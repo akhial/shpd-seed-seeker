@@ -1,17 +1,16 @@
 [package]
-name = "shpd-seedfinder-jni"
-description = "Coarse-grained Android JNI bridge for Seed Seeker"
+name = "shpd-seedfinder-ffi"
+description = "C ABI for Apple Seed Seeker frontends"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 
 [lib]
-name = "shpd_seedfinder"
-crate-type = ["cdylib", "rlib"]
+name = "shpd_seedfinder_ffi"
+crate-type = ["staticlib", "rlib"]
 
 [dependencies]
-jni = { version = "0.21.1", default-features = false }
 shpd-seedfinder-session = { path = "../seedfinder-session" }
 
 [lints]

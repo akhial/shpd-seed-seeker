@@ -1,0 +1,13 @@
+[package]
+name = "shpd-seedfinder-session"
+description = "Shared native search-session layer for Seed Seeker frontends"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+shpd-seedfinder-core = { path = "../seedfinder-core" }
+
+[lints]
+workspace = true

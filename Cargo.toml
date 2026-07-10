@@ -1,7 +1,9 @@
 [workspace]
 members = [
     "crates/seedfinder-core",
+    "crates/seedfinder-session",
     "crates/seedfinder-jni",
+    "crates/seedfinder-ffi",
 ]
 resolver = "3"
 

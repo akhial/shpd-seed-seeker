@@ -35,8 +35,14 @@ other play-time loot remain outside the compatibility profile.
 
 - `crates/seedfinder-core`: deterministic Rust engine, query model, matcher,
   multicore scheduler, and Java-parity tests.
+- `crates/seedfinder-session`: frontend-neutral native session lifecycle,
+  registry, status packets, and panic-contained scouting.
+- `crates/seedfinder-ffi`: thread-safe C ABI and public header used by Apple
+  frontends.
 - `android`: original Jetpack Compose UI, coarse-grained search sessions, and
   the one-shot JNI seed-scout contract.
+- `macos/SeedSeeker`: native arm64 macOS 14+ SwiftUI app and SwiftPM package,
+  linked to the shared Rust engine through its C ABI.
 - `tooling/oracle`: reproducible, machine-readable whole-floor snapshots from
   an isolated export of the exact pinned game revision.
 - `tooling/parity`: focused Java fixture generators for individual RNG and
@@ -54,6 +60,22 @@ cd android
 JAVA_HOME=/path/to/temurin-21 ./gradlew \
   :app:testDebugUnitTest :app:lintDebug :app:assembleRelease --offline
 ```
+
+For the native Apple Silicon macOS app, build the Rust static library before
+running the Swift tests. The app-bundle script repeats the release builds,
+assembles `dist/Seed Seeker.app`, and ad-hoc signs it:
+
+```sh
+cargo build --release --target aarch64-apple-darwin -p shpd-seedfinder-ffi
+cd macos/SeedSeeker
+swift test
+cd ../..
+bash scripts/build-macos-app.sh
+```
+
+The Swift package supports macOS 14 and newer and is arm64-only. Its manifest
+links `target/aarch64-apple-darwin/release/libshpd_seedfinder_ffi.a`; there is no
+demo engine on macOS.
 
 `assembleRelease` automatically cross-compiles the Rust JNI library for
 `arm64-v8a` and `x86_64` with Android NDK 28.2. The resulting

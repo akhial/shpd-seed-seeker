@@ -118,10 +118,24 @@ name = "shpd-seedfinder-core"
 version = "0.1.0"
 
 [[package]]
+name = "shpd-seedfinder-ffi"
+version = "0.1.0"
+dependencies = [
+ "shpd-seedfinder-session",
+]
+
+[[package]]
 name = "shpd-seedfinder-jni"
 version = "0.1.0"
 dependencies = [
  "jni",
+ "shpd-seedfinder-session",
+]
+
+[[package]]
+name = "shpd-seedfinder-session"
+version = "0.1.0"
+dependencies = [
  "shpd-seedfinder-core",
 ]
 

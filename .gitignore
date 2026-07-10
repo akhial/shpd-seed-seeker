@@ -15,5 +15,8 @@
 /android/build/
 /android/.gradle/
 
+# SwiftPM build products.
+/macos/SeedSeeker/.build/
+
 # Locally signed release artifacts.
 /dist/
