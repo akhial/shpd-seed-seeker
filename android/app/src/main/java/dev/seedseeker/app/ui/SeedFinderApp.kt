@@ -517,7 +517,7 @@ private fun HeroCard() {
                 )
                 Spacer(Modifier.height(10.dp))
                 Text(
-                    "Combine upgraded weapons, armor, wands, enchantments, and glyphs into one exact search.",
+                    "Combine upgraded weapons, armor, wands, rings, enchantments, and glyphs into one exact search.",
                     style = MaterialTheme.typography.bodyLarge,
                     color = Color(0xFFD5DED5),
                 )
@@ -577,7 +577,7 @@ private fun EmptyRequirementsCard() {
             Text("No requirements yet", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(6.dp))
             Text(
-                "Choose an item and the exact +1, +2, or +3 roll you need.",
+                "Choose an item and its exact upgrade. Rings support +1 through +4.",
                 textAlign = TextAlign.Center,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -922,7 +922,7 @@ private fun ScoutScreen(
                     SectionHeading(
                         eyebrow = "ONE WORLD • FLOORS 1–24",
                         title = "See what a seed contains",
-                        supporting = "Enter a seed to list its generated weapons, armor, and wands, including upgrade rolls, modifiers, curses, and sources.",
+                        supporting = "Enter a seed to list its generated weapons, armor, wands, and rings, including upgrade rolls, modifiers, curses, and sources.",
                     )
                 }
 
@@ -1052,6 +1052,7 @@ private fun ScoutSummaryCard(world: ScoutWorld, modifier: Modifier = Modifier) {
     val weaponCount = world.items.count { it.item.kind == ItemKind.WEAPON }
     val armorCount = world.items.count { it.item.kind == ItemKind.ARMOR }
     val wandCount = world.items.count { it.item.kind == ItemKind.WAND }
+    val ringCount = world.items.count { it.item.kind == ItemKind.RING }
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = RaisedMoss),
@@ -1072,7 +1073,7 @@ private fun ScoutSummaryCard(world: ScoutWorld, modifier: Modifier = Modifier) {
             )
             Spacer(Modifier.height(7.dp))
             Text(
-                "${world.items.size} items • $weaponCount weapons • $armorCount armor • $wandCount wands",
+                "${world.items.size} items • $weaponCount weapons • $armorCount armor • $wandCount wands • $ringCount rings",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -1109,7 +1110,7 @@ private fun ScoutItemCard(scoutItem: ScoutItem, modifier: Modifier = Modifier) {
     val effectLabel = scoutItem.effect ?: when (scoutItem.item.kind) {
         ItemKind.WEAPON -> "No enchantment"
         ItemKind.ARMOR -> "No glyph"
-        ItemKind.WAND -> "No modifier"
+        ItemKind.WAND, ItemKind.RING -> "No modifier"
     }
     val accessibilityLabel = when (scoutItem.accessibility) {
         ScoutAccessibility.Independent -> null
@@ -1262,6 +1263,7 @@ private fun RequirementSheet(
                         onClick = {
                             kind = tabKind
                             selectedItem = ItemCatalog.forKind(tabKind).first()
+                            upgrade = upgrade.coerceAtMost(tabKind.maximumSearchUpgrade)
                             modifierName = null
                         },
                         text = { Text(tabKind.label) },
@@ -1295,7 +1297,7 @@ private fun RequirementSheet(
                 Text("Exact upgrade", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(9.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                    (1..3).forEach { value ->
+                    (1..kind.maximumSearchUpgrade).forEach { value ->
                         FilterChip(
                             selected = upgrade == value,
                             onClick = { upgrade = value },

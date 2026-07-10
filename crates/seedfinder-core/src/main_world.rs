@@ -115,7 +115,9 @@ impl std::error::Error for MainWorldError {}
 
 #[cfg(test)]
 mod tests {
-    use crate::catalog::ItemId;
+    use crate::catalog::{ItemId, ItemKind};
+    use crate::model::ItemSource;
+    use crate::query::{Requirement, SearchQuery};
     use crate::search::WorldGenerator;
     use crate::seed::DungeonSeed;
 
@@ -164,6 +166,30 @@ mod tests {
                 ItemId::IncendiaryDart,
             ]
         );
+    }
+
+    #[test]
+    fn plus_four_imp_ring_is_present_and_searchable() {
+        let seed = DungeonSeed::from_code("AAA-AAA-AAF").unwrap();
+        let world = generate_main_world(seed, 24).unwrap();
+        assert!(world.items.iter().any(|value| {
+            value.item == ItemId::RingSharpshooting
+                && value.upgrade == 4
+                && value.depth == 17
+                && value.cursed
+                && value.source == ItemSource::ImpReward
+        }));
+        let query = SearchQuery {
+            requirements: vec![Requirement {
+                kind: ItemKind::Ring,
+                item: Some(ItemId::RingSharpshooting),
+                upgrade: Some(4),
+                effect: None,
+            }],
+            max_depth: 24,
+        };
+        assert_eq!(query.validate(), Ok(()));
+        assert!(query.matches(&world));
     }
 
     #[test]

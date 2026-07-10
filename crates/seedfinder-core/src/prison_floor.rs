@@ -1063,6 +1063,17 @@ mod tests {
                     },
                 ),
                 (
+                    ItemId::RingTenacity,
+                    1,
+                    None,
+                    true,
+                    ItemSource::CrystalChest,
+                    Accessibility::Choice {
+                        group: 0,
+                        option: 1,
+                    },
+                ),
+                (
                     ItemId::ScaleArmor,
                     0,
                     None,
@@ -1137,14 +1148,27 @@ mod tests {
                     Accessibility::Independent,
                 ),
             ],
-            vec![(
-                ItemId::ScaleArmor,
-                0,
-                None,
-                false,
-                ItemSource::Heap,
-                Accessibility::Independent,
-            )],
+            vec![
+                (
+                    ItemId::ScaleArmor,
+                    0,
+                    None,
+                    false,
+                    ItemSource::Heap,
+                    Accessibility::Independent,
+                ),
+                (
+                    ItemId::RingEnergy,
+                    0,
+                    None,
+                    false,
+                    ItemSource::Chest,
+                    Accessibility::Choice {
+                        group: 0,
+                        option: 1,
+                    },
+                ),
+            ],
             vec![
                 (
                     ItemId::Sai,

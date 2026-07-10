@@ -96,7 +96,22 @@ object ItemCatalog {
         wand("wand_transfusion", "Wand of Transfusion", 220),
     )
 
-    val all = weapons + armor + wands
+    val rings = listOf(
+        ring("ring_accuracy", "Ring of Accuracy", 224),
+        ring("ring_arcana", "Ring of Arcana", 225),
+        ring("ring_elements", "Ring of Elements", 226),
+        ring("ring_energy", "Ring of Energy", 227),
+        ring("ring_evasion", "Ring of Evasion", 228),
+        ring("ring_force", "Ring of Force", 229),
+        ring("ring_furor", "Ring of Furor", 230),
+        ring("ring_haste", "Ring of Haste", 231),
+        ring("ring_might", "Ring of Might", 232),
+        ring("ring_sharpshooting", "Ring of Sharpshooting", 233),
+        ring("ring_tenacity", "Ring of Tenacity", 234),
+        ring("ring_wealth", "Ring of Wealth", 235),
+    )
+
+    val all = weapons + armor + wands + rings
     private val byId = all.associateBy(CatalogItem::id)
 
     val enchantments = listOf(
@@ -157,6 +172,7 @@ object ItemCatalog {
         ItemKind.WEAPON -> weapons
         ItemKind.ARMOR -> armor
         ItemKind.WAND -> wands
+        ItemKind.RING -> rings
     }
 
     fun findById(id: String): CatalogItem? = byId[id]
@@ -164,13 +180,13 @@ object ItemCatalog {
     fun modifiersFor(kind: ItemKind): List<String> = when (kind) {
         ItemKind.WEAPON -> enchantments + weaponCurses
         ItemKind.ARMOR -> glyphs + armorCurses
-        ItemKind.WAND -> emptyList()
+        ItemKind.WAND, ItemKind.RING -> emptyList()
     }
 
     fun cursesFor(kind: ItemKind): List<String> = when (kind) {
         ItemKind.WEAPON -> weaponCurses
         ItemKind.ARMOR -> armorCurses
-        ItemKind.WAND -> emptyList()
+        ItemKind.WAND, ItemKind.RING -> emptyList()
     }
 
     private fun weapon(id: String, name: String, tier: Int, sprite: Int) =
@@ -181,4 +197,7 @@ object ItemCatalog {
 
     private fun wand(id: String, name: String, sprite: Int) =
         CatalogItem(id, name, ItemKind.WAND, sprite)
+
+    private fun ring(id: String, name: String, sprite: Int) =
+        CatalogItem(id, name, ItemKind.RING, sprite)
 }

@@ -14,15 +14,16 @@ The compatibility target is intentionally pinned:
   established seed-finder behavior and excluding unseeded Guidebook placement
 
 Seeds use the canonical `XXX-XXX-XXX` base-26 form. Searches support multiple
-AND requirements across melee and thrown weapons, armor, and wands, exact `+1`,
-`+2`, or `+3` upgrades, and weapon enchantment/curse or armor glyph/curse
-constraints.
+AND requirements across melee and thrown weapons, armor, wands, and all twelve
+rings. Weapons, armor, and wands accept exact `+1`, `+2`, or `+3` requirements;
+rings accept `+1` through `+4`. Weapon enchantment/curse and armor glyph/curse
+constraints are also supported.
 Mutually exclusive rewards are represented explicitly so impossible reward
 combinations cannot satisfy a query.
 
 Seed scouting accepts one canonical seed code and lists the searchable static
-equipment generated through depth 24, including its floor, true upgrade,
-enchantment or glyph, cursed state, source, and choice constraints. Scouting and
+equipment and deterministic quest rewards generated through depth 24, including
+their floor, true upgrade, enchantment or glyph, cursed state, source, and choice constraints. Scouting and
 searching use the same version-pinned world generator; normal monster drops and
 other play-time loot remain outside the compatibility profile.
 

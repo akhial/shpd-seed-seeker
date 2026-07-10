@@ -776,6 +776,22 @@ impl ImpQuest {
         self.reward = None;
         self.completed = true;
     }
+
+    /// Appends the obtainable deterministic ring reward for the accessible Imp room.
+    pub fn append_world_item(&self, output: &mut Vec<WorldItem>) -> bool {
+        let (Some(depth), true, Some(reward)) = (self.depth, self.room_accessible, self.reward)
+        else {
+            return false;
+        };
+        output.push(WorldItem::from_equipment_roll(
+            reward.kind.item_id(),
+            reward.roll,
+            depth,
+            ItemSource::ImpReward,
+            Accessibility::Independent,
+        ));
+        true
+    }
 }
 
 /// All quest state reset by `Dungeon.init()`.

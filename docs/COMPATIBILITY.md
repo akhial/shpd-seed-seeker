@@ -15,7 +15,7 @@ custom-seed run under the canonical profile:
 - no bones, documents, or other profile-dependent bonus items;
 - tutorial/journal progression complete (`SPDSettings.intro() == false`);
 - no player-caused drops or inventory-dependent mutations;
-- weapons, armor, wands, their true upgrade, cursed flag, enchantment/glyph,
+- weapons, armor, wands, rings, their true upgrade, cursed flag, enchantment/glyph,
   floor, source, container, and mutually exclusive choice group.
 
 Normal monster death loot is excluded. It is rolled during play after the level
@@ -29,8 +29,8 @@ Under the canonical fresh custom-seed profile, depths 5, 10, 15, and 25 can be
 skipped by the search engine after their independent depth roots are computed.
 Official v3.3.8 checkpoints across three seeds show identical before/after
 Generator, LimitedDrops, quest, special/secret-room queue, and shop-dependent
-state. Their initial level creation contains no searchable weapon, armor, or
-wand. Depth 10 does directly place an Iron Key, which is outside the searchable
+state. Their initial level creation contains no searchable weapon, armor, wand,
+or ring. Depth 10 does directly place an Iron Key, which is outside the searchable
 catalog. The boss levels also seed a child generator for `Bones.get()`; with
 bones disabled it produces no items, and both the child and all map RNG are
 confined to that boss depth.
@@ -38,11 +38,16 @@ confined to that boss depth.
 Depth 20 must not be skipped. `CityBossLevel.build()` creates an `ImpShopRoom`,
 and `ImpShopRoom.paint()` eagerly calls `ShopRoom.generateItems()` before the
 shop is visible. The resulting cached tier-five weapon, Plate Armor, missile,
-tipped darts, and possible rare wand are searchable initial-world content, and
+tipped darts, and possible rare wand or ring are searchable initial-world content, and
 the call mutates the live Generator state consumed by Halls. The Rust prefix
 therefore executes this transition between depths 19 and 21 and includes its
 shop records. Rewards generated only after fighting a boss remain excluded as
 later gameplay loot.
+
+The Imp quest ring is generated when its accessible City quest room is created,
+including the two deterministic reward upgrades. It is therefore searchable and
+reported with source `ImpReward`, even though collecting it requires completing
+the quest. This is the canonical source of searchable `+4` rings.
 
 ## Why floors are simulated sequentially
 
@@ -64,7 +69,7 @@ Two secret rooms select consumables from a real Java `HashMap<Class, …>`.
 `Class.hashCode()` identity and map iteration order are not specified across JVM
 implementations. Their consumable-only output cannot be intrinsically identical
 between desktop OpenJDK and Android ART. These rooms do not generate the target
-weapon/armor/wand identity, but the oracle records the runtime/order policy when
+weapon/armor/wand/ring identity, but the oracle records the runtime/order policy when
 their output is compared.
 
 Entrance guide pages and missile set IDs also use unseeded randomness. Neither

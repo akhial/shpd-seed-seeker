@@ -1406,7 +1406,18 @@ mod tests {
             72, 85, 98,
         ];
         assert_eq!(report.pit_fall_candidates, expected_candidates);
-        assert!(report.searchable_items.is_empty());
+        assert_eq!(
+            report.searchable_items,
+            vec![WorldItem {
+                item: ItemId::RingTenacity,
+                upgrade: 1,
+                effect: None,
+                cursed: false,
+                depth: 11,
+                source: ItemSource::Skeleton,
+                accessibility: Accessibility::Independent,
+            }]
+        );
         assert_eq!(
             events,
             vec![

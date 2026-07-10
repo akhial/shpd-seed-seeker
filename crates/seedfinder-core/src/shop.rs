@@ -16,8 +16,8 @@ use crate::catalog::ItemId;
 use crate::equipment::EquipmentRoll;
 use crate::generator::{
     BombKind, GeneratedArtifact, GeneratedEquipment, GeneratedItem, GeneratedItemFamily,
-    GeneratedMissile, GeneratedRing, GeneratorError, MissileKind, random_category,
-    random_tipped_dart, random_using_defaults,
+    GeneratedMissile, GeneratorError, MissileKind, random_category, random_tipped_dart,
+    random_using_defaults,
 };
 use crate::model::{Accessibility, ItemSource, WorldItem};
 use crate::rng::RandomStack;
@@ -567,12 +567,7 @@ fn generate_rare(
     match generated {
         None => Ok(ShopStockItem::Direct(DirectShopItem::Stylus)),
         Some(GeneratedItem::Equipment(equipment)) => Ok(searchable(equipment.item, depth_u8)),
-        Some(GeneratedItem::Ring(ring)) => Ok(ShopStockItem::Generated(GeneratedItem::Ring(
-            GeneratedRing {
-                kind: ring.kind,
-                roll: cleared_roll(),
-            },
-        ))),
+        Some(GeneratedItem::Ring(ring)) => Ok(searchable(ring.kind.item_id(), depth_u8)),
         Some(GeneratedItem::Artifact(artifact)) => Ok(ShopStockItem::Generated(
             GeneratedItem::Artifact(GeneratedArtifact {
                 kind: artifact.kind,
@@ -581,14 +576,6 @@ fn generate_rare(
             }),
         )),
         Some(other) => Err(ShopError::UnexpectedRare(other.family())),
-    }
-}
-
-const fn cleared_roll() -> EquipmentRoll {
-    EquipmentRoll {
-        upgrade: 0,
-        effect: None,
-        cursed: false,
     }
 }
 
@@ -621,7 +608,7 @@ mod tests {
         DirectShopItem, ShopBagKind, ShopBagOffer, ShopBagSet, ShopHourglassState, ShopRoomCache,
         ShopRunState, ShopStockItem, generate_shop_inventory,
     };
-    use crate::catalog::ItemId;
+    use crate::catalog::{ItemId, ItemKind, item as catalog_item};
     use crate::generator::{BombKind, GeneratedItem};
     use crate::rng::RandomStack;
     use crate::run::{PotionKind, RunState, ScrollKind};
@@ -819,11 +806,13 @@ mod tests {
                 generate_shop_inventory(&mut random, &mut generator, 6, &mut state).unwrap();
             for item in inventory.items {
                 match item {
-                    ShopStockItem::Generated(GeneratedItem::Ring(ring)) => {
+                    ShopStockItem::Searchable(world)
+                        if catalog_item(world.item).kind == ItemKind::Ring =>
+                    {
                         saw_ring = true;
-                        assert_eq!(ring.roll.upgrade, 0);
-                        assert_eq!(ring.roll.effect, None);
-                        assert!(!ring.roll.cursed);
+                        assert_eq!(world.upgrade, 0);
+                        assert_eq!(world.effect, None);
+                        assert!(!world.cursed);
                     }
                     ShopStockItem::Generated(GeneratedItem::Artifact(artifact)) => {
                         saw_artifact = true;

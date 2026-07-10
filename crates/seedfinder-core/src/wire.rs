@@ -136,13 +136,14 @@ pub fn encode_scout_world(world: &GeneratedWorld) -> Result<Vec<u8>, WireError> 
     output.extend_from_slice(&count.to_be_bytes());
 
     for world_item in &world.items {
+        let definition = item(world_item.item);
         if !(1..=24).contains(&world_item.depth) {
             return Err(WireError::InvalidItemDepth);
         }
-        if world_item.upgrade > 3 {
+        if world_item.upgrade > definition.kind.maximum_search_upgrade() {
             return Err(WireError::InvalidItemUpgrade);
         }
-        push_utf8_u16(&mut output, item(world_item.item).stable_id)?;
+        push_utf8_u16(&mut output, definition.stable_id)?;
         output.push(world_item.depth);
         output.push(world_item.upgrade);
         output.push(u8::from(world_item.cursed));
@@ -196,7 +197,7 @@ pub fn decode_scout_world(packet: &[u8]) -> Result<GeneratedWorld, WireError> {
             return Err(WireError::InvalidItemDepth);
         }
         let upgrade = input.u8()?;
-        if upgrade > 3 {
+        if upgrade > definition.kind.maximum_search_upgrade() {
             return Err(WireError::InvalidItemUpgrade);
         }
         let flags = input.u8()?;
@@ -401,7 +402,7 @@ impl std::error::Error for WireError {}
 
 #[cfg(test)]
 mod tests {
-    use crate::catalog::{ArmorEffect, Effect, ITEMS, ItemId, ItemKind, WeaponEffect};
+    use crate::catalog::{ArmorEffect, Effect, ITEMS, ItemId, ItemKind, WeaponEffect, item};
     use crate::main_world::CanonicalMainWorldGenerator;
     use crate::model::{Accessibility, GeneratedWorld, ItemSource, WorldItem};
     use crate::search::WorldGenerator;
@@ -484,6 +485,25 @@ mod tests {
     }
 
     #[test]
+    fn query_wire_accepts_plus_four_only_for_rings() {
+        let mut ring = b"SSF1".to_vec();
+        ring.extend_from_slice(&1_u16.to_be_bytes());
+        field(&mut ring, "ring_sharpshooting");
+        ring.push(4);
+        field(&mut ring, "");
+        let query = decode_query(&ring).unwrap();
+        assert_eq!(query.requirements[0].kind, ItemKind::Ring);
+        assert_eq!(query.requirements[0].upgrade, Some(4));
+
+        let mut sword = b"SSF1".to_vec();
+        sword.extend_from_slice(&1_u16.to_be_bytes());
+        field(&mut sword, "sword");
+        sword.push(4);
+        field(&mut sword, "");
+        assert_eq!(decode_query(&sword), Err(WireError::InvalidQuery));
+    }
+
+    #[test]
     fn result_packet_matches_android_big_endian_codec() {
         let worlds = vec![
             GeneratedWorld {
@@ -552,6 +572,24 @@ mod tests {
     }
 
     #[test]
+    fn scout_packet_round_trips_a_plus_four_ring() {
+        let world = GeneratedWorld {
+            seed: DungeonSeed::from_code("AAA-AAA-AAF").unwrap(),
+            items: vec![WorldItem {
+                item: ItemId::RingSharpshooting,
+                upgrade: 4,
+                effect: None,
+                cursed: true,
+                depth: 17,
+                source: ItemSource::ImpReward,
+                accessibility: Accessibility::Independent,
+            }],
+        };
+        let packet = encode_scout_world(&world).unwrap();
+        assert_eq!(decode_scout_world(&packet), Ok(world));
+    }
+
+    #[test]
     fn scout_round_trip_covers_every_catalog_item_source_and_accessibility() {
         let items = ITEMS
             .iter()
@@ -564,7 +602,7 @@ mod tests {
                     ItemKind::Weapon => Some(Effect::Weapon(WeaponEffect::Sacrificial)),
                     ItemKind::Armor if index % 2 == 0 => Some(Effect::Armor(ArmorEffect::Thorns)),
                     ItemKind::Armor => Some(Effect::Armor(ArmorEffect::Stench)),
-                    ItemKind::Wand => None,
+                    ItemKind::Wand | ItemKind::Ring => None,
                 };
                 let accessibility = match index % 3 {
                     0 => Accessibility::Independent,
@@ -601,7 +639,15 @@ mod tests {
     #[test]
     fn canonical_aaa_scout_response_contains_all_official_depth_twenty_four_items() {
         let generated = CanonicalMainWorldGenerator.generate(DungeonSeed::MIN, 24);
-        assert_eq!(generated.items.len(), 62);
+        assert_eq!(generated.items.len(), 67);
+        assert_eq!(
+            generated
+                .items
+                .iter()
+                .filter(|value| item(value.item).kind == ItemKind::Ring)
+                .count(),
+            5
+        );
         let packet = encode_scout_world(&generated).unwrap();
         let decoded = decode_scout_world(&packet).unwrap();
         assert_eq!(decoded, generated);
@@ -656,6 +702,13 @@ mod tests {
                 && item.item == ItemId::RunicBlade
                 && item.cursed
                 && item.effect == Some(Effect::Weapon(WeaponEffect::Displacing))
+        }));
+        assert!(decoded.items.iter().any(|item| {
+            item.depth == 19
+                && item.item == ItemId::RingHaste
+                && item.upgrade == 3
+                && item.cursed
+                && item.source == ItemSource::ImpReward
         }));
     }
 

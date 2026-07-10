@@ -7,6 +7,18 @@ pub enum ItemKind {
     Weapon,
     Armor,
     Wand,
+    Ring,
+}
+
+impl ItemKind {
+    /// Highest exact upgrade accepted by the Android search UI for this family.
+    #[must_use]
+    pub const fn maximum_search_upgrade(self) -> u8 {
+        match self {
+            Self::Ring => 4,
+            Self::Weapon | Self::Armor | Self::Wand => 3,
+        }
+    }
 }
 
 /// Stable identifiers for equipment that can be generated in a seeded world.
@@ -89,6 +101,18 @@ pub enum ItemId {
     HolyDart,
     DisplacingDart,
     BlindingDart,
+    RingAccuracy,
+    RingArcana,
+    RingElements,
+    RingEnergy,
+    RingEvasion,
+    RingForce,
+    RingFuror,
+    RingHaste,
+    RingMight,
+    RingSharpshooting,
+    RingTenacity,
+    RingWealth,
 }
 
 /// Static display and sprite data for one item.
@@ -117,7 +141,7 @@ macro_rules! item {
     };
 }
 
-/// Every non-zero-probability melee/thrown weapon, generic armor, and wand in v3.3.8.
+/// Every non-zero-probability melee/thrown weapon, generic armor, wand, and ring in v3.3.8.
 pub const ITEMS: &[ItemDefinition] = &[
     item!(
         WornShortsword,
@@ -489,6 +513,53 @@ pub const ITEMS: &[ItemDefinition] = &[
         Some(2),
         172
     ),
+    item!(
+        RingAccuracy,
+        "ring_accuracy",
+        "Ring of accuracy",
+        Ring,
+        None,
+        224
+    ),
+    item!(RingArcana, "ring_arcana", "Ring of arcana", Ring, None, 225),
+    item!(
+        RingElements,
+        "ring_elements",
+        "Ring of elements",
+        Ring,
+        None,
+        226
+    ),
+    item!(RingEnergy, "ring_energy", "Ring of energy", Ring, None, 227),
+    item!(
+        RingEvasion,
+        "ring_evasion",
+        "Ring of evasion",
+        Ring,
+        None,
+        228
+    ),
+    item!(RingForce, "ring_force", "Ring of force", Ring, None, 229),
+    item!(RingFuror, "ring_furor", "Ring of furor", Ring, None, 230),
+    item!(RingHaste, "ring_haste", "Ring of haste", Ring, None, 231),
+    item!(RingMight, "ring_might", "Ring of might", Ring, None, 232),
+    item!(
+        RingSharpshooting,
+        "ring_sharpshooting",
+        "Ring of sharpshooting",
+        Ring,
+        None,
+        233
+    ),
+    item!(
+        RingTenacity,
+        "ring_tenacity",
+        "Ring of tenacity",
+        Ring,
+        None,
+        234
+    ),
+    item!(RingWealth, "ring_wealth", "Ring of wealth", Ring, None, 235),
 ];
 
 /// Weapon enchantments and curses. Array ordering matches upstream RNG arrays.
@@ -636,7 +707,7 @@ impl Effect {
                 .copied()
                 .find(|effect| effect.wire_name().eq_ignore_ascii_case(name))
                 .map(Self::Armor),
-            ItemKind::Wand => None,
+            ItemKind::Wand | ItemKind::Ring => None,
         }
     }
 
@@ -725,6 +796,8 @@ mod tests {
         assert_eq!(item(ItemId::WandTransfusion).sprite_index, 220);
         assert_eq!(item(ItemId::ThrowingSpike).tier, Some(1));
         assert_eq!(item(ItemId::BlindingDart).sprite_index, 172);
+        assert_eq!(ItemId::RingAccuracy as u8, 76);
+        assert_eq!(item(ItemId::RingWealth).sprite_index, 235);
     }
 
     #[test]

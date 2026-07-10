@@ -5,6 +5,7 @@ import dev.seedseeker.app.catalog.ItemCatalog
 import dev.seedseeker.app.model.ItemRequirement
 import dev.seedseeker.app.model.SearchRequest
 import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class QueryCodecTest {
@@ -25,5 +26,23 @@ class QueryCodecTest {
             ),
             QueryCodec.encode(request),
         )
+    }
+
+    @Test
+    fun ringsAcceptPlusFourWithoutExpandingOtherItemRanges() {
+        val ring = ItemCatalog.rings.first { it.id == "ring_sharpshooting" }
+        val request = SearchRequest(listOf(ItemRequirement(1, ring, 4)))
+        val packet = QueryCodec.encode(request)
+        assertArrayEquals(
+            byteArrayOf(
+                0x53, 0x53, 0x46, 0x31,
+                0, 1,
+                0, 18,
+            ) + "ring_sharpshooting".encodeToByteArray() + byteArrayOf(4, 0, 0),
+            packet,
+        )
+        assertThrows(IllegalArgumentException::class.java) {
+            ItemRequirement(2, ItemCatalog.wands.first(), 4)
+        }
     }
 }

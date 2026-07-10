@@ -21,6 +21,7 @@ class ItemCatalogTest {
         )
         assertEquals((176..180).toList(), ItemCatalog.armor.map { it.spriteIndex })
         assertEquals((208..220).toList(), ItemCatalog.wands.map { it.spriteIndex })
+        assertEquals((224..235).toList(), ItemCatalog.rings.map { it.spriteIndex })
     }
 
     @Test
@@ -44,5 +45,7 @@ class ItemCatalogTest {
         assertEquals("gauntlet", ItemCatalog.weapons.first { it.spriteIndex == 133 }.id)
         assertEquals("rot_dart", ItemCatalog.weapons.first { it.spriteIndex == 161 }.id)
         assertEquals("blinding_dart", ItemCatalog.weapons.first { it.spriteIndex == 172 }.id)
+        assertEquals("ring_accuracy", ItemCatalog.rings.first().id)
+        assertEquals("ring_wealth", ItemCatalog.rings.last().id)
     }
 }

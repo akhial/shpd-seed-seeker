@@ -90,6 +90,15 @@ class DemoNativeSeedFinder : NativeSeedFinder {
                     source = ScoutItemSource.SHOP,
                     accessibility = ScoutAccessibility.Independent,
                 ),
+                ScoutItem(
+                    item = ItemCatalog.rings.first { it.id == "ring_haste" },
+                    depth = 19,
+                    upgrade = 4,
+                    effect = null,
+                    cursed = true,
+                    source = ScoutItemSource.IMP_REWARD,
+                    accessibility = ScoutAccessibility.Independent,
+                ),
             ),
         )
     }
@@ -348,7 +357,9 @@ object ScoutResultCodec {
                 val depth = input.readUnsignedByte()
                 check(depth in 1..24) { "Scout item depth must be 1..24" }
                 val upgrade = input.readUnsignedByte()
-                check(upgrade in 0..3) { "Scout item upgrade must be 0..3" }
+                check(upgrade in 0..catalogItem.kind.maximumSearchUpgrade) {
+                    "Scout item upgrade must be 0..${catalogItem.kind.maximumSearchUpgrade}"
+                }
                 val flags = input.readUnsignedByte()
                 check(flags and 0xFE == 0) { "Unknown scout item flags $flags" }
                 val effect = readUtf8(input, input.readUnsignedShort()).ifEmpty { null }

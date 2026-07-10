@@ -21,7 +21,7 @@
 
 use std::fmt;
 
-use crate::generator::{self, GeneratedEquipment, GeneratedItem, GeneratorError};
+use crate::generator::{self, GeneratedItem, GeneratorError};
 use crate::geometry::{GridMap, PathFinder, Point, Rect, painter as draw, terrain};
 use crate::java_math::div_i32;
 use crate::level::{Level, PlacedTrap, TrapKind, TrapSpec};
@@ -525,14 +525,7 @@ fn searchable_world_item(item: RegularItem, depth: u8) -> Option<WorldItem> {
     let RegularItem::Generated(generated) = item else {
         return None;
     };
-    let equipment = match generated {
-        GeneratedItem::Equipment(equipment) => Some(equipment),
-        GeneratedItem::Missile(missile) => missile.kind.item_id().map(|item| GeneratedEquipment {
-            item,
-            roll: missile.roll,
-        }),
-        _ => None,
-    }?;
+    let equipment = generated.searchable_equipment()?;
     Some(WorldItem::from_equipment_roll(
         equipment.item,
         equipment.roll,

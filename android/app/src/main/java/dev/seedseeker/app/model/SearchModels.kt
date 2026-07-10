@@ -1,10 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package dev.seedseeker.app.model
 
-enum class ItemKind(val label: String, val modifierLabel: String?) {
-    WEAPON("Weapons", "Enchantment"),
-    ARMOR("Armor", "Glyph"),
-    WAND("Wands", null),
+enum class ItemKind(
+    val label: String,
+    val modifierLabel: String?,
+    val maximumSearchUpgrade: Int,
+) {
+    WEAPON("Weapons", "Enchantment", 3),
+    ARMOR("Armor", "Glyph", 3),
+    WAND("Wands", null, 3),
+    RING("Rings", null, 4),
 }
 
 data class CatalogItem(
@@ -22,7 +27,9 @@ data class ItemRequirement(
     val modifier: String? = null,
 ) {
     init {
-        require(upgrade in 1..3) { "Upgrade requirement must be +1, +2, or +3" }
+        require(upgrade in 1..item.kind.maximumSearchUpgrade) {
+            "Upgrade requirement must be +1..+${item.kind.maximumSearchUpgrade} for ${item.kind.label}"
+        }
         require(item.kind.modifierLabel != null || modifier == null) {
             "${item.kind.label} cannot carry a modifier requirement"
         }

@@ -854,11 +854,14 @@ mod tests {
             .iter()
             .filter(|item| item.source == ItemSource::GoldenMimic)
             .collect();
-        assert_eq!(golden_world.len(), 1); // the second item is a non-searchable ring
+        assert_eq!(golden_world.len(), 2);
         assert_eq!(golden_world[0].item, ItemId::MailArmor);
         assert_eq!(golden_world[0].upgrade, 1);
         assert!(!golden_world[0].cursed);
         assert_eq!(golden_world[0].effect, None);
+        assert_eq!(golden_world[1].item, ItemId::RingTenacity);
+        assert_eq!(golden_world[1].upgrade, 1);
+        assert!(!golden_world[1].cursed);
         assert!(matches!(
             golden.items[1],
             RegularItem::Generated(GeneratedItem::Ring(crate::generator::GeneratedRing {

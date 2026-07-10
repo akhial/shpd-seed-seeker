@@ -349,10 +349,9 @@ fn generate_city_world_with_roots(
     Ok(GeneratedWorld { seed, items })
 }
 
-/// Completes a regular City floor through flags, mobs, and ordinary item
-/// placement. Imp's generated reward is intentionally absent from searchable
-/// output, while all RNG and Generator state consumed by it has already been
-/// retained during room initialization.
+/// Completes a regular City floor through flags, mobs, quests, and ordinary
+/// item placement. An accessible Imp room contributes its deterministic ring
+/// reward on the floor where the quest was generated.
 ///
 /// # Errors
 ///
@@ -392,6 +391,9 @@ pub fn generate_city_floor(
 
     let mut world_items = painted.world_items.clone();
     append_painted_room_items(&painted.level, depth, &mut world_items);
+    if quests.imp.depth == Some(u8::try_from(depth).expect("City depth fits u8")) {
+        quests.imp.append_world_item(&mut world_items);
+    }
     let queue = painted
         .remaining_prizes
         .items_to_spawn
@@ -1081,6 +1083,13 @@ mod tests {
             ],
             vec![],
             vec![
+                (
+                    ItemId::RingSharpshooting,
+                    0,
+                    None,
+                    true,
+                    ItemSource::Skeleton,
+                ),
                 (ItemId::Bolas, 1, None, false, ItemSource::Heap),
                 (
                     ItemId::Javelin,
@@ -1098,7 +1107,7 @@ mod tests {
                 ),
                 (ItemId::MailArmor, 0, None, false, ItemSource::Heap),
             ],
-            vec![],
+            vec![(ItemId::RingHaste, 3, None, true, ItemSource::ImpReward)],
         ];
         for (floor, expected) in floors.iter().zip(expected) {
             assert_eq!(

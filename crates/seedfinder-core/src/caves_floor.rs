@@ -1351,6 +1351,17 @@ mod tests {
                 &[283, 306, 658, 1_044, 1_366, 1_731, 1_855],
                 &[
                     (
+                        ItemId::RingForce,
+                        1,
+                        None,
+                        false,
+                        ItemSource::CrystalChest,
+                        Accessibility::Choice {
+                            group: 0,
+                            option: 1,
+                        },
+                    ),
+                    (
                         ItemId::Mace,
                         0,
                         Some(Effect::Weapon(WeaponEffect::Annoying)),

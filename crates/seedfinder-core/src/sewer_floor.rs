@@ -1332,7 +1332,11 @@ mod tests {
             let mut expected_items = match depth {
                 1 => vec![(ItemId::ScaleArmor, 0)],
                 2 => vec![(ItemId::LeatherArmor, 1), (ItemId::MailArmor, 2)],
-                3 => vec![(ItemId::ScaleArmor, 0), (ItemId::Spear, 1)],
+                3 => vec![
+                    (ItemId::ScaleArmor, 0),
+                    (ItemId::Spear, 1),
+                    (ItemId::RingTenacity, 0),
+                ],
                 4 => vec![
                     (ItemId::Quarterstaff, 1),
                     (ItemId::LeatherArmor, 1),
@@ -1359,7 +1363,7 @@ mod tests {
         let batched = generator.generate_batch(&seeds, 4);
 
         assert_eq!(batched, scalar);
-        assert_eq!(scalar[0].items.len(), 9);
+        assert_eq!(scalar[0].items.len(), 10);
         assert_eq!(scalar[0].seed, DungeonSeed::MIN);
     }
 

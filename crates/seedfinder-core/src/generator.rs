@@ -352,7 +352,7 @@ impl GeneratedItem {
         }
     }
 
-    /// Searchable weapon/armor/wand representation, if this generated item is
+    /// Searchable weapon/armor/wand/ring representation, if this generated item is
     /// part of the equipment query catalog. Tipped darts are fixed level-zero,
     /// clean weapons; their stack quantity does not affect search matching.
     #[must_use]
@@ -374,8 +374,11 @@ impl GeneratedItem {
                     cursed: false,
                 },
             }),
-            Self::Ring(_)
-            | Self::Artifact(_)
+            Self::Ring(ring) => Some(GeneratedEquipment {
+                item: ring.kind.item_id(),
+                roll: ring.roll,
+            }),
+            Self::Artifact(_)
             | Self::Food(_)
             | Self::Potion { .. }
             | Self::Seed(_)
@@ -446,6 +449,27 @@ pub const RING_ITEMS: [RingKind; 12] = [
     RingKind::Tenacity,
     RingKind::Wealth,
 ];
+
+impl RingKind {
+    /// Stable searchable catalog identity corresponding to this Java ring class.
+    #[must_use]
+    pub const fn item_id(self) -> ItemId {
+        match self {
+            Self::Accuracy => ItemId::RingAccuracy,
+            Self::Arcana => ItemId::RingArcana,
+            Self::Elements => ItemId::RingElements,
+            Self::Energy => ItemId::RingEnergy,
+            Self::Evasion => ItemId::RingEvasion,
+            Self::Force => ItemId::RingForce,
+            Self::Furor => ItemId::RingFuror,
+            Self::Haste => ItemId::RingHaste,
+            Self::Might => ItemId::RingMight,
+            Self::Sharpshooting => ItemId::RingSharpshooting,
+            Self::Tenacity => ItemId::RingTenacity,
+            Self::Wealth => ItemId::RingWealth,
+        }
+    }
+}
 pub const POTION_ITEMS: [PotionKind; 12] = [
     PotionKind::Strength,
     PotionKind::Healing,

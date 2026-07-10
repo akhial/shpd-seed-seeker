@@ -51,13 +51,23 @@ class ScoutResultCodecTest {
                     bytes.toByteArray()
                 },
             ),
+            item(
+                id = "ring_sharpshooting",
+                depth = 17,
+                upgrade = 4,
+                flags = 1,
+                source = 16,
+            ),
         )
 
         val world = ScoutResultCodec.decode(packet)
 
         assertEquals("AAA-AAA-AAA", world.seed)
-        assertEquals(3, world.items.size)
-        assertEquals(listOf("dagger", "dagger", "wand_frost"), world.items.map { it.item.id })
+        assertEquals(4, world.items.size)
+        assertEquals(
+            listOf("dagger", "dagger", "wand_frost", "ring_sharpshooting"),
+            world.items.map { it.item.id },
+        )
         with(world.items[0]) {
             assertEquals(0, upgrade)
             assertTrue(cursed)
@@ -74,6 +84,12 @@ class ScoutResultCodecTest {
                 ScoutAccessibility.Scenarios(7, 0x8000_0000_0000_0001UL),
                 accessibility,
             )
+        }
+        with(world.items[3]) {
+            assertEquals(ItemKind.RING, item.kind)
+            assertEquals(4, upgrade)
+            assertTrue(cursed)
+            assertEquals(ScoutItemSource.IMP_REWARD, source)
         }
     }
 
