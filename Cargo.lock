@@ -114,6 +114,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "shpd-seedfinder-cli"
+version = "0.1.0"
+dependencies = [
+ "shpd-seedfinder-core",
+]
+
+[[package]]
 name = "shpd-seedfinder-core"
 version = "0.1.0"
 

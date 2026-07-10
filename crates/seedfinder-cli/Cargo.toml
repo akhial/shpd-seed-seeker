@@ -1,0 +1,17 @@
+[package]
+name = "shpd-seedfinder-cli"
+description = "Command-line tools for the Seed Seeker engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "seed-seeker"
+path = "src/main.rs"
+
+[dependencies]
+shpd-seedfinder-core = { path = "../seedfinder-core" }
+
+[lints]
+workspace = true

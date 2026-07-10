@@ -35,6 +35,8 @@ other play-time loot remain outside the compatibility profile.
 
 - `crates/seedfinder-core`: deterministic Rust engine, query model, matcher,
   multicore scheduler, and Java-parity tests.
+- `crates/seedfinder-cli`: command-line entry point and canonical engine
+  benchmark.
 - `crates/seedfinder-session`: frontend-neutral native session lifecycle,
   registry, status packets, and panic-contained scouting.
 - `crates/seedfinder-ffi`: thread-safe C ABI and public header used by Apple
@@ -120,6 +122,15 @@ Android builds retain fat LTO but use optimization level O2; this is a pinned
 correctness requirement for the audited Rust/LLVM Android AArch64 toolchain.
 The host release profile remains O3. See the compatibility notes for the
 on-device parity gate.
+
+Run the canonical depth-24 search benchmark with a release build. It tests
+10,000 seeds on all available CPUs by default; the seed and worker counts can
+be overridden:
+
+```sh
+cargo run --release -p shpd-seedfinder-cli -- --benchmark
+cargo run --release -p shpd-seedfinder-cli -- -b 1000 --workers 4
+```
 
 ## Licensing and identity
 

@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "crates/seedfinder-cli",
     "crates/seedfinder-core",
     "crates/seedfinder-session",
     "crates/seedfinder-jni",
