@@ -2,18 +2,20 @@
 
 use std::fmt;
 
-use crate::catalog::{Effect, item, item_by_stable_id};
+use crate::catalog::{Effect, ItemKind, item, item_by_stable_id};
 use crate::model::{Accessibility, GeneratedWorld, ItemSource, WorldItem};
-use crate::query::{Requirement, SearchQuery};
+use crate::query::{Requirement, SearchQuery, UpgradeRequirement};
 use crate::seed::DungeonSeed;
 
-const REQUEST_MAGIC: &[u8; 4] = b"SSF1";
+const REQUEST_MAGIC_V1: &[u8; 4] = b"SSF1";
+const REQUEST_MAGIC_V2: &[u8; 4] = b"SSF2";
 const RESULT_MAGIC: &[u8; 4] = b"SSR1";
 const SCOUT_RESULT_MAGIC: &[u8; 4] = b"SSC1";
 const MAX_REQUIREMENTS: usize = 64;
 
-/// Decodes the Android `SSF1` packet. The v1 protocol searches the canonical
-/// main-path profile through floor 24 and treats upgrade values as exact.
+/// Decodes Android `SSF1` and `SSF2` packets. V1 is retained for compatibility;
+/// V2 adds floor limits, source/identity constraints, upgrade predicates, and
+/// a blacksmith-availability flag.
 ///
 /// # Errors
 ///
@@ -21,9 +23,22 @@ const MAX_REQUIREMENTS: usize = 64;
 /// invalid upgrades, trailing data, or an inconsistent query.
 pub fn decode_query(packet: &[u8]) -> Result<SearchQuery, WireError> {
     let mut input = Input::new(packet);
-    if input.take(4)? != REQUEST_MAGIC {
+    let magic = input.take(4)?;
+    let query = if magic == REQUEST_MAGIC_V1 {
+        decode_query_v1(&mut input)?
+    } else if magic == REQUEST_MAGIC_V2 {
+        decode_query_v2(&mut input)?
+    } else {
         return Err(WireError::BadMagic);
+    };
+    if !input.is_empty() {
+        return Err(WireError::TrailingData);
     }
+    query.validate().map_err(|_| WireError::InvalidQuery)?;
+    Ok(query)
+}
+
+fn decode_query_v1(input: &mut Input<'_>) -> Result<SearchQuery, WireError> {
     let count = usize::from(input.u16()?);
     if count == 0 || count > MAX_REQUIREMENTS {
         return Err(WireError::InvalidRequirementCount);
@@ -45,19 +60,88 @@ pub fn decode_query(packet: &[u8]) -> Result<SearchQuery, WireError> {
         requirements.push(Requirement {
             kind: definition.kind,
             item: Some(definition.id),
-            upgrade: Some(upgrade),
+            upgrade: UpgradeRequirement::Exact(upgrade),
             effect,
+            source: None,
+            identity_group: None,
         });
     }
-    if !input.is_empty() {
-        return Err(WireError::TrailingData);
-    }
-    let query = SearchQuery {
+    Ok(SearchQuery {
         requirements,
         max_depth: 24,
-    };
-    query.validate().map_err(|_| WireError::InvalidQuery)?;
-    Ok(query)
+        require_blacksmith: false,
+    })
+}
+
+fn decode_query_v2(input: &mut Input<'_>) -> Result<SearchQuery, WireError> {
+    let max_depth = input.u8()?;
+    let flags = input.u8()?;
+    if flags & !1 != 0 {
+        return Err(WireError::InvalidFlags);
+    }
+    let count = usize::from(input.u16()?);
+    if count == 0 || count > MAX_REQUIREMENTS {
+        return Err(WireError::InvalidRequirementCount);
+    }
+    let mut requirements = Vec::with_capacity(count);
+    for _ in 0..count {
+        let kind = item_kind_from_wire_id(input.u8()?).ok_or(WireError::UnknownItemKind)?;
+        let stable_id = input.utf8_u16()?;
+        let item = if stable_id.is_empty() {
+            None
+        } else {
+            Some(
+                item_by_stable_id(stable_id)
+                    .ok_or(WireError::UnknownItem)?
+                    .id,
+            )
+        };
+        let upgrade_mode = input.u8()?;
+        let upgrade_value = input.u8()?;
+        let upgrade = match upgrade_mode {
+            0 if upgrade_value == 0 => UpgradeRequirement::Any,
+            1 => UpgradeRequirement::Exact(upgrade_value),
+            2 => UpgradeRequirement::AtLeast(upgrade_value),
+            _ => return Err(WireError::InvalidUpgradeMode),
+        };
+        let modifier = input.utf8_u16()?;
+        let effect = if modifier.is_empty() {
+            None
+        } else {
+            Some(Effect::from_wire_name(kind, modifier).ok_or(WireError::UnknownModifier)?)
+        };
+        let source = match input.u8()? {
+            0 => None,
+            value => Some(source_from_wire_id(value - 1).ok_or(WireError::UnknownItemSource)?),
+        };
+        let identity_group = match input.u8()? {
+            0 => None,
+            value => Some(value),
+        };
+        requirements.push(Requirement {
+            kind,
+            item,
+            upgrade,
+            effect,
+            source,
+            identity_group,
+        });
+    }
+    Ok(SearchQuery {
+        requirements,
+        max_depth,
+        require_blacksmith: flags & 1 != 0,
+    })
+}
+
+const fn item_kind_from_wire_id(id: u8) -> Option<ItemKind> {
+    Some(match id {
+        0 => ItemKind::Weapon,
+        1 => ItemKind::Armor,
+        2 => ItemKind::Wand,
+        3 => ItemKind::Ring,
+        _ => return None,
+    })
 }
 
 /// Encodes the seed-only `SSR1` result batch consumed by Android.
@@ -359,8 +443,10 @@ pub enum WireError {
     InvalidUtf8,
     InvalidSeedCode,
     InvalidRequirementCount,
+    UnknownItemKind,
     UnknownItem,
     UnknownModifier,
+    InvalidUpgradeMode,
     InvalidQuery,
     TrailingData,
     TooManyResults,
@@ -381,8 +467,10 @@ impl fmt::Display for WireError {
             Self::InvalidUtf8 => "packet contains invalid UTF-8",
             Self::InvalidSeedCode => "seed code must contain nine A-Z characters",
             Self::InvalidRequirementCount => "requirement count must be 1..=64",
+            Self::UnknownItemKind => "packet names an unknown item category",
             Self::UnknownItem => "packet names an unknown item ID",
             Self::UnknownModifier => "packet names an unknown enchantment or glyph",
+            Self::InvalidUpgradeMode => "packet contains an invalid upgrade predicate",
             Self::InvalidQuery => "packet describes an inconsistent search query",
             Self::TrailingData => "packet has trailing bytes",
             Self::TooManyResults => "result batch exceeds the protocol limit",
@@ -405,6 +493,7 @@ mod tests {
     use crate::catalog::{ArmorEffect, Effect, ITEMS, ItemId, ItemKind, WeaponEffect, item};
     use crate::main_world::CanonicalMainWorldGenerator;
     use crate::model::{Accessibility, GeneratedWorld, ItemSource, WorldItem};
+    use crate::query::UpgradeRequirement;
     use crate::search::WorldGenerator;
     use crate::seed::DungeonSeed;
 
@@ -452,7 +541,7 @@ mod tests {
         let query = decode_query(&packet).unwrap();
         assert_eq!(query.requirements.len(), 2);
         assert_eq!(query.requirements[0].item, Some(ItemId::WandFrost));
-        assert_eq!(query.requirements[0].upgrade, Some(2));
+        assert_eq!(query.requirements[0].upgrade, UpgradeRequirement::Exact(2));
         assert_eq!(
             query.requirements[1].effect,
             Some(Effect::Armor(ArmorEffect::Stench))
@@ -480,7 +569,7 @@ mod tests {
 
         let query = decode_query(&packet).unwrap();
         assert_eq!(query.requirements[0].item, Some(ItemId::CleansingDart));
-        assert_eq!(query.requirements[0].upgrade, Some(1));
+        assert_eq!(query.requirements[0].upgrade, UpgradeRequirement::Exact(1));
         assert_eq!(query.requirements[0].effect, None);
     }
 
@@ -493,7 +582,7 @@ mod tests {
         field(&mut ring, "");
         let query = decode_query(&ring).unwrap();
         assert_eq!(query.requirements[0].kind, ItemKind::Ring);
-        assert_eq!(query.requirements[0].upgrade, Some(4));
+        assert_eq!(query.requirements[0].upgrade, UpgradeRequirement::Exact(4));
 
         let mut sword = b"SSF1".to_vec();
         sword.extend_from_slice(&1_u16.to_be_bytes());
@@ -501,6 +590,57 @@ mod tests {
         sword.push(4);
         field(&mut sword, "");
         assert_eq!(decode_query(&sword), Err(WireError::InvalidQuery));
+    }
+
+    #[test]
+    fn ssf2_decodes_general_linked_source_and_floor_constraints() {
+        let mut packet = b"SSF2".to_vec();
+        packet.extend_from_slice(&[14, 1, 0, 4]); // floor, blacksmith flag, count
+        for (mode, value, source, group) in [
+            (1, 3, 15, 1), // exact +3 from Wandmaker, linked group 1
+            (2, 0, 0, 1),  // at least +0, linked group 1
+            (2, 0, 0, 1),
+            (1, 1, 0, 0), // any +1 wand
+        ] {
+            packet.push(2); // wand
+            field(&mut packet, ""); // any wand type
+            packet.extend_from_slice(&[mode, value]);
+            field(&mut packet, "");
+            packet.extend_from_slice(&[source, group]);
+        }
+
+        let query = decode_query(&packet).unwrap();
+        assert_eq!(query.max_depth, 14);
+        assert!(query.require_blacksmith);
+        assert_eq!(query.requirements.len(), 4);
+        assert_eq!(query.requirements[0].item, None);
+        assert_eq!(query.requirements[0].upgrade, UpgradeRequirement::Exact(3));
+        assert_eq!(
+            query.requirements[0].source,
+            Some(ItemSource::WandmakerReward)
+        );
+        assert_eq!(query.requirements[0].identity_group, Some(1));
+        assert_eq!(
+            query.requirements[1].upgrade,
+            UpgradeRequirement::AtLeast(0)
+        );
+        assert_eq!(query.requirements[3].identity_group, None);
+    }
+
+    #[test]
+    fn ssf2_rejects_reserved_flags_kinds_and_upgrade_modes() {
+        assert_eq!(
+            decode_query(b"SSF2\x18\x02\0\x01"),
+            Err(WireError::InvalidFlags)
+        );
+
+        let mut bad_kind = b"SSF2\x18\0\0\x01".to_vec();
+        bad_kind.push(4);
+        assert_eq!(decode_query(&bad_kind), Err(WireError::UnknownItemKind));
+
+        let mut bad_mode = b"SSF2\x18\0\0\x01\x02\0\0".to_vec();
+        bad_mode.extend_from_slice(&[3, 0]);
+        assert_eq!(decode_query(&bad_mode), Err(WireError::InvalidUpgradeMode));
     }
 
     #[test]

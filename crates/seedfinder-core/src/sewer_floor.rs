@@ -1373,10 +1373,13 @@ mod tests {
             requirements: vec![Requirement {
                 kind: crate::catalog::ItemKind::Armor,
                 item: Some(ItemId::MailArmor),
-                upgrade: Some(2),
+                upgrade: crate::query::UpgradeRequirement::Exact(2),
                 effect: None,
+                source: None,
+                identity_group: None,
             }],
             max_depth: 4,
+            require_blacksmith: false,
         };
         let options = SearchOptions {
             start_seed: 0,

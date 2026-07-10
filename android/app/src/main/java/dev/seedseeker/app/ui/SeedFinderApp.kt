@@ -53,6 +53,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
@@ -112,8 +113,10 @@ import dev.seedseeker.app.model.SearchState
 import dev.seedseeker.app.model.SearchStatus
 import dev.seedseeker.app.model.ScoutAccessibility
 import dev.seedseeker.app.model.ScoutItem
+import dev.seedseeker.app.model.ScoutItemSource
 import dev.seedseeker.app.model.ScoutWorld
 import dev.seedseeker.app.model.SeedResult
+import dev.seedseeker.app.model.UpgradeMatch
 import dev.seedseeker.app.ui.theme.Amber
 import dev.seedseeker.app.ui.theme.DeepMoss
 import dev.seedseeker.app.ui.theme.Ink
@@ -121,6 +124,7 @@ import dev.seedseeker.app.ui.theme.Mint
 import dev.seedseeker.app.ui.theme.Muted
 import dev.seedseeker.app.ui.theme.RaisedMoss
 import java.util.Locale
+import kotlin.math.roundToInt
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -159,6 +163,8 @@ fun SeedFinderApp(engine: NativeSeedFinder) {
         )
     }
     var nextRequirementKey by remember { mutableLongStateOf(3L) }
+    var maximumDepth by remember { mutableStateOf(24) }
+    var requireBlacksmith by remember { mutableStateOf(false) }
     var editingRequirement by remember { mutableStateOf<ItemRequirement?>(null) }
     var showRequirementSheet by remember { mutableStateOf(false) }
     var results by remember { mutableStateOf(emptyList<SeedResult>()) }
@@ -252,6 +258,8 @@ fun SeedFinderApp(engine: NativeSeedFinder) {
         when (destination) {
             Destination.FINDER -> FinderScreen(
                 requirements = requirements,
+                maximumDepth = maximumDepth,
+                requireBlacksmith = requireBlacksmith,
                 results = results,
                 status = searchStatus,
                 isSearching = isSearching,
@@ -272,9 +280,14 @@ fun SeedFinderApp(engine: NativeSeedFinder) {
                 onRemove = { requirement ->
                     requirements = requirements.filterNot { it.key == requirement.key }
                 },
+                onMaximumDepthChange = { maximumDepth = it },
+                onRequireBlacksmithChange = { requireBlacksmith = it },
                 onSearch = {
                     if (requirements.isNotEmpty()) {
-                        run = SearchRun(nextRunId++, SearchRequest(requirements))
+                        run = SearchRun(
+                            nextRunId++,
+                            SearchRequest(requirements, maximumDepth, requireBlacksmith),
+                        )
                     }
                 },
                 onCancel = {
@@ -315,7 +328,7 @@ fun SeedFinderApp(engine: NativeSeedFinder) {
             RequirementSheet(
                 editing = editingRequirement,
                 onDismiss = { showRequirementSheet = false },
-                onSave = { item, upgrade, modifier ->
+                onSave = { item, kind, upgradeMatch, upgrade, modifier, source, identityGroup ->
                     val existing = editingRequirement
                     if (existing == null) {
                         requirements = requirements + ItemRequirement(
@@ -323,6 +336,10 @@ fun SeedFinderApp(engine: NativeSeedFinder) {
                             item = item,
                             upgrade = upgrade,
                             modifier = modifier,
+                            kind = kind,
+                            upgradeMatch = upgradeMatch,
+                            source = source,
+                            identityGroup = identityGroup,
                         )
                     } else {
                         requirements = requirements.map {
@@ -331,6 +348,10 @@ fun SeedFinderApp(engine: NativeSeedFinder) {
                                     item = item,
                                     upgrade = upgrade,
                                     modifier = modifier,
+                                    kind = kind,
+                                    upgradeMatch = upgradeMatch,
+                                    source = source,
+                                    identityGroup = identityGroup,
                                 )
                             } else {
                                 it
@@ -348,6 +369,8 @@ fun SeedFinderApp(engine: NativeSeedFinder) {
 @Composable
 private fun FinderScreen(
     requirements: List<ItemRequirement>,
+    maximumDepth: Int,
+    requireBlacksmith: Boolean,
     results: List<SeedResult>,
     status: SearchStatus?,
     isSearching: Boolean,
@@ -357,6 +380,8 @@ private fun FinderScreen(
     onAdd: () -> Unit,
     onEdit: (ItemRequirement) -> Unit,
     onRemove: (ItemRequirement) -> Unit,
+    onMaximumDepthChange: (Int) -> Unit,
+    onRequireBlacksmithChange: (Boolean) -> Unit,
     onSearch: () -> Unit,
     onCancel: () -> Unit,
 ) {
@@ -437,6 +462,17 @@ private fun FinderScreen(
                 }
 
                 item {
+                    SearchScopeCard(
+                        maximumDepth = maximumDepth,
+                        requireBlacksmith = requireBlacksmith,
+                        enabled = !isSearching,
+                        onMaximumDepthChange = onMaximumDepthChange,
+                        onRequireBlacksmithChange = onRequireBlacksmithChange,
+                        modifier = Modifier.padding(top = 20.dp),
+                    )
+                }
+
+                item {
                     SearchControls(
                         requirementCount = requirements.size,
                         status = status,
@@ -470,6 +506,46 @@ private fun FinderScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun SearchScopeCard(
+    maximumDepth: Int,
+    requireBlacksmith: Boolean,
+    enabled: Boolean,
+    onMaximumDepthChange: (Int) -> Unit,
+    onRequireBlacksmithChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    OutlinedCard(modifier = modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
+        Column(Modifier.padding(18.dp)) {
+            Text("Search scope", style = MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(5.dp))
+            Text(
+                "Every required item and facility must be available within the selected floor.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(16.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("First $maximumDepth floors", modifier = Modifier.weight(1f))
+                Text("Floor $maximumDepth", color = MaterialTheme.colorScheme.primary)
+            }
+            Slider(
+                value = maximumDepth.toFloat(),
+                onValueChange = { onMaximumDepthChange(it.roundToInt()) },
+                valueRange = 1f..24f,
+                steps = 22,
+                enabled = enabled,
+            )
+            FilterChip(
+                selected = requireBlacksmith,
+                onClick = { onRequireBlacksmithChange(!requireBlacksmith) },
+                enabled = enabled,
+                label = { Text("Require an accessible blacksmith") },
+            )
         }
     }
 }
@@ -577,7 +653,7 @@ private fun EmptyRequirementsCard() {
             Text("No requirements yet", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(6.dp))
             Text(
-                "Choose an item and its exact upgrade. Rings support +1 through +4.",
+                "Choose a category or item, upgrade predicate, source, and optional same-item group.",
                 textAlign = TextAlign.Center,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -606,17 +682,22 @@ private fun RequirementCard(
                     color = MaterialTheme.colorScheme.background.copy(alpha = 0.55f),
                 ) {
                     Box(contentAlignment = Alignment.Center) {
-                        ItemSprite(
-                            item = requirement.item,
-                            modifierName = requirement.modifier,
-                            modifier = Modifier.size(48.dp),
-                        )
+                        val item = requirement.item
+                        if (item == null) {
+                            Text("?", style = MaterialTheme.typography.headlineMedium, color = Mint)
+                        } else {
+                            ItemSprite(
+                                item = item,
+                                modifierName = requirement.modifier,
+                                modifier = Modifier.size(48.dp),
+                            )
+                        }
                     }
                 }
                 Spacer(Modifier.width(15.dp))
                 Column(Modifier.weight(1f)) {
                     Text(
-                        requirement.item.name,
+                        requirement.item?.name ?: "Any ${requirement.kind.label.lowercase(Locale.ROOT)}",
                         style = MaterialTheme.typography.titleMedium,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
@@ -627,9 +708,9 @@ private fun RequirementCard(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    requirement.item.tier?.let {
+                    requirement.item?.tier?.let {
                         Text(
-                            "Tier $it ${requirement.item.kind.name.lowercase(Locale.ROOT)}",
+                            "Tier $it ${requirement.kind.name.lowercase(Locale.ROOT)}",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -640,7 +721,11 @@ private fun RequirementCard(
                     color = MaterialTheme.colorScheme.primaryContainer,
                 ) {
                     Text(
-                        "+${requirement.upgrade}",
+                        when (requirement.upgradeMatch) {
+                            UpgradeMatch.ANY -> "Any"
+                            UpgradeMatch.EXACT -> "= +${requirement.upgrade}"
+                            UpgradeMatch.AT_LEAST -> "≥ +${requirement.upgrade}"
+                        },
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -1203,17 +1288,23 @@ private fun ScoutItemCard(scoutItem: ScoutItem, modifier: Modifier = Modifier) {
 private fun RequirementSheet(
     editing: ItemRequirement?,
     onDismiss: () -> Unit,
-    onSave: (CatalogItem, Int, String?) -> Unit,
+    onSave: (CatalogItem?, ItemKind, UpgradeMatch, Int, String?, ScoutItemSource?, Int?) -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val identity = editing?.key ?: -1L
-    var kind by remember(identity) { mutableStateOf(editing?.item?.kind ?: ItemKind.WEAPON) }
+    var kind by remember(identity) { mutableStateOf(editing?.kind ?: ItemKind.WEAPON) }
     var selectedItem by remember(identity) {
-        mutableStateOf(editing?.item ?: ItemCatalog.forKind(kind).first())
+        mutableStateOf<CatalogItem?>(
+            if (editing == null) ItemCatalog.forKind(kind).first() else editing.item,
+        )
     }
+    var upgradeMatch by remember(identity) { mutableStateOf(editing?.upgradeMatch ?: UpgradeMatch.EXACT) }
     var upgrade by remember(identity) { mutableStateOf(editing?.upgrade ?: 1) }
     var modifierName by remember(identity) { mutableStateOf(editing?.modifier) }
     var modifierMenuExpanded by remember(identity) { mutableStateOf(false) }
+    var source by remember(identity) { mutableStateOf(editing?.source) }
+    var sourceMenuExpanded by remember(identity) { mutableStateOf(false) }
+    var identityGroup by remember(identity) { mutableStateOf(editing?.identityGroup) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -1245,7 +1336,7 @@ private fun RequirementSheet(
                         style = MaterialTheme.typography.headlineSmall,
                     )
                     Text(
-                        "Choose loot and its exact upgrade roll.",
+                        "Combine general item, upgrade, source, and identity constraints.",
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
@@ -1263,12 +1354,34 @@ private fun RequirementSheet(
                         onClick = {
                             kind = tabKind
                             selectedItem = ItemCatalog.forKind(tabKind).first()
-                            upgrade = upgrade.coerceAtMost(tabKind.maximumSearchUpgrade)
+                            upgrade = when (upgradeMatch) {
+                                UpgradeMatch.ANY -> 0
+                                UpgradeMatch.EXACT -> upgrade.coerceIn(1, tabKind.maximumSearchUpgrade)
+                                UpgradeMatch.AT_LEAST -> upgrade.coerceIn(0, tabKind.maximumSearchUpgrade)
+                            }
                             modifierName = null
                         },
                         text = { Text(tabKind.label) },
                     )
                 }
+            }
+
+            Row(
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                FilterChip(
+                    selected = selectedItem == null,
+                    onClick = { selectedItem = null },
+                    label = { Text("Any ${kind.label.lowercase(Locale.ROOT)}") },
+                )
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    "Use a same-item group to link wildcard requirements.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
             }
 
             LazyVerticalGrid(
@@ -1283,7 +1396,7 @@ private fun RequirementSheet(
                 items(ItemCatalog.forKind(kind), key = { it.id }) { item ->
                     ItemTile(
                         item = item,
-                        selected = selectedItem.id == item.id,
+                        selected = selectedItem?.id == item.id,
                         onClick = { selectedItem = item },
                     )
                 }
@@ -1294,15 +1407,39 @@ private fun RequirementSheet(
                     .verticalScroll(rememberScrollState())
                     .padding(horizontal = 20.dp),
             ) {
-                Text("Exact upgrade", style = MaterialTheme.typography.titleMedium)
+                Text("Upgrade", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(9.dp))
                 Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-                    (1..kind.maximumSearchUpgrade).forEach { value ->
+                    UpgradeMatch.entries.forEach { match ->
                         FilterChip(
-                            selected = upgrade == value,
-                            onClick = { upgrade = value },
-                            label = { Text("+$value") },
+                            selected = upgradeMatch == match,
+                            onClick = {
+                                upgradeMatch = match
+                                upgrade = when (match) {
+                                    UpgradeMatch.ANY -> 0
+                                    UpgradeMatch.EXACT -> upgrade.coerceIn(1, kind.maximumSearchUpgrade)
+                                    UpgradeMatch.AT_LEAST -> upgrade.coerceIn(0, kind.maximumSearchUpgrade)
+                                }
+                            },
+                            label = { Text(match.label) },
                         )
+                    }
+                }
+                if (upgradeMatch != UpgradeMatch.ANY) {
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+                        val values = if (upgradeMatch == UpgradeMatch.EXACT) {
+                            1..kind.maximumSearchUpgrade
+                        } else {
+                            0..kind.maximumSearchUpgrade
+                        }
+                        values.forEach { value ->
+                            FilterChip(
+                                selected = upgrade == value,
+                                onClick = { upgrade = value },
+                                label = { Text("+$value") },
+                            )
+                        }
                     }
                 }
 
@@ -1384,15 +1521,95 @@ private fun RequirementSheet(
                     }
                 }
 
+                Spacer(Modifier.height(16.dp))
+                Text("Source", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(8.dp))
+                ExposedDropdownMenuBox(
+                    expanded = sourceMenuExpanded,
+                    onExpandedChange = { sourceMenuExpanded = it },
+                ) {
+                    OutlinedTextField(
+                        value = source?.label ?: "Any source",
+                        onValueChange = { },
+                        readOnly = true,
+                        singleLine = true,
+                        label = { Text("Where it must come from") },
+                        trailingIcon = {
+                            ExposedDropdownMenuDefaults.TrailingIcon(expanded = sourceMenuExpanded)
+                        },
+                        modifier = Modifier
+                            .menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)
+                            .fillMaxWidth(),
+                    )
+                    ExposedDropdownMenu(
+                        expanded = sourceMenuExpanded,
+                        onDismissRequest = { sourceMenuExpanded = false },
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Any source") },
+                            onClick = {
+                                source = null
+                                sourceMenuExpanded = false
+                            },
+                        )
+                        ScoutItemSource.entries.forEach { option ->
+                            DropdownMenuItem(
+                                text = { Text(option.label) },
+                                onClick = {
+                                    source = option
+                                    sourceMenuExpanded = false
+                                },
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(16.dp))
+                Text("Same-item group", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Requirements sharing a letter must resolve to the exact same item type, using distinct copies.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = identityGroup == null,
+                        onClick = { identityGroup = null },
+                        label = { Text("None") },
+                    )
+                    (1..4).forEach { group ->
+                        FilterChip(
+                            selected = identityGroup == group,
+                            onClick = { identityGroup = group },
+                            label = { Text(('A'.code + group - 1).toChar().toString()) },
+                        )
+                    }
+                }
+
                 Spacer(Modifier.height(18.dp))
                 SelectedRequirementPreview(
                     item = selectedItem,
+                    kind = kind,
+                    upgradeMatch = upgradeMatch,
                     upgrade = upgrade,
                     modifierName = modifierName,
+                    source = source,
+                    identityGroup = identityGroup,
                 )
                 Spacer(Modifier.height(14.dp))
                 Button(
-                    onClick = { onSave(selectedItem, upgrade, modifierName) },
+                    onClick = {
+                        onSave(
+                            selectedItem,
+                            kind,
+                            upgradeMatch,
+                            upgrade,
+                            modifierName,
+                            source,
+                            identityGroup,
+                        )
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(52.dp),
@@ -1445,9 +1662,13 @@ private fun ItemTile(item: CatalogItem, selected: Boolean, onClick: () -> Unit) 
 
 @Composable
 private fun SelectedRequirementPreview(
-    item: CatalogItem,
+    item: CatalogItem?,
+    kind: ItemKind,
+    upgradeMatch: UpgradeMatch,
     upgrade: Int,
     modifierName: String?,
+    source: ScoutItemSource?,
+    identityGroup: Int?,
 ) {
     Surface(
         shape = RoundedCornerShape(18.dp),
@@ -1459,16 +1680,33 @@ private fun SelectedRequirementPreview(
                 .padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            ItemSprite(item, modifierName, Modifier.size(48.dp))
+            if (item == null) {
+                Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                    Text("?", style = MaterialTheme.typography.headlineMedium, color = Mint)
+                }
+            } else {
+                ItemSprite(item, modifierName, Modifier.size(48.dp))
+            }
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
-                Text(item.name, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    item?.name ?: "Any ${kind.label.lowercase(Locale.ROOT)}",
+                    style = MaterialTheme.typography.titleMedium,
+                )
                 Text(
                     buildString {
-                        append("+")
-                        append(upgrade)
-                        append(" exactly")
+                        append(
+                            when (upgradeMatch) {
+                                UpgradeMatch.ANY -> "Any upgrade"
+                                UpgradeMatch.EXACT -> "+$upgrade exactly"
+                                UpgradeMatch.AT_LEAST -> "+$upgrade or higher"
+                            },
+                        )
                         modifierName?.let { append(" • $it") }
+                        source?.let { append(" • ${it.label}") }
+                        identityGroup?.let {
+                            append(" • group ${('A'.code + it - 1).toChar()}")
+                        }
                     },
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.bodySmall,

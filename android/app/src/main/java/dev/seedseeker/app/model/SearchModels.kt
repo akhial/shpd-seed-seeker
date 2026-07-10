@@ -22,34 +22,68 @@ data class CatalogItem(
 
 data class ItemRequirement(
     val key: Long,
-    val item: CatalogItem,
+    val item: CatalogItem?,
     val upgrade: Int,
     val modifier: String? = null,
+    val kind: ItemKind = item?.kind ?: error("A wildcard requirement must specify its category"),
+    val upgradeMatch: UpgradeMatch = UpgradeMatch.EXACT,
+    val source: ScoutItemSource? = null,
+    val identityGroup: Int? = null,
 ) {
     init {
-        require(upgrade in 1..item.kind.maximumSearchUpgrade) {
-            "Upgrade requirement must be +1..+${item.kind.maximumSearchUpgrade} for ${item.kind.label}"
+        require(item == null || item.kind == kind) { "Selected item must belong to its category" }
+        val validUpgrade = when (upgradeMatch) {
+            UpgradeMatch.ANY -> upgrade == 0
+            UpgradeMatch.EXACT -> upgrade in 1..kind.maximumSearchUpgrade
+            UpgradeMatch.AT_LEAST -> upgrade in 0..kind.maximumSearchUpgrade
         }
-        require(item.kind.modifierLabel != null || modifier == null) {
-            "${item.kind.label} cannot carry a modifier requirement"
+        require(validUpgrade) {
+            "Upgrade predicate is invalid for ${kind.label}"
         }
+        require(kind.modifierLabel != null || modifier == null) {
+            "${kind.label} cannot carry a modifier requirement"
+        }
+        require(identityGroup == null || identityGroup in 1..4) { "Same-item group must be A..D" }
     }
 
     val description: String
         get() = buildString {
-            append("+")
-            append(upgrade)
-            append(" exactly")
+            append(
+                when (upgradeMatch) {
+                    UpgradeMatch.ANY -> "Any upgrade"
+                    UpgradeMatch.EXACT -> "+$upgrade exactly"
+                    UpgradeMatch.AT_LEAST -> "+$upgrade or higher"
+                },
+            )
             modifier?.let {
                 append(" • ")
                 append(it)
             }
+            source?.let {
+                append(" • ")
+                append(it.label)
+            }
+            identityGroup?.let {
+                append(" • same item group ")
+                append(('A'.code + it - 1).toChar())
+            }
         }
 }
 
-data class SearchRequest(val requirements: List<ItemRequirement>) {
+enum class UpgradeMatch(val label: String) {
+    ANY("Any"),
+    EXACT("Exactly"),
+    AT_LEAST("At least"),
+}
+
+data class SearchRequest(
+    val requirements: List<ItemRequirement>,
+    val maximumDepth: Int = 24,
+    val requireBlacksmith: Boolean = false,
+) {
     init {
         require(requirements.isNotEmpty()) { "At least one requirement is needed" }
+        require(maximumDepth in 1..24) { "Maximum floor must be 1..24" }
     }
 }
 

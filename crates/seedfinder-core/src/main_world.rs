@@ -183,10 +183,13 @@ mod tests {
             requirements: vec![Requirement {
                 kind: ItemKind::Ring,
                 item: Some(ItemId::RingSharpshooting),
-                upgrade: Some(4),
+                upgrade: crate::query::UpgradeRequirement::Exact(4),
                 effect: None,
+                source: None,
+                identity_group: None,
             }],
             max_depth: 24,
+            require_blacksmith: false,
         };
         assert_eq!(query.validate(), Ok(()));
         assert!(query.matches(&world));

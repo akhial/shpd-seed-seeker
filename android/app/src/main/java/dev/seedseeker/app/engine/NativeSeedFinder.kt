@@ -175,9 +175,10 @@ class DemoNativeSeedFinder : NativeSeedFinder {
  * 5. `close(handle)` joins/releases native resources and is safe after any terminal state.
  * 6. `scoutSeed(seedBytes) -> scoutBytes` generates one canonical seed through depth 24.
  *
- * Request packet `SSF1`: magic[4], requirementCount:u16, then repeated
- * itemIdLength:u16, itemId:utf8, exactUpgrade:u8, modifierLength:u16, modifier:utf8.
- * A zero modifier length means no modifier. Result packet `SSR1`: magic[4], count:u16, then
+ * Request packet `SSF2`: magic[4], maxDepth:u8, flags:u8, requirementCount:u16, then repeated
+ * kind:u8, optionalItemId:utf8_u16, upgradeMode:u8, upgradeValue:u8, modifier:utf8_u16,
+ * optionalSource:u8, sameItemGroup:u8. Flag bit 0 requires an accessible blacksmith.
+ * Result packet `SSR1`: magic[4], count:u16, then
  * repeated seedLength:u8, seed:ASCII. State codes are 0 running, 1 complete, 2 cancelled,
  * 3 failed. A non-zero handle is required. Scout packet `SSC1` contains the echoed canonical seed
  * followed by catalog ID, depth, upgrade, curse, effect, source, and accessibility for every item.
@@ -292,11 +293,13 @@ object SeedCode {
 }
 
 object QueryCodec {
-    private val MAGIC = byteArrayOf('S'.code.toByte(), 'S'.code.toByte(), 'F'.code.toByte(), '1'.code.toByte())
+    private val MAGIC = byteArrayOf('S'.code.toByte(), 'S'.code.toByte(), 'F'.code.toByte(), '2'.code.toByte())
 
     fun encode(request: SearchRequest): ByteArray = ByteArrayOutputStream().use { bytes ->
         DataOutputStream(bytes).use { output ->
             output.write(MAGIC)
+            output.writeByte(request.maximumDepth)
+            output.writeByte(if (request.requireBlacksmith) 1 else 0)
             output.writeShort(request.requirements.size)
             request.requirements.forEach { requirement -> writeRequirement(output, requirement) }
         }
@@ -304,9 +307,13 @@ object QueryCodec {
     }
 
     private fun writeRequirement(output: DataOutputStream, requirement: ItemRequirement) {
-        writeUtf8(output, requirement.item.id)
+        output.writeByte(requirement.kind.ordinal)
+        writeUtf8(output, requirement.item?.id.orEmpty())
+        output.writeByte(requirement.upgradeMatch.ordinal)
         output.writeByte(requirement.upgrade)
         writeUtf8(output, requirement.modifier.orEmpty())
+        output.writeByte(requirement.source?.let { it.ordinal + 1 } ?: 0)
+        output.writeByte(requirement.identityGroup ?: 0)
     }
 
     private fun writeUtf8(output: DataOutputStream, text: String) {

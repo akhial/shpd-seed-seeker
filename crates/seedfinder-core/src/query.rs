@@ -88,7 +88,7 @@ impl Requirement {
 pub struct SearchQuery {
     pub requirements: Vec<Requirement>,
     pub max_depth: u8,
-    /// Reforging plans need an accessible blacksmith room within `max_depth`.
+    /// Whether an accessible blacksmith room must exist within `max_depth`.
     pub require_blacksmith: bool,
 }
 
@@ -106,17 +106,25 @@ impl SearchQuery {
         if !(1..=24).contains(&self.max_depth) {
             return Err(QueryError::InvalidDepth);
         }
-        let mut identity_groups = BTreeMap::new();
+        let mut identity_groups: BTreeMap<u8, (ItemKind, Option<ItemId>)> = BTreeMap::new();
         for requirement in &self.requirements {
             requirement.validate()?;
             if let Some(group) = requirement.identity_group {
                 let current = (requirement.kind, requirement.item);
-                if let Some(previous) = identity_groups.insert(group, current) {
+                if let Some(previous) = identity_groups.get(&group).copied() {
                     if previous.0 != current.0
-                        || previous.1.zip(current.1).is_some_and(|(left, right)| left != right)
+                        || previous
+                            .1
+                            .zip(current.1)
+                            .is_some_and(|(left, right)| left != right)
                     {
                         return Err(QueryError::InconsistentIdentityGroup);
                     }
+                    if previous.1.is_none() && current.1.is_some() {
+                        identity_groups.insert(group, current);
+                    }
+                } else {
+                    identity_groups.insert(group, current);
                 }
             }
         }
@@ -132,7 +140,8 @@ impl SearchQuery {
         }
         if self.require_blacksmith
             && !world.items.iter().any(|candidate| {
-                candidate.depth <= self.max_depth && candidate.source == ItemSource::BlacksmithReward
+                candidate.depth <= self.max_depth
+                    && candidate.source == ItemSource::BlacksmithReward
             })
         {
             return false;
@@ -208,6 +217,13 @@ fn match_recursive(
         {
             let compatible = scenarios.get(&group).copied().unwrap_or(u64::MAX) & item_scenarios;
             if compatible == 0 {
+                if let Some((identity_group, previous)) = previous_identity {
+                    if let Some(previous) = previous {
+                        identities.insert(identity_group, previous);
+                    } else {
+                        identities.remove(&identity_group);
+                    }
+                }
                 continue;
             }
             previous_scenarios = Some((group, scenarios.insert(group, compatible)));
@@ -280,7 +296,7 @@ mod tests {
     use crate::model::{Accessibility, GeneratedWorld, ItemSource, WorldItem};
     use crate::seed::DungeonSeed;
 
-    use super::{QueryError, Requirement, SearchQuery};
+    use super::{QueryError, Requirement, SearchQuery, UpgradeRequirement};
 
     fn world_item(item: ItemId, accessibility: Accessibility) -> WorldItem {
         WorldItem {
@@ -298,8 +314,10 @@ mod tests {
         Requirement {
             kind: crate::catalog::item(item).kind,
             item: Some(item),
-            upgrade: Some(2),
+            upgrade: UpgradeRequirement::Exact(2),
             effect: None,
+            source: None,
+            identity_group: None,
         }
     }
 
@@ -308,6 +326,7 @@ mod tests {
         let query = SearchQuery {
             requirements: vec![requirement(ItemId::Sword), requirement(ItemId::Sword)],
             max_depth: 4,
+            require_blacksmith: false,
         };
         let one = GeneratedWorld {
             seed: DungeonSeed::MIN,
@@ -329,6 +348,7 @@ mod tests {
         let query = SearchQuery {
             requirements: vec![requirement(ItemId::Sword), requirement(ItemId::MailArmor)],
             max_depth: 4,
+            require_blacksmith: false,
         };
         let world = GeneratedWorld {
             seed: DungeonSeed::MIN,
@@ -357,6 +377,7 @@ mod tests {
         let query = SearchQuery {
             requirements: vec![requirement(ItemId::Sword), requirement(ItemId::MailArmor)],
             max_depth: 4,
+            require_blacksmith: false,
         };
         let world = GeneratedWorld {
             seed: DungeonSeed::MIN,
@@ -411,12 +432,14 @@ mod tests {
         let compatible = SearchQuery {
             requirements: vec![requirement(ItemId::Sword), requirement(ItemId::MailArmor)],
             max_depth: 4,
+            require_blacksmith: false,
         };
         assert!(compatible.matches(&world));
 
         let incompatible = SearchQuery {
             requirements: vec![requirement(ItemId::Sword), requirement(ItemId::WandFrost)],
             max_depth: 4,
+            require_blacksmith: false,
         };
         assert!(!incompatible.matches(&world));
     }
@@ -426,8 +449,10 @@ mod tests {
         let invalid = Requirement {
             kind: ItemKind::Wand,
             item: Some(ItemId::Sword),
-            upgrade: Some(2),
+            upgrade: UpgradeRequirement::Exact(2),
             effect: None,
+            source: None,
+            identity_group: None,
         };
         assert!(invalid.validate().is_err());
     }
@@ -437,17 +462,105 @@ mod tests {
         let ring = Requirement {
             kind: ItemKind::Ring,
             item: Some(ItemId::RingSharpshooting),
-            upgrade: Some(4),
+            upgrade: UpgradeRequirement::Exact(4),
             effect: None,
+            source: None,
+            identity_group: None,
         };
         assert_eq!(ring.validate(), Ok(()));
 
         let wand = Requirement {
             kind: ItemKind::Wand,
             item: Some(ItemId::WandFrost),
-            upgrade: Some(4),
+            upgrade: UpgradeRequirement::Exact(4),
             effect: None,
+            source: None,
+            identity_group: None,
         };
         assert_eq!(wand.validate(), Err(QueryError::InvalidUpgrade));
+    }
+
+    #[test]
+    fn linked_wands_require_distinct_copies_and_a_blacksmith_in_range() {
+        let linked = |upgrade, source| Requirement {
+            kind: ItemKind::Wand,
+            item: None,
+            upgrade,
+            effect: None,
+            source,
+            identity_group: Some(1),
+        };
+        let mut query = SearchQuery {
+            requirements: vec![
+                linked(
+                    UpgradeRequirement::Exact(3),
+                    Some(ItemSource::WandmakerReward),
+                ),
+                linked(UpgradeRequirement::AtLeast(0), None),
+                linked(UpgradeRequirement::AtLeast(0), None),
+                Requirement {
+                    kind: ItemKind::Wand,
+                    item: None,
+                    upgrade: UpgradeRequirement::Exact(1),
+                    effect: None,
+                    source: None,
+                    identity_group: None,
+                },
+            ],
+            max_depth: 14,
+            require_blacksmith: true,
+        };
+        let make = |item, upgrade, depth, source| WorldItem {
+            item,
+            upgrade,
+            effect: None,
+            cursed: false,
+            depth,
+            source,
+            accessibility: Accessibility::Independent,
+        };
+        let world = GeneratedWorld {
+            seed: DungeonSeed::MIN,
+            items: vec![
+                make(ItemId::WandFrost, 3, 7, ItemSource::WandmakerReward),
+                make(ItemId::WandFrost, 0, 2, ItemSource::Heap),
+                make(ItemId::WandFrost, 1, 4, ItemSource::Chest),
+                make(ItemId::WandLightning, 1, 5, ItemSource::Heap),
+                make(ItemId::Sword, 2, 13, ItemSource::BlacksmithReward),
+            ],
+        };
+
+        assert_eq!(query.validate(), Ok(()));
+        assert!(query.matches(&world));
+
+        let mut wrong_type = world.clone();
+        wrong_type.items[2].item = ItemId::WandLightning;
+        assert!(!query.matches(&wrong_type));
+
+        query.max_depth = 12;
+        assert!(!query.matches(&world));
+    }
+
+    #[test]
+    fn wildcard_does_not_hide_conflicting_concrete_identity_group_members() {
+        let linked = |item| Requirement {
+            kind: ItemKind::Wand,
+            item,
+            upgrade: UpgradeRequirement::Any,
+            effect: None,
+            source: None,
+            identity_group: Some(1),
+        };
+        let query = SearchQuery {
+            requirements: vec![
+                linked(Some(ItemId::WandFrost)),
+                linked(None),
+                linked(Some(ItemId::WandLightning)),
+            ],
+            max_depth: 24,
+            require_blacksmith: false,
+        };
+
+        assert_eq!(query.validate(), Err(QueryError::InconsistentIdentityGroup));
     }
 }

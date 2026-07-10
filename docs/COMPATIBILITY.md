@@ -23,6 +23,14 @@ generator has been popped and is generally based on the unseeded base RNG.
 The seed scout reports this same static, searchable set rather than claiming to
 be a complete inventory of every consumable or future drop in a run.
 
+Search source constraints refer to the source stored on these static records.
+Same-item groups require distinct obtainable copies with the same concrete item
+ID, while normal AND requirements may match different types. The blacksmith
+condition is satisfied only when the generated Blacksmith quest room is
+accessible within the selected maximum floor; a failed room build does not
+count. The maximum floor is also passed into generation, so later regions are
+not simulated for a shallower query.
+
 ## Boss-floor transitions
 
 Under the canonical fresh custom-seed profile, depths 5, 10, 15, and 25 can be

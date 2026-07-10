@@ -542,10 +542,13 @@ mod tests {
             requirements: vec![Requirement {
                 kind: ItemKind::Wand,
                 item: Some(ItemId::WandFrost),
-                upgrade: Some(2),
+                upgrade: shpd_seedfinder_core::query::UpgradeRequirement::Exact(2),
                 effect: None,
+                source: None,
+                identity_group: None,
             }],
             max_depth: 24,
+            require_blacksmith: false,
         }
     }
 

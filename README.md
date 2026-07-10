@@ -15,9 +15,13 @@ The compatibility target is intentionally pinned:
 
 Seeds use the canonical `XXX-XXX-XXX` base-26 form. Searches support multiple
 AND requirements across melee and thrown weapons, armor, wands, and all twelve
-rings. Weapons, armor, and wands accept exact `+1`, `+2`, or `+3` requirements;
-rings accept `+1` through `+4`. Weapon enchantment/curse and armor glyph/curse
-constraints are also supported.
+rings. Each requirement can target a concrete item or any item in its category,
+use an exact, minimum, or unrestricted upgrade predicate, constrain the loot
+source, and join a same-item group shared by other requirements. Exact upgrades
+run through `+3` for weapons, armor, and wands and through `+4` for rings; minimum
+predicates also support `+0`. Weapon enchantment/curse and armor glyph/curse
+constraints are supported. Queries can require an accessible blacksmith and
+limit every item and facility to the first X dungeon floors.
 Mutually exclusive rewards are represented explicitly so impossible reward
 combinations cannot satisfy a query.
 
