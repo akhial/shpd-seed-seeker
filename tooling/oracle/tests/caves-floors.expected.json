@@ -1,0 +1,262 @@
+{
+  "schema": "shpd-caves-parity-fixture/v1",
+  "game_version": "3.3.8",
+  "game_commit": "7b8b845a76fe76c6b7c031ae9e570852411f56db",
+  "runtime": {
+    "java_version": "21.0.11",
+    "java_vendor": "Eclipse Adoptium",
+    "java_vm": "OpenJDK 64-Bit Server VM"
+  },
+  "generator_checkpoint_columns": ["depth", "level_class", "hash"],
+  "phase_generator_hash_columns": ["depth", "phase", "hash"],
+  "mob_columns": ["class", "cell"],
+  "item_columns": [
+    "depth", "source", "choice", "cell", "container", "class",
+    "kind", "upgrade", "cursed", "effect", "accessibility"
+  ],
+  "seeds": {
+    "AAA-AAA-AAA": {
+      "seed": 0,
+      "requested_depths": [11, 12, 13, 14],
+      "generator_checkpoints": [
+        [1, "SewerLevel", 859790557],
+        [2, "SewerLevel", -468353866],
+        [3, "SewerLevel", -1910739563],
+        [4, "SewerLevel", 817055954],
+        [5, "SewerBossLevel", 817055954],
+        [6, "PrisonLevel", -377540654],
+        [7, "PrisonLevel", 1236255219],
+        [8, "PrisonLevel", -1976694979],
+        [9, "PrisonLevel", 1864529333],
+        [10, "PrisonBossLevel", 1864529333],
+        [11, "CavesLevel", 1698565028],
+        [12, "CavesLevel", -1356614115],
+        [13, "CavesLevel", -2095123261],
+        [14, "CavesLevel", -396201598]
+      ],
+      "phase_generator_hashes": [
+        [11, "prepared", -1243475368],
+        [11, "built", -909972094],
+        [11, "flags", -909972094],
+        [11, "mobs", -909972094],
+        [11, "items", 1698565028],
+        [12, "prepared", 1547993218],
+        [12, "built", -565765370],
+        [12, "flags", -565765370],
+        [12, "mobs", -565765370],
+        [12, "items", -1356614115],
+        [13, "prepared", -114545281],
+        [13, "built", 1966546022],
+        [13, "flags", 1966546022],
+        [13, "mobs", 1966546022],
+        [13, "items", -2095123261],
+        [14, "prepared", -531035871],
+        [14, "built", 1219178367],
+        [14, "flags", 1219178367],
+        [14, "mobs", 1219178367],
+        [14, "items", -396201598]
+      ],
+      "levels": [
+        {
+          "depth": 11,
+          "class": "CavesLevel",
+          "feeling": "WATER",
+          "size": [45, 46],
+          "map_hash": -839635038,
+          "entrance": 346,
+          "exit": 1630,
+          "generator_state_hash": 1698565028,
+          "mobs": [
+            ["Shopkeeper", 263], ["Mimic", 904], ["Bat", 952],
+            ["Bat", 1190], ["Brute", 1310], ["Shaman$BlueShaman", 1681]
+          ]
+        },
+        {
+          "depth": 12,
+          "class": "CavesLevel",
+          "feeling": "WATER",
+          "size": [43, 48],
+          "map_hash": -1548060147,
+          "entrance": 1692,
+          "exit": 414,
+          "generator_state_hash": -1356614115,
+          "mobs": [
+            ["Spinner", 161], ["Shaman$RedShaman", 329], ["Brute", 865],
+            ["Brute", 968], ["Bat", 1085], ["Bat", 1192], ["Bat", 1615],
+            ["Piranha", 1913], ["Piranha", 1914], ["Piranha", 1957]
+          ]
+        },
+        {
+          "depth": 13,
+          "class": "CavesLevel",
+          "feeling": "TRAPS",
+          "size": [45, 32],
+          "map_hash": 1671650609,
+          "entrance": 624,
+          "exit": 769,
+          "generator_state_hash": -2095123261,
+          "mobs": [
+            ["Brute", 389], ["Bat", 724], ["Spinner", 963], ["DM200", 1055],
+            ["Brute", 1058], ["Shaman$RedShaman", 1163], ["Blacksmith", 1164],
+            ["Spinner", 1209]
+          ]
+        },
+        {
+          "depth": 14,
+          "class": "CavesLevel",
+          "feeling": "WATER",
+          "size": [49, 41],
+          "map_hash": -434007164,
+          "entrance": 655,
+          "exit": 1413,
+          "generator_state_hash": -396201598,
+          "mobs": [
+            ["DM200", 526], ["Shaman$RedShaman", 877], ["Spinner", 924],
+            ["Mimic", 973], ["Bat", 1021], ["Brute", 1096],
+            ["Shaman$RedShaman", 1414], ["DM200", 1676],
+            ["Shaman$BlueShaman", 1684], ["Spinner", 1744]
+          ]
+        }
+      ],
+      "items": [
+        [11, "mimic", 1, 904, null, "ScaleArmor", "armor", 0, false, "Stone", {"kind": "independent"}],
+        [11, "shop", 0, 126, "FOR_SALE", "ChillingDart", "weapon", 0, false, null, {"kind": "independent"}],
+        [11, "shop", 0, 128, "FOR_SALE", "Whip", "weapon", 0, false, null, {"kind": "independent"}],
+        [11, "shop", 0, 130, "FOR_SALE", "MailArmor", "armor", 0, false, null, {"kind": "independent"}],
+        [11, "shop", 0, 177, "FOR_SALE", "ThrowingSpear", "weapon", 0, false, null, {"kind": "independent"}],
+        [11, "tomb", 0, 1501, "TOMB", "WandOfMagicMissile", "wand", 0, true, null, {"kind": "independent"}],
+        [12, "sacrificial_prize", 0, null, null, "Crossbow", "weapon", 1, true, "Explosive", {"kind": "independent"}],
+        [13, "blacksmith_quest", 0, null, null, "BattleAxe", "weapon", 2, false, null, {"kind": "choice", "group": "blacksmith_quest@13", "option": 0}],
+        [13, "blacksmith_quest", 1, null, null, "Greatshield", "weapon", 2, false, null, {"kind": "choice", "group": "blacksmith_quest@13", "option": 1}],
+        [13, "blacksmith_quest", 2, null, null, "Tomahawk", "weapon", 2, false, null, {"kind": "choice", "group": "blacksmith_quest@13", "option": 2}],
+        [13, "blacksmith_quest", 3, null, null, "ScaleArmor", "armor", 2, false, null, {"kind": "choice", "group": "blacksmith_quest@13", "option": 3}],
+        [13, "heap", 0, 1208, "HEAP", "Scimitar", "weapon", 1, true, "Polarized", {"kind": "independent"}],
+        [13, "heap", 0, 1209, "HEAP", "MailArmor", "armor", 0, false, null, {"kind": "independent"}],
+        [14, "heap", 0, 927, "HEAP", "AssassinsBlade", "weapon", 1, false, null, {"kind": "independent"}],
+        [14, "locked_chest", 0, 1729, "LOCKED_CHEST", "Katana", "weapon", 0, false, null, {"kind": "independent"}],
+        [14, "mimic", 1, 973, null, "Katana", "weapon", 0, true, "Annoying", {"kind": "independent"}],
+        [14, "tomb", 0, 158, "TOMB", "PlateArmor", "armor", 0, true, "AntiEntropy", {"kind": "independent"}]
+      ]
+    },
+    "AAA-AAA-AAB": {
+      "seed": 1,
+      "requested_depths": [11],
+      "generator_checkpoints": [
+        [1, "SewerLevel", -898459919],
+        [2, "SewerLevel", 863960049],
+        [3, "SewerLevel", -442902350],
+        [4, "SewerLevel", 673725073],
+        [5, "SewerBossLevel", 673725073],
+        [6, "PrisonLevel", -1840842838],
+        [7, "PrisonLevel", 47054004],
+        [8, "PrisonLevel", -1757352012],
+        [9, "PrisonLevel", -649896664],
+        [10, "PrisonBossLevel", -649896664],
+        [11, "CavesLevel", -1319391852]
+      ],
+      "phase_generator_hashes": [],
+      "levels": [{
+        "depth": 11,
+        "class": "CavesLevel",
+        "feeling": "LARGE",
+        "size": [37, 64],
+        "map_hash": 1241369111,
+        "entrance": 686,
+        "exit": 1377,
+        "generator_state_hash": -1319391852,
+        "mobs": [
+          ["Piranha", 156], ["Piranha", 193], ["Shaman$BlueShaman", 252],
+          ["Bat", 326], ["Piranha", 339], ["Bat", 352], ["Shopkeeper", 660],
+          ["Bat", 1026], ["Brute", 1269], ["Bat", 1978], ["Mimic", 2086]
+        ]
+      }],
+      "items": [
+        [11, "chest", 0, 227, "CHEST", "ScaleArmor", "armor", 0, false, "Swiftness", {"kind": "independent"}],
+        [11, "locked_chest", 0, 1397, "LOCKED_CHEST", "RoundShield", "weapon", 1, false, null, {"kind": "independent"}],
+        [11, "shop", 0, 547, "FOR_SALE", "CleansingDart", "weapon", 0, false, null, {"kind": "independent"}],
+        [11, "shop", 0, 548, "FOR_SALE", "ThrowingSpear", "weapon", 0, false, null, {"kind": "independent"}],
+        [11, "shop", 0, 549, "FOR_SALE", "RoundShield", "weapon", 0, false, null, {"kind": "independent"}],
+        [11, "shop", 0, 583, "FOR_SALE", "MailArmor", "armor", 0, false, null, {"kind": "independent"}]
+      ]
+    },
+    "ABC-DEF-GHI": {
+      "seed": 8687205886,
+      "requested_depths": [11],
+      "generator_checkpoints": [
+        [1, "SewerLevel", -114202195],
+        [2, "SewerLevel", -2067098066],
+        [3, "SewerLevel", 317737289],
+        [4, "SewerLevel", 1385821137],
+        [5, "SewerBossLevel", 1385821137],
+        [6, "PrisonLevel", 1016433657],
+        [7, "PrisonLevel", -1735242408],
+        [8, "PrisonLevel", 447754678],
+        [9, "PrisonLevel", -495062703],
+        [10, "PrisonBossLevel", -495062703],
+        [11, "CavesLevel", 1804217106]
+      ],
+      "phase_generator_hashes": [],
+      "levels": [{
+        "depth": 11,
+        "class": "CavesLevel",
+        "feeling": "NONE",
+        "size": [43, 41],
+        "map_hash": -835444084,
+        "entrance": 955,
+        "exit": 894,
+        "generator_state_hash": 1804217106,
+        "mobs": [
+          ["Shaman$RedShaman", 534], ["Bee", 779], ["Bat", 877], ["Bat", 918],
+          ["Bat", 922], ["Brute", 1371], ["Shopkeeper", 1510], ["Bat", 1519]
+        ]
+      }],
+      "items": [
+        [11, "shop", 0, 1383, "FOR_SALE", "DisplacingDart", "weapon", 0, false, null, {"kind": "independent"}],
+        [11, "shop", 0, 1550, "FOR_SALE", "Kunai", "weapon", 0, false, null, {"kind": "independent"}],
+        [11, "shop", 0, 1593, "FOR_SALE", "Mace", "weapon", 0, false, null, {"kind": "independent"}],
+        [11, "shop", 0, 1637, "FOR_SALE", "MailArmor", "armor", 0, false, null, {"kind": "independent"}]
+      ]
+    },
+    "ZZZ-ZZZ-ZZZ": {
+      "seed": 5429503678975,
+      "requested_depths": [11],
+      "generator_checkpoints": [
+        [1, "SewerLevel", -991817379],
+        [2, "SewerLevel", 207178620],
+        [3, "SewerLevel", 1013031293],
+        [4, "SewerLevel", -1919031362],
+        [5, "SewerBossLevel", -1919031362],
+        [6, "PrisonLevel", -476017764],
+        [7, "PrisonLevel", -414822473],
+        [8, "PrisonLevel", -1382921520],
+        [9, "PrisonLevel", -2022875330],
+        [10, "PrisonBossLevel", -2022875330],
+        [11, "CavesLevel", -720375870]
+      ],
+      "phase_generator_hashes": [],
+      "levels": [{
+        "depth": 11,
+        "class": "CavesLevel",
+        "feeling": "NONE",
+        "size": [42, 48],
+        "map_hash": -97339910,
+        "entrance": 858,
+        "exit": 1729,
+        "generator_state_hash": -720375870,
+        "mobs": [
+          ["Bat", 283], ["Shopkeeper", 306], ["Shaman$RedShaman", 658],
+          ["Statue", 1044], ["Bat", 1366], ["Bat", 1731], ["Brute", 1855]
+        ]
+      }],
+      "items": [
+        [11, "chest", 0, 113, "CHEST", "Mace", "weapon", 0, true, "Annoying", {"kind": "independent"}],
+        [11, "heap", 0, 1728, "HEAP", "WandOfLivingEarth", "wand", 0, false, null, {"kind": "independent"}],
+        [11, "shop", 0, 178, "FOR_SALE", "Whip", "weapon", 0, false, null, {"kind": "independent"}],
+        [11, "shop", 0, 183, "FOR_SALE", "Bolas", "weapon", 0, false, null, {"kind": "independent"}],
+        [11, "shop", 0, 220, "FOR_SALE", "MailArmor", "armor", 0, false, null, {"kind": "independent"}],
+        [11, "shop", 0, 431, "FOR_SALE", "ChillingDart", "weapon", 0, false, null, {"kind": "independent"}],
+        [11, "statue", 0, 1044, null, "Sai", "weapon", 0, false, "Blocking", {"kind": "independent"}]
+      ]
+    }
+  }
+}

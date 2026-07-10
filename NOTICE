@@ -1,0 +1,21 @@
+Seed Seeker for Shattered Pixel Dungeon
+Copyright (C) 2026 Seed Seeker contributors
+
+This is an unofficial project and is not endorsed by Shattered Pixel Dungeon or
+its developers.
+
+This software derives deterministic generation behavior and includes the item
+sprite atlas from:
+
+Pixel Dungeon
+Copyright (C) 2012-2015 Oleg Dolya
+
+Shattered Pixel Dungeon
+Copyright (C) 2014-2026 Evan Debenham
+https://github.com/00-Evan/shattered-pixel-dungeon
+
+Compatibility source revision:
+7b8b845a76fe76c6b7c031ae9e570852411f56db (v3.3.8)
+
+The program and bundled derived assets are distributed under the GNU General
+Public License version 3 or, at your option, any later version. See COPYING.

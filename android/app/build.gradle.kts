@@ -1,0 +1,115 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+plugins {
+    id("com.android.application")
+    id("org.jetbrains.kotlin.plugin.compose")
+}
+
+android {
+    namespace = "dev.seedseeker.app"
+    compileSdk = 36
+    ndkVersion = "28.2.13676358"
+
+    defaultConfig {
+        applicationId = "dev.seedseeker.unofficial"
+        minSdk = 21
+        targetSdk = 36
+        versionCode = 2
+        versionName = "0.2.0"
+
+        ndk {
+            // The Rust build produces exactly these ABIs. Without an explicit filter,
+            // transitive AndroidX native libraries make the APK appear installable on
+            // 32-bit devices where libshpd_seedfinder.so is unavailable.
+            abiFilters += setOf("arm64-v8a", "x86_64")
+        }
+
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        vectorDrawables.useSupportLibrary = true
+    }
+
+    buildTypes {
+        debug {
+            buildConfigField("boolean", "USE_DEMO_ENGINE", "true")
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-demo"
+        }
+        release {
+            buildConfigField("boolean", "USE_DEMO_ENGINE", "false")
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
+        }
+    }
+
+    buildFeatures {
+        compose = true
+        buildConfig = true
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
+    }
+
+    packaging {
+        resources.excludes += setOf(
+            "/META-INF/{AL2.0,LGPL2.1}",
+            "/META-INF/DEPENDENCIES",
+        )
+    }
+
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
+
+    lint {
+        // Activity 1.11 is kept for minSdk 21; newer AndroidX lines require 23. Gradle 9.4 is
+        // intentionally paired with the audited upstream v3.3.8 toolchain.
+        disable += setOf("GradleDependency", "AndroidGradlePluginVersion")
+    }
+
+    // Debug builds use DemoNativeSeedFinder and must not pick up stale release JNI outputs.
+    sourceSets.getByName("release").jniLibs.directories.add("build/generated/jniLibs")
+}
+
+val rustJniOutput = layout.buildDirectory.dir("generated/jniLibs")
+val buildRustJni by tasks.registering(Exec::class) {
+    group = "build"
+    description = "Builds arm64-v8a and x86_64 Rust JNI libraries"
+    workingDir(rootProject.projectDir.parentFile)
+    commandLine(
+        "sh",
+        rootProject.projectDir.parentFile.resolve("scripts/build-android-native.sh").absolutePath,
+        rustJniOutput.get().asFile.absolutePath,
+    )
+    inputs.files(
+        fileTree(rootProject.projectDir.parentFile.resolve("crates")) {
+            include("**/*.rs", "**/Cargo.toml")
+        },
+        rootProject.projectDir.parentFile.resolve("Cargo.toml"),
+        rootProject.projectDir.parentFile.resolve("Cargo.lock"),
+        rootProject.projectDir.parentFile.resolve("scripts/build-android-native.sh"),
+    )
+    outputs.dir(rustJniOutput)
+}
+
+tasks.matching { it.name == "mergeReleaseJniLibFolders" }.configureEach {
+    dependsOn(buildRustJni)
+}
+
+dependencies {
+    val composeBom = platform("androidx.compose:compose-bom:2024.10.01")
+
+    implementation(composeBom)
+    implementation("androidx.activity:activity-compose:1.11.0")
+    implementation("androidx.compose.foundation:foundation")
+    implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.ui:ui-tooling-preview")
+    debugImplementation("androidx.compose.ui:ui-tooling")
+
+    testImplementation("junit:junit:4.13.2")
+}

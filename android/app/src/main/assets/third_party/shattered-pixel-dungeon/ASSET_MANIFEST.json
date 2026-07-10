@@ -1,0 +1,21 @@
+{
+  "schema": 1,
+  "upstream": {
+    "name": "Shattered Pixel Dungeon",
+    "repository": "https://github.com/00-Evan/shattered-pixel-dungeon",
+    "version": "3.3.8",
+    "commit": "7b8b845a76fe76c6b7c031ae9e570852411f56db",
+    "license": "GPL-3.0-or-later"
+  },
+  "asset": {
+    "file": "items.png",
+    "upstreamPath": "core/src/main/assets/sprites/items.png",
+    "sha256": "ce2496368660e9b2c4b50401fe4436656cfab5f7785f667ef32aa6a294caacaf",
+    "byteLength": 25062,
+    "width": 256,
+    "height": 512,
+    "cellSize": 16,
+    "columns": 16,
+    "indexFormula": "(x - 1) + 16 * (y - 1)"
+  }
+}

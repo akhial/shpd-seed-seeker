@@ -1,0 +1,14 @@
+[package]
+name = "shpd-seedfinder-core"
+description = "Version-pinned Shattered Pixel Dungeon seed search engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lib]
+name = "shpd_seedfinder_core"
+
+[lints]
+workspace = true
+

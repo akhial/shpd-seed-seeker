@@ -1,0 +1,19 @@
+/target/
+/.gradle/
+/local.properties
+*.iml
+.DS_Store
+
+# Read-only source/oracle clones used for parity work.
+/upstream/
+/tooling/java-oracle/
+/tooling/oracle/.work/
+
+# Android native build products.
+/android/app/.cxx/
+/android/app/build/
+/android/build/
+/android/.gradle/
+
+# Locally signed release artifacts.
+/dist/

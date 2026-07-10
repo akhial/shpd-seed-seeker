@@ -1,0 +1,23 @@
+{
+  "level": {
+    "level_class": "com.shatteredpixel.shatteredpixeldungeon.levels.SewerLevel",
+    "width": 40,
+    "height": 30,
+    "map_hash": -188128262
+  },
+  "item_record_count": 1,
+  "items": {
+    "classes": [
+      "com.shatteredpixel.shatteredpixeldungeon.items.armor.ScaleArmor"
+    ],
+    "searchable": [
+      [
+        "chest",
+        "com.shatteredpixel.shatteredpixeldungeon.items.armor.ScaleArmor",
+        0,
+        null,
+        null
+      ]
+    ]
+  }
+}

@@ -1,0 +1,91 @@
+diff --git a/core/build.gradle b/core/build.gradle
+index d3517a2..7ed2f33 100644
+--- a/core/build.gradle
++++ b/core/build.gradle
+@@ -5,5 +5,13 @@ java.sourceCompatibility = java.targetCompatibility = appJavaCompatibility
+ 
+ dependencies {
+     api project(':SPD-classes')
+     implementation project(':services')
+ }
++
++tasks.register('parityOracle', JavaExec) {
++    group = 'verification'
++    description = 'Emits deterministic parity records for seeded level generation.'
++    classpath = sourceSets.main.runtimeClasspath
++    mainClass = 'com.shatteredpixel.shatteredpixeldungeon.ParityOracle'
++    standardInput = System.in
++}
+diff --git a/SPD-classes/src/main/java/com/watabou/utils/DeviceCompat.java b/SPD-classes/src/main/java/com/watabou/utils/DeviceCompat.java
+index 56b5d50..cfd9b60 100644
+--- a/SPD-classes/src/main/java/com/watabou/utils/DeviceCompat.java
++++ b/SPD-classes/src/main/java/com/watabou/utils/DeviceCompat.java
+@@ -52,7 +52,7 @@ public class DeviceCompat {
+ 	}
+ 	
+ 	public static boolean isDebug(){
+-		return Game.version.contains("INDEV");
++		return true;
+ 	}
+ 	
+ 	public static void log( String tag, String message ){
+diff --git a/core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/SPDSettings.java b/core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/SPDSettings.java
+index 62a154c..918b231 100644
+--- a/core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/SPDSettings.java
++++ b/core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/SPDSettings.java
+@@ -232,7 +232,7 @@ public class SPDSettings extends GameSettings {
+ 	}
+ 	
+ 	public static boolean intro() {
+-		return getBoolean( KEY_INTRO, true );
++		return false;
+ 	}
+ 	
+ 	public static void lastClass( int value ) {
+diff --git a/core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/levels/Level.java b/core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/levels/Level.java
+index 07ac398..6bf7fb2 100644
+--- a/core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/levels/Level.java
++++ b/core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/levels/Level.java
+@@ -24,6 +24,7 @@ package com.shatteredpixel.shatteredpixeldungeon.levels;
+ import com.shatteredpixel.shatteredpixeldungeon.Assets;
+ import com.shatteredpixel.shatteredpixeldungeon.Challenges;
+ import com.shatteredpixel.shatteredpixeldungeon.Dungeon;
++import com.shatteredpixel.shatteredpixeldungeon.ParityOracle;
+ import com.shatteredpixel.shatteredpixeldungeon.ShatteredPixelDungeon;
+ import com.shatteredpixel.shatteredpixeldungeon.Statistics;
+ import com.shatteredpixel.shatteredpixeldungeon.actors.Actor;
+@@ -295,2 +296,4 @@ public abstract class Level implements Bundlable {
++		ParityOracle.checkpoint(this, "prepared");
++
+ 		do {
+ 			width = height = length = 0;
+@@ -307,11 +310,17 @@ public abstract class Level implements Bundlable {
+ 			
+ 		} while (!build());
+ 		
++		ParityOracle.checkpoint(this, "built");
++
+ 		buildFlagMaps();
+ 		cleanWalls();
+ 		
++		ParityOracle.checkpoint(this, "flags");
++
+ 		createMobs();
++		ParityOracle.checkpoint(this, "mobs");
+ 		createItems();
++		ParityOracle.checkpoint(this, "items");
+ 
+ 		Random.popGenerator();
+ 	}
+diff --git a/core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/sprites/ItemSpriteSheet.java b/core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/sprites/ItemSpriteSheet.java
+--- a/core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/sprites/ItemSpriteSheet.java
++++ b/core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/sprites/ItemSpriteSheet.java
+@@ -813,7 +813,7 @@ public class ItemSpriteSheet {
+ 		private static final int WIDTH = 16;
+ 		public static final int SIZE = 8;
+ 
+-		public static TextureFilm film = new TextureFilm( Assets.Sprites.ITEM_ICONS, SIZE, SIZE );
++		public static TextureFilm film = new TextureFilm( 128, 64, SIZE, SIZE );
+ 
+ 		private static int xy(int x, int y){
+ 			x -= 1; y -= 1;

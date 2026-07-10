@@ -1,0 +1,246 @@
+{
+  "schema": "shpd-prison-parity-fixture/v1",
+  "game_version": "3.3.8",
+  "game_commit": "7b8b845a76fe76c6b7c031ae9e570852411f56db",
+  "runtime": {
+    "java_version": "21.0.11",
+    "java_vendor": "Eclipse Adoptium",
+    "java_vm": "OpenJDK 64-Bit Server VM"
+  },
+  "generator_checkpoint_columns": ["depth", "level_class", "hash"],
+  "phase_generator_hash_columns": ["depth", "phase", "hash"],
+  "mob_columns": ["class", "cell"],
+  "item_columns": [
+    "depth", "source", "choice", "cell", "container", "class",
+    "kind", "upgrade", "cursed", "effect", "accessibility"
+  ],
+  "seeds": {
+    "AAA-AAA-AAA": {
+      "seed": 0,
+      "requested_depths": [6, 7, 8, 9],
+      "generator_checkpoints": [
+        [1, "SewerLevel", 859790557],
+        [2, "SewerLevel", -468353866],
+        [3, "SewerLevel", -1910739563],
+        [4, "SewerLevel", 817055954],
+        [5, "SewerBossLevel", 817055954],
+        [6, "PrisonLevel", -377540654],
+        [7, "PrisonLevel", 1236255219],
+        [8, "PrisonLevel", -1976694979],
+        [9, "PrisonLevel", 1864529333]
+      ],
+      "phase_generator_hashes": [
+        [6, "prepared", -938709229],
+        [6, "built", 468986643],
+        [6, "flags", 468986643],
+        [6, "mobs", 468986643],
+        [6, "items", -377540654],
+        [7, "prepared", 1812508686],
+        [7, "built", -512178256],
+        [7, "flags", -512178256],
+        [7, "mobs", -512178256],
+        [7, "items", 1236255219],
+        [8, "prepared", -1494624687],
+        [8, "built", -505650987],
+        [8, "flags", -505650987],
+        [8, "mobs", -505650987],
+        [8, "items", -1976694979],
+        [9, "prepared", -815979812],
+        [9, "built", -293170374],
+        [9, "flags", -293170374],
+        [9, "mobs", 1073995382],
+        [9, "items", 1864529333]
+      ],
+      "levels": [
+        {
+          "depth": 6,
+          "class": "PrisonLevel",
+          "feeling": "LARGE",
+          "size": [39, 52],
+          "map_hash": 1815027889,
+          "entrance": 249,
+          "exit": 1225,
+          "generator_state_hash": -377540654,
+          "mobs": [
+            ["Shopkeeper", 256], ["Skeleton", 417], ["Skeleton", 786],
+            ["Thief", 837], ["Skeleton", 1028], ["Swarm", 1311],
+            ["Skeleton", 1454], ["SentryRoom$Sentry", 1704]
+          ]
+        },
+        {
+          "depth": 7,
+          "class": "PrisonLevel",
+          "feeling": "LARGE",
+          "size": [48, 54],
+          "map_hash": 229406850,
+          "entrance": 652,
+          "exit": 2084,
+          "generator_state_hash": 1236255219,
+          "mobs": [
+            ["Guard", 278], ["Skeleton", 755], ["Thief", 811],
+            ["Skeleton", 1231], ["Skeleton", 1521], ["DM100", 1568],
+            ["Thief", 1789], ["Statue", 2138]
+          ]
+        },
+        {
+          "depth": 8,
+          "class": "PrisonLevel",
+          "feeling": "NONE",
+          "size": [56, 50],
+          "map_hash": -2001044122,
+          "entrance": 1780,
+          "exit": 846,
+          "generator_state_hash": -1976694979,
+          "mobs": [
+            ["Piranha", 353], ["Necromancer", 465], ["DM100", 1208],
+            ["Guard", 1301], ["DM100", 1592], ["Guard", 2336],
+            ["Skeleton", 2506]
+          ]
+        },
+        {
+          "depth": 9,
+          "class": "PrisonLevel",
+          "feeling": "NONE",
+          "size": [35, 38],
+          "map_hash": -1759126364,
+          "entrance": 189,
+          "exit": 791,
+          "generator_state_hash": 1864529333,
+          "mobs": [
+            ["Wandmaker", 328], ["Thief", 579], ["Skeleton", 585],
+            ["Guard", 618], ["DM100", 688], ["DM100", 852],
+            ["Necromancer", 854], ["Guard", 939], ["Necromancer", 1030]
+          ]
+        }
+      ],
+      "items": [
+        [6, "chest", 0, 1550, "CHEST", "ScaleArmor", "armor", 1, false, null, {"kind": "independent"}],
+        [6, "crystal_chest", 0, 736, "CRYSTAL_CHEST", "WandOfFrost", "wand", 1, false, null, {"kind": "choice", "group": "crystal_vault@6", "option": 0}],
+        [6, "heap", 0, 669, "HEAP", "ScaleArmor", "armor", 0, false, null, {"kind": "independent"}],
+        [6, "shop", 0, 140, "FOR_SALE", "Sickle", "weapon", 0, false, null, {"kind": "independent"}],
+        [6, "shop", 0, 298, "FOR_SALE", "HolyDart", "weapon", 0, false, null, {"kind": "independent"}],
+        [6, "shop", 0, 331, "FOR_SALE", "Shuriken", "weapon", 0, false, null, {"kind": "independent"}],
+        [6, "shop", 0, 337, "FOR_SALE", "LeatherArmor", "armor", 0, false, null, {"kind": "independent"}],
+        [7, "chest", 0, 2194, "CHEST", "ScaleArmor", "armor", 1, false, null, {"kind": "independent"}],
+        [7, "heap", 0, 2228, "HEAP", "WandOfBlastWave", "wand", 1, false, null, {"kind": "independent"}],
+        [7, "heap", 0, 2268, "HEAP", "ThrowingSpear", "weapon", 1, true, "Polarized", {"kind": "independent"}],
+        [7, "statue", 0, 2138, null, "Sickle", "weapon", 0, false, "Blocking", {"kind": "independent"}],
+        [8, "heap", 0, 523, "HEAP", "ScaleArmor", "armor", 0, false, null, {"kind": "independent"}],
+        [9, "locked_chest", 0, 696, "LOCKED_CHEST", "Sai", "weapon", 0, true, "Sacrificial", {"kind": "independent"}],
+        [9, "wandmaker_quest", 0, null, null, "WandOfTransfusion", "wand", 1, false, null, {"kind": "choice", "group": "wandmaker_quest@9", "option": 0}],
+        [9, "wandmaker_quest", 1, null, null, "WandOfFrost", "wand", 1, false, null, {"kind": "choice", "group": "wandmaker_quest@9", "option": 1}]
+      ]
+    },
+    "AAA-AAA-AAB": {
+      "seed": 1,
+      "requested_depths": [6],
+      "generator_checkpoints": [
+        [1, "SewerLevel", -898459919],
+        [2, "SewerLevel", 863960049],
+        [3, "SewerLevel", -442902350],
+        [4, "SewerLevel", 673725073],
+        [5, "SewerBossLevel", 673725073],
+        [6, "PrisonLevel", -1840842838]
+      ],
+      "phase_generator_hashes": [],
+      "levels": [
+        {
+          "depth": 6,
+          "class": "PrisonLevel",
+          "feeling": "NONE",
+          "size": [47, 38],
+          "map_hash": 554209483,
+          "entrance": 814,
+          "exit": 366,
+          "generator_state_hash": -1840842838,
+          "mobs": [
+            ["SentryRoom$Sentry", 202], ["Shopkeeper", 475], ["Swarm", 506],
+            ["Statue", 594], ["Mimic", 726], ["Skeleton", 967],
+            ["Skeleton", 1262], ["Skeleton", 1442], ["Thief", 1485]
+          ]
+        }
+      ],
+      "items": [
+        [6, "mimic", 1, 726, null, "Mace", "weapon", 0, true, "Explosive", {"kind": "independent"}],
+        [6, "shop", 0, 331, "FOR_SALE", "LeatherArmor", "armor", 0, false, null, {"kind": "independent"}],
+        [6, "shop", 0, 332, "FOR_SALE", "ChillingDart", "weapon", 0, false, null, {"kind": "independent"}],
+        [6, "shop", 0, 472, "FOR_SALE", "ThrowingClub", "weapon", 0, false, null, {"kind": "independent"}],
+        [6, "shop", 0, 566, "FOR_SALE", "Sickle", "weapon", 0, false, null, {"kind": "independent"}],
+        [6, "statue", 0, 594, null, "RoundShield", "weapon", 0, false, "Kinetic", {"kind": "independent"}]
+      ]
+    },
+    "ABC-DEF-GHI": {
+      "seed": 8687205886,
+      "requested_depths": [6],
+      "generator_checkpoints": [
+        [1, "SewerLevel", -114202195],
+        [2, "SewerLevel", -2067098066],
+        [3, "SewerLevel", 317737289],
+        [4, "SewerLevel", 1385821137],
+        [5, "SewerBossLevel", 1385821137],
+        [6, "PrisonLevel", 1016433657]
+      ],
+      "phase_generator_hashes": [],
+      "levels": [
+        {
+          "depth": 6,
+          "class": "PrisonLevel",
+          "feeling": "WATER",
+          "size": [45, 37],
+          "map_hash": 1938948240,
+          "entrance": 411,
+          "exit": 1115,
+          "generator_state_hash": 1016433657,
+          "mobs": [
+            ["Thief", 285], ["Piranha", 377], ["Piranha", 510],
+            ["Skeleton", 525], ["Piranha", 556], ["Skeleton", 784],
+            ["Shopkeeper", 815], ["Skeleton", 971]
+          ]
+        }
+      ],
+      "items": [
+        [6, "chest", 0, 376, "CHEST", "ScaleArmor", "armor", 0, false, null, {"kind": "independent"}],
+        [6, "heap", 0, 751, "HEAP", "ThrowingSpear", "weapon", 0, false, null, {"kind": "independent"}],
+        [6, "shop", 0, 679, "FOR_SALE", "AdrenalineDart", "weapon", 0, false, null, {"kind": "independent"}],
+        [6, "shop", 0, 682, "FOR_SALE", "LeatherArmor", "armor", 0, false, null, {"kind": "independent"}],
+        [6, "shop", 0, 951, "FOR_SALE", "Quarterstaff", "weapon", 0, false, null, {"kind": "independent"}],
+        [6, "shop", 0, 953, "FOR_SALE", "FishingSpear", "weapon", 0, false, null, {"kind": "independent"}]
+      ]
+    },
+    "ZZZ-ZZZ-ZZZ": {
+      "seed": 5429503678975,
+      "requested_depths": [6],
+      "generator_checkpoints": [
+        [1, "SewerLevel", -991817379],
+        [2, "SewerLevel", 207178620],
+        [3, "SewerLevel", 1013031293],
+        [4, "SewerLevel", -1919031362],
+        [5, "SewerBossLevel", -1919031362],
+        [6, "PrisonLevel", -476017764]
+      ],
+      "phase_generator_hashes": [],
+      "levels": [
+        {
+          "depth": 6,
+          "class": "PrisonLevel",
+          "feeling": "NONE",
+          "size": [39, 45],
+          "map_hash": 964050401,
+          "entrance": 1144,
+          "exit": 145,
+          "generator_state_hash": -476017764,
+          "mobs": [
+            ["Thief", 184], ["Skeleton", 747], ["Swarm", 1035],
+            ["Skeleton", 1115], ["Shopkeeper", 1526]
+          ]
+        }
+      ],
+      "items": [
+        [6, "shop", 0, 1406, "FOR_SALE", "PoisonDart", "weapon", 0, false, null, {"kind": "independent"}],
+        [6, "shop", 0, 1642, "FOR_SALE", "Shuriken", "weapon", 0, false, null, {"kind": "independent"}],
+        [6, "shop", 0, 1645, "FOR_SALE", "Dirk", "weapon", 0, false, null, {"kind": "independent"}],
+        [6, "shop", 0, 1646, "FOR_SALE", "LeatherArmor", "armor", 0, false, null, {"kind": "independent"}]
+      ]
+    }
+  }
+}

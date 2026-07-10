@@ -1,0 +1,995 @@
+{
+  "schema": "shpd-halls-parity-fixture/v1",
+  "game_version": "3.3.8",
+  "game_commit": "7b8b845a76fe76c6b7c031ae9e570852411f56db",
+  "runtime": {
+    "java_version": "21.0.11",
+    "java_vendor": "Eclipse Adoptium",
+    "java_vm": "OpenJDK 64-Bit Server VM"
+  },
+  "generator_checkpoint_columns": [
+    "depth",
+    "level_class",
+    "hash"
+  ],
+  "phase_generator_hash_columns": [
+    "depth",
+    "phase",
+    "hash"
+  ],
+  "mob_columns": [
+    "class",
+    "cell"
+  ],
+  "item_columns": [
+    "depth",
+    "source",
+    "choice",
+    "cell",
+    "container",
+    "class",
+    "kind",
+    "upgrade",
+    "cursed",
+    "effect",
+    "accessibility"
+  ],
+  "seeds": {
+    "AAA-AAA-AAA": {
+      "seed": 0,
+      "requested_depths": [
+        21,
+        22,
+        23,
+        24
+      ],
+      "generator_checkpoints": [
+        [
+          15,
+          "CavesBossLevel",
+          -396201598
+        ],
+        [
+          16,
+          "CityLevel",
+          1492949553
+        ],
+        [
+          17,
+          "CityLevel",
+          -255168431
+        ],
+        [
+          18,
+          "CityLevel",
+          -1412335577
+        ],
+        [
+          19,
+          "CityLevel",
+          -570047642
+        ],
+        [
+          20,
+          "CityBossLevel",
+          676581542
+        ],
+        [
+          21,
+          "HallsLevel",
+          -1470461652
+        ],
+        [
+          22,
+          "HallsLevel",
+          -1867504898
+        ],
+        [
+          23,
+          "HallsLevel",
+          1363352450
+        ],
+        [
+          24,
+          "HallsLevel",
+          739306559
+        ]
+      ],
+      "phase_generator_hashes": [
+        [
+          21,
+          "prepared",
+          1651696265
+        ],
+        [
+          21,
+          "built",
+          660419465
+        ],
+        [
+          21,
+          "flags",
+          660419465
+        ],
+        [
+          21,
+          "mobs",
+          660419465
+        ],
+        [
+          21,
+          "items",
+          -1470461652
+        ],
+        [
+          22,
+          "prepared",
+          -844499702
+        ],
+        [
+          22,
+          "built",
+          1133347266
+        ],
+        [
+          22,
+          "flags",
+          1133347266
+        ],
+        [
+          22,
+          "mobs",
+          1133347266
+        ],
+        [
+          22,
+          "items",
+          -1867504898
+        ],
+        [
+          23,
+          "prepared",
+          -303417508
+        ],
+        [
+          23,
+          "built",
+          874394755
+        ],
+        [
+          23,
+          "flags",
+          874394755
+        ],
+        [
+          23,
+          "mobs",
+          874394755
+        ],
+        [
+          23,
+          "items",
+          1363352450
+        ],
+        [
+          24,
+          "prepared",
+          -1689546012
+        ],
+        [
+          24,
+          "built",
+          -147654364
+        ],
+        [
+          24,
+          "flags",
+          -147654364
+        ],
+        [
+          24,
+          "mobs",
+          -147654364
+        ],
+        [
+          24,
+          "items",
+          739306559
+        ]
+      ],
+      "levels": [
+        {
+          "depth": 21,
+          "class": "HallsLevel",
+          "feeling": "NONE",
+          "size": [
+            48,
+            52
+          ],
+          "map_hash": 115893013,
+          "entrance": 244,
+          "exit": 1040,
+          "generator_state_hash": -1470461652,
+          "mobs": [
+            [
+              "Eye",
+              783
+            ],
+            [
+              "Eye",
+              876
+            ],
+            [
+              "Succubus",
+              969
+            ],
+            [
+              "Succubus",
+              1282
+            ],
+            [
+              "DemonSpawner",
+              1313
+            ],
+            [
+              "Succubus",
+              2109
+            ]
+          ]
+        },
+        {
+          "depth": 22,
+          "class": "HallsLevel",
+          "feeling": "CHASM",
+          "size": [
+            36,
+            54
+          ],
+          "map_hash": 1283341899,
+          "entrance": 1523,
+          "exit": 310,
+          "generator_state_hash": -1867504898,
+          "mobs": [
+            [
+              "Eye",
+              309
+            ],
+            [
+              "Statue",
+              374
+            ],
+            [
+              "Piranha",
+              549
+            ],
+            [
+              "Piranha",
+              623
+            ],
+            [
+              "Piranha",
+              658
+            ],
+            [
+              "Bee",
+              698
+            ],
+            [
+              "Eye",
+              847
+            ],
+            [
+              "Succubus",
+              883
+            ],
+            [
+              "Succubus",
+              956
+            ],
+            [
+              "Eye",
+              1264
+            ],
+            [
+              "Succubus",
+              1288
+            ],
+            [
+              "DemonSpawner",
+              1575
+            ]
+          ]
+        },
+        {
+          "depth": 23,
+          "class": "HallsLevel",
+          "feeling": "DARK",
+          "size": [
+            44,
+            65
+          ],
+          "map_hash": -1159174921,
+          "entrance": 168,
+          "exit": 2000,
+          "generator_state_hash": 1363352450,
+          "mobs": [
+            [
+              "Succubus",
+              644
+            ],
+            [
+              "DemonSpawner",
+              823
+            ],
+            [
+              "Eye",
+              1252
+            ],
+            [
+              "Scorpio",
+              1397
+            ],
+            [
+              "Eye",
+              1439
+            ],
+            [
+              "Succubus",
+              1824
+            ],
+            [
+              "Eye",
+              2039
+            ],
+            [
+              "Eye",
+              2131
+            ],
+            [
+              "Scorpio",
+              2343
+            ]
+          ]
+        },
+        {
+          "depth": 24,
+          "class": "HallsLevel",
+          "feeling": "NONE",
+          "size": [
+            39,
+            40
+          ],
+          "map_hash": -192497479,
+          "entrance": 1071,
+          "exit": 445,
+          "generator_state_hash": 739306559,
+          "mobs": [
+            [
+              "Scorpio",
+              426
+            ],
+            [
+              "Eye",
+              529
+            ],
+            [
+              "Scorpio",
+              570
+            ],
+            [
+              "Scorpio",
+              578
+            ],
+            [
+              "Succubus",
+              594
+            ],
+            [
+              "DemonSpawner",
+              687
+            ],
+            [
+              "Scorpio",
+              705
+            ],
+            [
+              "Eye",
+              1311
+            ]
+          ]
+        }
+      ],
+      "items": [
+        [
+          21,
+          "crystal_chest",
+          0,
+          606,
+          "CRYSTAL_CHEST",
+          "WandOfCorrosion",
+          "wand",
+          0,
+          false,
+          null,
+          {
+            "kind": "choice",
+            "group": "crystal_vault@21",
+            "option": 0
+          }
+        ],
+        [
+          21,
+          "heap",
+          0,
+          1068,
+          "HEAP",
+          "ThrowingHammer",
+          "weapon",
+          0,
+          false,
+          null,
+          {
+            "kind": "independent"
+          }
+        ],
+        [
+          21,
+          "heap",
+          0,
+          1211,
+          "HEAP",
+          "AssassinsBlade",
+          "weapon",
+          0,
+          false,
+          null,
+          {
+            "kind": "independent"
+          }
+        ],
+        [
+          22,
+          "chest",
+          0,
+          550,
+          "CHEST",
+          "PlateArmor",
+          "armor",
+          2,
+          false,
+          "Swiftness",
+          {
+            "kind": "independent"
+          }
+        ],
+        [
+          22,
+          "locked_chest",
+          0,
+          1337,
+          "LOCKED_CHEST",
+          "ThrowingHammer",
+          "weapon",
+          0,
+          false,
+          null,
+          {
+            "kind": "independent"
+          }
+        ],
+        [
+          22,
+          "locked_chest",
+          0,
+          1422,
+          "LOCKED_CHEST",
+          "WandOfPrismaticLight",
+          "wand",
+          0,
+          true,
+          null,
+          {
+            "kind": "independent"
+          }
+        ],
+        [
+          22,
+          "statue",
+          0,
+          374,
+          null,
+          "Glaive",
+          "weapon",
+          0,
+          false,
+          "Shocking",
+          {
+            "kind": "independent"
+          }
+        ],
+        [
+          24,
+          "sacrificial_prize",
+          0,
+          null,
+          null,
+          "RunicBlade",
+          "weapon",
+          0,
+          true,
+          "Displacing",
+          {
+            "kind": "independent"
+          }
+        ]
+      ]
+    },
+    "AAA-AAA-AAB": {
+      "seed": 1,
+      "requested_depths": [
+        21
+      ],
+      "generator_checkpoints": [
+        [
+          15,
+          "CavesBossLevel",
+          -1734340527
+        ],
+        [
+          16,
+          "CityLevel",
+          1516032466
+        ],
+        [
+          17,
+          "CityLevel",
+          987525046
+        ],
+        [
+          18,
+          "CityLevel",
+          -1293988297
+        ],
+        [
+          19,
+          "CityLevel",
+          -1663086306
+        ],
+        [
+          20,
+          "CityBossLevel",
+          -452333892
+        ],
+        [
+          21,
+          "HallsLevel",
+          1995301657
+        ]
+      ],
+      "phase_generator_hashes": [],
+      "levels": [
+        {
+          "depth": 21,
+          "class": "HallsLevel",
+          "feeling": "DARK",
+          "size": [
+            44,
+            44
+          ],
+          "map_hash": 1818812898,
+          "entrance": 193,
+          "exit": 1211,
+          "generator_state_hash": 1995301657,
+          "mobs": [
+            [
+              "Succubus",
+              761
+            ],
+            [
+              "Succubus",
+              1031
+            ],
+            [
+              "Succubus",
+              1064
+            ],
+            [
+              "DemonSpawner",
+              1163
+            ],
+            [
+              "Eye",
+              1298
+            ],
+            [
+              "Succubus",
+              1345
+            ],
+            [
+              "Eye",
+              1677
+            ]
+          ]
+        }
+      ],
+      "items": [
+        [
+          21,
+          "heap",
+          0,
+          643,
+          "HEAP",
+          "HeavyBoomerang",
+          "weapon",
+          0,
+          false,
+          null,
+          {
+            "kind": "independent"
+          }
+        ],
+        [
+          21,
+          "tomb",
+          0,
+          943,
+          "TOMB",
+          "WandOfFireblast",
+          "wand",
+          1,
+          false,
+          null,
+          {
+            "kind": "independent"
+          }
+        ]
+      ]
+    },
+    "ABC-DEF-GHI": {
+      "seed": 8687205886,
+      "requested_depths": [
+        21
+      ],
+      "generator_checkpoints": [
+        [
+          15,
+          "CavesBossLevel",
+          -729536501
+        ],
+        [
+          16,
+          "CityLevel",
+          -1179301947
+        ],
+        [
+          17,
+          "CityLevel",
+          1988887676
+        ],
+        [
+          18,
+          "CityLevel",
+          1060305879
+        ],
+        [
+          19,
+          "CityLevel",
+          -409646112
+        ],
+        [
+          20,
+          "CityBossLevel",
+          -481429732
+        ],
+        [
+          21,
+          "HallsLevel",
+          94543277
+        ]
+      ],
+      "phase_generator_hashes": [],
+      "levels": [
+        {
+          "depth": 21,
+          "class": "HallsLevel",
+          "feeling": "WATER",
+          "size": [
+            51,
+            49
+          ],
+          "map_hash": -1080298065,
+          "entrance": 1856,
+          "exit": 735,
+          "generator_state_hash": 94543277,
+          "mobs": [
+            [
+              "Succubus",
+              685
+            ],
+            [
+              "Eye",
+              782
+            ],
+            [
+              "Succubus",
+              984
+            ],
+            [
+              "Succubus",
+              1054
+            ],
+            [
+              "Succubus",
+              1598
+            ],
+            [
+              "Eye",
+              1645
+            ],
+            [
+              "DemonSpawner",
+              2266
+            ]
+          ]
+        }
+      ],
+      "items": []
+    },
+    "ZZZ-ZZZ-ZZZ": {
+      "seed": 5429503678975,
+      "requested_depths": [
+        21
+      ],
+      "generator_checkpoints": [
+        [
+          15,
+          "CavesBossLevel",
+          -1990957146
+        ],
+        [
+          16,
+          "CityLevel",
+          1918229285
+        ],
+        [
+          17,
+          "CityLevel",
+          1881754496
+        ],
+        [
+          18,
+          "CityLevel",
+          536292455
+        ],
+        [
+          19,
+          "CityLevel",
+          -2017271955
+        ],
+        [
+          20,
+          "CityBossLevel",
+          107536271
+        ],
+        [
+          21,
+          "HallsLevel",
+          -1999428000
+        ]
+      ],
+      "phase_generator_hashes": [],
+      "levels": [
+        {
+          "depth": 21,
+          "class": "HallsLevel",
+          "feeling": "DARK",
+          "size": [
+            47,
+            52
+          ],
+          "map_hash": 1615833505,
+          "entrance": 392,
+          "exit": 1436,
+          "generator_state_hash": -1999428000,
+          "mobs": [
+            [
+              "Succubus",
+              1136
+            ],
+            [
+              "DemonSpawner",
+              1430
+            ],
+            [
+              "Eye",
+              1760
+            ],
+            [
+              "Succubus",
+              1856
+            ],
+            [
+              "Succubus",
+              2011
+            ],
+            [
+              "SentryRoom$Sentry",
+              2190
+            ]
+          ]
+        }
+      ],
+      "items": [
+        [
+          21,
+          "chest",
+          0,
+          2288,
+          "CHEST",
+          "PlateArmor",
+          "armor",
+          0,
+          false,
+          null,
+          {
+            "kind": "independent"
+          }
+        ]
+      ]
+    },
+    "AAA-AAA-AIC": {
+      "seed": 210,
+      "requested_depths": [
+        22
+      ],
+      "generator_checkpoints": [
+        [
+          15,
+          "CavesBossLevel",
+          -1857373978
+        ],
+        [
+          16,
+          "CityLevel",
+          1863975190
+        ],
+        [
+          17,
+          "CityLevel",
+          -1677212126
+        ],
+        [
+          18,
+          "CityLevel",
+          518161296
+        ],
+        [
+          19,
+          "CityLevel",
+          983667182
+        ],
+        [
+          20,
+          "CityBossLevel",
+          416475182
+        ],
+        [
+          21,
+          "HallsLevel",
+          -1933451321
+        ],
+        [
+          22,
+          "HallsLevel",
+          -1078515647
+        ]
+      ],
+      "phase_generator_hashes": [],
+      "levels": [
+        {
+          "depth": 22,
+          "class": "HallsLevel",
+          "feeling": "NONE",
+          "size": [
+            34,
+            40
+          ],
+          "map_hash": 486780263,
+          "entrance": 605,
+          "exit": 1038,
+          "generator_state_hash": -1078515647,
+          "mobs": [
+            [
+              "SentryRoom$Sentry",
+              143
+            ],
+            [
+              "Eye",
+              187
+            ],
+            [
+              "DemonSpawner",
+              412
+            ],
+            [
+              "Succubus",
+              653
+            ],
+            [
+              "Succubus",
+              659
+            ],
+            [
+              "Piranha",
+              732
+            ],
+            [
+              "Piranha",
+              734
+            ],
+            [
+              "Succubus",
+              819
+            ],
+            [
+              "Mimic",
+              823
+            ],
+            [
+              "Eye",
+              1142
+            ]
+          ]
+        }
+      ],
+      "items": [
+        [
+          22,
+          "chest",
+          0,
+          116,
+          "CHEST",
+          "PlateArmor",
+          "armor",
+          0,
+          false,
+          null,
+          {
+            "kind": "independent"
+          }
+        ],
+        [
+          22,
+          "chest",
+          0,
+          805,
+          "CHEST",
+          "Gauntlet",
+          "weapon",
+          0,
+          false,
+          null,
+          {
+            "kind": "independent"
+          }
+        ],
+        [
+          22,
+          "skeleton",
+          3,
+          1201,
+          "SKELETON",
+          "PlateArmor",
+          "armor",
+          0,
+          false,
+          "Viscosity",
+          {
+            "kind": "independent"
+          }
+        ]
+      ]
+    }
+  }
+}
+
