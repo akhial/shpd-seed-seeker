@@ -247,7 +247,7 @@ private struct RequirementEditor: View {
         original = requirement; self.isNew = isNew; self.onFinish = onFinish
         _kind = State(initialValue: requirement.kind); _itemID = State(initialValue: requirement.item?.id ?? "")
         _tierMatch = State(initialValue: requirement.tierMatch)
-        _tier = State(initialValue: requirement.tier == 0 ? 1 : requirement.tier)
+        _tier = State(initialValue: requirement.tier < 2 ? 2 : requirement.tier)
         _match = State(initialValue: requirement.upgradeMatch); _upgrade = State(initialValue: requirement.upgrade)
         _modifier = State(initialValue: requirement.modifier ?? "")
         _sourceRaw = State(initialValue: requirement.source.map { $0.rawValue + 1 } ?? 0)
@@ -266,18 +266,21 @@ private struct RequirementEditor: View {
                     }
                     .pickerStyle(.segmented)
                     .onChange(of: kind) { _, _ in
-                        itemID = ""; tierMatch = .any; tier = 1; modifier = ""; normalizeUpgrade()
+                        itemID = ""; tierMatch = .any; tier = 2; modifier = ""; normalizeUpgrade()
                     }
                     Picker("Item", selection: $itemID) {
                         Text("Any \(kind.singularLabel)").tag("")
                         if kind == .weapon {
-                            ForEach(1...5, id: \.self) { tier in
+                            // Tier-1 melee weapons are starting gear and never spawn in the dungeon.
+                            ForEach(2...5, id: \.self) { tier in
                                 Section("Tier \(tier)") {
                                     ForEach(ItemCatalog.weapons.filter { $0.tier == tier }) { Text($0.name).tag($0.id) }
                                 }
                             }
                         } else {
-                            ForEach(ItemCatalog.forKind(kind)) { Text($0.name).tag($0.id) }
+                            ForEach(ItemCatalog.forKind(kind).filter { $0.tier != 1 }) {
+                                Text($0.name).tag($0.id)
+                            }
                         }
                     }
                     .onChange(of: itemID) { _, value in if !value.isEmpty { tierMatch = .any } }
@@ -287,10 +290,12 @@ private struct RequirementEditor: View {
                         }
                         .pickerStyle(.segmented)
                         if tierMatch != .any {
-                            Picker(tierMatch == .exactly ? "Exact tier" : "Minimum tier", selection: $tier) {
-                                ForEach(1...5, id: \.self) { value in
-                                    Text("Tier \(value)\(tierMatch == .atLeast ? "+" : "")").tag(value)
+                            VStack(alignment: .leading, spacing: 2) {
+                                LabeledContent(tierMatch == .exactly ? "Exact tier" : "Minimum tier") {
+                                    Text("Tier \(tier)\(tierMatch == .atLeast ? "+" : "")")
+                                        .monospacedDigit().foregroundStyle(.secondary)
                                 }
+                                Slider(value: intBinding($tier), in: 2...5, step: 1)
                             }
                         }
                     }

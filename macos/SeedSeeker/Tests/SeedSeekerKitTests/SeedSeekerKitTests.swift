@@ -105,6 +105,8 @@ final class SeedSeekerKitTests: XCTestCase {
         XCTAssertThrowsError(try ItemRequirement(key: 1, item: nil, upgrade: 1, kind: .weapon, maximumDepth: 25))
         XCTAssertNoThrow(try ItemRequirement(key: 1, item: nil, upgrade: 0, kind: .weapon,
             tier: 5, tierMatch: .exactly, upgradeMatch: .any))
+        XCTAssertThrowsError(try ItemRequirement(key: 1, item: nil, upgrade: 0, kind: .weapon,
+            tier: 1, tierMatch: .exactly, upgradeMatch: .any))
         XCTAssertThrowsError(try ItemRequirement(key: 1, item: ItemCatalog.weapons[0], upgrade: 1,
             kind: .weapon, tier: 1, tierMatch: .exactly))
     }

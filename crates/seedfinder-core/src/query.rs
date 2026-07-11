@@ -105,7 +105,7 @@ impl Requirement {
             TierRequirement::Exact(tier) | TierRequirement::AtLeast(tier) => {
                 self.item.is_none()
                     && matches!(self.kind, ItemKind::Weapon | ItemKind::Armor)
-                    && (1..=5).contains(&tier)
+                    && (2..=5).contains(&tier)
             }
         };
         if !valid_tier {
@@ -351,7 +351,7 @@ impl fmt::Display for QueryError {
             Self::Empty => "at least one item requirement is needed",
             Self::InvalidDepth => "maximum depth must be between 1 and 24",
             Self::InvalidUpgrade => "upgrade must be +1, +2, or +3 (+4 for rings)",
-            Self::InvalidTier => "tier filters require any tier-1 through tier-5 weapon or armor",
+            Self::InvalidTier => "tier filters require any tier-2 through tier-5 weapon or armor",
             Self::ItemKindMismatch => "selected item is in a different category",
             Self::EffectKindMismatch => "selected enchantment or glyph is inapplicable",
             Self::InvalidIdentityGroup => "identity group zero is reserved for no group",
@@ -684,6 +684,12 @@ mod tests {
             ..tier_five
         };
         assert_eq!(invalid.validate(), Err(QueryError::InvalidTier));
+
+        let tier_one = Requirement {
+            tier: TierRequirement::Exact(1),
+            ..tier_five
+        };
+        assert_eq!(tier_one.validate(), Err(QueryError::InvalidTier));
     }
 
     #[test]

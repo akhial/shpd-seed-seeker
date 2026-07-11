@@ -39,9 +39,9 @@ data class ItemRequirement(
         val validTier = when (tierMatch) {
             TierMatch.ANY -> tier == 0
             TierMatch.EXACT, TierMatch.AT_LEAST ->
-                item == null && kind in setOf(ItemKind.WEAPON, ItemKind.ARMOR) && tier in 1..5
+                item == null && kind in setOf(ItemKind.WEAPON, ItemKind.ARMOR) && tier in 2..5
         }
-        require(validTier) { "Tier predicate requires any tier-1 through tier-5 weapon or armor" }
+        require(validTier) { "Tier predicate requires any tier-2 through tier-5 weapon or armor" }
         val validUpgrade = when (upgradeMatch) {
             UpgradeMatch.ANY -> upgrade == 0
             UpgradeMatch.EXACT -> upgrade in 1..kind.maximumSearchUpgrade

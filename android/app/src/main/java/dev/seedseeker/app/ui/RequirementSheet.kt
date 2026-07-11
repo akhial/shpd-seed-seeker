@@ -59,6 +59,7 @@ import dev.seedseeker.app.model.ScoutItemSource
 import dev.seedseeker.app.model.TierMatch
 import dev.seedseeker.app.model.UpgradeMatch
 import java.util.Locale
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -72,13 +73,17 @@ fun RequirementSheet(
     var kind by remember(identity) { mutableStateOf(editing?.kind ?: ItemKind.WEAPON) }
     var selectedItem by remember(identity) {
         mutableStateOf<CatalogItem?>(
-            if (editing == null) ItemCatalog.forKind(kind).first() else editing.item,
+            if (editing == null) {
+                ItemCatalog.forKind(kind).first { it.tier != 1 }
+            } else {
+                editing.item
+            },
         )
     }
     var upgradeMatch by remember(identity) { mutableStateOf(editing?.upgradeMatch ?: UpgradeMatch.EXACT) }
     var upgrade by remember(identity) { mutableStateOf(editing?.upgrade ?: 1) }
     var tierMatch by remember(identity) { mutableStateOf(editing?.tierMatch ?: TierMatch.ANY) }
-    var tier by remember(identity) { mutableStateOf(editing?.tier?.takeIf { it > 0 } ?: 1) }
+    var tier by remember(identity) { mutableStateOf(editing?.tier?.takeIf { it >= 2 } ?: 2) }
     var modifierName by remember(identity) { mutableStateOf(editing?.modifier) }
     var modifierMenuExpanded by remember(identity) { mutableStateOf(false) }
     var source by remember(identity) { mutableStateOf(editing?.source) }
@@ -130,9 +135,9 @@ fun RequirementSheet(
                         onCheckedChange = { checked ->
                             if (checked && kind != entry) {
                                 kind = entry
-                                selectedItem = ItemCatalog.forKind(entry).first()
+                                selectedItem = ItemCatalog.forKind(entry).first { it.tier != 1 }
                                 tierMatch = TierMatch.ANY
-                                tier = 1
+                                tier = 2
                                 modifierName = null
                                 clampUpgrade(upgradeMatch, entry)
                             }
@@ -181,17 +186,29 @@ fun RequirementSheet(
                     }
                 }
                 if (tierMatch != TierMatch.ANY) {
-                    Row(
+                    Column(
                         modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        (1..5).forEach { value ->
-                            FilterChip(
-                                selected = tier == value,
-                                onClick = { tier = value },
-                                label = { Text("Tier $value${if (tierMatch == TierMatch.AT_LEAST) "+" else ""}") },
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Text(
+                                if (tierMatch == TierMatch.EXACT) "Exact tier" else "Minimum tier",
+                                style = MaterialTheme.typography.labelLarge,
+                            )
+                            Text(
+                                "Tier $tier${if (tierMatch == TierMatch.AT_LEAST) "+" else ""}",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary,
                             )
                         }
+                        Slider(
+                            value = tier.toFloat(),
+                            onValueChange = { tier = it.roundToInt() },
+                            valueRange = 2f..5f,
+                            steps = 2,
+                        )
                     }
                 }
             }
@@ -205,7 +222,7 @@ fun RequirementSheet(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                items(ItemCatalog.forKind(kind), key = { it.id }) { item ->
+                items(ItemCatalog.forKind(kind).filter { it.tier != 1 }, key = { it.id }) { item ->
                     ItemTile(
                         item = item,
                         selected = selectedItem?.id == item.id,

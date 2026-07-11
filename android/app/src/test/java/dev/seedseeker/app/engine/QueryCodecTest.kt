@@ -37,6 +37,9 @@ class QueryCodecTest {
             ),
             QueryCodec.encode(SearchRequest(listOf(requirement))),
         )
+        assertThrows(IllegalArgumentException::class.java) {
+            requirement.copy(tier = 1)
+        }
     }
 
     @Test
