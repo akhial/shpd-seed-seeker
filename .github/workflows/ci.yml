@@ -10,7 +10,11 @@ permissions:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Keep main's history complete; only supersede pull request builds.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
   rust:
@@ -19,8 +23,7 @@ jobs:
     timeout-minutes: 20
 
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v6
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -33,11 +36,11 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check
 
-      - name: Test workspace
-        run: cargo test --locked --workspace
-
       - name: Lint workspace
         run: cargo clippy --locked --workspace --all-targets -- -D warnings
+
+      - name: Test workspace
+        run: cargo test --locked --workspace
 
   android:
     name: Android
@@ -45,8 +48,7 @@ jobs:
     timeout-minutes: 45
 
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v6
 
       - name: Install Java
         uses: actions/setup-java@v5
@@ -64,11 +66,14 @@ jobs:
         with:
           shared-key: android
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android SDK packages
-        run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;28.2.13676358"
+      # Must match ndkVersion in android/app/build.gradle.kts. The runner
+      # image exports ANDROID_NDK_HOME pointing at its bundled NDK, so it has
+      # to be repointed or scripts/build-android-native.sh links with the
+      # wrong toolchain.
+      - name: Install Android NDK
+        run: |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "ndk;28.2.13676358"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
@@ -83,8 +88,7 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v6
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
