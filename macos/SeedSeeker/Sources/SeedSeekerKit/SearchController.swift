@@ -9,6 +9,7 @@ public final class SearchController {
     public private(set) var totalSeeds: Int64 = 0
     public private(set) var matchProbability: Double?
     public private(set) var seedsPerSecond: Double = 0
+    public private(set) var elapsed: TimeInterval = 0
     public private(set) var errorCode: Int64 = 0
     public private(set) var message: String?
     public private(set) var isRunning = false
@@ -19,17 +20,18 @@ public final class SearchController {
     private var task: Task<Void, Never>?
 
     public init(engine: any SeedFinderEngine = ProductionSeedFinderEngine()) { self.engine = engine }
-    public var timeToNextSeed: TimeInterval? {
+    public var timeToSeed: TimeInterval? {
         guard let matchProbability, seedsPerSecond > 0 else { return nil }
         return 1 / matchProbability / seedsPerSecond
     }
     public var reachedResultCap: Bool { results.count >= 1_024 }
 
     public func start(_ request: SearchRequest) {
-        task?.cancel(); results = []; scannedSeeds = 0; totalSeeds = 0; matchProbability = nil; seedsPerSecond = 0
+        task?.cancel(); results = []; scannedSeeds = 0; totalSeeds = 0; matchProbability = nil; seedsPerSecond = 0; elapsed = 0
         errorCode = 0; message = nil; state = .running; isRunning = true
         task = Task { [weak self] in
             guard let self else { return }
+            let searchStart = ContinuousClock.now
             do {
                 let session = try await engine.startSearch(request)
                 self.session = session
@@ -40,6 +42,8 @@ public final class SearchController {
                     self.results.append(contentsOf: batch)
                     let status = try await session.status()
                     let now = ContinuousClock.now
+                    let totalDuration = searchStart.duration(to: now).components
+                    self.elapsed = Double(totalDuration.seconds) + Double(totalDuration.attoseconds) / 1e18
                     let seconds = Double(previousTime.duration(to: now).components.attoseconds) / 1e18
                         + Double(previousTime.duration(to: now).components.seconds)
                     if seconds > 0 {

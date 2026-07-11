@@ -219,10 +219,10 @@ internal fun searchEstimateText(status: SearchStatus?, seedsPerSecond: Double): 
     val rate = formatSeedRate(seedsPerSecond)
     val probability = status?.matchProbability ?: 0.0
     if (probability <= 0.0 || seedsPerSecond <= 0.0) {
-        return "Seed match probability: estimating… TTNS @ $rate seeds/s: estimating…"
+        return "Seed match probability: estimating… TTS @ $rate seeds/s: estimating…"
     }
     return "Seed match probability: ${formatProbabilityPercent(probability)} " +
-        "TTNS @ $rate seeds/s: ${formatEstimateDuration(1.0 / probability / seedsPerSecond)}"
+        "TTS @ $rate seeds/s: ${formatEstimateDuration(1.0 / probability / seedsPerSecond)}"
 }
 
 private fun formatProbabilityPercent(probability: Double): String {
@@ -252,4 +252,10 @@ private fun formatEstimateDuration(seconds: Double): String {
     }
     val plural = if (value >= 0.95 && value < 1.05) "" else "s"
     return String.format(Locale.US, "%.1f %s%s", value, unit, plural)
+}
+
+internal fun formatElapsedTime(seconds: Long): String = when {
+    seconds < 60 -> "${seconds}s"
+    seconds < 3_600 -> "${seconds / 60}m ${seconds % 60}s"
+    else -> "${seconds / 3_600}h ${(seconds % 3_600) / 60}m"
 }

@@ -17,7 +17,7 @@ class SearchEstimateTextTest {
         )
 
         assertEquals(
-            "Seed match probability: 1.3x10^-4% TTNS @ 4.6k seeds/s: 2.8 minutes",
+            "Seed match probability: 1.3x10^-4% TTS @ 4.6k seeds/s: 2.8 minutes",
             searchEstimateText(status, 4_600.0),
         )
     }
@@ -27,8 +27,15 @@ class SearchEstimateTextTest {
         val status = SearchStatus(SearchState.RUNNING, 50_000, 5_429_503_678_976)
 
         assertEquals(
-            "Seed match probability: estimating… TTNS @ 4.6k seeds/s: estimating…",
+            "Seed match probability: estimating… TTS @ 4.6k seeds/s: estimating…",
             searchEstimateText(status, 4_600.0),
         )
+    }
+
+    @Test
+    fun formatsElapsedTime() {
+        assertEquals("30s", formatElapsedTime(30))
+        assertEquals("2m 5s", formatElapsedTime(125))
+        assertEquals("1h 2m", formatElapsedTime(3_725))
     }
 }

@@ -73,6 +73,7 @@ fun FinderScreen(
     results: List<SeedResult>,
     status: SearchStatus?,
     seedsPerSecond: Double,
+    elapsedSeconds: Long,
     isSearching: Boolean,
     error: String?,
     onAbout: () -> Unit,
@@ -196,6 +197,7 @@ fun FinderScreen(
                         requirementCount = requirements.size,
                         status = status,
                         seedsPerSecond = seedsPerSecond,
+                        elapsedSeconds = elapsedSeconds,
                         isSearching = isSearching,
                         error = error,
                         onSearch = onSearch,
@@ -473,6 +475,7 @@ private fun SearchControls(
     requirementCount: Int,
     status: SearchStatus?,
     seedsPerSecond: Double,
+    elapsedSeconds: Long,
     isSearching: Boolean,
     error: String?,
     onSearch: () -> Unit,
@@ -494,7 +497,7 @@ private fun SearchControls(
                     color = MaterialTheme.colorScheme.primary,
                 )
                 Text(
-                    "TTNS: Time to next seed",
+                    "Time elapsed: ${formatElapsedTime(elapsedSeconds)}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

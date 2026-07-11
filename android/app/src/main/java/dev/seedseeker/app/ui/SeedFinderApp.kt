@@ -80,6 +80,7 @@ fun SeedFinderApp(engine: NativeSeedFinder) {
     var results by remember { mutableStateOf(emptyList<SeedResult>()) }
     var searchStatus by remember { mutableStateOf<SearchStatus?>(null) }
     var searchSeedsPerSecond by remember { mutableStateOf(0.0) }
+    var searchElapsedSeconds by remember { mutableLongStateOf(0L) }
     var activeSession by remember { mutableStateOf<NativeSearchSession?>(null) }
     var run by remember { mutableStateOf<SearchRun?>(null) }
     var nextRunId by remember { mutableLongStateOf(1L) }
@@ -108,7 +109,9 @@ fun SeedFinderApp(engine: NativeSeedFinder) {
         results = emptyList()
         searchStatus = null
         searchSeedsPerSecond = 0.0
+        searchElapsedSeconds = 0L
 
+        val searchStartedAt = System.nanoTime()
         var previousScannedSeeds = 0L
         var previousStatusTime = System.nanoTime()
 
@@ -128,6 +131,7 @@ fun SeedFinderApp(engine: NativeSeedFinder) {
                     results = results + batch.results
                 }
                 val statusTime = System.nanoTime()
+                searchElapsedSeconds = (statusTime - searchStartedAt) / 1_000_000_000L
                 val elapsedSeconds = (statusTime - previousStatusTime) / 1_000_000_000.0
                 if (elapsedSeconds > 0.0 && status.scannedSeeds > previousScannedSeeds) {
                     val instantRate = (status.scannedSeeds - previousScannedSeeds) / elapsedSeconds
@@ -209,6 +213,7 @@ fun SeedFinderApp(engine: NativeSeedFinder) {
                 results = results,
                 status = searchStatus,
                 seedsPerSecond = searchSeedsPerSecond,
+                elapsedSeconds = searchElapsedSeconds,
                 isSearching = isSearching,
                 error = searchError,
                 onAbout = {
