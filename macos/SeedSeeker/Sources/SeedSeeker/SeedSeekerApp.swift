@@ -371,11 +371,11 @@ private struct ResultsView: View {
     @ViewBuilder private var status: some View {
         if controller.state == nil { Text("Add requirements, then press Start Search.").foregroundStyle(.secondary) }
         else if controller.isRunning {
-            ProgressView(value: controller.progress)
-            HStack {
-                Text("\(NumberFormat.si(Double(controller.scannedSeeds))) of \(NumberFormat.si(Double(controller.totalSeeds))) seeds")
-                Spacer(); Text("\(NumberFormat.si(controller.seedsPerSecond)) seeds/s"); Text("ETA \(NumberFormat.duration(controller.eta))")
-            }.font(.caption).foregroundStyle(.secondary)
+            Text("Seed match probability: \(NumberFormat.probabilityPercent(controller.matchProbability)) " +
+                 "TTNS @ \(NumberFormat.seedRate(controller.seedsPerSecond)) seeds/s: " +
+                 NumberFormat.estimateDuration(controller.timeToNextSeed))
+                .font(.caption).foregroundStyle(.secondary)
+            Text("TTNS: Time to next seed").font(.caption2).foregroundStyle(.tertiary)
         } else if let state = controller.state {
             Text(state == .failed ? "Failed (error \(controller.errorCode))" : state == .completed ? "Completed" : "Cancelled")
                 .font(.caption.bold()).padding(.horizontal, 10).padding(.vertical, 4).background(.quaternary, in: Capsule())

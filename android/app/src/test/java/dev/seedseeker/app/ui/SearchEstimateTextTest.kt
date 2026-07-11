@@ -1,0 +1,34 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+package dev.seedseeker.app.ui
+
+import dev.seedseeker.app.model.SearchState
+import dev.seedseeker.app.model.SearchStatus
+import org.junit.Assert.assertEquals
+import org.junit.Test
+
+class SearchEstimateTextTest {
+    @Test
+    fun formatsObservedProbabilityRateAndTimeToNextSeed() {
+        val status = SearchStatus(
+            state = SearchState.RUNNING,
+            scannedSeeds = 10_000_000,
+            totalSeeds = 5_429_503_678_976,
+            matchProbability = 13.0 / 10_000_000.0,
+        )
+
+        assertEquals(
+            "Seed match probability: 1.3x10^-4% TTNS @ 4.6k seeds/s: 2.8 minutes",
+            searchEstimateText(status, 4_600.0),
+        )
+    }
+
+    @Test
+    fun estimatesUntilTheFirstMatch() {
+        val status = SearchStatus(SearchState.RUNNING, 50_000, 5_429_503_678_976)
+
+        assertEquals(
+            "Seed match probability: estimating… TTNS @ 4.6k seeds/s: estimating…",
+            searchEstimateText(status, 4_600.0),
+        )
+    }
+}

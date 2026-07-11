@@ -34,7 +34,6 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LargeFlexibleTopAppBar
-import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
@@ -73,6 +72,7 @@ fun FinderScreen(
     fastMode: Boolean,
     results: List<SeedResult>,
     status: SearchStatus?,
+    seedsPerSecond: Double,
     isSearching: Boolean,
     error: String?,
     onAbout: () -> Unit,
@@ -195,6 +195,7 @@ fun FinderScreen(
                     SearchControls(
                         requirementCount = requirements.size,
                         status = status,
+                        seedsPerSecond = seedsPerSecond,
                         isSearching = isSearching,
                         error = error,
                         onSearch = onSearch,
@@ -471,6 +472,7 @@ private fun ScopeCard(
 private fun SearchControls(
     requirementCount: Int,
     status: SearchStatus?,
+    seedsPerSecond: Double,
     isSearching: Boolean,
     error: String?,
     onSearch: () -> Unit,
@@ -484,32 +486,17 @@ private fun SearchControls(
     ) {
         Column(Modifier.padding(18.dp)) {
             if (isSearching) {
-                val fraction = if (status != null && status.totalSeeds > 0) {
-                    (status.scannedSeeds.toDouble() / status.totalSeeds.toDouble())
-                        .coerceIn(0.0, 1.0)
-                        .toFloat()
-                } else {
-                    0f
-                }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Searching seeds in order…", style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            "${compactCount(status?.scannedSeeds ?: 0)} of ${compactCount(status?.totalSeeds ?: 0)} seeds",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Text(
-                        "${(fraction * 100).toInt()}%",
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
-                Spacer(Modifier.height(16.dp))
-                LinearWavyProgressIndicator(
-                    progress = { fraction },
-                    modifier = Modifier.fillMaxWidth(),
+                Text("Searching seeds in order…", style = MaterialTheme.typography.titleMedium)
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    searchEstimateText(status, seedsPerSecond),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    "TTNS: Time to next seed",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Spacer(Modifier.height(16.dp))
                 OutlinedButton(
