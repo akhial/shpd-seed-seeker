@@ -1,5 +1,7 @@
 # Seed Seeker for Shattered Pixel Dungeon
 
+[![CI](https://github.com/akhial/shpd-seed-finder/actions/workflows/ci.yml/badge.svg)](https://github.com/akhial/shpd-seed-finder/actions/workflows/ci.yml)
+
 An unofficial, offline seed finder for Shattered Pixel Dungeon. The engine is a
 Rust reimplementation of the game's deterministic generation path and is called
 from a standalone Android UI through JNI.
