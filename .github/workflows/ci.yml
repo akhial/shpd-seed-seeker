@@ -97,7 +97,7 @@ jobs:
           shared-key: macos
 
       - name: Build native library
-        run: cargo build --locked --release --target aarch64-apple-darwin -p shpd-seedfinder-ffi
+        run: bash scripts/build-macos-native.sh
 
       - name: Test Swift package
         working-directory: macos/SeedSeeker

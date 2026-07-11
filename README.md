@@ -71,7 +71,7 @@ running the Swift tests. The app-bundle script repeats the release builds,
 assembles `dist/Seed Seeker.app`, and ad-hoc signs it:
 
 ```sh
-cargo build --release --target aarch64-apple-darwin -p shpd-seedfinder-ffi
+bash scripts/build-macos-native.sh
 cd macos/SeedSeeker
 swift test
 cd ../..
