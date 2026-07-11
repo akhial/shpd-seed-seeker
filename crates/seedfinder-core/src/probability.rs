@@ -18,12 +18,7 @@ pub fn estimate_match_probability(query: &SearchQuery) -> f64 {
     let grouped_items: BTreeMap<_, _> = query
         .requirements
         .iter()
-        .filter_map(|requirement| {
-            requirement
-                .identity_group
-                .zip(requirement.item)
-                .map(|(group, item)| (group, item))
-        })
+        .filter_map(|requirement| requirement.identity_group.zip(requirement.item))
         .collect();
     let mut seen_groups = BTreeSet::new();
     let mut probability = 1.0;
@@ -65,7 +60,7 @@ fn identity_probability(requirement: Requirement, max_depth: u8) -> f64 {
     match requirement.kind {
         ItemKind::Weapon => {
             let tier = usize::from(definition.tier.unwrap_or(1)).saturating_sub(1);
-            average_tier_probability(tier, max_depth) / weapon_identity_count(tier) as f64
+            average_tier_probability(tier, max_depth) / f64::from(weapon_identity_count(tier))
         }
         ItemKind::Armor => {
             let tier = usize::from(definition.tier.unwrap_or(1)).saturating_sub(1);
@@ -91,7 +86,9 @@ fn ghost_identity_probability(requirement: Requirement) -> f64 {
     };
     match requirement.kind {
         ItemKind::Armor => tier_probability,
-        ItemKind::Weapon => tier_probability / weapon_identity_count(tier.saturating_sub(1)) as f64,
+        ItemKind::Weapon => {
+            tier_probability / f64::from(weapon_identity_count(tier.saturating_sub(1)))
+        }
         ItemKind::Wand | ItemKind::Ring => 0.0,
     }
 }
@@ -164,17 +161,13 @@ const fn upgrade_probability_for_requirement(requirement: Requirement) -> f64 {
 
 const fn ghost_upgrade_probability(requirement: UpgradeRequirement) -> f64 {
     match requirement {
-        UpgradeRequirement::Any => 1.0,
-        UpgradeRequirement::Exact(0) => 0.50,
+        UpgradeRequirement::Any | UpgradeRequirement::AtLeast(0) => 1.0,
+        UpgradeRequirement::Exact(0) | UpgradeRequirement::AtLeast(1) => 0.50,
         UpgradeRequirement::Exact(1) => 0.30,
         UpgradeRequirement::Exact(2) => 0.15,
-        UpgradeRequirement::Exact(3) => 0.05,
-        UpgradeRequirement::Exact(_) => 0.0,
-        UpgradeRequirement::AtLeast(0) => 1.0,
-        UpgradeRequirement::AtLeast(1) => 0.50,
         UpgradeRequirement::AtLeast(2) => 0.20,
-        UpgradeRequirement::AtLeast(3) => 0.05,
-        UpgradeRequirement::AtLeast(_) => 0.0,
+        UpgradeRequirement::Exact(3) | UpgradeRequirement::AtLeast(3) => 0.05,
+        UpgradeRequirement::Exact(_) | UpgradeRequirement::AtLeast(_) => 0.0,
     }
 }
 
@@ -186,11 +179,11 @@ const fn exact_upgrade_probability(kind: ItemKind, upgrade: u8) -> f64 {
         },
         (ItemKind::Weapon | ItemKind::Armor, 1) => 0.20,
         (ItemKind::Weapon | ItemKind::Armor, 2 | 3) => 0.05,
-        (ItemKind::Wand | ItemKind::Ring, 1) => 4.0 / 15.0,
-        (ItemKind::Wand | ItemKind::Ring, 2) => 1.0 / 15.0,
+        (ItemKind::Wand | ItemKind::Ring, 1) | (ItemKind::Ring, 3) => 4.0 / 15.0,
         // Wandmaker and Imp rewards add one and two upgrades respectively.
-        (ItemKind::Wand, 3) | (ItemKind::Ring, 4) => 1.0 / 15.0,
-        (ItemKind::Ring, 3) => 4.0 / 15.0,
+        (ItemKind::Wand | ItemKind::Ring, 2) | (ItemKind::Wand, 3) | (ItemKind::Ring, 4) => {
+            1.0 / 15.0
+        }
         _ => 0.0,
     }
 }
@@ -274,6 +267,7 @@ mod tests {
                 effect: Some(Effect::Weapon(WeaponEffect::Lucky)),
                 source: None,
                 identity_group: None,
+                max_depth: None,
             },
             Requirement {
                 kind: ItemKind::Armor,
@@ -282,6 +276,7 @@ mod tests {
                 effect: Some(Effect::Armor(ArmorEffect::Brimstone)),
                 source: None,
                 identity_group: None,
+                max_depth: None,
             },
         ]));
 
@@ -298,6 +293,7 @@ mod tests {
                 effect: None,
                 source: Some(ItemSource::GhostReward),
                 identity_group: None,
+                max_depth: None,
             },
             Requirement {
                 kind: ItemKind::Wand,
@@ -306,6 +302,7 @@ mod tests {
                 effect: None,
                 source: None,
                 identity_group: Some(1),
+                max_depth: None,
             },
             Requirement {
                 kind: ItemKind::Wand,
@@ -314,6 +311,7 @@ mod tests {
                 effect: None,
                 source: None,
                 identity_group: Some(1),
+                max_depth: None,
             },
             Requirement {
                 kind: ItemKind::Wand,
@@ -322,6 +320,7 @@ mod tests {
                 effect: None,
                 source: None,
                 identity_group: Some(1),
+                max_depth: None,
             },
             Requirement {
                 kind: ItemKind::Wand,
@@ -330,6 +329,7 @@ mod tests {
                 effect: None,
                 source: None,
                 identity_group: None,
+                max_depth: None,
             },
             Requirement {
                 kind: ItemKind::Ring,
@@ -338,6 +338,7 @@ mod tests {
                 effect: None,
                 source: None,
                 identity_group: None,
+                max_depth: None,
             },
         ]));
 
