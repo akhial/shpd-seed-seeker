@@ -537,7 +537,10 @@ mod tests {
     }
 
     #[test]
-    fn plus_four_imp_ring_is_present_and_searchable() {
+    fn java_oracle_plus_four_imp_transmutation_fixture_matches() {
+        // Official v3.3.8 oracle command:
+        // tooling/oracle/run.sh AAA-AAA-AAF 17 --transmute-imp
+        // RingOfSharpshooting +4 -> RingOfAccuracy +4.
         let seed = DungeonSeed::from_code("AAA-AAA-AAF").unwrap();
         let world = generate_main_world(seed, 24).unwrap();
         let imp_ring = world.items.iter().find(|value| {
@@ -551,7 +554,7 @@ mod tests {
         let transmuted_item = imp_ring
             .and_then(|ring| ring.transmuted_item)
             .expect("+4 Imp rings expose one transmutation roll");
-        assert_ne!(transmuted_item, ItemId::RingSharpshooting);
+        assert_eq!(transmuted_item, ItemId::RingAccuracy);
         let query = SearchQuery {
             requirements: vec![Requirement {
                 kind: ItemKind::Ring,
