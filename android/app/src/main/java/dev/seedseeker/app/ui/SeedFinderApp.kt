@@ -51,6 +51,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private const val ATLAS_PATH = "third_party/shattered-pixel-dungeon/items.png"
+private const val ITEM_ICONS_PATH = "third_party/shattered-pixel-dungeon/item_icons.png"
 private const val SETTINGS_PREFERENCES = "seed_seeker_settings"
 private const val CHALLENGES_KEY = "challenges_mask"
 
@@ -66,6 +67,11 @@ fun SeedFinderApp(engine: NativeSeedFinder) {
             context.assets.open(ATLAS_PATH).use(BitmapFactory::decodeStream)
                 ?.centerSpriteCells()
                 ?.asImageBitmap()
+        }.getOrNull()
+    }
+    val itemIcons = remember(context) {
+        runCatching {
+            context.assets.open(ITEM_ICONS_PATH).use(BitmapFactory::decodeStream)?.asImageBitmap()
         }.getOrNull()
     }
     val scope = rememberCoroutineScope()
@@ -221,7 +227,10 @@ fun SeedFinderApp(engine: NativeSeedFinder) {
         )
     }
 
-    CompositionLocalProvider(LocalItemAtlas provides atlas) {
+    CompositionLocalProvider(
+        LocalItemAtlas provides atlas,
+        LocalItemIconAtlas provides itemIcons,
+    ) {
         when (destination) {
             Destination.FINDER -> FinderScreen(
                 requirements = requirements,
