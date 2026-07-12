@@ -1,6 +1,8 @@
 using System.Collections.ObjectModel;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.UI;
+using Microsoft.UI.Xaml.Media;
 
 namespace SeedSeeker;
 
@@ -16,6 +18,12 @@ public enum ScoutItemSource
     Heap, Chest, LockedChest, CrystalChest, Tomb, Skeleton, SacrificialFire, Mimic,
     GoldenMimic, CrystalMimic, Statue, ArmoredStatue, Shop, GhostReward,
     WandmakerReward, BlacksmithReward, ImpReward
+}
+
+public static class KindStyle
+{
+    public static string Glyph(ItemKind kind) => kind switch { ItemKind.Weapon => "", ItemKind.Armor => "", ItemKind.Wand => "", _ => "" };
+    public static Brush Tint(ItemKind kind) => new SolidColorBrush(kind switch { ItemKind.Weapon => Colors.DarkOrange, ItemKind.Armor => Colors.DodgerBlue, ItemKind.Wand => Colors.MediumPurple, _ => Colors.Goldenrod });
 }
 
 public static class Labels
@@ -46,6 +54,8 @@ public sealed class ItemRequirement
     public ScoutItemSource? Source { get; set; }
     public int? IdentityGroup { get; set; }
     public int? MaximumDepth { get; set; }
+    [JsonIgnore] public string Glyph => KindStyle.Glyph(Kind);
+    [JsonIgnore] public Brush Tint => KindStyle.Tint(Kind);
     [JsonIgnore] public string Title => Item?.Name ?? (TierMatch switch { TierMatch.Exactly => $"Any Tier {Tier} {Labels.Singular(Kind)}", TierMatch.AtLeast => $"Any Tier {Tier}+ {Labels.Singular(Kind)}", _ => $"Any {Labels.Singular(Kind)}" });
     [JsonIgnore] public string Description
     {
