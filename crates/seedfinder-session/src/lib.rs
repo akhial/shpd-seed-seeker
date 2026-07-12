@@ -47,7 +47,9 @@ pub fn registry() -> &'static SessionRegistry {
 
 fn canonical_generator(challenges: Challenges) -> Arc<ConfiguredMainWorldGenerator> {
     let generators = CANONICAL_GENERATORS.get_or_init(|| Mutex::new(HashMap::new()));
-    let mut generators = generators.lock().unwrap_or_else(|error| error.into_inner());
+    let mut generators = generators
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     Arc::clone(
         generators
             .entry(challenges.bits())

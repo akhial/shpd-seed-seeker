@@ -202,6 +202,16 @@ pub fn generate_main_world(
 }
 
 /// Challenge-aware form of [`generate_main_world`].
+///
+/// # Errors
+///
+/// Returns [`MainWorldError`] when `maximum_depth` is outside `1..=24` or a
+/// regional generator rejects its inputs.
+///
+/// # Panics
+///
+/// Panics only if the ungated generation pipeline abandons a world, which the
+/// open gate makes unreachable.
 pub fn generate_main_world_with_challenges(
     seed: DungeonSeed,
     maximum_depth: u8,

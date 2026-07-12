@@ -20,6 +20,10 @@ impl Challenges {
     pub const MAX_VALUE: u16 = 511;
 
     /// Validates an upstream challenge mask.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`InvalidChallenges`] when `bits` exceeds [`Self::MAX_VALUE`].
     pub const fn new(bits: u16) -> Result<Self, InvalidChallenges> {
         if bits <= Self::MAX_VALUE {
             Ok(Self(bits))
