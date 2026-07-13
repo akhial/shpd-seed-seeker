@@ -103,15 +103,14 @@ impl Requirement {
         {
             return Err(QueryError::ItemKindMismatch);
         }
+        let tierable =
+            self.item.is_none() && matches!(self.kind, ItemKind::Weapon | ItemKind::Armor);
         let valid_tier = match self.tier {
             TierRequirement::Any => true,
-            TierRequirement::Exact(tier)
-            | TierRequirement::AtLeast(tier)
-            | TierRequirement::AtMost(tier) => {
-                self.item.is_none()
-                    && matches!(self.kind, ItemKind::Weapon | ItemKind::Armor)
-                    && (2..=5).contains(&tier)
+            TierRequirement::Exact(tier) | TierRequirement::AtLeast(tier) => {
+                tierable && (2..=5).contains(&tier)
             }
+            TierRequirement::AtMost(tier) => tierable && (2..=4).contains(&tier),
         };
         if !valid_tier {
             return Err(QueryError::InvalidTier);
@@ -358,7 +357,9 @@ impl fmt::Display for QueryError {
             Self::Empty => "at least one item requirement is needed",
             Self::InvalidDepth => "maximum depth must be between 1 and 24",
             Self::InvalidUpgrade => "upgrade must be +1, +2, or +3 (+4 for rings)",
-            Self::InvalidTier => "tier filters require any tier-2 through tier-5 weapon or armor",
+            Self::InvalidTier => {
+                "tier filters require a wildcard weapon or armor and a non-redundant tier"
+            }
             Self::ItemKindMismatch => "selected item is in a different category",
             Self::EffectKindMismatch => "selected enchantment or glyph is inapplicable",
             Self::InvalidIdentityGroup => "identity group zero is reserved for no group",
@@ -717,6 +718,12 @@ mod tests {
             ..tier_five
         };
         assert_eq!(tier_one.validate(), Err(QueryError::InvalidTier));
+
+        let redundant_maximum = Requirement {
+            tier: TierRequirement::AtMost(5),
+            ..tier_five
+        };
+        assert_eq!(redundant_maximum.validate(), Err(QueryError::InvalidTier));
     }
 
     #[test]

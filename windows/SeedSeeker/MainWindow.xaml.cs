@@ -87,6 +87,7 @@ public sealed partial class MainWindow : Window
         void SyncVisibility()
         {
             var k = (ItemKind)Math.Max(0, kind.SelectedIndex); var generic = item.SelectedIndex == 0 && k is ItemKind.Weapon or ItemKind.Armor;
+            tier.Maximum = tierMatch.SelectedIndex == (int)TierMatch.AtMost ? 4 : 5; if (tier.Value > tier.Maximum) tier.Value = tier.Maximum;
             tierMatch.Visibility = generic ? Visibility.Visible : Visibility.Collapsed;
             tier.Visibility = generic && tierMatch.SelectedIndex > 0 ? Visibility.Visible : Visibility.Collapsed;
             upgrade.Visibility = upgradeMatch.SelectedIndex > 0 ? Visibility.Visible : Visibility.Collapsed;

@@ -79,7 +79,7 @@ public enum ModelValidationError: Error, Equatable, LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .itemKind: "Selected item must belong to its category"
-        case .tier: "Tier predicate requires any tier-2 through tier-5 weapon or armor"
+        case .tier: "Tier predicate requires a wildcard weapon or armor and a non-redundant tier"
         case .upgrade: "Upgrade predicate is invalid"
         case .modifier: "This category cannot carry a modifier requirement"
         case .identityGroup: "Same-item group must be A..D"
@@ -111,10 +111,11 @@ public struct ItemRequirement: Codable, Hashable, Identifiable, Sendable {
                 source: ScoutItemSource? = nil, identityGroup: Int? = nil,
                 maximumDepth: Int? = nil) throws {
         guard item == nil || item?.kind == kind else { throw ModelValidationError.itemKind }
+        let tierable = item == nil && (kind == .weapon || kind == .armor)
         let validTier = switch tierMatch {
         case .any: tier == 0
-        case .exactly, .atLeast, .atMost:
-            item == nil && (kind == .weapon || kind == .armor) && (2...5).contains(tier)
+        case .exactly, .atLeast: tierable && (2...5).contains(tier)
+        case .atMost: tierable && (2...4).contains(tier)
         }
         guard validTier else { throw ModelValidationError.tier }
         let valid = switch upgradeMatch {

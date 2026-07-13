@@ -58,6 +58,9 @@ class QueryCodecTest {
         val packet = QueryCodec.encode(SearchRequest(listOf(requirement)))
         assertArrayEquals(byteArrayOf(3, 4), packet.copyOfRange(13, 15))
         assertEquals("Any Tier 4 or lower armor", requirement.title)
+        assertThrows(IllegalArgumentException::class.java) {
+            requirement.copy(tier = 5)
+        }
     }
 
     @Test

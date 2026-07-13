@@ -336,6 +336,9 @@ private struct RequirementEditor: View {
                             ForEach(TierMatch.allCases, id: \.self) { Text($0.label).tag($0) }
                         }
                         .pickerStyle(.segmented)
+                        .onChange(of: tierMatch) { _, value in
+                            if value == .atMost { tier = min(tier, 4) }
+                        }
                         if tierMatch != .any {
                             VStack(alignment: .leading, spacing: 2) {
                                 LabeledContent(tierMatch == .exactly ? "Exact tier" :
@@ -344,7 +347,8 @@ private struct RequirementEditor: View {
                                         tierMatch == .atMost ? "Tier \(tier) or lower" : "Tier \(tier)")
                                         .monospacedDigit().foregroundStyle(.secondary)
                                 }
-                                Slider(value: intBinding($tier), in: 2...5, step: 1)
+                                Slider(value: intBinding($tier),
+                                       in: 2.0...(tierMatch == .atMost ? 4.0 : 5.0), step: 1)
                             }
                         }
                     }

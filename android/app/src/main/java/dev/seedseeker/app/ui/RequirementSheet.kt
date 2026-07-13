@@ -180,7 +180,10 @@ fun RequirementSheet(
                     TierMatch.entries.forEach { match ->
                         FilterChip(
                             selected = tierMatch == match,
-                            onClick = { tierMatch = match },
+                            onClick = {
+                                tierMatch = match
+                                if (match == TierMatch.AT_MOST) tier = tier.coerceAtMost(4)
+                            },
                             label = { Text(match.label) },
                         )
                     }
@@ -215,8 +218,8 @@ fun RequirementSheet(
                         Slider(
                             value = tier.toFloat(),
                             onValueChange = { tier = it.roundToInt() },
-                            valueRange = 2f..5f,
-                            steps = 2,
+                            valueRange = 2f..(if (tierMatch == TierMatch.AT_MOST) 4f else 5f),
+                            steps = if (tierMatch == TierMatch.AT_MOST) 1 else 2,
                         )
                     }
                 }

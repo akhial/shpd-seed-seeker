@@ -37,12 +37,15 @@ data class ItemRequirement(
 ) {
     init {
         require(item == null || item.kind == kind) { "Selected item must belong to its category" }
+        val tierable = item == null && kind in setOf(ItemKind.WEAPON, ItemKind.ARMOR)
         val validTier = when (tierMatch) {
             TierMatch.ANY -> tier == 0
-            TierMatch.EXACT, TierMatch.AT_LEAST, TierMatch.AT_MOST ->
-                item == null && kind in setOf(ItemKind.WEAPON, ItemKind.ARMOR) && tier in 2..5
+            TierMatch.EXACT, TierMatch.AT_LEAST -> tierable && tier in 2..5
+            TierMatch.AT_MOST -> tierable && tier in 2..4
         }
-        require(validTier) { "Tier predicate requires any tier-2 through tier-5 weapon or armor" }
+        require(validTier) {
+            "Tier predicate requires a wildcard weapon or armor and a non-redundant tier"
+        }
         val validUpgrade = when (upgradeMatch) {
             UpgradeMatch.ANY -> upgrade == 0
             UpgradeMatch.EXACT -> upgrade in 1..kind.maximumSearchUpgrade
