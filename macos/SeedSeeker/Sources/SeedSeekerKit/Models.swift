@@ -27,8 +27,8 @@ public enum UpgradeMatch: Int, Codable, CaseIterable, Sendable {
 }
 
 public enum TierMatch: Int, Codable, CaseIterable, Sendable {
-    case any, exactly, atLeast
-    public var label: String { ["Any tier", "Exactly", "At least"][rawValue] }
+    case any, exactly, atLeast, atMost
+    public var label: String { ["Any tier", "Exactly", "At least", "At most"][rawValue] }
 }
 
 public enum ScoutItemSource: Int, Codable, CaseIterable, Sendable {
@@ -113,7 +113,7 @@ public struct ItemRequirement: Codable, Hashable, Identifiable, Sendable {
         guard item == nil || item?.kind == kind else { throw ModelValidationError.itemKind }
         let validTier = switch tierMatch {
         case .any: tier == 0
-        case .exactly, .atLeast:
+        case .exactly, .atLeast, .atMost:
             item == nil && (kind == .weapon || kind == .armor) && (2...5).contains(tier)
         }
         guard validTier else { throw ModelValidationError.tier }
@@ -171,6 +171,7 @@ public struct ItemRequirement: Codable, Hashable, Identifiable, Sendable {
         case .any: "Any \(kind.singularLabel)"
         case .exactly: "Any Tier \(tier) \(kind.singularLabel)"
         case .atLeast: "Any Tier \(tier)+ \(kind.singularLabel)"
+        case .atMost: "Any Tier \(tier) or lower \(kind.singularLabel)"
         }
     }
     public var description: String {
@@ -267,6 +268,7 @@ public func scoutMatchIndices(items: [ScoutItem], requirements: [ItemRequirement
         case .any: true
         case .exactly: item.item.tier == requirement.tier
         case .atLeast: item.item.tier.map { $0 >= requirement.tier } ?? false
+        case .atMost: item.item.tier.map { $0 <= requirement.tier } ?? false
         }
         let upgradeMatches = switch requirement.upgradeMatch {
         case .any: true

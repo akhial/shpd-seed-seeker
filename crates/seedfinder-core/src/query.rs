@@ -24,6 +24,7 @@ pub enum TierRequirement {
     Any,
     Exact(u8),
     AtLeast(u8),
+    AtMost(u8),
 }
 
 impl TierRequirement {
@@ -32,6 +33,7 @@ impl TierRequirement {
             Self::Any => true,
             Self::Exact(wanted) => tier == Some(wanted),
             Self::AtLeast(minimum) => tier.is_some_and(|tier| tier >= minimum),
+            Self::AtMost(maximum) => tier.is_some_and(|tier| tier <= maximum),
         }
     }
 }
@@ -103,7 +105,9 @@ impl Requirement {
         }
         let valid_tier = match self.tier {
             TierRequirement::Any => true,
-            TierRequirement::Exact(tier) | TierRequirement::AtLeast(tier) => {
+            TierRequirement::Exact(tier)
+            | TierRequirement::AtLeast(tier)
+            | TierRequirement::AtMost(tier) => {
                 self.item.is_none()
                     && matches!(self.kind, ItemKind::Weapon | ItemKind::Armor)
                     && (2..=5).contains(&tier)
@@ -665,7 +669,7 @@ mod tests {
     }
 
     #[test]
-    fn tier_predicates_match_exact_and_minimum_tiers() {
+    fn tier_predicates_match_exact_minimum_and_maximum_tiers() {
         let tier_five = Requirement {
             kind: ItemKind::Weapon,
             item: None,
@@ -688,6 +692,19 @@ mod tests {
             tier_four_plus.matches(&world_item(ItemId::Greatsword, Accessibility::Independent))
         );
         assert!(!tier_four_plus.matches(&world_item(ItemId::Sword, Accessibility::Independent)));
+
+        let tier_four_or_lower = Requirement {
+            tier: TierRequirement::AtMost(4),
+            ..tier_five
+        };
+        assert!(
+            tier_four_or_lower.matches(&world_item(ItemId::Longsword, Accessibility::Independent))
+        );
+        assert!(tier_four_or_lower.matches(&world_item(ItemId::Sword, Accessibility::Independent)));
+        assert!(
+            !tier_four_or_lower
+                .matches(&world_item(ItemId::Greatsword, Accessibility::Independent))
+        );
 
         let invalid = Requirement {
             kind: ItemKind::Wand,

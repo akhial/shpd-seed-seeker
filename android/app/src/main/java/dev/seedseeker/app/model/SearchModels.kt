@@ -39,7 +39,7 @@ data class ItemRequirement(
         require(item == null || item.kind == kind) { "Selected item must belong to its category" }
         val validTier = when (tierMatch) {
             TierMatch.ANY -> tier == 0
-            TierMatch.EXACT, TierMatch.AT_LEAST ->
+            TierMatch.EXACT, TierMatch.AT_LEAST, TierMatch.AT_MOST ->
                 item == null && kind in setOf(ItemKind.WEAPON, ItemKind.ARMOR) && tier in 2..5
         }
         require(validTier) { "Tier predicate requires any tier-2 through tier-5 weapon or armor" }
@@ -90,6 +90,7 @@ data class ItemRequirement(
             TierMatch.ANY -> "Any ${kind.singularLabel}"
             TierMatch.EXACT -> "Any Tier $tier ${kind.singularLabel}"
             TierMatch.AT_LEAST -> "Any Tier $tier+ ${kind.singularLabel}"
+            TierMatch.AT_MOST -> "Any Tier $tier or lower ${kind.singularLabel}"
         }
 }
 
@@ -97,6 +98,7 @@ enum class TierMatch(val label: String) {
     ANY("Any tier"),
     EXACT("Exactly"),
     AT_LEAST("At least"),
+    AT_MOST("At most"),
 }
 
 enum class UpgradeMatch(val label: String) {

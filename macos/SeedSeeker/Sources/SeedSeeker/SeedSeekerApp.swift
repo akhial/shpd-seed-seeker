@@ -338,8 +338,10 @@ private struct RequirementEditor: View {
                         .pickerStyle(.segmented)
                         if tierMatch != .any {
                             VStack(alignment: .leading, spacing: 2) {
-                                LabeledContent(tierMatch == .exactly ? "Exact tier" : "Minimum tier") {
-                                    Text("Tier \(tier)\(tierMatch == .atLeast ? "+" : "")")
+                                LabeledContent(tierMatch == .exactly ? "Exact tier" :
+                                    tierMatch == .atLeast ? "Minimum tier" : "Maximum tier") {
+                                    Text(tierMatch == .atLeast ? "Tier \(tier) or higher" :
+                                        tierMatch == .atMost ? "Tier \(tier) or lower" : "Tier \(tier)")
                                         .monospacedDigit().foregroundStyle(.secondary)
                                 }
                                 Slider(value: intBinding($tier), in: 2...5, step: 1)

@@ -194,11 +194,20 @@ fun RequirementSheet(
                             horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
                             Text(
-                                if (tierMatch == TierMatch.EXACT) "Exact tier" else "Minimum tier",
+                                when (tierMatch) {
+                                    TierMatch.EXACT -> "Exact tier"
+                                    TierMatch.AT_LEAST -> "Minimum tier"
+                                    TierMatch.AT_MOST -> "Maximum tier"
+                                    TierMatch.ANY -> "Tier"
+                                },
                                 style = MaterialTheme.typography.labelLarge,
                             )
                             Text(
-                                "Tier $tier${if (tierMatch == TierMatch.AT_LEAST) "+" else ""}",
+                                when (tierMatch) {
+                                    TierMatch.AT_LEAST -> "Tier $tier or higher"
+                                    TierMatch.AT_MOST -> "Tier $tier or lower"
+                                    else -> "Tier $tier"
+                                },
                                 style = MaterialTheme.typography.labelLarge,
                                 color = MaterialTheme.colorScheme.primary,
                             )
@@ -561,6 +570,7 @@ private fun RequirementPreview(
                         TierMatch.ANY -> "Any ${kind.singularLabel}"
                         TierMatch.EXACT -> "Any Tier $tier ${kind.singularLabel}"
                         TierMatch.AT_LEAST -> "Any Tier $tier+ ${kind.singularLabel}"
+                        TierMatch.AT_MOST -> "Any Tier $tier or lower ${kind.singularLabel}"
                     },
                     style = MaterialTheme.typography.titleMedium,
                 )

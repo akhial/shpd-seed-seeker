@@ -77,7 +77,7 @@ public sealed partial class MainWindow : Window
     {
         var kind = Combo(Enum.GetValues<ItemKind>().Select(Labels.Kind), (int)r.Kind); kind.Header = "Category";
         var item = new ComboBox { Header = "Item", HorizontalAlignment = HorizontalAlignment.Stretch };
-        var tierMatch = Combo(["Any tier", "Exactly", "At least"], (int)r.TierMatch); tierMatch.Header = "Tier predicate"; var tier = Number("Tier", r.Tier is >= 2 and <= 5 ? r.Tier : 2, 2, 5);
+        var tierMatch = Combo(["Any tier", "Exactly", "At least", "At most"], (int)r.TierMatch); tierMatch.Header = "Tier predicate"; var tier = Number("Tier", r.Tier is >= 2 and <= 5 ? r.Tier : 2, 2, 5);
         var upgradeMatch = Combo(["Any", "Exactly", "At least"], (int)r.UpgradeMatch); upgradeMatch.Header = "Upgrade predicate"; var upgrade = Number("Upgrade level", r.Upgrade, 0, 4);
         var modifier = new ComboBox { Header = "Enchantment or glyph", HorizontalAlignment = HorizontalAlignment.Stretch };
         var source = Combo(new[] { "Any source" }.Concat(Enum.GetValues<ScoutItemSource>().Select(Labels.Source)), r.Source is null ? 0 : (int)r.Source + 1); source.Header = "Source";
