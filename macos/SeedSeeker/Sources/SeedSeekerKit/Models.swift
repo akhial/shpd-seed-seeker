@@ -75,13 +75,14 @@ public enum Challenge: Int, CaseIterable, Sendable {
 }
 
 public enum ModelValidationError: Error, Equatable, LocalizedError {
-    case itemKind, tier, upgrade, modifier, identityGroup, itemMaximumDepth, emptyRequirements, maximumDepth, challenges
+    case itemKind, tier, upgrade, modifier, uncursedCurse, identityGroup, itemMaximumDepth, emptyRequirements, maximumDepth, challenges
     public var errorDescription: String? {
         switch self {
         case .itemKind: "Selected item must belong to its category"
         case .tier: "Tier predicate requires a wildcard weapon or armor and a non-redundant tier"
         case .upgrade: "Upgrade predicate is invalid"
         case .modifier: "This category cannot carry a modifier requirement"
+        case .uncursedCurse: "An uncursed item cannot have a curse"
         case .identityGroup: "Same-item group must be A..D"
         case .itemMaximumDepth: "Item floor limit must be 1..24"
         case .emptyRequirements: "At least one requirement is needed"
@@ -126,6 +127,9 @@ public struct ItemRequirement: Codable, Hashable, Identifiable, Sendable {
         }
         guard valid else { throw ModelValidationError.upgrade }
         guard kind.modifierLabel != nil || modifier == nil else { throw ModelValidationError.modifier }
+        guard !requireUncursed || !ItemCatalog.cursesFor(kind).contains(modifier ?? "") else {
+            throw ModelValidationError.uncursedCurse
+        }
         guard identityGroup == nil || (1...4).contains(identityGroup!) else { throw ModelValidationError.identityGroup }
         guard maximumDepth == nil || (1...24).contains(maximumDepth!) else { throw ModelValidationError.itemMaximumDepth }
         self.key = key; self.item = item; self.upgrade = upgrade; self.modifier = modifier

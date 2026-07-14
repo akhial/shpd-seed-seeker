@@ -177,6 +177,8 @@ final class SeedSeekerKitTests: XCTestCase {
         XCTAssertNoThrow(try ItemRequirement(key: 1, item: nil, upgrade: 4, kind: .ring, upgradeMatch: .atLeast))
         XCTAssertThrowsError(try ItemRequirement(key: 1, item: nil, upgrade: 5, kind: .ring, upgradeMatch: .atLeast))
         XCTAssertThrowsError(try ItemRequirement(key: 1, item: nil, upgrade: 1, modifier: "Lucky", kind: .wand))
+        XCTAssertThrowsError(try ItemRequirement(key: 1, item: nil, upgrade: 1,
+            modifier: "Displacing", kind: .weapon, requireUncursed: true))
         XCTAssertThrowsError(try ItemRequirement(key: 1, item: nil, upgrade: 1, kind: .weapon, identityGroup: 5))
         XCTAssertThrowsError(try ItemRequirement(key: 1, item: nil, upgrade: 1, kind: .weapon, maximumDepth: 25))
         XCTAssertNoThrow(try ItemRequirement(key: 1, item: nil, upgrade: 0, kind: .weapon,

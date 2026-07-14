@@ -649,7 +649,7 @@ mod tests {
                     item: None,
                     tier: TierRequirement::AtMost(4),
                     upgrade: UpgradeRequirement::AtLeast(1),
-                    effect: Some(Effect::Armor(ArmorEffect::Stench)),
+                    effect: Some(Effect::Armor(ArmorEffect::Thorns)),
                     require_uncursed: true,
                     source: Some(ItemSource::Chest),
                     identity_group: Some(2),

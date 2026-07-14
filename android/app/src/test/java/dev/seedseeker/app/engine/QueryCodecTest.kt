@@ -237,4 +237,17 @@ class QueryCodecTest {
 
         assertEquals(1, QueryCodec.encode(SearchRequest(listOf(requirement))).last().toInt())
     }
+
+    @Test
+    fun uncursedRequirementRejectsCurseModifier() {
+        assertThrows(IllegalArgumentException::class.java) {
+            ItemRequirement(
+                key = 1,
+                item = ItemCatalog.weapons.first(),
+                upgrade = 1,
+                modifier = "Displacing",
+                requireUncursed = true,
+            )
+        }
+    }
 }

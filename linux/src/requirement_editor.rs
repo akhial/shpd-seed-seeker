@@ -205,6 +205,16 @@ fn connect(editor: &Rc<Editor>) {
             refresh_visibility(editor);
         }));
     editor
+        .effect_row
+        .connect_selected_notify(hook(Rc::clone(editor), refresh_visibility));
+    editor
+        .uncursed
+        .connect_active_notify(hook(Rc::clone(editor), |editor| {
+            let selection = selected_effect(editor)
+                .filter(|effect| !editor.uncursed.is_active() || !effect.is_curse());
+            populate_effects(editor, selection);
+        }));
+    editor
         .floor_switch
         .connect_active_notify(hook(Rc::clone(editor), refresh_visibility));
 }
@@ -230,9 +240,9 @@ fn restore(editor: &Rc<Editor>, requirement: &UiRequirement) {
     editor
         .category
         .set_selected(u32::try_from(kind_index).unwrap_or(0));
+    editor.uncursed.set_active(requirement.require_uncursed);
     populate_items(editor, requirement.item);
     populate_effects(editor, requirement.effect);
-    editor.uncursed.set_active(requirement.require_uncursed);
     match requirement.tier {
         TierRequirement::Any => editor.tier_row.set_selected(0),
         TierRequirement::Exact(tier) => {
@@ -352,6 +362,15 @@ fn selected_item(editor: &Rc<Editor>) -> Option<ItemId> {
         .flatten()
 }
 
+fn selected_effect(editor: &Rc<Editor>) -> Option<Effect> {
+    editor
+        .effects
+        .borrow()
+        .get(editor.effect_row.selected() as usize)
+        .copied()
+        .flatten()
+}
+
 fn set_tier_value(editor: &Rc<Editor>, tier: u8) {
     editor.exact_tier.set_value(f64::from(tier));
     editor
@@ -398,6 +417,7 @@ fn populate_items(editor: &Rc<Editor>, selection: Option<ItemId>) {
 
 fn populate_effects(editor: &Rc<Editor>, selection: Option<Effect>) {
     let kind = selected_kind(editor);
+    let hide_curses = editor.uncursed.is_active();
     editor.effect_row.set_title(if kind == ItemKind::Armor {
         "Glyph"
     } else {
@@ -408,12 +428,18 @@ fn populate_effects(editor: &Rc<Editor>, selection: Option<Effect>) {
     match kind {
         ItemKind::Weapon => {
             for effect in ALL_WEAPON_EFFECTS {
+                if hide_curses && effect.is_curse() {
+                    continue;
+                }
                 effects.push(Some(Effect::Weapon(*effect)));
                 labels.push(effect_label(effect.wire_name(), effect.is_curse()));
             }
         }
         ItemKind::Armor => {
             for effect in ALL_ARMOR_EFFECTS {
+                if hide_curses && effect.is_curse() {
+                    continue;
+                }
                 effects.push(Some(Effect::Armor(*effect)));
                 labels.push(effect_label(effect.wire_name(), effect.is_curse()));
             }

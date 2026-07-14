@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package dev.seedseeker.app.model
 
+import dev.seedseeker.app.catalog.ItemCatalog
+
 enum class ItemKind(
     val label: String,
     val singularLabel: String,
@@ -57,6 +59,9 @@ data class ItemRequirement(
         }
         require(kind.modifierLabel != null || modifier == null) {
             "${kind.label} cannot carry a modifier requirement"
+        }
+        require(!requireUncursed || modifier !in ItemCatalog.cursesFor(kind)) {
+            "An uncursed item cannot have a curse"
         }
         require(identityGroup == null || identityGroup in 1..4) { "Same-item group must be A..D" }
         require(maximumDepth == null || maximumDepth in 1..24) { "Item floor limit must be 1..24" }

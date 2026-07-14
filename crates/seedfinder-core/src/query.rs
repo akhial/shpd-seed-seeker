@@ -139,9 +139,13 @@ impl Requirement {
         match (self.kind, self.effect) {
             (ItemKind::Weapon, None | Some(Effect::Weapon(_)))
             | (ItemKind::Armor, None | Some(Effect::Armor(_)))
-            | (ItemKind::Wand | ItemKind::Ring, None) => Ok(()),
-            _ => Err(QueryError::EffectKindMismatch),
+            | (ItemKind::Wand | ItemKind::Ring, None) => {}
+            _ => return Err(QueryError::EffectKindMismatch),
         }
+        if self.require_uncursed && self.effect.is_some_and(Effect::is_curse) {
+            return Err(QueryError::UncursedWithCurse);
+        }
+        Ok(())
     }
 }
 
@@ -350,6 +354,7 @@ pub enum QueryError {
     InvalidTier,
     ItemKindMismatch,
     EffectKindMismatch,
+    UncursedWithCurse,
     InvalidIdentityGroup,
     InconsistentIdentityGroup,
 }
@@ -365,6 +370,7 @@ impl fmt::Display for QueryError {
             }
             Self::ItemKindMismatch => "selected item is in a different category",
             Self::EffectKindMismatch => "selected enchantment or glyph is inapplicable",
+            Self::UncursedWithCurse => "an uncursed item cannot have a curse",
             Self::InvalidIdentityGroup => "identity group zero is reserved for no group",
             Self::InconsistentIdentityGroup => {
                 "linked item requirements must use the same category and item"
@@ -378,7 +384,7 @@ impl std::error::Error for QueryError {}
 
 #[cfg(test)]
 mod tests {
-    use crate::catalog::{ItemId, ItemKind};
+    use crate::catalog::{Effect, ItemId, ItemKind, WeaponEffect};
     use crate::model::{Accessibility, GeneratedWorld, ItemSource, WorldItem};
     use crate::seed::DungeonSeed;
 
@@ -661,6 +667,16 @@ mod tests {
             max_depth: None,
         };
         assert!(invalid.validate().is_err());
+    }
+
+    #[test]
+    fn validation_rejects_uncursed_items_with_a_curse() {
+        let invalid = Requirement {
+            effect: Some(Effect::Weapon(WeaponEffect::Displacing)),
+            require_uncursed: true,
+            ..requirement(ItemId::Sword)
+        };
+        assert_eq!(invalid.validate(), Err(QueryError::UncursedWithCurse));
     }
 
     #[test]

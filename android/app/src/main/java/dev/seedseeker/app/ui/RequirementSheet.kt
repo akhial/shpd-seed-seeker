@@ -395,25 +395,27 @@ fun RequirementSheet(
                                     },
                                 )
                             }
-                            HorizontalDivider(
-                                modifier = Modifier.padding(vertical = 5.dp),
-                                color = MaterialTheme.colorScheme.outlineVariant,
-                            )
-                            Text(
-                                "CURSES",
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                                style = MaterialTheme.typography.labelSmall,
-                                letterSpacing = 1.sp,
-                                color = MaterialTheme.colorScheme.error,
-                            )
-                            ItemCatalog.cursesFor(kind).forEach { option ->
-                                DropdownMenuItem(
-                                    text = { Text(option) },
-                                    onClick = {
-                                        modifierName = option
-                                        modifierMenuExpanded = false
-                                    },
+                            if (!requireUncursed) {
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(vertical = 5.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant,
                                 )
+                                Text(
+                                    "CURSES",
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    letterSpacing = 1.sp,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                                ItemCatalog.cursesFor(kind).forEach { option ->
+                                    DropdownMenuItem(
+                                        text = { Text(option) },
+                                        onClick = {
+                                            modifierName = option
+                                            modifierMenuExpanded = false
+                                        },
+                                    )
+                                }
                             }
                         }
                     }
@@ -426,16 +428,14 @@ fun RequirementSheet(
                 ) {
                     Checkbox(
                         checked = requireUncursed,
-                        onCheckedChange = { requireUncursed = it },
+                        onCheckedChange = { checked ->
+                            if (checked && modifierName in ItemCatalog.cursesFor(kind)) {
+                                modifierName = null
+                            }
+                            requireUncursed = checked
+                        },
                     )
-                    Column {
-                        Text("Require uncursed", style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            "Cursed copies will not satisfy this requirement.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
+                    Text("Require uncursed", style = MaterialTheme.typography.titleMedium)
                 }
 
                 Spacer(Modifier.height(18.dp))

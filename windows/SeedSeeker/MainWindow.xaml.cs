@@ -101,13 +101,23 @@ public sealed partial class MainWindow : Window
             tierBound.Header = predicate == TierMatch.AtLeast ? "Minimum tier" : "Maximum tier";
             upgrade.Visibility = upgradeMatch.SelectedIndex > 0 ? Visibility.Visible : Visibility.Collapsed;
         }
+        void PopulateModifiers(string? selection)
+        {
+            var k = (ItemKind)Math.Max(0, kind.SelectedIndex);
+            var modifiers = ItemCatalog.Modifiers(k)
+                .Where(effect => uncursed.IsChecked != true || !ItemCatalog.IsCurse(k, effect))
+                .ToList();
+            modifier.Items.Clear(); modifier.Items.Add("None"); foreach (var value in modifiers) modifier.Items.Add(value);
+            modifier.SelectedIndex = selection is null ? 0 : Math.Max(0, modifiers.IndexOf(selection) + 1);
+            modifier.Visibility = k is ItemKind.Weapon or ItemKind.Armor ? Visibility.Visible : Visibility.Collapsed;
+        }
         void Populate()
         {
             var k = (ItemKind)Math.Max(0, kind.SelectedIndex); var oldId = r.Item?.Id; var items = ItemCatalog.For(k).ToList(); item.Items.Clear(); item.Items.Add($"Any {Labels.Singular(k)}"); foreach (var value in items) item.Items.Add(value.Name); item.SelectedIndex = Math.Max(0, items.FindIndex(x => x.Id == oldId) + 1);
-            modifier.Items.Clear(); modifier.Items.Add("None"); foreach (var value in ItemCatalog.Modifiers(k)) modifier.Items.Add(value); modifier.SelectedIndex = r.Modifier is null ? 0 : Math.Max(0, ItemCatalog.Modifiers(k).ToList().IndexOf(r.Modifier) + 1); modifier.Visibility = k is ItemKind.Weapon or ItemKind.Armor ? Visibility.Visible : Visibility.Collapsed;
+            PopulateModifiers(r.Modifier);
             upgrade.Maximum = k == ItemKind.Ring ? 4 : 3; SyncVisibility();
         }
-        kind.SelectionChanged += (_, _) => { r.Item = null; r.Modifier = null; Populate(); }; item.SelectionChanged += (_, _) => SyncVisibility(); tier.ValueChanged += (_, _) => { if (!double.IsNaN(tier.Value)) selectedTier = (int)tier.Value; }; tierBound.SelectionChanged += (_, _) => { if (tierBound.SelectedIndex >= 0) selectedTier = tierBound.SelectedIndex + 3; }; tierMatch.SelectionChanged += (_, _) => { NormalizeTier(); SyncVisibility(); }; upgradeMatch.SelectionChanged += (_, _) => SyncVisibility(); depthToggle.Toggled += (_, _) => depth.Visibility = depthToggle.IsOn ? Visibility.Visible : Visibility.Collapsed;
+        kind.SelectionChanged += (_, _) => { r.Item = null; r.Modifier = null; Populate(); }; item.SelectionChanged += (_, _) => SyncVisibility(); tier.ValueChanged += (_, _) => { if (!double.IsNaN(tier.Value)) selectedTier = (int)tier.Value; }; tierBound.SelectionChanged += (_, _) => { if (tierBound.SelectedIndex >= 0) selectedTier = tierBound.SelectedIndex + 3; }; tierMatch.SelectionChanged += (_, _) => { NormalizeTier(); SyncVisibility(); }; upgradeMatch.SelectionChanged += (_, _) => SyncVisibility(); uncursed.Checked += (_, _) => PopulateModifiers(modifier.SelectedItem is string effect && !ItemCatalog.IsCurse((ItemKind)Math.Max(0, kind.SelectedIndex), effect) ? effect : null); uncursed.Unchecked += (_, _) => PopulateModifiers(modifier.SelectedItem?.ToString()); depthToggle.Toggled += (_, _) => depth.Visibility = depthToggle.IsOn ? Visibility.Visible : Visibility.Collapsed;
         Populate(); NormalizeTier(); SyncVisibility(); depth.Visibility = depthToggle.IsOn ? Visibility.Visible : Visibility.Collapsed;
         var dialog = new ContentDialog { XamlRoot = Content.XamlRoot, Title = isNew ? "New Requirement" : "Edit Requirement", PrimaryButtonText = isNew ? "Add" : "Save", CloseButtonText = "Cancel", DefaultButton = ContentDialogButton.Primary, Content = new ScrollViewer { Content = content, MaxHeight = 510, Width = 430 } };
         if (await dialog.ShowAsync() != ContentDialogResult.Primary) return false;

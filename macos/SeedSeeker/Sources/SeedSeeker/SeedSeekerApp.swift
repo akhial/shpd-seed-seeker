@@ -380,18 +380,24 @@ private struct RequirementEditor: View {
                     }
                 }
                 Section {
-                    Toggle("Require uncursed", isOn: $requireUncursed)
-                        .toggleStyle(.checkbox)
-                        .help("Cursed copies will not satisfy this requirement")
                     if kind.modifierLabel != nil {
                         Picker(kind.modifierLabel!, selection: $modifier) {
                             Section { Text("None").tag("") }
                             Section(kind == .weapon ? "Enchantments" : "Glyphs") {
                                 ForEach(kind == .weapon ? ItemCatalog.enchantments : ItemCatalog.glyphs, id: \.self) { Text($0).tag($0) }
                             }
-                            Section("Curses") { ForEach(ItemCatalog.cursesFor(kind), id: \.self) { Text($0).tag($0) } }
+                            if !requireUncursed {
+                                Section("Curses") { ForEach(ItemCatalog.cursesFor(kind), id: \.self) { Text($0).tag($0) } }
+                            }
                         }
                     }
+                    Toggle("Require uncursed", isOn: $requireUncursed)
+                        .toggleStyle(.checkbox)
+                        .onChange(of: requireUncursed) { _, value in
+                            if value && ItemCatalog.cursesFor(kind).contains(modifier) {
+                                modifier = ""
+                            }
+                        }
                     Picker("Source", selection: $sourceRaw) {
                         Text("Any").tag(0)
                         ForEach(ScoutItemSource.allCases, id: \.rawValue) { Text($0.label).tag($0.rawValue + 1) }
