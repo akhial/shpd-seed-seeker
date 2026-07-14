@@ -27,7 +27,7 @@ struct Editor {
     upgrade_value: adw::SpinRow,
     effect_row: adw::ComboRow,
     effects: RefCell<Vec<Option<Effect>>>,
-    uncursed: gtk::CheckButton,
+    uncursed: adw::SwitchRow,
     source_row: adw::ComboRow,
     group_row: adw::ComboRow,
     floor_switch: adw::SwitchRow,
@@ -115,10 +115,7 @@ fn build(requirement: &UiRequirement) -> Editor {
         upgrade_value: spin_row("Level", 1.0, 0.0, 4.0),
         effect_row: searchable_combo_row("Enchantment"),
         effects: RefCell::new(vec![None]),
-        uncursed: gtk::CheckButton::builder()
-            .label("Require uncursed")
-            .margin_top(4)
-            .build(),
+        uncursed: adw::SwitchRow::builder().title("Require uncursed").build(),
         source_row: combo_row(
             "Source",
             &std::iter::once("Any")
