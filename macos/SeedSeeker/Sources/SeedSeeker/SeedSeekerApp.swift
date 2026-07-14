@@ -289,6 +289,7 @@ private struct RequirementEditor: View {
     @State private var sourceRaw: Int
     @State private var group: Int
     @State private var maximumDepth: Int
+    @State private var requireUncursed: Bool
 
     init(requirement: ItemRequirement, isNew: Bool, onFinish: @escaping (ItemRequirement?) -> Void) {
         original = requirement; self.isNew = isNew; self.onFinish = onFinish
@@ -300,6 +301,7 @@ private struct RequirementEditor: View {
         _sourceRaw = State(initialValue: requirement.source.map { $0.rawValue + 1 } ?? 0)
         _group = State(initialValue: requirement.identityGroup ?? 0)
         _maximumDepth = State(initialValue: requirement.maximumDepth ?? 0)
+        _requireUncursed = State(initialValue: requirement.requireUncursed)
     }
 
     var body: some View {
@@ -378,6 +380,9 @@ private struct RequirementEditor: View {
                     }
                 }
                 Section {
+                    Toggle("Require uncursed", isOn: $requireUncursed)
+                        .toggleStyle(.checkbox)
+                        .help("Cursed copies will not satisfy this requirement")
                     if kind.modifierLabel != nil {
                         Picker(kind.modifierLabel!, selection: $modifier) {
                             Section { Text("None").tag("") }
@@ -429,7 +434,8 @@ private struct RequirementEditor: View {
             tier: tierMatch == .any ? 0 : tier, tierMatch: tierMatch, upgradeMatch: match,
             source: sourceRaw == 0 ? nil : ScoutItemSource(rawValue: sourceRaw - 1),
             identityGroup: group == 0 ? nil : group,
-            maximumDepth: maximumDepth == 0 ? nil : maximumDepth) else { return }
+            maximumDepth: maximumDepth == 0 ? nil : maximumDepth,
+            requireUncursed: requireUncursed) else { return }
         onFinish(value)
     }
 }

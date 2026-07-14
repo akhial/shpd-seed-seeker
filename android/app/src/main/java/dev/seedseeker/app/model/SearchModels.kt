@@ -34,6 +34,7 @@ data class ItemRequirement(
     val source: ScoutItemSource? = null,
     val identityGroup: Int? = null,
     val maximumDepth: Int? = null,
+    val requireUncursed: Boolean = false,
 ) {
     init {
         require(item == null || item.kind == kind) { "Selected item must belong to its category" }
@@ -74,6 +75,7 @@ data class ItemRequirement(
                 append(" • ")
                 append(it)
             }
+            if (requireUncursed) append(" • uncursed")
             source?.let {
                 append(" • ")
                 append(it.label)

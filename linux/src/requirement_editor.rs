@@ -27,6 +27,7 @@ struct Editor {
     upgrade_value: adw::SpinRow,
     effect_row: adw::ComboRow,
     effects: RefCell<Vec<Option<Effect>>>,
+    uncursed: gtk::CheckButton,
     source_row: adw::ComboRow,
     group_row: adw::ComboRow,
     floor_switch: adw::SwitchRow,
@@ -114,6 +115,7 @@ fn build(requirement: &UiRequirement) -> Editor {
         upgrade_value: spin_row("Level", 1.0, 0.0, 4.0),
         effect_row: searchable_combo_row("Enchantment"),
         effects: RefCell::new(vec![None]),
+        uncursed: gtk::CheckButton::with_label("Require uncursed"),
         source_row: combo_row(
             "Source",
             &std::iter::once("Any")
@@ -150,6 +152,7 @@ fn groups(editor: &Rc<Editor>) -> Vec<adw::PreferencesGroup> {
         .description("Same-item group members must resolve to the same item.")
         .build();
     details_group.add(&editor.effect_row);
+    details_group.add(&editor.uncursed);
     details_group.add(&editor.source_row);
     details_group.add(&editor.group_row);
     details_group.add(&editor.floor_switch);
@@ -229,6 +232,7 @@ fn restore(editor: &Rc<Editor>, requirement: &UiRequirement) {
         .set_selected(u32::try_from(kind_index).unwrap_or(0));
     populate_items(editor, requirement.item);
     populate_effects(editor, requirement.effect);
+    editor.uncursed.set_active(requirement.require_uncursed);
     match requirement.tier {
         TierRequirement::Any => editor.tier_row.set_selected(0),
         TierRequirement::Exact(tier) => {
@@ -325,6 +329,7 @@ fn collect(editor: &Rc<Editor>) -> UiRequirement {
         tier,
         upgrade,
         effect,
+        require_uncursed: editor.uncursed.is_active(),
         source,
         identity_group,
         max_depth,

@@ -56,6 +56,8 @@ pub struct Requirement {
     pub tier: TierRequirement,
     pub upgrade: UpgradeRequirement,
     pub effect: Option<Effect>,
+    /// Whether cursed candidate items are ineligible for this requirement.
+    pub require_uncursed: bool,
     pub source: Option<ItemSource>,
     /// Requirements in the same non-zero group must resolve to the same item ID.
     pub identity_group: Option<u8>,
@@ -86,6 +88,7 @@ impl Requirement {
             && self
                 .effect
                 .is_none_or(|wanted| candidate.effect == Some(wanted))
+            && (!self.require_uncursed || !candidate.cursed)
             && self.source.is_none_or(|wanted| wanted == candidate.source))
         .then_some(identity)
     }
@@ -401,6 +404,7 @@ mod tests {
             tier: TierRequirement::Any,
             upgrade: UpgradeRequirement::Exact(2),
             effect: None,
+            require_uncursed: false,
             source: None,
             identity_group: None,
             max_depth: None,
@@ -448,6 +452,7 @@ mod tests {
                 tier: TierRequirement::Any,
                 upgrade: UpgradeRequirement::Exact(4),
                 effect: None,
+                require_uncursed: false,
                 source: Some(ItemSource::GhostReward),
                 identity_group: None,
                 max_depth: None,
@@ -467,6 +472,7 @@ mod tests {
             tier: TierRequirement::Any,
             upgrade: UpgradeRequirement::Exact(4),
             effect: None,
+            require_uncursed: false,
             source: None,
             identity_group: None,
             max_depth: None,
@@ -485,12 +491,26 @@ mod tests {
             tier: TierRequirement::Any,
             upgrade: UpgradeRequirement::Exact(3),
             effect: None,
+            require_uncursed: false,
             source: None,
             identity_group: None,
             max_depth: None,
         };
 
         assert!(!requirement.matches(&ring));
+    }
+
+    #[test]
+    fn uncursed_requirement_rejects_cursed_copies() {
+        let mut candidate = world_item(ItemId::Sword, Accessibility::Independent);
+        let mut wanted = requirement(ItemId::Sword);
+        wanted.require_uncursed = true;
+
+        assert!(wanted.matches(&candidate));
+        candidate.cursed = true;
+        assert!(!wanted.matches(&candidate));
+        wanted.require_uncursed = false;
+        assert!(wanted.matches(&candidate));
     }
 
     #[test]
@@ -635,6 +655,7 @@ mod tests {
             tier: TierRequirement::Any,
             upgrade: UpgradeRequirement::Exact(2),
             effect: None,
+            require_uncursed: false,
             source: None,
             identity_group: None,
             max_depth: None,
@@ -650,6 +671,7 @@ mod tests {
             tier: TierRequirement::Any,
             upgrade: UpgradeRequirement::Exact(4),
             effect: None,
+            require_uncursed: false,
             source: None,
             identity_group: None,
             max_depth: None,
@@ -662,6 +684,7 @@ mod tests {
             tier: TierRequirement::Any,
             upgrade: UpgradeRequirement::Exact(4),
             effect: None,
+            require_uncursed: false,
             source: None,
             identity_group: None,
             max_depth: None,
@@ -677,6 +700,7 @@ mod tests {
             tier: TierRequirement::Exact(5),
             upgrade: UpgradeRequirement::Exact(2),
             effect: None,
+            require_uncursed: false,
             source: None,
             identity_group: None,
             max_depth: None,
@@ -749,6 +773,7 @@ mod tests {
             tier: TierRequirement::Any,
             upgrade,
             effect: None,
+            require_uncursed: false,
             source,
             identity_group: Some(1),
             max_depth: None,
@@ -767,6 +792,7 @@ mod tests {
                     tier: TierRequirement::Any,
                     upgrade: UpgradeRequirement::Exact(1),
                     effect: None,
+                    require_uncursed: false,
                     source: None,
                     identity_group: None,
                     max_depth: None,
@@ -857,6 +883,7 @@ mod tests {
             tier: TierRequirement::Any,
             upgrade: UpgradeRequirement::Any,
             effect: None,
+            require_uncursed: false,
             source: None,
             identity_group: Some(1),
             max_depth: None,
