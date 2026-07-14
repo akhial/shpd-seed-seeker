@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<gresources>
+  <gresource prefix="/dev/seedseeker/SeedSeeker">
+    <file preprocess="xml-stripblanks">icons/scalable/apps/dev.seedseeker.SeedSeeker-symbolic.svg</file>
+  </gresource>
+</gresources>

@@ -4,7 +4,7 @@
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](COPYING)
 
 An extremely fast, offline seed finder for [Shattered Pixel Dungeon](https://shatteredpixel.com/),
-written in Rust — with native Android, macOS, and Windows apps.
+written in Rust — with native Android, Linux, macOS, and Windows apps.
 
 <p align="center">
   <img alt="Bar chart of seed-search throughput. Seed Seeker tests 4,528 seeds per second on 12 cores and 604 on one core; the incumbent Java shpd-seed-finder tests 421 seeds per second across 6 processes and 93 in one process." src="assets/benchmark.svg">
@@ -25,6 +25,8 @@ written in Rust — with native Android, macOS, and Windows apps.
 - 🔮 **Seed scouting**: paste a seed code, get every searchable item through depth 24 with floor,
   upgrade, enchantment, cursed state, source, and choice constraints
 - 📱 **Android app** (Jetpack Compose) with streaming results and bounded memory
+- 🐧 **Native Linux app** (GTK 4 and libadwaita through gtk-rs) sharing the same Rust engine
+  in-process through the session crate
 - 🍎 **Native macOS app** (SwiftUI, Apple Silicon) sharing the same Rust engine over a C ABI
 - 🪟 **Native Windows app** (WinUI 3, x64 and ARM64) using Fluent Design 2 and the same Rust
   engine
@@ -126,9 +128,21 @@ bash scripts/build-macos-native.sh
 bash scripts/build-macos-app.sh
 ```
 
-Android and macOS app searches rotate the full seed space: the first session start is randomized,
-and later sessions use distinct, widely separated starts. CLI searches and benchmarks remain
-deterministic for reproducibility.
+Android, macOS, and Linux app searches rotate the full seed space: the first session start is
+randomized, and later sessions use distinct, widely separated starts. CLI searches and benchmarks
+remain deterministic for reproducibility.
+
+### Linux
+
+The native GTK 4 and libadwaita app links the shared Rust engine in-process through
+`shpd-seedfinder-session`. The Search page takes the same JSON query format as the CLI and
+streams matching seed codes with live progress; the Scout page lists every searchable item of a
+seed through depth 24. It requires GTK 4.22, libadwaita 1.9, and `glib-compile-resources`;
+[`linux/README.md`](linux/README.md) lists the development packages.
+
+```sh
+cargo run -p shpd-seedfinder-gtk
+```
 
 ## Search queries<a id="search-queries"></a>
 
@@ -259,6 +273,8 @@ O3. See the compatibility notes for the on-device parity gate.
 - `crates/seedfinder-session`: frontend-neutral native session lifecycle, registry, status
   packets, and panic-contained scouting.
 - `crates/seedfinder-ffi`: thread-safe C ABI and public header used by Apple frontends.
+- `linux`: native GTK 4 and libadwaita app (gtk-rs), linked to the shared Rust engine in-process
+  through `seedfinder-session`.
 - `android`: Jetpack Compose UI, coarse-grained search sessions, and the one-shot JNI seed-scout
   contract.
 - `macos/SeedSeeker`: native arm64 macOS 14+ SwiftUI app and SwiftPM package, linked to the
@@ -276,7 +292,13 @@ O3. See the compatibility notes for the on-device parity gate.
 ```sh
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
+```
 
+The workspace includes the GTK app, so the commands above need its system libraries (GTK 4.22
+and libadwaita 1.9). On hosts without them — macOS, Windows, and older Linux distributions —
+add `--exclude shpd-seedfinder-gtk`, exactly as the non-Linux CI jobs do.
+
+```sh
 cd android
 JAVA_HOME=/path/to/temurin-21 ./gradlew \
   :app:testDebugUnitTest :app:lintDebug :app:assembleRelease --offline
