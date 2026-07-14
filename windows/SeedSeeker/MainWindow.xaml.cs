@@ -210,7 +210,15 @@ public sealed partial class MainWindow : Window
         try { search = await Task.Run(() => engine.Start(query)); await RunSearch(search); } catch (Exception ex) { SearchStatus.Text = $"Failed: {ex.Message}"; }
         finally { search?.Dispose(); search = null; SetStartButton(running: false); StartButton.IsEnabled = query.Requirements.Count != 0; }
     }
-    private void SetStartButton(bool running) { StartIcon.Glyph = running ? "" : ""; StartLabel.Text = running ? "Cancel Search" : "Start Search"; PresetsPanel.IsEnabled = !running; }
+    private void SetStartButton(bool running)
+    {
+        StartIcon.Glyph = running ? "" : "";
+        StartLabel.Text = running ? "Cancel Search" : "Start Search";
+        PresetPicker.IsEnabled = !running;
+        SavePresetButton.IsEnabled = !running;
+        DeletePresetButton.IsEnabled = !running
+            && PresetPicker.SelectedItem is QueryPreset { IsBuiltIn: false };
+    }
     private async Task RunSearch(NativeSearch active)
     {
         var timer = Stopwatch.StartNew(); long lastScanned = 0; var lastTime = 0d;
