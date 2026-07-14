@@ -115,7 +115,10 @@ fn build(requirement: &UiRequirement) -> Editor {
         upgrade_value: spin_row("Level", 1.0, 0.0, 4.0),
         effect_row: searchable_combo_row("Enchantment"),
         effects: RefCell::new(vec![None]),
-        uncursed: gtk::CheckButton::with_label("Require uncursed"),
+        uncursed: gtk::CheckButton::builder()
+            .label("Require uncursed")
+            .margin_top(4)
+            .build(),
         source_row: combo_row(
             "Source",
             &std::iter::once("Any")
