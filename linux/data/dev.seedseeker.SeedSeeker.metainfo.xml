@@ -29,7 +29,7 @@
   <url type="homepage">https://github.com/akhial/shpd-seed-seeker</url>
   <launchable type="desktop-id">dev.seedseeker.SeedSeeker.desktop</launchable>
   <provides>
-    <binary>seed-seeker</binary>
+    <binary>seed-seeker-gtk</binary>
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>

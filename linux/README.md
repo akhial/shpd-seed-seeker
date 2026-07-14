@@ -55,6 +55,23 @@ cargo run -p shpd-seedfinder-gtk
 
 GTK Inspector can be enabled while developing with `GTK_DEBUG=interactive`.
 
+## AppImage
+
+The AppImage builder packages the release binary, GTK, libadwaita, the Adwaita icon theme,
+GSettings schemas, desktop integration metadata, and license notices. It supports native x86_64
+and arm64 builds on Fedora 44:
+
+```sh
+sudo dnf install gcc curl file gtk4-devel libadwaita-devel pkgconf-pkg-config
+APPIMAGE_VERSION=dev bash scripts/build-linux-appimage.sh
+./dist/seed-seeker-dev-"$(uname -m)".AppImage
+```
+
+The Release workflow runs the same builder for both architectures when a `v*` tag is pushed and
+publishes the AppImages with the other GitHub Release assets. Release builds first compile the
+pinned GTK and libadwaita stack against Ubuntu 24.04 so they retain an older glibc baseline;
+`build-linux-appimage.sh` can use that stack locally through `APPIMAGE_GTK_PREFIX` as well.
+
 ## Validate
 
 ```sh

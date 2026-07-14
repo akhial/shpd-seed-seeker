@@ -63,6 +63,7 @@ asset.
 | Asset | Platforms |
 | --- | --- |
 | `seed-seeker-cli-<tag>-<target>.tar.gz` / `.zip` | CLI for Linux (x86_64, arm64), macOS (Apple Silicon, Intel), and Windows (x86_64, arm64) |
+| `seed-seeker-<tag>-<arch>.AppImage` | Native Linux app (x86_64, arm64) |
 | `seed-seeker-<tag>-macos-arm64.app.zip` | Native macOS app (Apple Silicon, macOS 14+) |
 | `seed-seeker-<tag>-windows-<arch>.zip` | Native Windows app (x64, ARM64) |
 | `seed-seeker-<tag>-android.apk` | Android app (arm64-v8a and x86_64) |
@@ -77,6 +78,8 @@ Platform notes:
 - The Windows app requires the
   [Windows App SDK 1.8 runtime](https://learn.microsoft.com/en-us/windows/apps/windows-app-sdk/downloads)
   to be installed.
+- The Linux AppImage bundles GTK and libadwaita. Make it executable, then run it directly; it does
+  not need to be extracted or installed.
 
 ### CLI
 
@@ -142,6 +145,14 @@ seed through depth 24. It requires GTK 4.22, libadwaita 1.9, and `glib-compile-r
 
 ```sh
 cargo run -p shpd-seedfinder-gtk
+```
+
+Tagged releases include x86_64 and arm64 AppImages. To build one locally on Fedora 44, install the
+packages from [`linux/README.md`](linux/README.md), plus `curl` and `file`, then run:
+
+```sh
+APPIMAGE_VERSION=dev bash scripts/build-linux-appimage.sh
+./dist/seed-seeker-dev-"$(uname -m)".AppImage
 ```
 
 ## Search queries<a id="search-queries"></a>
