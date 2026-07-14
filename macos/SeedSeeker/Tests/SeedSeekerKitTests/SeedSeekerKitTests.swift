@@ -3,6 +3,41 @@ import SeedSeekerKit
 import XCTest
 
 final class SeedSeekerKitTests: XCTestCase {
+    func testBundledStaffPreset() throws {
+        let preset = BuiltInPresets.staff21
+        XCTAssertEqual(preset.name, "+21 Staff")
+        XCTAssertEqual(preset.query.requirements.count, 4)
+        XCTAssertEqual(preset.query.requirements.map(\.kind), [.wand, .wand, .wand, .wand])
+        XCTAssertEqual(preset.query.requirements.map(\.upgradeMatch), [.exactly, .any, .any, .atLeast])
+        XCTAssertEqual(preset.query.requirements.map(\.upgrade), [3, 0, 0, 1])
+        XCTAssertEqual(preset.query.requirements.map(\.identityGroup), [1, 1, 1, nil])
+        XCTAssertNotNil(preset.query.validated())
+    }
+
+    func testBundledRingOfWealthPreset() throws {
+        let preset = BuiltInPresets.ringOfWealth21
+        XCTAssertEqual(preset.name, "+21 Ring of Wealth")
+        XCTAssertEqual(preset.query.requirements.map(\.item?.id),
+                       ["ring_wealth", "ring_wealth", "ring_wealth"])
+        XCTAssertEqual(preset.query.requirements.map(\.upgradeMatch), [.exactly, .any, .any])
+        XCTAssertEqual(preset.query.requirements.map(\.upgrade), [4, 0, 0])
+        XCTAssertEqual(preset.query.requirements.first?.source, .impReward)
+        XCTAssertNotNil(preset.query.validated())
+    }
+
+    func testPresetPersistenceDropsInvalidEntries() throws {
+        let requirement = try ItemRequirement(key: 99, item: nil, upgrade: 1, kind: .wand,
+                                              upgradeMatch: .atLeast, requireUncursed: true)
+        let valid = QueryPreset(name: "My preset",
+                                query: SavedQuery(requirements: [requirement]))
+        let invalid = QueryPreset(name: "   ", query: BuiltInPresets.ringOfWealth21.query)
+        let encoded = try XCTUnwrap(PresetPersistence.encode([valid, invalid]))
+        let decoded = PresetPersistence.decode(encoded)
+        XCTAssertEqual(decoded, [valid])
+        XCTAssertEqual(decoded.first?.query.requirements.first?.requireUncursed, true)
+        XCTAssertEqual(PresetPersistence.decode("not json"), [])
+    }
+
     func testScoutMatchesSelectOnlyOneMutuallyExclusiveReward() throws {
         let warding = try XCTUnwrap(ItemCatalog.findById("wand_warding"))
         let light = try XCTUnwrap(ItemCatalog.findById("wand_prismatic_light"))
