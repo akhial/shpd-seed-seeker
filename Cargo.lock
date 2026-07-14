@@ -741,6 +741,8 @@ dependencies = [
  "glib-build-tools",
  "gtk4",
  "libadwaita",
+ "serde",
+ "serde_json",
  "shpd-seedfinder-core",
  "shpd-seedfinder-session",
 ]
