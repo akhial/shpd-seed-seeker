@@ -107,10 +107,10 @@ impl Requirement {
             self.item.is_none() && matches!(self.kind, ItemKind::Weapon | ItemKind::Armor);
         let valid_tier = match self.tier {
             TierRequirement::Any => true,
-            TierRequirement::Exact(tier) | TierRequirement::AtLeast(tier) => {
-                tierable && (2..=5).contains(&tier)
+            TierRequirement::Exact(tier) => tierable && (2..=5).contains(&tier),
+            TierRequirement::AtLeast(tier) | TierRequirement::AtMost(tier) => {
+                tierable && (3..=4).contains(&tier)
             }
-            TierRequirement::AtMost(tier) => tierable && (2..=4).contains(&tier),
         };
         if !valid_tier {
             return Err(QueryError::InvalidTier);
@@ -724,6 +724,21 @@ mod tests {
             ..tier_five
         };
         assert_eq!(redundant_maximum.validate(), Err(QueryError::InvalidTier));
+
+        for redundant in [
+            TierRequirement::AtLeast(2),
+            TierRequirement::AtLeast(5),
+            TierRequirement::AtMost(2),
+        ] {
+            assert_eq!(
+                Requirement {
+                    tier: redundant,
+                    ..tier_five
+                }
+                .validate(),
+                Err(QueryError::InvalidTier)
+            );
+        }
     }
 
     #[test]

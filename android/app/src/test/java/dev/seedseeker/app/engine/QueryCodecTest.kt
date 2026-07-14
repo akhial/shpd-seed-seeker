@@ -61,6 +61,15 @@ class QueryCodecTest {
         assertThrows(IllegalArgumentException::class.java) {
             requirement.copy(tier = 5)
         }
+        assertThrows(IllegalArgumentException::class.java) {
+            requirement.copy(tier = 2)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            requirement.copy(tier = 2, tierMatch = TierMatch.AT_LEAST)
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            requirement.copy(tier = 5, tierMatch = TierMatch.AT_LEAST)
+        }
     }
 
     @Test

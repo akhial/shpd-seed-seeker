@@ -337,19 +337,27 @@ private struct RequirementEditor: View {
                         }
                         .pickerStyle(.segmented)
                         .onChange(of: tierMatch) { _, value in
-                            if value == .atMost { tier = min(tier, 4) }
+                            if value == .atLeast || value == .atMost {
+                                tier = max(3, min(tier, 4))
+                            }
                         }
-                        if tierMatch != .any {
+                        if tierMatch == .exactly {
                             VStack(alignment: .leading, spacing: 2) {
-                                LabeledContent(tierMatch == .exactly ? "Exact tier" :
-                                    tierMatch == .atLeast ? "Minimum tier" : "Maximum tier") {
-                                    Text(tierMatch == .atLeast ? "Tier \(tier) or higher" :
-                                        tierMatch == .atMost ? "Tier \(tier) or lower" : "Tier \(tier)")
+                                LabeledContent("Exact tier") {
+                                    Text("Tier \(tier)")
                                         .monospacedDigit().foregroundStyle(.secondary)
                                 }
-                                Slider(value: intBinding($tier),
-                                       in: 2.0...(tierMatch == .atMost ? 4.0 : 5.0), step: 1)
+                                Slider(value: intBinding($tier), in: 2...5, step: 1)
                             }
+                        } else if tierMatch == .atLeast || tierMatch == .atMost {
+                            Picker(tierMatch == .atLeast ? "Minimum tier" : "Maximum tier",
+                                   selection: $tier) {
+                                ForEach(3...4, id: \.self) { option in
+                                    Text(tierMatch == .atLeast ? "Tier \(option) or higher" :
+                                        "Tier \(option) or lower").tag(option)
+                                }
+                            }
+                            .pickerStyle(.menu)
                         }
                     }
                 }

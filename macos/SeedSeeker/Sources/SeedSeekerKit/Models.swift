@@ -114,8 +114,8 @@ public struct ItemRequirement: Codable, Hashable, Identifiable, Sendable {
         let tierable = item == nil && (kind == .weapon || kind == .armor)
         let validTier = switch tierMatch {
         case .any: tier == 0
-        case .exactly, .atLeast: tierable && (2...5).contains(tier)
-        case .atMost: tierable && (2...4).contains(tier)
+        case .exactly: tierable && (2...5).contains(tier)
+        case .atLeast, .atMost: tierable && (3...4).contains(tier)
         }
         guard validTier else { throw ModelValidationError.tier }
         let valid = switch upgradeMatch {

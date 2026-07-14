@@ -163,6 +163,12 @@ final class SeedSeekerKitTests: XCTestCase {
             tier: 4, tierMatch: .atMost, upgradeMatch: .any))
         XCTAssertThrowsError(try ItemRequirement(key: 1, item: nil, upgrade: 0, kind: .armor,
             tier: 5, tierMatch: .atMost, upgradeMatch: .any))
+        XCTAssertThrowsError(try ItemRequirement(key: 1, item: nil, upgrade: 0, kind: .armor,
+            tier: 2, tierMatch: .atMost, upgradeMatch: .any))
+        XCTAssertThrowsError(try ItemRequirement(key: 1, item: nil, upgrade: 0, kind: .armor,
+            tier: 2, tierMatch: .atLeast, upgradeMatch: .any))
+        XCTAssertThrowsError(try ItemRequirement(key: 1, item: nil, upgrade: 0, kind: .armor,
+            tier: 5, tierMatch: .atLeast, upgradeMatch: .any))
         XCTAssertThrowsError(try ItemRequirement(key: 1, item: nil, upgrade: 0, kind: .weapon,
             tier: 1, tierMatch: .exactly, upgradeMatch: .any))
         XCTAssertThrowsError(try ItemRequirement(key: 1, item: ItemCatalog.weapons[0], upgrade: 1,

@@ -40,8 +40,8 @@ data class ItemRequirement(
         val tierable = item == null && kind in setOf(ItemKind.WEAPON, ItemKind.ARMOR)
         val validTier = when (tierMatch) {
             TierMatch.ANY -> tier == 0
-            TierMatch.EXACT, TierMatch.AT_LEAST -> tierable && tier in 2..5
-            TierMatch.AT_MOST -> tierable && tier in 2..4
+            TierMatch.EXACT -> tierable && tier in 2..5
+            TierMatch.AT_LEAST, TierMatch.AT_MOST -> tierable && tier in 3..4
         }
         require(validTier) {
             "Tier predicate requires a wildcard weapon or armor and a non-redundant tier"
