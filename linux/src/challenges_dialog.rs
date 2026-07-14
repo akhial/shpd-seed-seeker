@@ -18,9 +18,7 @@ pub fn present(
 ) {
     let group = adw::PreferencesGroup::builder()
         .title("Challenges")
-        .description(
-            "Searches and scouting simulate runs with the selected challenges enabled.",
-        )
+        .description("Searches and scouting simulate runs with the selected challenges enabled.")
         .build();
     for info in ALL_CHALLENGES {
         let row = adw::SwitchRow::builder()

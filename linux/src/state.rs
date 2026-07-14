@@ -7,9 +7,7 @@ use std::fmt::Write as _;
 use shpd_seedfinder_core::catalog::{Effect, ItemId, ItemKind, item};
 use shpd_seedfinder_core::challenges::Challenges;
 use shpd_seedfinder_core::model::ItemSource;
-use shpd_seedfinder_core::query::{
-    Requirement, SearchQuery, TierRequirement, UpgradeRequirement,
-};
+use shpd_seedfinder_core::query::{Requirement, SearchQuery, TierRequirement, UpgradeRequirement};
 
 /// Every user-facing item source, in the wire order shared with the other
 /// frontends.

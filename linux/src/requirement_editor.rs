@@ -7,7 +7,7 @@ use std::rc::Rc;
 
 use adw::prelude::*;
 use shpd_seedfinder_core::catalog::{
-    ALL_ARMOR_EFFECTS, ALL_WEAPON_EFFECTS, Effect, ItemDefinition, ItemId, ItemKind, ITEMS,
+    ALL_ARMOR_EFFECTS, ALL_WEAPON_EFFECTS, Effect, ITEMS, ItemDefinition, ItemId, ItemKind,
 };
 use shpd_seedfinder_core::query::{TierRequirement, UpgradeRequirement};
 
@@ -64,9 +64,11 @@ pub fn present(
     toolbar_view.add_top_bar(&header);
     toolbar_view.set_content(Some(&page));
 
-    editor
-        .dialog
-        .set_title(if is_new { "New Requirement" } else { "Edit Requirement" });
+    editor.dialog.set_title(if is_new {
+        "New Requirement"
+    } else {
+        "Edit Requirement"
+    });
     editor.dialog.set_child(Some(&toolbar_view));
     editor.dialog.set_default_widget(Some(&confirm));
 
@@ -203,7 +205,9 @@ fn restore(editor: &Rc<Editor>, requirement: &UiRequirement) {
         .iter()
         .position(|kind| *kind == requirement.kind)
         .unwrap_or(0);
-    editor.category.set_selected(u32::try_from(kind_index).unwrap_or(0));
+    editor
+        .category
+        .set_selected(u32::try_from(kind_index).unwrap_or(0));
     populate_items(editor, requirement.item);
     populate_effects(editor, requirement.effect);
     match requirement.tier {
@@ -234,7 +238,9 @@ fn restore(editor: &Rc<Editor>, requirement: &UiRequirement) {
         .source
         .and_then(|source| ALL_SOURCES.iter().position(|other| *other == source))
         .map_or(0, |index| index + 1);
-    editor.source_row.set_selected(u32::try_from(source_index).unwrap_or(0));
+    editor
+        .source_row
+        .set_selected(u32::try_from(source_index).unwrap_or(0));
     editor
         .group_row
         .set_selected(u32::from(requirement.identity_group.unwrap_or(0)));
@@ -249,8 +255,7 @@ fn restore(editor: &Rc<Editor>, requirement: &UiRequirement) {
 fn collect(editor: &Rc<Editor>) -> UiRequirement {
     let kind = selected_kind(editor);
     let item = selected_item(editor);
-    let tier_eligible =
-        item.is_none() && matches!(kind, ItemKind::Weapon | ItemKind::Armor);
+    let tier_eligible = item.is_none() && matches!(kind, ItemKind::Weapon | ItemKind::Armor);
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let tier_value = editor.tier_value.value().round() as u8;
     let tier = match editor.tier_row.selected() {
@@ -346,8 +351,12 @@ fn populate_items(editor: &Rc<Editor>, selection: Option<ItemId>) {
         .unwrap_or(0);
     editor.items.replace(ids);
     let labels: Vec<&str> = labels.iter().map(String::as_str).collect();
-    editor.item_row.set_model(Some(&gtk::StringList::new(&labels)));
-    editor.item_row.set_selected(u32::try_from(selected).unwrap_or(0));
+    editor
+        .item_row
+        .set_model(Some(&gtk::StringList::new(&labels)));
+    editor
+        .item_row
+        .set_selected(u32::try_from(selected).unwrap_or(0));
 }
 
 fn populate_effects(editor: &Rc<Editor>, selection: Option<Effect>) {
@@ -379,8 +388,12 @@ fn populate_effects(editor: &Rc<Editor>, selection: Option<Effect>) {
         .unwrap_or(0);
     editor.effects.replace(effects);
     let labels: Vec<&str> = labels.iter().map(String::as_str).collect();
-    editor.effect_row.set_model(Some(&gtk::StringList::new(&labels)));
-    editor.effect_row.set_selected(u32::try_from(selected).unwrap_or(0));
+    editor
+        .effect_row
+        .set_model(Some(&gtk::StringList::new(&labels)));
+    editor
+        .effect_row
+        .set_selected(u32::try_from(selected).unwrap_or(0));
 }
 
 fn effect_label(name: &str, is_curse: bool) -> String {
@@ -393,7 +406,11 @@ fn effect_label(name: &str, is_curse: bool) -> String {
 
 fn clamp_upgrade(editor: &Rc<Editor>) {
     let maximum = f64::from(selected_kind(editor).maximum_search_upgrade());
-    let minimum = if editor.upgrade_row.selected() == 1 { 1.0 } else { 0.0 };
+    let minimum = if editor.upgrade_row.selected() == 1 {
+        1.0
+    } else {
+        0.0
+    };
     let adjustment = editor.upgrade_value.adjustment();
     adjustment.set_lower(minimum);
     adjustment.set_upper(maximum);
@@ -404,29 +421,35 @@ fn clamp_upgrade(editor: &Rc<Editor>) {
 
 fn refresh_visibility(editor: &Rc<Editor>) {
     let kind = selected_kind(editor);
-    let wildcard_equipment = selected_item(editor).is_none()
-        && matches!(kind, ItemKind::Weapon | ItemKind::Armor);
+    let wildcard_equipment =
+        selected_item(editor).is_none() && matches!(kind, ItemKind::Weapon | ItemKind::Armor);
     editor.tier_row.set_visible(wildcard_equipment);
     editor
         .tier_value
         .set_visible(wildcard_equipment && editor.tier_row.selected() != 0);
-    editor.tier_value.set_title(if editor.tier_row.selected() == 1 {
-        "Exact tier"
-    } else {
-        "Minimum tier"
-    });
+    editor
+        .tier_value
+        .set_title(if editor.tier_row.selected() == 1 {
+            "Exact tier"
+        } else {
+            "Minimum tier"
+        });
     editor
         .upgrade_value
         .set_visible(editor.upgrade_row.selected() != 0);
-    editor.upgrade_value.set_title(if editor.upgrade_row.selected() == 1 {
-        "Exactly"
-    } else {
-        "At least"
-    });
+    editor
+        .upgrade_value
+        .set_title(if editor.upgrade_row.selected() == 1 {
+            "Exactly"
+        } else {
+            "At least"
+        });
     editor
         .effect_row
         .set_visible(matches!(kind, ItemKind::Weapon | ItemKind::Armor));
-    editor.floor_value.set_visible(editor.floor_switch.is_active());
+    editor
+        .floor_value
+        .set_visible(editor.floor_switch.is_active());
 }
 
 fn combo_row(title: &str, options: &[&str]) -> adw::ComboRow {

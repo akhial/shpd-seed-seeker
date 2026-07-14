@@ -194,12 +194,18 @@ mod tests {
             world_item(
                 ItemId::Sword,
                 3,
-                Accessibility::Choice { group: 1, option: 0 },
+                Accessibility::Choice {
+                    group: 1,
+                    option: 0,
+                },
             ),
             world_item(
                 ItemId::MailArmor,
                 3,
-                Accessibility::Choice { group: 1, option: 1 },
+                Accessibility::Choice {
+                    group: 1,
+                    option: 1,
+                },
             ),
         ];
         let requirements = [
@@ -231,7 +237,10 @@ mod tests {
         smith.source = ItemSource::BlacksmithReward;
         let items = [smith];
         let requirements = [requirement(1, ItemKind::Weapon, Some(ItemId::Sword))];
-        assert_eq!(scout_match_indices(&items, &requirements, 24, false).len(), 1);
+        assert_eq!(
+            scout_match_indices(&items, &requirements, 24, false).len(),
+            1
+        );
         assert!(scout_match_indices(&items, &requirements, 24, true).is_empty());
     }
 }

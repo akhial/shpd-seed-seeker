@@ -116,7 +116,9 @@ fn save_requirement(requirement: &UiRequirement) -> SavedRequirement {
         effect: requirement
             .effect
             .map(|effect| effect.wire_name().to_owned()),
-        source: requirement.source.map(|source| source_key(source).to_owned()),
+        source: requirement
+            .source
+            .map(|source| source_key(source).to_owned()),
         identity_group: requirement.identity_group,
         max_depth: requirement.max_depth,
     }

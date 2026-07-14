@@ -93,8 +93,7 @@ pub fn present(app: &adw::Application) {
             persist::save(&snapshot);
             query.refresh(&snapshot);
             detail.render(&snapshot);
-            start_action
-                .set_enabled(!snapshot.requirements.is_empty() || results.is_running());
+            start_action.set_enabled(!snapshot.requirements.is_empty() || results.is_running());
         }
     });
 

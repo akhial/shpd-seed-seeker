@@ -69,7 +69,9 @@ impl QueryPane {
                  leaving favor available for reforging",
             )
             .build();
-        let scope_group = adw::PreferencesGroup::builder().title("Search Scope").build();
+        let scope_group = adw::PreferencesGroup::builder()
+            .title("Search Scope")
+            .build();
         scope_group.add(&depth_row);
         scope_group.add(&blacksmith_row);
         scope_group.add(&exclude_row);
@@ -81,7 +83,9 @@ impl QueryPane {
                  Crypt and Sacrificial-fire prizes. Found seeds are always genuine",
             )
             .build();
-        let performance_group = adw::PreferencesGroup::builder().title("Performance").build();
+        let performance_group = adw::PreferencesGroup::builder()
+            .title("Performance")
+            .build();
         performance_group.add(&fast_row);
 
         let preferences_page = adw::PreferencesPage::new();
@@ -202,7 +206,8 @@ impl QueryPane {
         self.depth_row.set_value(f64::from(state.max_depth));
         self.blacksmith_row.set_active(state.require_blacksmith);
         self.blacksmith_row.set_sensitive(state.max_depth < 14);
-        self.exclude_row.set_active(state.exclude_blacksmith_rewards);
+        self.exclude_row
+            .set_active(state.exclude_blacksmith_rewards);
         self.fast_row.set_active(state.fast_mode);
         self.rebuild_rows(state);
         let enabled = state.challenges.bits().count_ones();
@@ -264,12 +269,14 @@ impl QueryPane {
     /// Flips the search action between its start and stop presentation.
     pub fn set_running(&self, running: bool) {
         if running {
-            self.start_content.set_icon_name("media-playback-stop-symbolic");
+            self.start_content
+                .set_icon_name("media-playback-stop-symbolic");
             self.start_content.set_label("Stop Search");
             self.start_button.remove_css_class("suggested-action");
             self.start_button.add_css_class("destructive-action");
         } else {
-            self.start_content.set_icon_name("media-playback-start-symbolic");
+            self.start_content
+                .set_icon_name("media-playback-start-symbolic");
             self.start_content.set_label("Start Search");
             self.start_button.remove_css_class("destructive-action");
             self.start_button.add_css_class("suggested-action");

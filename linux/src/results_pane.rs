@@ -14,9 +14,7 @@ use shpd_seedfinder_session::{
     STATE_RUNNING,
 };
 
-use crate::format::{
-    duration, estimate_duration, group_digits, probability_percent, seed_rate,
-};
+use crate::format::{duration, estimate_duration, group_digits, probability_percent, seed_rate};
 
 const POLL_INTERVAL: Duration = Duration::from_millis(100);
 const DRAIN_BATCH: usize = 256;

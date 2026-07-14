@@ -306,7 +306,10 @@ fn item_row(world_item: &WorldItem, matched: bool) -> adw::ActionRow {
             );
         }
         Accessibility::Scenarios { group, .. } => {
-            let _ = write!(subtitle, "\nOnly in some outcomes of scenario group {group}");
+            let _ = write!(
+                subtitle,
+                "\nOnly in some outcomes of scenario group {group}"
+            );
         }
     }
 
