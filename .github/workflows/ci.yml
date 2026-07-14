@@ -45,7 +45,7 @@ jobs:
         run: cargo test --locked --workspace --exclude shpd-seedfinder-gtk
 
   linux-app:
-    name: Linux app
+    name: Linux
     runs-on: ubuntu-latest
     # Fedora ships the GTK 4.22 and libadwaita 1.9 stack the app targets.
     container: registry.fedoraproject.org/fedora:44
