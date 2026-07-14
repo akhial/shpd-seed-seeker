@@ -197,23 +197,35 @@ private struct QueryView: View {
         VStack(spacing: 0) {
             List {
                 Section("Presets") {
-                    Menu("Load Preset", systemImage: "bookmark") {
-                        Section("Included") {
-                            ForEach(BuiltInPresets.all) { preset in
-                                Button(preset.name) { onApplyPreset(preset) }
-                            }
-                        }
-                        if !userPresets.isEmpty {
-                            Section("Saved") {
-                                ForEach(userPresets) { preset in
+                    HStack {
+                        Menu("Load Preset", systemImage: "bookmark") {
+                            Section("Included") {
+                                ForEach(BuiltInPresets.all) { preset in
                                     Button(preset.name) { onApplyPreset(preset) }
                                 }
                             }
+                            if !userPresets.isEmpty {
+                                Section("Saved") {
+                                    ForEach(userPresets) { preset in
+                                        Button(preset.name) { onApplyPreset(preset) }
+                                    }
+                                }
+                            }
                         }
-                    }
-                    Button("Save Current Query", systemImage: "bookmark.badge.plus") {
-                        presetName = ""
-                        showingSavePreset = true
+                        Button {
+                            presetName = ""
+                            showingSavePreset = true
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "bookmark.badge.plus")
+                                Text("Save Current Query")
+                            }
+                            .fixedSize()
+                        }
+                        .buttonStyle(.bordered)
+                        .fixedSize()
+                        .layoutPriority(1)
+                        Spacer(minLength: 0)
                     }
                     if !userPresets.isEmpty {
                         Menu("Delete Saved Preset", systemImage: "trash") {

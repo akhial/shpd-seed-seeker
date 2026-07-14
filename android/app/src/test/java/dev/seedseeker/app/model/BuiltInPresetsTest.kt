@@ -24,6 +24,7 @@ class BuiltInPresetsTest {
         assertEquals(listOf("ring_wealth", "ring_wealth", "ring_wealth"), requirements.map { it.item?.id })
         assertEquals(listOf(UpgradeMatch.EXACT, UpgradeMatch.ANY, UpgradeMatch.ANY), requirements.map { it.upgradeMatch })
         assertEquals(listOf(4, 0, 0), requirements.map { it.upgrade })
+        assertEquals(listOf(null, 4, 4), requirements.map { it.maximumDepth })
         assertEquals(ScoutItemSource.IMP_REWARD, requirements.first().source)
     }
 }

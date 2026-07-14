@@ -83,9 +83,9 @@ public enum BuiltInPresets {
             try! ItemRequirement(key: 1, item: ItemCatalog.findById("ring_wealth"), upgrade: 4,
                                  kind: .ring, upgradeMatch: .exactly, source: .impReward),
             try! ItemRequirement(key: 2, item: ItemCatalog.findById("ring_wealth"), upgrade: 0,
-                                 kind: .ring, upgradeMatch: .any),
+                                 kind: .ring, upgradeMatch: .any, maximumDepth: 4),
             try! ItemRequirement(key: 3, item: ItemCatalog.findById("ring_wealth"), upgrade: 0,
-                                 kind: .ring, upgradeMatch: .any),
+                                 kind: .ring, upgradeMatch: .any, maximumDepth: 4),
         ]))
 }
 
