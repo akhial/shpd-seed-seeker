@@ -188,27 +188,19 @@ fun StatusPill(
     }
 }
 
-/** One-line condensed requirement spec used by the query-header chips. */
-fun requirementChipLabel(requirement: ItemRequirement): String = buildString {
-    append(
-        requirement.item?.name ?: when (requirement.tierMatch) {
-            TierMatch.ANY -> "Any ${requirement.kind.singularLabel}"
-            TierMatch.EXACT -> "T${requirement.tier} ${requirement.kind.singularLabel}"
-            TierMatch.AT_LEAST -> "T${requirement.tier}+ ${requirement.kind.singularLabel}"
-            TierMatch.AT_MOST -> "≤T${requirement.tier} ${requirement.kind.singularLabel}"
-        },
-    )
+/** Condensed constraint list shown under a requirement's title; empty when unconstrained. */
+fun requirementDetailLine(requirement: ItemRequirement): String = buildList {
     when (requirement.upgradeMatch) {
         UpgradeMatch.ANY -> Unit
-        UpgradeMatch.EXACT -> append(" +${requirement.upgrade}")
-        UpgradeMatch.AT_LEAST -> append(" ≥+${requirement.upgrade}")
+        UpgradeMatch.EXACT -> add("+${requirement.upgrade}")
+        UpgradeMatch.AT_LEAST -> add("≥+${requirement.upgrade}")
     }
-    requirement.modifier?.let { append(" · $it") }
-    if (requirement.requireUncursed) append(" · uncursed")
-    requirement.source?.let { append(" · ${it.label}") }
-    requirement.identityGroup?.let { append(" · grp ${('A' + it - 1)}") }
-    requirement.maximumDepth?.let { append(" · ≤$it") }
-}
+    requirement.modifier?.let { add(it) }
+    if (requirement.requireUncursed) add("uncursed")
+    requirement.source?.let { add(it.label) }
+    requirement.identityGroup?.let { add("grp ${('A' + it - 1)}") }
+    requirement.maximumDepth?.let { add("≤ floor $it") }
+}.joinToString(" · ")
 
 /** One-line summary of the search scope, listing only active constraints. */
 fun scopeSummaryText(

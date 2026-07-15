@@ -12,7 +12,7 @@ import org.junit.Test
 
 class QuerySummaryTest {
     @Test
-    fun chipLabelCondensesAnExactItemRequirement() {
+    fun detailLineCondensesAnExactItemRequirement() {
         val requirement = ItemRequirement(
             key = 1,
             item = ItemCatalog.weapons.first { it.id == "sword" },
@@ -21,11 +21,11 @@ class QuerySummaryTest {
             maximumDepth = 12,
         )
 
-        assertEquals("Sword +2 · Lucky · ≤12", requirementChipLabel(requirement))
+        assertEquals("+2 · Lucky · ≤ floor 12", requirementDetailLine(requirement))
     }
 
     @Test
-    fun chipLabelCondensesAWildcardRequirement() {
+    fun detailLineCondensesAWildcardRequirement() {
         val requirement = ItemRequirement(
             key = 2,
             item = null,
@@ -40,9 +40,21 @@ class QuerySummaryTest {
         )
 
         assertEquals(
-            "T3+ armor ≥+1 · uncursed · Ghost reward · grp B",
-            requirementChipLabel(requirement),
+            "≥+1 · uncursed · Ghost reward · grp B",
+            requirementDetailLine(requirement),
         )
+    }
+
+    @Test
+    fun detailLineIsEmptyForAnUnconstrainedRequirement() {
+        val requirement = ItemRequirement(
+            key = 3,
+            item = ItemCatalog.weapons.first { it.id == "sword" },
+            upgrade = 0,
+            upgradeMatch = UpgradeMatch.ANY,
+        )
+
+        assertEquals("", requirementDetailLine(requirement))
     }
 
     @Test

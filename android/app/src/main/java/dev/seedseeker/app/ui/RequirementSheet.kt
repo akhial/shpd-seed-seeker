@@ -340,14 +340,24 @@ fun RequirementSheet(
                         }
                         if (upgradeMatch == UpgradeMatch.EXACT) {
                             Spacer(Modifier.height(8.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                (1..kind.maximumSearchUpgrade).forEach { value ->
-                                    FilterChip(
-                                        selected = upgrade == value,
-                                        onClick = { upgrade = value },
-                                        label = { Text("+$value") },
+                            Column {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                ) {
+                                    Text("Level", style = MaterialTheme.typography.labelLarge)
+                                    Text(
+                                        "+$upgrade",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = MaterialTheme.colorScheme.primary,
                                     )
                                 }
+                                Slider(
+                                    value = upgrade.toFloat(),
+                                    onValueChange = { upgrade = it.roundToInt() },
+                                    valueRange = 1f..kind.maximumSearchUpgrade.toFloat(),
+                                    steps = kind.maximumSearchUpgrade - 2,
+                                )
                             }
                         } else if (upgradeMatch == UpgradeMatch.AT_LEAST) {
                             Spacer(Modifier.height(8.dp))
@@ -546,29 +556,23 @@ fun RequirementSheet(
                         }
 
                         Spacer(Modifier.height(18.dp))
-                        Text("Floor limit", style = MaterialTheme.typography.titleSmall)
-                        Text(
-                            "Item must appear within the selected floors.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                        Spacer(Modifier.height(8.dp))
-                        FilterChip(
-                            selected = maximumDepth == null,
-                            onClick = { maximumDepth = null },
-                            label = { Text("Use search limit") },
-                        )
-                        if (maximumDepth != null) {
-                            Text("Within the first $maximumDepth floors", style = MaterialTheme.typography.bodyMedium)
-                            Slider(
-                                value = maximumDepth!!.toFloat(),
-                                onValueChange = { maximumDepth = it.toInt() },
-                                valueRange = 1f..24f,
-                                steps = 22,
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Text("Floor limit", style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                maximumDepth?.let { "≤ floor $it" } ?: "Search limit",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary,
                             )
-                        } else {
-                            TextButton(onClick = { maximumDepth = 5 }) { Text("Set item-specific limit") }
                         }
+                        Slider(
+                            value = (maximumDepth ?: 0).toFloat(),
+                            onValueChange = { maximumDepth = it.roundToInt().takeIf { depth -> depth > 0 } },
+                            valueRange = 0f..24f,
+                            steps = 23,
+                        )
 
                         Spacer(Modifier.height(18.dp))
                         Text("Same-item group", style = MaterialTheme.typography.titleSmall)
@@ -578,18 +582,33 @@ fun RequirementSheet(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Spacer(Modifier.height(8.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            FilterChip(
-                                selected = identityGroup == null,
-                                onClick = { identityGroup = null },
-                                label = { Text("None") },
-                            )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(3.dp),
+                        ) {
+                            ToggleButton(
+                                checked = identityGroup == null,
+                                onCheckedChange = { if (it) identityGroup = null },
+                                modifier = Modifier.weight(1f),
+                                colors = ToggleButtonDefaults.toggleButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                ),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 10.dp),
+                            ) {
+                                Text("None", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
                             (1..4).forEach { group ->
-                                FilterChip(
-                                    selected = identityGroup == group,
-                                    onClick = { identityGroup = group },
-                                    label = { Text(('A'.code + group - 1).toChar().toString()) },
-                                )
+                                ToggleButton(
+                                    checked = identityGroup == group,
+                                    onCheckedChange = { if (it) identityGroup = group },
+                                    modifier = Modifier.weight(1f),
+                                    colors = ToggleButtonDefaults.toggleButtonColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                    ),
+                                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 10.dp),
+                                ) {
+                                    Text(('A'.code + group - 1).toChar().toString())
+                                }
                             }
                         }
                         Spacer(Modifier.height(14.dp))

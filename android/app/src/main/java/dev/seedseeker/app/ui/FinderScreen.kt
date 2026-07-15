@@ -5,8 +5,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -25,6 +24,8 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -34,9 +35,6 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.InputChip
-import androidx.compose.material3.InputChipDefaults
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -104,7 +102,6 @@ fun FinderScreen(
     bottomBar: @Composable () -> Unit,
 ) {
     var showPresets by remember { mutableStateOf(false) }
-    var showScope by remember { mutableStateOf(false) }
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
@@ -167,7 +164,11 @@ fun FinderScreen(
                     onAdd = onAdd,
                     onEdit = onEdit,
                     onRemove = onRemove,
-                    onScope = { showScope = true },
+                    onMaximumDepthChange = onMaximumDepthChange,
+                    onRequireBlacksmithChange = onRequireBlacksmithChange,
+                    onExcludeBlacksmithRewardsChange = onExcludeBlacksmithRewardsChange,
+                    onFastModeChange = onFastModeChange,
+                    onChallenges = onChallenges,
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 LazyColumn(
@@ -215,26 +216,6 @@ fun FinderScreen(
         }
     }
 
-    if (showScope) {
-        ScopeDialog(
-            maximumDepth = maximumDepth,
-            requireBlacksmith = requireBlacksmith,
-            excludeBlacksmithRewards = excludeBlacksmithRewards,
-            fastMode = fastMode,
-            challenges = challenges,
-            enabled = !isSearching,
-            onMaximumDepthChange = onMaximumDepthChange,
-            onRequireBlacksmithChange = onRequireBlacksmithChange,
-            onExcludeBlacksmithRewardsChange = onExcludeBlacksmithRewardsChange,
-            onFastModeChange = onFastModeChange,
-            onChallenges = {
-                showScope = false
-                onChallenges()
-            },
-            onDismiss = { showScope = false },
-        )
-    }
-
     if (showPresets) {
         PresetsDialog(
             presets = presets,
@@ -246,7 +227,6 @@ fun FinderScreen(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun QueryHeader(
     requirements: List<ItemRequirement>,
@@ -262,7 +242,11 @@ private fun QueryHeader(
     onAdd: () -> Unit,
     onEdit: (ItemRequirement) -> Unit,
     onRemove: (ItemRequirement) -> Unit,
-    onScope: () -> Unit,
+    onMaximumDepthChange: (Int) -> Unit,
+    onRequireBlacksmithChange: (Boolean) -> Unit,
+    onExcludeBlacksmithRewardsChange: (Boolean) -> Unit,
+    onFastModeChange: (Boolean) -> Unit,
+    onChallenges: () -> Unit,
 ) {
     Column(Modifier.padding(horizontal = 16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -285,9 +269,12 @@ private fun QueryHeader(
                 modifier = Modifier.padding(bottom = 4.dp),
             )
         } else {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                requirements.forEach { requirement ->
-                    RequirementChip(
+            LazyColumn(
+                modifier = Modifier.heightIn(max = 280.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                items(requirements, key = { it.key }) { requirement ->
+                    RequirementRow(
                         requirement = requirement,
                         enabled = !isSearching,
                         onEdit = { onEdit(requirement) },
@@ -296,40 +283,20 @@ private fun QueryHeader(
                 }
             }
         }
-        Spacer(Modifier.height(6.dp))
-        Surface(
-            onClick = onScope,
+        Spacer(Modifier.height(4.dp))
+        ScopeSection(
+            maximumDepth = maximumDepth,
+            requireBlacksmith = requireBlacksmith,
+            excludeBlacksmithRewards = excludeBlacksmithRewards,
+            fastMode = fastMode,
+            challenges = challenges,
             enabled = !isSearching,
-            shape = MaterialTheme.shapes.small,
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    scopeSummaryText(
-                        maximumDepth = maximumDepth,
-                        requireBlacksmith = requireBlacksmith,
-                        excludeBlacksmithRewards = excludeBlacksmithRewards,
-                        fastMode = fastMode,
-                        challenges = challenges,
-                    ),
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.weight(1f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Icon(
-                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                    contentDescription = "Edit scope",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(18.dp),
-                )
-            }
-        }
-        Spacer(Modifier.height(10.dp))
+            onMaximumDepthChange = onMaximumDepthChange,
+            onRequireBlacksmithChange = onRequireBlacksmithChange,
+            onExcludeBlacksmithRewardsChange = onExcludeBlacksmithRewardsChange,
+            onFastModeChange = onFastModeChange,
+            onChallenges = onChallenges,
+        )
         Text(
             when {
                 isSearching -> "Results — ${results.size} · live"
@@ -351,148 +318,56 @@ private fun QueryHeader(
 }
 
 @Composable
-private fun RequirementChip(
+private fun RequirementRow(
     requirement: ItemRequirement,
     enabled: Boolean,
     onEdit: () -> Unit,
     onRemove: () -> Unit,
 ) {
-    InputChip(
-        selected = false,
+    Surface(
         onClick = onEdit,
         enabled = enabled,
-        label = {
-            Text(
-                requirementChipLabel(requirement),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.widthIn(max = 240.dp),
-            )
-        },
-        avatar = {
-            Box(
-                modifier = Modifier.size(InputChipDefaults.AvatarSize),
-                contentAlignment = Alignment.Center,
-            ) {
-                val item = requirement.item
-                if (item == null) {
-                    Text(
-                        "?",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                } else {
-                    ItemSprite(
-                        item = item,
-                        modifierName = requirement.modifier,
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
-            }
-        },
-        trailingIcon = {
-            Icon(
-                Icons.Filled.Close,
-                contentDescription = "Remove requirement",
-                modifier = Modifier
-                    .size(InputChipDefaults.IconSize)
-                    .clickable(enabled = enabled, onClick = onRemove),
-            )
-        },
-    )
-}
-
-@Composable
-private fun ResultRow(result: SeedResult, onScout: () -> Unit) {
-    val clipboard = LocalClipboardManager.current
-    Surface(
-        onClick = onScout,
         shape = MaterialTheme.shapes.medium,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         modifier = Modifier.fillMaxWidth(),
     ) {
         Row(
-            modifier = Modifier.padding(start = 14.dp, top = 2.dp, end = 2.dp, bottom = 2.dp),
+            modifier = Modifier.padding(start = 10.dp, top = 6.dp, end = 2.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                result.seed,
-                fontFamily = FontFamily.Monospace,
-                fontWeight = FontWeight.Bold,
-                fontSize = 18.sp,
-                letterSpacing = 1.sp,
-                color = MaterialTheme.colorScheme.tertiary,
-                modifier = Modifier.weight(1f),
-            )
-            TextButton(onClick = { clipboard.setText(AnnotatedString(result.seed)) }) {
-                Text("Copy")
+            SpriteTile(item = requirement.item, modifierName = requirement.modifier, tileSize = 40)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(
+                    requirement.title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                val detail = requirementDetailLine(requirement)
+                if (detail.isNotEmpty()) {
+                    Text(
+                        detail,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
-            Icon(
-                Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-private fun SearchActionBar(
-    requirementCount: Int,
-    status: SearchStatus?,
-    seedsPerSecond: Double,
-    elapsedSeconds: Long,
-    isSearching: Boolean,
-    onSearch: () -> Unit,
-    onCancel: () -> Unit,
-) {
-    Surface(color = MaterialTheme.colorScheme.surfaceContainer) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 10.dp),
-        ) {
-            if (isSearching) {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                Spacer(Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            "${formatSeedRate(seedsPerSecond)} seeds/s · " +
-                                "${formatElapsedTime(elapsedSeconds)} · " +
-                                "${compactCount(status?.scannedSeeds ?: 0L)} scanned",
-                            style = MaterialTheme.typography.labelLarge,
-                        )
-                        Text(
-                            searchEstimateText(status, seedsPerSecond),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Spacer(Modifier.width(10.dp))
-                    OutlinedButton(onClick = onCancel, shapes = ButtonDefaults.shapes()) {
-                        Text("Cancel")
-                    }
-                }
-            } else {
-                Button(
-                    onClick = onSearch,
-                    enabled = requirementCount > 0,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp),
-                    shapes = ButtonDefaults.shapes(),
-                ) {
-                    Text("Search", style = MaterialTheme.typography.titleMedium)
-                }
+            IconButton(onClick = onRemove, enabled = enabled) {
+                Icon(
+                    Icons.Filled.Close,
+                    contentDescription = "Remove requirement",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         }
     }
 }
 
 @Composable
-private fun ScopeDialog(
+private fun ScopeSection(
     maximumDepth: Int,
     requireBlacksmith: Boolean,
     excludeBlacksmithRewards: Boolean,
@@ -504,12 +379,39 @@ private fun ScopeDialog(
     onExcludeBlacksmithRewardsChange: (Boolean) -> Unit,
     onFastModeChange: (Boolean) -> Unit,
     onChallenges: () -> Unit,
-    onDismiss: () -> Unit,
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Scope") },
-        text = {
+    var expanded by remember { mutableStateOf(false) }
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { expanded = !expanded }
+                .padding(vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("Scope", style = MaterialTheme.typography.titleSmall)
+            Spacer(Modifier.width(8.dp))
+            Text(
+                scopeSummaryText(
+                    maximumDepth = maximumDepth,
+                    requireBlacksmith = requireBlacksmith,
+                    excludeBlacksmithRewards = excludeBlacksmithRewards,
+                    fastMode = fastMode,
+                    challenges = challenges,
+                ),
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Icon(
+                if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                contentDescription = if (expanded) "Collapse scope" else "Expand scope",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        if (expanded) {
             Column {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
@@ -572,11 +474,95 @@ private fun ScopeDialog(
                     )
                 }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Done") }
-        },
-    )
+        }
+    }
+}
+
+@Composable
+private fun ResultRow(result: SeedResult, onScout: () -> Unit) {
+    val clipboard = LocalClipboardManager.current
+    Surface(
+        onClick = onScout,
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 14.dp, top = 2.dp, end = 2.dp, bottom = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                result.seed,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.Bold,
+                fontSize = 18.sp,
+                letterSpacing = 1.sp,
+                color = MaterialTheme.colorScheme.tertiary,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = { clipboard.setText(AnnotatedString(result.seed)) }) {
+                Text("Copy")
+            }
+            Icon(
+                Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun SearchActionBar(
+    requirementCount: Int,
+    status: SearchStatus?,
+    seedsPerSecond: Double,
+    elapsedSeconds: Long,
+    isSearching: Boolean,
+    onSearch: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    Surface(color = MaterialTheme.colorScheme.surfaceContainer) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+        ) {
+            if (isSearching) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            "${formatSeedRate(seedsPerSecond)} seeds/s · " +
+                                "${formatElapsedTime(elapsedSeconds)} · " +
+                                "${compactCount(status?.scannedSeeds ?: 0L)} scanned",
+                            style = MaterialTheme.typography.labelLarge,
+                        )
+                        Text(
+                            searchEstimateText(status, seedsPerSecond),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    OutlinedButton(onClick = onCancel, shapes = ButtonDefaults.shapes()) {
+                        Text("Cancel")
+                    }
+                }
+            } else {
+                Button(
+                    onClick = onSearch,
+                    enabled = requirementCount > 0,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp),
+                    shapes = ButtonDefaults.shapes(),
+                ) {
+                    Text("Search", style = MaterialTheme.typography.titleMedium)
+                }
+            }
+        }
+    }
 }
 
 @Composable
