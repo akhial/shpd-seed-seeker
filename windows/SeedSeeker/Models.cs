@@ -114,6 +114,16 @@ public static class BuiltInPresets
         },
         new()
         {
+            Id = "wand-bonanza", Name = "Wand Bonanza", IsBuiltIn = true,
+            Query = new QuerySettings { Requirements = [
+                new() { Kind = ItemKind.Wand, Upgrade = 3, UpgradeMatch = UpgradeMatch.Exactly },
+                new() { Kind = ItemKind.Wand, Upgrade = 2, UpgradeMatch = UpgradeMatch.Exactly, MaximumDepth = 4 },
+                new() { Kind = ItemKind.Wand, Upgrade = 2, UpgradeMatch = UpgradeMatch.Exactly, MaximumDepth = 4 },
+                new() { Kind = ItemKind.Wand, Upgrade = 2, UpgradeMatch = UpgradeMatch.Exactly },
+            ] },
+        },
+        new()
+        {
             Id = "ring-of-wealth-21", Name = "+21 Ring of Wealth", IsBuiltIn = true,
             Query = new QuerySettings { Requirements = [
                 new() { Kind = ItemKind.Ring, Item = ItemCatalog.Find("ring_wealth"), Upgrade = 4, UpgradeMatch = UpgradeMatch.Exactly, Source = ScoutItemSource.ImpReward },

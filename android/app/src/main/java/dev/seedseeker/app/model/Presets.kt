@@ -35,6 +35,20 @@ object BuiltInPresets {
         ),
     )
 
+    val wandBonanza = QueryPreset(
+        id = "wand-bonanza",
+        name = "Wand Bonanza",
+        isBuiltIn = true,
+        query = PresetQuery(
+            requirements = listOf(
+                ItemRequirement(1, null, 3, kind = ItemKind.WAND, upgradeMatch = UpgradeMatch.EXACT),
+                ItemRequirement(2, null, 2, kind = ItemKind.WAND, upgradeMatch = UpgradeMatch.EXACT, maximumDepth = 4),
+                ItemRequirement(3, null, 2, kind = ItemKind.WAND, upgradeMatch = UpgradeMatch.EXACT, maximumDepth = 4),
+                ItemRequirement(4, null, 2, kind = ItemKind.WAND, upgradeMatch = UpgradeMatch.EXACT),
+            ),
+        ),
+    )
+
     val ringOfWealth21 = QueryPreset(
         id = "ring-of-wealth-21",
         name = "+21 Ring of Wealth",
@@ -67,5 +81,5 @@ object BuiltInPresets {
         ),
     )
 
-    val all = listOf(staff21, ringOfWealth21)
+    val all = listOf(staff21, wandBonanza, ringOfWealth21)
 }

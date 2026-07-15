@@ -60,7 +60,7 @@ public struct QueryPreset: Codable, Hashable, Identifiable, Sendable {
 extension SavedQuery: Hashable {}
 
 public enum BuiltInPresets {
-    public static let all: [QueryPreset] = [staff21, ringOfWealth21]
+    public static let all: [QueryPreset] = [staff21, wandBonanza, ringOfWealth21]
 
     public static let staff21 = QueryPreset(
         id: UUID(uuidString: "C3DB688D-3D7D-43F0-B10E-9BCBEA272101")!,
@@ -74,6 +74,20 @@ public enum BuiltInPresets {
                                  upgradeMatch: .any, identityGroup: 1),
             try! ItemRequirement(key: 4, item: nil, upgrade: 1, kind: .wand,
                                  upgradeMatch: .atLeast),
+        ]))
+
+    public static let wandBonanza = QueryPreset(
+        id: UUID(uuidString: "C3DB688D-3D7D-43F0-B10E-9BCBEA272103")!,
+        name: "Wand Bonanza",
+        query: SavedQuery(requirements: [
+            try! ItemRequirement(key: 1, item: nil, upgrade: 3, kind: .wand,
+                                 upgradeMatch: .exactly),
+            try! ItemRequirement(key: 2, item: nil, upgrade: 2, kind: .wand,
+                                 upgradeMatch: .exactly, maximumDepth: 4),
+            try! ItemRequirement(key: 3, item: nil, upgrade: 2, kind: .wand,
+                                 upgradeMatch: .exactly, maximumDepth: 4),
+            try! ItemRequirement(key: 4, item: nil, upgrade: 2, kind: .wand,
+                                 upgradeMatch: .exactly),
         ]))
 
     public static let ringOfWealth21 = QueryPreset(

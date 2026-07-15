@@ -14,6 +14,18 @@ final class SeedSeekerKitTests: XCTestCase {
         XCTAssertNotNil(preset.query.validated())
     }
 
+    func testBundledWandBonanzaPreset() throws {
+        let preset = BuiltInPresets.wandBonanza
+        XCTAssertEqual(preset.name, "Wand Bonanza")
+        XCTAssertEqual(preset.query.requirements.map(\.kind), [.wand, .wand, .wand, .wand])
+        XCTAssertEqual(preset.query.requirements.map(\.item), [nil, nil, nil, nil])
+        XCTAssertEqual(preset.query.requirements.map(\.upgradeMatch), [.exactly, .exactly, .exactly, .exactly])
+        XCTAssertEqual(preset.query.requirements.map(\.upgrade), [3, 2, 2, 2])
+        XCTAssertEqual(preset.query.requirements.map(\.maximumDepth), [nil, 4, 4, nil])
+        XCTAssertEqual(preset.query.requirements.map(\.identityGroup), [nil, nil, nil, nil])
+        XCTAssertNotNil(preset.query.validated())
+    }
+
     func testBundledRingOfWealthPreset() throws {
         let preset = BuiltInPresets.ringOfWealth21
         XCTAssertEqual(preset.name, "+21 Ring of Wealth")

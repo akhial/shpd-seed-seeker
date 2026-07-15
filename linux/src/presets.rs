@@ -17,8 +17,31 @@ pub struct BuiltInPreset {
 
 /// Returns the protected presets in presentation order.
 #[must_use]
-pub fn built_in() -> [BuiltInPreset; 2] {
-    [staff_21(), ring_of_wealth_21()]
+pub fn built_in() -> [BuiltInPreset; 3] {
+    [staff_21(), wand_bonanza(), ring_of_wealth_21()]
+}
+
+fn wand_bonanza() -> BuiltInPreset {
+    let mut state = AppState::default();
+    for (upgrade, max_depth) in [
+        (UpgradeRequirement::Exact(3), None),
+        (UpgradeRequirement::Exact(2), Some(4)),
+        (UpgradeRequirement::Exact(2), Some(4)),
+        (UpgradeRequirement::Exact(2), None),
+    ] {
+        let key = state.claim_key();
+        state.requirements.push(UiRequirement {
+            key,
+            kind: ItemKind::Wand,
+            upgrade,
+            max_depth,
+            ..UiRequirement::new(key)
+        });
+    }
+    BuiltInPreset {
+        name: "Wand Bonanza",
+        state,
+    }
 }
 
 fn staff_21() -> BuiltInPreset {
@@ -77,7 +100,7 @@ mod tests {
 
     #[test]
     fn staff_matches_requested_requirements() {
-        let [staff, _] = built_in();
+        let [staff, _, _] = built_in();
         assert_eq!(staff.name, "+21 Staff");
         assert_eq!(staff.state.requirements.len(), 4);
         assert!(
@@ -113,8 +136,51 @@ mod tests {
     }
 
     #[test]
+    fn wand_bonanza_matches_requested_requirements() {
+        let [_, preset, _] = built_in();
+        assert_eq!(preset.name, "Wand Bonanza");
+        assert!(
+            preset
+                .state
+                .requirements
+                .iter()
+                .all(|requirement| requirement.kind == ItemKind::Wand && requirement.item.is_none())
+        );
+        assert_eq!(
+            preset
+                .state
+                .requirements
+                .iter()
+                .map(|requirement| requirement.upgrade)
+                .collect::<Vec<_>>(),
+            [
+                UpgradeRequirement::Exact(3),
+                UpgradeRequirement::Exact(2),
+                UpgradeRequirement::Exact(2),
+                UpgradeRequirement::Exact(2),
+            ]
+        );
+        assert_eq!(
+            preset
+                .state
+                .requirements
+                .iter()
+                .map(|requirement| requirement.max_depth)
+                .collect::<Vec<_>>(),
+            [None, Some(4), Some(4), None]
+        );
+        assert!(
+            preset
+                .state
+                .requirements
+                .iter()
+                .all(|requirement| requirement.identity_group.is_none())
+        );
+    }
+
+    #[test]
     fn ring_of_wealth_matches_requested_requirements() {
-        let [_, ring] = built_in();
+        let [_, _, ring] = built_in();
         assert_eq!(ring.name, "+21 Ring of Wealth");
         assert!(
             ring.state

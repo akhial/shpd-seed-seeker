@@ -18,6 +18,18 @@ class BuiltInPresetsTest {
     }
 
     @Test
+    fun wandBonanzaPresetMatchesRequestedRequirements() {
+        val requirements = BuiltInPresets.wandBonanza.query.requirements
+
+        assertEquals(4, requirements.size)
+        assertTrue(requirements.all { it.kind == ItemKind.WAND && it.item == null })
+        assertEquals(listOf(UpgradeMatch.EXACT, UpgradeMatch.EXACT, UpgradeMatch.EXACT, UpgradeMatch.EXACT), requirements.map { it.upgradeMatch })
+        assertEquals(listOf(3, 2, 2, 2), requirements.map { it.upgrade })
+        assertEquals(listOf(null, 4, 4, null), requirements.map { it.maximumDepth })
+        assertEquals(listOf(null, null, null, null), requirements.map { it.identityGroup })
+    }
+
+    @Test
     fun ringOfWealthPresetMatchesRequestedRequirements() {
         val requirements = BuiltInPresets.ringOfWealth21.query.requirements
 
