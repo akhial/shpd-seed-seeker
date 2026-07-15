@@ -46,14 +46,10 @@ fn staff_21() -> BuiltInPreset {
 
 fn ring_of_wealth_21() -> BuiltInPreset {
     let mut state = AppState::default();
-    for (upgrade, source, max_depth) in [
-        (
-            UpgradeRequirement::Exact(4),
-            Some(ItemSource::ImpReward),
-            None,
-        ),
-        (UpgradeRequirement::Any, None, Some(4)),
-        (UpgradeRequirement::Any, None, Some(4)),
+    for (upgrade, source) in [
+        (UpgradeRequirement::Exact(4), Some(ItemSource::ImpReward)),
+        (UpgradeRequirement::Exact(2), None),
+        (UpgradeRequirement::Any, None),
     ] {
         let key = state.claim_key();
         state.requirements.push(UiRequirement {
@@ -62,7 +58,6 @@ fn ring_of_wealth_21() -> BuiltInPreset {
             item: Some(ItemId::RingWealth),
             upgrade,
             source,
-            max_depth,
             ..UiRequirement::new(key)
         });
     }
@@ -141,9 +136,12 @@ mod tests {
                 .iter()
                 .map(|requirement| requirement.max_depth)
                 .collect::<Vec<_>>(),
-            [None, Some(4), Some(4)]
+            [None, None, None]
         );
-        assert_eq!(ring.state.requirements[1].upgrade, UpgradeRequirement::Any);
+        assert_eq!(
+            ring.state.requirements[1].upgrade,
+            UpgradeRequirement::Exact(2)
+        );
         assert_eq!(ring.state.requirements[2].upgrade, UpgradeRequirement::Any);
     }
 }

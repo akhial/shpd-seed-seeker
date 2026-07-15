@@ -52,10 +52,9 @@ object BuiltInPresets {
                 ItemRequirement(
                     2,
                     ItemCatalog.findById("ring_wealth"),
-                    0,
+                    2,
                     kind = ItemKind.RING,
-                    upgradeMatch = UpgradeMatch.ANY,
-                    maximumDepth = 4,
+                    upgradeMatch = UpgradeMatch.EXACT,
                 ),
                 ItemRequirement(
                     3,
@@ -63,7 +62,6 @@ object BuiltInPresets {
                     0,
                     kind = ItemKind.RING,
                     upgradeMatch = UpgradeMatch.ANY,
-                    maximumDepth = 4,
                 ),
             ),
         ),

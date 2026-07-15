@@ -19,9 +19,9 @@ final class SeedSeekerKitTests: XCTestCase {
         XCTAssertEqual(preset.name, "+21 Ring of Wealth")
         XCTAssertEqual(preset.query.requirements.map(\.item?.id),
                        ["ring_wealth", "ring_wealth", "ring_wealth"])
-        XCTAssertEqual(preset.query.requirements.map(\.upgradeMatch), [.exactly, .any, .any])
-        XCTAssertEqual(preset.query.requirements.map(\.upgrade), [4, 0, 0])
-        XCTAssertEqual(preset.query.requirements.map(\.maximumDepth), [nil, 4, 4])
+        XCTAssertEqual(preset.query.requirements.map(\.upgradeMatch), [.exactly, .exactly, .any])
+        XCTAssertEqual(preset.query.requirements.map(\.upgrade), [4, 2, 0])
+        XCTAssertEqual(preset.query.requirements.map(\.maximumDepth), [nil, nil, nil])
         XCTAssertEqual(preset.query.requirements.first?.source, .impReward)
         XCTAssertNotNil(preset.query.validated())
     }

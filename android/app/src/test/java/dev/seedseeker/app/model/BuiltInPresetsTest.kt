@@ -22,9 +22,9 @@ class BuiltInPresetsTest {
         val requirements = BuiltInPresets.ringOfWealth21.query.requirements
 
         assertEquals(listOf("ring_wealth", "ring_wealth", "ring_wealth"), requirements.map { it.item?.id })
-        assertEquals(listOf(UpgradeMatch.EXACT, UpgradeMatch.ANY, UpgradeMatch.ANY), requirements.map { it.upgradeMatch })
-        assertEquals(listOf(4, 0, 0), requirements.map { it.upgrade })
-        assertEquals(listOf(null, 4, 4), requirements.map { it.maximumDepth })
+        assertEquals(listOf(UpgradeMatch.EXACT, UpgradeMatch.EXACT, UpgradeMatch.ANY), requirements.map { it.upgradeMatch })
+        assertEquals(listOf(4, 2, 0), requirements.map { it.upgrade })
+        assertEquals(listOf(null, null, null), requirements.map { it.maximumDepth })
         assertEquals(ScoutItemSource.IMP_REWARD, requirements.first().source)
     }
 }
