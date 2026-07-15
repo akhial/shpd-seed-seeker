@@ -3,10 +3,6 @@ package dev.seedseeker.app.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
@@ -27,7 +23,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import dev.seedseeker.app.model.CatalogItem
 import dev.seedseeker.app.model.ItemKind
 import dev.seedseeker.app.model.ItemRequirement
@@ -35,6 +30,7 @@ import dev.seedseeker.app.model.ScoutAccessibility
 import dev.seedseeker.app.model.ScoutItem
 import dev.seedseeker.app.model.ScoutItemSource
 import dev.seedseeker.app.model.SearchStatus
+import dev.seedseeker.app.model.TierMatch
 import dev.seedseeker.app.model.UpgradeMatch
 import dev.seedseeker.app.ui.theme.Amber
 import dev.seedseeker.app.ui.theme.Mint
@@ -174,37 +170,6 @@ fun SpriteTile(
     }
 }
 
-@Composable
-fun SectionHeader(
-    eyebrow: String,
-    title: String,
-    supporting: String? = null,
-    modifier: Modifier = Modifier,
-    trailing: @Composable () -> Unit = {},
-) {
-    Row(modifier, verticalAlignment = Alignment.Bottom) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                eyebrow.uppercase(Locale.ROOT),
-                style = MaterialTheme.typography.labelSmall,
-                letterSpacing = 1.4.sp,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            Spacer(Modifier.height(4.dp))
-            Text(title, style = MaterialTheme.typography.headlineSmall)
-            if (supporting != null) {
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    supporting,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        trailing()
-    }
-}
-
 /** Small tonal capsule used for counts and states. */
 @Composable
 fun StatusPill(
@@ -223,11 +188,46 @@ fun StatusPill(
     }
 }
 
-fun upgradeBadgeLabel(match: UpgradeMatch, upgrade: Int): String = when (match) {
-    UpgradeMatch.ANY -> "Any"
-    UpgradeMatch.EXACT -> "= +$upgrade"
-    UpgradeMatch.AT_LEAST -> "≥ +$upgrade"
+/** One-line condensed requirement spec used by the query-header chips. */
+fun requirementChipLabel(requirement: ItemRequirement): String = buildString {
+    append(
+        requirement.item?.name ?: when (requirement.tierMatch) {
+            TierMatch.ANY -> "Any ${requirement.kind.singularLabel}"
+            TierMatch.EXACT -> "T${requirement.tier} ${requirement.kind.singularLabel}"
+            TierMatch.AT_LEAST -> "T${requirement.tier}+ ${requirement.kind.singularLabel}"
+            TierMatch.AT_MOST -> "≤T${requirement.tier} ${requirement.kind.singularLabel}"
+        },
+    )
+    when (requirement.upgradeMatch) {
+        UpgradeMatch.ANY -> Unit
+        UpgradeMatch.EXACT -> append(" +${requirement.upgrade}")
+        UpgradeMatch.AT_LEAST -> append(" ≥+${requirement.upgrade}")
+    }
+    requirement.modifier?.let { append(" · $it") }
+    if (requirement.requireUncursed) append(" · uncursed")
+    requirement.source?.let { append(" · ${it.label}") }
+    requirement.identityGroup?.let { append(" · grp ${('A' + it - 1)}") }
+    requirement.maximumDepth?.let { append(" · ≤$it") }
 }
+
+/** One-line summary of the search scope, listing only active constraints. */
+fun scopeSummaryText(
+    maximumDepth: Int,
+    requireBlacksmith: Boolean,
+    excludeBlacksmithRewards: Boolean,
+    fastMode: Boolean,
+    challenges: Int,
+): String = buildList {
+    add("≤ floor $maximumDepth")
+    if (requireBlacksmith) add("smith")
+    if (excludeBlacksmithRewards) add("no smith rewards")
+    if (fastMode) add("fast")
+    when (val count = Integer.bitCount(challenges)) {
+        0 -> Unit
+        1 -> add("1 challenge")
+        else -> add("$count challenges")
+    }
+}.joinToString(" · ")
 
 /** Region names shown next to floor numbers, as in the macOS manifest. */
 fun floorRegion(depth: Int): String = when {
@@ -338,13 +338,12 @@ fun compactCount(value: Long): String = when {
 }
 
 internal fun searchEstimateText(status: SearchStatus?, seedsPerSecond: Double): String {
-    val rate = formatSeedRate(seedsPerSecond)
     val probability = status?.matchProbability ?: 0.0
     if (probability <= 0.0 || seedsPerSecond <= 0.0) {
-        return "Seed match probability: estimating… TTS @ $rate seeds/s: estimating…"
+        return "p estimating… · est —"
     }
-    return "Seed match probability: ${formatProbabilityPercent(probability)} " +
-        "TTS @ $rate seeds/s: ${formatEstimateDuration(1.0 / probability / seedsPerSecond)}"
+    return "p ${formatProbabilityPercent(probability)} · " +
+        "est ${formatEstimateDuration(1.0 / probability / seedsPerSecond)}"
 }
 
 private fun formatProbabilityPercent(probability: Double): String {
@@ -358,7 +357,7 @@ private fun formatProbabilityPercent(probability: Double): String {
     return String.format(Locale.US, "%.1fx10^%d%%", mantissa, exponent)
 }
 
-private fun formatSeedRate(rate: Double): String = when {
+internal fun formatSeedRate(rate: Double): String = when {
     rate <= 0.0 -> "—"
     rate >= 1_000_000.0 -> String.format(Locale.US, "%.1fM", rate / 1_000_000.0)
     rate >= 1_000.0 -> String.format(Locale.US, "%.1fk", rate / 1_000.0)
