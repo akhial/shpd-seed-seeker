@@ -57,9 +57,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.seedseeker.app.model.ItemRequirement
+import dev.seedseeker.app.model.MAX_REQUIREMENT_COUNT
 import dev.seedseeker.app.model.SearchState
 import dev.seedseeker.app.model.SearchStatus
 import dev.seedseeker.app.model.SeedResult
+import dev.seedseeker.app.model.requiredItemCount
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -93,6 +95,7 @@ fun FinderScreen(
     bottomBar: @Composable () -> Unit,
 ) {
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+    val requirementCount = requirements.requiredItemCount
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         containerColor = MaterialTheme.colorScheme.background,
@@ -143,7 +146,7 @@ fun FinderScreen(
                         modifier = Modifier.padding(top = 8.dp, bottom = 14.dp),
                         trailing = {
                             StatusPill(
-                                text = "${requirements.size}",
+                                text = "$requirementCount",
                                 container = MaterialTheme.colorScheme.primaryContainer,
                                 content = MaterialTheme.colorScheme.onPrimaryContainer,
                             )
@@ -170,7 +173,7 @@ fun FinderScreen(
                 item {
                     FilledTonalButton(
                         onClick = onAdd,
-                        enabled = !isSearching,
+                        enabled = !isSearching && requirementCount < MAX_REQUIREMENT_COUNT,
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(top = 14.dp)
@@ -202,7 +205,7 @@ fun FinderScreen(
 
                 item {
                     SearchControls(
-                        requirementCount = requirements.size,
+                        requirementCount = requirementCount,
                         status = status,
                         seedsPerSecond = seedsPerSecond,
                         elapsedSeconds = elapsedSeconds,
@@ -306,7 +309,7 @@ private fun RequirementCard(
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text(
-                    requirement.title,
+                    requirement.displayTitle,
                     style = MaterialTheme.typography.titleMedium,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,

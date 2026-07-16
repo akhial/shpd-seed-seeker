@@ -55,9 +55,11 @@ public sealed class ItemRequirement
     public int? IdentityGroup { get; set; }
     public int? MaximumDepth { get; set; }
     public bool RequireUncursed { get; set; }
+    public int Quantity { get; set; } = 1;
     [JsonIgnore] public string Glyph => KindStyle.Glyph(Kind);
     [JsonIgnore] public Brush Tint => KindStyle.Tint(Kind);
     [JsonIgnore] public string Title => Item?.Name ?? (TierMatch switch { TierMatch.Exactly => $"Any Tier {Tier} {Labels.Singular(Kind)}", TierMatch.AtLeast => $"Any Tier {Tier}+ {Labels.Singular(Kind)}", TierMatch.AtMost => $"Any Tier {Tier} or lower {Labels.Singular(Kind)}", _ => $"Any {Labels.Singular(Kind)}" });
+    [JsonIgnore] public string DisplayTitle => Quantity == 1 ? Title : $"{Quantity}× {Title}";
     [JsonIgnore] public string Description
     {
         get
@@ -69,6 +71,66 @@ public sealed class ItemRequirement
         }
     }
     public ItemRequirement Clone() => (ItemRequirement)MemberwiseClone();
+
+    internal bool HasSameCriteria(ItemRequirement other) =>
+        Item?.Id == other.Item?.Id && Upgrade == other.Upgrade && Modifier == other.Modifier
+        && Kind == other.Kind && Tier == other.Tier && TierMatch == other.TierMatch
+        && UpgradeMatch == other.UpgradeMatch && Source == other.Source
+        && IdentityGroup == other.IdentityGroup && MaximumDepth == other.MaximumDepth
+        && RequireUncursed == other.RequireUncursed;
+}
+
+public static class RequirementRules
+{
+    public const int MaximumCount = 64;
+
+    /// <summary>
+    /// Coalesces identical criteria while retaining the first row's key, then
+    /// stably places unrestricted rows first and floor-limited rows in ascending order.
+    /// </summary>
+    public static ObservableCollection<ItemRequirement> Normalize(IEnumerable<ItemRequirement> requirements)
+    {
+        var rows = new List<ItemRequirement>();
+        var total = 0;
+        foreach (var requirement in requirements)
+        {
+            if (requirement.Quantity is < 1 or > MaximumCount)
+                throw new InvalidDataException($"Requirement quantity must be 1..{MaximumCount}.");
+            total += requirement.Quantity;
+            if (total > MaximumCount)
+                throw new InvalidDataException($"Total requirement quantity must be at most {MaximumCount}.");
+
+            var existing = rows.FirstOrDefault(row => row.HasSameCriteria(requirement));
+            if (existing is not null) existing.Quantity += requirement.Quantity;
+            else rows.Add(requirement.Clone());
+        }
+
+        return new ObservableCollection<ItemRequirement>(rows
+            .Select((row, index) => (Row: row, Index: index))
+            .OrderBy(entry => entry.Row.MaximumDepth.HasValue ? 1 : 0)
+            .ThenBy(entry => entry.Row.MaximumDepth ?? 0)
+            .ThenBy(entry => entry.Index)
+            .Select(entry => entry.Row));
+    }
+
+    /// <summary>Expands quantities into distinct native requirements at an engine boundary.</summary>
+    public static IReadOnlyList<ItemRequirement> Expand(IEnumerable<ItemRequirement> requirements)
+    {
+        var result = new List<ItemRequirement>();
+        foreach (var requirement in Normalize(requirements))
+        {
+            for (var index = 0; index < requirement.Quantity; index++)
+            {
+                var copy = requirement.Clone();
+                copy.Quantity = 1;
+                result.Add(copy);
+            }
+        }
+        return result;
+    }
+
+    public static int Count(IEnumerable<ItemRequirement> requirements) =>
+        requirements.Sum(requirement => requirement.Quantity);
 }
 
 public sealed class QuerySettings
@@ -121,7 +183,7 @@ public static class ScoutMatcher
                 && (requirement.Source is null || requirement.Source == item.Source);
         }
 
-        var candidates = requirements
+        var candidates = RequirementRules.Expand(requirements)
             .Select(requirement => (Requirement: requirement, Items: Enumerable.Range(0, items.Count)
                 .Where(index => Matches(items[index], requirement)).ToArray()))
             .OrderBy(candidate => candidate.Items.Length).ToArray();

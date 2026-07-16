@@ -9,7 +9,7 @@ use shpd_seedfinder_core::catalog::ItemId;
 use shpd_seedfinder_core::model::{ItemSource, WorldItem};
 use shpd_seedfinder_core::query::Requirement;
 
-use crate::state::UiRequirement;
+use crate::state::{UiRequirement, expand_requirements};
 
 /// One requirement's identity group and its qualifying `(index, identity)`
 /// candidates in the scouted world.
@@ -23,7 +23,10 @@ pub fn scout_match_indices(
     max_depth: u8,
     exclude_blacksmith_rewards: bool,
 ) -> HashSet<usize> {
-    let mut candidates: Vec<RequirementCandidates> = requirements
+    let Ok(expanded) = expand_requirements(requirements) else {
+        return HashSet::new();
+    };
+    let mut candidates: Vec<RequirementCandidates> = expanded
         .iter()
         .map(|requirement| {
             let core = requirement.to_core();
@@ -186,6 +189,21 @@ mod tests {
         // With a shallower scope, only the first copy can qualify.
         let matches = scout_match_indices(&items, &requirements, 8, false);
         assert_eq!(matches, [0].into());
+    }
+
+    #[test]
+    fn quantity_matches_distinct_item_instances() {
+        let items = [
+            world_item(ItemId::WandFrost, 3, Accessibility::Independent),
+            world_item(ItemId::WandLightning, 4, Accessibility::Independent),
+        ];
+        let mut wanted = requirement(1, ItemKind::Wand, None);
+        wanted.quantity = 2;
+
+        assert_eq!(
+            scout_match_indices(&items, &[wanted], 24, false),
+            [0, 1].into()
+        );
     }
 
     #[test]

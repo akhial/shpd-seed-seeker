@@ -66,9 +66,24 @@ import kotlin.math.roundToInt
 @Composable
 fun RequirementSheet(
     editing: ItemRequirement?,
+    maximumQuantity: Int,
     onDismiss: () -> Unit,
-    onSave: (CatalogItem?, ItemKind, TierMatch, Int, UpgradeMatch, Int, String?, ScoutItemSource?, Int?, Int?, Boolean) -> Unit,
+    onSave: (
+        CatalogItem?,
+        ItemKind,
+        TierMatch,
+        Int,
+        UpgradeMatch,
+        Int,
+        String?,
+        ScoutItemSource?,
+        Int?,
+        Int?,
+        Boolean,
+        Int,
+    ) -> Unit,
 ) {
+    require(maximumQuantity in 1..64) { "Maximum quantity must be 1..64" }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val identity = editing?.key ?: -1L
     var kind by remember(identity) { mutableStateOf(editing?.kind ?: ItemKind.WEAPON) }
@@ -93,6 +108,9 @@ fun RequirementSheet(
     var identityGroup by remember(identity) { mutableStateOf(editing?.identityGroup) }
     var maximumDepth by remember(identity) { mutableStateOf(editing?.maximumDepth) }
     var requireUncursed by remember(identity) { mutableStateOf(editing?.requireUncursed ?: false) }
+    var quantity by remember(identity, maximumQuantity) {
+        mutableStateOf((editing?.quantity ?: 1).coerceAtMost(maximumQuantity))
+    }
 
     fun clampUpgrade(match: UpgradeMatch, forKind: ItemKind) {
         upgrade = when (match) {
@@ -172,6 +190,34 @@ fun RequirementSheet(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.weight(1f),
                 )
+            }
+
+            Row(
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text("Quantity", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        "Number of distinct copies required",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                TextButton(
+                    onClick = { quantity-- },
+                    enabled = quantity > 1,
+                ) { Text("−") }
+                Text(
+                    quantity.toString(),
+                    style = MaterialTheme.typography.titleMedium,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.width(32.dp),
+                )
+                TextButton(
+                    onClick = { quantity++ },
+                    enabled = quantity < maximumQuantity,
+                ) { Text("+") }
             }
 
             if (selectedItem == null && kind in setOf(ItemKind.WEAPON, ItemKind.ARMOR)) {
@@ -543,13 +589,14 @@ fun RequirementSheet(
                     identityGroup = identityGroup,
                     maximumDepth = maximumDepth,
                     requireUncursed = requireUncursed,
+                    quantity = quantity,
                 )
                 Spacer(Modifier.height(14.dp))
                 Button(
                     onClick = {
                         onSave(selectedItem, kind, tierMatch, if (tierMatch == TierMatch.ANY) 0 else tier,
                             upgradeMatch, upgrade, modifierName, source, identityGroup, maximumDepth,
-                            requireUncursed)
+                            requireUncursed, quantity)
                     },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -622,6 +669,7 @@ private fun RequirementPreview(
     identityGroup: Int?,
     maximumDepth: Int?,
     requireUncursed: Boolean,
+    quantity: Int,
 ) {
     Surface(
         shape = MaterialTheme.shapes.large,
@@ -637,12 +685,12 @@ private fun RequirementPreview(
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(
-                    item?.name ?: when (tierMatch) {
+                    (if (quantity == 1) "" else "$quantity× ") + (item?.name ?: when (tierMatch) {
                         TierMatch.ANY -> "Any ${kind.singularLabel}"
                         TierMatch.EXACT -> "Any Tier $tier ${kind.singularLabel}"
                         TierMatch.AT_LEAST -> "Any Tier $tier+ ${kind.singularLabel}"
                         TierMatch.AT_MOST -> "Any Tier $tier or lower ${kind.singularLabel}"
-                    },
+                    }),
                     style = MaterialTheme.typography.titleMedium,
                 )
                 Text(

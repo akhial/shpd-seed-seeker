@@ -44,7 +44,7 @@ public struct ProductionSeedFinderEngine: SeedFinderEngine {
             encoded.withUnsafeBytes { bytes in seedfinder_start_search(bytes.bindMemory(to: UInt8.self).baseAddress, bytes.count) }
         }.value
         guard handle != 0 else { throw SeedFinderEngineError.invalidArgument }
-        return NativeSearchSession(handle: handle, requirementCount: request.requirements.count)
+        return NativeSearchSession(handle: handle, requirementCount: request.requiredItemCount)
     }
 
     public func scoutSeed(_ seed: String, challenges: Int = 0) async throws -> ScoutWorld {

@@ -38,9 +38,13 @@ public struct SavedQuery: Codable, Sendable {
                 upgradeMatch: requirement.upgradeMatch, source: requirement.source,
                 identityGroup: requirement.identityGroup,
                 maximumDepth: requirement.maximumDepth,
-                requireUncursed: requirement.requireUncursed)) != nil else { return nil }
+                requireUncursed: requirement.requireUncursed,
+                quantity: requirement.quantity)) != nil else { return nil }
         }
-        return self
+        guard requirements.reduce(0, { $0 + $1.quantity }) <= 64 else { return nil }
+        var normalized = self
+        normalized.requirements = requirements.coalescedByCriteria()
+        return normalized
     }
 }
 

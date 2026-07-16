@@ -15,6 +15,26 @@ import org.junit.Test
 
 class QueryCodecTest {
     @Test
+    fun quantityExpandsIntoRepeatedNativeRequirements() {
+        val requirement = ItemRequirement(
+            key = 1,
+            item = ItemCatalog.wands.first { it.id == "wand_frost" },
+            upgrade = 2,
+            quantity = 3,
+        )
+
+        val singlePacket = QueryCodec.encode(SearchRequest(listOf(requirement.copy(quantity = 1))))
+        val packet = QueryCodec.encode(SearchRequest(listOf(requirement)))
+
+        assertArrayEquals(byteArrayOf(0, 3), packet.copyOfRange(8, 10))
+        val singleRequirement = singlePacket.copyOfRange(10, singlePacket.size)
+        assertArrayEquals(
+            singleRequirement + singleRequirement + singleRequirement,
+            packet.copyOfRange(10, packet.size),
+        )
+    }
+
+    @Test
     fun tierPredicateUsesSsf7AndEncodesExactTierWithZeroChallengeMask() {
         val requirement = ItemRequirement(
             key = 1,

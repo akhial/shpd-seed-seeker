@@ -52,6 +52,19 @@ final class SeedSeekerKitTests: XCTestCase {
         XCTAssertTrue(scoutMatchIndices(items: [cursed], requirements: [requirement]).isEmpty)
     }
 
+    func testScoutMatchesQuantityWithDistinctItems() throws {
+        let warding = try XCTUnwrap(ItemCatalog.findById("wand_warding"))
+        let light = try XCTUnwrap(ItemCatalog.findById("wand_prismatic_light"))
+        let requirement = try ItemRequirement(key: 1, item: nil, upgrade: 3,
+                                               kind: .wand, quantity: 2)
+        let items = [
+            ScoutItem(item: warding, depth: 4, upgrade: 3, source: .chest),
+            ScoutItem(item: light, depth: 5, upgrade: 3, source: .heap),
+        ]
+
+        XCTAssertEqual(scoutMatchIndices(items: items, requirements: [requirement]), [0, 1])
+    }
+
     func testQueryCodecTierPredicateUsesSSF7WithZeroChallenges() throws {
         let requirement = try ItemRequirement(key: 1, item: nil, upgrade: 0, kind: .armor,
             tier: 4, tierMatch: .atLeast, upgradeMatch: .any)
@@ -116,6 +129,19 @@ final class SeedSeekerKitTests: XCTestCase {
         let request = try SearchRequest(requirements: [requirement])
 
         XCTAssertEqual(try QueryCodec.encode(request).last, 1)
+    }
+
+    func testQueryCodecExpandsRequirementQuantity() throws {
+        let requirement = try ItemRequirement(key: 1, item: nil, upgrade: 2,
+                                               kind: .wand, quantity: 3)
+        let request = try SearchRequest(requirements: [requirement])
+        let packet = Array(try QueryCodec.encode(request))
+
+        XCTAssertEqual(request.requirements.count, 1)
+        XCTAssertEqual(request.requiredItemCount, 3)
+        XCTAssertEqual(Array(packet[8..<10]), [0, 3])
+        XCTAssertEqual(Array(packet[10..<23]), Array(packet[23..<36]))
+        XCTAssertEqual(Array(packet[10..<23]), Array(packet[36..<49]))
     }
 
     func testScoutRequestGoldenZeroAndNonzeroChallenges() throws {
@@ -197,6 +223,41 @@ final class SeedSeekerKitTests: XCTestCase {
             tier: 1, tierMatch: .exactly, upgradeMatch: .any))
         XCTAssertThrowsError(try ItemRequirement(key: 1, item: ItemCatalog.weapons[0], upgrade: 1,
             kind: .weapon, tier: 1, tierMatch: .exactly))
+        XCTAssertThrowsError(try ItemRequirement(key: 1, item: nil, upgrade: 1,
+                                                 kind: .wand, quantity: 0))
+        let first = try ItemRequirement(key: 1, item: nil, upgrade: 1,
+                                        kind: .wand, quantity: 33)
+        let second = try ItemRequirement(key: 2, item: nil, upgrade: 2,
+                                         kind: .wand, quantity: 32)
+        XCTAssertThrowsError(try SearchRequest(requirements: [first, second]))
+    }
+
+    func testRequirementsCoalesceThenSortByFloorLimit() throws {
+        let requirements = try [
+            ItemRequirement(key: 1, item: nil, upgrade: 3, kind: .wand),
+            ItemRequirement(key: 2, item: nil, upgrade: 2, kind: .wand, maximumDepth: 4),
+            ItemRequirement(key: 3, item: nil, upgrade: 2, kind: .wand, maximumDepth: 9),
+            ItemRequirement(key: 4, item: nil, upgrade: 2, kind: .wand, maximumDepth: 4),
+            ItemRequirement(key: 5, item: nil, upgrade: 2, kind: .wand, maximumDepth: 4),
+        ]
+        let displayed = requirements.coalescedByCriteria().sortedByFloorLimit()
+
+        XCTAssertEqual(displayed.map(\.key), [1, 2, 3])
+        XCTAssertEqual(displayed.map(\.quantity), [1, 3, 1])
+        XCTAssertEqual(displayed[1].displayTitle, "3× Any wand")
+    }
+
+    func testRequirementQuantityPersistenceIsBackwardCompatible() throws {
+        let oldJSON = #"{"requirements":[{"key":1,"upgrade":2,"kind":2,"upgradeMatch":1}],"maximumDepth":24,"requireBlacksmith":false}"#
+        XCTAssertEqual(QueryPersistence.decode(oldJSON).requirements.first?.quantity, 1)
+
+        let requirement = try ItemRequirement(key: 2, item: nil, upgrade: 2,
+                                               kind: .wand, quantity: 3)
+        let encoded = try XCTUnwrap(QueryPersistence.encode(
+            SavedQuery(requirements: [requirement])))
+        let decoded = QueryPersistence.decode(encoded)
+        XCTAssertEqual(decoded.requirements.count, 1)
+        XCTAssertEqual(decoded.requirements.first?.quantity, 3)
     }
 
     func testRealFFIScout() async throws {

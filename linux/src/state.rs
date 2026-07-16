@@ -9,6 +9,8 @@ use shpd_seedfinder_core::challenges::Challenges;
 use shpd_seedfinder_core::model::ItemSource;
 use shpd_seedfinder_core::query::{Requirement, SearchQuery, TierRequirement, UpgradeRequirement};
 
+pub const MAX_REQUIREMENT_COUNT: usize = 64;
+
 /// Every user-facing item source, in the wire order shared with the other
 /// frontends.
 pub const ALL_SOURCES: &[ItemSource] = &[
@@ -44,6 +46,7 @@ pub const ALL_KINDS: &[ItemKind] = &[
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct UiRequirement {
     pub key: u64,
+    pub quantity: u8,
     pub kind: ItemKind,
     pub item: Option<ItemId>,
     pub tier: TierRequirement,
@@ -59,6 +62,7 @@ impl UiRequirement {
     pub const fn new(key: u64) -> Self {
         Self {
             key,
+            quantity: 1,
             kind: ItemKind::Weapon,
             item: None,
             tier: TierRequirement::Any,
@@ -86,6 +90,20 @@ impl UiRequirement {
         }
     }
 
+    /// Whether this row differs from `other` only by identity and quantity.
+    #[must_use]
+    pub fn has_same_criteria(&self, other: &Self) -> bool {
+        self.kind == other.kind
+            && self.item == other.item
+            && self.tier == other.tier
+            && self.upgrade == other.upgrade
+            && self.effect == other.effect
+            && self.require_uncursed == other.require_uncursed
+            && self.source == other.source
+            && self.identity_group == other.identity_group
+            && self.max_depth == other.max_depth
+    }
+
     /// Primary row label, e.g. `Any Tier 3+ weapon` or `Ring of tenacity`.
     #[must_use]
     pub fn title(&self) -> String {
@@ -103,6 +121,18 @@ impl UiRequirement {
             TierRequirement::AtMost(tier) => {
                 format!("Any Tier {tier} or lower {}", kind_singular(self.kind))
             }
+        }
+    }
+
+    /// Primary row label including a quantity prefix when more than one item
+    /// must satisfy these criteria.
+    #[must_use]
+    pub fn display_title(&self) -> String {
+        let title = self.title();
+        if self.quantity == 1 {
+            title
+        } else {
+            format!("{}× {title}", self.quantity)
         }
     }
 
@@ -167,6 +197,37 @@ impl AppState {
         key
     }
 
+    /// Adds or replaces one row, then combines identical criteria and orders
+    /// rows by floor limit. The first row's key survives coalescing.
+    ///
+    /// # Errors
+    ///
+    /// Returns a human-readable validation message without changing the state.
+    pub fn upsert_requirement(&mut self, requirement: UiRequirement) -> Result<(), String> {
+        let mut candidate = self.requirements.clone();
+        if let Some(slot) = candidate
+            .iter_mut()
+            .find(|other| other.key == requirement.key)
+        {
+            *slot = requirement;
+        } else {
+            candidate.push(requirement);
+        }
+        self.requirements = normalize_requirements(&candidate)?;
+        Ok(())
+    }
+
+    /// Coalesces and floor-sorts the current requirements in place.
+    ///
+    /// # Errors
+    ///
+    /// Returns a human-readable validation message without changing the state.
+    pub fn normalize_requirements(&mut self) -> Result<(), String> {
+        let normalized = normalize_requirements(&self.requirements)?;
+        self.requirements = normalized;
+        Ok(())
+    }
+
     /// Builds the validated engine query for the current state.
     ///
     /// # Errors
@@ -174,7 +235,10 @@ impl AppState {
     /// Returns the human-readable validation message.
     pub fn to_query(&self) -> Result<SearchQuery, String> {
         let query = SearchQuery {
-            requirements: self.requirements.iter().map(|r| r.to_core()).collect(),
+            requirements: expand_requirements(&self.requirements)?
+                .into_iter()
+                .map(UiRequirement::to_core)
+                .collect(),
             max_depth: self.max_depth,
             challenges: self.challenges,
             require_blacksmith: self.require_blacksmith && self.max_depth < 14,
@@ -184,6 +248,58 @@ impl AppState {
         query.validate().map_err(|error| error.to_string())?;
         Ok(query)
     }
+}
+
+/// Expands compact quantity rows into one copy per required item. Search and
+/// scouting call this immediately before native/core matching so each copy
+/// must resolve to a distinct world item.
+///
+/// # Errors
+///
+/// Returns a human-readable validation message when a row quantity or the
+/// expanded total falls outside `1..=64`.
+pub fn expand_requirements(requirements: &[UiRequirement]) -> Result<Vec<UiRequirement>, String> {
+    let mut expanded = Vec::new();
+    for requirement in requirements {
+        if !(1..=u8::try_from(MAX_REQUIREMENT_COUNT).unwrap_or(u8::MAX))
+            .contains(&requirement.quantity)
+        {
+            return Err("Requirement quantity must be between 1 and 64".to_owned());
+        }
+        if expanded.len() + usize::from(requirement.quantity) > MAX_REQUIREMENT_COUNT {
+            return Err("Total requirement quantity must be at most 64".to_owned());
+        }
+        expanded.extend(std::iter::repeat_n(
+            UiRequirement {
+                quantity: 1,
+                ..*requirement
+            },
+            usize::from(requirement.quantity),
+        ));
+    }
+    Ok(expanded)
+}
+
+/// Combines rows with equal criteria and then keeps unrestricted rows first,
+/// followed by floor-limited rows from earliest to latest. Both operations are
+/// stable, preserving the first row's key and the order of ties.
+fn normalize_requirements(requirements: &[UiRequirement]) -> Result<Vec<UiRequirement>, String> {
+    // Validate the compact input and the total before adding quantities, which
+    // also guarantees a coalesced row cannot exceed 64.
+    let _ = expand_requirements(requirements)?;
+    let mut normalized: Vec<UiRequirement> = Vec::new();
+    for requirement in requirements {
+        if let Some(existing) = normalized
+            .iter_mut()
+            .find(|existing| existing.has_same_criteria(requirement))
+        {
+            existing.quantity += requirement.quantity;
+        } else {
+            normalized.push(*requirement);
+        }
+    }
+    normalized.sort_by_key(|requirement| requirement.max_depth.unwrap_or(0));
+    Ok(normalized)
 }
 
 pub const fn kind_label(kind: ItemKind) -> &'static str {
@@ -314,7 +430,7 @@ pub const ALL_CHALLENGES: &[ChallengeInfo] = &[
 
 #[cfg(test)]
 mod tests {
-    use shpd_seedfinder_core::catalog::ItemId;
+    use shpd_seedfinder_core::catalog::{ItemId, ItemKind};
     use shpd_seedfinder_core::query::{TierRequirement, UpgradeRequirement};
 
     use super::{AppState, UiRequirement};
@@ -323,7 +439,11 @@ mod tests {
     fn labels_describe_wildcards_and_predicates() {
         let mut requirement = UiRequirement::new(1);
         assert_eq!(requirement.title(), "Any weapon");
+        assert_eq!(requirement.display_title(), "Any weapon");
         assert_eq!(requirement.subtitle(), "Any upgrade");
+
+        requirement.quantity = 3;
+        assert_eq!(requirement.display_title(), "3× Any weapon");
 
         requirement.tier = TierRequirement::AtLeast(4);
         requirement.upgrade = UpgradeRequirement::Exact(2);
@@ -353,5 +473,79 @@ mod tests {
         assert!(!state.to_query().unwrap().require_blacksmith);
         state.max_depth = 13;
         assert!(state.to_query().unwrap().require_blacksmith);
+    }
+
+    #[test]
+    fn upsert_coalesces_criteria_and_sorts_by_floor_limit() {
+        let requirement = |key, upgrade, max_depth| UiRequirement {
+            kind: ItemKind::Wand,
+            upgrade: UpgradeRequirement::Exact(upgrade),
+            max_depth,
+            ..UiRequirement::new(key)
+        };
+        let mut state = AppState::default();
+        state.upsert_requirement(requirement(1, 3, None)).unwrap();
+        state
+            .upsert_requirement(requirement(2, 2, Some(4)))
+            .unwrap();
+        state
+            .upsert_requirement(requirement(3, 2, Some(9)))
+            .unwrap();
+        let mut duplicate = requirement(4, 2, Some(4));
+        duplicate.quantity = 2;
+        state.upsert_requirement(duplicate).unwrap();
+
+        assert_eq!(
+            state
+                .requirements
+                .iter()
+                .map(|requirement| requirement.key)
+                .collect::<Vec<_>>(),
+            [1, 2, 3]
+        );
+        assert_eq!(
+            state
+                .requirements
+                .iter()
+                .map(|requirement| requirement.quantity)
+                .collect::<Vec<_>>(),
+            [1, 3, 1]
+        );
+        assert_eq!(state.requirements[1].display_title(), "3× Any wand");
+    }
+
+    #[test]
+    fn query_expands_quantities_and_caps_total_at_sixty_four() {
+        let mut state = AppState::default();
+        let mut requirement = UiRequirement {
+            kind: ItemKind::Wand,
+            upgrade: UpgradeRequirement::Exact(2),
+            ..UiRequirement::new(1)
+        };
+        requirement.quantity = 3;
+        state.requirements.push(requirement);
+
+        let query = state.to_query().unwrap();
+        assert_eq!(query.requirements.len(), 3);
+        assert!(query.requirements.windows(2).all(|pair| pair[0] == pair[1]));
+
+        requirement.quantity = 0;
+        state.requirements = vec![requirement];
+        assert_eq!(
+            state.to_query().unwrap_err(),
+            "Requirement quantity must be between 1 and 64"
+        );
+
+        requirement.quantity = 64;
+        state.requirements = vec![requirement];
+        let mut other = requirement;
+        other.key = 2;
+        other.upgrade = UpgradeRequirement::Exact(3);
+        other.quantity = 1;
+        state.requirements.push(other);
+        assert_eq!(
+            state.to_query().unwrap_err(),
+            "Total requirement quantity must be at most 64"
+        );
     }
 }

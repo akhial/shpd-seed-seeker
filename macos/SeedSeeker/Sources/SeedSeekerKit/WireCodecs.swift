@@ -75,8 +75,8 @@ public enum QueryCodec {
             | (request.fastMode ? 2 : 0)
             | (request.excludeBlacksmithRewards ? 4 : 0))
         output.u16LittleEndian(request.challenges)
-        output.u16(request.requirements.count)
-        for requirement in request.requirements {
+        output.u16(request.requiredItemCount)
+        for requirement in request.expandedRequirements {
             output.u8(requirement.kind.rawValue); try output.text(requirement.item?.id ?? "")
             output.u8(requirement.tierMatch.rawValue); output.u8(requirement.tier)
             output.u8(requirement.upgradeMatch.rawValue); output.u8(requirement.upgrade)

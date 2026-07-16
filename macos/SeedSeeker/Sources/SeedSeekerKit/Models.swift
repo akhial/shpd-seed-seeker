@@ -75,7 +75,8 @@ public enum Challenge: Int, CaseIterable, Sendable {
 }
 
 public enum ModelValidationError: Error, Equatable, LocalizedError {
-    case itemKind, tier, upgrade, modifier, uncursedCurse, identityGroup, itemMaximumDepth, emptyRequirements, maximumDepth, challenges
+    case itemKind, tier, upgrade, modifier, uncursedCurse, identityGroup, itemMaximumDepth
+    case quantity, emptyRequirements, requirementCount, maximumDepth, challenges
     public var errorDescription: String? {
         switch self {
         case .itemKind: "Selected item must belong to its category"
@@ -85,7 +86,9 @@ public enum ModelValidationError: Error, Equatable, LocalizedError {
         case .uncursedCurse: "An uncursed item cannot have a curse"
         case .identityGroup: "Same-item group must be A..D"
         case .itemMaximumDepth: "Item floor limit must be 1..24"
+        case .quantity: "Requirement quantity must be 1..64"
         case .emptyRequirements: "At least one requirement is needed"
+        case .requirementCount: "Total requirement quantity must be at most 64"
         case .maximumDepth: "Maximum floor must be 1..24"
         case .challenges: "Challenge mask must be 0..511"
         }
@@ -105,13 +108,15 @@ public struct ItemRequirement: Codable, Hashable, Identifiable, Sendable {
     public var identityGroup: Int?
     public var maximumDepth: Int?
     public var requireUncursed: Bool
+    public var quantity: Int
     public var id: Int64 { key }
 
     public init(key: Int64, item: CatalogItem?, upgrade: Int, modifier: String? = nil,
                 kind: ItemKind, tier: Int = 0, tierMatch: TierMatch = .any,
                 upgradeMatch: UpgradeMatch = .exactly,
                 source: ScoutItemSource? = nil, identityGroup: Int? = nil,
-                maximumDepth: Int? = nil, requireUncursed: Bool = false) throws {
+                maximumDepth: Int? = nil, requireUncursed: Bool = false,
+                quantity: Int = 1) throws {
         guard item == nil || item?.kind == kind else { throw ModelValidationError.itemKind }
         let tierable = item == nil && (kind == .weapon || kind == .armor)
         let validTier = switch tierMatch {
@@ -132,16 +137,19 @@ public struct ItemRequirement: Codable, Hashable, Identifiable, Sendable {
         }
         guard identityGroup == nil || (1...4).contains(identityGroup!) else { throw ModelValidationError.identityGroup }
         guard maximumDepth == nil || (1...24).contains(maximumDepth!) else { throw ModelValidationError.itemMaximumDepth }
+        guard (1...64).contains(quantity) else { throw ModelValidationError.quantity }
         self.key = key; self.item = item; self.upgrade = upgrade; self.modifier = modifier
         self.kind = kind; self.tier = tier; self.tierMatch = tierMatch
         self.upgradeMatch = upgradeMatch; self.source = source
         self.identityGroup = identityGroup
         self.maximumDepth = maximumDepth
         self.requireUncursed = requireUncursed
+        self.quantity = quantity
     }
 
     private enum CodingKeys: String, CodingKey {
-        case key, item, upgrade, modifier, kind, tier, tierMatch, upgradeMatch, source, identityGroup, maximumDepth, requireUncursed
+        case key, item, upgrade, modifier, kind, tier, tierMatch, upgradeMatch, source
+        case identityGroup, maximumDepth, requireUncursed, quantity
     }
 
     public init(from decoder: Decoder) throws {
@@ -158,7 +166,8 @@ public struct ItemRequirement: Codable, Hashable, Identifiable, Sendable {
             source: values.decodeIfPresent(ScoutItemSource.self, forKey: .source),
             identityGroup: values.decodeIfPresent(Int.self, forKey: .identityGroup),
             maximumDepth: values.decodeIfPresent(Int.self, forKey: .maximumDepth),
-            requireUncursed: values.decodeIfPresent(Bool.self, forKey: .requireUncursed) ?? false
+            requireUncursed: values.decodeIfPresent(Bool.self, forKey: .requireUncursed) ?? false,
+            quantity: values.decodeIfPresent(Int.self, forKey: .quantity) ?? 1
         )
     }
 
@@ -172,6 +181,7 @@ public struct ItemRequirement: Codable, Hashable, Identifiable, Sendable {
         try values.encodeIfPresent(identityGroup, forKey: .identityGroup)
         try values.encodeIfPresent(maximumDepth, forKey: .maximumDepth)
         try values.encode(requireUncursed, forKey: .requireUncursed)
+        try values.encode(quantity, forKey: .quantity)
     }
 
     public var title: String {
@@ -196,6 +206,43 @@ public struct ItemRequirement: Codable, Hashable, Identifiable, Sendable {
         if let maximumDepth { text += " • by floor \(maximumDepth)" }
         return text
     }
+
+    public var displayTitle: String { quantity == 1 ? title : "\(quantity)× \(title)" }
+
+    fileprivate func hasSameCriteria(as other: ItemRequirement) -> Bool {
+        item == other.item && upgrade == other.upgrade && modifier == other.modifier
+            && kind == other.kind && tier == other.tier && tierMatch == other.tierMatch
+            && upgradeMatch == other.upgradeMatch && source == other.source
+            && identityGroup == other.identityGroup && maximumDepth == other.maximumDepth
+            && requireUncursed == other.requireUncursed
+    }
+}
+
+public extension Sequence where Element == ItemRequirement {
+    /// Combines requirements that differ only by identity and quantity.
+    func coalescedByCriteria() -> [ItemRequirement] {
+        reduce(into: []) { result, requirement in
+            if let index = result.firstIndex(where: { $0.hasSameCriteria(as: requirement) }) {
+                result[index].quantity += requirement.quantity
+            } else {
+                result.append(requirement)
+            }
+        }
+    }
+
+    /// Keeps unrestricted requirements first, then orders floor-limited requirements
+    /// from the earliest floor to the latest while preserving ties.
+    func sortedByFloorLimit() -> [ItemRequirement] {
+        enumerated().sorted { lhs, rhs in
+            switch (lhs.element.maximumDepth, rhs.element.maximumDepth) {
+            case (nil, nil): lhs.offset < rhs.offset
+            case (nil, .some): true
+            case (.some, nil): false
+            case let (lhsDepth?, rhsDepth?):
+                lhsDepth == rhsDepth ? lhs.offset < rhs.offset : lhsDepth < rhsDepth
+            }
+        }.map(\.element)
+    }
 }
 
 public struct SearchRequest: Codable, Sendable {
@@ -209,14 +256,30 @@ public struct SearchRequest: Codable, Sendable {
     /// Sacrificial-fire prize. Found seeds are always genuine matches.
     public var fastMode: Bool
     public var challenges: Int
+    public var requiredItemCount: Int { requirements.reduce(0) { $0 + $1.quantity } }
+    public var expandedRequirements: [ItemRequirement] {
+        requirements.flatMap { requirement in
+            (0..<requirement.quantity).map { _ in
+                var copy = requirement
+                copy.quantity = 1
+                return copy
+            }
+        }
+    }
 
     public init(requirements: [ItemRequirement], maximumDepth: Int = 24,
                 requireBlacksmith: Bool = false, excludeBlacksmithRewards: Bool = false,
                 fastMode: Bool = false, challenges: Int = 0) throws {
         guard !requirements.isEmpty else { throw ModelValidationError.emptyRequirements }
+        guard requirements.allSatisfy({ (1...64).contains($0.quantity) }) else {
+            throw ModelValidationError.quantity
+        }
+        guard requirements.reduce(0, { $0 + $1.quantity }) <= 64 else {
+            throw ModelValidationError.requirementCount
+        }
         guard (1...24).contains(maximumDepth) else { throw ModelValidationError.maximumDepth }
         guard (0...511).contains(challenges) else { throw ModelValidationError.challenges }
-        self.requirements = requirements; self.maximumDepth = maximumDepth
+        self.requirements = requirements.coalescedByCriteria(); self.maximumDepth = maximumDepth
         self.requireBlacksmith = requireBlacksmith
         self.excludeBlacksmithRewards = excludeBlacksmithRewards
         self.fastMode = fastMode
@@ -289,7 +352,10 @@ public func scoutMatchIndices(items: [ScoutItem], requirements: [ItemRequirement
         return tierMatches && upgradeMatches
     }
 
-    let candidates = requirements.map { requirement in
+    let expandedRequirements = requirements.flatMap { requirement in
+        Array(repeating: requirement, count: requirement.quantity)
+    }
+    let candidates = expandedRequirements.map { requirement in
         (requirement, items.indices.filter { matches(items[$0], requirement) })
     }.sorted { $0.1.count < $1.1.count }
     var used = Set<Int>()

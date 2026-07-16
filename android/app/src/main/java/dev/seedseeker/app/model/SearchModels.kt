@@ -37,6 +37,7 @@ data class ItemRequirement(
     val identityGroup: Int? = null,
     val maximumDepth: Int? = null,
     val requireUncursed: Boolean = false,
+    val quantity: Int = 1,
 ) {
     init {
         require(item == null || item.kind == kind) { "Selected item must belong to its category" }
@@ -65,6 +66,9 @@ data class ItemRequirement(
         }
         require(identityGroup == null || identityGroup in 1..4) { "Same-item group must be A..D" }
         require(maximumDepth == null || maximumDepth in 1..24) { "Item floor limit must be 1..24" }
+        require(quantity in 1..MAX_REQUIREMENT_COUNT) {
+            "Requirement quantity must be 1..$MAX_REQUIREMENT_COUNT"
+        }
     }
 
     val description: String
@@ -102,6 +106,71 @@ data class ItemRequirement(
             TierMatch.AT_LEAST -> "Any Tier $tier+ ${kind.singularLabel}"
             TierMatch.AT_MOST -> "Any Tier $tier or lower ${kind.singularLabel}"
         }
+
+    val displayTitle: String
+        get() = if (quantity == 1) title else "$quantity× $title"
+
+    internal fun hasSameCriteria(other: ItemRequirement): Boolean =
+        item == other.item &&
+            upgrade == other.upgrade &&
+            modifier == other.modifier &&
+            kind == other.kind &&
+            tier == other.tier &&
+            tierMatch == other.tierMatch &&
+            upgradeMatch == other.upgradeMatch &&
+            source == other.source &&
+            identityGroup == other.identityGroup &&
+            maximumDepth == other.maximumDepth &&
+            requireUncursed == other.requireUncursed
+}
+
+const val MAX_REQUIREMENT_COUNT = 64
+
+val List<ItemRequirement>.requiredItemCount: Int
+    get() = sumOf(ItemRequirement::quantity)
+
+/** Combines rows that differ only by key and quantity, retaining the first row's key. */
+fun Iterable<ItemRequirement>.coalescedByCriteria(): List<ItemRequirement> =
+    fold(mutableListOf()) { result, requirement ->
+        val index = result.indexOfFirst { it.hasSameCriteria(requirement) }
+        if (index < 0) {
+            result += requirement
+        } else {
+            val combinedQuantity = result[index].quantity + requirement.quantity
+            require(combinedQuantity <= MAX_REQUIREMENT_COUNT) {
+                "Total requirement quantity must be at most $MAX_REQUIREMENT_COUNT"
+            }
+            result[index] = result[index].copy(quantity = combinedQuantity)
+        }
+        result
+    }
+
+/** Keeps unrestricted rows first, then floor-limited rows in ascending floor order. */
+fun Iterable<ItemRequirement>.sortedByFloorLimit(): List<ItemRequirement> =
+    withIndex()
+        .sortedWith(
+            compareBy<IndexedValue<ItemRequirement>> { it.value.maximumDepth != null }
+                .thenBy { it.value.maximumDepth ?: 0 }
+                .thenBy { it.index },
+        )
+        .map(IndexedValue<ItemRequirement>::value)
+
+fun Iterable<ItemRequirement>.coalescedAndSorted(): List<ItemRequirement> {
+    val coalesced = coalescedByCriteria()
+    require(coalesced.requiredItemCount <= MAX_REQUIREMENT_COUNT) {
+        "Total requirement quantity must be at most $MAX_REQUIREMENT_COUNT"
+    }
+    return coalesced.sortedByFloorLimit()
+}
+
+fun Iterable<ItemRequirement>.expandedRequirements(): List<ItemRequirement> {
+    val requirements = toList()
+    require(requirements.requiredItemCount <= MAX_REQUIREMENT_COUNT) {
+        "Total requirement quantity must be at most $MAX_REQUIREMENT_COUNT"
+    }
+    return requirements.flatMap { requirement ->
+        List(requirement.quantity) { requirement.copy(quantity = 1) }
+    }
 }
 
 enum class TierMatch(val label: String) {
@@ -133,9 +202,18 @@ data class SearchRequest(
 ) {
     init {
         require(requirements.isNotEmpty()) { "At least one requirement is needed" }
+        require(requirements.requiredItemCount <= MAX_REQUIREMENT_COUNT) {
+            "Total requirement quantity must be at most $MAX_REQUIREMENT_COUNT"
+        }
         require(maximumDepth in 1..24) { "Maximum floor must be 1..24" }
         require(challenges in 0..Challenge.ALL_MASK) { "Challenge mask must be 0..${Challenge.ALL_MASK}" }
     }
+
+    val requiredItemCount: Int
+        get() = requirements.requiredItemCount
+
+    val expandedRequirements: List<ItemRequirement>
+        get() = requirements.expandedRequirements()
 }
 
 enum class Challenge(

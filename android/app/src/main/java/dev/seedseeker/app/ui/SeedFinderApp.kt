@@ -36,12 +36,15 @@ import dev.seedseeker.app.engine.NativeSearchSession
 import dev.seedseeker.app.engine.NativeSeedFinder
 import dev.seedseeker.app.engine.SeedCode
 import dev.seedseeker.app.model.ItemRequirement
+import dev.seedseeker.app.model.MAX_REQUIREMENT_COUNT
 import dev.seedseeker.app.model.Challenge
 import dev.seedseeker.app.model.ScoutWorld
 import dev.seedseeker.app.model.SearchRequest
 import dev.seedseeker.app.model.SearchState
 import dev.seedseeker.app.model.SearchStatus
 import dev.seedseeker.app.model.SeedResult
+import dev.seedseeker.app.model.coalescedAndSorted
+import dev.seedseeker.app.model.requiredItemCount
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -87,7 +90,7 @@ fun SeedFinderApp(engine: NativeSeedFinder) {
             listOf(
                 ItemRequirement(1, ItemCatalog.weapons.first { it.id == "sword" }, 2, "Lucky"),
                 ItemRequirement(2, ItemCatalog.armor.first { it.id == "plate_armor" }, 1, "Brimstone"),
-            ),
+            ).coalescedAndSorted(),
         )
     }
     var nextRequirementKey by remember { mutableLongStateOf(3L) }
@@ -343,13 +346,29 @@ fun SeedFinderApp(engine: NativeSeedFinder) {
         }
 
         if (showRequirementSheet) {
+            val remainingQuantity = MAX_REQUIREMENT_COUNT -
+                (requirements.requiredItemCount - (editingRequirement?.quantity ?: 0))
             RequirementSheet(
                 editing = editingRequirement,
+                maximumQuantity = remainingQuantity,
                 onDismiss = { showRequirementSheet = false },
-                onSave = { item, kind, tierMatch, tier, upgradeMatch, upgrade, modifier, source, identityGroup, itemMaximumDepth, requireUncursed ->
+                onSave = {
+                    item,
+                    kind,
+                    tierMatch,
+                    tier,
+                    upgradeMatch,
+                    upgrade,
+                    modifier,
+                    source,
+                    identityGroup,
+                    itemMaximumDepth,
+                    requireUncursed,
+                    quantity,
+                    ->
                     val existing = editingRequirement
                     if (existing == null) {
-                        requirements = requirements + ItemRequirement(
+                        requirements = (requirements + ItemRequirement(
                             key = nextRequirementKey++,
                             item = item,
                             upgrade = upgrade,
@@ -362,7 +381,8 @@ fun SeedFinderApp(engine: NativeSeedFinder) {
                             identityGroup = identityGroup,
                             maximumDepth = itemMaximumDepth,
                             requireUncursed = requireUncursed,
-                        )
+                            quantity = quantity,
+                        )).coalescedAndSorted()
                     } else {
                         requirements = requirements.map {
                             if (it.key == existing.key) {
@@ -378,11 +398,12 @@ fun SeedFinderApp(engine: NativeSeedFinder) {
                                     identityGroup = identityGroup,
                                     maximumDepth = itemMaximumDepth,
                                     requireUncursed = requireUncursed,
+                                    quantity = quantity,
                                 )
                             } else {
                                 it
                             }
-                        }
+                        }.coalescedAndSorted()
                     }
                     showRequirementSheet = false
                 },

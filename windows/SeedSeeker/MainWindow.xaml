@@ -34,7 +34,7 @@
                       <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                       <FontIcon Glyph="{Binding Glyph}" Foreground="{Binding Tint}" FontSize="16" VerticalAlignment="Center"/>
                       <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
-                        <TextBlock Text="{Binding Title}" TextWrapping="Wrap"/>
+                        <TextBlock Text="{Binding DisplayTitle}" TextWrapping="Wrap"/>
                         <TextBlock Text="{Binding Description}" Style="{StaticResource Caption}"/>
                       </StackPanel>
                       <Button Grid.Column="2" Style="{StaticResource SubtleIconButton}" Tag="{Binding}" Click="RemoveRequirement_Click" ToolTipService.ToolTip="Remove requirement" VerticalAlignment="Center" Margin="0,0,-6,0">
@@ -46,7 +46,7 @@
               </ItemsRepeater.ItemTemplate>
             </ItemsRepeater>
             <TextBlock x:Name="NoRequirements" Text="No requirements yet. Add one to describe the item you're hunting for." Style="{StaticResource Caption}" Margin="1,0,1,10"/>
-            <Button Click="AddRequirement_Click" HorizontalAlignment="Stretch" Margin="0,4,0,0">
+            <Button x:Name="AddRequirementButton" Click="AddRequirement_Click" HorizontalAlignment="Stretch" Margin="0,4,0,0">
               <StackPanel Orientation="Horizontal" Spacing="8">
                 <FontIcon Glyph="&#xE710;" FontSize="13"/><TextBlock Text="Add requirement"/>
               </StackPanel>
