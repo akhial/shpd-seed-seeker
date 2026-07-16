@@ -1272,9 +1272,7 @@ mod tests {
                 && item.source == ItemSource::Chest
         }));
         assert!(floors[1].world_items.iter().any(|item| {
-            item.item == ItemId::MailArmor
-                && item.upgrade == 1
-                && item.source == ItemSource::Chest
+            item.item == ItemId::MailArmor && item.upgrade == 1 && item.source == ItemSource::Chest
         }));
 
         let rewards: Vec<_> = floors[3]
