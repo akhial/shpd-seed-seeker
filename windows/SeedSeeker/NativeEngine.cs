@@ -13,6 +13,7 @@ internal static partial class Native
     [LibraryImport(Library)] internal static partial void seedfinder_cancel(long handle);
     [LibraryImport(Library)] internal static partial void seedfinder_close(long handle);
     [LibraryImport(Library)] internal static partial int seedfinder_scout(byte[] request, nuint length, out nint packet, out nuint outputLength);
+    [LibraryImport(Library)] internal static partial int seedfinder_filter(byte[] request, nuint length, out nint packet, out nuint outputLength);
     [LibraryImport(Library)] internal static partial void seedfinder_buffer_free(nint packet, nuint length);
 }
 
@@ -55,6 +56,30 @@ public sealed class NativeEngine
 {
     public NativeSearch Start(QuerySettings query)
     {
+        var packet = EncodeQuery(query); var handle = Native.seedfinder_start_search(packet, (nuint)packet.Length);
+        if (handle == 0) throw new InvalidOperationException("The native engine rejected the query.");
+        return new NativeSearch(handle);
+    }
+
+    public IReadOnlyList<string> Filter(QuerySettings query, IReadOnlyList<string> seeds)
+    {
+        if (seeds.Count == 0) return [];
+        if (seeds.Count > SeedListCodec.MaximumSeeds) throw new ArgumentOutOfRangeException(nameof(seeds));
+        var queryPacket = EncodeQuery(query);
+        if (queryPacket.Length > ushort.MaxValue) throw new InvalidOperationException("The query is too large to filter.");
+        var w = new Writer(); w.Bytes("SFF1"u8.ToArray()); w.U16(queryPacket.Length); w.Bytes(queryPacket); w.U16(seeds.Count);
+        foreach (var seed in seeds)
+        {
+            if (!SeedCode.IsCanonical(seed)) throw new ArgumentException("Seed lists require canonical AAA-AAA-AAA codes.", nameof(seeds));
+            w.Bytes(Encoding.ASCII.GetBytes(seed));
+        }
+        var request = w.Finish(); var code = Native.seedfinder_filter(request, (nuint)request.Length, out var ptr, out var len);
+        if (code != 0) throw new InvalidOperationException($"Native seed filtering failed ({code}).");
+        return DecodeResults(CopyAndFree(ptr, len));
+    }
+
+    private static byte[] EncodeQuery(QuerySettings query)
+    {
         var w = new Writer(); w.Bytes("SSF7"u8.ToArray()); w.U8(query.MaximumDepth);
         w.U8((query.RequireBlacksmith ? 1 : 0) | (query.FastMode ? 2 : 0) | (query.ExcludeBlacksmithRewards ? 4 : 0));
         w.U16Le(query.Challenges); w.U16(query.Requirements.Count);
@@ -64,9 +89,7 @@ public sealed class NativeEngine
             w.U8((int)r.UpgradeMatch); w.U8(r.Upgrade); w.Text(r.Modifier ?? "");
             w.U8(r.Source is null ? 0 : (int)r.Source + 1); w.U8(r.IdentityGroup ?? 0); w.U8(r.MaximumDepth ?? 0); w.U8(r.RequireUncursed ? 1 : 0);
         }
-        var packet = w.Finish(); var handle = Native.seedfinder_start_search(packet, (nuint)packet.Length);
-        if (handle == 0) throw new InvalidOperationException("The native engine rejected the query.");
-        return new NativeSearch(handle);
+        return w.Finish();
     }
 
     public ScoutWorld Scout(string seed, int challenges)
@@ -94,6 +117,14 @@ public sealed class NativeEngine
         try { var bytes = new byte[(int)len]; Marshal.Copy(ptr, bytes, 0, bytes.Length); return bytes; }
         finally { if (ptr != 0) Native.seedfinder_buffer_free(ptr, len); }
     }
+
+    internal static IReadOnlyList<string> DecodeResults(byte[] packet)
+    {
+        var r = new Reader(packet); r.Magic("SSR1");
+        var result = new List<string>(); var count = r.U16(); for (var i = 0; i < count; i++) result.Add(r.Text(r.U8()));
+        if (r.Remaining != 0) throw new InvalidDataException("Trailing native result data");
+        return result;
+    }
 }
 
 public sealed class NativeSearch : IDisposable
@@ -104,9 +135,7 @@ public sealed class NativeSearch : IDisposable
     {
         var code = Native.seedfinder_poll(handle, (uint)maximum, out var ptr, out var len);
         if (code != 0) throw new InvalidOperationException($"Native poll failed ({code}).");
-        var r = new Reader(NativeEngine.CopyAndFree(ptr, len)); r.Magic("SSR1");
-        var result = new List<string>(); var count = r.U16(); for (var i = 0; i < count; i++) result.Add(r.Text(r.U8()));
-        return result;
+        return NativeEngine.DecodeResults(NativeEngine.CopyAndFree(ptr, len));
     }
     public SearchStatus Status()
     {

@@ -6,8 +6,8 @@ use jni::JNIEnv;
 use jni::objects::{JByteArray, JClass, JLongArray};
 use jni::sys::{jint, jlong};
 use shpd_seedfinder_session::{
-    NativeSession, ScoutCallError, ScoutPacketError, StartSessionError, close_session,
-    production_scout_packet, registry,
+    FilterCallError, FilterPacketError, NativeSession, ScoutCallError, ScoutPacketError,
+    StartSessionError, close_session, production_filter_packet, production_scout_packet, registry,
 };
 
 fn throw_illegal_argument(env: &mut JNIEnv<'_>, message: impl AsRef<str>) {
@@ -74,6 +74,53 @@ pub extern "system" fn Java_dev_seedseeker_app_engine_JniBindings_scoutSeed<'loc
         Ok(array) => array,
         Err(error) => {
             throw_illegal_state(&mut env, format!("cannot allocate scout response: {error}"));
+            JByteArray::default()
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+/// Filters the explicit seeds in an `SFF1` packet and returns matching seed
+/// codes in the existing `SSR1` result format.
+pub extern "system" fn Java_dev_seedseeker_app_engine_JniBindings_filterSeeds<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    request: JByteArray<'local>,
+) -> JByteArray<'local> {
+    let bytes = match env.convert_byte_array(&request) {
+        Ok(bytes) => bytes,
+        Err(error) => {
+            throw_illegal_argument(&mut env, format!("invalid filter request array: {error}"));
+            return JByteArray::default();
+        }
+    };
+    let packet = match production_filter_packet(&bytes) {
+        Ok(packet) => packet,
+        Err(FilterCallError::Packet(FilterPacketError::Request(error))) => {
+            throw_illegal_argument(&mut env, error.to_string());
+            return JByteArray::default();
+        }
+        Err(FilterCallError::Packet(FilterPacketError::Filter(error))) => {
+            throw_illegal_argument(&mut env, format!("invalid finite-list query: {error:?}"));
+            return JByteArray::default();
+        }
+        Err(FilterCallError::Packet(FilterPacketError::Response(error))) => {
+            throw_illegal_state(&mut env, format!("cannot encode filter response: {error}"));
+            return JByteArray::default();
+        }
+        Err(FilterCallError::Panicked) => {
+            android_error("canonical finite-list filtering generation panicked");
+            throw_illegal_state(&mut env, "native finite-list filtering failed");
+            return JByteArray::default();
+        }
+    };
+    match env.byte_array_from_slice(&packet) {
+        Ok(array) => array,
+        Err(error) => {
+            throw_illegal_state(
+                &mut env,
+                format!("cannot allocate filter response: {error}"),
+            );
             JByteArray::default()
         }
     }

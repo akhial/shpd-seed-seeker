@@ -71,8 +71,25 @@ class JniNativeSeedFinderTest {
         }
     }
 
+    @Test
+    fun exactSeedFilteringUsesSff1AndDecodesTheExistingResultPacket() {
+        val bindings = RecordingBindings()
+        val finder = JniNativeSeedFinder(bindings)
+        val request = SearchRequest(
+            listOf(ItemRequirement(1, ItemCatalog.armor.first { it.id == "plate_armor" }, 2)),
+        )
+        val seeds = listOf("AAA-AAA-AAA", "BBB-BBB-BBB")
+
+        val filtered = finder.filterSeeds(request, seeds)
+
+        assertTrue(bindings.filterRequest.contentEquals(FilterRequestCodec.encode(request, seeds)))
+        assertEquals(listOf("AAA-AAA-AAA"), filtered.map { it.seed })
+        assertEquals(1, filtered.single().matchedRequirements)
+    }
+
     private class RecordingBindings : NativeBindings {
         var request = byteArrayOf()
+        var filterRequest = byteArrayOf()
         var statusPacket = longArrayOf(1, 123, 456, 0, 0.125.toBits())
         var cancelCalls = 0
         var closeCalls = 0
@@ -85,6 +102,19 @@ class JniNativeSeedFinderTest {
         override fun poll(handle: Long, maxResults: Int): ByteArray {
             assertEquals(42, handle)
             assertEquals(24, maxResults)
+            return byteArrayOf(
+                'S'.code.toByte(),
+                'S'.code.toByte(),
+                'R'.code.toByte(),
+                '1'.code.toByte(),
+                0,
+                1,
+                11,
+            ) + "AAA-AAA-AAA".encodeToByteArray()
+        }
+
+        override fun filterSeeds(request: ByteArray): ByteArray {
+            filterRequest = request.copyOf()
             return byteArrayOf(
                 'S'.code.toByte(),
                 'S'.code.toByte(),

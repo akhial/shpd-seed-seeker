@@ -26,6 +26,7 @@ import kotlin.math.min
 /** A deliberately small boundary shared by the Compose UI, demo engine, and Rust JNI adapter. */
 interface NativeSeedFinder {
     fun startSearch(request: SearchRequest): NativeSearchSession
+    fun filterSeeds(request: SearchRequest, seeds: List<String>): List<SeedResult>
     fun scoutSeed(seed: String, challenges: Int = 0): ScoutWorld
 }
 
@@ -50,6 +51,16 @@ object NativeSeedFinderFactory {
  */
 class DemoNativeSeedFinder : NativeSeedFinder {
     override fun startSearch(request: SearchRequest): NativeSearchSession = DemoSession(request)
+
+    override fun filterSeeds(request: SearchRequest, seeds: List<String>): List<SeedResult> {
+        require(seeds.isNotEmpty()) { "A filter needs at least one seed" }
+        require(seeds.size <= MAX_FILTER_SEEDS) { "A filter can contain at most $MAX_FILTER_SEEDS seeds" }
+        seeds.forEach { require(SeedCode.isCanonical(it)) { "Seed must use XXX-XXX-XXX format" } }
+        // The demo search emits illustrative results rather than query-derived worlds. Keep those
+        // results available when exercising the explorer UI; production delegates exact matching
+        // to the Rust query matcher.
+        return seeds.map { SeedResult(it, request.requirements.size) }
+    }
 
     override fun scoutSeed(seed: String, challenges: Int): ScoutWorld {
         require(SeedCode.isCanonical(seed)) { "Seed must use XXX-XXX-XXX format" }
@@ -179,6 +190,7 @@ class DemoNativeSeedFinder : NativeSeedFinder {
  * 4. `cancel(handle)` is cooperative and safe to repeat.
  * 5. `close(handle)` joins/releases native resources and is safe after any terminal state.
  * 6. `scoutSeed(requestBytes) -> scoutBytes` generates one canonical seed through depth 24.
+ * 7. `filterSeeds(requestBytes) -> resultBytes` exactly filters an explicit seed list.
  *
  * Search requests always use `SSF7`: magic, maxDepth:u8, flags:u8, challenges:u16 little-endian,
  * requirementCount:u16 big-endian, followed by repeated
@@ -194,10 +206,18 @@ class DemoNativeSeedFinder : NativeSeedFinder {
  * 3 failed. A non-zero handle is required. Scout requests use `SSQ2`, a little-endian challenge
  * mask, then the canonical UTF-8 seed. Scout packet `SSC1` contains the echoed canonical seed
  * followed by catalog ID, depth, upgrade, curse, effect, source, and accessibility for every item.
+ * Finite-list filter requests use `SFF1`: magic, nestedQueryLength:u16, one complete `SSF7`
+ * query, seedCount:u16, then exactly eleven ASCII bytes per canonical seed (maximum 1,024).
  */
 class JniNativeSeedFinder(
     private val bindings: NativeBindings = JniBindingsAdapter,
 ) : NativeSeedFinder {
+    override fun filterSeeds(request: SearchRequest, seeds: List<String>): List<SeedResult> =
+        ResultCodec.decode(
+            bindings.filterSeeds(FilterRequestCodec.encode(request, seeds)),
+            request.requirements.size,
+        )
+
     override fun scoutSeed(seed: String, challenges: Int): ScoutWorld {
         require(SeedCode.isCanonical(seed)) { "Seed must use XXX-XXX-XXX format" }
         require(challenges in 0..Challenge.ALL_MASK) { "Challenge mask must be 0..${Challenge.ALL_MASK}" }
@@ -261,6 +281,7 @@ class JniNativeSeedFinder(
 
 interface NativeBindings {
     fun startSearch(request: ByteArray): Long
+    fun filterSeeds(request: ByteArray): ByteArray
     fun poll(handle: Long, maxResults: Int): ByteArray
     fun status(handle: Long): LongArray
     fun cancel(handle: Long)
@@ -275,6 +296,7 @@ object JniBindings {
     }
 
     @JvmStatic external fun startSearch(request: ByteArray): Long
+    @JvmStatic external fun filterSeeds(request: ByteArray): ByteArray
     @JvmStatic external fun poll(handle: Long, maxResults: Int): ByteArray
     @JvmStatic external fun status(handle: Long): LongArray
     @JvmStatic external fun cancel(handle: Long)
@@ -284,6 +306,7 @@ object JniBindings {
 
 private object JniBindingsAdapter : NativeBindings {
     override fun startSearch(request: ByteArray) = JniBindings.startSearch(request)
+    override fun filterSeeds(request: ByteArray) = JniBindings.filterSeeds(request)
     override fun poll(handle: Long, maxResults: Int) = JniBindings.poll(handle, maxResults)
     override fun status(handle: Long) = JniBindings.status(handle)
     override fun cancel(handle: Long) = JniBindings.cancel(handle)
@@ -296,14 +319,20 @@ object SeedCode {
 
     /** Makes typing and pasting forgiving while always producing canonical grouping. */
     fun formatInput(input: String): String {
-        val letters = input
-            .uppercase(Locale.US)
-            .filter { it in 'A'..'Z' }
-            .take(9)
+        val letters = normalizedLetters(input).take(9)
         return letters.chunked(3).joinToString("-")
     }
 
     fun isCanonical(seed: String): Boolean = PATTERN.matches(seed)
+
+    fun matchesSearch(seed: String, search: String): Boolean {
+        val needle = normalizedLetters(search)
+        return needle.isEmpty() || needle in normalizedLetters(seed)
+    }
+
+    private fun normalizedLetters(value: String): String = value
+        .uppercase(Locale.US)
+        .filter { it in 'A'..'Z' }
 }
 
 object QueryCodec {
@@ -343,6 +372,32 @@ object QueryCodec {
         require(encoded.size <= 65_535) { "Wire string is too long" }
         output.writeShort(encoded.size)
         output.write(encoded)
+    }
+}
+
+private const val MAX_FILTER_SEEDS = 1_024
+
+object FilterRequestCodec {
+    fun encode(request: SearchRequest, seeds: List<String>): ByteArray {
+        require(seeds.isNotEmpty()) { "A filter needs at least one seed" }
+        require(seeds.size <= MAX_FILTER_SEEDS) {
+            "A filter can contain at most $MAX_FILTER_SEEDS seeds"
+        }
+        seeds.forEach {
+            require(SeedCode.isCanonical(it)) { "Seed must use XXX-XXX-XXX format" }
+        }
+        val query = QueryCodec.encode(request)
+        require(query.size <= 65_535) { "Encoded query is too large" }
+        return ByteArrayOutputStream(8 + query.size + seeds.size * 11).use { bytes ->
+            DataOutputStream(bytes).use { output ->
+                output.write("SFF1".toByteArray(StandardCharsets.US_ASCII))
+                output.writeShort(query.size)
+                output.write(query)
+                output.writeShort(seeds.size)
+                seeds.forEach { output.write(it.toByteArray(StandardCharsets.US_ASCII)) }
+            }
+            bytes.toByteArray()
+        }
     }
 }
 

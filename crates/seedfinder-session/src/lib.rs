@@ -15,11 +15,12 @@ use shpd_seedfinder_core::probability::estimate_match_probability;
 use shpd_seedfinder_core::query::SearchQuery;
 use shpd_seedfinder_core::search::{
     SearchError, SearchOptions, StreamingSearchHandle, StreamingSearchState, WorldGenerator,
-    spawn_rotated_streaming_search, spawn_streaming_search,
+    filter_seeds as filter_explicit_seeds, spawn_rotated_streaming_search, spawn_streaming_search,
 };
 use shpd_seedfinder_core::seed::{DungeonSeed, TOTAL_SEEDS};
 use shpd_seedfinder_core::wire::{
-    WireError, decode_query, decode_scout_request, encode_results, encode_scout_world,
+    WireError, decode_filter_request, decode_query, decode_scout_request, encode_results,
+    encode_scout_world,
 };
 
 pub const STATE_RUNNING: i64 = 0;
@@ -93,6 +94,19 @@ pub enum ScoutCallError {
     Panicked,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FilterPacketError {
+    Request(WireError),
+    Filter(SearchError),
+    Response(WireError),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FilterCallError {
+    Packet(FilterPacketError),
+    Panicked,
+}
+
 /// Validates an `SSQ2` scout request (`magic[4]`, little-endian challenge
 /// `u16`, remaining UTF-8 seed code) or a legacy raw-seed request, generates a
 /// depth-24 world with the supplied generator, and encodes `SSC1`.
@@ -150,6 +164,73 @@ pub fn production_scout_world(
     let generator = canonical_generator(challenges);
     catch_unwind(AssertUnwindSafe(|| generator.generate(seed, 24)))
         .map_err(|_| ScoutCallError::Panicked)
+}
+
+/// Filters an explicit seed list with an `SFF1` request and encodes matching
+/// seed codes as `SSR1`. Input order is preserved.
+///
+/// # Errors
+///
+/// Returns a request, query-filter, or response wire error.
+pub fn filter_seed_packet<G: WorldGenerator + ?Sized>(
+    generator: &G,
+    request: &[u8],
+) -> Result<Vec<u8>, FilterPacketError> {
+    let (query, seeds) = decode_filter_request(request).map_err(FilterPacketError::Request)?;
+    let worlds =
+        filter_explicit_seeds(generator, &query, &seeds).map_err(FilterPacketError::Filter)?;
+    encode_results(&worlds).map_err(FilterPacketError::Response)
+}
+
+/// Performs [`filter_seed_packet`] while containing generator panics.
+///
+/// # Errors
+///
+/// Returns a packet error or [`FilterCallError::Panicked`].
+pub fn protected_filter_seed_packet<G: WorldGenerator + ?Sized>(
+    generator: &G,
+    request: &[u8],
+) -> Result<Vec<u8>, FilterCallError> {
+    catch_unwind(AssertUnwindSafe(|| filter_seed_packet(generator, request)))
+        .map_err(|_| FilterCallError::Panicked)?
+        .map_err(FilterCallError::Packet)
+}
+
+/// Filters one `SFF1` list with the cached canonical generator selected by
+/// the nested query's challenge mask.
+///
+/// # Errors
+///
+/// Returns a packet error or a contained generation panic.
+pub fn production_filter_packet(request: &[u8]) -> Result<Vec<u8>, FilterCallError> {
+    let (query, _) = decode_filter_request(request)
+        .map_err(FilterPacketError::Request)
+        .map_err(FilterCallError::Packet)?;
+    protected_filter_seed_packet(canonical_generator(query.challenges).as_ref(), request)
+}
+
+/// Typed finite-list filter for in-process Rust frontends.
+///
+/// The exact full-search matcher is used, including blacksmith requirements
+/// and accessibility constraints.
+/// Matching seeds preserve input order.
+///
+/// # Errors
+///
+/// Returns a query validation error or [`FilterCallError::Panicked`] when
+/// canonical generation panics.
+pub fn production_filter_seeds(
+    query: &SearchQuery,
+    seeds: &[DungeonSeed],
+) -> Result<Vec<DungeonSeed>, FilterCallError> {
+    let generator = canonical_generator(query.challenges);
+    catch_unwind(AssertUnwindSafe(|| {
+        filter_explicit_seeds(generator.as_ref(), query, seeds)
+    }))
+    .map_err(|_| FilterCallError::Panicked)?
+    .map_err(FilterPacketError::Filter)
+    .map_err(FilterCallError::Packet)
+    .map(|worlds| worlds.into_iter().map(|world| world.seed).collect())
 }
 
 pub struct NativeSession {
@@ -376,7 +457,7 @@ mod tests {
     };
     use shpd_seedfinder_core::search::{SearchOptions, WorldGenerator};
     use shpd_seedfinder_core::seed::DungeonSeed;
-    use shpd_seedfinder_core::wire::{WireError, decode_scout_world};
+    use shpd_seedfinder_core::wire::{WireError, decode_scout_world, encode_filter_request};
 
     use super::*;
 
@@ -620,6 +701,62 @@ mod tests {
         let challenged = production_scout_world(seed, Challenges::new(0x68).unwrap()).unwrap();
         assert_eq!(challenged.seed, world.seed);
         assert_ne!(challenged, world);
+    }
+
+    #[test]
+    fn finite_filter_packet_preserves_seed_order() {
+        let seeds = [
+            DungeonSeed::new(9).unwrap(),
+            DungeonSeed::MIN,
+            DungeonSeed::new(4).unwrap(),
+        ];
+        let request = encode_filter_request(&query(), &seeds).unwrap();
+
+        let packet = filter_seed_packet(&MatchingGenerator, &request).unwrap();
+
+        assert_eq!(count(&packet), seeds.len());
+        let codes = seeds.map(DungeonSeed::to_code);
+        assert_eq!(&packet[7..18], codes[0].as_bytes());
+        assert_eq!(&packet[19..30], codes[1].as_bytes());
+        assert_eq!(&packet[31..42], codes[2].as_bytes());
+    }
+
+    #[test]
+    fn finite_filter_contains_generation_panics_and_rejects_bad_packets() {
+        let request = encode_filter_request(&query(), &[DungeonSeed::MIN]).unwrap();
+        assert_eq!(
+            protected_filter_seed_packet(&PanickingGenerator, &request),
+            Err(FilterCallError::Panicked)
+        );
+        assert_eq!(
+            filter_seed_packet(&MatchingGenerator, b"bad"),
+            Err(FilterPacketError::Request(WireError::Truncated))
+        );
+    }
+
+    #[test]
+    fn production_filter_matches_current_imp_reward_identity() {
+        let seed = DungeonSeed::from_code("AAA-AAA-AAF").unwrap();
+        let query = SearchQuery {
+            requirements: vec![Requirement {
+                kind: ItemKind::Ring,
+                item: Some(ItemId::RingSharpshooting),
+                tier: TierRequirement::Any,
+                upgrade: UpgradeRequirement::Exact(4),
+                effect: None,
+                source: None,
+                identity_group: None,
+                max_depth: None,
+                require_uncursed: false,
+            }],
+            max_depth: 24,
+            challenges: Challenges::NONE,
+            require_blacksmith: false,
+            exclude_blacksmith_rewards: false,
+            fast_mode: false,
+        };
+
+        assert_eq!(production_filter_seeds(&query, &[seed]), Ok(vec![seed]));
     }
 
     #[test]

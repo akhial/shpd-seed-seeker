@@ -8,6 +8,9 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Rect
 import androidx.activity.compose.PredictiveBackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Search
@@ -44,7 +47,9 @@ import dev.seedseeker.app.model.ScoutWorld
 import dev.seedseeker.app.model.SearchRequest
 import dev.seedseeker.app.model.SearchState
 import dev.seedseeker.app.model.SearchStatus
+import dev.seedseeker.app.model.SeedListCodec
 import dev.seedseeker.app.model.SeedResult
+import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -60,6 +65,7 @@ private const val CHALLENGES_KEY = "challenges_mask"
 
 private enum class Destination { FINDER, SCOUT, CHALLENGES, ABOUT }
 private data class SearchRun(val id: Long, val request: SearchRequest)
+private data class FilterRun(val id: Long, val request: SearchRequest, val seeds: List<String>)
 private data class ScoutRun(val id: Long, val seed: String, val challenges: Int)
 
 @Composable
@@ -106,7 +112,13 @@ fun SeedFinderApp(engine: NativeSeedFinder) {
     }
     var editingRequirement by remember { mutableStateOf<ItemRequirement?>(null) }
     var showRequirementSheet by remember { mutableStateOf(false) }
-    var results by remember { mutableStateOf(emptyList<SeedResult>()) }
+    var baseResults by remember { mutableStateOf(emptyList<SeedResult>()) }
+    var filteredResults by remember { mutableStateOf<List<SeedResult>?>(null) }
+    var seedResultQuery by remember { mutableStateOf("") }
+    var filterRun by remember { mutableStateOf<FilterRun?>(null) }
+    var nextFilterRunId by remember { mutableLongStateOf(1L) }
+    var isFiltering by remember { mutableStateOf(false) }
+    var explorerError by remember { mutableStateOf<String?>(null) }
     var searchStatus by remember { mutableStateOf<SearchStatus?>(null) }
     var searchSeedsPerSecond by remember { mutableStateOf(0.0) }
     var searchElapsedSeconds by remember { mutableLongStateOf(0L) }
@@ -122,6 +134,60 @@ fun SeedFinderApp(engine: NativeSeedFinder) {
     var isScouting by remember { mutableStateOf(false) }
     var scoutError by remember { mutableStateOf<String?>(null) }
 
+    val visibleResults = (filteredResults ?: baseResults).let { candidates ->
+        if (seedResultQuery.isEmpty()) candidates
+        else candidates.filter { SeedCode.matchesSearch(it.seed, seedResultQuery) }
+    }
+
+    val importSeedList = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null && !isSearching && !isFiltering) {
+            scope.launch {
+                try {
+                    val imported = withContext(Dispatchers.IO) {
+                        val input = context.contentResolver.openInputStream(uri)
+                            ?: throw IOException("Android could not open the selected seed list.")
+                        input.use { SeedListCodec.decode(it.readBytes()) }
+                    }
+                    baseResults = imported.map { SeedResult(it, matchedRequirements = null) }
+                    filteredResults = null
+                    seedResultQuery = ""
+                    filterRun = null
+                    run = null
+                    searchStatus = null
+                    searchSeedsPerSecond = 0.0
+                    searchElapsedSeconds = 0L
+                    searchError = null
+                    explorerError = null
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (failure: Exception) {
+                    explorerError = failure.message ?: "The selected seed list could not be imported."
+                }
+            }
+        }
+    }
+    val exportSeedList = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("text/plain"),
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                try {
+                    val packet = SeedListCodec.encode(visibleResults.map(SeedResult::seed))
+                    withContext(Dispatchers.IO) {
+                        val output = context.contentResolver.openOutputStream(uri, "wt")
+                            ?: throw IOException("Android could not create the seed list.")
+                        output.use { it.write(packet) }
+                    }
+                    explorerError = null
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (failure: Exception) {
+                    explorerError = failure.message ?: "The visible seed list could not be exported."
+                }
+            }
+        }
+    }
+
     PredictiveBackHandler(enabled = destination != Destination.FINDER) { progress ->
         progress.collect { }
         destination = when (destination) {
@@ -135,7 +201,11 @@ fun SeedFinderApp(engine: NativeSeedFinder) {
         val currentRun = run ?: return@LaunchedEffect
         isSearching = true
         searchError = null
-        results = emptyList()
+        explorerError = null
+        baseResults = emptyList()
+        filteredResults = null
+        seedResultQuery = ""
+        filterRun = null
         searchStatus = null
         searchSeedsPerSecond = 0.0
         searchElapsedSeconds = 0L
@@ -157,7 +227,7 @@ fun SeedFinderApp(engine: NativeSeedFinder) {
                     openedSession.poll(24) to openedSession.status()
                 }
                 if (batch.results.isNotEmpty()) {
-                    results = results + batch.results
+                    baseResults = baseResults + batch.results
                 }
                 val statusTime = System.nanoTime()
                 searchElapsedSeconds = (statusTime - searchStartedAt) / 1_000_000_000L
@@ -196,6 +266,23 @@ fun SeedFinderApp(engine: NativeSeedFinder) {
         }
     }
 
+    LaunchedEffect(filterRun?.id) {
+        val currentRun = filterRun ?: return@LaunchedEffect
+        isFiltering = true
+        explorerError = null
+        try {
+            filteredResults = withContext(Dispatchers.Default) {
+                engine.filterSeeds(currentRun.request, currentRun.seeds)
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Throwable) {
+            explorerError = failure.message ?: "The current results could not be filtered."
+        } finally {
+            isFiltering = false
+        }
+    }
+
     LaunchedEffect(scoutRun?.id) {
         val currentRun = scoutRun ?: return@LaunchedEffect
         isScouting = true
@@ -224,6 +311,22 @@ fun SeedFinderApp(engine: NativeSeedFinder) {
         }
     }
 
+    fun currentRequest() = SearchRequest(
+        requirements = requirements,
+        maximumDepth = maximumDepth,
+        challenges = challenges,
+        requireBlacksmith = requireBlacksmith,
+        excludeBlacksmithRewards = excludeBlacksmithRewards,
+        fastMode = fastMode,
+    )
+
+    fun clearExplorerFilter() {
+        filterRun = null
+        filteredResults = null
+        seedResultQuery = ""
+        explorerError = null
+    }
+
     val navBar: @Composable () -> Unit = {
         SeedSeekerNavBar(
             current = destination,
@@ -244,7 +347,12 @@ fun SeedFinderApp(engine: NativeSeedFinder) {
                 fastMode = fastMode,
                 challenges = challenges,
                 presets = BuiltInPresets.all + userPresets,
-                results = results,
+                results = visibleResults,
+                baseResultCount = baseResults.size,
+                seedResultQuery = seedResultQuery,
+                hasSemanticFilter = filteredResults != null,
+                isFiltering = isFiltering,
+                explorerError = explorerError,
                 status = searchStatus,
                 seedsPerSecond = searchSeedsPerSecond,
                 elapsedSeconds = searchElapsedSeconds,
@@ -266,6 +374,7 @@ fun SeedFinderApp(engine: NativeSeedFinder) {
                     fastMode = preset.query.fastMode
                     challenges = preset.query.challenges
                     preferences.edit().putInt(CHALLENGES_KEY, challenges).apply()
+                    clearExplorerFilter()
                 },
                 onSavePreset = { name ->
                     val cleanName = name.trim()
@@ -301,23 +410,30 @@ fun SeedFinderApp(engine: NativeSeedFinder) {
                 },
                 onRemove = { requirement ->
                     requirements = requirements.filterNot { it.key == requirement.key }
+                    clearExplorerFilter()
                 },
-                onMaximumDepthChange = { maximumDepth = it },
-                onRequireBlacksmithChange = { requireBlacksmith = it },
-                onExcludeBlacksmithRewardsChange = { excludeBlacksmithRewards = it },
-                onFastModeChange = { fastMode = it },
+                onMaximumDepthChange = {
+                    maximumDepth = it
+                    clearExplorerFilter()
+                },
+                onRequireBlacksmithChange = {
+                    requireBlacksmith = it
+                    clearExplorerFilter()
+                },
+                onExcludeBlacksmithRewardsChange = {
+                    excludeBlacksmithRewards = it
+                    clearExplorerFilter()
+                },
+                onFastModeChange = {
+                    fastMode = it
+                    clearExplorerFilter()
+                },
                 onSearch = {
-                    if (requirements.isNotEmpty()) {
+                    if (requirements.isNotEmpty() && !isFiltering) {
+                        clearExplorerFilter()
                         run = SearchRun(
                             nextRunId++,
-                            SearchRequest(
-                                requirements = requirements,
-                                maximumDepth = maximumDepth,
-                                challenges = challenges,
-                                requireBlacksmith = requireBlacksmith,
-                                excludeBlacksmithRewards = excludeBlacksmithRewards,
-                                fastMode = fastMode,
-                            ),
+                            currentRequest(),
                         )
                     }
                 },
@@ -327,6 +443,19 @@ fun SeedFinderApp(engine: NativeSeedFinder) {
                         scope.launch(Dispatchers.Default) { session.cancel() }
                     }
                 },
+                onSeedResultQueryChange = { seedResultQuery = SeedCode.formatInput(it) },
+                onFilterSeeds = {
+                    if (!isSearching && !isFiltering && requirements.isNotEmpty() && baseResults.isNotEmpty()) {
+                        filterRun = FilterRun(
+                            id = nextFilterRunId++,
+                            request = currentRequest(),
+                            seeds = baseResults.map(SeedResult::seed),
+                        )
+                    }
+                },
+                onClearFilter = ::clearExplorerFilter,
+                onImportSeeds = { importSeedList.launch(arrayOf("text/plain", "text/*")) },
+                onExportSeeds = { exportSeedList.launch("seed-seeker-seeds.txt") },
                 onScoutSeed = ::scoutSeed,
                 bottomBar = navBar,
             )
@@ -363,7 +492,7 @@ fun SeedFinderApp(engine: NativeSeedFinder) {
 
             Destination.CHALLENGES -> ChallengesScreen(
                 challenges = challenges,
-                enabled = !isSearching && !isScouting,
+                enabled = !isSearching && !isScouting && !isFiltering,
                 onChallengeChange = { challenge, checked ->
                     val updatedChallenges = if (checked) {
                         challenges or challenge.bit
@@ -372,6 +501,7 @@ fun SeedFinderApp(engine: NativeSeedFinder) {
                     }
                     challenges = updatedChallenges
                     scoutResult = null
+                    clearExplorerFilter()
                     preferences.edit().putInt(CHALLENGES_KEY, updatedChallenges).apply()
                 },
                 onBack = { destination = challengesReturnDestination },
@@ -422,6 +552,7 @@ fun SeedFinderApp(engine: NativeSeedFinder) {
                             }
                         }
                     }
+                    clearExplorerFilter()
                     showRequirementSheet = false
                 },
             )

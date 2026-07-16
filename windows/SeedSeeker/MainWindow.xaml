@@ -22,7 +22,7 @@
       <Grid>
         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
         <TextBlock Text="Query" Style="{StaticResource SubtitleTextBlockStyle}" Margin="20,2,20,10"/>
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+        <ScrollViewer x:Name="QueryEditor" Grid.Row="1" VerticalScrollBarVisibility="Auto">
           <StackPanel Padding="20,0,20,20">
             <TextBlock Text="Presets" Style="{StaticResource SectionHeader}" Margin="1,2,0,8"/>
             <StackPanel Spacing="6">
@@ -149,15 +149,28 @@
 
         <!-- Results -->
         <Grid Padding="24,18,24,0">
-          <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition/></Grid.RowDefinitions>
+          <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition/></Grid.RowDefinitions>
           <TextBlock Text="Results" Style="{StaticResource SubtitleTextBlockStyle}"/>
-          <TextBlock x:Name="SearchStatus" Grid.Row="1" Text="Add requirements, then press Start Search." Style="{StaticResource Caption}" MinHeight="32" Margin="0,10,0,10"/>
-          <Grid Grid.Row="2" Padding="12,0,12,8" BorderThickness="0,0,0,1" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
+          <TextBlock x:Name="SearchStatus" Grid.Row="1" Text="Add requirements, then press Start Search." Style="{StaticResource Caption}" MinHeight="32" Margin="0,10,0,8"/>
+          <StackPanel Grid.Row="2" Spacing="6" Margin="0,0,0,10">
+            <TextBox x:Name="SeedSearch" PlaceholderText="Search seed codes" TextChanged="SeedSearch_TextChanged">
+              <TextBox.Header><TextBlock Text="Seed explorer" Style="{StaticResource Caption}"/></TextBox.Header>
+            </TextBox>
+            <Grid ColumnSpacing="6">
+              <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
+              <Button x:Name="ImportSeedsButton" Content="Import" HorizontalAlignment="Stretch" Click="ImportSeeds_Click" ToolTipService.ToolTip="Replace the seed list from a text file"/>
+              <Button x:Name="ExportSeedsButton" Grid.Column="1" Content="Export" HorizontalAlignment="Stretch" Click="ExportSeeds_Click" ToolTipService.ToolTip="Export the visible seeds"/>
+              <Button x:Name="FilterSeedsButton" Grid.Column="2" Content="Filter" HorizontalAlignment="Stretch" Click="FilterSeeds_Click" ToolTipService.ToolTip="Filter the original list with the current query"/>
+              <Button x:Name="ClearSeedFilterButton" Grid.Column="3" Content="Clear" HorizontalAlignment="Stretch" Click="ClearSeedFilter_Click" ToolTipService.ToolTip="Clear the item filter"/>
+            </Grid>
+            <TextBlock x:Name="ExplorerStatus" Text="No seeds loaded." Style="{StaticResource Caption}"/>
+          </StackPanel>
+          <Grid Grid.Row="3" Padding="12,0,12,8" BorderThickness="0,0,0,1" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
             <Grid.ColumnDefinitions><ColumnDefinition Width="40"/><ColumnDefinition/></Grid.ColumnDefinitions>
             <TextBlock Text="#" Style="{StaticResource Caption}"/>
             <TextBlock Grid.Column="1" Text="Seed" Style="{StaticResource Caption}"/>
           </Grid>
-          <ListView x:Name="ResultsList" Grid.Row="3" Margin="-12,4,-12,0" Padding="12,0,12,16"
+          <ListView x:Name="ResultsList" Grid.Row="4" Margin="-12,4,-12,0" Padding="12,0,12,16"
                     SelectionChanged="ResultsList_SelectionChanged" DoubleTapped="ResultsList_DoubleTapped">
             <ListView.ItemContainerStyle>
               <Style TargetType="ListViewItem">

@@ -4,7 +4,7 @@ import Observation
 @MainActor @Observable
 public final class SearchController {
     public private(set) var state: SearchState?
-    public private(set) var results: [SeedResult] = []
+    public private(set) var baseResults: [SeedResult] = []
     public private(set) var scannedSeeds: Int64 = 0
     public private(set) var totalSeeds: Int64 = 0
     public private(set) var matchProbability: Double?
@@ -13,26 +13,47 @@ public final class SearchController {
     public private(set) var errorCode: Int64 = 0
     public private(set) var message: String?
     public private(set) var isRunning = false
+    public private(set) var isFiltering = false
+    public private(set) var filterMessage: String?
+    public private(set) var isImportedList = false
+    public var seedSearchText = ""
     public var selectedSeed: String?
 
     private let engine: any SeedFinderEngine
+    private var semanticResults: [SeedResult]?
     private var session: (any SeedFinderSearchSession)?
     private var task: Task<Void, Never>?
+    private var filterTask: Task<Void, Never>?
+    private var filterGeneration = 0
 
     public init(engine: any SeedFinderEngine = ProductionSeedFinderEngine()) { self.engine = engine }
     public var timeToSeed: TimeInterval? {
         guard let matchProbability, seedsPerSecond > 0 else { return nil }
         return 1 / matchProbability / seedsPerSecond
     }
-    public var reachedResultCap: Bool { results.count >= 1_024 }
+    public var results: [SeedResult] {
+        let source = semanticResults ?? baseResults
+        let search = normalizedSeedSearch(seedSearchText)
+        guard !search.isEmpty else { return source }
+        return source.filter { normalizedSeedSearch($0.seed).contains(search) }
+    }
+    public var reachedResultCap: Bool { !isImportedList && baseResults.count >= 1_024 }
+    public var hasSemanticFilter: Bool { semanticResults != nil }
+    public var hasActiveFilter: Bool {
+        hasSemanticFilter || !normalizedSeedSearch(seedSearchText).isEmpty
+    }
     /// The engine completes an unsatisfiable plan before scanning any seed,
     /// which would otherwise be indistinguishable from a malfunction.
     public var isImpossibleQuery: Bool {
-        state == .completed && scannedSeeds == 0 && results.isEmpty
+        state == .completed && scannedSeeds == 0 && baseResults.isEmpty
     }
 
     public func start(_ request: SearchRequest) {
-        task?.cancel(); results = []; scannedSeeds = 0; totalSeeds = 0; matchProbability = nil; seedsPerSecond = 0; elapsed = 0
+        guard !isFiltering else { return }
+        cancelFilter()
+        task?.cancel(); baseResults = []; semanticResults = nil; seedSearchText = ""
+        isImportedList = false; selectedSeed = nil
+        scannedSeeds = 0; totalSeeds = 0; matchProbability = nil; seedsPerSecond = 0; elapsed = 0
         errorCode = 0; message = nil; state = .running; isRunning = true
         task = Task { [weak self] in
             guard let self else { return }
@@ -44,7 +65,7 @@ public final class SearchController {
                 var previousTime = ContinuousClock.now
                 while !Task.isCancelled {
                     let batch = try await session.poll(1_024)
-                    self.results.append(contentsOf: batch)
+                    self.baseResults.append(contentsOf: batch)
                     let status = try await session.status()
                     let now = ContinuousClock.now
                     let totalDuration = searchStart.duration(to: now).components
@@ -61,7 +82,7 @@ public final class SearchController {
                     self.errorCode = status.errorCode; self.state = status.state
                     if status.state != .running {
                         let finalBatch = try await session.poll(1_024)
-                        self.results.append(contentsOf: finalBatch)
+                        self.baseResults.append(contentsOf: finalBatch)
                         break
                     }
                     try await Task.sleep(for: .milliseconds(150))
@@ -77,10 +98,85 @@ public final class SearchController {
         }
     }
 
+    public func filterSeeds(matching request: SearchRequest) {
+        guard !isRunning, !isFiltering, !baseResults.isEmpty else { return }
+        filterGeneration += 1
+        let generation = filterGeneration
+        let snapshot = baseResults
+        isFiltering = true
+        filterMessage = nil
+        filterTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                let matches = try await engine.filterSeeds(snapshot.map(\.seed), matching: request)
+                try Task.checkCancellation()
+                guard generation == filterGeneration else { return }
+                let matchingSeeds = Set(matches.map(\.seed))
+                semanticResults = snapshot.compactMap { result in
+                    matchingSeeds.contains(result.seed)
+                        ? SeedResult(seed: result.seed, matchedRequirements: request.requirements.count)
+                        : nil
+                }
+                if let selectedSeed, !matchingSeeds.contains(selectedSeed) { self.selectedSeed = nil }
+            } catch is CancellationError {
+                // A new search or imported list superseded this filter.
+            } catch {
+                guard generation == filterGeneration else { return }
+                filterMessage = error.localizedDescription
+            }
+            if generation == filterGeneration {
+                isFiltering = false
+                filterTask = nil
+            }
+        }
+    }
+
+    public func clearFilter() {
+        guard !isFiltering else { return }
+        cancelFilter()
+        semanticResults = nil
+        seedSearchText = ""
+        filterMessage = nil
+    }
+
+    public func replaceWithImportedSeeds(_ seeds: [String]) throws {
+        guard !isRunning, !isFiltering else { return }
+        let normalized = try SeedListCodec.decode(SeedListCodec.encode(seeds))
+        cancelFilter()
+        task?.cancel()
+        baseResults = normalized.map { SeedResult(seed: $0, matchedRequirements: 0) }
+        semanticResults = nil
+        seedSearchText = ""
+        selectedSeed = nil
+        state = nil
+        scannedSeeds = 0
+        totalSeeds = 0
+        matchProbability = nil
+        seedsPerSecond = 0
+        elapsed = 0
+        errorCode = 0
+        message = nil
+        filterMessage = nil
+        isImportedList = true
+    }
+
     public func cancel() {
         guard isRunning else { return }
         Task { await session?.cancel() }
     }
+
+    private func cancelFilter() {
+        filterGeneration += 1
+        filterTask?.cancel()
+        filterTask = nil
+        isFiltering = false
+        filterMessage = nil
+    }
+}
+
+private func normalizedSeedSearch(_ value: String) -> String {
+    value.filter { $0 != "-" && !$0.isWhitespace }
+        .uppercased(with: Locale(identifier: "en_US_POSIX"))
 }
 
 public enum NumberFormat {

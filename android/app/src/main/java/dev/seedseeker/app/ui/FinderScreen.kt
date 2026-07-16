@@ -26,6 +26,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -79,6 +80,11 @@ fun FinderScreen(
     challenges: Int,
     presets: List<QueryPreset>,
     results: List<SeedResult>,
+    baseResultCount: Int,
+    seedResultQuery: String,
+    hasSemanticFilter: Boolean,
+    isFiltering: Boolean,
+    explorerError: String?,
     status: SearchStatus?,
     seedsPerSecond: Double,
     elapsedSeconds: Long,
@@ -98,6 +104,11 @@ fun FinderScreen(
     onFastModeChange: (Boolean) -> Unit,
     onSearch: () -> Unit,
     onCancel: () -> Unit,
+    onSeedResultQueryChange: (String) -> Unit,
+    onFilterSeeds: () -> Unit,
+    onClearFilter: () -> Unit,
+    onImportSeeds: () -> Unit,
+    onExportSeeds: () -> Unit,
     onScoutSeed: (String) -> Unit,
     bottomBar: @Composable () -> Unit,
 ) {
@@ -108,7 +119,7 @@ fun FinderScreen(
             TopAppBar(
                 title = { Text("Seed Seeker") },
                 actions = {
-                    TextButton(onClick = { showPresets = true }, enabled = !isSearching) {
+                    TextButton(onClick = { showPresets = true }, enabled = !isSearching && !isFiltering) {
                         Text("Presets")
                     }
                     IconButton(onClick = onChallenges) {
@@ -131,6 +142,7 @@ fun FinderScreen(
                     seedsPerSecond = seedsPerSecond,
                     elapsedSeconds = elapsedSeconds,
                     isSearching = isSearching,
+                    searchEnabled = !isFiltering,
                     onSearch = onSearch,
                     onCancel = onCancel,
                 )
@@ -160,6 +172,7 @@ fun FinderScreen(
                     results = results,
                     status = status,
                     isSearching = isSearching,
+                    isFiltering = isFiltering,
                     error = error,
                     onAdd = onAdd,
                     onEdit = onEdit,
@@ -178,13 +191,33 @@ fun FinderScreen(
                     contentPadding = PaddingValues(start = 16.dp, top = 10.dp, end = 16.dp, bottom = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
+                    item {
+                        ResultExplorerControls(
+                            seedQuery = seedResultQuery,
+                            visibleCount = results.size,
+                            baseCount = baseResultCount,
+                            requirementCount = requirements.size,
+                            hasSemanticFilter = hasSemanticFilter,
+                            isSearching = isSearching,
+                            isFiltering = isFiltering,
+                            error = explorerError,
+                            onSeedQueryChange = onSeedResultQueryChange,
+                            onFilter = onFilterSeeds,
+                            onClear = onClearFilter,
+                            onImport = onImportSeeds,
+                            onExport = onExportSeeds,
+                            modifier = Modifier.padding(bottom = 4.dp),
+                        )
+                    }
                     if (results.isEmpty()) {
                         item {
                             Text(
                                 when {
+                                    isFiltering -> "Filtering $baseResultCount seeds…"
+                                    baseResultCount > 0 -> "0 seeds match the active explorer filters."
                                     isSearching -> "0 matches yet."
                                     status?.state == SearchState.COMPLETED -> "0 matches."
-                                    else -> "No results — run a search."
+                                    else -> "No results — run a search or import a list."
                                 },
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -197,10 +230,10 @@ fun FinderScreen(
                         items(results, key = { it.seed }) { result ->
                             ResultRow(result = result, onScout = { onScoutSeed(result.seed) })
                         }
-                        if (results.size >= 1_024) {
+                        if (baseResultCount >= 1_024) {
                             item {
                                 Text(
-                                    "Result limit reached (1,024 seeds).",
+                                    "Seed list limit reached (1,024 seeds).",
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(top = 4.dp),
@@ -238,6 +271,7 @@ private fun QueryHeader(
     results: List<SeedResult>,
     status: SearchStatus?,
     isSearching: Boolean,
+    isFiltering: Boolean,
     error: String?,
     onAdd: () -> Unit,
     onEdit: (ItemRequirement) -> Unit,
@@ -255,7 +289,7 @@ private fun QueryHeader(
                 style = MaterialTheme.typography.titleSmall,
                 modifier = Modifier.weight(1f),
             )
-            TextButton(onClick = onAdd, enabled = !isSearching) {
+            TextButton(onClick = onAdd, enabled = !isSearching && !isFiltering) {
                 Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(4.dp))
                 Text("Add")
@@ -276,7 +310,7 @@ private fun QueryHeader(
                 items(requirements, key = { it.key }) { requirement ->
                     RequirementRow(
                         requirement = requirement,
-                        enabled = !isSearching,
+                        enabled = !isSearching && !isFiltering,
                         onEdit = { onEdit(requirement) },
                         onRemove = { onRemove(requirement) },
                     )
@@ -290,7 +324,7 @@ private fun QueryHeader(
             excludeBlacksmithRewards = excludeBlacksmithRewards,
             fastMode = fastMode,
             challenges = challenges,
-            enabled = !isSearching,
+            enabled = !isSearching && !isFiltering,
             onMaximumDepthChange = onMaximumDepthChange,
             onRequireBlacksmithChange = onRequireBlacksmithChange,
             onExcludeBlacksmithRewardsChange = onExcludeBlacksmithRewardsChange,
@@ -299,6 +333,7 @@ private fun QueryHeader(
         )
         Text(
             when {
+                isFiltering -> "Results — filtering…"
                 isSearching -> "Results — ${results.size} · live"
                 status?.state == SearchState.COMPLETED -> "Results — ${results.size} found"
                 status?.state == SearchState.CANCELLED -> "Results — ${results.size} · cancelled"
@@ -479,6 +514,123 @@ private fun ScopeSection(
 }
 
 @Composable
+private fun ResultExplorerControls(
+    seedQuery: String,
+    visibleCount: Int,
+    baseCount: Int,
+    requirementCount: Int,
+    hasSemanticFilter: Boolean,
+    isSearching: Boolean,
+    isFiltering: Boolean,
+    error: String?,
+    onSeedQueryChange: (String) -> Unit,
+    onFilter: () -> Unit,
+    onClear: () -> Unit,
+    onImport: () -> Unit,
+    onExport: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+    ) {
+        Column(Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Seed explorer",
+                    style = MaterialTheme.typography.titleSmall,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    if (hasSemanticFilter || seedQuery.isNotEmpty()) {
+                        "$visibleCount of $baseCount"
+                    } else {
+                        "$baseCount seeds"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+                value = seedQuery,
+                onValueChange = onSeedQueryChange,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !isSearching && !isFiltering,
+                singleLine = true,
+                label = { Text("Search seed codes") },
+                placeholder = { Text("ABC or ABC-DEF") },
+                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                trailingIcon = if (seedQuery.isNotEmpty()) {
+                    {
+                        IconButton(onClick = { onSeedQueryChange("") }) {
+                            Icon(Icons.Filled.Close, contentDescription = "Clear seed search")
+                        }
+                    }
+                } else {
+                    null
+                },
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Button(
+                    onClick = onFilter,
+                    enabled = baseCount > 0 && requirementCount > 0 && !isSearching && !isFiltering,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(if (isFiltering) "Filtering…" else "Filter seeds")
+                }
+                OutlinedButton(
+                    onClick = onClear,
+                    enabled = hasSemanticFilter || seedQuery.isNotEmpty(),
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("Clear filter")
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedButton(
+                    onClick = onImport,
+                    enabled = !isSearching && !isFiltering,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("Import list")
+                }
+                OutlinedButton(
+                    onClick = onExport,
+                    enabled = visibleCount > 0,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("Export visible")
+                }
+            }
+            Text(
+                "Item filters use the current requirements and search scope.",
+                modifier = Modifier.padding(top = 8.dp),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            error?.let {
+                Text(
+                    it,
+                    modifier = Modifier.padding(top = 8.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+        }
+    }
+}
+
+@Composable
 private fun ResultRow(result: SeedResult, onScout: () -> Unit) {
     val clipboard = LocalClipboardManager.current
     Surface(
@@ -520,6 +672,7 @@ private fun SearchActionBar(
     seedsPerSecond: Double,
     elapsedSeconds: Long,
     isSearching: Boolean,
+    searchEnabled: Boolean,
     onSearch: () -> Unit,
     onCancel: () -> Unit,
 ) {
@@ -552,7 +705,7 @@ private fun SearchActionBar(
             } else {
                 Button(
                     onClick = onSearch,
-                    enabled = requirementCount > 0,
+                    enabled = requirementCount > 0 && searchEnabled,
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(48.dp),

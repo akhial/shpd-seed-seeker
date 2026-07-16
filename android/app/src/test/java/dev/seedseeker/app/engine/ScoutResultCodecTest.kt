@@ -164,6 +164,9 @@ class ScoutResultCodecTest {
         assertEquals("ABC-DEF-GHI", SeedCode.formatInput("ab c-def_gHi!!!"))
         assertEquals("ABC-DEF-GHI", SeedCode.formatInput("abcdefghijkl"))
         assertTrue(SeedCode.isCanonical("ABC-DEF-GHI"))
+        assertTrue(SeedCode.matchesSearch("ABC-DEF-GHI", "abcdef"))
+        assertTrue(SeedCode.matchesSearch("ABC-DEF-GHI", "c-de"))
+        assertTrue(SeedCode.matchesSearch("ABC-DEF-GHI", " G H I "))
 
         val bindings = ScoutBindings(scoutPacket())
         val world = JniNativeSeedFinder(bindings).scoutSeed("AAA-AAA-AAA")
@@ -245,6 +248,7 @@ class ScoutResultCodecTest {
         }
 
         override fun startSearch(request: ByteArray): Long = error("not used")
+        override fun filterSeeds(request: ByteArray): ByteArray = error("not used")
         override fun poll(handle: Long, maxResults: Int): ByteArray = error("not used")
         override fun status(handle: Long): LongArray = error("not used")
         override fun cancel(handle: Long) = error("not used")

@@ -161,7 +161,8 @@ enum class Challenge(
 
 data class SeedResult(
     val seed: String,
-    val matchedRequirements: Int,
+    /** Null for imported seeds whose originating query is unknown. */
+    val matchedRequirements: Int?,
 )
 
 data class ScoutWorld(

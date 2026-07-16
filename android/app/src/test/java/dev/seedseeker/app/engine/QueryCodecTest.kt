@@ -15,6 +15,43 @@ import org.junit.Test
 
 class QueryCodecTest {
     @Test
+    fun seedFilterPacketNestsSsf7AndUsesFixedWidthCanonicalSeeds() {
+        val request = SearchRequest(
+            listOf(ItemRequirement(1, ItemCatalog.armor.first { it.id == "plate_armor" }, 2)),
+        )
+        val query = QueryCodec.encode(request)
+        val packet = FilterRequestCodec.encode(
+            request,
+            listOf("AAA-AAA-AAA", "ZZZ-ZZZ-ZZZ"),
+        )
+
+        assertArrayEquals("SFF1".encodeToByteArray(), packet.copyOfRange(0, 4))
+        assertEquals(
+            query.size,
+            ((packet[4].toInt() and 0xff) shl 8) or (packet[5].toInt() and 0xff),
+        )
+        assertArrayEquals(query, packet.copyOfRange(6, 6 + query.size))
+        assertArrayEquals(
+            byteArrayOf(0, 2) + "AAA-AAA-AAAZZZ-ZZZ-ZZZ".encodeToByteArray(),
+            packet.copyOfRange(6 + query.size, packet.size),
+        )
+    }
+
+    @Test
+    fun seedFilterPacketRejectsMalformedSeedsAndMoreThanTheNativeLimit() {
+        val request = SearchRequest(listOf(ItemRequirement(1, ItemCatalog.armor.first(), 1)))
+        assertThrows(IllegalArgumentException::class.java) {
+            FilterRequestCodec.encode(request, emptyList())
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            FilterRequestCodec.encode(request, listOf("aaa-aaa-aaa"))
+        }
+        assertThrows(IllegalArgumentException::class.java) {
+            FilterRequestCodec.encode(request, List(1_025) { "AAA-AAA-AAA" })
+        }
+    }
+
+    @Test
     fun tierPredicateUsesSsf7AndEncodesExactTierWithZeroChallengeMask() {
         val requirement = ItemRequirement(
             key = 1,

@@ -135,6 +135,58 @@ public static class BuiltInPresets
 }
 
 public sealed record SeedResult(string Seed, int Number);
+
+public static class SeedListCodec
+{
+    public const int MaximumSeeds = 1024;
+
+    public static IReadOnlyList<string> Parse(string contents)
+    {
+        var seeds = new List<string>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var lines = contents.Split('\n');
+        for (var index = 0; index < lines.Length; index++)
+        {
+            var lineNumber = index + 1;
+            var original = lines[index];
+            var lineFeedTerminated = index < lines.Length - 1;
+            if (lineFeedTerminated && original.EndsWith('\r')) original = original[..^1];
+            if (original.Contains('\r'))
+                throw new FormatException($"Line {lineNumber} contains a bare carriage return; use LF or CRLF line endings.");
+            var line = lineNumber == 1 && original.StartsWith('\uFEFF') ? original[1..] : original;
+            if (string.IsNullOrWhiteSpace(line)) continue;
+            if (!IsCanonicalShape(line))
+                throw new FormatException($"Line {lineNumber} is not a canonical seed code (expected AAA-AAA-AAA).");
+            var normalized = line.ToUpperInvariant();
+            if (!seen.Add(normalized)) continue;
+            if (seeds.Count == MaximumSeeds)
+                throw new FormatException($"Line {lineNumber} exceeds the limit of {MaximumSeeds:N0} unique seeds.");
+            seeds.Add(normalized);
+        }
+        return seeds;
+    }
+
+    public static string Format(IEnumerable<string> seeds)
+    {
+        var values = seeds.ToArray();
+        return values.Length == 0 ? "" : string.Join('\n', values) + "\n";
+    }
+
+    public static bool MatchesSearch(string seed, string search)
+    {
+        var needle = NormalizeSearch(search);
+        return needle.Length == 0 || NormalizeSearch(seed).Contains(needle, StringComparison.Ordinal);
+    }
+
+    private static bool IsCanonicalShape(string value) => value.Length == 11
+        && value[3] == '-' && value[7] == '-'
+        && value.Select((character, index) => index is 3 or 7 || character is >= 'A' and <= 'Z' || character is >= 'a' and <= 'z').All(x => x);
+
+    private static string NormalizeSearch(string value) => new(value
+        .Where(character => character != '-' && !char.IsWhiteSpace(character))
+        .Select(char.ToUpperInvariant).ToArray());
+}
+
 public sealed record ScoutItem(CatalogItem Item, int Depth, int Upgrade, string? Effect, bool Cursed,
     ScoutItemSource Source, byte AccessibilityTag, int AccessibilityGroup, ulong AccessibilityValue);
 public sealed record ScoutWorld(string Seed, IReadOnlyList<ScoutItem> Items);

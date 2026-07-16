@@ -1,6 +1,7 @@
 import AppKit
 import SeedSeekerKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 @main
 struct SeedSeekerApp: App {
@@ -8,6 +9,24 @@ struct SeedSeekerApp: App {
         WindowGroup("Seed Seeker") { ContentView() }
             .defaultSize(width: 1_180, height: 720)
         Settings { ChallengesSettingsView() }
+    }
+}
+
+private struct SeedListDocument: FileDocument {
+    static var readableContentTypes: [UTType] { [.plainText] }
+    var seeds: [String]
+
+    init(seeds: [String]) { self.seeds = seeds }
+
+    init(configuration: ReadConfiguration) throws {
+        guard let data = configuration.file.regularFileContents else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        seeds = try SeedListCodec.decode(data)
+    }
+
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        FileWrapper(regularFileWithContents: try SeedListCodec.encode(seeds))
     }
 }
 
@@ -39,7 +58,9 @@ private struct ContentView: View {
                           controller: controller)
                     .navigationSplitViewColumnWidth(min: 300, ideal: 330, max: 380)
             } content: {
-                ResultsView(controller: controller) { seed in scout.scout(seed, challenges: challenges) }
+                ResultsView(controller: controller, filterRequest: currentSearchRequest) { seed in
+                    scout.scout(seed, challenges: challenges)
+                }
                     .navigationSplitViewColumnWidth(min: 340, ideal: 420)
             } detail: {
                 SeedDetailView(model: scout, requirements: requirements, maximumDepth: maximumDepth,
@@ -111,6 +132,13 @@ private struct ContentView: View {
     private func deletePreset(_ preset: QueryPreset) {
         userPresets.removeAll { $0.id == preset.id }
         savedPresetsJSON = PresetPersistence.encode(userPresets) ?? ""
+    }
+
+    private var currentSearchRequest: SearchRequest? {
+        try? SearchRequest(requirements: requirements, maximumDepth: maximumDepth,
+                           requireBlacksmith: requireBlacksmith,
+                           excludeBlacksmithRewards: excludeBlacksmithRewards,
+                           fastMode: fastMode, challenges: challenges)
     }
 }
 
@@ -284,7 +312,8 @@ private struct QueryView: View {
                       systemImage: controller.isRunning ? "stop.fill" : "play.fill")
                     .frame(maxWidth: .infinity).padding(.vertical, 5)
             }.buttonStyle(.borderedProminent).tint(controller.isRunning ? .red : .accentColor)
-                .disabled(requirements.isEmpty).keyboardShortcut(.return, modifiers: .command)
+                .disabled(requirements.isEmpty || controller.isFiltering)
+                .keyboardShortcut(.return, modifiers: .command)
                 .padding()
         }
         .navigationTitle("Query")
@@ -575,13 +604,19 @@ private struct RequirementEditor: View {
 // MARK: - Results
 
 private struct ResultsView: View {
-    let controller: SearchController
+    @Bindable var controller: SearchController
+    let filterRequest: SearchRequest?
     let scout: (String) -> Void
+    @State private var showingImporter = false
+    @State private var showingExporter = false
+    @State private var exportDocument = SeedListDocument(seeds: [])
+    @State private var fileError: String?
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             status.padding([.horizontal, .top])
             if controller.reachedResultCap { Text("Result limit reached (1,024 seeds).").font(.caption).foregroundStyle(.secondary).padding(.horizontal) }
-            Table(controller.results, selection: Bindable(controller).selectedSeed) {
+            Table(controller.results, selection: $controller.selectedSeed) {
                 TableColumn("#") { result in Text("\((controller.results.firstIndex(of: result) ?? 0) + 1)").foregroundStyle(.secondary) }.width(45)
                 TableColumn("Seed") { result in
                     Text(result.seed).font(.system(.body, design: .monospaced))
@@ -590,11 +625,65 @@ private struct ResultsView: View {
             }
             Button("Copy Selected") { if let seed = controller.selectedSeed { copy(seed) } }
                 .keyboardShortcut("c", modifiers: .command).hidden()
-        }.navigationTitle("Results")
+        }
+        .navigationTitle("Seeds")
+        .searchable(text: $controller.seedSearchText, placement: .toolbar, prompt: "Search seed codes")
+        .toolbar {
+            ToolbarItemGroup {
+                Button("Import…", systemImage: "square.and.arrow.down") { showingImporter = true }
+                    .disabled(controller.isRunning || controller.isFiltering)
+                Button("Export…", systemImage: "square.and.arrow.up") {
+                    exportDocument = SeedListDocument(seeds: controller.results.map(\.seed))
+                    showingExporter = true
+                }
+                .disabled(controller.results.isEmpty)
+                Button("Filter Seeds…", systemImage: "line.3.horizontal.decrease.circle") {
+                    if let filterRequest { controller.filterSeeds(matching: filterRequest) }
+                }
+                .disabled(filterRequest == nil || controller.baseResults.isEmpty ||
+                          controller.isRunning || controller.isFiltering)
+                .help("Apply the current query to the existing seed list")
+                if controller.hasActiveFilter {
+                    Button("Clear Filter", systemImage: "line.3.horizontal.decrease.circle.fill") {
+                        controller.clearFilter()
+                    }
+                    .disabled(controller.isFiltering)
+                }
+            }
+        }
+        .fileImporter(isPresented: $showingImporter, allowedContentTypes: [.plainText]) { result in
+            do {
+                let url = try result.get()
+                let accessing = url.startAccessingSecurityScopedResource()
+                defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+                let seeds = try SeedListCodec.decode(Data(contentsOf: url))
+                try controller.replaceWithImportedSeeds(seeds)
+            } catch {
+                fileError = error.localizedDescription
+            }
+        }
+        .fileExporter(isPresented: $showingExporter, document: exportDocument,
+                      contentType: .plainText, defaultFilename: "seed-seeker-seeds") { result in
+            if case .failure(let error) = result { fileError = error.localizedDescription }
+        }
+        .alert("Seed List Error", isPresented: Binding(
+            get: { fileError != nil },
+            set: { if !$0 { fileError = nil } }
+        )) {
+            Button("OK") { fileError = nil }
+        } message: {
+            Text(fileError ?? "The seed list could not be read or written.")
+        }
     }
     @ViewBuilder private var status: some View {
-        if controller.state == nil { Text("Add requirements, then press Start Search.").foregroundStyle(.secondary) }
-        else if controller.isRunning {
+        if controller.isFiltering {
+            HStack(spacing: 8) {
+                ProgressView().controlSize(.small)
+                Text("Filtering \(controller.baseResults.count) seeds…")
+            }.foregroundStyle(.secondary)
+        } else if let filterMessage = controller.filterMessage {
+            Text(filterMessage).font(.caption).foregroundStyle(.red)
+        } else if controller.isRunning {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Seed match probability: \(NumberFormat.probabilityPercent(controller.matchProbability)) " +
                      "TTS @ \(NumberFormat.seedRate(controller.seedsPerSecond)) seeds/s: " +
@@ -603,7 +692,14 @@ private struct ResultsView: View {
                 Text("Time elapsed: \(NumberFormat.duration(controller.elapsed))")
                     .font(.caption2).foregroundStyle(.tertiary)
             }
-        } else if controller.isImpossibleQuery {
+        } else if controller.hasActiveFilter {
+            Text("\(controller.results.count) of \(controller.baseResults.count) seeds shown")
+                .font(.caption).foregroundStyle(.secondary)
+        } else if controller.isImportedList {
+            Text("\(controller.baseResults.count) imported seed\(controller.baseResults.count == 1 ? "" : "s")")
+                .font(.caption).foregroundStyle(.secondary)
+        } else if controller.state == nil { Text("Add requirements, then press Start Search.").foregroundStyle(.secondary) }
+        else if controller.isImpossibleQuery {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Impossible query").font(.caption.bold())
                     .padding(.horizontal, 10).padding(.vertical, 4)
