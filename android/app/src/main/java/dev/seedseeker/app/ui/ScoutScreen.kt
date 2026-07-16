@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -144,7 +145,12 @@ fun ScoutScreen(
                                     .padding(24.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally,
                             ) {
-                                CompassMark(Modifier.size(44.dp))
+                                Icon(
+                                    Icons.Outlined.Place,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(44.dp),
+                                    tint = MaterialTheme.colorScheme.primary,
+                                )
                                 Spacer(Modifier.height(14.dp))
                                 Text(
                                     "Enter a seed or tap a search result to list its items through floor 24.",
@@ -239,13 +245,6 @@ private fun SeedInputCard(
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text("Seed") },
                 placeholder = { Text("ABC-DEF-GHI") },
-                supportingText = if (seedIsReady) {
-                    null
-                } else {
-                    {
-                        Text("Type or paste nine letters; hyphens are added automatically.")
-                    }
-                },
                 singleLine = true,
                 shape = MaterialTheme.shapes.medium,
                 textStyle = MaterialTheme.typography.titleLarge.copy(
