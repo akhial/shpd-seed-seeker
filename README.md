@@ -25,8 +25,6 @@ written in Rust — with native apps for Android, Linux, macOS, and Windows.
 - 🍎 **Native macOS app** SwiftUI, Apple Silicon
 - 🪟 **Native Windows app** WinUI 3, x64 and ARM64 using Fluent Design 2
 
-Seeds use the `XXX-XXX-XXX` base-26 form.
-
 ## Table of contents
 
 1. [Getting started](#getting-started)
