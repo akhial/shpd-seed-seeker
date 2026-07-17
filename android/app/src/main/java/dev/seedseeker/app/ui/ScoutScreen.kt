@@ -22,6 +22,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -32,30 +33,35 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MediumFlexibleTopAppBar
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.seedseeker.app.catalog.ItemCatalog
 import dev.seedseeker.app.engine.SeedCode
-import dev.seedseeker.app.model.ItemKind
 import dev.seedseeker.app.model.ItemRequirement
 import dev.seedseeker.app.model.ScoutAccessibility
 import dev.seedseeker.app.model.ScoutItem
@@ -78,20 +84,11 @@ fun ScoutScreen(
     bottomBar: @Composable () -> Unit,
 ) {
     val seedIsReady = SeedCode.isCanonical(seedInput)
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            MediumFlexibleTopAppBar(
-                scrollBehavior = scrollBehavior,
+            TopAppBar(
                 title = { Text("Scout") },
-                subtitle = {
-                    Text(
-                        "Inspect one generated world",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                },
                 actions = {
                     IconButton(onClick = onChallenges) {
                         Icon(Icons.Filled.Settings, contentDescription = "Challenges")
@@ -102,7 +99,6 @@ fun ScoutScreen(
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
                 ),
             )
         },
@@ -149,10 +145,15 @@ fun ScoutScreen(
                                     .padding(24.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally,
                             ) {
-                                CompassMark(Modifier.size(44.dp))
+                                Icon(
+                                    Icons.Outlined.Place,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(44.dp),
+                                    tint = MaterialTheme.colorScheme.primary,
+                                )
                                 Spacer(Modifier.height(14.dp))
                                 Text(
-                                    "Enter a seed, or tap a search result, to list every searchable item generated through floor 24.",
+                                    "Enter a seed or tap a search result to list its items through floor 24.",
                                     textAlign = TextAlign.Center,
                                     style = MaterialTheme.typography.bodyMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -216,6 +217,17 @@ private fun SeedInputCard(
     onSeedChange: (String) -> Unit,
     onScout: () -> Unit,
 ) {
+    var fieldValue by remember {
+        mutableStateOf(
+            TextFieldValue(seedInput, selection = TextRange(seedInput.length)),
+        )
+    }
+    LaunchedEffect(seedInput) {
+        if (seedInput != fieldValue.text) {
+            fieldValue = TextFieldValue(seedInput, selection = TextRange(seedInput.length))
+        }
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.extraLarge,
@@ -223,21 +235,16 @@ private fun SeedInputCard(
     ) {
         Column(Modifier.padding(18.dp)) {
             OutlinedTextField(
-                value = seedInput,
-                onValueChange = onSeedChange,
+                value = fieldValue,
+                onValueChange = {
+                    val formattedValue = formatSeedFieldValue(it)
+                    fieldValue = formattedValue
+                    onSeedChange(formattedValue.text)
+                },
                 enabled = !isScouting,
                 modifier = Modifier.fillMaxWidth(),
                 label = { Text("Seed") },
                 placeholder = { Text("ABC-DEF-GHI") },
-                supportingText = {
-                    Text(
-                        if (seedIsReady) {
-                            "Ready to scout this world"
-                        } else {
-                            "Type or paste nine letters; hyphens are added automatically."
-                        },
-                    )
-                },
                 singleLine = true,
                 shape = MaterialTheme.shapes.medium,
                 textStyle = MaterialTheme.typography.titleLarge.copy(
@@ -282,6 +289,25 @@ private fun SeedInputCard(
     }
 }
 
+/** Keeps the logical cursor position when canonical grouping inserts or removes hyphens. */
+internal fun formatSeedFieldValue(input: TextFieldValue): TextFieldValue {
+    val formatted = SeedCode.formatInput(input.text)
+    if (formatted == input.text) return input
+
+    fun remapOffset(offset: Int): Int = SeedCode
+        .formatInput(input.text.take(offset))
+        .length
+        .coerceAtMost(formatted.length)
+
+    return TextFieldValue(
+        text = formatted,
+        selection = TextRange(
+            remapOffset(input.selection.start),
+            remapOffset(input.selection.end),
+        ),
+    )
+}
+
 @Composable
 private fun ScoutSummaryCard(
     world: ScoutWorld,
@@ -298,20 +324,13 @@ private fun ScoutSummaryCard(
     ) {
         Column(Modifier.padding(18.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        "CONTENTS OF",
-                        style = MaterialTheme.typography.labelSmall,
-                        letterSpacing = 1.4.sp,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    Text(
-                        world.seed,
-                        style = MaterialTheme.typography.headlineSmall,
-                        fontFamily = FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.tertiary,
-                    )
-                }
+                Text(
+                    world.seed,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontFamily = FontFamily.Monospace,
+                    color = MaterialTheme.colorScheme.tertiary,
+                )
                 TextButton(onClick = { clipboard.setText(AnnotatedString(world.seed)) }) {
                     Text("Copy")
                 }
@@ -336,12 +355,6 @@ private fun ScoutSummaryCard(
                     )
                 }
             }
-            Spacer(Modifier.height(10.dp))
-            Text(
-                "Reward alternatives are shown individually and marked when a choice or route affects access.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
         }
     }
 }
@@ -378,11 +391,6 @@ private fun ScoutItemCard(
 ) {
     val effectIsCurse = scoutItem.effect != null &&
         ItemCatalog.cursesFor(scoutItem.item.kind).contains(scoutItem.effect)
-    val effectLabel = scoutItem.effect ?: when (scoutItem.item.kind) {
-        ItemKind.WEAPON -> "No enchantment"
-        ItemKind.ARMOR -> "No glyph"
-        ItemKind.WAND, ItemKind.RING -> "No modifier"
-    }
     val accessibilityLabel = when (scoutItem.accessibility) {
         ScoutAccessibility.Independent -> null
         is ScoutAccessibility.Choice ->
@@ -432,15 +440,17 @@ private fun ScoutItemCard(
                         }
                     }
                 }
-                Text(
-                    effectLabel,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = when {
-                        effectIsCurse -> MaterialTheme.colorScheme.error
-                        scoutItem.effect != null -> MaterialTheme.colorScheme.tertiary
-                        else -> MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
+                scoutItem.effect?.let { effect ->
+                    Text(
+                        effect,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (effectIsCurse) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.tertiary
+                        },
+                    )
+                }
                 Text(
                     scoutItem.source.label,
                     style = MaterialTheme.typography.bodySmall,
@@ -457,11 +467,13 @@ private fun ScoutItemCard(
             }
             Spacer(Modifier.width(10.dp))
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                StatusPill(
-                    text = "+${scoutItem.upgrade}",
-                    container = MaterialTheme.colorScheme.secondaryContainer,
-                    content = MaterialTheme.colorScheme.onSecondaryContainer,
-                )
+                if (scoutItem.upgrade != 0) {
+                    StatusPill(
+                        text = "+${scoutItem.upgrade}",
+                        container = MaterialTheme.colorScheme.secondaryContainer,
+                        content = MaterialTheme.colorScheme.onSecondaryContainer,
+                    )
+                }
                 if (matches) {
                     Surface(
                         shape = MaterialTheme.shapes.large,

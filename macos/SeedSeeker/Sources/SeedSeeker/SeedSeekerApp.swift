@@ -13,6 +13,7 @@ struct SeedSeekerApp: App {
 
 private struct ContentView: View {
     @AppStorage("savedQuery") private var savedQueryJSON = ""
+    @AppStorage("savedPresets") private var savedPresetsJSON = ""
     @AppStorage("challenges") private var challenges = 0
     @State private var requirements: [ItemRequirement] = []
     @State private var maximumDepth = 24
@@ -20,6 +21,7 @@ private struct ContentView: View {
     @State private var excludeBlacksmithRewards = false
     @State private var fastMode = false
     @State private var restored = false
+    @State private var userPresets: [QueryPreset] = []
     @State private var controller = SearchController()
     @State private var scout = ScoutViewModel()
 
@@ -30,6 +32,10 @@ private struct ContentView: View {
                           requireBlacksmith: $requireBlacksmith,
                           excludeBlacksmithRewards: $excludeBlacksmithRewards, fastMode: $fastMode,
                           challenges: $challenges,
+                          userPresets: userPresets,
+                          onApplyPreset: apply,
+                          onSavePreset: savePreset,
+                          onDeletePreset: deletePreset,
                           controller: controller)
                     .navigationSplitViewColumnWidth(min: 300, ideal: 330, max: 380)
             } content: {
@@ -52,12 +58,14 @@ private struct ContentView: View {
             requireBlacksmith = saved.requireBlacksmith
             excludeBlacksmithRewards = saved.excludeBlacksmithRewards
             fastMode = saved.fastMode
+            userPresets = PresetPersistence.decode(savedPresetsJSON)
         }
         .onChange(of: requirements) { normalizeAndSaveRequirements() }
         .onChange(of: maximumDepth) { save() }
         .onChange(of: requireBlacksmith) { save() }
         .onChange(of: excludeBlacksmithRewards) { save() }
         .onChange(of: fastMode) { save() }
+        .onChange(of: challenges) { save() }
         .onChange(of: controller.selectedSeed) { _, seed in
             if let seed { scout.scout(seed, challenges: challenges) }
         }
@@ -67,7 +75,42 @@ private struct ContentView: View {
         guard restored else { return }
         savedQueryJSON = QueryPersistence.encode(.init(requirements: requirements,
             maximumDepth: maximumDepth, requireBlacksmith: requireBlacksmith,
-            excludeBlacksmithRewards: excludeBlacksmithRewards, fastMode: fastMode)) ?? ""
+            excludeBlacksmithRewards: excludeBlacksmithRewards, fastMode: fastMode,
+            challenges: challenges)) ?? ""
+    }
+
+    private func apply(_ preset: QueryPreset) {
+        let saved = preset.query
+        requirements = saved.requirements.map { requirement in
+            var copy = requirement
+            copy.key = Int64.random(in: 1...Int64.max)
+            return copy
+        }
+        maximumDepth = saved.maximumDepth
+        requireBlacksmith = saved.requireBlacksmith
+        excludeBlacksmithRewards = saved.excludeBlacksmithRewards
+        fastMode = saved.fastMode
+        challenges = saved.challenges
+    }
+
+    private func savePreset(name: String) {
+        let cleanName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleanName.isEmpty else { return }
+        let query = SavedQuery(requirements: requirements, maximumDepth: maximumDepth,
+                               requireBlacksmith: requireBlacksmith,
+                               excludeBlacksmithRewards: excludeBlacksmithRewards,
+                               fastMode: fastMode, challenges: challenges)
+        if let index = userPresets.firstIndex(where: { $0.name.localizedCaseInsensitiveCompare(cleanName) == .orderedSame }) {
+            userPresets[index].query = query
+        } else {
+            userPresets.append(QueryPreset(name: cleanName, query: query))
+        }
+        savedPresetsJSON = PresetPersistence.encode(userPresets) ?? ""
+    }
+
+    private func deletePreset(_ preset: QueryPreset) {
+        userPresets.removeAll { $0.id == preset.id }
+        savedPresetsJSON = PresetPersistence.encode(userPresets) ?? ""
     }
 
     private func normalizeAndSaveRequirements() {
@@ -150,12 +193,57 @@ private struct QueryView: View {
     @Binding var excludeBlacksmithRewards: Bool
     @Binding var fastMode: Bool
     @Binding var challenges: Int
+    let userPresets: [QueryPreset]
+    let onApplyPreset: (QueryPreset) -> Void
+    let onSavePreset: (String) -> Void
+    let onDeletePreset: (QueryPreset) -> Void
     let controller: SearchController
     @State private var editor: EditorSession?
+    @State private var showingSavePreset = false
+    @State private var presetName = ""
 
     var body: some View {
         VStack(spacing: 0) {
             List {
+                Section("Presets") {
+                    HStack {
+                        Menu("Load Preset", systemImage: "bookmark") {
+                            Section("Included") {
+                                ForEach(BuiltInPresets.all) { preset in
+                                    Button(preset.name) { onApplyPreset(preset) }
+                                }
+                            }
+                            if !userPresets.isEmpty {
+                                Section("Saved") {
+                                    ForEach(userPresets) { preset in
+                                        Button(preset.name) { onApplyPreset(preset) }
+                                    }
+                                }
+                            }
+                        }
+                        Button {
+                            presetName = ""
+                            showingSavePreset = true
+                        } label: {
+                            HStack(spacing: 6) {
+                                Image(systemName: "bookmark.badge.plus")
+                                Text("Save Current Query")
+                            }
+                            .fixedSize()
+                        }
+                        .buttonStyle(.bordered)
+                        .fixedSize()
+                        .layoutPriority(1)
+                        Spacer(minLength: 0)
+                    }
+                    if !userPresets.isEmpty {
+                        Menu("Delete Saved Preset", systemImage: "trash") {
+                            ForEach(userPresets) { preset in
+                                Button(preset.name, role: .destructive) { onDeletePreset(preset) }
+                            }
+                        }
+                    }
+                }
                 requirementSections
                 Section {
                     Button("Add Requirement", systemImage: "plus") { addRequirement() }
@@ -221,6 +309,14 @@ private struct QueryView: View {
                 }
                 editor = nil
             }
+        }
+        .alert("Save Preset", isPresented: $showingSavePreset) {
+            TextField("Preset name", text: $presetName)
+            Button("Cancel", role: .cancel) {}
+            Button("Save") { onSavePreset(presetName) }
+                .disabled(presetName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        } message: {
+            Text("Save the current requirements and search settings.")
         }
     }
 
@@ -308,7 +404,14 @@ private struct RequirementEditor: View {
         _kind = State(initialValue: requirement.kind); _itemID = State(initialValue: requirement.item?.id ?? "")
         _tierMatch = State(initialValue: requirement.tierMatch)
         _tier = State(initialValue: requirement.tier < 2 ? 2 : requirement.tier)
-        _match = State(initialValue: requirement.upgradeMatch); _upgrade = State(initialValue: requirement.upgrade)
+        _match = State(initialValue: requirement.upgradeMatch)
+        let maximumUpgrade = requirement.kind.maximumSearchUpgrade
+        let initialUpgrade = switch requirement.upgradeMatch {
+        case .any: 0
+        case .exactly: max(1, min(requirement.upgrade, maximumUpgrade))
+        case .atLeast: max(1, min(requirement.upgrade, maximumUpgrade - 1))
+        }
+        _upgrade = State(initialValue: initialUpgrade)
         _modifier = State(initialValue: requirement.modifier ?? "")
         _sourceRaw = State(initialValue: requirement.source.map { $0.rawValue + 1 } ?? 0)
         _group = State(initialValue: requirement.identityGroup ?? 0)
@@ -387,13 +490,30 @@ private struct RequirementEditor: View {
                     }
                     .pickerStyle(.segmented)
                     .onChange(of: match) { normalizeUpgrade() }
-                    if match != .any {
+                    if match == .exactly {
                         VStack(alignment: .leading, spacing: 2) {
-                            LabeledContent(match == .exactly ? "Exactly" : "At least") {
+                            LabeledContent("Exactly") {
                                 Text("+\(upgrade)").monospacedDigit().foregroundStyle(.secondary)
                             }
                             Slider(value: intBinding($upgrade),
-                                   in: Double(minimumUpgrade)...Double(kind.maximumSearchUpgrade), step: 1)
+                                   in: 1...Double(kind.maximumSearchUpgrade), step: 1)
+                        }
+                    } else if match == .atLeast {
+                        if kind == .ring {
+                            VStack(alignment: .leading, spacing: 2) {
+                                LabeledContent("At least") {
+                                    Text("+\(upgrade)").monospacedDigit().foregroundStyle(.secondary)
+                                }
+                                Slider(value: intBinding($upgrade),
+                                       in: 1...Double(kind.maximumSearchUpgrade - 1), step: 1)
+                            }
+                        } else {
+                            Picker("Minimum upgrade", selection: $upgrade) {
+                                ForEach(1..<kind.maximumSearchUpgrade, id: \.self) { option in
+                                    Text("+\(option) or higher").tag(option)
+                                }
+                            }
+                            .pickerStyle(.menu)
                         }
                     }
                 }
@@ -447,9 +567,15 @@ private struct RequirementEditor: View {
         .frame(width: 460, height: kind.modifierLabel == nil ? 500 : 530)
     }
 
-    private var minimumUpgrade: Int { match == .exactly ? 1 : 0 }
     private func normalizeUpgrade() {
-        upgrade = match == .any ? 0 : max(minimumUpgrade, min(upgrade, kind.maximumSearchUpgrade))
+        switch match {
+        case .any:
+            upgrade = 0
+        case .exactly:
+            upgrade = max(1, min(upgrade, kind.maximumSearchUpgrade))
+        case .atLeast:
+            upgrade = max(1, min(upgrade, kind.maximumSearchUpgrade - 1))
+        }
     }
     private func save() {
         let item = itemID.isEmpty ? nil : ItemCatalog.findById(itemID)

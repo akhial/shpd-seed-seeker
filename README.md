@@ -4,40 +4,32 @@
 [![License: GPL-3.0-or-later](https://img.shields.io/badge/license-GPL--3.0--or--later-blue.svg)](COPYING)
 
 An extremely fast, offline seed finder for [Shattered Pixel Dungeon](https://shatteredpixel.com/),
-written in Rust — with native Android, Linux, macOS, and Windows apps.
+written in Rust — with native apps for Android, Linux, macOS, and Windows.
 
 <p align="center">
-  <img alt="Bar chart of seed-search throughput. Seed Seeker tests 4,528 seeds per second on 12 cores and 604 on one core; the incumbent Java shpd-seed-finder tests 421 seeds per second across 6 processes and 93 in one process." src="assets/benchmark.svg">
+  <img alt="Bar chart of seed-search throughput. Seed Seeker tests 13,716 seeds per second on 12 cores and 1,567 on one core; the incumbent Java shpd-seed-finder tests 453 seeds per second across 6 processes and 94 in one process." src="assets/benchmark.svg">
 </p>
 
 <p align="center">
-  <i>Scanning seeds for a +4 Ring of Tenacity in the first 24 floors, on an Apple M4 Pro (12 cores).
-  Both finders were built from the same pinned v3.3.8 game source.
+  <i>Scanning seeds for a +3 Wand of Fireblast in the first 24 floors, on an Apple M4 Pro (12 cores).
   See <a href="#benchmarks">Benchmarks</a> for the full methodology.</i>
 </p>
 
-- ⚡️ **6–10× faster** than the established Java seed finder — per core *and* at full machine width
-- 🎯 **Exact**: a Rust reimplementation of the game's deterministic generation path, pinned to
-  Shattered Pixel Dungeon **v3.3.8** and continuously cross-checked against the real game code
+- ⚡️ **16–30× faster** than the established Java seed finder
+- 🎯 **Exact**: a Rust reimplementation of the game's deterministic generation path
 - 🔍 **Rich queries**: multiple AND requirements across melee and thrown weapons, armor, wands,
   and all twelve rings — exact or minimum upgrades, enchantments/glyphs/curses, loot sources,
   per-item floor limits, same-item groups, and blacksmith constraints
 - 🔮 **Seed scouting**: paste a seed code, get every searchable item through depth 24 with floor,
   upgrade, enchantment, cursed state, source, and choice constraints
-- 📱 **Android app** (Jetpack Compose) with streaming results and bounded memory
-- 🐧 **Native Linux app** (GTK 4 and libadwaita through gtk-rs) sharing the same Rust engine
-  in-process through the session crate
-- 🍎 **Native macOS app** (SwiftUI, Apple Silicon) sharing the same Rust engine over a C ABI
-- 🪟 **Native Windows app** (WinUI 3, x64 and ARM64) using Fluent Design 2 and the same Rust
-  engine
+- 📱 **Android app** beautiful Material 3 interface
+- 🐧 **Native Linux app** GTK 4 and libadwaita
+- 🍎 **Native macOS app** SwiftUI, Apple Silicon
+- 🪟 **Native Windows app** WinUI 3, x64 and ARM64 using Fluent Design 2
 - 🧵 **Multicore scheduler** with per-search cancellation, atomic progress, and NEON-batched RNG
   on ARM64
-- 🧪 **Oracle-verified**: Java-parity tests and reproducible whole-floor snapshots generated from
-  an isolated export of the exact pinned game revision
 
-Seeds use the canonical `XXX-XXX-XXX` base-26 form. Searching and scouting share the same
-version-pinned world generator, so a seed the search reports is exactly what the scout — and the
-game — will generate.
+Seeds use the `XXX-XXX-XXX` base-26 form.
 
 ## Table of contents
 
@@ -56,9 +48,7 @@ game — will generate.
 ### Download a release
 
 Prebuilt binaries for every tagged version are published on the
-[GitHub Releases page](https://github.com/akhial/shpd-seed-seeker/releases). Each release is
-built by the Release workflow from a `v*` tag and includes a `SHA256SUMS.txt` covering every
-asset.
+[GitHub Releases page](https://github.com/akhial/shpd-seed-seeker/releases).
 
 | Asset | Platforms |
 | --- | --- |
@@ -70,20 +60,17 @@ asset.
 
 Platform notes:
 
-- The macOS app is signed with a Developer ID certificate and notarized by Apple, so it opens
-  normally after download.
+- The macOS app is signed with a Developer ID certificate and notarized by Apple
 - The Android APK is signed with the project's release key and installs directly once
-  installing from unknown sources is allowed. Locally built APKs are unsigned; see the
-  [Android](#android) section below for an `apksigner` example.
+  installing from unknown sources is allowed.
 - The Windows app requires the
   [Windows App SDK 1.8 runtime](https://learn.microsoft.com/en-us/windows/apps/windows-app-sdk/downloads)
   to be installed.
-- The Linux AppImage bundles GTK and libadwaita. Make it executable, then run it directly; it does
-  not need to be extracted or installed.
 
 ### CLI
 
-Build and run the canonical depth-24 benchmark (10,000 seeds on all available CPUs by default):
+Build and run the canonical benchmark — a +3 Wand of Fireblast within the first 24 floors
+(10,000 seeds on all available CPUs by default):
 
 ```sh
 cargo run --release -p shpd-seedfinder-cli -- --benchmark
@@ -118,9 +105,6 @@ installation. For local testing only, it can be signed with Android's standard d
   android/app/build/outputs/apk/release/app-release-unsigned.apk
 ```
 
-A published build should instead use a protected distribution key. Debug builds deliberately use
-the deterministic demo adapter and do not package stale release JNI binaries.
-
 ### macOS
 
 The native Apple Silicon app (macOS 14+) links the shared Rust engine as a static library. The
@@ -137,10 +121,8 @@ remain deterministic for reproducibility.
 
 ### Linux
 
-The native GTK 4 and libadwaita app links the shared Rust engine in-process through
-`shpd-seedfinder-session`. The Search page takes the same JSON query format as the CLI and
-streams matching seed codes with live progress; the Scout page lists every searchable item of a
-seed through depth 24. It requires GTK 4.22, libadwaita 1.9, and `glib-compile-resources`;
+The native GTK 4 and libadwaita app links the Rust engine in-process through
+`shpd-seedfinder-session`. It requires GTK 4.22, libadwaita 1.9, and `glib-compile-resources`;
 [`linux/README.md`](linux/README.md) lists the development packages.
 
 ```sh
@@ -162,12 +144,10 @@ or unrestricted upgrade predicate, constrain the loot source, set its own inclus
 and join a same-item group shared by other requirements. Exact upgrades run through `+3` for
 weapons, armor, and wands and through `+4` for rings; minimum predicates also support `+0`.
 Weapon enchantment/curse and armor glyph/curse constraints are supported, and any requirement can
-demand that its matching copy be uncursed. A concrete `+4` ring
-requirement also accepts an Imp ring when one immediate Scroll of Transmutation roll produces the
-requested ring. Queries can require an accessible blacksmith, prevent the Blacksmith's Smith
-rewards from satisfying item requirements, and limit every item and facility to the first X
-dungeon floors. Mutually exclusive rewards are represented explicitly so impossible reward
-combinations cannot satisfy a query.
+demand that its matching copy be uncursed. Queries can require an accessible blacksmith, prevent
+the Blacksmith's Smith rewards from satisfying item requirements, and limit every item and
+facility to the first X dungeon floors. Mutually exclusive rewards are represented explicitly so
+impossible reward combinations cannot satisfy a query.
 
 ```json
 {
@@ -204,11 +184,11 @@ The optional `challenges` array accepts `on_diet`, `faith_is_my_armor`, `pharmac
 Searches automatically exploit generation logic: queries that can only be satisfied by quest
 rewards stop generating floors past the quest's depth window (+3 wands end at floor 9, +3/+4
 rings at floor 19). Per-item floor limits reject a seed as soon as a missing item's deadline
-passes, and resolved quests can also rule a seed out early. These shortcuts are exact. The
-optional top-level `"fast_mode": true` adds one lossy shortcut: +3 weapon/armor requirements
-consider only Ghost and Blacksmith rewards, skipping the far rarer Crypt and Sacrificial-fire
-prizes, so those searches end at floor 14. Fast-mode matches are always genuine; some exotic
-seeds are simply not reported.
+passes, and resolved quests can also rule a seed out early. The optional top-level
+`"fast_mode": true` adds one lossy shortcut: +3 weapon/armor requirements consider only
+Ghost and Blacksmith rewards, skipping the far rarer Crypt and Sacrificial-fire prizes, so
+those searches end at floor 14. Fast-mode matches are always genuine; some exotic seeds are
+simply not reported.
 
 ## Benchmarks<a id="benchmarks"></a>
 
@@ -218,33 +198,34 @@ patches the real game source and replays generation on the JVM.
 
 | Configuration | Throughput | Relative |
 | --- | ---: | ---: |
-| Seed Seeker, 12 threads | 4,528 seeds/s | **10.8×** |
-| Seed Seeker, 1 thread | 604 seeds/s | 6.5× (per core) |
-| shpd-seed-finder, 6 processes (its best) | 421 seeds/s | 1× |
-| shpd-seed-finder, 1 process | 93 seeds/s | — |
+| Seed Seeker, 12 threads | 13,716 seeds/s | **30.3×** |
+| Seed Seeker, 1 thread | 1,567 seeds/s | 16.7× (per core) |
+| shpd-seed-finder, 6 processes (its best) | 453 seeds/s | 1× |
+| shpd-seed-finder, 1 process | 94 seeds/s | — |
 
 Methodology:
 
-- **Machine:** Apple M4 Pro (12 cores), 48 GB, macOS 26.5. Both tools ran on the same machine
-  on the same day.
-- **Workload:** scan seeds sequentially from `AAA-AAA-AAA`, testing the first 24 floors of each
-  seed for a +4 Ring of Tenacity — Seed Seeker's canonical `--benchmark` query, expressed for the
-  Java finder as an `all`-mode item list containing `ring of tenacity +4` with 24 floors.
+- **Machine:** Apple M4 Pro (12 cores), 48 GB, macOS 26.5.
+- **Workload:** scan seeds sequentially from `AAA-AAA-AAA`, testing the 24 floors of each
+  seed for a +3 Wand of Fireblastd
 - **Incumbent build:** the reference finder was built from the *same pinned v3.3.8 game source*
-  using its own `changes.patch` and run on OpenJDK 26 (Temurin) with its default configuration
+  using its own `changes.patch` and run on OpenJDK 21 (Temurin) with its default configuration
   in sequential mode. Timing instrumentation was added only to its driver loop (a counter and a
   `System.nanoTime()` pair); the per-seed search code is unmodified, and JVM startup is excluded.
-- **Single process:** 10,000 seeds per run for the Java finder (107.6 s); 30,000–100,000 seeds
-  for Seed Seeker, whose timer also excludes process startup.
-- **Multi-process:** the Java finder's documented "turbo mode" runs independent JVM processes.
-  Concurrency 4, 6, 8, and 12 were measured and its best (6 processes, summed steady-state rate)
-  is reported; at 12 processes its aggregate falls to 179 seeds/s.
-- **Cross-check:** every one of the 58 seeds the Java finder reported in the first 10,000 was
-  also reported by Seed Seeker. (Seed Seeker finds a documented superset: a concrete +4 ring
-  requirement also accepts a transmutable Imp ring.)
-- **Same question, different engines:** Seed Seeker's always-on exact planning shortcuts (boss
-  floors whose state transitions are precomputed, quest-window deadlines) are part of the
-  measurement; the lossy `fast_mode` is off. The Java finder generates every floor of every seed.
+- **Single process:** 3,000–10,000 seeds per run for the Java finder; 150,000 (1 thread) and
+  1,000,000 (12 threads) seeds for Seed Seeker.
+- **Multi-process:** the Java finder's "turbo mode" runs independent JVM processes.
+  Concurrency 4, 6, and 8 were measured at 330, 453, and 373 seeds/s aggregate (summed
+  steady-state rates); its best (6 processes) is reported.
+- **Cross-check:** over the first 10,000 seeds the two finders' match lists are *identical* —
+  the same 92 seeds each.
+- **Same question, different engines:** Seed Seeker's always-on exact planning shortcuts are
+  part of the measurement; the lossy `fast_mode` is off. A +3 wand can only be the Wandmaker's
+  reward, so Seed Seeker derives a depth-9 generation horizon for this query and abandons a
+  seed as soon as the quest resolves without the wand, while the Java finder generates every
+  floor of every seed. Even when the Java finder is manually told to search only 9 floors —
+  the best configuration a domain-savvy user could pick, giving up the tool-enforced 24-floor
+  equivalence — it reaches 283 seeds/s in one process, still 5.5× slower per core.
 
 Reproduce the Seed Seeker side with `cargo run --release -p shpd-seedfinder-cli -- --benchmark`.
 
@@ -259,10 +240,8 @@ The compatibility target is intentionally pinned:
 - tutorial/journal progression treated as complete (`intro = false`), matching established
   seed-finder behavior and excluding unseeded Guidebook placement
 
-Scouting lists the searchable static equipment and deterministic quest rewards generated through
-depth 24. Normal monster drops and other play-time loot remain outside the compatibility profile:
-they are rolled during play from unseeded RNG. See the
-[compatibility notes](docs/COMPATIBILITY.md) for the exact parity boundary, boss-floor handling,
+Scouting lists the equipment and quest rewards generated through depth 24.
+See the [compatibility notes](docs/COMPATIBILITY.md) for the exact parity boundary, boss-floor handling,
 and known upstream nondeterminism.
 
 ## Performance model<a id="performance-model"></a>

@@ -7,7 +7,6 @@ use std::collections::{BTreeMap, HashSet};
 
 use shpd_seedfinder_core::catalog::ItemId;
 use shpd_seedfinder_core::model::{ItemSource, WorldItem};
-use shpd_seedfinder_core::query::Requirement;
 
 use crate::state::{UiRequirement, expand_requirements};
 
@@ -42,7 +41,7 @@ pub fn scout_match_indices(
                                 || candidate.source != ItemSource::BlacksmithReward)
                             && core.matches(candidate)
                     })
-                    .map(|(index, candidate)| (index, matched_identity(&core, candidate)))
+                    .map(|(index, candidate)| (index, candidate.item))
                     .collect(),
             )
         })
@@ -60,15 +59,6 @@ pub fn scout_match_indices(
     };
     search.visit(0);
     search.best
-}
-
-/// The identity a matched candidate contributes to its same-item group. Only
-/// deterministic +4 Imp rings can match under a transmuted identity.
-fn matched_identity(requirement: &Requirement, candidate: &WorldItem) -> ItemId {
-    match requirement.item {
-        Some(wanted) if candidate.item != wanted => wanted,
-        _ => candidate.item,
-    }
 }
 
 struct BestSubset<'a> {
@@ -155,7 +145,6 @@ mod tests {
     fn world_item(item: ItemId, depth: u8, accessibility: Accessibility) -> WorldItem {
         WorldItem {
             item,
-            transmuted_item: None,
             upgrade: 2,
             effect: None,
             cursed: false,
