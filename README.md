@@ -118,6 +118,14 @@ cargo run --release -p shpd-seedfinder-cli -- -i requirements.json -b 1000 --wor
         "ring_evasion" | "ring_force" | "ring_furor" | "ring_haste" | "ring_might" |
         "ring_sharpshooting" | "ring_tenacity" | "ring_wealth",
 
+      // Tier filters apply only to wildcard weapon/armor requirements.
+      "tier"?:
+        "any" |
+        { "exact": 2..5 } |
+        { "at_least": 3..4 } |
+        { "at_most": 3..4 }
+        = "any",
+
       // +4 is valid only for rings; "any" and effect names are case-insensitive.
       "upgrade"?:
         "any" | 1..3 | 4 |
@@ -185,6 +193,16 @@ Compared with [Elektrochecker's Java finder](https://github.com/Elektrochecker/s
 Reproduce: `cargo run --release -p shpd-seedfinder-cli -- --benchmark`
 
 ## Development<a id="development"></a>
+
+### Web app
+
+Build the browser engine before starting Vite:
+
+```sh
+./scripts/build-web-wasm.sh && cd web && npm ci && npm run dev
+```
+
+Searches run fully client-side in Web Workers through WebAssembly. Release tags build and deploy the app to Firebase Hosting.
 
 ### Android
 
