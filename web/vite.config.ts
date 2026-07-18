@@ -1,11 +1,14 @@
 import { defineConfig } from 'vitest/config'
-import react from '@vitejs/plugin-react'
 
 export default defineConfig({
-  plugins: [react()],
+  build: {
+    lib: {
+      entry: 'src/lib/wasm/index.ts',
+      formats: ['es'],
+      fileName: 'seed-seeker',
+    },
+  },
   test: {
-    environment: 'jsdom',
-    setupFiles: './src/test/setup.ts',
-    css: true,
+    environment: 'node',
   },
 })

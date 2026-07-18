@@ -1,4 +1,4 @@
-import { Store } from '@tanstack/react-store'
+import { Store } from '@tanstack/store'
 import type { QueryDocument, ScoutRequest, ScoutResult } from '../wasm/types'
 import { applyProgress, initialCoordinatorState, markWorkerDone, type CoordinatorState } from './coordinator-state'
 import type { SearchWorkerRequest, SearchWorkerResponse } from './protocol'

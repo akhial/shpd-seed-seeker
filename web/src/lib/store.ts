@@ -1,4 +1,4 @@
-import { Store } from '@tanstack/react-store'
+import { Store } from '@tanstack/store'
 import { defaultQueryState, fromQueryJson, toQueryJson } from './query'
 import type { QueryState } from './wasm/types'
 
