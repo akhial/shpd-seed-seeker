@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useStore } from '@tanstack/react-store'
 import { challenges as challengeOptions, wildcardSprites } from '../../lib/catalog'
 import { probabilityLabel } from '../../lib/format'
+import { CommandIcon, ReturnIcon } from '../../lib/icons'
 import { emptyRequirement, fromQueryJson, toQueryJson, validateRequirement } from '../../lib/query'
 import type { ValidationResult } from '../../lib/query'
 import { builtInPresets, loadPresets, queryStore, savePresets } from '../../lib/store'
@@ -195,7 +196,7 @@ export function QueryPanel({
             <h3>Requirements</h3>
             <button
               type="button"
-              className="d1-btn d1-btn-sm"
+              className="d1-btn d1-btn-sm d1-btn-primary"
               onClick={() => setEditor({ index: null, requirement: emptyRequirement('weapon') })}
             >
               + Add
@@ -335,7 +336,10 @@ export function QueryPanel({
           onClick={onToggleSearch}
         >
           <span>{running ? 'Cancel Search' : 'Start Search'}</span>
-          <kbd>{isMac ? '⌘⏎' : 'Ctrl ⏎'}</kbd>
+          <kbd>
+            {isMac ? <CommandIcon size={13} /> : <span className="d1-kbd-text">Ctrl</span>}
+            <ReturnIcon size={13} />
+          </kbd>
         </button>
         {challengeCount > 0 && (
           <p className="d1-caption d1-center">⚑ {challengeCount} challenge{challengeCount === 1 ? '' : 's'} enabled</p>
