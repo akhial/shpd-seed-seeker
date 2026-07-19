@@ -215,8 +215,6 @@ export default function App() {
       <footer className="d1-footer">
         <span>Shattered Pixel Dungeon v{engine?.shpdVersion ?? '…'}</span>
         <span className="d1-footer-sep" aria-hidden="true">·</span>
-        <span>Unofficial companion — not endorsed by the game's developers</span>
-        <span className="d1-footer-sep" aria-hidden="true">·</span>
         <span>GPL-3.0-or-later</span>
         <span className="d1-footer-sep" aria-hidden="true">·</span>
         <a href="/licenses/COPYING.txt">License</a>
