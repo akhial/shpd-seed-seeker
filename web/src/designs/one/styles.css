@@ -70,15 +70,6 @@ body {
   letter-spacing: 0.02em;
 }
 
-.d1-wordmark-sub {
-  font-size: 11px;
-  color: var(--d1-text-3);
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  margin-left: 2px;
-  padding-left: 11px;
-  border-left: 1px solid var(--d1-border-strong);
-}
 
 .d1-topbar-right {
   font-size: 11px;
@@ -1328,7 +1319,6 @@ input[type='range']::-moz-range-thumb {
 @media (max-width: 999px) {
   .d1-footer { padding-right: 150px; padding-bottom: 10px; }
   .d1-stat-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .d1-wordmark-sub { display: none; }
 }
 
 /* ---------- Scrollbars ---------- */

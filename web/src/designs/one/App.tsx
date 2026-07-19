@@ -154,7 +154,6 @@ export default function App() {
         <div className="d1-wordmark">
           <Sprite index={112} size={20} />
           <span className="d1-wordmark-name">Seed Seeker</span>
-          <span className="d1-wordmark-sub">dungeon workbench</span>
         </div>
         <div className="d1-topbar-right d1-mono">
           {engine ? `SHPD v${engine.shpdVersion}` : 'loading engine…'}
