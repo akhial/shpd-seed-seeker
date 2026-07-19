@@ -23,12 +23,30 @@ if (typeof localStorage !== 'undefined') {
 export interface Preset { name: string; query: QueryState }
 export const builtInPresets: Preset[] = [
   {
-    name: '+3 Wand of Fireblast',
-    query: { ...defaultQueryState(), requirements: [{ kind: 'wand', item: 'wand_fireblast', tier: { mode: 'any', value: 3 }, upgrade: { mode: 'at_least', value: 3 }, uncursed: false }] },
+    // Four wands where three share identity group A: upgrade transfer stacks them into a +21 staff.
+    name: '+21 Staff',
+    query: { ...defaultQueryState(), requirements: [
+      { kind: 'wand', tier: { mode: 'any', value: 3 }, upgrade: { mode: 'exact', value: 3 }, uncursed: false, identityGroup: 1 },
+      { kind: 'wand', tier: { mode: 'any', value: 3 }, upgrade: { mode: 'any', value: 1 }, uncursed: false, identityGroup: 1 },
+      { kind: 'wand', tier: { mode: 'any', value: 3 }, upgrade: { mode: 'any', value: 1 }, uncursed: false, identityGroup: 1 },
+      { kind: 'wand', tier: { mode: 'any', value: 3 }, upgrade: { mode: 'at_least', value: 1 }, uncursed: false },
+    ] },
   },
   {
-    name: 'Early +2 armor',
-    query: { ...defaultQueryState(), requirements: [{ kind: 'armor', tier: { mode: 'any', value: 3 }, upgrade: { mode: 'at_least', value: 2 }, uncursed: false, maxDepth: 6 }] },
+    name: 'Wand Bonanza',
+    query: { ...defaultQueryState(), requirements: [
+      { kind: 'wand', tier: { mode: 'any', value: 3 }, upgrade: { mode: 'exact', value: 3 }, uncursed: false },
+      { kind: 'wand', tier: { mode: 'any', value: 3 }, upgrade: { mode: 'exact', value: 2 }, uncursed: false, maxDepth: 4 },
+      { kind: 'wand', tier: { mode: 'any', value: 3 }, upgrade: { mode: 'exact', value: 2 }, uncursed: false, maxDepth: 4 },
+      { kind: 'wand', tier: { mode: 'any', value: 3 }, upgrade: { mode: 'exact', value: 2 }, uncursed: false },
+    ] },
+  },
+  {
+    name: '+21 Ring of Wealth',
+    query: { ...defaultQueryState(), requirements: [
+      { kind: 'ring', item: 'ring_wealth', tier: { mode: 'any', value: 3 }, upgrade: { mode: 'exact', value: 4 }, uncursed: false, source: 'imp_reward' },
+      { kind: 'ring', item: 'ring_wealth', tier: { mode: 'any', value: 3 }, upgrade: { mode: 'exact', value: 2 }, uncursed: false, maxDepth: 4 },
+    ] },
   },
 ]
 

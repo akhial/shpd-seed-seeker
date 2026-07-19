@@ -5,7 +5,9 @@ import type { SearchAdvance } from '../wasm/types'
 import type { SearchWorkerRequest, SearchWorkerResponse } from './protocol'
 
 const context: DedicatedWorkerGlobalScope = self as unknown as DedicatedWorkerGlobalScope
-const CHUNK = 2_048
+// Small enough that even a slow worker surfaces progress several times a
+// second; posts are still rate-limited to one per 100ms below.
+const CHUNK = 256
 let activeSession = 0
 let stopRequested = false
 const ready = init(new URL('../wasm/pkg/seedfinder_bg.wasm', import.meta.url))
