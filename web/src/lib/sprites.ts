@@ -93,6 +93,7 @@ export function spriteBoxCss(index: number, size: number): SpriteBoxCss {
       flex: '0 0 auto',
     },
     inner: {
+      position: 'relative',
       width: `${width * scale}px`,
       height: `${height * scale}px`,
       backgroundImage: `url(${SHEET_URL})`,
@@ -100,5 +101,37 @@ export function spriteBoxCss(index: number, size: number): SpriteBoxCss {
       backgroundSize: `${SHEET_COLUMNS * CELL * scale}px auto`,
       imageRendering: 'pixelated',
     },
+  }
+}
+
+/**
+ * Overlay CSS for an enchantment/curse glow, sized to sit exactly on top of the
+ * `inner` sprite art (as its child, inset 0). A solid colour layer is masked to
+ * the sprite's opaque pixels so only the art tints; animating the layer's
+ * opacity from 0 to 0.6 blends the sprite toward `color`, reproducing upstream's
+ * `texel*(1-value) + glow*value` glow shader. The pulse period is supplied via
+ * the `.d1-sprite-glow` animation; `2 × period` seconds per full cycle.
+ */
+export function spriteGlowCss(index: number, size: number, color: string, period: number): CSSProperties {
+  const scale = size / CELL
+  const col = index % SHEET_COLUMNS
+  const row = Math.floor(index / SHEET_COLUMNS)
+  const [x, y] = bounds[String(index)] ?? [0, 0, CELL, CELL]
+  const maskPosition = `${-(col * CELL + x) * scale}px ${-(row * CELL + y) * scale}px`
+  const maskSize = `${SHEET_COLUMNS * CELL * scale}px auto`
+  return {
+    position: 'absolute',
+    inset: 0,
+    backgroundColor: color,
+    WebkitMaskImage: `url(${SHEET_URL})`,
+    maskImage: `url(${SHEET_URL})`,
+    WebkitMaskPosition: maskPosition,
+    maskPosition,
+    WebkitMaskSize: maskSize,
+    maskSize,
+    WebkitMaskRepeat: 'no-repeat',
+    maskRepeat: 'no-repeat',
+    animationDuration: `${2 * period}s`,
+    pointerEvents: 'none',
   }
 }

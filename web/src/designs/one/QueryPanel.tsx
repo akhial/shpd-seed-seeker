@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useStore } from '@tanstack/react-store'
 import { challenges as challengeOptions, wildcardSprites } from '../../lib/catalog'
 import { probabilityLabel } from '../../lib/format'
-import { CommandIcon, ReturnIcon } from '../../lib/icons'
+import { effectGlow } from '../../lib/glow'
+import { CommandIcon, PlusIcon, ReturnIcon, XIcon } from '../../lib/icons'
 import { emptyRequirement, fromQueryJson, toQueryJson, validateRequirement } from '../../lib/query'
 import type { ValidationResult } from '../../lib/query'
 import { builtInPresets, loadPresets, queryStore, savePresets } from '../../lib/store'
@@ -10,7 +11,7 @@ import type { Preset } from '../../lib/store'
 import type { AnalysisResult, ChallengeName, ItemCategory, QueryState, RequirementState } from '../../lib/wasm/types'
 import { RequirementEditor } from './RequirementEditor'
 import { SliderRow, Sprite } from './parts'
-import { categoryPlural, categoryTint, requirementDetails, requirementKind, requirementSprite, requirementTitle } from './summary'
+import { categoryPlural, requirementDetails, requirementKind, requirementSprite, requirementTitle } from './summary'
 
 const KIND_ORDER: ItemCategory[] = ['weapon', 'armor', 'wand', 'ring']
 const LEVEL_GEN_CHALLENGES = new Set<ChallengeName>(['barren_land', 'into_darkness', 'forbidden_runes'])
@@ -184,7 +185,7 @@ export function QueryPanel({
                     title="Delete preset"
                     onClick={() => deletePreset(preset.name)}
                   >
-                    ×
+                    <XIcon size={14} />
                   </button>
                 </li>
               ))}
@@ -200,7 +201,8 @@ export function QueryPanel({
               className="d1-btn d1-btn-sm d1-btn-primary"
               onClick={() => setEditor({ index: null, requirement: emptyRequirement('weapon') })}
             >
-              + Add
+              <PlusIcon size={14} />
+              Add
             </button>
           </div>
           {!hasRequirements && ungrouped.length === 0 ? (
@@ -209,7 +211,7 @@ export function QueryPanel({
             <>
               {groups.map((group) => (
                 <div className="d1-req-group" key={group.kind}>
-                  <div className="d1-req-group-head" style={{ color: categoryTint[group.kind] }}>
+                  <div className="d1-req-group-head" style={{ color: 'rgb(234, 234, 234)' }}>
                     <Sprite index={wildcardSprites[group.kind]} size={16} />
                     <span>{categoryPlural[group.kind]}</span>
                   </div>
@@ -338,9 +340,6 @@ export function QueryPanel({
             <ReturnIcon size={13} />
           </kbd>
         </button>
-        {challengeCount > 0 && (
-          <p className="d1-caption d1-center">⚑ {challengeCount} challenge{challengeCount === 1 ? '' : 's'} enabled</p>
-        )}
       </div>
 
       {editor && (
@@ -370,7 +369,7 @@ function RequirementRow({
   return (
     <li className="d1-req">
       <button type="button" className="d1-req-main" onClick={onEdit} title="Edit requirement">
-        <Sprite index={requirementSprite(requirement)} size={28} />
+        <Sprite index={requirementSprite(requirement)} size={28} glow={effectGlow(requirement.effect)} />
         <span className="d1-req-text">
           <span className="d1-req-title">{requirementTitle(requirement)}</span>
           <span className="d1-req-sub">{details.length > 0 ? details.join(' · ') : 'any upgrade · any source'}</span>
@@ -378,7 +377,7 @@ function RequirementRow({
         </span>
       </button>
       <button type="button" className="d1-req-remove" aria-label="Remove requirement" title="Remove" onClick={onRemove}>
-        ×
+        <XIcon size={15} />
       </button>
     </li>
   )

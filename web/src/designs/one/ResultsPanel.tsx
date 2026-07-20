@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useStore } from '@tanstack/react-store'
 import { compactNumber, formatDuration, probabilityLabel } from '../../lib/format'
+import { CheckIcon, CopyIcon } from '../../lib/icons'
 import { searchStore } from '../../lib/search/coordinator'
 import type { AnalysisResult } from '../../lib/wasm/types'
 
@@ -148,7 +149,7 @@ export function ResultsPanel({
                   title="Copy seed"
                   onClick={() => copySeed(match.code)}
                 >
-                  {copied === match.code ? '✓' : '⧉'}
+                  {copied === match.code ? <CheckIcon size={14} /> : <CopyIcon size={14} />}
                 </button>
               </li>
             ))}

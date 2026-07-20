@@ -1,7 +1,19 @@
 import type { CSSProperties, ReactNode } from 'react'
-import { ringIconCss, spriteBoxCss } from '../../lib/sprites'
+import type { Glow } from '../../lib/glow'
+import { ringIconCss, spriteBoxCss, spriteGlowCss } from '../../lib/sprites'
 
-export function Sprite({ index, size = 24, label }: { index: number; size?: number; label?: string }) {
+export function Sprite({
+  index,
+  size = 24,
+  label,
+  glow,
+}: {
+  index: number
+  size?: number
+  label?: string
+  /** Enchantment/curse glow that pulses the icon, matching the game. */
+  glow?: Glow | null
+}) {
   const box = spriteBoxCss(index, size)
   const ringIcon = ringIconCss(index, size)
   return (
@@ -12,7 +24,9 @@ export function Sprite({ index, size = 24, label }: { index: number; size?: numb
       aria-hidden={label ? undefined : true}
       style={box.outer}
     >
-      <span style={box.inner} />
+      <span style={box.inner}>
+        {glow && <span className="d1-sprite-glow" style={spriteGlowCss(index, size, glow.color, glow.period)} />}
+      </span>
       {ringIcon && <span style={ringIcon} />}
     </span>
   )

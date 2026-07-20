@@ -44,6 +44,55 @@ export function ReturnIcon(props: IconProps) {
   )
 }
 
+/** Lucide `x` — a cross, the remove / dismiss action. */
+export function XIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M18 6 6 18" />
+      <path d="m6 6 12 12" />
+    </Icon>
+  )
+}
+
+/** Lucide `plus` — the add action. */
+export function PlusIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M5 12h14" />
+      <path d="M12 5v14" />
+    </Icon>
+  )
+}
+
+/** Lucide `flag` — marks enabled challenges. */
+export function FlagIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+      <line x1="4" x2="4" y1="22" y2="15" />
+    </Icon>
+  )
+}
+
+/** Lucide `copy` — overlapping sheets, the copy-to-clipboard action. */
+export function CopyIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+      <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+    </Icon>
+  )
+}
+
+/** Lucide `check` — a checkmark, confirms the copy succeeded. */
+export function CheckIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M20 6 9 17l-5-5" />
+    </Icon>
+  )
+}
+
 /** Lucide `git-fork` — a branching fork, marks branching-choice reward notes. */
 export function ForkIcon(props: IconProps) {
   return (

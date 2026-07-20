@@ -629,8 +629,9 @@ input[type='range']::-moz-range-thumb {
 .d1-chip-name:hover { color: var(--d1-text); }
 
 .d1-chip-delete {
-  font: inherit;
-  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   color: var(--d1-text-3);
   background: transparent;
   border: none;
@@ -723,9 +724,10 @@ input[type='range']::-moz-range-thumb {
 
 .d1-req-remove {
   flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 28px;
-  font: inherit;
-  font-size: 15px;
   color: var(--d1-text-3);
   background: transparent;
   border: none;
@@ -983,9 +985,10 @@ input[type='range']::-moz-range-thumb {
 
 .d1-result-copy {
   flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 30px;
-  font: inherit;
-  font-size: 14px;
   color: var(--d1-text-3);
   background: transparent;
   border: none;
@@ -1193,8 +1196,9 @@ input[type='range']::-moz-range-thumb {
 }
 
 .d1-badge-up {
-  color: var(--d1-green);
-  background: rgba(110, 201, 143, 0.12);
+  /* Scout-pane upgrade badge (+N), matching the game's upgrade green. */
+  color: rgb(131, 252, 100);
+  background: rgba(131, 252, 100, 0.12);
 }
 
 .d1-badge-curse {
@@ -1394,4 +1398,26 @@ input[type='range']::-moz-range-thumb {
 .d1-sprite {
   display: inline-block;
   image-rendering: pixelated;
+}
+
+/*
+ * Enchantment/curse glow, mirroring Shattered Pixel Dungeon's ItemSprite glow:
+ * the masked colour layer fades linearly to 0.6 opacity and back, blending the
+ * sprite toward its glow colour. The cycle duration (2 × the enchant's period)
+ * is set inline per icon; peak opacity 0.6 matches the game's max glow value.
+ */
+@keyframes d1-ench-pulse {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 0.6; }
+}
+
+.d1-sprite-glow {
+  opacity: 0;
+  animation-name: d1-ench-pulse;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .d1-sprite-glow { animation: none; opacity: 0.3; }
 }

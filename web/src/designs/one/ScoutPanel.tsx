@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react'
 import { useStore } from '@tanstack/react-store'
 import { sourceLabel } from '../../lib/catalog'
 import { formatSeedInput } from '../../lib/format'
-import { ForkIcon } from '../../lib/icons'
+import { itemGlow } from '../../lib/glow'
+import { CheckIcon, CopyIcon, FlagIcon, ForkIcon } from '../../lib/icons'
 import { regionForDepth } from '../../lib/region'
 import { queryStore } from '../../lib/store'
 import type { ScoutItem, ScoutResult } from '../../lib/wasm/types'
@@ -58,7 +59,14 @@ export function ScoutPanel({
     <>
       <div className="d1-pane-head">
         <span>Seed Scout</span>
-        <span className="d1-pane-head-info">{challengeCount > 0 ? `⚑ ${challengeCount} challenge${challengeCount === 1 ? '' : 's'}` : ''}</span>
+        <span className="d1-pane-head-info">
+          {challengeCount > 0 && (
+            <>
+              <FlagIcon size={12} />
+              {challengeCount} challenge{challengeCount === 1 ? '' : 's'}
+            </>
+          )}
+        </span>
       </div>
 
       <div className="d1-scout-input-row">
@@ -108,7 +116,7 @@ export function ScoutPanel({
               <div className="d1-manifest-seed">
                 <span className="d1-mono d1-manifest-code">{result.seed.code}</span>
                 <button type="button" className="d1-result-copy" aria-label="Copy seed" title="Copy seed" onClick={copySeed}>
-                  {copied ? '✓' : '⧉'}
+                  {copied ? <CheckIcon size={14} /> : <CopyIcon size={14} />}
                 </button>
               </div>
               <p className="d1-caption">
@@ -138,7 +146,7 @@ export function ScoutPanel({
                       const note = accessibilityNote(item)
                       return (
                         <li className={item.matched ? 'd1-item d1-item-matched' : 'd1-item'} key={`${item.id}-${index}`}>
-                          <Sprite index={item.spriteIndex} size={32} label={item.name} />
+                          <Sprite index={item.spriteIndex} size={32} label={item.name} glow={itemGlow(item)} />
                           <div className="d1-item-body">
                             <div className="d1-item-name">
                               <span>{item.name}</span>
