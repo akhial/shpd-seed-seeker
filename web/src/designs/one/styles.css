@@ -1048,6 +1048,7 @@ input[type='range']::-moz-range-thumb {
 }
 
 .d1-result-list li:hover .d1-result-copy,
+.d1-result-active .d1-result-copy,
 .d1-result-copy:focus-visible,
 .d1-manifest .d1-result-copy { opacity: 1; }
 
