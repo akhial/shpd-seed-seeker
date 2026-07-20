@@ -3,7 +3,7 @@ import { useStore } from '@tanstack/react-store'
 import { formatSeedInput } from '../../lib/format'
 import { toQueryDocument, toQueryJson, validateQuery } from '../../lib/query'
 import { SearchCoordinator, scoutSeed, searchStore } from '../../lib/search/coordinator'
-import { queryStore } from '../../lib/store'
+import { queryStore, workerCountStore } from '../../lib/store'
 import { analyzeQuery, getEngineInfo, parseSeedCode } from '../../lib/wasm'
 import type { AnalysisResult, EngineInfo, ScoutResult } from '../../lib/wasm/types'
 import { DownloadMenu } from './DownloadMenu'
@@ -81,7 +81,7 @@ export default function App() {
     }
     const state = queryStore.state
     if (!validateQuery(state).valid) return
-    controller.start(toQueryDocument(state))
+    controller.start(toQueryDocument(state), workerCountStore.state)
     setActiveTab('results')
   }, [])
 
