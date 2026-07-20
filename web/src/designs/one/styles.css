@@ -137,14 +137,15 @@ body {
   overscroll-behavior: contain;
 }
 
-/* The query form's full-width section dividers must meet the pane's right
-   border, so hide its scrollbar gutter (it still scrolls; the Start Search
-   button lives outside this scroller and stays put). */
-.d1-pane-query .d1-pane-body {
+/* The query form's section dividers and the scout manifest's floor headers
+   run full width, so a reserved scrollbar gutter leaves a gap at the pane
+   edge. Hide the gutter on those panes (they still scroll); the results
+   seed-list keeps its scrollbar. */
+:is(.d1-pane-query, .d1-pane-scout) .d1-pane-body {
   scrollbar-width: none;
 }
 
-.d1-pane-query .d1-pane-body::-webkit-scrollbar {
+:is(.d1-pane-query, .d1-pane-scout) .d1-pane-body::-webkit-scrollbar {
   display: none;
 }
 
@@ -1140,12 +1141,28 @@ input[type='range']::-moz-range-thumb {
 
 .d1-item:hover { background: var(--d1-panel-2); }
 
+/* The match highlight bleeds to both pane edges. The list insets items by
+   8px horizontally (5px vertically); cancel that with negative margins and
+   restore the inset as padding so the content stays aligned. */
 .d1-item-matched {
   background: rgba(110, 201, 143, 0.06);
-  border-color: rgba(110, 201, 143, 0.22);
+  border-radius: 0;
+  margin-left: -8px;
+  margin-right: -8px;
+  padding-left: 16px;
+  padding-right: 16px;
 }
 
 .d1-item-matched:hover { background: rgba(110, 201, 143, 0.09); }
+
+/* A lone match also fills its floor block vertically; with siblings it just
+   spans full width. */
+.d1-item-matched:only-child {
+  margin-top: -5px;
+  margin-bottom: -5px;
+  padding-top: 11px;
+  padding-bottom: 11px;
+}
 
 .d1-item > .d1-sprite { margin-top: 1px; }
 
