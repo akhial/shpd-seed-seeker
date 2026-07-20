@@ -74,6 +74,55 @@ body {
   letter-spacing: 0.02em;
 }
 
+.d1-avail {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  column-gap: 8px;
+  row-gap: 2px;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--d1-text-3);
+  letter-spacing: 0.01em;
+}
+
+.d1-avail-lead {
+  font-weight: 650;
+  color: var(--d1-text-2);
+}
+
+.d1-avail-links {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.d1-avail-link {
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--d1-text-2);
+  cursor: pointer;
+  border-bottom: 1px solid var(--d1-border-strong);
+  transition: color 0.12s ease, border-color 0.12s ease;
+}
+
+.d1-avail-link:hover:not(:disabled) {
+  color: var(--d1-amber-bright);
+  border-bottom-color: var(--d1-amber);
+}
+
+.d1-avail-link:disabled { cursor: default; }
+.d1-avail-link[aria-busy='true'] { color: var(--d1-amber-bright); opacity: 0.7; }
+
+/* On narrow viewports the lead-in is dropped so the platform links still fit
+   the fixed-height topbar. */
+@media (max-width: 720px) {
+  .d1-avail-lead { display: none; }
+}
+
 
 .d1-topbar-right {
   font-size: 12px;
@@ -1349,6 +1398,48 @@ input[type='range']::-moz-range-thumb {
   border-top: 1px solid var(--d1-border);
   background: var(--d1-panel-2);
   border-radius: 0 0 11px 11px;
+}
+
+/* ---------- Download modal ---------- */
+
+.d1-dl-modal { width: min(440px, 100%); }
+
+.d1-dl-list {
+  list-style: none;
+  margin: 0;
+  padding: 8px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.d1-dl-option {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 11px 13px;
+  border: 1px solid var(--d1-border-strong);
+  border-radius: 8px;
+  background: var(--d1-panel-2);
+  text-decoration: none;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+
+.d1-dl-option:hover {
+  border-color: var(--d1-amber);
+  background: var(--d1-amber-dim);
+}
+
+.d1-dl-arch {
+  font-size: 13.5px;
+  font-weight: 650;
+  color: var(--d1-text);
+}
+
+.d1-dl-file {
+  font-size: 11.5px;
+  color: var(--d1-text-3);
+  word-break: break-all;
 }
 
 /* ---------- Footer ---------- */

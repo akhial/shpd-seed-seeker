@@ -6,6 +6,7 @@ import { SearchCoordinator, scoutSeed, searchStore } from '../../lib/search/coor
 import { queryStore } from '../../lib/store'
 import { analyzeQuery, getEngineInfo, parseSeedCode } from '../../lib/wasm'
 import type { AnalysisResult, EngineInfo, ScoutResult } from '../../lib/wasm/types'
+import { DownloadMenu } from './DownloadMenu'
 import { QueryPanel } from './QueryPanel'
 import { ResultsPanel } from './ResultsPanel'
 import { ScoutPanel } from './ScoutPanel'
@@ -153,10 +154,10 @@ export default function App() {
       <header className="d1-topbar">
         <div className="d1-wordmark">
           <Sprite index={112} size={20} />
-          <span className="d1-wordmark-name">Seed Seeker</span>
+          <DownloadMenu />
         </div>
         <div className="d1-topbar-right d1-mono">
-          {engine ? `SHPD v${engine.shpdVersion}` : 'loading engine…'}
+          {engine ? `Shattered Pixel Dungeon v${engine.shpdVersion}` : 'loading engine…'}
         </div>
       </header>
 
