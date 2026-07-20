@@ -1,6 +1,6 @@
 import type { ReactNode, SVGProps } from 'react'
 
-// Icons vendored from Lucide (https://lucide.dev), ISC License. Only the two
+// Icons vendored from Lucide (https://lucide.dev), ISC License. Only the few
 // glyphs the UI needs are copied here so we don't pull in the whole package.
 
 type IconProps = SVGProps<SVGSVGElement> & { size?: number }
@@ -40,6 +40,19 @@ export function ReturnIcon(props: IconProps) {
     <Icon {...props}>
       <path d="M20 4v7a4 4 0 0 1-4 4H4" />
       <path d="m9 10-5 5 5 5" />
+    </Icon>
+  )
+}
+
+/** Lucide `git-fork` — a branching fork, marks branching-choice reward notes. */
+export function ForkIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <circle cx="12" cy="18" r="3" />
+      <circle cx="6" cy="6" r="3" />
+      <circle cx="18" cy="6" r="3" />
+      <path d="M18 9v2c0 .6-.4 1-1 1H7c-.6 0-1-.4-1-1V9" />
+      <path d="M12 12v3" />
     </Icon>
   )
 }

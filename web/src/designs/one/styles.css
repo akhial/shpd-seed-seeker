@@ -1155,12 +1155,15 @@ input[type='range']::-moz-range-thumb {
 
 .d1-item-matched:hover { background: rgba(110, 201, 143, 0.09); }
 
-/* A lone match also fills its floor block vertically; with siblings it just
-   spans full width. */
-.d1-item-matched:only-child {
+/* A match at the top of its floor meets the header; one at the bottom meets
+   the next floor. A lone match is both, so it fills the whole block. */
+.d1-item-matched:first-child {
   margin-top: -5px;
-  margin-bottom: -5px;
   padding-top: 11px;
+}
+
+.d1-item-matched:last-child {
+  margin-bottom: -5px;
   padding-bottom: 11px;
 }
 
@@ -1227,10 +1230,15 @@ input[type='range']::-moz-range-thumb {
 .d1-fx-curse { color: var(--d1-danger); }
 
 .d1-item-note {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   margin: 2px 0 0;
   font-size: 11.5px;
   color: var(--d1-text-3);
 }
+
+.d1-item-note svg { flex: 0 0 auto; }
 
 /* ---------- Modal (requirement editor) ---------- */
 

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useStore } from '@tanstack/react-store'
 import { sourceLabel } from '../../lib/catalog'
 import { formatSeedInput } from '../../lib/format'
+import { ForkIcon } from '../../lib/icons'
 import { regionForDepth } from '../../lib/region'
 import { queryStore } from '../../lib/store'
 import type { ScoutItem, ScoutResult } from '../../lib/wasm/types'
@@ -150,7 +151,12 @@ export function ScoutPanel({
                               )}
                               <span>{sourceLabel(item.source)}</span>
                             </div>
-                            {note && <p className="d1-item-note">⑂ {note}</p>}
+                            {note && (
+                              <p className="d1-item-note">
+                                <ForkIcon size={12} />
+                                {note}
+                              </p>
+                            )}
                           </div>
                           {item.matched && <span className="d1-badge d1-badge-match" title="Selected as part of a jointly obtainable requirement match">✓ match</span>}
                         </li>
