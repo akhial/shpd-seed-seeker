@@ -214,7 +214,7 @@ export default function App() {
       </main>
 
       <footer className="d1-footer">
-        <span>SHPD Seek Seeker v0.5.0</span>
+        <span>SHPD Seed Seeker v0.5.0</span>
         <span className="d1-footer-sep" aria-hidden="true">·</span>
         <span>GPL-3.0-or-later</span>
         <span className="d1-footer-sep" aria-hidden="true">·</span>
