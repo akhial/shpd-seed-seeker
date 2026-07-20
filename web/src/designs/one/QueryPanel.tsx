@@ -290,7 +290,6 @@ export function QueryPanel({
           </label>
           <p className="d1-caption">
             Treats +3 weapons and armor as quest rewards only, skipping the rare Crypt and Sacrificial-fire prizes.
-            Found seeds are always genuine.
           </p>
         </section>
 
