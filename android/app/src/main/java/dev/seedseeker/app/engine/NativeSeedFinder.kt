@@ -119,7 +119,7 @@ class DemoNativeSeedFinder : NativeSeedFinder {
             val available = min(SAMPLE_SEEDS.size, (elapsedMillis() / 620L).toInt())
             val end = min(available, emitted + maxResults)
             val newResults = SAMPLE_SEEDS.subList(emitted, end).map { seed ->
-                SeedResult(seed, request.requirements.size)
+                SeedResult(seed, request.requiredItemCount)
             }
             emitted = end
             SearchBatch(newResults)
@@ -211,7 +211,7 @@ class JniNativeSeedFinder(
     override fun startSearch(request: SearchRequest): NativeSearchSession {
         val handle = bindings.startSearch(QueryCodec.encode(request))
         check(handle != 0L) { "Native seed finder returned an invalid handle" }
-        return JniSession(handle, request.requirements.size, bindings)
+        return JniSession(handle, request.requiredItemCount, bindings)
     }
 
     private class JniSession(
@@ -309,6 +309,7 @@ object SeedCode {
 object QueryCodec {
     fun encode(request: SearchRequest): ByteArray = ByteArrayOutputStream().use { bytes ->
         DataOutputStream(bytes).use { output ->
+            val expandedRequirements = request.expandedRequirements
             output.write("SSF7".toByteArray(StandardCharsets.US_ASCII))
             output.writeByte(request.maximumDepth)
             output.writeByte(
@@ -318,8 +319,8 @@ object QueryCodec {
             )
             output.writeByte(request.challenges and 0xff)
             output.writeByte(request.challenges ushr 8)
-            output.writeShort(request.requirements.size)
-            request.requirements.forEach { requirement -> writeRequirement(output, requirement) }
+            output.writeShort(expandedRequirements.size)
+            expandedRequirements.forEach { requirement -> writeRequirement(output, requirement) }
         }
         bytes.toByteArray()
     }

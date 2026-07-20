@@ -17,6 +17,7 @@ use crate::state::{
 
 struct Editor {
     dialog: adw::Dialog,
+    quantity: adw::SpinRow,
     category: adw::ComboRow,
     item_row: adw::ComboRow,
     items: RefCell<Vec<Option<ItemId>>>,
@@ -44,9 +45,10 @@ pub fn present(
     parent: &adw::ApplicationWindow,
     requirement: &UiRequirement,
     is_new: bool,
+    maximum_quantity: u8,
     on_finish: impl Fn(UiRequirement) + 'static,
 ) {
-    let editor = Rc::new(build(requirement));
+    let editor = Rc::new(build(requirement, maximum_quantity));
     connect(&editor);
     restore(&editor, requirement);
 
@@ -95,12 +97,13 @@ pub fn present(
     editor.dialog.present(Some(parent));
 }
 
-fn build(requirement: &UiRequirement) -> Editor {
+fn build(requirement: &UiRequirement, maximum_quantity: u8) -> Editor {
     Editor {
         dialog: adw::Dialog::builder()
             .content_width(460)
             .content_height(640)
             .build(),
+        quantity: spin_row("Quantity", 1.0, 1.0, f64::from(maximum_quantity)),
         category: combo_row(
             "Category",
             &ALL_KINDS
@@ -139,6 +142,7 @@ fn build(requirement: &UiRequirement) -> Editor {
 
 fn groups(editor: &Rc<Editor>) -> Vec<adw::PreferencesGroup> {
     let item_group = adw::PreferencesGroup::builder().title("Item").build();
+    item_group.add(&editor.quantity);
     item_group.add(&editor.category);
     item_group.add(&editor.item_row);
     item_group.add(&editor.tier_row);
@@ -239,6 +243,7 @@ fn hook<W>(editor: Rc<Editor>, handler: fn(&Rc<Editor>)) -> impl Fn(&W) {
 
 fn restore(editor: &Rc<Editor>, requirement: &UiRequirement) {
     editor.updating.set(true);
+    editor.quantity.set_value(f64::from(requirement.quantity));
     let kind_index = ALL_KINDS
         .iter()
         .position(|kind| *kind == requirement.kind)
@@ -298,6 +303,8 @@ fn restore(editor: &Rc<Editor>, requirement: &UiRequirement) {
 }
 
 fn collect(editor: &Rc<Editor>) -> UiRequirement {
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let quantity = editor.quantity.value().round() as u8;
     let kind = selected_kind(editor);
     let item = selected_item(editor);
     let tier_eligible = item.is_none() && matches!(kind, ItemKind::Weapon | ItemKind::Armor);
@@ -353,6 +360,7 @@ fn collect(editor: &Rc<Editor>) -> UiRequirement {
         .then(|| editor.floor_value.value().round() as u8);
     UiRequirement {
         key: editor.key,
+        quantity,
         kind,
         item,
         tier,

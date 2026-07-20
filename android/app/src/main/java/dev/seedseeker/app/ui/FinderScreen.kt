@@ -62,10 +62,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.seedseeker.app.model.ItemRequirement
+import dev.seedseeker.app.model.MAX_REQUIREMENT_COUNT
 import dev.seedseeker.app.model.QueryPreset
 import dev.seedseeker.app.model.SearchState
 import dev.seedseeker.app.model.SearchStatus
 import dev.seedseeker.app.model.SeedResult
+import dev.seedseeker.app.model.requiredItemCount
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -101,6 +103,7 @@ fun FinderScreen(
     onScoutSeed: (String) -> Unit,
     bottomBar: @Composable () -> Unit,
 ) {
+    val requirementCount = requirements.requiredItemCount
     var showPresets by remember { mutableStateOf(false) }
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -126,7 +129,7 @@ fun FinderScreen(
         bottomBar = {
             Column {
                 SearchActionBar(
-                    requirementCount = requirements.size,
+                    requirementCount = requirementCount,
                     status = status,
                     seedsPerSecond = seedsPerSecond,
                     elapsedSeconds = elapsedSeconds,
@@ -248,14 +251,18 @@ private fun QueryHeader(
     onFastModeChange: (Boolean) -> Unit,
     onChallenges: () -> Unit,
 ) {
+    val requirementCount = requirements.requiredItemCount
     Column(Modifier.padding(horizontal = 16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                "Requirements (${requirements.size})",
+                "Requirements ($requirementCount)",
                 style = MaterialTheme.typography.titleSmall,
                 modifier = Modifier.weight(1f),
             )
-            TextButton(onClick = onAdd, enabled = !isSearching) {
+            TextButton(
+                onClick = onAdd,
+                enabled = !isSearching && requirementCount < MAX_REQUIREMENT_COUNT,
+            ) {
                 Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.width(4.dp))
                 Text("Add")
@@ -339,7 +346,7 @@ private fun RequirementRow(
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(
-                    requirement.title,
+                    requirement.displayTitle,
                     style = MaterialTheme.typography.bodyLarge,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,

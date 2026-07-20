@@ -69,9 +69,24 @@ private enum class SheetStep { ITEM, DETAILS }
 @Composable
 fun RequirementSheet(
     editing: ItemRequirement?,
+    maximumQuantity: Int,
     onDismiss: () -> Unit,
-    onSave: (CatalogItem?, ItemKind, TierMatch, Int, UpgradeMatch, Int, String?, ScoutItemSource?, Int?, Int?, Boolean) -> Unit,
+    onSave: (
+        CatalogItem?,
+        ItemKind,
+        TierMatch,
+        Int,
+        UpgradeMatch,
+        Int,
+        String?,
+        ScoutItemSource?,
+        Int?,
+        Int?,
+        Boolean,
+        Int,
+    ) -> Unit,
 ) {
+    require(maximumQuantity in 1..64) { "Maximum quantity must be 1..64" }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val identity = editing?.key ?: -1L
     var step by remember(identity) {
@@ -104,6 +119,9 @@ fun RequirementSheet(
     var identityGroup by remember(identity) { mutableStateOf(editing?.identityGroup) }
     var maximumDepth by remember(identity) { mutableStateOf(editing?.maximumDepth) }
     var requireUncursed by remember(identity) { mutableStateOf(editing?.requireUncursed ?: false) }
+    var quantity by remember(identity, maximumQuantity) {
+        mutableStateOf((editing?.quantity ?: 1).coerceAtMost(maximumQuantity))
+    }
 
     fun clampUpgrade(match: UpgradeMatch, forKind: ItemKind) {
         upgrade = normalizedUpgrade(upgrade, match, forKind)
@@ -182,6 +200,31 @@ fun RequirementSheet(
                             onClick = { selectedItem = null },
                             label = { Text("Any ${kind.label.lowercase(Locale.ROOT)}") },
                         )
+                    }
+
+                    Row(
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Quantity", style = MaterialTheme.typography.titleSmall)
+                            Text(
+                                "Distinct copies required",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                        TextButton(onClick = { quantity-- }, enabled = quantity > 1) { Text("−") }
+                        Text(
+                            quantity.toString(),
+                            style = MaterialTheme.typography.titleMedium,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.width(32.dp),
+                        )
+                        TextButton(
+                            onClick = { quantity++ },
+                            enabled = quantity < maximumQuantity,
+                        ) { Text("+") }
                     }
 
                     // Item picker — the only scrollable region on this step.
@@ -627,6 +670,7 @@ fun RequirementSheet(
                             identityGroup = identityGroup,
                             maximumDepth = maximumDepth,
                             requireUncursed = requireUncursed,
+                            quantity = quantity,
                         )
                         Spacer(Modifier.height(10.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -641,7 +685,7 @@ fun RequirementSheet(
                                 onClick = {
                                     onSave(selectedItem, kind, tierMatch, if (tierMatch == TierMatch.ANY) 0 else tier,
                                         upgradeMatch, upgrade, modifierName, source, identityGroup, maximumDepth,
-                                        requireUncursed)
+                                        requireUncursed, quantity)
                                 },
                                 modifier = Modifier
                                     .weight(1f)
@@ -723,6 +767,7 @@ private fun RequirementPreview(
     identityGroup: Int?,
     maximumDepth: Int?,
     requireUncursed: Boolean,
+    quantity: Int,
 ) {
     Surface(
         shape = MaterialTheme.shapes.large,
@@ -738,12 +783,12 @@ private fun RequirementPreview(
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Text(
-                    item?.name ?: when (tierMatch) {
+                    (if (quantity == 1) "" else "$quantity× ") + (item?.name ?: when (tierMatch) {
                         TierMatch.ANY -> "Any ${kind.singularLabel}"
                         TierMatch.EXACT -> "Any Tier $tier ${kind.singularLabel}"
                         TierMatch.AT_LEAST -> "Any Tier $tier+ ${kind.singularLabel}"
                         TierMatch.AT_MOST -> "Any Tier $tier or lower ${kind.singularLabel}"
-                    },
+                    }),
                     style = MaterialTheme.typography.titleSmall,
                 )
                 Text(

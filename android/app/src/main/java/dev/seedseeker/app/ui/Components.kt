@@ -32,6 +32,7 @@ import dev.seedseeker.app.model.ScoutItemSource
 import dev.seedseeker.app.model.SearchStatus
 import dev.seedseeker.app.model.TierMatch
 import dev.seedseeker.app.model.UpgradeMatch
+import dev.seedseeker.app.model.expandedRequirements
 import dev.seedseeker.app.ui.theme.Amber
 import dev.seedseeker.app.ui.theme.Mint
 import java.util.Locale
@@ -260,7 +261,7 @@ internal fun scoutMatchIndices(
             (!requirement.requireUncursed || !item.cursed) &&
             (requirement.source == null || requirement.source == item.source)
 
-    val candidates = requirements
+    val candidates = requirements.expandedRequirements()
         .map { requirement -> requirement to items.indices.filter { matches(items[it], requirement) } }
         .sortedBy { it.second.size }
     val used = mutableSetOf<Int>()

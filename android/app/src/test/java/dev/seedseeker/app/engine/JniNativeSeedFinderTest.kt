@@ -22,6 +22,7 @@ class JniNativeSeedFinderTest {
                     item = ItemCatalog.wands.first { it.id == "wand_frost" },
                     upgrade = 2,
                     modifier = null,
+                    quantity = 3,
                 ),
             ),
         )
@@ -29,7 +30,7 @@ class JniNativeSeedFinderTest {
         val session = finder.startSearch(request)
         assertTrue(bindings.request.contentEquals(QueryCodec.encode(request)))
         assertEquals("AAA-AAA-AAA", session.poll(24).results.single().seed)
-        assertEquals(1, session.poll(24).results.single().matchedRequirements)
+        assertEquals(3, session.poll(24).results.single().matchedRequirements)
 
         val status = session.status()
         assertEquals(SearchState.COMPLETED, status.state)

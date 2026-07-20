@@ -35,6 +35,7 @@ import dev.seedseeker.app.engine.NativeSearchSession
 import dev.seedseeker.app.engine.NativeSeedFinder
 import dev.seedseeker.app.engine.SeedCode
 import dev.seedseeker.app.model.ItemRequirement
+import dev.seedseeker.app.model.MAX_REQUIREMENT_COUNT
 import dev.seedseeker.app.model.Challenge
 import dev.seedseeker.app.model.BuiltInPresets
 import dev.seedseeker.app.model.PresetQuery
@@ -45,6 +46,8 @@ import dev.seedseeker.app.model.SearchRequest
 import dev.seedseeker.app.model.SearchState
 import dev.seedseeker.app.model.SearchStatus
 import dev.seedseeker.app.model.SeedResult
+import dev.seedseeker.app.model.coalescedAndSorted
+import dev.seedseeker.app.model.requiredItemCount
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -90,7 +93,7 @@ fun SeedFinderApp(engine: NativeSeedFinder) {
         mutableStateOf(
             listOf(
                 ItemRequirement(1, ItemCatalog.wands.first { it.id == "wand_fireblast" }, 3),
-            ),
+            ).coalescedAndSorted(),
         )
     }
     var nextRequirementKey by remember { mutableLongStateOf(2L) }
@@ -259,7 +262,9 @@ fun SeedFinderApp(engine: NativeSeedFinder) {
                     destination = Destination.CHALLENGES
                 },
                 onApplyPreset = { preset ->
-                    requirements = preset.query.requirements.map { it.copy(key = nextRequirementKey++) }
+                    requirements = preset.query.requirements
+                        .map { it.copy(key = nextRequirementKey++) }
+                        .coalescedAndSorted()
                     maximumDepth = preset.query.maximumDepth
                     requireBlacksmith = preset.query.requireBlacksmith
                     excludeBlacksmithRewards = preset.query.excludeBlacksmithRewards
@@ -381,13 +386,29 @@ fun SeedFinderApp(engine: NativeSeedFinder) {
         }
 
         if (showRequirementSheet) {
+            val remainingQuantity = MAX_REQUIREMENT_COUNT -
+                (requirements.requiredItemCount - (editingRequirement?.quantity ?: 0))
             RequirementSheet(
                 editing = editingRequirement,
+                maximumQuantity = remainingQuantity,
                 onDismiss = { showRequirementSheet = false },
-                onSave = { item, kind, tierMatch, tier, upgradeMatch, upgrade, modifier, source, identityGroup, itemMaximumDepth, requireUncursed ->
+                onSave = {
+                    item,
+                    kind,
+                    tierMatch,
+                    tier,
+                    upgradeMatch,
+                    upgrade,
+                    modifier,
+                    source,
+                    identityGroup,
+                    itemMaximumDepth,
+                    requireUncursed,
+                    quantity,
+                    ->
                     val existing = editingRequirement
                     if (existing == null) {
-                        requirements = requirements + ItemRequirement(
+                        requirements = (requirements + ItemRequirement(
                             key = nextRequirementKey++,
                             item = item,
                             upgrade = upgrade,
@@ -400,7 +421,8 @@ fun SeedFinderApp(engine: NativeSeedFinder) {
                             identityGroup = identityGroup,
                             maximumDepth = itemMaximumDepth,
                             requireUncursed = requireUncursed,
-                        )
+                            quantity = quantity,
+                        )).coalescedAndSorted()
                     } else {
                         requirements = requirements.map {
                             if (it.key == existing.key) {
@@ -416,11 +438,12 @@ fun SeedFinderApp(engine: NativeSeedFinder) {
                                     identityGroup = identityGroup,
                                     maximumDepth = itemMaximumDepth,
                                     requireUncursed = requireUncursed,
+                                    quantity = quantity,
                                 )
                             } else {
                                 it
                             }
-                        }
+                        }.coalescedAndSorted()
                     }
                     showRequirementSheet = false
                 },

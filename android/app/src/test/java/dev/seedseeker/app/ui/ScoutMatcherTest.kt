@@ -72,6 +72,20 @@ class ScoutMatcherTest {
         assertEquals(emptySet<Int>(), scoutMatchIndices(listOf(cursed), listOf(requirement)))
     }
 
+    @Test
+    fun quantityRequiresDistinctMatchingCopies() {
+        val requirement = ItemRequirement(
+            key = 1,
+            item = warding,
+            upgrade = 3,
+            quantity = 3,
+        )
+        val copies = List(3) { scoutItem(warding, ScoutAccessibility.Independent) }
+
+        assertEquals(setOf(0, 1, 2), scoutMatchIndices(copies, listOf(requirement)))
+        assertEquals(2, scoutMatchIndices(copies.take(2), listOf(requirement)).size)
+    }
+
     private fun scoutItem(item: CatalogItem, accessibility: ScoutAccessibility) = ScoutItem(
         item = item,
         depth = 8,

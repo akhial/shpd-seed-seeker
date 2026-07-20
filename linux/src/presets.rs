@@ -38,10 +38,7 @@ fn wand_bonanza() -> BuiltInPreset {
             ..UiRequirement::new(key)
         });
     }
-    BuiltInPreset {
-        name: "Wand Bonanza",
-        state,
-    }
+    normalized_preset("Wand Bonanza", state)
 }
 
 fn staff_21() -> BuiltInPreset {
@@ -61,10 +58,7 @@ fn staff_21() -> BuiltInPreset {
             ..UiRequirement::new(key)
         });
     }
-    BuiltInPreset {
-        name: "+21 Staff",
-        state,
-    }
+    normalized_preset("+21 Staff", state)
 }
 
 fn ring_of_wealth_21() -> BuiltInPreset {
@@ -84,10 +78,14 @@ fn ring_of_wealth_21() -> BuiltInPreset {
             ..UiRequirement::new(key)
         });
     }
-    BuiltInPreset {
-        name: "+21 Ring of Wealth",
-        state,
-    }
+    normalized_preset("+21 Ring of Wealth", state)
+}
+
+fn normalized_preset(name: &'static str, mut state: AppState) -> BuiltInPreset {
+    state
+        .normalize_requirements()
+        .expect("built-in preset requirements must be valid");
+    BuiltInPreset { name, state }
 }
 
 #[cfg(test)]
@@ -102,7 +100,7 @@ mod tests {
     fn staff_matches_requested_requirements() {
         let [staff, _, _] = built_in();
         assert_eq!(staff.name, "+21 Staff");
-        assert_eq!(staff.state.requirements.len(), 4);
+        assert_eq!(staff.state.requirements.len(), 3);
         assert!(
             staff
                 .state
@@ -120,7 +118,6 @@ mod tests {
             [
                 UpgradeRequirement::Exact(3),
                 UpgradeRequirement::Any,
-                UpgradeRequirement::Any,
                 UpgradeRequirement::AtLeast(1),
             ]
         );
@@ -131,8 +128,9 @@ mod tests {
                 .iter()
                 .map(|requirement| requirement.identity_group)
                 .collect::<Vec<_>>(),
-            [Some(1), Some(1), Some(1), None]
+            [Some(1), Some(1), None]
         );
+        assert_eq!(staff.state.requirements[1].quantity, 2);
     }
 
     #[test]
@@ -157,7 +155,6 @@ mod tests {
                 UpgradeRequirement::Exact(3),
                 UpgradeRequirement::Exact(2),
                 UpgradeRequirement::Exact(2),
-                UpgradeRequirement::Exact(2),
             ]
         );
         assert_eq!(
@@ -167,8 +164,9 @@ mod tests {
                 .iter()
                 .map(|requirement| requirement.max_depth)
                 .collect::<Vec<_>>(),
-            [None, Some(4), Some(4), None]
+            [None, None, Some(4)]
         );
+        assert_eq!(preset.state.requirements[2].quantity, 2);
         assert!(
             preset
                 .state

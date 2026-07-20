@@ -55,10 +55,11 @@ public sealed class NativeEngine
 {
     public NativeSearch Start(QuerySettings query)
     {
+        var requirements = RequirementRules.Expand(query.Requirements);
         var w = new Writer(); w.Bytes("SSF7"u8.ToArray()); w.U8(query.MaximumDepth);
         w.U8((query.RequireBlacksmith ? 1 : 0) | (query.FastMode ? 2 : 0) | (query.ExcludeBlacksmithRewards ? 4 : 0));
-        w.U16Le(query.Challenges); w.U16(query.Requirements.Count);
-        foreach (var r in query.Requirements)
+        w.U16Le(query.Challenges); w.U16(requirements.Count);
+        foreach (var r in requirements)
         {
             w.U8((int)r.Kind); w.Text(r.Item?.Id ?? ""); w.U8((int)r.TierMatch); w.U8(r.Tier);
             w.U8((int)r.UpgradeMatch); w.U8(r.Upgrade); w.Text(r.Modifier ?? "");

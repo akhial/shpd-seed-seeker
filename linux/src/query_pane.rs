@@ -249,7 +249,7 @@ impl QueryPane {
                 .tooltip_text("Remove Requirement")
                 .build();
             let row = adw::ActionRow::builder()
-                .title(gtk::glib::markup_escape_text(&requirement.title()))
+                .title(gtk::glib::markup_escape_text(&requirement.display_title()))
                 .subtitle(gtk::glib::markup_escape_text(&requirement.subtitle()))
                 .activatable(true)
                 .build();

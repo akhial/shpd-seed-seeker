@@ -43,6 +43,8 @@ pub struct UserPreset {
 
 #[derive(Deserialize, Serialize)]
 struct SavedRequirement {
+    #[serde(default = "default_quantity")]
+    quantity: u8,
     kind: String,
     item: Option<String>,
     tier: Option<SavedPredicate>,
@@ -53,6 +55,10 @@ struct SavedRequirement {
     source: Option<String>,
     identity_group: Option<u8>,
     max_depth: Option<u8>,
+}
+
+const fn default_quantity() -> u8 {
+    1
 }
 
 #[derive(Deserialize, Serialize)]
@@ -148,7 +154,7 @@ fn restore_state(saved: SavedState) -> AppState {
         if let Some(restored) = restore_requirement(&requirement, key)
             && restored.to_core().validate().is_ok()
         {
-            state.requirements.push(restored);
+            let _ = state.upsert_requirement(restored);
         }
     }
     state
@@ -168,6 +174,7 @@ fn write_json(path: PathBuf, value: &impl Serialize) {
 
 fn save_requirement(requirement: &UiRequirement) -> SavedRequirement {
     SavedRequirement {
+        quantity: requirement.quantity,
         kind: kind_key(requirement.kind).to_owned(),
         item: requirement
             .item
@@ -203,6 +210,9 @@ fn save_predicate(predicate: Option<(&str, u8)>) -> Option<SavedPredicate> {
 }
 
 fn restore_requirement(saved: &SavedRequirement, key: u64) -> Option<UiRequirement> {
+    if !(1..=64).contains(&saved.quantity) {
+        return None;
+    }
     let kind = kind_from_key(&saved.kind)?;
     let item = match &saved.item {
         None => None,
@@ -225,6 +235,7 @@ fn restore_requirement(saved: &SavedRequirement, key: u64) -> Option<UiRequireme
     };
     Some(UiRequirement {
         key,
+        quantity: saved.quantity,
         kind,
         item,
         tier,
@@ -324,13 +335,17 @@ mod tests {
     use shpd_seedfinder_core::model::ItemSource;
     use shpd_seedfinder_core::query::{TierRequirement, UpgradeRequirement};
 
-    use super::{SavedPreset, decode_presets, restore_requirement, save_requirement, save_state};
+    use super::{
+        SavedPreset, SavedRequirement, SavedState, decode_presets, restore_requirement,
+        restore_state, save_requirement, save_state,
+    };
     use crate::state::{AppState, UiRequirement};
 
     #[test]
     fn requirements_round_trip() {
         let requirement = UiRequirement {
             key: 7,
+            quantity: 3,
             kind: ItemKind::Weapon,
             item: Some(ItemId::Greatsword),
             tier: TierRequirement::Any,
@@ -355,6 +370,36 @@ mod tests {
         let mut saved = save_requirement(&UiRequirement::new(1));
         saved.kind = "trinket".to_owned();
         assert!(restore_requirement(&saved, 1).is_none());
+    }
+
+    #[test]
+    fn missing_quantity_defaults_to_one() {
+        let saved: SavedRequirement = serde_json::from_str(r#"{"kind":"wand"}"#).unwrap();
+        assert_eq!(saved.quantity, 1);
+        assert_eq!(restore_requirement(&saved, 9).unwrap().quantity, 1);
+    }
+
+    #[test]
+    fn restored_state_coalesces_before_sorting_by_floor() {
+        let saved: SavedState = serde_json::from_str(
+            r#"{
+                "requirements": [
+                    {"kind":"wand","upgrade":{"mode":"exact","value":3}},
+                    {"kind":"wand","upgrade":{"mode":"exact","value":2},"max_depth":4},
+                    {"kind":"wand","upgrade":{"mode":"exact","value":2},"max_depth":9},
+                    {"kind":"wand","upgrade":{"mode":"exact","value":2},"max_depth":4}
+                ]
+            }"#,
+        )
+        .unwrap();
+        let state = restore_state(saved);
+
+        assert_eq!(state.requirements.len(), 3);
+        assert_eq!(state.requirements[0].max_depth, None);
+        assert_eq!(state.requirements[1].max_depth, Some(4));
+        assert_eq!(state.requirements[1].key, 2);
+        assert_eq!(state.requirements[1].quantity, 2);
+        assert_eq!(state.requirements[2].max_depth, Some(9));
     }
 
     #[test]

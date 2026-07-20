@@ -11,7 +11,7 @@ use adw::prelude::*;
 use gtk::gio;
 
 use crate::config::APP_NAME;
-use crate::state::UiRequirement;
+use crate::state::{MAX_REQUIREMENT_COUNT, UiRequirement};
 use crate::{
     challenges_dialog, detail_pane, persist, presets_dialog, query_pane, requirement_editor,
     results_pane,
@@ -103,23 +103,41 @@ pub fn present(app: &adw::Application) {
         let state = Rc::clone(&state);
         let refresh_all = Rc::clone(&refresh_all);
         let window = window.clone();
+        let toasts = toasts.clone();
         move |requirement, is_new| {
+            let used_elsewhere = state
+                .borrow()
+                .requirements
+                .iter()
+                .filter(|other| other.key != requirement.key)
+                .map(|other| usize::from(other.quantity))
+                .sum::<usize>();
+            let maximum_quantity = MAX_REQUIREMENT_COUNT.saturating_sub(used_elsewhere);
+            let Ok(maximum_quantity) = u8::try_from(maximum_quantity) else {
+                return;
+            };
+            if maximum_quantity == 0 {
+                toasts.add_toast(adw::Toast::new(
+                    "A query can contain at most 64 required items",
+                ));
+                return;
+            }
             let state = Rc::clone(&state);
             let refresh_all = Rc::clone(&refresh_all);
-            requirement_editor::present(&window, &requirement, is_new, move |result| {
-                let mut state = state.borrow_mut();
-                if let Some(slot) = state
-                    .requirements
-                    .iter_mut()
-                    .find(|other| other.key == result.key)
-                {
-                    *slot = result;
-                } else {
-                    state.requirements.push(result);
-                }
-                drop(state);
-                refresh_all();
-            });
+            let toasts = toasts.clone();
+            requirement_editor::present(
+                &window,
+                &requirement,
+                is_new,
+                maximum_quantity,
+                move |result| {
+                    if let Err(message) = state.borrow_mut().upsert_requirement(result) {
+                        toasts.add_toast(adw::Toast::new(&message));
+                    } else {
+                        refresh_all();
+                    }
+                },
+            );
         }
     });
 

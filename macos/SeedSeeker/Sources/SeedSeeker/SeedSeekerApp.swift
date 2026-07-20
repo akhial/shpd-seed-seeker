@@ -60,7 +60,7 @@ private struct ContentView: View {
             fastMode = saved.fastMode
             userPresets = PresetPersistence.decode(savedPresetsJSON)
         }
-        .onChange(of: requirements) { save() }
+        .onChange(of: requirements) { normalizeAndSaveRequirements() }
         .onChange(of: maximumDepth) { save() }
         .onChange(of: requireBlacksmith) { save() }
         .onChange(of: excludeBlacksmithRewards) { save() }
@@ -111,6 +111,15 @@ private struct ContentView: View {
     private func deletePreset(_ preset: QueryPreset) {
         userPresets.removeAll { $0.id == preset.id }
         savedPresetsJSON = PresetPersistence.encode(userPresets) ?? ""
+    }
+
+    private func normalizeAndSaveRequirements() {
+        let normalized = requirements.coalescedByCriteria()
+        guard normalized == requirements else {
+            requirements = normalized
+            return
+        }
+        save()
     }
 }
 
@@ -296,6 +305,7 @@ private struct QueryView: View {
                     } else if let index = requirements.firstIndex(where: { $0.key == result.key }) {
                         requirements[index] = result
                     }
+                    requirements = requirements.coalescedByCriteria()
                 }
                 editor = nil
             }
@@ -319,6 +329,7 @@ private struct QueryView: View {
         } else {
             ForEach(ItemKind.allCases, id: \.self) { kind in
                 let group = requirements.filter { $0.kind == kind }
+                    .coalescedByCriteria().sortedByFloorLimit()
                 if !group.isEmpty {
                     Section {
                         ForEach(group) { requirement in
@@ -353,7 +364,7 @@ private struct RequirementRow: View {
         HStack(spacing: 6) {
             Button(action: onEdit) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(requirement.title).foregroundStyle(.primary)
+                    Text(requirement.displayTitle).foregroundStyle(.primary)
                     Text(requirement.description).font(.caption).foregroundStyle(.secondary)
                 }.frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
@@ -386,6 +397,7 @@ private struct RequirementEditor: View {
     @State private var group: Int
     @State private var maximumDepth: Int
     @State private var requireUncursed: Bool
+    @State private var quantity: Int
 
     init(requirement: ItemRequirement, isNew: Bool, onFinish: @escaping (ItemRequirement?) -> Void) {
         original = requirement; self.isNew = isNew; self.onFinish = onFinish
@@ -405,6 +417,7 @@ private struct RequirementEditor: View {
         _group = State(initialValue: requirement.identityGroup ?? 0)
         _maximumDepth = State(initialValue: requirement.maximumDepth ?? 0)
         _requireUncursed = State(initialValue: requirement.requireUncursed)
+        _quantity = State(initialValue: requirement.quantity)
     }
 
     var body: some View {
@@ -436,6 +449,11 @@ private struct RequirementEditor: View {
                         }
                     }
                     .onChange(of: itemID) { _, value in if !value.isEmpty { tierMatch = .any } }
+                    Stepper(value: $quantity, in: 1...64) {
+                        LabeledContent("Quantity") {
+                            Text("\(quantity)").monospacedDigit().foregroundStyle(.secondary)
+                        }
+                    }
                     if itemID.isEmpty && (kind == .weapon || kind == .armor) {
                         Picker("Tier", selection: $tierMatch) {
                             ForEach(TierMatch.allCases, id: \.self) { Text($0.label).tag($0) }
@@ -546,7 +564,7 @@ private struct RequirementEditor: View {
                     .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
             }.padding(12)
         }
-        .frame(width: 460, height: kind.modifierLabel == nil ? 470 : 500)
+        .frame(width: 460, height: kind.modifierLabel == nil ? 500 : 530)
     }
 
     private func normalizeUpgrade() {
@@ -567,7 +585,7 @@ private struct RequirementEditor: View {
             source: sourceRaw == 0 ? nil : ScoutItemSource(rawValue: sourceRaw - 1),
             identityGroup: group == 0 ? nil : group,
             maximumDepth: maximumDepth == 0 ? nil : maximumDepth,
-            requireUncursed: requireUncursed) else { return }
+            requireUncursed: requireUncursed, quantity: quantity) else { return }
         onFinish(value)
     }
 }

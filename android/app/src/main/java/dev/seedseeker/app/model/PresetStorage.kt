@@ -50,6 +50,7 @@ class PresetStorage(private val preferences: SharedPreferences) {
                     put("identityGroup", requirement.identityGroup ?: JSONObject.NULL)
                     put("maximumDepth", requirement.maximumDepth ?: JSONObject.NULL)
                     put("requireUncursed", requirement.requireUncursed)
+                    put("quantity", requirement.quantity)
                 })
             }
         })
@@ -86,12 +87,13 @@ class PresetStorage(private val preferences: SharedPreferences) {
                         identityGroup = encoded.optInt("identityGroup").takeIf { !encoded.isNull("identityGroup") },
                         maximumDepth = encoded.optInt("maximumDepth").takeIf { !encoded.isNull("maximumDepth") },
                         requireUncursed = encoded.optBoolean("requireUncursed", false),
+                        quantity = encoded.optInt("quantity", 1),
                     ),
                 )
             }
         }
         return PresetQuery(
-            requirements = requirements,
+            requirements = requirements.coalescedAndSorted(),
             maximumDepth = maximumDepth,
             requireBlacksmith = value.optBoolean("requireBlacksmith"),
             excludeBlacksmithRewards = value.optBoolean("excludeBlacksmithRewards"),
