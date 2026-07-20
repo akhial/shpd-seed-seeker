@@ -291,13 +291,13 @@ body {
 
 .d1-btn-danger {
   color: #fff;
-  background: linear-gradient(180deg, #d97465, #bd5849);
-  border-color: #93453a;
+  background: rgb(141, 54, 51);
+  border-color: rgb(178, 87, 65);
 }
 
 .d1-btn-danger:hover:not(:disabled) {
-  background: linear-gradient(180deg, #e28273, #c96353);
-  border-color: #a44f42;
+  background: rgb(158, 68, 64);
+  border-color: rgb(178, 87, 65);
 }
 
 .d1-btn-big {
