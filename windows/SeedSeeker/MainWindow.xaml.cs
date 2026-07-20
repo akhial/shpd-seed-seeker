@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.Json;
 using Microsoft.UI.Text;
 using Microsoft.UI.Windowing;
@@ -12,6 +13,9 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Graphics;
+using Windows.Storage;
+using Windows.Storage.Pickers;
+using Windows.Storage.Streams;
 using Windows.System;
 using Windows.UI;
 
@@ -21,9 +25,13 @@ public sealed partial class MainWindow : Window
 {
     private readonly NativeEngine engine = new();
     private readonly ObservableCollection<SeedResult> results = [];
+    private readonly List<string> baseSeeds = [];
+    private IReadOnlyList<string>? filteredSeeds;
     private QuerySettings query = new();
     private List<QueryPreset> userPresets = [];
     private NativeSearch? search;
+    private bool searching;
+    private bool filtering;
     private bool restoring = true;
     private const int ResultCap = 1024;
     private static readonly string SettingsPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Seed Seeker", "query.json");
@@ -108,8 +116,41 @@ public sealed partial class MainWindow : Window
     private void RefreshQuery()
     {
         RequirementList.ItemsSource = query.Requirements; NoRequirements.Visibility = query.Requirements.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-        FloorLabel.Text = $"first {query.MaximumDepth} floor{(query.MaximumDepth == 1 ? "" : "s")}"; RequireBlacksmith.IsEnabled = query.MaximumDepth < 14; StartButton.IsEnabled = search is not null || query.Requirements.Count != 0;
+        FloorLabel.Text = $"first {query.MaximumDepth} floor{(query.MaximumDepth == 1 ? "" : "s")}"; RequireBlacksmith.IsEnabled = query.MaximumDepth < 14; StartButton.IsEnabled = !filtering && (searching ? search is not null : query.Requirements.Count != 0);
         var count = BitOperations.PopCount((uint)query.Challenges); ChallengeSummary.Text = count == 0 ? "None" : $"{count} enabled";
+        RefreshExplorerControls();
+    }
+
+    private IReadOnlyList<string> ExplorerSeeds => filteredSeeds ?? baseSeeds;
+
+    private void RebuildVisibleResults()
+    {
+        results.Clear();
+        foreach (var seed in ExplorerSeeds)
+            if (SeedListCodec.MatchesSearch(seed, SeedSearch.Text)) results.Add(new(seed, results.Count + 1));
+        RefreshExplorerControls();
+    }
+
+    private void AddBaseSeed(string seed)
+    {
+        baseSeeds.Add(seed);
+        if (SeedListCodec.MatchesSearch(seed, SeedSearch.Text)) results.Add(new(seed, results.Count + 1));
+    }
+
+    private void RefreshExplorerControls()
+    {
+        var busy = searching || filtering;
+        ImportSeedsButton.IsEnabled = !busy;
+        FilterSeedsButton.IsEnabled = !busy && baseSeeds.Count != 0 && query.Requirements.Count != 0;
+        ClearSeedFilterButton.IsEnabled = !busy && filteredSeeds is not null;
+        ExportSeedsButton.IsEnabled = results.Count != 0;
+        QueryEditor.IsEnabled = !filtering;
+        var available = ExplorerSeeds.Count;
+        ExplorerStatus.Text = available == 0 && filteredSeeds is null
+            ? "No seeds loaded."
+            : filteredSeeds is null
+                ? $"{results.Count:N0} of {available:N0} seeds shown."
+                : $"{results.Count:N0} of {available:N0} matches shown · {baseSeeds.Count:N0} original seeds.";
     }
     private void FloorSlider_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e) { if (restoring || FloorLabel is null) return; query.MaximumDepth = (int)e.NewValue; RefreshQuery(); SaveSettings(); }
     private void SettingChanged(object sender, RoutedEventArgs e) { if (restoring) return; query.RequireBlacksmith = RequireBlacksmith.IsOn; query.ExcludeBlacksmithRewards = ExcludeRewards.IsOn; query.FastMode = FastMode.IsOn; SaveSettings(); }
@@ -218,9 +259,12 @@ public sealed partial class MainWindow : Window
 
     private async void Start_Click(object sender, RoutedEventArgs e)
     {
-        if (search is not null) { search.Cancel(); StartButton.IsEnabled = false; return; } results.Clear(); SearchStatus.Text = "Starting search…"; SetStartButton(running: true);
-        try { search = await Task.Run(() => engine.Start(query)); await RunSearch(search); } catch (Exception ex) { SearchStatus.Text = $"Failed: {ex.Message}"; }
-        finally { search?.Dispose(); search = null; SetStartButton(running: false); StartButton.IsEnabled = query.Requirements.Count != 0; }
+        if (filtering || (searching && search is null)) return;
+        if (search is not null) { search.Cancel(); StartButton.IsEnabled = false; return; }
+        var querySnapshot = query.Clone();
+        searching = true; baseSeeds.Clear(); filteredSeeds = null; SeedSearch.Text = ""; RebuildVisibleResults(); SearchStatus.Text = "Starting search…"; SetStartButton(running: true); StartButton.IsEnabled = false;
+        try { search = await Task.Run(() => engine.Start(querySnapshot)); RefreshQuery(); await RunSearch(search); } catch (Exception ex) { SearchStatus.Text = $"Failed: {ex.Message}"; }
+        finally { search?.Dispose(); search = null; searching = false; SetStartButton(running: false); RefreshQuery(); }
     }
     private void SetStartButton(bool running)
     {
@@ -236,14 +280,101 @@ public sealed partial class MainWindow : Window
         var timer = Stopwatch.StartNew(); long lastScanned = 0; var lastTime = 0d;
         while (true)
         {
-            await Task.Delay(150); var pollCount = Math.Max(1, Math.Min(128, ResultCap - results.Count)); var batch = await Task.Run(() => active.Poll(pollCount)); foreach (var seed in batch) if (results.Count < ResultCap) results.Add(new(seed, results.Count + 1));
+            await Task.Delay(150); var pollCount = Math.Max(1, Math.Min(128, ResultCap - baseSeeds.Count)); var batch = await Task.Run(() => active.Poll(pollCount)); foreach (var seed in batch) if (baseSeeds.Count < ResultCap) AddBaseSeed(seed);
             var status = await Task.Run(active.Status); var seconds = timer.Elapsed.TotalSeconds; var rate = seconds > lastTime ? (status.Scanned - lastScanned) / (seconds - lastTime) : 0; lastScanned = status.Scanned; lastTime = seconds;
             var probability = status.Probability > 0 ? $"{status.Probability:P4}" : "calculating"; var tts = status.Probability > 0 && rate > 0 ? FormatDuration(1 / status.Probability / rate) : "calculating";
             SearchStatus.Text = status.State == SearchState.Running ? $"Seed match probability: {probability}   •   TTS @ {rate:N0} seeds/s: {tts}\nTime elapsed: {FormatDuration(seconds)}" : status.State switch { SearchState.Completed => "Completed", SearchState.Cancelled => "Cancelled", _ => $"Failed (error {status.ErrorCode})" };
-            if (results.Count >= ResultCap) { active.Cancel(); SearchStatus.Text += "\nResult limit reached (1,024 seeds)."; } if (status.State != SearchState.Running || results.Count >= ResultCap) break;
+            RefreshExplorerControls();
+            if (baseSeeds.Count >= ResultCap) { active.Cancel(); SearchStatus.Text += "\nResult limit reached (1,024 seeds)."; } if (status.State != SearchState.Running || baseSeeds.Count >= ResultCap) break;
         }
     }
     private static string FormatDuration(double seconds) => seconds switch { < 1 => "less than a second", < 60 => $"{seconds:N0}s", < 3600 => $"{seconds / 60:N1}m", < 86400 => $"{seconds / 3600:N1}h", _ => $"{seconds / 86400:N1}d" };
+
+    private void SeedSearch_TextChanged(object sender, TextChangedEventArgs e) => RebuildVisibleResults();
+
+    private async void ImportSeeds_Click(object sender, RoutedEventArgs e)
+    {
+        if (searching || filtering) return;
+        var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.DocumentsLibrary };
+        picker.FileTypeFilter.Add(".txt");
+        InitializePicker(picker);
+        try
+        {
+            var file = await picker.PickSingleFileAsync();
+            if (file is null) return;
+            var buffer = await FileIO.ReadBufferAsync(file);
+            using var reader = DataReader.FromBuffer(buffer);
+            var bytes = new byte[buffer.Length];
+            reader.ReadBytes(bytes);
+            string text;
+            try { text = new UTF8Encoding(false, true).GetString(bytes); }
+            catch (DecoderFallbackException) { throw new FormatException("Seed list is not valid UTF-8."); }
+            var imported = SeedListCodec.Parse(text);
+            if (searching || filtering)
+            {
+                ExplorerStatus.Text = "Wait for the current operation before importing.";
+                return;
+            }
+            baseSeeds.Clear(); baseSeeds.AddRange(imported); filteredSeeds = null;
+            SeedSearch.Text = "";
+            RebuildVisibleResults();
+            SearchStatus.Text = $"Imported {baseSeeds.Count:N0} seed{(baseSeeds.Count == 1 ? "" : "s")}.";
+        }
+        catch (Exception ex) { ExplorerStatus.Text = $"Import failed: {ex.Message}"; }
+    }
+
+    private async void ExportSeeds_Click(object sender, RoutedEventArgs e)
+    {
+        var visible = results.Select(result => result.Seed).ToArray();
+        if (visible.Length == 0) return;
+        var picker = new FileSavePicker
+        {
+            SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
+            SuggestedFileName = "seed-seeker-seeds",
+            DefaultFileExtension = ".txt",
+        };
+        picker.FileTypeChoices.Add("Plain text", new List<string> { ".txt" });
+        InitializePicker(picker);
+        try
+        {
+            var file = await picker.PickSaveFileAsync();
+            if (file is null) return;
+            await FileIO.WriteBytesAsync(file, Encoding.UTF8.GetBytes(SeedListCodec.Format(visible)));
+            ExplorerStatus.Text = $"Exported {visible.Length:N0} visible seed{(visible.Length == 1 ? "" : "s")}.";
+        }
+        catch (Exception ex) { ExplorerStatus.Text = $"Export failed: {ex.Message}"; }
+    }
+
+    private async void FilterSeeds_Click(object sender, RoutedEventArgs e)
+    {
+        if (searching || filtering || baseSeeds.Count == 0 || query.Requirements.Count == 0) return;
+        var querySnapshot = query.Clone();
+        var seedSnapshot = baseSeeds.ToArray();
+        string? failure = null;
+        filtering = true; RefreshQuery();
+        ExplorerStatus.Text = $"Checking {seedSnapshot.Length:N0} seed{(seedSnapshot.Length == 1 ? "" : "s")} against the current query…";
+        try
+        {
+            var matches = await Task.Run(() => engine.Filter(querySnapshot, seedSnapshot));
+            filteredSeeds = matches;
+            RebuildVisibleResults();
+        }
+        catch (Exception ex) { failure = $"Filtering failed: {ex.Message}"; }
+        finally
+        {
+            filtering = false; RefreshQuery();
+            if (failure is not null) ExplorerStatus.Text = failure;
+        }
+    }
+
+    private void ClearSeedFilter_Click(object sender, RoutedEventArgs e)
+    {
+        if (searching || filtering || filteredSeeds is null) return;
+        filteredSeeds = null; RebuildVisibleResults();
+    }
+
+    private void InitializePicker(object picker) => WinRT.Interop.InitializeWithWindow.Initialize(
+        picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
 
     private void ResultsList_SelectionChanged(object sender, SelectionChangedEventArgs e) { if (ResultsList.SelectedItem is SeedResult row) { SeedInput.Text = row.Seed; _ = ScoutSeed(row.Seed); } }
     private void ResultsList_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e) { if (ResultsList.SelectedItem is SeedResult row) Copy(row.Seed); }

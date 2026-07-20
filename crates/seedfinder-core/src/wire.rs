@@ -9,10 +9,12 @@ use crate::query::{Requirement, SearchQuery, TierRequirement, UpgradeRequirement
 use crate::seed::DungeonSeed;
 
 const REQUEST_MAGIC: &[u8; 4] = b"SSF7";
+const FILTER_REQUEST_MAGIC: &[u8; 4] = b"SFF1";
 const SCOUT_REQUEST_MAGIC_V2: &[u8; 4] = b"SSQ2";
 const RESULT_MAGIC: &[u8; 4] = b"SSR1";
 const SCOUT_RESULT_MAGIC: &[u8; 4] = b"SSC1";
 const MAX_REQUIREMENTS: usize = 64;
+pub const MAX_FILTER_SEEDS: usize = 1_024;
 
 /// Decodes an `SSF7` search request. The flags byte uses bit 0 for required
 /// blacksmith availability, bit 1 for the lossy fast search mode described on
@@ -95,6 +97,65 @@ pub fn encode_query(query: &SearchQuery) -> Result<Vec<u8>, WireError> {
         output.push(u8::from(requirement.require_uncursed));
     }
     Ok(output)
+}
+
+/// Encodes a finite-list filter request around the ordinary `SSF7` query.
+///
+/// `SFF1` is deliberately small and fixed-width for seed codes:
+/// `magic[4], query_length:u16, query_packet[query_length], seed_count:u16,
+/// seed_codes[seed_count][11]`.
+///
+/// # Errors
+///
+/// Returns [`WireError`] when the query is invalid, the list is empty or
+/// exceeds [`MAX_FILTER_SEEDS`], or the nested query cannot fit a `u16` length.
+pub fn encode_filter_request(
+    query: &SearchQuery,
+    seeds: &[DungeonSeed],
+) -> Result<Vec<u8>, WireError> {
+    if seeds.is_empty() || seeds.len() > MAX_FILTER_SEEDS {
+        return Err(WireError::InvalidSeedCount);
+    }
+    let query_packet = encode_query(query)?;
+    let query_length = u16::try_from(query_packet.len()).map_err(|_| WireError::FieldTooLong)?;
+    let seed_count = u16::try_from(seeds.len()).map_err(|_| WireError::InvalidSeedCount)?;
+    let mut output = Vec::with_capacity(8 + query_packet.len() + seeds.len() * 11);
+    output.extend_from_slice(FILTER_REQUEST_MAGIC);
+    output.extend_from_slice(&query_length.to_be_bytes());
+    output.extend_from_slice(&query_packet);
+    output.extend_from_slice(&seed_count.to_be_bytes());
+    for seed in seeds {
+        output.extend_from_slice(seed.to_code().as_bytes());
+    }
+    Ok(output)
+}
+
+/// Decodes an `SFF1` finite-list filter request.
+///
+/// # Errors
+///
+/// Returns [`WireError`] for malformed framing, an invalid nested query, an
+/// empty or oversized list, a malformed seed code, or trailing bytes.
+pub fn decode_filter_request(packet: &[u8]) -> Result<(SearchQuery, Vec<DungeonSeed>), WireError> {
+    let mut input = Input::new(packet);
+    if input.take(4)? != FILTER_REQUEST_MAGIC {
+        return Err(WireError::BadMagic);
+    }
+    let query_length = usize::from(input.u16()?);
+    let query = decode_query(input.take(query_length)?)?;
+    let seed_count = usize::from(input.u16()?);
+    if seed_count == 0 || seed_count > MAX_FILTER_SEEDS {
+        return Err(WireError::InvalidSeedCount);
+    }
+    let mut seeds = Vec::with_capacity(seed_count);
+    for _ in 0..seed_count {
+        let code = std::str::from_utf8(input.take(11)?).map_err(|_| WireError::InvalidUtf8)?;
+        seeds.push(DungeonSeed::from_code(code).map_err(|_| WireError::InvalidSeedCode)?);
+    }
+    if !input.is_empty() {
+        return Err(WireError::TrailingData);
+    }
+    Ok((query, seeds))
 }
 
 fn decode_query_payload(input: &mut Input<'_>) -> Result<SearchQuery, WireError> {
@@ -527,6 +588,7 @@ pub enum WireError {
     Truncated,
     InvalidUtf8,
     InvalidSeedCode,
+    InvalidSeedCount,
     InvalidRequirementCount,
     UnknownItemKind,
     UnknownItem,
@@ -553,6 +615,7 @@ impl fmt::Display for WireError {
             Self::Truncated => "packet ended before a declared field",
             Self::InvalidUtf8 => "packet contains invalid UTF-8",
             Self::InvalidSeedCode => "seed code must contain nine A-Z characters",
+            Self::InvalidSeedCount => "finite seed list must contain 1..=1024 seeds",
             Self::InvalidRequirementCount => "requirement count must be 1..=64",
             Self::UnknownItemKind => "packet names an unknown item category",
             Self::UnknownItem => "packet names an unknown item ID",
@@ -588,8 +651,9 @@ mod tests {
     use crate::seed::DungeonSeed;
 
     use super::{
-        WireError, decode_query, decode_scout_request, decode_scout_seed, decode_scout_world,
-        empty_results, encode_query, encode_results, encode_scout_world,
+        WireError, decode_filter_request, decode_query, decode_scout_request, decode_scout_seed,
+        decode_scout_world, empty_results, encode_filter_request, encode_query, encode_results,
+        encode_scout_world,
     };
 
     const SOURCES: [ItemSource; 17] = [
@@ -697,6 +761,48 @@ mod tests {
 
         *packet.last_mut().unwrap() = 2;
         assert_eq!(decode_query(&packet), Err(WireError::InvalidFlags));
+    }
+
+    #[test]
+    fn finite_filter_request_round_trips_query_and_ordered_seeds() {
+        let query = decode_query(&query_packet(0, 0, 1, "plate_armor", [0, 0], [1, 2])).unwrap();
+        let seeds = [
+            DungeonSeed::new(42).unwrap(),
+            DungeonSeed::MIN,
+            DungeonSeed::new(17).unwrap(),
+        ];
+
+        let packet = encode_filter_request(&query, &seeds).unwrap();
+
+        assert_eq!(&packet[..4], b"SFF1");
+        assert_eq!(decode_filter_request(&packet), Ok((query, seeds.to_vec())));
+    }
+
+    #[test]
+    fn finite_filter_request_rejects_empty_invalid_and_trailing_lists() {
+        let query = decode_query(&query_packet(0, 0, 1, "plate_armor", [0, 0], [1, 2])).unwrap();
+        assert_eq!(
+            encode_filter_request(&query, &[]),
+            Err(WireError::InvalidSeedCount)
+        );
+
+        let query_packet = encode_query(&query).unwrap();
+        let mut invalid = b"SFF1".to_vec();
+        invalid.extend_from_slice(&u16::try_from(query_packet.len()).unwrap().to_be_bytes());
+        invalid.extend_from_slice(&query_packet);
+        invalid.extend_from_slice(&1_u16.to_be_bytes());
+        invalid.extend_from_slice(b"AAA-AAA-AA0");
+        assert_eq!(
+            decode_filter_request(&invalid),
+            Err(WireError::InvalidSeedCode)
+        );
+
+        let mut trailing = encode_filter_request(&query, &[DungeonSeed::MIN]).unwrap();
+        trailing.push(0);
+        assert_eq!(
+            decode_filter_request(&trailing),
+            Err(WireError::TrailingData)
+        );
     }
 
     #[test]

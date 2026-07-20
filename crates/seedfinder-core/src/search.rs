@@ -219,6 +219,86 @@ pub fn search_parallel<G: WorldGenerator>(
     })
 }
 
+/// Applies a validated query to an explicit, ordered list of seeds.
+///
+/// Unlike [`search_parallel`], this helper does not traverse a numeric range.
+/// It is intended for imported or previously discovered seed lists. Results
+/// preserve the caller's input order and use [`SearchQuery::matches`] exactly.
+/// `fast_mode` is deliberately ignored because a finite imported list should
+/// never lose genuine matches to a whole-space search optimization.
+///
+/// # Errors
+///
+/// Returns [`SearchError::InvalidQuery`] when the query is invalid.
+///
+/// # Panics
+///
+/// Panics if a custom [`WorldGenerator::generate_batch_gated`] implementation
+/// violates its one-output-per-input contract.
+pub fn filter_seeds<G: WorldGenerator + ?Sized>(
+    generator: &G,
+    query: &SearchQuery,
+    seeds: &[DungeonSeed],
+) -> Result<Vec<GeneratedWorld>, SearchError> {
+    query.validate()?;
+    if seeds.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut exact_query = query.clone();
+    exact_query.fast_mode = false;
+    let plan = QueryPlan::analyze(&exact_query);
+    if plan.is_unsatisfiable() {
+        return Ok(Vec::new());
+    }
+
+    let lane_batches = seeds.len().div_ceil(4);
+    let worker_count = SearchOptions::available_parallelism()
+        .get()
+        .min(lane_batches)
+        .max(1);
+    if worker_count == 1 {
+        return Ok(filter_seed_chunk(generator, &exact_query, &plan, seeds));
+    }
+    let chunk_size = seeds.len().div_ceil(worker_count).div_ceil(4) * 4;
+    let worlds = std::thread::scope(|scope| {
+        let plan = &plan;
+        let query = &exact_query;
+        let handles = seeds
+            .chunks(chunk_size)
+            .map(|chunk| scope.spawn(move || filter_seed_chunk(generator, query, plan, chunk)))
+            .collect::<Vec<_>>();
+        let mut worlds = Vec::new();
+        for handle in handles {
+            match handle.join() {
+                Ok(mut chunk) => worlds.append(&mut chunk),
+                Err(payload) => std::panic::resume_unwind(payload),
+            }
+        }
+        worlds
+    });
+    Ok(worlds)
+}
+
+fn filter_seed_chunk<G: WorldGenerator + ?Sized>(
+    generator: &G,
+    query: &SearchQuery,
+    plan: &QueryPlan,
+    seeds: &[DungeonSeed],
+) -> Vec<GeneratedWorld> {
+    let worlds = generator.generate_batch_gated(seeds, plan.generation_depth(), plan);
+    assert_eq!(
+        worlds.len(),
+        seeds.len(),
+        "WorldGenerator::generate_batch_gated must return one entry per seed"
+    );
+    worlds
+        .into_iter()
+        .flatten()
+        .filter(|world| query.matches(world))
+        .collect()
+}
+
 /// Starts a search on a coordinator thread and returns a cancellable handle.
 /// This is the ownership shape used by the JNI layer.
 pub fn spawn_search<G: WorldGenerator + Send + 'static>(
@@ -690,13 +770,13 @@ mod tests {
     use std::num::NonZeroUsize;
     use std::sync::{Arc, Mutex};
 
-    use crate::catalog::{ItemId, ItemKind};
+    use crate::catalog::{Effect, ItemId, ItemKind, WeaponEffect};
     use crate::model::{Accessibility, GeneratedWorld, ItemSource, WorldItem};
     use crate::query::{Requirement, SearchQuery, TierRequirement};
 
     use super::{
-        SearchOptions, SearchProgress, StreamingSearchState, WorldGenerator, search_parallel,
-        spawn_rotated_streaming_search, spawn_streaming_search,
+        SearchOptions, SearchProgress, StreamingSearchState, WorldGenerator, filter_seeds,
+        search_parallel, spawn_rotated_streaming_search, spawn_streaming_search,
     };
 
     struct DivisibleGenerator;
@@ -763,6 +843,86 @@ mod tests {
                 .all(|world| world.seed.value() % 17 == 0)
         );
         assert!(outcome.tested >= 20);
+    }
+
+    #[test]
+    fn explicit_seed_filter_preserves_input_order() {
+        let query = SearchQuery {
+            requirements: vec![Requirement {
+                kind: ItemKind::Wand,
+                item: Some(ItemId::WandFrost),
+                tier: TierRequirement::Any,
+                upgrade: crate::query::UpgradeRequirement::Exact(2),
+                effect: None,
+                require_uncursed: false,
+                source: None,
+                identity_group: None,
+                max_depth: None,
+            }],
+            max_depth: 4,
+            challenges: crate::challenges::Challenges::NONE,
+            require_blacksmith: false,
+            exclude_blacksmith_rewards: false,
+            fast_mode: false,
+        };
+        let seeds = [34, 1, 17, 8, 51].map(|value| crate::seed::DungeonSeed::new(value).unwrap());
+
+        let matching = filter_seeds(&DivisibleGenerator, &query, &seeds).unwrap();
+
+        assert_eq!(
+            matching
+                .iter()
+                .map(|world| world.seed.value())
+                .collect::<Vec<_>>(),
+            vec![34, 17, 51]
+        );
+    }
+
+    #[test]
+    fn explicit_seed_filter_ignores_fast_mode_lossiness() {
+        struct RarePrizeGenerator;
+
+        impl WorldGenerator for RarePrizeGenerator {
+            fn generate(&self, seed: crate::seed::DungeonSeed, _max_depth: u8) -> GeneratedWorld {
+                GeneratedWorld {
+                    seed,
+                    items: vec![WorldItem {
+                        item: ItemId::Sword,
+                        upgrade: 3,
+                        effect: Some(Effect::Weapon(WeaponEffect::Sacrificial)),
+                        cursed: true,
+                        depth: 7,
+                        source: ItemSource::SacrificialFire,
+                        accessibility: Accessibility::Independent,
+                    }],
+                }
+            }
+        }
+
+        let query = SearchQuery {
+            requirements: vec![Requirement {
+                kind: ItemKind::Weapon,
+                item: Some(ItemId::Sword),
+                tier: TierRequirement::Any,
+                upgrade: crate::query::UpgradeRequirement::Exact(3),
+                effect: Some(Effect::Weapon(WeaponEffect::Sacrificial)),
+                require_uncursed: false,
+                source: None,
+                identity_group: None,
+                max_depth: None,
+            }],
+            max_depth: 24,
+            challenges: crate::challenges::Challenges::NONE,
+            require_blacksmith: false,
+            exclude_blacksmith_rewards: false,
+            fast_mode: true,
+        };
+        let seed = crate::seed::DungeonSeed::MIN;
+
+        let matching = filter_seeds(&RarePrizeGenerator, &query, &[seed]).unwrap();
+
+        assert_eq!(matching.len(), 1);
+        assert_eq!(matching[0].seed, seed);
     }
 
     #[test]

@@ -104,6 +104,30 @@ public enum ResultCodec {
     }
 }
 
+public enum FilterCodec {
+    public static func encode(request: SearchRequest, seeds: [String]) throws -> Data {
+        guard !seeds.isEmpty, seeds.count <= SeedListCodec.maximumSeedCount else {
+            throw WireCodecError.invalidValue("Seed filters must contain 1...1,024 seeds")
+        }
+        let query = try QueryCodec.encode(request)
+        guard query.count <= 65_535 else {
+            throw WireCodecError.invalidValue("Encoded query is too large")
+        }
+        var output = Writer()
+        output.bytes("SFF1".utf8)
+        output.u16(query.count)
+        output.bytes(query)
+        output.u16(seeds.count)
+        for seed in seeds {
+            guard SeedCode.isCanonical(seed) else {
+                throw WireCodecError.invalidValue("Seed must use XXX-XXX-XXX format")
+            }
+            output.bytes(seed.utf8)
+        }
+        return output.data
+    }
+}
+
 public enum ScoutCodec {
     public static func encodeRequest(seed: String, challenges: Int) throws -> Data {
         guard SeedCode.isCanonical(seed) else { throw WireCodecError.invalidValue("Seed must use XXX-XXX-XXX format") }

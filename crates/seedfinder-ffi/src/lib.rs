@@ -6,8 +6,8 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::ptr;
 
 use shpd_seedfinder_session::{
-    NativeSession, ScoutCallError, ScoutPacketError, StartSessionError, close_session,
-    production_scout_packet, registry,
+    FilterCallError, FilterPacketError, NativeSession, ScoutCallError, ScoutPacketError,
+    StartSessionError, close_session, production_filter_packet, production_scout_packet, registry,
 };
 
 const OK: i32 = 0;
@@ -146,6 +146,34 @@ pub extern "C" fn seedfinder_scout(
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn seedfinder_filter(
+    request: *const u8,
+    request_len: usize,
+    out_packet: *mut *mut u8,
+    out_len: *mut usize,
+) -> i32 {
+    clear_outputs(out_packet, out_len);
+    catch_unwind(AssertUnwindSafe(|| {
+        if out_packet.is_null() || out_len.is_null() {
+            return INVALID;
+        }
+        let Some(bytes) = request_slice(request, request_len) else {
+            return INVALID;
+        };
+        match production_filter_packet(bytes) {
+            Ok(packet) => return_packet(packet, out_packet, out_len),
+            Err(FilterCallError::Packet(
+                FilterPacketError::Request(_) | FilterPacketError::Filter(_),
+            )) => INVALID,
+            Err(
+                FilterCallError::Packet(FilterPacketError::Response(_)) | FilterCallError::Panicked,
+            ) => INTERNAL,
+        }
+    }))
+    .unwrap_or(INTERNAL)
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn seedfinder_buffer_free(pointer: *mut u8, len: usize) {
     let _ = catch_unwind(AssertUnwindSafe(|| {
         if pointer.is_null() {
@@ -166,6 +194,16 @@ mod tests {
         packet.extend_from_slice(&[24, 0, 0, 0, 0, 1, 2, 0, 10]);
         packet.extend_from_slice(b"wand_frost");
         packet.extend_from_slice(&[0, 0, 1, 2, 0, 0, 0, 0, 0, 0]);
+        packet
+    }
+
+    fn filter_packet() -> Vec<u8> {
+        let query = query_packet();
+        let mut packet = b"SFF1".to_vec();
+        packet.extend_from_slice(&u16::try_from(query.len()).unwrap().to_be_bytes());
+        packet.extend_from_slice(&query);
+        packet.extend_from_slice(&1_u16.to_be_bytes());
+        packet.extend_from_slice(b"AAA-AAA-AAA");
         packet
     }
 
@@ -194,6 +232,25 @@ mod tests {
         let packet = unsafe { take_packet(pointer, len) };
         assert_eq!(&packet[..4], b"SSC1");
         seedfinder_buffer_free(ptr::null_mut(), 0);
+    }
+
+    #[test]
+    fn finite_filter_round_trip_and_buffer_free() {
+        let request = filter_packet();
+        let mut pointer = ptr::null_mut();
+        let mut len = 0;
+        assert_eq!(
+            seedfinder_filter(
+                request.as_ptr(),
+                request.len(),
+                &raw mut pointer,
+                &raw mut len
+            ),
+            OK
+        );
+        assert!(!pointer.is_null());
+        let packet = unsafe { take_packet(pointer, len) };
+        assert_eq!(&packet[..4], b"SSR1");
     }
 
     #[test]
@@ -232,6 +289,10 @@ mod tests {
         );
         assert_eq!(
             seedfinder_scout(b"bad".as_ptr(), 3, &raw mut pointer, &raw mut len),
+            INVALID
+        );
+        assert_eq!(
+            seedfinder_filter(b"bad".as_ptr(), 3, &raw mut pointer, &raw mut len),
             INVALID
         );
         assert_eq!(

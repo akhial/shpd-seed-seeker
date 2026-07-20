@@ -22,6 +22,7 @@ public protocol SeedFinderSearchSession: Sendable {
 
 public protocol SeedFinderEngine: Sendable {
     func startSearch(_ request: SearchRequest) async throws -> any SeedFinderSearchSession
+    func filterSeeds(_ seeds: [String], matching request: SearchRequest) async throws -> [SeedResult]
     func scoutSeed(_ seed: String, challenges: Int) async throws -> ScoutWorld
 }
 
@@ -45,6 +46,31 @@ public struct ProductionSeedFinderEngine: SeedFinderEngine {
         }.value
         guard handle != 0 else { throw SeedFinderEngineError.invalidArgument }
         return NativeSearchSession(handle: handle, requirementCount: request.requirements.count)
+    }
+
+    public func filterSeeds(_ seeds: [String], matching request: SearchRequest) async throws -> [SeedResult] {
+        guard !seeds.isEmpty else { return [] }
+        let encoded = try FilterCodec.encode(request: request, seeds: seeds)
+        let packet: Data = try await Task.detached {
+            var pointer: UnsafeMutablePointer<UInt8>?
+            var length = 0
+            let code = encoded.withUnsafeBytes { bytes in
+                seedfinder_filter(bytes.bindMemory(to: UInt8.self).baseAddress, bytes.count,
+                                  &pointer, &length)
+            }
+            guard code == 0 else { throw ffiError(code) }
+            return try copiedPacket(pointer, length)
+        }.value
+        let results = try ResultCodec.decode(packet, requirementCount: request.requirements.count)
+        var inputCursor = 0
+        for result in results {
+            while inputCursor < seeds.count, seeds[inputCursor] != result.seed {
+                inputCursor += 1
+            }
+            guard inputCursor < seeds.count else { throw SeedFinderEngineError.invalidResponse }
+            inputCursor += 1
+        }
+        return results
     }
 
     public func scoutSeed(_ seed: String, challenges: Int = 0) async throws -> ScoutWorld {

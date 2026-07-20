@@ -12,6 +12,7 @@ mod query_pane;
 mod requirement_editor;
 mod results_pane;
 mod scout_match;
+mod seed_list;
 mod state;
 mod window;
 

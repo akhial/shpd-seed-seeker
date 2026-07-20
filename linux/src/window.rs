@@ -8,9 +8,10 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use adw::prelude::*;
-use gtk::gio;
+use gtk::{gio, glib};
 
 use crate::config::APP_NAME;
+use crate::seed_list;
 use crate::state::UiRequirement;
 use crate::{
     challenges_dialog, detail_pane, persist, presets_dialog, query_pane, requirement_editor,
@@ -95,7 +96,10 @@ pub fn present(app: &adw::Application) {
             persist::save(&snapshot);
             query.refresh(&snapshot);
             detail.render(&snapshot);
-            start_action.set_enabled(!snapshot.requirements.is_empty() || results.is_running());
+            start_action.set_enabled(
+                !results.is_filtering()
+                    && (!snapshot.requirements.is_empty() || results.is_running()),
+            );
         }
     });
 
@@ -170,13 +174,122 @@ pub fn present(app: &adw::Application) {
             inner_split.set_show_content(true);
         }
     });
+    results.connect_import({
+        let results = Rc::clone(&results);
+        let window = window.clone();
+        let inner_split = inner_split.clone();
+        let outer_split = outer_split.clone();
+        move || {
+            let results = Rc::clone(&results);
+            let window = window.clone();
+            let inner_split = inner_split.clone();
+            let outer_split = outer_split.clone();
+            glib::spawn_future_local(async move {
+                let dialog = seed_file_dialog("Import Seed List", None);
+                let file = match dialog.open_future(Some(&window)).await {
+                    Ok(file) => file,
+                    Err(error) if dialog_was_cancelled(&error) => return,
+                    Err(error) => {
+                        results.show_toast(&format!("Could not open seed list: {error}"));
+                        return;
+                    }
+                };
+                let (contents, _) = match file.load_contents_future().await {
+                    Ok(contents) => contents,
+                    Err(error) => {
+                        results.show_toast(&format!("Could not read seed list: {error}"));
+                        return;
+                    }
+                };
+                let Ok(text) = std::str::from_utf8(&contents) else {
+                    results.show_toast("Seed lists must be UTF-8 text");
+                    return;
+                };
+                match seed_list::parse(text) {
+                    Ok(seeds) => {
+                        if results.is_busy() {
+                            results.show_toast("Wait for the current operation before importing");
+                            return;
+                        }
+                        results.replace_seeds(seeds);
+                        outer_split.set_show_content(true);
+                        inner_split.set_show_content(false);
+                    }
+                    Err(error) => {
+                        results.show_toast(&format!("Could not import seed list: {error}"));
+                    }
+                }
+            });
+        }
+    });
+    results.connect_export({
+        let results = Rc::clone(&results);
+        let window = window.clone();
+        move || {
+            let seeds = results.visible_seeds();
+            if seeds.is_empty() {
+                return;
+            }
+            let contents = seed_list::format(&seeds).into_bytes();
+            let count = seeds.len();
+            let results = Rc::clone(&results);
+            let window = window.clone();
+            glib::spawn_future_local(async move {
+                let dialog =
+                    seed_file_dialog("Export Visible Seeds", Some("seed-seeker-seeds.txt"));
+                let file = match dialog.save_future(Some(&window)).await {
+                    Ok(file) => file,
+                    Err(error) if dialog_was_cancelled(&error) => return,
+                    Err(error) => {
+                        results.show_toast(&format!("Could not choose export file: {error}"));
+                        return;
+                    }
+                };
+                match file
+                    .replace_contents_future(
+                        contents,
+                        None,
+                        false,
+                        gio::FileCreateFlags::REPLACE_DESTINATION,
+                    )
+                    .await
+                {
+                    Ok(_) => results.show_toast(&format!(
+                        "Exported {count} visible seed{}",
+                        if count == 1 { "" } else { "s" }
+                    )),
+                    Err((_, error)) => {
+                        results.show_toast(&format!("Could not export seed list: {error}"));
+                    }
+                }
+            });
+        }
+    });
+    results.connect_filter({
+        let results = Rc::clone(&results);
+        let state = Rc::clone(&state);
+        let query = Rc::clone(&query);
+        let start_action = start_action.clone();
+        move || match state.borrow().to_query() {
+            Ok(search_query) => {
+                results.filter(search_query);
+                if results.is_filtering() {
+                    query.set_running(true);
+                    start_action.set_enabled(false);
+                }
+            }
+            Err(message) => results.show_toast(&message),
+        }
+    });
     results.connect_finished({
         let query = Rc::clone(&query);
         let state = Rc::clone(&state);
+        let results = Rc::clone(&results);
         let start_action = start_action.clone();
         move || {
             query.set_running(false);
-            start_action.set_enabled(!state.borrow().requirements.is_empty());
+            start_action
+                .set_enabled(!results.is_filtering() && !state.borrow().requirements.is_empty());
         }
     });
     detail.connect_scout({
@@ -285,6 +398,25 @@ fn build_menu() -> gio::Menu {
     app_section.append(Some("_About Seed Seeker"), Some("app.about"));
     menu.append_section(None, &app_section);
     menu
+}
+
+fn seed_file_dialog(title: &str, initial_name: Option<&str>) -> gtk::FileDialog {
+    let filter = gtk::FileFilter::new();
+    filter.set_name(Some("Plain-text seed lists"));
+    filter.add_mime_type("text/plain");
+    filter.add_pattern("*.txt");
+    let mut builder = gtk::FileDialog::builder()
+        .title(title)
+        .modal(true)
+        .default_filter(&filter);
+    if let Some(name) = initial_name {
+        builder = builder.initial_name(name);
+    }
+    builder.build()
+}
+
+fn dialog_was_cancelled(error: &glib::Error) -> bool {
+    error.matches(gtk::DialogError::Cancelled) || error.matches(gtk::DialogError::Dismissed)
 }
 
 fn present_shortcuts(window: &adw::ApplicationWindow) {
