@@ -97,7 +97,8 @@ export function QueryPanel({
   const ungrouped = indexed.filter(({ requirement }) => requirementKind(requirement) === undefined)
   const challengeCount = query.challenges.length
   const hasRequirements = query.requirements.length > 0
-  const startDisabled = !running && (!engineReady || !validation.valid)
+  const impossible = Boolean(analysis?.valid && analysis.impossible)
+  const startDisabled = !running && (!engineReady || !validation.valid || impossible)
 
   return (
     <>
@@ -320,9 +321,6 @@ export function QueryPanel({
       </div>
 
       <div className="d1-query-foot">
-        {hasRequirements && analysis?.valid && analysis.impossible && (
-          <span className="d1-warn-chip">Impossible query</span>
-        )}
         {hasRequirements && analysis?.valid && !analysis.impossible && (
           <p className="d1-analysis-line">{probabilityLabel(analysis.probability)}</p>
         )}
@@ -331,7 +329,7 @@ export function QueryPanel({
         )}
         <button
           type="button"
-          className={`d1-btn d1-btn-big ${running ? 'd1-btn-danger' : 'd1-btn-primary'}`}
+          className={`d1-btn d1-btn-big ${running ? 'd1-btn-danger' : impossible ? '' : 'd1-btn-primary'}`}
           disabled={startDisabled}
           onClick={onToggleSearch}
         >

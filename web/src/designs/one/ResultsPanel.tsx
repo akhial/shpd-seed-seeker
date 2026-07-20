@@ -102,10 +102,10 @@ export function ResultsPanel({
 
         {!running && impossible && (
           <div className="d1-impossible">
-            <span className="d1-warn-chip">Impossible query</span>
+            <strong className="d1-impossible-title">Impossible query</strong>
             <p>
               No seed can satisfy these requirements within the current floor limit. Quest-reward-only items
-              need their quest floors in range: +3 wands floor 9, +3/+4 rings floor 19.
+              need their quest floors in range: +3 wands floors 7–9, +3/+4 rings floors 17–19.
             </p>
           </div>
         )}
