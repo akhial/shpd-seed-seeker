@@ -15,6 +15,9 @@ private struct ContentView: View {
     @AppStorage("savedQuery") private var savedQueryJSON = ""
     @AppStorage("savedPresets") private var savedPresetsJSON = ""
     @AppStorage("challenges") private var challenges = 0
+    @AppStorage("skippedUpdateVersion") private var skippedUpdateVersion = ""
+    @AppStorage("lastUpdateCheck") private var lastUpdateCheck = 0.0
+    @State private var availableUpdate: UpdateInfo?
     @State private var requirements: [ItemRequirement] = []
     @State private var maximumDepth = 24
     @State private var requireBlacksmith = false
@@ -69,6 +72,37 @@ private struct ContentView: View {
         .onChange(of: controller.selectedSeed) { _, seed in
             if let seed { scout.scout(seed, challenges: challenges) }
         }
+        .task { await checkForUpdates() }
+        // Mirrors the Sparkle update prompt macOS users expect.
+        .alert("A new version of Seed Seeker is available!",
+               isPresented: Binding(get: { availableUpdate != nil },
+                                    set: { if !$0 { availableUpdate = nil } }),
+               presenting: availableUpdate) { update in
+            Button("Download") { NSWorkspace.shared.open(update.url) }
+            Button("Remind Me Later", role: .cancel) {}
+            Button("Skip This Version") { skippedUpdateVersion = update.version }
+        } message: { update in
+            Text("Seed Seeker \(update.version) is now available — you have \(appVersion). Would you like to download it?")
+        }
+    }
+
+    /// The marketing version from the app bundle; "0.0.0" when running
+    /// outside a bundle (e.g. `swift run`), where only the fake-update
+    /// override can trigger the alert anyway.
+    private var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
+    }
+
+    private func checkForUpdates() async {
+        let forced = UpdateChecker.fakeLatest != nil
+        let day: TimeInterval = 86_400
+        guard forced || Date.now.timeIntervalSince1970 - lastUpdateCheck > day else { return }
+        lastUpdateCheck = Date.now.timeIntervalSince1970
+        // Outside a bundle the real version is unknown; never nag from dev runs.
+        guard forced || Bundle.main.infoDictionary?["CFBundleShortVersionString"] != nil else { return }
+        guard let update = await UpdateChecker.check(current: appVersion),
+              update.version != skippedUpdateVersion else { return }
+        availableUpdate = update
     }
 
     private func save() {
