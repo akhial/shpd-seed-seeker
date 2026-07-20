@@ -16,7 +16,7 @@ export class SearchCoordinator {
   }
 
   private ensureWorkers(): Worker[] {
-    const count = Math.max(1, Math.min(navigator.hardwareConcurrency ?? 4, 8))
+    const count = Math.max(1, navigator.hardwareConcurrency ?? 4)
     while (this.workers.length < count) {
       const workerId = this.workers.length
       const worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' })
