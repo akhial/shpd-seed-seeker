@@ -114,7 +114,7 @@ export function ResultsPanel({
           <p className="d1-empty">Add requirements, then press Start Search.</p>
         )}
 
-        {!running && statusChip && (
+        {!running && !impossible && statusChip && (
           <div className="d1-done-row">
             <span className={`d1-state-chip${search.state === 'completed' ? ' d1-state-ok' : ''}`}>{statusChip}</span>
             <span className="d1-caption">

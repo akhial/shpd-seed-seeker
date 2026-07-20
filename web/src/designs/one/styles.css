@@ -137,6 +137,17 @@ body {
   overscroll-behavior: contain;
 }
 
+/* The query form's full-width section dividers must meet the pane's right
+   border, so hide its scrollbar gutter (it still scrolls; the Start Search
+   button lives outside this scroller and stays put). */
+.d1-pane-query .d1-pane-body {
+  scrollbar-width: none;
+}
+
+.d1-pane-query .d1-pane-body::-webkit-scrollbar {
+  display: none;
+}
+
 /* ---------- Mobile tabs ---------- */
 
 .d1-tabs { display: none; }
@@ -413,9 +424,9 @@ input[type='range']:focus-visible,
 .d1-check input[type='checkbox'] {
   appearance: none;
   -webkit-appearance: none;
-  margin: 2px 0 0;
-  width: 15px;
-  height: 15px;
+  margin: 1px 0 0;
+  width: 18px;
+  height: 18px;
   flex: 0 0 auto;
   border: 1px solid var(--d1-border-strong);
   border-radius: 4px;
@@ -428,8 +439,8 @@ input[type='range']:focus-visible,
 
 .d1-check input[type='checkbox']::before {
   content: '';
-  width: 9px;
-  height: 9px;
+  width: 11px;
+  height: 11px;
   transform: scale(0);
   transition: transform 0.1s ease-in-out;
   clip-path: polygon(14% 44%, 0 65%, 40% 100%, 100% 16%, 84% 0%, 38% 66%);
