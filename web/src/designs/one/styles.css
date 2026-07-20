@@ -136,6 +136,7 @@ body {
 .d1-gh-link {
   display: inline-flex;
   align-items: center;
+  gap: 8px;
   color: var(--d1-text-3);
   transition: color 0.12s ease;
 }
