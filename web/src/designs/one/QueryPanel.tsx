@@ -46,6 +46,12 @@ export function QueryPanel({
     queryStore.setState(() => cloneQuery(preset.query))
   }
 
+  const currentQueryJson = JSON.stringify(toQueryJson(query))
+  const presetFingerprint = (preset: Preset) => JSON.stringify(toQueryJson(preset.query))
+  const builtInMatch = builtInPresets.findIndex((preset) => presetFingerprint(preset) === currentQueryJson)
+  const userMatch = builtInMatch >= 0 ? -1 : userPresets.findIndex((preset) => presetFingerprint(preset) === currentQueryJson)
+  const selectedPreset = builtInMatch >= 0 ? `b:${builtInMatch}` : userMatch >= 0 ? `u:${userMatch}` : ''
+
   const saveCurrentPreset = () => {
     const name = presetName.trim()
     if (!name) return
@@ -115,7 +121,7 @@ export function QueryPanel({
           <div className="d1-preset-row">
             <select
               className="d1-select d1-grow"
-              value=""
+              value={selectedPreset}
               aria-label="Load preset"
               onChange={(event) => {
                 const value = event.currentTarget.value
@@ -124,7 +130,6 @@ export function QueryPanel({
                 const index = Number(indexText)
                 const preset = scope === 'b' ? builtInPresets[index] : userPresets[index]
                 if (preset) applyPreset(preset)
-                event.currentTarget.value = ''
               }}
             >
               <option value="">Load preset…</option>
