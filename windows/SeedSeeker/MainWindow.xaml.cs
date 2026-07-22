@@ -51,8 +51,9 @@ public sealed partial class MainWindow : Window
         FloorSlider.Value = 1; FloorSlider.Minimum = 1; FloorSlider.Maximum = 24;
         LoadSettings(); LoadPresets(); RefreshPresets(); RefreshQuery();
         Closed += (_, _) => { search?.Cancel(); search?.Dispose(); };
-        // ContentDialog needs a live XamlRoot, so wait for first activation.
-        Activated += (_, _) => { if (!updateCheckStarted) { updateCheckStarted = true; _ = CheckForUpdatesAsync(); } };
+        // ContentDialog needs a live XamlRoot, which only exists once the root
+        // element has loaded; Activated can fire before that.
+        ((FrameworkElement)Content).Loaded += (_, _) => { if (!updateCheckStarted) { updateCheckStarted = true; _ = CheckForUpdatesAsync(); } };
     }
 
     private sealed class UpdateState { public string? SkippedVersion { get; set; } public DateTimeOffset LastChecked { get; set; } }
