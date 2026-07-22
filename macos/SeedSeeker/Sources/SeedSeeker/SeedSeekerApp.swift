@@ -8,10 +8,9 @@ import SwiftUI
 struct SeedSeekerApp: App {
     // Updates are handled by Sparkle: it schedules background checks (asking
     // the user for permission first) and drives the whole download/install
-    // flow. Only release builds carry a feed: scripts/build-macos-app.sh
-    // injects SUFeedURL alongside the EdDSA public key, and dev runs via
-    // `swift run` have no Info.plist at all — without a feed the updater
-    // stays stopped and the menu item below stays disabled.
+    // flow. Dev runs via `swift run` execute outside a bundle and see no
+    // Info.plist, hence no feed — the updater then stays stopped and the
+    // menu item below stays disabled.
     private let updaterController = SPUStandardUpdaterController(
         startingUpdater: Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") != nil,
         updaterDelegate: nil, userDriverDelegate: nil)

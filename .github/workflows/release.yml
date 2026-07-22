@@ -237,16 +237,16 @@ jobs:
     timeout-minutes: 30
 
     # Signing/notarization activates once the repository secrets exist;
-    # without them the build falls back to the ad-hoc signature. Sparkle
-    # updates likewise activate once the EdDSA key pair exists: generate it
-    # with Sparkle's `generate_keys -x key.txt` and store the printed public
-    # key as SPARKLE_PUBLIC_ED_KEY and the exported file's contents as
-    # SPARKLE_ED_PRIVATE_KEY. Without them the app ships without an update
-    # feed and its "Check for Updates" menu item stays disabled.
+    # without them the build falls back to the ad-hoc signature. The Sparkle
+    # appcast likewise needs SPARKLE_ED_PRIVATE_KEY: the EdDSA private key
+    # matching the SUPublicEDKey baked into Info.plist (exported with
+    # Sparkle's `generate_keys -x`; the tool ships in the SwiftPM artifact
+    # under macos/SeedSeeker/.build/artifacts/sparkle/Sparkle/bin). Without
+    # it no appcast is published and installed apps see no updates.
     env:
       HAVE_CERT: ${{ secrets.MACOS_CERT_P12 != '' }}
       HAVE_NOTARY: ${{ secrets.NOTARY_KEY != '' }}
-      HAVE_SPARKLE: ${{ secrets.SPARKLE_ED_PRIVATE_KEY != '' && secrets.SPARKLE_PUBLIC_ED_KEY != '' }}
+      HAVE_SPARKLE: ${{ secrets.SPARKLE_ED_PRIVATE_KEY != '' }}
 
     steps:
       - uses: actions/checkout@v6
@@ -287,8 +287,6 @@ jobs:
           echo "MACOS_SIGN_IDENTITY=$IDENTITY" >> "$GITHUB_ENV"
 
       - name: Build app bundle
-        env:
-          SPARKLE_PUBLIC_ED_KEY: ${{ secrets.SPARKLE_PUBLIC_ED_KEY }}
         run: bash scripts/build-macos-app.sh
 
       - name: Package dmg
@@ -316,22 +314,19 @@ jobs:
       # The appcast is generated from the final (stapled) dmg bytes because
       # its EdDSA signature covers the archive exactly as users download it.
       # It is published as a release asset, and the app's SUFeedURL always
-      # points at the copy attached to the latest release.
+      # points at the copy attached to the latest release. generate_appcast
+      # comes from the SwiftPM artifact the build step resolved, so its
+      # version tracks Package.resolved.
       - name: Generate Sparkle appcast
         if: env.HAVE_SPARKLE == 'true'
         env:
           SPARKLE_ED_PRIVATE_KEY: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
         run: |
-          SPARKLE_VERSION=2.9.4
-          curl -fsSL -o "$RUNNER_TEMP/sparkle-tools.tar.xz" \
-            "https://github.com/sparkle-project/Sparkle/releases/download/$SPARKLE_VERSION/Sparkle-$SPARKLE_VERSION.tar.xz"
-          mkdir -p "$RUNNER_TEMP/sparkle-tools"
-          tar -xJf "$RUNNER_TEMP/sparkle-tools.tar.xz" -C "$RUNNER_TEMP/sparkle-tools"
           KEY_FILE="$RUNNER_TEMP/sparkle-ed-key"
           printf '%s' "$SPARKLE_ED_PRIVATE_KEY" > "$KEY_FILE"
           mkdir "$RUNNER_TEMP/appcast"
           cp "seed-seeker-${{ github.ref_name }}-macos-arm64.dmg" "$RUNNER_TEMP/appcast/"
-          "$RUNNER_TEMP/sparkle-tools/bin/generate_appcast" \
+          macos/SeedSeeker/.build/artifacts/sparkle/Sparkle/bin/generate_appcast \
             --ed-key-file "$KEY_FILE" \
             --download-url-prefix "https://github.com/akhial/shpd-seed-seeker/releases/download/${{ github.ref_name }}/" \
             --link "https://github.com/akhial/shpd-seed-seeker/releases" \

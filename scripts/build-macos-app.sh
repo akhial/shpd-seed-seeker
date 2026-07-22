@@ -37,18 +37,6 @@ fi
 install -d "$APP/Contents/Frameworks"
 ditto "$SPARKLE" "$APP/Contents/Frameworks/Sparkle.framework"
 
-# Sparkle only serves updates to apps that know where the appcast lives and
-# how to verify it. Both halves are injected here rather than kept in
-# Info.plist so that unkeyed builds (local, or CI before the Sparkle
-# secrets exist) ship without a feed: the app then never starts the
-# updater and the menu item stays disabled instead of erroring.
-if [ -n "${SPARKLE_PUBLIC_ED_KEY:-}" ]; then
-    /usr/libexec/PlistBuddy \
-        -c "Add :SUFeedURL string https://github.com/akhial/shpd-seed-seeker/releases/latest/download/appcast.xml" \
-        -c "Add :SUPublicEDKey string $SPARKLE_PUBLIC_ED_KEY" \
-        "$APP/Contents/Info.plist"
-fi
-
 # With MACOS_SIGN_IDENTITY set (a "Developer ID Application" identity),
 # sign for notarized distribution; otherwise fall back to ad-hoc signing
 # for local development builds. Notarization requires every nested Sparkle
