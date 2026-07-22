@@ -24,12 +24,52 @@ install -d "$APP/Contents/MacOS"
 install -m 755 "$PACKAGE/.build/release/SeedSeeker" "$APP/Contents/MacOS/SeedSeeker"
 install -m 644 "$PACKAGE/Info.plist" "$APP/Contents/Info.plist"
 install -m 644 "$PACKAGE/PkgInfo" "$APP/Contents/PkgInfo"
+
+# Embed Sparkle. SwiftPM links the framework from the resolved binary
+# artifact but does not assemble bundles, so it is copied in by hand; the
+# executable reaches it through the @executable_path/../Frameworks rpath
+# set in Package.swift.
+SPARKLE=$(find "$PACKAGE/.build/artifacts" -type d -name Sparkle.framework -path "*macos*" | head -n 1)
+if [ -z "$SPARKLE" ]; then
+    echo "error: Sparkle.framework not found under $PACKAGE/.build/artifacts" >&2
+    exit 1
+fi
+install -d "$APP/Contents/Frameworks"
+ditto "$SPARKLE" "$APP/Contents/Frameworks/Sparkle.framework"
+
+# Sparkle only serves updates to apps that know where the appcast lives and
+# how to verify it. Both halves are injected here rather than kept in
+# Info.plist so that unkeyed builds (local, or CI before the Sparkle
+# secrets exist) ship without a feed: the app then never starts the
+# updater and the menu item stays disabled instead of erroring.
+if [ -n "${SPARKLE_PUBLIC_ED_KEY:-}" ]; then
+    /usr/libexec/PlistBuddy \
+        -c "Add :SUFeedURL string https://github.com/akhial/shpd-seed-seeker/releases/latest/download/appcast.xml" \
+        -c "Add :SUPublicEDKey string $SPARKLE_PUBLIC_ED_KEY" \
+        "$APP/Contents/Info.plist"
+fi
+
 # With MACOS_SIGN_IDENTITY set (a "Developer ID Application" identity),
 # sign for notarized distribution; otherwise fall back to ad-hoc signing
-# for local development builds.
+# for local development builds. Notarization requires every nested Sparkle
+# executable to carry the hardened runtime and a secure timestamp, signed
+# inside-out before the framework and the app.
 if [ -n "${MACOS_SIGN_IDENTITY:-}" ]; then
+    FRAMEWORK="$APP/Contents/Frameworks/Sparkle.framework"
+    VERSION="$FRAMEWORK/Versions/$(readlink "$FRAMEWORK/Versions/Current")"
+    codesign --force --options runtime --timestamp \
+        --sign "$MACOS_SIGN_IDENTITY" "$VERSION/XPCServices/Installer.xpc"
+    # The downloader ships sandbox entitlements that must survive re-signing.
+    codesign --force --options runtime --timestamp --preserve-metadata=entitlements \
+        --sign "$MACOS_SIGN_IDENTITY" "$VERSION/XPCServices/Downloader.xpc"
+    codesign --force --options runtime --timestamp \
+        --sign "$MACOS_SIGN_IDENTITY" "$VERSION/Autoupdate"
+    codesign --force --options runtime --timestamp \
+        --sign "$MACOS_SIGN_IDENTITY" "$VERSION/Updater.app"
+    codesign --force --options runtime --timestamp \
+        --sign "$MACOS_SIGN_IDENTITY" "$FRAMEWORK"
     codesign --force --options runtime --timestamp \
         --sign "$MACOS_SIGN_IDENTITY" "$APP"
 else
-    codesign --force --sign - "$APP"
+    codesign --force --deep --sign - "$APP"
 fi

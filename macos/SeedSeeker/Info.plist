@@ -12,6 +12,10 @@
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
     <string>0.5.2</string>
+    <!-- Sparkle decides whether an update applies by comparing
+         CFBundleVersion, so every release must bump it along with the
+         marketing version. SUFeedURL and SUPublicEDKey are injected into
+         the packaged app by scripts/build-macos-app.sh on keyed builds. -->
     <key>CFBundleVersion</key>
     <string>7</string>
     <key>LSMinimumSystemVersion</key>

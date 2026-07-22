@@ -1,13 +1,56 @@
 import AppKit
+import Combine
 import SeedSeekerKit
+import Sparkle
 import SwiftUI
 
 @main
 struct SeedSeekerApp: App {
+    // Updates are handled by Sparkle: it schedules background checks (asking
+    // the user for permission first) and drives the whole download/install
+    // flow. Only release builds carry a feed: scripts/build-macos-app.sh
+    // injects SUFeedURL alongside the EdDSA public key, and dev runs via
+    // `swift run` have no Info.plist at all — without a feed the updater
+    // stays stopped and the menu item below stays disabled.
+    private let updaterController = SPUStandardUpdaterController(
+        startingUpdater: Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") != nil,
+        updaterDelegate: nil, userDriverDelegate: nil)
+
     var body: some Scene {
         WindowGroup("Seed Seeker") { ContentView() }
             .defaultSize(width: 1_180, height: 720)
+            .commands {
+                CommandGroup(after: .appInfo) {
+                    CheckForUpdatesView(updater: updaterController.updater)
+                }
+            }
         Settings { ChallengesSettingsView() }
+    }
+}
+
+/// The "Check for Updates…" menu item, enabled whenever Sparkle can check
+/// (updater started and no check already in flight).
+private struct CheckForUpdatesView: View {
+    @ObservedObject private var model: CheckForUpdatesViewModel
+    private let updater: SPUUpdater
+
+    init(updater: SPUUpdater) {
+        self.updater = updater
+        model = CheckForUpdatesViewModel(updater: updater)
+    }
+
+    var body: some View {
+        Button("Check for Updates…") { updater.checkForUpdates() }
+            .disabled(!model.canCheckForUpdates)
+    }
+}
+
+@MainActor
+private final class CheckForUpdatesViewModel: ObservableObject {
+    @Published var canCheckForUpdates = false
+
+    init(updater: SPUUpdater) {
+        updater.publisher(for: \.canCheckForUpdates).assign(to: &$canCheckForUpdates)
     }
 }
 
@@ -15,9 +58,6 @@ private struct ContentView: View {
     @AppStorage("savedQuery") private var savedQueryJSON = ""
     @AppStorage("savedPresets") private var savedPresetsJSON = ""
     @AppStorage("challenges") private var challenges = 0
-    @AppStorage("skippedUpdateVersion") private var skippedUpdateVersion = ""
-    @AppStorage("lastUpdateCheck") private var lastUpdateCheck = 0.0
-    @State private var availableUpdate: UpdateInfo?
     @State private var requirements: [ItemRequirement] = []
     @State private var maximumDepth = 24
     @State private var requireBlacksmith = false
@@ -72,37 +112,6 @@ private struct ContentView: View {
         .onChange(of: controller.selectedSeed) { _, seed in
             if let seed { scout.scout(seed, challenges: challenges) }
         }
-        .task { await checkForUpdates() }
-        // Sparkle-style buttons; copy shared with the other platforms.
-        .alert("Update available",
-               isPresented: Binding(get: { availableUpdate != nil },
-                                    set: { if !$0 { availableUpdate = nil } }),
-               presenting: availableUpdate) { update in
-            Button("Download") { NSWorkspace.shared.open(update.url) }
-            Button("Remind Me Later", role: .cancel) {}
-            Button("Skip This Version") { skippedUpdateVersion = update.version }
-        } message: { update in
-            Text("Seed Seeker \(update.version) is available on GitHub. You have \(appVersion).")
-        }
-    }
-
-    /// The marketing version from the app bundle; "0.0.0" when running
-    /// outside a bundle (e.g. `swift run`), where only the fake-update
-    /// override can trigger the alert anyway.
-    private var appVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
-    }
-
-    private func checkForUpdates() async {
-        let forced = UpdateChecker.fakeLatest != nil
-        let day: TimeInterval = 86_400
-        guard forced || Date.now.timeIntervalSince1970 - lastUpdateCheck > day else { return }
-        lastUpdateCheck = Date.now.timeIntervalSince1970
-        // Outside a bundle the real version is unknown; never nag from dev runs.
-        guard forced || Bundle.main.infoDictionary?["CFBundleShortVersionString"] != nil else { return }
-        guard let update = await UpdateChecker.check(current: appVersion),
-              update.version != skippedUpdateVersion else { return }
-        availableUpdate = update
     }
 
     private func save() {
