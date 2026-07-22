@@ -64,9 +64,9 @@ pub fn check_on_startup(window: &adw::ApplicationWindow) {
 
 fn present_dialog(window: &adw::ApplicationWindow, update: &UpdateInfo) {
     let dialog = adw::AlertDialog::new(
-        Some("Update Available"),
+        Some("Update available"),
         Some(&format!(
-            "Seed Seeker {} is available — you have {}.",
+            "Seed Seeker {} is available on GitHub. You have {}.",
             update.version,
             env!("CARGO_PKG_VERSION")
         )),

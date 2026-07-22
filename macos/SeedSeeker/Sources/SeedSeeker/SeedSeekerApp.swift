@@ -73,8 +73,8 @@ private struct ContentView: View {
             if let seed { scout.scout(seed, challenges: challenges) }
         }
         .task { await checkForUpdates() }
-        // Mirrors the Sparkle update prompt macOS users expect.
-        .alert("A new version of Seed Seeker is available!",
+        // Sparkle-style buttons; copy shared with the other platforms.
+        .alert("Update available",
                isPresented: Binding(get: { availableUpdate != nil },
                                     set: { if !$0 { availableUpdate = nil } }),
                presenting: availableUpdate) { update in
@@ -82,7 +82,7 @@ private struct ContentView: View {
             Button("Remind Me Later", role: .cancel) {}
             Button("Skip This Version") { skippedUpdateVersion = update.version }
         } message: { update in
-            Text("Seed Seeker \(update.version) is now available — you have \(appVersion). Would you like to download it?")
+            Text("Seed Seeker \(update.version) is available on GitHub. You have \(appVersion).")
         }
     }
 
