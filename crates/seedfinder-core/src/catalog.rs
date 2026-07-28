@@ -126,6 +126,13 @@ pub struct ItemDefinition {
     pub tier: Option<u8>,
     /// Zero-based 16×16 cell in the upstream `items.png` atlas.
     pub sprite_index: u16,
+    /// Whether a search requirement may name this item.
+    ///
+    /// Everything in the catalog is reported by the seed scout, but the tipped
+    /// darts are not worth asking for: every run grows the plant seeds the
+    /// generator tips them from, so a dart requirement matches essentially every
+    /// seed while crowding out the weapon picker. See [`is_requestable`].
+    pub requestable: bool,
 }
 
 macro_rules! item {
@@ -137,6 +144,17 @@ macro_rules! item {
             kind: ItemKind::$kind,
             tier: $tier,
             sprite_index: $sprite,
+            requestable: true,
+        }
+    };
+}
+
+/// A catalog item the scout reports but a requirement cannot name.
+macro_rules! scout_only {
+    ($variant:ident, $stable:literal, $name:literal, $kind:ident, $tier:expr, $sprite:expr) => {
+        ItemDefinition {
+            requestable: false,
+            ..item!($variant, $stable, $name, $kind, $tier, $sprite)
         }
     };
 }
@@ -431,8 +449,8 @@ pub const ITEMS: &[ItemDefinition] = &[
         None,
         220
     ),
-    item!(RotDart, "rot_dart", "Rot dart", Weapon, Some(2), 161),
-    item!(
+    scout_only!(RotDart, "rot_dart", "Rot dart", Weapon, Some(2), 161),
+    scout_only!(
         IncendiaryDart,
         "incendiary_dart",
         "Incendiary dart",
@@ -440,7 +458,7 @@ pub const ITEMS: &[ItemDefinition] = &[
         Some(2),
         162
     ),
-    item!(
+    scout_only!(
         AdrenalineDart,
         "adrenaline_dart",
         "Adrenaline dart",
@@ -448,7 +466,7 @@ pub const ITEMS: &[ItemDefinition] = &[
         Some(2),
         163
     ),
-    item!(
+    scout_only!(
         HealingDart,
         "healing_dart",
         "Healing dart",
@@ -456,7 +474,7 @@ pub const ITEMS: &[ItemDefinition] = &[
         Some(2),
         164
     ),
-    item!(
+    scout_only!(
         ChillingDart,
         "chilling_dart",
         "Chilling dart",
@@ -464,7 +482,7 @@ pub const ITEMS: &[ItemDefinition] = &[
         Some(2),
         165
     ),
-    item!(
+    scout_only!(
         ShockingDart,
         "shocking_dart",
         "Shocking dart",
@@ -472,7 +490,7 @@ pub const ITEMS: &[ItemDefinition] = &[
         Some(2),
         166
     ),
-    item!(
+    scout_only!(
         PoisonDart,
         "poison_dart",
         "Poison dart",
@@ -480,7 +498,7 @@ pub const ITEMS: &[ItemDefinition] = &[
         Some(2),
         167
     ),
-    item!(
+    scout_only!(
         CleansingDart,
         "cleansing_dart",
         "Cleansing dart",
@@ -488,7 +506,7 @@ pub const ITEMS: &[ItemDefinition] = &[
         Some(2),
         168
     ),
-    item!(
+    scout_only!(
         ParalyticDart,
         "paralytic_dart",
         "Paralytic dart",
@@ -496,8 +514,8 @@ pub const ITEMS: &[ItemDefinition] = &[
         Some(2),
         169
     ),
-    item!(HolyDart, "holy_dart", "Holy dart", Weapon, Some(2), 170),
-    item!(
+    scout_only!(HolyDart, "holy_dart", "Holy dart", Weapon, Some(2), 170),
+    scout_only!(
         DisplacingDart,
         "displacing_dart",
         "Displacing dart",
@@ -505,7 +523,7 @@ pub const ITEMS: &[ItemDefinition] = &[
         Some(2),
         171
     ),
-    item!(
+    scout_only!(
         BlindingDart,
         "blinding_dart",
         "Blinding dart",
@@ -788,6 +806,20 @@ pub fn item(item_id: ItemId) -> &'static ItemDefinition {
     &ITEMS[item_id as usize]
 }
 
+/// Whether a search requirement may name this item.
+///
+/// The scout reports every catalog item; only requirements are narrowed. See
+/// [`ItemDefinition::requestable`].
+#[must_use]
+pub fn is_requestable(item_id: ItemId) -> bool {
+    item(item_id).requestable
+}
+
+/// Every item a requirement may name, in catalog order.
+pub fn requestable_items() -> impl Iterator<Item = &'static ItemDefinition> {
+    ITEMS.iter().filter(|definition| definition.requestable)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{ITEMS, ItemId, item, item_by_stable_id};
@@ -814,6 +846,23 @@ mod tests {
         assert!(item_by_stable_id("pickaxe").is_none());
         assert!(item_by_stable_id("dart").is_none());
         assert!(item_by_stable_id("warrior_armor").is_none());
+    }
+
+    #[test]
+    fn tipped_darts_are_scouted_but_never_requested() {
+        use super::{is_requestable, requestable_items};
+
+        // Every seed grows the plant seeds that tip them, so requiring one says
+        // nothing about a seed. They stay in the catalog for the scout.
+        let darts = [ItemId::RotDart, ItemId::HolyDart, ItemId::BlindingDart];
+        for dart in darts {
+            assert!(item_by_stable_id(item(dart).stable_id).is_some());
+            assert!(!is_requestable(dart), "{}", item(dart).name);
+        }
+        assert!(is_requestable(ItemId::Sword));
+        assert!(is_requestable(ItemId::ThrowingClub));
+        assert_eq!(requestable_items().count(), ITEMS.len() - 12);
+        assert!(requestable_items().all(|definition| !definition.name.ends_with("dart")));
     }
 
     #[test]

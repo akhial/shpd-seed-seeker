@@ -38,6 +38,20 @@ class ItemCatalogTest {
     }
 
     @Test
+    fun tippedDartsAreScoutedButNeverOfferedAsRequirements() {
+        // Every seed grows the plant seeds that tip them, so requiring one says
+        // nothing about a seed. Scout results still name and draw them.
+        val darts = ItemCatalog.weapons.filter { it.spriteIndex in 161..172 }
+        assertEquals(12, darts.size)
+        assertTrue(darts.none { it.requestable })
+        assertTrue(ItemCatalog.requestableForKind(ItemKind.WEAPON).none { it.id.endsWith("_dart") })
+        assertEquals("Rot Dart", ItemCatalog.findById("rot_dart")?.name)
+        for (kind in ItemKind.entries.filterNot { it == ItemKind.WEAPON }) {
+            assertEquals(ItemCatalog.forKind(kind), ItemCatalog.requestableForKind(kind))
+        }
+    }
+
+    @Test
     fun idsAndModifierNamesAreStableAndUnique() {
         assertEquals(ItemCatalog.all.size, ItemCatalog.all.map { it.id }.toSet().size)
         assertEquals(13, ItemCatalog.enchantments.size)

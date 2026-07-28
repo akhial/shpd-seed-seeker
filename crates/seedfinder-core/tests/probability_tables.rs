@@ -61,7 +61,6 @@ fn tabled_supply_matches_the_generator() {
             match supply.line {
                 Line::Plain => "",
                 Line::Thrown => " (thrown)",
-                Line::Tipped => " (tipped)",
             }
         );
     }
@@ -128,8 +127,13 @@ fn measure() -> Vec<Row> {
                     let mut groups: std::collections::BTreeSet<(usize, Line, String, u16)> =
                         std::collections::BTreeSet::new();
                     for candidate in &world.items {
+                        let definition = item(candidate.item);
+                        // The table only covers supply a requirement can name.
+                        if !definition.requestable {
+                            continue;
+                        }
                         let key = (
-                            kind_index(item(candidate.item).kind),
+                            kind_index(definition.kind),
                             line_of(candidate.item),
                             format!("{:?}", candidate.source),
                         );

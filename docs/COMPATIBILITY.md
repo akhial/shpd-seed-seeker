@@ -23,6 +23,13 @@ generator has been popped and is generally based on the unseeded base RNG.
 The seed scout reports this same static, searchable set rather than claiming to
 be a complete inventory of every consumable or future drop in a run.
 
+Tipped darts are reported by the scout but cannot be required. Every run grows
+the plant seeds the generator tips them from, so a dart requirement matches
+essentially every seed while crowding out the weapon picker. The catalog marks
+them as not requestable: query validation rejects one, the probability estimator
+leaves their supply out of what a requirement can draw on, and every platform's
+item picker omits them while its scout list still names and draws them.
+
 Search source constraints refer to the source stored on these static records.
 Per-item uncursed constraints reject records whose cursed flag is set.
 Same-item groups require distinct obtainable copies with the same concrete item
