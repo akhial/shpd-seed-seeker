@@ -4,14 +4,17 @@
 use crate::catalog::{Effect, ItemKind, WeaponCategory, item, item_by_stable_id};
 use crate::challenges::Challenges;
 use crate::model::ItemSource;
-use crate::query::{Requirement, SearchQuery, TierRequirement, UpgradeRequirement};
+use crate::query::{
+    EffectRequirement, EffectSet, Requirement, SearchQuery, TierRequirement, UpgradeRequirement,
+    UpgradeSum,
+};
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct QueryDocument {
-    requirements: Vec<FileRequirement>,
+    requirements: Vec<FileRequirementEntry>,
     #[serde(default = "default_max_depth")]
     max_depth: u8,
     #[serde(default)]
@@ -22,6 +25,21 @@ struct QueryDocument {
     fast_mode: bool,
     #[serde(default)]
     challenges: Vec<FileChallenge>,
+}
+
+/// One entry of the `requirements` array: a plain requirement, or an
+/// `{"any_of": [...]}` group satisfied by any single member.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum FileRequirementEntry {
+    AnyOf(FileAnyOf),
+    Single(FileRequirement),
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FileAnyOf {
+    any_of: Vec<FileRequirement>,
 }
 
 #[derive(Clone, Copy, Deserialize)]
@@ -66,7 +84,7 @@ struct FileRequirement {
     #[serde(default)]
     upgrade: FileUpgrade,
     #[serde(default)]
-    effect: Option<String>,
+    effect: Option<FileEffect>,
     #[serde(default)]
     uncursed: bool,
     #[serde(default)]
@@ -75,6 +93,24 @@ struct FileRequirement {
     identity_group: Option<u8>,
     #[serde(default)]
     max_depth: Option<u8>,
+    #[serde(default)]
+    upgrade_sum: Option<FileUpgradeSum>,
+}
+
+/// One effect name, or a list of acceptable effect names. The name
+/// `any_enchantment` stands for every non-curse effect of the item's family.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum FileEffect {
+    Name(String),
+    OneOf(Vec<String>),
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FileUpgradeSum {
+    group: u8,
+    at_least: u8,
 }
 
 #[derive(Deserialize)]
@@ -224,15 +260,35 @@ const fn default_max_depth() -> u8 {
 pub fn decode(contents: &str) -> Result<SearchQuery, String> {
     let document: QueryDocument =
         serde_json::from_str(contents).map_err(|error| format!("invalid JSON: {error}"))?;
-    let requirements = document
-        .requirements
-        .into_iter()
-        .enumerate()
-        .map(|(index, requirement)| {
-            convert_requirement(requirement)
-                .map_err(|error| format!("requirement {}: {error}", index + 1))
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+    let mut requirements = Vec::new();
+    let mut next_alternative_group: u8 = 0;
+    for (index, entry) in document.requirements.into_iter().enumerate() {
+        let position = index + 1;
+        match entry {
+            FileRequirementEntry::Single(requirement) => {
+                requirements.push(
+                    convert_requirement(requirement, None)
+                        .map_err(|error| format!("requirement {position}: {error}"))?,
+                );
+            }
+            FileRequirementEntry::AnyOf(group) => {
+                if group.any_of.is_empty() {
+                    return Err(format!(
+                        "requirement {position}: any_of needs at least one alternative"
+                    ));
+                }
+                next_alternative_group = next_alternative_group
+                    .checked_add(1)
+                    .ok_or_else(|| "too many any_of groups".to_owned())?;
+                for requirement in group.any_of {
+                    requirements.push(
+                        convert_requirement(requirement, Some(next_alternative_group))
+                            .map_err(|error| format!("requirement {position}: {error}"))?,
+                    );
+                }
+            }
+        }
+    }
     let query = SearchQuery {
         requirements,
         max_depth: document.max_depth,
@@ -250,7 +306,36 @@ pub fn decode(contents: &str) -> Result<SearchQuery, String> {
     Ok(query)
 }
 
-fn convert_requirement(requirement: FileRequirement) -> Result<Requirement, String> {
+fn convert_effect(kind: ItemKind, effect: FileEffect) -> Result<EffectRequirement, String> {
+    let lookup = |name: &str| -> Result<Effect, String> {
+        Effect::from_wire_name(kind, name).ok_or_else(|| format!("unknown effect '{name}'"))
+    };
+    match effect {
+        FileEffect::Name(name) if name.eq_ignore_ascii_case("any_enchantment") => {
+            EffectSet::enchantments(kind)
+                .map(EffectRequirement::OneOf)
+                .ok_or_else(|| "any_enchantment requires a weapon or armor".to_owned())
+        }
+        FileEffect::Name(name) => Ok(EffectRequirement::OneOf(EffectSet::single(lookup(&name)?))),
+        FileEffect::OneOf(names) => {
+            if names.is_empty() {
+                return Err("effect list needs at least one entry".to_owned());
+            }
+            let effects = names
+                .iter()
+                .map(|name| lookup(name))
+                .collect::<Result<Vec<_>, _>>()?;
+            EffectSet::from_effects(effects)
+                .map(EffectRequirement::OneOf)
+                .ok_or_else(|| "effect list mixes item families".to_owned())
+        }
+    }
+}
+
+fn convert_requirement(
+    requirement: FileRequirement,
+    alternative_group: Option<u8>,
+) -> Result<Requirement, String> {
     let definition = requirement
         .item
         .as_deref()
@@ -265,11 +350,9 @@ fn convert_requirement(requirement: FileRequirement) -> Result<Requirement, Stri
         .ok_or_else(|| "kind is required when item is omitted".to_owned())?;
     let effect = requirement
         .effect
-        .as_deref()
-        .map(|name| {
-            Effect::from_wire_name(kind, name).ok_or_else(|| format!("unknown effect '{name}'"))
-        })
-        .transpose()?;
+        .map(|effect| convert_effect(kind, effect))
+        .transpose()?
+        .unwrap_or(EffectRequirement::Any);
     let upgrade = match requirement.upgrade {
         FileUpgrade::Exact(value) | FileUpgrade::ExactObject(ExactUpgrade { exact: value }) => {
             UpgradeRequirement::Exact(value)
@@ -298,6 +381,11 @@ fn convert_requirement(requirement: FileRequirement) -> Result<Requirement, Stri
         source: requirement.source.map(ItemSource::from),
         identity_group: requirement.identity_group,
         max_depth: requirement.max_depth,
+        alternative_group,
+        upgrade_sum: requirement.upgrade_sum.map(|sum| UpgradeSum {
+            group: sum.group,
+            minimum_total: sum.at_least,
+        }),
     })
 }
 
@@ -357,16 +445,33 @@ pub const fn source_name(source: ItemSource) -> &'static str {
 #[must_use]
 pub fn encode(query: &SearchQuery) -> Value {
     let mut document = Map::new();
-    document.insert(
-        "requirements".to_owned(),
-        Value::Array(
-            query
-                .requirements
-                .iter()
-                .map(encode_requirement)
-                .collect::<Vec<_>>(),
-        ),
-    );
+    // Alternative groups serialize as one any_of entry at the first member's
+    // position, holding every member in requirement order; decode assigns the
+    // groups fresh sequential ids, preserving the structure.
+    let mut entries = Vec::new();
+    let mut emitted_groups = Vec::new();
+    for requirement in &query.requirements {
+        let Some(group) = requirement.alternative_group else {
+            entries.push(encode_requirement(requirement));
+            continue;
+        };
+        if emitted_groups.contains(&group) {
+            continue;
+        }
+        emitted_groups.push(group);
+        let members = query
+            .requirements
+            .iter()
+            .filter(|candidate| candidate.alternative_group == Some(group))
+            .map(encode_requirement)
+            .collect::<Vec<_>>();
+        if members.len() == 1 {
+            entries.extend(members);
+        } else {
+            entries.push(json!({ "any_of": members }));
+        }
+    }
+    document.insert("requirements".to_owned(), Value::Array(entries));
     if query.max_depth != default_max_depth() {
         document.insert("max_depth".to_owned(), json!(query.max_depth));
     }
@@ -424,8 +529,22 @@ fn encode_requirement(requirement: &Requirement) -> Value {
             output.insert("upgrade".to_owned(), json!({ "at_least": upgrade }));
         }
     }
-    if let Some(effect) = requirement.effect {
-        output.insert("effect".to_owned(), json!(effect.wire_name()));
+    if let EffectRequirement::OneOf(set) = requirement.effect {
+        // The full non-curse family set uses the shorthand; one effect stays
+        // a bare name; anything else lists its members.
+        let effect = if EffectSet::enchantments(set.family()) == Some(set) {
+            json!("any_enchantment")
+        } else {
+            let names = set
+                .effects()
+                .map(|effect| json!(effect.wire_name()))
+                .collect::<Vec<_>>();
+            match <[Value; 1]>::try_from(names) {
+                Ok([single]) => single,
+                Err(names) => Value::Array(names),
+            }
+        };
+        output.insert("effect".to_owned(), effect);
     }
     if requirement.require_uncursed {
         output.insert("uncursed".to_owned(), json!(true));
@@ -439,15 +558,24 @@ fn encode_requirement(requirement: &Requirement) -> Value {
     if let Some(depth) = requirement.max_depth {
         output.insert("max_depth".to_owned(), json!(depth));
     }
+    if let Some(sum) = requirement.upgrade_sum {
+        output.insert(
+            "upgrade_sum".to_owned(),
+            json!({ "group": sum.group, "at_least": sum.minimum_total }),
+        );
+    }
     Value::Object(output)
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::catalog::{Effect, ItemId, ItemKind, WeaponEffect};
+    use crate::catalog::{ArmorEffect, Effect, ItemId, ItemKind, WeaponEffect};
     use crate::challenges::Challenges;
     use crate::model::ItemSource;
-    use crate::query::{Requirement, SearchQuery, TierRequirement, UpgradeRequirement};
+    use crate::query::{
+        EffectRequirement, EffectSet, Requirement, SearchQuery, TierRequirement,
+        UpgradeRequirement, UpgradeSum,
+    };
 
     use super::{decode, encode};
 
@@ -518,7 +646,10 @@ mod tests {
         // Enchantments remain valid for both weapon sub-kinds.
         let enchanted =
             decode(r#"{"requirements":[{"kind":"thrown_weapon","effect":"Projecting"}]}"#).unwrap();
-        assert!(enchanted.requirements[0].effect.is_some());
+        assert_eq!(
+            enchanted.requirements[0].effect,
+            EffectRequirement::OneOf(EffectSet::single(Effect::Weapon(WeaponEffect::Projecting)))
+        );
     }
 
     #[test]
@@ -588,6 +719,129 @@ mod tests {
     }
 
     #[test]
+    fn decodes_effect_lists_and_the_any_enchantment_shorthand() {
+        let query = decode(
+            r#"{"requirements":[
+                {"item":"greatshield","upgrade":2,
+                 "effect":["blocking","projecting","vampiric"]},
+                {"kind":"weapon","effect":"any_enchantment"},
+                {"kind":"armor","effect":"thorns"}
+            ]}"#,
+        )
+        .unwrap();
+        let EffectRequirement::OneOf(set) = query.requirements[0].effect else {
+            panic!("expected a one-of set");
+        };
+        assert_eq!(set.len(), 3);
+        assert!(set.contains(Effect::Weapon(WeaponEffect::Vampiric)));
+        assert_eq!(
+            query.requirements[1].effect,
+            EffectRequirement::OneOf(EffectSet::enchantments(ItemKind::Weapon).unwrap())
+        );
+        assert_eq!(
+            query.requirements[2].effect,
+            EffectRequirement::OneOf(EffectSet::single(Effect::Armor(ArmorEffect::Thorns)))
+        );
+
+        for invalid in [
+            r#"{"requirements":[{"kind":"weapon","effect":[]}]}"#,
+            r#"{"requirements":[{"kind":"weapon","effect":["thorns"]}]}"#,
+            r#"{"requirements":[{"kind":"ring","effect":"any_enchantment"}]}"#,
+            r#"{"requirements":[{"kind":"weapon","effect":["blocking","thorns"]}]}"#,
+        ] {
+            assert!(decode(invalid).is_err(), "{invalid}");
+        }
+    }
+
+    #[test]
+    fn any_of_groups_become_alternative_requirements() {
+        let query = decode(
+            r#"{"requirements":[
+                {"any_of":[
+                    {"item":"spear","upgrade":3},
+                    {"item":"shuriken","upgrade":2},
+                    {"item":"sword","upgrade":1}
+                ]},
+                {"kind":"wand"},
+                {"any_of":[{"item":"sword"},{"item":"mace"}]}
+            ]}"#,
+        )
+        .unwrap();
+        assert_eq!(query.requirements.len(), 6);
+        let groups: Vec<Option<u8>> = query
+            .requirements
+            .iter()
+            .map(|requirement| requirement.alternative_group)
+            .collect();
+        assert_eq!(
+            groups,
+            vec![Some(1), Some(1), Some(1), None, Some(2), Some(2)]
+        );
+        assert_eq!(query.requirements[0].item, Some(ItemId::Spear));
+        assert_eq!(query.requirements[1].upgrade, UpgradeRequirement::Exact(2));
+
+        assert!(decode(r#"{"requirements":[{"any_of":[]}]}"#).is_err());
+        // Nested groups are not representable.
+        assert!(
+            decode(r#"{"requirements":[{"any_of":[{"any_of":[{"item":"sword"}]}]}]}"#).is_err()
+        );
+    }
+
+    #[test]
+    fn upgrade_sums_link_requirements_through_shared_groups() {
+        let query = decode(
+            r#"{"requirements":[
+                {"item":"ring_might","identity_group":1,
+                 "upgrade_sum":{"group":1,"at_least":2}},
+                {"item":"ring_might","identity_group":1,
+                 "upgrade_sum":{"group":1,"at_least":2}}
+            ]}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            query.requirements[0].upgrade_sum,
+            Some(UpgradeSum {
+                group: 1,
+                minimum_total: 2,
+            })
+        );
+        assert_eq!(
+            query.requirements[0].upgrade_sum,
+            query.requirements[1].upgrade_sum
+        );
+
+        // Disagreeing totals and unattainable sums are query errors.
+        assert!(
+            decode(
+                r#"{"requirements":[
+                    {"item":"ring_might","upgrade_sum":{"group":1,"at_least":2}},
+                    {"item":"ring_might","upgrade_sum":{"group":1,"at_least":3}}
+                ]}"#,
+            )
+            .is_err()
+        );
+        assert!(
+            decode(
+                r#"{"requirements":[
+                    {"item":"ring_might","upgrade_sum":{"group":1,"at_least":9}},
+                    {"item":"ring_might","upgrade_sum":{"group":1,"at_least":9}}
+                ]}"#,
+            )
+            .is_err()
+        );
+        // A sum inside an any_of group is rejected.
+        assert!(
+            decode(
+                r#"{"requirements":[{"any_of":[
+                    {"item":"ring_might","upgrade_sum":{"group":1,"at_least":2}},
+                    {"item":"ring_haste"}
+                ]}]}"#,
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
     fn encoding_omits_defaults_and_round_trips_a_loaded_query() {
         let query = SearchQuery {
             requirements: vec![
@@ -597,11 +851,15 @@ mod tests {
                     item: None,
                     tier: TierRequirement::AtLeast(4),
                     upgrade: UpgradeRequirement::Exact(2),
-                    effect: Some(Effect::Weapon(WeaponEffect::Blazing)),
+                    effect: EffectRequirement::OneOf(EffectSet::single(Effect::Weapon(
+                        WeaponEffect::Blazing,
+                    ))),
                     require_uncursed: true,
                     source: Some(ItemSource::LockedChest),
                     identity_group: Some(2),
                     max_depth: Some(9),
+                    alternative_group: None,
+                    upgrade_sum: None,
                 },
                 Requirement {
                     kind: ItemKind::Ring,
@@ -609,11 +867,13 @@ mod tests {
                     item: Some(ItemId::RingWealth),
                     tier: TierRequirement::Any,
                     upgrade: UpgradeRequirement::AtLeast(3),
-                    effect: None,
+                    effect: EffectRequirement::Any,
                     require_uncursed: false,
                     source: None,
                     identity_group: None,
                     max_depth: None,
+                    alternative_group: None,
+                    upgrade_sum: None,
                 },
             ],
             max_depth: 19,
@@ -658,11 +918,13 @@ mod tests {
                 item: None,
                 tier: TierRequirement::Any,
                 upgrade: UpgradeRequirement::Any,
-                effect: None,
+                effect: EffectRequirement::Any,
                 require_uncursed: false,
                 source: None,
                 identity_group: None,
                 max_depth: None,
+                alternative_group: None,
+                upgrade_sum: None,
             }],
             max_depth: 24,
             challenges: Challenges::NONE,
@@ -675,5 +937,31 @@ mod tests {
             r#"{"requirements":[{"kind":"wand"}]}"#
         );
         assert_eq!(decode(&encode(&query).to_string()).unwrap(), query);
+    }
+
+    #[test]
+    fn encoding_round_trips_groups_sums_and_effect_sets() {
+        let query = decode(
+            r#"{"requirements":[
+                {"any_of":[
+                    {"item":"spear","upgrade":3},
+                    {"item":"shuriken","upgrade":2}
+                ]},
+                {"kind":"melee_weapon","effect":"any_enchantment"},
+                {"item":"greatshield","effect":["blocking","projecting","vampiric"]},
+                {"item":"ring_might","identity_group":1,
+                 "upgrade_sum":{"group":1,"at_least":2}},
+                {"item":"ring_might","identity_group":1,
+                 "upgrade_sum":{"group":1,"at_least":2}}
+            ]}"#,
+        )
+        .unwrap();
+        let document = encode(&query);
+        assert_eq!(decode(&document.to_string()).unwrap(), query);
+        let entries = document["requirements"].as_array().unwrap();
+        assert!(entries[0].get("any_of").is_some());
+        assert_eq!(entries[1]["effect"], serde_json::json!("any_enchantment"));
+        assert_eq!(entries[2]["effect"].as_array().unwrap().len(), 3);
+        assert_eq!(entries[3]["upgrade_sum"]["at_least"], 2);
     }
 }

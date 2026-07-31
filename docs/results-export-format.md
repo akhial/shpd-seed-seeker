@@ -53,26 +53,35 @@ The query reuses the existing JSON query-document format shared by the CLI
 (`seed-seeker --query`), the web frontend, and the presets on every platform.
 It is decoded by `crates/seedfinder-core/src/json_query.rs`:
 
-- `requirements` — non-empty array of requirement objects with the optional
-  fields:
+- `requirements` — non-empty array of entries. Each entry is either a
+  requirement object, or an alternative group `{"any_of": [<requirement>,
+  ...]}` satisfied by any single member (groups may not nest, and members may
+  not carry `upgrade_sum`). Requirement objects have the optional fields:
   - `kind` — `"weapon" | "melee_weapon" | "thrown_weapon" | "armor" | "wand"
     | "ring"` (required when `item` is absent). `"weapon"` matches melee and
     thrown weapons alike; the two narrowed kinds were added alongside the
     melee/thrown search filters as an **additive enum value within format
     version 1** — a file that uses them simply fails to import on builds
-    older than both features, with the codec's unknown-category message,
+    older than both features, with the codec's unknown-category message.
+    The `any_of`, effect-list/`"any_enchantment"`, and `upgrade_sum` forms
+    below are additive within version 1 in the same way,
   - `item` — catalog stable id such as `"ring_wealth"`,
   - `tier` — `"any"` (the default) or exactly one of `{"exact": n}`,
     `{"at_least": n}`, `{"at_most": n}`,
   - `upgrade` — `"any"` (the default), a bare number `n` (shorthand for
     exact), or exactly one of `{"exact": n}`, `{"at_least": n}`,
-  - `effect` — enchantment/glyph wire name such as `"Blazing"` or
-    `"Anti-Magic"` (matched case-insensitively),
+  - `effect` — an enchantment/glyph wire name such as `"Blazing"` or
+    `"Anti-Magic"`, an array of same-family names (any one satisfies), or
+    the keyword `"any_enchantment"` (every non-curse effect of the item's
+    family); names are matched case-insensitively,
   - `uncursed` — boolean,
   - `source` — snake_case source name such as `"imp_reward"`,
   - `identity_group` — integer 1–4 (groups A–D; the engine allows more, but
     no app's editor can express them, so the file format caps at 4),
-  - `max_depth` — integer 1–24.
+  - `max_depth` — integer 1–24,
+  - `upgrade_sum` — `{"group": n, "at_least": n}`: requirements sharing a
+    group must be matched by distinct items whose upgrade levels add up to
+    at least the total; members of one group agree on the total.
 - `max_depth` (integer 1–24, default 24), `require_blacksmith`,
   `exclude_blacksmith_rewards`, `fast_mode` (booleans) — top-level scope
   flags.
@@ -87,7 +96,11 @@ case-insensitively, mirroring the core decoder.
 Writers omit defaults (`"tier": "any"`, `"upgrade": "any"`, `false` flags,
 `"max_depth": 24`, an empty `challenges` list) and write `upgrade` exact
 filters as the bare-number shorthand, so exported documents stay minimal and
-identical across platforms.
+identical across platforms. Alternative groups are written as one `any_of`
+entry at the first member's position with the members in requirement order;
+readers assign the groups fresh sequential ids. Effect sets are written as a
+bare name when one effect is chosen and as `"any_enchantment"` when the set
+is the full non-curse family.
 
 ## Compatibility rules
 

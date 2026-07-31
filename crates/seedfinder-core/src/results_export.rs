@@ -183,7 +183,9 @@ mod tests {
     use crate::catalog::{ItemId, ItemKind};
     use crate::challenges::Challenges;
     use crate::model::ItemSource;
-    use crate::query::{Requirement, SearchQuery, TierRequirement, UpgradeRequirement};
+    use crate::query::{
+        EffectRequirement, Requirement, SearchQuery, TierRequirement, UpgradeRequirement,
+    };
     use crate::seed::DungeonSeed;
 
     use super::{FORMAT_VERSION, decode, dedupe_and_cap, encode};
@@ -197,11 +199,13 @@ mod tests {
                     item: Some(ItemId::RingWealth),
                     tier: TierRequirement::Any,
                     upgrade: UpgradeRequirement::Exact(4),
-                    effect: None,
+                    effect: EffectRequirement::Any,
                     require_uncursed: false,
                     source: Some(ItemSource::ImpReward),
                     identity_group: None,
                     max_depth: None,
+                    alternative_group: None,
+                    upgrade_sum: None,
                 },
                 Requirement {
                     kind: ItemKind::Wand,
@@ -209,11 +213,13 @@ mod tests {
                     item: None,
                     tier: TierRequirement::Any,
                     upgrade: UpgradeRequirement::AtLeast(2),
-                    effect: None,
+                    effect: EffectRequirement::Any,
                     require_uncursed: true,
                     source: None,
                     identity_group: Some(1),
                     max_depth: Some(9),
+                    alternative_group: None,
+                    upgrade_sum: None,
                 },
             ],
             max_depth: 21,

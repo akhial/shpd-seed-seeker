@@ -62,6 +62,10 @@ public final class SearchController {
 
     public func start(_ request: SearchRequest) {
         task?.cancel(); results = []; scannedSeeds = 0; totalSeeds = 0; matchProbability = nil; seedsPerSecond = 0; elapsed = 0
+        if let problem = request.unattainableUpgradeSumMessage {
+            errorCode = 0; state = .failed; message = problem; isRunning = false
+            return
+        }
         errorCode = 0; message = nil; state = .running; isRunning = true; isImported = false; importedDropped = 0
         exportQuery = SavedQuery(
             requirements: request.requirements, maximumDepth: request.maximumDepth,

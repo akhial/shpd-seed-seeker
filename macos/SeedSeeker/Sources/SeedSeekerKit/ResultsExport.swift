@@ -58,7 +58,7 @@ public enum ResultsExport {
     ]
     private static let requirementKeys: Set<String> = [
         "kind", "item", "tier", "upgrade", "effect", "uncursed", "source",
-        "identity_group", "max_depth",
+        "identity_group", "max_depth", "upgrade_sum",
     ]
 
     public static func encode(_ query: SavedQuery, seeds: [String], appVersion: String) -> String {
@@ -171,7 +171,26 @@ public enum ResultsExport {
     }
 
     private static func encodeQuery(_ query: SavedQuery) -> [String: Any] {
-        var output: [String: Any] = ["requirements": query.requirements.map(encodeRequirement)]
+        // An alternative group serializes as one any_of entry at its first
+        // member's position, holding every member in requirement order;
+        // import assigns the groups fresh sequential ids, preserving the
+        // structure. A single-member group is the same query as a plain
+        // requirement and collapses to one.
+        var entries: [Any] = []
+        var emittedGroups = Set<Int>()
+        for requirement in query.requirements {
+            guard let group = requirement.alternativeGroup else {
+                entries.append(encodeRequirement(requirement))
+                continue
+            }
+            guard emittedGroups.insert(group).inserted else { continue }
+            let members = query.requirements
+                .filter { $0.alternativeGroup == group }
+                .map(encodeRequirement)
+            if members.count == 1 { entries.append(members[0]) }
+            else { entries.append(["any_of": members]) }
+        }
+        var output: [String: Any] = ["requirements": entries]
         if query.maximumDepth != 24 { output["max_depth"] = query.maximumDepth }
         if query.requireBlacksmith { output["require_blacksmith"] = true }
         if query.excludeBlacksmithRewards { output["exclude_blacksmith_rewards"] = true }
@@ -197,11 +216,25 @@ public enum ResultsExport {
         case .exactly: output["upgrade"] = requirement.upgrade
         case .atLeast: output["upgrade"] = ["at_least": requirement.upgrade]
         }
-        if let modifier = requirement.modifier { output["effect"] = modifier }
+        switch requirement.effect {
+        case .any: break
+        case .anyEnchantment: output["effect"] = "any_enchantment"
+        case .oneOf(let names):
+            // The full non-curse family set uses the shorthand; one effect
+            // stays a bare name; anything else lists its members.
+            let family = requirement.kind.family == .weapon
+                ? ItemCatalog.enchantments : ItemCatalog.glyphs
+            if Set(names) == Set(family) { output["effect"] = "any_enchantment" }
+            else if names.count == 1 { output["effect"] = names[0] }
+            else { output["effect"] = names }
+        }
         if requirement.requireUncursed { output["uncursed"] = true }
         if let source = requirement.source { output["source"] = sourceNames[source.rawValue] }
         if let group = requirement.identityGroup { output["identity_group"] = group }
         if let depth = requirement.maximumDepth { output["max_depth"] = depth }
+        if let group = requirement.upgradeSumGroup, let total = requirement.upgradeSumTotal {
+            output["upgrade_sum"] = ["group": group, "at_least": total]
+        }
         return output
     }
 
@@ -214,18 +247,59 @@ public enum ResultsExport {
         guard let requirementsValue = value["requirements"] as? [Any], !requirementsValue.isEmpty else {
             throw ResultsExportError("The query in this results file has no requirements.")
         }
-        let requirements = try requirementsValue.enumerated().map { index, entry -> ItemRequirement in
-            guard let entry = entry as? [String: Any] else {
+        // An entry is a plain requirement or an {"any_of": [...]} alternative
+        // group. Groups get fresh sequential ids in entry order; a
+        // single-member group is the same query as a plain requirement and
+        // collapses to one.
+        var requirements: [ItemRequirement] = []
+        var nextAlternativeGroup = 0
+        var nextKey: Int64 = 0
+        for (index, entryValue) in requirementsValue.enumerated() {
+            guard let entry = entryValue as? [String: Any] else {
                 throw ResultsExportError("Requirement \(index + 1) is not a JSON object.")
             }
             do {
-                return try decodeRequirement(entry, key: Int64(index + 1))
+                if let anyOfValue = entry["any_of"] {
+                    for field in entry.keys where field != "any_of" {
+                        throw ResultsExportError(
+                            "unknown field \"\(field)\" — update Seed Seeker to import it")
+                    }
+                    guard let members = anyOfValue as? [Any], !members.isEmpty else {
+                        throw ResultsExportError("\"any_of\" needs at least one requirement")
+                    }
+                    let group: Int?
+                    if members.count > 1 { nextAlternativeGroup += 1; group = nextAlternativeGroup }
+                    else { group = nil }
+                    for memberValue in members {
+                        guard let member = memberValue as? [String: Any] else {
+                            throw ResultsExportError("\"any_of\" members must be JSON objects")
+                        }
+                        nextKey += 1
+                        requirements.append(try decodeRequirement(
+                            member, key: nextKey, alternativeGroup: group, insideGroup: true))
+                    }
+                } else {
+                    nextKey += 1
+                    requirements.append(try decodeRequirement(entry, key: nextKey))
+                }
             } catch let failure as ResultsExportError {
                 throw ResultsExportError("Requirement \(index + 1): \(failure.message)")
             } catch {
                 let reason = (error as? LocalizedError)?.errorDescription ?? "\(error)"
                 throw ResultsExportError("Requirement \(index + 1): \(reason)")
             }
+        }
+        // Members of a combined-upgrade group must agree on the total; the
+        // engine would reject the search with an unspecific error.
+        var groupTotals: [Int: Int] = [:]
+        for requirement in requirements {
+            guard let group = requirement.upgradeSumGroup,
+                  let total = requirement.upgradeSumTotal else { continue }
+            if let existing = groupTotals[group], existing != total {
+                throw ResultsExportError(
+                    "Combined upgrade group \(group) members disagree on the required total.")
+            }
+            groupTotals[group] = total
         }
         let maximumDepth = try intField(value, "max_depth") ?? 24
         guard (1...24).contains(maximumDepth) else {
@@ -255,7 +329,9 @@ public enum ResultsExport {
             challenges: challenges)
     }
 
-    private static func decodeRequirement(_ entry: [String: Any], key: Int64) throws -> ItemRequirement {
+    private static func decodeRequirement(
+        _ entry: [String: Any], key: Int64,
+        alternativeGroup: Int? = nil, insideGroup: Bool = false) throws -> ItemRequirement {
         for field in entry.keys where !requirementKeys.contains(field) {
             throw ResultsExportError("unknown field \"\(field)\" — update Seed Seeker to import it")
         }
@@ -314,13 +390,29 @@ public enum ResultsExport {
                 throw ResultsExportError("unrecognized upgrade filter")
             }
         }
-        var modifier: String?
-        if let name = try stringField(entry, "effect") {
-            guard let match = ItemCatalog.modifiersFor(kind)
-                .first(where: { $0.caseInsensitiveCompare(name) == .orderedSame }) else {
-                throw ResultsExportError("unknown effect \"\(name)\"")
+        var effect = EffectPredicate.any
+        if let effectValue = entry["effect"], !(effectValue is NSNull) {
+            effect = try decodeEffect(effectValue, kind: kind)
+        }
+        var upgradeSumGroup: Int?
+        var upgradeSumTotal: Int?
+        if let sumValue = entry["upgrade_sum"], !(sumValue is NSNull) {
+            guard !insideGroup else {
+                throw ResultsExportError(
+                    "a combined upgrade total cannot sit inside an \"any_of\" group")
             }
-            modifier = match
+            guard let object = sumValue as? [String: Any] else {
+                throw ResultsExportError("\"upgrade_sum\" must be an object")
+            }
+            for field in object.keys where field != "group" && field != "at_least" {
+                throw ResultsExportError("unknown field \"\(field)\" — update Seed Seeker to import it")
+            }
+            guard let group = try intField(object, "group"),
+                  let total = try intField(object, "at_least") else {
+                throw ResultsExportError("\"upgrade_sum\" needs a group and an at_least total")
+            }
+            upgradeSumGroup = group
+            upgradeSumTotal = total
         }
         var source: ScoutItemSource?
         if let name = try stringField(entry, "source") {
@@ -334,7 +426,7 @@ public enum ResultsExport {
             key: key,
             item: item,
             upgrade: upgrade,
-            modifier: modifier,
+            effect: effect,
             kind: kind,
             tier: tier,
             tierMatch: tierMatch,
@@ -342,6 +434,49 @@ public enum ResultsExport {
             source: source,
             identityGroup: try intField(entry, "identity_group"),
             maximumDepth: try intField(entry, "max_depth"),
-            requireUncursed: try boolField(entry, "uncursed"))
+            requireUncursed: try boolField(entry, "uncursed"),
+            alternativeGroup: alternativeGroup,
+            upgradeSumGroup: upgradeSumGroup,
+            upgradeSumTotal: upgradeSumTotal)
+    }
+
+    /// Decodes the effect field's three wire forms: a single effect name, a
+    /// list of same-family names, or the "any_enchantment" shorthand for the
+    /// family's full non-curse set. Names match case-insensitively and
+    /// canonicalize to the catalog spelling; duplicates collapse.
+    private static func decodeEffect(_ value: Any, kind: ItemKind) throws -> EffectPredicate {
+        func canonical(_ name: String) throws -> String {
+            guard let match = ItemCatalog.modifiersFor(kind)
+                .first(where: { $0.caseInsensitiveCompare(name) == .orderedSame }) else {
+                throw ResultsExportError("unknown effect \"\(name)\"")
+            }
+            return match
+        }
+        if let name = value as? String, !(value is NSNumber) {
+            if name.lowercased() == "any_enchantment" {
+                guard kind.modifierLabel != nil else {
+                    throw ResultsExportError("\"any_enchantment\" requires a weapon or armor")
+                }
+                return .anyEnchantment
+            }
+            return .oneOf([try canonical(name)])
+        }
+        if let names = value as? [Any] {
+            guard !names.isEmpty else {
+                throw ResultsExportError("an effect list needs at least one name")
+            }
+            var seen = Set<String>()
+            var canonicalNames: [String] = []
+            for nameValue in names {
+                guard let name = nameValue as? String, !(nameValue is NSNumber) else {
+                    throw ResultsExportError("\"effect\" names must be strings")
+                }
+                let match = try canonical(name)
+                if seen.insert(match).inserted { canonicalNames.append(match) }
+            }
+            return .oneOf(canonicalNames)
+        }
+        throw ResultsExportError(
+            "\"effect\" must be an effect name, a list of names, or \"any_enchantment\"")
     }
 }

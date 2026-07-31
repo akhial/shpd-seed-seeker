@@ -10,8 +10,9 @@ import org.json.JSONObject
  * that found them.
  *
  * The canonical implementation and compatibility rules live in the Rust core
- * (`crates/seedfinder-core/src/results_export.rs`); the schema is documented
- * in `docs/results-export-format.md`. Keep this codec schema-compatible with
+ * (`crates/seedfinder-core/src/results_export.rs`, query schema in
+ * `json_query.rs`); the schema is documented in
+ * `docs/results-export-format.md`. Keep this codec schema-compatible with
  * it: unknown envelope and per-result fields are ignored, files declaring a
  * newer `format_version` are rejected with an "update the app" message, and
  * unknown or wrong-typed query content fails the import instead of silently
@@ -67,6 +68,7 @@ object ResultsExport {
         "source",
         "identity_group",
         "max_depth",
+        "upgrade_sum",
     )
 
     fun encode(query: PresetQuery, seeds: List<String>, appVersion: String): String =
@@ -132,10 +134,33 @@ object ResultsExport {
     }
 
     private fun encodeQuery(query: PresetQuery) = JSONObject().apply {
-        put(
-            "requirements",
-            JSONArray().apply { query.requirements.forEach { put(encodeRequirement(it)) } },
-        )
+        // An alternative group serializes as one {"any_of": [...]} entry at
+        // its first member's position, holding every member in requirement
+        // order; decode assigns the groups fresh sequential ids, preserving
+        // the structure. A single-member group is the same query as a plain
+        // requirement and collapses to one.
+        val entries = JSONArray()
+        val emittedGroups = mutableSetOf<Int>()
+        for (requirement in query.requirements) {
+            val group = requirement.alternativeGroup
+            if (group == null) {
+                entries.put(encodeRequirement(requirement))
+                continue
+            }
+            if (!emittedGroups.add(group)) continue
+            val members = query.requirements.filter { it.alternativeGroup == group }
+            if (members.size == 1) {
+                entries.put(encodeRequirement(members.single()))
+            } else {
+                entries.put(
+                    JSONObject().put(
+                        "any_of",
+                        JSONArray().apply { members.forEach { put(encodeRequirement(it)) } },
+                    ),
+                )
+            }
+        }
+        put("requirements", entries)
         if (query.maximumDepth != 24) put("max_depth", query.maximumDepth)
         if (query.requireBlacksmith) put("require_blacksmith", true)
         if (query.excludeBlacksmithRewards) put("exclude_blacksmith_rewards", true)
@@ -147,6 +172,9 @@ object ResultsExport {
     }
 
     private fun encodeRequirement(requirement: ItemRequirement) = JSONObject().apply {
+        // Narrowed weapon kinds keep their document names (melee_weapon,
+        // thrown_weapon); widening them to "weapon" would silently change the
+        // query's meaning on import.
         put("kind", requirement.kind.name.lowercase())
         requirement.item?.let { put("item", it.id) }
         when (requirement.tierMatch) {
@@ -160,11 +188,36 @@ object ResultsExport {
             UpgradeMatch.EXACT -> put("upgrade", requirement.upgrade)
             UpgradeMatch.AT_LEAST -> put("upgrade", JSONObject().put("at_least", requirement.upgrade))
         }
-        requirement.modifier?.let { put("effect", it) }
+        when (val effect = requirement.effect) {
+            EffectRequirement.Any -> {}
+            EffectRequirement.AnyEnchantment -> put("effect", "any_enchantment")
+            is EffectRequirement.OneOf -> {
+                // The full non-curse family set uses the shorthand; one
+                // effect stays a bare name; anything else lists its members.
+                val nonCurse = ItemCatalog.modifiersFor(requirement.kind).toSet() -
+                    ItemCatalog.cursesFor(requirement.kind).toSet()
+                put(
+                    "effect",
+                    when {
+                        effect.effects.toSet() == nonCurse -> "any_enchantment"
+                        effect.effects.size == 1 -> effect.effects.single()
+                        else -> JSONArray(effect.effects)
+                    },
+                )
+            }
+        }
         if (requirement.requireUncursed) put("uncursed", true)
         requirement.source?.let { put("source", it.name.lowercase()) }
         requirement.identityGroup?.let { put("identity_group", it) }
         requirement.maximumDepth?.let { put("max_depth", it) }
+        if (requirement.upgradeSumGroup != null && requirement.upgradeSumTotal != null) {
+            put(
+                "upgrade_sum",
+                JSONObject()
+                    .put("group", requirement.upgradeSumGroup)
+                    .put("at_least", requirement.upgradeSumTotal),
+            )
+        }
     }
 
     private fun decodeQuery(value: JSONObject): PresetQuery {
@@ -176,18 +229,53 @@ object ResultsExport {
         }
         val requirementsValue = value.optJSONArray("requirements")
         requireNotNull(requirementsValue) { "The query in this results file has no requirements list." }
+        // An entry is a plain requirement or an {"any_of": [...]} alternative
+        // group satisfied by any single member. Groups get fresh sequential
+        // ids in entry order.
         val requirements = buildList {
+            var nextAlternativeGroup = 0
             for (index in 0 until requirementsValue.length()) {
                 val entry = requirementsValue.optJSONObject(index)
                 requireNotNull(entry) { "Requirement ${index + 1} is not a JSON object." }
-                add(
-                    runCatching { decodeRequirement(entry, index) }.getOrElse { failure ->
-                        throw IllegalArgumentException("Requirement ${index + 1}: ${failure.message}")
-                    },
-                )
+                runCatching {
+                    if (entry.has("any_of")) {
+                        for (key in entry.keys()) {
+                            require(key == "any_of") {
+                                "unknown field \"$key\" — update Seed Seeker to import it"
+                            }
+                        }
+                        val members = entry.optJSONArray("any_of")
+                        require(members != null && members.length() > 0) {
+                            "\"any_of\" needs at least one requirement"
+                        }
+                        // A one-member group is the same query as a plain
+                        // requirement.
+                        val group = if (members.length() > 1) ++nextAlternativeGroup else null
+                        for (memberIndex in 0 until members.length()) {
+                            val member = members.optJSONObject(memberIndex)
+                            requireNotNull(member) { "\"any_of\" members must be JSON objects" }
+                            add(decodeRequirement(member, size + 1L, group, insideGroup = true))
+                        }
+                    } else {
+                        add(decodeRequirement(entry, size + 1L, alternativeGroup = null, insideGroup = false))
+                    }
+                }.getOrElse { failure ->
+                    throw IllegalArgumentException("Requirement ${index + 1}: ${failure.message}")
+                }
             }
         }
         require(requirements.isNotEmpty()) { "The query in this results file has no requirements." }
+        // Members of a combined-upgrade group must agree on the total; the
+        // engine would reject such a search with an unspecific error.
+        val groupTotals = mutableMapOf<Int, Int>()
+        for (requirement in requirements) {
+            val group = requirement.upgradeSumGroup ?: continue
+            val total = requirement.upgradeSumTotal ?: continue
+            val previous = groupTotals.put(group, total)
+            require(previous == null || previous == total) {
+                "Combined upgrade group $group members disagree on the required total."
+            }
+        }
         val challengesValue = value.opt("challenges")
         var challenges = 0
         if (challengesValue != null && challengesValue != JSONObject.NULL) {
@@ -215,9 +303,14 @@ object ResultsExport {
         )
     }
 
-    private fun decodeRequirement(entry: JSONObject, index: Int): ItemRequirement {
-        for (key in entry.keys()) {
-            require(key in REQUIREMENT_KEYS) { "unknown field \"$key\" — update Seed Seeker to import it" }
+    private fun decodeRequirement(
+        entry: JSONObject,
+        key: Long,
+        alternativeGroup: Int?,
+        insideGroup: Boolean,
+    ): ItemRequirement {
+        for (field in entry.keys()) {
+            require(field in REQUIREMENT_KEYS) { "unknown field \"$field\" — update Seed Seeker to import it" }
         }
         val item = entry.strictStringOrNull("item")?.let { id ->
             requireNotNull(ItemCatalog.findById(id)) { "unknown item \"$id\"" }
@@ -283,10 +376,24 @@ object ResultsExport {
             }
             else -> throw IllegalArgumentException("unrecognized upgrade filter")
         }
-        val modifier = entry.strictStringOrNull("effect")?.let { name ->
-            requireNotNull(
-                ItemCatalog.modifiersFor(kind).firstOrNull { it.equals(name, ignoreCase = true) },
-            ) { "unknown effect \"$name\"" }
+        val effect = decodeEffect(entry.opt("effect"), kind)
+        var upgradeSumGroup: Int? = null
+        var upgradeSumTotal: Int? = null
+        when (val sumValue = entry.opt("upgrade_sum")) {
+            null, JSONObject.NULL -> {}
+            is JSONObject -> {
+                require(!insideGroup) {
+                    "a combined upgrade total cannot sit inside an \"any_of\" group"
+                }
+                for (field in sumValue.keys()) {
+                    require(field == "group" || field == "at_least") {
+                        "unknown field \"$field\" — update Seed Seeker to import it"
+                    }
+                }
+                upgradeSumGroup = sumValue.strictInt("group")
+                upgradeSumTotal = sumValue.strictInt("at_least")
+            }
+            else -> throw IllegalArgumentException("\"upgrade_sum\" must be an object")
         }
         val source = entry.strictStringOrNull("source")?.let { name ->
             requireNotNull(ScoutItemSource.entries.firstOrNull { it.name.lowercase() == name }) {
@@ -294,10 +401,10 @@ object ResultsExport {
             }
         }
         return ItemRequirement(
-            key = index + 1L,
+            key = key,
             item = item,
             upgrade = upgrade,
-            modifier = modifier,
+            effect = effect,
             kind = kind,
             tier = tier,
             tierMatch = tierMatch,
@@ -306,7 +413,50 @@ object ResultsExport {
             identityGroup = entry.strictIntOrNull("identity_group"),
             maximumDepth = entry.strictIntOrNull("max_depth"),
             requireUncursed = entry.strictBool("uncursed"),
+            alternativeGroup = alternativeGroup,
+            upgradeSumGroup = upgradeSumGroup,
+            upgradeSumTotal = upgradeSumTotal,
         )
+    }
+
+    /**
+     * Decodes the effect field's three wire forms: a single effect name, a
+     * list of same-family names, or the "any_enchantment" shorthand for the
+     * family's full non-curse set. Names match case-insensitively and
+     * canonicalize to the catalog spelling; duplicates collapse.
+     */
+    private fun decodeEffect(value: Any?, kind: ItemKind): EffectRequirement {
+        if (value == null || value == JSONObject.NULL) return EffectRequirement.Any
+        fun canonical(name: Any?): String {
+            require(name is String) { "\"effect\" names must be strings" }
+            return requireNotNull(
+                ItemCatalog.modifiersFor(kind).firstOrNull { it.equals(name, ignoreCase = true) },
+            ) { "unknown effect \"$name\"" }
+        }
+        return when (value) {
+            is String ->
+                if (value.equals("any_enchantment", ignoreCase = true)) {
+                    require(kind.modifierLabel != null) {
+                        "\"any_enchantment\" requires a weapon or armor"
+                    }
+                    EffectRequirement.AnyEnchantment
+                } else {
+                    EffectRequirement.OneOf(listOf(canonical(value)))
+                }
+            is JSONArray -> {
+                require(value.length() > 0) { "an effect list needs at least one name" }
+                val names = buildList {
+                    for (index in 0 until value.length()) {
+                        val match = canonical(value.opt(index))
+                        if (match !in this) add(match)
+                    }
+                }
+                EffectRequirement.OneOf(names)
+            }
+            else -> throw IllegalArgumentException(
+                "\"effect\" must be an effect name, a list of names, or \"any_enchantment\"",
+            )
+        }
     }
 
     // Strict typed readers: a present-but-wrong-type value is an error, never

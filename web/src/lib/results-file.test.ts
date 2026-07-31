@@ -207,4 +207,39 @@ describe('results file', () => {
     expect(decoded.query).toEqual(query)
     expect(decoded.seeds).toEqual([])
   })
+
+  it('round-trips alternative groups, effect sets, and combined upgrade totals', () => {
+    const base = { tier: { mode: 'any', value: 3 }, upgrade: { mode: 'any', value: 1 }, uncursed: false } as const
+    const query: QueryState = {
+      ...defaultQueryState(),
+      requirements: [
+        { ...base, kind: 'weapon', item: 'spear', upgrade: { mode: 'exact', value: 3 }, alternativeGroup: 1 },
+        { ...base, kind: 'thrown_weapon', item: 'shuriken', upgrade: { mode: 'exact', value: 2 }, alternativeGroup: 1 },
+        { ...base, kind: 'melee_weapon', effect: { mode: 'any_enchantment' } },
+        { ...base, kind: 'weapon', item: 'greatshield', effect: { mode: 'one_of', names: ['Blocking', 'Projecting', 'Vampiric'] } },
+        { ...base, kind: 'ring', item: 'ring_might', identityGroup: 1, upgradeSum: { group: 1, atLeast: 2 } },
+        { ...base, kind: 'ring', item: 'ring_might', identityGroup: 1, upgradeSum: { group: 1, atLeast: 2 } },
+      ],
+    }
+    const decoded = decodeResultsFile(encodeResultsFile(toQueryDocument(query), ['AAA-AAA-AAB'], '3.3.8'))
+    expect(decoded.query).toEqual(query)
+    expect(decoded.seeds).toEqual(['AAA-AAA-AAB'])
+  })
+
+  it('rejects malformed group, effect, and sum content in imported queries', () => {
+    expect(() => decodeResultsFile(file({ requirements: [{ any_of: [] }] })))
+      .toThrowError(/any_of/)
+    expect(() => decodeResultsFile(file({ requirements: [{ any_of: [{ item: 'sword' }], extra: 1 }] })))
+      .toThrowError(/unknown field/)
+    expect(() => decodeResultsFile(file({ requirements: [{ any_of: [{ item: 'ring_might', upgrade_sum: { group: 1, at_least: 2 } }] }] })))
+      .toThrowError(/inside/)
+    expect(() => decodeResultsFile(file({ requirements: [{ kind: 'weapon', effect: [] }] })))
+      .toThrowError(/at least one name/)
+    expect(() => decodeResultsFile(file({ requirements: [{ kind: 'weapon', effect: ['Blocking', 'Sparkling'] }] })))
+      .toThrowError(/Sparkling/)
+    expect(() => decodeResultsFile(file({ requirements: [{ item: 'ring_might', upgrade_sum: { group: 1, at_least: 9 } }] })))
+      .toThrowError(/total/)
+    expect(() => decodeResultsFile(file({ requirements: [{ item: 'ring_might', upgrade_sum: { group: 0, at_least: 2 } }] })))
+      .toThrowError(/group/)
+  })
 })

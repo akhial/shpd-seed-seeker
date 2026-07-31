@@ -244,7 +244,195 @@ final class ResultsExportTests: XCTestCase {
         XCTAssertEqual(requirements[2].upgradeMatch, .atLeast)
         XCTAssertEqual(requirements[3].tierMatch, .atMost)
         // Effect matching is case-insensitive and canonicalizes to the catalog name.
-        XCTAssertEqual(requirements[3].modifier, "Anti-Magic")
+        XCTAssertEqual(requirements[3].effect, .oneOf(["Anti-Magic"]))
+    }
+
+    /// Requirements compare equal except for the session-local row keys.
+    private func assertSameRequirements(_ lhs: [ItemRequirement], _ rhs: [ItemRequirement],
+                                        file: StaticString = #filePath, line: UInt = #line) {
+        var expected = lhs
+        var actual = rhs
+        for index in expected.indices { expected[index].key = 0 }
+        for index in actual.indices { actual[index].key = 0 }
+        XCTAssertEqual(expected, actual, file: file, line: line)
+    }
+
+    func testAlternativeGroupsRoundTripAsAnyOfEntries() throws {
+        let query = SavedQuery(requirements: [
+            try ItemRequirement(key: 1, item: ItemCatalog.findById("spear"), upgrade: 3,
+                                kind: .weapon, upgradeMatch: .exactly, alternativeGroup: 1),
+            try ItemRequirement(key: 2, item: ItemCatalog.findById("shuriken"), upgrade: 2,
+                                kind: .thrownWeapon, upgradeMatch: .exactly, alternativeGroup: 1),
+            try ItemRequirement(key: 3, item: nil, upgrade: 0, kind: .wand, upgradeMatch: .any),
+            try ItemRequirement(key: 4, item: ItemCatalog.findById("sword"), upgrade: 0,
+                                kind: .meleeWeapon, upgradeMatch: .any, alternativeGroup: 2),
+            try ItemRequirement(key: 5, item: ItemCatalog.findById("mace"), upgrade: 0,
+                                kind: .weapon, upgradeMatch: .any, alternativeGroup: 2),
+        ])
+        let text = ResultsExport.encode(query, seeds: ["AAA-AAA-AAB"], appVersion: "0.6.1")
+        let document = try XCTUnwrap(
+            try JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any])
+        let entries = try XCTUnwrap((document["query"] as? [String: Any])?["requirements"] as? [Any])
+        XCTAssertEqual(entries.count, 3)
+        let first = try XCTUnwrap((entries[0] as? [String: Any])?["any_of"] as? [[String: Any]])
+        XCTAssertEqual(first.count, 2)
+        XCTAssertEqual(first[1]["kind"] as? String, "thrown_weapon")
+        XCTAssertNil((entries[1] as? [String: Any])?["any_of"])
+        let imported = try ResultsExport.decode(text)
+        assertSameRequirements(query.requirements, imported.query.requirements)
+    }
+
+    func testImportRenumbersAlternativeGroupsSequentially() throws {
+        let query = SavedQuery(requirements: [
+            try ItemRequirement(key: 1, item: nil, upgrade: 0, kind: .wand,
+                                upgradeMatch: .any, alternativeGroup: 9),
+            try ItemRequirement(key: 2, item: nil, upgrade: 0, kind: .ring,
+                                upgradeMatch: .any, alternativeGroup: 9),
+            try ItemRequirement(key: 3, item: nil, upgrade: 0, kind: .armor,
+                                upgradeMatch: .any, alternativeGroup: 4),
+            try ItemRequirement(key: 4, item: nil, upgrade: 0, kind: .weapon,
+                                upgradeMatch: .any, alternativeGroup: 4),
+        ])
+        let imported = try ResultsExport.decode(
+            ResultsExport.encode(query, seeds: [], appVersion: "0.6.1"))
+        XCTAssertEqual(imported.query.requirements.map(\.alternativeGroup), [1, 1, 2, 2])
+    }
+
+    func testSingleMemberAnyOfCollapsesToAPlainRequirement() throws {
+        let imported = try ResultsExport.decode("""
+            {"format":"seed-seeker-results","format_version":1,
+             "query":{"requirements":[{"any_of":[{"item":"sword"}]},{"kind":"wand"}]},
+             "results":[]}
+            """)
+        XCTAssertEqual(imported.query.requirements.count, 2)
+        XCTAssertEqual(imported.query.requirements.map(\.alternativeGroup), [nil, nil])
+        XCTAssertEqual(imported.query.requirements[0].item?.id, "sword")
+    }
+
+    func testEffectListsAndAnyEnchantmentRoundTrip() throws {
+        let query = SavedQuery(requirements: [
+            try ItemRequirement(key: 1, item: nil, upgrade: 0, effect: .anyEnchantment,
+                                kind: .meleeWeapon, upgradeMatch: .any),
+            try ItemRequirement(key: 2, item: ItemCatalog.findById("greatshield"), upgrade: 2,
+                                effect: .oneOf(["Blocking", "Projecting", "Vampiric"]),
+                                kind: .weapon, upgradeMatch: .exactly),
+            try ItemRequirement(key: 3, item: nil, upgrade: 0, effect: .oneOf(["Thorns"]),
+                                kind: .armor, upgradeMatch: .any),
+        ])
+        let text = ResultsExport.encode(query, seeds: [], appVersion: "0.6.1")
+        let document = try XCTUnwrap(
+            try JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any])
+        let entries = try XCTUnwrap(
+            (document["query"] as? [String: Any])?["requirements"] as? [[String: Any]])
+        XCTAssertEqual(entries[0]["effect"] as? String, "any_enchantment")
+        XCTAssertEqual(entries[1]["effect"] as? [String], ["Blocking", "Projecting", "Vampiric"])
+        XCTAssertEqual(entries[2]["effect"] as? String, "Thorns")
+        let imported = try ResultsExport.decode(text)
+        assertSameRequirements(query.requirements, imported.query.requirements)
+    }
+
+    func testFullFamilyEffectSetsUseTheAnyEnchantmentShorthand() throws {
+        let query = SavedQuery(requirements: [
+            try ItemRequirement(key: 1, item: nil, upgrade: 0,
+                                effect: .oneOf(ItemCatalog.glyphs),
+                                kind: .armor, upgradeMatch: .any),
+        ])
+        let text = ResultsExport.encode(query, seeds: [], appVersion: "0.6.1")
+        let document = try XCTUnwrap(
+            try JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any])
+        let entries = try XCTUnwrap(
+            (document["query"] as? [String: Any])?["requirements"] as? [[String: Any]])
+        XCTAssertEqual(entries[0]["effect"] as? String, "any_enchantment")
+        // The shorthand imports as the canonical any-enchantment predicate.
+        let imported = try ResultsExport.decode(text)
+        XCTAssertEqual(imported.query.requirements[0].effect, .anyEnchantment)
+    }
+
+    func testUpgradeSumGroupsRoundTrip() throws {
+        let query = SavedQuery(requirements: [
+            try ItemRequirement(key: 1, item: ItemCatalog.findById("ring_might"), upgrade: 0,
+                                kind: .ring, upgradeMatch: .any, identityGroup: 1,
+                                upgradeSumGroup: 1, upgradeSumTotal: 4),
+            try ItemRequirement(key: 2, item: ItemCatalog.findById("ring_might"), upgrade: 0,
+                                kind: .ring, upgradeMatch: .any, identityGroup: 1,
+                                upgradeSumGroup: 1, upgradeSumTotal: 4),
+        ])
+        let text = ResultsExport.encode(query, seeds: ["AAA-AAA-AAB"], appVersion: "0.6.1")
+        let document = try XCTUnwrap(
+            try JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any])
+        let entries = try XCTUnwrap(
+            (document["query"] as? [String: Any])?["requirements"] as? [[String: Any]])
+        XCTAssertEqual(entries[0]["upgrade_sum"] as? [String: Int], ["group": 1, "at_least": 4])
+        let imported = try ResultsExport.decode(text)
+        assertSameRequirements(query.requirements, imported.query.requirements)
+    }
+
+    func testNarrowedWeaponKindsRoundTripWithEffectsAndGroups() throws {
+        let query = SavedQuery(requirements: [
+            try ItemRequirement(key: 1, item: nil, upgrade: 1, effect: .anyEnchantment,
+                                kind: .thrownWeapon, upgradeMatch: .atLeast, alternativeGroup: 1),
+            try ItemRequirement(key: 2, item: nil, upgrade: 0, effect: .oneOf(["Grim"]),
+                                kind: .meleeWeapon, tier: 5, tierMatch: .exactly,
+                                upgradeMatch: .any, alternativeGroup: 1),
+        ])
+        let imported = try ResultsExport.decode(
+            ResultsExport.encode(query, seeds: [], appVersion: "0.6.1"))
+        XCTAssertEqual(imported.query.requirements.map(\.kind), [.thrownWeapon, .meleeWeapon])
+        assertSameRequirements(query.requirements, imported.query.requirements)
+    }
+
+    func testUpgradeSumInsideAnyOfIsRejected() {
+        XCTAssertThrowsError(try ResultsExport.decode("""
+            {"format":"seed-seeker-results","format_version":1,
+             "query":{"requirements":[{"any_of":[
+               {"item":"ring_might","upgrade_sum":{"group":1,"at_least":2}},
+               {"item":"ring_haste"}
+             ]}]},
+             "results":[]}
+            """)) { error in
+            let message = (error as? ResultsExportError)?.message ?? ""
+            XCTAssertTrue(message.contains("any_of"), message)
+        }
+        // Even a single-member group cannot carry a combined upgrade total.
+        XCTAssertThrowsError(try ResultsExport.decode("""
+            {"format":"seed-seeker-results","format_version":1,
+             "query":{"requirements":[{"any_of":[
+               {"item":"ring_might","upgrade_sum":{"group":1,"at_least":2}}
+             ]}]},
+             "results":[]}
+            """))
+    }
+
+    func testMalformedGroupsSumsAndEffectsAreRejected() {
+        let payloads = [
+            // any_of must be the entry's only field, non-empty, with object members.
+            #"{"requirements":[{"any_of":[]}]}"#,
+            #"{"requirements":[{"any_of":[{"item":"sword"}],"extra":1}]}"#,
+            #"{"requirements":[{"any_of":["sword"]}]}"#,
+            // Nested groups are not representable.
+            #"{"requirements":[{"any_of":[{"any_of":[{"item":"sword"}]}]}]}"#,
+            // upgrade_sum needs exactly {"group", "at_least"} in range.
+            #"{"requirements":[{"item":"sword","upgrade_sum":3}]}"#,
+            #"{"requirements":[{"item":"sword","upgrade_sum":{"group":1}}]}"#,
+            #"{"requirements":[{"item":"sword","upgrade_sum":{"group":1,"at_least":2,"x":3}}]}"#,
+            #"{"requirements":[{"item":"sword","upgrade_sum":{"group":0,"at_least":2}}]}"#,
+            #"{"requirements":[{"item":"sword","upgrade_sum":{"group":1,"at_least":9}}]}"#,
+            // Disagreeing totals within one group.
+            #"{"requirements":[{"item":"sword","upgrade_sum":{"group":1,"at_least":2}},"# +
+                #"{"item":"mace","upgrade_sum":{"group":1,"at_least":3}}]}"#,
+            // Effect lists must be non-empty, known, and family-consistent.
+            #"{"requirements":[{"kind":"weapon","effect":[]}]}"#,
+            #"{"requirements":[{"kind":"weapon","effect":["Thorns"]}]}"#,
+            #"{"requirements":[{"kind":"weapon","effect":[3]}]}"#,
+            #"{"requirements":[{"kind":"ring","effect":"any_enchantment"}]}"#,
+            #"{"requirements":[{"kind":"weapon","effect":{"name":"Grim"}}]}"#,
+        ]
+        for query in payloads {
+            XCTAssertThrowsError(try ResultsExport.decode("""
+                {"format":"seed-seeker-results","format_version":1,
+                 "query":\(query),"results":[]}
+                """), query)
+        }
     }
 
     @MainActor

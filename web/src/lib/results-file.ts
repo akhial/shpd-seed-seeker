@@ -16,7 +16,7 @@ export const MAX_RESULTS_FILE_BYTES = 2 * 1024 * 1024
 
 const SEED_CODE = /^[A-Z]{3}-[A-Z]{3}-[A-Z]{3}$/
 const QUERY_KEYS = new Set(['requirements', 'max_depth', 'require_blacksmith', 'exclude_blacksmith_rewards', 'fast_mode', 'challenges'])
-const REQUIREMENT_KEYS = new Set(['kind', 'item', 'tier', 'upgrade', 'effect', 'uncursed', 'source', 'identity_group', 'max_depth'])
+const REQUIREMENT_KEYS = new Set(['kind', 'item', 'tier', 'upgrade', 'effect', 'uncursed', 'source', 'identity_group', 'max_depth', 'upgrade_sum'])
 const KIND_NAMES = new Set(['weapon', 'melee_weapon', 'thrown_weapon', 'armor', 'wand', 'ring'])
 const SOURCE_NAMES = new Set([
   'heap', 'chest', 'locked_chest', 'crystal_chest', 'tomb', 'skeleton', 'sacrificial_fire', 'mimic',
@@ -123,6 +123,17 @@ function validateQueryDocument(query: Record<string, unknown>): void {
   }
   query.requirements.forEach((entry, index) => {
     try {
+      // An any_of entry is an alternative group; each member validates like
+      // a plain requirement (nested groups and combined sums are invalid).
+      if (isRecord(entry) && 'any_of' in entry) {
+        const keys = Object.keys(entry)
+        if (keys.length !== 1) throw new Error(`unknown field "${keys.find((key) => key !== 'any_of')}" — update Seed Seeker to import it`)
+        if (!Array.isArray(entry.any_of) || entry.any_of.length === 0) throw new Error('"any_of" needs at least one requirement')
+        for (const member of entry.any_of as unknown[]) {
+          validateRequirementDocument(member, { insideGroup: true })
+        }
+        return
+      }
       validateRequirementDocument(entry)
     } catch (error) {
       throw new Error(`Requirement ${index + 1}: ${error instanceof Error ? error.message : String(error)}`)
@@ -130,7 +141,7 @@ function validateQueryDocument(query: Record<string, unknown>): void {
   })
 }
 
-function validateRequirementDocument(entry: unknown): void {
+function validateRequirementDocument(entry: unknown, options?: { insideGroup?: boolean }): void {
   if (!isRecord(entry)) throw new Error('not a JSON object')
   for (const key of Object.keys(entry)) {
     if (!REQUIREMENT_KEYS.has(key)) throw new Error(`unknown field "${key}" — update Seed Seeker to import it`)
@@ -140,11 +151,15 @@ function validateRequirementDocument(entry: unknown): void {
   const kind = stringField(entry, 'kind') ?? (item ? getItem(item)?.type : undefined)
   if (kind === undefined) throw new Error('a category is required when no item is set')
   if (!KIND_NAMES.has(kind)) throw new Error(`unknown category "${kind}"`)
-  const effect = stringField(entry, 'effect')
-  if (effect !== undefined) {
-    const known = effectNamesForCategory(kind).some((name) => name.toLowerCase() === effect.toLowerCase())
-      || isCurseForCategory(kind, effect)
-    if (!known) throw new Error(`unknown effect "${effect}"`)
+  validateEffectField(entry, kind)
+  const upgradeSum = entry.upgrade_sum
+  if (upgradeSum !== undefined && upgradeSum !== null) {
+    if (options?.insideGroup) throw new Error('a combined upgrade total cannot sit inside an "any_of" group')
+    if (!isRecord(upgradeSum)) throw new Error('"upgrade_sum" must be an object')
+    const group = intField(upgradeSum, 'group')
+    const atLeast = intField(upgradeSum, 'at_least')
+    if (group === undefined || group < 1 || group > 255) throw new Error('combined upgrade group must be 1..255')
+    if (atLeast === undefined || atLeast < 1 || atLeast > 8) throw new Error('combined upgrade total must be 1..8')
   }
   const source = stringField(entry, 'source')
   if (source !== undefined && !SOURCE_NAMES.has(source)) throw new Error(`unknown source "${source}"`)
@@ -155,6 +170,28 @@ function validateRequirementDocument(entry: unknown): void {
   }
   const maxDepth = intField(entry, 'max_depth')
   if (maxDepth !== undefined && (maxDepth < 1 || maxDepth > 24)) throw new Error('item floor limit must be 1..24')
+}
+
+/** Validates the effect field's three wire forms: name, list, "any_enchantment". */
+function validateEffectField(entry: Record<string, unknown>, kind: string): void {
+  const value = entry.effect
+  if (value === undefined || value === null) return
+  const known = (name: string) =>
+    effectNamesForCategory(kind).some((candidate) => candidate.toLowerCase() === name.toLowerCase())
+    || isCurseForCategory(kind, name)
+  if (typeof value === 'string') {
+    if (value.toLowerCase() === 'any_enchantment') return
+    if (!known(value)) throw new Error(`unknown effect "${value}"`)
+    return
+  }
+  if (Array.isArray(value)) {
+    if (value.length === 0) throw new Error('an effect list needs at least one name')
+    for (const name of value as unknown[]) {
+      if (typeof name !== 'string' || !known(name)) throw new Error(`unknown effect "${String(name)}"`)
+    }
+    return
+  }
+  throw new Error('"effect" must be an effect name, a list of names, or "any_enchantment"')
 }
 
 /**

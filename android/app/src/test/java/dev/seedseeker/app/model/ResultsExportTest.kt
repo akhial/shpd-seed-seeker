@@ -285,6 +285,274 @@ class ResultsExportTest {
         assertEquals(UpgradeMatch.AT_LEAST, requirements[2].upgradeMatch)
         assertEquals(TierMatch.AT_MOST, requirements[3].tierMatch)
         // Effect matching is case-insensitive and canonicalizes to the catalog name.
-        assertEquals("Anti-Magic", requirements[3].modifier)
+        assertEquals(EffectRequirement.OneOf(listOf("Anti-Magic")), requirements[3].effect)
+    }
+
+    @Test
+    fun anyOfGroupsRoundTripWithFreshSequentialIds() {
+        val query = PresetQuery(
+            requirements = listOf(
+                ItemRequirement(
+                    key = 1,
+                    item = ItemCatalog.findById("spear"),
+                    upgrade = 3,
+                    upgradeMatch = UpgradeMatch.EXACT,
+                    alternativeGroup = 7,
+                ),
+                ItemRequirement(
+                    key = 2,
+                    item = ItemCatalog.findById("shuriken"),
+                    upgrade = 2,
+                    upgradeMatch = UpgradeMatch.EXACT,
+                    alternativeGroup = 7,
+                ),
+                ItemRequirement(3, null, 0, kind = ItemKind.WAND, upgradeMatch = UpgradeMatch.ANY),
+            ),
+        )
+        val text = ResultsExport.encode(query, listOf("AAA-AAA-BUH"), "0.6.1")
+        // The group serializes as one any_of entry at its first member's
+        // position, holding the members in requirement order.
+        val entries = JSONObject(text).getJSONObject("query").getJSONArray("requirements")
+        assertEquals(2, entries.length())
+        val anyOf = entries.getJSONObject(0).getJSONArray("any_of")
+        assertEquals(2, anyOf.length())
+        assertEquals("spear", anyOf.getJSONObject(0).getString("item"))
+        assertEquals("shuriken", anyOf.getJSONObject(1).getString("item"))
+
+        val imported = ResultsExport.decode(text).query
+        assertEquals(listOf(1, 1, null), imported.requirements.map { it.alternativeGroup })
+        assertEquals(
+            query.requirements.map { it.copy(key = 0, alternativeGroup = null) },
+            imported.requirements.map { it.copy(key = 0, alternativeGroup = null) },
+        )
+    }
+
+    @Test
+    fun singleMemberAlternativeGroupsCollapseToPlainRequirements() {
+        val query = PresetQuery(
+            requirements = listOf(
+                ItemRequirement(1, ItemCatalog.findById("sword"), 1, alternativeGroup = 3),
+            ),
+        )
+        val text = ResultsExport.encode(query, listOf("AAA-AAA-BUH"), "0.6.1")
+        val entries = JSONObject(text).getJSONObject("query").getJSONArray("requirements")
+        assertTrue(!entries.getJSONObject(0).has("any_of"))
+        // A one-member "any_of" also decodes as no group at all.
+        val imported = ResultsExport.decode(
+            """{"format":"seed-seeker-results","format_version":1,
+               "query":{"requirements":[{"any_of":[{"item":"sword","upgrade":1}]}]},
+               "results":[]}""",
+        )
+        assertEquals(listOf<Int?>(null), imported.query.requirements.map { it.alternativeGroup })
+    }
+
+    @Test
+    fun effectSetsAndAnyEnchantmentRoundTrip() {
+        val query = PresetQuery(
+            requirements = listOf(
+                ItemRequirement(
+                    key = 1,
+                    item = null,
+                    upgrade = 0,
+                    kind = ItemKind.WEAPON,
+                    upgradeMatch = UpgradeMatch.ANY,
+                    effect = EffectRequirement.OneOf(listOf("Blazing", "Vampiric", "Grim")),
+                ),
+                ItemRequirement(
+                    key = 2,
+                    item = null,
+                    upgrade = 0,
+                    kind = ItemKind.ARMOR,
+                    upgradeMatch = UpgradeMatch.ANY,
+                    effect = EffectRequirement.AnyEnchantment,
+                ),
+                ItemRequirement(
+                    key = 3,
+                    item = null,
+                    upgrade = 0,
+                    kind = ItemKind.WEAPON,
+                    upgradeMatch = UpgradeMatch.ANY,
+                    effect = EffectRequirement.OneOf(listOf("Lucky")),
+                ),
+            ),
+        )
+        val text = ResultsExport.encode(query, listOf("AAA-AAA-BUH"), "0.6.1")
+        val entries = JSONObject(text).getJSONObject("query").getJSONArray("requirements")
+        assertEquals(3, entries.getJSONObject(0).getJSONArray("effect").length())
+        assertEquals("any_enchantment", entries.getJSONObject(1).getString("effect"))
+        assertEquals("Lucky", entries.getJSONObject(2).getString("effect"))
+        val imported = ResultsExport.decode(text).query
+        assertEquals(
+            query.requirements.map { it.copy(key = 0) },
+            imported.requirements.map { it.copy(key = 0) },
+        )
+    }
+
+    @Test
+    fun fullNonCurseEffectSetsUseAndDecodeTheAnyEnchantmentShorthand() {
+        val query = PresetQuery(
+            requirements = listOf(
+                ItemRequirement(
+                    key = 1,
+                    item = null,
+                    upgrade = 0,
+                    kind = ItemKind.WEAPON,
+                    upgradeMatch = UpgradeMatch.ANY,
+                    effect = EffectRequirement.OneOf(ItemCatalog.enchantments),
+                ),
+            ),
+        )
+        val text = ResultsExport.encode(query, listOf("AAA-AAA-BUH"), "0.6.1")
+        val entry = JSONObject(text).getJSONObject("query").getJSONArray("requirements")
+            .getJSONObject(0)
+        assertEquals("any_enchantment", entry.getString("effect"))
+        assertEquals(
+            EffectRequirement.AnyEnchantment,
+            ResultsExport.decode(text).query.requirements.single().effect,
+        )
+    }
+
+    @Test
+    fun effectNamesMatchCaseInsensitivelyAndBadOnesAreRejected() {
+        val imported = ResultsExport.decode(
+            """{"format":"seed-seeker-results","format_version":1,
+               "query":{"requirements":[{"kind":"thrown_weapon","effect":["blazing","PROJECTING"]}]},
+               "results":[]}""",
+        )
+        assertEquals(
+            EffectRequirement.OneOf(listOf("Blazing", "Projecting")),
+            imported.query.requirements.single().effect,
+        )
+        for (payload in listOf(
+            """{"requirements":[{"kind":"weapon","effect":[]}]}""",
+            """{"requirements":[{"kind":"weapon","effect":"Thorns"}]}""",
+            """{"requirements":[{"kind":"weapon","effect":["Blazing","Thorns"]}]}""",
+            """{"requirements":[{"kind":"ring","effect":"any_enchantment"}]}""",
+            """{"requirements":[{"kind":"weapon","effect":7}]}""",
+        )) {
+            assertThrows(payload, IllegalArgumentException::class.java) {
+                ResultsExport.decode(
+                    """{"format":"seed-seeker-results","format_version":1,
+                       "query":$payload,"results":[]}""",
+                )
+            }
+        }
+    }
+
+    @Test
+    fun upgradeSumsRoundTrip() {
+        val query = PresetQuery(
+            requirements = listOf(
+                ItemRequirement(
+                    key = 1,
+                    item = ItemCatalog.findById("ring_might"),
+                    upgrade = 0,
+                    upgradeMatch = UpgradeMatch.ANY,
+                    identityGroup = 1,
+                    upgradeSumGroup = 2,
+                    upgradeSumTotal = 5,
+                ),
+                ItemRequirement(
+                    key = 2,
+                    item = ItemCatalog.findById("ring_might"),
+                    upgrade = 0,
+                    upgradeMatch = UpgradeMatch.ANY,
+                    identityGroup = 1,
+                    upgradeSumGroup = 2,
+                    upgradeSumTotal = 5,
+                ),
+            ),
+        )
+        val text = ResultsExport.encode(query, listOf("AAA-AAA-BUH"), "0.6.1")
+        val entry = JSONObject(text).getJSONObject("query").getJSONArray("requirements")
+            .getJSONObject(0).getJSONObject("upgrade_sum")
+        assertEquals(2, entry.getInt("group"))
+        assertEquals(5, entry.getInt("at_least"))
+        val imported = ResultsExport.decode(text).query
+        assertEquals(
+            query.requirements.map { it.copy(key = 0) },
+            imported.requirements.map { it.copy(key = 0) },
+        )
+    }
+
+    @Test
+    fun upgradeSumInsideAnyOfIsRejected() {
+        val failure = assertThrows(IllegalArgumentException::class.java) {
+            ResultsExport.decode(
+                """{"format":"seed-seeker-results","format_version":1,
+                   "query":{"requirements":[{"any_of":[
+                     {"item":"ring_might","upgrade_sum":{"group":1,"at_least":2}},
+                     {"item":"ring_haste"}
+                   ]}]},
+                   "results":[]}""",
+            )
+        }
+        assertTrue(failure.message!!.contains("any_of"))
+    }
+
+    @Test
+    fun malformedGroupsAndSumsAreRejected() {
+        val payloads = listOf(
+            // Empty and non-object any_of members, unknown sibling fields.
+            """{"requirements":[{"any_of":[]}]}""",
+            """{"requirements":[{"any_of":["sword"]}]}""",
+            """{"requirements":[{"any_of":[{"item":"sword"}],"extra":1}]}""",
+            // Nested groups are not representable.
+            """{"requirements":[{"any_of":[{"any_of":[{"item":"sword"}]}]}]}""",
+            // Unknown or missing upgrade_sum fields, out-of-range values.
+            """{"requirements":[{"item":"ring_might","upgrade_sum":{"group":1}}]}""",
+            """{"requirements":[{"item":"ring_might","upgrade_sum":{"group":1,"at_least":2,"bonus":3}}]}""",
+            """{"requirements":[{"item":"ring_might","upgrade_sum":7}]}""",
+            """{"requirements":[{"item":"ring_might","upgrade_sum":{"group":0,"at_least":2}}]}""",
+            """{"requirements":[{"item":"ring_might","upgrade_sum":{"group":1,"at_least":9}}]}""",
+            // Members of one group must agree on the total.
+            """{"requirements":[
+                {"item":"ring_might","upgrade_sum":{"group":1,"at_least":2}},
+                {"item":"ring_might","upgrade_sum":{"group":1,"at_least":3}}
+            ]}""",
+        )
+        for (payload in payloads) {
+            assertThrows(payload, IllegalArgumentException::class.java) {
+                ResultsExport.decode(
+                    """{"format":"seed-seeker-results","format_version":1,
+                       "query":$payload,"results":[]}""",
+                )
+            }
+        }
+    }
+
+    @Test
+    fun narrowedWeaponKindsRoundTripWithEffectsAndTiers() {
+        val query = PresetQuery(
+            requirements = listOf(
+                ItemRequirement(
+                    key = 1,
+                    item = null,
+                    upgrade = 0,
+                    kind = ItemKind.MELEE_WEAPON,
+                    tier = 4,
+                    tierMatch = TierMatch.AT_LEAST,
+                    upgradeMatch = UpgradeMatch.ANY,
+                    effect = EffectRequirement.OneOf(listOf("Grim")),
+                ),
+                ItemRequirement(
+                    key = 2,
+                    item = null,
+                    upgrade = 1,
+                    kind = ItemKind.THROWN_WEAPON,
+                    upgradeMatch = UpgradeMatch.AT_LEAST,
+                    effect = EffectRequirement.AnyEnchantment,
+                ),
+            ),
+        )
+        val text = ResultsExport.encode(query, listOf("AAA-AAA-BUH"), "0.6.1")
+        val entries = JSONObject(text).getJSONObject("query").getJSONArray("requirements")
+        assertEquals("melee_weapon", entries.getJSONObject(0).getString("kind"))
+        assertEquals("thrown_weapon", entries.getJSONObject(1).getString("kind"))
+        val imported = ResultsExport.decode(text).query
+        assertEquals(
+            query.requirements.map { it.copy(key = 0) },
+            imported.requirements.map { it.copy(key = 0) },
+        )
     }
 }
