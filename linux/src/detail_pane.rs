@@ -21,6 +21,12 @@ use crate::sprites::ItemSprite;
 use crate::state::{AppState, QuestRow, quest_rows, region, source_label};
 use crate::{glow, sprites};
 
+#[derive(Clone, Copy)]
+enum TrinketOverride {
+    Automatic,
+    Manual(Option<ItemId>),
+}
+
 pub struct DetailPane {
     pub page: adw::NavigationPage,
     title: adw::WindowTitle,
@@ -34,7 +40,7 @@ pub struct DetailPane {
     manifest_box: gtk::Box,
     world: RefCell<Option<GeneratedWorld>>,
     selected_trinket: Cell<Option<ItemId>>,
-    trinket_override: Cell<Option<Option<ItemId>>>,
+    trinket_override: Cell<TrinketOverride>,
     world_challenges: Cell<Challenges>,
     updating: Cell<bool>,
     toasts: adw::ToastOverlay,
@@ -172,7 +178,7 @@ impl DetailPane {
             manifest_box,
             world: RefCell::new(None),
             selected_trinket: Cell::new(None),
-            trinket_override: Cell::new(None),
+            trinket_override: Cell::new(TrinketOverride::Automatic),
             world_challenges: Cell::new(Challenges::NONE),
             updating: Cell::new(false),
             toasts: toasts.clone(),
@@ -256,7 +262,7 @@ impl DetailPane {
     /// Scouts the seed in the entry, or `code` when given (also filling the
     /// entry), and renders its manifest against the current requirements.
     pub fn scout(self: &Rc<Self>, code: Option<&str>, state: &AppState) {
-        self.trinket_override.set(None);
+        self.trinket_override.set(TrinketOverride::Automatic);
         self.scout_with_override(code, state);
     }
 
@@ -278,7 +284,10 @@ impl DetailPane {
             seed,
             state.challenges,
             Some(&query),
-            self.trinket_override.get(),
+            match self.trinket_override.get() {
+                TrinketOverride::Automatic => None,
+                TrinketOverride::Manual(selected) => Some(selected),
+            },
         ) else {
             self.toasts.add_toast(adw::Toast::new(
                 "World generation failed for this seed; please report it",
@@ -291,19 +300,30 @@ impl DetailPane {
         self.render(state);
     }
 
-    /// Re-renders the manifest, e.g. after the requirements changed.
-    pub fn render(self: &Rc<Self>, state: &AppState) {
+    /// Regenerates the world when the effective trinket or challenges changed.
+    fn refresh_world(self: &Rc<Self>, state: &AppState) -> bool {
         let seed = self.world.borrow().as_ref().map(|world| world.seed);
         if let Some(seed) = seed {
-            let selected = self.trinket_override.get().unwrap_or_else(|| {
-                resolve_selection(seed, &selection_slots(&manifest_query(state)))
-            });
+            let selected = match self.trinket_override.get() {
+                TrinketOverride::Automatic => {
+                    resolve_selection(seed, &selection_slots(&manifest_query(state)))
+                }
+                TrinketOverride::Manual(selected) => selected,
+            };
             if selected != self.selected_trinket.get()
                 || state.challenges != self.world_challenges.get()
             {
                 self.scout_with_override(Some(&seed.to_code()), state);
-                return;
+                return true;
             }
+        }
+        false
+    }
+
+    /// Re-renders the manifest, e.g. after the requirements changed.
+    pub fn render(self: &Rc<Self>, state: &AppState) {
+        if self.refresh_world(state) {
+            return;
         }
         let world = self.world.borrow();
         let Some(world) = world.as_ref() else {
@@ -392,7 +412,8 @@ impl DetailPane {
                                     if let Some(pane) = pane.upgrade() {
                                         let selected =
                                             (pane.selected_trinket.get() != Some(id)).then_some(id);
-                                        pane.trinket_override.set(Some(selected));
+                                        pane.trinket_override
+                                            .set(TrinketOverride::Manual(selected));
                                         pane.scout_with_override(Some(&code), &state);
                                     }
                                 }

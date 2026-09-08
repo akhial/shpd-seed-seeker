@@ -148,6 +148,7 @@ pub fn present(
     editor.dialog.present(Some(parent));
 }
 
+#[allow(clippy::too_many_lines)] // Widget assembly is declarative and linear.
 fn build(context: AppState, requirement: &UiRequirement, stack: StackShape) -> Editor {
     let effect_list = gtk::ListBox::builder()
         .css_classes(["boxed-list"])
