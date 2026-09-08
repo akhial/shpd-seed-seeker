@@ -1,4 +1,4 @@
-export type ItemCategory = "weapon" | "armor" | "wand" | "ring" | "trinket";
+export type ItemCategory = "weapon" | "armor" | "wand" | "ring" | "trinket" | "artifact";
 
 /** Melee/thrown classification carried by weapon catalog entries. */
 export type WeaponClass = "melee" | "thrown";
@@ -256,7 +256,24 @@ export interface TrinketOffer {
   spriteIndex: number;
 }
 
+export type FloorFeeling =
+  | "none"
+  | "chasm"
+  | "water"
+  | "grass"
+  | "dark"
+  | "large"
+  | "traps"
+  | "secrets";
+
+export interface ScoutFeeling {
+  depth: number;
+  feeling: FloorFeeling;
+}
+
 export interface ScoutResult {
+  /** Optional for responses cached before floor feelings were exposed. */
+  feelings?: ScoutFeeling[];
   /** Full private-deck order; only entries 0..3 are initial catalyst offers. */
   trinketOrder?: TrinketOffer[];
   seed: ParsedSeed;

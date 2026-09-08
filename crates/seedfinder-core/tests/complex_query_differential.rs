@@ -64,7 +64,7 @@ fn family_effects(kind: ItemKind) -> Vec<Effect> {
             .copied()
             .map(Effect::Armor)
             .collect(),
-        ItemKind::Wand | ItemKind::Ring | ItemKind::Trinket => Vec::new(),
+        ItemKind::Wand | ItemKind::Ring | ItemKind::Trinket | ItemKind::Artifact => Vec::new(),
     }
 }
 
@@ -107,6 +107,7 @@ fn random_world(rng: &mut Rng) -> GeneratedWorld {
         })
         .collect();
     GeneratedWorld {
+        feelings: Vec::new(),
         seed: DungeonSeed::MIN,
         items,
         quests: QuestSummary::default(),

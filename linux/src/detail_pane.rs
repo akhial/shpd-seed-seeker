@@ -325,8 +325,22 @@ impl DetailPane {
             if let Some(quest) = quests.iter().find(|quest| quest.depth == *depth) {
                 let _ = write!(description, " · {}", quest.variant);
             }
+            let section = gtk::Box::new(gtk::Orientation::Vertical, 8);
+            let heading = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+            heading.append(
+                &gtk::Label::builder()
+                    .label(format!("Floor {depth}"))
+                    .css_classes(["heading"])
+                    .accessible_role(gtk::AccessibleRole::Heading)
+                    .build(),
+            );
+            if let Some(floor) = world.feelings.iter().find(|floor| floor.depth == *depth)
+                && let Some(icon) = sprites::feeling_image(floor.feeling)
+            {
+                heading.append(&icon);
+            }
+            section.append(&heading);
             let group = adw::PreferencesGroup::builder()
-                .title(format!("Floor {depth}"))
                 .description(description)
                 .build();
             let mut catalyst_shown = false;
@@ -344,7 +358,8 @@ impl DetailPane {
                     group.add(&item_row(&world.items[*index], gems, marks.matched[*index]));
                 }
             }
-            self.manifest_box.append(&group);
+            section.append(&group);
+            self.manifest_box.append(&section);
         }
     }
 }
@@ -461,9 +476,9 @@ fn item_row(world_item: &WorldItem, gems: RingGems, matched: bool) -> adw::Actio
         glow::item(world_item.cursed, world_item.effect),
     ));
 
-    if world_item.upgrade > 0 {
+    if world_item.displayed_upgrade() > 0 {
         let upgrade = gtk::Label::builder()
-            .label(format!("+{}", world_item.upgrade))
+            .label(format!("+{}", world_item.displayed_upgrade()))
             .css_classes(["caption-heading", "success"])
             .valign(gtk::Align::Center)
             .build();

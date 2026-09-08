@@ -246,7 +246,7 @@ fn family_effects(kind: ItemKind) -> Option<Box<dyn Iterator<Item = Effect>>> {
         ItemKind::Armor => Some(Box::new(
             ALL_ARMOR_EFFECTS.iter().copied().map(Effect::Armor),
         )),
-        ItemKind::Wand | ItemKind::Ring | ItemKind::Trinket => None,
+        ItemKind::Wand | ItemKind::Ring | ItemKind::Trinket | ItemKind::Artifact => None,
     }
 }
 
@@ -371,6 +371,9 @@ impl Requirement {
     /// stops there.
     #[must_use]
     pub fn upgrade_ceiling(self) -> u8 {
+        if self.kind == ItemKind::Artifact {
+            return 5;
+        }
         if self.kind == ItemKind::Trinket {
             return 0;
         }
@@ -464,6 +467,9 @@ impl Requirement {
     /// another family, an upgrade outside the UI's family-specific range, or
     /// an inconsistent group label.
     pub fn validate(self) -> Result<(), QueryError> {
+        if self.kind == ItemKind::Artifact && self.item.is_none() {
+            return Err(QueryError::ArtifactRequiresIdentity);
+        }
         if self.kind == ItemKind::Trinket && self.item.is_none() {
             return Err(QueryError::TrinketRequiresIdentity);
         }
@@ -1418,6 +1424,7 @@ pub enum QueryError {
     InvalidTier,
     ItemKindMismatch,
     TrinketRequiresIdentity,
+    ArtifactRequiresIdentity,
     InvalidWeaponCategory,
     EffectKindMismatch,
     UncursedWithCurse,
@@ -1477,6 +1484,7 @@ impl fmt::Display for QueryError {
                 "tier filters require a wildcard weapon or armor and a non-redundant tier"
             }
             Self::TrinketRequiresIdentity => "select a trinket",
+            Self::ArtifactRequiresIdentity => "select an artifact",
             Self::ItemKindMismatch => "selected item is in a different category",
             Self::InvalidWeaponCategory => {
                 "melee/thrown filters require a weapon requirement and a matching item"
@@ -1761,6 +1769,7 @@ mod tests {
             wandmaker_quest: None,
         };
         let one = GeneratedWorld {
+            feelings: Vec::new(),
             quests: crate::quests::QuestSummary::default(),
             seed: DungeonSeed::MIN,
             items: vec![world_item(ItemId::Sword, Accessibility::Independent)],
@@ -1768,6 +1777,7 @@ mod tests {
         };
         assert!(!query.matches(&one));
         let two = GeneratedWorld {
+            feelings: Vec::new(),
             quests: crate::quests::QuestSummary::default(),
             seed: DungeonSeed::MIN,
             items: vec![
@@ -1792,6 +1802,7 @@ mod tests {
             wandmaker_quest: Some(WandmakerQuestType::Rotberry),
         };
         let world = |wandmaker| GeneratedWorld {
+            feelings: Vec::new(),
             quests: QuestSummary {
                 wandmaker,
                 ..QuestSummary::default()
@@ -1841,6 +1852,7 @@ mod tests {
     #[test]
     fn requirement_floor_limit_is_inclusive() {
         let world = GeneratedWorld {
+            feelings: Vec::new(),
             quests: crate::quests::QuestSummary::default(),
             seed: DungeonSeed::MIN,
             items: vec![world_item(ItemId::Sword, Accessibility::Independent)],
@@ -1872,6 +1884,7 @@ mod tests {
             wandmaker_quest: None,
         };
         let world = GeneratedWorld {
+            feelings: Vec::new(),
             quests: crate::quests::QuestSummary::default(),
             seed: DungeonSeed::MIN,
             items: vec![
@@ -1906,6 +1919,7 @@ mod tests {
             wandmaker_quest: None,
         };
         let world = GeneratedWorld {
+            feelings: Vec::new(),
             quests: crate::quests::QuestSummary::default(),
             seed: DungeonSeed::MIN,
             items: vec![
@@ -1953,6 +1967,7 @@ mod tests {
             },
         );
         let world = GeneratedWorld {
+            feelings: Vec::new(),
             quests: crate::quests::QuestSummary::default(),
             seed: DungeonSeed::MIN,
             items: vec![sword, armor, wand],
@@ -2362,6 +2377,7 @@ mod tests {
             secret: false,
         };
         let world = GeneratedWorld {
+            feelings: Vec::new(),
             quests: crate::quests::QuestSummary::default(),
             seed: DungeonSeed::MIN,
             items: vec![
@@ -2406,6 +2422,7 @@ mod tests {
             secret: false,
         };
         let smith_only = GeneratedWorld {
+            feelings: Vec::new(),
             quests: crate::quests::QuestSummary::default(),
             seed: DungeonSeed::MIN,
             items: vec![make(ItemSource::BlacksmithReward)],
@@ -2420,6 +2437,7 @@ mod tests {
 
         query.require_blacksmith = false;
         let no_blacksmith = GeneratedWorld {
+            feelings: Vec::new(),
             quests: crate::quests::QuestSummary::default(),
             seed: DungeonSeed::MIN,
             items: vec![make(ItemSource::Heap)],
@@ -2997,6 +3015,7 @@ mod tests {
 
     fn scout_world(items: Vec<WorldItem>) -> GeneratedWorld {
         GeneratedWorld {
+            feelings: Vec::new(),
             quests: crate::quests::QuestSummary::default(),
             seed: DungeonSeed::MIN,
             items,

@@ -105,6 +105,7 @@ impl Accessibility {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct WorldItem {
     pub item: ItemId,
+    /// Equipment upgrade, or the artifact transfer amount (+5 in the Imp vault).
     pub upgrade: u8,
     pub effect: Option<Effect>,
     pub cursed: bool,
@@ -117,6 +118,18 @@ pub struct WorldItem {
 }
 
 impl WorldItem {
+    /// Identified in-game upgrade: artifacts round both transferUpgrade and visiblyUpgraded.
+    #[must_use]
+    pub const fn displayed_upgrade(&self) -> u8 {
+        let cap = match self.item {
+            ItemId::SandalsOfNature => 3,
+            ItemId::EtherealChains | ItemId::TimekeepersHourglass => 5,
+            _ => return self.upgrade,
+        };
+        let internal = (self.upgrade * cap + 5) / 10;
+        (internal * 10 + cap / 2) / cap
+    }
+
     pub(crate) fn catalyst(depth: u8, source: ItemSource, accessibility: Accessibility) -> Self {
         Self {
             item: ItemId::TrinketCatalyst,
@@ -159,11 +172,20 @@ impl WorldItem {
     }
 }
 
+/// Final feeling for a generated regular floor.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct FloorFeeling {
+    pub depth: u8,
+    pub feeling: crate::level_prelude::Feeling,
+}
+
 /// Searchable output for one seed.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct GeneratedWorld {
     pub seed: DungeonSeed,
     pub items: Vec<WorldItem>,
+    /// Final feelings in depth order, excluding boss floors.
+    pub feelings: Vec<FloorFeeling>,
     /// Quest variants rolled while generating the requested prefix.
     pub quests: QuestSummary,
     /// The gem this run gave each ring class, and so the `items.png` cell every

@@ -309,8 +309,8 @@ BETA-3 JAR. The canonical scout still models a run generated entirely on
 its advertised version; a seed alone does not specify an upgrade history.
 
 All versioned oracle fixtures are regenerated from the pinned RC1 JAR;
-historical BETA-3 benchmark measurements and probability estimates retain their
-original provenance.
+historical BETA-3 benchmark measurements retain their original provenance.
+Probability supply tables are calibrated against BETA-4, including artifacts.
 
 `crates/seedfinder-core/examples/dump_floors.rs` prints a seed's floors in a
 reduced text form (size, map hash, entrance, exit, feeling, ordinary mobs,
