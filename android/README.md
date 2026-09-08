@@ -44,12 +44,21 @@ alternatives leaving no trinket selected. Presets, exports, and share links keep
 this choice. Probability estimates use the selected generation effects.
 
 Tap any of the four offered scout cards to apply it, or tap the selected card
-again to deselect it. The selected card carries an ìApplied +3î badge. Each
+again to deselect it. The selected card carries an ‚ÄúApplied +3‚Äù badge. Each
 rescout keeps the query and explicit override together so match highlights use
 the same generated world.
 
 Scout requests use SSQ3 (little-endian challenge mask and length-prefixed seed
-and override, followed by canonical query JSON). The native scout decoder reads
-SSC5: SSC4's ordered 17-entry trinket deck followed by a UTF-8 selected ID with a
-big-endian unsigned 16-bit length; an empty ID means no selection. SSC3 and SSC4
-remain readable. The deck ordering is independent of item sorting.
+and override, followed by canonical query JSON). SSC6 responses extend SSC5
+with a UTF-8 selected ID and big-endian unsigned 16-bit length; an empty ID means
+no selection. The decoder also accepts SSC3, SSC4, and SSC5.
+
+SSC5 contains the SSC3 layout followed by a 17-entry trinket deck: a one-byte
+count and UTF-8 IDs with unsigned 16-bit lengths. After the deck, SSC5 carries a one-byte
+feeling count (0..20), followed by depth/feeling byte pairs in strictly ascending
+regular-floor order (1..24, excluding boss floors). Feeling IDs are none=0,
+chasm=1, water=2, grass=3, dark=4, large=5, traps=6, secrets=7.
+The deck ordering is independent of item sorting. Scout floor headings show the
+feeling sprite without visible text; normal floors have no icon. The unmodified
+`dungeon-icons.png` atlas and its upstream attribution are packaged beside the
+item artwork.

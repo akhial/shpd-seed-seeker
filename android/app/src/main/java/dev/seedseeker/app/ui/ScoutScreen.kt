@@ -2,6 +2,15 @@
 package dev.seedseeker.app.ui
 
 import android.content.ClipData
+import android.graphics.BitmapFactory
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import dev.seedseeker.app.model.FloorFeeling
+import kotlin.math.roundToInt
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -243,6 +252,7 @@ fun ScoutScreen(
                             item(key = "floor-$depth") {
                                 FloorHeading(
                                     depth = depth,
+                                    feeling = world.floorFeelings[depth],
                                     itemCount = floorItems.size,
                                     questLabel = questsByDepth[depth]?.variant?.label,
                                     modifier = Modifier.padding(top = 20.dp, bottom = 10.dp),
@@ -471,6 +481,7 @@ private fun ScoutSummaryCard(
 private fun FloorHeading(
     depth: Int,
     itemCount: Int,
+    feeling: FloorFeeling? = null,
     modifier: Modifier = Modifier,
     questLabel: String? = null,
 ) {
@@ -489,6 +500,10 @@ private fun FloorHeading(
             letterSpacing = 1.1.sp,
             color = MaterialTheme.colorScheme.onSurface,
         )
+        if (feeling != null && feeling != FloorFeeling.NONE) {
+            Spacer(Modifier.width(6.dp))
+            FloorFeelingSprite(feeling)
+        }
         Spacer(Modifier.width(8.dp))
         Text(
             floorRegion(depth),
@@ -514,6 +529,26 @@ private fun FloorHeading(
             if (itemCount == 1) "1 item" else "$itemCount items",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun FloorFeelingSprite(feeling: FloorFeeling) {
+    val context = LocalContext.current
+    val atlas = remember(context) {
+        context.assets.open("third_party/shattered-pixel-dungeon/dungeon-icons.png")
+            .use(BitmapFactory::decodeStream)!!.asImageBitmap()
+    }
+    Canvas(Modifier.size(width = 15.dp, height = 16.dp).semantics {
+        contentDescription = "${feeling.label} floor"
+    }) {
+        drawImage(
+            image = atlas,
+            srcOffset = IntOffset(16 * feeling.ordinal, 64),
+            srcSize = IntSize(15, 16),
+            dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()),
+            filterQuality = FilterQuality.None,
         )
     }
 }
@@ -621,13 +656,13 @@ private fun ScoutItemCard(
             }
             Spacer(Modifier.width(10.dp))
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                if (scoutItem.upgrade != 0) {
+                if (scoutItem.displayedUpgrade != 0) {
                     Surface(
                         shape = MaterialTheme.shapes.extraSmall,
                         color = SpdUpgrade.copy(alpha = 0.12f),
                     ) {
                         Text(
-                            "+${scoutItem.upgrade}",
+                            "+${scoutItem.displayedUpgrade}",
                             modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
                             style = MaterialTheme.typography.labelMedium,
                             fontFamily = FontFamily.Monospace,

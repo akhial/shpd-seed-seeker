@@ -238,7 +238,7 @@ public sealed class NativeEngine
     public static ScoutWorld DecodeScout(byte[] bytes)
     {
         var r = new Reader(bytes); var version = r.Text(4);
-        if (version is not ("SSC3" or "SSC4" or "SSC5")) throw new InvalidDataException("Unexpected scout packet");
+        if (version is not ("SSC3" or "SSC4" or "SSC5" or "SSC6")) throw new InvalidDataException("Unexpected scout packet");
         var returnedSeed = r.Text(r.U8()); var gems = new RingGems(r.Bytes(RingGems.Count));
         var quests = r.Quests(); var items = new List<ScoutItem>(); var count = r.U16();
         for (var i = 0; i < count; i++)
@@ -250,7 +250,7 @@ public sealed class NativeEngine
             items.Add(new(item, depth, upgrade, effect.Length == 0 ? null : effect, (flags & 1) != 0, source, tag, group, value, Secret: (flags & 2) != 0));
         }
         var order = new List<CatalogItem>();
-        if (version is "SSC4" or "SSC5")
+        if (version is "SSC4" or "SSC5" or "SSC6")
         {
             var orderCount = r.U8();
             if (orderCount != 17) throw new InvalidDataException("Unexpected trinket deck size");
@@ -262,12 +262,27 @@ public sealed class NativeEngine
                 order.Add(entry);
             }
         }
-        var selectedTrinket = version == "SSC5" ? r.Text() : "";
+        var feelings = new List<ScoutFloorFeeling>();
+        if (version is "SSC5" or "SSC6")
+        {
+            var feelingCount = r.U8();
+            if (feelingCount > 20) throw new InvalidDataException("Unexpected floor feeling count");
+            var previousDepth = 0;
+            for (var i = 0; i < feelingCount; i++)
+            {
+                var depth = r.U8(); var feeling = r.U8();
+                if (depth <= previousDepth || depth > 24 || depth % 5 == 0 || feeling > 7)
+                    throw new InvalidDataException("Invalid floor feeling");
+                feelings.Add(new(depth, (FloorFeeling)feeling));
+                previousDepth = depth;
+            }
+        }
+        var selectedTrinket = version == "SSC6" ? r.Text() : "";
         if (selectedTrinket.Length == 0) selectedTrinket = null;
         if (selectedTrinket is not null && !order.Take(4).Any(item => item.Id == selectedTrinket))
             throw new InvalidDataException("Selected trinket is not initially offered");
         if (r.Remaining != 0) throw new InvalidDataException("Trailing native data");
-        return new(returnedSeed, quests, items, gems, order, selectedTrinket);
+        return new(returnedSeed, quests, items, gems, order, feelings, selectedTrinket);
     }
 
     /// <summary>

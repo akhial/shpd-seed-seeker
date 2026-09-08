@@ -27,7 +27,7 @@ use shpd_seedfinder_core::search::{
 use shpd_seedfinder_core::seed::{DungeonSeed, TOTAL_SEEDS};
 use shpd_seedfinder_core::wire::{
     WireError, decode_query, decode_scout_request, decode_selected_scout_request, encode_results,
-    encode_scout_world, encode_scout_world_with_selection, encode_scout_world_with_trinkets,
+    encode_scout_world, encode_scout_world_with_selection,
 };
 
 pub const STATE_RUNNING: i64 = 0;
@@ -97,7 +97,7 @@ pub enum ScoutCallError {
 
 /// Validates an `SSQ2` scout request (`magic[4]`, little-endian challenge
 /// `u16`, remaining UTF-8 seed code) or a legacy raw-seed request, generates a
-/// depth-24 world with the supplied generator, and encodes `SSC3`.
+/// depth-24 world with the supplied generator, and encodes `SSC5`.
 ///
 /// # Errors
 ///
@@ -144,7 +144,7 @@ pub fn production_scout_packet(request: &[u8]) -> Result<Vec<u8>, ScoutCallError
     let packet = if request.starts_with(b"SSQ3") {
         encode_scout_world_with_selection(&world, selected)
     } else {
-        encode_scout_world_with_trinkets(&world)
+        encode_scout_world(&world)
     };
     packet
         .map_err(ScoutPacketError::Response)
@@ -760,6 +760,7 @@ mod tests {
     }
     fn matching_world(seed: DungeonSeed) -> GeneratedWorld {
         GeneratedWorld {
+            feelings: Vec::new(),
             quests: shpd_seedfinder_core::quests::QuestSummary::default(),
             seed,
             items: vec![WorldItem {
@@ -1358,7 +1359,7 @@ mod tests {
         ] {
             let request = request(choice);
             let packet = production_scout_packet(&request).unwrap();
-            assert_eq!(&packet[..4], b"SSC5");
+            assert_eq!(&packet[..4], b"SSC6");
             let world = decode_scout_world(&packet).unwrap();
             let (expected, actual_selection) = production_scout_world_selected(
                 seed,
@@ -1385,7 +1386,11 @@ mod tests {
         let packet = production_scout_packet(b"SSQ2\x00\x00AAA-AAA-AAF").unwrap();
 
         assert_eq!(world, decode_scout_world(&packet).unwrap());
-        assert_eq!(&packet[..4], b"SSC4");
+        assert_eq!(&packet[..4], b"SSC5");
+        assert!(world.items.iter().any(|entry| {
+            shpd_seedfinder_core::catalog::item(entry.item).kind
+                == shpd_seedfinder_core::catalog::ItemKind::Artifact
+        }));
         assert_eq!(
             world
                 .items
@@ -1397,6 +1402,22 @@ mod tests {
                 .count(),
             4
         );
+
+        let artifact_index = world
+            .items
+            .iter()
+            .position(|entry| {
+                shpd_seedfinder_core::catalog::item(entry.item).kind == ItemKind::Artifact
+            })
+            .unwrap();
+        let artifact = &world.items[artifact_index];
+        let mut query = kind_query(ItemKind::Artifact);
+        query.requirements[0].item = Some(artifact.item);
+        let matches =
+            production_scout_matches(b"SSQ2\x00\x00AAA-AAA-AAF", &query_request(&query)).unwrap();
+        assert_eq!(matches.matched.len(), world.items.len());
+        assert_eq!(matches.matched_requirements, 1);
+        assert!(matches.matched[artifact_index]);
 
         let challenged = production_scout_world(seed, Challenges::new(0x68).unwrap()).unwrap();
         assert_eq!(challenged.seed, world.seed);

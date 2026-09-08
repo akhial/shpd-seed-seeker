@@ -2261,6 +2261,15 @@ input[type="range"]::-moz-range-thumb {
   font-variant-numeric: tabular-nums;
 }
 
+.d1-floor-feeling {
+  display: inline-block;
+  flex: 0 0 15px;
+  width: 15px;
+  height: 16px;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+}
+
 .d1-floor-region {
   font-size: 12px;
   color: var(--region, var(--d1-text-3));
@@ -2845,8 +2854,7 @@ input[type="range"]::-moz-range-thumb {
 /* Catalyst offers: four primary choices, then the preserved diagnostic deck. */
 .d1-catalyst {
   list-style: none;
-  padding: 16px 14px;
-  background: #bba0ee08;
+  padding: 6px 14px 16px;
   border-bottom: 1px solid var(--d1-border);
 }
 .d1-catalyst-head {
@@ -2958,4 +2966,12 @@ input[type="range"]::-moz-range-thumb {
   font-size: 10px;
   font-weight: 600;
   color: var(--d1-accent, #bd9df1);
+}
+
+/* Six item families stay legible on a phone-sized requirement editor. */
+@media (max-width: 480px) {
+  .d1-modal .d1-seg[aria-label="Category"] {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }

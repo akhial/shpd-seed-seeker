@@ -91,12 +91,14 @@ matched border/fill, single-line names that shrink to fit, and one row of 13
 smaller nearest-neighbor icons below "Remaining deck order." The platform's
 own controls, typography, and colors provide the surrounding UI.
 
-Legacy native scout responses use `SSC4`: the existing `SSC3` layout,
+Native production scout responses use `SSC5`: the existing `SSC3` layout,
 with its magic changed, followed after the item records by `trinket_count:u8`
 (equal to 17) and 17 `stable_item_id:utf8_u16` strings in draw order. The
 four initial choices are ordinary item records carrying catalyst placement
 metadata, and match indices address that full item stream. Native decoders
-also accept legacy `SSC3` packets without deck metadata. Linux calls the same
+also accept legacy `SSC3` packets without deck metadata and `SSC4` packets
+without feelings. In `SSC5`, a [floor-feeling block](floor-feelings.md) follows
+the deck. Linux calls the same
 typed generator and `trinket_order(seed)` directly. The shared Android catalog
 asset supplies the same 17 title-case names and sprites to every platform.
 Query JSON and share-link codecs use category code 6 and appended item codes,
@@ -107,7 +109,7 @@ challenge mask, a little-endian u16-length UTF-8 seed, a little-endian
 u16-length UTF-8 override, and the canonical query JSON in all remaining
 bytes (empty is allowed). An empty override resolves the query, `none`
 deselects, and a stable ID must name one of the four initial offers.
-The response uses `SSC5`, extending `SSC4` with one big-endian u16-length
+The response uses `SSC6`, extending `SSC5` with one big-endian u16-length
 selected stable ID; an empty string means no selection. Scout matches must
 use the same request bytes so item indices refer to the selected world.
 Linux uses `production_scout_world_selected` directly with equivalent semantics.

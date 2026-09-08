@@ -55,3 +55,30 @@ fn selected_estimates_track_generated_matches() {
         }
     });
 }
+
+#[test]
+fn selected_trinkets_support_artifact_and_thrown_weapon_queries() {
+    for trinket in [
+        "mimic_tooth",
+        "parchment_scrap",
+        "rat_skull",
+        "exotic_crystals",
+        "mossy_clump",
+        "trap_mechanism",
+        "cracked_spyglass",
+    ] {
+        for requirement in [
+            r#"{"item":"sandals_of_nature"}"#,
+            r#"{"kind":"thrown_weapon"}"#,
+        ] {
+            let query = json_query::decode(&format!(
+                r#"{{"requirements":[{{"item":"{trinket}","select_trinket":true}},{requirement}],"max_depth":24}}"#
+            )).unwrap();
+            let probability = estimate_match_probability(&query);
+            assert!(
+                probability.is_finite() && probability > 0.0 && probability <= 4.0 / 17.0,
+                "{trinket} {requirement}: {probability}"
+            );
+        }
+    }
+}

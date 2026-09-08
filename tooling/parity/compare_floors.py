@@ -46,7 +46,7 @@ NON_CATALOG_ITEMS = {
     "shard_of_oblivion", "chaotic_censer", "ferret_tuft", "cracked_spyglass",
 }
 
-SEARCHABLE_KINDS = {"weapon", "armor", "wand", "ring", "missile", "melee"}
+SEARCHABLE_KINDS = {"weapon", "armor", "wand", "ring", "missile", "melee", "artifact"}
 
 
 def snake(name):
@@ -105,7 +105,7 @@ def load_oracle(path):
                 continue
             entry["items"][(
                 identity,
-                record.get("true_level"),
+                record.get("search_upgrade", record.get("true_level")),
                 bool(record.get("cursed")),
                 effect_name(effect),
             )] += 1

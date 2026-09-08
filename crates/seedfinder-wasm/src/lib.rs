@@ -105,6 +105,7 @@ struct ScoutOutput {
     trinket_order: Vec<TrinketOutput>,
     seed: SeedOutput,
     quests: Vec<ScoutQuestOutput>,
+    feelings: Vec<ScoutFeelingOutput>,
     items: Vec<ScoutItemOutput>,
     /// The gem each ring class is drawn with in this run, in catalog ring
     /// order. A ring item's atlas cell is `RING_SPRITE_BASE` plus its class's
@@ -113,6 +114,26 @@ struct ScoutOutput {
     ring_gems: [u8; 12],
     matched_requirements: usize,
     total_requirements: usize,
+}
+
+#[derive(Serialize)]
+struct ScoutFeelingOutput {
+    depth: u8,
+    feeling: &'static str,
+}
+
+fn feeling_name(feeling: shpd_seedfinder_core::level_prelude::Feeling) -> &'static str {
+    use shpd_seedfinder_core::level_prelude::Feeling;
+    match feeling {
+        Feeling::None => "none",
+        Feeling::Chasm => "chasm",
+        Feeling::Water => "water",
+        Feeling::Grass => "grass",
+        Feeling::Dark => "dark",
+        Feeling::Large => "large",
+        Feeling::Traps => "traps",
+        Feeling::Secrets => "secrets",
+    }
 }
 
 #[derive(Serialize)]
@@ -565,6 +586,14 @@ fn scout_impl(request_json: &str) -> Result<String, String> {
     };
     let world = generate_main_world_with_trinket(seed, 24, challenges, selected)
         .map_err(|error| format!("world generation failed: {error}"))?;
+    let feelings = world
+        .feelings
+        .iter()
+        .map(|entry| ScoutFeelingOutput {
+            depth: entry.depth,
+            feeling: feeling_name(entry.feeling),
+        })
+        .collect();
     let marks = query.as_ref().map(|query| scout_matches(&world, query));
     let matched_requirements = marks.as_ref().map_or(0, |marks| marks.matched_requirements);
     let total_requirements = marks.as_ref().map_or(0, |marks| marks.total_requirements);
@@ -590,6 +619,7 @@ fn scout_impl(request_json: &str) -> Result<String, String> {
             })
             .collect(),
         quests: scout_quest_outputs(world.quests),
+        feelings,
         items,
         ring_gems: world.ring_gems.ordinals(),
         matched_requirements,
@@ -668,6 +698,7 @@ const fn item_kind_name(kind: ItemKind) -> &'static str {
         ItemKind::Wand => "wand",
         ItemKind::Ring => "ring",
         ItemKind::Trinket => "trinket",
+        ItemKind::Artifact => "artifact",
     }
 }
 
@@ -986,6 +1017,46 @@ mod tests {
     }
 
     #[test]
+    fn scout_feelings_match_game_fixtures_and_skip_boss_floors() {
+        let output: Value =
+            serde_json::from_str(&scout_impl(r#"{"seed":"AAA-AAA-AAA"}"#).unwrap()).unwrap();
+        let feelings = output["feelings"].as_array().unwrap();
+        assert_eq!(feelings.len(), 20);
+        assert_eq!(
+            feelings[0],
+            serde_json::json!({"depth": 1, "feeling": "none"})
+        );
+        assert!(
+            feelings
+                .iter()
+                .all(|entry| entry["depth"].as_u64().unwrap() % 5 != 0)
+        );
+        for fixture in [
+            include_str!("../../../tooling/oracle-4.0/tests/prison-floors.expected.json"),
+            include_str!("../../../tooling/oracle-4.0/tests/caves-floors.expected.json"),
+            include_str!("../../../tooling/oracle-4.0/tests/city-floors.expected.json"),
+            include_str!("../../../tooling/oracle-4.0/tests/halls-floors.expected.json"),
+        ] {
+            let fixture: Value = serde_json::from_str(fixture).unwrap();
+            for level in fixture["seeds"]["AAA-AAA-AAA"]["levels"]
+                .as_array()
+                .unwrap()
+            {
+                let actual = feelings
+                    .iter()
+                    .find(|entry| entry["depth"] == level["depth"])
+                    .unwrap();
+                assert_eq!(
+                    actual["feeling"],
+                    level["feeling"].as_str().unwrap().to_lowercase(),
+                    "floor {}",
+                    level["depth"]
+                );
+            }
+        }
+    }
+
+    #[test]
     fn scout_matches_canonical_world_and_android_catalog() {
         use shpd_seedfinder_core::catalog::WeaponCategory;
 
@@ -1053,6 +1124,32 @@ mod tests {
                 "{}",
                 entry.id
             );
+        }
+    }
+
+    #[test]
+    fn artifact_shared_catalog_agrees_with_engine_wire_metadata() {
+        let entries: Value =
+            serde_json::from_str(include_str!("../../../android/app/src/main/assets/third_party/shattered-pixel-dungeon/catalog-v4.0.0.json"))
+                .unwrap();
+        let entries: Vec<_> = entries["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|entry| entry["type"] == "artifact")
+            .collect();
+        assert_eq!(entries.len(), 11);
+        for entry in entries {
+            let definition =
+                shpd_seedfinder_core::catalog::item_by_stable_id(entry["id"].as_str().unwrap())
+                    .unwrap();
+            assert_eq!(
+                definition.kind,
+                shpd_seedfinder_core::catalog::ItemKind::Artifact
+            );
+            assert_eq!(entry["type"], super::item_kind_name(definition.kind));
+            assert_eq!(entry["name"], definition.name);
+            assert_eq!(entry["sprite"], definition.sprite_index);
         }
     }
 

@@ -3,6 +3,7 @@ package dev.seedseeker.app.engine
 
 import dev.seedseeker.app.BuildConfig
 import dev.seedseeker.app.model.Challenge
+import dev.seedseeker.app.model.FloorFeeling
 import dev.seedseeker.app.model.ResultsExport
 import dev.seedseeker.app.model.ResumeHint
 import dev.seedseeker.app.model.RingGems
@@ -390,7 +391,7 @@ class DemoNativeSeedFinder : NativeSeedFinder {
  * 3 failed. A non-zero handle is required. Scout requests use `SSQ3`, a little-endian challenge
  * mask, length-prefixed UTF-8 seed and override (little-endian u16 lengths), and canonical query
  * JSON. An empty override means automatic query selection; "none" disables it. Scout packet
- * `SSC5` extends SSC4 with a selected ID (big-endian u16 UTF-8 length, empty means none).
+ * `SSC6` extends SSC5 with a selected ID (big-endian u16 UTF-8 length, empty means none).
  * SSC4 extends the following `SSC3` layout with a 17-entry trinket deck. SSC3 contains the echoed canonical seed,
  * then the run's ring gems — twelve gem ordinals, one per ring class in catalog ring order —
  * then a quest block — questCount:u8 (0..4) of strictly ascending {quest:u8, variant:u8,
@@ -398,6 +399,10 @@ class DemoNativeSeedFinder : NativeSeedFinder {
  * per giver, and depth must sit in the giver's floor range (2..4, 7..9, 12..14, 17..19) — and
  * finally catalog ID, depth, upgrade, flags (bit 0 cursed, bit 1 hidden in a secret room),
  * effect, source, and accessibility for every item.
+ * SSC4 appends the trinket deck (count:u8 = 17, then length:u16 + UTF-8 ID per entry).
+ * SSC5 appends feelingCount:u8 (0..20), then depth:u8/feeling:u8 pairs: strictly
+ * ascending depths 1..24 excluding multiples of five, feeling IDs 0..7 matching
+ * [FloorFeeling]. Older packets decode with an empty feeling map.
  */
 class JniNativeSeedFinder(
     private val bindings: NativeBindings = JniBindingsAdapter,
@@ -735,8 +740,9 @@ object ScoutResultCodec {
     fun decode(packet: ByteArray): ScoutWorld =
         DataInputStream(ByteArrayInputStream(packet)).use { input ->
             val magic = ByteArray(4).also(input::readFully)
-            val hasSelectedTrinket = magic.contentEquals(byteArrayOf(83, 83, 67, 53))
-            val hasTrinketOrder = hasSelectedTrinket || magic.contentEquals(byteArrayOf(83, 83, 67, 52))
+            val hasSelectedTrinket = magic.contentEquals(byteArrayOf(83, 83, 67, 54))
+            val hasFeelings = hasSelectedTrinket || magic.contentEquals(byteArrayOf(83, 83, 67, 53))
+            val hasTrinketOrder = hasFeelings || magic.contentEquals(byteArrayOf(83, 83, 67, 52))
             check(hasTrinketOrder || magic.contentEquals(MAGIC)) { "Unexpected native scout packet" }
 
             val seed = readAscii(input, input.readUnsignedByte())
@@ -832,13 +838,31 @@ object ScoutResultCodec {
                     }
                 }.also { deck -> check(deck.map { it.id }.distinct().size == 17) { "Repeated scout trinket" } }
             } else emptyList()
+            val floorFeelings = if (hasFeelings) {
+                val count = input.readUnsignedByte()
+                check(count <= 20) { "Scout feeling count must be 0..20" }
+                var previousDepth = 0
+                buildMap {
+                    repeat(count) {
+                        val depth = input.readUnsignedByte()
+                        check(depth in 1..24 && depth % 5 != 0 && depth > previousDepth) {
+                            "Scout feeling depths must be ascending regular floors 1..24"
+                        }
+                        previousDepth = depth
+                        val feeling = FloorFeeling.entries.getOrNull(input.readUnsignedByte())
+                            ?: error("Unknown scout floor feeling")
+                        put(depth, feeling)
+                    }
+                }
+            } else emptyMap()
             val selectedTrinket = if (hasSelectedTrinket) {
                 readUtf8(input, input.readUnsignedShort()).takeIf { it.isNotEmpty() }?.also { id ->
                     check(trinketOrder.take(4).any { it.id == id }) { "Selected trinket is not an initial offer" }
                 }
             } else null
             check(input.available() == 0) { "Trailing bytes in native scout packet" }
-            ScoutWorld(seed = seed, items = items, quests = quests, ringGems = ringGems, trinketOrder = trinketOrder, selectedTrinket = selectedTrinket)
+            ScoutWorld(seed = seed, items = items, quests = quests, ringGems = ringGems,
+                trinketOrder = trinketOrder, floorFeelings = floorFeelings, selectedTrinket = selectedTrinket)
         }
 
     private fun readUtf8(input: DataInputStream, length: Int): String {

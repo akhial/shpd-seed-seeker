@@ -94,6 +94,32 @@ public sealed class TrinketTests
     }
 
     [Fact]
+    public void SelectedPacketsPreserveFeelingsAndValidateTheSelection()
+    {
+        var deck = ItemCatalog.For(ItemKind.Trinket).ToList();
+        byte[] Packet(string selected)
+        {
+            var writer = new Writer();
+            writer.Bytes(System.Text.Encoding.UTF8.GetBytes("SSC6"));
+            writer.U8(11); writer.Bytes(System.Text.Encoding.UTF8.GetBytes("AAA-AAA-AAA"));
+            writer.Bytes(Enumerable.Range(0, 12).Select(x => (byte)x));
+            writer.U8(0); writer.U16(0); writer.U8(17);
+            foreach (var item in deck) writer.Text(item.Id);
+            writer.U8(1); writer.U8(1); writer.U8(2);
+            writer.Text(selected);
+            return writer.Finish();
+        }
+        var packet = Packet(deck[0].Id);
+        var world = NativeEngine.DecodeScout(packet);
+        Assert.Equal(deck[0].Id, world.SelectedTrinket);
+        Assert.Equal(new ScoutFloorFeeling(1, FloorFeeling.Water), Assert.Single(world.FloorFeelings!));
+        Assert.Null(NativeEngine.DecodeScout(Packet("")).SelectedTrinket);
+        Assert.Throws<InvalidDataException>(() => NativeEngine.DecodeScout(Packet(deck[4].Id)));
+        Assert.Throws<InvalidDataException>(() => NativeEngine.DecodeScout(packet[..^1]));
+        Assert.Throws<InvalidDataException>(() => NativeEngine.DecodeScout(packet.Concat(new byte[] { 0 }).ToArray()));
+    }
+
+    [Fact]
     public void ScoutRequestCarriesQueryAndExplicitDeselection()
     {
         var query = new QuerySettings { Requirements = [

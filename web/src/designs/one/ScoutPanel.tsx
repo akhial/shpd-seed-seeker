@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useStore } from "@tanstack/react-store";
-import { sourceLabel } from "../../lib/catalog";
+import { displayedUpgrade, sourceLabel } from "../../lib/catalog";
 import { itemGlow } from "../../lib/glow";
 import { CheckIcon, CopyIcon, FlagIcon, ForkIcon } from "../../lib/icons";
 import { questLabel, questVariantLabel } from "../../lib/quests";
@@ -11,6 +11,7 @@ import { queryStore } from "../../lib/store";
 import { formatSeedCode } from "../../lib/wasm";
 import type { ScoutItem, ScoutResult, TrinketOffer } from "../../lib/wasm/types";
 import { Sprite } from "./parts";
+import { FeelingSprite } from "./FeelingSprite";
 import { TrinketName, TrinketSprite } from "./TrinketArt";
 
 const groupLetter = (group: number) => "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[group % 26];
@@ -59,6 +60,9 @@ export function ScoutPanel({
   }, [result]);
 
   // `?? []` guards against cached worker responses from before quests existed.
+  const feelingByDepth = new Map(
+    (result?.feelings ?? []).map(({ depth, feeling }) => [depth, feeling]),
+  );
   const questByDepth = new Map((result?.quests ?? []).map((quest) => [quest.depth, quest]));
 
   const copySeed = () => {
@@ -219,6 +223,7 @@ export function ScoutPanel({
                   <header className="d1-floor-head">
                     <span className="d1-floor-bar" aria-hidden="true" />
                     <span className="d1-floor-label">Floor {depth}</span>
+                    <FeelingSprite feeling={feelingByDepth.get(depth)} />
                     <span className="d1-floor-region">{region.name}</span>
                     {quest && (
                       <span className="d1-floor-quest" title={`${questLabel(quest.quest)} quest`}>
@@ -255,7 +260,9 @@ export function ScoutPanel({
                               <div className="d1-item-name">
                                 <span>{item.name}</span>
                                 {item.upgrade > 0 && (
-                                  <b className="d1-badge d1-badge-up">+{item.upgrade}</b>
+                                  <b className="d1-badge d1-badge-up">
+                                    +{displayedUpgrade(item.id, item.upgrade)}
+                                  </b>
                                 )}
                                 {item.cursed && <b className="d1-badge d1-badge-curse">cursed</b>}
                                 {item.secret && (

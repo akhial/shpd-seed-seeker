@@ -20,8 +20,8 @@ extern "C" {
 // Selected scout requests use SSQ3, a LE u16 challenge mask, LE u16-length
 // UTF-8 seed, LE u16-length override (empty=auto, none=deselected, or stable ID),
 // followed by optional canonical query JSON. See docs/trinket-offers.md.
-// Responses use SSC4 for legacy requests or SSC5 for SSQ3. SSC5 appends the
-// selected stable ID as a BE u16-length string (empty=none) after the SSC4 deck.
+// Responses use SSC5 for legacy requests or SSC6 for SSQ3. SSC6 appends the
+// selected stable ID as a BE u16-length string (empty=none) after SSC5 feelings.
 // Each item's flags byte uses bit 0 for cursed
 // and bit 1 for placement inside a secret room.
 // workers is the number of search threads to spawn, clamped to the host's

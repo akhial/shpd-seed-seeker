@@ -184,6 +184,7 @@ enum FileItemKind {
     Wand,
     Ring,
     Trinket,
+    Artifact,
 }
 
 impl FileItemKind {
@@ -196,6 +197,7 @@ impl FileItemKind {
             Self::Wand => (ItemKind::Wand, None),
             Self::Ring => (ItemKind::Ring, None),
             Self::Trinket => (ItemKind::Trinket, None),
+            Self::Artifact => (ItemKind::Artifact, None),
         }
     }
 }
@@ -480,6 +482,7 @@ pub const fn kind_name(kind: ItemKind) -> &'static str {
         ItemKind::Wand => "wand",
         ItemKind::Ring => "ring",
         ItemKind::Trinket => "trinket",
+        ItemKind::Artifact => "artifact",
     }
 }
 

@@ -83,12 +83,14 @@ final class TrinketTests: XCTestCase {
         let order = ItemCatalog.trinkets.map(\.id)
         func selectedPacket(_ id: String) -> Data {
             var result = packet(order)
-            result.replaceSubrange(0..<4, with: "SSC5".utf8)
+            result.replaceSubrange(0..<4, with: "SSC6".utf8)
+            result.append(contentsOf: [1, 1, 2]) // One water feeling on floor 1.
             result.append(contentsOf: [UInt8(id.utf8.count >> 8), UInt8(id.utf8.count & 255)])
             result.append(contentsOf: id.utf8)
             return result
         }
         XCTAssertEqual(try ScoutCodec.decode(selectedPacket(order[0])).selectedTrinket, order[0])
+        XCTAssertEqual(try ScoutCodec.decode(selectedPacket(order[0])).feelings, [1: .water])
         XCTAssertNil(try ScoutCodec.decode(selectedPacket("")).selectedTrinket)
         XCTAssertThrowsError(try ScoutCodec.decode(selectedPacket(order[4])))
         XCTAssertThrowsError(try ScoutCodec.decode(selectedPacket("unknown")))

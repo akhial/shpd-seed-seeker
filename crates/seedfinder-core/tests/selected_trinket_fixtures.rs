@@ -1,4 +1,4 @@
-//! Searchable loot captured from the official v4.0.0-BETA-4 Java oracle.
+//! Equipment loot captured from the official v4.0.0-BETA-4 Java oracle.
 //! Seven generation-changing trinkets, each at +3 after the first brewing
 //! opportunity, across three seeds through floor 24 (including vault rewards).
 use serde::Deserialize;
@@ -29,7 +29,12 @@ fn selected_trinket_loot_matches_beta4_java() {
         let mut actual: Vec<_> = world
             .items
             .iter()
-            .filter(|entry| item(entry.item).kind != ItemKind::Trinket)
+            .filter(|entry| {
+                !matches!(
+                    item(entry.item).kind,
+                    ItemKind::Trinket | ItemKind::Artifact
+                )
+            })
             .map(|entry| {
                 (
                     entry.depth,

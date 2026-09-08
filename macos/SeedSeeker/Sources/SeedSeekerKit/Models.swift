@@ -29,9 +29,10 @@ public enum SearchLimits {
     /// final-room prize — appears once per run.
     public static let maxUpgradeRingStandard = 2
     /// Highest upgrade a weapon requirement may name: v4.0.0's Imp vault
-    /// reaches +5 on a tier-4 weapon or thrown weapon, one above every other
-    /// family's ceiling.
+    /// reaches +5 on a tier-4 weapon or thrown weapon.
     public static let maxUpgradeWeapon = 5
+    /// Upgrade transferred to an artifact in the Imp vault.
+    public static let maxUpgradeArtifact = 5
     /// Highest upgrade the generator puts on any item, whatever its tier.
     public static let maxUpgradeAnyTier = 4
     /// The one weapon tier levelled past `maxUpgradeAnyTier`, a
@@ -43,11 +44,10 @@ public enum SearchLimits {
     public static let extraUpgradeTier = 4
 
     /// The highest upgrade a requirement may name once its item and tier
-    /// filter are known: everything that cannot be a tier-`extraUpgradeTier`
-    /// weapon stops at `maxUpgradeAnyTier`.
+    /// filter are known. Only weapons have a ceiling that depends on tier.
     public static func maximumUpgrade(kind: ItemKind, item: CatalogItem?, tier: Int, tierMatch: TierMatch) -> Int {
         let ceiling = kind.maximumSearchUpgrade
-        guard ceiling > maxUpgradeAnyTier else { return ceiling }
+        guard kind.family == .weapon, ceiling > maxUpgradeAnyTier else { return ceiling }
         let reachesExtraTier = if let item {
             item.tier == extraUpgradeTier
         } else {
@@ -75,17 +75,17 @@ public enum ItemKind: Int, Codable, CaseIterable, Sendable {
     // The raw value is the saved-query kind ID: 0...3 are the original
     // families and 4/5 narrow a weapon requirement to one weapon class, so
     // saved queries from older builds keep their meaning.
-    case weapon, armor, wand, ring, meleeWeapon, thrownWeapon, trinket
+    case weapon, armor, wand, ring, meleeWeapon, thrownWeapon, trinket, artifact
 
-    public var label: String { ["Weapons", "Armor", "Wands", "Rings", "Melee weapons", "Thrown weapons", "Trinket"][rawValue] }
-    public var singularLabel: String { ["weapon", "armor", "wand", "ring", "melee weapon", "thrown weapon", "trinket"][rawValue] }
+    public var label: String { ["Weapons", "Armor", "Wands", "Rings", "Melee weapons", "Thrown weapons", "Trinket", "Artifacts"][rawValue] }
+    public var singularLabel: String { ["weapon", "armor", "wand", "ring", "melee weapon", "thrown weapon", "trinket", "artifact"][rawValue] }
     public var modifierLabel: String? { family == .weapon ? "Enchantment" : family == .armor ? "Glyph" : nil }
     /// The non-curse effects of this family — enchantments or glyphs — in the
     /// shared catalog asset's order.
     public var enchantmentNames: [String] { ItemCatalog.enchantmentsFor(self) }
     /// The highest upgrade a search may name for this family.
     public var maximumSearchUpgrade: Int {
-        family == .trinket ? 0 : family == .weapon ? SearchLimits.maxUpgradeWeapon
+        family == .artifact ? SearchLimits.maxUpgradeArtifact : family == .trinket ? 0 : family == .weapon ? SearchLimits.maxUpgradeWeapon
             : family == .ring ? SearchLimits.maxUpgradeRing : SearchLimits.maxUpgradeDefault
     }
 
@@ -370,7 +370,7 @@ public struct ItemRequirement: Codable, Hashable, Identifiable, Sendable {
                 alternativeGroup: Int? = nil, levelSum: LevelSum? = nil,
                 selectTrinket: Bool = false) throws {
         guard !selectTrinket || (kind == .trinket && item != nil) else { throw ModelValidationError.itemKind }
-        guard kind != .trinket || item != nil else { throw ModelValidationError.itemKind }
+        guard (kind != .trinket && kind != .artifact) || item != nil else { throw ModelValidationError.itemKind }
         guard item == nil || item.map(kind.accepts) == true else { throw ModelValidationError.itemKind }
         let tierable = item == nil && (kind.family == .weapon || kind.family == .armor)
         let validTier = switch tierMatch {
@@ -693,6 +693,24 @@ public struct SeedResult: Hashable, Identifiable, Sendable {
     public init(seed: String, matchedRequirements: Int) { self.seed = seed; self.matchedRequirements = matchedRequirements }
 }
 
+/// Raw values are the SSC5 feeling IDs and the dungeon icon frame columns.
+public enum FloorFeeling: Int, CaseIterable, Sendable {
+    case none = 0, chasm, water, grass, dark, large, traps, secrets
+
+    public var label: String {
+        switch self {
+        case .none: "Normal floor"
+        case .chasm: "Chasms floor"
+        case .water: "Water floor"
+        case .grass: "Grass floor"
+        case .dark: "Dark floor"
+        case .large: "Large floor"
+        case .traps: "Traps floor"
+        case .secrets: "Secrets floor"
+        }
+    }
+}
+
 public struct ScoutWorld: Sendable {
     public let seed: String
     public let quests: [ScoutQuest]
@@ -704,10 +722,13 @@ public struct ScoutWorld: Sendable {
     public let ringGems: RingGems
     public let trinketOrder: [CatalogItem]
     public let selectedTrinket: String?
+    public let feelings: [Int: FloorFeeling]
     public init(seed: String, quests: [ScoutQuest] = [], items: [ScoutItem],
-                ringGems: RingGems = .catalogDefault, trinketOrder: [CatalogItem] = [], selectedTrinket: String? = nil) {
+                ringGems: RingGems = .catalogDefault, trinketOrder: [CatalogItem] = [],
+                feelings: [Int: FloorFeeling] = [:], selectedTrinket: String? = nil) {
         self.seed = seed; self.quests = quests; self.items = items; self.ringGems = ringGems
         self.trinketOrder = trinketOrder
+        self.feelings = feelings
         self.selectedTrinket = selectedTrinket
     }
 }
@@ -789,6 +810,17 @@ public struct ScoutQuest: Hashable, Identifiable, Sendable {
 }
 
 public struct ScoutItem: Identifiable, Sendable {
+    /// Mirrors transferUpgrade followed by visiblyUpgraded, with positive half-up rounding.
+    public var displayedUpgrade: Int {
+        let cap: Int
+        switch item.id {
+        case "sandals_of_nature": cap = 3
+        case "ethereal_chains", "timekeepers_hourglass": cap = 5
+        default: return upgrade
+        }
+        let internalLevel = (upgrade * cap + 5) / 10
+        return (internalLevel * 10 + cap / 2) / cap
+    }
     public let item: CatalogItem
     public let depth: Int
     public let upgrade: Int

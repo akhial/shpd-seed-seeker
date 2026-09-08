@@ -242,11 +242,11 @@ class DeepLinkTest {
         assertDecodeFails("truncated", "A")
         assertDecodeFails("truncated", "QAMtCY")
         assertDecodeFails("trailing data", "QAMtCYAAAAAA")
-        // Unsupported future version (bits 0101 in the top nibble).
+        // Unsupported future version (bits 0110 in the top nibble).
         val versioned = assertThrows(IllegalArgumentException::class.java) {
-            DeepLink.decode("UAAA")
+            DeepLink.decode("YAAA")
         }
-        assertTrue(versioned.message!!.contains("version 5"))
+        assertTrue(versioned.message!!.contains("version 6"))
         assertTrue(versioned.message!!.contains("different"))
     }
 
