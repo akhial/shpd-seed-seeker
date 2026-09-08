@@ -2312,7 +2312,7 @@ private struct TrinketScoutRow: View {
                             }
                             .padding(8)
                             .frame(width: edge, height: edge)
-                            .background(selectedTrinket == item.id || matchedIDs.contains(item.id) ? Color.shatteredMint.opacity(0.12) : Color.secondary.opacity(0.05),
+                            .background(matchedIDs.contains(item.id) ? Color.shatteredMint.opacity(0.12) : Color.secondary.opacity(0.05),
                                         in: RoundedRectangle(cornerRadius: 6))
                             .overlay(RoundedRectangle(cornerRadius: 6)
                                 .strokeBorder(selectedTrinket == item.id || matchedIDs.contains(item.id) ? Color.shatteredMint : Color.secondary.opacity(0.25), lineWidth: selectedTrinket == item.id ? 2 : 1))

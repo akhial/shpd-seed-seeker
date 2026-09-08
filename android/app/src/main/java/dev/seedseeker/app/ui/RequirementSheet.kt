@@ -118,7 +118,7 @@ fun RequirementSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val identity = editing?.key ?: -1L
     var step by remember(identity) {
-        mutableStateOf(if (editing == null || startWithItemPicker || editing.kind == ItemKind.TRINKET) SheetStep.ITEM else SheetStep.DETAILS)
+        mutableStateOf(if (editing == null || startWithItemPicker) SheetStep.ITEM else SheetStep.DETAILS)
     }
     var kind by remember(identity) { mutableStateOf(editing?.kind ?: ItemKind.WEAPON) }
     var selectedItem by remember(identity) {
@@ -366,35 +366,8 @@ fun RequirementSheet(
                         }
                     }
 
-                    if (kind == ItemKind.TRINKET) {
-                        Row(
-                            Modifier.fillMaxWidth().padding(horizontal = 20.dp).toggleable(
-                                value = selectTrinket,
-                                role = Role.Checkbox,
-                                onValueChange = { selectTrinket = it },
-                            ),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Checkbox(checked = selectTrinket, onCheckedChange = null)
-                            Text("Choose matching trinket at +3")
-                        }
-                        Text(
-                            "Applies after the first brewing opportunity. If several alternatives are offered, no trinket is chosen.",
-                            modifier = Modifier.padding(horizontal = 20.dp),
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                    }
-                    if (kind == ItemKind.TRINKET && editing != null && onRemove != null) {
-                        TextButton(onClick = onRemove, modifier = Modifier.padding(horizontal = 20.dp)) {
-                            Text(if (inAlternativeGroup) "Remove alternative" else "Remove requirement", color = MaterialTheme.colorScheme.error)
-                        }
-                    }
                     Button(
-                        onClick = {
-                            if (kind == ItemKind.TRINKET) draft.getOrNull()?.let { onSave(it, 1, null, null) }
-                            else step = SheetStep.DETAILS
-                        },
-                        enabled = kind != ItemKind.TRINKET || draft.isSuccess,
+                        onClick = { step = SheetStep.DETAILS },
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 20.dp)
@@ -402,7 +375,7 @@ fun RequirementSheet(
                             .height(52.dp),
                         shapes = ButtonDefaults.shapes(),
                     ) {
-                        Text(if (kind == ItemKind.TRINKET) { if (editing == null) "Add" else "Save" } else "Next", style = MaterialTheme.typography.titleMedium)
+                        Text("Next", style = MaterialTheme.typography.titleMedium)
                     }
                 }
 
@@ -414,6 +387,24 @@ fun RequirementSheet(
                             .verticalScroll(rememberScrollState())
                             .padding(horizontal = 20.dp),
                     ) {
+                        if (kind == ItemKind.TRINKET) {
+                            Row(
+                                Modifier.fillMaxWidth().toggleable(
+                                    value = selectTrinket,
+                                    role = Role.Checkbox,
+                                    onValueChange = { selectTrinket = it },
+                                ),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Checkbox(checked = selectTrinket, onCheckedChange = null)
+                                Text("Choose matching trinket at +3")
+                            }
+                            Text(
+                                "Applies after the first brewing opportunity. If several alternatives are offered, no trinket is chosen.",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+
                         if (selectedItem == null && kind.family in setOf(ItemKind.WEAPON, ItemKind.ARMOR)) {
                             Text("Tier", style = MaterialTheme.typography.titleSmall)
                             Spacer(Modifier.height(8.dp))
@@ -514,7 +505,7 @@ fun RequirementSheet(
                             Spacer(Modifier.height(18.dp))
                         }
 
-                        if (kind != ItemKind.ARTIFACT) {
+                        if (!kind.requiresNamedItem) {
                             Text("Upgrade", style = MaterialTheme.typography.titleSmall)
                             Spacer(Modifier.height(8.dp))
                             Row(
@@ -685,95 +676,97 @@ fun RequirementSheet(
                             }
                         }
 
-                        Spacer(Modifier.height(10.dp))
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .toggleable(
-                                    value = requireUncursed,
-                                    role = Role.Checkbox,
-                                    onValueChange = { checked ->
-                                        if (checked) {
-                                            selectedEffects = selectedEffects - ItemCatalog.cursesFor(kind).toSet()
-                                        }
-                                        requireUncursed = checked
-                                    },
-                                ),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Checkbox(checked = requireUncursed, onCheckedChange = null)
-                            Text("Require uncursed", style = MaterialTheme.typography.bodyMedium)
-                        }
-
-                        Spacer(Modifier.height(10.dp))
-                        ExposedDropdownMenuBox(
-                            expanded = sourceMenuExpanded,
-                            onExpandedChange = { sourceMenuExpanded = it },
-                        ) {
-                            OutlinedTextField(
-                                value = source?.label ?: "Any source",
-                                onValueChange = { },
-                                readOnly = true,
-                                singleLine = true,
-                                shape = MaterialTheme.shapes.medium,
-                                label = { Text("Source") },
-                                trailingIcon = {
-                                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = sourceMenuExpanded)
-                                },
+                        if (kind != ItemKind.TRINKET) {
+                            Spacer(Modifier.height(10.dp))
+                            Row(
                                 modifier = Modifier
-                                    .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = true)
-                                    .fillMaxWidth(),
-                            )
-                            ExposedDropdownMenu(
-                                expanded = sourceMenuExpanded,
-                                onDismissRequest = { sourceMenuExpanded = false },
+                                    .fillMaxWidth()
+                                    .toggleable(
+                                        value = requireUncursed,
+                                        role = Role.Checkbox,
+                                        onValueChange = { checked ->
+                                            if (checked) {
+                                                selectedEffects = selectedEffects - ItemCatalog.cursesFor(kind).toSet()
+                                            }
+                                            requireUncursed = checked
+                                        },
+                                    ),
+                                verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                DropdownMenuItem(
-                                    text = { Text("Any source") },
-                                    onClick = {
-                                        source = null
-                                        sourceMenuExpanded = false
+                                Checkbox(checked = requireUncursed, onCheckedChange = null)
+                                Text("Require uncursed", style = MaterialTheme.typography.bodyMedium)
+                            }
+
+                            Spacer(Modifier.height(10.dp))
+                            ExposedDropdownMenuBox(
+                                expanded = sourceMenuExpanded,
+                                onExpandedChange = { sourceMenuExpanded = it },
+                            ) {
+                                OutlinedTextField(
+                                    value = source?.label ?: "Any source",
+                                    onValueChange = { },
+                                    readOnly = true,
+                                    singleLine = true,
+                                    shape = MaterialTheme.shapes.medium,
+                                    label = { Text("Source") },
+                                    trailingIcon = {
+                                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = sourceMenuExpanded)
                                     },
+                                    modifier = Modifier
+                                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable, enabled = true)
+                                        .fillMaxWidth(),
                                 )
-                                ScoutItemSource.entries.forEach { option ->
+                                ExposedDropdownMenu(
+                                    expanded = sourceMenuExpanded,
+                                    onDismissRequest = { sourceMenuExpanded = false },
+                                ) {
                                     DropdownMenuItem(
-                                        text = { Text(option.label) },
+                                        text = { Text("Any source") },
                                         onClick = {
-                                            source = option
+                                            source = null
                                             sourceMenuExpanded = false
                                         },
                                     )
+                                    ScoutItemSource.entries.forEach { option ->
+                                        DropdownMenuItem(
+                                            text = { Text(option.label) },
+                                            onClick = {
+                                                source = option
+                                                sourceMenuExpanded = false
+                                            },
+                                        )
+                                    }
                                 }
                             }
-                        }
 
-                        Spacer(Modifier.height(18.dp))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                        ) {
-                            Text("Floor limit", style = MaterialTheme.typography.titleSmall)
-                            Text(
-                                maximumDepth?.let { "≤ floor $it" } ?: "Search limit",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.primary,
+                            Spacer(Modifier.height(18.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                            ) {
+                                Text("Floor limit", style = MaterialTheme.typography.titleSmall)
+                                Text(
+                                    maximumDepth?.let { "≤ floor $it" } ?: "Search limit",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                            }
+                            // Position 0 means "no limit"; the rest index into FLOOR_LIMIT_OPTIONS so
+                            // empty boss floors (5, 10, 15) are not offered. Off-list stored values
+                            // snap to the nearest option below via floorLimitIndex.
+                            Slider(
+                                value = (maximumDepth?.let { depth -> floorLimitIndex(depth) + 1 } ?: 0).toFloat(),
+                                onValueChange = {
+                                    val index = it.roundToInt().coerceIn(0, FLOOR_LIMIT_OPTIONS.size)
+                                    maximumDepth = if (index == 0) null else FLOOR_LIMIT_OPTIONS[index - 1]
+                                },
+                                valueRange = 0f..FLOOR_LIMIT_OPTIONS.size.toFloat(),
+                                steps = FLOOR_LIMIT_OPTIONS.size - 1,
+                                modifier = Modifier.semantics {
+                                    stateDescription = maximumDepth?.let { "Floor $it" } ?: "No limit"
+                                },
                             )
                         }
-                        // Position 0 means "no limit"; the rest index into FLOOR_LIMIT_OPTIONS so
-                        // empty boss floors (5, 10, 15) are not offered. Off-list stored values
-                        // snap to the nearest option below via floorLimitIndex.
-                        Slider(
-                            value = (maximumDepth?.let { depth -> floorLimitIndex(depth) + 1 } ?: 0).toFloat(),
-                            onValueChange = {
-                                val index = it.roundToInt().coerceIn(0, FLOOR_LIMIT_OPTIONS.size)
-                                maximumDepth = if (index == 0) null else FLOOR_LIMIT_OPTIONS[index - 1]
-                            },
-                            valueRange = 0f..FLOOR_LIMIT_OPTIONS.size.toFloat(),
-                            steps = FLOOR_LIMIT_OPTIONS.size - 1,
-                            modifier = Modifier.semantics {
-                                stateDescription = maximumDepth?.let { "Floor $it" } ?: "No limit"
-                            },
-                        )
 
                         if (!inAlternativeGroup && kind.supportsStacks) {
                             Spacer(Modifier.height(18.dp))
