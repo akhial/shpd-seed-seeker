@@ -1,0 +1,4 @@
+{"code":"AAA-AAA-AAC","item":"WorldItem { item: CleansingDart, upgrade: 0, effect: None, cursed: false, depth: 6, source: Shop, accessibility: Independent, secret: false }","offers":["mossy_clump","thirteen_leaf_clover","wondrous_resin","parchment_scrap"],"query":{"max_depth":6,"requirements":[{"item":"cleansing_dart","uncursed":true}]},"seed":2,"trinket":"mossy_clump"}
+{"code":"AAA-AAA-AAF","item":"WorldItem { item: Spear, upgrade: 1, effect: Some(Weapon(Explosive)), cursed: true, depth: 7, source: Mimic, accessibility: Independent, secret: false }","offers":["salt_cube","ferret_tuft","trap_mechanism","mimic_tooth"],"query":{"max_depth":7,"requirements":[{"effect":"Explosive","item":"spear","uncursed":false,"upgrade":{"exact":1}}]},"seed":5,"trinket":"trap_mechanism"}
+Unproven: [ExoticCrystals]
+Exotic Crystals: 224 initial offers scanned; 0 searchable world differences

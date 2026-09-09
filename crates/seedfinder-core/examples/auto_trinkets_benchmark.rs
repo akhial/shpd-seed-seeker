@@ -97,6 +97,10 @@ fn bench(seconds: f64, name_filter: Option<&str>) {
             "ethereal_chains_depth9",
             json!({"max_depth":9,"requirements":[{"item":"ethereal_chains"}]}),
         ),
+        (
+            "grim_weapon_plus1_depth19",
+            json!({"max_depth":19,"requirements":[{"kind":"weapon","upgrade":{"exact":1},"effect":"Grim"}]}),
+        ),
     ];
     for (name, query) in queries {
         if name_filter.is_some_and(|filter| !name.contains(filter)) {
