@@ -35,7 +35,7 @@ class TrinketRequirementsTest {
         val preset = ResultsExport.decodeQuery(document)
         assertTrue(DeepLink.decode(DeepLink.encodeLink(preset)).requirements.single().selectTrinket)
         assertTrue(ResultsExport.decode(ResultsExport.encode(preset, emptyList(), "test")).query.requirements.single().selectTrinket)
-        assertTrue(selected.description.contains("choose at +3"))
+        assertEquals("Trinket", selected.description)
         val plain = ResultsExport.encodeQuery(SearchRequest(listOf(selected.copy(selectTrinket = false))))
         assertFalse(plain.toString().contains("select_trinket"))
         assertFalse(ResultsExport.decodeQuery(plain).requirements.single().selectTrinket)

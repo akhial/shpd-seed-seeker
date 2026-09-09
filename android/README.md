@@ -33,7 +33,7 @@ Shattered Pixel Dungeon is copyright © 2014–2026 Evan Debenham. Pixel Dungeon
 ## Trinkets
 
 The requirement picker has a named Trinket category, including either/or groups.
-Trinkets use a second details page for the matching-trinket checkbox and the
+Trinkets use a second details page for the matching-trinket switch and the
 shared save and trash controls, without equipment filters. Scout shows
 four square choices beneath the catalyst on its actual floor, highlights matching
 choices with a flat green fill, and keeps the remaining thirteen icons

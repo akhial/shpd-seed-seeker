@@ -329,7 +329,7 @@ data class ItemRequirement(
 
     val description: String
         get() = if (kind == ItemKind.TRINKET) {
-            if (selectTrinket) "Trinket • choose at +3" else "Trinket"
+            "Trinket"
         } else buildString {
             append(
                 when (upgradeMatch) {

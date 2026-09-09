@@ -391,17 +391,20 @@ fun RequirementSheet(
                             Row(
                                 Modifier.fillMaxWidth().toggleable(
                                     value = selectTrinket,
-                                    role = Role.Checkbox,
+                                    role = Role.Switch,
                                     onValueChange = { selectTrinket = it },
                                 ),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Checkbox(checked = selectTrinket, onCheckedChange = null)
-                                Text("Choose matching trinket at +3")
+                                Text("Choose matching trinket at +3", modifier = Modifier.weight(1f))
+                                Spacer(Modifier.width(12.dp))
+                                Switch(checked = selectTrinket, onCheckedChange = null)
                             }
+                            Spacer(Modifier.height(8.dp))
                             Text(
                                 "Applies after the first brewing opportunity. If several alternatives are offered, no trinket is chosen.",
                                 style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
 
