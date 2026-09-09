@@ -323,6 +323,8 @@ pub struct Requirement {
     pub effect: EffectRequirement,
     /// Whether cursed candidate items are ineligible for this requirement.
     pub require_uncursed: bool,
+    /// Choose this offer (or its unique matching OR alternative) at +3 after brewing.
+    pub select_trinket: bool,
     pub source: Option<ItemSource>,
     /// Requirements in the same non-zero group must resolve to the same item ID.
     pub identity_group: Option<u8>,
@@ -467,6 +469,9 @@ impl Requirement {
     /// another family, an upgrade outside the UI's family-specific range, or
     /// an inconsistent group label.
     pub fn validate(self) -> Result<(), QueryError> {
+        if self.select_trinket && self.kind != ItemKind::Trinket {
+            return Err(QueryError::SelectionRequiresTrinket);
+        }
         if self.kind == ItemKind::Artifact && self.item.is_none() {
             return Err(QueryError::ArtifactRequiresIdentity);
         }
@@ -761,6 +766,7 @@ impl SearchQuery {
     pub fn continues(&self, base: &SearchQuery) -> bool {
         if self.max_depth != base.max_depth
             || self.challenges != base.challenges
+            || crate::trinkets::selection_slots(self) != crate::trinkets::selection_slots(base)
             || !flag_at_least_as_strict(self.require_blacksmith, base.require_blacksmith)
             || !flag_at_least_as_strict(
                 self.exclude_blacksmith_rewards,
@@ -1424,6 +1430,7 @@ pub enum QueryError {
     InvalidTier,
     ItemKindMismatch,
     TrinketRequiresIdentity,
+    SelectionRequiresTrinket,
     ArtifactRequiresIdentity,
     InvalidWeaponCategory,
     EffectKindMismatch,
@@ -1483,6 +1490,7 @@ impl fmt::Display for QueryError {
             Self::InvalidTier => {
                 "tier filters require a wildcard weapon or armor and a non-redundant tier"
             }
+            Self::SelectionRequiresTrinket => "only a named trinket can be selected",
             Self::TrinketRequiresIdentity => "select a trinket",
             Self::ArtifactRequiresIdentity => "select an artifact",
             Self::ItemKindMismatch => "selected item is in a different category",
@@ -1549,6 +1557,7 @@ mod tests {
             upgrade: UpgradeRequirement::Exact(2),
             effect: EffectRequirement::Any,
             require_uncursed: false,
+            select_trinket: false,
             source: None,
             identity_group: None,
             max_depth: None,
@@ -1636,6 +1645,7 @@ mod tests {
             upgrade: UpgradeRequirement::AtLeast(3),
             effect: EffectRequirement::Any,
             require_uncursed: false,
+            select_trinket: false,
             source: None,
             identity_group: None,
             max_depth: None,
@@ -1667,6 +1677,7 @@ mod tests {
         let stricter = Requirement {
             upgrade: UpgradeRequirement::AtLeast(4),
             require_uncursed: true,
+            select_trinket: false,
             max_depth: Some(10),
             ..arcana
         };
@@ -1718,6 +1729,7 @@ mod tests {
                 upgrade: UpgradeRequirement::Any,
                 effect: EffectRequirement::Any,
                 require_uncursed: false,
+                select_trinket: false,
                 source: None,
                 identity_group: None,
                 max_depth: None,
@@ -2005,6 +2017,7 @@ mod tests {
             upgrade: UpgradeRequirement::Exact(2),
             effect: EffectRequirement::Any,
             require_uncursed: false,
+            select_trinket: false,
             source: None,
             identity_group: None,
             max_depth: None,
@@ -2026,6 +2039,7 @@ mod tests {
             upgrade: UpgradeRequirement::Any,
             effect: EffectRequirement::Any,
             require_uncursed: false,
+            select_trinket: false,
             source: None,
             identity_group: None,
             max_depth: None,
@@ -2103,6 +2117,7 @@ mod tests {
         let invalid = Requirement {
             effect: EffectRequirement::exactly(Effect::Weapon(WeaponEffect::Displacing)),
             require_uncursed: true,
+            select_trinket: false,
             ..requirement(ItemId::Sword)
         };
         assert_eq!(invalid.validate(), Err(QueryError::UncursedWithCurse));
@@ -2118,6 +2133,7 @@ mod tests {
             upgrade: UpgradeRequirement::Exact(4),
             effect: EffectRequirement::Any,
             require_uncursed: false,
+            select_trinket: false,
             source: None,
             identity_group: None,
             max_depth: None,
@@ -2134,6 +2150,7 @@ mod tests {
             upgrade: UpgradeRequirement::Exact(4),
             effect: EffectRequirement::Any,
             require_uncursed: false,
+            select_trinket: false,
             source: None,
             identity_group: None,
             max_depth: None,
@@ -2168,6 +2185,7 @@ mod tests {
             upgrade: UpgradeRequirement::Exact(4),
             effect: EffectRequirement::Any,
             require_uncursed: false,
+            select_trinket: false,
             source: None,
             identity_group: None,
             max_depth: None,
@@ -2255,6 +2273,7 @@ mod tests {
             upgrade: UpgradeRequirement::Exact(2),
             effect: EffectRequirement::Any,
             require_uncursed: false,
+            select_trinket: false,
             source: None,
             identity_group: None,
             max_depth: None,
@@ -2331,6 +2350,7 @@ mod tests {
             upgrade,
             effect: EffectRequirement::Any,
             require_uncursed: false,
+            select_trinket: false,
             source,
             identity_group: Some(1),
             max_depth: None,
@@ -2353,6 +2373,7 @@ mod tests {
                     upgrade: UpgradeRequirement::Exact(1),
                     effect: EffectRequirement::Any,
                     require_uncursed: false,
+                    select_trinket: false,
                     source: None,
                     identity_group: None,
                     max_depth: None,
@@ -2456,6 +2477,7 @@ mod tests {
             upgrade: UpgradeRequirement::Any,
             effect: EffectRequirement::Any,
             require_uncursed: false,
+            select_trinket: false,
             source: None,
             identity_group: Some(1),
             max_depth: None,
@@ -2563,6 +2585,7 @@ mod tests {
             upgrade: UpgradeRequirement::Any,
             effect: EffectRequirement::Any,
             require_uncursed: false,
+            select_trinket: false,
             source: None,
             identity_group: None,
             max_depth: None,
@@ -2645,6 +2668,7 @@ mod tests {
                     .unwrap()
                 ),
                 require_uncursed: true,
+                select_trinket: false,
                 ..plain(ItemKind::Weapon)
             }
             .validate(),
@@ -2657,6 +2681,7 @@ mod tests {
                         .unwrap()
                 ),
                 require_uncursed: true,
+                select_trinket: false,
                 ..plain(ItemKind::Weapon)
             }
             .validate(),
@@ -3032,6 +3057,7 @@ mod tests {
             upgrade: UpgradeRequirement::Any,
             effect: EffectRequirement::Any,
             require_uncursed: false,
+            select_trinket: false,
             source: None,
             identity_group: None,
             max_depth: None,

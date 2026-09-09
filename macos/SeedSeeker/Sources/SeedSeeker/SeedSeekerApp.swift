@@ -123,7 +123,7 @@ private struct ContentView: View {
                     // ScrollView, so it has to supply one.
                     .background(Color(nsColor: .windowBackgroundColor))
             } content: {
-                ResultsView(controller: controller) { seed in scout.scout(seed, challenges: challenges) }
+                ResultsView(controller: controller) { seed in scout.scout(seed, challenges: challenges, query: try? buildRequest()) }
                     .navigationSplitViewColumnWidth(min: 300, ideal: 380)
             } detail: {
                 SeedDetailView(model: scout, requirements: requirements, maximumDepth: maximumDepth,
@@ -214,7 +214,7 @@ private struct ContentView: View {
         .onChange(of: controller.selectedSeed) { _, seed in
             // J/K navigation scouts before moving the selection; only scout
             // here for direct table selections.
-            if let seed, seed != scout.requestedSeed { scout.scout(seed, challenges: challenges) }
+            if let seed, seed != scout.requestedSeed { scout.scout(seed, challenges: challenges, query: try? buildRequest()) }
         }
     }
 
@@ -261,6 +261,13 @@ private struct ContentView: View {
         }
     }
 
+    private func buildRequest() throws -> SearchRequest {
+        try SearchRequest(requirements: requirements, maximumDepth: maximumDepth,
+                          requireBlacksmith: requireBlacksmith,
+                          excludeBlacksmithRewards: excludeBlacksmithRewards,
+                          wandmakerQuest: wandmakerQuest, challenges: challenges)
+    }
+
     /// Where the scouted seed sits in the search results, or nil when it did
     /// not come from one (hand-entered seed, or no search yet).
     private var resultPosition: ResultPosition? {
@@ -277,7 +284,7 @@ private struct ContentView: View {
         guard let next = ResultNavigation.seed(from: scout.requestedSeed,
                                                in: controller.results.map(\.seed),
                                                offset: offset) else { return false }
-        scout.scout(next, challenges: challenges)
+        scout.scout(next, challenges: challenges, query: try? buildRequest())
         controller.selectedSeed = next
         return true
     }
@@ -1431,6 +1438,7 @@ private struct RequirementEditor: View {
     @State private var sourceRaw: Int
     @State private var maximumDepth: Int
     @State private var requireUncursed: Bool
+    @State private var selectTrinket: Bool
     /// How many items the chip asks for, and what its stack's copies carry.
     @State private var count: Int
     @State private var total: Int?
@@ -1461,6 +1469,7 @@ private struct RequirementEditor: View {
         _sourceRaw = State(initialValue: requirement.source.map { $0.rawValue + 1 } ?? 0)
         _maximumDepth = State(initialValue: requirement.maximumDepth ?? 0)
         _requireUncursed = State(initialValue: requirement.requireUncursed)
+        _selectTrinket = State(initialValue: requirement.selectTrinket)
         _count = State(initialValue: stack.count)
         _total = State(initialValue: stack.total)
         _copyDepth = State(initialValue: stack.copyDepth)
@@ -1482,7 +1491,7 @@ private struct RequirementEditor: View {
                     .frame(maxWidth: .infinity)
                     .onChange(of: kind) { previous, value in
                         if previous.family != value.family {
-                            itemID = ""; tierMatch = .any; tier = 2
+                            itemID = ""; tierMatch = .any; tier = 2; selectTrinket = false
                             effectMode = .any; selectedEffects = []
                             if value == .trinket || value == .artifact {
                                 itemID = ItemCatalog.forKind(value).first?.id ?? ""
@@ -1529,6 +1538,9 @@ private struct RequirementEditor: View {
                     .onChange(of: itemID) { _, value in
                         if value.isEmpty { total = nil } else { tierMatch = .any }
                         normalizeUpgrade()
+                    }
+                    if kind == .trinket {
+                        Toggle("Choose matching trinket at +3", isOn: $selectTrinket)
                     }
                     if itemID.isEmpty && (kind.family == .weapon || kind.family == .armor) {
                         Picker("Tier", selection: $tierMatch) {
@@ -1714,7 +1726,7 @@ private struct RequirementEditor: View {
                     .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
             }.padding(12)
         }
-        .frame(width: 480, height: kind == .trinket ? 260 : kind.modifierLabel == nil ? 580 : 660)
+        .frame(width: 480, height: kind == .trinket ? 300 : kind.modifierLabel == nil ? 580 : 660)
     }
 
     /// A combined level is a property of a concrete stack of two or more —
@@ -1784,7 +1796,8 @@ private struct RequirementEditor: View {
                 source: kind == .trinket || sourceRaw == 0 ? nil : ScoutItemSource(rawValue: sourceRaw - 1),
                 maximumDepth: kind == .trinket || maximumDepth == 0 ? nil : maximumDepth,
                 requireUncursed: kind != .trinket && requireUncursed,
-                alternativeGroup: original.alternativeGroup)
+                alternativeGroup: original.alternativeGroup,
+                selectTrinket: kind == .trinket && selectTrinket)
             onFinish(EditorResult(
                 requirement: value,
                 count: kind == .trinket || kind == .artifact || stack.inCluster ? 1 : count,
@@ -1943,8 +1956,9 @@ private struct ResultsView: View {
     /// in flight. A failed request falls back to the rendered manifest's seed.
     private(set) var requestedSeed: String?
     private var generation = 0
+    private(set) var renderedRequest: Data?
     private let engine = ProductionSeedFinderEngine()
-    func scout(_ seed: String? = nil, challenges: Int) {
+    func scout(_ seed: String? = nil, challenges: Int, query: SearchRequest?, trinket: String? = nil) {
         if let seed { input = SeedCode.formatInput(seed) }
         guard SeedCode.isCanonical(input) else { error = "Seed must use XXX-XXX-XXX format"; return }
         let requested = input; requestedSeed = requested; loading = true; error = nil
@@ -1954,9 +1968,11 @@ private struct ResultsView: View {
         let current = generation
         Task {
             do {
-                let scouted = try await engine.scoutSeed(requested, challenges: challenges)
+                let request = try ScoutCodec.encodeRequest(seed: requested, challenges: challenges, query: query, trinket: trinket)
+                let scouted = try await engine.scoutSeed(requested, challenges: challenges, query: query, trinket: trinket)
                 guard current == generation else { return }
                 world = scouted
+                renderedRequest = request
             } catch {
                 guard current == generation else { return }
                 self.error = error.localizedDescription
@@ -2004,8 +2020,8 @@ private struct SeedDetailView: View {
             HStack {
                 TextField("AAA-AAA-AAA", text: $model.input).font(.system(size: 20, design: .monospaced)).focused($focused)
                     .onChange(of: model.input) { _, value in let formatted = SeedCode.formatInput(value); if formatted != value { model.input = formatted } }
-                    .onSubmit { model.scout(challenges: challenges) }
-                Button("Scout") { model.scout(challenges: challenges) }.disabled(!SeedCode.isCanonical(model.input))
+                    .onSubmit { model.scout(challenges: challenges, query: scoutQuery) }
+                Button("Scout") { model.scout(challenges: challenges, query: scoutQuery) }.disabled(!SeedCode.isCanonical(model.input))
                 if let seed = model.world?.seed { Button("Copy") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(seed, forType: .string) } }
                 if model.loading { ProgressView().controlSize(.small) }
             }
@@ -2031,12 +2047,14 @@ private struct SeedDetailView: View {
     /// The engine's own marks for the scouted world, taken from the same
     /// request the scout used. Without requirements (or with a query the
     /// engine refuses) there is nothing to mark.
+    private var scoutQuery: SearchRequest? {
+        try? SearchRequest(requirements: requirements, maximumDepth: maximumDepth,
+                           excludeBlacksmithRewards: excludeBlacksmithRewards, challenges: challenges)
+    }
+
     private func engineMatches(in world: ScoutWorld) -> ScoutMatches? {
-        guard let query = try? SearchRequest(
-                  requirements: requirements, maximumDepth: maximumDepth,
-                  excludeBlacksmithRewards: excludeBlacksmithRewards, challenges: challenges)
-        else { return nil }
-        return try? ScoutMatches.mark(seed: world.seed, challenges: challenges, query: query)
+        guard let query = scoutQuery, let request = model.renderedRequest else { return nil }
+        return try? ScoutMatches.mark(request, query: QueryDocument.encode(query))
     }
 
     private func manifest(_ world: ScoutWorld) -> some View {
@@ -2076,6 +2094,11 @@ private struct SeedDetailView: View {
                     Section {
                         if let catalyst = world.items.first(where: { $0.depth == depth && $0.item.kind == .trinket }) {
                             TrinketScoutRow(catalyst: catalyst, order: world.trinketOrder,
+                                selectedTrinket: world.selectedTrinket, loading: model.loading,
+                                onSelect: { id in
+                                    model.scout(world.seed, challenges: challenges, query: scoutQuery,
+                                                trinket: world.selectedTrinket == id ? "none" : id)
+                                },
                                 matchedIDs: Set(world.items.enumerated().filter {
                                     matches.contains($0.offset) && $0.element.item.kind == .trinket
                                 }.map { $0.element.item.id }))
@@ -2247,6 +2270,9 @@ private struct FlowLayout: Layout {
 private struct TrinketScoutRow: View {
     let catalyst: ScoutItem
     let order: [CatalogItem]
+    let selectedTrinket: String?
+    let loading: Bool
+    let onSelect: (String) -> Void
     let matchedIDs: Set<String>
     private let catalystArt = CatalogItem(id: "trinket_catalyst", name: "Magical Catalyst",
                                           kind: .trinket, spriteIndex: 70)
@@ -2275,22 +2301,33 @@ private struct TrinketScoutRow: View {
                 ForEach(Array(order.prefix(4))) { item in
                     GeometryReader { geometry in
                         let edge = geometry.size.width
-                        VStack(spacing: 4) {
-                            Spacer(minLength: 0)
-                            ItemSpriteView(item: item, pointSize: max(1, min(44, Int(edge * 0.5))))
-                            Text(item.name).font(.system(size: 11))
-                                .lineLimit(1).minimumScaleFactor(0.3)
-                                .frame(maxWidth: .infinity)
-                            Spacer(minLength: 0)
+                        Button { onSelect(item.id) } label: {
+                            VStack(spacing: 4) {
+                                Spacer(minLength: 0)
+                                ItemSpriteView(item: item, pointSize: max(1, min(44, Int(edge * 0.5))))
+                                Text(item.name).font(.system(size: 11))
+                                    .lineLimit(1).minimumScaleFactor(0.3)
+                                    .frame(maxWidth: .infinity)
+                                Spacer(minLength: 0)
+                            }
+                            .padding(8)
+                            .frame(width: edge, height: edge)
+                            .background(matchedIDs.contains(item.id) ? Color.shatteredMint.opacity(0.12) : Color.secondary.opacity(0.05),
+                                        in: RoundedRectangle(cornerRadius: 6))
+                            .overlay(RoundedRectangle(cornerRadius: 6)
+                                .strokeBorder(selectedTrinket == item.id || matchedIDs.contains(item.id) ? Color.shatteredMint : Color.secondary.opacity(0.25), lineWidth: selectedTrinket == item.id ? 2 : 1))
+                            .overlay(alignment: .top) {
+                                if selectedTrinket == item.id {
+                                    Text("Applied +3").font(.caption2.bold()).foregroundStyle(Color.shatteredMint)
+                                        .padding(.horizontal, 4).background(.background).offset(y: -6)
+                                }
+                            }
                         }
-                        .padding(8)
-                        .frame(width: edge, height: edge)
-                        .background(matchedIDs.contains(item.id) ? Color.shatteredMint.opacity(0.12) : Color.secondary.opacity(0.05),
-                                    in: RoundedRectangle(cornerRadius: 6))
-                        .overlay(RoundedRectangle(cornerRadius: 6)
-                            .strokeBorder(matchedIDs.contains(item.id) ? Color.shatteredMint : Color.secondary.opacity(0.25)))
+                        .buttonStyle(.plain)
+                        .disabled(loading)
                         .accessibilityElement(children: .ignore)
-                        .accessibilityLabel(item.name + (matchedIDs.contains(item.id) ? ", matches requirement" : ""))
+                        .accessibilityLabel(item.name + (selectedTrinket == item.id ? ", applied at +3" : "") + (matchedIDs.contains(item.id) ? ", matches requirement" : ""))
+                        .accessibilityValue(selectedTrinket == item.id ? "Selected" : "Not selected")
                     }
                     .aspectRatio(1, contentMode: .fit)
                 }

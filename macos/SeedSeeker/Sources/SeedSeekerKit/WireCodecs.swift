@@ -14,7 +14,7 @@ public enum WireCodecError: Error, Equatable, LocalizedError {
     }
 }
 
-/// Builds the SSQ2 scout request; queries go to the engine as the canonical
+/// Builds versioned scout requests; queries go to the engine as the canonical
 /// JSON document (`QueryDocument`), not as a hand-built packet.
 private struct Writer {
     var data = Data()
@@ -107,20 +107,34 @@ public enum ResultCodec {
 }
 
 public enum ScoutCodec {
-    public static func encodeRequest(seed: String, challenges: Int) throws -> Data {
+    public static func encodeRequest(seed: String, challenges: Int, query: SearchRequest? = nil, trinket: String? = nil) throws -> Data {
         guard SeedCode.isCanonical(seed) else { throw WireCodecError.invalidValue("Seed must use XXX-XXX-XXX format") }
         guard (0...SearchLimits.challengeMask).contains(challenges) else { throw WireCodecError.invalidValue("Challenge mask must be 0..\(SearchLimits.challengeMask)") }
         var output = Writer()
-        output.bytes("SSQ2".utf8)
-        output.u16LittleEndian(challenges)
-        output.bytes(seed.utf8)
+        if query == nil && trinket == nil {
+            output.bytes("SSQ2".utf8)
+            output.u16LittleEndian(challenges)
+            output.bytes(seed.utf8)
+        } else {
+            let override = trinket ?? ""
+            guard override.isEmpty || override == "none" || ItemCatalog.findById(override)?.kind == .trinket else {
+                throw WireCodecError.invalidValue("Unknown trinket")
+            }
+            output.bytes("SSQ3".utf8)
+            output.u16LittleEndian(challenges)
+            output.u16LittleEndian(seed.utf8.count)
+            output.bytes(seed.utf8)
+            output.u16LittleEndian(override.utf8.count)
+            output.bytes(override.utf8)
+            if let query { output.bytes(try QueryDocument.encode(query)) }
+        }
         return output.data
     }
 
     public static func decode(_ packet: Data) throws -> ScoutWorld {
         var input = Reader(data: packet)
         let magic = try input.bytes(4)
-        guard ["SSC3", "SSC4", "SSC5"].contains(where: { magic == Data($0.utf8) }) else { throw WireCodecError.badMagic }
+        guard ["SSC3", "SSC4", "SSC5", "SSC6"].contains(where: { magic == Data($0.utf8) }) else { throw WireCodecError.badMagic }
         let seed = try input.ascii(Int(input.u8()))
         guard SeedCode.isCanonical(seed) else { throw WireCodecError.invalidValue("Malformed seed from native scout") }
         // Twelve gem ordinals, one per ring class in the order the catalog
@@ -191,7 +205,7 @@ public enum ScoutCodec {
             }
         }
         var feelings: [Int: FloorFeeling] = [:]
-        if magic == Data("SSC5".utf8) {
+        if magic == Data("SSC5".utf8) || magic == Data("SSC6".utf8) {
             let count = Int(try input.u8())
             guard count <= 20 else { throw WireCodecError.invalidValue("Floor feeling count must be 0..20") }
             var previousDepth = 0
@@ -207,8 +221,16 @@ public enum ScoutCodec {
                 previousDepth = depth
             }
         }
+        var selectedTrinket: String?
+        if magic == Data("SSC6".utf8) {
+            let id = try input.utf8(input.u16())
+            guard id.isEmpty || trinketOrder.prefix(4).contains(where: { $0.id == id }) else {
+                throw WireCodecError.invalidValue("Selected trinket is not initially offered")
+            }
+            selectedTrinket = id.isEmpty ? nil : id
+        }
         guard input.remaining == 0 else { throw WireCodecError.trailingBytes }
         return ScoutWorld(seed: seed, quests: quests, items: items, ringGems: ringGems,
-                          trinketOrder: trinketOrder, feelings: feelings)
+                          trinketOrder: trinketOrder, feelings: feelings, selectedTrinket: selectedTrinket)
     }
 }

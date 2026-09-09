@@ -218,6 +218,7 @@ export function RequirementEditor({
             ? { mode: "any", value: 1 }
             : current.upgrade,
       uncursed: nextKind === "trinket" ? false : current.uncursed,
+      selectTrinket: nextKind === "trinket" ? current.selectTrinket : undefined,
       item:
         nextKind === "trinket" || nextKind === "artifact"
           ? itemsForKind(nextKind)[0].id
@@ -387,6 +388,26 @@ export function RequirementEditor({
               </>
             )}
           </section>
+
+          {family === "trinket" && (
+            <section className="d1-modal-section">
+              <label className="d1-check">
+                <input
+                  type="checkbox"
+                  checked={draft.selectTrinket ?? false}
+                  onChange={(event) => {
+                    const checked = event.currentTarget.checked;
+                    reviseDraft((current) => ({ ...current, selectTrinket: checked }));
+                  }}
+                />
+                <span>Choose matching trinket at +3</span>
+              </label>
+              <p className="d1-caption">
+                Applies from the next floor after the catalyst can first be brewed. In an OR group,
+                exactly one of its trinkets must be offered; multiple matches use No Trinket.
+              </p>
+            </section>
+          )}
 
           {effectiveTotal === undefined && family !== "trinket" && family !== "artifact" && (
             <section className="d1-modal-section">
