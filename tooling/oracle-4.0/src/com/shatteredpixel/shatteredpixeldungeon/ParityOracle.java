@@ -135,14 +135,8 @@ public final class ParityOracle {
 		Dungeon.initSeed();
 		GamesInProgress.selectedClass = HeroClass.WARRIOR;
 		Dungeon.init();
-		// INDEV leaves the final Halls lore page missing. Match the engine's
-		// canonical all-pages-read profile explicitly, including that page.
-		for (com.shatteredpixel.shatteredpixeldungeon.journal.Document document
-				: com.shatteredpixel.shatteredpixeldungeon.journal.Document.values()) {
-			@SuppressWarnings("unchecked")
-			Map<String, Integer> states = (Map<String, Integer>) getField(document, "pagesStates");
-			states.replaceAll((page, state) -> 2);
-		}
+		// Preserve RC1's debug journal defaults: the Halls "attrition" page
+		// remains unfound and is generated on floor 24, matching the engine.
 
 		output.emit(runInitRecord(options));
 
