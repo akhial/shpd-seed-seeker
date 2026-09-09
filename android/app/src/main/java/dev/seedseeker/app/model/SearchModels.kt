@@ -225,6 +225,7 @@ data class ItemRequirement(
     val identityGroup: Int? = null,
     val maximumDepth: Int? = null,
     val requireUncursed: Boolean = false,
+    val selectTrinket: Boolean = false,
     /**
      * Session-local id of the "any of these" slot this row belongs to, or
      * null for a slot of its own. Members of one group count as a single
@@ -240,6 +241,7 @@ data class ItemRequirement(
         require(kind.supportsStacks || (identityGroup == null && levelSum == null)) {
             "${kind.label} cannot be stacked"
         }
+        require(!selectTrinket || kind == ItemKind.TRINKET) { "Only a named trinket can be selected" }
         val tierable = item == null && kind.family in setOf(ItemKind.WEAPON, ItemKind.ARMOR)
         val validTier = when (tierMatch) {
             TierMatch.ANY -> tier == 0
@@ -326,7 +328,9 @@ data class ItemRequirement(
         }
 
     val description: String
-        get() = if (kind == ItemKind.TRINKET) "Trinket" else buildString {
+        get() = if (kind == ItemKind.TRINKET) {
+            "Trinket"
+        } else buildString {
             append(
                 when (upgradeMatch) {
                     UpgradeMatch.ANY -> "Any upgrade"
@@ -568,6 +572,7 @@ data class ScoutWorld(
      */
     val ringGems: RingGems,
     val trinketOrder: List<CatalogItem> = emptyList(),
+    val selectedTrinket: String? = null,
     val floorFeelings: Map<Int, FloorFeeling> = emptyMap(),
 )
 

@@ -40,9 +40,13 @@ depths or ordering, truncated fields, and trailing bytes are rejected. A full
 canonical scout carries all 20 regular floors, including normal floors (ID 0).
 
 Decoders continue to accept `SSC3` (no deck or feelings) and `SSC4` (deck, no
-feelings), returning an empty feelings collection. Current producers always
-emit `SSC5`; legacy formats are supported only for decoding.
+feelings), returning an empty feelings collection. Legacy scout requests emit `SSC5`; `SSC3` and `SSC4` are supported only
+for decoding.
 
 The sprite atlas is Shattered Pixel Dungeon's `interfaces/icons.png`, pinned
 with provenance in the asset attribution. The approved large feeling frames
 are 15 by 16 pixels at y=64, x=16 times the feeling ID.
+
+Selected-trinket requests (`SSQ3`) return `SSC6`, which preserves the entire
+`SSC5` layout and appends the selected stable ID as a big-endian u16-length
+UTF-8 string (empty means none). All native decoders accept both versions.

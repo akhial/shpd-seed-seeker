@@ -290,6 +290,7 @@ public sealed partial class ItemRequirement
     public int? IdentityGroup { get; set; }
     public int? MaximumDepth { get; set; }
     public bool RequireUncursed { get; set; }
+    public bool SelectTrinket { get; set; }
     /// <summary>
     /// Requirements sharing a number form one "any of these" slot, satisfied
     /// by any single member. Null for a requirement that stands alone.
@@ -311,7 +312,7 @@ public sealed partial class ItemRequirement
     {
         get
         {
-            if (Kind == ItemKind.Trinket) return "";
+            if (Kind == ItemKind.Trinket) return SelectTrinket ? "choose at +3" : "";
             var parts = new List<string> { UpgradeMatch switch { UpgradeMatch.Exactly => $"+{Upgrade} exactly", UpgradeMatch.AtLeast => $"+{Upgrade} or higher", _ => "Any upgrade" } };
             if (Effect.Describe() is string effect) parts.Add(effect); if (RequireUncursed) parts.Add("uncursed"); if (Source is not null) parts.Add(Labels.Source(Source.Value));
             if (IdentityGroup is not null) parts.Add("same-kind stack");
@@ -331,6 +332,7 @@ public sealed partial class ItemRequirement
         get
         {
             var tags = new List<ChipTag>();
+            if (Kind == ItemKind.Trinket && SelectTrinket) tags.Add(new("choose at +3"));
             if (Item is null && TierMatch == TierMatch.Exactly) tags.Add(new($"T{Tier}"));
             if (Item is null && TierMatch == TierMatch.AtLeast) tags.Add(new($"T{Tier}+"));
             if (Item is null && TierMatch == TierMatch.AtMost) tags.Add(new($"T\u2264{Tier}"));
@@ -1347,7 +1349,7 @@ public sealed record RingGems
 /// <param name="Gems">The run's ring gems, which decide what cell each scouted
 /// ring is drawn in.</param>
 public sealed record ScoutWorld(string Seed, IReadOnlyList<ScoutQuest> Quests, IReadOnlyList<ScoutItem> Items,
-    RingGems Gems, IReadOnlyList<CatalogItem>? TrinketOrder = null, IReadOnlyList<ScoutFloorFeeling>? FloorFeelings = null);
+    RingGems Gems, IReadOnlyList<CatalogItem>? TrinketOrder = null, IReadOnlyList<ScoutFloorFeeling>? FloorFeelings = null, string? SelectedTrinket = null);
 
 public enum FloorFeeling : byte { None, Chasm, Water, Grass, Dark, Large, Traps, Secrets }
 public sealed record ScoutFloorFeeling(int Depth, FloorFeeling Feeling);

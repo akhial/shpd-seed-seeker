@@ -2,7 +2,7 @@
 
 Seed Seeker is an independent, unofficial seed-search interface for Shattered Pixel Dungeon. It uses an original Jetpack Compose UI and does not include or reuse the game's UI components.
 
-The debug build deliberately uses `DemoNativeSeedFinder` as its search engine, so UI states can be exercised with deterministic sample seeds. Release builds select `JniNativeSeedFinder`, whose compact wire contract is documented in `NativeSeedFinder.kt`. Both build types package `libshpd_seedfinder.so` for `arm64-v8a` and `x86_64` (built through `scripts/build-android-native.sh`): wire codecs such as the share-link format always run the canonical Rust implementation through `dev.seedseeker.app.engine.JniBindings`, even in debug APKs.
+The debug build deliberately uses `DemoNativeSeedFinder` as its search engine, so UI states can be exercised with deterministic sample seeds. Interactive scouting uses the real engine in both build types, including trinket effects and match highlights. Release builds select `JniNativeSeedFinder`, whose compact wire contract is documented in `NativeSeedFinder.kt`. Both build types package `libshpd_seedfinder.so` for `arm64-v8a` and `x86_64` (built through `scripts/build-android-native.sh`): wire codecs such as the share-link format always run the canonical Rust implementation through `dev.seedseeker.app.engine.JniBindings`, even in debug APKs.
 
 Build with:
 
@@ -33,14 +33,29 @@ Shattered Pixel Dungeon is copyright © 2014–2026 Evan Debenham. Pixel Dungeon
 ## Trinkets
 
 The requirement picker has a named Trinket category, including either/or groups.
-Trinkets save directly from the item picker without equipment details. Scout shows
+Trinkets use a second details page for the matching-trinket switch and the
+shared save and trash controls, without equipment filters. Scout shows
 four square choices beneath the catalyst on its actual floor, highlights matching
 choices with a flat green fill, and keeps the remaining thirteen icons
 in one row. Sprite drawing uses nearest-neighbor filtering.
 
-The native scout decoder reads SSC5 (the SSC3 layout followed by a 17-entry
-trinket deck: one-byte count and UTF-8 IDs with unsigned 16-bit lengths), while
-retaining SSC3 and SSC4 compatibility. After the deck, SSC5 carries a one-byte
+The requirement editor can choose matching trinkets at +3. The engine applies
+that selection after the first brewing opportunity, with ambiguous offered OR
+alternatives leaving no trinket selected. Presets, exports, and share links keep
+this choice. Probability estimates use the selected generation effects.
+
+Tap any of the four offered scout cards to apply it, or tap the selected card
+again to deselect it. The selected card carries an “Applied +3” badge. Each
+rescout keeps the query and explicit override together so match highlights use
+the same generated world.
+
+Scout requests use SSQ3 (little-endian challenge mask and length-prefixed seed
+and override, followed by canonical query JSON). SSC6 responses extend SSC5
+with a UTF-8 selected ID and big-endian unsigned 16-bit length; an empty ID means
+no selection. The decoder also accepts SSC3, SSC4, and SSC5.
+
+SSC5 contains the SSC3 layout followed by a 17-entry trinket deck: a one-byte
+count and UTF-8 IDs with unsigned 16-bit lengths. After the deck, SSC5 carries a one-byte
 feeling count (0..20), followed by depth/feeling byte pairs in strictly ascending
 regular-floor order (1..24, excluding boss floors). Feeling IDs are none=0,
 chasm=1, water=2, grass=3, dark=4, large=5, traps=6, secrets=7.

@@ -234,6 +234,38 @@ pub fn generate_main_world_with_challenges(
         .map(|world| world.expect("open gate never abandons a world"))
 }
 
+/// Generate with a chosen initial offer at +3, activated after the first brewing opportunity.
+/// The caller validates the identity against the seed's initial offers.
+///
+/// # Panics
+/// Panics if the internal open gate unexpectedly abandons generation.
+///
+/// # Errors
+/// Returns the same depth and generation errors as `generate_main_world`.
+pub fn generate_main_world_with_trinket(
+    seed: DungeonSeed,
+    maximum_depth: u8,
+    challenges: Challenges,
+    selected: Option<crate::catalog::ItemId>,
+) -> Result<GeneratedWorld, MainWorldError> {
+    struct OpenGate(Option<crate::catalog::ItemId>);
+    impl FloorGate for OpenGate {
+        fn selected_trinket(&self, _: DungeonSeed) -> Option<crate::catalog::ItemId> {
+            self.0
+        }
+        fn continue_after_floor(
+            &self,
+            _: u8,
+            _: &[crate::model::WorldItem],
+            _: &crate::quests::QuestSummary,
+        ) -> bool {
+            true
+        }
+    }
+    generate_main_world_gated_with_challenges(seed, maximum_depth, challenges, &OpenGate(selected))
+        .map(|world| world.expect("open gate never abandons a world"))
+}
+
 /// Regular (non-boss) depths generated for a prefix through `target`.
 /// Depth 20 is included from 20 onward because its Imp shop eagerly draws
 /// stock which the searchable model exposes as depth-20 items.
@@ -322,6 +354,7 @@ fn generate_main_world_gated_with_challenges(
 
 /// Sequential gated composite over the canonical per-region floor generators.
 /// `target` must already be boss-mapped (never 5, 10, or 15).
+#[allow(clippy::too_many_lines)]
 fn generate_gated_world_with_roots(
     seed: DungeonSeed,
     target: u8,
@@ -339,6 +372,8 @@ fn generate_gated_world_with_roots(
     let mut items = Vec::new();
     let mut feelings = Vec::new();
     let mut next_choice_group = 0_u16;
+    let selected_trinket = gate.selected_trinket(seed);
+    let mut alchemy_available = false;
 
     for (&root, depth) in roots.iter().zip(regular_depths(target)) {
         random.push(root);
@@ -353,6 +388,12 @@ fn generate_gated_world_with_roots(
                     &mut random,
                 )
                 .map_err(MainWorldError::Sewer)?;
+                alchemy_available |= floor
+                    .painted
+                    .level
+                    .map
+                    .cells
+                    .contains(&crate::geometry::terrain::ALCHEMY);
                 (floor.world_items, Some(floor.painted.level.feeling))
             }
             6..=9 => {
@@ -417,6 +458,12 @@ fn generate_gated_world_with_roots(
             });
         }
         random.pop();
+        if random.trinket.selected.is_none()
+            && alchemy_available
+            && limited_drops.trinket_catalyst_dropped
+        {
+            random.trinket = crate::trinkets::TrinketEffects::new(selected_trinket, dungeon_seed);
+        }
         next_choice_group = remap_floor_choice_groups(&mut floor_items, next_choice_group);
         items.extend(floor_items);
         if completed < target && !gate.continue_after_floor(completed, &items, &quests.summary()) {
@@ -569,6 +616,7 @@ mod tests {
             upgrade,
             effect: EffectRequirement::Any,
             require_uncursed: false,
+            select_trinket: false,
             source: None,
             identity_group: None,
             max_depth: None,
@@ -651,6 +699,7 @@ mod tests {
                 upgrade: UpgradeRequirement::AtLeast(1),
                 effect: EffectRequirement::Any,
                 require_uncursed: false,
+                select_trinket: false,
                 source: None,
                 identity_group: None,
                 max_depth: None,
@@ -719,6 +768,7 @@ mod tests {
                 upgrade: UpgradeRequirement::Exact(3),
                 effect: EffectRequirement::Any,
                 require_uncursed: false,
+                select_trinket: false,
                 source: None,
                 identity_group: None,
                 max_depth: None,
@@ -849,6 +899,7 @@ mod tests {
                 upgrade: crate::query::UpgradeRequirement::Exact(4),
                 effect: EffectRequirement::Any,
                 require_uncursed: false,
+                select_trinket: false,
                 source: None,
                 identity_group: None,
                 max_depth: None,

@@ -9,16 +9,23 @@ use std::rc::Rc;
 
 use adw::prelude::*;
 use shpd_seedfinder_core::catalog::{Effect, ItemId, ItemKind, item};
+use shpd_seedfinder_core::challenges::Challenges;
 use shpd_seedfinder_core::model::{Accessibility, GeneratedWorld, WorldItem};
 use shpd_seedfinder_core::query::{SearchQuery, scout_matches};
 use shpd_seedfinder_core::run::RingGems;
 use shpd_seedfinder_core::seed::{DungeonSeed, format_input};
-use shpd_seedfinder_core::trinkets::trinket_order;
-use shpd_seedfinder_session::production_scout_world;
+use shpd_seedfinder_core::trinkets::{resolve_selection, selection_slots, trinket_order};
+use shpd_seedfinder_session::production_scout_world_selected;
 
 use crate::sprites::ItemSprite;
 use crate::state::{AppState, QuestRow, quest_rows, region, source_label};
 use crate::{glow, sprites};
+
+#[derive(Clone, Copy)]
+enum TrinketOverride {
+    Automatic,
+    Manual(Option<ItemId>),
+}
 
 pub struct DetailPane {
     pub page: adw::NavigationPage,
@@ -32,6 +39,9 @@ pub struct DetailPane {
     summary_quests: gtk::Label,
     manifest_box: gtk::Box,
     world: RefCell<Option<GeneratedWorld>>,
+    selected_trinket: Cell<Option<ItemId>>,
+    trinket_override: Cell<TrinketOverride>,
+    world_challenges: Cell<Challenges>,
     updating: Cell<bool>,
     toasts: adw::ToastOverlay,
     on_scout: RefCell<Option<Box<dyn Fn()>>>,
@@ -167,6 +177,9 @@ impl DetailPane {
             summary_quests,
             manifest_box,
             world: RefCell::new(None),
+            selected_trinket: Cell::new(None),
+            trinket_override: Cell::new(TrinketOverride::Automatic),
+            world_challenges: Cell::new(Challenges::NONE),
             updating: Cell::new(false),
             toasts: toasts.clone(),
             on_scout: RefCell::new(None),
@@ -248,7 +261,12 @@ impl DetailPane {
 
     /// Scouts the seed in the entry, or `code` when given (also filling the
     /// entry), and renders its manifest against the current requirements.
-    pub fn scout(&self, code: Option<&str>, state: &AppState) {
+    pub fn scout(self: &Rc<Self>, code: Option<&str>, state: &AppState) {
+        self.trinket_override.set(TrinketOverride::Automatic);
+        self.scout_with_override(code, state);
+    }
+
+    fn scout_with_override(self: &Rc<Self>, code: Option<&str>, state: &AppState) {
         if let Some(code) = code {
             self.updating.set(true);
             self.entry.set_text(&format_input(code));
@@ -261,18 +279,52 @@ impl DetailPane {
                 .add_toast(adw::Toast::new("Seed codes use the AAA-AAA-AAA format"));
             return;
         };
-        let Ok(world) = production_scout_world(seed, state.challenges) else {
+        let query = manifest_query(state);
+        let Ok((world, selected)) = production_scout_world_selected(
+            seed,
+            state.challenges,
+            Some(&query),
+            match self.trinket_override.get() {
+                TrinketOverride::Automatic => None,
+                TrinketOverride::Manual(selected) => Some(selected),
+            },
+        ) else {
             self.toasts.add_toast(adw::Toast::new(
                 "World generation failed for this seed; please report it",
             ));
             return;
         };
         self.world.replace(Some(world));
+        self.selected_trinket.set(selected);
+        self.world_challenges.set(state.challenges);
         self.render(state);
     }
 
+    /// Regenerates the world when the effective trinket or challenges changed.
+    fn refresh_world(self: &Rc<Self>, state: &AppState) -> bool {
+        let seed = self.world.borrow().as_ref().map(|world| world.seed);
+        if let Some(seed) = seed {
+            let selected = match self.trinket_override.get() {
+                TrinketOverride::Automatic => {
+                    resolve_selection(seed, &selection_slots(&manifest_query(state)))
+                }
+                TrinketOverride::Manual(selected) => selected,
+            };
+            if selected != self.selected_trinket.get()
+                || state.challenges != self.world_challenges.get()
+            {
+                self.scout_with_override(Some(&seed.to_code()), state);
+                return true;
+            }
+        }
+        false
+    }
+
     /// Re-renders the manifest, e.g. after the requirements changed.
-    pub fn render(&self, state: &AppState) {
+    pub fn render(self: &Rc<Self>, state: &AppState) {
+        if self.refresh_world(state) {
+            return;
+        }
         let world = self.world.borrow();
         let Some(world) = world.as_ref() else {
             self.stack.set_visible_child_name("empty");
@@ -351,6 +403,21 @@ impl DetailPane {
                             world,
                             &world.items[*index],
                             &marks.matched,
+                            self.selected_trinket.get(),
+                            {
+                                let pane = Rc::downgrade(self);
+                                let state = state.clone();
+                                let code = world.seed.to_code();
+                                move |id| {
+                                    if let Some(pane) = pane.upgrade() {
+                                        let selected =
+                                            (pane.selected_trinket.get() != Some(id)).then_some(id);
+                                        pane.trinket_override
+                                            .set(TrinketOverride::Manual(selected));
+                                        pane.scout_with_override(Some(&code), &state);
+                                    }
+                                }
+                            },
                         ));
                         catalyst_shown = true;
                     }
@@ -401,7 +468,14 @@ fn quest_summary_line(quests: &[QuestRow]) -> String {
 }
 
 /// The catalyst keeps the source and accessibility of its generated location.
-fn trinket_choices(world: &GeneratedWorld, location: &WorldItem, matched: &[bool]) -> gtk::Box {
+fn trinket_choices(
+    world: &GeneratedWorld,
+    location: &WorldItem,
+    matched: &[bool],
+    selected: Option<ItemId>,
+    on_select: impl Fn(ItemId) + 'static,
+) -> gtk::Box {
+    let on_select = Rc::new(on_select);
     let content = gtk::Box::new(gtk::Orientation::Vertical, 8);
     let mut catalyst = location.clone();
     catalyst.item = ItemId::TrinketCatalyst;
@@ -420,7 +494,33 @@ fn trinket_choices(world: &GeneratedWorld, location: &WorldItem, matched: &[bool
             .iter()
             .enumerate()
             .any(|(index, entry)| entry.item == *id && matched[index]);
-        choices.append(&sprites::trinket_tile(item(*id), is_match, true));
+        let tile = sprites::trinket_tile(item(*id), is_match, true);
+        let applied = selected == Some(*id);
+        let overlay = gtk::Overlay::new();
+        overlay.set_child(Some(&tile));
+        if applied {
+            overlay.add_overlay(
+                &gtk::Label::builder()
+                    .label("Applied +3")
+                    .css_classes(["trinket-applied-badge"])
+                    .halign(gtk::Align::Center)
+                    .valign(gtk::Align::Start)
+                    .build(),
+            );
+        }
+        let button = gtk::ToggleButton::builder()
+            .child(&overlay)
+            .active(applied)
+            .css_classes(["flat", "trinket-toggle"])
+            .tooltip_text(item(*id).name)
+            .build();
+        button.update_property(&[gtk::accessible::Property::Label(item(*id).name)]);
+        button.connect_clicked({
+            let id = *id;
+            let on_select = Rc::clone(&on_select);
+            move |_| on_select(id)
+        });
+        choices.append(&button);
     }
     content.append(&choices);
     content.append(

@@ -4,7 +4,7 @@
 //! the canonical JSON query document of [`crate::json_query`], which
 //! frontends already build for share links and results files. What stays
 //! binary is what the bridges hand back or take as a seed: `SSR1` result
-//! batches, `SSQ2` scouting requests and `SSC5` scouted worlds.
+//! batches, versioned `SSQ` scouting requests and `SSC` scouted worlds.
 
 use std::fmt;
 
@@ -22,12 +22,75 @@ use crate::run::RingGems;
 use crate::seed::DungeonSeed;
 
 const SCOUT_REQUEST_MAGIC_V2: &[u8; 4] = b"SSQ2";
+
+/// A native scouting request, including the query used to select an offer.
+#[cfg(feature = "json-query")]
+pub struct SelectedScoutRequest {
+    pub seed: DungeonSeed,
+    pub challenges: Challenges,
+    pub query: Option<SearchQuery>,
+    pub trinket_override: Option<Option<crate::catalog::ItemId>>,
+}
+
+/// `SSQ3`: magic, LE u16 challenge mask, LE u16-length UTF-8 seed,
+/// LE u16-length override (empty = automatic, `none` = deselected, otherwise
+/// stable item ID), then an optional canonical JSON query in remaining bytes.
+/// Legacy requests remain supported.
+///
+/// # Errors
+/// Rejects malformed fields, invalid queries, and overrides outside the initial offers.
+#[cfg(feature = "json-query")]
+pub fn decode_selected_scout_request(request: &[u8]) -> Result<SelectedScoutRequest, WireError> {
+    fn text_le<'a>(input: &mut Input<'a>) -> Result<&'a str, WireError> {
+        let bytes = input.take(2)?;
+        let len = usize::from(u16::from_le_bytes([bytes[0], bytes[1]]));
+        std::str::from_utf8(input.take(len)?).map_err(|_| WireError::InvalidUtf8)
+    }
+    let Some(payload) = request.strip_prefix(b"SSQ3") else {
+        let (seed, challenges) = decode_scout_request(request)?;
+        return Ok(SelectedScoutRequest {
+            seed,
+            challenges,
+            query: None,
+            trinket_override: None,
+        });
+    };
+    let mut input = Input::new(payload);
+    let mask = input.take(2)?;
+    let challenges = Challenges::new(u16::from_le_bytes([mask[0], mask[1]]))
+        .map_err(|_| WireError::InvalidChallenges)?;
+    let seed =
+        DungeonSeed::from_code(text_le(&mut input)?).map_err(|_| WireError::InvalidSeedCode)?;
+    let trinket_override = match text_le(&mut input)? {
+        "" => None,
+        "none" => Some(None),
+        id => {
+            let id = item_by_stable_id(id).ok_or(WireError::UnknownItem)?.id;
+            if !crate::trinkets::trinket_order(seed)[..4].contains(&id) {
+                return Err(WireError::InvalidTrinketOrder);
+            }
+            Some(Some(id))
+        }
+    };
+    let query = if input.is_empty() {
+        None
+    } else {
+        Some(decode_query(&input.bytes[input.offset..])?)
+    };
+    Ok(SelectedScoutRequest {
+        seed,
+        challenges,
+        query,
+        trinket_override,
+    })
+}
 /// Ring classes, and so gem-table bytes, in one `SSC3` packet.
 const RING_GEM_COUNT: usize = 12;
 const RESULT_MAGIC: &[u8; 4] = b"SSR1";
 const SCOUT_RESULT_MAGIC: &[u8; 4] = b"SSC3";
 const SCOUT_RESULT_MAGIC_V4: &[u8; 4] = b"SSC4";
 const SCOUT_RESULT_MAGIC_V5: &[u8; 4] = b"SSC5";
+const SCOUT_RESULT_MAGIC_V6: &[u8; 4] = b"SSC6";
 /// Requirement ceiling of a bridge request; far above anything the UIs
 /// produce, and what the retired binary layout's count field could hold.
 #[cfg(feature = "json-query")]
@@ -240,6 +303,21 @@ pub fn encode_scout_world(world: &GeneratedWorld) -> Result<Vec<u8>, WireError> 
     Ok(output)
 }
 
+/// `SSC6` extends `SSC5` with a big-endian u16-length selected stable ID;
+/// the empty string means no trinket is applied.
+///
+/// # Errors
+/// Returns the same validation errors as [`encode_scout_world`].
+pub fn encode_scout_world_with_selection(
+    world: &GeneratedWorld,
+    selected: Option<crate::catalog::ItemId>,
+) -> Result<Vec<u8>, WireError> {
+    let mut output = encode_scout_world(world)?;
+    output[..4].copy_from_slice(SCOUT_RESULT_MAGIC_V6);
+    push_utf8_u16(&mut output, selected.map_or("", |id| item(id).stable_id))?;
+    Ok(output)
+}
+
 fn validate_feeling_depth(depth: u8, previous: u8) -> Result<(), WireError> {
     if !(1..=24).contains(&depth) || depth % 5 == 0 {
         return Err(WireError::InvalidFeelingDepth);
@@ -413,7 +491,7 @@ const fn quest_depth_range(quest: u8) -> std::ops::RangeInclusive<u8> {
     }
 }
 
-/// Decodes an `SSC3`, `SSC4`, or `SSC5` scouting response. Deck metadata is
+/// Decodes an `SSC3`, `SSC4`, `SSC5`, or `SSC6` scouting response. Deck metadata is
 /// validated against the seed; typed Rust callers obtain that same order
 /// from [`crate::trinkets::trinket_order`]. Older packets have empty feelings.
 ///
@@ -425,12 +503,14 @@ const fn quest_depth_range(quest: u8) -> std::ops::RangeInclusive<u8> {
 ///
 /// Returns [`WireError`] for malformed lengths, identifiers, flags, enum
 /// values, accessibility constraints, quest entries, or trailing bytes.
+#[allow(clippy::too_many_lines)] // Keep the sequential packet layout readable in one place.
 pub fn decode_scout_world(packet: &[u8]) -> Result<GeneratedWorld, WireError> {
     let mut input = Input::new(packet);
     let magic = input.take(4)?;
     if magic != SCOUT_RESULT_MAGIC
         && magic != SCOUT_RESULT_MAGIC_V4
         && magic != SCOUT_RESULT_MAGIC_V5
+        && magic != SCOUT_RESULT_MAGIC_V6
     {
         return Err(WireError::BadMagic);
     }
@@ -499,7 +579,7 @@ pub fn decode_scout_world(packet: &[u8]) -> Result<GeneratedWorld, WireError> {
             secret: flags & 0b10 != 0,
         });
     }
-    if magic == SCOUT_RESULT_MAGIC_V4 || magic == SCOUT_RESULT_MAGIC_V5 {
+    if magic != SCOUT_RESULT_MAGIC {
         if input.u8()? != 17 {
             return Err(WireError::InvalidTrinketOrder);
         }
@@ -509,11 +589,21 @@ pub fn decode_scout_world(packet: &[u8]) -> Result<GeneratedWorld, WireError> {
             }
         }
     }
-    let feelings = if magic == SCOUT_RESULT_MAGIC_V5 {
+    let feelings = if magic == SCOUT_RESULT_MAGIC_V5 || magic == SCOUT_RESULT_MAGIC_V6 {
         decode_feelings(&mut input)?
     } else {
         Vec::new()
     };
+    if magic == SCOUT_RESULT_MAGIC_V6 {
+        let selected = input.utf8_u16()?;
+        if !selected.is_empty()
+            && !crate::trinkets::trinket_order(seed)[..4]
+                .iter()
+                .any(|id| item(*id).stable_id == selected)
+        {
+            return Err(WireError::InvalidTrinketOrder);
+        }
+    }
     if !input.is_empty() {
         return Err(WireError::TrailingData);
     }
@@ -778,6 +868,7 @@ mod tests {
                     upgrade: UpgradeRequirement::AtLeast(1),
                     effect: EffectRequirement::exactly(Effect::Armor(ArmorEffect::Thorns)),
                     require_uncursed: true,
+                    select_trinket: false,
                     source: Some(ItemSource::Chest),
                     identity_group: Some(2),
                     max_depth: Some(14),
@@ -792,6 +883,7 @@ mod tests {
                     upgrade: UpgradeRequirement::Any,
                     effect: EffectRequirement::Any,
                     require_uncursed: false,
+                    select_trinket: false,
                     source: None,
                     identity_group: None,
                     max_depth: None,
@@ -806,6 +898,7 @@ mod tests {
                     upgrade: UpgradeRequirement::Exact(2),
                     effect: EffectRequirement::Any,
                     require_uncursed: false,
+                    select_trinket: false,
                     source: None,
                     identity_group: None,
                     max_depth: None,
@@ -875,6 +968,7 @@ mod tests {
                         .unwrap(),
                     ),
                     require_uncursed: false,
+                    select_trinket: false,
                     source: None,
                     identity_group: None,
                     max_depth: None,
@@ -891,6 +985,7 @@ mod tests {
                         EffectSet::enchantments(ItemKind::Armor).unwrap(),
                     ),
                     require_uncursed: true,
+                    select_trinket: false,
                     source: None,
                     identity_group: None,
                     max_depth: None,
@@ -905,6 +1000,7 @@ mod tests {
                     upgrade: UpgradeRequirement::Any,
                     effect: EffectRequirement::Any,
                     require_uncursed: false,
+                    select_trinket: false,
                     source: None,
                     identity_group: None,
                     max_depth: None,
@@ -922,6 +1018,7 @@ mod tests {
                     upgrade: UpgradeRequirement::Any,
                     effect: EffectRequirement::Any,
                     require_uncursed: false,
+                    select_trinket: false,
                     source: None,
                     identity_group: None,
                     max_depth: None,
@@ -1291,6 +1388,33 @@ mod tests {
         world.feelings.clear();
         assert_eq!(decode_scout_world(&legacy_v4), Ok(world.clone()));
         assert_eq!(decode_scout_world(&legacy_v3), Ok(world));
+    }
+
+    #[test]
+    fn selected_packets_preserve_feelings_and_validate_the_selection_tail() {
+        let world = CanonicalMainWorldGenerator.generate(DungeonSeed::MIN, 24);
+        let order = crate::trinkets::trinket_order(world.seed);
+        let legacy = super::encode_scout_world(&world).unwrap();
+        for selected in [None, Some(order[0])] {
+            let packet = super::encode_scout_world_with_selection(&world, selected).unwrap();
+            assert_eq!(&packet[..4], b"SSC6");
+            assert_eq!(&packet[4..legacy.len()], &legacy[4..]);
+            assert_eq!(decode_scout_world(&packet), Ok(world.clone()));
+            for end in legacy.len()..packet.len() {
+                assert_eq!(
+                    decode_scout_world(&packet[..end]),
+                    Err(WireError::Truncated)
+                );
+            }
+            let mut trailing = packet;
+            trailing.push(0);
+            assert_eq!(decode_scout_world(&trailing), Err(WireError::TrailingData));
+        }
+        let invalid = super::encode_scout_world_with_selection(&world, Some(order[4])).unwrap();
+        assert_eq!(
+            decode_scout_world(&invalid),
+            Err(WireError::InvalidTrinketOrder)
+        );
     }
 
     #[test]
