@@ -127,6 +127,8 @@ export type RequirementEntryDocument = RequirementDocument | AnyOfDocument;
  * retired keys such as `fast_mode`; both the engine's codec and `fromQueryJson`
  * accept and ignore them. */
 export interface QueryDocument {
+  /** Web search setting captured for resume, refine, and result scouting. */
+  auto_apply_trinkets?: boolean;
   requirements: RequirementEntryDocument[];
   max_depth?: number;
   require_blacksmith?: true;
@@ -181,6 +183,7 @@ export interface EngineInfo {
 }
 
 export interface ParsedSeed {
+  selectedTrinket?: string;
   code: string;
   value: number;
 }

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useStore } from "@tanstack/react-store";
+import { getItem } from "../../lib/catalog";
 import { compactNumber, formatDuration, probabilityLabel } from "../../lib/format";
 import { CheckIcon, CopyIcon, DownloadIcon, TrashIcon, UploadIcon } from "../../lib/icons";
 import {
@@ -10,7 +11,7 @@ import {
 } from "../../lib/results-file";
 import { clearResults, loadImportedResults, searchStore } from "../../lib/search/coordinator";
 import { canClearResults, RESULT_CAP } from "../../lib/search/coordinator-state";
-import { queryStore } from "../../lib/store";
+import { queryStore, setAutoTrinkets } from "../../lib/store";
 import type { AnalysisResult } from "../../lib/wasm/types";
 
 /** Re-renders 10 times a second while active so stats stay live between worker updates. */
@@ -84,7 +85,11 @@ export function ResultsPanel({
   const running = search.state === "running" || search.state === "stopping";
   const now = useTicker(running);
   const elapsed = running ? now - search.startedAt : search.elapsed;
-  const probability = analysis?.valid ? analysis.probability : null;
+  const probability = search.query?.auto_apply_trinkets
+    ? null
+    : analysis?.valid
+      ? analysis.probability
+      : null;
   const impossible = Boolean(hasRequirements && analysis?.valid && analysis.impossible);
   const timeToSeed =
     probability && probability > 0 && search.rate > 0
@@ -144,6 +149,7 @@ export function ResultsPanel({
         throw new Error("A search is running — stop it before importing results.");
       }
       queryStore.setState(() => decoded.query);
+      setAutoTrinkets(decoded.queryDocument.auto_apply_trinkets === true);
       loadImportedResults(
         decoded.seeds.map(parsedSeedFromCode),
         decoded.queryDocument,
@@ -335,6 +341,14 @@ export function ResultsPanel({
                 >
                   <span className="d1-result-index">{index + 1}</span>
                   <span className="d1-result-code d1-mono">{match.code}</span>
+                  {match.selectedTrinket && (
+                    <span
+                      className="d1-result-trinket"
+                      title={`${getItem(match.selectedTrinket)?.name ?? match.selectedTrinket} +3`}
+                    >
+                      {getItem(match.selectedTrinket)?.name ?? match.selectedTrinket} +3
+                    </span>
+                  )}
                 </button>
                 <button
                   type="button"

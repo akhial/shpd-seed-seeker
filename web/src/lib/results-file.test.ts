@@ -51,6 +51,16 @@ const file = (query: unknown, results: unknown[] = []) =>
   JSON.stringify({ format: "seed-seeker-results", query, results });
 
 describe("results file", () => {
+  it("round-trips the auto-apply search setting outside the portable query", () => {
+    const query = { ...toQueryDocument(loadedQuery), auto_apply_trinkets: true };
+    const encoded = encodeResultsFile(query, ["AAA-AAA-AAA"]);
+    expect(JSON.parse(encoded).query.auto_apply_trinkets).toBeUndefined();
+    expect(decodeResultsFile(encoded).queryDocument.auto_apply_trinkets).toBe(true);
+    expect(
+      decodeResultsFile(encodeResultsFile(toQueryDocument(loadedQuery), ["AAA-AAA-AAA"]))
+        .queryDocument.auto_apply_trinkets,
+    ).toBeUndefined();
+  });
   it("values a seed code through the engine seed parser", () => {
     expect(parsedSeedFromCode("AAA-AAA-AAA")).toEqual({ code: "AAA-AAA-AAA", value: 0 });
     expect(parsedSeedFromCode("AAA-AAA-AAB")).toEqual({ code: "AAA-AAA-AAB", value: 1 });

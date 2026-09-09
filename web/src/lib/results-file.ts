@@ -22,7 +22,13 @@ export function parsedSeedFromCode(code: string): ParsedSeed {
  * @throws Error with the codec's message for an invalid query or seed code.
  */
 export function encodeResultsFile(query: QueryDocument, seeds: string[]): string {
-  return encodeResultsFileText(JSON.stringify({ query, seeds, app_version: packageJson.version }));
+  const { auto_apply_trinkets, ...portableQuery } = query;
+  const encoded = encodeResultsFileText(
+    JSON.stringify({ query: portableQuery, seeds, app_version: packageJson.version }),
+  );
+  // Keep the web-only setting outside the portable query, so native importers can still read it.
+  if (!auto_apply_trinkets) return encoded;
+  return JSON.stringify({ ...JSON.parse(encoded), auto_apply_trinkets: true }, null, 2);
 }
 
 export interface DecodedResultsFile {
@@ -55,6 +61,8 @@ interface DecodedDocument {
  */
 export function decodeResultsFile(text: string): DecodedResultsFile {
   const decoded = JSON.parse(decodeResultsFileText(text)) as DecodedDocument;
+  if ((JSON.parse(text) as { auto_apply_trinkets?: boolean }).auto_apply_trinkets === true)
+    decoded.query.auto_apply_trinkets = true;
   return {
     appVersion: decoded.app_version ?? undefined,
     shpdVersion: decoded.shpd_version ?? undefined,

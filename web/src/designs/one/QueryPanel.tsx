@@ -7,12 +7,15 @@ import {
   BLACKSMITH_LAST_FLOOR,
   FLOOR_LIMIT_OPTIONS,
   emptyRequirement,
+  requirementFamily,
   fromQueryJson,
   toQueryJson,
 } from "../../lib/query";
 import type { ValidationResult } from "../../lib/query";
 import { questVariantLabel } from "../../lib/quests";
 import {
+  autoTrinketsStore,
+  setAutoTrinkets,
   builtInPresets,
   loadPresets,
   maxWorkers,
@@ -68,6 +71,8 @@ export function QueryPanel({
 }) {
   const query = useStore(queryStore);
   const workerCount = useStore(workerCountStore);
+  const autoTrinkets = useStore(autoTrinketsStore);
+  const hasTrinket = query.requirements.some((r) => requirementFamily(r) === "trinket");
   const workerCeiling = maxWorkers();
   const [userPresets, setUserPresets] = useState<Preset[]>(() => loadPresets());
   const [namingPreset, setNamingPreset] = useState(false);
@@ -403,15 +408,13 @@ export function QueryPanel({
           </details>
         </section>
 
-        {/* The worker slider is the whole section, so a single-core machine
-            has nothing to show here. */}
-        {workerCeiling > 1 && (
-          <section className="d1-section">
-            <details className="d1-details">
-              <summary>
-                <span>Performance</span>
-              </summary>
-              <div className="d1-details-body">
+        <section className="d1-section">
+          <details className="d1-details">
+            <summary>
+              <span>Performance</span>
+            </summary>
+            <div className="d1-details-body">
+              {workerCeiling > 1 && (
                 <SliderRow
                   label="Workers"
                   valueLabel={`${workerCount} of ${workerCeiling} cores`}
@@ -421,11 +424,27 @@ export function QueryPanel({
                   fill
                   onChange={setWorkerCount}
                 />
+              )}
+              {workerCeiling > 1 && (
                 <p className="d1-caption">Number of search threads to spawn.</p>
-              </div>
-            </details>
-          </section>
-        )}
+              )}
+              <label className="d1-check">
+                <input
+                  type="checkbox"
+                  checked={autoTrinkets}
+                  disabled={running || hasTrinket}
+                  onChange={(event) => setAutoTrinkets(event.currentTarget.checked)}
+                />
+                <span>Auto-apply trinkets</span>
+              </label>
+              <p className="d1-caption">
+                {hasTrinket
+                  ? "Auto-apply is inactive when requirements include a trinket."
+                  : "Also try offered generation-changing trinkets at +3. Finds additional seeds, but tests fewer seeds per second."}
+              </p>
+            </div>
+          </details>
+        </section>
 
         <section className="d1-section">
           <details className="d1-details">
@@ -482,7 +501,9 @@ export function QueryPanel({
             ) : (
               <span className="d1-analysis-line">
                 {analysis?.valid && !analysis.impossible
-                  ? probabilityLabel(analysis.probability)
+                  ? autoTrinkets && !hasTrinket
+                    ? "Match estimate unavailable with auto-apply."
+                    : probabilityLabel(analysis.probability)
                   : ""}
               </span>
             )}

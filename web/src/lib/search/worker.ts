@@ -1,7 +1,7 @@
 /// <reference lib="webworker" />
 
 import init, { filter_seeds, scout, SearchSession } from "../wasm/pkg/seedfinder.js";
-import type { SearchAdvance } from "../wasm/types";
+import type { QueryDocument, SearchAdvance } from "../wasm/types";
 import type { SearchWorkerRequest, SearchWorkerResponse } from "./protocol";
 
 const context: DedicatedWorkerGlobalScope = self as unknown as DedicatedWorkerGlobalScope;
@@ -28,6 +28,8 @@ async function runSearch(message: Extract<SearchWorkerRequest, { type: "search:s
     pendingMatches = [];
   };
   try {
+    // Branching costs more per seed; yield often enough for progress and Stop.
+    const chunk = (JSON.parse(message.queryJson) as QueryDocument).auto_apply_trinkets ? 64 : CHUNK;
     for (const [segmentIndex, segment] of message.segments.entries()) {
       if (stopRequested || activeSession !== sessionId) break;
       const search = new SearchSession(
@@ -37,7 +39,7 @@ async function runSearch(message: Extract<SearchWorkerRequest, { type: "search:s
       );
       try {
         while (!stopRequested && activeSession === sessionId) {
-          const advance = JSON.parse(search.advance(CHUNK)) as SearchAdvance;
+          const advance = JSON.parse(search.advance(chunk)) as SearchAdvance;
           scanned[segmentIndex] = advance.tested;
           pendingMatches.push(...advance.matches);
           const now = performance.now();

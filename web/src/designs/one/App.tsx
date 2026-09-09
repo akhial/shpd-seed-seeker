@@ -1,11 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "@tanstack/react-store";
-import { fromQueryJson, toQueryDocument, toQueryJson, validateQuery } from "../../lib/query";
+import {
+  requirementFamily,
+  fromQueryJson,
+  toQueryDocument,
+  toQueryJson,
+  validateQuery,
+} from "../../lib/query";
 import { resultPosition, stepResult } from "../../lib/scout-nav";
 import { SearchCoordinator, scoutSeed, searchStore } from "../../lib/search/coordinator";
 import { hasShareCode, withoutFragment } from "../../lib/share-link";
 import { itemArt } from "../../lib/sprites";
-import { queryStore, workerCountStore } from "../../lib/store";
+import { autoTrinketsStore, queryStore, workerCountStore } from "../../lib/store";
 import {
   analyzeQuery,
   decodeShareText,
@@ -129,7 +135,15 @@ export default function App() {
     }
     const state = queryStore.state;
     if (!validateQuery(state).valid) return;
-    controller.start(toQueryDocument(state), workerCountStore.state);
+    controller.start(
+      {
+        ...toQueryDocument(state),
+        auto_apply_trinkets:
+          autoTrinketsStore.state &&
+          !state.requirements.some((r) => requirementFamily(r) === "trinket"),
+      },
+      workerCountStore.state,
+    );
     setActiveTab("results");
   }, []);
 
@@ -191,11 +205,20 @@ export default function App() {
       try {
         const parsed = await parseSeedCode(input);
         const state = queryStore.state;
+        const resultMatch = searchStore.state.matches.find((match) => match.code === parsed.code);
         const result = await scoutSeed({
           seed: parsed.code,
-          trinket,
+          trinket: trinket ?? resultMatch?.selectedTrinket,
           challenges: state.challenges.length > 0 ? state.challenges : undefined,
-          query: state.requirements.length > 0 ? toQueryDocument(state) : undefined,
+          query:
+            state.requirements.length > 0
+              ? {
+                  ...toQueryDocument(state),
+                  auto_apply_trinkets: Boolean(
+                    resultMatch && searchStore.state.query?.auto_apply_trinkets,
+                  ),
+                }
+              : undefined,
         });
         if (requestId === scoutRequest.current) {
           setScout({ loading: false, result });

@@ -25,6 +25,15 @@ export function setWorkerCount(count: number): void {
   if (typeof localStorage !== "undefined") localStorage.setItem(WORKERS_KEY, String(clamped));
 }
 
+const AUTO_TRINKETS_KEY = "seedseeker.autoTrinkets.v1";
+export const autoTrinketsStore = new Store<boolean>(
+  typeof localStorage !== "undefined" && localStorage.getItem(AUTO_TRINKETS_KEY) === "true",
+);
+export function setAutoTrinkets(enabled: boolean): void {
+  autoTrinketsStore.setState(() => enabled);
+  if (typeof localStorage !== "undefined") localStorage.setItem(AUTO_TRINKETS_KEY, String(enabled));
+}
+
 function hydrateQuery(): QueryState {
   if (typeof localStorage === "undefined") return defaultQueryState();
   try {

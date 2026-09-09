@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use shpd_seedfinder_core::auto_trinkets::search_batch;
 use shpd_seedfinder_core::catalog::{Effect, ItemKind, item};
 use shpd_seedfinder_core::challenges::Challenges;
 use shpd_seedfinder_core::deep_link;
@@ -19,9 +20,10 @@ use shpd_seedfinder_core::quests::{
 };
 use shpd_seedfinder_core::results_export;
 pub use shpd_seedfinder_core::results_export::MAX_RESULTS;
-use shpd_seedfinder_core::search::WorldGenerator;
 use shpd_seedfinder_core::seed::{self, DungeonSeed, TOTAL_SEEDS};
 use wasm_bindgen::prelude::*;
+
+mod auto_trinkets;
 
 const SEARCH_BATCH_SIZE: u64 = 256;
 
@@ -29,6 +31,8 @@ const SEARCH_BATCH_SIZE: u64 = 256;
 struct SeedOutput {
     code: String,
     value: u64,
+    #[serde(rename = "selectedTrinket", skip_serializing_if = "Option::is_none")]
+    selected_trinket: Option<&'static str>,
 }
 
 impl From<DungeonSeed> for SeedOutput {
@@ -36,6 +40,7 @@ impl From<DungeonSeed> for SeedOutput {
         Self {
             code: seed.to_code(),
             value: seed.value(),
+            selected_trinket: None,
         }
     }
 }
@@ -335,7 +340,9 @@ pub fn query_continues(candidate_json: &str, base_json: &str) -> Result<bool, Js
 }
 
 fn query_continues_impl(candidate_json: &str, base_json: &str) -> Result<bool, String> {
-    Ok(json_query::decode(candidate_json)?.continues(&json_query::decode(base_json)?))
+    let (candidate, candidate_auto) = auto_trinkets::decode(candidate_json)?;
+    let (base, base_auto) = auto_trinkets::decode(base_json)?;
+    Ok(candidate_auto == base_auto && candidate.continues(&base))
 }
 
 /// Reports what pressing Start Search must do with the query in
@@ -379,9 +386,25 @@ fn decide_start_impl(
     target_has_uncovered_seeds: bool,
     detached_base_json: Option<&str>,
 ) -> Result<String, String> {
-    let candidate = json_query::decode(candidate_json)?;
-    let target = target_json.map(json_query::decode).transpose()?;
-    let detached_base = detached_base_json.map(json_query::decode).transpose()?;
+    let (candidate, enabled) = auto_trinkets::decode(candidate_json)?;
+    let target = target_json.map(auto_trinkets::decode).transpose()?;
+    let detached_base = detached_base_json.map(auto_trinkets::decode).transpose()?;
+    // A changed world set must scan fresh, even when it shares target items.
+    if !target_set_empty && target.as_ref().is_some_and(|(_, auto)| *auto != enabled) {
+        return Ok(if detached_base
+            .as_ref()
+            .is_some_and(|(base, auto)| *auto == enabled && candidate.continues(base))
+        {
+            "continue-detached"
+        } else {
+            "detached"
+        }
+        .to_owned());
+    }
+    let target = target.map(|(q, _)| q);
+    let detached_base = detached_base
+        .filter(|(_, auto)| *auto == enabled)
+        .map(|(q, _)| q);
     Ok(decide_start_query(
         &candidate,
         target.as_ref(),
@@ -397,6 +420,7 @@ fn decide_start_impl(
 #[wasm_bindgen]
 pub struct SearchSession {
     query: SearchQuery,
+    auto_apply: bool,
     plan: QueryPlan,
     generator: ConfiguredMainWorldGenerator,
     cursor: u64,
@@ -437,18 +461,20 @@ impl SearchSession {
             let seeds = (self.cursor..batch_end)
                 .filter_map(|value| DungeonSeed::new(value).ok())
                 .collect::<Vec<_>>();
-            let worlds = self.generator.generate_batch_gated(
-                &seeds,
-                self.plan.generation_depth(),
+            let worlds = search_batch(
+                &self.generator,
+                &self.query,
                 &self.plan,
+                &seeds,
+                self.auto_apply,
             );
-            for world in worlds {
+            for found in worlds {
                 self.cursor += 1;
                 self.tested += 1;
-                if let Some(world) = world
-                    && self.query.matches(&world)
-                {
-                    matches.push(world.seed.into());
+                if let Some(found) = found {
+                    let mut output = SeedOutput::from(found.world.seed);
+                    output.selected_trinket = found.selected_trinket.map(|id| item(id).stable_id);
+                    matches.push(output);
                     self.accepted += 1;
                     if self.accepted == MAX_RESULTS {
                         self.completed = true;
@@ -480,7 +506,7 @@ impl SearchSession {
         start_seed: f64,
         end_seed_exclusive: f64,
     ) -> Result<Self, String> {
-        let query = json_query::decode(query_json)?;
+        let (query, auto_apply) = auto_trinkets::decode(query_json)?;
         let start_seed = seed_bound(start_seed, false)?;
         let end_seed_exclusive = seed_bound(end_seed_exclusive, true)?;
         if start_seed >= end_seed_exclusive {
@@ -491,6 +517,7 @@ impl SearchSession {
         Ok(Self {
             generator: CanonicalMainWorldGenerator::with_challenges(query.challenges),
             query,
+            auto_apply,
             plan,
             cursor: if completed {
                 end_seed_exclusive
@@ -506,7 +533,7 @@ impl SearchSession {
 }
 
 fn filter_seeds_impl(query_json: &str, seed_values: &[f64]) -> Result<String, String> {
-    let query = json_query::decode(query_json)?;
+    let (query, auto_apply) = auto_trinkets::decode(query_json)?;
     let seeds = seed_values
         .iter()
         .map(|&value| {
@@ -519,12 +546,14 @@ fn filter_seeds_impl(query_json: &str, seed_values: &[f64]) -> Result<String, St
         return Ok(to_json::<Vec<SeedOutput>>(&Vec::new()));
     }
     let generator = CanonicalMainWorldGenerator::with_challenges(query.challenges);
-    let worlds = generator.generate_batch_gated(&seeds, plan.generation_depth(), &plan);
-    let matches = worlds
+    let matches = search_batch(&generator, &query, &plan, &seeds, auto_apply)
         .into_iter()
         .flatten()
-        .filter(|world| query.matches(world))
-        .map(|world| SeedOutput::from(world.seed))
+        .map(|found| {
+            let mut output = SeedOutput::from(found.world.seed);
+            output.selected_trinket = found.selected_trinket.map(|id| item(id).stable_id);
+            output
+        })
         .collect::<Vec<_>>();
     Ok(to_json(&matches))
 }
@@ -560,11 +589,22 @@ fn scout_impl(request_json: &str) -> Result<String, String> {
         .challenges
         .into_iter()
         .fold(Challenges::NONE, |mask, challenge| mask | challenge.into());
-    let query = request
+    let decoded = request
         .query
-        .map(|value| json_query::decode(&value.to_string()))
+        .map(|value| auto_trinkets::decode(&value.to_string()))
         .transpose()?;
+    let auto_apply = decoded.as_ref().is_some_and(|(_, enabled)| *enabled);
+    let query = decoded.map(|(query, _)| query);
     let selected = match request.trinket.as_deref() {
+        None if auto_apply => query.as_ref().and_then(|q| {
+            let plan = QueryPlan::analyze(q);
+            let generator = CanonicalMainWorldGenerator::with_challenges(challenges);
+            search_batch(&generator, q, &plan, &[seed], true)
+                .into_iter()
+                .flatten()
+                .next()
+                .and_then(|found| found.selected_trinket)
+        }),
         None => query.as_ref().and_then(|q| {
             shpd_seedfinder_core::trinkets::resolve_selection(
                 seed,
@@ -776,6 +816,7 @@ fn to_json<T: Serialize>(value: &T) -> String {
 
 #[cfg(test)]
 mod tests {
+    use crate::auto_trinkets;
     use std::collections::BTreeMap;
     use std::num::NonZeroUsize;
 
@@ -792,6 +833,88 @@ mod tests {
         encode_share_link_impl, engine_info, engine_info_document, filter_seeds_impl,
         format_seed_code, parse_seed_code_impl, query_continues_impl, scout_impl,
     };
+
+    #[test]
+    fn auto_apply_search_filter_and_scout_agree() {
+        let baseline = r#"{"requirements":[{"item":"hand_axe","upgrade":1,"source":"golden_mimic","max_depth":6}],"max_depth":9}"#;
+        let mut document: Value = serde_json::from_str(baseline).unwrap();
+        document["auto_apply_trinkets"] = true.into();
+        let auto = document.to_string();
+        assert_eq!(filter_seeds_impl(baseline, &[0.0]).unwrap(), "[]");
+        let filtered: Value =
+            serde_json::from_str(&filter_seeds_impl(&auto, &[0.0]).unwrap()).unwrap();
+        assert_eq!(filtered[0]["selectedTrinket"], "mimic_tooth");
+        let mut session = SearchSession::new_impl(&auto, 0.0, 1.0).unwrap();
+        let result: Value = serde_json::from_str(&session.advance(1)).unwrap();
+        assert_eq!(result["matches"], filtered);
+        assert_eq!(result["tested"], 1);
+        assert_eq!(result["state"], "completed");
+        let mut request = serde_json::json!({"seed":"AAA-AAA-AAA", "query":document});
+        let scout: Value =
+            serde_json::from_str(&scout_impl(&request.to_string()).unwrap()).unwrap();
+        assert_eq!(scout["selectedTrinket"], "mimic_tooth");
+        assert_eq!(scout["matchedRequirements"], 1);
+        request["trinket"] = "none".into();
+        let scout: Value =
+            serde_json::from_str(&scout_impl(&request.to_string()).unwrap()).unwrap();
+        assert_eq!(scout["matchedRequirements"], 0);
+    }
+
+    #[test]
+    fn auto_apply_never_changes_explicit_trinket_queries_or_reuses_other_coverage() {
+        let baseline = r#"{"requirements":[{"item":"ring_might","upgrade":2}],"max_depth":9}"#;
+        let mut document: Value = serde_json::from_str(baseline).unwrap();
+        document["auto_apply_trinkets"] = true.into();
+        let auto = document.to_string();
+        assert!(!query_continues_impl(&auto, baseline).unwrap());
+        assert!(!query_continues_impl(baseline, &auto).unwrap());
+        assert!(query_continues_impl(&auto, &auto).unwrap());
+        assert_eq!(
+            decide_start_impl(&auto, Some(baseline), false, true, None).unwrap(),
+            "detached"
+        );
+        assert_eq!(
+            decide_start_impl(&auto, Some(baseline), false, true, Some(&auto)).unwrap(),
+            "continue-detached"
+        );
+        for requirement in [
+            serde_json::json!({"item":"mimic_tooth"}),
+            serde_json::json!({"item":"mimic_tooth", "select_trinket":true}),
+            serde_json::json!({"any_of":[{"item":"mimic_tooth"},{"item":"rat_skull"}]}),
+        ] {
+            document["requirements"]
+                .as_array_mut()
+                .unwrap()
+                .push(requirement);
+            assert!(!auto_trinkets::decode(&document.to_string()).unwrap().1);
+            document["requirements"].as_array_mut().unwrap().pop();
+        }
+        document["auto_apply_trinkets"] = "yes".into();
+        assert!(auto_trinkets::decode(&document.to_string()).is_err());
+    }
+
+    #[test]
+    fn auto_apply_retains_baseline_matches_without_duplicate_seeds() {
+        let baseline = r#"{"requirements":[{"kind":"weapon"}],"max_depth":6}"#;
+        let mut document: Value = serde_json::from_str(baseline).unwrap();
+        document["auto_apply_trinkets"] = true.into();
+        let seeds = (0..16).map(f64::from).collect::<Vec<_>>();
+        let baseline: Value =
+            serde_json::from_str(&filter_seeds_impl(baseline, &seeds).unwrap()).unwrap();
+        let auto: Value =
+            serde_json::from_str(&filter_seeds_impl(&document.to_string(), &seeds).unwrap())
+                .unwrap();
+        for seed in baseline.as_array().unwrap() {
+            assert!(auto.as_array().unwrap().contains(seed));
+        }
+        let values = auto
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|s| s["value"].as_u64().unwrap())
+            .collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(values.len(), auto.as_array().unwrap().len());
+    }
 
     #[test]
     fn selected_search_filters_using_postbrew_loot() {

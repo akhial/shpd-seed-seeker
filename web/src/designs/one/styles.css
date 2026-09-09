@@ -1981,6 +1981,7 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .d1-result-main {
+  min-width: 0;
   flex: 1;
   display: flex;
   align-items: center;
@@ -2003,7 +2004,17 @@ input[type="range"]::-moz-range-thumb {
   text-align: right;
 }
 
+.d1-result-trinket {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--d1-text-3);
+  font-size: 11px;
+}
+
 .d1-result-code {
+  flex-shrink: 0;
   font-size: 14px;
   letter-spacing: 0.06em;
 }

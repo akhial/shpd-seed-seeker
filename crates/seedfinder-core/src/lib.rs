@@ -4,6 +4,7 @@
 //! must flow through [`rng`] so Java parity can be tested independently from
 //! higher-level dungeon generation.
 
+pub mod auto_trinkets;
 pub mod batch;
 mod bit_rows;
 pub mod builder;
