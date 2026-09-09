@@ -1,6 +1,9 @@
-//! Equipment loot captured from the official v4.0.0-BETA-4 Java oracle.
+//! Equipment loot captured from the official BETA-4 Java oracle, with the
+//! AAA-AAA-AAF Cracked Spyglass case refreshed against v4.0.0-RC-1.
 //! Seven generation-changing trinkets, each at +3 after the first brewing
 //! opportunity, across three seeds through floor 24 (including vault rewards).
+//! RC1 journal defaults retain the floor-24 Halls lore page, changing the
+//! Spyglass's revealed loot. See `fixtures/selected_trinkets.md` for provenance.
 use serde::Deserialize;
 use shpd_seedfinder_core::catalog::{ItemKind, item, item_by_stable_id};
 use shpd_seedfinder_core::challenges::Challenges;
@@ -14,9 +17,9 @@ struct Case {
 }
 
 #[test]
-fn selected_trinket_loot_matches_beta4_java() {
+fn selected_trinket_loot_matches_java_fixtures() {
     let cases: Vec<Case> =
-        serde_json::from_str(include_str!("fixtures/selected_trinkets_beta4.json")).unwrap();
+        serde_json::from_str(include_str!("fixtures/selected_trinkets_rc1.json")).unwrap();
     assert_eq!(cases.len(), 21);
     for mut case in cases {
         let world = generate_main_world_with_trinket(
