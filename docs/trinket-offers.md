@@ -118,7 +118,7 @@ Linux uses `production_scout_world_selected` directly with equivalent semantics.
 
 ```sh
 tooling/oracle-4.0/build.sh
-java -cp "tooling/oracle-4.0/.work/classes:tooling/oracle-4.0/.work/ShatteredPD-v4.0.0-RC-1-Java.jar" \
+java -cp "tooling/oracle-4.0/.work/classes:tooling/oracle-4.0/.work/ShatteredPD-v4.0.0-Java.jar" \
   com.shatteredpixel.shatteredpixeldungeon.TrinketOracle AAA-AAA-AAA
 ```
 

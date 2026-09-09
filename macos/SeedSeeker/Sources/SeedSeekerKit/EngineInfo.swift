@@ -11,9 +11,7 @@ public struct EngineInfo: Sendable {
     /// Upstream Shattered Pixel Dungeon version the engine targets.
     public let shpdVersion: String
 
-    /// Upstream revision pin. For v4.0.0 no source has been published, so
-    /// this holds the SHA-256 digest of the official release JAR instead of
-    /// a commit hash.
+    /// Upstream source commit tagged with the engine's target game version.
     public let shpdCommit: String
 
     /// The one instance, loaded on first use.

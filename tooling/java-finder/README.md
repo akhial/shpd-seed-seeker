@@ -1,4 +1,4 @@
-# Java baseline seed finder (v4.0.0-RC-1)
+# Java baseline seed finder (v4.0.0)
 
 The Java side of the benchmark in the top-level `README.md`: a seed finder that
 runs Shattered Pixel Dungeon's own generator on the JVM, so Seed Seeker's
@@ -6,22 +6,19 @@ throughput can be compared with the game's own code **at the version Seed
 Seeker targets**.
 
 The published throughput and match counts below were measured on BETA-3;
-rerun the commands to obtain RC1 measurements.
+rerun the commands to obtain v4.0.0 measurements.
 
-It exists because the established Java finder cannot follow the engine to
-v4.0.0. [Elektrochecker's shpd-seed-finder](https://github.com/Elektrochecker/shpd-seed-finder)
-patches the game's *source* tree (26 files, mostly item-recording hooks) and
-builds a modified desktop JAR; its newest release is `3.3.X`. Upstream has
-published a v4.0.0-RC-1 release JAR but no v4.0.0 source, so there is nothing
-to apply that patch to. This finder takes the route `tooling/oracle-4.0` takes
-instead: it drives the **unmodified official JAR** headlessly and recompiles
-nothing of the game.
+This finder drives the **unmodified official JAR** headlessly, using the same
+technique as `tooling/oracle-4.0`. Upstream now publishes the full
+[v4.0.0 source](https://github.com/00-Evan/shattered-pixel-dungeon/tree/v4.0.0)
+at commit `2bb34a4e91d29c8785a9363cad6ddfe5122b1d4f`; using the shipped JAR keeps
+the baseline tied to the released build without maintaining source patches.
 
 The pin is the same artifact the oracle uses:
 
-- artifact: `ShatteredPD-v4.0.0-RC-1-Java.jar`
-- URL: `https://github.com/00-Evan/shattered-pixel-dungeon/releases/download/4.0.0-beta/ShatteredPD-v4.0.0-RC-1-Java.jar`
-- sha256: `43f881f0d6484faffea913f5563fd2c3277ed83159eda6e83efc55e586fbfdbf`
+- artifact: `ShatteredPD-v4.0.0-Java.jar` (build 912)
+- URL: `https://github.com/00-Evan/shattered-pixel-dungeon/releases/download/v4.0.0/ShatteredPD-v4.0.0-Java.jar`
+- sha256: `b3e6f9508dea1a7a32a9934e2bc18f20a9a905df5732550404294340d31c87a1`
 
 `build.sh` reuses the oracle's download when there is one, verifies the sha256,
 and compiles `src/**/*.java` plus the oracle's `TextureFilm` stand-in into
@@ -79,7 +76,7 @@ searching. A seed's floors stop being generated as soon as a match is found.
 
 Startup is the oracle's, and the oracle's README explains it in full:
 `Game.version` is set to a `-INDEV` string so `DeviceCompat.isDebug()` marks the
-journal read, `GameSettings.set(new MemoryPreferences())` provides in-memory
+journal read except for the Halls `attrition` page, `GameSettings.set(new MemoryPreferences())` provides in-memory
 settings, `Badges.global` and the `Bones` fields are reset, and the geometry-only
 `com.watabou.noosa.TextureFilm` stand-in keeps `ItemSpriteSheet.Icons.film` off
 the GPU. That stand-in is compiled straight out of `tooling/oracle-4.0/src`

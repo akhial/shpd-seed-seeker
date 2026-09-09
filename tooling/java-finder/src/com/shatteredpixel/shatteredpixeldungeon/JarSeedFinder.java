@@ -44,17 +44,15 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * A seed finder for Shattered Pixel Dungeon v4.0.0-RC-1, driven headlessly
+ * A seed finder for Shattered Pixel Dungeon v4.0.0, driven headlessly
  * against the unmodified official desktop JAR.
  *
  * <p>It exists so that Seed Seeker's throughput can be compared with what the
  * game's own generator achieves on the JVM at the version Seed Seeker targets.
- * Elektrochecker's shpd-seed-finder — the tool this replaces as a baseline —
- * patches the game's <em>source</em> and so is pinned to v3.3.8; no v4.0.0
- * source has been published, only the release JAR. The startup technique is
- * the one {@code tooling/oracle-4.0} documents: nothing from the game is
- * recompiled and the only shadow class is a geometry-only
- * {@code com.watabou.noosa.TextureFilm} stand-in.
+ * The startup technique is the one {@code tooling/oracle-4.0} documents:
+ * the final v4.0.0 source is published, but this baseline runs the shipped JAR
+ * without recompiling the game. Only the headless {@code TextureFilm} and
+ * {@code ItemSprite} stand-ins precede it on the classpath.
  *
  * <p>Per seed the finder runs the game's own {@code Dungeon.init()} and
  * {@code Dungeon.newLevel()} over floors 1..N, plus the Imp's Vault when the
@@ -67,8 +65,8 @@ import java.util.Map;
  */
 public final class JarSeedFinder {
 
-	private static final String GAME_VERSION = "4.0.0-RC-1";
-	private static final int GAME_VERSION_CODE = 907;
+	private static final String GAME_VERSION = "4.0.0";
+	private static final int GAME_VERSION_CODE = 912;
 	/** {@code DeviceCompat.isDebug()} is {@code Game.version.contains("INDEV")}; see the oracle's README. */
 	private static final String EFFECTIVE_GAME_VERSION = GAME_VERSION + "-INDEV";
 

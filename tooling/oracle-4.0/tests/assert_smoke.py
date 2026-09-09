@@ -7,8 +7,8 @@ import sys
 
 
 ORACLE_SCHEMA = "shpd-parity-oracle/v2"
-GAME_VERSION = "4.0.0-RC-1"
-GAME_JAR_SHA256 = "43f881f0d6484faffea913f5563fd2c3277ed83159eda6e83efc55e586fbfdbf"
+GAME_VERSION = "4.0.0"
+GAME_JAR_SHA256 = "b3e6f9508dea1a7a32a9934e2bc18f20a9a905df5732550404294340d31c87a1"
 
 
 def load_ndjson(path: pathlib.Path):
@@ -67,6 +67,8 @@ def main():
     run_init = one(records, "run_init")
     level = one(records, "level")
     assert run_init["game_version"] == GAME_VERSION
+    assert run_init["game_version_code"] == 912
+    assert run_init["game_commit"] == "2bb34a4e91d29c8785a9363cad6ddfe5122b1d4f"
     assert run_init["game_jar_sha256"] == GAME_JAR_SHA256
     assert run_init["effective_game_version"] == GAME_VERSION + "-INDEV"
     assert run_init["seed_code"] == "AAA-AAA-AAA"

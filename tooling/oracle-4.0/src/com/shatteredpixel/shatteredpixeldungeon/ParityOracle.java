@@ -62,7 +62,7 @@ import java.util.Set;
 import java.util.TreeSet;
 
 /**
- * A non-interactive, machine-readable oracle over the official v4.0.0-RC-1
+ * A non-interactive, machine-readable oracle over the official v4.0.0
  * generation path, driven headlessly against the unmodified desktop JAR.
  * This class deliberately avoids identifying or otherwise mutating generated
  * items while recording them.
@@ -70,15 +70,16 @@ import java.util.TreeSet;
 public final class ParityOracle {
 
 	private static final String SCHEMA = "shpd-parity-oracle/v2";
-	private static final String GAME_VERSION = "4.0.0-RC-1";
-	private static final int GAME_VERSION_CODE = 907;
+	private static final String GAME_VERSION = "4.0.0";
+	private static final int GAME_VERSION_CODE = 912;
+	private static final String GAME_COMMIT = "2bb34a4e91d29c8785a9363cad6ddfe5122b1d4f";
 	private static final String GAME_JAR_URL =
-			"https://github.com/00-Evan/shattered-pixel-dungeon/releases/download/4.0.0-beta/ShatteredPD-v4.0.0-RC-1-Java.jar";
+			"https://github.com/00-Evan/shattered-pixel-dungeon/releases/download/v4.0.0/ShatteredPD-v4.0.0-Java.jar";
 	private static final String GAME_JAR_SHA256 =
-			"43f881f0d6484faffea913f5563fd2c3277ed83159eda6e83efc55e586fbfdbf";
+			"b3e6f9508dea1a7a32a9934e2bc18f20a9a905df5732550404294340d31c87a1";
 	/**
 	 * The JAR's own {@code DeviceCompat.isDebug()} is {@code Game.version.contains("INDEV")}.
-	 * Debug mode marks guide pages read (RC1 excludes the Halls attrition lore page), keeping the unseeded
+	 * Debug mode marks guide pages read (v4.0.0 excludes the Halls attrition lore page), keeping the unseeded
 	 * early-Guidebook heap off the first floors.  Nothing else on the generation path
 	 * reads {@code Game.version} (see README), so the suffix is the smallest possible
 	 * headless intervention.
@@ -135,7 +136,7 @@ public final class ParityOracle {
 		Dungeon.initSeed();
 		GamesInProgress.selectedClass = HeroClass.WARRIOR;
 		Dungeon.init();
-		// Preserve RC1's debug journal defaults: the Halls "attrition" page
+		// Preserve v4.0.0's debug journal defaults: the Halls "attrition" page
 		// remains unfound and is generated on floor 24, matching the engine.
 
 		output.emit(runInitRecord(options));
@@ -232,6 +233,7 @@ public final class ParityOracle {
 		Map<String, Object> record = record("run_init");
 		record.put("game_version", GAME_VERSION);
 		record.put("game_version_code", GAME_VERSION_CODE);
+		record.put("game_commit", GAME_COMMIT);
 		record.put("game_jar_url", GAME_JAR_URL);
 		record.put("game_jar_sha256", GAME_JAR_SHA256);
 		record.put("effective_game_version", Game.version);

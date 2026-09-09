@@ -2,10 +2,11 @@
 
 Shattered Pixel Dungeon generation changes between versions. Every engine result
 must therefore carry the target version, commit, and run profile. This project
-targets v4.0.0 as shipped in the official `4.0.0-BETA-3` release JAR. No
-source revision of 4.0.0 has been published, so `SHPD_COMMIT` holds the
-SHA-256 digest of that JAR instead of a commit hash, and the 4.0.0 parity
-oracle (`tooling/oracle-4.0`) runs against the JAR itself. The v3.3.8 fixtures
+targets the final [v4.0.0 source release](https://github.com/00-Evan/shattered-pixel-dungeon/tree/v4.0.0),
+build 912. `SHPD_COMMIT` holds its source commit,
+`2bb34a4e91d29c8785a9363cad6ddfe5122b1d4f`. The 4.0.0 parity oracle
+(`tooling/oracle-4.0`) runs the matching unmodified official release JAR,
+with its SHA-256 pinned separately. The v3.3.8 fixtures
 that still exist were pinned at commit
 `7b8b845a76fe76c6b7c031ae9e570852411f56db`.
 
@@ -16,12 +17,14 @@ custom-seed run under the canonical profile:
 
 - main branch floors generated in ascending order;
 - Warrior, no challenges, no equipped trinket;
-- no bones, documents, or other profile-dependent bonus items;
-- tutorial/journal progression complete (`SPDSettings.intro() == false`);
+- no bones or other profile-dependent bonus items;
+- tutorial complete (`SPDSettings.intro() == false`), with the game's debug
+  journal defaults: all pages read except the Halls King's `attrition` page,
+  whose floor-24 placement can clear grass and affect subsequent generation;
 - no player-caused drops or inventory-dependent mutations;
-- weapons, armor, wands, rings, their true upgrade, cursed flag, enchantment/glyph,
-  floor, source, container, secret-room placement, and mutually exclusive choice
-  group.
+- weapons, armor, wands, rings, artifacts, their searchable upgrade, cursed flag,
+  enchantment/glyph, floor, source, container, secret-room placement, and mutually
+  exclusive choice group.
 
 Item appearances are part of that reproduced state. `Dungeon.init()` shuffles
 `Ring.gems` once per run and hands each ring class the gem at its own index, so
