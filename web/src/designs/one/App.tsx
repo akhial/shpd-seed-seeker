@@ -163,9 +163,12 @@ export default function App() {
   // keeping the indicator honest.
   const [scoutedSeed, setScoutedSeed] = useState<string | undefined>(undefined);
   const renderedSeed = useRef<string | undefined>(undefined);
-  const [scout, setScout] = useState<{ loading: boolean; error?: string; result?: ScoutResult }>({
-    loading: false,
-  });
+  const [scout, setScout] = useState<{
+    loading: boolean;
+    error?: string;
+    result?: ScoutResult;
+    challenges?: readonly string[];
+  }>({ loading: false });
   const scoutRequest = useRef(0);
   // True while the newest scout request is still in flight. A held J/K uses
   // this to pace itself to the scout worker instead of queueing on it.
@@ -176,8 +179,8 @@ export default function App() {
     setActiveTab("scout");
     if (input.length !== 11) {
       setScout((current) => ({
+        ...current,
         loading: false,
-        result: current.result,
         error: "Seed must use XXX-XXX-XXX format",
       }));
       setScoutedSeed(renderedSeed.current);
@@ -186,19 +189,21 @@ export default function App() {
     setScoutedSeed(input);
     const requestId = ++scoutRequest.current;
     scoutBusy.current = true;
-    setScout((current) => ({ loading: true, result: current.result }));
+    setScout((current) => ({ ...current, loading: true, error: undefined }));
+    const state = queryStore.state;
+    const challenges = [...state.challenges];
+    const scoutQuery = state.requirements.length > 0 ? toQueryDocument(state) : undefined;
     void (async () => {
       try {
         const parsed = await parseSeedCode(input);
-        const state = queryStore.state;
         const result = await scoutSeed({
           seed: parsed.code,
           trinket,
-          challenges: state.challenges.length > 0 ? state.challenges : undefined,
-          query: state.requirements.length > 0 ? toQueryDocument(state) : undefined,
+          challenges: challenges.length > 0 ? challenges : undefined,
+          query: scoutQuery,
         });
         if (requestId === scoutRequest.current) {
-          setScout({ loading: false, result });
+          setScout({ loading: false, result, challenges });
           setScoutInput(result.seed.code);
           renderedSeed.current = result.seed.code;
           setScoutedSeed(result.seed.code);
@@ -206,8 +211,8 @@ export default function App() {
       } catch (error) {
         if (requestId === scoutRequest.current) {
           setScout((current) => ({
+            ...current,
             loading: false,
-            result: current.result,
             error: error instanceof Error ? error.message : String(error),
           }));
           setScoutedSeed(renderedSeed.current);
@@ -217,6 +222,17 @@ export default function App() {
       }
     })();
   }, []);
+
+  // A seed URL opens the ordinary scout. Query share links keep their existing
+  // precedence; they must finish applying a query before a user scouts it.
+  const initialScoutOpened = useRef(false);
+  useEffect(() => {
+    if (!engine || initialScoutOpened.current) return;
+    initialScoutOpened.current = true;
+    if (hasShareCode(window.location.hash)) return;
+    const seed = new URL(window.location.href).searchParams.get("scout");
+    if (seed) runScout(seed);
+  }, [engine, runScout]);
 
   // Result-to-result navigation while scouting: J/K on desktop, swipe on touch.
   // The joined-string selector keeps referential stability across progress
@@ -436,12 +452,14 @@ export default function App() {
           onTouchEnd={onScoutTouchEnd}
         >
           <ScoutPanel
+            key={scout.result?.seed.code ?? "unscouted"}
             input={scoutInput}
             onInput={setScoutInput}
             onScout={runScout}
             loading={scout.loading}
             error={scout.error}
             result={scout.result}
+            challenges={scout.challenges ?? []}
             onTrinketChange={(trinket) => {
               if (scout.result) runScout(scout.result.seed.code, trinket);
             }}

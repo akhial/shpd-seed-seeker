@@ -1,0 +1,180 @@
+.d1-floor-head-with-map {
+  gap: 7px;
+  padding-top: 3px;
+  padding-bottom: 3px;
+  min-height: 35px;
+}
+
+.d1-floor-head-with-map .d1-floor-region {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.d1-floor-head-with-map .d1-floor-label,
+.d1-floor-head-with-map .d1-floor-bar {
+  flex-shrink: 0;
+}
+
+.d1-floor-head-with-map .d1-floor-quest {
+  margin-left: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 5px;
+}
+
+.d1-floor-map-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  flex-shrink: 0;
+  margin-left: auto;
+  margin-right: -5px;
+  padding: 5px;
+  min-height: 28px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--d1-text-2);
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 550;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.d1-floor-map-trigger:hover,
+.d1-floor-map-trigger[aria-expanded="true"] {
+  color: var(--region);
+  background: color-mix(in srgb, var(--region) 9%, transparent);
+  border-color: color-mix(in srgb, var(--region) 25%, transparent);
+}
+
+.d1-floor-map-trigger:focus-visible,
+.d1-map-lens-icon-button:focus-visible {
+  outline: 2px solid var(--region);
+  outline-offset: 2px;
+}
+
+.d1-floor-no-loot {
+  margin: 10px 16px 4px;
+  font-size: 12px;
+  color: var(--d1-text-3);
+}
+
+.d1-map-lens {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  padding: 0;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100dvh - 24px);
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--d1-border-strong);
+  border-top: 2px solid var(--region);
+  border-radius: 9px;
+  color: var(--d1-text);
+  background: var(--d1-bg);
+  box-shadow:
+    0 14px 48px #0009,
+    0 2px 12px #0008;
+  font: inherit;
+}
+
+.d1-map-lens-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px 10px 16px;
+  border-bottom: 1px solid var(--d1-border);
+  background: var(--d1-panel);
+}
+
+.d1-map-lens-heading {
+  min-width: 0;
+  margin-right: auto;
+}
+
+.d1-map-lens-eyebrow {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  color: var(--d1-text-2);
+  font-size: 10px;
+  letter-spacing: 0.03em;
+}
+
+.d1-map-lens-heading h3 {
+  margin: 2px 0 0;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.d1-map-lens-heading h3 span {
+  color: var(--region);
+  font-weight: 500;
+}
+
+.d1-map-lens-navigation {
+  display: flex;
+  gap: 2px;
+}
+
+.d1-map-lens-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--d1-text-2);
+  background: transparent;
+  font: inherit;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.d1-map-lens-icon-button:hover:not(:disabled) {
+  border-color: var(--d1-border-strong);
+  background: var(--d1-bg);
+  color: var(--d1-text);
+}
+
+.d1-map-lens-icon-button:disabled {
+  opacity: 0.25;
+  cursor: default;
+}
+
+.d1-map-lens-close {
+  margin-left: 2px;
+}
+
+@media (max-width: 999px) {
+  .d1-floor-map-trigger {
+    min-height: 34px;
+    padding: 7px;
+  }
+
+  .d1-map-lens {
+    border-radius: 12px;
+  }
+
+  .d1-map-lens-head {
+    padding: 10px 10px 10px 14px;
+    gap: 6px;
+  }
+
+  .d1-map-lens-icon-button {
+    width: 36px;
+    height: 36px;
+  }
+}

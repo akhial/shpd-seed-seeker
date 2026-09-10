@@ -1,8 +1,9 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useStore } from "@tanstack/react-store";
 import { displayedUpgrade, sourceLabel } from "../../lib/catalog";
 import { itemGlow } from "../../lib/glow";
 import { CheckIcon, CopyIcon, FlagIcon, ForkIcon } from "../../lib/icons";
+import { isMapDepthSupported } from "../../lib/level-map/client";
 import { questLabel, questVariantLabel } from "../../lib/quests";
 import { regionForDepth } from "../../lib/region";
 import type { ResultPosition } from "../../lib/scout-nav";
@@ -12,6 +13,7 @@ import { formatSeedCode } from "../../lib/wasm";
 import type { ScoutItem, ScoutResult, TrinketOffer } from "../../lib/wasm/types";
 import { Sprite } from "./parts";
 import { FeelingSprite } from "./FeelingSprite";
+import { FloorMapButton, ScoutMapLens } from "./ScoutMapLens";
 import { TrinketName, TrinketSprite } from "./TrinketArt";
 
 const groupLetter = (group: number) => "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[group % 26];
@@ -33,6 +35,7 @@ export function ScoutPanel({
   loading,
   error,
   result,
+  challenges = [],
   nav,
   onNavigate,
   onTrinketChange,
@@ -43,16 +46,33 @@ export function ScoutPanel({
   loading: boolean;
   error?: string;
   result?: ScoutResult;
+  /** The profile that produced the rendered result, even during a new scout. */
+  challenges?: readonly string[];
   /** Position of the scouted seed within the search results, when it is one. */
   nav?: ResultPosition;
   onNavigate?: (delta: number) => void;
   onTrinketChange?: (trinket: string) => void;
 }) {
-  const challengeCount = useStore(queryStore, (state) => state.challenges.length);
+  const queryChallengeCount = useStore(queryStore, (state) => state.challenges.length);
+  const challengeCount = result ? challenges.length : queryChallengeCount;
+  const [mapTarget, setMapTarget] = useState<
+    | {
+        depth: number;
+        anchor: HTMLButtonElement;
+      }
+    | undefined
+  >(undefined);
+  const closeMap = useCallback(() => setMapTarget(undefined), []);
   const [copied, setCopied] = useState(false);
 
   const floors = useMemo(() => {
     const byDepth = new Map<number, ScoutItem[]>();
+    // A floor with no catalogued loot still has a layout worth scouting.
+    if (result) {
+      for (let depth = 1; depth <= 24; depth++) {
+        if (isMapDepthSupported(depth)) byDepth.set(depth, []);
+      }
+    }
     for (const item of result?.items ?? []) {
       byDepth.set(item.depth, [...(byDepth.get(item.depth) ?? []), item]);
     }
@@ -220,7 +240,9 @@ export function ScoutPanel({
                   key={depth}
                   style={{ ["--region" as string]: region.color }}
                 >
-                  <header className="d1-floor-head">
+                  <header
+                    className={`d1-floor-head${isMapDepthSupported(depth) ? " d1-floor-head-with-map" : ""}`}
+                  >
                     <span className="d1-floor-bar" aria-hidden="true" />
                     <span className="d1-floor-label">Floor {depth}</span>
                     <FeelingSprite feeling={feelingByDepth.get(depth)} />
@@ -230,7 +252,24 @@ export function ScoutPanel({
                         {questVariantLabel(quest.variant)}
                       </span>
                     )}
+                    {isMapDepthSupported(depth) && (
+                      <FloorMapButton
+                        seed={result.seed.code}
+                        depth={depth}
+                        challenges={challenges}
+                        selectedTrinket={result.selectedTrinket}
+                        active={mapTarget?.depth === depth}
+                        onOpen={(anchor) => {
+                          setMapTarget((current) =>
+                            current?.depth === depth ? undefined : { depth, anchor },
+                          );
+                        }}
+                      />
+                    )}
                   </header>
+                  {items.length === 0 && (
+                    <p className="d1-floor-no-loot">No catalogued items on this floor.</p>
+                  )}
                   <ul className="d1-item-list">
                     {items.some((item) => item.category === "trinket") && (
                       <CatalystEntry
@@ -311,6 +350,24 @@ export function ScoutPanel({
           </div>
         )}
       </div>
+      {result && mapTarget && (
+        <ScoutMapLens
+          seed={result.seed.code}
+          depth={mapTarget.depth}
+          challenges={challenges}
+          selectedTrinket={result.selectedTrinket}
+          anchor={mapTarget.anchor}
+          depths={floors.map(([depth]) => depth).filter(isMapDepthSupported)}
+          onDepthChange={(depth) => {
+            const anchor = mapTarget.anchor
+              .closest(".d1-pane-scout")
+              ?.querySelector<HTMLButtonElement>(`[data-floor-map-depth="${depth}"]`);
+            anchor?.scrollIntoView({ block: "nearest" });
+            setMapTarget({ depth, anchor: anchor ?? mapTarget.anchor });
+          }}
+          onClose={closeMap}
+        />
+      )}
     </>
   );
 }
