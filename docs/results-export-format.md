@@ -46,8 +46,16 @@ Each entry of `results` is an object with one required field:
 | ------ | ------ | -------- | ------------------------------------------------------------ |
 | `seed` | string | yes      | Seed code in **strictly canonical** `XXX-XXX-XXX` form: nine uppercase `A–Z` digits with dashes after the third and sixth. Lowercase, undashed, or whitespace-padded codes are rejected, so a file that imports on one platform imports on all of them. |
 
-Result entries are objects (not bare strings) so future releases can attach
-per-result metadata without a format break.
+An optional `trinket` field records the exact initial-offer stable ID used to
+generate that result, for example `"parchment_scrap"`. `null` explicitly means
+No Trinket. Missing legacy fields resolve from the saved query. Non-null
+choices must be among that seed's four initial catalyst offers. Duplicate
+seeds retain the first entry's choice as well as its position.
+
+Searches with automatic selection export these choices, and scouting uses
+them alongside the saved query even after the editor changes. The bridge
+encode request accepts an optional `trinkets` array parallel to `seeds`;
+bridge decode returns both arrays after deduplication and capping.
 
 ## The `query` object
 
@@ -55,6 +63,10 @@ The query reuses the existing JSON query-document format shared by the CLI
 (`seed-seeker --query`), the web frontend, and the presets on every platform.
 It is decoded by `crates/seedfinder-core/src/json_query.rs`:
 
+- `auto_apply_trinket` — boolean, defaults to `false`; the web Performance
+  setting. The engine chooses one offered trinket at +3 before generation.
+  Any trinket requirement disables automatic selection, including alternatives.
+  See [automatic selection](auto-apply-trinkets.md).
 - `requirements` — non-empty array of entries. Each entry is either a
   requirement object, or an alternative group `{"any_of": [<requirement>,
   ...]}` satisfied by any single member (groups may not nest, and members may

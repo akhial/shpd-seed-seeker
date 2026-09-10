@@ -1,0 +1,1430 @@
+[
+  {
+    "file": "annoying_weapon.jsonl",
+    "query": "annoying_weapon_plus1_depth9",
+    "policy": "ranked",
+    "count": 16384,
+    "matches": [
+      890,
+      904
+    ],
+    "new": 30,
+    "lost": 16,
+    "seconds": [
+      24.717331296,
+      24.917755272999994
+    ],
+    "cpu_seconds": [
+      24.62,
+      25.07
+    ],
+    "generation_cost_change_percent": 0.8108641446757936,
+    "match_increase_percent": 1.573033707865168,
+    "seconds_per_match": [
+      0.02777228235505618,
+      0.02756388857632743
+    ],
+    "time_saved_percent": 0.7503660522550248,
+    "time_saved_95_ci_percent": [
+      -0.9748297980364695,
+      2.4425148909752115
+    ],
+    "cpu_time_saved_percent": -0.25080336153784355,
+    "setup_seconds": 0.002427516,
+    "one_result_seconds_including_setup": [
+      0.02777228235505618,
+      0.02999140457632743
+    ],
+    "ranking": [
+      "mimic_tooth"
+    ],
+    "selected_cells": {
+      "chaotic_censer": [
+        1119,
+        0,
+        0,
+        68
+      ],
+      "cracked_spyglass": [
+        26,
+        0,
+        0,
+        1
+      ],
+      "dimensional_sundial": [
+        1069,
+        0,
+        0,
+        67
+      ],
+      "exotic_crystals": [
+        1098,
+        0,
+        0,
+        74
+      ],
+      "eye_of_newt": [
+        1111,
+        0,
+        0,
+        58
+      ],
+      "ferret_tuft": [
+        1096,
+        0,
+        0,
+        66
+      ],
+      "mimic_tooth": [
+        3548,
+        16,
+        30,
+        177
+      ],
+      "mossy_clump": [
+        6,
+        0,
+        0,
+        0
+      ],
+      "petrified_seed": [
+        1050,
+        0,
+        0,
+        76
+      ],
+      "salt_cube": [
+        1040,
+        0,
+        0,
+        56
+      ],
+      "shard_of_oblivion": [
+        1099,
+        0,
+        0,
+        52
+      ],
+      "thirteen_leaf_clover": [
+        1041,
+        0,
+        0,
+        58
+      ],
+      "vial_of_blood": [
+        1072,
+        0,
+        0,
+        54
+      ],
+      "wondrous_resin": [
+        1089,
+        0,
+        0,
+        67
+      ]
+    },
+    "native_model_of_256_seed_delivery": {
+      "batch_count": 64,
+      "successful_batches": [
+        64,
+        64
+      ],
+      "seconds_to_nonempty_batch": [
+        0.3862083015,
+        0.389339926140625
+      ],
+      "time_saved_percent": -0.8108641446758158,
+      "time_saved_95_ci_percent": [
+        -1.6042656941776645,
+        -0.07838203462320337
+      ],
+      "note": "Aggregated native measurements modeling existing web batch size; not measured browser latency."
+    }
+  },
+  {
+    "file": "ethereal_chains.jsonl",
+    "query": "ethereal_chains_depth9",
+    "policy": "ranked",
+    "count": 32768,
+    "matches": [
+      4614,
+      4748
+    ],
+    "new": 168,
+    "lost": 34,
+    "seconds": [
+      49.66730936200005,
+      49.758197157000026
+    ],
+    "cpu_seconds": [
+      49.7,
+      49.8
+    ],
+    "generation_cost_change_percent": 0.1829931924387962,
+    "match_increase_percent": 2.9042045947117456,
+    "seconds_per_match": [
+      0.01076447970567838,
+      0.01047982248462511
+    ],
+    "time_saved_percent": 2.644412259917306,
+    "time_saved_95_ci_percent": [
+      1.7806769738496486,
+      3.523727915213759
+    ],
+    "cpu_time_saved_percent": 2.626712253300767,
+    "setup_seconds": 0.001758829,
+    "one_result_seconds_including_setup": [
+      0.01076447970567838,
+      0.01223865148462511
+    ],
+    "ranking": [
+      "mimic_tooth",
+      "cracked_spyglass"
+    ],
+    "selected_cells": {
+      "chaotic_censer": [
+        1500,
+        0,
+        0,
+        262
+      ],
+      "cracked_spyglass": [
+        5196,
+        0,
+        65,
+        891
+      ],
+      "dimensional_sundial": [
+        1483,
+        0,
+        0,
+        263
+      ],
+      "exotic_crystals": [
+        1495,
+        0,
+        0,
+        215
+      ],
+      "eye_of_newt": [
+        1570,
+        0,
+        0,
+        244
+      ],
+      "ferret_tuft": [
+        1493,
+        0,
+        0,
+        235
+      ],
+      "mimic_tooth": [
+        6450,
+        34,
+        103,
+        981
+      ],
+      "mossy_clump": [
+        15,
+        0,
+        0,
+        1
+      ],
+      "petrified_seed": [
+        1398,
+        0,
+        0,
+        264
+      ],
+      "salt_cube": [
+        1522,
+        0,
+        0,
+        218
+      ],
+      "shard_of_oblivion": [
+        1522,
+        0,
+        0,
+        231
+      ],
+      "thirteen_leaf_clover": [
+        1458,
+        0,
+        0,
+        275
+      ],
+      "vial_of_blood": [
+        1467,
+        0,
+        0,
+        229
+      ],
+      "wondrous_resin": [
+        1417,
+        0,
+        0,
+        271
+      ]
+    },
+    "native_model_of_256_seed_delivery": {
+      "batch_count": 128,
+      "successful_batches": [
+        128,
+        128
+      ],
+      "seconds_to_nonempty_batch": [
+        0.388025854390625,
+        0.3887359152890625
+      ],
+      "time_saved_percent": -0.1829931924388406,
+      "time_saved_95_ci_percent": [
+        -0.693848945049691,
+        0.32769880713798827
+      ],
+      "note": "Aggregated native measurements modeling existing web batch size; not measured browser latency."
+    }
+  },
+  {
+    "file": "fireblast.jsonl",
+    "query": "fireblast_plus3_depth9",
+    "policy": "ranked",
+    "count": 4096,
+    "matches": [
+      51,
+      51
+    ],
+    "new": 0,
+    "lost": 0,
+    "seconds": [
+      5.603944922,
+      5.631691827
+    ],
+    "cpu_seconds": [
+      5.59,
+      5.65
+    ],
+    "generation_cost_change_percent": 0.4951316507603609,
+    "match_increase_percent": 0.0,
+    "seconds_per_match": [
+      0.10988127298039216,
+      0.11042532994117647
+    ],
+    "time_saved_percent": -0.4951316507603387,
+    "time_saved_95_ci_percent": [
+      -3.1130647757651175,
+      2.1001710922091243
+    ],
+    "cpu_time_saved_percent": -1.073345259391778,
+    "setup_seconds": 0.00320085,
+    "one_result_seconds_including_setup": [
+      0.10988127298039216,
+      0.11362617994117648
+    ],
+    "ranking": [],
+    "selected_cells": {
+      "chaotic_censer": [
+        393,
+        0,
+        0,
+        3
+      ],
+      "cracked_spyglass": [
+        7,
+        0,
+        0,
+        0
+      ],
+      "dimensional_sundial": [
+        352,
+        0,
+        0,
+        3
+      ],
+      "exotic_crystals": [
+        384,
+        0,
+        0,
+        7
+      ],
+      "eye_of_newt": [
+        378,
+        0,
+        0,
+        2
+      ],
+      "ferret_tuft": [
+        369,
+        0,
+        0,
+        6
+      ],
+      "parchment_scrap": [
+        14,
+        0,
+        0,
+        0
+      ],
+      "petrified_seed": [
+        340,
+        0,
+        0,
+        7
+      ],
+      "salt_cube": [
+        328,
+        0,
+        0,
+        4
+      ],
+      "shard_of_oblivion": [
+        372,
+        0,
+        0,
+        3
+      ],
+      "thirteen_leaf_clover": [
+        369,
+        0,
+        0,
+        5
+      ],
+      "trap_mechanism": [
+        2,
+        0,
+        0,
+        1
+      ],
+      "vial_of_blood": [
+        365,
+        0,
+        0,
+        5
+      ],
+      "wondrous_resin": [
+        372,
+        0,
+        0,
+        5
+      ]
+    },
+    "native_model_of_256_seed_delivery": {
+      "batch_count": 16,
+      "successful_batches": [
+        16,
+        16
+      ],
+      "seconds_to_nonempty_batch": [
+        0.350246557625,
+        0.3519807391875
+      ],
+      "time_saved_percent": -0.4951316507603609,
+      "time_saved_95_ci_percent": [
+        -1.8974914626997075,
+        0.9030034811314258
+      ],
+      "note": "Aggregated native measurements modeling existing web batch size; not measured browser latency."
+    }
+  },
+  {
+    "file": "grim_and_might.jsonl",
+    "query": "grim_and_might_depth9",
+    "policy": "ranked",
+    "count": 16384,
+    "matches": [
+      0,
+      2
+    ],
+    "new": 2,
+    "lost": 0,
+    "seconds": [
+      24.865316838000012,
+      24.82025079700001
+    ],
+    "cpu_seconds": [
+      24.88,
+      24.89
+    ],
+    "generation_cost_change_percent": -0.18124056610101524,
+    "match_increase_percent": null,
+    "seconds_per_match": [
+      null,
+      12.410125398500005
+    ],
+    "time_saved_percent": null,
+    "time_saved_95_ci_percent": null,
+    "cpu_time_saved_percent": null,
+    "setup_seconds": 0.005895459,
+    "one_result_seconds_including_setup": [
+      null,
+      12.416020857500005
+    ],
+    "ranking": [
+      "parchment_scrap",
+      "mimic_tooth",
+      "cracked_spyglass"
+    ],
+    "selected_cells": {
+      "chaotic_censer": [
+        662,
+        0,
+        0,
+        0
+      ],
+      "cracked_spyglass": [
+        2534,
+        0,
+        0,
+        0
+      ],
+      "dimensional_sundial": [
+        654,
+        0,
+        0,
+        0
+      ],
+      "exotic_crystals": [
+        633,
+        0,
+        0,
+        0
+      ],
+      "eye_of_newt": [
+        649,
+        0,
+        0,
+        0
+      ],
+      "ferret_tuft": [
+        663,
+        0,
+        0,
+        0
+      ],
+      "mimic_tooth": [
+        3097,
+        0,
+        1,
+        0
+      ],
+      "parchment_scrap": [
+        3747,
+        0,
+        1,
+        0
+      ],
+      "petrified_seed": [
+        624,
+        0,
+        0,
+        0
+      ],
+      "salt_cube": [
+        625,
+        0,
+        0,
+        0
+      ],
+      "shard_of_oblivion": [
+        611,
+        0,
+        0,
+        0
+      ],
+      "thirteen_leaf_clover": [
+        612,
+        0,
+        0,
+        0
+      ],
+      "vial_of_blood": [
+        634,
+        0,
+        0,
+        0
+      ],
+      "wondrous_resin": [
+        637,
+        0,
+        0,
+        0
+      ]
+    },
+    "native_model_of_256_seed_delivery": {
+      "batch_count": 64,
+      "successful_batches": [
+        0,
+        2
+      ],
+      "seconds_to_nonempty_batch": [
+        null,
+        12.4101253985
+      ],
+      "time_saved_percent": null,
+      "time_saved_95_ci_percent": null,
+      "note": "Aggregated native measurements modeling existing web batch size; not measured browser latency."
+    }
+  },
+  {
+    "file": "grim_runic_blade_plus1_depth19.jsonl",
+    "query": "grim_runic_blade_plus1_depth19",
+    "policy": "ranked",
+    "count": 32768,
+    "matches": [
+      38,
+      68
+    ],
+    "new": 33,
+    "lost": 3,
+    "seconds": [
+      128.7308165030002,
+      129.4972552060001
+    ],
+    "cpu_seconds": [
+      128.67,
+      129.44
+    ],
+    "generation_cost_change_percent": 0.5953809070899707,
+    "match_increase_percent": 78.94736842105263,
+    "seconds_per_match": [
+      3.387653065868426,
+      1.9043714000882366
+    ],
+    "time_saved_percent": 43.78493419897913,
+    "time_saved_95_ci_percent": [
+      30.070334240255335,
+      57.015592471872445
+    ],
+    "cpu_time_saved_percent": 43.783230242435046,
+    "setup_seconds": 0.002931738,
+    "one_result_seconds_including_setup": [
+      3.387653065868426,
+      1.9073031380882366
+    ],
+    "ranking": [
+      "parchment_scrap",
+      "mimic_tooth"
+    ],
+    "selected_cells": {
+      "chaotic_censer": [
+        1746,
+        0,
+        0,
+        1
+      ],
+      "cracked_spyglass": [
+        9,
+        0,
+        0,
+        0
+      ],
+      "dimensional_sundial": [
+        1743,
+        0,
+        0,
+        0
+      ],
+      "exotic_crystals": [
+        1711,
+        0,
+        0,
+        5
+      ],
+      "eye_of_newt": [
+        1813,
+        0,
+        0,
+        2
+      ],
+      "ferret_tuft": [
+        1727,
+        0,
+        0,
+        2
+      ],
+      "mimic_tooth": [
+        6158,
+        3,
+        4,
+        4
+      ],
+      "parchment_scrap": [
+        7581,
+        0,
+        29,
+        10
+      ],
+      "petrified_seed": [
+        1677,
+        0,
+        0,
+        2
+      ],
+      "salt_cube": [
+        1685,
+        0,
+        0,
+        6
+      ],
+      "shard_of_oblivion": [
+        1736,
+        0,
+        0,
+        1
+      ],
+      "thirteen_leaf_clover": [
+        1712,
+        0,
+        0,
+        1
+      ],
+      "vial_of_blood": [
+        1712,
+        0,
+        0,
+        0
+      ],
+      "wondrous_resin": [
+        1687,
+        0,
+        0,
+        1
+      ]
+    },
+    "native_model_of_256_seed_delivery": {
+      "batch_count": 128,
+      "successful_batches": [
+        33,
+        54
+      ],
+      "seconds_to_nonempty_batch": [
+        3.9009338334242423,
+        2.3980973186296297
+      ],
+      "time_saved_percent": 38.525045001222736,
+      "time_saved_95_ci_percent": [
+        21.445630374315027,
+        54.56081219608775
+      ],
+      "note": "Aggregated native measurements modeling existing web batch size; not measured browser latency."
+    }
+  },
+  {
+    "file": "grim_runic_blade_plus3_depth19.jsonl",
+    "query": "grim_runic_blade_plus3_depth19",
+    "policy": "ranked",
+    "count": 32768,
+    "matches": [
+      19,
+      22
+    ],
+    "new": 3,
+    "lost": 0,
+    "seconds": [
+      128.06565263199988,
+      128.402619652
+    ],
+    "cpu_seconds": [
+      128.13,
+      128.2
+    ],
+    "generation_cost_change_percent": 0.2631205269131742,
+    "match_increase_percent": 15.789473684210531,
+    "seconds_per_match": [
+      6.740297506947362,
+      5.836482711454545
+    ],
+    "time_saved_percent": 13.409123181302263,
+    "time_saved_95_ci_percent": [
+      -0.3044307234296939,
+      29.793586099166202
+    ],
+    "cpu_time_saved_percent": 13.589181442143284,
+    "setup_seconds": 0.003618338,
+    "one_result_seconds_including_setup": [
+      6.740297506947362,
+      5.840101049454545
+    ],
+    "ranking": [
+      "parchment_scrap"
+    ],
+    "selected_cells": {
+      "chaotic_censer": [
+        2274,
+        0,
+        0,
+        3
+      ],
+      "dimensional_sundial": [
+        2322,
+        0,
+        0,
+        1
+      ],
+      "exotic_crystals": [
+        2271,
+        0,
+        0,
+        0
+      ],
+      "eye_of_newt": [
+        2366,
+        0,
+        0,
+        4
+      ],
+      "ferret_tuft": [
+        2310,
+        0,
+        0,
+        0
+      ],
+      "mimic_tooth": [
+        63,
+        0,
+        0,
+        0
+      ],
+      "parchment_scrap": [
+        7612,
+        0,
+        3,
+        5
+      ],
+      "petrified_seed": [
+        2229,
+        0,
+        0,
+        2
+      ],
+      "rat_skull": [
+        9,
+        0,
+        0,
+        0
+      ],
+      "salt_cube": [
+        2263,
+        0,
+        0,
+        0
+      ],
+      "shard_of_oblivion": [
+        2248,
+        0,
+        0,
+        0
+      ],
+      "thirteen_leaf_clover": [
+        2252,
+        0,
+        0,
+        1
+      ],
+      "vial_of_blood": [
+        2272,
+        0,
+        0,
+        0
+      ],
+      "wondrous_resin": [
+        2255,
+        0,
+        0,
+        3
+      ]
+    },
+    "native_model_of_256_seed_delivery": {
+      "batch_count": 128,
+      "successful_batches": [
+        19,
+        22
+      ],
+      "seconds_to_nonempty_batch": [
+        6.7402975069473685,
+        5.836482711454545
+      ],
+      "time_saved_percent": 13.409123181302341,
+      "time_saved_95_ci_percent": [
+        -0.3328098790353229,
+        30.03735765216803
+      ],
+      "note": "Aggregated native measurements modeling existing web batch size; not measured browser latency."
+    }
+  },
+  {
+    "file": "grim_weapon.jsonl",
+    "query": "grim_weapon_plus1_depth19",
+    "policy": "ranked",
+    "count": 16384,
+    "matches": [
+      432,
+      686
+    ],
+    "new": 260,
+    "lost": 6,
+    "seconds": [
+      63.884375383999945,
+      64.39805671099997
+    ],
+    "cpu_seconds": [
+      63.78,
+      64.46
+    ],
+    "generation_cost_change_percent": 0.8040797517583131,
+    "match_increase_percent": 58.796296296296305,
+    "seconds_per_match": [
+      0.14788049857407395,
+      0.09387471823760928
+    ],
+    "time_saved_percent": 36.5198798064729,
+    "time_saved_95_ci_percent": [
+      32.85529850281053,
+      40.405883501337584
+    ],
+    "cpu_time_saved_percent": 36.35483490533695,
+    "setup_seconds": 0.003426881,
+    "one_result_seconds_including_setup": [
+      0.14788049857407395,
+      0.09730159923760928
+    ],
+    "ranking": [
+      "parchment_scrap",
+      "mimic_tooth"
+    ],
+    "selected_cells": {
+      "chaotic_censer": [
+        877,
+        0,
+        0,
+        22
+      ],
+      "cracked_spyglass": [
+        4,
+        0,
+        0,
+        0
+      ],
+      "dimensional_sundial": [
+        845,
+        0,
+        0,
+        24
+      ],
+      "exotic_crystals": [
+        846,
+        0,
+        0,
+        28
+      ],
+      "eye_of_newt": [
+        875,
+        0,
+        0,
+        22
+      ],
+      "ferret_tuft": [
+        857,
+        0,
+        0,
+        25
+      ],
+      "mimic_tooth": [
+        3001,
+        5,
+        24,
+        68
+      ],
+      "parchment_scrap": [
+        3404,
+        1,
+        236,
+        107
+      ],
+      "petrified_seed": [
+        846,
+        0,
+        0,
+        19
+      ],
+      "salt_cube": [
+        812,
+        0,
+        0,
+        18
+      ],
+      "shard_of_oblivion": [
+        836,
+        0,
+        0,
+        17
+      ],
+      "thirteen_leaf_clover": [
+        802,
+        0,
+        0,
+        24
+      ],
+      "vial_of_blood": [
+        825,
+        0,
+        0,
+        33
+      ],
+      "wondrous_resin": [
+        862,
+        0,
+        0,
+        19
+      ]
+    },
+    "native_model_of_256_seed_delivery": {
+      "batch_count": 64,
+      "successful_batches": [
+        64,
+        64
+      ],
+      "seconds_to_nonempty_batch": [
+        0.998193365375,
+        1.006219636109375
+      ],
+      "time_saved_percent": -0.8040797517582687,
+      "time_saved_95_ci_percent": [
+        -1.5868014254117657,
+        0.03739248467830025
+      ],
+      "note": "Aggregated native measurements modeling existing web batch size; not measured browser latency."
+    }
+  },
+  {
+    "file": "plate_armor.jsonl",
+    "query": "plate_armor_plus3_depth19",
+    "policy": "ranked",
+    "count": 4096,
+    "matches": [
+      3206,
+      3206
+    ],
+    "new": 0,
+    "lost": 0,
+    "seconds": [
+      16.049821015000003,
+      15.956925578999996
+    ],
+    "cpu_seconds": [
+      16.05,
+      15.93
+    ],
+    "generation_cost_change_percent": -0.5787942177871486,
+    "match_increase_percent": 0.0,
+    "seconds_per_match": [
+      0.005006182475046788,
+      0.004977206980349344
+    ],
+    "time_saved_percent": 0.5787942177871375,
+    "time_saved_95_ci_percent": [
+      -0.7324638421112084,
+      1.915434787909942
+    ],
+    "cpu_time_saved_percent": 0.747663551401867,
+    "setup_seconds": 0.003643567,
+    "one_result_seconds_including_setup": [
+      0.005006182475046788,
+      0.008620773980349343
+    ],
+    "ranking": [],
+    "selected_cells": {
+      "chaotic_censer": [
+        83,
+        0,
+        0,
+        313
+      ],
+      "cracked_spyglass": [
+        1,
+        0,
+        0,
+        6
+      ],
+      "dimensional_sundial": [
+        75,
+        0,
+        0,
+        280
+      ],
+      "exotic_crystals": [
+        86,
+        0,
+        0,
+        305
+      ],
+      "eye_of_newt": [
+        82,
+        0,
+        0,
+        298
+      ],
+      "ferret_tuft": [
+        82,
+        0,
+        0,
+        293
+      ],
+      "parchment_scrap": [
+        2,
+        0,
+        0,
+        12
+      ],
+      "petrified_seed": [
+        84,
+        0,
+        0,
+        263
+      ],
+      "salt_cube": [
+        66,
+        0,
+        0,
+        266
+      ],
+      "shard_of_oblivion": [
+        88,
+        0,
+        0,
+        287
+      ],
+      "thirteen_leaf_clover": [
+        88,
+        0,
+        0,
+        286
+      ],
+      "trap_mechanism": [
+        0,
+        0,
+        0,
+        3
+      ],
+      "vial_of_blood": [
+        72,
+        0,
+        0,
+        298
+      ],
+      "wondrous_resin": [
+        81,
+        0,
+        0,
+        296
+      ]
+    },
+    "native_model_of_256_seed_delivery": {
+      "batch_count": 16,
+      "successful_batches": [
+        16,
+        16
+      ],
+      "seconds_to_nonempty_batch": [
+        1.0031138134375,
+        0.9973078486875
+      ],
+      "time_saved_percent": 0.5787942177871042,
+      "time_saved_95_ci_percent": [
+        -0.8148900110877211,
+        2.0700638008628425
+      ],
+      "note": "Aggregated native measurements modeling existing web batch size; not measured browser latency."
+    }
+  },
+  {
+    "file": "ring_might.jsonl",
+    "query": "ring_might_plus2_depth9",
+    "policy": "ranked",
+    "count": 32768,
+    "matches": [
+      347,
+      400
+    ],
+    "new": 73,
+    "lost": 20,
+    "seconds": [
+      49.268177014999914,
+      49.35582193700001
+    ],
+    "cpu_seconds": [
+      49.22,
+      49.39
+    ],
+    "generation_cost_change_percent": 0.17789357615851653,
+    "match_increase_percent": 15.27377521613833,
+    "seconds_per_match": [
+      0.14198321906340033,
+      0.12338955484250003
+    ],
+    "time_saved_percent": 13.095677322682475,
+    "time_saved_95_ci_percent": [
+      8.537251925620426,
+      17.764157316118933
+    ],
+    "cpu_time_saved_percent": 12.950375863470132,
+    "setup_seconds": 0.001974244,
+    "one_result_seconds_including_setup": [
+      0.14198321906340033,
+      0.12536379884250004
+    ],
+    "ranking": [
+      "mimic_tooth",
+      "cracked_spyglass"
+    ],
+    "selected_cells": {
+      "chaotic_censer": [
+        1749,
+        0,
+        0,
+        13
+      ],
+      "cracked_spyglass": [
+        6089,
+        1,
+        4,
+        58
+      ],
+      "dimensional_sundial": [
+        1728,
+        0,
+        0,
+        18
+      ],
+      "exotic_crystals": [
+        1692,
+        0,
+        0,
+        18
+      ],
+      "eye_of_newt": [
+        1792,
+        0,
+        0,
+        22
+      ],
+      "ferret_tuft": [
+        1710,
+        0,
+        0,
+        18
+      ],
+      "mimic_tooth": [
+        7401,
+        19,
+        69,
+        79
+      ],
+      "mossy_clump": [
+        16,
+        0,
+        0,
+        0
+      ],
+      "petrified_seed": [
+        1647,
+        0,
+        0,
+        15
+      ],
+      "salt_cube": [
+        1722,
+        0,
+        0,
+        18
+      ],
+      "shard_of_oblivion": [
+        1733,
+        0,
+        0,
+        20
+      ],
+      "thirteen_leaf_clover": [
+        1710,
+        0,
+        0,
+        23
+      ],
+      "vial_of_blood": [
+        1686,
+        0,
+        0,
+        10
+      ],
+      "wondrous_resin": [
+        1673,
+        0,
+        0,
+        15
+      ]
+    },
+    "native_model_of_256_seed_delivery": {
+      "batch_count": 128,
+      "successful_batches": [
+        120,
+        124
+      ],
+      "seconds_to_nonempty_batch": [
+        0.4105681417916667,
+        0.39803082207258067
+      ],
+      "time_saved_percent": 3.053651377911293,
+      "time_saved_95_ci_percent": [
+        -0.6646279029082214,
+        6.979381029933595
+      ],
+      "note": "Aggregated native measurements modeling existing web batch size; not measured browser latency."
+    }
+  },
+  {
+    "file": "thorns_armor.jsonl",
+    "query": "thorns_armor_plus1_depth9",
+    "policy": "ranked",
+    "count": 32768,
+    "matches": [
+      279,
+      489
+    ],
+    "new": 215,
+    "lost": 5,
+    "seconds": [
+      49.48153023000005,
+      49.559849292999935
+    ],
+    "cpu_seconds": [
+      49.31,
+      49.68
+    ],
+    "generation_cost_change_percent": 0.1582793875529731,
+    "match_increase_percent": 75.26881720430107,
+    "seconds_per_match": [
+      0.17735315494623674,
+      0.10134938505725959
+    ],
+    "time_saved_percent": 42.85447863164155,
+    "time_saved_95_ci_percent": [
+      38.58369471972021,
+      47.38578953501309
+    ],
+    "cpu_time_saved_percent": 42.51666867806403,
+    "setup_seconds": 0.002116166,
+    "one_result_seconds_including_setup": [
+      0.17735315494623674,
+      0.10346555105725959
+    ],
+    "ranking": [
+      "parchment_scrap",
+      "mimic_tooth",
+      "rat_skull"
+    ],
+    "selected_cells": {
+      "chaotic_censer": [
+        1243,
+        0,
+        0,
+        12
+      ],
+      "dimensional_sundial": [
+        1254,
+        0,
+        0,
+        19
+      ],
+      "exotic_crystals": [
+        1252,
+        0,
+        0,
+        18
+      ],
+      "eye_of_newt": [
+        1340,
+        0,
+        0,
+        10
+      ],
+      "ferret_tuft": [
+        1249,
+        0,
+        0,
+        9
+      ],
+      "mimic_tooth": [
+        6086,
+        4,
+        27,
+        52
+      ],
+      "parchment_scrap": [
+        7371,
+        0,
+        183,
+        66
+      ],
+      "petrified_seed": [
+        1254,
+        0,
+        0,
+        12
+      ],
+      "rat_skull": [
+        5029,
+        1,
+        5,
+        35
+      ],
+      "salt_cube": [
+        1205,
+        0,
+        0,
+        9
+      ],
+      "shard_of_oblivion": [
+        1297,
+        0,
+        0,
+        9
+      ],
+      "thirteen_leaf_clover": [
+        1224,
+        0,
+        0,
+        8
+      ],
+      "vial_of_blood": [
+        1228,
+        0,
+        0,
+        5
+      ],
+      "wondrous_resin": [
+        1242,
+        0,
+        0,
+        10
+      ]
+    },
+    "native_model_of_256_seed_delivery": {
+      "batch_count": 128,
+      "successful_batches": [
+        119,
+        127
+      ],
+      "seconds_to_nonempty_batch": [
+        0.4158111784033613,
+        0.3902350338031496
+      ],
+      "time_saved_percent": 6.1509035659934375,
+      "time_saved_95_ci_percent": [
+        2.1356712396447652,
+        11.61275693903704
+      ],
+      "note": "Aggregated native measurements modeling existing web batch size; not measured browser latency."
+    }
+  }
+]

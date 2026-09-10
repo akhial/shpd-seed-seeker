@@ -5,7 +5,13 @@ export type SearchWorkerRequest =
   | { type: "search:start"; queryJson: string; segments: SeedRange[]; sessionId: number }
   | { type: "search:stop"; sessionId: number }
   | { type: "scout"; requestJson: string; requestId: number }
-  | { type: "filter"; queryJson: string; seeds: number[]; requestId: number };
+  | {
+      type: "filter";
+      queryJson: string;
+      seeds: number[];
+      trinkets?: (string | null)[];
+      requestId: number;
+    };
 
 /** Progress is reported per assigned segment: `scanned[i]` seeds at the
  * front of segment `i` have been tested. A cumulative count would misplace

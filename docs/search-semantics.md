@@ -86,7 +86,7 @@ Set:
    coverage untouched: proving no seed can match consumes none of the
    remainder, so removing the impossible requirement later resumes where the
    target actually stopped.
-2. **`Q` shares an item with the Target Query** → *target filter*: re-verify
+2. **`Q` shares an item with the Target Query and has the same automatic trinket policy** → *target filter*: re-verify
    the whole Target Set against `Q` and display the survivors. No scanning;
    the Target Set and its coverage are untouched. Because the base is always
    the full Target Set — not the last run's survivors — loosening a
@@ -133,3 +133,18 @@ bar, mobile snackbar, GNOME toasts) also carry the target notes:
 
 The result cap, stats box, chips, and impossible-query warning are
 unchanged.
+
+## Automatic trinket world conditions
+
+`auto_apply_trinket` selects one initial offer before generation. The prepared
+policy is part of world identity: continuation requires identical preferred
+and fallback rankings (or automatic selection disabled in both queries).
+Explicit trinket selection slots still must agree for continuation. Changing
+automatic choices starts a detached traversal, preserving the target, even
+when the queries share an item. Merely filtering the target could miss seeds
+that failed under the old choice and pass under the new one.
+
+The engine owns this decision. The web passes the exact saved choices to
+filter workers and uses them for automatic-result replay. Manual trinket
+requirements continue to use their explicit selection rules. Imports carry
+no scanned coverage; their result recipes survive subsequent editor changes.

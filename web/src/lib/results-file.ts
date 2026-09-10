@@ -21,8 +21,14 @@ export function parsedSeedFromCode(code: string): ParsedSeed {
  *
  * @throws Error with the codec's message for an invalid query or seed code.
  */
-export function encodeResultsFile(query: QueryDocument, seeds: string[]): string {
-  return encodeResultsFileText(JSON.stringify({ query, seeds, app_version: packageJson.version }));
+export function encodeResultsFile(
+  query: QueryDocument,
+  seeds: string[],
+  trinkets?: (string | null)[],
+): string {
+  return encodeResultsFileText(
+    JSON.stringify({ query, seeds, trinkets, app_version: packageJson.version }),
+  );
 }
 
 export interface DecodedResultsFile {
@@ -34,6 +40,7 @@ export interface DecodedResultsFile {
   query: QueryState;
   /** Canonical seed codes, already deduplicated and capped by the engine. */
   seeds: string[];
+  trinkets: (string | null)[];
   /** Exported entries the engine's dedupe-and-cap removed. */
   dropped: number;
 }
@@ -41,6 +48,7 @@ export interface DecodedResultsFile {
 interface DecodedDocument {
   query: QueryDocument;
   seeds: string[];
+  trinkets: (string | null)[];
   dropped: number;
   app_version: string | null;
   shpd_version: string | null;
@@ -61,6 +69,7 @@ export function decodeResultsFile(text: string): DecodedResultsFile {
     queryDocument: decoded.query,
     query: fromQueryJson(JSON.stringify(decoded.query)),
     seeds: decoded.seeds,
+    trinkets: decoded.trinkets,
     dropped: decoded.dropped,
   };
 }

@@ -204,11 +204,7 @@ export class SearchCoordinator {
       runKind: mode,
       error: undefined,
     }));
-    void this.filterSeeds(
-      queryJson,
-      target.matches.map((match) => match.value),
-      workerCount,
-    )
+    void this.filterSeeds(queryJson, target.matches, workerCount)
       .then((kept) => {
         if (this.filterRestore?.sessionId !== sessionId) return;
         this.filterRestore = undefined;
@@ -261,11 +257,7 @@ export class SearchCoordinator {
       runKind: "detached",
       error: undefined,
     }));
-    void this.filterSeeds(
-      queryJson,
-      previousMatches.map((match) => match.value),
-      workerCount,
-    )
+    void this.filterSeeds(queryJson, previousMatches, workerCount)
       .then((kept) => {
         if (this.filterRestore?.sessionId !== sessionId) return;
         this.filterRestore = undefined;
@@ -297,7 +289,7 @@ export class SearchCoordinator {
    */
   private filterSeeds(
     queryJson: string,
-    seeds: number[],
+    seeds: ParsedSeed[],
     workerCount: number,
   ): Promise<ParsedSeed[]> {
     if (seeds.length === 0) return Promise.resolve([]);
@@ -315,7 +307,10 @@ export class SearchCoordinator {
           workers[index].postMessage({
             type: "filter",
             queryJson,
-            seeds: chunk,
+            seeds: chunk.map((match) => match.value),
+            ...(chunk.every((match) => match.selectedTrinket !== undefined)
+              ? { trinkets: chunk.map((match) => match.selectedTrinket ?? null) }
+              : {}),
             requestId,
           } satisfies SearchWorkerRequest);
         }),

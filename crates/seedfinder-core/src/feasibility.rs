@@ -294,6 +294,7 @@ struct RequirementPlan {
 /// `false` answer sound and merely forgoes some early exits.
 #[derive(Clone, Debug)]
 pub struct QueryPlan {
+    auto_trinket: Option<crate::auto_trinkets::AutoTrinketPolicy>,
     selected_slots: Vec<Vec<Requirement>>,
     /// One entry per query slot: a plain requirement alone, or every member
     /// of an alternative group, any one of which satisfies the slot.
@@ -407,6 +408,7 @@ impl QueryPlan {
         });
 
         let mut plan = Self {
+            auto_trinket: crate::auto_trinkets::AutoTrinketPolicy::prepare(query),
             selected_slots: crate::trinkets::selection_slots(query),
             slots,
             generation_depth,
@@ -542,6 +544,9 @@ impl QueryPlan {
 
 impl FloorGate for QueryPlan {
     fn selected_trinket(&self, seed: crate::seed::DungeonSeed) -> Option<crate::catalog::ItemId> {
+        if let Some(policy) = &self.auto_trinket {
+            return policy.selected_trinket(seed);
+        }
         crate::trinkets::resolve_selection(seed, &self.selected_slots)
     }
 
@@ -591,6 +596,7 @@ mod tests {
 
     fn query(requirements: Vec<Requirement>, max_depth: u8) -> SearchQuery {
         SearchQuery {
+            auto_apply_trinket: false,
             requirements,
             max_depth,
             challenges: crate::challenges::Challenges::NONE,

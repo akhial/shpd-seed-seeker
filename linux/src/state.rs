@@ -291,6 +291,7 @@ impl AppState {
     #[must_use]
     pub fn unvalidated_query(&self) -> SearchQuery {
         SearchQuery {
+            auto_apply_trinket: false,
             requirements: self.requirements.iter().map(|r| r.to_core()).collect(),
             max_depth: self.max_depth,
             challenges: self.challenges,

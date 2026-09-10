@@ -162,9 +162,9 @@ pub fn production_scout_world_selected(
     query: Option<&SearchQuery>,
     trinket_override: Option<Option<ItemId>>,
 ) -> Result<(GeneratedWorld, Option<ItemId>), ScoutCallError> {
-    use shpd_seedfinder_core::trinkets::{resolve_selection, selection_slots, trinket_order};
-    let selected = trinket_override
-        .unwrap_or_else(|| query.and_then(|q| resolve_selection(seed, &selection_slots(q))));
+    use shpd_seedfinder_core::trinkets::{selected_for_query, trinket_order};
+    let selected =
+        trinket_override.unwrap_or_else(|| query.and_then(|q| selected_for_query(seed, q)));
     if selected.is_some_and(|id| !trinket_order(seed)[..4].contains(&id)) {
         return Err(ScoutCallError::Packet(ScoutPacketError::Request(
             WireError::InvalidTrinketOrder,
@@ -778,6 +778,7 @@ mod tests {
     }
     fn query() -> SearchQuery {
         SearchQuery {
+            auto_apply_trinket: false,
             requirements: vec![Requirement {
                 kind: ItemKind::Wand,
                 weapon_category: None,
@@ -950,6 +951,7 @@ mod tests {
             .unwrap();
         let definition = shpd_seedfinder_core::catalog::item(known.item);
         let satisfiable = SearchQuery {
+            auto_apply_trinket: false,
             requirements: vec![Requirement {
                 kind: definition.kind,
                 weapon_category: None,
@@ -1034,6 +1036,7 @@ mod tests {
         // instantly without scanning, and the hint must return the entire
         // requested arc so a later satisfiable continuation still covers it.
         let impossible = SearchQuery {
+            auto_apply_trinket: false,
             requirements: vec![Requirement {
                 kind: shpd_seedfinder_core::catalog::ItemKind::Ring,
                 weapon_category: None,
@@ -1141,6 +1144,7 @@ mod tests {
 
     fn kind_query(kind: ItemKind) -> SearchQuery {
         SearchQuery {
+            auto_apply_trinket: false,
             requirements: vec![kind_requirement(kind)],
             max_depth: 24,
             challenges: Challenges::NONE,

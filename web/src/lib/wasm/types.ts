@@ -90,6 +90,7 @@ export interface RequirementState {
 }
 
 export interface QueryState {
+  autoApplyTrinket: boolean;
   requirements: RequirementState[];
   maxDepth: number;
   requireBlacksmith: boolean;
@@ -127,6 +128,7 @@ export type RequirementEntryDocument = RequirementDocument | AnyOfDocument;
  * retired keys such as `fast_mode`; both the engine's codec and `fromQueryJson`
  * accept and ignore them. */
 export interface QueryDocument {
+  auto_apply_trinket?: boolean;
   requirements: RequirementEntryDocument[];
   max_depth?: number;
   require_blacksmith?: true;
@@ -181,6 +183,8 @@ export interface EngineInfo {
 }
 
 export interface ParsedSeed {
+  /** Exact result recipe. Null means No Trinket; absent uses the query. */
+  selectedTrinket?: string | null;
   code: string;
   value: number;
 }

@@ -279,6 +279,7 @@ export const emptyRequirement = (kind?: RequirementState["kind"]): RequirementSt
 });
 
 export const defaultQueryState = (): QueryState => ({
+  autoApplyTrinket: false,
   requirements: [],
   maxDepth: MAX_DEPTH,
   requireBlacksmith: false,
@@ -327,6 +328,7 @@ export function toQueryDocument(state: QueryState): QueryDocument {
     return members.length === 1 ? members[0] : { any_of: members };
   });
   const output: QueryDocument = { requirements: entries };
+  if (state.autoApplyTrinket) output.auto_apply_trinket = true;
   if (state.maxDepth !== MAX_DEPTH) output.max_depth = state.maxDepth;
   if (state.requireBlacksmith) output.require_blacksmith = true;
   if (state.excludeBlacksmithRewards) output.exclude_blacksmith_rewards = true;
@@ -467,7 +469,10 @@ export function fromQueryJson(json: string): QueryState {
     throw new Error("a query needs a requirements list");
   if (document.challenges !== undefined && !Array.isArray(document.challenges))
     throw new Error("challenges must be a list of challenge names");
+  if (document.auto_apply_trinket !== undefined && typeof document.auto_apply_trinket !== "boolean")
+    throw new Error("auto_apply_trinket must be a boolean");
   return {
+    autoApplyTrinket: document.auto_apply_trinket ?? false,
     requirements: requirementsFromDocument(document.requirements),
     maxDepth: normalizeFloorLimit(document.max_depth ?? MAX_DEPTH),
     requireBlacksmith: document.require_blacksmith ?? false,

@@ -2027,6 +2027,17 @@ input[type="range"]::-moz-range-thumb {
   cursor: pointer;
 }
 
+.d1-result-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.d1-result-trinket {
+  font-size: 11px;
+  color: var(--d1-text-2);
+}
+
 .d1-result-index {
   flex: 0 0 30px;
   font-family: var(--d1-mono);

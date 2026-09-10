@@ -859,6 +859,7 @@ mod tests {
     #[test]
     fn query_requests_round_trip_every_query_field() {
         let query = SearchQuery {
+            auto_apply_trinket: false,
             requirements: vec![
                 Requirement {
                     kind: ItemKind::Armor,
@@ -952,6 +953,7 @@ mod tests {
     #[test]
     fn query_requests_round_trip_effect_sets_alternatives_and_level_sums() {
         let query = SearchQuery {
+            auto_apply_trinket: false,
             requirements: vec![
                 Requirement {
                     kind: ItemKind::Weapon,

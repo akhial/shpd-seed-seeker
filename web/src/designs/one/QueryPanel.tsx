@@ -8,6 +8,7 @@ import {
   FLOOR_LIMIT_OPTIONS,
   emptyRequirement,
   fromQueryJson,
+  requirementFamily,
   toQueryJson,
 } from "../../lib/query";
 import type { ValidationResult } from "../../lib/query";
@@ -403,29 +404,43 @@ export function QueryPanel({
           </details>
         </section>
 
-        {/* The worker slider is the whole section, so a single-core machine
-            has nothing to show here. */}
-        {workerCeiling > 1 && (
-          <section className="d1-section">
-            <details className="d1-details">
-              <summary>
-                <span>Performance</span>
-              </summary>
-              <div className="d1-details-body">
-                <SliderRow
-                  label="Workers"
-                  valueLabel={`${workerCount} of ${workerCeiling} cores`}
-                  min={1}
-                  max={workerCeiling}
-                  value={Math.min(workerCount, workerCeiling)}
-                  fill
-                  onChange={setWorkerCount}
+        <section className="d1-section">
+          <details className="d1-details">
+            <summary>
+              <span>Performance</span>
+            </summary>
+            <div className="d1-details-body">
+              {workerCeiling > 1 && (
+                <>
+                  <SliderRow
+                    label="Workers"
+                    valueLabel={`${workerCount} of ${workerCeiling} cores`}
+                    min={1}
+                    max={workerCeiling}
+                    value={Math.min(workerCount, workerCeiling)}
+                    fill
+                    onChange={setWorkerCount}
+                  />
+                  <p className="d1-caption">Number of search threads to spawn.</p>
+                </>
+              )}
+              <label className="d1-check">
+                <input
+                  type="checkbox"
+                  checked={query.autoApplyTrinket}
+                  disabled={query.requirements.some((r) => requirementFamily(r) === "trinket")}
+                  onChange={(event) => patchQuery({ autoApplyTrinket: event.target.checked })}
                 />
-                <p className="d1-caption">Number of search threads to spawn.</p>
-              </div>
-            </details>
-          </section>
-        )}
+                <span>Auto-apply a trinket at +3</span>
+              </label>
+              <p className="d1-caption">
+                {query.requirements.some((r) => requirementFamily(r) === "trinket")
+                  ? "Uses your trinket requirements instead."
+                  : "Chooses one offered trinket to improve this search. Results show the choice to use at the first brewing opportunity."}
+              </p>
+            </div>
+          </details>
+        </section>
 
         <section className="d1-section">
           <details className="d1-details">

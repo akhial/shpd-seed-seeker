@@ -99,7 +99,11 @@ context.addEventListener("message", (event: MessageEvent<SearchWorkerRequest>) =
         post({
           type: "filter:result",
           requestId: message.requestId,
-          resultJson: filter_seeds(message.queryJson, new Float64Array(message.seeds)),
+          resultJson: filter_seeds(
+            message.queryJson,
+            new Float64Array(message.seeds),
+            message.trinkets ? JSON.stringify(message.trinkets) : undefined,
+          ),
         });
       } catch (error) {
         post({

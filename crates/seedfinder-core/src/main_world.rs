@@ -624,6 +624,7 @@ mod tests {
             level_sum: None,
         };
         let query = |requirements: Vec<Requirement>| SearchQuery {
+            auto_apply_trinket: false,
             requirements,
             max_depth: 24,
             challenges: crate::challenges::Challenges::NONE,
@@ -691,6 +692,7 @@ mod tests {
         use crate::quests::WandmakerQuestType;
 
         let base = SearchQuery {
+            auto_apply_trinket: false,
             requirements: vec![Requirement {
                 kind: ItemKind::Wand,
                 weapon_category: None,
@@ -760,6 +762,7 @@ mod tests {
         use crate::catalog::WeaponCategory;
 
         let query = SearchQuery {
+            auto_apply_trinket: false,
             requirements: vec![Requirement {
                 kind: ItemKind::Weapon,
                 weapon_category: Some(WeaponCategory::Thrown),
@@ -891,6 +894,7 @@ mod tests {
         });
         assert!(imp_ring.is_some());
         let query = SearchQuery {
+            auto_apply_trinket: false,
             requirements: vec![Requirement {
                 kind: ItemKind::Ring,
                 weapon_category: None,

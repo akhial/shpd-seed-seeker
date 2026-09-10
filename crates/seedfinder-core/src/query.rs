@@ -561,6 +561,9 @@ impl Requirement {
 /// All requirements must be obtainable together in the same generated world.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SearchQuery {
+    /// Automatically choose one offered trinket at +3 before generation.
+    /// Explicit trinket requirements take precedence over this setting.
+    pub auto_apply_trinket: bool,
     pub requirements: Vec<Requirement>,
     pub max_depth: u8,
     /// Upstream v3.3.8 challenge mask used while generating candidate worlds.
@@ -766,6 +769,7 @@ impl SearchQuery {
     pub fn continues(&self, base: &SearchQuery) -> bool {
         if self.max_depth != base.max_depth
             || self.challenges != base.challenges
+            || !crate::auto_trinkets::same_selection(self, base)
             || crate::trinkets::selection_slots(self) != crate::trinkets::selection_slots(base)
             || !flag_at_least_as_strict(self.require_blacksmith, base.require_blacksmith)
             || !flag_at_least_as_strict(
@@ -1412,7 +1416,7 @@ pub fn decide_start(
     if continues_target {
         return StartDecision::TargetRefine;
     }
-    if candidate.shares_item(target) {
+    if candidate.shares_item(target) && crate::auto_trinkets::same_selection(candidate, target) {
         return StartDecision::TargetFilter;
     }
     match detached_base {
@@ -1569,6 +1573,7 @@ mod tests {
     #[test]
     fn continuation_needs_a_compatible_scope_and_a_requirement_superset() {
         let base = SearchQuery {
+            auto_apply_trinket: false,
             requirements: vec![requirement(ItemId::Sword), requirement(ItemId::Sword)],
             max_depth: 4,
             challenges: crate::challenges::Challenges::NONE,
@@ -1657,6 +1662,7 @@ mod tests {
             ..any_ring
         };
         let query = |requirements: Vec<Requirement>| SearchQuery {
+            auto_apply_trinket: false,
             requirements,
             max_depth: 24,
             challenges: crate::challenges::Challenges::NONE,
@@ -1721,6 +1727,7 @@ mod tests {
     #[test]
     fn sharing_compares_kinds_and_named_items_only() {
         let query = |kind: ItemKind, item: Option<ItemId>| SearchQuery {
+            auto_apply_trinket: false,
             requirements: vec![Requirement {
                 kind,
                 weapon_category: None,
@@ -1773,6 +1780,7 @@ mod tests {
     #[test]
     fn and_query_requires_distinct_item_occurrences() {
         let query = SearchQuery {
+            auto_apply_trinket: false,
             requirements: vec![requirement(ItemId::Sword), requirement(ItemId::Sword)],
             max_depth: 4,
             challenges: crate::challenges::Challenges::NONE,
@@ -1806,6 +1814,7 @@ mod tests {
         use crate::quests::{QuestSummary, ScheduledQuest, WandmakerQuestType};
 
         let mut query = SearchQuery {
+            auto_apply_trinket: false,
             requirements: vec![requirement(ItemId::Sword)],
             max_depth: 24,
             challenges: crate::challenges::Challenges::NONE,
@@ -1873,6 +1882,7 @@ mod tests {
         let mut limited = requirement(ItemId::Sword);
         limited.max_depth = Some(2);
         let mut query = SearchQuery {
+            auto_apply_trinket: false,
             requirements: vec![limited],
             max_depth: 24,
             challenges: crate::challenges::Challenges::NONE,
@@ -1888,6 +1898,7 @@ mod tests {
     #[test]
     fn mutually_exclusive_rewards_cannot_satisfy_and_query() {
         let query = SearchQuery {
+            auto_apply_trinket: false,
             requirements: vec![requirement(ItemId::Sword), requirement(ItemId::MailArmor)],
             max_depth: 4,
             challenges: crate::challenges::Challenges::NONE,
@@ -1923,6 +1934,7 @@ mod tests {
     #[test]
     fn same_choice_option_and_independent_rewards_can_match() {
         let query = SearchQuery {
+            auto_apply_trinket: false,
             requirements: vec![requirement(ItemId::Sword), requirement(ItemId::MailArmor)],
             max_depth: 4,
             challenges: crate::challenges::Challenges::NONE,
@@ -1987,6 +1999,7 @@ mod tests {
         };
 
         let compatible = SearchQuery {
+            auto_apply_trinket: false,
             requirements: vec![requirement(ItemId::Sword), requirement(ItemId::MailArmor)],
             max_depth: 4,
             challenges: crate::challenges::Challenges::NONE,
@@ -1997,6 +2010,7 @@ mod tests {
         assert!(compatible.matches(&world));
 
         let incompatible = SearchQuery {
+            auto_apply_trinket: false,
             requirements: vec![requirement(ItemId::Sword), requirement(ItemId::WandFrost)],
             max_depth: 4,
             challenges: crate::challenges::Challenges::NONE,
@@ -2358,6 +2372,7 @@ mod tests {
             level_sum: None,
         };
         let mut query = SearchQuery {
+            auto_apply_trinket: false,
             requirements: vec![
                 linked(
                     UpgradeRequirement::Exact(3),
@@ -2425,6 +2440,7 @@ mod tests {
     #[test]
     fn smith_rewards_can_be_excluded_without_hiding_the_blacksmith() {
         let mut query = SearchQuery {
+            auto_apply_trinket: false,
             requirements: vec![requirement(ItemId::Sword)],
             max_depth: 14,
             challenges: crate::challenges::Challenges::NONE,
@@ -2485,6 +2501,7 @@ mod tests {
             level_sum: None,
         };
         let query = |members: Vec<Requirement>| SearchQuery {
+            auto_apply_trinket: false,
             requirements: members,
             max_depth: 24,
             challenges: crate::challenges::Challenges::NONE,
@@ -3029,6 +3046,7 @@ mod tests {
 
     fn scout_query(requirements: Vec<Requirement>) -> SearchQuery {
         SearchQuery {
+            auto_apply_trinket: false,
             requirements,
             max_depth: 24,
             challenges: crate::challenges::Challenges::NONE,

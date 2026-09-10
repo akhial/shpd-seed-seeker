@@ -23,8 +23,12 @@
 
 use serde_json::{Map, Value, json};
 
+use crate::auto_trinkets::SeedRecipe;
+use crate::catalog::{ItemId, item};
+use crate::feasibility::QueryPlan;
 use crate::json_query;
 use crate::query::{MAX_IDENTITY_GROUP, MAX_LEVEL_SUM_GROUP, SearchQuery};
+use crate::search::FloorGate;
 use crate::seed::DungeonSeed;
 
 /// Identifies a Seed Seeker results file.
@@ -54,20 +58,46 @@ pub struct ResultsFile {
     pub query: SearchQuery,
     /// The exported result seeds, in their exported order.
     pub seeds: Vec<DungeonSeed>,
+    /// Exact choices in exported order. Missing legacy choices resolve from
+    /// the file's query once at import; explicit null means No Trinket.
+    pub recipes: Vec<SeedRecipe>,
 }
 
 /// Encodes a validated query and its result seeds as a pretty-printed results
 /// document.
 #[must_use]
 pub fn encode(query: &SearchQuery, seeds: &[DungeonSeed], app_version: &str) -> String {
+    let plan = QueryPlan::analyze(query);
+    let recipes: Vec<_> = seeds
+        .iter()
+        .map(|&seed| SeedRecipe {
+            seed,
+            trinket: plan.selected_trinket(seed),
+        })
+        .collect();
+    encode_recipes(query, &recipes, app_version)
+}
+
+/// Encode the exact choices used for each result, preserving replay after
+/// query editing or future changes to the ranking tables.
+#[must_use]
+pub fn encode_recipes(query: &SearchQuery, recipes: &[SeedRecipe], app_version: &str) -> String {
+    let record_empty_choice =
+        query.auto_apply_trinket || query.requirements.iter().any(|r| r.select_trinket);
     let document = json!({
         "format": FILE_FORMAT,
         "app_version": app_version,
         "shpd_version": crate::SHPD_VERSION,
         "query": json_query::encode(query),
-        "results": seeds
+        "results": recipes
             .iter()
-            .map(|seed| json!({ "seed": seed.to_code() }))
+            .map(|recipe| {
+                let mut value = json!({ "seed": recipe.seed.to_code() });
+                if recipe.trinket.is_some() || record_empty_choice {
+                    value["trinket"] = json!(recipe.trinket.map(|id| item(id).stable_id));
+                }
+                value
+            })
             .collect::<Vec<_>>(),
     });
     serde_json::to_string_pretty(&document).unwrap_or_default()
@@ -130,16 +160,29 @@ pub fn decode(contents: &str) -> Result<ResultsFile, String> {
         .get("results")
         .and_then(Value::as_array)
         .ok_or("this results file is missing its \"results\" list")?;
-    let seeds = results
+    let seeds: Vec<_> = results
         .iter()
         .enumerate()
         .map(|(index, entry)| decode_result_seed(index, entry))
         .collect::<Result<Vec<_>, _>>()?;
+    let plan = QueryPlan::analyze(&query);
+    let recipes = seeds
+        .iter()
+        .zip(results)
+        .map(|(&seed, entry)| {
+            let trinket = match entry.get("trinket") {
+                None => plan.selected_trinket(seed),
+                Some(value) => decode_trinket(seed, value)?,
+            };
+            Ok(SeedRecipe { seed, trinket })
+        })
+        .collect::<Result<Vec<_>, String>>()?;
     Ok(ResultsFile {
         app_version: field_string(document, "app_version"),
         shpd_version: field_string(document, "shpd_version"),
         query,
         seeds,
+        recipes,
     })
 }
 
@@ -193,7 +236,36 @@ pub fn encode_document(request_json: &str) -> Result<String, String> {
         .get("app_version")
         .and_then(Value::as_str)
         .unwrap_or_default();
-    Ok(encode(&query, &seeds, app_version))
+    if let Some(values) = request.get("trinkets") {
+        let values = values
+            .as_array()
+            .filter(|v| v.len() == seeds.len())
+            .ok_or("trinkets must contain one choice per seed")?;
+        let recipes = seeds
+            .iter()
+            .zip(values)
+            .map(|(&seed, value)| {
+                decode_trinket(seed, value).map(|trinket| SeedRecipe { seed, trinket })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(encode_recipes(&query, &recipes, app_version))
+    } else {
+        Ok(encode(&query, &seeds, app_version))
+    }
+}
+
+/// Decode one saved choice. Null explicitly preserves an unselected world.
+///
+/// # Errors
+/// Rejects non-string values and choices absent from the initial offers.
+pub fn decode_trinket(seed: DungeonSeed, value: &Value) -> Result<Option<ItemId>, String> {
+    if value.is_null() {
+        return Ok(None);
+    }
+    let id = value
+        .as_str()
+        .ok_or("trinket must be a stable ID or null")?;
+    crate::trinkets::parse_offered(seed, id).map(Some)
 }
 
 fn request_seed(index: usize, entry: &Value) -> Result<DungeonSeed, String> {
@@ -222,9 +294,14 @@ fn request_seed(index: usize, entry: &Value) -> Result<DungeonSeed, String> {
 pub fn decode_document(contents: &str) -> Result<String, String> {
     let file = decode(contents)?;
     let (seeds, dropped) = dedupe_and_cap(&file.seeds, MAX_RESULTS);
+    let mut choices = std::collections::BTreeMap::new();
+    for recipe in &file.recipes {
+        choices.entry(recipe.seed.value()).or_insert(recipe.trinket);
+    }
     Ok(json!({
         "query": json_query::encode(&file.query),
         "seeds": seeds.iter().copied().map(DungeonSeed::to_code).collect::<Vec<_>>(),
+        "trinkets": seeds.iter().map(|seed| choices[&seed.value()].map(|id| item(id).stable_id)).collect::<Vec<_>>(),
         "dropped": dropped,
         "app_version": file.app_version,
         "shpd_version": file.shpd_version,
@@ -288,6 +365,7 @@ mod tests {
 
     fn sample_query() -> SearchQuery {
         SearchQuery {
+            auto_apply_trinket: false,
             requirements: vec![
                 Requirement {
                     kind: ItemKind::Ring,

@@ -2,6 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use shpd_seedfinder_core::auto_trinkets::{self, SeedRecipe};
 use shpd_seedfinder_core::catalog::{Effect, ItemKind, item};
 use shpd_seedfinder_core::challenges::Challenges;
 use shpd_seedfinder_core::deep_link;
@@ -19,7 +20,6 @@ use shpd_seedfinder_core::quests::{
 };
 use shpd_seedfinder_core::results_export;
 pub use shpd_seedfinder_core::results_export::MAX_RESULTS;
-use shpd_seedfinder_core::search::WorldGenerator;
 use shpd_seedfinder_core::seed::{self, DungeonSeed, TOTAL_SEEDS};
 use wasm_bindgen::prelude::*;
 
@@ -27,6 +27,9 @@ const SEARCH_BATCH_SIZE: u64 = 256;
 
 #[derive(Serialize)]
 struct SeedOutput {
+    #[allow(clippy::option_option)] // Absent uses the query; null explicitly means No Trinket.
+    #[serde(rename = "selectedTrinket", skip_serializing_if = "Option::is_none")]
+    selected_trinket: Option<Option<&'static str>>,
     code: String,
     value: u64,
 }
@@ -34,8 +37,18 @@ struct SeedOutput {
 impl From<DungeonSeed> for SeedOutput {
     fn from(seed: DungeonSeed) -> Self {
         Self {
+            selected_trinket: None,
             code: seed.to_code(),
             value: seed.value(),
+        }
+    }
+}
+
+impl From<SeedRecipe> for SeedOutput {
+    fn from(recipe: SeedRecipe) -> Self {
+        Self {
+            selected_trinket: Some(recipe.trinket.map(|id| item(id).stable_id)),
+            ..recipe.seed.into()
         }
     }
 }
@@ -305,17 +318,23 @@ pub fn scout(request_json: &str) -> Result<String, JsError> {
 
 /// Re-verifies specific seeds against a full query using the same
 /// authoritative matcher as the search path, returning the matching seeds as
-/// a JSON array of `{code, value}` in input order. This backs the "refine"
-/// flow: existing result seeds are filtered by the combined query instead of
-/// trusting stale metadata.
+/// a JSON array of `{code, value, selectedTrinket}` in input order. Optional
+/// `trinkets_json` carries an array of saved IDs or nulls, parallel to the seeds.
+/// Automatic queries replay those choices; explicit requirements resolve their
+/// own selection rules. This backs the filter-and-resume flow.
 ///
 /// # Errors
 ///
 /// Returns a JavaScript error for an invalid query or seed value.
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)] // wasm-bindgen requires an owned Vec.
-pub fn filter_seeds(query_json: &str, seed_values: Vec<f64>) -> Result<String, JsError> {
-    filter_seeds_impl(query_json, &seed_values).map_err(|error| JsError::new(&error))
+pub fn filter_seeds(
+    query_json: &str,
+    seed_values: Vec<f64>,
+    trinkets_json: Option<String>,
+) -> Result<String, JsError> {
+    filter_recipes_impl(query_json, &seed_values, trinkets_json.as_deref())
+        .map_err(|error| JsError::new(&error))
 }
 
 /// Reports whether the query in `candidate_json` continues the one in
@@ -437,18 +456,13 @@ impl SearchSession {
             let seeds = (self.cursor..batch_end)
                 .filter_map(|value| DungeonSeed::new(value).ok())
                 .collect::<Vec<_>>();
-            let worlds = self.generator.generate_batch_gated(
-                &seeds,
-                self.plan.generation_depth(),
-                &self.plan,
-            );
-            for world in worlds {
+            let results =
+                auto_trinkets::search_batch(&self.generator, &self.query, &self.plan, &seeds);
+            for result in results {
                 self.cursor += 1;
                 self.tested += 1;
-                if let Some(world) = world
-                    && self.query.matches(&world)
-                {
-                    matches.push(world.seed.into());
+                if let Some(result) = result {
+                    matches.push(result.recipe.into());
                     self.accepted += 1;
                     if self.accepted == MAX_RESULTS {
                         self.completed = true;
@@ -505,7 +519,16 @@ impl SearchSession {
     }
 }
 
+#[cfg(test)]
 fn filter_seeds_impl(query_json: &str, seed_values: &[f64]) -> Result<String, String> {
+    filter_recipes_impl(query_json, seed_values, None)
+}
+
+fn filter_recipes_impl(
+    query_json: &str,
+    seed_values: &[f64],
+    trinkets_json: Option<&str>,
+) -> Result<String, String> {
     let query = json_query::decode(query_json)?;
     let seeds = seed_values
         .iter()
@@ -519,13 +542,28 @@ fn filter_seeds_impl(query_json: &str, seed_values: &[f64]) -> Result<String, St
         return Ok(to_json::<Vec<SeedOutput>>(&Vec::new()));
     }
     let generator = CanonicalMainWorldGenerator::with_challenges(query.challenges);
-    let worlds = generator.generate_batch_gated(&seeds, plan.generation_depth(), &plan);
-    let matches = worlds
+    let results = if let Some(choices) = trinkets_json.filter(|_| auto_trinkets::enabled(&query)) {
+        let values: Vec<Value> = serde_json::from_str(choices).map_err(|e| e.to_string())?;
+        if values.len() != seeds.len() {
+            return Err("trinkets must contain one choice per seed".to_owned());
+        }
+        let recipes = seeds
+            .iter()
+            .zip(&values)
+            .map(|(&seed, value)| {
+                results_export::decode_trinket(seed, value)
+                    .map(|trinket| SeedRecipe { seed, trinket })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        auto_trinkets::filter_batch(&generator, &query, &plan, &recipes)
+    } else {
+        auto_trinkets::search_batch(&generator, &query, &plan, &seeds)
+    };
+    let matches: Vec<_> = results
         .into_iter()
         .flatten()
-        .filter(|world| query.matches(world))
-        .map(|world| SeedOutput::from(world.seed))
-        .collect::<Vec<_>>();
+        .map(|result| SeedOutput::from(result.recipe))
+        .collect();
     Ok(to_json(&matches))
 }
 
@@ -565,24 +603,11 @@ fn scout_impl(request_json: &str) -> Result<String, String> {
         .map(|value| json_query::decode(&value.to_string()))
         .transpose()?;
     let selected = match request.trinket.as_deref() {
-        None => query.as_ref().and_then(|q| {
-            shpd_seedfinder_core::trinkets::resolve_selection(
-                seed,
-                &shpd_seedfinder_core::trinkets::selection_slots(q),
-            )
-        }),
+        None => query
+            .as_ref()
+            .and_then(|q| shpd_seedfinder_core::trinkets::selected_for_query(seed, q)),
         Some("none") => None,
-        Some(id) => {
-            let selected = shpd_seedfinder_core::catalog::item_by_stable_id(id)
-                .ok_or_else(|| format!("unknown trinket: {id}"))?
-                .id;
-            if !shpd_seedfinder_core::trinkets::trinket_order(seed)[..4].contains(&selected) {
-                return Err(
-                    "selected trinket must be one of the four initial catalyst offers".to_owned(),
-                );
-            }
-            Some(selected)
-        }
+        Some(id) => Some(shpd_seedfinder_core::trinkets::parse_offered(seed, id)?),
     };
     let world = generate_main_world_with_trinket(seed, 24, challenges, selected)
         .map_err(|error| format!("world generation failed: {error}"))?;

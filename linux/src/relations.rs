@@ -868,6 +868,7 @@ mod tests {
     /// The whole list as the engine would check it.
     fn valid(requirements: &[UiRequirement]) -> Result<(), String> {
         SearchQuery {
+            auto_apply_trinket: false,
             requirements: requirements.iter().map(|row| row.to_core()).collect(),
             max_depth: 24,
             challenges: shpd_seedfinder_core::challenges::Challenges::NONE,

@@ -4,7 +4,7 @@
 //! `https://shpd-seed-seeker.web.app/#q=QAMtCYAA`. The payload is a versioned
 //! bit stream, so codes shared today must keep decoding in every future
 //! release: the numeric code tables below are frozen by tests and may only
-//! ever grow at the end. Versions 4 and 5 are supported; versions 1
+//! ever grow at the end. Versions 4, 5 and 6 are supported; versions 1
 //! and 2 were retired while the feature had next to no users (the effect
 //! table was also re-frozen in journal order at the same time), and version
 //! 3 — the same layout plus the retired fast-mode bit — went with the flag,
@@ -32,7 +32,8 @@ pub const WEB_LINK_PREFIX: &str = "https://shpd-seed-seeker.web.app/#q=";
 pub const URI_SCHEME: &str = "seedseeker";
 
 /// Default format, retained byte-for-byte for queries without selected trinkets.
-/// Version 5 adds a selection bit per requirement. Both carry effect sets as a 32-bit mask,
+/// Version 5 adds a selection bit per requirement; version 6 adds the auto-apply
+/// flag after the version nibble. All carry effect sets as a 32-bit mask,
 /// alternative groups and combined-level groups per requirement. Versions 1
 /// through 3 are rejected as unsupported (3 differed only in carrying the
 /// retired fast-mode bit).
@@ -94,8 +95,20 @@ pub fn encode(query: &SearchQuery) -> Result<String, String> {
     // labels fit the count field; the structure is all that travels.
     let mut alternative_labels: Vec<u8> = Vec::new();
     let mut bits = BitWriter::default();
-    let selected = query.requirements.iter().any(|r| r.select_trinket);
-    bits.push(if selected { 5 } else { VERSION.into() }, 4);
+    let selected = query.auto_apply_trinket || query.requirements.iter().any(|r| r.select_trinket);
+    bits.push(
+        if query.auto_apply_trinket {
+            6
+        } else if selected {
+            5
+        } else {
+            VERSION.into()
+        },
+        4,
+    );
+    if query.auto_apply_trinket {
+        bits.push(1, 1);
+    }
     bits.push(query.require_blacksmith.into(), 1);
     bits.push(query.exclude_blacksmith_rewards.into(), 1);
     push_optional(&mut bits, query.max_depth != 24, || {
@@ -153,12 +166,13 @@ pub fn decode(code: &str) -> Result<SearchQuery, String> {
     let bytes = base64url_decode(code.trim())?;
     let mut bits = BitReader::new(&bytes);
     let version = bits.pull(4)?;
-    if version != u32::from(VERSION) && version != 5 {
+    if version != u32::from(VERSION) && version != 5 && version != 6 {
         return Err(format!(
             "this link uses format version {version}; this app only understands \
-             version {VERSION} — it may have been created by a different release"
+             versions {VERSION}, 5 and 6 — it may have been created by a different release"
         ));
     }
+    let auto_apply_trinket = version >= 6 && bits.pull(1)? == 1;
     let require_blacksmith = bits.pull(1)? == 1;
     let exclude_blacksmith_rewards = bits.pull(1)? == 1;
     let max_depth = if bits.pull(1)? == 1 {
@@ -181,7 +195,7 @@ pub fn decode(code: &str) -> Result<SearchQuery, String> {
         .map(|index| {
             decode_requirement(&mut bits)
                 .and_then(|mut requirement| {
-                    if version == 5 {
+                    if version >= 5 {
                         requirement.select_trinket = bits.pull(1)? == 1;
                     }
                     Ok(requirement)
@@ -191,6 +205,7 @@ pub fn decode(code: &str) -> Result<SearchQuery, String> {
         .collect::<Result<Vec<_>, _>>()?;
     bits.expect_exhausted()?;
     let query = SearchQuery {
+        auto_apply_trinket,
         requirements,
         max_depth,
         challenges,
@@ -773,6 +788,7 @@ mod tests {
 
     fn minimal(requirements: Vec<Requirement>) -> SearchQuery {
         SearchQuery {
+            auto_apply_trinket: false,
             requirements,
             max_depth: 24,
             challenges: Challenges::NONE,
@@ -793,6 +809,7 @@ mod tests {
     #[test]
     fn round_trips_a_fully_loaded_query() {
         let query = SearchQuery {
+            auto_apply_trinket: false,
             requirements: vec![
                 Requirement {
                     kind: ItemKind::Weapon,
@@ -965,8 +982,8 @@ mod tests {
         assert!(decode("").is_err());
         assert!(decode("!!!").is_err());
         assert!(decode("A").is_err());
-        // Unsupported future version (bits 0110 in the top nibble).
-        assert!(decode("YAAA").unwrap_err().contains("version 6"));
+        // Unsupported future version (bits 0111 in the top nibble).
+        assert!(decode("cAAA").unwrap_err().contains("version 7"));
         let code = encode(&minimal(vec![wildcard(ItemKind::Wand)])).unwrap();
         assert!(decode(&code[..code.len() - 1]).is_err());
         assert!(decode(&format!("{code}AAAA")).is_err());
@@ -1462,6 +1479,31 @@ mod tests {
         );
     }
 
+    #[test]
+    fn auto_apply_round_trips_with_and_without_manual_selection() {
+        for requirement in [
+            r#"{"item":"runic_blade","effect":"Grim"}"#,
+            r#"{"item":"mimic_tooth","select_trinket":true}"#,
+        ] {
+            let query = json_query::decode(&format!(
+                r#"{{"auto_apply_trinket":true,"requirements":[{requirement}]}}"#
+            ))
+            .unwrap();
+            let code = encode(&query).unwrap();
+            assert_eq!(decode(&code).unwrap(), query);
+            assert_eq!(
+                json_query::decode(&json_query::encode(&query).to_string()).unwrap(),
+                query
+            );
+        }
+        assert!(
+            json_query::decode(
+                r#"{"auto_apply_trinket":"true","requirements":[{"item":"runic_blade"}]}"#
+            )
+            .is_err()
+        );
+    }
+
     /// A known code must decode identically forever; this pins the
     /// byte-level format.
     #[test]
@@ -1493,7 +1535,10 @@ mod tests {
         for code in ["EAGWhMA", "IAIQ4sCAEWJAgA", "MAGWhMAA"] {
             let error = decode(code).unwrap_err();
             assert!(error.contains("format version"), "{error}");
-            assert!(error.contains("only understands version 4"), "{error}");
+            assert!(
+                error.contains("only understands versions 4, 5 and 6"),
+                "{error}"
+            );
         }
     }
 }

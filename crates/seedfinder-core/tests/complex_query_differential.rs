@@ -205,6 +205,7 @@ fn random_query(rng: &mut Rng) -> Option<SearchQuery> {
         // a slot whose members agree on a kind can anchor a stack.
         let slots: Vec<Vec<usize>> = {
             let query = SearchQuery {
+                auto_apply_trinket: false,
                 requirements: requirements.clone(),
                 max_depth: 10,
                 challenges: Challenges::NONE,
@@ -240,6 +241,7 @@ fn random_query(rng: &mut Rng) -> Option<SearchQuery> {
         }
     }
     let query = SearchQuery {
+        auto_apply_trinket: false,
         requirements,
         max_depth: 10,
         challenges: Challenges::NONE,

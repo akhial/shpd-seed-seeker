@@ -158,6 +158,7 @@ describe("query serialization", () => {
 
   it("round-trips a fully loaded state", () => {
     const state: QueryState = {
+      autoApplyTrinket: false,
       requirements: [
         {
           kind: "weapon",
