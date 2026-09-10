@@ -95,3 +95,27 @@ it("shows Performance on one core and defers to explicit trinket requirements", 
   expect(html).toContain("Uses your trinket requirements instead.");
   expect(html).toMatch(/<input type="checkbox" disabled="" checked=""\/><span>Auto-apply/);
 });
+
+it("returns explicit no-trinket recipes when the offers cannot help", () => {
+  const query = JSON.stringify({
+    auto_apply_trinket: true,
+    max_depth: 2,
+    requirements: [{ item: "leather_armor", upgrade: 1 }],
+  });
+  const session = new SearchSession(query, 0, 64);
+  try {
+    const found = JSON.parse(session.advance(64)) as SearchAdvance;
+    expect(found.matches.length).toBeGreaterThan(0);
+    expect(found.matches.every((match) => match.selectedTrinket === null)).toBe(true);
+    const replay = JSON.parse(
+      filter_seeds(
+        query,
+        new Float64Array(found.matches.map((match) => match.value)),
+        JSON.stringify(found.matches.map(() => null)),
+      ),
+    );
+    expect(replay).toEqual(found.matches);
+  } finally {
+    session.free();
+  }
+});

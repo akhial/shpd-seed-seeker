@@ -1,7 +1,7 @@
 # Automatically choosing one trinket
 
 The web's **Performance → Auto-apply a trinket at +3** option is off by default.
-It asks the engine to select one of the seed's four initial catalyst offers
+It asks the engine to select a helpful trinket from the seed's four initial catalyst offers
 before generating any floors. Each seed is generated once, with no baseline
 scout, retry, or union of loot from different possible worlds. The existing
 +3 model activates the choice at the first brewing opportunity; it does not
@@ -15,14 +15,11 @@ improves every seed. Parchment Scrap is excluded whenever any requested effect
 is a curse, including inside alternatives.
 
 For each offer deck, the engine chooses the highest-ranked preferred offer.
-If none is offered, it chooses the first neutral offer. Exotic Crystals is
-neutral for the current searchable equipment catalog: its consumable
-conversions do not change the generation RNG draws used by this model. If no
-neutral choice is offered, it chooses the highest-ranked allowed candidate.
-Mossy Clump and Trap Mechanism are excluded even from this last resort.
-There is always an allowed choice among four offers. Any explicit trinket
-requirement disables auto-apply, whether selected or merely required, and
-whether standalone or in an OR group.
+If no preferred trinket is offered, it generates the no-trinket world. Neutral
+trinkets (including Exotic Crystals), candidates without the required estimated
+benefit, Mossy Clump, and Trap Mechanism are never selected automatically.
+Any explicit trinket requirement disables auto-apply, whether selected or merely
+required, and whether standalone or in an OR group.
 
 The choice is an estimate based on the query and offer deck, not advance
 knowledge of a seed's contents. Some baseline matches are lost; the purpose
@@ -44,7 +41,7 @@ UIs have no new toggle or result-recipe integration in this change.
 
 The query JSON codec persists `auto_apply_trinket` only when true. Share links
 use version 6 for the flag; existing version 4 and 5 queries retain their
-byte format and remain readable. Results show “Choose … +3,” export the
+byte format and remain readable. Results show the applied trinket's name, export the
 exact choice, and scout using that choice and the saved query rather than
 the current editor. See [results export](results-export-format.md).
 
@@ -54,7 +51,8 @@ saved recipes. See [search semantics](search-semantics.md).
 
 ## Validation
 
-Core regression tests enumerate all four-offer subsets, check curse and
+Core regression tests enumerate all four-offer subsets, verify the no-trinket
+fallback against baseline worlds, check curse and
 manual-requirement exclusions, count generation inputs, and verify continuation
 rules. The known selection-only result `SRU-YSU-QHS` matches a +1 Grim Runic
 Blade through floor 19 with Parchment Scrap, fails without it, and reproduces

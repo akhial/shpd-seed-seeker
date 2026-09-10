@@ -166,26 +166,23 @@ fn bench(name: &str, document: &Value, count: u64, start: u64) {
         }
         let mut cells = [0_u64; 4];
         for (i, &seed) in seeds.iter().enumerate() {
-            let selected = plans[1]
-                .selected_trinket(seed)
-                .expect("must choose one offer");
-            assert!(trinket_order(seed)[..INITIAL_OFFER_COUNT].contains(&selected));
-            assert!(!matches!(
-                selected,
-                ItemId::MossyClump | ItemId::TrapMechanism
-            ));
-            if name.starts_with("annoying") {
-                assert_ne!(selected, ItemId::ParchmentScrap);
+            let selected = plans[1].selected_trinket(seed);
+            if let Some(selected) = selected {
+                assert!(trinket_order(seed)[..INITIAL_OFFER_COUNT].contains(&selected));
+                assert!(policy.preferred().contains(&selected));
+                if name.starts_with("annoying") {
+                    assert_ne!(selected, ItemId::ParchmentScrap);
+                }
             }
             let cell = usize::from(flags[0][i]) + 2 * usize::from(flags[1][i]);
             cells[cell] += 1;
             total_cells[cell] += 1;
             selected_cells
-                .entry(item(selected).stable_id.to_owned())
+                .entry(selected.map_or("none", |id| item(id).stable_id).to_owned())
                 .or_default()[cell] += 1;
             if cell == 2 && examples.len() < 3 {
                 examples.push(json!({"seed":seed.to_code(),"value":seed.value(),
-                    "trinket":item(selected).stable_id}));
+                    "trinket":selected.map(|id| item(id).stable_id)}));
             }
         }
         blocks.push(

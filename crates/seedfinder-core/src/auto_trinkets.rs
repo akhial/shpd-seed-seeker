@@ -114,7 +114,7 @@ fn match_batch<G: WorldGenerator>(
 }
 
 /// Generation effects with a directional equipment benefit. Feeling changes
-/// are deliberately excluded, including from the last-resort choices.
+/// and neutral trinkets are deliberately excluded.
 pub const CANDIDATES: [ItemId; 4] = [
     ItemId::ParchmentScrap,
     ItemId::MimicTooth,
@@ -127,7 +127,6 @@ pub const CANDIDATES: [ItemId; 4] = [
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AutoTrinketPolicy {
     preferred: Vec<ItemId>,
-    fallback: Vec<ItemId>,
 }
 
 impl AutoTrinketPolicy {
@@ -156,13 +155,15 @@ impl AutoTrinketPolicy {
                 .filter(|(_, p)| baseline.is_finite() && p.is_finite() && *p > baseline * 1.05)
                 .map(|&(id, _)| id)
                 .collect(),
-            fallback: scores.into_iter().map(|(id, _)| id).collect(),
         })
     }
 
-    /// Choose one actual initial offer, without generating any floors.
+    /// Choose a beneficial initial offer, or none, without generating floors.
     #[must_use]
     pub fn selected_trinket(&self, seed: DungeonSeed) -> Option<ItemId> {
+        if self.preferred.is_empty() {
+            return None;
+        }
         self.choose(&trinket_order(seed)[..INITIAL_OFFER_COUNT])
     }
 
@@ -171,8 +172,6 @@ impl AutoTrinketPolicy {
             .iter()
             .copied()
             .find(|id| offers.contains(id))
-            .or_else(|| offers.iter().copied().find(|&id| is_neutral(id)))
-            .or_else(|| self.fallback.iter().copied().find(|id| offers.contains(id)))
     }
 
     /// Preferred generation effects, in descending estimated match probability.
@@ -184,10 +183,6 @@ impl AutoTrinketPolicy {
 
 fn finite_score(score: f64) -> f64 {
     if score.is_finite() { score } else { 0.0 }
-}
-
-fn is_neutral(id: ItemId) -> bool {
-    !CANDIDATES.contains(&id) && !matches!(id, ItemId::MossyClump | ItemId::TrapMechanism)
 }
 
 /// Whether the requested setting applies to this query.
@@ -252,7 +247,7 @@ mod tests {
     }
 
     #[test]
-    fn every_offer_set_has_one_allowed_choice_even_for_curses() {
+    fn every_offer_set_selects_only_a_beneficial_choice_or_none() {
         let identities = trinket_order(DungeonSeed::MIN);
         for requirements in [
             r#"[{"item":"runic_blade","upgrade":1,"effect":"Grim"}]"#,
@@ -266,18 +261,68 @@ mod tests {
                         for d in c + 1..17 {
                             let offers =
                                 [identities[a], identities[b], identities[c], identities[d]];
-                            let choice = policy.choose(&offers).unwrap();
-                            assert!(offers.contains(&choice));
-                            assert!(!matches!(
-                                choice,
-                                ItemId::MossyClump | ItemId::TrapMechanism
-                            ));
-                            assert!(!curse || choice != ItemId::ParchmentScrap);
+                            if let Some(choice) = policy.choose(&offers) {
+                                assert!(offers.contains(&choice));
+                                assert!(policy.preferred().contains(&choice));
+                                assert!(!curse || choice != ItemId::ParchmentScrap);
+                            } else {
+                                assert!(offers.iter().all(|id| !policy.preferred().contains(id)));
+                            }
                         }
                     }
                 }
             }
         }
+    }
+
+    #[test]
+    fn unhelpful_offers_keep_the_no_trinket_world() {
+        let mut early = query(r#"[{"item":"leather_armor","upgrade":1}]"#);
+        early.max_depth = 2;
+        let policy = AutoTrinketPolicy::prepare(&early).unwrap();
+        assert!(policy.preferred().is_empty());
+        assert_eq!(policy.selected_trinket(DungeonSeed::MIN), None);
+        let mut baseline = early.clone();
+        baseline.auto_apply_trinket = false;
+        let seeds: Vec<_> = (0..64)
+            .map(|value| DungeonSeed::new(value).unwrap())
+            .collect();
+        let automatic = search_batch(
+            &CanonicalMainWorldGenerator,
+            &early,
+            &QueryPlan::analyze(&early),
+            &seeds,
+        );
+        let plain = search_batch(
+            &CanonicalMainWorldGenerator,
+            &baseline,
+            &QueryPlan::analyze(&baseline),
+            &seeds,
+        );
+        assert!(automatic.iter().any(Option::is_some));
+        for (automatic, plain) in automatic.into_iter().zip(plain) {
+            assert_eq!(
+                automatic.as_ref().map(|m| &m.world),
+                plain.as_ref().map(|m| &m.world)
+            );
+            if let Some(result) = automatic {
+                assert_eq!(result.recipe.trinket, None);
+                assert!(baseline.matches(&result.world));
+            }
+        }
+        let grim = AutoTrinketPolicy::prepare(&query(
+            r#"[{"item":"runic_blade","upgrade":1,"effect":"Grim"}]"#,
+        ))
+        .unwrap();
+        assert_eq!(
+            grim.choose(&[
+                ItemId::SaltCube,
+                ItemId::WondrousResin,
+                ItemId::MossyClump,
+                ItemId::TrapMechanism
+            ]),
+            None
+        );
     }
 
     #[test]

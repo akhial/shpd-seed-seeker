@@ -345,7 +345,7 @@ export function ResultsPanel({
                     <span className="d1-result-code d1-mono">{match.code}</span>
                     {match.selectedTrinket && (
                       <span className="d1-result-trinket">
-                        Choose {getItem(match.selectedTrinket)?.name ?? match.selectedTrinket} +3
+                        {getItem(match.selectedTrinket)?.name ?? match.selectedTrinket}
                       </span>
                     )}
                   </span>

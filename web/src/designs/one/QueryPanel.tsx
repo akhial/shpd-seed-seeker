@@ -436,7 +436,7 @@ export function QueryPanel({
               <p className="d1-caption">
                 {query.requirements.some((r) => requirementFamily(r) === "trinket")
                   ? "Uses your trinket requirements instead."
-                  : "Chooses one offered trinket to improve this search. Results show the choice to use at the first brewing opportunity."}
+                  : "Applies the best helpful offer at the first brewing opportunity. Uses no trinket when none helps; results show any applied trinket."}
               </p>
             </div>
           </details>
