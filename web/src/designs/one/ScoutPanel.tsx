@@ -238,9 +238,26 @@ export function ScoutPanel({
                     feeling={feelingByDepth.get(depth)}
                     quest={quest}
                     expanded={mapOpen}
-                    onToggle={() =>
-                      setOpenMap(mapOpen ? undefined : { seed: result.seed.code, depth })
-                    }
+                    onToggle={() => {
+                      setOpenMap(mapOpen ? undefined : { seed: result.seed.code, depth });
+                      if (!mapOpen) {
+                        // Wait for the previous disclosure to collapse, then
+                        // make room for this map below its sticky floor title.
+                        // Only explicit opens scroll; profile changes do not.
+                        window.requestAnimationFrame(() => {
+                          document
+                            .getElementById(`scout-floor-map-${depth}`)
+                            ?.closest(".d1-floor")
+                            ?.scrollIntoView({
+                              block: "start",
+                              behavior: window.matchMedia("(prefers-reduced-motion: reduce)")
+                                .matches
+                                ? "instant"
+                                : "smooth",
+                            });
+                        });
+                      }
+                    }}
                     onPrefetch={() => {
                       void prefetchLevelMap({
                         seed: result.seed.code,
