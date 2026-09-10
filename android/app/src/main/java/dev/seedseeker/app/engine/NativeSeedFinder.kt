@@ -578,6 +578,10 @@ object JniBindings {
     @JvmStatic external fun resumeHint(handle: Long): LongArray
     @JvmStatic external fun cancel(handle: Long)
     @JvmStatic external fun close(handle: Long)
+    /** UTF-8 JSON request/response; see docs/level-map-format.md. */
+    @JvmStatic external fun levelMap(request: ByteArray): ByteArray
+    /** UTF-8 asset ID from a map document to embedded PNG bytes. */
+    @JvmStatic external fun levelMapAsset(assetId: ByteArray): ByteArray
     @JvmStatic external fun scoutSeed(request: ByteArray): ByteArray
     @JvmStatic external fun scoutMatches(request: ByteArray, query: ByteArray): ByteArray
     @JvmStatic external fun filterSeeds(request: ByteArray, seeds: LongArray): ByteArray

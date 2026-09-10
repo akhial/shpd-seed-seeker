@@ -128,6 +128,63 @@ pub extern "system" fn Java_dev_seedseeker_app_engine_JniBindings_scoutMatches<'
     }
 }
 
+/// UTF-8 map JSON in/out, sharing the C/wasm contract.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_seedseeker_app_engine_JniBindings_levelMap<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    request: JByteArray<'local>,
+) -> JByteArray<'local> {
+    let bytes = match env.convert_byte_array(&request) {
+        Ok(bytes) => bytes,
+        Err(error) => {
+            throw_illegal_argument(&mut env, error.to_string());
+            return JByteArray::default();
+        }
+    };
+    match shpd_seedfinder_session::production_level_map_document(&bytes) {
+        Ok(document) => utf8_response(&mut env, &document, "level map"),
+        Err(shpd_seedfinder_session::LevelMapCallError::Request(error)) => {
+            throw_illegal_argument(&mut env, error);
+            JByteArray::default()
+        }
+        Err(_) => {
+            throw_illegal_state(&mut env, "level map generation failed");
+            JByteArray::default()
+        }
+    }
+}
+
+/// Embedded PNG bytes by UTF-8 map asset ID.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_seedseeker_app_engine_JniBindings_levelMapAsset<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    asset_id: JByteArray<'local>,
+) -> JByteArray<'local> {
+    let bytes = match env.convert_byte_array(&asset_id) {
+        Ok(bytes) => bytes,
+        Err(error) => {
+            throw_illegal_argument(&mut env, error.to_string());
+            return JByteArray::default();
+        }
+    };
+    let asset = std::str::from_utf8(&bytes)
+        .ok()
+        .and_then(shpd_seedfinder_core::level_map::assets::get);
+    let Some(asset) = asset else {
+        throw_illegal_argument(&mut env, "unknown level map asset");
+        return JByteArray::default();
+    };
+    match env.byte_array_from_slice(asset.png) {
+        Ok(array) => array,
+        Err(error) => {
+            throw_illegal_state(&mut env, error.to_string());
+            JByteArray::default()
+        }
+    }
+}
+
 /// `workers` is the number of search threads to spawn, clamped to the host's
 /// parallelism; 0 or a negative value uses every available core.
 #[unsafe(no_mangle)]

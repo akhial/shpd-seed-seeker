@@ -381,6 +381,60 @@ pub extern "C" fn seedfinder_scout_matches(
     .unwrap_or(INTERNAL)
 }
 
+/// Returns a UTF-8 map document for the JSON request described in
+/// `docs/level-map-format.md`. Free the response with `seedfinder_buffer_free`.
+#[unsafe(no_mangle)]
+pub extern "C" fn seedfinder_level_map(
+    request: *const u8,
+    request_len: usize,
+    out_packet: *mut *mut u8,
+    out_len: *mut usize,
+) -> i32 {
+    clear_outputs(out_packet, out_len);
+    catch_unwind(AssertUnwindSafe(|| {
+        if out_packet.is_null() || out_len.is_null() {
+            return INVALID;
+        }
+        let Some(bytes) = request_slice(request, request_len) else {
+            return INVALID;
+        };
+        match shpd_seedfinder_session::production_level_map_document(bytes) {
+            Ok(document) => return_packet(document.into_bytes(), out_packet, out_len),
+            Err(shpd_seedfinder_session::LevelMapCallError::Request(_)) => INVALID,
+            Err(_) => INTERNAL,
+        }
+    }))
+    .unwrap_or(INTERNAL)
+}
+
+/// Returns an embedded PNG by its UTF-8 map asset ID. Unknown IDs are invalid.
+/// Free the response with `seedfinder_buffer_free`.
+#[unsafe(no_mangle)]
+pub extern "C" fn seedfinder_level_map_asset(
+    asset_id: *const u8,
+    asset_id_len: usize,
+    out_packet: *mut *mut u8,
+    out_len: *mut usize,
+) -> i32 {
+    clear_outputs(out_packet, out_len);
+    catch_unwind(AssertUnwindSafe(|| {
+        if out_packet.is_null() || out_len.is_null() {
+            return INVALID;
+        }
+        let Some(bytes) = request_slice(asset_id, asset_id_len) else {
+            return INVALID;
+        };
+        let Ok(id) = std::str::from_utf8(bytes) else {
+            return INVALID;
+        };
+        let Some(asset) = shpd_seedfinder_core::level_map::assets::get(id) else {
+            return INVALID;
+        };
+        return_packet(asset.png.to_vec(), out_packet, out_len)
+    }))
+    .unwrap_or(INTERNAL)
+}
+
 /// Returns the engine's own constants as UTF-8 JSON: the pinned upstream
 /// version, the seed-space size, the query bounds, the empty boss floors, the
 /// quest depth windows, the challenge list with each bit's effect on
@@ -606,6 +660,78 @@ mod tests {
         let packet = unsafe { std::slice::from_raw_parts(pointer, len) }.to_vec();
         seedfinder_buffer_free(pointer, len);
         packet
+    }
+
+    #[test]
+    fn map_bridge_returns_shared_json_assets_and_clears_failed_outputs() {
+        let request = br#"{"seed":"AAA-AAA-AAA","depth":1}"#;
+        let mut pointer = ptr::null_mut();
+        let mut len = 0;
+        for request in [
+            request.as_slice(),
+            br#"{"seed":"AAA-AAA-AAA","depth":13,"branch":1}"#,
+            br#"{"seed":"AAA-AAA-AAA","depth":19,"branch":1}"#,
+        ] {
+            assert_eq!(
+                seedfinder_level_map(
+                    request.as_ptr(),
+                    request.len(),
+                    &raw mut pointer,
+                    &raw mut len
+                ),
+                OK
+            );
+            let document = unsafe { take_packet(pointer, len) };
+            assert_eq!(
+                document,
+                shpd_seedfinder_session::production_level_map_document(request)
+                    .unwrap()
+                    .into_bytes()
+            );
+        }
+        let id = b"tiles_sewers.png";
+        assert_eq!(
+            seedfinder_level_map_asset(id.as_ptr(), id.len(), &raw mut pointer, &raw mut len),
+            OK
+        );
+        let png = unsafe { take_packet(pointer, len) };
+        assert_eq!(
+            png,
+            shpd_seedfinder_core::level_map::assets::get("tiles_sewers.png")
+                .unwrap()
+                .png
+        );
+        for bad in [
+            br#"{"seed":"AAA-AAA-AAA","depth":5}"#.as_slice(),
+            br#"{"seed":"AAA-AAA-AAA","depth":12,"branch":1}"#,
+        ] {
+            assert_eq!(
+                seedfinder_level_map(bad.as_ptr(), bad.len(), &raw mut pointer, &raw mut len),
+                INVALID
+            );
+            assert!(pointer.is_null());
+            assert_eq!(len, 0);
+        }
+        assert_eq!(
+            seedfinder_level_map(ptr::null(), 0, &raw mut pointer, &raw mut len),
+            INVALID
+        );
+        assert_eq!(
+            seedfinder_level_map(
+                request.as_ptr(),
+                request.len(),
+                ptr::null_mut(),
+                &raw mut len
+            ),
+            INVALID
+        );
+        let bad = b"../tiles_sewers.png";
+        assert_eq!(
+            seedfinder_level_map_asset(bad.as_ptr(), bad.len(), &raw mut pointer, &raw mut len),
+            INVALID
+        );
+        assert!(pointer.is_null());
+        assert_eq!(len, 0);
     }
 
     #[test]

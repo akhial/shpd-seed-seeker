@@ -341,6 +341,26 @@ fn generate_main_world_gated_with_challenges(
     challenges: Challenges,
     gate: &dyn FloorGate,
 ) -> Result<Option<GeneratedWorld>, MainWorldError> {
+    generate_main_world_observed(seed, maximum_depth, challenges, gate, &mut |_| {})
+}
+
+pub(crate) struct FloorObservation<'a> {
+    pub level: &'a crate::level::Level,
+    pub rooms: &'a [crate::room::Room],
+    pub quests: crate::quests::QuestSummary,
+    pub trinket: &'a crate::trinkets::TrinketEffects,
+    pub vault: Option<&'a crate::vault_floor::GeneratedVault>,
+}
+
+/// Captures completed regular floors without changing generation or retaining
+/// maps in search results. The observer is called after mob/item terrain edits.
+pub(crate) fn generate_main_world_observed(
+    seed: DungeonSeed,
+    maximum_depth: u8,
+    challenges: Challenges,
+    gate: &dyn FloorGate,
+    observer: &mut impl FnMut(FloorObservation<'_>),
+) -> Result<Option<GeneratedWorld>, MainWorldError> {
     if !(1..=24).contains(&maximum_depth) {
         return Err(MainWorldError::InvalidMaximumDepth(maximum_depth));
     }
@@ -349,7 +369,7 @@ fn generate_main_world_gated_with_challenges(
     let roots = regular_depths(target)
         .map(|depth| seed_for_depth(dungeon_seed, depth, 0))
         .collect::<Vec<_>>();
-    generate_gated_world_with_roots(seed, target, &roots, challenges, gate)
+    generate_observed_world_with_roots(seed, target, &roots, challenges, gate, observer)
 }
 
 /// Sequential gated composite over the canonical per-region floor generators.
@@ -361,6 +381,18 @@ fn generate_gated_world_with_roots(
     roots: &[i64],
     challenges: Challenges,
     gate: &dyn FloorGate,
+) -> Result<Option<GeneratedWorld>, MainWorldError> {
+    generate_observed_world_with_roots(seed, target, roots, challenges, gate, &mut |_| {})
+}
+
+#[allow(clippy::too_many_lines)]
+fn generate_observed_world_with_roots(
+    seed: DungeonSeed,
+    target: u8,
+    roots: &[i64],
+    challenges: Challenges,
+    gate: &dyn FloorGate,
+    observer: &mut impl FnMut(FloorObservation<'_>),
 ) -> Result<Option<GeneratedWorld>, MainWorldError> {
     let dungeon_seed = i64::try_from(seed.value()).expect("base-26 seed range fits Java long");
     let mut run = RunState::with_challenges(dungeon_seed, challenges);
@@ -394,6 +426,13 @@ fn generate_gated_world_with_roots(
                     .map
                     .cells
                     .contains(&crate::geometry::terrain::ALCHEMY);
+                observer(FloorObservation {
+                    level: &floor.painted.level,
+                    rooms: &floor.painted.rooms,
+                    quests: quests.summary(),
+                    trinket: &random.trinket,
+                    vault: None,
+                });
                 (floor.world_items, Some(floor.painted.level.feeling))
             }
             6..=9 => {
@@ -406,6 +445,13 @@ fn generate_gated_world_with_roots(
                     &mut random,
                 )
                 .map_err(MainWorldError::Prison)?;
+                observer(FloorObservation {
+                    level: &floor.painted.level,
+                    rooms: &floor.painted.rooms,
+                    quests: quests.summary(),
+                    trinket: &random.trinket,
+                    vault: None,
+                });
                 (floor.world_items, Some(floor.painted.level.feeling))
             }
             11..=14 => {
@@ -418,6 +464,13 @@ fn generate_gated_world_with_roots(
                     &mut random,
                 )
                 .map_err(MainWorldError::Caves)?;
+                observer(FloorObservation {
+                    level: &floor.painted.level,
+                    rooms: &floor.painted.rooms,
+                    quests: quests.summary(),
+                    trinket: &random.trinket,
+                    vault: None,
+                });
                 (floor.world_items, Some(floor.painted.level.feeling))
             }
             16..=19 => {
@@ -430,6 +483,13 @@ fn generate_gated_world_with_roots(
                     &mut random,
                 )
                 .map_err(MainWorldError::City)?;
+                observer(FloorObservation {
+                    level: &floor.painted.level,
+                    rooms: &floor.painted.rooms,
+                    quests: quests.summary(),
+                    trinket: &random.trinket,
+                    vault: floor.vault.as_ref(),
+                });
                 (floor.world_items, Some(floor.painted.level.feeling))
             }
             20 => (
@@ -448,6 +508,13 @@ fn generate_gated_world_with_roots(
                     &mut random,
                 )
                 .map_err(MainWorldError::Halls)?;
+                observer(FloorObservation {
+                    level: &floor.painted.level,
+                    rooms: &floor.painted.rooms,
+                    quests: quests.summary(),
+                    trinket: &random.trinket,
+                    vault: None,
+                });
                 (floor.world_items, Some(floor.painted.level.feeling))
             }
         };

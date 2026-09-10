@@ -303,6 +303,32 @@ pub fn scout(request_json: &str) -> Result<String, JsError> {
     scout_impl(request_json).map_err(|error| JsError::new(&error))
 }
 
+/// Returns the shared, versioned map JSON document for one regular floor.
+///
+/// # Errors
+/// Rejects malformed requests, unsupported floors and invalid trinket offers.
+#[wasm_bindgen]
+pub fn level_map(request_json: &str) -> Result<String, JsError> {
+    level_map_impl(request_json).map_err(|error| JsError::new(&error))
+}
+
+fn level_map_impl(request_json: &str) -> Result<String, String> {
+    shpd_seedfinder_core::level_map::json::decode_request(request_json)?
+        .generate_document()
+        .map_err(|error| error.to_string())
+}
+
+/// Returns a map texture as PNG bytes (a `Uint8Array` in JavaScript).
+///
+/// # Errors
+/// Rejects IDs outside the embedded map asset manifest.
+#[wasm_bindgen]
+pub fn level_map_asset(asset_id: &str) -> Result<Vec<u8>, JsError> {
+    shpd_seedfinder_core::level_map::assets::get(asset_id)
+        .map(|asset| asset.png.to_vec())
+        .ok_or_else(|| JsError::new("unknown level map asset"))
+}
+
 /// Re-verifies specific seeds against a full query using the same
 /// authoritative matcher as the search path, returning the matching seeds as
 /// a JSON array of `{code, value}` in input order. This backs the "refine"
@@ -792,6 +818,36 @@ mod tests {
         encode_share_link_impl, engine_info, engine_info_document, filter_seeds_impl,
         format_seed_code, parse_seed_code_impl, query_continues_impl, scout_impl,
     };
+
+    #[test]
+    fn map_bridge_uses_shared_document_and_scout_selection() {
+        let request = r#"{"seed":"AAA-AAA-AAA","depth":4,"query":{"requirements":[{"item":"mimic_tooth","select_trinket":true}]}}"#;
+        let map: Value = serde_json::from_str(&super::level_map_impl(request).unwrap()).unwrap();
+        let mut scout_request: Value = serde_json::from_str(request).unwrap();
+        scout_request.as_object_mut().unwrap().remove("depth");
+        let scout: Value =
+            serde_json::from_str(&scout_impl(&scout_request.to_string()).unwrap()).unwrap();
+        assert_eq!(map["selectedTrinket"], scout["selectedTrinket"]);
+        let shared = shpd_seedfinder_core::level_map::json::decode_request(request)
+            .unwrap()
+            .generate_document()
+            .unwrap();
+        assert_eq!(super::level_map_impl(request).unwrap(), shared);
+        for depth in [13, 19] {
+            let request = json!({"seed":"AAA-AAA-AAA","depth":depth,"branch":1}).to_string();
+            let map: Value =
+                serde_json::from_str(&super::level_map_impl(&request).unwrap()).unwrap();
+            assert_eq!(map["branch"], 1);
+            assert_eq!(map["depth"], depth);
+        }
+        assert!(super::level_map_impl(r#"{"seed":"AAA-AAA-AAA","depth":20}"#).is_err());
+        assert_eq!(
+            super::level_map_asset("water0.png").unwrap(),
+            shpd_seedfinder_core::level_map::assets::get("water0.png")
+                .unwrap()
+                .png
+        );
+    }
 
     #[test]
     fn selected_search_filters_using_postbrew_loot() {
