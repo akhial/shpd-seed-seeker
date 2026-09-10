@@ -525,6 +525,7 @@ where
         report: SecretPaintReport::default(),
     };
     match kind {
+        SecretRoomKind::Mine => return Ok(SecretPaintOutcome::NotHandled),
         SecretRoomKind::Garden => paint_garden(&mut inputs),
         SecretRoomKind::Laboratory => paint_laboratory(&mut inputs),
         SecretRoomKind::Library => paint_library(&mut inputs),

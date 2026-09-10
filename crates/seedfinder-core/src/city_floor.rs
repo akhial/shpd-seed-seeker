@@ -89,6 +89,8 @@ pub struct PaintedCityFloor {
 /// One complete City `Level.create()` result after mobs and items.
 #[derive(Clone, Debug, PartialEq)]
 pub struct GeneratedCityFloor {
+    /// The independently generated Imp branch, when requested by the caller.
+    pub vault: Option<crate::vault_floor::GeneratedVault>,
     pub painted: PaintedCityFloor,
     pub flags: LevelFlags,
     pub mobs: CityMobsResult,
@@ -429,6 +431,7 @@ pub fn generate_city_floor(
     let mut world_items = painted.world_items.clone();
     append_painted_room_items(&painted.level, depth, &mut world_items);
     let imp_group = painted.remaining_prizes.next_choice_group;
+    let mut generated_vault = None;
     if quests.imp.depth == Some(u8::try_from(depth).expect("City depth fits u8")) {
         quests.imp.append_world_items(imp_group, &mut world_items);
         // The Imp's Vault (branch 1 of this depth) has its own depth seed and
@@ -444,6 +447,7 @@ pub fn generate_city_floor(
                 &random.trinket,
             )?;
             world_items.extend(vault.world_items(depth_u8, imp_group, VAULT_FIRST_OPTION));
+            generated_vault = Some(vault);
         }
     }
     let queue = painted
@@ -474,6 +478,7 @@ pub fn generate_city_floor(
     world_items.extend(regular_items.world_items.iter().cloned());
 
     Ok(GeneratedCityFloor {
+        vault: generated_vault,
         painted,
         flags,
         mobs,

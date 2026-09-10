@@ -235,6 +235,34 @@ pub fn production_scout_matches(
     Ok(scout_matches(&world, &query))
 }
 
+/// Failures of the on-demand map JSON endpoint.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum LevelMapCallError {
+    Request(String),
+    Generation(String),
+    Panicked,
+}
+
+/// Builds the shared map document and contains generator panics at native
+/// boundaries. Scouting/search packets remain unchanged.
+///
+/// # Errors
+/// Reports malformed requests separately from generation failures and panics.
+pub fn production_level_map_document(request: &[u8]) -> Result<String, LevelMapCallError> {
+    let text = std::str::from_utf8(request)
+        .map_err(|error| LevelMapCallError::Request(error.to_string()))?;
+    let request = shpd_seedfinder_core::level_map::json::decode_request(text)
+        .map_err(LevelMapCallError::Request)?;
+    catch_unwind(AssertUnwindSafe(|| request.generate_document()))
+        .map_err(|_| LevelMapCallError::Panicked)?
+        .map_err(|error| match error {
+            shpd_seedfinder_core::level_map::MapError::MissingQuestBranch => {
+                LevelMapCallError::Request(error.to_string())
+            }
+            _ => LevelMapCallError::Generation(error.to_string()),
+        })
+}
+
 /// Logical processors available to search workers, never less than one.
 /// Frontends read their worker-selector ceiling from here so the engine and
 /// its UI agree on what "all cores" means.
