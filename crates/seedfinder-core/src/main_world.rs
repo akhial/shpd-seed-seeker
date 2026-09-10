@@ -352,6 +352,35 @@ fn generate_main_world_gated_with_challenges(
     generate_gated_world_with_roots(seed, target, &roots, challenges, gate)
 }
 
+pub(crate) struct FloorObservation<'a> {
+    pub level: &'a crate::level::Level,
+    pub rooms: &'a [crate::room::Room],
+    pub quests: crate::quests::QuestSummary,
+    pub trinket: &'a crate::trinkets::TrinketEffects,
+    pub vault: Option<&'a crate::vault_floor::GeneratedVault>,
+}
+
+/// Captures completed regular floors without changing generation or retaining
+/// maps in search results. The observer is called after mob/item terrain edits.
+pub(crate) fn generate_main_world_observed(
+    seed: DungeonSeed,
+    maximum_depth: u8,
+    challenges: Challenges,
+    gate: &dyn FloorGate,
+    observer: &mut impl FnMut(FloorObservation<'_>),
+) -> Result<Option<GeneratedWorld>, MainWorldError> {
+    if !(1..=24).contains(&maximum_depth) {
+        return Err(MainWorldError::InvalidMaximumDepth(maximum_depth));
+    }
+    let target = effective_regular_depth(maximum_depth);
+    let dungeon_seed = i64::try_from(seed.value()).expect("base-26 seed range fits Java long");
+    let roots = regular_depths(target)
+        .map(|depth| seed_for_depth(dungeon_seed, depth, 0))
+        .collect::<Vec<_>>();
+    // Map observers need the vault alongside its parent floor, so replay eagerly.
+    generate_gated_world_attempt(seed, target, &roots, challenges, gate, None, observer)
+}
+
 /// Sequential gated composite over the canonical per-region floor generators.
 /// `target` must already be boss-mapped (never 5, 10, or 15).
 #[allow(clippy::too_many_lines)]
@@ -363,11 +392,20 @@ fn generate_gated_world_with_roots(
     gate: &dyn FloorGate,
 ) -> Result<Option<GeneratedWorld>, MainWorldError> {
     let deferred = gate.deferred_vault_plan(target);
-    let result = generate_gated_world_attempt(seed, target, roots, challenges, gate, deferred);
+    let result =
+        generate_gated_world_attempt(seed, target, roots, challenges, gate, deferred, &mut |_| {});
     if deferred.is_some() && result.is_err() {
         // Delaying a vault can change which regional error is encountered
         // first. Discard the entire attempt and reproduce the eager result.
-        return generate_gated_world_attempt(seed, target, roots, challenges, gate, None);
+        return generate_gated_world_attempt(
+            seed,
+            target,
+            roots,
+            challenges,
+            gate,
+            None,
+            &mut |_| {},
+        );
     }
     result
 }
@@ -387,6 +425,7 @@ fn generate_gated_world_attempt(
     challenges: Challenges,
     gate: &dyn FloorGate,
     deferred: Option<&crate::feasibility::QueryPlan>,
+    observer: &mut impl FnMut(FloorObservation<'_>),
 ) -> Result<Option<GeneratedWorld>, MainWorldError> {
     let dungeon_seed = i64::try_from(seed.value()).expect("base-26 seed range fits Java long");
     let mut pending_vault = None;
@@ -424,6 +463,13 @@ fn generate_gated_world_attempt(
                     .map
                     .cells
                     .contains(&crate::geometry::terrain::ALCHEMY);
+                observer(FloorObservation {
+                    level: &floor.painted.level,
+                    rooms: &floor.painted.rooms,
+                    quests: quests.summary(),
+                    trinket: &random.trinket,
+                    vault: None,
+                });
                 (floor.world_items, Some(floor.painted.level.feeling))
             }
             6..=9 => {
@@ -436,6 +482,13 @@ fn generate_gated_world_attempt(
                     &mut random,
                 )
                 .map_err(MainWorldError::Prison)?;
+                observer(FloorObservation {
+                    level: &floor.painted.level,
+                    rooms: &floor.painted.rooms,
+                    quests: quests.summary(),
+                    trinket: &random.trinket,
+                    vault: None,
+                });
                 (floor.world_items, Some(floor.painted.level.feeling))
             }
             11..=14 => {
@@ -448,6 +501,13 @@ fn generate_gated_world_attempt(
                     &mut random,
                 )
                 .map_err(MainWorldError::Caves)?;
+                observer(FloorObservation {
+                    level: &floor.painted.level,
+                    rooms: &floor.painted.rooms,
+                    quests: quests.summary(),
+                    trinket: &random.trinket,
+                    vault: None,
+                });
                 (floor.world_items, Some(floor.painted.level.feeling))
             }
             16..=19 => {
@@ -489,6 +549,13 @@ fn generate_gated_world_attempt(
                     #[cfg(test)]
                     deferred_vault_tests::fault(1)?;
                 }
+                observer(FloorObservation {
+                    level: &floor.painted.level,
+                    rooms: &floor.painted.rooms,
+                    quests: quests.summary(),
+                    trinket: &random.trinket,
+                    vault: floor.vault.as_ref(),
+                });
                 (floor.world_items, Some(floor.painted.level.feeling))
             }
             20 => (
@@ -507,6 +574,13 @@ fn generate_gated_world_attempt(
                     &mut random,
                 )
                 .map_err(MainWorldError::Halls)?;
+                observer(FloorObservation {
+                    level: &floor.painted.level,
+                    rooms: &floor.painted.rooms,
+                    quests: quests.summary(),
+                    trinket: &random.trinket,
+                    vault: None,
+                });
                 (floor.world_items, Some(floor.painted.level.feeling))
             }
         };
@@ -1538,9 +1612,16 @@ mod deferred_vault_tests {
         let roots: Vec<_> = regular_depths(24)
             .map(|depth| seed_for_depth(dungeon_seed, depth, 0))
             .collect();
-        let expected =
-            generate_gated_world_attempt(seed, 24, &roots, Challenges::NONE, &recorder, None)
-                .unwrap();
+        let expected = generate_gated_world_attempt(
+            seed,
+            24,
+            &roots,
+            Challenges::NONE,
+            &recorder,
+            None,
+            &mut |_| {},
+        )
+        .unwrap();
         let expected_calls = std::mem::take(&mut *recorder.calls.lock().unwrap());
         let actual = generate_main_world_gated(seed, 24, &recorder).unwrap();
         assert_eq!(actual, expected);

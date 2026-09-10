@@ -114,6 +114,10 @@ pub enum StandardRoomKind {
     Study,
     SuspiciousChest,
     Minefield,
+    MineEntrance,
+    MineSmall,
+    MineLarge,
+    MineGiant,
 }
 
 /// Concrete connection-room painter classes.  Their spatial behavior is
@@ -178,6 +182,7 @@ pub enum SecretRoomKind {
     Hoard,
     Maze,
     Summoning,
+    Mine,
 }
 
 /// Quest rooms appended by the Wandmaker, Blacksmith, and Ambitious Imp
@@ -579,6 +584,8 @@ impl Room {
         }
 
         match standard_kind {
+            StandardRoomKind::MineLarge => [0.0, 1.0, 0.0],
+            StandardRoomKind::MineGiant => [0.0, 0.0, 1.0],
             StandardRoomKind::SewerPipe => [3.0, 2.0, 1.0],
             StandardRoomKind::Ring
             | StandardRoomKind::Segmented
@@ -610,7 +617,9 @@ impl Room {
             | StandardRoomKind::ChasmBridge
             | StandardRoomKind::Hallway
             | StandardRoomKind::GrassyGrave
-            | StandardRoomKind::SuspiciousChest => [1.0, 0.0, 0.0],
+            | StandardRoomKind::SuspiciousChest
+            | StandardRoomKind::MineEntrance
+            | StandardRoomKind::MineSmall => [1.0, 0.0, 0.0],
         }
     }
 
@@ -633,6 +642,7 @@ impl Room {
                     .expect("a StandardRoom always has a size category");
                 let base = category.min_dimension();
                 let mut minimum = match kind {
+                    StandardRoomKind::MineLarge => 11,
                     StandardRoomKind::SewerPipe
                     | StandardRoomKind::Ring
                     | StandardRoomKind::Segmented
@@ -642,7 +652,8 @@ impl Room {
                     | StandardRoomKind::Skulls
                     | StandardRoomKind::LibraryHall
                     | StandardRoomKind::Aquarium
-                    | StandardRoomKind::Study => base.max(7),
+                    | StandardRoomKind::Study
+                    | StandardRoomKind::MineEntrance => base.max(7),
                     StandardRoomKind::RegionDecoPatch
                     | StandardRoomKind::WaterBridge
                     | StandardRoomKind::RegionDecoLine
@@ -653,10 +664,11 @@ impl Room {
                     | StandardRoomKind::Chasm
                     | StandardRoomKind::Plants
                     | StandardRoomKind::Fissure
-                    | StandardRoomKind::SuspiciousChest => base.max(5),
+                    | StandardRoomKind::SuspiciousChest
+                    | StandardRoomKind::MineGiant => base.max(5),
                     StandardRoomKind::CirclePit => base.max(8),
                     StandardRoomKind::LibraryRing | StandardRoomKind::Ritual => base.max(9),
-                    StandardRoomKind::Platform => base.max(6),
+                    StandardRoomKind::Platform | StandardRoomKind::MineSmall => base.max(6),
                     StandardRoomKind::CircleBasin => base.wrapping_add(1),
                     _ => base,
                 };
@@ -736,6 +748,7 @@ impl Room {
                 _ => 10,
             },
             RoomKind::Secret(kind) => match kind {
+                SecretRoomKind::Mine => 7,
                 SecretRoomKind::ChestChasm => 9,
                 SecretRoomKind::Maze => 18,
                 SecretRoomKind::Summoning => 8,

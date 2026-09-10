@@ -308,6 +308,13 @@ Pass `-EngineIsa avx2` to build the engine for x86-64-v3.
 PGO_TARGET=x86_64-pc-windows-msvc bash scripts/record-pgo-profile.sh
 ```
 
+### Engine level maps
+
+The engine exposes on-demand, trinket-aware regular-floor, Blacksmith mine and Imp vault maps as portable sprite
+scenes with animation frames and embedded game textures. See the
+[level-map contract](docs/level-map-format.md) for Rust, C, JNI and wasm APIs.
+This primitive is available for future scout UI integration.
+
 ### Testing
 
 #### Rust

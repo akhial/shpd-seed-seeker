@@ -4,8 +4,8 @@ Copyright (C) 2026 Seed Seeker contributors
 This is an unofficial project and is not endorsed by Shattered Pixel Dungeon or
 its developers.
 
-This software derives deterministic generation behavior, includes the item
-sprite atlas, and bases its application icon on the launcher icon of:
+This software derives deterministic generation behavior, includes the item and level-map
+sprite atlases, and bases its application icon on the launcher icon of:
 
 Pixel Dungeon
 Copyright (C) 2012-2015 Oleg Dolya
@@ -16,6 +16,10 @@ https://github.com/00-Evan/shattered-pixel-dungeon
 
 Compatibility source revision:
 7b8b845a76fe76c6b7c031ae9e570852411f56db (v3.3.8)
+
+Level-map sprite source revision:
+2bb34a4e91d29c8785a9363cad6ddfe5122b1d4f
+(see crates/seedfinder-core/assets/level-map/ATTRIBUTION.md)
 
 The program and bundled derived assets are distributed under the GNU General
 Public License version 3 or, at your option, any later version. See COPYING.

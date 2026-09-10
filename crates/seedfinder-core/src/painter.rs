@@ -210,7 +210,12 @@ pub fn set_shared_door_type(
         .set_type(door_type);
 }
 
-fn force_shared_door_type(rooms: &mut [Room], first: RoomId, second: RoomId, door_type: DoorType) {
+pub(crate) fn force_shared_door_type(
+    rooms: &mut [Room],
+    first: RoomId,
+    second: RoomId,
+    door_type: DoorType,
+) {
     let (first_room, second_room) = two_rooms_mut(rooms, first, second);
     first_room
         .connection_to_mut(second)
@@ -239,7 +244,7 @@ fn shared_door(rooms: &[Room], first: RoomId, second: RoomId) -> Door {
 /// Make direct callback mutations converge to the same value on both records.
 /// Correct room ports should use [`set_shared_door_type`]; this synchronization
 /// is a defensive check around legacy/simple callback implementations.
-fn synchronize_room_doors(rooms: &mut [Room], room: RoomId) {
+pub(crate) fn synchronize_room_doors(rooms: &mut [Room], room: RoomId) {
     let neighbours: Vec<RoomId> = rooms[room]
         .connected
         .iter()
@@ -285,6 +290,10 @@ pub fn normalize_rooms(level: &mut Level, rooms: &mut [Room]) {
     } else {
         1
     };
+    normalize_rooms_with_padding(level, rooms, padding);
+}
+
+pub(crate) fn normalize_rooms_with_padding(level: &mut Level, rooms: &mut [Room], padding: i32) {
     let mut left_most = i32::MAX;
     let mut top_most = i32::MAX;
     for room in &*rooms {
@@ -765,7 +774,7 @@ impl RegularPainter {
         self.paint_with_decorator(level, rooms, dispatch, rng, |_, _, _, _| {})
     }
 
-    fn paint_water<D: RoomPaintDispatch>(
+    pub(crate) fn paint_water<D: RoomPaintDispatch>(
         &self,
         level: &mut Level,
         rooms: &[Room],
@@ -798,7 +807,7 @@ impl RegularPainter {
         }
     }
 
-    fn paint_grass<D: RoomPaintDispatch>(
+    pub(crate) fn paint_grass<D: RoomPaintDispatch>(
         &self,
         level: &mut Level,
         rooms: &[Room],
@@ -966,7 +975,7 @@ fn remove_first(values: &mut Vec<usize>, value: usize) {
     }
 }
 
-fn build_room_distance_map(rooms: &mut [Room], focus: RoomId) {
+pub(crate) fn build_room_distance_map(rooms: &mut [Room], focus: RoomId) {
     for room in rooms.iter_mut() {
         room.distance = i32::MAX;
     }
