@@ -127,6 +127,16 @@ function MapCanvas({
     heightPx = map.height * map.scene.tileSize;
   const fit = Math.min((size.width - 24) / widthPx, (size.height - 24) / heightPx);
   const scale = Math.max(0.01, fit) * zoom;
+  const boundX = Math.max(0, (widthPx * scale - size.width) / 2 + 36);
+  const boundY = Math.max(0, (heightPx * scale - size.height) / 2 + 36);
+  // Keep the map reachable after zooming out or resizing an already panned view.
+  useEffect(() => {
+    setPan((value) => {
+      const x = Math.max(-boundX, Math.min(boundX, value.x));
+      const y = Math.max(-boundY, Math.min(boundY, value.y));
+      return x === value.x && y === value.y ? value : { x, y };
+    });
+  }, [boundX, boundY]);
   const secretCount = map.secretRooms.length + map.secretDoors.length + map.secretTraps.length;
   const reset = () => {
     setZoom(1);
@@ -196,8 +206,6 @@ function MapCanvas({
     };
   };
   const clampPan = (x: number, y: number) => {
-    const boundX = Math.max(0, (widthPx * scale - size.width) / 2 + 36);
-    const boundY = Math.max(0, (heightPx * scale - size.height) / 2 + 36);
     return { x: Math.max(-boundX, Math.min(boundX, x)), y: Math.max(-boundY, Math.min(boundY, y)) };
   };
   const pointMove = (event: ReactPointerEvent<HTMLDivElement>) => {
