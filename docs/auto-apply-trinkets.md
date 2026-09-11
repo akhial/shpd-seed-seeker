@@ -54,6 +54,13 @@ The name is available on hover and to screen readers. Results export the
 exact choice, and scout using that choice and the saved query rather than
 the current editor. See [results export](results-export-format.md).
 
+Scout keeps the four initial offers available while browsing later floors.
+As the large offer cards scroll behind the sticky floor header, small sprite
+buttons slide into the navigation bar while its keyboard/swipe hint fades.
+They retain the offer order and highlight the selected trinket without a text
+badge. Switching trinkets preserves the current floor and scroll offset;
+clicking the selected trinket again scouts without it.
+
 Continuation compares the prepared choice policies. A different policy
 requires a new traversal; matching policies can reuse coverage and filter
 saved recipes. `refine_batch` also retries a previously stripped choice when
@@ -81,3 +88,6 @@ single-worker search, cancellation, matching result scouting, and export.
 An imported Parchment result still scouted and exported its original recipe
 after auto-apply was switched off in the editor. Desktop and 390-pixel mobile
 layouts were checked with no page errors or horizontal overflow.
+Browser checks also covered the compact trinket controls' reveal and reverse
+animation, reduced motion, offer order after changing seeds, and switching or
+clearing a trinket on floor 14 while retaining the same scroll offset.

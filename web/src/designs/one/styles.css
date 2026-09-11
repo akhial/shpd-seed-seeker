@@ -2167,6 +2167,85 @@ input[type="range"]::-moz-range-thumb {
   color: var(--d1-text-2);
 }
 
+.d1-scout-nav-pos {
+  white-space: nowrap;
+}
+
+.d1-scout-nav-tools {
+  --trinket-reveal: 0;
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  margin-left: auto;
+  overflow: hidden;
+}
+
+.d1-scout-nav-hints,
+.d1-scout-trinkets {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.d1-scout-nav-hints {
+  opacity: calc(1 - var(--trinket-reveal));
+  pointer-events: none;
+}
+
+.d1-scout-trinkets {
+  gap: 4px;
+  opacity: var(--trinket-reveal);
+  transform: translateY(calc((1 - var(--trinket-reveal)) * 100%));
+}
+
+.d1-scout-trinkets[aria-hidden="true"] {
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.d1-scout-trinket {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 1 28px;
+  min-width: 0;
+  height: 28px;
+  padding: 0;
+  border: 1px solid rgba(89, 203, 137, 0.35);
+  border-radius: 6px;
+  background: var(--d1-panel-2);
+  cursor: pointer;
+}
+
+.d1-scout-trinket:hover:not(:disabled),
+.d1-scout-trinket[aria-pressed="true"] {
+  border-color: var(--d1-accent);
+  background: rgba(89, 203, 137, 0.14);
+}
+
+.d1-scout-trinket[aria-pressed="true"] {
+  box-shadow: inset 0 0 0 1px var(--d1-accent);
+}
+
+.d1-scout-trinket:focus-visible {
+  outline: 2px solid var(--d1-accent);
+  outline-offset: -2px;
+}
+
+.d1-scout-trinket:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .d1-scout-trinkets {
+    transform: none;
+  }
+}
+
 .d1-scout-nav-hint {
   margin-left: auto;
   font-size: 11.5px;
@@ -2435,6 +2514,9 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .d1-badge-match {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   flex: 0 0 auto;
   align-self: center;
   font-family: inherit;
@@ -2446,6 +2528,10 @@ input[type="range"]::-moz-range-thumb {
   border-radius: 999px;
   padding: 1px 8px;
   white-space: nowrap;
+}
+
+.d1-badge-match svg {
+  flex: 0 0 auto;
 }
 
 .d1-item-meta {
