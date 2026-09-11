@@ -2295,6 +2295,7 @@ private struct SeedDetailView: View {
                     // in SwiftUI's placement cache while scrolling on macOS.
                     VStack(alignment: .leading, spacing: 0) {
                         ForEach(depths, id: \.self) { depth in
+                            let floorItems = (byDepth[depth] ?? []).filter { $0.element.item.kind != .trinket }
                             VStack(alignment: .leading, spacing: 0) {
                                 ScoutMovingHeader(depth: depth, state: scrollState.headerOffset(for: depth), world: world)
                                     .background(GeometryReader { geometry in
@@ -2308,14 +2309,14 @@ private struct SeedDetailView: View {
                                             selectedTrinket: world.selectedTrinket, loading: model.loading, onSelect: selectTrinket,
                                             matchedIDs: Set(world.items.enumerated().filter { matches.contains($0.offset) && $0.element.item.kind == .trinket }.map { $0.element.item.id }))
                                     }
-                                    ForEach((byDepth[depth] ?? []).filter { $0.element.item.kind != .trinket }, id: \.offset) { entry in
+                                    ForEach(floorItems, id: \.offset) { entry in
                                         ScoutItemRow(item: entry.element, ringGems: world.ringGems, matches: matches.contains(entry.offset))
                                             .padding(.vertical, 5)
-                                        Divider()
+                                        if entry.offset != floorItems.last?.offset { Divider() }
                                     }
                                 }
                                 .padding(.horizontal)
-                                .padding(.bottom, 16)
+                                .padding(.vertical, 4)
                             }
                             .id(depth)
                             .background(GeometryReader { geometry in
@@ -2324,7 +2325,6 @@ private struct SeedDetailView: View {
                             })
                         }
                     }
-                    .padding(.bottom)
                 }
                 .coordinateSpace(name: "scout-manifest")
                 .background(GeometryReader { geometry in Color.clear.preference(key: ScoutViewportHeight.self, value: geometry.size.height) })
