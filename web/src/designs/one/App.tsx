@@ -13,7 +13,7 @@ import {
   getEngineInfo,
   parseSeedCode,
 } from "../../lib/wasm";
-import type { AnalysisResult, EngineInfo, ScoutResult } from "../../lib/wasm/types";
+import type { AnalysisResult, ChallengeName, EngineInfo, ScoutResult } from "../../lib/wasm/types";
 import { DownloadMenu } from "./DownloadMenu";
 import { QueryPanel } from "./QueryPanel";
 import { ResultsPanel } from "./ResultsPanel";
@@ -163,9 +163,12 @@ export default function App() {
   // keeping the indicator honest.
   const [scoutedSeed, setScoutedSeed] = useState<string | undefined>(undefined);
   const renderedSeed = useRef<string | undefined>(undefined);
-  const [scout, setScout] = useState<{ loading: boolean; error?: string; result?: ScoutResult }>({
-    loading: false,
-  });
+  const [scout, setScout] = useState<{
+    loading: boolean;
+    error?: string;
+    result?: ScoutResult;
+    challenges: readonly ChallengeName[];
+  }>({ loading: false, challenges: [] });
   const scoutRequest = useRef(0);
   // True while the newest scout request is still in flight. A held J/K uses
   // this to pace itself to the scout worker instead of queueing on it.
@@ -176,8 +179,8 @@ export default function App() {
     setActiveTab("scout");
     if (input.length !== 11) {
       setScout((current) => ({
+        ...current,
         loading: false,
-        result: current.result,
         error: "Seed must use XXX-XXX-XXX format",
       }));
       setScoutedSeed(renderedSeed.current);
@@ -195,18 +198,21 @@ export default function App() {
     const selected = trinket ?? (saved?.selectedTrinket === null ? "none" : saved?.selectedTrinket);
     const requestId = ++scoutRequest.current;
     scoutBusy.current = true;
-    setScout((current) => ({ loading: true, result: current.result }));
+    setScout((current) => ({ ...current, loading: true, error: undefined }));
+    // Keep the generation context with the result it produced. Editing the
+    // query while a scout loads must not silently change that floor's map.
+    const challenges = [...(query?.challenges ?? (saved ? [] : state.challenges))];
     void (async () => {
       try {
         const parsed = await parseSeedCode(input);
         const result = await scoutSeed({
           seed: parsed.code,
           trinket: selected,
-          challenges: query?.challenges ?? (saved ? undefined : state.challenges),
+          challenges: challenges.length > 0 ? challenges : undefined,
           query,
         });
         if (requestId === scoutRequest.current) {
-          setScout({ loading: false, result });
+          setScout({ loading: false, result, challenges });
           setScoutInput(result.seed.code);
           renderedSeed.current = result.seed.code;
           setScoutedSeed(result.seed.code);
@@ -214,8 +220,8 @@ export default function App() {
       } catch (error) {
         if (requestId === scoutRequest.current) {
           setScout((current) => ({
+            ...current,
             loading: false,
-            result: current.result,
             error: error instanceof Error ? error.message : String(error),
           }));
           setScoutedSeed(renderedSeed.current);
@@ -225,6 +231,19 @@ export default function App() {
       }
     })();
   }, []);
+
+  // An optional seed link opens the existing scout pane. Query share links
+  // retain priority, and the guard avoids duplicate work in Strict Mode.
+  const [initialScoutSeed] = useState(() => {
+    if (typeof window === "undefined" || hasShareCode(window.location.hash)) return undefined;
+    return new URLSearchParams(window.location.search).get("scout") ?? undefined;
+  });
+  const initialScoutOpened = useRef(false);
+  useEffect(() => {
+    if (!engine || !initialScoutSeed || initialScoutOpened.current) return;
+    initialScoutOpened.current = true;
+    runScout(initialScoutSeed);
+  }, [engine, initialScoutSeed, runScout]);
 
   // Result-to-result navigation while scouting: J/K on desktop, swipe on touch.
   // The joined-string selector keeps referential stability across progress
@@ -349,6 +368,11 @@ export default function App() {
   // devices; mostly-vertical gestures stay scrolls.
   const swipeStart = useRef<{ x: number; y: number } | undefined>(undefined);
   const onScoutTouchStart = (event: React.TouchEvent) => {
+    // Dragging a map pans that floor; it must not navigate to another seed.
+    if ((event.target as HTMLElement).closest("[data-scout-map]")) {
+      swipeStart.current = undefined;
+      return;
+    }
     const touch = event.touches[0];
     swipeStart.current =
       touch && event.touches.length === 1 ? { x: touch.clientX, y: touch.clientY } : undefined;
@@ -450,6 +474,7 @@ export default function App() {
             loading={scout.loading}
             error={scout.error}
             result={scout.result}
+            renderedChallenges={scout.challenges}
             onTrinketChange={(trinket) => {
               if (scout.result) runScout(scout.result.seed.code, trinket);
             }}

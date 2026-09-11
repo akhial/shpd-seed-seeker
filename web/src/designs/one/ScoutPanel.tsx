@@ -1,20 +1,22 @@
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Ref } from "react";
 import { useStore } from "@tanstack/react-store";
 import { displayedUpgrade, sourceLabel } from "../../lib/catalog";
 import { itemGlow } from "../../lib/glow";
 import { CheckIcon, CopyIcon, FlagIcon, ForkIcon } from "../../lib/icons";
-import { questLabel, questVariantLabel } from "../../lib/quests";
+import { isMapDepthSupported, requestLevelMap } from "../../lib/level-map/client";
 import { regionForDepth } from "../../lib/region";
 import type { ResultPosition } from "../../lib/scout-nav";
 import { itemArt } from "../../lib/sprites";
 import { queryStore } from "../../lib/store";
 import { formatSeedCode } from "../../lib/wasm";
-import type { ScoutItem, ScoutResult, TrinketOffer } from "../../lib/wasm/types";
+import type { ChallengeName, ScoutItem, ScoutResult, TrinketOffer } from "../../lib/wasm/types";
 import { Sprite } from "./parts";
-import { FeelingSprite } from "./FeelingSprite";
+import { FloorMapHeader } from "./FloorMapHeader";
+import { LevelMapView } from "./LevelMapView";
 import { TrinketName, TrinketSprite } from "./TrinketArt";
 import { useTrinketDock } from "./useTrinketDock";
+import "./floor-map-inline.css";
 
 const groupLetter = (group: number) => "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[group % 26];
 
@@ -40,6 +42,7 @@ export function ScoutPanel({
   loading,
   error,
   result,
+  renderedChallenges = [],
   nav,
   onNavigate,
   onTrinketChange,
@@ -50,13 +53,18 @@ export function ScoutPanel({
   loading: boolean;
   error?: string;
   result?: ScoutResult;
+  /** Challenges used to produce the rendered scout, independent of current query edits. */
+  renderedChallenges?: readonly ChallengeName[];
   /** Position of the scouted seed within the search results, when it is one. */
   nav?: ResultPosition;
   onNavigate?: (delta: number) => void;
   onTrinketChange?: (trinket: string) => void;
 }) {
-  const challengeCount = useStore(queryStore, (state) => state.challenges.length);
+  const currentChallengeCount = useStore(queryStore, (state) => state.challenges.length);
+  const challengeCount = result ? renderedChallenges.length : currentChallengeCount;
   const [copied, setCopied] = useState(false);
+  const [openMap, setOpenMap] = useState<{ seed: string; depth: number } | undefined>(undefined);
+  useEffect(() => setOpenMap(undefined), [result?.seed.code]);
   const bodyRef = useRef<HTMLDivElement>(null);
   const summaryRef = useRef<HTMLDivElement>(null);
 
@@ -96,6 +104,10 @@ export function ScoutPanel({
 
   const floors = useMemo(() => {
     const byDepth = new Map<number, ScoutItem[]>();
+    // A generated floor remains worth exploring when it has no listed loot.
+    for (const { depth } of result?.feelings ?? []) {
+      if (isMapDepthSupported(depth)) byDepth.set(depth, []);
+    }
     for (const item of result?.items ?? []) {
       byDepth.set(item.depth, [...(byDepth.get(item.depth) ?? []), item]);
     }
@@ -297,6 +309,7 @@ export function ScoutPanel({
           {floors.map(([depth, items]) => {
             const region = regionForDepth(depth);
             const quest = questByDepth.get(depth);
+            const mapOpen = openMap?.seed === result.seed.code && openMap.depth === depth;
             return (
               <section
                 className="d1-floor"
@@ -304,17 +317,66 @@ export function ScoutPanel({
                 data-depth={depth}
                 style={{ ["--region" as string]: region.color }}
               >
-                <header className="d1-floor-head">
-                  <span className="d1-floor-bar" aria-hidden="true" />
-                  <span className="d1-floor-label">Floor {depth}</span>
-                  <FeelingSprite feeling={feelingByDepth.get(depth)} />
-                  <span className="d1-floor-region">{region.name}</span>
-                  {quest && (
-                    <span className="d1-floor-quest" title={`${questLabel(quest.quest)} quest`}>
-                      {questVariantLabel(quest.variant)}
-                    </span>
+                <FloorMapHeader
+                  depth={depth}
+                  feeling={feelingByDepth.get(depth)}
+                  quest={quest}
+                  expanded={mapOpen}
+                  onToggle={() => {
+                    setOpenMap(mapOpen ? undefined : { seed: result.seed.code, depth });
+                    if (!mapOpen) {
+                      // Wait for the previous disclosure to collapse, then
+                      // make room for this map below its sticky floor title.
+                      // Only explicit opens scroll; profile changes do not.
+                      window.requestAnimationFrame(() => {
+                        document
+                          .getElementById(`scout-floor-map-${depth}`)
+                          ?.closest(".d1-floor")
+                          ?.scrollIntoView({
+                            block: "start",
+                            behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches
+                              ? "instant"
+                              : "smooth",
+                          });
+                      });
+                    }
+                  }}
+                  onPrefetch={() => {
+                    void requestLevelMap({
+                      seed: result.seed.code,
+                      depth,
+                      challenges: renderedChallenges,
+                      selectedTrinket: result.selectedTrinket,
+                    }).catch(() => undefined);
+                  }}
+                />
+                <div
+                  id={`scout-floor-map-${depth}`}
+                  className="d1-floor-map-disclosure"
+                  role="region"
+                  aria-label={`Floor ${depth} map`}
+                  hidden={!mapOpen}
+                  data-scout-map=""
+                  onKeyDown={(event) => {
+                    if (event.key === "Escape") {
+                      event.stopPropagation();
+                      setOpenMap(undefined);
+                      document.getElementById(`scout-floor-map-toggle-${depth}`)?.focus();
+                    }
+                  }}
+                >
+                  {mapOpen && (
+                    <LevelMapView
+                      seed={result.seed.code}
+                      depth={depth}
+                      challenges={renderedChallenges}
+                      selectedTrinket={result.selectedTrinket}
+                    />
                   )}
-                </header>
+                </div>
+                {items.length === 0 && (
+                  <p className="d1-floor-no-items">No notable items on this floor.</p>
+                )}
                 <ul className="d1-item-list">
                   {items.some((item) => item.category === "trinket") && (
                     <CatalystEntry
