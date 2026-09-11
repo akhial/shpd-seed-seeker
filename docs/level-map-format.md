@@ -1,4 +1,4 @@
-# Engine level maps (version 1)
+# Engine level maps (version 2)
 
 The engine returns a **sprite scene as JSON**, with embedded game PNGs available
 through an asset endpoint. It resolves terrain selection, water/chasm stitching,
@@ -16,7 +16,7 @@ RNG, seeded with the floor root, and cannot advance generation state.
 
 ## Coverage
 
-Version 1 supports regular main-branch floors **1–4, 6–9, 11–14, 16–19, 21–24**.
+Version 2 supports regular main-branch floors **1–4, 6–9, 11–14, 16–19, 21–24**.
 It also supports **branch 1** at the Blacksmith quest floor (12–14, Crystal or
 Gnoll mine) and the Imp quest floor (17–19, vault). The branch must exist at the
 requested depth in the selected run; its variant is inferred from that run.
@@ -26,21 +26,29 @@ there is no substitution of the preceding floor. Boss floors 5/10/15 have no
 terrain generator in this engine, and depth 20 only generates Imp shop stock.
 Boss arenas and the final levels need separate map generators.
 
-Maps use the game's **flat** 16×16 tile sprites to make the complete layout
-readable without wall occlusion or fog. Secret doors are drawn as ordinary
-closed doors; recorded traps are drawn even when hidden. Original terrain
-codes, hidden trap flags, secret-door cells and secret-room bounds remain in
-the document so a future UI can distinguish secrets. Dark feelings do not hide
-terrain in this scouting view.
+Maps use Shattered's **raised 16×16 tile layers**: terrain, occlusion shadows,
+terrain features, raised grass, and upper walls/overhangs. The original 4.0 shadow
+atlas supplies the ambient wall shadows. The game's geometric fog rules mask
+undiscoverable rock and the hidden halves of solid wall interiors to opaque black;
+there is no player-position visibility radius or explored-floor dimming.
+
+`scene.layers` reveals secret doors, hidden traps, and secret rooms.
+`scene.concealedLayers` is a complete alternative layer stack using the same sprite
+palette. It conceals room interiors, draws undiscovered doors as walls, and omits
+hidden traps. Terrain, water edges, shadows, and overhangs are re-stitched for that
+concealed geometry so secret areas do not leak through neighbouring cells. Prefer
+this stack until the user enables secrets. Original terrain and secret metadata
+remain unchanged. Switching visibility requires no regeneration or extra assets.
 
 This is an initial **terrain overview**, not a screenshot of a running game.
 It includes recorded plants and traps, mine crystals/boulders/gold, the branch
 return stairs, and the vault’s flame trap markers. Items, heaps, monsters, NPCs, blobs,
-lighting, room-specific custom tilemaps (such as decorative paintings and quest
+dynamic lighting, room-specific custom tilemaps (such as decorative paintings and quest
 props other than the branch return stairs), ripples and other ambient effects are not drawn. Custom terrain uses
 its base game tile; the underlying layout remains present. Inventory-dependent
 changes and events during play are outside the canonical scout profile.
-Water uses the game texture and scrolling rate; pipe particles use a repeating
+The static terrain layers follow the game's sprite choices; this does not claim a
+numeric whole-game pixel-fidelity percentage. Water uses the game texture and scrolling rate; pipe particles use a repeating
 approximation of the game's unseeded particle motion. The JSON does not promise
 pixel identity with a running game's ambient effects.
 
@@ -105,8 +113,8 @@ cargo run -p shpd-seedfinder-core --features json-query --example level_map -- \
 
 ## Response and rendering
 
-The envelope identifies `format: "seed-seeker-level-map"`, `schemaVersion: 1`,
-`shpdVersion`, `shpdCommit`, `profile: "canonical-scout-flat-v1"`, `assetRevision`,
+The envelope identifies `format: "seed-seeker-level-map"`, `schemaVersion: 2`,
+`shpdVersion`, `shpdCommit`, `profile: "canonical-scout-raised-v2"`, `assetRevision`,
 `seed`, `depth`, `branch`, `kind`, `challenges`, `selectedTrinket` and `feeling`.
 `kind` is `regular`, `blacksmith_crystal`, `blacksmith_gnoll` or `imp_vault`.
 Regular-floor `branches` lists accessible quest branches as
@@ -127,10 +135,13 @@ and cache them using the asset endpoint; PNG bytes are omitted from JSON.
 The approximately 170 KiB of original textures are embedded once in the engine.
 Map documents reuse a sprite palette.
 
-`scene` contains `tileSize: 16`, `sprites` and `layers`. Every layer has `name`
+`scene` contains `tileSize: 16`, `sprites`, `layers`, and `concealedLayers`. Every layer has `name`
 and `cells`, another row-major array of `width * height` entries. `null` means
-no sprite; an integer indexes `sprites`. Draw layers in array order (water,
-terrain, structures, features, effects), then cells in row-major order.
+no sprite; an integer indexes `sprites`. Choose exactly one layer stack and draw
+its layers in array order: water, terrain, structures, shadows, features, raised
+terrain, upper walls, effects, darkness. Draw cells in row-major order within each
+layer. The last layer supplies opaque geometric wall masks, not a visibility hint
+for the frontend to interpret.
 
 Each sprite contains `frameDurationMs` and a nonempty `frames` array. Each frame
 is a list of drawing commands in draw order:
@@ -155,7 +166,7 @@ origin and downward-positive y. Destination coordinates are relative to the
 cell's origin. Use nearest-neighbour sampling and ordinary source-over alpha
 on an opaque black canvas. Assets contain straight alpha. Apply viewport
 translation/zoom after computing map pixel coordinates; an integer scale keeps
-pixel art crisp. Version 1 commands stay inside their cell's 16×16 rectangle.
+pixel art crisp. Version 2 commands stay inside their cell's 16×16 rectangle.
 
 The complete animation algorithm is:
 
@@ -198,3 +209,15 @@ v4.0.0 release JAR (both quest types, depths 12–14, three seeds, challenge mas
 [mining-map fixtures](../tooling/oracle-4.0/tests/mining-maps.md).
 Vault terrain uses the existing RC1-validated generator. No fresh Java
 rendering-parity run is claimed.
+
+The raised selectors are checked against the unmodified official v4.0.0 JAR:
+65 full-layer hashes across 13 maps cover every region, Crystal and Gnoll mines,
+and an Imp vault, including the example seed JHG-HJJ-BKK. The oracle receives
+the engine's terrain and independently resolves atlas indices; it validates
+rendering selection, not generation parity or dynamic lighting. See
+[raised rendering fixtures](../tooling/oracle-4.0/tests/raised-map-visuals.md) for
+the JAR digest and reproduction commands. Secret concealment, geometric black
+masks, animation and draw bounds have separate engine tests.
+
+Version 2 replaces the unreleased flat prototype. Consumers must check
+`schemaVersion` and include it with the rendering profile in persistent cache keys.
