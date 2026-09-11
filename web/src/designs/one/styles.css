@@ -191,6 +191,19 @@ body {
   mask: url(/github-mark.svg) center / contain no-repeat;
 }
 
+@media (max-width: 400px) {
+  .d1-topbar {
+    height: auto;
+    min-height: 46px;
+    flex-wrap: wrap;
+    gap: 6px 8px;
+    padding: 6px 10px;
+  }
+  .d1-topbar-right {
+    margin-left: auto;
+  }
+}
+
 /* ---------- Layout ---------- */
 
 /* The three minimums have to sum to no more than the 1000px floor this layout
@@ -387,6 +400,19 @@ body {
   }
   .d1-pane.d1-pane-active {
     display: flex;
+  }
+
+  /* Scout uses the page scroll on phones and tablets so the topbar, tabs,
+     entry controls, and footer do not permanently cover the floor list. */
+  .d1-app-scout {
+    height: auto;
+    min-height: 100dvh;
+  }
+  .d1-app-scout .d1-pane-scout {
+    height: auto;
+  }
+  .d1-app-scout .d1-pane-scout > .d1-pane-body {
+    overflow: visible;
   }
 }
 
@@ -2180,13 +2206,18 @@ input[type="range"]::-moz-range-thumb {
   padding-bottom: 40px;
 }
 
-.d1-manifest-loading {
+.d1-manifest-loading .d1-floor,
+.d1-manifest-loading .d1-manifest-head > * {
   opacity: 0.55;
   transition: opacity 0.15s ease;
 }
 
 .d1-manifest-head {
-  padding: 11px 14px;
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  padding: 8px 14px;
+  background: var(--d1-panel);
   border-bottom: 1px solid var(--d1-border);
 }
 
@@ -2205,6 +2236,12 @@ input[type="range"]::-moz-range-thumb {
 
 .d1-manifest-head .d1-caption {
   margin-top: 2px;
+}
+
+.d1-manifest-head .d1-scout-nav {
+  margin: 8px -14px -8px;
+  border-top: 1px solid var(--d1-border);
+  border-bottom: none;
 }
 
 .d1-match-full {
@@ -2235,7 +2272,7 @@ input[type="range"]::-moz-range-thumb {
 
 .d1-floor-head {
   position: sticky;
-  top: 0;
+  top: var(--d1-scout-summary-height, 0px);
   z-index: 2;
   display: flex;
   align-items: center;

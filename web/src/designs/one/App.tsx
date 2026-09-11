@@ -361,7 +361,7 @@ export default function App() {
   const running = searchState === "running" || searchState === "stopping";
 
   return (
-    <div className="d1-app">
+    <div className={`d1-app d1-app-${activeTab}`}>
       <header className="d1-topbar">
         <div className="d1-wordmark">
           <Sprite art={itemArt(112)} size={20} />
