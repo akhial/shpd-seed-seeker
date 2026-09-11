@@ -1,0 +1,126 @@
+.d1-level-map-view {
+  min-width: 0;
+  color: var(--d1-text-2);
+  font-size: 11px;
+}
+.d1-map-branches {
+  display: flex;
+  min-width: 0;
+  gap: 2px;
+}
+.d1-map-toolbar button {
+  flex-shrink: 0;
+  white-space: nowrap;
+  font: inherit;
+  color: var(--d1-text-2);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+.d1-map-branches button[aria-pressed="true"] {
+  background: var(--d1-amber-dim);
+  color: var(--d1-amber);
+}
+.d1-map-toolbar button:hover:not(:disabled) {
+  color: var(--d1-text);
+  background: var(--d1-border);
+}
+.d1-map-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 4px;
+  background: var(--d1-bg);
+  border-bottom: 1px solid var(--d1-border);
+}
+.d1-map-toolbar button[aria-pressed="true"] {
+  color: var(--d1-amber);
+  background: var(--d1-amber-dim);
+}
+.d1-map-toolbar button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.d1-map-toolbar button:focus-visible,
+.d1-map-viewport:focus-visible {
+  outline: 2px solid var(--d1-amber);
+  outline-offset: -2px;
+}
+.d1-map-toolbar-branched .d1-map-secrets {
+  margin-left: auto;
+}
+.d1-map-viewport {
+  position: relative;
+  overflow: hidden;
+  background: #000;
+  width: 100%;
+  max-height: 60dvh;
+  outline: none;
+  isolation: isolate;
+  touch-action: none;
+  user-select: none;
+}
+.d1-map-viewport canvas {
+  display: block;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  image-rendering: pixelated;
+  max-width: none;
+  pointer-events: none;
+}
+.d1-map-zoomed {
+  cursor: grab;
+}
+.d1-map-zoomed:active {
+  cursor: grabbing;
+}
+.d1-map-message {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  text-align: center;
+  background: #000;
+  max-height: 60dvh;
+}
+.d1-map-message p {
+  margin: 0;
+}
+.d1-map-message span {
+  max-width: 32em;
+  overflow-wrap: anywhere;
+}
+.d1-map-loading-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--d1-amber);
+  border-radius: 50%;
+  animation: d1-map-pulse 1s ease-in-out infinite alternate;
+}
+@keyframes d1-map-pulse {
+  to {
+    opacity: 0.25;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .d1-map-loading-dot {
+    animation: none;
+  }
+}
+@media (pointer: coarse) {
+  .d1-map-toolbar button {
+    min-height: 36px;
+    min-width: 36px;
+  }
+}
+@media (max-width: 380px) {
+  .d1-map-toolbar button {
+    padding-right: 5px;
+    padding-left: 5px;
+  }
+}

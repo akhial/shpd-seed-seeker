@@ -1,0 +1,114 @@
+.d1-floor {
+  scroll-margin-top: var(--d1-scout-summary-height, 0px);
+}
+
+.d1-floor-head.d1-floor-head-interactive {
+  padding: 0;
+}
+
+.d1-floor-map-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  padding: 7px 14px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.d1-floor-map-toggle:hover,
+.d1-floor-map-toggle[aria-expanded="true"] {
+  background: color-mix(in srgb, var(--region) 6%, transparent);
+}
+
+.d1-floor-map-toggle:focus-visible {
+  outline: 2px solid var(--d1-amber);
+  outline-offset: -2px;
+}
+
+.d1-floor-map-toggle .d1-floor-bar {
+  flex-shrink: 0;
+}
+
+.d1-floor-map-toggle .d1-floor-region {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.d1-floor-map-toggle .d1-floor-quest {
+  min-width: 0;
+  margin-left: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.d1-floor-map-action {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 5px;
+  margin-left: auto;
+  color: var(--d1-text-2);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.d1-floor-map-toggle:hover .d1-floor-map-action,
+.d1-floor-map-toggle[aria-expanded="true"] .d1-floor-map-action {
+  color: var(--region);
+}
+
+.d1-floor-map-chevron {
+  transition: transform 120ms ease;
+}
+
+.d1-floor-map-toggle[aria-expanded="true"] .d1-floor-map-chevron {
+  transform: rotate(180deg);
+}
+
+.d1-floor-map-disclosure {
+  padding: 8px;
+  background: var(--d1-bg);
+  border-bottom: 1px solid var(--d1-border);
+}
+
+.d1-floor-map-disclosure[hidden] {
+  display: none;
+}
+
+.d1-floor-no-items {
+  margin: 0;
+  padding: 12px 14px 7px;
+  color: var(--d1-text-3);
+  font-size: 12px;
+}
+
+@media (pointer: coarse) {
+  .d1-floor-map-toggle {
+    min-height: 44px;
+  }
+}
+
+@media (max-width: 380px) {
+  .d1-floor-map-toggle {
+    gap: 6px;
+    padding-right: 10px;
+  }
+
+  .d1-floor-map-action > svg:first-child {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .d1-floor-map-chevron {
+    transition: none;
+  }
+}
