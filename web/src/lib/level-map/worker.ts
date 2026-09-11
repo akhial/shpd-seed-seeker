@@ -7,7 +7,7 @@ self.onmessage = async ({ data }: MessageEvent<MapWorkerRequest>) => {
   try {
     await ready;
     const map = JSON.parse(level_map(data.requestJson)) as LevelMapDocument;
-    if (map.schemaVersion !== 1 || map.format !== "seed-seeker-level-map") {
+    if (map.schemaVersion !== 2 || map.format !== "seed-seeker-level-map") {
       throw new Error("This map needs a newer version of Seed Seeker.");
     }
     const assets = map.assets.map(({ id }) => ({ id, png: level_map_asset(id).slice().buffer }));

@@ -21,11 +21,15 @@ describe("browser level map contract", () => {
     expect([0, 5, 10, 15, 20, 25, 26].some(isMapDepthSupported)).toBe(false);
   });
   it("canonicalizes challenge order while isolating trinket, floor and branch cache entries", () => {
-    const request = { seed: "AAA-AAA-AAA", depth: 13, challenges: ["no_armor", "no_food"] };
+    const request = {
+      seed: "AAA-AAA-AAA",
+      depth: 13,
+      challenges: ["faith_is_my_armor", "on_diet"],
+    };
     const key = mapRequestJson(request);
-    expect(mapRequestJson({ ...request, challenges: ["no_food", "no_armor", "no_food"] })).toBe(
-      key,
-    );
+    expect(
+      mapRequestJson({ ...request, challenges: ["on_diet", "faith_is_my_armor", "on_diet"] }),
+    ).toBe(key);
     expect(JSON.parse(key).trinket).toBe("none");
     expect(mapRequestJson({ ...request, selectedTrinket: "mossy_clump" })).not.toBe(key);
     expect(mapRequestJson({ ...request, branch: 1 })).not.toBe(key);
@@ -60,7 +64,7 @@ describe("browser level map contract", () => {
   });
 });
 
-it("composites layers at cell origins, advances animation and adds secrets only on request", () => {
+it("composites raised layers and switches secret visibility without drawing annotations", () => {
   const floor = map(1);
   const texture = {} as ImageBitmap;
   const blits: unknown[][] = [];
@@ -84,8 +88,8 @@ it("composites layers at cell origins, advances animation and adds secrets only 
       ...floor,
       width: 2,
       height: 2,
-      entrance: null,
-      exit: null,
+      entrance: 0,
+      exit: 3,
       branches: [],
       secretRooms: [],
       secretDoors: [1],
@@ -96,6 +100,7 @@ it("composites layers at cell origins, advances animation and adds secrets only 
           { name: "terrain", cells: [null, 0, null, null] },
           { name: "features", cells: [null, 1, null, null] },
         ],
+        concealedLayers: [{ name: "terrain", cells: [null, 0, null, null] }],
         sprites: [
           {
             frameDurationMs: 200,
@@ -129,14 +134,12 @@ it("composites layers at cell origins, advances animation and adds secrets only 
     },
   };
   drawLevelMap(context, bundle, 200, false);
-  expect(blits).toEqual([
-    [texture, 16, 0, 16, 16, 16, 0, 16, 16],
-    [texture, 32, 0, 8, 8, 20, 2, 8, 8],
-  ]);
+  expect(blits).toEqual([[texture, 16, 0, 16, 16, 16, 0, 16, 16]]);
   expect(outlines).toEqual([]);
   blits.length = 0;
   drawLevelMap(context, bundle, 400, true);
   expect(blits[0]).toEqual([texture, 0, 0, 16, 16, 16, 0, 16, 16]);
-  expect(outlines).toEqual([[17, 1, 14, 14]]);
+  expect(blits[1]).toEqual([texture, 32, 0, 8, 8, 20, 2, 8, 8]);
+  expect(outlines).toEqual([]);
   expect(context.imageSmoothingEnabled).toBe(false);
 });

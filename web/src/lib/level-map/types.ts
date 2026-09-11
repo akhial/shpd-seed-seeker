@@ -8,7 +8,7 @@ export interface MapSprite {
 }
 export interface LevelMapDocument {
   format: "seed-seeker-level-map";
-  schemaVersion: 1;
+  schemaVersion: 2;
   seed: string;
   depth: number;
   branch: number;
@@ -30,6 +30,7 @@ export interface LevelMapDocument {
     tileSize: number;
     sprites: MapSprite[];
     layers: { name: string; cells: (number | null)[] }[];
+    concealedLayers: { name: string; cells: (number | null)[] }[];
   };
 }
 export interface LevelMapRequest {
