@@ -408,7 +408,13 @@ body {
     height: auto;
     min-height: 100dvh;
   }
+  .d1-app-scout .d1-main {
+    display: flex;
+    flex-direction: column;
+  }
   .d1-app-scout .d1-pane-scout {
+    /* Fill the remaining viewport even before a seed has been scouted. */
+    flex: 1;
     height: auto;
   }
   .d1-app-scout .d1-pane-scout > .d1-pane-body {
