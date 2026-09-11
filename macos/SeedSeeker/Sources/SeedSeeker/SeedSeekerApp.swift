@@ -2209,17 +2209,29 @@ private struct SeedDetailView: View {
                 .onPreferenceChange(ScoutOfferFrame.self) { offerFrame = $0 }
                 .onPreferenceChange(ScoutFloorFrames.self) { frames in
                     floorFrames = frames
-                    if let anchor = pendingAnchor, anchor.seed == world.seed, anchor.trinket == world.selectedTrinket,
-                       let frame = frames[anchor.depth], viewportHeight > 0 {
-                        pendingAnchor = nil
-                        let distance = viewportHeight - frame.height
-                        let alignment = abs(distance) > 1 ? anchor.offset / distance : 0
-                        var transaction = Transaction(); transaction.disablesAnimations = true
-                        withTransaction(transaction) { proxy.scrollTo(anchor.depth, anchor: UnitPoint(x: 0, y: alignment)) }
-                    }
+                    restoreAnchor(in: world, using: proxy)
+                }
+                .task(id: world.selectedTrinket) {
+                    // An effect-only change may leave every frame identical,
+                    // so no preference callback arrives. Consume that anchor
+                    // after layout rather than on the user's next scroll.
+                    try? await Task.sleep(for: .milliseconds(50))
+                    guard !Task.isCancelled else { return }
+                    restoreAnchor(in: world, using: proxy)
                 }
             }
         }
+    }
+
+    private func restoreAnchor(in world: ScoutWorld, using proxy: ScrollViewProxy) {
+        guard let anchor = pendingAnchor, anchor.seed == world.seed,
+              anchor.trinket == world.selectedTrinket,
+              let frame = floorFrames[anchor.depth], viewportHeight > 0 else { return }
+        pendingAnchor = nil
+        let distance = viewportHeight - frame.height
+        let alignment = abs(distance) > 1 ? anchor.offset / distance : 0
+        var transaction = Transaction(); transaction.disablesAnimations = true
+        withTransaction(transaction) { proxy.scrollTo(anchor.depth, anchor: UnitPoint(x: 0, y: alignment)) }
     }
 
     private static func questTint(_ kind: ScoutQuestKind) -> Color {
