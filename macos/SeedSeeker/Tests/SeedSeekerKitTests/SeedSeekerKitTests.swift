@@ -362,9 +362,9 @@ final class SeedSeekerKitTests: XCTestCase {
         XCTAssertEqual(world.quests.map(\.variant), [.greatCrab, .rotberry, .crystal, .vault])
         XCTAssertEqual(world.quests.map(\.depth), [4, 8, 13, 18])
         XCTAssertEqual(world.quests.map(\.kind.giverLabel),
-                       ["Sad ghost", "Wandmaker", "Blacksmith", "Imp"])
+                       ["Sad Ghost", "Wandmaker", "Blacksmith", "Imp"])
         XCTAssertEqual(world.quests.map(\.variant.label),
-                       ["Great crab", "Rotberry", "Crystal spire", "Vault"])
+                       ["Great Crab", "Rotberry", "Crystal Spire", "Vault"])
         XCTAssertTrue(try ScoutCodec.decode(questPacket()).quests.isEmpty)
     }
 

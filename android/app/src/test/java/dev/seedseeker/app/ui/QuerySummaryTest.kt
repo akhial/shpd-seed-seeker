@@ -122,7 +122,7 @@ class QuerySummaryTest {
             scopeSummaryText(1, requireBlacksmith = false, excludeBlacksmithRewards = false, challenges = 16),
         )
         assertEquals(
-            "≤ floor 9 · corpse dust",
+            "≤ floor 9 · Corpse Dust",
             scopeSummaryText(
                 9,
                 requireBlacksmith = false,

@@ -651,7 +651,7 @@ fn match_summary(matched: usize, total: usize) -> String {
     )
 }
 
-/// The whole quest schedule on one line, e.g. "Sad ghost: Great crab ·
+/// The whole quest schedule on one line, e.g. "Sad Ghost: Great Crab ·
 /// Wandmaker: Rotberry". The floors are left to the floor headers, which
 /// already repeat each quest's variant.
 fn quest_summary_line(quests: &[QuestRow]) -> String {
@@ -940,17 +940,17 @@ mod tests {
         assert_eq!(
             quest_summary_line(&[
                 QuestRow {
-                    giver: "Sad ghost",
-                    variant: "Great crab",
+                    giver: "Sad Ghost",
+                    variant: "Great Crab",
                     depth: 4,
                 },
                 QuestRow {
                     giver: "Blacksmith",
-                    variant: "Crystal spire",
+                    variant: "Crystal Spire",
                     depth: 13,
                 },
             ]),
-            "Sad ghost: Great crab · Blacksmith: Crystal spire"
+            "Sad Ghost: Great Crab · Blacksmith: Crystal Spire"
         );
     }
 }

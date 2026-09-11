@@ -94,7 +94,7 @@ public static class ScoutQuests
 
     public static string GiverLabel(QuestGiver value) => value switch
     {
-        QuestGiver.Ghost => "Sad ghost",
+        QuestGiver.Ghost => "Sad Ghost",
         QuestGiver.Wandmaker => "Wandmaker",
         QuestGiver.Blacksmith => "Blacksmith",
         _ => "Imp",
@@ -102,14 +102,14 @@ public static class ScoutQuests
 
     public static string VariantLabel(QuestVariant value) => value switch
     {
-        QuestVariant.FetidRat => "Fetid rat",
-        QuestVariant.GnollTrickster => "Gnoll trickster",
-        QuestVariant.GreatCrab => "Great crab",
-        QuestVariant.CorpseDust => "Corpse dust",
-        QuestVariant.ElementalEmbers => "Elemental embers",
+        QuestVariant.FetidRat => "Fetid Rat",
+        QuestVariant.GnollTrickster => "Gnoll Trickster",
+        QuestVariant.GreatCrab => "Great Crab",
+        QuestVariant.CorpseDust => "Corpse Dust",
+        QuestVariant.ElementalEmbers => "Elemental Embers",
         QuestVariant.Rotberry => "Rotberry",
-        QuestVariant.Crystal => "Crystal spire",
-        QuestVariant.Gnoll => "Gnoll geomancer",
+        QuestVariant.Crystal => "Crystal Spire",
+        QuestVariant.Gnoll => "Gnoll Geomancer",
         _ => "Vault",
     };
 

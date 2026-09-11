@@ -1089,8 +1089,8 @@ public static class WandmakerQuests
 
     public static string Label(WandmakerQuest quest) => quest switch
     {
-        WandmakerQuest.CorpseDust => "Corpse dust",
-        WandmakerQuest.ElementalEmbers => "Elemental embers",
+        WandmakerQuest.CorpseDust => "Corpse Dust",
+        WandmakerQuest.ElementalEmbers => "Elemental Embers",
         WandmakerQuest.Rotberry => "Rotberry",
         _ => "Any",
     };

@@ -579,24 +579,24 @@ pub const fn region(depth: u8) -> &'static str {
 
 pub const fn ghost_quest_label(variant: GhostQuestType) -> &'static str {
     match variant {
-        GhostQuestType::FetidRat => "Fetid rat",
-        GhostQuestType::GnollTrickster => "Gnoll trickster",
-        GhostQuestType::GreatCrab => "Great crab",
+        GhostQuestType::FetidRat => "Fetid Rat",
+        GhostQuestType::GnollTrickster => "Gnoll Trickster",
+        GhostQuestType::GreatCrab => "Great Crab",
     }
 }
 
 pub const fn wandmaker_quest_label(variant: WandmakerQuestType) -> &'static str {
     match variant {
-        WandmakerQuestType::CorpseDust => "Corpse dust",
-        WandmakerQuestType::ElementalEmbers => "Elemental embers",
+        WandmakerQuestType::CorpseDust => "Corpse Dust",
+        WandmakerQuestType::ElementalEmbers => "Elemental Embers",
         WandmakerQuestType::Rotberry => "Rotberry",
     }
 }
 
 pub const fn blacksmith_quest_label(variant: BlacksmithQuestType) -> &'static str {
     match variant {
-        BlacksmithQuestType::Crystal => "Crystal spire",
-        BlacksmithQuestType::Gnoll => "Gnoll geomancer",
+        BlacksmithQuestType::Crystal => "Crystal Spire",
+        BlacksmithQuestType::Gnoll => "Gnoll Geomancer",
     }
 }
 
@@ -621,7 +621,7 @@ pub fn quest_rows(quests: QuestSummary) -> Vec<QuestRow> {
     let mut rows = Vec::with_capacity(4);
     if let Some(quest) = quests.ghost {
         rows.push(QuestRow {
-            giver: "Sad ghost",
+            giver: "Sad Ghost",
             variant: ghost_quest_label(quest.variant),
             depth: quest.depth,
         });
@@ -977,19 +977,19 @@ mod tests {
 
     #[test]
     fn quest_labels_name_every_variant() {
-        assert_eq!(ghost_quest_label(GhostQuestType::FetidRat), "Fetid rat");
+        assert_eq!(ghost_quest_label(GhostQuestType::FetidRat), "Fetid Rat");
         assert_eq!(
             ghost_quest_label(GhostQuestType::GnollTrickster),
-            "Gnoll trickster"
+            "Gnoll Trickster"
         );
-        assert_eq!(ghost_quest_label(GhostQuestType::GreatCrab), "Great crab");
+        assert_eq!(ghost_quest_label(GhostQuestType::GreatCrab), "Great Crab");
         assert_eq!(
             wandmaker_quest_label(WandmakerQuestType::CorpseDust),
-            "Corpse dust"
+            "Corpse Dust"
         );
         assert_eq!(
             wandmaker_quest_label(WandmakerQuestType::ElementalEmbers),
-            "Elemental embers"
+            "Elemental Embers"
         );
         assert_eq!(
             wandmaker_quest_label(WandmakerQuestType::Rotberry),
@@ -997,11 +997,11 @@ mod tests {
         );
         assert_eq!(
             blacksmith_quest_label(BlacksmithQuestType::Crystal),
-            "Crystal spire"
+            "Crystal Spire"
         );
         assert_eq!(
             blacksmith_quest_label(BlacksmithQuestType::Gnoll),
-            "Gnoll geomancer"
+            "Gnoll Geomancer"
         );
         assert_eq!(imp_target_label(ImpQuestType::Vault), "Vault");
     }
@@ -1046,18 +1046,18 @@ mod tests {
             quest_rows(summary),
             vec![
                 QuestRow {
-                    giver: "Sad ghost",
-                    variant: "Great crab",
+                    giver: "Sad Ghost",
+                    variant: "Great Crab",
                     depth: 4,
                 },
                 QuestRow {
                     giver: "Wandmaker",
-                    variant: "Elemental embers",
+                    variant: "Elemental Embers",
                     depth: 9,
                 },
                 QuestRow {
                     giver: "Blacksmith",
-                    variant: "Crystal spire",
+                    variant: "Crystal Spire",
                     depth: 13,
                 },
                 QuestRow {

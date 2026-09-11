@@ -743,7 +743,7 @@ public enum ScoutQuestKind: Int, CaseIterable, Sendable {
 
     public var giverLabel: String {
         switch self {
-        case .ghost: "Sad ghost"
+        case .ghost: "Sad Ghost"
         case .wandmaker: "Wandmaker"
         case .blacksmith: "Blacksmith"
         case .imp: "Imp"
@@ -788,14 +788,14 @@ public enum ScoutQuestVariant: Hashable, Sendable {
     }
     public var label: String {
         switch self {
-        case .fetidRat: "Fetid rat"
-        case .gnollTrickster: "Gnoll trickster"
-        case .greatCrab: "Great crab"
-        case .corpseDust: "Corpse dust"
-        case .elementalEmbers: "Elemental embers"
+        case .fetidRat: "Fetid Rat"
+        case .gnollTrickster: "Gnoll Trickster"
+        case .greatCrab: "Great Crab"
+        case .corpseDust: "Corpse Dust"
+        case .elementalEmbers: "Elemental Embers"
         case .rotberry: "Rotberry"
-        case .crystal: "Crystal spire"
-        case .gnoll: "Gnoll geomancer"
+        case .crystal: "Crystal Spire"
+        case .gnoll: "Gnoll Geomancer"
         case .vault: "Vault"
         }
     }

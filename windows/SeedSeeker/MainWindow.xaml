@@ -284,7 +284,7 @@
               <Button Grid.Column="2" Content="Copy" Click="CopySeed_Click" VerticalAlignment="Stretch"/>
             </Grid>
             <TextBlock x:Name="ScoutStatus" Style="{StaticResource Caption}" Margin="0,-2,0,0"/>
-            <!-- One chip per quest of the scouted seed, e.g. "Great crab · Sad Ghost · F4"; built in code-behind. -->
+            <!-- One chip per quest of the scouted seed, e.g. "Great Crab · Sad Ghost · F4"; built in code-behind. -->
             <local:WrapPanel x:Name="QuestStrip" Spacing="8" LineSpacing="4" Visibility="Collapsed"/>
             <!-- Shown while the scouted seed is one of the search results: J/K (or the chevrons) step through them. -->
             <Grid x:Name="ResultNav" Visibility="Collapsed" ColumnSpacing="8" MinHeight="32">

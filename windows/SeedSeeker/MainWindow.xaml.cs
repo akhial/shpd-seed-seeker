@@ -2041,7 +2041,7 @@ public sealed partial class MainWindow : Window
     /// <summary>The variant label of the quest hosted on <paramref name="depth"/>, or "" for quest-less floors.</summary>
     private static string QuestLabel(IReadOnlyList<ScoutQuest> quests, int depth) =>
         quests.FirstOrDefault(quest => quest.Depth == depth) is { } quest ? ScoutQuests.VariantLabel(quest.Variant) : "";
-    /// <summary>A pill summarising one quest, e.g. "Great crab · Sad Ghost · F4".</summary>
+    /// <summary>A pill summarising one quest, e.g. "Great Crab · Sad Ghost · F4".</summary>
     private static Border QuestChip(ScoutQuest quest)
     {
         var text = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
