@@ -77,7 +77,7 @@ pub fn document() -> Value {
             "branchDepths": crate::level_map::SUPPORTED_BRANCH_DEPTHS,
             "kinds": ["regular", "blacksmith_crystal", "blacksmith_gnoll", "imp_vault"],
             "tileSize": crate::level_map::TILE_SIZE,
-            "projection": "flat",
+            "projection": "raised",
             "assetRevision": crate::level_map::assets::SOURCE_REVISION,
         },
         "questWindows": quest_windows(),

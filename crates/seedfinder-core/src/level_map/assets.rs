@@ -120,6 +120,20 @@ pub const ASSETS: &[MapAsset] = &[
         sha256: "8782ef5007a841b2f13abc18b31983335ca193daed590760439c44410781b529",
         png: include_bytes!("../../assets/level-map/city_quest.png"),
     },
+    MapAsset {
+        id: "occlusion_shadows.png",
+        width: 128,
+        height: 128,
+        sha256: "f51350203bf898a544c03fd87f36607c225619ee5e785ecdd7940ac7fe9213f2",
+        png: include_bytes!("../../assets/level-map/occlusion_shadows.png"),
+    },
+    MapAsset {
+        id: "raised_terrain.png",
+        width: 64,
+        height: 128,
+        sha256: "405c2c34b3f8815a78ad78a68ed89cc8fd5b8cbdcec88f31532ec266a394b76b",
+        png: include_bytes!("../../assets/level-map/raised_terrain.png"),
+    },
 ];
 
 #[must_use]
