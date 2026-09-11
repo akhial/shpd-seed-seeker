@@ -1,8 +1,17 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { mapRequestJson, requestLevelMap } from "../../lib/level-map/client";
 import { drawLevelMap } from "../../lib/level-map/render";
 import type { LevelMapRequest, MapBundle } from "../../lib/level-map/types";
+import {
+  constrainMapTransform,
+  FIT_MAP,
+  mapFitScale,
+  MapGesture,
+  wheelZoomFactor,
+  zoomMapAt,
+} from "./map-gestures";
+import type { MapTransform } from "./map-gestures";
 import "./level-map.css";
 
 export interface LevelMapViewProps {
@@ -24,6 +33,20 @@ function MapSession(props: LevelMapViewProps) {
   const [parent, setParent] = useState<MapBundle>();
   const [error, setError] = useState<string>();
   const [retry, setRetry] = useState(0);
+  const [secrets, setSecrets] = useState(false);
+  const [playing, setPlaying] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+  );
+  useEffect(() => {
+    const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const update = () => {
+      if (preference.matches) setPlaying(false);
+    };
+    preference.addEventListener("change", update);
+    return () => preference.removeEventListener("change", update);
+  }, []);
   const request: LevelMapRequest = { ...props, branch };
   const requestKey = mapRequestJson(request);
   useEffect(() => {
@@ -47,6 +70,9 @@ function MapSession(props: LevelMapViewProps) {
   }, [requestKey, retry]);
   const bundle = loaded?.key === requestKey ? loaded.bundle : undefined;
   const branches = parent?.map.branches ?? [];
+  const secretCount = bundle
+    ? bundle.map.secretRooms.length + bundle.map.secretDoors.length + bundle.map.secretTraps.length
+    : 0;
   const title =
     branch === 0
       ? `Floor ${props.depth} layout`
@@ -57,23 +83,46 @@ function MapSession(props: LevelMapViewProps) {
     <div
       className={`d1-level-map-view ${props.compact ? "d1-level-map-compact" : ""} ${props.className ?? ""}`}
     >
-      {branches.length > 0 && (
-        <div className="d1-map-branches" role="group" aria-label="Level area">
-          <button type="button" aria-pressed={branch === 0} onClick={() => setBranch(0)}>
-            Floor {props.depth}
-          </button>
-          {branches.map((entry) => (
-            <button
-              type="button"
-              key={entry.branch}
-              aria-pressed={branch === entry.branch}
-              onClick={() => setBranch(entry.branch)}
-            >
-              {entry.kind === "imp_vault" ? "Imp vault" : "Blacksmith mine"}
+      <div className={`d1-map-toolbar${branches.length > 0 ? " d1-map-toolbar-branched" : ""}`}>
+        {branches.length > 0 && (
+          <div className="d1-map-branches" role="group" aria-label="Level area">
+            <button type="button" aria-pressed={branch === 0} onClick={() => setBranch(0)}>
+              Main
             </button>
-          ))}
-        </div>
-      )}
+            {branches.map((entry) => (
+              <button
+                type="button"
+                key={entry.branch}
+                aria-pressed={branch === entry.branch}
+                onClick={() => setBranch(entry.branch)}
+              >
+                {entry.kind === "imp_vault" ? "Imp vault" : "Blacksmith mine"}
+              </button>
+            ))}
+          </div>
+        )}
+        <button
+          type="button"
+          className="d1-map-secrets"
+          aria-pressed={secrets}
+          disabled={secretCount === 0}
+          onClick={() => setSecrets((value) => !value)}
+          title={
+            secrets ? "Hide secret rooms, doors and traps" : "Reveal secret rooms, doors and traps"
+          }
+        >
+          Secrets
+        </button>
+        <button
+          type="button"
+          className="d1-map-motion"
+          aria-pressed={playing}
+          onClick={() => setPlaying((value) => !value)}
+          aria-label={playing ? "Pause map animation" : "Play map animation"}
+        >
+          {playing ? "Pause" : "Animate"}
+        </button>
+      </div>
       {error ? (
         <div className="d1-map-message" role="alert" style={{ minHeight: props.height ?? 300 }}>
           <p>Couldn’t load this map.</p>
@@ -88,6 +137,8 @@ function MapSession(props: LevelMapViewProps) {
           bundle={bundle}
           height={props.height ?? (props.compact ? 230 : 320)}
           label={title}
+          secrets={secrets}
+          playing={playing}
         />
       ) : (
         <div className="d1-map-message" role="status" style={{ minHeight: props.height ?? 300 }}>
@@ -102,51 +153,40 @@ function MapCanvas({
   bundle,
   height,
   label,
+  secrets,
+  playing,
 }: {
   bundle: MapBundle;
   height: number;
   label: string;
+  secrets: boolean;
+  playing: boolean;
 }) {
   const { map } = bundle;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 300, height });
-  const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [secrets, setSecrets] = useState(false);
-  const [playing, setPlaying] = useState(
-    () =>
-      typeof window !== "undefined" &&
-      !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
-  );
+  const [transform, setTransform] = useState(FIT_MAP);
+  const transformRef = useRef(transform);
+  const gestures = useRef(new MapGesture());
   const [visible, setVisible] = useState(true);
-  const drag = useRef<{ id: number; x: number; y: number; startX: number; startY: number } | null>(
-    null,
-  );
   const widthPx = map.width * map.scene.tileSize,
     heightPx = map.height * map.scene.tileSize;
-  const fit = Math.min((size.width - 24) / widthPx, (size.height - 24) / heightPx);
-  const scale = Math.max(0.01, fit) * zoom;
-  const boundX = Math.max(0, (widthPx * scale - size.width) / 2 + 36);
-  const boundY = Math.max(0, (heightPx * scale - size.height) / 2 + 36);
-  // Keep the map reachable after zooming out or resizing an already panned view.
+  const geometry = useMemo(
+    () => ({ ...size, mapWidth: widthPx, mapHeight: heightPx }),
+    [size, widthPx, heightPx],
+  );
+  const scale = mapFitScale(geometry) * transform.zoom;
+  const applyTransform = useCallback((next: MapTransform) => {
+    // Pointer and wheel events may arrive before React commits a render.
+    transformRef.current = next;
+    setTransform(next);
+  }, []);
   useEffect(() => {
-    setPan((value) => {
-      const x = Math.max(-boundX, Math.min(boundX, value.x));
-      const y = Math.max(-boundY, Math.min(boundY, value.y));
-      return x === value.x && y === value.y ? value : { x, y };
-    });
-  }, [boundX, boundY]);
-  const secretCount = map.secretRooms.length + map.secretDoors.length + map.secretTraps.length;
-  const reset = () => {
-    setZoom(1);
-    setPan({ x: 0, y: 0 });
-  };
-  const changeZoom = (value: number) => {
-    const next = Math.max(1, Math.min(6, value));
-    setZoom(next);
-    if (next === 1) setPan({ x: 0, y: 0 });
-  };
+    const next = constrainMapTransform(transformRef.current, geometry);
+    applyTransform(next);
+    gestures.current.rebase(next);
+  }, [applyTransform, geometry]);
   useEffect(() => {
     const viewport = viewportRef.current;
     if (!viewport) return;
@@ -162,13 +202,30 @@ function MapCanvas({
     };
   }, []);
   useEffect(() => {
-    const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const update = () => {
-      if (preference.matches) setPlaying(false);
+    const viewport = viewportRef.current;
+    if (!viewport) return;
+    const wheel = (event: WheelEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const bounds = viewport.getBoundingClientRect();
+      const current = transformRef.current;
+      const next = zoomMapAt(
+        current,
+        current.zoom * wheelZoomFactor(event.deltaY, event.deltaMode, event.ctrlKey),
+        {
+          x: event.clientX - bounds.left - bounds.width / 2,
+          y: event.clientY - bounds.top - bounds.height / 2,
+        },
+        geometry,
+      );
+      applyTransform(next);
+      gestures.current.rebase(next);
     };
-    preference.addEventListener("change", update);
-    return () => preference.removeEventListener("change", update);
-  }, []);
+    // A native non-passive listener consumes trackpad pinch and wheel events
+    // without scrolling the scout or zooming the entire browser page.
+    viewport.addEventListener("wheel", wheel, { passive: false });
+    return () => viewport.removeEventListener("wheel", wheel);
+  }, [applyTransform, geometry]);
   useEffect(() => {
     const context = canvasRef.current?.getContext("2d");
     if (!context) return;
@@ -193,158 +250,92 @@ function MapCanvas({
       document.removeEventListener("visibilitychange", resume);
     };
   }, [bundle, playing, visible, secrets]);
-  const pointDown = (event: ReactPointerEvent<HTMLDivElement>) => {
-    if (event.button !== 0 || zoom === 1) return;
-    event.stopPropagation();
-    event.currentTarget.setPointerCapture(event.pointerId);
-    drag.current = {
-      id: event.pointerId,
-      x: event.clientX,
-      y: event.clientY,
-      startX: pan.x,
-      startY: pan.y,
+  const pointerPoint = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    return {
+      x: event.clientX - bounds.left - bounds.width / 2,
+      y: event.clientY - bounds.top - bounds.height / 2,
     };
   };
-  const clampPan = (x: number, y: number) => {
-    return { x: Math.max(-boundX, Math.min(boundX, x)), y: Math.max(-boundY, Math.min(boundY, y)) };
+  const pointDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.focus({ preventScroll: true });
+    event.currentTarget.setPointerCapture(event.pointerId);
+    gestures.current.down(event.pointerId, pointerPoint(event), transformRef.current);
   };
   const pointMove = (event: ReactPointerEvent<HTMLDivElement>) => {
-    const current = drag.current;
-    if (!current || current.id !== event.pointerId) return;
-    setPan(
-      clampPan(
-        current.startX + event.clientX - current.x,
-        current.startY + event.clientY - current.y,
-      ),
-    );
+    const next = gestures.current.move(event.pointerId, pointerPoint(event), geometry);
+    if (next) {
+      event.stopPropagation();
+      applyTransform(next);
+    }
   };
-  const endDrag = () => {
-    drag.current = null;
+  const pointUp = (event: ReactPointerEvent<HTMLDivElement>) => {
+    gestures.current.up(event.pointerId, transformRef.current);
   };
   const canvasStyle: CSSProperties = {
     width: widthPx * scale,
     height: heightPx * scale,
-    transform: `translate(calc(-50% + ${pan.x}px), calc(-50% + ${pan.y}px))`,
+    transform: `translate(calc(-50% + ${transform.x}px), calc(-50% + ${transform.y}px))`,
   };
   return (
-    <>
-      <div className="d1-map-toolbar">
-        <div className="d1-map-zoom" role="group" aria-label="Map zoom">
-          <button
-            type="button"
-            aria-label="Zoom out"
-            disabled={zoom === 1}
-            onClick={() => changeZoom(zoom / 1.5)}
-          >
-            −
-          </button>
-          <button type="button" onClick={reset} title="Fit the entire map">
-            Fit
-          </button>
-          <button
-            type="button"
-            aria-label="Zoom in"
-            disabled={zoom === 6}
-            onClick={() => changeZoom(zoom * 1.5)}
-          >
-            +
-          </button>
-        </div>
-        <button
-          type="button"
-          aria-pressed={secrets}
-          disabled={secretCount === 0}
-          onClick={() => setSecrets((value) => !value)}
-          title="Highlight secret rooms, doors and traps"
-        >
-          Secrets{secretCount > 0 ? ` · ${secretCount}` : ""}
-        </button>
-        <button
-          type="button"
-          className="d1-map-motion"
-          aria-pressed={playing}
-          onClick={() => setPlaying((value) => !value)}
-          aria-label={playing ? "Pause map animation" : "Play map animation"}
-        >
-          {playing ? "Pause" : "Animate"}
-        </button>
-      </div>
-      <div
-        ref={viewportRef}
-        className={`d1-map-viewport ${zoom > 1 ? "d1-map-zoomed" : ""}`}
-        style={{ height, touchAction: zoom > 1 ? "none" : "pan-y" }}
-        tabIndex={0}
-        role="region"
-        aria-label={`${label}. Use zoom buttons, drag to pan, or arrow keys when zoomed.`}
-        onPointerDown={pointDown}
-        onPointerMove={pointMove}
-        onPointerUp={endDrag}
-        onPointerCancel={endDrag}
-        onLostPointerCapture={endDrag}
-        onKeyDown={(event) => {
-          if (
-            ["+", "=", "-", "0", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(
-              event.key,
-            )
-          ) {
-            event.stopPropagation();
-            event.preventDefault();
-            if (event.key === "0") reset();
-            else if (event.key === "+" || event.key === "=") changeZoom(zoom * 1.5);
-            else if (event.key === "-") changeZoom(zoom / 1.5);
-            else if (zoom > 1)
-              setPan((value) =>
-                clampPan(
-                  value.x + (event.key === "ArrowLeft" ? 24 : event.key === "ArrowRight" ? -24 : 0),
-                  value.y + (event.key === "ArrowUp" ? 24 : event.key === "ArrowDown" ? -24 : 0),
-                ),
-              );
-          }
-        }}
-      >
-        <canvas
-          ref={canvasRef}
-          width={widthPx}
-          height={heightPx}
-          style={canvasStyle}
-          role="img"
-          aria-label={`${label}: ${map.width} by ${map.height} tiles, ${map.secretRooms.length} secret rooms, ${map.traps.length} traps.`}
-        />
-        {zoom > 1 && (
-          <span className="d1-map-pan-hint" aria-hidden="true">
-            Drag to explore
-          </span>
-        )}
-      </div>
-      <div className="d1-map-legend">
-        <span>
-          <i className="d1-map-dot-entry" />
-          {map.branch ? "Return" : "Entrance"}
-        </span>
-        {map.exit !== null && (
-          <span>
-            <i className="d1-map-dot-exit" />
-            Exit
-          </span>
-        )}
-        {map.branches.length > 0 && (
-          <span>
-            <i className="d1-map-dot-quest" />
-            Quest
-          </span>
-        )}
-        <span className="d1-map-size">
-          {map.width} × {map.height}
-        </span>
-      </div>
-      <p className="d1-map-caption">
-        {map.kind === "blacksmith_crystal"
-          ? "Crystal mine · "
-          : map.kind === "blacksmith_gnoll"
-            ? "Gnoll mine · "
-            : ""}
-        Full layout · Secrets revealed · Terrain and traps
-      </p>
-    </>
+    <div
+      ref={viewportRef}
+      className={`d1-map-viewport ${transform.zoom > 1 ? "d1-map-zoomed" : ""}`}
+      style={{ height }}
+      tabIndex={0}
+      role="region"
+      aria-label={label}
+      onPointerDown={pointDown}
+      onPointerMove={pointMove}
+      onPointerUp={pointUp}
+      onPointerCancel={pointUp}
+      onLostPointerCapture={pointUp}
+      onKeyDown={(event) => {
+        if (event.ctrlKey || event.metaKey || event.altKey) return;
+        if (
+          ["+", "=", "-", "0", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(
+            event.key,
+          )
+        ) {
+          event.stopPropagation();
+          event.preventDefault();
+          const current = transformRef.current;
+          let next = current;
+          if (event.key === "0") next = FIT_MAP;
+          else if (event.key === "+" || event.key === "=" || event.key === "-")
+            next = zoomMapAt(
+              current,
+              current.zoom * (event.key === "-" ? 1 / 1.5 : 1.5),
+              { x: 0, y: 0 },
+              geometry,
+            );
+          else
+            next = constrainMapTransform(
+              {
+                ...current,
+                x:
+                  current.x +
+                  (event.key === "ArrowLeft" ? 24 : event.key === "ArrowRight" ? -24 : 0),
+                y: current.y + (event.key === "ArrowUp" ? 24 : event.key === "ArrowDown" ? -24 : 0),
+              },
+              geometry,
+            );
+          applyTransform(next);
+          gestures.current.rebase(next);
+        }
+      }}
+    >
+      <canvas
+        ref={canvasRef}
+        width={widthPx}
+        height={heightPx}
+        style={canvasStyle}
+        role="img"
+        aria-label={label}
+      />
+    </div>
   );
 }
