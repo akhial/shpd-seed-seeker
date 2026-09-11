@@ -2214,7 +2214,7 @@ input[type="range"]::-moz-range-thumb {
   min-width: 0;
   height: 28px;
   padding: 0;
-  border: 1px solid rgba(89, 203, 137, 0.35);
+  border: 1px solid #bba0ee30;
   border-radius: 6px;
   background: var(--d1-panel-2);
   cursor: pointer;

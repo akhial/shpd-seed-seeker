@@ -399,7 +399,7 @@ private fun ResultNavigationBar(
                     val applied = selectedTrinket == offer.id
                     Surface(selected = applied, onClick = { onSelect(if (applied) "none" else offer.id) }, enabled = enabled,
                         modifier = Modifier.size(36.dp).semantics { contentDescription = offer.name },
-                        shape = MaterialTheme.shapes.small, border = BorderStroke(if (applied) 2.dp else 1.dp, SpdGreen.copy(alpha = if (applied) 1f else 0.35f)),
+                        shape = MaterialTheme.shapes.small, border = BorderStroke(if (applied) 2.dp else 1.dp, if (applied) SpdGreen else MaterialTheme.colorScheme.outlineVariant),
                         color = if (applied) SpdGreen.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceContainerLow) {
                         Box(contentAlignment = Alignment.Center) { ItemSprite(offer, modifier = Modifier.size(22.dp)) }
                     }

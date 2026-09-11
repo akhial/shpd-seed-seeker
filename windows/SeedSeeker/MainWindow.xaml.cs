@@ -2002,7 +2002,7 @@ public sealed partial class MainWindow : Window
             {
                 Width = 32, Height = 32, Padding = new Thickness(4), CornerRadius = new CornerRadius(6),
                 IsChecked = applied, BorderThickness = new Thickness(applied ? 2 : 1),
-                BorderBrush = ThemeBrush(applied ? "SystemFillColorSuccessBrush" : "SystemFillColorSuccessBackgroundBrush", Microsoft.UI.Colors.ForestGreen),
+                BorderBrush = ThemeBrush(applied ? "SystemFillColorSuccessBrush" : "CardStrokeColorDefaultBrush", applied ? Microsoft.UI.Colors.ForestGreen : Microsoft.UI.Colors.Gray),
                 Background = ThemeBrush(applied ? "SystemFillColorSuccessBackgroundBrush" : "CardBackgroundFillColorDefaultBrush", Microsoft.UI.Colors.Transparent),
                 Content = new SpriteView { SpriteIndex = item.SpriteIndex, SpriteSize = 20 },
                 IsTabStop = false,

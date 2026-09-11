@@ -2073,7 +2073,7 @@ private struct SeedDetailView: View {
                         ItemSpriteView(item: item, pointSize: 20)
                             .frame(width: 28, height: 28)
                             .background(applied ? Color.shatteredMint.opacity(0.14) : Color.clear, in: RoundedRectangle(cornerRadius: 6))
-                            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Color.shatteredMint.opacity(applied ? 1 : 0.35), lineWidth: applied ? 2 : 1))
+                            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(applied ? Color.shatteredMint : Color.secondary.opacity(0.25), lineWidth: applied ? 2 : 1))
                     }
                     .buttonStyle(.plain).help(item.name)
                     .accessibilityLabel(item.name).accessibilityValue(applied ? "Selected" : "Not selected")

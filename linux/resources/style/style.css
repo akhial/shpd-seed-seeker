@@ -208,7 +208,7 @@ button.stack-badge:hover {
   min-width: 20px;
   min-height: 20px;
   padding: 4px;
-  border: 1px solid alpha(@success_color, 0.35);
+  border: 1px solid alpha(currentColor, 0.16);
   border-radius: 6px;
 }
 .trinket-shortcut:checked {
