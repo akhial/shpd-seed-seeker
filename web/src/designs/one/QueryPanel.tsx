@@ -330,7 +330,7 @@ export function QueryPanel({
             fill
             onChange={(value) => patchQuery({ maxDepth: value })}
           />
-          <label className="d1-check">
+          <label className="d1-check d1-auto-trinket">
             <input
               type="checkbox"
               checked={query.autoApplyTrinket}

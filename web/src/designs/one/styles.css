@@ -766,6 +766,10 @@ input[type="range"]:focus-visible,
   user-select: none;
 }
 
+.d1-auto-trinket {
+  margin-top: 12px;
+}
+
 .d1-check input[type="checkbox"] {
   appearance: none;
   -webkit-appearance: none;
