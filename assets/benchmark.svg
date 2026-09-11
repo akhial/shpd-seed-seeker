@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 204" width="780" height="204" role="img">
-  <title>Matching seeds per minute on an Apple M4 Pro, 12 workers. +2 Runic Blade (Grim, Corrupting, Vampiric or Crystal) and +2 Ring of Might: Seed Seeker auto 79.9, Java 10.6. +5 Crossbow: Seed Seeker auto 8,429.7, Java 1,772.0. Both queries through floor 19; separate bar scales.</title>
+  <title>Matching seeds per minute on an Apple M4 Pro, 12 workers. +2 Runic Blade (Grim, Corrupting, Vampiric or Crystal) and +2 Ring of Might: Seed Seeker (AutoTrinket on) 79.9, Java 10.6. +5 Crossbow: Seed Seeker (AutoTrinket on) 8,429.7, Java 1,772.0. Both queries through floor 19; separate bar scales.</title>
 
   <style>
     @font-face {
@@ -26,7 +26,7 @@
     }
   </style>
 
-  <!-- Each query uses its own scale; Seed Seeker has auto-apply enabled. -->
+  <!-- Each query uses its own scale; Seed Seeker has AutoTrinket on. -->
   <line class="baseline" x1="221.5" y1="14" x2="221.5" y2="190"/>
   <text class="label" x="222" y="12" style="font-size:11px">+2 Runic Blade (Grim, Corrupting, Vampiric or Crystal) + +2 Ring of Might · floor 19 · matches/min</text>
   <text class="label ours" x="210" y="34" text-anchor="end">Seed Seeker (12 threads)</text>

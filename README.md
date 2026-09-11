@@ -15,7 +15,7 @@ written in Rust — with native apps for Android, Linux, macOS, and Windows.
 **[Try it in your browser →](https://shpd-seed-seeker.web.app/)**
 
 <p align="center">
-  <img alt="Matching seeds per minute on an Apple M4 Pro, 12 workers. +2 Runic Blade (Grim, Corrupting, Vampiric or Crystal) and +2 Ring of Might: Seed Seeker auto 79.9, Java 10.6. +5 Crossbow: Seed Seeker auto 8,429.7, Java 1,772.0. Both queries through floor 19; separate bar scales." src="assets/benchmark.svg">
+  <img alt="Matching seeds per minute on an Apple M4 Pro, 12 workers. +2 Runic Blade (Grim, Corrupting, Vampiric or Crystal) and +2 Ring of Might: Seed Seeker (AutoTrinket on) 79.9, Java 10.6. +5 Crossbow: Seed Seeker (AutoTrinket on) 8,429.7, Java 1,772.0. Both queries through floor 19; separate bar scales." src="assets/benchmark.svg">
 </p>
 
 <p align="center">
@@ -205,12 +205,12 @@ cargo run --release -p shpd-seedfinder-cli -- -i requirements.json -b 1000 --wor
 
 **Matching seeds per minute**, through floor 19. +2 Grim/Vampiric/Corrupting/Crystal Runic Blade and +2 Ring of Might.
 
-| Query | Java baseline | Auto-trinket off | Auto-trinket on | Auto / Java |
+| Query | Java baseline | AutoTrinket off | AutoTrinket on | AutoTrinket on / Java |
 | --- | ---: | ---: | ---: | ---: |
 | [+2 Runic Blade and +2 Ring of Might](https://shpd-seed-seeker.web.app/#q=QyAhKCsAAeAAAuoKAA) | 10.6 | 54.9 | **79.9** | 7.5× |
 | +5 Crossbow | 1,772.0 | 8,398.0 | 8,429.7 | 4.8× |
 
-Auto-trinket improved match throughput by **45.4%**.
+AutoTrinket improved match throughput by **45.4%**.
 
 - **Machine:** Apple M4 Pro.
 
