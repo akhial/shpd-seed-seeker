@@ -28,7 +28,8 @@ pub struct TrinketSearchMatch {
     pub recipe: SeedRecipe,
 }
 
-/// Generate at most one world per input seed using a prepared query plan.
+/// Search once per input seed using a prepared query plan. Auto-applied
+/// matches alone get a no-trinket replay to remove unnecessary choices.
 /// One output per input preserves traversal accounting even for pruned seeds.
 #[must_use]
 pub fn search_batch<G: WorldGenerator>(
@@ -40,12 +41,68 @@ pub fn search_batch<G: WorldGenerator>(
     if plan.is_unsatisfiable() {
         return seeds.iter().map(|_| None).collect();
     }
-    match_batch(generator, query, plan, plan.generation_depth(), seeds)
+    let results = match_batch(generator, query, plan, plan.generation_depth(), seeds);
+    remove_unnecessary_trinkets(generator, query, plan, results)
+}
+
+struct RecipeGate<'a> {
+    plan: &'a QueryPlan,
+    choices: std::collections::BTreeMap<u64, Option<ItemId>>,
+}
+
+impl FloorGate for RecipeGate<'_> {
+    fn selected_trinket(&self, seed: DungeonSeed) -> Option<ItemId> {
+        self.choices.get(&seed.value()).copied().flatten()
+    }
+    fn continue_after_floor(&self, depth: u8, items: &[WorldItem], quests: &QuestSummary) -> bool {
+        self.plan.continue_after_floor(depth, items, quests)
+    }
+    fn wants_vault_treasure(&self) -> bool {
+        self.plan.wants_vault_treasure()
+    }
+}
+
+fn remove_unnecessary_trinkets<G: WorldGenerator>(
+    generator: &G,
+    query: &SearchQuery,
+    plan: &QueryPlan,
+    mut results: Vec<Option<TrinketSearchMatch>>,
+) -> Vec<Option<TrinketSearchMatch>> {
+    if !enabled(query) {
+        return results;
+    }
+    let selected: Vec<_> = results
+        .iter()
+        .enumerate()
+        .filter_map(|(index, result)| {
+            result
+                .as_ref()
+                .and_then(|result| result.recipe.trinket.map(|_| (index, result.recipe.seed)))
+        })
+        .collect();
+    if selected.is_empty() {
+        return results;
+    }
+    // Reuse the query's floor/vault pruning without its automatic choice.
+    // Failed initial searches never get this extra generation pass.
+    let gate = RecipeGate {
+        plan,
+        choices: std::collections::BTreeMap::new(),
+    };
+    let seeds: Vec<_> = selected.iter().map(|&(_, seed)| seed).collect();
+    let baseline = match_batch(generator, query, &gate, plan.generation_depth(), &seeds);
+    for ((index, _), result) in selected.into_iter().zip(baseline) {
+        if result.is_some() {
+            // Replace the world as well as its recipe: callers must see the
+            // exact no-trinket items, not loot from the original generation.
+            results[index] = result;
+        }
+    }
+    results
 }
 
 /// Verify saved recipes against new item predicates while retaining their
-/// original world conditions. Choice changes require a new traversal, not a
-/// continuation of already-scanned coverage.
+/// original world conditions, then remove any unnecessary automatic choice.
 #[must_use]
 pub fn filter_batch<G: WorldGenerator>(
     generator: &G,
@@ -53,26 +110,6 @@ pub fn filter_batch<G: WorldGenerator>(
     plan: &QueryPlan,
     recipes: &[SeedRecipe],
 ) -> Vec<Option<TrinketSearchMatch>> {
-    struct RecipeGate<'a> {
-        plan: &'a QueryPlan,
-        choices: std::collections::BTreeMap<u64, Option<ItemId>>,
-    }
-    impl FloorGate for RecipeGate<'_> {
-        fn selected_trinket(&self, seed: DungeonSeed) -> Option<ItemId> {
-            self.choices.get(&seed.value()).copied().flatten()
-        }
-        fn continue_after_floor(
-            &self,
-            depth: u8,
-            items: &[WorldItem],
-            quests: &QuestSummary,
-        ) -> bool {
-            self.plan.continue_after_floor(depth, items, quests)
-        }
-        fn wants_vault_treasure(&self) -> bool {
-            self.plan.wants_vault_treasure()
-        }
-    }
     if plan.is_unsatisfiable() {
         return recipes.iter().map(|_| None).collect();
     }
@@ -84,7 +121,47 @@ pub fn filter_batch<G: WorldGenerator>(
             .collect(),
     };
     let seeds: Vec<_> = recipes.iter().map(|r| r.seed).collect();
-    match_batch(generator, query, &gate, plan.generation_depth(), &seeds)
+    let results = match_batch(generator, query, &gate, plan.generation_depth(), &seeds);
+    remove_unnecessary_trinkets(generator, query, plan, results)
+}
+
+/// Refine saved results under a new query. An automatic choice removed for
+/// the base query may be necessary for the new one, so retry the policy's
+/// choice when a saved no-trinket recipe fails changed predicates.
+/// Callers use `SearchQuery::continues` to decide whether
+/// they can also reuse the base query's scanned coverage.
+#[must_use]
+pub fn refine_batch<G: WorldGenerator>(
+    generator: &G,
+    query: &SearchQuery,
+    plan: &QueryPlan,
+    base: &SearchQuery,
+    recipes: &[SeedRecipe],
+) -> Vec<Option<TrinketSearchMatch>> {
+    let mut results = filter_batch(generator, query, plan, recipes);
+    if !enabled(query) || query == base || plan.is_unsatisfiable() {
+        return results;
+    }
+    let retry: Vec<_> = recipes
+        .iter()
+        .enumerate()
+        .filter_map(|(index, recipe)| {
+            (results[index].is_none()
+                && recipe.trinket.is_none()
+                && plan.selected_trinket(recipe.seed).is_some())
+            .then_some((index, recipe.seed))
+        })
+        .collect();
+    if !retry.is_empty() {
+        let seeds: Vec<_> = retry.iter().map(|&(_, seed)| seed).collect();
+        // The baseline just failed, so any match here needs its trinket.
+        // Saved recipes that still match retain their verified world.
+        let recovered = match_batch(generator, query, plan, plan.generation_depth(), &seeds);
+        for ((index, _), result) in retry.into_iter().zip(recovered) {
+            results[index] = result;
+        }
+    }
+    results
 }
 
 fn match_batch<G: WorldGenerator>(
@@ -246,6 +323,22 @@ mod tests {
         .unwrap()
     }
 
+    struct CountingGenerator(AtomicUsize);
+    impl WorldGenerator for CountingGenerator {
+        fn generate(&self, _: DungeonSeed, _: u8) -> GeneratedWorld {
+            panic!("batch path expected")
+        }
+        fn generate_batch_gated(
+            &self,
+            seeds: &[DungeonSeed],
+            depth: u8,
+            gate: &dyn FloorGate,
+        ) -> Vec<Option<GeneratedWorld>> {
+            self.0.fetch_add(seeds.len(), Ordering::Relaxed);
+            CanonicalMainWorldGenerator.generate_batch_gated(seeds, depth, gate)
+        }
+    }
+
     #[test]
     fn every_offer_set_selects_only_a_beneficial_choice_or_none() {
         let identities = trinket_order(DungeonSeed::MIN);
@@ -379,22 +472,7 @@ mod tests {
     }
 
     #[test]
-    fn one_generation_per_seed_and_saved_choices_replay_the_match() {
-        struct CountingGenerator(AtomicUsize);
-        impl WorldGenerator for CountingGenerator {
-            fn generate(&self, _: DungeonSeed, _: u8) -> GeneratedWorld {
-                panic!("batch path expected")
-            }
-            fn generate_batch_gated(
-                &self,
-                seeds: &[DungeonSeed],
-                depth: u8,
-                gate: &dyn FloorGate,
-            ) -> Vec<Option<GeneratedWorld>> {
-                self.0.fetch_add(seeds.len(), Ordering::Relaxed);
-                CanonicalMainWorldGenerator.generate_batch_gated(seeds, depth, gate)
-            }
-        }
+    fn necessary_trinkets_survive_baseline_replay_and_saved_choices_replay_the_match() {
         let seed = DungeonSeed::from_code("SRU-YSU-QHS").unwrap();
         let query = query(r#"[{"item":"runic_blade","upgrade":1,"effect":"Grim"}]"#);
         let plan = QueryPlan::analyze(&query);
@@ -403,7 +481,7 @@ mod tests {
             .pop()
             .unwrap()
             .unwrap();
-        assert_eq!(generator.0.load(Ordering::Relaxed), 1);
+        assert_eq!(generator.0.load(Ordering::Relaxed), 2);
         assert_eq!(result.recipe.trinket, Some(ItemId::ParchmentScrap));
         let baseline = generate_main_world_with_trinket(seed, 24, Challenges::NONE, None).unwrap();
         assert!(!query.matches(&baseline));
@@ -436,6 +514,106 @@ mod tests {
             )[0]
             .is_none()
         );
-        assert_eq!(generator.0.load(Ordering::Relaxed), 3);
+        assert_eq!(generator.0.load(Ordering::Relaxed), 5);
+    }
+
+    #[test]
+    fn only_auto_applied_matches_are_rechecked_and_unneeded_worlds_are_replaced() {
+        let seed = DungeonSeed::from_code("EYY-RUL-LQG").unwrap();
+        let query = query(r#"[{"item":"runic_blade","upgrade":1,"effect":"Grim"}]"#);
+        let plan = QueryPlan::analyze(&query);
+        assert_eq!(plan.selected_trinket(seed), Some(ItemId::ParchmentScrap));
+        let generator = CountingGenerator(AtomicUsize::new(0));
+        let required = DungeonSeed::from_code("SRU-YSU-QHS").unwrap();
+        let results = search_batch(
+            &generator,
+            &query,
+            &plan,
+            &[seed, DungeonSeed::MIN, required],
+        );
+        assert_eq!(results.len(), 3);
+        assert!(results[1].is_none());
+        assert_eq!(
+            results[2].as_ref().unwrap().recipe.trinket,
+            Some(ItemId::ParchmentScrap)
+        );
+        assert_eq!(generator.0.load(Ordering::Relaxed), 5); // Three searches, two match rechecks.
+        let result = results[0].as_ref().unwrap();
+        assert_eq!(
+            result.recipe,
+            SeedRecipe {
+                seed,
+                trinket: None
+            }
+        );
+
+        let mut baseline_query = query.clone();
+        baseline_query.auto_apply_trinket = false;
+        let baseline = search_batch(
+            &generator,
+            &baseline_query,
+            &QueryPlan::analyze(&baseline_query),
+            &[seed],
+        );
+        assert_eq!(result.world, baseline[0].as_ref().unwrap().world);
+        assert_eq!(generator.0.load(Ordering::Relaxed), 6); // No recheck with auto off.
+        let filtered = filter_batch(&generator, &query, &plan, &[result.recipe]);
+        assert_eq!(filtered[0].as_ref().unwrap().world, result.world);
+        assert_eq!(generator.0.load(Ordering::Relaxed), 7); // No recheck for a null recipe.
+
+        let explicit = json_query::decode(
+            r#"{"auto_apply_trinket":true,"max_depth":19,
+            "requirements":[{"item":"runic_blade","upgrade":1,"effect":"Grim"},
+                {"item":"parchment_scrap","select_trinket":true}]}"#,
+        )
+        .unwrap();
+        let explicit_result = search_batch(
+            &generator,
+            &explicit,
+            &QueryPlan::analyze(&explicit),
+            &[seed],
+        );
+        assert_eq!(
+            explicit_result[0].as_ref().unwrap().recipe.trinket,
+            Some(ItemId::ParchmentScrap)
+        );
+        assert_eq!(generator.0.load(Ordering::Relaxed), 8); // Manual choices are preserved.
+    }
+
+    #[test]
+    fn refinement_can_restore_a_trinket_removed_for_the_base_query() {
+        let seed = DungeonSeed::from_code("EYY-RUL-LQG").unwrap();
+        let base = query(r#"[{"item":"runic_blade","upgrade":1,"effect":"Grim"}]"#);
+        let narrowed = query(
+            r#"[{"item":"runic_blade","upgrade":1,"effect":"Grim"},
+            {"item":"whip","effect":"Venomous"}]"#,
+        );
+        assert!(narrowed.continues(&base));
+        let generator = CanonicalMainWorldGenerator;
+        let base_plan = QueryPlan::analyze(&base);
+        let plan = QueryPlan::analyze(&narrowed);
+        let original = search_batch(&generator, &base, &base_plan, &[seed]);
+        let recipe = original[0].as_ref().unwrap().recipe;
+        assert_eq!(recipe.trinket, None);
+        assert!(filter_batch(&generator, &narrowed, &plan, &[recipe])[0].is_none());
+
+        let refined = refine_batch(&generator, &narrowed, &plan, &base, &[recipe]);
+        let refined = refined[0].as_ref().unwrap();
+        assert_eq!(refined.recipe.trinket, Some(ItemId::ParchmentScrap));
+        assert!(narrowed.matches(&refined.world));
+        let replay =
+            generate_main_world_with_trinket(seed, 24, Challenges::NONE, refined.recipe.trinket)
+                .unwrap();
+        assert!(narrowed.matches(&replay));
+
+        // Refining back removes the choice, including when replaying an old
+        // imported result whose trinket was unnecessary for the same query.
+        let widened = refine_batch(&generator, &base, &base_plan, &narrowed, &[refined.recipe]);
+        assert_eq!(widened[0].as_ref().unwrap().recipe, recipe);
+        let imported = refine_batch(&generator, &base, &base_plan, &base, &[refined.recipe]);
+        assert_eq!(
+            imported[0].as_ref().unwrap().world,
+            original[0].as_ref().unwrap().world
+        );
     }
 }

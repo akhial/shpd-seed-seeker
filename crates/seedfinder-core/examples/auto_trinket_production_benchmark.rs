@@ -122,6 +122,8 @@ fn bench(name: &str, document: &Value, count: u64, start: u64) {
     let mut blocks = Vec::new();
     let mut examples = Vec::new();
     let mut replayed = [0_u64; 2];
+    let mut baseline_rechecks = 0_u64;
+    let mut removed_trinkets = 0_u64;
     let mut done = 0_u64;
     while done < count {
         let seeds: Vec<_> = (start + done..start + (done + 32).min(count))
@@ -138,6 +140,10 @@ fn bench(name: &str, document: &Value, count: u64, start: u64) {
             assert_eq!(results.len(), seeds.len());
             for (i, result) in results.into_iter().enumerate() {
                 if let Some(result) = result {
+                    if mode == 1 && plans[mode].selected_trinket(result.recipe.seed).is_some() {
+                        baseline_rechecks += 1;
+                        removed_trinkets += u64::from(result.recipe.trinket.is_none());
+                    }
                     flags[mode][i] = true;
                     recipes[mode].push(result.recipe);
                 }
@@ -160,7 +166,20 @@ fn bench(name: &str, document: &Value, count: u64, start: u64) {
                 )
                 .unwrap();
                 assert!(queries[mode].matches(&replay), "recipe failed full scout");
-                assert_eq!(recipe.trinket, plans[mode].selected_trinket(recipe.seed));
+                if recipe.trinket.is_some() {
+                    assert_eq!(recipe.trinket, plans[mode].selected_trinket(recipe.seed));
+                    let baseline_world = generate_main_world_with_trinket(
+                        recipe.seed,
+                        24,
+                        baseline.challenges,
+                        None,
+                    )
+                    .unwrap();
+                    assert!(
+                        !queries[mode].matches(&baseline_world),
+                        "unnecessary trinket retained"
+                    );
+                }
                 replayed[mode] += 1;
             }
         }
@@ -193,7 +212,10 @@ fn bench(name: &str, document: &Value, count: u64, start: u64) {
             eprintln!("{name}: {done}/{count}, matches {matches:?}, seconds {seconds:?}");
         }
     }
-    assert_eq!(generator.inputs.load(Ordering::Relaxed), count * 2);
+    assert_eq!(
+        generator.inputs.load(Ordering::Relaxed),
+        count * 2 + baseline_rechecks
+    );
     assert_eq!(replayed, matches);
     println!(
         "{}",
@@ -204,6 +226,7 @@ fn bench(name: &str, document: &Value, count: u64, start: u64) {
             "ticks_per_second":ticks_per_second,"matches":matches,"cells":total_cells,
             "selected_cells":selected_cells,"examples":examples,"blocks":blocks,
             "validation":{"generated_inputs":generator.inputs.load(Ordering::Relaxed),
+                "baseline_rechecks":baseline_rechecks,"removed_trinkets":removed_trinkets,
                 "replayed_matches":replayed,"replay_depth":24,"checked_offer_decks":count,
                 "forbidden_choices":0}}
         )

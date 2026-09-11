@@ -1,5 +1,11 @@
 # Production auto-trinket benchmark
 
+These recorded measurements predate the match-only no-trinket recheck. Current
+search keeps the same initial match set, then strips unnecessary choices by
+replaying only auto-applied matches. The runnable adapter now counts those
+extra generations and checks returned recipes; the historical timing data
+below does not measure that added cost.
+
 This validates the implemented `auto_trinkets::search_batch` path, including its
 prepared `QueryPlan`, choice resolution, pruning, matching, and result recipes.
 The earlier [single-trinket study](single-trinket-study.md) measured a prototype;

@@ -38,7 +38,7 @@ it("keeps the setting in share links and rejects malformed flags", () => {
   expect(fromQueryJson('{"requirements":[]}').autoApplyTrinket).toBe(false);
 });
 
-it("searches one world, returns its recipe, and replays it in scouting and filtering", () => {
+it("keeps a necessary trinket and replays its recipe in scouting and filtering", () => {
   const json = JSON.stringify(document);
   const seed = JSON.parse(parse_seed_code("SRU-YSU-QHS")) as ParsedSeed;
   const session = new SearchSession(json, seed.value, seed.value + 1);
@@ -62,6 +62,45 @@ it("searches one world, returns its recipe, and replays it in scouting and filte
       JSON.parse(filter_seeds(json, new Float64Array([seed.value]), '["parchment_scrap"]')),
     ).toEqual(found.matches);
     expect(JSON.parse(filter_seeds(json, new Float64Array([seed.value]), "[null]"))).toEqual([]);
+  } finally {
+    session.free();
+  }
+});
+
+it("removes an unnecessary trinket and restores it when a refined query needs it", () => {
+  const json = JSON.stringify(document);
+  const seed = JSON.parse(parse_seed_code("EYY-RUL-LQG")) as ParsedSeed;
+  const session = new SearchSession(json, seed.value, seed.value + 1);
+  try {
+    const found = JSON.parse(session.advance(1)) as SearchAdvance;
+    expect(found.tested).toBe(1);
+    expect(found.matches).toEqual([{ ...seed, selectedTrinket: null }]);
+    const manifest = JSON.parse(
+      scout(JSON.stringify({ seed: seed.code, query: document, trinket: "none" })),
+    ) as ScoutResult;
+    expect(manifest.selectedTrinket).toBeNull();
+    expect(manifest.matchedRequirements).toBe(1);
+    const narrowed = JSON.stringify({
+      ...document,
+      requirements: [...document.requirements, { item: "whip", effect: "Venomous" }],
+    });
+    const seeds = new Float64Array([seed.value]);
+    expect(JSON.parse(filter_seeds(narrowed, seeds, "[null]"))).toEqual([]);
+    const refined = JSON.parse(filter_seeds(narrowed, seeds, "[null]", json));
+    expect(refined).toEqual([{ ...seed, selectedTrinket: "parchment_scrap" }]);
+    const selected = JSON.parse(
+      scout(
+        JSON.stringify({
+          seed: seed.code,
+          query: JSON.parse(narrowed),
+          trinket: "parchment_scrap",
+        }),
+      ),
+    ) as ScoutResult;
+    expect(selected.matchedRequirements).toBe(2);
+    expect(JSON.parse(filter_seeds(json, seeds, '["parchment_scrap"]', narrowed))).toEqual(
+      found.matches,
+    );
   } finally {
     session.free();
   }

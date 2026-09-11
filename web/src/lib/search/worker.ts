@@ -103,6 +103,7 @@ context.addEventListener("message", (event: MessageEvent<SearchWorkerRequest>) =
             message.queryJson,
             new Float64Array(message.seeds),
             message.trinkets ? JSON.stringify(message.trinkets) : undefined,
+            message.baseQueryJson,
           ),
         });
       } catch (error) {

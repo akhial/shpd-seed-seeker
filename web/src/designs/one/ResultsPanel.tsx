@@ -12,7 +12,9 @@ import {
 import { clearResults, loadImportedResults, searchStore } from "../../lib/search/coordinator";
 import { canClearResults, RESULT_CAP } from "../../lib/search/coordinator-state";
 import { queryStore } from "../../lib/store";
+import { itemArt } from "../../lib/sprites";
 import type { AnalysisResult } from "../../lib/wasm/types";
+import { Sprite } from "./parts";
 
 /** Re-renders 10 times a second while active so stats stay live between worker updates. */
 function useTicker(active: boolean): number {
@@ -328,39 +330,42 @@ export function ResultsPanel({
           </div>
         ) : (
           <ol className="d1-result-list">
-            {shownMatches.map((match, index) => (
-              <li
-                key={match.code}
-                ref={activeSeed === match.code ? activeRow : undefined}
-                className={activeSeed === match.code ? "d1-result-active" : undefined}
-              >
-                <button
-                  type="button"
-                  className="d1-result-main"
-                  onClick={() => onScout(match.code)}
-                  title="Scout this seed"
+            {shownMatches.map((match, index) => {
+              const trinket = match.selectedTrinket ? getItem(match.selectedTrinket) : undefined;
+              return (
+                <li
+                  key={match.code}
+                  ref={activeSeed === match.code ? activeRow : undefined}
+                  className={activeSeed === match.code ? "d1-result-active" : undefined}
                 >
-                  <span className="d1-result-index">{index + 1}</span>
-                  <span className="d1-result-identity">
-                    <span className="d1-result-code d1-mono">{match.code}</span>
-                    {match.selectedTrinket && (
-                      <span className="d1-result-trinket">
-                        {getItem(match.selectedTrinket)?.name ?? match.selectedTrinket}
-                      </span>
-                    )}
-                  </span>
-                </button>
-                <button
-                  type="button"
-                  className="d1-result-copy"
-                  aria-label={`Copy seed ${match.code}`}
-                  title="Copy seed"
-                  onClick={() => copySeed(match.code)}
-                >
-                  {copied === match.code ? <CheckIcon size={14} /> : <CopyIcon size={14} />}
-                </button>
-              </li>
-            ))}
+                  <button
+                    type="button"
+                    className="d1-result-main"
+                    onClick={() => onScout(match.code)}
+                    title="Scout this seed"
+                  >
+                    <span className="d1-result-index">{index + 1}</span>
+                    <span className="d1-result-identity">
+                      <span className="d1-result-code d1-mono">{match.code}</span>
+                      {trinket && (
+                        <span className="d1-result-trinket" title={trinket.name}>
+                          <Sprite art={itemArt(trinket.sprite)} size={16} label={trinket.name} />
+                        </span>
+                      )}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="d1-result-copy"
+                    aria-label={`Copy seed ${match.code}`}
+                    title="Copy seed"
+                    onClick={() => copySeed(match.code)}
+                  >
+                    {copied === match.code ? <CheckIcon size={14} /> : <CopyIcon size={14} />}
+                  </button>
+                </li>
+              );
+            })}
           </ol>
         )}
       </div>

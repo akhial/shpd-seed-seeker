@@ -2029,13 +2029,15 @@ input[type="range"]::-moz-range-thumb {
 
 .d1-result-identity {
   display: flex;
-  flex-direction: column;
-  gap: 3px;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
 }
 
 .d1-result-trinket {
-  font-size: 11px;
-  color: var(--d1-text-2);
+  display: inline-flex;
+  flex: 0 0 auto;
+  opacity: 0.6;
 }
 
 .d1-result-index {

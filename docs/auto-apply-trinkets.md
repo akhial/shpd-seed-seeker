@@ -2,8 +2,11 @@
 
 The web's **Performance → Auto-apply a trinket at +3** option is off by default.
 It asks the engine to select a helpful trinket from the seed's four initial catalyst offers
-before generating any floors. Each seed is generated once, with no baseline
-scout, retry, or union of loot from different possible worlds. The existing
+before generating any floors. Each seed gets one initial search. Only a match
+with an automatic trinket gets a second, no-trinket generation pass. If it still
+satisfies the full query, the engine returns that no-trinket world and recipe;
+otherwise it retains the necessary trinket. Failed searches are not retried,
+and items from different possible worlds are never combined. The existing
 +3 model activates the choice at the first brewing opportunity; it does not
 change equipment on floors generated before then.
 
@@ -34,27 +37,37 @@ first result earlier because the web delivers batches of 256 seeds.
 `auto_trinkets::AutoTrinketPolicy` prepares the ranking once per `QueryPlan`.
 `FloorGate::selected_trinket` supplies the choice to the existing production
 generator. Shared `search_batch` and `filter_batch` return matching worlds
-with `SeedRecipe` choices. WASM only adapts those operations to cooperative
+with `SeedRecipe` choices, stripping unnecessary automatic choices only after
+rechecking the full query with the same floor and vault pruning. Explicit
+trinket requirements are not stripped. WASM only adapts those operations to cooperative
 sessions and JSON; there is no selection or generation algorithm in the web.
 Native engine callers also receive selection through `QueryPlan`. Remaining
 UIs have no new toggle or result-recipe integration in this change.
 
 The query JSON codec persists `auto_apply_trinket` only when true. Share links
 use version 6 for the flag; existing version 4 and 5 queries retain their
-byte format and remain readable. Results show the applied trinket's name, export the
+byte format and remain readable. Results stay on one line with a small,
+translucent trinket sprite beside the seed only when a trinket is applied.
+The name is available on hover and to screen readers. Results export the
 exact choice, and scout using that choice and the saved query rather than
 the current editor. See [results export](results-export-format.md).
 
 Continuation compares the prepared choice policies. A different policy
 requires a new traversal; matching policies can reuse coverage and filter
-saved recipes. See [search semantics](search-semantics.md).
+saved recipes. `refine_batch` also retries a previously stripped choice when
+the no-trinket recipe fails a changed query: a trinket unnecessary for the old
+requirements may now be necessary. Unchanged queries keep their saved choices,
+subject to the same unnecessary-trinket check. See [search semantics](search-semantics.md).
 
 ## Validation
 
 Core regression tests enumerate all four-offer subsets, verify the no-trinket
 fallback against baseline worlds, check curse and
 manual-requirement exclusions, count generation inputs, and verify continuation
-rules. The known selection-only result `SRU-YSU-QHS` matches a +1 Grim Runic
+rules, and check that only auto-applied matches get a baseline replay. Seed
+`EYY-RUL-LQG` needs no trinket for a +1 Grim Runic Blade, but refining that query
+to also require a Venomous Whip restores Parchment Scrap. The known
+selection-only result `SRU-YSU-QHS` matches a +1 Grim Runic
 Blade through floor 19 with Parchment Scrap, fails without it, and reproduces
 through a complete floor-24 scout. The early floors remain unchanged.
 

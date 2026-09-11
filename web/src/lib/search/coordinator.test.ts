@@ -119,6 +119,7 @@ describe("implicit refine on start", () => {
       {
         type: "filter",
         queryJson: JSON.stringify(baseQuery),
+        baseQueryJson: JSON.stringify(baseQuery),
         seeds: [11, 22],
         requestId: expect.any(Number),
       },
@@ -210,6 +211,7 @@ describe("implicit refine on start", () => {
       {
         type: "filter",
         queryJson: JSON.stringify(baseQuery),
+        baseQueryJson: JSON.stringify(targetQuery),
         seeds: [11, 22],
         requestId: expect.any(Number),
       },
@@ -311,6 +313,7 @@ it("passes saved choices to filter workers when continuing the same policy", () 
   coordinator.start(query, 1);
   expect(StubWorker.posted[0]).toMatchObject({
     type: "filter",
+    baseQueryJson: JSON.stringify(query),
     seeds: [11, 22],
     trinkets: ["parchment_scrap", null],
   });

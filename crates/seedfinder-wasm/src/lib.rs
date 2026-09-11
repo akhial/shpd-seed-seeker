@@ -321,7 +321,10 @@ pub fn scout(request_json: &str) -> Result<String, JsError> {
 /// a JSON array of `{code, value, selectedTrinket}` in input order. Optional
 /// `trinkets_json` carries an array of saved IDs or nulls, parallel to the seeds.
 /// Automatic queries replay those choices; explicit requirements resolve their
-/// own selection rules. This backs the filter-and-resume flow.
+/// own selection rules. With `base_query_json`, changed automatic queries
+/// retry failed no-trinket recipes with the policy's choice, which may now
+/// be necessary.
+/// This backs the filter-and-resume flow.
 ///
 /// # Errors
 ///
@@ -332,9 +335,15 @@ pub fn filter_seeds(
     query_json: &str,
     seed_values: Vec<f64>,
     trinkets_json: Option<String>,
+    base_query_json: Option<String>,
 ) -> Result<String, JsError> {
-    filter_recipes_impl(query_json, &seed_values, trinkets_json.as_deref())
-        .map_err(|error| JsError::new(&error))
+    filter_recipes_impl(
+        query_json,
+        &seed_values,
+        trinkets_json.as_deref(),
+        base_query_json.as_deref(),
+    )
+    .map_err(|error| JsError::new(&error))
 }
 
 /// Reports whether the query in `candidate_json` continues the one in
@@ -521,15 +530,17 @@ impl SearchSession {
 
 #[cfg(test)]
 fn filter_seeds_impl(query_json: &str, seed_values: &[f64]) -> Result<String, String> {
-    filter_recipes_impl(query_json, seed_values, None)
+    filter_recipes_impl(query_json, seed_values, None, None)
 }
 
 fn filter_recipes_impl(
     query_json: &str,
     seed_values: &[f64],
     trinkets_json: Option<&str>,
+    base_query_json: Option<&str>,
 ) -> Result<String, String> {
     let query = json_query::decode(query_json)?;
+    let base = base_query_json.map(json_query::decode).transpose()?;
     let seeds = seed_values
         .iter()
         .map(|&value| {
@@ -555,7 +566,11 @@ fn filter_recipes_impl(
                     .map(|trinket| SeedRecipe { seed, trinket })
             })
             .collect::<Result<Vec<_>, _>>()?;
-        auto_trinkets::filter_batch(&generator, &query, &plan, &recipes)
+        if let Some(base) = base {
+            auto_trinkets::refine_batch(&generator, &query, &plan, &base, &recipes)
+        } else {
+            auto_trinkets::filter_batch(&generator, &query, &plan, &recipes)
+        }
     } else {
         auto_trinkets::search_batch(&generator, &query, &plan, &seeds)
     };

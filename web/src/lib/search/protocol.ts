@@ -8,6 +8,7 @@ export type SearchWorkerRequest =
   | {
       type: "filter";
       queryJson: string;
+      baseQueryJson: string;
       seeds: number[];
       trinkets?: (string | null)[];
       requestId: number;

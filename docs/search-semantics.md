@@ -138,13 +138,22 @@ unchanged.
 
 `auto_apply_trinket` selects one initial offer before generation. The prepared
 policy is part of world identity: continuation requires identical preferred
-and fallback rankings (or automatic selection disabled in both queries).
+rankings (or automatic selection disabled in both queries).
 Explicit trinket selection slots still must agree for continuation. Changing
 automatic choices starts a detached traversal, preserving the target, even
 when the queries share an item. Merely filtering the target could miss seeds
 that failed under the old choice and pass under the new one.
 
-The engine owns this decision. The web passes the exact saved choices to
-filter workers and uses them for automatic-result replay. Manual trinket
+Auto-applied matches are rechecked without the trinket. If the full query still
+matches, both the world and recipe are replaced with the no-trinket result.
+This cleanup does not change which initial searches succeed or their coverage.
+
+The engine owns this decision. The web passes the exact saved choices and base
+query to filter workers. The engine first replays those choices, removing
+unnecessary trinkets. If a saved no-trinket recipe fails a changed automatic
+query, `refine_batch` retries it with the policy's choice: stripping a trinket
+for the base query must not lose a seed that needs it for a refinement. Saved
+recipes that still match are retained. Manual trinket
 requirements continue to use their explicit selection rules. Imports carry
-no scanned coverage; their result recipes survive subsequent editor changes.
+no scanned coverage; their recipes continue to control scouting and export
+independently of editor changes.
