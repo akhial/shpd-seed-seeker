@@ -112,7 +112,7 @@ fn all_supported_depths_have_bounded_draws_and_explicit_metadata() {
     for depth in SUPPORTED_DEPTHS {
         let map = generate_level_map(DungeonSeed::MIN, depth, Challenges::NONE, None).unwrap();
         let doc = document(&map);
-        assert_eq!(doc["schemaVersion"], 1);
+        assert_eq!(doc["schemaVersion"], 2);
         assert_eq!(doc["selectedTrinket"], Value::Null);
         assert_eq!(doc["shpdVersion"], shpd_seedfinder_core::SHPD_VERSION);
         assert_eq!(
@@ -187,7 +187,7 @@ fn challenge_json_uses_the_game_fixture_profile() {
 }
 
 fn assert_drawing_bounds(map: &LevelMap) {
-    for layer in &map.scene.layers {
+    for layer in map.scene.layers.iter().chain(&map.scene.concealed_layers) {
         assert_eq!(layer.cells.len(), map.terrain.len());
         assert!(
             layer
