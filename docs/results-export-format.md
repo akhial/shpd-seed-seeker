@@ -63,8 +63,10 @@ The query reuses the existing JSON query-document format shared by the CLI
 (`seed-seeker --query`), the web frontend, and the presets on every platform.
 It is decoded by `crates/seedfinder-core/src/json_query.rs`:
 
-- `auto_apply_trinket` — boolean, defaults to `false`; the web Performance
-  setting. The engine chooses one offered trinket at +3 before generation.
+- `auto_apply_trinket` — boolean, defaults to `false` in the file format;
+  the web's **Search scope → AutoTrinket** setting starts enabled for new
+  queries and writes this flag as `true`. The engine chooses one offered
+  trinket at +3 before generation.
   Any trinket requirement disables automatic selection, including alternatives.
   See [automatic selection](auto-apply-trinkets.md).
 - `requirements` — non-empty array of entries. Each entry is either a

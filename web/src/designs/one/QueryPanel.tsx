@@ -330,6 +330,20 @@ export function QueryPanel({
             fill
             onChange={(value) => patchQuery({ maxDepth: value })}
           />
+          <label className="d1-check">
+            <input
+              type="checkbox"
+              checked={query.autoApplyTrinket}
+              disabled={query.requirements.some((r) => requirementFamily(r) === "trinket")}
+              onChange={(event) => patchQuery({ autoApplyTrinket: event.target.checked })}
+            />
+            <span>AutoTrinket</span>
+          </label>
+          <p className="d1-caption">
+            {query.requirements.some((r) => requirementFamily(r) === "trinket")
+              ? "Uses your trinket requirements instead."
+              : "Applies a helpful trinket at +3 at the first brewing opportunity. Keeps it only when the match needs it."}
+          </p>
         </section>
 
         <section className="d1-section">
@@ -404,43 +418,27 @@ export function QueryPanel({
           </details>
         </section>
 
-        <section className="d1-section">
-          <details className="d1-details">
-            <summary>
-              <span>Performance</span>
-            </summary>
-            <div className="d1-details-body">
-              {workerCeiling > 1 && (
-                <>
-                  <SliderRow
-                    label="Workers"
-                    valueLabel={`${workerCount} of ${workerCeiling} cores`}
-                    min={1}
-                    max={workerCeiling}
-                    value={Math.min(workerCount, workerCeiling)}
-                    fill
-                    onChange={setWorkerCount}
-                  />
-                  <p className="d1-caption">Number of search threads to spawn.</p>
-                </>
-              )}
-              <label className="d1-check">
-                <input
-                  type="checkbox"
-                  checked={query.autoApplyTrinket}
-                  disabled={query.requirements.some((r) => requirementFamily(r) === "trinket")}
-                  onChange={(event) => patchQuery({ autoApplyTrinket: event.target.checked })}
+        {workerCeiling > 1 && (
+          <section className="d1-section">
+            <details className="d1-details">
+              <summary>
+                <span>Performance</span>
+              </summary>
+              <div className="d1-details-body">
+                <SliderRow
+                  label="Workers"
+                  valueLabel={`${workerCount} of ${workerCeiling} cores`}
+                  min={1}
+                  max={workerCeiling}
+                  value={Math.min(workerCount, workerCeiling)}
+                  fill
+                  onChange={setWorkerCount}
                 />
-                <span>Auto-apply a trinket at +3</span>
-              </label>
-              <p className="d1-caption">
-                {query.requirements.some((r) => requirementFamily(r) === "trinket")
-                  ? "Uses your trinket requirements instead."
-                  : "Applies the best helpful offer at the first brewing opportunity. Uses no trinket when none helps; results show any applied trinket."}
-              </p>
-            </div>
-          </details>
-        </section>
+                <p className="d1-caption">Number of search threads to spawn.</p>
+              </div>
+            </details>
+          </section>
+        )}
 
         <section className="d1-section">
           <details className="d1-details">

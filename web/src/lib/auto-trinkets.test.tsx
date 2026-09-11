@@ -106,7 +106,7 @@ it("removes an unnecessary trinket and restores it when a refined query needs it
   }
 });
 
-it("shows Performance on one core and defers to explicit trinket requirements", () => {
+it("shows AutoTrinket enabled in Search scope on one core and defers to explicit requirements", () => {
   vi.stubGlobal("navigator", { hardwareConcurrency: 1 });
   const panel = () =>
     renderToStaticMarkup(
@@ -122,8 +122,9 @@ it("shows Performance on one core and defers to explicit trinket requirements", 
       />,
     );
   queryStore.setState(defaultQueryState);
-  expect(panel()).toContain("Performance");
-  expect(panel()).toContain("Auto-apply a trinket at +3");
+  expect(panel()).toContain("Search scope");
+  expect(panel()).toContain('<input type="checkbox" checked=""/><span>AutoTrinket</span>');
+  expect(panel()).not.toContain("Performance");
   expect(panel()).not.toContain("Workers");
   queryStore.setState(() =>
     fromQueryJson(
@@ -132,7 +133,7 @@ it("shows Performance on one core and defers to explicit trinket requirements", 
   );
   const html = panel();
   expect(html).toContain("Uses your trinket requirements instead.");
-  expect(html).toMatch(/<input type="checkbox" disabled="" checked=""\/><span>Auto-apply/);
+  expect(html).toMatch(/<input type="checkbox" disabled="" checked=""\/><span>AutoTrinket/);
 });
 
 it("returns explicit no-trinket recipes when the offers cannot help", () => {

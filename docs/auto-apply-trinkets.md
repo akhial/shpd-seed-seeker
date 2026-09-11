@@ -1,6 +1,8 @@
 # Automatically choosing one trinket
 
-The web's **Performance → Auto-apply a trinket at +3** option is off by default.
+The web's **Search scope → AutoTrinket** option is on by default for new queries
+and built-in presets. Saved queries, shared links and imports retain their
+recorded setting, including the legacy off default when the flag is absent.
 It asks the engine to select a helpful trinket from the seed's four initial catalyst offers
 before generating any floors. Each seed gets one initial search. Only a match
 with an automatic trinket gets a second, no-trinket generation pass. If it still

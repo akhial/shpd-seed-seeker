@@ -14,7 +14,7 @@ import { weaponEnchantments } from "./catalog";
 import type { QueryState, RequirementState } from "./wasm/types";
 
 describe("query serialization", () => {
-  it("omits query and requirement defaults", () => {
+  it("omits wire defaults while retaining the enabled AutoTrinket setting", () => {
     expect(
       toQueryJson({
         ...defaultQueryState(),
@@ -27,7 +27,7 @@ describe("query serialization", () => {
           },
         ],
       }),
-    ).toBe('{"requirements":[{"kind":"wand"}]}');
+    ).toBe('{"requirements":[{"kind":"wand"}],"auto_apply_trinket":true}');
   });
 
   it("emits tier and upgrade wire forms exactly", () => {
@@ -51,6 +51,7 @@ describe("query serialization", () => {
       challenges: ["on_diet" as const, "into_darkness" as const],
     };
     expect(JSON.parse(toQueryJson(state))).toEqual({
+      auto_apply_trinket: true,
       requirements: [
         { kind: "armor", tier: { at_least: 4 }, upgrade: { at_least: 2 } },
         { kind: "ring", item: "ring_haste", upgrade: 4 },
@@ -85,6 +86,7 @@ describe("query serialization", () => {
       ],
     };
     expect(JSON.parse(toQueryJson(state))).toEqual({
+      auto_apply_trinket: true,
       requirements: [
         { kind: "melee_weapon", tier: { exact: 5 } },
         { kind: "thrown_weapon" },
@@ -113,7 +115,9 @@ describe("query serialization", () => {
         },
       ],
     };
-    expect(toQueryJson(state)).toBe('{"requirements":[{"kind":"weapon","item":"sword"}]}');
+    expect(toQueryJson(state)).toBe(
+      '{"requirements":[{"kind":"weapon","item":"sword"}],"auto_apply_trinket":true}',
+    );
     expect(
       fromQueryJson(
         '{"requirements":[{"item":"sword"},{"item":"ring_haste"},{"kind":"wand"}]}',
@@ -138,12 +142,13 @@ describe("query serialization", () => {
         },
       ],
     };
-    expect(toQueryJson(base)).toBe('{"requirements":[{"kind":"wand"}]}');
+    expect(toQueryJson(base)).toBe('{"requirements":[{"kind":"wand"}],"auto_apply_trinket":true}');
     expect(fromQueryJson(toQueryJson(base)).wandmakerQuest).toBeUndefined();
 
     for (const variant of ["corpse_dust", "elemental_embers", "rotberry"] as const) {
       const state: QueryState = { ...base, wandmakerQuest: variant };
       expect(JSON.parse(toQueryJson(state))).toEqual({
+        auto_apply_trinket: true,
         requirements: [{ kind: "wand" }],
         wandmaker_quest: variant,
       });
@@ -276,6 +281,7 @@ describe("query serialization", () => {
       ],
     };
     expect(JSON.parse(toQueryJson(state))).toEqual({
+      auto_apply_trinket: true,
       requirements: [
         {
           kind: "weapon",
@@ -322,6 +328,7 @@ describe("query serialization", () => {
       ],
     };
     expect(JSON.parse(toQueryJson(state))).toEqual({
+      auto_apply_trinket: true,
       requirements: [
         {
           any_of: [

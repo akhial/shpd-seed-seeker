@@ -279,7 +279,7 @@ export const emptyRequirement = (kind?: RequirementState["kind"]): RequirementSt
 });
 
 export const defaultQueryState = (): QueryState => ({
-  autoApplyTrinket: false,
+  autoApplyTrinket: true,
   requirements: [],
   maxDepth: MAX_DEPTH,
   requireBlacksmith: false,
