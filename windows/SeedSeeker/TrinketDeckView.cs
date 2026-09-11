@@ -9,11 +9,12 @@ namespace SeedSeeker;
 /// <summary>The catalyst deck in its seeded order, using Fluent cards and pixel art.</summary>
 public sealed class TrinketDeckView : StackPanel
 {
+    public Grid Choices { get; } = new() { ColumnSpacing = 6 };
     public TrinketDeckView(IReadOnlyList<CatalogItem> order, IReadOnlySet<string> matches, string? selectedTrinket, Action<string> onSelect)
     {
         Spacing = 10;
         Margin = new Thickness(0, 12, 0, 6);
-        var choices = new Grid { ColumnSpacing = 6 };
+        var choices = Choices;
         for (var i = 0; i < 4; i++) choices.ColumnDefinitions.Add(new ColumnDefinition());
         foreach (var (item, index) in order.Take(4).Select((item, index) => (item, index)))
         {
@@ -27,6 +28,7 @@ public sealed class TrinketDeckView : StackPanel
                 Background = Resource(applied ? "SystemFillColorSuccessBackgroundBrush" : "CardBackgroundFillColorDefaultBrush"),
                 BorderBrush = Resource(applied || matched ? "SystemFillColorSuccessBrush" : "CardStrokeColorDefaultBrush"),
             };
+            StyleSelection(card);
             AutomationProperties.SetName(card, item.Name + (applied ? ", applied at +3" : "") + (matched ? ", matches requirement" : ""));
             card.Click += (_, _) => { card.IsChecked = applied; onSelect(applied ? "none" : item.Id); };
             ToolTipService.SetToolTip(card, item.Name);
@@ -69,6 +71,23 @@ public sealed class TrinketDeckView : StackPanel
             Grid.SetColumn(cell, index); tail.Children.Add(cell);
         }
         Children.Add(tail);
+    }
+
+    internal static void StyleSelection(ToggleButton button)
+    {
+        // Fluent's checked/hover visual states use these resources instead of
+        // BorderBrush. Keep the applied colour green through each state, and
+        // never paint an unselected hover as another applied choice.
+        foreach (var state in new[] { "Checked", "CheckedPointerOver", "CheckedPressed", "CheckedDisabled" })
+        {
+            button.Resources["ToggleButtonBorderBrush" + state] = Resource("SystemFillColorSuccessBrush");
+            button.Resources["ToggleButtonBackground" + state] = Resource("SystemFillColorSuccessBackgroundBrush");
+        }
+        foreach (var state in new[] { "PointerOver", "Pressed" })
+        {
+            button.Resources["ToggleButtonBorderBrush" + state] = button.BorderBrush;
+            button.Resources["ToggleButtonBackground" + state] = button.Background;
+        }
     }
 
     private static Brush Resource(string key) => (Brush)Application.Current.Resources[key];

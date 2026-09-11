@@ -99,6 +99,7 @@ mod tests {
             level_sum: None,
         };
         let query = |kind| SearchQuery {
+            auto_apply_trinket: false,
             requirements: vec![requirement(kind)],
             max_depth: 24,
             challenges: Challenges::NONE,

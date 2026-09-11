@@ -32,6 +32,7 @@ object ResultsExport {
         val seeds: List<String>,
         val dropped: Int,
         val shpdVersion: String?,
+        val trinkets: List<String?> = emptyList(),
     )
 
     /** Stable document names for the nine challenges, in mask order. */
@@ -48,10 +49,11 @@ object ResultsExport {
     )
 
     /** @throws IllegalArgumentException with the codec's message. */
-    fun encode(query: PresetQuery, seeds: List<String>, appVersion: String): String {
+    fun encode(query: PresetQuery, seeds: List<String>, appVersion: String, trinkets: List<String?>? = null): String {
         val request = JSONObject().apply {
             put("query", encodeQuery(query))
             put("seeds", JSONArray(seeds))
+            trinkets?.let { put("trinkets", JSONArray(it.map { id -> id ?: JSONObject.NULL })) }
             put("app_version", appVersion)
         }
         return String(JniBindings.resultsEncode(request.toString().toByteArray()), Charsets.UTF_8)
@@ -68,12 +70,14 @@ object ResultsExport {
             seeds = List(seeds.length()) { seeds.getString(it) },
             dropped = document.getInt("dropped"),
             shpdVersion = document.opt("shpd_version") as? String,
+            trinkets = List(seeds.length()) { document.optJSONArray("trinkets")?.opt(it) as? String },
         )
     }
 
     /** The query half of the document; [DeepLink] and the engine transport share it with the Rust codec. */
     internal fun encodeQuery(query: PresetQuery) = JSONObject().apply {
         put("requirements", encodeRequirements(query.requirements))
+        if (query.autoApplyTrinket) put("auto_apply_trinket", true)
         if (query.maximumDepth != 24) put("max_depth", query.maximumDepth)
         if (query.requireBlacksmith) put("require_blacksmith", true)
         if (query.excludeBlacksmithRewards) put("exclude_blacksmith_rewards", true)
@@ -178,6 +182,7 @@ object ResultsExport {
             CHALLENGE_NAMES[challengesValue.optString(index)]?.let { challenges = challenges or it.bit }
         }
         return PresetQuery(
+            autoApplyTrinket = value.optBoolean("auto_apply_trinket", false),
             requirements = requirements,
             maximumDepth = value.optInt("max_depth", 24),
             requireBlacksmith = value.optBoolean("require_blacksmith"),
@@ -286,6 +291,7 @@ object ResultsExport {
 
 /** The editor-facing view of a runnable request, which the document mapping is written against. */
 fun SearchRequest.toPresetQuery() = PresetQuery(
+    autoApplyTrinket = autoApplyTrinket,
     requirements = requirements,
     maximumDepth = maximumDepth,
     requireBlacksmith = requireBlacksmith,

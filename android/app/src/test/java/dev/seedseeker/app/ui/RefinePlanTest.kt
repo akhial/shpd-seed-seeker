@@ -52,7 +52,7 @@ class RefinePlanTest {
         // Narrowed, unchanged, and re-keyed queries all continue the Target Query; the plan
         // filters the full Target Set and resumes the target's own coverage.
         val expected =
-            StartPlan(StartMode.TARGET_REFINE, RefineSpec(4_096, 512, seeds))
+            StartPlan(StartMode.TARGET_REFINE, RefineSpec(4_096, 512, seeds, target.request))
         assertEquals(expected, planFor(request(frost, fireblast), target, null, null))
         assertEquals(expected, planFor(request(frost), target, null, null))
         assertEquals(expected, planFor(request(frost.copy(key = 41)), target, null, null))
@@ -66,7 +66,7 @@ class RefinePlanTest {
         val plan = planFor(
             request(frost, maximumDepth = 12), target, narrowedRun, StartMode.TARGET_REFINE,
         )
-        assertEquals(StartPlan(StartMode.TARGET_FILTER, RefineSpec(4_096, 0, seeds)), plan)
+        assertEquals(StartPlan(StartMode.TARGET_FILTER, RefineSpec(4_096, 0, seeds, target.request)), plan)
     }
 
     @Test
@@ -76,7 +76,7 @@ class RefinePlanTest {
         val scopeChanged = planFor(
             request(frost, challenges = Challenge.DARKNESS.bit), target, null, null,
         )
-        assertEquals(StartPlan(StartMode.TARGET_FILTER, RefineSpec(4_096, 0, seeds)), scopeChanged)
+        assertEquals(StartPlan(StartMode.TARGET_FILTER, RefineSpec(4_096, 0, seeds, target.request)), scopeChanged)
         // A kind-level wildcard subsumes every item of its kind.
         val wildcard = planFor(request(anyWand, maximumDepth = 12), target, null, null)
         assertEquals(StartMode.TARGET_FILTER, wildcard.mode)
@@ -98,7 +98,7 @@ class RefinePlanTest {
         val detachedRun = FinishedRun(request(ring), resumeFrom = 2_048, remaining = 128, results = seeds.take(1))
         val plan = planFor(request(ring), target, detachedRun, StartMode.DETACHED)
         assertEquals(
-            StartPlan(StartMode.CONTINUE_DETACHED, RefineSpec(2_048, 128, seeds.take(1))),
+            StartPlan(StartMode.CONTINUE_DETACHED, RefineSpec(2_048, 128, seeds.take(1), detachedRun.request)),
             plan,
         )
         // A continued detached scan is remembered as detached, so a further
@@ -120,7 +120,7 @@ class RefinePlanTest {
         val empty = target.copy(results = emptyList())
         // A continuing query with coverage left still resumes the target scan.
         assertEquals(
-            StartPlan(StartMode.TARGET_REFINE, RefineSpec(4_096, 512, emptyList())),
+            StartPlan(StartMode.TARGET_REFINE, RefineSpec(4_096, 512, emptyList(), target.request)),
             planFor(request(frost, fireblast), empty, null, null),
         )
         // With nothing left to scan — or for any other query — the search re-anchors.
@@ -160,7 +160,7 @@ class RefinePlanTest {
         // The next refine of that Target filters the full uncapped set again.
         val plan = planFor(request(frost, fireblast), settled, null, StartMode.TARGET_REFINE)
         assertEquals(
-            StartPlan(StartMode.TARGET_REFINE, RefineSpec(8_192, 256, existing + newFinds)),
+            StartPlan(StartMode.TARGET_REFINE, RefineSpec(8_192, 256, existing + newFinds, target.request)),
             plan,
         )
     }

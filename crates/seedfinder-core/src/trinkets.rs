@@ -6,6 +6,30 @@ use crate::rng::RandomStack;
 use crate::run::{GeneratorCategory, GeneratorState, RunState};
 use crate::seed::DungeonSeed;
 
+/// Resolve the query's complete selection rule for a single scout or replay.
+/// Search batches use the prepared policy in `QueryPlan` instead.
+#[must_use]
+pub fn selected_for_query(seed: DungeonSeed, query: &crate::query::SearchQuery) -> Option<ItemId> {
+    crate::auto_trinkets::AutoTrinketPolicy::prepare(query).map_or_else(
+        || resolve_selection(seed, &selection_slots(query)),
+        |policy| policy.selected_trinket(seed),
+    )
+}
+
+/// Validate a saved or manually chosen trinket against the actual initial offers.
+///
+/// # Errors
+/// Rejects unknown IDs and items outside the seed's four initial choices.
+pub fn parse_offered(seed: DungeonSeed, id: &str) -> Result<ItemId, String> {
+    let selected = crate::catalog::item_by_stable_id(id)
+        .ok_or_else(|| format!("unknown trinket: {id}"))?
+        .id;
+    if !trinket_order(seed)[..INITIAL_OFFER_COUNT].contains(&selected) {
+        return Err("selected trinket must be one of the four initial catalyst offers".to_owned());
+    }
+    Ok(selected)
+}
+
 /// The full OR slots which request choosing a trinket. Keep every alternative:
 /// even an unchecked alternative makes a multiply matching group ambiguous.
 #[must_use]

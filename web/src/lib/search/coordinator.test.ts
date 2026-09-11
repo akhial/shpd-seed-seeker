@@ -119,6 +119,7 @@ describe("implicit refine on start", () => {
       {
         type: "filter",
         queryJson: JSON.stringify(baseQuery),
+        baseQueryJson: JSON.stringify(baseQuery),
         seeds: [11, 22],
         requestId: expect.any(Number),
       },
@@ -210,6 +211,7 @@ describe("implicit refine on start", () => {
       {
         type: "filter",
         queryJson: JSON.stringify(baseQuery),
+        baseQueryJson: JSON.stringify(targetQuery),
         seeds: [11, 22],
         requestId: expect.any(Number),
       },
@@ -272,5 +274,47 @@ describe("clearing results", () => {
     clearResults();
     expect(searchStore.state.state).toBe("running");
     expect(searchStore.state.matches).toHaveLength(1);
+  });
+});
+
+it("starts a detached traversal when automatic choices change", () => {
+  const coordinator = new SearchCoordinator(TOTAL);
+  const query: QueryDocument = {
+    max_depth: 19,
+    requirements: [{ item: "runic_blade", upgrade: 1, effect: "Grim" }],
+  };
+  seedFinishedRun(query);
+  const target = searchStore.state.target;
+  coordinator.start({ ...query, auto_apply_trinket: true }, 1);
+  expect(searchStore.state.runKind).toBe("detached");
+  expect(searchStore.state.filtering).toBe(false);
+  expect(searchStore.state.target).toBe(target);
+  expect(postedTypes()).toEqual(["search:start"]);
+});
+
+it("passes saved choices to filter workers when continuing the same policy", () => {
+  const coordinator = new SearchCoordinator(TOTAL);
+  const query: QueryDocument = {
+    auto_apply_trinket: true,
+    max_depth: 19,
+    requirements: [{ item: "runic_blade", upgrade: 1, effect: "Grim" }],
+  };
+  seedFinishedRun(query);
+  searchStore.setState((state) => ({
+    ...state,
+    target: {
+      ...state.target!,
+      matches: [
+        { ...match(11), selectedTrinket: "parchment_scrap" },
+        { ...match(22), selectedTrinket: null },
+      ],
+    },
+  }));
+  coordinator.start(query, 1);
+  expect(StubWorker.posted[0]).toMatchObject({
+    type: "filter",
+    baseQueryJson: JSON.stringify(query),
+    seeds: [11, 22],
+    trinkets: ["parchment_scrap", null],
   });
 });

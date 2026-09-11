@@ -62,7 +62,7 @@ export function StatusSnackbar() {
       search.refined === undefined &&
       running;
     if (detached && !seen.current.detached) {
-      events.push("Unrelated query — detached search from previous results.");
+      events.push("Started a new search. Earlier results are kept.");
     }
     seen.current.detached = seen.current.detached || detached;
     if (filterDone && !seen.current.filterDone && search.refined) {

@@ -23,6 +23,7 @@ beforeAll(async () => {
 });
 
 const loadedQuery: QueryState = {
+  autoApplyTrinket: false,
   requirements: [
     {
       kind: "ring",
@@ -233,4 +234,31 @@ describe("results file", () => {
       ),
     ).toThrowError(/any_of|alternative|sum/i);
   });
+});
+
+it("preserves each automatic recipe through export, import and duplicate removal", () => {
+  const query = toQueryDocument({
+    ...defaultQueryState(),
+    autoApplyTrinket: true,
+    requirements: [
+      {
+        kind: "weapon",
+        item: "runic_blade",
+        tier: { mode: "any", value: 3 },
+        upgrade: { mode: "exact", value: 1 },
+        effect: "Grim",
+        uncursed: false,
+      },
+    ],
+  });
+  const text = encodeResultsFile(query, ["SRU-YSU-QHS", "SRU-YSU-QHS"], ["parchment_scrap", null]);
+  const decoded = decodeResultsFile(text);
+  expect(decoded.query.autoApplyTrinket).toBe(true);
+  expect(decoded.seeds).toEqual(["SRU-YSU-QHS"]);
+  expect(decoded.trinkets).toEqual(["parchment_scrap"]);
+  expect(decoded.dropped).toBe(1);
+  const emptyChoice = decodeResultsFile(encodeResultsFile(query, decoded.seeds, [null]));
+  expect(emptyChoice.trinkets).toEqual([null]);
+  expect(() => encodeResultsFile(query, decoded.seeds, ["runic_blade"])).toThrow(/initial|offered/);
+  expect(() => encodeResultsFile(query, decoded.seeds, [])).toThrow(/one choice per seed/);
 });

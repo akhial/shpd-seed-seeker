@@ -14,7 +14,10 @@ use serde_json::{Map, Value, json};
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+#[allow(clippy::struct_excessive_bools)] // Independent flags in the shared JSON schema.
 struct QueryDocument {
+    #[serde(default)]
+    auto_apply_trinket: bool,
     requirements: Vec<Value>,
     #[serde(default = "default_max_depth")]
     max_depth: u8,
@@ -363,6 +366,7 @@ pub fn decode_unvalidated(contents: &str) -> Result<SearchQuery, String> {
         })
         .transpose()?;
     Ok(SearchQuery {
+        auto_apply_trinket: document.auto_apply_trinket,
         requirements,
         max_depth: document.max_depth,
         challenges: document
@@ -518,6 +522,9 @@ pub const fn source_name(source: ItemSource) -> &'static str {
 #[must_use]
 pub fn encode(query: &SearchQuery) -> Value {
     let mut document = Map::new();
+    if query.auto_apply_trinket {
+        document.insert("auto_apply_trinket".to_owned(), json!(true));
+    }
     // Alternative groups serialize as one any_of entry at the first member's
     // position, holding every member in requirement order; decode assigns the
     // groups fresh sequential ids, preserving the structure.
@@ -1020,6 +1027,7 @@ mod tests {
     #[test]
     fn encoding_omits_defaults_and_round_trips_a_loaded_query() {
         let query = SearchQuery {
+            auto_apply_trinket: false,
             requirements: vec![
                 Requirement {
                     kind: ItemKind::Weapon,
@@ -1087,6 +1095,7 @@ mod tests {
     #[test]
     fn encoding_a_minimal_query_emits_requirements_only() {
         let query = SearchQuery {
+            auto_apply_trinket: false,
             requirements: vec![Requirement {
                 kind: ItemKind::Wand,
                 weapon_category: None,

@@ -25,7 +25,7 @@ public static class ResultsExport
     public const string SuggestedFileName = "seed-seeker-results";
 
     /// <param name="Dropped">Exported entries the engine's dedupe-and-cap step removed.</param>
-    public sealed record Imported(QuerySettings Query, IReadOnlyList<string> Seeds, int Dropped, string? FileShpdVersion);
+    public sealed record Imported(QuerySettings Query, IReadOnlyList<string> Seeds, int Dropped, string? FileShpdVersion, IReadOnlyList<string?>? Trinkets = null);
 
     /// <summary>Stable document names, indexed by the matching enum value.</summary>
     private static readonly string[] KindNames = ["weapon", "armor", "wand", "ring", "melee_weapon", "thrown_weapon", "trinket", "artifact"];
@@ -39,7 +39,7 @@ public static class ResultsExport
         [.. Challenges.All.Select(entry => (entry.Name, entry.Mask))];
 
     /// <exception cref="ResultsExportException">With a user-facing message.</exception>
-    public static string Encode(QuerySettings query, IEnumerable<string> seeds, string appVersion)
+    public static string Encode(QuerySettings query, IEnumerable<string> seeds, string appVersion, IEnumerable<string?>? trinkets = null)
     {
         var request = new JsonObject
         {
@@ -47,6 +47,7 @@ public static class ResultsExport
             ["seeds"] = new JsonArray([.. seeds.Select(seed => (JsonNode)seed)]),
             ["app_version"] = appVersion,
         };
+        if (trinkets is not null) request["trinkets"] = new JsonArray([.. trinkets.Select(id => id is null ? null : JsonValue.Create(id))]);
         return NativeEngine.TryEncodeResultsFile(request.ToJsonString())
             ?? throw new ResultsExportException("These results could not be written to a results file.");
     }
@@ -63,7 +64,8 @@ public static class ResultsExport
         foreach (var entry in document["seeds"] as JsonArray ?? [])
             if (entry is JsonValue seedValue && seedValue.TryGetValue(out string? seed)) seeds.Add(seed);
         return new Imported(DecodeQuery(queryValue), seeds, IntField(document, "dropped") ?? 0,
-            TolerantString(document, "shpd_version"));
+            TolerantString(document, "shpd_version"),
+            (document["trinkets"] as JsonArray)?.Select(value => value?.GetValue<string>()).ToArray());
     }
 
     /// <summary>Reads informational envelope strings; wrong types are ignored, not errors.</summary>
@@ -98,6 +100,7 @@ public static class ResultsExport
             : new JsonObject { ["any_of"] = new JsonArray([.. slot.Select(member => (JsonNode)EncodeRequirement(member))]) });
         var output = new JsonObject { ["requirements"] = new JsonArray([.. entries]) };
         if (query.MaximumDepth != 24) output["max_depth"] = query.MaximumDepth;
+        if (query.AutoApplyTrinket) output["auto_apply_trinket"] = true;
         if (query.RequireBlacksmith) output["require_blacksmith"] = true;
         if (query.ExcludeBlacksmithRewards) output["exclude_blacksmith_rewards"] = true;
         if (WandmakerQuests.DocumentName(query.WandmakerQuest) is string quest) output["wandmaker_quest"] = quest;
@@ -181,6 +184,7 @@ public static class ResultsExport
         {
             Requirements = requirements,
             MaximumDepth = IntField(value, "max_depth") ?? 24,
+            AutoApplyTrinket = BoolField(value, "auto_apply_trinket"),
             RequireBlacksmith = BoolField(value, "require_blacksmith"),
             ExcludeBlacksmithRewards = BoolField(value, "exclude_blacksmith_rewards"),
             WandmakerQuest = TolerantString(value, "wandmaker_quest") is string questName

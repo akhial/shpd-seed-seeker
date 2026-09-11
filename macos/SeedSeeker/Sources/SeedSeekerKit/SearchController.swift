@@ -56,10 +56,11 @@ public struct TargetState: Sendable {
     /// Every unique seed the Target Query's traversal has delivered, in
     /// discovery order.
     public var seeds: [String]
+    public var recipes: [String: SeedResult]
     public var resumeFrom: Int64
     public var remaining: Int64
-    public init(request: SearchRequest, seeds: [String], resumeFrom: Int64, remaining: Int64) {
-        self.request = request; self.seeds = seeds
+    public init(request: SearchRequest, seeds: [String], resumeFrom: Int64, remaining: Int64, recipes: [String: SeedResult] = [:]) {
+        self.request = request; self.seeds = seeds; self.recipes = recipes
         self.resumeFrom = resumeFrom; self.remaining = remaining
     }
 }
@@ -117,6 +118,7 @@ public final class SearchController {
     /// `results`. This is what settles into the Target and what a detached
     /// continuation filters.
     private var collected: [String] = []
+    private var collectedRecipes: [String: SeedResult] = [:]
 
     public init(engine: any SeedFinderEngine = ProductionSeedFinderEngine()) { self.engine = engine }
     public var timeToSeed: TimeInterval? {
@@ -136,8 +138,9 @@ public final class SearchController {
     /// engine's, applied while decoding the file, so `seeds` is taken as given
     /// and `dropped` is what that step removed. Callers must ensure no search
     /// is running.
-    public func loadImported(seeds: [String], dropped: Int = 0, query: SavedQuery) {
-        results = seeds.map { SeedResult(seed: $0, matchedRequirements: query.requirements.slotCount) }
+    public func loadImported(seeds: [String], dropped: Int = 0, query: SavedQuery, trinkets: [String?] = []) {
+        results = seeds.enumerated().map { index, seed in SeedResult(seed: seed, matchedRequirements: query.requirements.slotCount, selectedTrinket: index < trinkets.count ? trinkets[index] : nil) }
+        collectedRecipes = Dictionary(uniqueKeysWithValues: results.map { ($0.seed, $0) })
         collected = seeds
         importedDropped = dropped
         exportQuery = query
@@ -153,8 +156,8 @@ public final class SearchController {
             requireBlacksmith: query.requireBlacksmith,
             excludeBlacksmithRewards: query.excludeBlacksmithRewards,
             wandmakerQuest: query.wandmakerQuest,
-            challenges: query.challenges)
-        target = request.map { TargetState(request: $0, seeds: seeds, resumeFrom: 0, remaining: 0) }
+            challenges: query.challenges, autoApplyTrinket: query.autoApplyTrinket)
+        target = request.map { TargetState(request: $0, seeds: seeds, resumeFrom: 0, remaining: 0, recipes: collectedRecipes) }
     }
 
     /// Starts `request`, dispatching on its relationship to the session's
@@ -200,7 +203,7 @@ public final class SearchController {
     /// results. An `.anchor` run establishes the Target when it concludes; a
     /// `.detached` run leaves the existing Target untouched.
     private func freshSearch(_ request: SearchRequest, workers: Int, as kind: RunKind) {
-        task?.cancel(); results = []; collected = []; refinedKept = nil; refinedOf = nil; baseRun = nil; resetProgress()
+        task?.cancel(); results = []; collected = []; collectedRecipes = [:]; refinedKept = nil; refinedOf = nil; baseRun = nil; resetProgress()
         isImported = false; importedDropped = 0
         runKind = kind
         exportQuery = SavedQuery(
@@ -208,7 +211,7 @@ public final class SearchController {
             requireBlacksmith: request.requireBlacksmith,
             excludeBlacksmithRewards: request.excludeBlacksmithRewards,
             wandmakerQuest: request.wandmakerQuest,
-            challenges: request.challenges)
+            challenges: request.challenges, autoApplyTrinket: request.autoApplyTrinket)
         task = Task { [weak self] in
             guard let self else { return }
             await self.run(request, alreadyShown: []) { engine in
@@ -240,7 +243,7 @@ public final class SearchController {
     /// while a search or filter phase is running.
     public func clearResults() {
         guard !isRunning else { return }
-        results = []; collected = []; selectedSeed = nil; exportQuery = nil
+        results = []; collected = []; collectedRecipes = [:]; selectedSeed = nil; exportQuery = nil
         isImported = false; importedDropped = 0
         baseRun = nil; refinedKept = nil; refinedOf = nil
         target = nil; runKind = .anchor
@@ -266,9 +269,9 @@ public final class SearchController {
         let baseSeeds = target.seeds
         task = Task { [weak self] in
             guard let self else { return }
-            let kept: [String]
+            let kept: [SeedResult]
             do {
-                kept = try await engine.filterSeeds(request, seeds: baseSeeds)
+                kept = try await engine.filterRecipes(request, base: target.request, recipes: baseSeeds.map { target.recipes[$0] ?? SeedResult(seed: $0, matchedRequirements: target.request.requirements.slotCount) })
             } catch is CancellationError {
                 // The user backed out before the filter finished; the Target
                 // was never consumed, so it stays refinable as-is.
@@ -282,8 +285,9 @@ public final class SearchController {
                 self.runKind = restoreKind; self.isRunning = false
                 return
             }
-            self.collected = kept
-            self.results = kept.prefix(Self.resultCap).map { SeedResult(seed: $0, matchedRequirements: request.requirements.slotCount) }
+            self.collected = kept.map(\.seed)
+            self.collectedRecipes = Dictionary(uniqueKeysWithValues: kept.map { ($0.seed, $0) })
+            self.results = Array(kept.prefix(Self.resultCap))
             self.refinedKept = kept.count; self.refinedOf = baseSeeds.count
             // From here on the listed results match the refined request, so
             // that is what an export must claim. A cancel or failure above
@@ -293,10 +297,10 @@ public final class SearchController {
                 requireBlacksmith: request.requireBlacksmith,
                 excludeBlacksmithRewards: request.excludeBlacksmithRewards,
                 wandmakerQuest: request.wandmakerQuest,
-                challenges: request.challenges)
+                challenges: request.challenges, autoApplyTrinket: request.autoApplyTrinket)
             // A filter never scans; a refine resumes the target's remainder.
             if resumesScan && target.remaining > 0 {
-                await self.run(request, alreadyShown: Set(kept)) { engine in
+                await self.run(request, alreadyShown: Set(kept.map(\.seed))) { engine in
                     try await engine.startResumedSearch(request, resumeFrom: target.resumeFrom,
                                                         scanLen: target.remaining, workers: workers)
                 }
@@ -321,9 +325,9 @@ public final class SearchController {
         let previousSeeds = collected
         task = Task { [weak self] in
             guard let self else { return }
-            let kept: [String]
+            let kept: [SeedResult]
             do {
-                kept = try await engine.filterSeeds(request, seeds: previousSeeds)
+                kept = try await engine.filterRecipes(request, base: base.request, recipes: previousSeeds.map { self.collectedRecipes[$0] ?? SeedResult(seed: $0, matchedRequirements: base.request.requirements.slotCount) })
             } catch is CancellationError {
                 // The user backed out before the filter finished; the base run
                 // was never consumed, so it stays refinable as-is.
@@ -336,17 +340,18 @@ public final class SearchController {
                 self.refinedKept = nil; self.refinedOf = nil; self.isRunning = false
                 return
             }
-            self.collected = kept
-            self.results = kept.prefix(Self.resultCap).map { SeedResult(seed: $0, matchedRequirements: request.requirements.slotCount) }
+            self.collected = kept.map(\.seed)
+            self.collectedRecipes = Dictionary(uniqueKeysWithValues: kept.map { ($0.seed, $0) })
+            self.results = Array(kept.prefix(Self.resultCap))
             self.refinedKept = kept.count; self.refinedOf = previousSeeds.count
             self.exportQuery = SavedQuery(
                 requirements: request.requirements, maximumDepth: request.maximumDepth,
                 requireBlacksmith: request.requireBlacksmith,
                 excludeBlacksmithRewards: request.excludeBlacksmithRewards,
                 wandmakerQuest: request.wandmakerQuest,
-                challenges: request.challenges)
+                challenges: request.challenges, autoApplyTrinket: request.autoApplyTrinket)
             if base.remaining > 0 {
-                await self.run(request, alreadyShown: Set(kept)) { engine in
+                await self.run(request, alreadyShown: Set(kept.map(\.seed))) { engine in
                     try await engine.startResumedSearch(request, resumeFrom: base.resumeFrom,
                                                         scanLen: base.remaining, workers: workers)
                 }
@@ -442,18 +447,20 @@ public final class SearchController {
             return
         case .anchor:
             target = TargetState(request: request, seeds: collected,
-                                 resumeFrom: hint?.position ?? 0, remaining: hint?.remaining ?? 0)
+                                 resumeFrom: hint?.position ?? 0, remaining: hint?.remaining ?? 0, recipes: collectedRecipes)
         case .targetRefine:
             guard var updated = target else {
                 target = TargetState(request: request, seeds: collected,
-                                     resumeFrom: hint?.position ?? 0, remaining: hint?.remaining ?? 0)
+                                     resumeFrom: hint?.position ?? 0, remaining: hint?.remaining ?? 0, recipes: collectedRecipes)
                 return
             }
             // The filter's survivors were already members; only new finds
             // from the resumed scan grow the set. The stored set is never
             // capped, and the Target Query stays the original one.
             var seen = Set(updated.seeds)
-            updated.seeds += collected.filter { seen.insert($0).inserted }
+            let fresh = collected.filter { seen.insert($0).inserted }
+            for seed in fresh { updated.recipes[seed] = collectedRecipes[seed] }
+            updated.seeds += fresh
             if let hint { updated.resumeFrom = hint.position; updated.remaining = hint.remaining }
             target = updated
         }
@@ -464,6 +471,7 @@ public final class SearchController {
         let fresh = batch.filter { shown.insert($0.seed).inserted }
         guard !fresh.isEmpty else { return }
         collected.append(contentsOf: fresh.map(\.seed))
+        for result in fresh { collectedRecipes[result.seed] = result }
         // Only the display is capped; everything delivered stays collected
         // for the Target and later refines.
         if results.count < Self.resultCap {

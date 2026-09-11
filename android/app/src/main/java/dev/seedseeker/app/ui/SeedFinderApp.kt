@@ -158,6 +158,7 @@ fun SeedFinderApp(
     }
     var nextRequirementKey by remember { mutableLongStateOf(2L) }
     var userPresets by remember { mutableStateOf(presetStorage.load()) }
+    var autoApplyTrinket by rememberSaveable { mutableStateOf(true) }
     var maximumDepth by remember { mutableStateOf(24) }
     var requireBlacksmith by remember { mutableStateOf(false) }
     var excludeBlacksmithRewards by remember { mutableStateOf(false) }
@@ -204,6 +205,7 @@ fun SeedFinderApp(
     var scoutInput by remember { mutableStateOf("") }
     var scoutResult by remember { mutableStateOf<ScoutWorld?>(null) }
     var scoutRun by remember { mutableStateOf<ScoutRun?>(null) }
+    var completedScoutRun by remember { mutableStateOf<ScoutRun?>(null) }
     var nextScoutRunId by remember { mutableLongStateOf(1L) }
     var isScouting by remember { mutableStateOf(false) }
     var scoutError by remember { mutableStateOf<String?>(null) }
@@ -257,6 +259,7 @@ fun SeedFinderApp(
                     return@onSuccess
                 }
                 requirements = imported.query.requirements.map { it.copy(key = nextRequirementKey++) }
+                autoApplyTrinket = imported.query.autoApplyTrinket
                 maximumDepth = imported.query.maximumDepth
                 requireBlacksmith = imported.query.requireBlacksmith
                 excludeBlacksmithRewards = imported.query.excludeBlacksmithRewards
@@ -267,7 +270,7 @@ fun SeedFinderApp(
                 // reported what that removed.
                 val kept = imported.seeds
                 val dropped = imported.dropped
-                val importedResults = kept.map { SeedResult(it, imported.query.requirements.slotCount()) }
+                val importedResults = kept.mapIndexed { index, seed -> SeedResult(seed, imported.query.requirements.slotCount(), imported.trinkets.getOrNull(index)) }
                 results = importedResults
                 foundCount = importedResults.size
                 searchedQuery = imported.query
@@ -281,6 +284,7 @@ fun SeedFinderApp(
                     TargetState(
                         request = SearchRequest(
                             requirements = imported.query.requirements,
+                            autoApplyTrinket = imported.query.autoApplyTrinket,
                             maximumDepth = imported.query.maximumDepth,
                             challenges = imported.query.challenges,
                             requireBlacksmith = imported.query.requireBlacksmith,
@@ -324,6 +328,7 @@ fun SeedFinderApp(
         }
         runCatching { DeepLink.decode(code) }.onSuccess { query ->
             requirements = query.requirements.map { it.copy(key = nextRequirementKey++) }
+            autoApplyTrinket = query.autoApplyTrinket
             maximumDepth = query.maximumDepth
             requireBlacksmith = query.requireBlacksmith
             excludeBlacksmithRewards = query.excludeBlacksmithRewards
@@ -412,10 +417,10 @@ fun SeedFinderApp(
                 // filter, the previous detached run's results for a continuation — then
                 // rescan only the window that base never reached.
                 val kept = withContext(Dispatchers.Default) {
-                    engine.filterSeeds(currentRun.request, refine.keepSeeds.map { it.seed })
+                    engine.filterRecipes(currentRun.request, refine.base ?: currentRun.request, refine.keepSeeds)
                 }
                 // Every survivor stays collected; the screen lists at most RESULT_CAP of them.
-                collected = kept.map { SeedResult(it, currentRun.request.slotCount) }
+                collected = kept
                 results = displayedResults(collected)
                 foundCount = collected.size
                 // From here on the listed results match the refined request, so
@@ -541,11 +546,15 @@ fun SeedFinderApp(
         val currentRun = scoutRun ?: return@LaunchedEffect
         isScouting = true
         scoutError = null
-        scoutResult = null
+        // Keep the current manifest mounted while switching trinkets so its
+        // stable floor keys retain the user's scroll position.
+        if (scoutResult?.seed != currentRun.seed) scoutResult = null
         try {
-            scoutResult = withContext(Dispatchers.Default) {
+            val world = withContext(Dispatchers.Default) {
                 engine.scoutSelectedSeed(currentRun.seed, currentRun.challenges, currentRun.query, currentRun.trinket)
             }
+            completedScoutRun = currentRun
+            scoutResult = world
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (failure: Throwable) {
@@ -562,6 +571,7 @@ fun SeedFinderApp(
     val currentRequest = runCatching {
         SearchRequest(
             requirements = requirements,
+            autoApplyTrinket = autoApplyTrinket,
             maximumDepth = maximumDepth,
             challenges = challenges,
             requireBlacksmith = requireBlacksmith,
@@ -575,7 +585,13 @@ fun SeedFinderApp(
         scoutError = null
         destination = Destination.SCOUT
         if (SeedCode.isCanonical(formatted)) {
-            scoutRun = ScoutRun(nextScoutRunId++, formatted, challenges, currentRequest)
+            val saved = results.find { it.seed == formatted }
+            val query = if (saved != null) searchedQuery?.let {
+                SearchRequest(it.requirements, it.maximumDepth, it.challenges, it.requireBlacksmith,
+                    it.excludeBlacksmithRewards, it.wandmakerQuest, it.autoApplyTrinket)
+            } ?: currentRequest else currentRequest
+            scoutRun = ScoutRun(nextScoutRunId++, formatted, query?.challenges ?: challenges, query,
+                if (saved != null) saved.selectedTrinket ?: "none" else null)
         }
     }
 
@@ -597,14 +613,14 @@ fun SeedFinderApp(
     // seed field does not move the anchor until a scout actually runs.
     val scoutedSeed = if (isScouting) scoutRun?.seed else scoutResult?.seed
 
-    // Which items of the scouted world explain the live query. The engine
+    // Which items explain the saved query of this completed scout. The engine
     // scouts that same world again and marks it (its `scout_matches`), so the
     // app never re-derives the selection; null means there is nothing to mark
     // — no runnable query, or an engine that did not produce this world.
-    val scoutMatches by produceState<ScoutMatches?>(null, scoutResult, currentRequest) {
+    val scoutMatches by produceState<ScoutMatches?>(null, scoutResult, completedScoutRun) {
         val world = scoutResult
-        val request = currentRequest
-        val completedRun = scoutRun
+        val completedRun = completedScoutRun
+        val request = completedRun?.query ?: currentRequest
         value = if (world == null || request == null || completedRun == null) {
             null
         } else {
@@ -625,6 +641,7 @@ fun SeedFinderApp(
         when (destination) {
             Destination.FINDER -> FinderScreen(
                 requirements = requirements,
+                autoApplyTrinket = autoApplyTrinket,
                 maximumDepth = maximumDepth,
                 requireBlacksmith = requireBlacksmith,
                 excludeBlacksmithRewards = excludeBlacksmithRewards,
@@ -653,6 +670,7 @@ fun SeedFinderApp(
                 },
                 onApplyPreset = { preset ->
                     requirements = preset.query.requirements.map { it.copy(key = nextRequirementKey++) }
+                    autoApplyTrinket = preset.query.autoApplyTrinket
                     maximumDepth = preset.query.maximumDepth
                     requireBlacksmith = preset.query.requireBlacksmith
                     excludeBlacksmithRewards = preset.query.excludeBlacksmithRewards
@@ -665,6 +683,7 @@ fun SeedFinderApp(
                     if (cleanName.isNotEmpty()) {
                         val query = PresetQuery(
                             requirements = requirements,
+                            autoApplyTrinket = autoApplyTrinket,
                             maximumDepth = maximumDepth,
                             requireBlacksmith = requireBlacksmith,
                             excludeBlacksmithRewards = excludeBlacksmithRewards,
@@ -703,6 +722,7 @@ fun SeedFinderApp(
                 onRequirementsChange = { requirements = it },
                 onRemove = { item -> requirements = requirements.removeItem(item) },
                 onMaximumDepthChange = { maximumDepth = it },
+                onAutoApplyTrinketChange = { autoApplyTrinket = it },
                 onRequireBlacksmithChange = { requireBlacksmith = it },
                 onExcludeBlacksmithRewardsChange = { excludeBlacksmithRewards = it },
                 onWandmakerQuestChange = { wandmakerQuest = it },
@@ -762,7 +782,7 @@ fun SeedFinderApp(
                         transferError = "Run a search first — there are no results to export yet."
                     } else {
                         runCatching {
-                            ResultsExport.encode(query, results.map { it.seed }, BuildConfig.VERSION_NAME)
+                            ResultsExport.encode(query, results.map { it.seed }, BuildConfig.VERSION_NAME, results.map { it.selectedTrinket })
                         }.onSuccess { contents ->
                             pendingExport = contents
                             exportLauncher.launch(ResultsExport.SUGGESTED_FILE_NAME)
@@ -781,6 +801,7 @@ fun SeedFinderApp(
                         DeepLink.encodeLink(
                             PresetQuery(
                                 requirements = requirements,
+                                autoApplyTrinket = autoApplyTrinket,
                                 maximumDepth = maximumDepth,
                                 requireBlacksmith = requireBlacksmith,
                                 excludeBlacksmithRewards = excludeBlacksmithRewards,
@@ -824,7 +845,7 @@ fun SeedFinderApp(
                 },
                 onScout = {
                     if (SeedCode.isCanonical(scoutInput)) {
-                        scoutRun = ScoutRun(nextScoutRunId++, scoutInput, challenges, currentRequest)
+                        scoutSeed(scoutInput)
                     }
                 },
                 onSettings = {

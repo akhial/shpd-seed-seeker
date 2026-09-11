@@ -94,6 +94,13 @@
                     <!-- Indexes into FloorLimits.Options (skips the empty boss floors); the code-behind
                          installs a ThumbToolTipValueConverter so the tooltip names the floor, not the index. -->
                     <Slider x:Name="FloorSlider" StepFrequency="1" ValueChanged="FloorSlider_ValueChanged" HorizontalAlignment="Stretch" Margin="0,2,0,-8"/>
+                    <Grid ColumnSpacing="14" Margin="0,16,0,0">
+                      <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                      <TextBlock Text="AutoTrinket" VerticalAlignment="Center"/>
+                      <ToggleSwitch Grid.Column="1" x:Name="AutoTrinketToggle" Style="{StaticResource CompactToggle}" Toggled="SettingChanged" AutomationProperties.Name="AutoTrinket"/>
+                    </Grid>
+                    <TextBlock Text="Applies a helpful trinket at +3 at the first brewing opportunity. Keeps it only when the match needs it." Style="{StaticResource Caption}" Margin="0,4,0,0"/>
+
                   </StackPanel>
                 </Border>
               </Grid>
@@ -242,7 +249,10 @@
                 <Grid>
                   <Grid.ColumnDefinitions><ColumnDefinition Width="40"/><ColumnDefinition/></Grid.ColumnDefinitions>
                   <TextBlock Text="{Binding Number}" Style="{StaticResource Caption}" VerticalAlignment="Center"/>
-                  <TextBlock Grid.Column="1" Text="{Binding Seed}" FontFamily="Cascadia Mono, Consolas" VerticalAlignment="Center"/>
+                  <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding Seed}" FontFamily="Cascadia Mono, Consolas" VerticalAlignment="Center"/>
+                    <local:SpriteView SpriteIndex="{Binding TrinketSpriteIndex}" SpriteSize="16" Opacity="0.6" Visibility="{Binding TrinketVisibility}" ToolTipService.ToolTip="{Binding TrinketName}" AutomationProperties.Name="{Binding TrinketName}" VerticalAlignment="Center"/>
+                  </StackPanel>
                   <Grid.ContextFlyout>
                     <MenuFlyout>
                       <MenuFlyoutItem Text="Copy seed" Click="CopyResult_Click">
@@ -274,10 +284,12 @@
               <Button Grid.Column="2" Content="Copy" Click="CopySeed_Click" VerticalAlignment="Stretch"/>
             </Grid>
             <TextBlock x:Name="ScoutStatus" Style="{StaticResource Caption}" Margin="0,-2,0,0"/>
-            <!-- One chip per quest of the scouted seed, e.g. "Great crab · Sad Ghost · F4"; built in code-behind. -->
+            <!-- One chip per quest of the scouted seed, e.g. "Great Crab · Sad Ghost · F4"; built in code-behind. -->
             <local:WrapPanel x:Name="QuestStrip" Spacing="8" LineSpacing="4" Visibility="Collapsed"/>
             <!-- Shown while the scouted seed is one of the search results: J/K (or the chevrons) step through them. -->
-            <StackPanel x:Name="ResultNav" Orientation="Horizontal" Spacing="8" Visibility="Collapsed">
+            <Grid x:Name="ResultNav" Visibility="Collapsed" ColumnSpacing="8" MinHeight="32">
+              <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="140"/></Grid.ColumnDefinitions>
+              <StackPanel x:Name="ResultNavPosition" Orientation="Horizontal" Spacing="8">
               <Button x:Name="PrevResultButton" Click="PrevResult_Click" Padding="7,3"
                       AutomationProperties.Name="Previous result"
                       ToolTipService.ToolTip="Scout the previous search result (K)">
@@ -289,8 +301,13 @@
                       ToolTipService.ToolTip="Scout the next search result (J)">
                 <FontIcon Glyph="&#xE76C;" FontSize="11"/>
               </Button>
-              <TextBlock Text="J / K" Style="{StaticResource Caption}" VerticalAlignment="Center" Opacity="0.6"/>
-            </StackPanel>
+              </StackPanel>
+              <Grid Grid.Column="1" x:Name="TrinketDockSlot" Height="32">
+                <Grid.Clip><RectangleGeometry Rect="0,0,140,32"/></Grid.Clip>
+                <TextBlock x:Name="ResultNavGuide" Text="J / K" Style="{StaticResource Caption}" VerticalAlignment="Center" HorizontalAlignment="Right" Opacity="0.6"/>
+                <StackPanel x:Name="TrinketDock" Orientation="Horizontal" Spacing="4" HorizontalAlignment="Right" Opacity="0" IsHitTestVisible="False"/>
+              </Grid>
+            </Grid>
           </StackPanel>
 
           <Grid Grid.Row="1">
@@ -301,6 +318,7 @@
             </StackPanel>
             <ListView x:Name="ScoutList" Visibility="Collapsed" SelectionMode="None" Padding="12,4,12,16"
                       ScrollViewer.HorizontalScrollMode="Disabled" ScrollViewer.HorizontalScrollBarVisibility="Hidden">
+              <ListView.ItemsPanel><ItemsPanelTemplate><StackPanel/></ItemsPanelTemplate></ListView.ItemsPanel>
               <ListView.ItemContainerStyle>
                 <Style TargetType="ListViewItem">
                   <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
@@ -309,6 +327,7 @@
               </ListView.ItemContainerStyle>
               <ListView.GroupStyle>
                 <GroupStyle>
+                  <GroupStyle.Panel><ItemsPanelTemplate><StackPanel/></ItemsPanelTemplate></GroupStyle.Panel>
                   <GroupStyle.HeaderTemplate>
                     <DataTemplate>
                       <StackPanel Orientation="Horizontal" Spacing="8">

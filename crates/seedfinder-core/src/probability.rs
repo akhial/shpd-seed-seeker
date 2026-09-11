@@ -98,6 +98,9 @@ use crate::quests::WandmakerQuestType;
 /// the group.
 #[must_use]
 pub fn estimate_match_probability(query: &SearchQuery) -> f64 {
+    if let Some(policy) = crate::auto_trinkets::AutoTrinketPolicy::prepare(query) {
+        return crate::auto_trinkets::probability(query, &policy);
+    }
     if query
         .requirements
         .iter()
@@ -108,7 +111,7 @@ pub fn estimate_match_probability(query: &SearchQuery) -> f64 {
     equipment_probability(query, Profile::None)
 }
 
-fn equipment_probability(query: &SearchQuery, profile: Profile) -> f64 {
+pub(crate) fn equipment_probability(query: &SearchQuery, profile: Profile) -> f64 {
     let mut linked: BTreeMap<u8, Vec<Requirement>> = BTreeMap::new();
     let mut independent: Vec<Requirement> = Vec::new();
     for requirement in effective_requirements(query, profile) {
@@ -1808,6 +1811,7 @@ mod tests {
 
     fn query(requirements: Vec<Requirement>, max_depth: u8) -> SearchQuery {
         SearchQuery {
+            auto_apply_trinket: false,
             requirements,
             max_depth,
             challenges: Challenges::NONE,

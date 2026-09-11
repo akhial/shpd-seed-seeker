@@ -8,6 +8,7 @@ import {
   FLOOR_LIMIT_OPTIONS,
   emptyRequirement,
   fromQueryJson,
+  requirementFamily,
   toQueryJson,
 } from "../../lib/query";
 import type { ValidationResult } from "../../lib/query";
@@ -329,6 +330,20 @@ export function QueryPanel({
             fill
             onChange={(value) => patchQuery({ maxDepth: value })}
           />
+          <label className="d1-check d1-auto-trinket">
+            <input
+              type="checkbox"
+              checked={query.autoApplyTrinket}
+              disabled={query.requirements.some((r) => requirementFamily(r) === "trinket")}
+              onChange={(event) => patchQuery({ autoApplyTrinket: event.target.checked })}
+            />
+            <span>AutoTrinket</span>
+          </label>
+          <p className="d1-caption">
+            {query.requirements.some((r) => requirementFamily(r) === "trinket")
+              ? "Uses your trinket requirements instead."
+              : "Applies a helpful trinket at +3 at the first brewing opportunity. Keeps it only when the match needs it."}
+          </p>
         </section>
 
         <section className="d1-section">
@@ -403,8 +418,6 @@ export function QueryPanel({
           </details>
         </section>
 
-        {/* The worker slider is the whole section, so a single-core machine
-            has nothing to show here. */}
         {workerCeiling > 1 && (
           <section className="d1-section">
             <details className="d1-details">

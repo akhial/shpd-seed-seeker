@@ -40,7 +40,8 @@ bits are written.
 
 | Field | Bits | Meaning |
 | --- | --- | --- |
-| `version` | 4 | Format version, always `4`. Versions 1 and 2 (narrower records and a 24-bit effect mask over a differently ordered effect table) were retired while the feature had next to no users, and version 3 — this same layout plus a fast-mode flag bit after the blacksmith flags — went when that setting was removed; decoders reject every version but 4, telling the user the link comes from a different release, and encoders must never renumber or reorder anything within the version. |
+| `version` | 4 | `4` for ordinary queries, `5` when a requirement selects a trinket, `6` when auto-apply is enabled. Decoders accept 4–6; retired versions 1–3 and future versions are rejected. Existing tables and layouts are frozen. |
+| `auto_apply_trinket` | 1, version 6 only | Immediately follows the version nibble. Boolean query flag; absent in versions 4–5, which default to false. |
 | `require_blacksmith` | 1 | Query flag. |
 | `exclude_blacksmith_rewards` | 1 | Query flag. |
 | `max_depth` | 1 (+5) | Present only when not the default 24. Value is `max_depth − 1` (floors 1–24). |
@@ -52,8 +53,8 @@ bits are written.
 
 | Field | Bits | Meaning |
 | --- | --- | --- |
-| `kind` | 3 | `0` weapon · `1` melee_weapon · `2` thrown_weapon · `3` armor · `4` wand · `5` ring · `6` trinket offered. |
-| `item` | 1 (+7) | Item code: index into the frozen item table (88 entries today). |
+| `kind` | 3 | `0` weapon · `1` melee_weapon · `2` thrown_weapon · `3` armor · `4` wand · `5` ring · `6` trinket offered · `7` artifact. |
+| `item` | 1 (+7) | Item code: index into the frozen item table. |
 | `tier` | 2 (+3) | Mode `0` any (no value bits) · `1` exact · `2` at_least · `3` at_most, then the tier value. |
 | `upgrade` | 2 (+3) | Mode `0` any (no value bits) · `1` exact · `2` at_least, then the upgrade value (up to +5 for weapons, +4 otherwise; the three-bit field predates those ceilings). Mode `3` is invalid. |
 | `effect` | 2 (+5 or +32) | Mode `0` any (no value bits) · `1` one effect, then its 5-bit code · `2` any enchantment (every non-curse effect of the family, no value bits) · `3` a set, then a 32-bit mask whose bit *n* is effect code *n*. Modes 1–3 are invalid for wands and rings; a mode-3 mask must be nonzero. Mode 2 carries no codes, so a link asking for "any enchantment" means the whole family of whichever release opens it. |
@@ -63,6 +64,7 @@ bits are written.
 | `max_depth` | 1 (+5) | Value is `depth − 1` (floors 1–24). |
 | `alternative_group` | 1 (+6) | Alternative-group label minus one. Records sharing a label form one "any of" slot; labels are renumbered in first-appearance order when encoding. |
 | `level_sum` | 1 (+10) | Combined-level group: two bits of group label minus one (groups 1–4, the editors' A–D), then the eight-bit minimum total in levels (1–255), where a matched item counts its upgrade plus one. |
+| `select_trinket` | 1, versions 5–6 only | Whether this requirement selects its offered trinket. Version 6 includes this bit even when auto-apply is disabled by explicit trinket requirements. |
 
 ### Code tables
 

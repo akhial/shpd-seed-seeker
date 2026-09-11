@@ -37,3 +37,10 @@ public sealed class FloorLimitIndexConverter : IValueConverter
         FloorLimits.Options[Math.Clamp((int)Math.Round((double)value), 0, FloorLimits.Options.Length - 1)].ToString();
     public object ConvertBack(object value, Type targetType, object parameter, string language) => throw new NotSupportedException();
 }
+
+public sealed partial record SeedResult
+{
+    public Visibility TrinketVisibility => SelectedTrinket is null ? Visibility.Collapsed : Visibility.Visible;
+    public int TrinketSpriteIndex => SelectedTrinket is string id ? ItemCatalog.Find(id)?.SpriteIndex ?? -1 : -1;
+    public string TrinketName => SelectedTrinket is string id ? ItemCatalog.Find(id)?.Name ?? id : "";
+}

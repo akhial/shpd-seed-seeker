@@ -11,6 +11,7 @@ data class PresetQuery(
     val excludeBlacksmithRewards: Boolean = false,
     val wandmakerQuest: WandmakerQuest? = null,
     val challenges: Int = 0,
+    val autoApplyTrinket: Boolean = true,
 )
 
 data class QueryPreset(

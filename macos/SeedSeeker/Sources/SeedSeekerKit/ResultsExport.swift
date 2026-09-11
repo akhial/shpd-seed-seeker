@@ -24,13 +24,14 @@ public enum ResultsExport {
     public struct Imported: Sendable {
         public let query: SavedQuery
         public let seeds: [String]
+        public let trinkets: [String?]
         /// Exported entries the engine's dedupe-and-cap step removed.
         public let dropped: Int
         /// The upstream game version the file declares, if any.
         public let shpdVersion: String?
-        public init(query: SavedQuery, seeds: [String], dropped: Int, shpdVersion: String?) {
+        public init(query: SavedQuery, seeds: [String], dropped: Int, shpdVersion: String?, trinkets: [String?] = []) {
             self.query = query; self.seeds = seeds
-            self.dropped = dropped; self.shpdVersion = shpdVersion
+            self.dropped = dropped; self.shpdVersion = shpdVersion; self.trinkets = trinkets
         }
     }
 
@@ -52,12 +53,13 @@ public enum ResultsExport {
 
     /// Encodes the query and its seeds as results-file text, or "" when the
     /// engine refuses them (an unusable query, a non-canonical seed code).
-    public static func encode(_ query: SavedQuery, seeds: [String], appVersion: String) -> String {
-        let request: [String: Any] = [
+    public static func encode(_ query: SavedQuery, seeds: [String], appVersion: String, trinkets: [String?]? = nil) -> String {
+        var request: [String: Any] = [
             "query": encodeQuery(query),
             "seeds": seeds,
             "app_version": appVersion,
         ]
+        if let trinkets { request["trinkets"] = trinkets.map { $0 as Any? ?? NSNull() } }
         guard let document = try? JSONSerialization.data(withJSONObject: request),
               let packet = try? enginePacket({ out, length in
                   document.withUnsafeBytes { bytes in
@@ -90,7 +92,8 @@ public enum ResultsExport {
         }
         return Imported(query: try decodeQuery(queryValue), seeds: seeds,
                         dropped: intField(document, "dropped") ?? 0,
-                        shpdVersion: document["shpd_version"] as? String)
+                        shpdVersion: document["shpd_version"] as? String,
+                        trinkets: (document["trinkets"] as? [Any] ?? []).map { $0 as? String })
     }
 
     // MARK: Document mapping
@@ -117,6 +120,7 @@ public enum ResultsExport {
             slot.count == 1 ? encodeRequirement(slot[0]) : ["any_of": slot.map(encodeRequirement)]
         }
         var output: [String: Any] = ["requirements": entries]
+        if query.autoApplyTrinket { output["auto_apply_trinket"] = true }
         if query.maximumDepth != 24 { output["max_depth"] = query.maximumDepth }
         if query.requireBlacksmith { output["require_blacksmith"] = true }
         if query.excludeBlacksmithRewards { output["exclude_blacksmith_rewards"] = true }
@@ -214,7 +218,7 @@ public enum ResultsExport {
             requireBlacksmith: boolField(value, "require_blacksmith"),
             excludeBlacksmithRewards: boolField(value, "exclude_blacksmith_rewards"),
             wandmakerQuest: wandmakerQuest,
-            challenges: challenges)
+            challenges: challenges, autoApplyTrinket: boolField(value, "auto_apply_trinket"))
     }
 
     private static func decodeRequirement(_ entry: [String: Any], key: Int64,
@@ -318,7 +322,7 @@ public enum QueryDocument {
             requireBlacksmith: request.requireBlacksmith,
             excludeBlacksmithRewards: request.excludeBlacksmithRewards,
             wandmakerQuest: request.wandmakerQuest,
-            challenges: request.challenges))
+            challenges: request.challenges, autoApplyTrinket: request.autoApplyTrinket))
     }
 
     /// UTF-8 JSON bytes of the document, keys sorted so equal queries encode

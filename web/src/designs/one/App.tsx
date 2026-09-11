@@ -184,18 +184,26 @@ export default function App() {
       return;
     }
     setScoutedSeed(input);
+    const saved = searchStore.state.matches.find((match) => match.code === input);
+    const state = queryStore.state;
+    const query =
+      saved && searchStore.state.query
+        ? searchStore.state.query
+        : state.requirements.length > 0
+          ? toQueryDocument(state)
+          : undefined;
+    const selected = trinket ?? (saved?.selectedTrinket === null ? "none" : saved?.selectedTrinket);
     const requestId = ++scoutRequest.current;
     scoutBusy.current = true;
     setScout((current) => ({ loading: true, result: current.result }));
     void (async () => {
       try {
         const parsed = await parseSeedCode(input);
-        const state = queryStore.state;
         const result = await scoutSeed({
           seed: parsed.code,
-          trinket,
-          challenges: state.challenges.length > 0 ? state.challenges : undefined,
-          query: state.requirements.length > 0 ? toQueryDocument(state) : undefined,
+          trinket: selected,
+          challenges: query?.challenges ?? (saved ? undefined : state.challenges),
+          query,
         });
         if (requestId === scoutRequest.current) {
           setScout({ loading: false, result });

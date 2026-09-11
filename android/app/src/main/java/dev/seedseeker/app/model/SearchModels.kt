@@ -518,6 +518,7 @@ data class SearchRequest(
     val excludeBlacksmithRewards: Boolean = false,
     /** Which Wandmaker quest the run must roll; null accepts any. */
     val wandmakerQuest: WandmakerQuest? = null,
+    val autoApplyTrinket: Boolean = false,
 ) {
     init {
         require(requirements.isNotEmpty()) { "At least one requirement is needed" }
@@ -556,6 +557,7 @@ enum class Challenge(
 data class SeedResult(
     val seed: String,
     val matchedRequirements: Int,
+    val selectedTrinket: String? = null,
 )
 
 data class ScoutWorld(
@@ -652,7 +654,7 @@ data class ScoutQuest(
 }
 
 enum class ScoutQuestGiver(val label: String, val depths: IntRange) {
-    GHOST("Sad ghost", 2..4),
+    GHOST("Sad Ghost", 2..4),
     WANDMAKER("Wandmaker", 7..9),
     BLACKSMITH("Blacksmith", 12..14),
     IMP("Imp", 17..19),
@@ -660,14 +662,14 @@ enum class ScoutQuestGiver(val label: String, val depths: IntRange) {
 
 /** Declaration order within each giver matches the wire variant codes 1..n. */
 enum class ScoutQuestVariant(val giver: ScoutQuestGiver, val label: String) {
-    FETID_RAT(ScoutQuestGiver.GHOST, "Fetid rat"),
-    GNOLL_TRICKSTER(ScoutQuestGiver.GHOST, "Gnoll trickster"),
-    GREAT_CRAB(ScoutQuestGiver.GHOST, "Great crab"),
-    CORPSE_DUST(ScoutQuestGiver.WANDMAKER, "Corpse dust"),
-    ELEMENTAL_EMBERS(ScoutQuestGiver.WANDMAKER, "Elemental embers"),
+    FETID_RAT(ScoutQuestGiver.GHOST, "Fetid Rat"),
+    GNOLL_TRICKSTER(ScoutQuestGiver.GHOST, "Gnoll Trickster"),
+    GREAT_CRAB(ScoutQuestGiver.GHOST, "Great Crab"),
+    CORPSE_DUST(ScoutQuestGiver.WANDMAKER, "Corpse Dust"),
+    ELEMENTAL_EMBERS(ScoutQuestGiver.WANDMAKER, "Elemental Embers"),
     ROTBERRY(ScoutQuestGiver.WANDMAKER, "Rotberry"),
-    CRYSTAL(ScoutQuestGiver.BLACKSMITH, "Crystal spire"),
-    GNOLL(ScoutQuestGiver.BLACKSMITH, "Gnoll geomancer"),
+    CRYSTAL(ScoutQuestGiver.BLACKSMITH, "Crystal Spire"),
+    GNOLL(ScoutQuestGiver.BLACKSMITH, "Gnoll Geomancer"),
     // v4.0.0 replaced the Imp's Monk/Golem token hunts with one vault
     // expedition, so this giver has a single variant.
     VAULT(ScoutQuestGiver.IMP, "Vault"),

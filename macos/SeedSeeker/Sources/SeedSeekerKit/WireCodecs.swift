@@ -95,11 +95,14 @@ public enum SeedCode {
 public enum ResultCodec {
     public static func decode(_ packet: Data, requirementCount: Int) throws -> [SeedResult] {
         var input = Reader(data: packet)
-        guard try input.bytes(4) == Data("SSR1".utf8) else { throw WireCodecError.badMagic }
+        let magic = try input.bytes(4)
+        guard magic == Data("SSR1".utf8) || magic == Data("SSR2".utf8) else { throw WireCodecError.badMagic }
         let results = try (0..<input.u16()).map { _ in
             let seed = try input.ascii(Int(input.u8()))
             guard SeedCode.isCanonical(seed) else { throw WireCodecError.invalidValue("Malformed seed from native engine") }
-            return SeedResult(seed: seed, matchedRequirements: requirementCount)
+            let id = magic == Data("SSR2".utf8) ? try input.ascii(Int(input.u16())) : ""
+            guard id.isEmpty || ItemCatalog.findById(id)?.kind == .trinket else { throw WireCodecError.invalidValue("Unknown trinket") }
+            return SeedResult(seed: seed, matchedRequirements: requirementCount, selectedTrinket: id.isEmpty ? nil : id)
         }
         guard input.remaining == 0 else { throw WireCodecError.trailingBytes }
         return results

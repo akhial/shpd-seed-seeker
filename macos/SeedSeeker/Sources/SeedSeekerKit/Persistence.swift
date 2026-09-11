@@ -2,6 +2,7 @@ import Foundation
 
 public struct SavedQuery: Codable, Sendable {
     public var requirements: [ItemRequirement]
+    public var autoApplyTrinket: Bool
     public var maximumDepth: Int
     public var requireBlacksmith: Bool
     public var excludeBlacksmithRewards: Bool
@@ -10,19 +11,21 @@ public struct SavedQuery: Codable, Sendable {
     public init(requirements: [ItemRequirement] = [], maximumDepth: Int = 24,
                 requireBlacksmith: Bool = false, excludeBlacksmithRewards: Bool = false,
                 wandmakerQuest: WandmakerQuest? = nil,
-                challenges: Int = 0) {
+                challenges: Int = 0, autoApplyTrinket: Bool = true) {
         self.requirements = requirements; self.maximumDepth = maximumDepth
         self.requireBlacksmith = requireBlacksmith
         self.excludeBlacksmithRewards = excludeBlacksmithRewards
         self.wandmakerQuest = wandmakerQuest
         self.challenges = challenges
+        self.autoApplyTrinket = autoApplyTrinket
     }
     private enum CodingKeys: String, CodingKey {
         case requirements, maximumDepth, requireBlacksmith, excludeBlacksmithRewards
-        case wandmakerQuest, challenges
+        case wandmakerQuest, challenges, autoApplyTrinket
     }
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        autoApplyTrinket = try container.decodeIfPresent(Bool.self, forKey: .autoApplyTrinket) ?? false
         requirements = try container.decode([ItemRequirement].self, forKey: .requirements)
         // Queries saved before empty boss floors were removed may hold 5/10/15;
         // snap them to the equivalent limit below.
@@ -220,5 +223,13 @@ public enum PresetPersistence {
             return try? JSONDecoder().decode(QueryPreset.self, from: elementData)
         }
         return presets.filter { !$0.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && $0.query.validated() != nil }
+    }
+}
+
+public extension SavedQuery {
+    func searchRequest() throws -> SearchRequest {
+        try SearchRequest(requirements: requirements, maximumDepth: maximumDepth,
+                          requireBlacksmith: requireBlacksmith, excludeBlacksmithRewards: excludeBlacksmithRewards,
+                          wandmakerQuest: wandmakerQuest, challenges: challenges, autoApplyTrinket: autoApplyTrinket)
     }
 }

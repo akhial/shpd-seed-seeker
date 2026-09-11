@@ -140,6 +140,34 @@ pub fn encode_results(worlds: &[GeneratedWorld]) -> Result<Vec<u8>, WireError> {
     Ok(output)
 }
 
+/// Encodes `SSR2`: big-endian u16 count, then u8-length seed code and
+/// u16-length selected trinket ID per entry. An empty ID means no trinket.
+///
+/// # Errors
+/// Returns a wire error if the batch or a string exceeds its length field.
+pub fn encode_recipe_results(
+    recipes: &[crate::auto_trinkets::SeedRecipe],
+) -> Result<Vec<u8>, WireError> {
+    let count = u16::try_from(recipes.len()).map_err(|_| WireError::TooManyResults)?;
+    let mut output = Vec::from(*b"SSR2");
+    output.extend_from_slice(&count.to_be_bytes());
+    for recipe in recipes {
+        let code = recipe.seed.to_code();
+        output.push(u8::try_from(code.len()).unwrap_or_default());
+        output.extend_from_slice(code.as_bytes());
+        let id = recipe
+            .trinket
+            .map_or("", |id| crate::catalog::item(id).stable_id);
+        output.extend_from_slice(
+            &u16::try_from(id.len())
+                .map_err(|_| WireError::TooManyResults)?
+                .to_be_bytes(),
+        );
+        output.extend_from_slice(id.as_bytes());
+    }
+    Ok(output)
+}
+
 /// Empty but valid poll response.
 #[must_use]
 pub fn empty_results() -> Vec<u8> {
@@ -859,6 +887,7 @@ mod tests {
     #[test]
     fn query_requests_round_trip_every_query_field() {
         let query = SearchQuery {
+            auto_apply_trinket: false,
             requirements: vec![
                 Requirement {
                     kind: ItemKind::Armor,
@@ -952,6 +981,7 @@ mod tests {
     #[test]
     fn query_requests_round_trip_effect_sets_alternatives_and_level_sums() {
         let query = SearchQuery {
+            auto_apply_trinket: false,
             requirements: vec![
                 Requirement {
                     kind: ItemKind::Weapon,

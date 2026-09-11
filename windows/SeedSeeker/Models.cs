@@ -1089,8 +1089,8 @@ public static class WandmakerQuests
 
     public static string Label(WandmakerQuest quest) => quest switch
     {
-        WandmakerQuest.CorpseDust => "Corpse dust",
-        WandmakerQuest.ElementalEmbers => "Elemental embers",
+        WandmakerQuest.CorpseDust => "Corpse Dust",
+        WandmakerQuest.ElementalEmbers => "Elemental Embers",
         WandmakerQuest.Rotberry => "Rotberry",
         _ => "Any",
     };
@@ -1117,6 +1117,7 @@ public sealed class QuerySettings
 {
     public ObservableCollection<ItemRequirement> Requirements { get; set; } = [];
     public int MaximumDepth { get; set; } = SearchLimits.MaxDepth;
+    public bool AutoApplyTrinket { get; set; }
     public bool RequireBlacksmith { get; set; }
     public bool ExcludeBlacksmithRewards { get; set; }
     public WandmakerQuest WandmakerQuest { get; set; } = WandmakerQuest.Any;
@@ -1126,6 +1127,7 @@ public sealed class QuerySettings
     {
         Requirements = new ObservableCollection<ItemRequirement>(Requirements.Select(x => x.Clone())),
         MaximumDepth = MaximumDepth,
+        AutoApplyTrinket = AutoApplyTrinket,
         RequireBlacksmith = RequireBlacksmith,
         ExcludeBlacksmithRewards = ExcludeBlacksmithRewards,
         WandmakerQuest = WandmakerQuest,
@@ -1183,7 +1185,7 @@ public enum StartMode
 /// bring seeds back. <see cref="Remaining"/> is zero for imports, whose refines
 /// are filter-only.
 /// </summary>
-public sealed record TargetRun(QuerySettings Query, IReadOnlyList<string> Seeds, long ResumeFrom, long Remaining);
+public sealed record TargetRun(QuerySettings Query, IReadOnlyList<string> Seeds, long ResumeFrom, long Remaining, IReadOnlyDictionary<string, SeedResult>? Recipes = null);
 
 public sealed class QueryPreset
 {
@@ -1206,7 +1208,7 @@ public static class BuiltInPresets
         new()
         {
             Id = "staff-21", Name = "+21 Staff", IsBuiltIn = true,
-            Query = new QuerySettings { Requirements = [
+            Query = new QuerySettings { AutoApplyTrinket = true, Requirements = [
                 new() { Kind = ItemKind.Wand, Upgrade = 3, UpgradeMatch = UpgradeMatch.Exactly, IdentityGroup = 1 },
                 new() { Kind = ItemKind.Wand, UpgradeMatch = UpgradeMatch.Any, IdentityGroup = 1 },
                 new() { Kind = ItemKind.Wand, UpgradeMatch = UpgradeMatch.Any, IdentityGroup = 1 },
@@ -1218,7 +1220,7 @@ public static class BuiltInPresets
         new()
         {
             Id = "staff-22", Name = "+22 Staff", IsBuiltIn = true,
-            Query = new QuerySettings { MaximumDepth = VaultFloorLimit, Requirements = [
+            Query = new QuerySettings { AutoApplyTrinket = true, MaximumDepth = VaultFloorLimit, Requirements = [
                 new() { Kind = ItemKind.Wand, Upgrade = 4, UpgradeMatch = UpgradeMatch.Exactly, IdentityGroup = 1 },
                 new() { Kind = ItemKind.Wand, UpgradeMatch = UpgradeMatch.Any, IdentityGroup = 1 },
                 new() { Kind = ItemKind.Wand, UpgradeMatch = UpgradeMatch.Any, IdentityGroup = 1 },
@@ -1228,7 +1230,7 @@ public static class BuiltInPresets
         new()
         {
             Id = "wand-bonanza", Name = "Wand Bonanza", IsBuiltIn = true,
-            Query = new QuerySettings { Requirements = [
+            Query = new QuerySettings { AutoApplyTrinket = true, Requirements = [
                 new() { Kind = ItemKind.Wand, Upgrade = 3, UpgradeMatch = UpgradeMatch.Exactly },
                 new() { Kind = ItemKind.Wand, Upgrade = 2, UpgradeMatch = UpgradeMatch.Exactly, MaximumDepth = 4 },
                 new() { Kind = ItemKind.Wand, Upgrade = 2, UpgradeMatch = UpgradeMatch.Exactly, MaximumDepth = 4 },
@@ -1238,7 +1240,7 @@ public static class BuiltInPresets
         new()
         {
             Id = "ring-of-wealth-21", Name = "+21 Ring of Wealth", IsBuiltIn = true,
-            Query = new QuerySettings { Requirements = [
+            Query = new QuerySettings { AutoApplyTrinket = true, Requirements = [
                 new() { Kind = ItemKind.Ring, Item = ItemCatalog.Find("ring_wealth"), Upgrade = 4, UpgradeMatch = UpgradeMatch.Exactly, Source = ScoutItemSource.ImpReward },
                 new() { Kind = ItemKind.Ring, Item = ItemCatalog.Find("ring_wealth"), Upgrade = 2, UpgradeMatch = UpgradeMatch.Exactly },
                 new() { Kind = ItemKind.Ring, Item = ItemCatalog.Find("ring_wealth"), UpgradeMatch = UpgradeMatch.Any },
@@ -1249,7 +1251,7 @@ public static class BuiltInPresets
         new()
         {
             Id = "tier-4-weapon-26", Name = "+26 Tier 4 Weapon", IsBuiltIn = true,
-            Query = new QuerySettings { MaximumDepth = VaultFloorLimit, Requirements = [
+            Query = new QuerySettings { AutoApplyTrinket = true, MaximumDepth = VaultFloorLimit, Requirements = [
                 new() { Kind = ItemKind.Weapon, Tier = 4, TierMatch = TierMatch.Exactly, Upgrade = 5, UpgradeMatch = UpgradeMatch.Exactly, IdentityGroup = 1 },
                 new() { Kind = ItemKind.Weapon, UpgradeMatch = UpgradeMatch.Any, IdentityGroup = 1 },
                 new() { Kind = ItemKind.Weapon, UpgradeMatch = UpgradeMatch.Any, IdentityGroup = 1 },
@@ -1258,7 +1260,7 @@ public static class BuiltInPresets
     ];
 }
 
-public sealed record SeedResult(string Seed, int Number);
+public sealed partial record SeedResult(string Seed, int Number, string? SelectedTrinket = null);
 public sealed record ScoutItem(CatalogItem Item, int Depth, int Upgrade, string? Effect, bool Cursed,
     ScoutItemSource Source, byte AccessibilityTag, int AccessibilityGroup, ulong AccessibilityValue,
     bool Secret = false)

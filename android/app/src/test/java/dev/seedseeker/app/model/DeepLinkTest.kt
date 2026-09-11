@@ -22,6 +22,7 @@ class DeepLinkTest {
     init { PackagedCatalog.install() }
 
     private val pinnedQuery = PresetQuery(
+        autoApplyTrinket = false,
         requirements = listOf(
             ItemRequirement(
                 key = 1,
@@ -242,11 +243,11 @@ class DeepLinkTest {
         assertDecodeFails("truncated", "A")
         assertDecodeFails("truncated", "QAMtCY")
         assertDecodeFails("trailing data", "QAMtCYAAAAAA")
-        // Unsupported future version (bits 0110 in the top nibble).
+        // Unsupported future version (bits 0111 in the top nibble).
         val versioned = assertThrows(IllegalArgumentException::class.java) {
-            DeepLink.decode("YAAA")
+            DeepLink.decode("cAAA")
         }
-        assertTrue(versioned.message!!.contains("version 6"))
+        assertTrue(versioned.message!!.contains("version 7"))
         assertTrue(versioned.message!!.contains("different"))
     }
 

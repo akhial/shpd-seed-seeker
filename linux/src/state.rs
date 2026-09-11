@@ -219,6 +219,7 @@ pub fn effect_label(effect: EffectRequirement) -> Option<String> {
 /// The whole persisted query state shared by all panes.
 #[derive(Clone, Debug)]
 pub struct AppState {
+    pub auto_apply_trinket: bool,
     pub requirements: Vec<UiRequirement>,
     pub max_depth: u8,
     pub require_blacksmith: bool,
@@ -231,6 +232,7 @@ pub struct AppState {
 impl Default for AppState {
     fn default() -> Self {
         Self {
+            auto_apply_trinket: true,
             requirements: Vec::new(),
             max_depth: 24,
             require_blacksmith: false,
@@ -255,6 +257,7 @@ impl AppState {
     #[must_use]
     pub fn from_query(query: &SearchQuery) -> Self {
         let mut state = Self {
+            auto_apply_trinket: query.auto_apply_trinket,
             requirements: Vec::with_capacity(query.requirements.len()),
             max_depth: query.max_depth,
             require_blacksmith: query.require_blacksmith,
@@ -291,6 +294,7 @@ impl AppState {
     #[must_use]
     pub fn unvalidated_query(&self) -> SearchQuery {
         SearchQuery {
+            auto_apply_trinket: self.auto_apply_trinket,
             requirements: self.requirements.iter().map(|r| r.to_core()).collect(),
             max_depth: self.max_depth,
             challenges: self.challenges,
@@ -575,24 +579,24 @@ pub const fn region(depth: u8) -> &'static str {
 
 pub const fn ghost_quest_label(variant: GhostQuestType) -> &'static str {
     match variant {
-        GhostQuestType::FetidRat => "Fetid rat",
-        GhostQuestType::GnollTrickster => "Gnoll trickster",
-        GhostQuestType::GreatCrab => "Great crab",
+        GhostQuestType::FetidRat => "Fetid Rat",
+        GhostQuestType::GnollTrickster => "Gnoll Trickster",
+        GhostQuestType::GreatCrab => "Great Crab",
     }
 }
 
 pub const fn wandmaker_quest_label(variant: WandmakerQuestType) -> &'static str {
     match variant {
-        WandmakerQuestType::CorpseDust => "Corpse dust",
-        WandmakerQuestType::ElementalEmbers => "Elemental embers",
+        WandmakerQuestType::CorpseDust => "Corpse Dust",
+        WandmakerQuestType::ElementalEmbers => "Elemental Embers",
         WandmakerQuestType::Rotberry => "Rotberry",
     }
 }
 
 pub const fn blacksmith_quest_label(variant: BlacksmithQuestType) -> &'static str {
     match variant {
-        BlacksmithQuestType::Crystal => "Crystal spire",
-        BlacksmithQuestType::Gnoll => "Gnoll geomancer",
+        BlacksmithQuestType::Crystal => "Crystal Spire",
+        BlacksmithQuestType::Gnoll => "Gnoll Geomancer",
     }
 }
 
@@ -617,7 +621,7 @@ pub fn quest_rows(quests: QuestSummary) -> Vec<QuestRow> {
     let mut rows = Vec::with_capacity(4);
     if let Some(quest) = quests.ghost {
         rows.push(QuestRow {
-            giver: "Sad ghost",
+            giver: "Sad Ghost",
             variant: ghost_quest_label(quest.variant),
             depth: quest.depth,
         });
@@ -831,8 +835,32 @@ mod tests {
     }
 
     #[test]
+    fn auto_trinket_defaults_on_and_preserves_saved_scope() {
+        assert!(AppState::default().auto_apply_trinket);
+        let legacy =
+            shpd_seedfinder_core::wire::decode_query(br#"{"requirements":[{"item":"whip"}]}"#)
+                .unwrap();
+        assert!(!AppState::from_query(&legacy).auto_apply_trinket);
+        let enabled = shpd_seedfinder_core::query::SearchQuery {
+            auto_apply_trinket: true,
+            ..legacy
+        };
+        assert!(
+            AppState::from_query(&enabled)
+                .to_query()
+                .unwrap()
+                .auto_apply_trinket
+        );
+    }
+
+    #[test]
     fn refinement_requires_identical_scope_and_no_fewer_requirements() {
-        let mut base_state = AppState::default();
+        // This fixture exercises requirement containment with a fixed baseline world.
+        // AutoTrinket policy changes deliberately require a fresh traversal.
+        let mut base_state = AppState {
+            auto_apply_trinket: false,
+            ..AppState::default()
+        };
         let mut first = UiRequirement::new(base_state.claim_key());
         first.kind = ItemKind::Ring;
         first.upgrade = UpgradeRequirement::AtLeast(2);
@@ -949,19 +977,19 @@ mod tests {
 
     #[test]
     fn quest_labels_name_every_variant() {
-        assert_eq!(ghost_quest_label(GhostQuestType::FetidRat), "Fetid rat");
+        assert_eq!(ghost_quest_label(GhostQuestType::FetidRat), "Fetid Rat");
         assert_eq!(
             ghost_quest_label(GhostQuestType::GnollTrickster),
-            "Gnoll trickster"
+            "Gnoll Trickster"
         );
-        assert_eq!(ghost_quest_label(GhostQuestType::GreatCrab), "Great crab");
+        assert_eq!(ghost_quest_label(GhostQuestType::GreatCrab), "Great Crab");
         assert_eq!(
             wandmaker_quest_label(WandmakerQuestType::CorpseDust),
-            "Corpse dust"
+            "Corpse Dust"
         );
         assert_eq!(
             wandmaker_quest_label(WandmakerQuestType::ElementalEmbers),
-            "Elemental embers"
+            "Elemental Embers"
         );
         assert_eq!(
             wandmaker_quest_label(WandmakerQuestType::Rotberry),
@@ -969,11 +997,11 @@ mod tests {
         );
         assert_eq!(
             blacksmith_quest_label(BlacksmithQuestType::Crystal),
-            "Crystal spire"
+            "Crystal Spire"
         );
         assert_eq!(
             blacksmith_quest_label(BlacksmithQuestType::Gnoll),
-            "Gnoll geomancer"
+            "Gnoll Geomancer"
         );
         assert_eq!(imp_target_label(ImpQuestType::Vault), "Vault");
     }
@@ -1018,18 +1046,18 @@ mod tests {
             quest_rows(summary),
             vec![
                 QuestRow {
-                    giver: "Sad ghost",
-                    variant: "Great crab",
+                    giver: "Sad Ghost",
+                    variant: "Great Crab",
                     depth: 4,
                 },
                 QuestRow {
                     giver: "Wandmaker",
-                    variant: "Elemental embers",
+                    variant: "Elemental Embers",
                     depth: 9,
                 },
                 QuestRow {
                     giver: "Blacksmith",
-                    variant: "Crystal spire",
+                    variant: "Crystal Spire",
                     depth: 13,
                 },
                 QuestRow {

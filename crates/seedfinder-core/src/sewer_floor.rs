@@ -1420,6 +1420,7 @@ mod tests {
     #[test]
     fn live_streaming_search_finds_a_real_multi_floor_seed() {
         let query = SearchQuery {
+            auto_apply_trinket: false,
             requirements: vec![Requirement {
                 kind: crate::catalog::ItemKind::Armor,
                 weapon_category: None,

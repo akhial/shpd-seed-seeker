@@ -202,3 +202,17 @@ button.stack-badge:hover {
   font-size: 10px;
   font-weight: bold;
 }
+
+/* Selection alone carries the applied highlight; hover must not mimic it. */
+.trinket-shortcut {
+  min-width: 20px;
+  min-height: 20px;
+  padding: 4px;
+  border: 1px solid alpha(currentColor, 0.16);
+  border-radius: 6px;
+}
+.trinket-shortcut:checked {
+  border-color: @success_color;
+  box-shadow: inset 0 0 0 1px @success_color;
+  background: alpha(@success_color, 0.14);
+}

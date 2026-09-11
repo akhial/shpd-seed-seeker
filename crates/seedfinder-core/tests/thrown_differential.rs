@@ -35,6 +35,7 @@ fn requirement(category: Option<WeaponCategory>, upgrade: UpgradeRequirement) ->
 
 fn query(requirements: Vec<Requirement>) -> SearchQuery {
     SearchQuery {
+        auto_apply_trinket: false,
         requirements,
         max_depth: 24,
         challenges: Challenges::NONE,

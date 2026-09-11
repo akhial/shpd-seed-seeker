@@ -1,4 +1,5 @@
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { Ref } from "react";
 import { useStore } from "@tanstack/react-store";
 import { displayedUpgrade, sourceLabel } from "../../lib/catalog";
 import { itemGlow } from "../../lib/glow";
@@ -13,8 +14,14 @@ import type { ScoutItem, ScoutResult, TrinketOffer } from "../../lib/wasm/types"
 import { Sprite } from "./parts";
 import { FeelingSprite } from "./FeelingSprite";
 import { TrinketName, TrinketSprite } from "./TrinketArt";
+import { useTrinketDock } from "./useTrinketDock";
 
 const groupLetter = (group: number) => "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[group % 26];
+
+const initialOffers = (offers: ScoutItem[], order: TrinketOffer[]) =>
+  order.length
+    ? order.slice(0, 4).flatMap((entry) => offers.find((offer) => offer.id === entry.id) ?? [])
+    : offers.slice(0, 4);
 
 function accessibilityNote(item: ScoutItem): string | undefined {
   if (item.accessibility.type === "choice") {
@@ -70,6 +77,22 @@ export function ScoutPanel({
     observer.observe(summary);
     return () => observer.disconnect();
   }, [hasResult]);
+
+  const dock = useTrinketDock(result, bodyRef, summaryRef);
+  const offers = useMemo(
+    () =>
+      initialOffers(
+        result?.items.filter((item) => item.category === "trinket") ?? [],
+        result?.trinketOrder ?? [],
+      ),
+    [result],
+  );
+  const selectTrinket = onTrinketChange
+    ? (trinket: string) => {
+        dock.rememberFloor();
+        onTrinketChange(trinket);
+      }
+    : undefined;
 
   const floors = useMemo(() => {
     const byDepth = new Map<number, ScoutItem[]>();
@@ -185,46 +208,88 @@ export function ScoutPanel({
                 </>
               )}
             </p>
-            {nav && (
-              <div className="d1-scout-nav" role="navigation" aria-label="Search result navigation">
-                <button
-                  type="button"
-                  className="d1-scout-nav-btn"
-                  disabled={nav.index === 0}
-                  onClick={() => onNavigate?.(-1)}
-                  aria-label="Previous result"
-                  title="Previous result (K)"
-                >
-                  ‹
-                </button>
-                {/* Only the index is a live region: a running search grows the
+            {(nav || (selectTrinket && offers.length > 0)) && (
+              <div
+                className="d1-scout-nav"
+                role={nav ? "navigation" : undefined}
+                aria-label={nav ? "Search result navigation" : undefined}
+              >
+                {nav ? (
+                  <>
+                    <button
+                      type="button"
+                      className="d1-scout-nav-btn"
+                      disabled={nav.index === 0}
+                      onClick={() => onNavigate?.(-1)}
+                      aria-label="Previous result"
+                      title="Previous result (K)"
+                    >
+                      ‹
+                    </button>
+                    {/* Only the index is a live region: a running search grows the
                     total ~1,000 times and must not re-announce each change. */}
-                <span className="d1-scout-nav-pos">
-                  <span aria-live="polite">
-                    Result <b className="d1-mono">{nav.index + 1}</b>
-                  </span>
-                  {" of "}
-                  <b className="d1-mono">{nav.total}</b>
-                </span>
-                <button
-                  type="button"
-                  className="d1-scout-nav-btn"
-                  disabled={nav.index + 1 >= nav.total}
-                  onClick={() => onNavigate?.(1)}
-                  aria-label="Next result"
-                  title="Next result (J)"
-                >
-                  ›
-                </button>
-                <span className="d1-scout-nav-hint d1-scout-nav-hint-keys" aria-hidden="true">
-                  <kbd className="d1-keycap">J</kbd>
-                  <span>next</span>
-                  <kbd className="d1-keycap">K</kbd>
-                  <span>prev</span>
-                </span>
-                <span className="d1-scout-nav-hint d1-scout-nav-hint-swipe" aria-hidden="true">
-                  swipe to browse
-                </span>
+                    <span className="d1-scout-nav-pos">
+                      <span aria-live="polite">
+                        Result <b className="d1-mono">{nav.index + 1}</b>
+                      </span>
+                      {" of "}
+                      <b className="d1-mono">{nav.total}</b>
+                    </span>
+                    <button
+                      type="button"
+                      className="d1-scout-nav-btn"
+                      disabled={nav.index + 1 >= nav.total}
+                      onClick={() => onNavigate?.(1)}
+                      aria-label="Next result"
+                      title="Next result (J)"
+                    >
+                      ›
+                    </button>
+                  </>
+                ) : (
+                  <span>Trinkets</span>
+                )}
+                <div className="d1-scout-nav-tools" ref={dock.dockRef}>
+                  {nav && (
+                    <div className="d1-scout-nav-hints" aria-hidden="true">
+                      <span className="d1-scout-nav-hint d1-scout-nav-hint-keys">
+                        <kbd className="d1-keycap">J</kbd>
+                        <span>next</span>
+                        <kbd className="d1-keycap">K</kbd>
+                        <span>prev</span>
+                      </span>
+                      <span className="d1-scout-nav-hint d1-scout-nav-hint-swipe">
+                        swipe to browse
+                      </span>
+                    </div>
+                  )}
+                  {selectTrinket && offers.length > 0 && (
+                    <div
+                      className="d1-scout-trinkets"
+                      role="group"
+                      aria-label="Trinket shortcuts"
+                      aria-hidden={!dock.visible}
+                      inert={!dock.visible}
+                    >
+                      {offers.map((offer) => (
+                        <button
+                          key={offer.id}
+                          type="button"
+                          className="d1-scout-trinket"
+                          aria-label={offer.name}
+                          title={offer.name}
+                          aria-pressed={result?.selectedTrinket === offer.id}
+                          disabled={loading}
+                          onClick={() =>
+                            selectTrinket(result?.selectedTrinket === offer.id ? "none" : offer.id)
+                          }
+                        >
+                          <Sprite art={itemArt(offer.spriteIndex)} size={18} />
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -236,6 +301,7 @@ export function ScoutPanel({
               <section
                 className="d1-floor"
                 key={depth}
+                data-depth={depth}
                 style={{ ["--region" as string]: region.color }}
               >
                 <header className="d1-floor-head">
@@ -255,8 +321,9 @@ export function ScoutPanel({
                       offers={items.filter((item) => item.category === "trinket")}
                       order={result.trinketOrder ?? []}
                       selectedTrinket={result.selectedTrinket}
-                      onSelect={onTrinketChange}
+                      onSelect={selectTrinket}
                       disabled={loading}
+                      choicesRef={dock.offersRef}
                     />
                   )}
                   {items
@@ -314,7 +381,7 @@ export function ScoutPanel({
                               className="d1-badge d1-badge-match"
                               title="Selected as part of a jointly obtainable requirement match"
                             >
-                              ✓ match
+                              <CheckIcon size={12} /> match
                             </span>
                           )}
                         </li>
@@ -336,12 +403,14 @@ export function CatalystEntry({
   selectedTrinket,
   onSelect,
   disabled,
+  choicesRef,
 }: {
   offers: ScoutItem[];
   order: TrinketOffer[];
   selectedTrinket?: string | null;
   onSelect?: (trinket: string) => void;
   disabled?: boolean;
+  choicesRef?: Ref<HTMLOListElement>;
 }) {
   const catalyst = offers[0];
   const note = accessibilityNote(catalyst);
@@ -358,14 +427,8 @@ export function CatalystEntry({
         </div>
       </div>
       {note && <p className="d1-item-note">{note}</p>}
-      <ol className="d1-trinket-choices" aria-label="Initial trinket choices">
-        {(order.length
-          ? order
-              .slice(0, 4)
-              .map((entry) => offers.find((offer) => offer.id === entry.id)!)
-              .filter(Boolean)
-          : offers
-        ).map((offer) => {
+      <ol className="d1-trinket-choices" aria-label="Initial trinket choices" ref={choicesRef}>
+        {initialOffers(offers, order).map((offer) => {
           const contents = (
             <>
               <TrinketSprite cell={offer.spriteIndex} maximum={48} />

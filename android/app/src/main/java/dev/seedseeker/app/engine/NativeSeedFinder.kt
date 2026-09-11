@@ -19,6 +19,7 @@ import dev.seedseeker.app.model.ScoutQuest
 import dev.seedseeker.app.model.ScoutQuestGiver
 import dev.seedseeker.app.model.ScoutQuestVariant
 import dev.seedseeker.app.model.ScoutWorld
+import dev.seedseeker.app.model.ItemKind
 import dev.seedseeker.app.model.SeedResult
 import dev.seedseeker.app.catalog.ItemCatalog
 import org.json.JSONObject
@@ -48,6 +49,9 @@ interface NativeSeedFinder {
         workers: Int,
     ): NativeSearchSession
     fun filterSeeds(request: SearchRequest, seeds: List<String>): List<String>
+    fun filterRecipes(request: SearchRequest, base: SearchRequest, recipes: List<SeedResult>): List<SeedResult> =
+        filterSeeds(request, recipes.map { it.seed }).map { SeedResult(it, request.slotCount) }
+
     fun scoutSeed(seed: String, challenges: Int = 0): ScoutWorld
     fun scoutSelectedSeed(seed: String, challenges: Int, query: SearchRequest?, trinket: String?): ScoutWorld =
         scoutSeed(seed, challenges)
@@ -456,6 +460,16 @@ class JniNativeSeedFinder(
         return ResultCodec.decode(packet, request.slotCount).map { it.seed }
     }
 
+    override fun filterRecipes(request: SearchRequest, base: SearchRequest, recipes: List<SeedResult>): List<SeedResult> {
+        val envelope = org.json.JSONObject().apply {
+            put("query", ResultsExport.encodeQuery(request))
+            put("base_query", ResultsExport.encodeQuery(base))
+            put("trinkets", org.json.JSONArray(recipes.map { it.selectedTrinket ?: org.json.JSONObject.NULL }))
+        }
+        val values = LongArray(recipes.size) { SeedCode.value(recipes[it].seed) }
+        return ResultCodec.decode(bindings.filterSeeds(envelope.toString().toByteArray(), values), request.slotCount)
+    }
+
     /** Asks the engine, so the refine soundness rule has exactly one implementation. */
     override fun queryContinues(candidate: SearchRequest, base: SearchRequest): Boolean =
         bindings.queryContinues(QueryDocument.encode(candidate), QueryDocument.encode(base))
@@ -707,14 +721,19 @@ private object ResultCodec {
     fun decode(packet: ByteArray, requirementCount: Int): List<SeedResult> =
         DataInputStream(ByteArrayInputStream(packet)).use { input ->
             val magic = ByteArray(4).also(input::readFully)
-            check(magic.contentEquals(MAGIC)) { "Unexpected native result packet" }
+            val hasRecipes = magic.contentEquals("SSR2".toByteArray())
+            check(hasRecipes || magic.contentEquals(MAGIC)) { "Unexpected native result packet" }
             val count = input.readUnsignedShort()
             List(count) {
                 val length = input.readUnsignedByte()
                 val bytes = ByteArray(length).also(input::readFully)
                 val seed = bytes.toString(StandardCharsets.US_ASCII)
                 check(SeedCode.isCanonical(seed)) { "Malformed seed from native engine" }
-                SeedResult(seed, requirementCount)
+                val trinket = if (hasRecipes) {
+                    val id = ByteArray(input.readUnsignedShort()).also(input::readFully).toString(Charsets.UTF_8)
+                    id.takeIf { it.isNotEmpty() }?.also { check(ItemCatalog.findById(it)?.kind == ItemKind.TRINKET) }
+                } else null
+                SeedResult(seed, requirementCount, trinket)
             }.also {
                 check(input.available() == 0) { "Trailing bytes in native result packet" }
             }

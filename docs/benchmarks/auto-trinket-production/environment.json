@@ -1,0 +1,22 @@
+{
+  "started_utc": "2026-09-10T17:54:45.584390+00:00",
+  "platform": "Linux-6.12.107+deb13-amd64-x86_64-with-glibc2.41",
+  "logical_cpus": 8,
+  "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
+  "git_base": "ba22483065c7ff4954260da6863618c590ffcea2",
+  "note": "Working-tree implementation; source hashes identify measured code. Shared host; single benchmark process.",
+  "binary_sha256": "f36f4e82099bb64d4791b6b2dc5e11f9c4608fe2593d696f1e84dd2ec1cebe98",
+  "sources_sha256": {
+    "crates/seedfinder-core/examples/auto_trinket_production_benchmark.rs": "3fdca2e0b28ba16f378ea48c34c4dac2e5d6014b7740655e4b96609cb53130fd",
+    "crates/seedfinder-core/src/auto_trinkets.rs": "c33b30589b9c111b2080fa47e7fee2c25a4ff8e23ab6773ad3de7e6b62eaf24d",
+    "crates/seedfinder-core/src/feasibility.rs": "f1dc3b6d34e2c7cd8a969c65ca2e93145cca25915e4cb1e8eaf814bf8e647389",
+    "crates/seedfinder-core/src/main_world.rs": "0c6ce1d3d496ee0709323a73bfe54186b7059865f6e4d87e268d335eb9f57067",
+    "crates/seedfinder-core/src/probability.rs": "14bda8f5fbc8e529b76a0cb1104ef8efc4d47586bca0ed83a5913f20f7dfefa0"
+  },
+  "prespecified_count_per_mode_per_query": 32768,
+  "prespecified_start_index": 300000,
+  "seed_formula": "(index * PRODUCTION_SEARCH_START_STRIDE + 812345678901) % TOTAL_SEEDS",
+  "mode_order": "AB/BA alternating blocks of 32 identical seeds",
+  "finished_utc": "2026-09-10T18:02:43.208562+00:00",
+  "concurrent_activity": "A one-worker browser search smoke test ran for approximately 30 seconds near the end of the Grim Runic Blade query. No builds or broad test suites overlapped timed measurements. Other unrelated shared-host services remained active."
+}

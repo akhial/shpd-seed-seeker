@@ -140,7 +140,7 @@ public sealed class ScoutQuestsTests
     [Fact]
     public void GiverLabelsMatchTheGameNames()
     {
-        Assert.Equal("Sad ghost", ScoutQuests.GiverLabel(QuestGiver.Ghost));
+        Assert.Equal("Sad Ghost", ScoutQuests.GiverLabel(QuestGiver.Ghost));
         Assert.Equal("Wandmaker", ScoutQuests.GiverLabel(QuestGiver.Wandmaker));
         Assert.Equal("Blacksmith", ScoutQuests.GiverLabel(QuestGiver.Blacksmith));
         Assert.Equal("Imp", ScoutQuests.GiverLabel(QuestGiver.Imp));
@@ -149,14 +149,14 @@ public sealed class ScoutQuestsTests
     [Fact]
     public void VariantLabelsMatchTheGameNames()
     {
-        Assert.Equal("Fetid rat", ScoutQuests.VariantLabel(QuestVariant.FetidRat));
-        Assert.Equal("Gnoll trickster", ScoutQuests.VariantLabel(QuestVariant.GnollTrickster));
-        Assert.Equal("Great crab", ScoutQuests.VariantLabel(QuestVariant.GreatCrab));
-        Assert.Equal("Corpse dust", ScoutQuests.VariantLabel(QuestVariant.CorpseDust));
-        Assert.Equal("Elemental embers", ScoutQuests.VariantLabel(QuestVariant.ElementalEmbers));
+        Assert.Equal("Fetid Rat", ScoutQuests.VariantLabel(QuestVariant.FetidRat));
+        Assert.Equal("Gnoll Trickster", ScoutQuests.VariantLabel(QuestVariant.GnollTrickster));
+        Assert.Equal("Great Crab", ScoutQuests.VariantLabel(QuestVariant.GreatCrab));
+        Assert.Equal("Corpse Dust", ScoutQuests.VariantLabel(QuestVariant.CorpseDust));
+        Assert.Equal("Elemental Embers", ScoutQuests.VariantLabel(QuestVariant.ElementalEmbers));
         Assert.Equal("Rotberry", ScoutQuests.VariantLabel(QuestVariant.Rotberry));
-        Assert.Equal("Crystal spire", ScoutQuests.VariantLabel(QuestVariant.Crystal));
-        Assert.Equal("Gnoll geomancer", ScoutQuests.VariantLabel(QuestVariant.Gnoll));
+        Assert.Equal("Crystal Spire", ScoutQuests.VariantLabel(QuestVariant.Crystal));
+        Assert.Equal("Gnoll Geomancer", ScoutQuests.VariantLabel(QuestVariant.Gnoll));
         Assert.Equal("Vault", ScoutQuests.VariantLabel(QuestVariant.Vault));
     }
 }

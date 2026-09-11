@@ -287,6 +287,7 @@ fn load_query(path: &Path) -> Result<SearchQuery, String> {
 /// it, are not comparable with current ones.
 fn benchmark_query() -> SearchQuery {
     SearchQuery {
+        auto_apply_trinket: false,
         requirements: vec![Requirement {
             kind: ItemKind::Weapon,
             weapon_category: None,
