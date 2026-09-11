@@ -144,6 +144,22 @@ public sealed class NativeEngine
         return ReadSeedList(CopyAndFree(ptr, len));
     }
 
+    public IReadOnlyList<SeedResult> FilterRecipes(QuerySettings query, QuerySettings baseline, IReadOnlyList<SeedResult> recipes)
+    {
+        if (recipes.Count == 0) return [];
+        var request = new JsonObject
+        {
+            ["query"] = JsonNode.Parse(ResultsExport.EncodeQueryDocument(query)),
+            ["base_query"] = JsonNode.Parse(ResultsExport.EncodeQueryDocument(baseline)),
+            ["trinkets"] = new JsonArray([.. recipes.Select(recipe => recipe.SelectedTrinket is string id ? JsonValue.Create(id) : null)]),
+        };
+        var packet = Encoding.UTF8.GetBytes(request.ToJsonString());
+        var values = recipes.Select(recipe => SeedCode.Value(recipe.Seed)).ToArray();
+        var code = Native.seedfinder_filter_seeds(packet, (nuint)packet.Length, values, (nuint)values.Length, out var ptr, out var len);
+        if (code != 0) throw new InvalidOperationException($"Native filter failed ({code}).");
+        return ReadRecipes(CopyAndFree(ptr, len));
+    }
+
     /// <summary>
     /// Whether <paramref name="candidate"/> continues <paramref name="baseline"/>:
     /// an identical floor limit and challenge set, world conditions
@@ -369,12 +385,25 @@ public sealed class NativeEngine
         finally { if (ptr != 0) Native.seedfinder_buffer_free(ptr, len); }
     }
 
-    internal static IReadOnlyList<string> ReadSeedList(byte[] bytes)
+    internal static IReadOnlyList<string> ReadSeedList(byte[] bytes) => ReadRecipes(bytes).Select(recipe => recipe.Seed).ToArray();
+
+    internal static IReadOnlyList<SeedResult> ReadRecipes(byte[] bytes)
     {
-        var r = new Reader(bytes); r.Magic("SSR1");
-        var result = new List<string>(); var count = r.U16(); for (var i = 0; i < count; i++) result.Add(r.Text(r.U8()));
+        var r = new Reader(bytes); var magic = r.Text(4);
+        if (magic is not ("SSR1" or "SSR2")) throw new InvalidDataException("Unexpected native packet");
+        var count = r.U16(); var result = new List<SeedResult>(count);
+        for (var i = 0; i < count; i++)
+        {
+            var seed = r.Text(r.U8());
+            var trinket = magic == "SSR2" ? r.Text() : "";
+            if (trinket.Length > 0 && ItemCatalog.Find(trinket)?.Kind != ItemKind.Trinket)
+                throw new InvalidDataException("Unknown trinket in native packet");
+            result.Add(new(seed, i + 1, trinket.Length == 0 ? null : trinket));
+        }
+        if (r.Remaining != 0) throw new InvalidDataException("Trailing native result data");
         return result;
     }
+
 }
 
 /// <summary>
@@ -408,11 +437,12 @@ public sealed class NativeSearch : IDisposable
 {
     private long handle;
     internal NativeSearch(long value) => handle = value;
-    public IReadOnlyList<string> Poll(int maximum)
+    public IReadOnlyList<string> Poll(int maximum) => PollRecipes(maximum).Select(recipe => recipe.Seed).ToArray();
+    public IReadOnlyList<SeedResult> PollRecipes(int maximum)
     {
         var code = Native.seedfinder_poll(handle, (uint)maximum, out var ptr, out var len);
         if (code != 0) throw new InvalidOperationException($"Native poll failed ({code}).");
-        return NativeEngine.ReadSeedList(NativeEngine.CopyAndFree(ptr, len));
+        return NativeEngine.ReadRecipes(NativeEngine.CopyAndFree(ptr, len));
     }
     public SearchStatus Status()
     {

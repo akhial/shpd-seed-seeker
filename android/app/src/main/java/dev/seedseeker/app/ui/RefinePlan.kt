@@ -33,6 +33,7 @@ internal data class RefineSpec(
     val resumeFrom: Long,
     val remaining: Long,
     val keepSeeds: List<SeedResult>,
+    val base: SearchRequest? = null,
 )
 
 /**
@@ -120,18 +121,18 @@ internal fun startPlanFor(
             val anchor = checkNotNull(target) { "A target refine needs a Target" }
             StartPlan(
                 StartMode.TARGET_REFINE,
-                RefineSpec(anchor.resumeFrom, anchor.remaining, anchor.results),
+                RefineSpec(anchor.resumeFrom, anchor.remaining, anchor.results, anchor.request),
             )
         }
         "target-filter" -> {
             val anchor = checkNotNull(target) { "A target filter needs a Target" }
-            StartPlan(StartMode.TARGET_FILTER, RefineSpec(anchor.resumeFrom, 0, anchor.results))
+            StartPlan(StartMode.TARGET_FILTER, RefineSpec(anchor.resumeFrom, 0, anchor.results, anchor.request))
         }
         "continue-detached" -> {
             val base = checkNotNull(lastRun) { "Continuing a detached scan needs that run" }
             StartPlan(
                 StartMode.CONTINUE_DETACHED,
-                RefineSpec(base.resumeFrom, base.remaining, base.results),
+                RefineSpec(base.resumeFrom, base.remaining, base.results, base.request),
             )
         }
         "detached" -> StartPlan(StartMode.DETACHED)

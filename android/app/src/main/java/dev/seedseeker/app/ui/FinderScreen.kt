@@ -62,6 +62,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.alpha
+import dev.seedseeker.app.catalog.ItemCatalog
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.toClipEntry
@@ -94,6 +96,7 @@ import kotlinx.coroutines.launch
 fun FinderScreen(
     requirements: List<ItemRequirement>,
     maximumDepth: Int,
+    autoApplyTrinket: Boolean,
     requireBlacksmith: Boolean,
     excludeBlacksmithRewards: Boolean,
     wandmakerQuest: WandmakerQuest?,
@@ -125,6 +128,7 @@ fun FinderScreen(
     onRequirementsChange: (List<ItemRequirement>) -> Unit,
     onRemove: (BoardItem) -> Unit,
     onMaximumDepthChange: (Int) -> Unit,
+    onAutoApplyTrinketChange: (Boolean) -> Unit,
     onRequireBlacksmithChange: (Boolean) -> Unit,
     onExcludeBlacksmithRewardsChange: (Boolean) -> Unit,
     onWandmakerQuestChange: (WandmakerQuest?) -> Unit,
@@ -275,6 +279,7 @@ fun FinderScreen(
                     QueryPage(
                         requirements = requirements,
                         maximumDepth = maximumDepth,
+                        autoApplyTrinket = autoApplyTrinket,
                         requireBlacksmith = requireBlacksmith,
                         excludeBlacksmithRewards = excludeBlacksmithRewards,
                         wandmakerQuest = wandmakerQuest,
@@ -289,6 +294,7 @@ fun FinderScreen(
                         onRequirementsChange = onRequirementsChange,
                         onRemove = onRemove,
                         onMaximumDepthChange = onMaximumDepthChange,
+                        onAutoApplyTrinketChange = onAutoApplyTrinketChange,
                         onRequireBlacksmithChange = onRequireBlacksmithChange,
                         onExcludeBlacksmithRewardsChange = onExcludeBlacksmithRewardsChange,
                         onWandmakerQuestChange = onWandmakerQuestChange,
@@ -437,6 +443,7 @@ private fun requirementsSummaryText(requirements: List<ItemRequirement>): String
 private fun QueryPage(
     requirements: List<ItemRequirement>,
     maximumDepth: Int,
+    autoApplyTrinket: Boolean,
     requireBlacksmith: Boolean,
     excludeBlacksmithRewards: Boolean,
     wandmakerQuest: WandmakerQuest?,
@@ -451,6 +458,7 @@ private fun QueryPage(
     onRequirementsChange: (List<ItemRequirement>) -> Unit,
     onRemove: (BoardItem) -> Unit,
     onMaximumDepthChange: (Int) -> Unit,
+    onAutoApplyTrinketChange: (Boolean) -> Unit,
     onRequireBlacksmithChange: (Boolean) -> Unit,
     onExcludeBlacksmithRewardsChange: (Boolean) -> Unit,
     onWandmakerQuestChange: (WandmakerQuest?) -> Unit,
@@ -484,6 +492,7 @@ private fun QueryPage(
         Spacer(Modifier.height(4.dp))
         ScopeSection(
             maximumDepth = maximumDepth,
+                        autoApplyTrinket = autoApplyTrinket,
             requireBlacksmith = requireBlacksmith,
             excludeBlacksmithRewards = excludeBlacksmithRewards,
             wandmakerQuest = wandmakerQuest,
@@ -492,6 +501,7 @@ private fun QueryPage(
             workerCeiling = workerCeiling,
             enabled = !isSearching,
             onMaximumDepthChange = onMaximumDepthChange,
+                        onAutoApplyTrinketChange = onAutoApplyTrinketChange,
             onRequireBlacksmithChange = onRequireBlacksmithChange,
             onExcludeBlacksmithRewardsChange = onExcludeBlacksmithRewardsChange,
             onWandmakerQuestChange = onWandmakerQuestChange,
@@ -510,6 +520,7 @@ private fun QueryPage(
 @Composable
 private fun ScopeSection(
     maximumDepth: Int,
+    autoApplyTrinket: Boolean,
     requireBlacksmith: Boolean,
     excludeBlacksmithRewards: Boolean,
     wandmakerQuest: WandmakerQuest?,
@@ -518,6 +529,7 @@ private fun ScopeSection(
     workerCeiling: Int,
     enabled: Boolean,
     onMaximumDepthChange: (Int) -> Unit,
+    onAutoApplyTrinketChange: (Boolean) -> Unit,
     onRequireBlacksmithChange: (Boolean) -> Unit,
     onExcludeBlacksmithRewardsChange: (Boolean) -> Unit,
     onWandmakerQuestChange: (WandmakerQuest?) -> Unit,
@@ -581,6 +593,9 @@ private fun ScopeSection(
                     enabled = enabled,
                     modifier = Modifier.semantics { stateDescription = "Floor $maximumDepth" },
                 )
+                Spacer(Modifier.height(12.dp))
+                SwitchRow(label = "AutoTrinket", supporting = "Applies a helpful trinket at +3 at the first brewing opportunity. Keeps it only when the match needs it.",
+                    checked = autoApplyTrinket, onCheckedChange = onAutoApplyTrinketChange, enabled = enabled)
                 WandmakerQuestRow(
                     quest = wandmakerQuest,
                     enabled = enabled,
@@ -706,6 +721,7 @@ private fun ResultRow(result: SeedResult, onScout: () -> Unit) {
             modifier = Modifier.padding(start = 14.dp, top = 2.dp, end = 2.dp, bottom = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
+            Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(
                 result.seed,
                 fontFamily = FontFamily.Monospace,
@@ -713,8 +729,10 @@ private fun ResultRow(result: SeedResult, onScout: () -> Unit) {
                 fontSize = 18.sp,
                 letterSpacing = 1.sp,
                 color = MaterialTheme.colorScheme.tertiary,
-                modifier = Modifier.weight(1f),
+
             )
+                result.selectedTrinket?.let(ItemCatalog::findById)?.let { ItemSprite(it, modifier = Modifier.size(16.dp).alpha(0.6f)) }
+            }
             TextButton(
                 onClick = {
                     scope.launch {

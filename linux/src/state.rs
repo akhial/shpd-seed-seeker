@@ -219,6 +219,7 @@ pub fn effect_label(effect: EffectRequirement) -> Option<String> {
 /// The whole persisted query state shared by all panes.
 #[derive(Clone, Debug)]
 pub struct AppState {
+    pub auto_apply_trinket: bool,
     pub requirements: Vec<UiRequirement>,
     pub max_depth: u8,
     pub require_blacksmith: bool,
@@ -231,6 +232,7 @@ pub struct AppState {
 impl Default for AppState {
     fn default() -> Self {
         Self {
+            auto_apply_trinket: true,
             requirements: Vec::new(),
             max_depth: 24,
             require_blacksmith: false,
@@ -255,6 +257,7 @@ impl AppState {
     #[must_use]
     pub fn from_query(query: &SearchQuery) -> Self {
         let mut state = Self {
+            auto_apply_trinket: query.auto_apply_trinket,
             requirements: Vec::with_capacity(query.requirements.len()),
             max_depth: query.max_depth,
             require_blacksmith: query.require_blacksmith,
@@ -291,7 +294,7 @@ impl AppState {
     #[must_use]
     pub fn unvalidated_query(&self) -> SearchQuery {
         SearchQuery {
-            auto_apply_trinket: false,
+            auto_apply_trinket: self.auto_apply_trinket,
             requirements: self.requirements.iter().map(|r| r.to_core()).collect(),
             max_depth: self.max_depth,
             challenges: self.challenges,
@@ -832,8 +835,32 @@ mod tests {
     }
 
     #[test]
+    fn auto_trinket_defaults_on_and_preserves_saved_scope() {
+        assert!(AppState::default().auto_apply_trinket);
+        let legacy =
+            shpd_seedfinder_core::wire::decode_query(br#"{"requirements":[{"item":"whip"}]}"#)
+                .unwrap();
+        assert!(!AppState::from_query(&legacy).auto_apply_trinket);
+        let enabled = shpd_seedfinder_core::query::SearchQuery {
+            auto_apply_trinket: true,
+            ..legacy
+        };
+        assert!(
+            AppState::from_query(&enabled)
+                .to_query()
+                .unwrap()
+                .auto_apply_trinket
+        );
+    }
+
+    #[test]
     fn refinement_requires_identical_scope_and_no_fewer_requirements() {
-        let mut base_state = AppState::default();
+        // This fixture exercises requirement containment with a fixed baseline world.
+        // AutoTrinket policy changes deliberately require a fresh traversal.
+        let mut base_state = AppState {
+            auto_apply_trinket: false,
+            ..AppState::default()
+        };
         let mut first = UiRequirement::new(base_state.claim_key());
         first.kind = ItemKind::Ring;
         first.upgrade = UpgradeRequirement::AtLeast(2);

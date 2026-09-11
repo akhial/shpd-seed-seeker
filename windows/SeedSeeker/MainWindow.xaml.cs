@@ -28,7 +28,7 @@ public sealed partial class MainWindow : Window
 {
     private readonly NativeEngine engine = new();
     private readonly ObservableCollection<SeedResult> results = [];
-    private QuerySettings query = new();
+    private QuerySettings query = new() { AutoApplyTrinket = true };
     private List<QueryPreset> userPresets = [];
     private NativeSearch? search;
     /// <summary>The last concluded run's record — its query, delivered seeds, and
@@ -53,6 +53,7 @@ public sealed partial class MainWindow : Window
     /// <see cref="baseRun"/>, so no match is ever lost to the display limit.</summary>
     private readonly List<string> collected = [];
     private readonly HashSet<string> collectedSet = [];
+    private readonly Dictionary<string, SeedResult> collectedRecipes = [];
     private bool restoring = true;
     /// <summary>
     /// Anchor for result navigation: the seed of the most recent scout
@@ -64,6 +65,13 @@ public sealed partial class MainWindow : Window
     private string? renderedSeed;
     /// <summary>Only the latest scout request may publish its manifest.</summary>
     private int scoutGeneration;
+    private QuerySettings? renderedScoutQuery;
+    private ScrollViewer? scoutScroll;
+    private TrinketDeckView? scoutTrinkets;
+    private (int Depth, double Offset)? scoutAnchor;
+    private readonly TranslateTransform trinketDockTransform = new();
+    private bool scoutLoading;
+
     private bool searchRunning;
     /// <summary>
     /// The query that produced the current results, snapshotted at search
@@ -119,6 +127,17 @@ public sealed partial class MainWindow : Window
         // Decode the item atlases up front so the first sprite render is warm.
         _ = ItemAtlas.GetAsync();
         ResultsList.ItemsSource = results; ScoutButton.IsEnabled = false;
+        TrinketDock.RenderTransform = trinketDockTransform;
+        ScoutList.Loaded += (_, _) =>
+        {
+            scoutScroll = Descendants<ScrollViewer>(ScoutList).FirstOrDefault();
+            if (scoutScroll is not null) scoutScroll.ViewChanged += (_, _) => UpdateTrinketDock();
+        };
+        ScoutList.LayoutUpdated += (_, _) =>
+        {
+            RestoreScoutAnchor();
+            UpdateTrinketDock();
+        };
         results.CollectionChanged += (_, _) => UpdateResultNav();
         // J/K step the scout pane through the search results from anywhere in
         // the window except a focused text field.
@@ -142,7 +161,7 @@ public sealed partial class MainWindow : Window
 
     private sealed class UpdateState { public string? SkippedVersion { get; set; } public DateTimeOffset LastChecked { get; set; } }
 
-    private sealed record BaseRun(QuerySettings Query, IReadOnlyList<string> Seeds, long ResumeFrom, long Remaining);
+    private sealed record BaseRun(QuerySettings Query, IReadOnlyList<string> Seeds, long ResumeFrom, long Remaining, IReadOnlyDictionary<string, SeedResult> Recipes);
 
     private async Task CheckForUpdatesAsync()
     {
@@ -194,6 +213,7 @@ public sealed partial class MainWindow : Window
         query.MaximumDepth = FloorLimits.Normalize(query.MaximumDepth);
         foreach (var requirement in query.Requirements)
             if (requirement.MaximumDepth is int depth) requirement.MaximumDepth = FloorLimits.Normalize(depth);
+        AutoTrinketToggle.IsOn = query.AutoApplyTrinket;
         FloorSlider.Value = FloorLimits.IndexOf(query.MaximumDepth); RequireBlacksmith.IsOn = query.RequireBlacksmith; ExcludeRewards.IsOn = query.ExcludeBlacksmithRewards;
         WandmakerQuestPicker.ItemsSource = WandmakerQuests.All.Select(WandmakerQuests.Label).ToList();
         WandmakerQuestPicker.SelectedIndex = Array.IndexOf(WandmakerQuests.All, query.WandmakerQuest);
@@ -251,6 +271,7 @@ public sealed partial class MainWindow : Window
         query.MaximumDepth = FloorLimits.Normalize(query.MaximumDepth);
         foreach (var requirement in query.Requirements)
             if (requirement.MaximumDepth is int depth) requirement.MaximumDepth = FloorLimits.Normalize(depth);
+        AutoTrinketToggle.IsOn = query.AutoApplyTrinket;
         FloorSlider.Value = FloorLimits.IndexOf(query.MaximumDepth); RequireBlacksmith.IsOn = query.RequireBlacksmith;
         ExcludeRewards.IsOn = query.ExcludeBlacksmithRewards;
         WandmakerQuestPicker.SelectedIndex = Array.IndexOf(WandmakerQuests.All, query.WandmakerQuest);
@@ -303,7 +324,7 @@ public sealed partial class MainWindow : Window
             Grid.SetColumnSpan(cells[i], paired ? 1 : 2);
         }
     }
-    private void SettingChanged(object sender, RoutedEventArgs e) { if (restoring) return; query.RequireBlacksmith = RequireBlacksmith.IsOn; query.ExcludeBlacksmithRewards = ExcludeRewards.IsOn; SaveSettings(); }
+    private void SettingChanged(object sender, RoutedEventArgs e) { if (restoring) return; query.AutoApplyTrinket = AutoTrinketToggle.IsOn; query.RequireBlacksmith = RequireBlacksmith.IsOn; query.ExcludeBlacksmithRewards = ExcludeRewards.IsOn; SaveSettings(); }
     private void WandmakerQuestChanged(object sender, SelectionChangedEventArgs e)
     {
         if (restoring) return;
@@ -1432,7 +1453,7 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private async Task StartScan(bool detached)
     {
-        busy = true; collected.Clear(); collectedSet.Clear(); results.Clear(); SearchStatus.Text = "Starting search…";
+        busy = true; collected.Clear(); collectedSet.Clear(); collectedRecipes.Clear(); results.Clear(); SearchStatus.Text = "Starting search…";
         var notice = detached ? UnrelatedNotice : null;
         SetStatusBar(notice); SetStartButton(running: true);
         try
@@ -1465,8 +1486,8 @@ public sealed partial class MainWindow : Window
         {
             // Filter before touching the displayed results, so a failure here
             // leaves the previous run's display fully intact.
-            var kept = await Task.Run(() => engine.FilterSeeds(snapshot, anchor.Seeds));
-            results.Clear(); collected.Clear(); collectedSet.Clear();
+            var kept = await Task.Run(() => engine.FilterRecipes(snapshot, anchor.Query, anchor.Seeds.Select(seed => anchor.Recipes?.GetValueOrDefault(seed) ?? new SeedResult(seed, 0)).ToArray()));
+            results.Clear(); collected.Clear(); collectedSet.Clear(); collectedRecipes.Clear();
             Collect(kept);
             // From here on the listed results match the refined query, so
             // that is what an export must claim. A failure above leaves the
@@ -1491,7 +1512,7 @@ public sealed partial class MainWindow : Window
             }
             // A filter-only run (or a refine with nothing left to scan) scans
             // nothing: the Target Set and its coverage stay exactly as they were.
-            else { SearchStatus.Text = "Completed"; SetStatusBar(results.Count >= ResultCap ? WithCapNotice(summary) : summary); baseRun = new(snapshot, [.. collected], anchor.ResumeFrom, 0); }
+            else { SearchStatus.Text = "Completed"; SetStatusBar(results.Count >= ResultCap ? WithCapNotice(summary) : summary); baseRun = new(snapshot, [.. collected], anchor.ResumeFrom, 0, new Dictionary<string, SeedResult>(collectedRecipes)); }
         }
         // The Target stays valid on failure: nothing of its coverage was
         // consumed, so the refine can simply be retried.
@@ -1515,8 +1536,8 @@ public sealed partial class MainWindow : Window
         {
             // Filter before touching the displayed results, so a failure here
             // leaves the previous run (and its refinable base) fully intact.
-            var kept = await Task.Run(() => engine.FilterSeeds(snapshot, previous.Seeds));
-            results.Clear(); collected.Clear(); collectedSet.Clear();
+            var kept = await Task.Run(() => engine.FilterRecipes(snapshot, previous.Query, previous.Seeds.Select(seed => previous.Recipes.GetValueOrDefault(seed) ?? new SeedResult(seed, 0)).ToArray()));
+            results.Clear(); collected.Clear(); collectedSet.Clear(); collectedRecipes.Clear();
             Collect(kept);
             // From here on the listed results match the refined query, so
             // that is what an export must claim. A failure above leaves the
@@ -1533,7 +1554,7 @@ public sealed partial class MainWindow : Window
                 StartButton.IsEnabled = true;
                 await RunSearch(search, summary); await CaptureBaseRun(snapshot, search, RunKind.Detached);
             }
-            else { SearchStatus.Text = "Completed"; SetStatusBar(results.Count >= ResultCap ? WithCapNotice(summary) : summary); baseRun = new(snapshot, [.. collected], previous.ResumeFrom, 0); }
+            else { SearchStatus.Text = "Completed"; SetStatusBar(results.Count >= ResultCap ? WithCapNotice(summary) : summary); baseRun = new(snapshot, [.. collected], previous.ResumeFrom, 0, new Dictionary<string, SeedResult>(collectedRecipes)); }
         }
         // The previous base run stays valid on failure: nothing of its
         // coverage was consumed, so the refine can simply be retried.
@@ -1544,13 +1565,14 @@ public sealed partial class MainWindow : Window
     /// Records every unique delivered seed; the visible list is capped while
     /// the full set stays available as a later refine's filter input.
     /// </summary>
-    private void Collect(IEnumerable<string> seeds)
+    private void Collect(IEnumerable<SeedResult> recipes)
     {
-        foreach (var seed in seeds)
+        foreach (var recipe in recipes)
         {
-            if (!collectedSet.Add(seed)) continue;
-            collected.Add(seed);
-            if (results.Count < ResultCap) results.Add(new(seed, results.Count + 1));
+            if (!collectedSet.Add(recipe.Seed)) continue;
+            collected.Add(recipe.Seed);
+            collectedRecipes[recipe.Seed] = recipe;
+            if (results.Count < ResultCap) results.Add(recipe with { Number = results.Count + 1 });
         }
     }
     /// <summary>How the run being settled relates to the Target, for <see cref="CaptureBaseRun"/>.</summary>
@@ -1574,18 +1596,19 @@ public sealed partial class MainWindow : Window
         var status = await Task.Run(active.Status);
         if (status.State == SearchState.Failed) { baseRun = null; lastRunDetached = false; return; }
         var (resumeFrom, remaining) = await Task.Run(active.ResumeHint);
-        baseRun = new(ranQuery, [.. collected], resumeFrom, remaining);
+        baseRun = new(ranQuery, [.. collected], resumeFrom, remaining, new Dictionary<string, SeedResult>(collectedRecipes));
         lastRunDetached = kind == RunKind.Detached;
         if (kind == RunKind.Anchor)
-            target = new(ranQuery, [.. collected], resumeFrom, remaining);
+            target = new(ranQuery, [.. collected], resumeFrom, remaining, new Dictionary<string, SeedResult>(collectedRecipes));
         else if (kind == RunKind.TargetRefine && target is TargetRun anchor)
         {
             // The refined run's survivors were already members; only new finds
             // from the resumed scan grow the set, which is never capped. The
             // Target Query stays fixed — the finds match it by construction.
             var seeds = new List<string>(anchor.Seeds); var seen = new HashSet<string>(anchor.Seeds);
-            foreach (var seed in collected) if (seen.Add(seed)) seeds.Add(seed);
-            target = new(anchor.Query, seeds, resumeFrom, remaining);
+            var recipes = new Dictionary<string, SeedResult>(anchor.Recipes ?? new Dictionary<string, SeedResult>());
+            foreach (var seed in collected) if (seen.Add(seed)) { seeds.Add(seed); recipes[seed] = collectedRecipes[seed]; }
+            target = new(anchor.Query, seeds, resumeFrom, remaining, recipes);
         }
     }
     /// <summary>
@@ -1633,7 +1656,7 @@ public sealed partial class MainWindow : Window
     private void ClearResults_Click(object sender, RoutedEventArgs e)
     {
         if (busy || search is not null) return;
-        results.Clear(); collected.Clear(); collectedSet.Clear();
+        results.Clear(); collected.Clear(); collectedSet.Clear(); collectedRecipes.Clear();
         baseRun = null; target = null; lastRunDetached = false; searchedQuery = null;
         SearchStatus.Text = "Add requirements, then press Start Search."; SetStatusBar(null);
         UpdateTransferButtons();
@@ -1648,6 +1671,7 @@ public sealed partial class MainWindow : Window
         if (busy || search is not null || searchedQuery is null || results.Count == 0) return;
         var exportQuery = searchedQuery.Clone();
         var seeds = results.Select(x => x.Seed).ToList();
+        var trinkets = results.Select(x => x.SelectedTrinket).ToList();
         var picker = new Windows.Storage.Pickers.FileSavePicker
         {
             SuggestedStartLocation = Windows.Storage.Pickers.PickerLocationId.DocumentsLibrary,
@@ -1662,7 +1686,7 @@ public sealed partial class MainWindow : Window
         {
             var version = typeof(MainWindow).Assembly.GetName().Version;
             var appVersion = version is null ? "dev" : $"{version.Major}.{version.Minor}.{version.Build}";
-            var contents = ResultsExport.Encode(exportQuery, seeds, appVersion);
+            var contents = ResultsExport.Encode(exportQuery, seeds, appVersion, trinkets);
             await FileIO.WriteTextAsync(file, contents);
         }
         catch (Exception ex)
@@ -1707,12 +1731,12 @@ public sealed partial class MainWindow : Window
             // search's record — and the seeds collected as its filter input —
             // no longer describe the listed seeds.
             baseRun = null; lastRunDetached = false;
-            results.Clear(); collected.Clear(); collectedSet.Clear(); SetStatusBar(null);
+            results.Clear(); collected.Clear(); collectedSet.Clear(); collectedRecipes.Clear(); SetStatusBar(null);
             // The engine already deduplicated and capped the imported seeds.
-            foreach (var seed in imported.Seeds) results.Add(new(seed, results.Count + 1));
+            Collect(imported.Seeds.Select((seed, index) => new SeedResult(seed, index + 1, imported.Trinkets?.ElementAtOrDefault(index))));
             // The imported query and seeds become the session's Target, with
             // no coverage: refines of an import are filter-only.
-            target = new(snapshot, results.Select(x => x.Seed).ToList(), 0, 0);
+            target = new(snapshot, results.Select(x => x.Seed).ToList(), 0, 0, new Dictionary<string, SeedResult>(collectedRecipes));
             var dropped = imported.Dropped;
             var status = $"Imported {results.Count} seed{(results.Count == 1 ? "" : "s")} from file.";
             if (dropped > 0)
@@ -1793,7 +1817,7 @@ public sealed partial class MainWindow : Window
         var timer = Stopwatch.StartNew(); long lastScanned = 0; var lastTime = 0d;
         while (true)
         {
-            await Task.Delay(150); var batch = await Task.Run(() => active.Poll(128)); Collect(batch);
+            await Task.Delay(150); var batch = await Task.Run(() => active.PollRecipes(128)); Collect(batch);
             var status = await Task.Run(active.Status); var seconds = timer.Elapsed.TotalSeconds; var rate = seconds > lastTime ? (status.Scanned - lastScanned) / (seconds - lastTime) : 0; lastScanned = status.Scanned; lastTime = seconds;
             var probability = status.ProbabilityDescription; var tts = status.ProbabilityUnavailable ? "unavailable" : status.Probability > 0 && rate > 0 ? FormatDuration(1 / status.Probability / rate) : "calculating";
             // A concluded run keeps its counter, except where nothing was
@@ -1834,7 +1858,15 @@ public sealed partial class MainWindow : Window
     }
     private void UpdateResultNav()
     {
-        if (ResultNavigation.IndexOf(ResultSeeds(), scoutedSeed) is not int index) { ResultNav.Visibility = Visibility.Collapsed; return; }
+        if (ResultNavigation.IndexOf(ResultSeeds(), scoutedSeed) is not int index)
+        {
+            ResultNav.Visibility = scoutTrinkets is null ? Visibility.Collapsed : Visibility.Visible;
+            PrevResultButton.Visibility = NextResultButton.Visibility = Visibility.Collapsed;
+            ResultPosition.Text = "Trinkets"; ResultNavGuide.Text = "";
+            return;
+        }
+        PrevResultButton.Visibility = NextResultButton.Visibility = Visibility.Visible;
+        ResultNavGuide.Text = "J / K";
         ResultNav.Visibility = Visibility.Visible;
         ResultPosition.Text = $"Result {index + 1} of {results.Count}";
         PrevResultButton.IsEnabled = index > 0;
@@ -1859,20 +1891,25 @@ public sealed partial class MainWindow : Window
     private async Task ScoutSeed(string seed, string? trinket = null)
     {
         var generation = ++scoutGeneration;
+        scoutAnchor = trinket is not null && seed == renderedSeed ? CaptureScoutAnchor() : null;
+        scoutLoading = true; SetTrinketDockEnabled(false);
         scoutedSeed = seed; UpdateResultNav();
         ScoutButton.IsEnabled = false; ScoutList.IsEnabled = false; ScoutStatus.Text = "Scouting…";
         try
         {
             // One snapshot names the generated world and its matched item indices.
-            var marked = query.Clone();
-            var world = await Task.Run(() => engine.Scout(seed, marked.Challenges, marked, trinket));
+            var saved = results.FirstOrDefault(result => result.Seed == seed);
+            var marked = (trinket is not null && seed == renderedSeed ? renderedScoutQuery
+                : saved is not null ? searchedQuery : query)?.Clone() ?? query.Clone();
+            var chosen = trinket ?? (saved is not null ? saved.SelectedTrinket ?? "none" : null);
+            var world = await Task.Run(() => engine.Scout(seed, marked.Challenges, marked, chosen));
             if (generation != scoutGeneration) return;
-            var matches = await Task.Run(() => NativeEngine.ScoutMatches(seed, marked.Challenges, marked, trinket));
+            var matches = await Task.Run(() => NativeEngine.ScoutMatches(seed, marked.Challenges, marked, chosen));
             if (generation != scoutGeneration) return;
             var groups = world.Items.Select((item, index) => (Item: item, Index: index))
                 .GroupBy(x => x.Item.Depth).OrderBy(g => g.Key).Select(g =>
             {
-                var group = new ScoutGroup { Floor = $"Floor {g.Key}", Region = Region(g.Key), Quest = QuestLabel(world.Quests, g.Key), Feeling = world.FloorFeelings?.FirstOrDefault(f => f.Depth == g.Key)?.Feeling ?? FloorFeeling.None };
+                var group = new ScoutGroup { Depth = g.Key, Floor = $"Floor {g.Key}", Region = Region(g.Key), Quest = QuestLabel(world.Quests, g.Key), Feeling = world.FloorFeelings?.FirstOrDefault(f => f.Depth == g.Key)?.Feeling ?? FloorFeeling.None };
                 var trinkets = g.Where(entry => entry.Item.Item.Kind == ItemKind.Trinket).ToList();
                 foreach (var entry in g)
                 {
@@ -1885,7 +1922,11 @@ public sealed partial class MainWindow : Window
                 }
                 return group;
             }).ToList();
+            scoutTrinkets = groups.SelectMany(group => group).Select(row => row.TrinketDeck).OfType<TrinketDeckView>().FirstOrDefault();
             ScoutList.ItemsSource = new CollectionViewSource { IsSourceGrouped = true, Source = groups }.View;
+            BuildTrinketDock(world);
+            renderedScoutQuery = marked;
+            UpdateResultNav();
             QuestStrip.Children.Clear();
             foreach (var quest in world.Quests) QuestStrip.Children.Add(QuestChip(quest));
             QuestStrip.Visibility = world.Quests.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
@@ -1899,10 +1940,103 @@ public sealed partial class MainWindow : Window
             if (generation != scoutGeneration) return;
             ScoutStatus.Text = ex.Message;
             // Keep the indicator describing the manifest that is still shown.
-            scoutedSeed = renderedSeed; UpdateResultNav();
+            scoutAnchor = null; scoutedSeed = renderedSeed; UpdateResultNav();
         }
-        finally { if (generation == scoutGeneration) { ScoutButton.IsEnabled = SeedCode.IsCanonical(SeedInput.Text); ScoutList.IsEnabled = true; } }
+        finally { if (generation == scoutGeneration) { ScoutButton.IsEnabled = SeedCode.IsCanonical(SeedInput.Text); ScoutList.IsEnabled = true; scoutLoading = false; SetTrinketDockEnabled(true); } }
     }
+    private static IEnumerable<T> Descendants<T>(DependencyObject root) where T : DependencyObject
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is T match) yield return match;
+            foreach (var descendant in Descendants<T>(child)) yield return descendant;
+        }
+    }
+
+    private List<(int Depth, double Top, double Bottom)> ScoutFloorPositions()
+    {
+        if (scoutScroll is null) return [];
+        return Descendants<ListViewItem>(ScoutList)
+            .Where(row => row.Content is ScoutRow && row.ActualHeight > 0)
+            .Select(row => (Depth: ((ScoutRow)row.Content).Depth,
+                Top: row.TransformToVisual(scoutScroll).TransformPoint(new Point()).Y,
+                Height: row.ActualHeight))
+            .GroupBy(row => row.Depth).OrderBy(group => group.Key)
+            .Select(group => (group.Key, group.Min(row => row.Top), group.Max(row => row.Top + row.Height))).ToList();
+    }
+
+    private (int Depth, double Offset)? CaptureScoutAnchor()
+    {
+        foreach (var floor in ScoutFloorPositions())
+            if (floor.Bottom > 0) return (floor.Depth, floor.Top);
+        return null;
+    }
+
+    private void RestoreScoutAnchor()
+    {
+        if (scoutLoading || scoutScroll is null || scoutAnchor is not { } anchor) return;
+        foreach (var floor in ScoutFloorPositions())
+        {
+            if (floor.Depth != anchor.Depth) continue;
+            scoutAnchor = null;
+            scoutScroll.ChangeView(null, Math.Max(0, scoutScroll.VerticalOffset + floor.Top - anchor.Offset), null, true);
+            break;
+        }
+    }
+
+    private void SetTrinketDockEnabled(bool enabled)
+    {
+        foreach (var button in TrinketDock.Children.OfType<Microsoft.UI.Xaml.Controls.Primitives.ToggleButton>())
+            button.IsEnabled = enabled;
+        UpdateTrinketDock();
+    }
+
+    private void BuildTrinketDock(ScoutWorld world)
+    {
+        TrinketDock.Children.Clear();
+        foreach (var item in (world.TrinketOrder ?? []).Take(4))
+        {
+            var applied = world.SelectedTrinket == item.Id;
+            var button = new Microsoft.UI.Xaml.Controls.Primitives.ToggleButton
+            {
+                Width = 32, Height = 32, Padding = new Thickness(4), CornerRadius = new CornerRadius(6),
+                IsChecked = applied, BorderThickness = new Thickness(applied ? 2 : 1),
+                BorderBrush = ThemeBrush(applied ? "SystemFillColorSuccessBrush" : "SystemFillColorSuccessBackgroundBrush", Microsoft.UI.Colors.ForestGreen),
+                Background = ThemeBrush(applied ? "SystemFillColorSuccessBackgroundBrush" : "CardBackgroundFillColorDefaultBrush", Microsoft.UI.Colors.Transparent),
+                Content = new SpriteView { SpriteIndex = item.SpriteIndex, SpriteSize = 20 },
+                IsTabStop = false,
+            };
+            TrinketDeckView.StyleSelection(button);
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(button, item.Name);
+            ToolTipService.SetToolTip(button, item.Name);
+            button.Click += (_, _) =>
+            {
+                button.IsChecked = applied;
+                if (!scoutLoading) _ = ScoutSeed(world.Seed, applied ? "none" : item.Id);
+            };
+            TrinketDock.Children.Add(button);
+        }
+        UpdateTrinketDock();
+    }
+
+    private void UpdateTrinketDock()
+    {
+        var progress = 0d;
+        if (scoutScroll is not null && scoutTrinkets?.Choices is { ActualHeight: > 0 } choices
+            && choices.XamlRoot is not null)
+        {
+            var top = choices.TransformToVisual(scoutScroll).TransformPoint(new Point()).Y;
+            progress = Math.Clamp(-top / choices.ActualHeight, 0, 1);
+        }
+        ResultNavGuide.Opacity = 0.6 * (1 - progress);
+        TrinketDock.Opacity = progress;
+        trinketDockTransform.Y = (1 - progress) * 32;
+        TrinketDock.IsHitTestVisible = progress > 0 && !scoutLoading;
+        foreach (var button in TrinketDock.Children.OfType<Microsoft.UI.Xaml.Controls.Primitives.ToggleButton>())
+            button.IsTabStop = progress > 0 && !scoutLoading;
+    }
+
     private static string Region(int depth) => depth switch { <= 5 => "Sewers", <= 10 => "Prison", <= 15 => "Caves", <= 20 => "Dwarven City", _ => "Demon Halls" };
     /// <summary>The variant label of the quest hosted on <paramref name="depth"/>, or "" for quest-less floors.</summary>
     private static string QuestLabel(IReadOnlyList<ScoutQuest> quests, int depth) =>
@@ -1932,6 +2066,7 @@ public sealed partial class MainWindow : Window
 
 public sealed class ScoutGroup : List<ScoutRow>
 {
+    public int Depth { get; init; }
     public string Floor { get; init; } = "";
     public FloorFeeling Feeling { get; init; }
     public string Region { get; init; } = "";
@@ -1941,10 +2076,11 @@ public sealed class ScoutGroup : List<ScoutRow>
 
 public sealed class ScoutRow
 {
+    public int Depth { get; init; }
     public UIElement? TrinketDeck { get; init; }
     public static ScoutRow Catalyst(ScoutItem catalyst, IReadOnlyList<CatalogItem> order, IReadOnlySet<string> matches, string? selectedTrinket, Action<string> onSelect) => new()
     {
-        ItemName = "Magical Catalyst", SpriteIndex = 70, Source = Labels.Source(catalyst.Source),
+        Depth = catalyst.Depth, ItemName = "Magical Catalyst", SpriteIndex = 70, Source = Labels.Source(catalyst.Source),
         SecretVisibility = catalyst.Secret ? Visibility.Visible : Visibility.Collapsed,
         Accessibility = catalyst.AccessibilityTag switch { 1 => $"One reward of choice group {catalyst.AccessibilityGroup}", 2 => $"Only in some outcomes of scenario group {catalyst.AccessibilityGroup}", _ => "" },
         AccessibilityVisibility = catalyst.AccessibilityTag == 0 ? Visibility.Collapsed : Visibility.Visible,
@@ -1984,6 +2120,7 @@ public sealed class ScoutRow
         var glow = ItemGlow.ForItem(x);
         return new()
         {
+            Depth = x.Depth,
             ItemName = x.Item.Name,
             Upgrade = $"+{x.DisplayedUpgrade}", UpgradeVisibility = x.DisplayedUpgrade > 0 ? Visibility.Visible : Visibility.Collapsed,
             CurseVisibility = x.Cursed ? Visibility.Visible : Visibility.Collapsed,

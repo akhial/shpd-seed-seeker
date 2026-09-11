@@ -420,6 +420,10 @@ fn glow_value(frame_time: i64, period: f64) -> f64 {
 /// belongs to a scouted seed, so its rings wear that run's gems.
 #[must_use]
 pub fn item_image(sprite: ItemSprite, glow: Option<Glow>) -> gtk::Widget {
+    item_image_sized(sprite, glow, SIZE)
+}
+
+pub fn item_image_sized(sprite: ItemSprite, glow: Option<Glow>, size: i32) -> gtk::Widget {
     let definition = sprite.definition;
     let Some(atlas) = atlas() else {
         let image =
@@ -429,8 +433,8 @@ pub fn item_image(sprite: ItemSprite, glow: Option<Glow>) -> gtk::Widget {
     };
 
     let area = gtk::DrawingArea::builder()
-        .content_width(SIZE)
-        .content_height(SIZE)
+        .content_width(size)
+        .content_height(size)
         .valign(gtk::Align::Center)
         .halign(gtk::Align::Center)
         .accessible_role(gtk::AccessibleRole::Img)
@@ -438,7 +442,7 @@ pub fn item_image(sprite: ItemSprite, glow: Option<Glow>) -> gtk::Widget {
     area.update_property(&[gtk::accessible::Property::Label(definition.name)]);
 
     area.set_draw_func(move |area, context, width, height| {
-        draw(&atlas, area, context, width, height, sprite, glow, SIZE);
+        draw(&atlas, area, context, width, height, sprite, glow, size);
     });
     if let Some(glow) = glow {
         animate(&area, glow.period);

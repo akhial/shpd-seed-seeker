@@ -11,6 +11,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import dev.seedseeker.app.model.FloorFeeling
 import kotlin.math.roundToInt
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -31,6 +33,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -58,6 +61,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -67,6 +71,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalClipboard
@@ -120,6 +130,22 @@ fun ScoutScreen(
     onAbout: () -> Unit,
     bottomBar: @Composable () -> Unit,
 ) {
+    val listState = rememberLazyListState()
+    val floors = remember(result) { result?.items?.withIndex()?.groupBy { it.value.depth }?.toSortedMap().orEmpty() }
+    val offerFloorIndex = floors.values.indexOfFirst { rows -> rows.any { it.value.item.kind == ItemKind.TRINKET } }
+    val offerBodyIndex = if (offerFloorIndex >= 0) 2 + 2 * offerFloorIndex else -1
+    var offerTop by remember { mutableStateOf(0f) }
+    var offerHeight by remember { mutableStateOf(0f) }
+    var floorHeaderHeight by remember { mutableStateOf(0) }
+    val reveal by remember(offerBodyIndex, offerTop, offerHeight, floorHeaderHeight) { derivedStateOf {
+        val row = listState.layoutInfo.visibleItemsInfo.find { it.index == offerBodyIndex }
+        when {
+            offerBodyIndex < 0 || offerHeight <= 0 -> 0f
+            row != null -> ((floorHeaderHeight - row.offset - offerTop) / offerHeight).coerceIn(0f, 1f)
+            listState.firstVisibleItemIndex > offerBodyIndex -> 1f
+            else -> 0f
+        }
+    } }
     val seedIsReady = SeedCode.isCanonical(seedInput)
     // Position within the search results, when the scouted seed came from one.
     val resultIndex = ScoutResultNavigation.position(resultSeeds, scoutedSeed)
@@ -171,35 +197,18 @@ fun ScoutScreen(
                 },
             contentAlignment = Alignment.TopCenter,
         ) {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .fillMaxWidth()
-                    .widthIn(max = 680.dp),
-                contentPadding = PaddingValues(start = 16.dp, top = 4.dp, end = 16.dp, bottom = 24.dp),
-            ) {
-                item {
-                    SeedInputCard(
-                        seedInput = seedInput,
-                        seedIsReady = seedIsReady,
-                        isScouting = isScouting,
-                        error = error,
-                        onSeedChange = onSeedChange,
-                        onScout = onScout,
+            Column(Modifier.fillMaxHeight().fillMaxWidth().widthIn(max = 680.dp).padding(horizontal = 16.dp)) {
+                SeedInputCard(seedInput, seedIsReady, isScouting, error, onSeedChange, onScout)
+                if (resultIndex != null || result?.trinketOrder?.isNotEmpty() == true) {
+                    ResultNavigationBar(
+                        index = resultIndex, total = resultSeeds.size, onStep = stepToResult,
+                        offers = result?.trinketOrder?.take(4).orEmpty(), selectedTrinket = result?.selectedTrinket,
+                        reveal = reveal, enabled = !isScouting, onSelect = onSelectTrinket,
+                        modifier = Modifier.padding(top = 6.dp),
                     )
                 }
-
-                if (resultIndex != null) {
-                    item {
-                        ResultNavigationBar(
-                            index = resultIndex,
-                            total = resultSeeds.size,
-                            onStep = stepToResult,
-                            modifier = Modifier.padding(top = 6.dp),
-                        )
-                    }
-                }
-
+                LazyColumn(state = listState, modifier = Modifier.weight(1f).fillMaxWidth(),
+                    contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp)) {
                 if (result == null && !isScouting) {
                     item {
                         Card(
@@ -245,34 +254,29 @@ fun ScoutScreen(
                     }
 
                     val questsByDepth = world.quests.associateBy(ScoutQuest::depth)
-                    world.items.withIndex()
-                        .groupBy { it.value.depth }
-                        .toSortedMap()
+                    floors
                         .forEach { (depth, floorItems) ->
-                            item(key = "floor-$depth") {
+                            stickyHeader(key = "floor-$depth") {
                                 FloorHeading(
                                     depth = depth,
                                     feeling = world.floorFeelings[depth],
                                     itemCount = floorItems.size,
                                     questLabel = questsByDepth[depth]?.variant?.label,
-                                    modifier = Modifier.padding(top = 20.dp, bottom = 10.dp),
+                                    modifier = Modifier.background(MaterialTheme.colorScheme.background).onSizeChanged { floorHeaderHeight = it.height }.padding(top = 12.dp, bottom = 10.dp),
                                 )
                             }
-                            val trinkets = floorItems.filter { it.value.item.kind == ItemKind.TRINKET }
-                            if (trinkets.isNotEmpty()) {
-                                item(key = "catalyst-$depth") {
-                                    TrinketCatalystCard(trinkets, world.trinketOrder, matches, world.selectedTrinket, !isScouting, onSelectTrinket)
-                                }
-                            }
-                            floorItems.filter { it.value.item.kind != ItemKind.TRINKET }.forEach { indexedItem ->
-                                val scoutItem = indexedItem.value
-                                item(key = "scout-$depth-${indexedItem.index}-${scoutItem.item.id}") {
-                                    ScoutItemCard(
-                                        scoutItem = scoutItem,
-                                        ringGems = world.ringGems,
-                                        matches = matches?.items?.contains(indexedItem.index) == true,
-                                        modifier = Modifier.padding(bottom = 8.dp),
-                                    )
+                            item(key = "floor-body-$depth") {
+                                Column {
+                                    val trinkets = floorItems.filter { it.value.item.kind == ItemKind.TRINKET }
+                                    if (trinkets.isNotEmpty()) {
+                                        TrinketCatalystCard(trinkets, world.trinketOrder, matches, world.selectedTrinket, !isScouting, onSelectTrinket,
+                                            onOffersLayout = { top, height -> offerTop = top; offerHeight = height })
+                                    }
+                                    floorItems.filter { it.value.item.kind != ItemKind.TRINKET }.forEach { indexedItem ->
+                                        ScoutItemCard(scoutItem = indexedItem.value, ringGems = world.ringGems,
+                                            matches = matches?.items?.contains(indexedItem.index) == true,
+                                            modifier = Modifier.padding(bottom = 8.dp))
+                                    }
                                 }
                             }
                         }
@@ -280,6 +284,8 @@ fun ScoutScreen(
             }
         }
     }
+}
+
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -370,32 +376,35 @@ private fun SeedInputCard(
  */
 @Composable
 private fun ResultNavigationBar(
-    index: Int,
-    total: Int,
-    onStep: (Int) -> Unit,
-    modifier: Modifier = Modifier,
+    index: Int?, total: Int, onStep: (Int) -> Unit,
+    offers: List<CatalogItem>, selectedTrinket: String?, reveal: Float,
+    enabled: Boolean, onSelect: (String) -> Unit, modifier: Modifier = Modifier,
 ) {
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center,
-    ) {
-        IconButton(onClick = { onStep(-1) }, enabled = index > 0) {
-            Icon(
-                Icons.AutoMirrored.Filled.KeyboardArrowLeft,
-                contentDescription = "Previous result",
-            )
-        }
-        Text(
-            "Result ${index + 1} of $total · swipe to browse",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        IconButton(onClick = { onStep(1) }, enabled = index < total - 1) {
-            Icon(
-                Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = "Next result",
-            )
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        if (index != null) {
+            IconButton(onClick = { onStep(-1) }, enabled = index > 0, modifier = Modifier.size(36.dp)) {
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Previous result")
+            }
+            Text("${index + 1} of $total", style = MaterialTheme.typography.labelMedium)
+            IconButton(onClick = { onStep(1) }, enabled = index < total - 1, modifier = Modifier.size(36.dp)) {
+                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Next result")
+            }
+        } else Text("Trinkets", style = MaterialTheme.typography.labelMedium)
+        Box(Modifier.weight(1f).height(44.dp).clipToBounds(), contentAlignment = Alignment.CenterEnd) {
+            if (index != null) Text("swipe to browse", modifier = Modifier.graphicsLayer { alpha = 1f - reveal },
+                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (reveal > 0) Row(Modifier.graphicsLayer { alpha = reveal; translationY = (1f - reveal) * size.height },
+                horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                offers.forEach { offer ->
+                    val applied = selectedTrinket == offer.id
+                    Surface(selected = applied, onClick = { onSelect(if (applied) "none" else offer.id) }, enabled = enabled,
+                        modifier = Modifier.size(36.dp).semantics { contentDescription = offer.name },
+                        shape = MaterialTheme.shapes.small, border = BorderStroke(if (applied) 2.dp else 1.dp, SpdGreen.copy(alpha = if (applied) 1f else 0.35f)),
+                        color = if (applied) SpdGreen.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceContainerLow) {
+                        Box(contentAlignment = Alignment.Center) { ItemSprite(offer, modifier = Modifier.size(22.dp)) }
+                    }
+                }
+            }
         }
     }
 }
@@ -702,7 +711,7 @@ private fun ScoutItemCard(
 
 
 /** The catalyst keeps its placement; its deck retains the engine's order. */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 private fun TrinketCatalystCard(
     choices: List<IndexedValue<ScoutItem>>,
@@ -711,12 +720,14 @@ private fun TrinketCatalystCard(
     selectedTrinket: String?,
     enabled: Boolean,
     onSelect: (String) -> Unit,
+    onOffersLayout: (Float, Float) -> Unit = { _, _ -> },
 ) {
+    var cardCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     val catalyst = CatalogItem("trinket_catalyst", "Magical catalyst", ItemKind.TRINKET, 70)
     val placement = choices.first().value
     val ordered = deck.take(4).ifEmpty { choices.map { it.value.item } }
     Card(
-        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp).onGloballyPositioned { cardCoordinates = it },
         shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
     ) {
@@ -736,7 +747,9 @@ private fun TrinketCatalystCard(
                     }
                 }
             }
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(Modifier.onGloballyPositioned { row ->
+                cardCoordinates?.takeIf { it.isAttached }?.let { card -> onOffersLayout(row.positionInWindow().y - card.positionInWindow().y, row.size.height.toFloat()) }
+            }, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 ordered.forEach { trinket ->
                     val applied = selectedTrinket == trinket.id
                     val matched = choices.any { it.value.item.id == trinket.id && matches?.items?.contains(it.index) == true }

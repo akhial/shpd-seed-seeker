@@ -10,6 +10,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 
 pub mod json;
 
+use shpd_seedfinder_core::auto_trinkets::{self, SeedRecipe, TrinketSearchMatch};
 use shpd_seedfinder_core::catalog::ItemId;
 use shpd_seedfinder_core::challenges::Challenges;
 use shpd_seedfinder_core::feasibility::QueryPlan;
@@ -26,8 +27,8 @@ use shpd_seedfinder_core::search::{
 };
 use shpd_seedfinder_core::seed::{DungeonSeed, TOTAL_SEEDS};
 use shpd_seedfinder_core::wire::{
-    WireError, decode_query, decode_scout_request, decode_selected_scout_request, encode_results,
-    encode_scout_world, encode_scout_world_with_selection,
+    WireError, decode_query, decode_scout_request, decode_selected_scout_request,
+    encode_recipe_results, encode_results, encode_scout_world, encode_scout_world_with_selection,
 };
 
 pub const STATE_RUNNING: i64 = 0;
@@ -162,9 +163,12 @@ pub fn production_scout_world_selected(
     query: Option<&SearchQuery>,
     trinket_override: Option<Option<ItemId>>,
 ) -> Result<(GeneratedWorld, Option<ItemId>), ScoutCallError> {
-    use shpd_seedfinder_core::trinkets::{selected_for_query, trinket_order};
-    let selected =
-        trinket_override.unwrap_or_else(|| query.and_then(|q| selected_for_query(seed, q)));
+    use shpd_seedfinder_core::trinkets::trinket_order;
+    let selected = trinket_override.unwrap_or_else(|| {
+        query.and_then(|q| {
+            shpd_seedfinder_core::search::FloorGate::selected_trinket(&QueryPlan::analyze(q), seed)
+        })
+    });
     if selected.is_some_and(|id| !trinket_order(seed)[..4].contains(&id)) {
         return Err(ScoutCallError::Packet(ScoutPacketError::Request(
             WireError::InvalidTrinketOrder,
@@ -261,38 +265,58 @@ pub fn filter_matching_seeds(
     query: &SearchQuery,
     seed_values: &[u64],
 ) -> Result<Vec<GeneratedWorld>, SearchError> {
+    let matches = filter_seed_matches(query, seed_values)?;
+    Ok(matches.into_iter().map(|m| m.world).collect())
+}
+
+fn filter_seed_matches(
+    query: &SearchQuery,
+    seed_values: &[u64],
+) -> Result<Vec<TrinketSearchMatch>, SearchError> {
     query.validate()?;
-    let seeds = seed_values
-        .iter()
-        .map(|&value| DungeonSeed::new(value).map_err(|_| SearchError::InvalidSeedRange))
-        .collect::<Result<Vec<_>, _>>()?;
     let plan = QueryPlan::analyze(query);
-    if plan.is_unsatisfiable() || seeds.is_empty() {
+    let recipes = seed_values
+        .iter()
+        .map(|&value| {
+            let seed = DungeonSeed::new(value).map_err(|_| SearchError::InvalidSeedRange)?;
+            Ok(SeedRecipe {
+                seed,
+                trinket: shpd_seedfinder_core::search::FloorGate::selected_trinket(&plan, seed),
+            })
+        })
+        .collect::<Result<Vec<_>, SearchError>>()?;
+    filter_matching_recipes(query, query, &recipes)
+}
+
+/// Refines saved recipes with the same verification and recovery as the web.
+/// # Errors
+/// Rejects invalid queries and contains generation failures.
+pub fn filter_matching_recipes(
+    query: &SearchQuery,
+    base: &SearchQuery,
+    recipes: &[SeedRecipe],
+) -> Result<Vec<TrinketSearchMatch>, SearchError> {
+    query.validate()?;
+    let plan = QueryPlan::analyze(query);
+    if plan.is_unsatisfiable() || recipes.is_empty() {
         return Ok(Vec::new());
     }
     let generator = canonical_generator(query.challenges);
-    let depth = plan.generation_depth();
     let workers = SearchOptions::available_parallelism()
         .get()
-        .min(seeds.len());
-    let slice_len = seeds.len().div_ceil(workers);
+        .min(recipes.len());
+    let slice_len = recipes.len().div_ceil(workers);
     std::thread::scope(|scope| {
-        let handles = seeds
+        let handles = recipes
             .chunks(slice_len)
             .map(|slice| {
                 let generator = &generator;
                 let plan = &plan;
                 scope.spawn(move || {
-                    // The catch keeps the panic on this side of the scope:
-                    // an unwinding scoped thread would make `thread::scope`
-                    // itself panic on exit, turning the error path below into
-                    // a panic whenever more than one slice trips it.
                     catch_unwind(AssertUnwindSafe(|| {
-                        generator
-                            .generate_batch_gated(slice, depth, plan)
+                        auto_trinkets::refine_batch(generator.as_ref(), query, plan, base, slice)
                             .into_iter()
                             .flatten()
-                            .filter(|world| query.matches(world))
                             .collect::<Vec<_>>()
                     }))
                 })
@@ -300,8 +324,6 @@ pub fn filter_matching_seeds(
             .collect::<Vec<_>>();
         let mut matched = Vec::new();
         for handle in handles {
-            // A generator panic must surface as an error: silently treating
-            // its slice as empty would drop genuine matches from the filter.
             matched.extend(
                 handle
                     .join()
@@ -326,13 +348,56 @@ pub fn production_filter_packet(
     request: &[u8],
     seed_values: &[u64],
 ) -> Result<Vec<u8>, FilterPacketError> {
-    let query = decode_query(request).map_err(FilterPacketError::Request)?;
-    let worlds = catch_unwind(AssertUnwindSafe(|| {
-        filter_matching_seeds(&query, seed_values)
-    }))
-    .map_err(|_| FilterPacketError::Panicked)?
-    .map_err(FilterPacketError::Filter)?;
-    encode_results(&worlds).map_err(FilterPacketError::Response)
+    // Existing callers send a bare query. Recipe-aware clients send a query,
+    // its saved base, and one explicit choice (including null) per numeric seed.
+    let envelope: Option<serde_json::Value> = serde_json::from_slice(request).ok();
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        if let Some(envelope) = envelope.as_ref().filter(|v| v.get("query").is_some()) {
+            let decode = |value: &serde_json::Value| {
+                decode_query(value.to_string().as_bytes()).map_err(FilterPacketError::Request)
+            };
+            let query = decode(&envelope["query"])?;
+            let base = decode(&envelope["base_query"])?;
+            let choices = envelope["trinkets"]
+                .as_array()
+                .filter(|v| v.len() == seed_values.len())
+                .ok_or_else(|| {
+                    FilterPacketError::Request(WireError::InvalidQueryDocument(
+                        "trinkets must contain one choice per seed".into(),
+                    ))
+                })?;
+            let recipes = seed_values
+                .iter()
+                .zip(choices)
+                .map(|(&value, choice)| {
+                    let seed = DungeonSeed::new(value)
+                        .map_err(|_| FilterPacketError::Filter(SearchError::InvalidSeedRange))?;
+                    let trinket =
+                        shpd_seedfinder_core::results_export::decode_trinket(seed, choice)
+                            .map_err(|e| {
+                                FilterPacketError::Request(WireError::InvalidQueryDocument(e))
+                            })?;
+                    Ok(SeedRecipe { seed, trinket })
+                })
+                .collect::<Result<Vec<_>, FilterPacketError>>()?;
+            let matches = filter_matching_recipes(&query, &base, &recipes)
+                .map_err(FilterPacketError::Filter)?;
+            encode_recipe_results(&matches.iter().map(|m| m.recipe).collect::<Vec<_>>())
+                .map_err(FilterPacketError::Response)
+        } else {
+            let query = decode_query(request).map_err(FilterPacketError::Request)?;
+            let matches =
+                filter_seed_matches(&query, seed_values).map_err(FilterPacketError::Filter)?;
+            if query.auto_apply_trinket || query.requirements.iter().any(|r| r.select_trinket) {
+                encode_recipe_results(&matches.iter().map(|m| m.recipe).collect::<Vec<_>>())
+                    .map_err(FilterPacketError::Response)
+            } else {
+                encode_results(&matches.into_iter().map(|m| m.world).collect::<Vec<_>>())
+                    .map_err(FilterPacketError::Response)
+            }
+        }
+    }));
+    result.map_err(|_| FilterPacketError::Panicked)?
 }
 
 /// Failure modes of [`production_filter_packet`].
@@ -385,13 +450,49 @@ pub fn decide_start_packets(
     ))
 }
 
+type FinishMatches = dyn Fn(Vec<GeneratedWorld>) -> Vec<TrinketSearchMatch> + Send + Sync;
+
+#[derive(Debug)]
+pub enum PollError {
+    WorkerPanicked,
+    Response(WireError),
+}
+impl std::fmt::Display for PollError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
 pub struct NativeSession {
+    finish_matches: Box<FinishMatches>,
+    recipe_packets: bool,
     search: StreamingSearchHandle,
     match_probability: f64,
     diagnostic_claimed: AtomicBool,
 }
 
 impl NativeSession {
+    fn wrap<G: WorldGenerator + Send + 'static>(
+        search: StreamingSearchHandle,
+        generator: &Arc<G>,
+        query: SearchQuery,
+    ) -> Self {
+        let match_probability = estimate_match_probability(&query);
+        let recipe_packets =
+            query.auto_apply_trinket || query.requirements.iter().any(|r| r.select_trinket);
+        let generator = Arc::clone(generator);
+        let plan = QueryPlan::analyze(&query);
+        Self {
+            search,
+            match_probability,
+            recipe_packets,
+            diagnostic_claimed: AtomicBool::new(false),
+            finish_matches: Box::new(move |worlds| {
+                auto_trinkets::finish_matches(generator.as_ref(), &query, &plan, worlds)
+            }),
+        }
+    }
+
     /// Starts a session using an injected generator and search range.
     ///
     /// # Errors
@@ -402,12 +503,8 @@ impl NativeSession {
         query: SearchQuery,
         options: SearchOptions,
     ) -> Result<Self, SearchError> {
-        let match_probability = estimate_match_probability(&query);
-        spawn_streaming_search(generator, query, options).map(|search| Self {
-            search,
-            match_probability,
-            diagnostic_claimed: AtomicBool::new(false),
-        })
+        spawn_streaming_search(generator, query.clone(), options)
+            .map(|search| Self::wrap(search, generator, query))
     }
 
     /// Starts the canonical full-range production search. `workers` is the
@@ -421,7 +518,6 @@ impl NativeSession {
         query: SearchQuery,
         workers: Option<NonZeroUsize>,
     ) -> Result<Self, SearchError> {
-        let match_probability = estimate_match_probability(&query);
         let options = SearchOptions {
             start_seed: 0,
             end_seed_exclusive: TOTAL_SEEDS,
@@ -430,13 +526,13 @@ impl NativeSession {
             max_results: NonZeroUsize::new(MAX_RESULTS).unwrap_or(NonZeroUsize::MIN),
         };
         let generator = canonical_generator(query.challenges);
-        spawn_rotated_streaming_search(&generator, query, options, production_search_start()).map(
-            |search| Self {
-                search,
-                match_probability,
-                diagnostic_claimed: AtomicBool::new(false),
-            },
+        spawn_rotated_streaming_search(
+            &generator,
+            query.clone(),
+            options,
+            production_search_start(),
         )
+        .map(|search| Self::wrap(search, &generator, query))
     }
 
     /// Decodes an query request and starts a canonical production search.
@@ -468,7 +564,6 @@ impl NativeSession {
         scan_len: u64,
         workers: Option<NonZeroUsize>,
     ) -> Result<Self, SearchError> {
-        let match_probability = estimate_match_probability(&query);
         let options = SearchOptions {
             start_seed: 0,
             end_seed_exclusive: TOTAL_SEEDS,
@@ -477,13 +572,8 @@ impl NativeSession {
             max_results: NonZeroUsize::new(MAX_RESULTS).unwrap_or(NonZeroUsize::MIN),
         };
         let generator = canonical_generator(query.challenges);
-        spawn_partial_streaming_search(&generator, query, options, resume_from, scan_len).map(
-            |search| Self {
-                search,
-                match_probability,
-                diagnostic_claimed: AtomicBool::new(false),
-            },
-        )
+        spawn_partial_streaming_search(&generator, query.clone(), options, resume_from, scan_len)
+            .map(|search| Self::wrap(search, &generator, query))
     }
 
     /// Decodes an query request and starts a resumed production search.
@@ -517,13 +607,30 @@ impl NativeSession {
         ]
     }
 
-    /// Drains at most `maximum` matches into an `SSR1` packet.
+    /// Drains at most `maximum` matches into `SSR2` when recipes are selected,
+    /// or legacy `SSR1` for searches without a trinket policy.
     ///
     /// # Errors
     ///
     /// Returns a wire error when the result count cannot be encoded.
-    pub fn poll(&self, maximum: usize) -> Result<Vec<u8>, WireError> {
-        encode_results(&self.search.drain_results(maximum))
+    pub fn poll(&self, maximum: usize) -> Result<Vec<u8>, PollError> {
+        if !self.recipe_packets {
+            return encode_results(&self.search.drain_results(maximum))
+                .map_err(PollError::Response);
+        }
+        let matches = self.drain_matches(maximum)?;
+        encode_recipe_results(&matches.iter().map(|m| m.recipe).collect::<Vec<_>>())
+            .map_err(PollError::Response)
+    }
+
+    /// Drains reproducible matching worlds, replaying only auto-applied matches.
+    /// # Errors
+    /// Contains generator panics from the no-trinket verification pass.
+    pub fn drain_matches(&self, maximum: usize) -> Result<Vec<TrinketSearchMatch>, PollError> {
+        catch_unwind(AssertUnwindSafe(|| {
+            (self.finish_matches)(self.search.drain_results(maximum))
+        }))
+        .map_err(|_| PollError::WorkerPanicked)
     }
 
     /// Drains at most `maximum` matches as typed worlds. This is the in-process
@@ -1028,6 +1135,77 @@ mod tests {
                 _
             )))
         ));
+    }
+
+    #[test]
+    fn native_auto_matches_deliver_reproducible_recipes_and_refine_them() {
+        let request = br#"{"max_depth":19,"auto_apply_trinket":true,"requirements":[{"item":"runic_blade","upgrade":1,"effect":"Grim"}]}"#;
+        let query = decode_query(request).unwrap();
+        let parchment = shpd_seedfinder_core::catalog::item_by_stable_id("parchment_scrap")
+            .unwrap()
+            .id;
+        for (code, chosen) in [("SRU-YSU-QHS", Some(parchment)), ("EYY-RUL-LQG", None)] {
+            let seed = DungeonSeed::from_code(code).unwrap();
+            let session = NativeSession::production_resumed(
+                query.clone(),
+                seed.value(),
+                1,
+                NonZeroUsize::new(1),
+            )
+            .unwrap();
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+            let mut matches = Vec::new();
+            loop {
+                matches.extend(session.drain_matches(8).unwrap());
+                if session.status()[0] != STATE_RUNNING {
+                    break;
+                }
+                assert!(
+                    std::time::Instant::now() < deadline,
+                    "native search did not finish"
+                );
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
+            assert_eq!(matches.len(), 1, "{code}");
+            assert_eq!(
+                matches[0].recipe,
+                SeedRecipe {
+                    seed,
+                    trinket: chosen
+                }
+            );
+            assert!(query.matches(&matches[0].world));
+            let packet = encode_recipe_results(&[matches[0].recipe]).unwrap();
+            assert_eq!(&packet[..6], b"SSR2\0\x01");
+            assert_eq!(&packet[7..18], code.as_bytes());
+        }
+        let seed = DungeonSeed::from_code("EYY-RUL-LQG").unwrap();
+        let refined = decode_query(br#"{"max_depth":19,"auto_apply_trinket":true,"requirements":[{"item":"runic_blade","upgrade":1,"effect":"Grim"},{"item":"whip","effect":"Venomous"}]}"#).unwrap();
+        let found = filter_matching_recipes(
+            &refined,
+            &query,
+            &[SeedRecipe {
+                seed,
+                trinket: None,
+            }],
+        )
+        .unwrap();
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].recipe.trinket, Some(parchment));
+    }
+
+    #[test]
+    fn native_recipe_filter_validates_envelope_and_preserves_explicit_none() {
+        let request = br#"{"query":{"auto_apply_trinket":true,"max_depth":19,"requirements":[{"item":"runic_blade","upgrade":1,"effect":"Grim"}]},"base_query":{"auto_apply_trinket":true,"max_depth":19,"requirements":[{"item":"runic_blade","upgrade":1,"effect":"Grim"}]},"trinkets":[null]}"#;
+        let seed = DungeonSeed::from_code("EYY-RUL-LQG").unwrap();
+        let packet = production_filter_packet(request, &[seed.value()]).unwrap();
+        assert_eq!(&packet[..6], b"SSR2\0\x01");
+        assert_eq!(&packet[18..], &[0, 0]);
+        assert!(production_filter_packet(request, &[]).is_err());
+        let invalid = String::from_utf8(request.to_vec())
+            .unwrap()
+            .replace("[null]", "[\"dagger\"]");
+        assert!(production_filter_packet(invalid.as_bytes(), &[seed.value()]).is_err());
     }
 
     #[test]

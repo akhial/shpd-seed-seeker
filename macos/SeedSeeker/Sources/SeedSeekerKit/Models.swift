@@ -628,6 +628,7 @@ public enum WandmakerQuest: Int, CaseIterable, Codable, Sendable {
 
 public struct SearchRequest: Codable, Sendable {
     public var requirements: [ItemRequirement]
+    public var autoApplyTrinket: Bool
     public var maximumDepth: Int
     public var requireBlacksmith: Bool
     /// Prevents the 2,000-favor Smith choice from satisfying item requirements.
@@ -639,7 +640,7 @@ public struct SearchRequest: Codable, Sendable {
     public init(requirements: [ItemRequirement], maximumDepth: Int = SearchLimits.maxDepth,
                 requireBlacksmith: Bool = false, excludeBlacksmithRewards: Bool = false,
                 wandmakerQuest: WandmakerQuest? = nil,
-                challenges: Int = 0) throws {
+                challenges: Int = 0, autoApplyTrinket: Bool = false) throws {
         guard !requirements.isEmpty else { throw ModelValidationError.emptyRequirements }
         guard (1...SearchLimits.maxDepth).contains(maximumDepth) else { throw ModelValidationError.maximumDepth }
         guard (0...SearchLimits.challengeMask).contains(challenges) else { throw ModelValidationError.challenges }
@@ -649,6 +650,7 @@ public struct SearchRequest: Codable, Sendable {
         self.excludeBlacksmithRewards = excludeBlacksmithRewards
         self.wandmakerQuest = wandmakerQuest
         self.challenges = challenges
+        self.autoApplyTrinket = autoApplyTrinket
     }
 }
 
@@ -689,8 +691,9 @@ public struct ResumeHint: Sendable {
 public struct SeedResult: Hashable, Identifiable, Sendable {
     public let seed: String
     public let matchedRequirements: Int
+    public let selectedTrinket: String?
     public var id: String { seed }
-    public init(seed: String, matchedRequirements: Int) { self.seed = seed; self.matchedRequirements = matchedRequirements }
+    public init(seed: String, matchedRequirements: Int, selectedTrinket: String? = nil) { self.seed = seed; self.matchedRequirements = matchedRequirements; self.selectedTrinket = selectedTrinket }
 }
 
 /// Raw values are the SSC5 feeling IDs and the dungeon icon frame columns.

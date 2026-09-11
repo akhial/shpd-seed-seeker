@@ -1,6 +1,6 @@
 # Automatically choosing one trinket
 
-The web's **Search scope → AutoTrinket** option is on by default for new queries
+The **Search scope → AutoTrinket** option in web, Android, Linux, macOS and Windows is on by default for new queries
 and built-in presets. Saved queries, shared links and imports retain their
 recorded setting, including the legacy off default when the flag is absent.
 It asks the engine to select a helpful trinket from the seed's four initial catalyst offers
@@ -43,8 +43,10 @@ with `SeedRecipe` choices, stripping unnecessary automatic choices only after
 rechecking the full query with the same floor and vault pruning. Explicit
 trinket requirements are not stripped. WASM only adapts those operations to cooperative
 sessions and JSON; there is no selection or generation algorithm in the web.
-Native engine callers also receive selection through `QueryPlan`. Remaining
-UIs have no new toggle or result-recipe integration in this change.
+Native UIs use the same policy and match cleanup through `NativeSession`.
+GTK consumes typed recipes; JNI and C FFI deliver `SSR2` packets with an explicit
+trinket ID or no-trinket marker. Saved recipes and their base query also travel
+through native refinement. Native clients use platform switches in Search scope.
 
 The query JSON codec persists `auto_apply_trinket` only when true. Share links
 use version 6 for the flag; existing version 4 and 5 queries retain their
@@ -55,7 +57,7 @@ exact choice, and scout using that choice and the saved query rather than
 the current editor. See [results export](results-export-format.md).
 
 Scout keeps the four initial offers available while browsing later floors.
-As the large offer cards scroll behind the sticky floor header, small sprite
+As the large offer cards scroll behind the top edge or sticky floor header, small sprite
 buttons slide into the navigation bar while its keyboard/swipe hint fades.
 They retain the offer order and highlight the selected trinket without a text
 badge. Switching trinkets preserves the current floor and scroll offset;
@@ -91,3 +93,13 @@ layouts were checked with no page errors or horizontal overflow.
 Browser checks also covered the compact trinket controls' reveal and reverse
 animation, reduced motion, offer order after changing seeds, and switching or
 clearing a trinket on floor 14 while retaining the same scroll offset.
+
+Native regression tests cover the setting in presets, saved queries and shared
+links, recipe packets, explicit no-trinket exports, and the same necessary/stripped
+seed fixtures through JNI, C FFI and the Swift engine adapter. Match selection,
+reverification and recovery remain in Rust; the frontends only render the recipe.
+
+GTK's display test exercises the partial hint fade, complete reveal, changing
+from Mimic Tooth to Parchment Scrap, clearing selection, and preserving the
+visible floor and offset after item layouts change. Run it on a GTK-capable host
+with `xvfb-run -a dbus-run-session -- cargo test -p shpd-seedfinder-gtk scout_dock_tracks -- --ignored`.

@@ -11,7 +11,7 @@ final class DeepLinkTests: XCTestCase {
         SavedQuery(requirements: [
             try ItemRequirement(key: 1, item: ItemCatalog.findById("wand_fireblast"),
                                 upgrade: 3, kind: .wand, upgradeMatch: .atLeast),
-        ])
+        ], autoApplyTrinket: false)
     }
 
     func testPinnedVectorEncodesToTheExactLink() throws {

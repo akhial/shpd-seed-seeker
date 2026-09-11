@@ -12,7 +12,6 @@ use gtk::{gdk, gio, glib};
 
 use shpd_seedfinder_core::deep_link;
 use shpd_seedfinder_core::results_export;
-use shpd_seedfinder_core::seed::DungeonSeed;
 use shpd_seedfinder_session::MAX_RESULTS;
 
 use crate::config::APP_NAME;
@@ -209,8 +208,15 @@ pub fn present(app: &adw::Application) {
         let results = Rc::clone(&results);
         let inner_split = inner_split.clone();
         let outer_split = outer_split.clone();
+        let exported_query = Rc::clone(&exported_query);
         move |seed| {
-            detail.scout(Some(seed), &state.borrow());
+            if let (Some(recipe), Some(query)) =
+                (results.recipe(seed), exported_query.borrow().as_ref())
+            {
+                detail.scout_recipe(recipe, &AppState::from_query(query));
+            } else {
+                detail.scout(Some(seed), &state.borrow());
+            }
             detail.set_result_position(results.position_of(seed));
             outer_split.set_show_content(true);
             inner_split.set_show_content(true);
@@ -226,12 +232,27 @@ pub fn present(app: &adw::Application) {
             refresh_all();
         }
     });
+    detail.connect_navigate({
+        let results = Rc::clone(&results);
+        let detail = Rc::clone(&detail);
+        move |delta| {
+            if let Some(seed) = detail.current_seed() {
+                results.select_step(&seed, delta);
+            }
+        }
+    });
     detail.connect_scout({
+        let exported_query = Rc::clone(&exported_query);
         let state = Rc::clone(&state);
         let detail = Rc::clone(&detail);
         let results = Rc::clone(&results);
         move || {
-            detail.scout(None, &state.borrow());
+            let recipe = detail.entered_seed().and_then(|seed| results.recipe(&seed));
+            if let (Some(recipe), Some(query)) = (recipe, exported_query.borrow().as_ref()) {
+                detail.scout_recipe(recipe, &AppState::from_query(query));
+            } else {
+                detail.scout(None, &state.borrow());
+            }
             // A hand-entered seed may still be one of the results; keep the
             // position indicator honest either way.
             let position = detail
@@ -471,18 +492,9 @@ pub fn present(app: &adw::Application) {
                 ));
                 return;
             };
-            let seeds = match codes
-                .iter()
-                .map(|code| DungeonSeed::from_code(code))
-                .collect::<Result<Vec<_>, _>>()
-            {
-                Ok(seeds) => seeds,
-                Err(error) => {
-                    toasts.add_toast(adw::Toast::new(&format!("Cannot export: {error}")));
-                    return;
-                }
-            };
-            let contents = results_export::encode(&query, &seeds, env!("CARGO_PKG_VERSION"));
+            let recipes = results.seed_recipes();
+            let contents =
+                results_export::encode_recipes(&query, &recipes, env!("CARGO_PKG_VERSION"));
             let dialog = gtk::FileDialog::builder()
                 .title("Export Results")
                 .initial_name("seed-seeker-results.json")
@@ -552,7 +564,7 @@ pub fn present(app: &adw::Application) {
                                 kept.iter().map(|seed| seed.to_code()).collect();
                             // The import becomes the session's Target: the
                             // imported query plus seeds, with no coverage.
-                            results.load_imported(&codes, &imported.query);
+                            results.load_imported(&codes, &imported.query, &imported.recipes);
                             exported_query.replace(Some(imported.query));
                             refresh_all();
                             let mut message = format!(

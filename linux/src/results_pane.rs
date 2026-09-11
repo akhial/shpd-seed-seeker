@@ -3,7 +3,7 @@
 //! Results pane: streaming search session, live statistics, and seed list.
 
 use std::cell::{Cell, RefCell};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::num::NonZeroUsize;
 use std::rc::Rc;
 use std::sync::mpsc;
@@ -11,14 +11,13 @@ use std::time::{Duration, Instant};
 
 use adw::prelude::*;
 use gtk::glib;
+use shpd_seedfinder_core::auto_trinkets::{SeedRecipe, TrinketSearchMatch};
 use shpd_seedfinder_core::feasibility::{QueryPlan, Quest};
-use shpd_seedfinder_core::model::GeneratedWorld;
 use shpd_seedfinder_core::query::{SearchQuery, StartDecision, decide_start};
 use shpd_seedfinder_core::search::SearchError;
-use shpd_seedfinder_core::seed::DungeonSeed;
 use shpd_seedfinder_session::{
     MAX_RESULTS, NativeSession, STATE_CANCELLED, STATE_COMPLETED, STATE_FAILED, STATE_RUNNING,
-    filter_matching_seeds,
+    filter_matching_recipes,
 };
 
 use crate::format::{duration, group_digits, search_statistics};
@@ -35,6 +34,7 @@ const DRAIN_BATCH: usize = 256;
 const DISPLAY_CAP: usize = MAX_RESULTS;
 
 struct ActiveSearch {
+    replay_failed: bool,
     session: Rc<NativeSession>,
     query: SearchQuery,
     /// How this run relates to the session's Target, fixed at start; the
@@ -73,6 +73,7 @@ struct BaseRun {
 /// is a superset of any related run's display, which is what lets a loosened
 /// query bring seeds back.
 struct Target {
+    recipes: HashMap<String, SeedRecipe>,
     query: SearchQuery,
     seeds: Vec<String>,
     resume_from: u64,
@@ -81,7 +82,7 @@ struct Target {
 
 /// An in-flight re-verification of previously found seeds on a worker thread.
 struct PendingRefine {
-    receiver: mpsc::Receiver<Result<Vec<GeneratedWorld>, SearchError>>,
+    receiver: mpsc::Receiver<Result<Vec<TrinketSearchMatch>, SearchError>>,
     query: SearchQuery,
     mode: StartDecision,
     resume_from: u64,
@@ -91,6 +92,7 @@ struct PendingRefine {
 }
 
 pub struct ResultsPane {
+    recipes: RefCell<HashMap<String, SeedRecipe>>,
     pub page: adw::NavigationPage,
     title: adw::WindowTitle,
     stack: gtk::Stack,
@@ -203,6 +205,7 @@ impl ResultsPane {
             progress_line,
             list,
             seeds: RefCell::new(Vec::new()),
+            recipes: RefCell::new(HashMap::new()),
             active: RefCell::new(None),
             pending_refine: RefCell::new(None),
             base: RefCell::new(None),
@@ -308,6 +311,7 @@ impl ResultsPane {
         self.base.replace(None);
         self.target.replace(None);
         self.seeds.borrow_mut().clear();
+        self.recipes.borrow_mut().clear();
         self.list.remove_all();
         self.progress_line.set_visible(false);
         self.stats_line.set_label("");
@@ -346,6 +350,18 @@ impl ResultsPane {
 
     /// The currently listed seed codes, in display order.
     #[must_use]
+    pub fn recipe(&self, code: &str) -> Option<SeedRecipe> {
+        self.recipes.borrow().get(code).copied()
+    }
+
+    pub fn seed_recipes(&self) -> Vec<SeedRecipe> {
+        self.seeds
+            .borrow()
+            .iter()
+            .filter_map(|code| self.recipe(code))
+            .collect()
+    }
+
     pub fn seed_codes(&self) -> Vec<String> {
         self.seeds.borrow().clone()
     }
@@ -355,11 +371,19 @@ impl ResultsPane {
     /// the Target Query and the imported seeds the Target Set, with no
     /// coverage — refines of an import are filter-only. Callers must ensure
     /// no search is running.
-    pub fn load_imported(&self, imported: &[String], query: &SearchQuery) {
+    pub fn load_imported(&self, imported: &[String], query: &SearchQuery, recipes: &[SeedRecipe]) {
+        self.recipes.borrow_mut().clear();
+        for recipe in recipes {
+            self.recipes
+                .borrow_mut()
+                .entry(recipe.seed.to_code())
+                .or_insert(*recipe);
+        }
         // Imported results carry no traversal state, so the previous
         // search's refine base no longer describes the listed seeds.
         self.base.replace(None);
         self.target.replace(Some(Target {
+            recipes: self.recipes.borrow().clone(),
             query: query.clone(),
             seeds: imported.to_vec(),
             resume_from: 0,
@@ -510,6 +534,7 @@ impl ResultsPane {
             }
         };
         self.seeds.borrow_mut().clear();
+        self.recipes.borrow_mut().clear();
         self.list.remove_all();
         self.notify_results_changed();
         self.stack.set_visible_child_name("results");
@@ -519,6 +544,7 @@ impl ResultsPane {
         self.progress_line.set_visible(true);
         let now = Instant::now();
         self.active.replace(Some(ActiveSearch {
+            replay_failed: false,
             session,
             query,
             mode,
@@ -552,17 +578,35 @@ impl ResultsPane {
         remaining: u64,
         mode: StartDecision,
     ) {
-        let seed_values: Vec<u64> = seed_codes
+        let (base_query, saved) = if matches!(
+            mode,
+            StartDecision::TargetRefine | StartDecision::TargetFilter
+        ) {
+            let target = self.target.borrow();
+            let target = target.as_ref().expect("target filter has a target");
+            (target.query.clone(), target.recipes.clone())
+        } else {
+            (
+                self.base
+                    .borrow()
+                    .as_ref()
+                    .map_or_else(|| query.clone(), |b| b.query.clone()),
+                self.recipes.borrow().clone(),
+            )
+        };
+        let recipes: Vec<_> = seed_codes
             .iter()
-            .filter_map(|code| DungeonSeed::from_code(code).ok())
-            .map(DungeonSeed::value)
+            .filter_map(|code| saved.get(code).copied())
             .collect();
-        let previous_matches = seed_values.len() as u64;
-
+        let previous_matches = recipes.len() as u64;
         let (sender, receiver) = mpsc::channel();
         let filter_query = query.clone();
         std::thread::spawn(move || {
-            let _ = sender.send(filter_matching_seeds(&filter_query, &seed_values));
+            let _ = sender.send(filter_matching_recipes(
+                &filter_query,
+                &base_query,
+                &recipes,
+            ));
         });
         self.pending_refine.replace(Some(PendingRefine {
             receiver,
@@ -621,12 +665,14 @@ impl ResultsPane {
 
         // Replace the list with the surviving subset, in their original order.
         self.seeds.borrow_mut().clear();
+        self.recipes.borrow_mut().clear();
         self.list.remove_all();
         let mut seen = HashSet::new();
         {
             let mut seeds = self.seeds.borrow_mut();
             for world in &kept_worlds {
-                let code = world.seed.to_code();
+                let code = world.recipe.seed.to_code();
+                self.recipes.borrow_mut().insert(code.clone(), world.recipe);
                 // Only the first DISPLAY_CAP survivors get a row; the rest
                 // stay in the collection for the Target and later refines.
                 if seeds.len() < DISPLAY_CAP {
@@ -678,6 +724,7 @@ impl ResultsPane {
         self.progress_line.set_visible(true);
         let now = Instant::now();
         self.active.replace(Some(ActiveSearch {
+            replay_failed: false,
             session,
             query: pending.query,
             mode: pending.mode,
@@ -740,6 +787,7 @@ impl ResultsPane {
         match mode {
             StartDecision::Anchor => {
                 self.target.replace(Some(Target {
+                    recipes: self.recipes.borrow().clone(),
                     query: query.clone(),
                     seeds: self.seeds.borrow().clone(),
                     resume_from: concluded.resume_from,
@@ -760,6 +808,11 @@ impl ResultsPane {
                             .cloned()
                             .collect()
                     };
+                    for code in &new_finds {
+                        if let Some(recipe) = self.recipes.borrow().get(code) {
+                            target.recipes.insert(code.clone(), *recipe);
+                        }
+                    }
                     target.seeds.extend(new_finds);
                     target.resume_from = concluded.resume_from;
                     target.remaining = concluded.remaining;
@@ -780,7 +833,11 @@ impl ResultsPane {
         Self::drain_matches(self, active);
 
         let status = active.session.status();
-        let search_state = status[0];
+        let search_state = if active.replay_failed {
+            STATE_FAILED
+        } else {
+            status[0]
+        };
         let tested = status[1].max(0).unsigned_abs();
         let probability = f64::from_bits(u64::from_ne_bytes(status[4].to_ne_bytes()));
 
@@ -816,6 +873,11 @@ impl ResultsPane {
 
         // Catch matches that raced the terminal state transition.
         Self::drain_matches(self, active);
+        let search_state = if active.replay_failed {
+            STATE_FAILED
+        } else {
+            search_state
+        };
         let matches = active.matches;
         let refined = active.refined;
         let diagnostic = if search_state == STATE_FAILED {
@@ -964,13 +1026,24 @@ impl ResultsPane {
     fn drain_matches(self: &Rc<Self>, active: &mut ActiveSearch) {
         let mut appended = false;
         loop {
-            let worlds = active.session.drain_worlds(DRAIN_BATCH);
+            let worlds = match active.session.drain_matches(DRAIN_BATCH) {
+                Ok(worlds) => worlds,
+                Err(error) => {
+                    active.session.cancel();
+                    active.replay_failed = true;
+                    self.toasts.add_toast(adw::Toast::new(&format!(
+                        "Match verification failed: {error}"
+                    )));
+                    break;
+                }
+            };
             if worlds.is_empty() {
                 break;
             }
             let mut seeds = self.seeds.borrow_mut();
             for world in &worlds {
-                let code = world.seed.to_code();
+                let code = world.recipe.seed.to_code();
+                self.recipes.borrow_mut().insert(code.clone(), world.recipe);
                 // A resumed traversal may re-test a small overlap around the
                 // previous stop position; keep each seed listed once.
                 if !active.seen.insert(code.clone()) {
@@ -1009,6 +1082,26 @@ impl ResultsPane {
             .css_classes(["seed-row"])
             .build();
         row.add_prefix(&index_label);
+        row.set_title("");
+        let code = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+        code.set_hexpand(true);
+        code.append(
+            &gtk::Label::builder()
+                .label(seed_code)
+                .css_classes(["monospace"])
+                .build(),
+        );
+        if let Some(id) = self.recipe(seed_code).and_then(|r| r.trinket) {
+            let sprite = crate::sprites::item_image_sized(
+                crate::sprites::ItemSprite::from_catalog(shpd_seedfinder_core::catalog::item(id)),
+                None,
+                16,
+            );
+            sprite.set_opacity(0.6);
+            sprite.set_tooltip_text(Some(shpd_seedfinder_core::catalog::item(id).name));
+            code.append(&sprite);
+        }
+        row.add_prefix(&code);
         row.add_suffix(&copy_button);
 
         let toasts = self.toasts.clone();

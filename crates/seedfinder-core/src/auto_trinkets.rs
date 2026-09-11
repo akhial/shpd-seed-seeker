@@ -28,6 +28,33 @@ pub struct TrinketSearchMatch {
     pub recipe: SeedRecipe,
 }
 
+/// Attach recipes to already-matched streaming worlds and strip unnecessary
+/// automatic choices with the same replay used by batch search.
+#[must_use]
+pub fn finish_matches<G: WorldGenerator>(
+    generator: &G,
+    query: &SearchQuery,
+    plan: &QueryPlan,
+    worlds: Vec<GeneratedWorld>,
+) -> Vec<TrinketSearchMatch> {
+    let matches = worlds
+        .into_iter()
+        .map(|world| {
+            Some(TrinketSearchMatch {
+                recipe: SeedRecipe {
+                    seed: world.seed,
+                    trinket: plan.selected_trinket(world.seed),
+                },
+                world,
+            })
+        })
+        .collect();
+    remove_unnecessary_trinkets(generator, query, plan, matches)
+        .into_iter()
+        .flatten()
+        .collect()
+}
+
 /// Search once per input seed using a prepared query plan. Auto-applied
 /// matches alone get a no-trinket replay to remove unnecessary choices.
 /// One output per input preserves traversal accounting even for pruned seeds.

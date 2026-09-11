@@ -518,6 +518,7 @@ data class SearchRequest(
     val excludeBlacksmithRewards: Boolean = false,
     /** Which Wandmaker quest the run must roll; null accepts any. */
     val wandmakerQuest: WandmakerQuest? = null,
+    val autoApplyTrinket: Boolean = false,
 ) {
     init {
         require(requirements.isNotEmpty()) { "At least one requirement is needed" }
@@ -556,6 +557,7 @@ enum class Challenge(
 data class SeedResult(
     val seed: String,
     val matchedRequirements: Int,
+    val selectedTrinket: String? = null,
 )
 
 data class ScoutWorld(

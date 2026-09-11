@@ -655,7 +655,7 @@ final class RefineSearchTests: XCTestCase {
         let engine = FakeEngine()
         let controller = SearchController(engine: engine)
         controller.loadImported(seeds: ["AAA-AAA-AAA", "AAA-AAA-AAB"],
-                                query: SavedQuery(requirements: try wandRequest(count: 1).requirements))
+                                query: SavedQuery(requirements: try wandRequest(count: 1).requirements, autoApplyTrinket: false))
 
         XCTAssertEqual(controller.decideStart(try wandRequest(count: 2)), .targetRefine)
         engine.filterResult = ["AAA-AAA-AAB"]

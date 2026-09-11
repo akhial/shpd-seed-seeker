@@ -29,7 +29,14 @@ public protocol SeedFinderEngine: Sendable {
     func startSearch(_ request: SearchRequest, workers: Int) async throws -> any SeedFinderSearchSession
     func startResumedSearch(_ request: SearchRequest, resumeFrom: Int64, scanLen: Int64, workers: Int) async throws -> any SeedFinderSearchSession
     func filterSeeds(_ request: SearchRequest, seeds: [String]) async throws -> [String]
+    func filterRecipes(_ request: SearchRequest, base: SearchRequest, recipes: [SeedResult]) async throws -> [SeedResult]
     func scoutSeed(_ seed: String, challenges: Int) async throws -> ScoutWorld
+}
+
+extension SeedFinderEngine {
+    public func filterRecipes(_ request: SearchRequest, base: SearchRequest, recipes: [SeedResult]) async throws -> [SeedResult] {
+        try await filterSeeds(request, seeds: recipes.map(\.seed)).map { SeedResult(seed: $0, matchedRequirements: request.requirements.slotCount) }
+    }
 }
 
 private func ffiError(_ code: Int32) -> SeedFinderEngineError {
@@ -239,6 +246,34 @@ public struct ProductionSeedFinderEngine: SeedFinderEngine {
             return try copiedPacket(pointer, length)
         }.value
         return try ResultCodec.decode(packet, requirementCount: count).map(\.seed)
+    }
+
+    public func filterRecipes(_ request: SearchRequest, base: SearchRequest, recipes: [SeedResult]) async throws -> [SeedResult] {
+        let seeds = recipes.map(\.seed)
+        guard !seeds.isEmpty else { return [] }
+        let encoded = try JSONSerialization.data(withJSONObject: [
+            "query": try JSONSerialization.jsonObject(with: QueryDocument.encode(request)),
+            "base_query": try JSONSerialization.jsonObject(with: QueryDocument.encode(base)),
+            "trinkets": recipes.map { $0.selectedTrinket as Any? ?? NSNull() },
+        ])
+        let values: [UInt64] = try seeds.map { seed in
+            guard let parsed = SeedCode.parse(seed) else { throw SeedFinderEngineError.invalidArgument }
+            return UInt64(parsed.value)
+        }
+        let count = request.requirements.slotCount
+        let packet: Data = try await Task.detached {
+            var pointer: UnsafeMutablePointer<UInt8>?
+            var length = 0
+            let code = encoded.withUnsafeBytes { requestBytes in
+                values.withUnsafeBufferPointer { seedValues in
+                    seedfinder_filter_seeds(requestBytes.bindMemory(to: UInt8.self).baseAddress, requestBytes.count,
+                                            seedValues.baseAddress, seedValues.count, &pointer, &length)
+                }
+            }
+            guard code == 0 else { throw ffiError(code) }
+            return try copiedPacket(pointer, length)
+        }.value
+        return try ResultCodec.decode(packet, requirementCount: count)
     }
 
     public func scoutSeed(_ seed: String, challenges: Int = 0) async throws -> ScoutWorld {

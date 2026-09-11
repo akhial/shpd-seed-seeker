@@ -14,7 +14,11 @@ extern "C" {
 // README.md "Search queries"; a leading byte-order mark and whitespace are
 // tolerated), so a frontend needs only one query encoder; a request that is
 // not such a document, or carries more than 64 requirements, is rejected.
-// Results use SSR1.
+// Results use SSR1 without a trinket policy, SSR2 when auto-apply or an explicit
+// selection is enabled. SSR2: u16 big-endian count, then per result a u8-length
+// seed code and u16-length stable trinket ID. Empty ID means explicitly no trinket.
+// Only successful automatic matches are replayed without the trinket; unnecessary
+// selections are removed before delivery. Never discard the selected recipe.
 // Scout requests are SSQ2 magic[4], challenges:u16 little-endian, then the
 // UTF-8 seed code in all remaining bytes. Legacy raw UTF-8 seed codes use mask 0.
 // Selected scout requests use SSQ3, a LE u16 challenge mask, LE u16-length
@@ -80,7 +84,11 @@ int32_t seedfinder_scout(const uint8_t *request, size_t request_len, uint8_t **o
 // could explain. The return packet is freed with seedfinder_buffer_free.
 int32_t seedfinder_scout_matches(const uint8_t *request, size_t request_len, const uint8_t *query, size_t query_len, uint8_t **out_packet, size_t *out_len);
 // Re-verifies seeds_len numeric seed values against the query in request
-// and returns the surviving seeds as an SSR1 packet in input order.
+// and returns surviving seeds in input order (SSR1 or SSR2 as above).
+// To refine saved recipes, request may instead be JSON:
+// {"query": <current query>, "base_query": <original query>, "trinkets": [null|"stable_id", ...]}.
+// The trinkets array must parallel the numeric seeds. This form always returns
+// SSR2, preserving explicit none and recovering stripped choices when needed.
 int32_t seedfinder_filter_seeds(const uint8_t *request, size_t request_len, const uint64_t *seeds, size_t seeds_len, uint8_t **out_packet, size_t *out_len);
 // Share links carry a query as a compact code. Encode takes the canonical
 // UTF-8 JSON query document and returns the full UTF-8 web link; decode takes

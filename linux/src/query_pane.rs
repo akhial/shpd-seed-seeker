@@ -102,6 +102,7 @@ pub struct QueryPane {
     stack_target: Cell<Option<(u64, StackField)>>,
     stack_opened_on: Cell<f64>,
     depth_row: adw::SpinRow,
+    auto_trinket_row: adw::SwitchRow,
     blacksmith_row: adw::SwitchRow,
     exclude_row: adw::SwitchRow,
     wandmaker_row: adw::ComboRow,
@@ -192,6 +193,8 @@ impl QueryPane {
                 0.0,
             ))
             .build();
+        let auto_trinket_row = adw::SwitchRow::builder().title("AutoTrinket")
+            .subtitle("Applies a helpful trinket at +3 at the first brewing opportunity. Keeps it only when the match needs it.").margin_top(12).build();
         let blacksmith_row = adw::SwitchRow::builder()
             .title("Require accessible blacksmith")
             .subtitle("Always in range when searching 14 floors or more")
@@ -222,6 +225,7 @@ impl QueryPane {
             .title("Search Scope")
             .build();
         scope_group.add(&depth_row);
+        scope_group.add(&auto_trinket_row);
 
         let blacksmith_group = adw::PreferencesGroup::builder().title("Blacksmith").build();
         blacksmith_group.add(&blacksmith_row);
@@ -322,6 +326,7 @@ impl QueryPane {
             stack_target: Cell::new(None),
             stack_opened_on: Cell::new(1.0),
             depth_row,
+            auto_trinket_row,
             blacksmith_row,
             exclude_row,
             wandmaker_row,
@@ -360,7 +365,11 @@ impl QueryPane {
             let pane = Rc::clone(&pane);
             move |_| pane.notify_changed()
         });
-        for row in [&pane.blacksmith_row, &pane.exclude_row] {
+        for row in [
+            &pane.auto_trinket_row,
+            &pane.blacksmith_row,
+            &pane.exclude_row,
+        ] {
             row.connect_active_notify({
                 let pane = Rc::clone(&pane);
                 move |_| pane.notify_changed()
@@ -413,6 +422,7 @@ impl QueryPane {
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         let depth = self.depth_row.value().round() as u8;
         state.max_depth = normalize_floor_limit(depth.clamp(1, MAX_SEARCH_DEPTH));
+        state.auto_apply_trinket = self.auto_trinket_row.is_active();
         state.require_blacksmith = self.blacksmith_row.is_active();
         state.exclude_blacksmith_rewards = self.exclude_row.is_active();
         state.wandmaker_quest = usize::try_from(self.wandmaker_row.selected())
@@ -440,6 +450,7 @@ impl QueryPane {
     /// Rebuilds every control from `state` without echoing change signals.
     pub fn refresh(self: &Rc<Self>, state: &AppState) {
         self.updating.set(true);
+        self.auto_trinket_row.set_active(state.auto_apply_trinket);
         self.depth_row
             .set_value(f64::from(normalize_floor_limit(state.max_depth)));
         self.blacksmith_row.set_active(state.require_blacksmith);
