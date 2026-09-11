@@ -35,7 +35,7 @@
   background: var(--d1-bg);
   border-bottom: 1px solid var(--d1-border);
 }
-.d1-map-toolbar button[aria-pressed="true"]:not(.d1-map-motion) {
+.d1-map-toolbar button[aria-pressed="true"] {
   color: var(--d1-amber);
   background: var(--d1-amber-dim);
 }
@@ -48,14 +48,8 @@
   outline: 2px solid var(--d1-amber);
   outline-offset: -2px;
 }
-.d1-map-motion {
-  margin-left: auto;
-}
 .d1-map-toolbar-branched .d1-map-secrets {
   margin-left: auto;
-}
-.d1-map-toolbar-branched .d1-map-motion {
-  margin-left: 0;
 }
 .d1-map-viewport {
   position: relative;

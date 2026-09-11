@@ -34,19 +34,6 @@ function MapSession(props: LevelMapViewProps) {
   const [error, setError] = useState<string>();
   const [retry, setRetry] = useState(0);
   const [secrets, setSecrets] = useState(false);
-  const [playing, setPlaying] = useState(
-    () =>
-      typeof window !== "undefined" &&
-      !window.matchMedia("(prefers-reduced-motion: reduce)").matches,
-  );
-  useEffect(() => {
-    const preference = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const update = () => {
-      if (preference.matches) setPlaying(false);
-    };
-    preference.addEventListener("change", update);
-    return () => preference.removeEventListener("change", update);
-  }, []);
   const request: LevelMapRequest = { ...props, branch };
   const requestKey = mapRequestJson(request);
   useEffect(() => {
@@ -113,15 +100,6 @@ function MapSession(props: LevelMapViewProps) {
         >
           Secrets
         </button>
-        <button
-          type="button"
-          className="d1-map-motion"
-          aria-pressed={playing}
-          onClick={() => setPlaying((value) => !value)}
-          aria-label={playing ? "Pause map animation" : "Play map animation"}
-        >
-          {playing ? "Pause" : "Animate"}
-        </button>
       </div>
       {error ? (
         <div className="d1-map-message" role="alert" style={{ minHeight: props.height ?? 300 }}>
@@ -138,7 +116,6 @@ function MapSession(props: LevelMapViewProps) {
           height={props.height ?? (props.compact ? 230 : 320)}
           label={title}
           secrets={secrets}
-          playing={playing}
         />
       ) : (
         <div className="d1-map-message" role="status" style={{ minHeight: props.height ?? 300 }}>
@@ -154,13 +131,11 @@ function MapCanvas({
   height,
   label,
   secrets,
-  playing,
 }: {
   bundle: MapBundle;
   height: number;
   label: string;
   secrets: boolean;
-  playing: boolean;
 }) {
   const { map } = bundle;
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -234,10 +209,10 @@ function MapCanvas({
     const start = performance.now();
     const tick = (time: number) => {
       if (time - last >= 50) {
-        drawLevelMap(context, bundle, playing ? time - start : 0, secrets);
+        drawLevelMap(context, bundle, time - start, secrets);
         last = time;
       }
-      if (playing && visible && !document.hidden) frame = requestAnimationFrame(tick);
+      if (visible && !document.hidden) frame = requestAnimationFrame(tick);
     };
     const resume = () => {
       cancelAnimationFrame(frame);
@@ -249,7 +224,7 @@ function MapCanvas({
       cancelAnimationFrame(frame);
       document.removeEventListener("visibilitychange", resume);
     };
-  }, [bundle, playing, visible, secrets]);
+  }, [bundle, visible, secrets]);
   const pointerPoint = (event: ReactPointerEvent<HTMLDivElement>) => {
     const bounds = event.currentTarget.getBoundingClientRect();
     return {
