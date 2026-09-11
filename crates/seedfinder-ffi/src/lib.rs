@@ -26,6 +26,42 @@ const INVALID: i32 = -1;
 const INTERNAL: i32 = -2;
 const UNKNOWN_HANDLE: i32 = -3;
 
+/// Estimates the query before a search, without creating a search session.
+#[allow(clippy::not_unsafe_ptr_arg_deref)] // The C caller supplies the writable output slot.
+#[unsafe(no_mangle)]
+pub extern "C" fn seedfinder_analyze_query(
+    request: *const u8,
+    request_len: usize,
+    out_probability: *mut f64,
+) -> i32 {
+    if out_probability.is_null() {
+        return INVALID;
+    }
+    // SAFETY: the ABI requires a writable output slot.
+    unsafe { out_probability.write(0.0) };
+    catch_unwind(AssertUnwindSafe(|| {
+        let Some(bytes) = request_slice(request, request_len) else {
+            return INVALID;
+        };
+        let Ok(document) = std::str::from_utf8(bytes) else {
+            return INVALID;
+        };
+        let Ok(query) = json_query::decode(document) else {
+            return INVALID;
+        };
+        if shpd_seedfinder_core::feasibility::QueryPlan::analyze(&query).is_unsatisfiable() {
+            return 1;
+        }
+        let probability = shpd_seedfinder_core::probability::estimate_match_probability(&query);
+        if probability.is_finite() && probability > 0.0 {
+            // SAFETY: checked above; the caller owns this writable slot.
+            unsafe { out_probability.write(probability) };
+        }
+        OK
+    }))
+    .unwrap_or(INTERNAL)
+}
+
 fn request_slice<'a>(request: *const u8, len: usize) -> Option<&'a [u8]> {
     if request.is_null() {
         return None;
@@ -599,6 +635,41 @@ mod tests {
     /// document — here a +2 Wand of Frost anywhere in the dungeon.
     fn query_packet() -> Vec<u8> {
         br#"{"requirements":[{"item":"wand_frost","upgrade":2}]}"#.to_vec()
+    }
+
+    #[test]
+    fn analysis_handles_possible_impossible_and_invalid_queries() {
+        let request = query_packet();
+        let mut probability = -1.0;
+        assert_eq!(
+            seedfinder_analyze_query(request.as_ptr(), request.len(), &raw mut probability),
+            OK
+        );
+        assert!(probability > 0.0 && probability <= 1.0);
+
+        let impossible = br#"{"requirements":[{"kind":"ring","upgrade":4}],"max_depth":14}"#;
+        assert_eq!(
+            seedfinder_analyze_query(impossible.as_ptr(), impossible.len(), &raw mut probability),
+            1
+        );
+        assert_eq!(probability.to_bits(), 0.0_f64.to_bits());
+
+        for invalid in [b"bad".as_slice(), b"", &[0xff]] {
+            probability = 1.0;
+            assert_eq!(
+                seedfinder_analyze_query(invalid.as_ptr(), invalid.len(), &raw mut probability),
+                INVALID
+            );
+            assert_eq!(probability.to_bits(), 0.0_f64.to_bits());
+        }
+        assert_eq!(
+            seedfinder_analyze_query(ptr::null(), 0, &raw mut probability),
+            INVALID
+        );
+        assert_eq!(
+            seedfinder_analyze_query(request.as_ptr(), request.len(), ptr::null_mut()),
+            INVALID
+        );
     }
 
     unsafe fn take_packet(pointer: *mut u8, len: usize) -> Vec<u8> {

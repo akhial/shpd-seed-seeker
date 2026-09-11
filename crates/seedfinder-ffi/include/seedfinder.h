@@ -39,6 +39,10 @@ int64_t seedfinder_start_resumed_search(const uint8_t *request, size_t request_l
 // Logical processors available to search workers, never less than one: the
 // ceiling for a frontend's worker selector.
 uint32_t seedfinder_available_workers(void);
+// Analyzes a query without starting workers, using the web app's feasibility
+// and probability model. Returns 0 for a possible query, 1 for an impossible
+// query, or a negative error code. out_probability is 0 when unavailable.
+int32_t seedfinder_analyze_query(const uint8_t *request, size_t request_len, double *out_probability);
 int32_t seedfinder_poll(int64_t handle, uint32_t max_results, uint8_t **out_packet, size_t *out_len);
 // [state, scanned, total, errorCode, probabilityBits]; state: 0 running,
 // 1 completed, 2 cancelled, 3 failed. A stopped search keeps reporting

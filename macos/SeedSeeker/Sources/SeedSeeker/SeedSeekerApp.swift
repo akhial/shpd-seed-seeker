@@ -599,6 +599,9 @@ private struct QueryView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal).padding(.top, 8)
             }
+            if let request = builtRequest, let document = try? QueryDocument.encode(request) {
+                QueryEstimateView(document: document)
+            }
             // Starting a search that narrows — or just repeats — the last
             // finished run refines it automatically; the controller decides,
             // so there is no second button here.
@@ -743,7 +746,12 @@ private struct QueryView: View {
                     Slider(value: floorLimitBinding($maximumDepth),
                            in: 0...Double(FloorLimits.options.count - 1), step: 1)
                         .accessibilityValue(Text("first \(maximumDepth) floor\(maximumDepth == 1 ? "" : "s")"))
-                    Toggle("AutoTrinket", isOn: $autoApplyTrinket).toggleStyle(.switch).padding(.top, 12)
+                    HStack {
+                        Text("AutoTrinket")
+                        Spacer()
+                        Toggle("AutoTrinket", isOn: $autoApplyTrinket)
+                            .labelsHidden().toggleStyle(.switch)
+                    }.padding(.top, 12)
                     Text("Applies a helpful trinket at +3 at the first brewing opportunity. Keeps it only when the match needs it.")
                         .font(.caption).foregroundStyle(.secondary)
 
@@ -1884,27 +1892,46 @@ private struct NumberedResult: Identifiable {
 private struct ResultsView: View {
     let controller: SearchController
     let scout: (String) -> Void
+
     var body: some View {
-        let rows = controller.results.enumerated().map { NumberedResult(number: $0.offset + 1, result: $0.element) }
         VStack(alignment: .leading, spacing: 10) {
-            statusBody.padding([.horizontal, .top])
-            Table(rows, selection: Bindable(controller).selectedSeed) {
-                TableColumn("#") { row in Text("\(row.number)").foregroundStyle(.secondary) }.width(45)
-                TableColumn("Seed") { row in
-                    HStack(spacing: 6) {
-                        Text(row.result.seed).font(.system(.body, design: .monospaced))
-                        if let id = row.result.selectedTrinket, let item = ItemCatalog.findById(id) {
-                            ItemSpriteView(item: item, pointSize: 16, label: item.name).opacity(0.6).help(item.name)
-                        }
-                    }
-                        .contextMenu { Button("Copy Seed") { copy(row.result.seed) }; Button("Scout Seed") { scout(row.result.seed) } }
-                }
-            }
-            Button("Copy Selected") { if let seed = controller.selectedSeed { copy(seed) } }
-                .keyboardShortcut("c", modifiers: .command).hidden()
+            ResultsStatusView(controller: controller).padding([.horizontal, .top])
+            ResultsTable(controller: controller, scout: scout)
         }.navigationTitle("Results")
     }
-    @ViewBuilder private var statusBody: some View {
+}
+
+/// Search progress changes every poll. Keep those observations outside the
+/// table so a status tick cannot overwrite an in-flight native selection.
+private struct ResultsTable: View {
+    let controller: SearchController
+    let scout: (String) -> Void
+
+    var body: some View {
+        let rows = controller.results.enumerated().map { NumberedResult(number: $0.offset + 1, result: $0.element) }
+        Table(rows, selection: Bindable(controller).selectedSeed) {
+            TableColumn("#") { row in Text("\(row.number)").foregroundStyle(.secondary) }.width(45)
+            TableColumn("Seed") { row in
+                HStack(spacing: 6) {
+                    Text(row.result.seed).font(.system(.body, design: .monospaced))
+                    if let id = row.result.selectedTrinket, let item = ItemCatalog.findById(id) {
+                        ItemSpriteView(item: item, pointSize: 16, label: item.name).opacity(0.6).help(item.name)
+                    }
+                }
+                    .contextMenu { Button("Copy Seed") { copy(row.result.seed) }; Button("Scout Seed") { scout(row.result.seed) } }
+            }
+        }
+        .background {
+            Button("Copy Selected") { if let seed = controller.selectedSeed { copy(seed) } }
+                .keyboardShortcut("c", modifiers: .command).hidden().frame(width: 0, height: 0)
+        }
+    }
+    private func copy(_ seed: String) { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(seed, forType: .string) }
+}
+
+private struct ResultsStatusView: View {
+    let controller: SearchController
+    @ViewBuilder var body: some View {
         if controller.isImported {
             HStack(spacing: 8) {
                 Text("Imported").font(.caption.bold())
@@ -1962,7 +1989,6 @@ private struct ResultsView: View {
         }
         return caption
     }
-    private func copy(_ seed: String) { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(seed, forType: .string) }
 }
 
 // MARK: - Scout / seed detail
@@ -2022,6 +2048,12 @@ private struct ScoutFloorFrames: PreferenceKey {
     static var defaultValue: [Int: CGRect] { [:] }
     static func reduce(value: inout [Int: CGRect], nextValue: () -> [Int: CGRect]) { value.merge(nextValue(), uniquingKeysWith: { _, next in next }) }
 }
+private struct ScoutHeaderHeights: PreferenceKey {
+    static var defaultValue: [Int: CGFloat] { [:] }
+    static func reduce(value: inout [Int: CGFloat], nextValue: () -> [Int: CGFloat]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, next in next })
+    }
+}
 private struct ScoutOfferFrame: PreferenceKey {
     static var defaultValue: CGRect? { nil }
     static func reduce(value: inout CGRect?, nextValue: () -> CGRect?) { value = nextValue() ?? value }
@@ -2029,6 +2061,125 @@ private struct ScoutOfferFrame: PreferenceKey {
 private struct ScoutViewportHeight: PreferenceKey {
     static var defaultValue: CGFloat { 0 }
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
+@Observable private final class ScoutHeaderOffset {
+    var value: CGFloat = 0
+}
+
+/// Geometry is cached without invalidating the document. Only the moving
+/// header and the compact trinket tools observe scroll-dependent values.
+private final class ScoutScrollState {
+    var floorFrames: [Int: CGRect] = [:]
+    var headerHeights: [Int: CGFloat] = [:]
+    var viewportHeight: CGFloat = 0
+    var pendingAnchor: (seed: String, trinket: String?, depth: Int, offset: CGFloat)?
+    private var headerOffsets: [Int: ScoutHeaderOffset] = [:]
+    private var pinnedDepth: Int?
+
+    func headerOffset(for depth: Int) -> ScoutHeaderOffset {
+        if let offset = headerOffsets[depth] { return offset }
+        let offset = ScoutHeaderOffset()
+        headerOffsets[depth] = offset
+        return offset
+    }
+
+    func updatePinnedHeader() {
+        // Use the floor's layout position, never the translated header's
+        // visual frame, so pinning cannot feed back into its own measurement.
+        var frames: [Int: CGRect] = [:]
+        for (depth, frame) in floorFrames {
+            if let height = headerHeights[depth] {
+                frames[depth] = CGRect(x: frame.minX, y: frame.minY, width: frame.width, height: height)
+            }
+        }
+        let position = ScoutHeaderPosition.pinned(in: frames)
+        if let previous = pinnedDepth, previous != position?.depth {
+            headerOffset(for: previous).value = 0
+        }
+        pinnedDepth = position?.depth
+        if let position, let frame = frames[position.depth] {
+            let offset = headerOffset(for: position.depth)
+            let translation = position.offset - frame.minY
+            if offset.value != translation { offset.value = translation }
+        }
+    }
+}
+
+@Observable private final class ScoutTrinketReveal {
+    var fraction: Double = 0
+}
+
+private struct ScoutTrinketTools: View {
+    let model: ScoutViewModel
+    let reveal: ScoutTrinketReveal
+    let hasResult: Bool
+    let onSelect: (String) -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        ZStack(alignment: .trailing) {
+            Text(!hasResult ? "" : "J / K").font(.caption2).foregroundStyle(.tertiary).opacity(1 - reveal.fraction)
+            HStack(spacing: 4) {
+                ForEach(Array((model.world?.trinketOrder ?? []).prefix(4))) { item in
+                    let applied = model.world?.selectedTrinket == item.id
+                    Button { onSelect(item.id) } label: {
+                        ItemSpriteView(item: item, pointSize: 20)
+                            .frame(width: 28, height: 28)
+                            .background(applied ? Color.shatteredMint.opacity(0.14) : Color.clear, in: RoundedRectangle(cornerRadius: 6))
+                            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(applied ? Color.shatteredMint : Color.secondary.opacity(0.25), lineWidth: applied ? 2 : 1))
+                    }
+                    .buttonStyle(.plain).help(item.name)
+                    .accessibilityLabel(item.name).accessibilityValue(applied ? "Selected" : "Not selected")
+                    .disabled(model.loading || reveal.fraction == 0)
+                }
+            }
+            .opacity(reveal.fraction).offset(y: reduceMotion ? 0 : (1 - reveal.fraction) * 28)
+            .allowsHitTesting(reveal.fraction > 0).accessibilityHidden(reveal.fraction == 0)
+        }.frame(width: 124, height: 28).clipped()
+    }
+}
+
+private struct ScoutFloorHeader: View {
+    let depth: Int
+    let world: ScoutWorld
+
+    var body: some View {
+        HStack {
+            Text("Floor \(depth)").font(.headline)
+            if let feeling = world.feelings[depth] { FloorFeelingSpriteView(feeling: feeling) }
+            Text(region).foregroundStyle(.tertiary)
+            if let quest = world.quests.first(where: { $0.depth == depth }) {
+                Text("· \(quest.variant.label)").foregroundStyle(.tertiary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal).padding(.vertical, 6)
+        .background(Color(nsColor: .windowBackgroundColor))
+    }
+
+    private var region: String {
+        switch depth {
+        case ..<6: "Sewers"
+        case ..<11: "Prison"
+        case ..<16: "Caves"
+        case ..<21: "Dwarven City"
+        default: "Demon Halls"
+        }
+    }
+}
+
+/// Move the real header inside its floor. Offset affects drawing, not the
+/// document's layout, and keeps a single accessible header for each floor.
+private struct ScoutMovingHeader: View {
+    let depth: Int
+    let state: ScoutHeaderOffset
+    let world: ScoutWorld
+
+    var body: some View {
+        ScoutFloorHeader(depth: depth, world: world)
+            .offset(y: state.value)
+    }
 }
 
 private struct SeedDetailView: View {
@@ -2043,46 +2194,17 @@ private struct SeedDetailView: View {
     let onNavigateResult: (Int) -> Void
     @FocusState private var focused: Bool
 
-    @State private var offerFrame: CGRect?
-    @State private var floorFrames: [Int: CGRect] = [:]
-    @State private var viewportHeight: CGFloat = 0
-    @State private var pendingAnchor: (seed: String, trinket: String?, depth: Int, offset: CGFloat)?
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    private var trinketReveal: Double {
-        guard let frame = offerFrame, frame.height > 0 else { return 0 }
-        return Double(min(1, max(0, -frame.minY / frame.height)))
-    }
+    @State private var scrollState = ScoutScrollState()
+    @State private var trinketReveal = ScoutTrinketReveal()
 
     private func selectTrinket(_ id: String) {
         guard let world = model.world, !model.loading else { return }
         let selected = world.selectedTrinket == id ? nil : id
-        if let floor = floorFrames.sorted(by: { $0.key < $1.key }).first(where: { $0.value.maxY > 0 }) {
-            pendingAnchor = (world.seed, selected, floor.key, floor.value.minY)
+        if let floor = scrollState.floorFrames.sorted(by: { $0.key < $1.key }).first(where: { $0.value.maxY > 0 }) {
+            scrollState.pendingAnchor = (world.seed, selected, floor.key, floor.value.minY)
         }
         let query = model.renderedQuery ?? scoutQuery
         model.scout(world.seed, challenges: query?.challenges ?? challenges, query: query, trinket: selected ?? "none")
-    }
-
-    private var trinketTools: some View {
-        ZStack(alignment: .trailing) {
-            Text(resultPosition == nil ? "" : "J / K").font(.caption2).foregroundStyle(.tertiary).opacity(1 - trinketReveal)
-            HStack(spacing: 4) {
-                ForEach(Array((model.world?.trinketOrder ?? []).prefix(4))) { item in
-                    let applied = model.world?.selectedTrinket == item.id
-                    Button { selectTrinket(item.id) } label: {
-                        ItemSpriteView(item: item, pointSize: 20)
-                            .frame(width: 28, height: 28)
-                            .background(applied ? Color.shatteredMint.opacity(0.14) : Color.clear, in: RoundedRectangle(cornerRadius: 6))
-                            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(applied ? Color.shatteredMint : Color.secondary.opacity(0.25), lineWidth: applied ? 2 : 1))
-                    }
-                    .buttonStyle(.plain).help(item.name)
-                    .accessibilityLabel(item.name).accessibilityValue(applied ? "Selected" : "Not selected")
-                    .disabled(model.loading || trinketReveal == 0)
-                }
-            }
-            .opacity(trinketReveal).offset(y: reduceMotion ? 0 : (1 - trinketReveal) * 28)
-            .allowsHitTesting(trinketReveal > 0).accessibilityHidden(trinketReveal == 0)
-        }.frame(width: 124, height: 28).clipped()
     }
 
     var body: some View {
@@ -2095,7 +2217,10 @@ private struct SeedDetailView: View {
                 ContentUnavailableView("No seed scouted", systemImage: "map",
                     description: Text("Enter a canonical seed, or select a search result, to inspect its item manifest."))
             }
-            Button("") { focused = true }.keyboardShortcut("l", modifiers: .command).hidden()
+        }
+        .background {
+            Button("") { focused = true }.keyboardShortcut("l", modifiers: .command)
+                .hidden().frame(width: 0, height: 0)
         }
         .navigationTitle("Seed Detail")
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -2127,7 +2252,8 @@ private struct SeedDetailView: View {
                         .help("Scout the next search result (J)")
                     } else { Text("Trinkets").font(.caption).foregroundStyle(.secondary) }
                     Spacer(minLength: 4)
-                    trinketTools
+                    ScoutTrinketTools(model: model, reveal: trinketReveal,
+                                      hasResult: resultPosition != nil, onSelect: selectTrinket)
                 }
             }
         }.padding(.horizontal).padding(.top, 10).padding(.bottom, 8)
@@ -2144,7 +2270,7 @@ private struct SeedDetailView: View {
     private func engineMatches(in world: ScoutWorld) -> ScoutMatches? { model.matches }
 
     private func manifest(_ world: ScoutWorld) -> some View {
-        let byDepth = Dictionary(grouping: world.items, by: \.depth)
+        let byDepth = Dictionary(grouping: Array(world.items.enumerated()), by: { $0.element.depth })
         let depths = Set(byDepth.keys).union(world.feelings.keys).sorted()
         let marks = engineMatches(in: world)
         let matches = marks?.matched ?? []
@@ -2162,55 +2288,68 @@ private struct SeedDetailView: View {
             }
             .font(.caption).foregroundStyle(.secondary)
             .padding(.horizontal).padding(.vertical, 6)
-            if !world.quests.isEmpty {
-                FlowLayout(spacing: 6, lineSpacing: 6) {
-                    ForEach(world.quests) { quest in
-                        HStack(spacing: 4) {
-                            Text(quest.variant.label).font(.caption.bold())
-                            Text("\(quest.kind.giverLabel) · F\(quest.depth)")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                        .padding(.horizontal, 7).padding(.vertical, 2)
-                        .background(Self.questTint(quest.kind).opacity(0.12), in: Capsule())
-                    }
-                }.padding(.horizontal).padding(.bottom, 6)
-            }
             ScrollViewReader { proxy in
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
+                    // A manifest is bounded and small enough to lay out once.
+                    // Lazy sections with variable-height floor groups can loop
+                    // in SwiftUI's placement cache while scrolling on macOS.
+                    VStack(alignment: .leading, spacing: 0) {
                         ForEach(depths, id: \.self) { depth in
-                            VStack(alignment: .leading, spacing: 6) {
-                                HStack {
-                                    Text("Floor \(depth)").font(.headline)
-                                    if let feeling = world.feelings[depth] { FloorFeelingSpriteView(feeling: feeling) }
-                                    Text(Self.region(depth)).foregroundStyle(.tertiary)
-                                    if let quest = world.quests.first(where: { $0.depth == depth }) { Text("· \(quest.variant.label)").foregroundStyle(.tertiary) }
-                                }.padding(.vertical, 6)
-                                if let catalyst = world.items.first(where: { $0.depth == depth && $0.item.kind == .trinket }) {
-                                    TrinketScoutRow(catalyst: catalyst, order: world.trinketOrder,
-                                        selectedTrinket: world.selectedTrinket, loading: model.loading, onSelect: selectTrinket,
-                                        matchedIDs: Set(world.items.enumerated().filter { matches.contains($0.offset) && $0.element.item.kind == .trinket }.map { $0.element.item.id }))
+                            VStack(alignment: .leading, spacing: 0) {
+                                ScoutMovingHeader(depth: depth, state: scrollState.headerOffset(for: depth), world: world)
+                                    .background(GeometryReader { geometry in
+                                        Color.clear.preference(key: ScoutHeaderHeights.self,
+                                            value: [depth: geometry.size.height])
+                                    })
+                                    .zIndex(1)
+                                VStack(alignment: .leading, spacing: 6) {
+                                    if let catalyst = byDepth[depth]?.first(where: { $0.element.item.kind == .trinket })?.element {
+                                        TrinketScoutRow(catalyst: catalyst, order: world.trinketOrder,
+                                            selectedTrinket: world.selectedTrinket, loading: model.loading, onSelect: selectTrinket,
+                                            matchedIDs: Set(world.items.enumerated().filter { matches.contains($0.offset) && $0.element.item.kind == .trinket }.map { $0.element.item.id }))
+                                    }
+                                    ForEach((byDepth[depth] ?? []).filter { $0.element.item.kind != .trinket }, id: \.offset) { entry in
+                                        ScoutItemRow(item: entry.element, ringGems: world.ringGems, matches: matches.contains(entry.offset))
+                                            .padding(.vertical, 5)
+                                        Divider()
+                                    }
                                 }
-                                ForEach(Array(world.items.enumerated()).filter { $0.element.depth == depth && $0.element.item.kind != .trinket }, id: \.offset) { entry in
-                                    ScoutItemRow(item: entry.element, ringGems: world.ringGems, matches: matches.contains(entry.offset))
-                                        .padding(.vertical, 5)
-                                    Divider()
-                                }
-                            }.id(depth)
-                                .background(GeometryReader { geometry in
-                                    Color.clear.preference(key: ScoutFloorFrames.self, value: [depth: geometry.frame(in: .named("scout-manifest"))])
-                                })
+                                .padding(.horizontal)
+                                .padding(.bottom, 16)
+                            }
+                            .id(depth)
+                            .background(GeometryReader { geometry in
+                                Color.clear.preference(key: ScoutFloorFrames.self,
+                                    value: [depth: geometry.frame(in: .named("scout-manifest"))])
+                            })
                         }
-                    }.padding(.horizontal).padding(.bottom)
+                    }
+                    .padding(.bottom)
                 }
                 .coordinateSpace(name: "scout-manifest")
                 .background(GeometryReader { geometry in Color.clear.preference(key: ScoutViewportHeight.self, value: geometry.size.height) })
-                .onPreferenceChange(ScoutViewportHeight.self) { viewportHeight = $0 }
-                .onPreferenceChange(ScoutOfferFrame.self) { offerFrame = $0 }
-                .onPreferenceChange(ScoutFloorFrames.self) { frames in
-                    floorFrames = frames
-                    restoreAnchor(in: world, using: proxy)
+                .onPreferenceChange(ScoutViewportHeight.self) { scrollState.viewportHeight = $0 }
+                .onPreferenceChange(ScoutOfferFrame.self) { frame in
+                    let fraction = frame.flatMap { frame -> Double? in
+                        guard frame.height > 0 else { return nil }
+                        return Double(min(1, max(0, -frame.minY / frame.height)))
+                    } ?? 0
+                    if trinketReveal.fraction != fraction { trinketReveal.fraction = fraction }
                 }
+                .onPreferenceChange(ScoutHeaderHeights.self) { heights in
+                    scrollState.headerHeights = heights
+                    scrollState.updatePinnedHeader()
+                }
+                .onPreferenceChange(ScoutFloorFrames.self) { frames in
+                    scrollState.floorFrames = frames
+                    scrollState.updatePinnedHeader()
+                    // Scroll after layout, never re-enter layout from a
+                    // geometry preference callback.
+                    if scrollState.pendingAnchor != nil {
+                        DispatchQueue.main.async { restoreAnchor(in: world, using: proxy) }
+                    }
+                }
+                .onChange(of: world.seed) { scrollState.pendingAnchor = nil }
                 .task(id: world.selectedTrinket) {
                     // An effect-only change may leave every frame identical,
                     // so no preference callback arrives. Consume that anchor
@@ -2224,33 +2363,14 @@ private struct SeedDetailView: View {
     }
 
     private func restoreAnchor(in world: ScoutWorld, using proxy: ScrollViewProxy) {
-        guard let anchor = pendingAnchor, anchor.seed == world.seed,
+        guard let anchor = scrollState.pendingAnchor, anchor.seed == world.seed,
               anchor.trinket == world.selectedTrinket,
-              let frame = floorFrames[anchor.depth], viewportHeight > 0 else { return }
-        pendingAnchor = nil
-        let distance = viewportHeight - frame.height
+              let frame = scrollState.floorFrames[anchor.depth], scrollState.viewportHeight > 0 else { return }
+        scrollState.pendingAnchor = nil
+        let distance = scrollState.viewportHeight - frame.height
         let alignment = abs(distance) > 1 ? anchor.offset / distance : 0
         var transaction = Transaction(); transaction.disablesAnimations = true
         withTransaction(transaction) { proxy.scrollTo(anchor.depth, anchor: UnitPoint(x: 0, y: alignment)) }
-    }
-
-    private static func questTint(_ kind: ScoutQuestKind) -> Color {
-        switch kind {
-        case .ghost: .teal
-        case .wandmaker: .purple
-        case .blacksmith: .orange
-        case .imp: .yellow
-        }
-    }
-
-    private static func region(_ depth: Int) -> String {
-        switch depth {
-        case ..<6: "Sewers"
-        case ..<11: "Prison"
-        case ..<16: "Caves"
-        case ..<21: "Dwarven City"
-        default: "Demon Halls"
-        }
     }
 
 }
