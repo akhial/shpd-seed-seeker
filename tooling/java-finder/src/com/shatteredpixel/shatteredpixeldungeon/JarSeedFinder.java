@@ -11,6 +11,12 @@
 package com.shatteredpixel.shatteredpixeldungeon;
 
 import com.badlogic.gdx.Preferences;
+import com.badlogic.gdx.utils.JsonReader;
+import com.badlogic.gdx.utils.JsonValue;
+import com.shatteredpixel.shatteredpixeldungeon.items.Generator;
+import com.shatteredpixel.shatteredpixeldungeon.levels.Terrain;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import com.shatteredpixel.shatteredpixeldungeon.actors.blobs.SacrificialFire;
 import com.shatteredpixel.shatteredpixeldungeon.actors.hero.HeroClass;
 import com.shatteredpixel.shatteredpixeldungeon.actors.mobs.ArmoredStatue;
@@ -59,7 +65,7 @@ import java.util.Map;
  * Imp has spawned, and scans everything generated — heaps and their containers,
  * mimics, statues, the sacrificial-fire prize, the Imp's shop cache and the
  * Ghost/Wandmaker/Blacksmith/Imp reward options — for an item of a named class
- * at a named upgrade. The game's generator state is global, so one JVM searches
+ * at a named upgrade and optional enchantment/glyph. The game's generator state is global, so one JVM searches
  * one seed at a time; use several processes over disjoint ranges for a
  * multi-core figure.
  */
@@ -108,6 +114,11 @@ public final class JarSeedFinder {
 		Dungeon.dailyReplay = false;
 		SPDSettings.challenges(options.challenges);
 
+		if (options.stream) {
+			runStream(options);
+			return;
+		}
+
 		List<String> matches = new ArrayList<String>();
 		// The JIT needs a few hundred runs before the generator settles; the
 		// warmup seeds are searched exactly like the rest but not timed, which
@@ -135,6 +146,33 @@ public final class JarSeedFinder {
 				options.warmup, tested, matches.size(), elapsed, tested / elapsed);
 	}
 
+	/** JSON-lines benchmark/replay adapter. Input parsing and output are outside
+	 * the internal timer; the driver also records end-to-end batch wall time. */
+	private static void runStream(Options options) throws Exception {
+		for (long i = 0; i < options.warmup; i++) search(9_000_000L + i, options);
+		System.out.println("{\"ready\":true}");
+		BufferedReader input = new BufferedReader(new InputStreamReader(System.in));
+		String line;
+		while ((line = input.readLine()) != null) {
+			JsonValue request = new JsonReader().parse(line);
+			long[] seeds = request.get("seeds").asLongArray();
+			JsonValue choices = request.get("trinkets");
+			options.fullScan = request.getBoolean("verify", false);
+			if (choices != null && choices.size != seeds.length) throw new IllegalArgumentException("one choice per seed required");
+			List<String> results = new ArrayList<>();
+			long began = System.nanoTime();
+			for (int i = 0; i < seeds.length; i++) {
+				options.trinket = choices == null || choices.get(i).isNull() ? null : choices.get(i).asString();
+				boolean found = search(seeds[i], options);
+				if (found || options.fullScan) results.add("{\"seed\":" + seeds[i]
+					+ ",\"witnesses\":[" + String.join(",", options.witnesses) + "]}");
+			}
+			double seconds = (System.nanoTime() - began) / 1e9;
+			System.out.println("{\"tested\":" + seeds.length + ",\"seconds\":" + seconds
+				+ ",\"matches\":[" + String.join(",", results) + "]}");
+		}
+	}
+
 	/** Generates one seed's world and reports whether it holds the wanted item. */
 	private static boolean search(long seed, Options options) throws Exception {
 		SPDSettings.customSeed(DungeonSeed.convertToCode(seed));
@@ -143,12 +181,20 @@ public final class JarSeedFinder {
 		Dungeon.init();
 		resetLeftoverQuestState();
 
+		options.witnesses.clear();
+		options.foundItems.clear();
+		options.independentItems.clear();
+		options.source = "Heap";
+		options.effectOverride = null;
+		boolean brewed = false;
+		boolean alchemy = false;
 		int impDepth = -1;
 		boolean ghost = false;
 		boolean wandmaker = false;
 		boolean blacksmith = false;
 		boolean found = false;
-		for (int depth = 1; depth <= options.floors && !found; depth++) {
+		for (int depth = 1; depth <= (options.fullScan ? 24 : options.floors) && (!found || options.fullScan); depth++) {
+			options.depth = depth;
 			// Depths 5, 10, 15 and 25 leave no run-persistent state behind — the
 			// oracle's boss-skip fixtures pin that — so a search can step over
 			// them. Depth 20 is not neutral (it caches the Imp's shop) and is
@@ -158,31 +204,56 @@ public final class JarSeedFinder {
 				continue;
 			}
 			Level level = Dungeon.newLevel();
-			found = matches(level, options);
+			found |= matches(level, options);
 
 			if (!ghost && Ghost.Quest.weapon != null && Ghost.Quest.armor != null) {
 				ghost = true;
-				found |= matches(Ghost.Quest.weapon, options) || matches(Ghost.Quest.armor, options);
+				options.source = "GhostReward";
+				options.effectOverride = Ghost.Quest.enchant;
+				found |= matches(Ghost.Quest.weapon, options);
+				options.effectOverride = Ghost.Quest.glyph;
+				found |= matches(Ghost.Quest.armor, options);
+				options.effectOverride = null;
 			}
 			if (!wandmaker && Wandmaker.Quest.wand1 != null && Wandmaker.Quest.wand2 != null) {
 				wandmaker = true;
-				found |= matches(Wandmaker.Quest.wand1, options) || matches(Wandmaker.Quest.wand2, options);
+				options.source = "WandmakerReward";
+				found |= matches(Wandmaker.Quest.wand1, options) | matches(Wandmaker.Quest.wand2, options);
 			}
 			if (!blacksmith && Blacksmith.Quest.smithRewards != null) {
 				blacksmith = true;
+				options.source = "BlacksmithReward";
 				found |= matches(Blacksmith.Quest.smithRewards, options);
 			}
 			// Imp.Quest.rewardOptions is rolled on the Imp's City floor and cleared
 			// again by VaultFinalRoom.paint(), so it has to be read here.
 			if (impDepth < 0 && !Imp.Quest.rewardOptions.isEmpty()) {
 				impDepth = depth;
+				options.source = "ImpReward";
 				found |= matches(Imp.Quest.rewardOptions, options);
 			}
 
+			// Apply only after the same catalyst/alchemy opportunity as the engine.
+			if (options.trinket != null && !brewed) {
+				for (int tile : level.map) if (tile == Terrain.ALCHEMY) alchemy = true;
+				if (alchemy && Dungeon.LimitedDrops.TRINKET_CATA.count > 0) {
+					Item trinket = (Item) Class.forName("com.shatteredpixel.shatteredpixeldungeon.items.trinkets." + options.trinket).getDeclaredConstructor().newInstance();
+					trinket.level(3);
+					Dungeon.hero.belongings.backpack.items.add(trinket);
+					brewed = true;
+				}
+			}
 			Dungeon.depth++;
 		}
 
-		if (!found && options.vault && impDepth > 0) found = searchVault(impDepth, options);
+		if ((!found || options.fullScan) && options.vault && impDepth > 0) found |= searchVault(impDepth, options);
+
+		// Read the private offer deck only after all level generation is finished.
+		if (options.trinket != null) {
+			boolean offered = false;
+			for (int i = 0; i < 4; i++) offered |= Generator.random(Generator.Category.TRINKET).getClass().getSimpleName().equals(options.trinket);
+			if (!offered) throw new IllegalArgumentException("trinket was not initially offered: " + options.trinket);
+		}
 		return found;
 	}
 
@@ -219,6 +290,7 @@ public final class JarSeedFinder {
 	private static boolean searchVault(int impDepth, Options options) throws Exception {
 		int savedDepth = Dungeon.depth;
 		int savedBranch = Dungeon.branch;
+		options.depth = impDepth;
 		Dungeon.depth = impDepth;
 		Dungeon.branch = 1;
 		try {
@@ -231,48 +303,51 @@ public final class JarSeedFinder {
 
 	/** Scans everything a generated floor carries: heaps, mimics, statues, prizes. */
 	private static boolean matches(Level level, Options options) throws Exception {
-		if (level.heaps != null) {
-			for (int cell : level.heaps.keyArray()) {
-				Heap heap = level.heaps.get(cell);
-				if (heap != null && matches(heap.items, options)) return true;
+		boolean found = false;
+		for (Heap heap : level.heaps.valueList()) {
+			options.source = Dungeon.branch == 1 ? "VaultTreasure" : switch (heap.type) {
+				case HEAP -> "Heap"; case CHEST -> "Chest"; case LOCKED_CHEST -> "LockedChest";
+				case CRYSTAL_CHEST -> "CrystalChest"; case TOMB -> "Tomb";
+				case SKELETON -> "Skeleton"; case FOR_SALE -> "Shop";
+				default -> throw new IllegalStateException("unknown heap: " + heap.type);
+			};
+			if (Dungeon.branch == 1 && level instanceof com.shatteredpixel.shatteredpixeldungeon.levels.RegularLevel) {
+				Object room = ((com.shatteredpixel.shatteredpixeldungeon.levels.RegularLevel)level).room(heap.pos);
+				if (room != null && room.getClass().getSimpleName().equals("VaultFinalRoom")) continue;
 			}
+			found |= matches(heap.items, options);
+			if (found && !options.fullScan) return true;
 		}
-
-		if (level.mobs != null) {
-			for (Mob mob : level.mobs) {
-				if (mob instanceof Mimic) {
-					if (matches(((Mimic) mob).items, options)) return true;
-				} else if (mob instanceof Statue) {
-					if (matches(((Statue) mob).weapon(), options)) return true;
-					if (mob instanceof ArmoredStatue
-							&& matches(((ArmoredStatue) mob).armor(), options)) {
-						return true;
-					}
-				}
+		for (Mob mob : level.mobs) {
+			if (mob instanceof Mimic) {
+				options.source = Dungeon.branch == 1 ? "VaultTreasure" : mob instanceof com.shatteredpixel.shatteredpixeldungeon.actors.mobs.GoldenMimic ? "GoldenMimic" : mob instanceof com.shatteredpixel.shatteredpixeldungeon.actors.mobs.CrystalMimic ? "CrystalMimic" : "Mimic";
+				found |= matches(((Mimic)mob).items, options);
+			} else if (mob instanceof Statue) {
+				options.source = Dungeon.branch == 1 ? "VaultTreasure" : mob instanceof ArmoredStatue ? "ArmoredStatue" : "Statue";
+				found |= matches(((Statue)mob).weapon(), options);
+				if (mob instanceof ArmoredStatue) found |= matches(((ArmoredStatue)mob).armor(), options);
 			}
+			if (found && !options.fullScan) return true;
 		}
-
-		SacrificialFire fire = level.blobs == null ? null
-				: (SacrificialFire) level.blobs.get(SacrificialFire.class);
-		if (fire != null && matches(getField(fire, "prize"), options)) return true;
-
-		return level instanceof CityBossLevel && matchesImpShopCache(level, options);
-	}
-
-	/** The depth-20 Imp shop cache, generated with the boss floor. */
-	private static boolean matchesImpShopCache(Level level, Options options) throws Exception {
-		Object shop = getField(level, "impShop");
-		if (!(shop instanceof ImpShopRoom)) return false;
-		Object items = getField(shop, "itemsToSpawn");
-		return items instanceof Collection && matches((Collection<?>) items, options);
+		options.source = "SacrificialFire";
+		SacrificialFire fire = (SacrificialFire)level.blobs.get(SacrificialFire.class);
+		if (fire != null) found |= matches(getField(fire, "prize"), options);
+		if (level instanceof CityBossLevel) {
+			options.source = "Shop";
+			Object shop = getField(level, "impShop");
+			if (shop instanceof ImpShopRoom) found |= matches((Collection<?>)getField(shop, "itemsToSpawn"), options);
+		}
+		return found;
 	}
 
 	private static boolean matches(Collection<?> items, Options options) {
 		if (items == null) return false;
+		boolean found = false;
 		for (Object item : items) {
-			if (matches(item, options)) return true;
+			found |= matches(item, options);
+			if (found && !options.fullScan) return true;
 		}
-		return false;
+		return found;
 	}
 
 	/**
@@ -285,8 +360,27 @@ public final class JarSeedFinder {
 		if (!(candidate instanceof Item)) return false;
 		Item item = (Item) candidate;
 		if (!isSearchable(item)) return false;
-		if (!item.getClass().getSimpleName().equalsIgnoreCase(options.item)) return false;
-		return options.upgrade < 0 || item.trueLevel() == options.upgrade;
+		String itemClass = item.getClass().getSimpleName();
+		if (!options.items.contains(itemClass)) return false;
+		if (options.depth > options.floors || (options.upgrade >= 0 && item.trueLevel() != options.upgrade)) return false;
+		Object effect = item instanceof Weapon ? ((Weapon)item).enchantment : item instanceof Armor ? ((Armor)item).glyph : null;
+		if (options.source.equals("GhostReward")) effect = options.effectOverride;
+		if (options.source.equals("BlacksmithReward")) effect = item instanceof Weapon ? Blacksmith.Quest.smithEnchant : item instanceof Armor ? Blacksmith.Quest.smithGlyph : null;
+		String effectName = effect == null ? "-" : effect.getClass().getSimpleName();
+		if (effectName.equals("AntiMagic")) effectName = "Anti-Magic";
+		if (effectName.equals("AntiEntropy")) effectName = "Anti-Entropy";
+		if (options.effect != null && itemClass.equals(options.items.get(0))
+				&& !options.effects.contains(effectName)) return false;
+		String id = item.getClass().getSimpleName().replaceAll("(?<!^)([A-Z])", "_$1").toLowerCase(Locale.ROOT).replace("wand_of_", "wand_").replace("ring_of_", "ring_");
+		options.witnesses.add("[" + options.depth + ",\"" + options.source + "\",\"" + id + "\"," + item.trueLevel() + "," + item.cursed + ",\"" + effectName + "\"]");
+		options.foundItems.add(itemClass);
+		// The benchmark's blade and ring have no shared choice outside the
+		// vault. Exactly one item can leave the vault, including Imp rewards.
+		if (!options.source.equals("ImpReward") && !options.source.equals("VaultTreasure")) {
+			options.independentItems.add(itemClass);
+		}
+		return options.foundItems.containsAll(options.items)
+				&& options.items.stream().filter(required -> !options.independentItems.contains(required)).count() <= 1;
 	}
 
 	/** The kinds Seed Seeker searches, so that both tools answer the same question. */
@@ -319,8 +413,10 @@ public final class JarSeedFinder {
 	private static void printUsage() {
 		System.out.println("Usage: java-finder [--item CLASS] [--upgrade N] [--floors N] "
 				+ "[--seeds N] [--start N] [--warmup N] [--challenges N] [--no-vault]"
-				+ " [--skip-boss-floors] [--print-matches]");
-		System.out.println("  --item CLASS       Item class simple name (default: RunicBlade)");
+				+ " [--skip-boss-floors] [--print-matches] [--effect NAME] [--stream]");
+		System.out.println("  --item CLASS       Comma-separated required item classes (default: RunicBlade)");
+		System.out.println("  --stream           JSON-lines batch search and recipe verification protocol");
+		System.out.println("  --effect NAME      Allowed effects for the first item, comma-separated (default: any)");
 		System.out.println("  --upgrade N        Required true upgrade, -1 for any (default: 5)");
 		System.out.println("  --floors N         Deepest floor to generate (default: 19)");
 		System.out.println("  --seeds N          Timed seeds (default: 2000)");
@@ -334,6 +430,18 @@ public final class JarSeedFinder {
 
 	private static final class Options {
 		String item = "RunicBlade";
+		String effect;
+		List<String> items;
+		List<String> effects;
+		java.util.Set<String> foundItems = new java.util.HashSet<>();
+		java.util.Set<String> independentItems = new java.util.HashSet<>();
+		boolean stream;
+		boolean fullScan;
+		String trinket;
+		String source;
+		Object effectOverride;
+		int depth;
+		List<String> witnesses = new ArrayList<>();
 		int upgrade = 5;
 		int floors = LAST_IMP_DEPTH;
 		long seeds = 2000;
@@ -353,6 +461,10 @@ public final class JarSeedFinder {
 					result.help = true;
 				} else if ("--item".equals(arg)) {
 					result.item = requireValue(args, ++i, arg);
+				} else if ("--effect".equals(arg)) {
+					result.effect = requireValue(args, ++i, arg);
+				} else if ("--stream".equals(arg)) {
+					result.stream = true;
 				} else if ("--upgrade".equals(arg)) {
 					result.upgrade = Integer.parseInt(requireValue(args, ++i, arg));
 				} else if ("--floors".equals(arg)) {
@@ -374,6 +486,12 @@ public final class JarSeedFinder {
 				} else {
 					throw new IllegalArgumentException("unknown option '" + arg + "'");
 				}
+			}
+			result.items = List.of(result.item.split(","));
+			result.effects = result.effect == null ? List.of() : List.of(result.effect.split(","));
+			if (result.items.size() > 1 && (!result.items.equals(List.of("RunicBlade", "RingOfMight"))
+					|| result.upgrade != 2 || result.floors != 19)) {
+				throw new IllegalArgumentException("compound mode supports only +2 RunicBlade and +2 RingOfMight through floor 19");
 			}
 			if (result.floors < 1 || result.floors > 26) {
 				throw new IllegalArgumentException("--floors must be between 1 and 26");

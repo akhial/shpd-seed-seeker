@@ -15,16 +15,16 @@ written in Rust — with native apps for Android, Linux, macOS, and Windows.
 **[Try it in your browser →](https://shpd-seed-seeker.web.app/)**
 
 <p align="center">
-  <img alt="Bar chart of seed-search throughput. Seed Seeker tests 5,701 seeds per second on 12 cores and 630 on one core; a Java finder driving the game's own release JAR tests 916 seeds per second across 12 processes and 147 in one process." src="assets/benchmark.svg">
+  <img alt="Matching seeds per minute on an Apple M4 Pro, 12 workers. +2 Runic Blade (Grim, Corrupting, Vampiric or Crystal) and +2 Ring of Might: Seed Seeker (AutoTrinket on) 79.9, Java 10.6. +5 Crossbow: Seed Seeker (AutoTrinket on) 8,429.7, Java 1,772.0. Both queries through floor 19; separate bar scales." src="assets/benchmark.svg">
 </p>
 
 <p align="center">
-  <i>Scanning seeds for a +5 Runic Blade across 19 floors, on an Apple M4 Pro (12 cores).</i>
+  <i>Matches/minute on an Apple M4 Pro (12 cores).</i>
 </p>
 
-- ⚡️ **4–6× faster** than Shattered Pixel Dungeon's own generator on the JVM
+- ⚡️ **4.8–7.5× faster** than Java seed finders
 - 🔍 **Rich queries**: multiple requirements across melee and thrown weapons, armor, wands, and rings
-- 🔗 **Share links**: any search fits in a short link that fills in the query on every platform
+- 🔗 **Share links**: short links to share your search
 - 🔮 **Seed scouting**: paste a seed, get every item with floor, upgrade, enchantment, cursed state and source
 - 📱 **Native apps** Material 3, GTK 4 and libadwaita, SwiftUI, WinUI 3
 
@@ -62,7 +62,7 @@ Binaries are published on the [GitHub Releases page](https://github.com/akhial/s
 
 ### CLI
 
-Build and run the benchmark:
+Build and run benchmark:
 
 ```sh
 cargo run --release -p shpd-seedfinder-cli -- --benchmark
@@ -203,43 +203,34 @@ cargo run --release -p shpd-seedfinder-cli -- -i requirements.json -b 1000 --wor
 
 ## Benchmarks<a id="benchmarks"></a>
 
-Compared with a Java finder that runs Shattered Pixel Dungeon's own generator
-against the official `4.0.0-BETA-3` release JAR (`tooling/java-finder`):
+**Matching seeds per minute**, through floor 19. +2 Grim/Vampiric/Corrupting/Crystal Runic Blade and +2 Ring of Might.
 
-| Configuration | Throughput | Relative |
-| --- | ---: | ---: |
-| Seed Seeker, 12 threads | 5,701 seeds/s | **6.2×** |
-| Seed Seeker, 1 thread | 630 seeds/s | 4.3× (per core) |
-| Java finder, 12 processes (its best) | 916 seeds/s | 1× |
-| Java finder, 1 process | 147 seeds/s | — |
+| Query | Java baseline | AutoTrinket off | AutoTrinket on | AutoTrinket on / Java |
+| --- | ---: | ---: | ---: | ---: |
+| [+2 Runic Blade and +2 Ring of Might](https://shpd-seed-seeker.web.app/#q=QyAhKCsAAeAAAuoKAA) | 10.6 | 54.9 | **79.9** | 7.5× |
+| +5 Crossbow | 1,772.0 | 8,398.0 | 8,429.7 | 4.8× |
 
-- **Machine:** Apple M4 Pro (12 cores), 48 GB, macOS 26.6
-- **Query:** +5 Runic Blade, 19 floors, seeds from `AAA-AAA-AAA`
-- **Builds:** Shattered Pixel Dungeon v4.0.0-BETA-3 release JAR; Rust release; Java OpenJDK 21.0.11
-- **Samples:** Java 5,000 seeds after 200 warm-up seeds (1 process), 2,000 per process; Rust 150,000 (1 thread), 1,000,000 (12 threads)
-- **Java turbo:** 6/8/12 processes: 805/902/916 seeds/s
+AutoTrinket improved match throughput by **45.4%**.
+
+- **Machine:** Apple M4 Pro.
 
 Reproduce:
 
 ```sh
-cargo run --release -p shpd-seedfinder-cli -- --benchmark
-tooling/java-finder/run.sh --no-vault --skip-boss-floors --seeds 5000
+tooling/benchmarks/run.sh --minutes 10 --workers 12 --output /tmp/seed-seeker-benchmark
 ```
 
 ## Development<a id="development"></a>
 
 ### Web app
 
-The web app is a [Vite+](https://viteplus.dev) project. Install the `vp` CLI once
+The web app is a [Vite+](https://viteplus.dev) project. Install `vp`
 (`curl -fsSL https://vite.plus | bash`), then build the browser engine before starting the dev
 server:
 
 ```sh
 ./scripts/build-web-wasm.sh && cd web && vp install && vp dev
 ```
-
-`vp check` (format, lint, type-check), `vp test`, and `vp build` cover the rest; they all need the
-generated engine assets, so run `build-web-wasm.sh` first on a fresh clone.
 
 ### Android
 
@@ -347,21 +338,10 @@ cd macos/SeedSeeker
 swift test
 ```
 
-#### Java Oracle
-
-```sh
-javac -d /tmp tooling/parity/RngOracle.java
-java -cp /tmp RngOracle
-```
-
-`EquipmentOracle.java` is compiled against the isolated v3.3.8 JAR.
-`tooling/oracle-4.0` drives the v4.0.0 release JAR headlessly.
-
 ## Acknowledgements<a id="acknowledgements"></a>
 
 Seed Seeker reimplements the generation of
-[Shattered Pixel Dungeon](https://github.com/00-Evan/shattered-pixel-dungeon) by Evan Debenham,
-itself based on [Pixel Dungeon](https://github.com/watabou/pixel-dungeon) by Oleg Dolya.
+[Shattered Pixel Dungeon](https://github.com/00-Evan/shattered-pixel-dungeon) by Evan Debenham.
 
 ## License and identity<a id="license-and-identity"></a>
 

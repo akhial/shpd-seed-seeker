@@ -5,8 +5,9 @@ runs Shattered Pixel Dungeon's own generator on the JVM, so Seed Seeker's
 throughput can be compared with the game's own code **at the version Seed
 Seeker targets**.
 
-The published throughput and match counts below were measured on BETA-3;
-rerun the commands to obtain v4.0.0 measurements.
+The [README benchmark](../../README.md#benchmarks) measures matching seeds per
+minute, checks the full Java seed sample against native search, and replays
+returned trinket recipes independently in the JAR.
 
 This finder drives the **unmodified official JAR** headlessly, using the same
 technique as `tooling/oracle-4.0`. Upstream now publishes the full
@@ -14,7 +15,7 @@ technique as `tooling/oracle-4.0`. Upstream now publishes the full
 at commit `2bb34a4e91d29c8785a9363cad6ddfe5122b1d4f`; using the shipped JAR keeps
 the baseline tied to the released build without maintaining source patches.
 
-The pin is the same artifact the oracle uses:
+The final-release pin follows [PR #118](https://github.com/akhial/shpd-seed-seeker/pull/118):
 
 - artifact: `ShatteredPD-v4.0.0-Java.jar` (build 912)
 - URL: `https://github.com/00-Evan/shattered-pixel-dungeon/releases/download/v4.0.0/ShatteredPD-v4.0.0-Java.jar`
@@ -25,7 +26,8 @@ and compiles `src/**/*.java` plus the oracle's `TextureFilm` stand-in into
 `.work/classes`. `run.sh` builds when needed and runs
 `com.shatteredpixel.shatteredpixeldungeon.JarSeedFinder` with `classes` first on
 the classpath, then the JAR. Both honour `JAVA_21_HOME`, then `JAVA_HOME`, then
-`PATH`; the published numbers were measured with JDK 21.0.11.
+`PATH`. The current effective-match driver invokes `java` from `PATH` directly
+and records its version and JVM options; `--java /path/to/java` selects another JVM.
 
 ## Build and run
 
@@ -38,7 +40,9 @@ tooling/java-finder/run.sh --seeds 10000 --warmup 0 --print-matches > matches.tx
 
 | Option | Meaning |
 | --- | --- |
-| `--item CLASS` | item class simple name, e.g. `RunicBlade` (default) |
+| `--item CLASS` | item class name (default: `RunicBlade`); `RunicBlade,RingOfMight` supports the +2/+2 floor-19 benchmark |
+| `--effect NAME` | comma-separated allowed effects for the first item (default: any) |
+| `--stream` | persistent JSON-lines batch search / full recipe replay |
 | `--upgrade N` | required true upgrade; `-1` accepts any (default `5`) |
 | `--floors N` | deepest floor generated (default `19`) |
 | `--seeds N` | timed seeds (default `2000`) |
@@ -49,11 +53,8 @@ tooling/java-finder/run.sh --seeds 10000 --warmup 0 --print-matches > matches.tx
 | `--skip-boss-floors` | step over the state-neutral boss depths 5, 10, 15 and 25 |
 | `--print-matches` | print each matching seed code before the `BENCH` line |
 
-The run ends with one line:
-
-```
-BENCH item=RunicBlade+5 floors=19 start=200 warmup=200 seeds=2000 matches=48 elapsed=57.412 seeds_per_s=34.8
-```
+Each run ends with a `BENCH` line containing the tested seed count, matches,
+elapsed seconds and seeds per second.
 
 ## What it searches
 
@@ -70,7 +71,38 @@ wanted `trueLevel()`:
 
 Reading `trueLevel()` (rather than `name()` or `identify()`) is what keeps the
 scan from mutating a generated item, so the search cannot perturb the run it is
-searching. A seed's floors stop being generated as soon as a match is found.
+searching. A seed's floors stop once the complete query matches. The compound benchmark
+respects the vault's single-item limit, including the Imp reward options.
+
+## Effective-match protocol
+
+The Python driver in `tooling/benchmarks/effective_matches.py` starts persistent
+JVMs with `--stream`. Each prints `{"ready":true}` after untimed warmup, then
+accepts one JSON object per input line:
+
+```json
+{"seeds":[3901899992008]}
+{"seeds":[3901899992008],"verify":true,"trinkets":["ParchmentScrap"]}
+```
+
+The first request searches the no-trinket world and stops when the query matches.
+The second generates through floor 24 and the Imp's Vault, returning every
+matching item **within the requested query depth**, including an empty witness
+list for unsuccessful seeds. Each trinket choice must be among the four initial
+offers. A chosen trinket is inserted at +3 after the first floor by whose end
+both a catalyst and an alchemy opportunity have appeared, matching Seed Seeker's
+existing generation profile. This validates that profile; it does not simulate
+collecting the energy needed for +3 or arbitrary gameplay actions.
+
+Responses contain `tested`, internal `seconds`, and `matches`. Every match has
+a numeric `seed` and `witnesses`: `[depth, source, stable_item_id, upgrade,
+cursed, enchantment_or_glyph]` tuples (`"-"` means no effect). Quest effects are
+read from the quest's deferred enchantment/glyph fields. Vault reward choices
+are recorded as Imp rewards, separately from vault treasure. The driver records
+request-to-response wall time, so protocol overhead is included in its metric.
+
+The adapter supports single-item queries and the benchmark's +2 Runic Blade
+and +2 Ring of Might query. Other compound queries are rejected.
 
 ## Headless technique
 
@@ -122,12 +154,10 @@ done
 wait
 ```
 
-## A fair comparison
+## Generation shortcuts
 
-Seed Seeker plans a query before searching, and for the benchmark query the plan
-takes two shortcuts that cost it no exactness. Both are available here, and the
-published numbers use them, so that neither side is generating floors the other
-one skips:
+Seed Seeker plans a query before searching, and for the +5 Crossbow control the plan
+takes two shortcuts. Both are enabled for its Java baseline:
 
 - `--no-vault`. A `+5` only ever appears on a tier-4 weapon in
   `Imp.Quest.rewardOptions`, which is rolled on the Imp's City floor; the
@@ -142,39 +172,14 @@ one skips:
   later floor. The engine never simulates them. Depth 20 is *not* neutral (it
   caches the Imp's shop) and is never skipped.
 
-Both flags are verified, not assumed: with and without them the finder returns
-the same seeds as the engine over the first 10,000.
-
 ## Cross-check
 
-The finder and the engine must agree on which seeds match, or the throughput
-comparison is meaningless. Over the first 10,000 seeds both report the same 251
-seeds for the canonical query (`RunicBlade` at `+5` within 19 floors):
-
-```sh
-tooling/java-finder/run.sh --seeds 10000 --warmup 0 --no-vault --skip-boss-floors \
-    --print-matches | grep -v '^BENCH' > java.txt
-
-# the engine's count over the same range: "Matches: 251"
-cargo run --release -p shpd-seedfinder-cli -- --benchmark 10000
-
-# the engine's list: it scans in ascending order, so stop at the last match below 10,000
-cargo run --release -p shpd-seedfinder-cli -- --items runic-blade.json \
-    | sed "/^$(tail -1 java.txt)$/q" > engine.txt
-diff java.txt engine.txt
-```
-
-where `runic-blade.json` is the canonical query:
-
-```json
-{"max_depth":19,"requirements":[{"kind":"weapon","item":"runic_blade","upgrade":5}]}
-```
-
-A second query shape checks the paths the canonical one never reaches — the
-vault sub-level and the Wandmaker's rewards. `--item WandOfFireblast --upgrade 3
---floors 24` and
-`{"max_depth":24,"requirements":[{"kind":"wand","item":"wand_fireblast","upgrade":3}]}`
-return the same 195 seeds over the first 2,000.
+The [README benchmark](../../README.md#benchmarks) checks the complete Java
+sample, including negative seeds, against the native engine. It also replays
+every returned recipe through floor 24 and checks supporting item details in
+the JAR, outside timing. A regression seed rejects taking both an Imp ring and
+a blade from the vault. Raw evidence is written to the requested output
+directory and is not committed.
 
 ## Isolation
 
