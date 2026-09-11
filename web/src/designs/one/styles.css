@@ -2220,7 +2220,6 @@ input[type="range"]::-moz-range-thumb {
   cursor: pointer;
 }
 
-.d1-scout-trinket:hover:not(:disabled),
 .d1-scout-trinket[aria-pressed="true"] {
   border-color: var(--d1-accent);
   background: rgba(89, 203, 137, 0.14);
