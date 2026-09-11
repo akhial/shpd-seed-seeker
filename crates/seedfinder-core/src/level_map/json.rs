@@ -121,7 +121,7 @@ pub fn document(map: &LevelMap) -> Value {
         "schemaVersion": SCHEMA_VERSION,
         "shpdVersion": crate::SHPD_VERSION,
         "shpdCommit": crate::SHPD_COMMIT,
-        "profile": "canonical-scout-flat-v1",
+        "profile": "canonical-scout-raised-v2",
         "seed": map.seed.to_code(),
         "depth": map.depth,
         "branch": map.kind.branch(),

@@ -1,4 +1,4 @@
-//! On-demand, fully revealed floor and quest-branch maps for scouting.
+//! On-demand floor and quest-branch maps with optional secret revelation.
 //!
 //! Generation replays the same sequential prefix and trinket activation as
 //! loot scouting. Rendering uses a separate RNG, never the generation stream.
@@ -7,6 +7,7 @@
 pub mod assets;
 #[cfg(feature = "json-query")]
 pub mod json;
+mod projection;
 mod visuals;
 
 use crate::catalog::ItemId;
@@ -24,7 +25,7 @@ pub const SUPPORTED_DEPTHS: [u8; 20] = [
 ];
 pub const SUPPORTED_BRANCH_DEPTHS: [u8; 6] = [12, 13, 14, 17, 18, 19];
 
-pub const SCHEMA_VERSION: u8 = 1;
+pub const SCHEMA_VERSION: u8 = 2;
 pub const TILE_SIZE: u16 = 16;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -62,8 +63,9 @@ impl std::fmt::Display for MapError {
 }
 impl std::error::Error for MapError {}
 
-/// The complete initial terrain and a portable drawing plan. No fog is applied.
-/// Terrain codes retain secret doors/traps even though the drawing reveals them.
+/// The complete initial terrain and a portable raised drawing plan.
+/// Both secret visibility modes retain the original terrain codes. The geometric
+/// wall masks are included; player-specific exploration fog is not.
 #[derive(Clone, Debug, PartialEq)]
 pub struct LevelMap {
     pub seed: DungeonSeed,
@@ -136,6 +138,8 @@ pub struct MapScene {
     pub tile_size: u16,
     pub sprites: Vec<MapSprite>,
     pub layers: Vec<MapLayer>,
+    /// Complete alternative layer stack with undiscovered secrets concealed.
+    pub concealed_layers: Vec<MapLayer>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -410,6 +414,6 @@ fn snapshot(
                 active: trap.active,
             })
             .collect(),
-        scene: visuals::scene(seed, level, kind),
+        scene: visuals::scene(seed, level, rooms, kind),
     }
 }
