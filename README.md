@@ -19,12 +19,12 @@ written in Rust — with native apps for Android, Linux, macOS, and Windows.
 </p>
 
 <p align="center">
-  <i>Matches/minute on an Apple M4 Pro (12 cores), 10 minutes per mode. Seed Seeker uses auto-apply; each query has its own bar scale.</i>
+  <i>Matches/minute on an Apple M4 Pro (12 cores).</i>
 </p>
 
-- ⚡️ **4.8–7.5× Java’s match throughput** in the [native benchmark](#benchmarks)
+- ⚡️ **4.8–7.5× faster** than Java seed finders
 - 🔍 **Rich queries**: multiple requirements across melee and thrown weapons, armor, wands, and rings
-- 🔗 **Share links**: any search fits in a short link that fills in the query on every platform
+- 🔗 **Share links**: short links to share your search
 - 🔮 **Seed scouting**: paste a seed, get every item with floor, upgrade, enchantment, cursed state and source
 - 📱 **Native apps** Material 3, GTK 4 and libadwaita, SwiftUI, WinUI 3
 
@@ -62,7 +62,7 @@ Binaries are published on the [GitHub Releases page](https://github.com/akhial/s
 
 ### CLI
 
-Build and run a quick CLI benchmark:
+Build and run benchmark:
 
 ```sh
 cargo run --release -p shpd-seedfinder-cli -- --benchmark
@@ -203,62 +203,34 @@ cargo run --release -p shpd-seedfinder-cli -- -i requirements.json -b 1000 --wor
 
 ## Benchmarks<a id="benchmarks"></a>
 
-**Matching seeds per minute**, through floor 19. The compound query requires an
-exact +2 Runic Blade with **Grim, Corrupting, Vampiric or Crystal**, and an exact
-+2 Ring of Might. The control requires an exact +5 Crossbow. No challenges.
+**Matching seeds per minute**, through floor 19. +2 Grim/Vampiric/Corrupting/Crystal Runic Blade and +2 Ring of Might.
 
-| Query | Java baseline | Seed Seeker, auto off | Seed Seeker, auto on | Auto / Java |
+| Query | Java baseline | Auto-trinket off | Auto-trinket on | Auto / Java |
 | --- | ---: | ---: | ---: | ---: |
-| [+2 Runic Blade + +2 Ring of Might](https://shpd-seed-seeker.web.app/#q=QyAhKCsAAeAAAuoKAA) | 10.6 | 54.9 | **79.9** | 7.5× |
-| +5 Crossbow (control) | 1,772.0 | 8,398.0 | **8,429.7** | 4.8× |
+| [+2 Runic Blade and +2 Ring of Might](https://shpd-seed-seeker.web.app/#q=QyAhKCsAAeAAAuoKAA) | 10.6 | 54.9 | **79.9** | 7.5× |
+| +5 Crossbow | 1,772.0 | 8,398.0 | 8,429.7 | 4.8× |
 
-Auto-apply improved compound-query match throughput by **45.4%**
-(95% paired block bootstrap interval: 37.7–53.7%). On identical seeds it
-found 313 additional matches and lost 65. The Crossbow control selected no trinket
-and returned identical match sets: auto/off throughput was 1.004×
-(95% interval 0.999–1.008×).
+Auto-trinket improved match throughput by **45.4%**.
 
-- **Machine:** Apple M4 Pro (8 performance + 4 efficiency cores), 48 GB, macOS 26.6.2; 12 native workers versus 12 persistent JVMs.
-- **Builds:** Rust 1.98.0, `aarch64-apple-darwin`, release/fat LTO, mimalloc, fresh PGO trained on disjoint seeds; OpenJDK 26.0.2.1 and the unmodified official Shattered Pixel Dungeon **4.0.0 JAR (build 912)**, pinned in [the Java adapter](tooling/java-finder).
-- **Method:** at least 600 timed seconds per query/mode, finishing the last block; 1,024 warm-up seeds per worker plus a regression seed. Alternating mode order, with only one mode running at a time; native off/auto search identical dispersed seeds. Java searches a shorter prefix of the same sequence. Times include batch dispatch and result collection, excluding builds, startup, warm-up and verification.
+- **Machine:** Apple M4 Pro.
 
-| Query | Seeds: Java / each native mode | Matches: Java / off / auto | Seconds: Java / off / auto |
-| --- | ---: | ---: | ---: |
-| Blade + ring | 595,968 / 2,899,968 | 106 / 552 / 800 | 600.5 / 603.0 / 601.1 |
-| Crossbow | 737,280 / 3,526,656 | 17,759 / 84,532 / 84,532 | 601.3 / 603.9 / 601.7 |
-
-Every native result passed a full floor-24 query replay; every reported result's
-supporting items were independently replayed in the JAR, checking floor, source,
-item, upgrade, cursed state and effect. Java and native off agreed on the entire
-Java sample, including negative seeds. Automatic recipes also passed the JAR's
-initial-offer check. Trinkets use the engine's **+3 after the first catalyst/alchemy
-opportunity** profile; these are warmed native measurements, not browser latency.
-
-Reproduce on macOS arm64 with Rust's `llvm-tools` component and a JDK on `PATH`
-(about an hour of timing, plus training, warm-up and replay):
+Reproduce:
 
 ```sh
 tooling/benchmarks/run.sh --minutes 10 --workers 12 --output /tmp/seed-seeker-benchmark
 ```
 
-The script builds both adapters, runs both queries, validates matches and writes
-raw blocks, counts, timings, source/binary/profile hashes and 5,000-resample
-bootstrap intervals to a new output directory. No generated results are committed.
-
 ## Development<a id="development"></a>
 
 ### Web app
 
-The web app is a [Vite+](https://viteplus.dev) project. Install the `vp` CLI once
+The web app is a [Vite+](https://viteplus.dev) project. Install `vp`
 (`curl -fsSL https://vite.plus | bash`), then build the browser engine before starting the dev
 server:
 
 ```sh
 ./scripts/build-web-wasm.sh && cd web && vp install && vp dev
 ```
-
-`vp check` (format, lint, type-check), `vp test`, and `vp build` cover the rest; they all need the
-generated engine assets, so run `build-web-wasm.sh` first on a fresh clone.
 
 ### Android
 
@@ -366,21 +338,10 @@ cd macos/SeedSeeker
 swift test
 ```
 
-#### Java Oracle
-
-```sh
-javac -d /tmp tooling/parity/RngOracle.java
-java -cp /tmp RngOracle
-```
-
-`EquipmentOracle.java` is compiled against the isolated v3.3.8 JAR.
-`tooling/oracle-4.0` drives the v4.0.0 release JAR headlessly.
-
 ## Acknowledgements<a id="acknowledgements"></a>
 
 Seed Seeker reimplements the generation of
-[Shattered Pixel Dungeon](https://github.com/00-Evan/shattered-pixel-dungeon) by Evan Debenham,
-itself based on [Pixel Dungeon](https://github.com/watabou/pixel-dungeon) by Oleg Dolya.
+[Shattered Pixel Dungeon](https://github.com/00-Evan/shattered-pixel-dungeon) by Evan Debenham.
 
 ## License and identity<a id="license-and-identity"></a>
 
