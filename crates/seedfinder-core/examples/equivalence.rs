@@ -1,4 +1,4 @@
-//! Streams exact RC1 items, equipment coordinates, and terrain comparisons.
+//! Streams exact v4.0.0 items, equipment coordinates, and terrain comparisons.
 //! See tooling/parity/BatchEquipmentOracle.java and tooling/parity/EQUIVALENCE.md.
 use shpd_seedfinder_core::{
     catalog::item, main_world::CanonicalMainWorldGenerator, search::WorldGenerator,

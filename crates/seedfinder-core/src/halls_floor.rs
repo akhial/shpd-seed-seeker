@@ -1365,8 +1365,8 @@ mod tests {
     }
 
     #[test]
-    fn rc1_halls_lore_page_clears_its_drop_cell() {
-        // Official RC1 JAR: seed 17, depth 24, attrition page at cell 1191.
+    fn halls_lore_page_clears_its_drop_cell() {
+        // Official v4.0.0 JAR: seed 17, depth 24, attrition page at cell 1191.
         // The BETA-4 profile left this cell as HIGH_GRASS.
         let floor = generate_halls_prefix(DungeonSeed::new(17).unwrap(), 24)
             .pop()

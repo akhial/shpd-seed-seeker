@@ -1,19 +1,21 @@
-# Shattered Pixel Dungeon v4.0.0-RC-1 parity oracle
+# Shattered Pixel Dungeon v4.0.0 parity oracle
 
 This directory builds an isolated, deterministic generation oracle for
-Shattered Pixel Dungeon `v4.0.0-RC-1`. Unlike `tooling/oracle/` (v3.3.8),
-which patches and compiles the official source tree, no 4.0.0 source has been
-published yet, so this oracle drives the **unmodified official desktop JAR**
-headlessly. Nothing from the game is recompiled; the only things placed ahead
-of the JAR on the classpath are the oracle itself and one small geometry-only
-stand-in class (see "Headless technique").
+Shattered Pixel Dungeon `v4.0.0`. The full
+[source release](https://github.com/00-Evan/shattered-pixel-dungeon/tree/v4.0.0)
+is published and pins the Rust port's upstream revision. This oracle continues
+to drive the **unmodified official desktop JAR** headlessly, validating the
+shipped build without recompiling game classes. Only the oracle itself and a
+small geometry-only stand-in precede the JAR (see "Headless technique").
 
 The pin is:
 
-- artifact: `ShatteredPD-v4.0.0-RC-1-Java.jar`
-- URL: `https://github.com/00-Evan/shattered-pixel-dungeon/releases/download/4.0.0-beta/ShatteredPD-v4.0.0-RC-1-Java.jar`
-- sha256: `43f881f0d6484faffea913f5563fd2c3277ed83159eda6e83efc55e586fbfdbf`
-- manifest: `Specification-Version: 4.0.0-RC-1`, `Implementation-Version: 907`
+- source commit: `2bb34a4e91d29c8785a9363cad6ddfe5122b1d4f` (`v4.0.0`)
+
+- artifact: `ShatteredPD-v4.0.0-Java.jar`
+- URL: `https://github.com/00-Evan/shattered-pixel-dungeon/releases/download/v4.0.0/ShatteredPD-v4.0.0-Java.jar`
+- sha256: `b3e6f9508dea1a7a32a9934e2bc18f20a9a905df5732550404294340d31c87a1`
+- manifest: `Specification-Version: 4.0.0`, `Implementation-Version: 912`
   (used as `Game.versionCode`)
 
 `build.sh` downloads the JAR into `.work/` when absent, verifies the sha256
@@ -22,7 +24,7 @@ The pin is:
 needed and runs `com.shatteredpixel.shatteredpixeldungeon.ParityOracle` with
 the classpath `classes` first, then the JAR (`;` separated on Windows/MSYS,
 `:` elsewhere). Both honour `JAVA_21_HOME`, then `JAVA_HOME`, then `PATH`; the
-RC1 fixtures were produced with Eclipse Adoptium JDK 25.0.4.1.
+v4.0.0 fixtures were checked with Eclipse Adoptium JDK 25.0.4.1 on macOS arm64.
 
 ## Build and run
 
@@ -72,19 +74,20 @@ oracle solved both with source patches; here they are solved without touching
 any game class:
 
 1. **Debug journal defaults** (`DeviceCompat.isDebug()`). In debug mode every
-   journal page except the final Halls lore page counts as read. The oracle
-   explicitly marks that last page read too. This keeps the *unseeded* early-Guidebook
-   heap off the first floors (without it, `AAA-AAA-AAA` floor 1 gains an
+   journal page except the final Halls lore page counts as read. This keeps the
+   *unseeded* early-Guidebook heap off the first floors (without it,
+   `AAA-AAA-AAA` floor 1 gains an
    eleventh heap and floor 2 changes). The JAR implements `isDebug()` as
    `Game.version.contains("INDEV")`, so the oracle simply sets
-   `Game.version = "4.0.0-RC-1-INDEV"`. Grepping the decompiled tree shows
+   `Game.version = "4.0.0-INDEV"`. The published source shows
    `Game.version` is otherwise read only by `DesktopLauncher`, the title/menu
    version labels, and `SPDSettings.betas()` (an update-checker default), none
    of which are on the generation path; the other `isDebug()` call sites are
    `HeroClass.isUnlocked` (Warrior is always unlocked anyway) and UI scenes.
-   `run_init.game_version` records the true `4.0.0-RC-1`;
+   `run_init.game_commit` records the published source revision,
+   `run_init.game_version` records the true `4.0.0`;
    `run_init.effective_game_version` records the string actually installed.
-   RC1 deliberately leaves the Halls King's `attrition` lore page unfound even
+   v4.0.0 deliberately leaves the Halls King's `attrition` lore page unfound even
    in debug mode. It is placed on floor 24 and can clear high grass at its cell;
    the engine mirrors this exception rather than suppressing the oracle page.
 2. **An eagerly loaded texture atlas.** `ItemSpriteSheet.Icons.film` is
@@ -115,9 +118,9 @@ Every record has `schema: "shpd-parity-oracle/v2"` and a `record` type. Where
 nothing changed, the v1 vocabulary is kept verbatim.
 
 - `run_init`: canonical/numeric seed, JVM provenance, `game_version`,
-  `game_version_code`, `game_jar_url`, `game_jar_sha256` (replacing v1's
-  `game_commit`), `effective_game_version`, `vault_requested`, selected depth
-  seeds (each with `branch: 0`), challenge mask, fixed Warrior initialization,
+  `game_version_code`, `game_commit` (the published source revision),
+  `game_jar_url`, `game_jar_sha256`, `effective_game_version`, `vault_requested`,
+  selected depth seeds (each with `branch: 0`), challenge mask, fixed Warrior initialization,
   limited-drop counters, potion/scroll/ring identity permutations, the complete
   Generator deck state and ordered special/secret room queues immediately after
   `Dungeon.init()`.
@@ -309,8 +312,10 @@ result. This is a compatibility reconstruction, not a run of an archived
 BETA-3 JAR. The canonical scout still models a run generated entirely on
 its advertised version; a seed alone does not specify an upgrade history.
 
-All versioned oracle fixtures are regenerated from the pinned RC1 JAR;
-historical BETA-3 benchmark measurements retain their original provenance.
+All versioned oracle fixtures are checked against the pinned v4.0.0 JAR;
+their artifact entries were refreshed to match the current recorder. The
+previous equipment, maps and generator checkpoints are unchanged. Historical
+BETA-3 benchmark measurements retain their original provenance.
 Probability supply tables are calibrated against BETA-4, including artifacts.
 
 `crates/seedfinder-core/examples/dump_floors.rs` prints a seed's floors in a

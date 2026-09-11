@@ -553,6 +553,15 @@
         ],
         [
           14,
+          "chest",
+          1020,
+          "UnstableSpellbook",
+          0,
+          true,
+          null
+        ],
+        [
+          14,
           "tomb",
           525,
           "MailArmor",
@@ -1095,6 +1104,15 @@
           0,
           false,
           "Eldritch"
+        ],
+        [
+          14,
+          "chest",
+          1020,
+          "UnstableSpellbook",
+          0,
+          true,
+          null
         ],
         [
           14,
@@ -1643,6 +1661,15 @@
         ],
         [
           14,
+          "chest",
+          1020,
+          "UnstableSpellbook",
+          0,
+          true,
+          null
+        ],
+        [
+          14,
           "tomb",
           525,
           "MailArmor",
@@ -2185,6 +2212,15 @@
           0,
           false,
           "Eldritch"
+        ],
+        [
+          14,
+          "chest",
+          1020,
+          "UnstableSpellbook",
+          0,
+          true,
+          null
         ],
         [
           14,
@@ -2733,6 +2769,15 @@
         ],
         [
           14,
+          "chest",
+          1020,
+          "UnstableSpellbook",
+          0,
+          true,
+          null
+        ],
+        [
+          14,
           "tomb",
           525,
           "MailArmor",
@@ -2868,6 +2913,15 @@
           1297,
           "MailArmor",
           1,
+          false,
+          null
+        ],
+        [
+          2,
+          "crystal_chest",
+          1543,
+          "TalismanOfForesight",
+          0,
           false,
           null
         ],
@@ -3130,6 +3184,15 @@
           "IncendiaryDart",
           0,
           false,
+          null
+        ],
+        [
+          12,
+          "crystal_chest",
+          1038,
+          "EtherealChains",
+          0,
+          true,
           null
         ],
         [
@@ -3365,6 +3428,15 @@
         [
           2,
           "crystal_chest",
+          1543,
+          "TalismanOfForesight",
+          0,
+          false,
+          null
+        ],
+        [
+          2,
+          "crystal_chest",
           1545,
           "RingOfMight",
           0,
@@ -3621,6 +3693,15 @@
           "IncendiaryDart",
           0,
           false,
+          null
+        ],
+        [
+          12,
+          "crystal_chest",
+          1038,
+          "EtherealChains",
+          0,
+          true,
           null
         ],
         [
@@ -3856,6 +3937,15 @@
         [
           2,
           "crystal_chest",
+          1543,
+          "TalismanOfForesight",
+          0,
+          false,
+          null
+        ],
+        [
+          2,
+          "crystal_chest",
           1545,
           "RingOfMight",
           0,
@@ -4112,6 +4202,15 @@
           "IncendiaryDart",
           0,
           false,
+          null
+        ],
+        [
+          12,
+          "crystal_chest",
+          1038,
+          "EtherealChains",
+          0,
+          true,
           null
         ],
         [
@@ -4347,6 +4446,15 @@
         [
           2,
           "crystal_chest",
+          1543,
+          "TalismanOfForesight",
+          0,
+          false,
+          null
+        ],
+        [
+          2,
+          "crystal_chest",
           1545,
           "RingOfMight",
           0,
@@ -4603,6 +4711,15 @@
           "IncendiaryDart",
           0,
           false,
+          null
+        ],
+        [
+          12,
+          "crystal_chest",
+          1038,
+          "EtherealChains",
+          0,
+          true,
           null
         ],
         [
@@ -4838,6 +4955,15 @@
         [
           2,
           "crystal_chest",
+          1543,
+          "TalismanOfForesight",
+          0,
+          false,
+          null
+        ],
+        [
+          2,
+          "crystal_chest",
           1545,
           "RingOfMight",
           0,
@@ -5099,6 +5225,15 @@
         [
           12,
           "crystal_chest",
+          1038,
+          "EtherealChains",
+          0,
+          true,
+          null
+        ],
+        [
+          12,
+          "crystal_chest",
           1122,
           "RingOfHaste",
           2,
@@ -5198,8 +5333,8 @@
       ]
     }
   },
-  "game_version": "4.0.0-RC-1",
-  "game_jar_sha256": "43f881f0d6484faffea913f5563fd2c3277ed83159eda6e83efc55e586fbfdbf",
+  "game_version": "4.0.0",
+  "game_jar_sha256": "b3e6f9508dea1a7a32a9934e2bc18f20a9a905df5732550404294340d31c87a1",
   "runtime": {
     "java_version": "25.0.4.1",
     "java_vendor": "Eclipse Adoptium",

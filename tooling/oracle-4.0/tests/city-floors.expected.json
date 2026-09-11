@@ -1,7 +1,7 @@
 {
   "schema": "shpd-city-parity-fixture/v3",
-  "game_version": "4.0.0-RC-1",
-  "game_jar_sha256": "43f881f0d6484faffea913f5563fd2c3277ed83159eda6e83efc55e586fbfdbf",
+  "game_version": "4.0.0",
+  "game_jar_sha256": "b3e6f9508dea1a7a32a9934e2bc18f20a9a905df5732550404294340d31c87a1",
   "runtime": {
     "java_version": "25.0.4.1",
     "java_vendor": "Eclipse Adoptium",
@@ -440,6 +440,23 @@
         [
           19,
           "imp_quest",
+          0,
+          null,
+          null,
+          "SandalsOfNature",
+          "artifact",
+          2,
+          false,
+          null,
+          {
+            "kind": "choice",
+            "group": "imp_quest@19",
+            "option": 0
+          }
+        ],
+        [
+          19,
+          "imp_quest",
           1,
           null,
           null,
@@ -610,6 +627,23 @@
         }
       ],
       "items": [
+        [
+          16,
+          "crystal_chest",
+          0,
+          1641,
+          "CRYSTAL_CHEST",
+          "SandalsOfNature",
+          "artifact",
+          0,
+          false,
+          null,
+          {
+            "kind": "choice",
+            "group": "crystal_vault@16",
+            "option": 0
+          }
+        ],
         [
           16,
           "crystal_chest",
@@ -923,6 +957,21 @@
         ],
         [
           16,
+          "chest",
+          0,
+          1509,
+          "CHEST",
+          "TalismanOfForesight",
+          "artifact",
+          0,
+          true,
+          null,
+          {
+            "kind": "independent"
+          }
+        ],
+        [
+          16,
           "shop",
           0,
           72,
@@ -959,6 +1008,21 @@
           "FOR_SALE",
           "HealingDart",
           "weapon",
+          0,
+          false,
+          null,
+          {
+            "kind": "independent"
+          }
+        ],
+        [
+          16,
+          "shop",
+          0,
+          241,
+          "FOR_SALE",
+          "SkeletonKey",
+          "artifact",
           0,
           false,
           null,

@@ -1,0 +1,153 @@
+{
+  "schema": "shpd-release-equivalence/v1",
+  "result": "PASS",
+  "game_version": "4.0.0",
+  "game_build": 912,
+  "game_commit": "2bb34a4e91d29c8785a9363cad6ddfe5122b1d4f",
+  "jar_sha256": "b3e6f9508dea1a7a32a9934e2bc18f20a9a905df5732550404294340d31c87a1",
+  "source_comparison": {
+    "base_commit": "1934006549840b4d63fbb15798d48db7c4f8e2b7",
+    "target_commit": "2bb34a4e91d29c8785a9363cad6ddfe5122b1d4f",
+    "generation_changed": false,
+    "unchanged_paths": [
+      "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/Dungeon.java",
+      "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/levels",
+      "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/items",
+      "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/actors/mobs/npcs",
+      "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/journal",
+      "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/utils/DungeonSeed.java",
+      "SPD-classes/src/main/java/com/watabou/utils/Random.java"
+    ],
+    "changed_paths": [
+      "build.gradle",
+      "core/src/main/assets/messages/actors/actors.properties",
+      "core/src/main/assets/messages/actors/actors_be.properties",
+      "core/src/main/assets/messages/items/items_be.properties",
+      "core/src/main/assets/messages/windows/windows_be.properties",
+      "core/src/main/assets/sprites/vault_boss_elemental.png",
+      "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/ShatteredPixelDungeon.java",
+      "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/actors/mobs/quest/vault/VaultBossElemental.java",
+      "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/messages/Languages.java",
+      "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/scenes/WelcomeScene.java",
+      "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/sprites/VaultBossElementalSprite.java",
+      "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/ui/BossHealthBar.java",
+      "core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/ui/changelist/v4_X_Changes.java",
+      "metadata/en-US/changelogs/912.txt"
+    ],
+    "assessment": "Release metadata, text/translations, and visual/UI changes; no seeded generation changes."
+  },
+  "profile": {
+    "hero": "Warrior",
+    "challenges": 0,
+    "equipped_trinkets": [],
+    "journal": "v4.0.0 debug defaults (Halls attrition page unread)",
+    "floors": 24,
+    "vault": true
+  },
+  "scope": "catalog equipment, artifacts and initial catalyst offers; physical equipment and artifact cells; full terrain arrays on 20 regular floors and the vault; boss terrain, consumables, quantities, mob identities, custom visual tiles, secret flags and accessibility groups are not compared",
+  "comparison_fields": [
+    "floor",
+    "source",
+    "item",
+    "upgrade",
+    "cursed",
+    "effect",
+    "branch",
+    "cell",
+    "width",
+    "height",
+    "terrain_cells"
+  ],
+  "runtime": "openjdk version \"25.0.4.1\" 2026-08-18 LTS\nOpenJDK Runtime Environment Temurin-25.0.4.1+1 (build 25.0.4.1+1-LTS)\nOpenJDK 64-Bit Server VM Temurin-25.0.4.1+1 (build 25.0.4.1+1-LTS, mixed mode, sharing)",
+  "platform": "macOS arm64",
+  "rust_toolchain": "rustc 1.98.0 (88d9e12ae 2026-08-18)",
+  "base_commit": "ba22483065c7ff4954260da6863618c590ffcea2",
+  "working_tree_changes": true,
+  "seed_range": {
+    "start": 0,
+    "end_exclusive": 10000
+  },
+  "totals": {
+    "tested": 10000,
+    "deviations": 0,
+    "errors": 0,
+    "entries": 989616,
+    "floors": 210000,
+    "terrain_cells": 403361210,
+    "item_locations": 744720
+  },
+  "comparator_sha256": "d17ae71d4b84a0fe0493ae45e6ea3a003c78e876a2bdd962b31b0acbb41f27c9",
+  "batch_oracle_source_sha256": "b4150bf4343238d29e6ffe4126da07c4c453a0203180d534dcdbd657a63df50a",
+  "elapsed_seconds": 40.04502511024475,
+  "checks": {
+    "workspace_tests_passed": 535,
+    "workspace_tests_ignored": 5,
+    "workspace_excluded": [
+      "shpd-seedfinder-gtk"
+    ],
+    "oracle_fixture_groups_passed": 8,
+    "comparator_controls_passed": 9,
+    "cracked_spyglass_fixture": "AAA-AAA-AAF equipment matches final release",
+    "web_tests_passed": 197,
+    "web_check": "PASS",
+    "workspace_all_targets_clippy": "PASS",
+    "workspace_format": "PASS",
+    "retained_stream_replay": "PASS"
+  },
+  "fixture_refresh": "Added artifact records already emitted by the oracle, including their searchable flags and resulting accessibility option indices; all previous equipment, maps and generator checkpoints are unchanged.",
+  "evidence_directory": "tooling/oracle-4.0/.work/v4.0.0-10000",
+  "shards": [
+    {
+      "deviations": 0,
+      "entries": 247403,
+      "errors": 0,
+      "floors": 52500,
+      "item_locations": 186192,
+      "requested": 2500,
+      "start": 0,
+      "summary": true,
+      "terrain_cells": 100926438,
+      "tested": 2500,
+      "oracle_archive_sha256": "a50184a18816e28d25959301c499ed78b9de457047035ffb7aec0e50f7ca275d"
+    },
+    {
+      "deviations": 0,
+      "entries": 247328,
+      "errors": 0,
+      "floors": 52500,
+      "item_locations": 186107,
+      "requested": 2500,
+      "start": 2500,
+      "summary": true,
+      "terrain_cells": 100834949,
+      "tested": 2500,
+      "oracle_archive_sha256": "4398303b9f5debf174dafe046e39d3d3836e33b283c7d2df1139eda3c25b80e2"
+    },
+    {
+      "deviations": 0,
+      "entries": 247326,
+      "errors": 0,
+      "floors": 52500,
+      "item_locations": 186041,
+      "requested": 2500,
+      "start": 5000,
+      "summary": true,
+      "terrain_cells": 100871509,
+      "tested": 2500,
+      "oracle_archive_sha256": "4b53193a76a3a6700b591486de5d0a5a4d285be8a4bcec93b2e587ef5a75458f"
+    },
+    {
+      "deviations": 0,
+      "entries": 247559,
+      "errors": 0,
+      "floors": 52500,
+      "item_locations": 186380,
+      "requested": 2500,
+      "start": 7500,
+      "summary": true,
+      "terrain_cells": 100728314,
+      "tested": 2500,
+      "oracle_archive_sha256": "d085a1aab36fd3d85e3c5c8decc40158bd25c11a8c879b48d2f374252df29767"
+    }
+  ]
+}

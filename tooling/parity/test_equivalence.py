@@ -1,4 +1,4 @@
-"""Exercise the comparator's failure paths using one retained RC1 oracle record.
+"""Exercise the comparator's failure paths using one retained v4.0.0 oracle record.
 
 python tooling/parity/test_equivalence.py --exe PATH --oracle-archive SHARD.oracle.txt.gz
 """
@@ -14,7 +14,7 @@ args = parser.parse_args()
 with gzip.open(args.oracle_archive, "rt", encoding="utf-8") as archive:
     record = next(line.strip() for line in archive if not line.startswith("BENCH "))
 fields = record.split("|")
-assert len(fields) == 4, "requires an RC1 item-and-cell stream"
+assert len(fields) == 4, "requires a v4.0.0 item-and-cell stream"
 seed = int(fields[0])
 
 

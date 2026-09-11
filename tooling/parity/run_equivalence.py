@@ -1,4 +1,4 @@
-"""Run disjoint RC1 equipment and cell streams against a frozen comparator.
+"""Run disjoint v4.0.0 equipment and cell streams against a frozen comparator.
 Retains gzip-compressed oracle records, deviations, progress, and exact coverage.
 """
 import argparse
@@ -27,9 +27,9 @@ if not 0 < WORKERS <= COUNT:
 WORK = args.output.resolve()
 WORK.mkdir(parents=True, exist_ok=False)
 JAVA = args.java
-JAR = ROOT / "tooling/oracle-4.0/.work/ShatteredPD-v4.0.0-RC-1-Java.jar"
+JAR = ROOT / "tooling/oracle-4.0/.work/ShatteredPD-v4.0.0-Java.jar"
 jar_hash = hashlib.sha256(JAR.read_bytes()).hexdigest()
-assert jar_hash == "43f881f0d6484faffea913f5563fd2c3277ed83159eda6e83efc55e586fbfdbf", "wrong oracle JAR"
+assert jar_hash == "b3e6f9508dea1a7a32a9934e2bc18f20a9a905df5732550404294340d31c87a1", "wrong oracle JAR"
 CP = os.pathsep.join(str(p) for p in [
     ROOT / "tooling/oracle-4.0/.work/batch-classes",
     ROOT / "tooling/java-finder/.work/classes", JAR,
@@ -39,13 +39,15 @@ shutil.copy2(args.exe.resolve(), EXE)
 manifest = {
     "commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
     "dirty": bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True).strip()),
+    "game_version": "4.0.0", "game_build": 912,
+    "game_commit": "2bb34a4e91d29c8785a9363cad6ddfe5122b1d4f",
     "jar_sha256": jar_hash, "exe_sha256": hashlib.sha256(EXE.read_bytes()).hexdigest(),
     "java_runtime": subprocess.check_output([JAVA, "-version"], stderr=subprocess.STDOUT, text=True).strip(),
     "start": 0, "count": COUNT, "workers": WORKERS, "floors": 24,
     "vault": True, "challenges": 0, "hero": "Warrior",
     "comparison_fields": ["floor", "source", "item", "upgrade", "cursed", "effect", "branch", "cell", "width", "height", "terrain_cells"],
     "comparison": "exact sorted multisets, duplicate entries retained",
-    "scope": "catalog equipment and initial catalyst offers; physical equipment cells; full terrain arrays on 20 regular floors and the vault; boss terrain, consumables, quantities, mob identities, custom visual tiles, secret flags and accessibility groups are not compared",
+    "scope": "catalog equipment, artifacts and initial catalyst offers; physical equipment and artifact cells; full terrain arrays on 20 regular floors and the vault; boss terrain, consumables, quantities, mob identities, custom visual tiles, secret flags and accessibility groups are not compared",
 }
 (WORK / "manifest.json").write_text(json.dumps(manifest, indent=2))
 

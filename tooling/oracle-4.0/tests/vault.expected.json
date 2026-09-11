@@ -1,7 +1,7 @@
 {
   "schema": "shpd-vault-parity-fixture/v1",
-  "game_version": "4.0.0-RC-1",
-  "game_jar_sha256": "43f881f0d6484faffea913f5563fd2c3277ed83159eda6e83efc55e586fbfdbf",
+  "game_version": "4.0.0",
+  "game_jar_sha256": "b3e6f9508dea1a7a32a9934e2bc18f20a9a905df5732550404294340d31c87a1",
   "runtime": {
     "java_version": "25.0.4.1",
     "java_vendor": "Eclipse Adoptium",
@@ -57,6 +57,15 @@
       "challenges": 0,
       "imp_depth": 17,
       "imp_reward_options": [
+        [
+          0,
+          "AlchemistsToolkit",
+          "artifact",
+          5,
+          false,
+          null,
+          1
+        ],
         [
           1,
           "RingOfSharpshooting",
@@ -535,7 +544,7 @@
             false,
             null,
             1,
-            false
+            true
           ],
           [
             696,
@@ -1028,6 +1037,15 @@
       "challenges": 0,
       "imp_depth": 18,
       "imp_reward_options": [
+        [
+          0,
+          "ChaliceOfBlood",
+          "artifact",
+          5,
+          false,
+          null,
+          1
+        ],
         [
           1,
           "RingOfElements",
@@ -1710,7 +1728,7 @@
             false,
             null,
             1,
-            false
+            true
           ],
           [
             1731,
@@ -2011,6 +2029,15 @@
       "challenges": 0,
       "imp_depth": 19,
       "imp_reward_options": [
+        [
+          0,
+          "SandalsOfNature",
+          "artifact",
+          2,
+          false,
+          null,
+          1
+        ],
         [
           1,
           "RingOfHaste",
@@ -2487,7 +2514,7 @@
             false,
             null,
             1,
-            false
+            true
           ],
           [
             570,

@@ -23,11 +23,7 @@ object EngineInfo {
     /** Upstream Shattered Pixel Dungeon version this engine reproduces. */
     val shpdVersion: String by lazy { document.getString("shpdVersion") }
 
-    /**
-     * Upstream revision pin. For v4.0.0 no source has been published, so this
-     * holds the SHA-256 digest of the official release JAR instead of a
-     * commit hash.
-     */
+    /** Upstream source commit tagged with the engine's target game version. */
     val shpdCommit: String by lazy { document.getString("shpdCommit") }
 
     private val limits: JSONObject by lazy { document.getJSONObject("limits") }

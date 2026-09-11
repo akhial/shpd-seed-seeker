@@ -8,9 +8,9 @@
 
 from the Shattered Pixel Dungeon v4.0.0-BETA-3 release JAR
 (`ShatteredPD-v4.0.0-BETA-3-Java.jar`, SHA-256
-`f62f8ac2ef6d36c72223c1a4e78f18e98d0bb1282cd4f1fca123082d43edccc9`). No
-source revision of 4.0.0 has been published, so the JAR digest stands in for
-a commit hash. `item_icons.png` is byte-identical with the v3.3.8 copy
+`f62f8ac2ef6d36c72223c1a4e78f18e98d0bb1282cd4f1fca123082d43edccc9`). These artwork files retain their original BETA-3 provenance;
+the engine targets the final v4.0.0 source release at commit
+`2bb34a4e91d29c8785a9363cad6ddfe5122b1d4f`. `item_icons.png` is byte-identical with the v3.3.8 copy
 (commit `7b8b845a76fe76c6b7c031ae9e570852411f56db`); `items.png` keeps the
 same 256x512 layout but redraws the tipped darts and adds the vault crystals.
 

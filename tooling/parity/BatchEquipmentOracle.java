@@ -6,6 +6,7 @@ import com.shatteredpixel.shatteredpixeldungeon.actors.mobs.*;
 import com.shatteredpixel.shatteredpixeldungeon.actors.mobs.npcs.*;
 import com.shatteredpixel.shatteredpixeldungeon.items.*;
 import com.shatteredpixel.shatteredpixeldungeon.items.armor.Armor;
+import com.shatteredpixel.shatteredpixeldungeon.items.artifacts.Artifact;
 import com.shatteredpixel.shatteredpixeldungeon.items.rings.Ring;
 import com.shatteredpixel.shatteredpixeldungeon.items.wands.Wand;
 import com.shatteredpixel.shatteredpixeldungeon.items.weapon.Weapon;
@@ -51,7 +52,7 @@ public final class BatchEquipmentOracle {
         if (item instanceof com.shatteredpixel.shatteredpixeldungeon.items.trinkets.TrinketCatalyst) {
             CATALYSTS.add(depth+","+source);
         }
-        if (!(item instanceof Weapon || item instanceof Armor || item instanceof Wand || item instanceof Ring || item instanceof com.shatteredpixel.shatteredpixeldungeon.items.trinkets.Trinket)) return;
+        if (!(item instanceof Weapon || item instanceof Armor || item instanceof Wand || item instanceof Ring || item instanceof Artifact || item instanceof com.shatteredpixel.shatteredpixeldungeon.items.trinkets.Trinket)) return;
         String id = IDS.computeIfAbsent(item.getClass(), c -> c.getSimpleName()
             .replaceAll("(?<!^)([A-Z])", "_$1").toLowerCase(Locale.ROOT)
             .replace("wand_of_", "wand_").replace("ring_of_", "ring_"));
@@ -62,7 +63,10 @@ public final class BatchEquipmentOracle {
         String e = effect == null ? "-" : effect.getClass().getSimpleName();
         if (e.equals("AntiMagic")) e="Anti-Magic";
         if (e.equals("AntiEntropy")) e="Anti-Entropy";
-        ITEMS.add(depth+","+source+","+id+","+item.trueLevel()+","+(item.cursed?1:0)+","+e);
+        // Search records retain the Imp's transfer amount; physical cells use
+        // the artifact's actual internal level, as in the floor comparator.
+        int searchUpgrade = item instanceof Artifact && source.equals("ImpReward") ? 5 : item.trueLevel();
+        ITEMS.add(depth+","+source+","+id+","+searchUpgrade+","+(item.cursed?1:0)+","+e);
         if (cell >= 0) LOCATIONS.add(depth+","+branch+","+cell+","+id+","+item.trueLevel()+","+(item.cursed?1:0)+","+e);
     }
     static void addAll(Object values, String source) {
@@ -139,4 +143,3 @@ public final class BatchEquipmentOracle {
         System.err.printf(Locale.ROOT,"DONE tested=%d elapsed=%.3f%n",count,(System.nanoTime()-began)/1e9);
     }
 }
-
