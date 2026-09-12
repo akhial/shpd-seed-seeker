@@ -78,6 +78,10 @@ struct RecipeGate<'a> {
 }
 
 impl FloorGate for RecipeGate<'_> {
+    fn deferred_vault_plan(&self, target: u8) -> Option<&QueryPlan> {
+        self.plan.deferred_vault_plan(target)
+    }
+
     fn continue_after_run_init(&self, run: &crate::run::RunState) -> bool {
         self.plan.continue_after_run_init(run)
     }

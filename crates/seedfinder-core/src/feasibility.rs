@@ -449,6 +449,7 @@ struct RequirementPlan {
     /// Bit set of quests (see [`Quest::bit`]) whose reward could satisfy the
     /// requirement inside the query's depth limit.
     quests: u8,
+    vault: bool,
     /// Latest depth at which a non-quest source could still first produce a
     /// matching item, or `None` when only quests can satisfy it.
     open_deadline: Option<u8>,
@@ -543,6 +544,7 @@ impl QueryPlan {
                         max_depth
                     });
                 let mut quests = 0_u8;
+                let mut vault = false;
                 let mut open_deadline = None;
                 for source in ALL_SOURCES {
                     if !source_feasible(requirement, source, &profile) {
@@ -564,6 +566,7 @@ impl QueryPlan {
                             // needs the sub-level generated.
                             if source == ItemSource::VaultTreasure {
                                 needs_vault_treasure = true;
+                                vault = true;
                             }
                             quests |= quest.bit();
                             generation_depth =
@@ -586,6 +589,7 @@ impl QueryPlan {
                     requirement: *requirement,
                     max_depth: requirement_max_depth,
                     quests,
+                    vault,
                     open_deadline,
                 });
             }
@@ -666,6 +670,18 @@ impl QueryPlan {
         items: &[WorldItem],
         quests: &QuestSummary,
     ) -> bool {
+        self.viable_with_pending_vault(completed_depth, items, *quests, None)
+    }
+
+    /// A missing independent vault keeps only its own feasible requirements
+    /// alive. Its items still share the Imp's one-choice resource.
+    pub(crate) fn viable_with_pending_vault(
+        &self,
+        completed_depth: u8,
+        items: &[WorldItem],
+        quests: QuestSummary,
+        pending_depth: Option<u8>,
+    ) -> bool {
         if let Some((wanted, deadline)) = self.wandmaker_deadline {
             match quests.wandmaker {
                 // The variant is rolled once per run and never revised, so a
@@ -705,7 +721,10 @@ impl QueryPlan {
             for plan in slot {
                 for quest in QUESTS {
                     if plan.quests & quest.bit() != 0
-                        && Self::quest_alive(quest, plan, completed_depth, items)
+                        && (Self::quest_alive(quest, plan, completed_depth, items)
+                            || (quest == Quest::Imp
+                                && plan.vault
+                                && pending_depth.is_some_and(|depth| depth <= plan.max_depth)))
                     {
                         live |= quest.bit();
                     }
@@ -762,6 +781,36 @@ impl QueryPlan {
 }
 
 impl FloorGate for QueryPlan {
+    fn deferred_vault_plan(&self, target: u8) -> Option<&Self> {
+        // Every vault-capable slot remains open at all existing callbacks
+        // (completed_depth < target), preserving the original prefix pruning.
+        // A wholly non-vault slot must retain a source into the Imp's window:
+        // earlier-only slots already survived their last ordinary callback.
+        // This last condition only selects an execution strategy; it never
+        // rejects a seed. Optional sum members remain outside this path.
+        let imp_start = Quest::Imp.window().0;
+        (self.needs_vault_treasure
+            && self
+                .slots
+                .iter()
+                .flatten()
+                .all(|plan| plan.requirement.level_sum.is_none())
+            && self.slots.iter().any(|slot| {
+                slot.iter().all(|plan| !plan.vault)
+                    && slot.iter().any(|plan| {
+                        plan.open_deadline.is_some_and(|depth| depth >= imp_start)
+                            || plan.quests & Quest::Imp.bit() != 0
+                    })
+            })
+            && self.slots.iter().all(|slot| {
+                !slot.iter().any(|plan| plan.vault)
+                    || slot
+                        .iter()
+                        .any(|plan| plan.open_deadline.is_some_and(|depth| depth >= target))
+            }))
+        .then_some(self)
+    }
+
     fn continue_after_run_init(&self, run: &crate::run::RunState) -> bool {
         if self.required_trinket_slots.is_empty() {
             return true;

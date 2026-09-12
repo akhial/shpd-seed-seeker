@@ -46,6 +46,16 @@ pub trait FloorGate: Sync {
         quests_so_far: &QuestSummary,
     ) -> bool;
 
+    /// Opt into delaying the independent vault until the requested prefix is
+    /// complete. The returned plan must describe this gate's exact pruning
+    /// and pass its target-specific eligibility check; forward the plan's
+    /// implementation of this method. All callbacks must be pure, since a
+    /// failed deferred attempt is retried eagerly. Custom gates default to eager
+    /// generation and keep receiving complete floor prefixes.
+    fn deferred_vault_plan(&self, _target: u8) -> Option<&QueryPlan> {
+        None
+    }
+
     /// Whether the Imp's Vault sub-level must be generated. Its treasure is
     /// only ever matched by requirements the vault can satisfy, so a gate
     /// that knows none exist lets the generator skip the extra level.
