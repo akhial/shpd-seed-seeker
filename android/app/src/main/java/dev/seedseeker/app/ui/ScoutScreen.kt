@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package dev.seedseeker.app.ui
 
-import android.content.ClipData
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.graphics.FilterQuality
@@ -14,8 +13,10 @@ import kotlin.math.roundToInt
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.rememberScrollableState
+import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -58,7 +59,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.derivedStateOf
@@ -67,7 +67,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -77,10 +76,15 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalClipboard
-import androidx.compose.ui.platform.toClipEntry
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
@@ -90,6 +94,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import dev.seedseeker.app.model.ItemKind
@@ -110,7 +115,6 @@ import dev.seedseeker.app.ui.theme.SpdSecret
 import dev.seedseeker.app.ui.theme.SpdTeal
 import dev.seedseeker.app.ui.theme.SpdUpgrade
 import kotlin.math.abs
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -131,11 +135,28 @@ fun ScoutScreen(
     bottomBar: @Composable () -> Unit,
 ) {
     val listState = rememberLazyListState()
+    val collapseWindow = with(LocalDensity.current) { 96.dp.toPx() }
+    val headerScroll = remember(collapseWindow) { ScoutHeaderScrollState(collapseWindow) }
+    val hasResult by rememberUpdatedState(result != null)
+    val scrollConnection = remember(headerScroll) {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset =
+                if (hasResult && available.y < 0f) Offset(0f, headerScroll.consume(available.y)) else Offset.Zero
+
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset =
+                if (hasResult && available.y > 0f) Offset(0f, headerScroll.consume(available.y)) else Offset.Zero
+        }
+    }
+    // Gestures starting on the form/summary also scroll the same floor list.
+    val headerDragState = rememberScrollableState { delta -> -listState.dispatchRawDelta(-delta) }
+    LaunchedEffect(error, result == null) {
+        if (error != null || result == null) headerScroll.expand()
+    }
     val floors = remember(result) { result?.items?.withIndex()?.groupBy { it.value.depth }?.toSortedMap().orEmpty() }
     val offerFloorIndex = floors.values.indexOfFirst { rows -> rows.any { it.value.item.kind == ItemKind.TRINKET } }
-    val offerBodyIndex = if (offerFloorIndex >= 0) 2 + 2 * offerFloorIndex else -1
-    var offerTop by remember { mutableStateOf(0f) }
-    var offerHeight by remember { mutableStateOf(0f) }
+    val offerBodyIndex = if (offerFloorIndex >= 0) 1 + 2 * offerFloorIndex else -1
+    var offerTop by remember(result?.seed) { mutableStateOf(0f) }
+    var offerHeight by remember(result?.seed) { mutableStateOf(0f) }
     var floorHeaderHeight by remember { mutableStateOf(0) }
     val reveal by remember(offerBodyIndex, offerTop, offerHeight, floorHeaderHeight) { derivedStateOf {
         val row = listState.layoutInfo.visibleItemsInfo.find { it.index == offerBodyIndex }
@@ -197,14 +218,40 @@ fun ScoutScreen(
                 },
             contentAlignment = Alignment.TopCenter,
         ) {
-            Column(Modifier.fillMaxHeight().fillMaxWidth().widthIn(max = 680.dp).padding(horizontal = 16.dp)) {
-                SeedInputCard(seedInput, seedIsReady, isScouting, error, onSeedChange, onScout)
+            Column(
+                Modifier.fillMaxHeight().widthIn(max = 680.dp).fillMaxWidth().padding(horizontal = 16.dp)
+                    .clipToBounds()
+                    .nestedScroll(scrollConnection)
+                    .scrollable(headerDragState, Orientation.Vertical, enabled = result != null),
+            ) {
+                Box(
+                    Modifier.clipToBounds().layout { measurable, constraints ->
+                        // Measure the full form even when only its departing bottom edge is visible.
+                        val placeable = measurable.measure(constraints.copy(minHeight = 0, maxHeight = Constraints.Infinity))
+                        val offset = headerScroll.inputOffset.roundToInt()
+                        layout(placeable.width, (placeable.height - offset).coerceAtLeast(0)) {
+                            placeable.placeRelative(0, -offset)
+                        }
+                    }.onSizeChanged { headerScroll.updateMeasurements(input = it.height.toFloat()) },
+                ) {
+                    Column(Modifier.padding(bottom = 12.dp)) {
+                        SeedInputCard(seedInput, seedIsReady, isScouting, error, onSeedChange, onScout)
+                    }
+                }
+                result?.let { world ->
+                    ScoutSummaryCard(
+                        world = world,
+                        matches = matches,
+                        progress = headerScroll.progress,
+                        onCollapseDistanceChanged = { headerScroll.updateMeasurements(summary = it) },
+                    )
+                }
                 if (resultIndex != null || result?.trinketOrder?.isNotEmpty() == true) {
                     ResultNavigationBar(
                         index = resultIndex, total = resultSeeds.size, onStep = stepToResult,
                         offers = result?.trinketOrder?.take(4).orEmpty(), selectedTrinket = result?.selectedTrinket,
                         reveal = reveal, enabled = !isScouting, onSelect = onSelectTrinket,
-                        modifier = Modifier.padding(top = 6.dp),
+                        modifier = Modifier.testTag("scout-navigation").padding(top = 6.dp),
                     )
                 }
                 LazyColumn(state = listState, modifier = Modifier.weight(1f).fillMaxWidth(),
@@ -245,14 +292,6 @@ fun ScoutScreen(
                 }
 
                 result?.let { world ->
-                    item {
-                        ScoutSummaryCard(
-                            world = world,
-                            matches = matches,
-                            modifier = Modifier.padding(top = 22.dp),
-                        )
-                    }
-
                     val questsByDepth = world.quests.associateBy(ScoutQuest::depth)
                     floors
                         .forEach { (depth, floorItems) ->
@@ -310,7 +349,7 @@ private fun SeedInputCard(
     }
 
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().testTag("scout-input"),
         shape = MaterialTheme.shapes.extraLarge,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
     ) {
@@ -426,64 +465,6 @@ internal fun formatSeedFieldValue(input: TextFieldValue): TextFieldValue {
             remapOffset(input.selection.end),
         ),
     )
-}
-
-@Composable
-private fun ScoutSummaryCard(
-    world: ScoutWorld,
-    matches: ScoutMatches?,
-    modifier: Modifier = Modifier,
-) {
-    val clipboard = LocalClipboard.current
-    val scope = rememberCoroutineScope()
-    val floors = world.items.map(ScoutItem::depth).distinct().size
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-    ) {
-        Column(Modifier.padding(18.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    world.seed,
-                    modifier = Modifier.weight(1f),
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontFamily = FontFamily.Monospace,
-                    color = MaterialTheme.colorScheme.tertiary,
-                )
-                TextButton(
-                    onClick = {
-                        scope.launch {
-                            clipboard.setClipEntry(ClipData.newPlainText("Seed", world.seed).toClipEntry())
-                        }
-                    },
-                ) {
-                    Text("Copy")
-                }
-            }
-            Spacer(Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                StatusPill("${world.items.size} items")
-                StatusPill("$floors floors")
-                if (matches != null) {
-                    val matchCount = matches.matchedSlots
-                    StatusPill(
-                        text = scoutMatchText(matches.matchedSlots, matches.totalSlots),
-                        container = if (matchCount > 0) {
-                            MaterialTheme.colorScheme.primaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.surfaceContainerHighest
-                        },
-                        content = if (matchCount > 0) {
-                            MaterialTheme.colorScheme.onPrimaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                    )
-                }
-            }
-        }
-    }
 }
 
 @Composable
