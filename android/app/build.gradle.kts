@@ -14,8 +14,8 @@ android {
         // Compose 1.9+ (required for Material 3 Expressive) raised the floor to API 23.
         minSdk = 23
         targetSdk = 36
-        versionCode = 18
-        versionName = "0.12.0"
+        versionCode = 19
+        versionName = "0.12.1"
 
         ndk {
             // The Rust build produces exactly these ABIs. Without an explicit filter,
