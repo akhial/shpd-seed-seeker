@@ -1,0 +1,38 @@
+[
+  {
+    "dataset": "direct_mac_original_c18b_cheap",
+    "source": "/tmp/seed-perf-ae0cb0c/mac-c18b-original-nine-02/matching-07-audit/summary.json",
+    "bytes": 3947,
+    "sha256": "8a471dcfdc2372292419edf743eec57ed4b15a9e22c3adcb441c4a5a4405510f"
+  },
+  {
+    "dataset": "direct_mac_original_c18b_cli",
+    "source": "/tmp/seed-perf-ae0cb0c/mac-c18b-original-nine-02/cli-01-retry02-audit/summary.json",
+    "bytes": 7217,
+    "sha256": "b7f95872617b94201fea1804e2ff540b11749d727effc2a3418b28d0ece0cb7c"
+  },
+  {
+    "dataset": "incremental_linux_c17_c18b",
+    "source": "/tmp/seed-perf-ae0cb0c/raw/c18b-screen-summary.json",
+    "bytes": 7416,
+    "sha256": "61f9c0ecd11dd82b6e9d7ebc1d9493ba9ecb293d8ebe1eeb668ecca22c8704bd"
+  },
+  {
+    "dataset": "incremental_wasm_c17_c18b",
+    "source": "/tmp/seed-perf-ae0cb0c/raw/c18b-wasm-vault-summary.json",
+    "bytes": 4479,
+    "sha256": "4827239fe31103c4cda8ebb44b16d61e9c58daa684c36b801de69a41670e6db5"
+  },
+  {
+    "dataset": "incremental_mac_c18b_c19d",
+    "source": "/tmp/seed-perf-ae0cb0c/mac-c19d-independent-findings/findings.json",
+    "bytes": 103767,
+    "sha256": "c1485c9b30b154647d344cdd6f2a9862e5d419a825a78c7e480a71cea6ecd096"
+  },
+  {
+    "dataset": "incremental_wasm_c18b_c19d",
+    "source": "/tmp/seed-perf-ae0cb0c/c19d-wasm-audit/summary.json",
+    "bytes": 12552,
+    "sha256": "aee01901bc59124ff044526f3e03f3661d7a442b534216e63027021fde9a2168"
+  }
+]

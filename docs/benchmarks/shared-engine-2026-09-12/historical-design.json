@@ -1,0 +1,2555 @@
+{
+  "version": 1,
+  "scope": "Design map for exactly the 42 historical timing cells in historical-timings.json; not a final nine-case benchmark.",
+  "artifact_root": "Receipt paths below are relative to the retained seed-perf-ae0cb0c evidence archive. They are provenance identifiers, not public download links.",
+  "export_scope": "Reads retained audited summaries/plans/metadata and copies recorded archive/module hashes. Does not rerun engine work or re-audit archive contents. Missing original receipts are marked explicitly.",
+  "queries": {
+    "wand": {
+      "max_depth": 24,
+      "requirements": [
+        {
+          "item": "wand_fireblast",
+          "upgrade": 3,
+          "source": "wandmaker_reward"
+        }
+      ],
+      "auto_apply_trinket": false
+    },
+    "late": {
+      "max_depth": 24,
+      "requirements": [
+        {
+          "item": "runic_blade",
+          "upgrade": 2,
+          "effect": "Grim",
+          "source": "heap"
+        }
+      ],
+      "auto_apply_trinket": false
+    },
+    "vault_imp_prospect": {
+      "max_depth": 19,
+      "auto_apply_trinket": false,
+      "requirements": [
+        {
+          "kind": "weapon"
+        },
+        {
+          "kind": "ring",
+          "source": "imp_reward"
+        }
+      ]
+    },
+    "vault_high_prospect": {
+      "max_depth": 19,
+      "auto_apply_trinket": false,
+      "requirements": [
+        {
+          "kind": "weapon"
+        },
+        {
+          "kind": "wand",
+          "source": "wandmaker_reward"
+        }
+      ]
+    },
+    "vault_feasible": {
+      "max_depth": 24,
+      "requirements": [
+        {
+          "item": "ring_accuracy",
+          "upgrade": 3,
+          "source": "vault_treasure"
+        }
+      ],
+      "auto_apply_trinket": false
+    },
+    "early": {
+      "max_depth": 24,
+      "requirements": [
+        {
+          "item": "leather_armor",
+          "upgrade": 3,
+          "source": "ghost_reward"
+        }
+      ],
+      "auto_apply_trinket": false
+    },
+    "cheap_auto": {
+      "max_depth": 1,
+      "requirements": [
+        {
+          "kind": "ring"
+        }
+      ],
+      "auto_apply_trinket": true
+    },
+    "vault_mixed_or": {
+      "max_depth": 19,
+      "auto_apply_trinket": false,
+      "requirements": [
+        {
+          "any_of": [
+            {
+              "item": "runic_blade",
+              "upgrade": 4,
+              "source": "vault_treasure"
+            },
+            {
+              "item": "greatsword",
+              "upgrade": 2
+            }
+          ]
+        },
+        {
+          "item": "ring_might",
+          "upgrade": 2
+        }
+      ]
+    },
+    "cheap": {
+      "max_depth": 1,
+      "requirements": [
+        {
+          "kind": "ring"
+        }
+      ],
+      "auto_apply_trinket": false
+    },
+    "blade_might": {
+      "max_depth": 19,
+      "requirements": [
+        {
+          "item": "runic_blade",
+          "upgrade": 2,
+          "effect": [
+            "Grim",
+            "Corrupting",
+            "Vampiric",
+            "Crystal"
+          ]
+        },
+        {
+          "item": "ring_might",
+          "upgrade": 2
+        }
+      ],
+      "auto_apply_trinket": false
+    },
+    "blade_might_auto": {
+      "max_depth": 19,
+      "requirements": [
+        {
+          "item": "runic_blade",
+          "upgrade": 2,
+          "effect": [
+            "Grim",
+            "Corrupting",
+            "Vampiric",
+            "Crystal"
+          ]
+        },
+        {
+          "item": "ring_might",
+          "upgrade": 2
+        }
+      ],
+      "auto_apply_trinket": true
+    },
+    "cli": {
+      "max_depth": 19,
+      "auto_apply_trinket": false,
+      "requirements": [
+        {
+          "item": "runic_blade",
+          "upgrade": 5
+        }
+      ]
+    }
+  },
+  "local_native_snapshots": {
+    "c17": {
+      "kind": "local source snapshot; not a clean-commit build receipt",
+      "base_revision": "ae0cb0c07aca55bc4ec31b32f7e6aa15a714a0b0",
+      "base_source_archive_sha256": "2693930ecc6fec39cbcaabe81601e4e554bc4774be46554c5f05d7ed060dd697",
+      "cumulative_patch_sha256": "894a5c8e84513f27022f5884d14ac784f3cc5f51731c42e19d3c43b18bf616a4",
+      "build_receipt_limit": "The original C17 native build log and frozen SHA256SUMS are retained; no separate C17 exact shell argv/full compiler receipt was found. Session environment records the compiler and release settings. Do not promote a reconstructed command to an original receipt."
+    },
+    "c18b": {
+      "kind": "local source snapshot; not a clean-commit build receipt",
+      "base_revision": "ae0cb0c07aca55bc4ec31b32f7e6aa15a714a0b0",
+      "base_source_archive_sha256": "2693930ecc6fec39cbcaabe81601e4e554bc4774be46554c5f05d7ed060dd697",
+      "cumulative_patch_sha256": "50049958f3941f99c5fbb40b3f1bcc66f951c2efb28bbf3e2033a32024cab924",
+      "recorded_dirty_head": "d6fc1557f3f9ad650c3581b654d443cb3bd80185",
+      "later_clean_revision": "a5ddec16900fdd4c7da1822a91eefa5cdc702772",
+      "later_revision_note": "Related accepted checkpoint; the measured local artifact is identified by its recorded source snapshot and hash, not this later commit.",
+      "build": {
+        "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)\nbinary: rustc\ncommit-hash: 48a229ceaefd4985c50990b14116b6d856af0985\ncommit-date: 2026-09-01\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.1\nLLVM version: 22.1.8\n",
+        "cargo": "cargo 1.98.1 (797e8a9bc 2026-08-05)\n",
+        "env": {
+          "RUSTFLAGS": null,
+          "CARGO_ENCODED_RUSTFLAGS": null,
+          "CARGO_BUILD_TARGET": null,
+          "CARGO_TARGET_DIR": null
+        },
+        "build_flags": "release opt-level=3, fat LTO, 1 codegen unit, normal host target; CLI/FFI mimalloc",
+        "build_argv": [
+          "cargo",
+          "build",
+          "--locked",
+          "--release",
+          "-p",
+          "shpd-seedfinder-cli",
+          "-p",
+          "shpd-seedfinder-ffi",
+          "--bin",
+          "seed-seeker",
+          "--example",
+          "match_benchmark"
+        ]
+      }
+    }
+  },
+  "local_wasm_snapshots": {
+    "c17": {
+      "kind": "local source snapshot; not a clean-commit build receipt",
+      "base_revision": "ae0cb0c07aca55bc4ec31b32f7e6aa15a714a0b0",
+      "base_source_archive_sha256": "2693930ecc6fec39cbcaabe81601e4e554bc4774be46554c5f05d7ed060dd697",
+      "cumulative_patch_sha256": "894a5c8e84513f27022f5884d14ac784f3cc5f51731c42e19d3c43b18bf616a4",
+      "build_receipt_limit": "C17 WASM was built by copying its feasibility.rs into the retained prior WASM checkout; no separate fresh-checkout/full-source-inventory receipt or per-build compiler receipt is available. The cumulative snapshot and exact loaded module hash identify the intended source and actual artifact separately."
+    },
+    "c18b": {
+      "kind": "local source snapshot; not a clean-commit build receipt",
+      "base_revision": "ae0cb0c07aca55bc4ec31b32f7e6aa15a714a0b0",
+      "base_source_archive_sha256": "2693930ecc6fec39cbcaabe81601e4e554bc4774be46554c5f05d7ed060dd697",
+      "cumulative_patch_sha256": "50049958f3941f99c5fbb40b3f1bcc66f951c2efb28bbf3e2033a32024cab924",
+      "recorded_dirty_head": "d6fc1557f3f9ad650c3581b654d443cb3bd80185",
+      "later_clean_revision": "a5ddec16900fdd4c7da1822a91eefa5cdc702772",
+      "later_revision_note": "Related accepted checkpoint; the measured local artifact is identified by its recorded source snapshot and hash, not this later commit.",
+      "build": {
+        "source": "immutable baseline archive + cumulative C18b patch, fresh isolated checkout",
+        "target": "wasm32-unknown-unknown",
+        "profile": "release O3/fat LTO/one CGU/dlmalloc, wasm-pack --no-opt",
+        "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)\nbinary: rustc\ncommit-hash: 48a229ceaefd4985c50990b14116b6d856af0985\ncommit-date: 2026-09-01\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.1\nLLVM version: 22.1.8\n",
+        "wasm_pack": "wasm-pack 0.15.0\n",
+        "node": "v24.21.0\n",
+        "rustflags": null
+      }
+    },
+    "c19d": {
+      "kind": "local source snapshot; not a clean-commit build receipt",
+      "base_revision": "ae0cb0c07aca55bc4ec31b32f7e6aa15a714a0b0",
+      "base_source_archive_sha256": "2693930ecc6fec39cbcaabe81601e4e554bc4774be46554c5f05d7ed060dd697",
+      "cumulative_patch_sha256": "14cafaccbdc4a225f1498eb3d55ba0981ec1ecc0a2907a041cdfcec5b24ee9dc",
+      "later_clean_revision": "2ee20c3f597fb7f00872a1858f59d9424a14d16b",
+      "later_revision_note": "Related accepted checkpoint; local WASM build receipt uses archive plus cumulative patch.",
+      "build": {
+        "source": "immutable baseline archive + cumulative C19d patch, fresh isolated checkout",
+        "target": "wasm32-unknown-unknown",
+        "profile": "release O3/fat LTO/one CGU/dlmalloc, wasm-pack --no-opt",
+        "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)\nbinary: rustc\ncommit-hash: 48a229ceaefd4985c50990b14116b6d856af0985\ncommit-date: 2026-09-01\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.1\nLLVM version: 22.1.8\n",
+        "wasm_pack": "wasm-pack 0.15.0\n",
+        "node": "v24.21.0\n",
+        "rustflags": null
+      }
+    }
+  },
+  "datasets": [
+    {
+      "dataset": "direct_mac_original_c18b_cheap",
+      "source_summary_ref": "mac-c18b-original-nine-02/matching-07-audit/summary.json",
+      "jobs": [
+        {
+          "job_ref": "mac-c18b-original-nine-02/matching-07.json",
+          "audit_ref": "mac-c18b-original-nine-02/matching-07-audit/provenance.json",
+          "sources": {
+            "baseline": "ae0cb0c07aca55bc4ec31b32f7e6aa15a714a0b0",
+            "candidate": "a5ddec16900fdd4c7da1822a91eefa5cdc702772"
+          },
+          "source_status": {
+            "environment_before": {
+              "baseline": "",
+              "candidate": ""
+            },
+            "environment_after": {
+              "baseline": "",
+              "candidate": ""
+            }
+          },
+          "source_bundle_identifiers": {
+            "environment_before": {
+              "baseline": "bcd5b6b8a5c73f96be2d7c22fe8211841ee5b7838c4b80ab960bcfaaea3b1aeb",
+              "candidate": "bcd5b6b8a5c73f96be2d7c22fe8211841ee5b7838c4b80ab960bcfaaea3b1aeb"
+            },
+            "environment_after": {
+              "baseline": "bcd5b6b8a5c73f96be2d7c22fe8211841ee5b7838c4b80ab960bcfaaea3b1aeb",
+              "candidate": "bcd5b6b8a5c73f96be2d7c22fe8211841ee5b7838c4b80ab960bcfaaea3b1aeb"
+            }
+          },
+          "build": {
+            "argv": [
+              "cargo",
+              "build",
+              "--locked",
+              "--offline",
+              "--release",
+              "--target",
+              "aarch64-apple-darwin",
+              "-p",
+              "shpd-seedfinder-cli",
+              "-p",
+              "shpd-seedfinder-ffi",
+              "--bin",
+              "seed-seeker",
+              "--example",
+              "match_benchmark"
+            ],
+            "env": {
+              "CARGO_TARGET_DIR": "${JOB}/work/targets/baseline",
+              "RUSTFLAGS": ""
+            }
+          },
+          "profile": "repository release opt-level 3, fat LTO, one codegen unit; default portable aarch64-apple-darwin; MiMalloc CLI/FFI; no PGO",
+          "frozen_executables": {
+            "baseline": {
+              "seed-seeker": {
+                "sha256": "e05a52096c3f03d1889d8878d6a95922f4f60d7baf1412e37c0b6f482f8aef55",
+                "bytes": 3891552
+              },
+              "match_benchmark": {
+                "sha256": "d493b241aacf42e52093a0294f0b2a02e1680900f32fc4958612d5d4e05688be",
+                "bytes": 3924720
+              }
+            },
+            "candidate": {
+              "seed-seeker": {
+                "sha256": "5fbe5c682d39025ddf5b4d584e53eb9d5041721298b365153d98569e6d919252",
+                "bytes": 3875056
+              },
+              "match_benchmark": {
+                "sha256": "7599c05090f38aff1ded57ce4de88b6a99490fb0ad17936f5d07eecbd2705f7e",
+                "bytes": 3941264
+              }
+            }
+          },
+          "environment": {
+            "environment_before": {
+              "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: aarch64-apple-darwin\nrelease: 1.98.0\nLLVM version: 22.1.8",
+              "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
+              "architecture": "arm64",
+              "macos": "ProductName:\t\tmacOS\nProductVersion:\t\t26.6.2\nBuildVersion:\t\t25G83",
+              "hardware": "Mac16,8\n12\n12\n51539607552",
+              "performance_cores": "8",
+              "available_cores": "12"
+            },
+            "environment_after": {
+              "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: aarch64-apple-darwin\nrelease: 1.98.0\nLLVM version: 22.1.8",
+              "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
+              "architecture": "arm64",
+              "macos": "ProductName:\t\tmacOS\nProductVersion:\t\t26.6.2\nBuildVersion:\t\t25G83",
+              "hardware": "Mac16,8\n12\n12\n51539607552",
+              "performance_cores": "8",
+              "available_cores": "12"
+            }
+          },
+          "artifact_archive": {
+            "artifact": "mac-c18b-original-nine-02/matching-07-artifacts.tar.gz",
+            "bytes": 9682695,
+            "sha256": "44d721011bb91edd2cd4b4127e40d0c7b2c85cbdcef43007bb710a2ababb0281"
+          },
+          "artifact_manifest": {
+            "bytes": 10968,
+            "sha256": "f9d028be102e38721316010a7b9029cfb5f808190ad527df2a775fb5a0fddc08"
+          },
+          "archive_binding": true
+        }
+      ],
+      "cells": [
+        {
+          "case": "cheap-w1-c0-r0",
+          "workers": 1,
+          "query": "cheap",
+          "job_ref": "mac-c18b-original-nine-02/matching-07.json",
+          "seeds_per_sample": 387328,
+          "seed_intervals_by_repetition": [
+            [
+              30000000,
+              30387328
+            ],
+            [
+              30000000,
+              30387328
+            ],
+            [
+              30000000,
+              30387328
+            ],
+            [
+              30000000,
+              30387328
+            ]
+          ],
+          "seed_order": "consecutive actual seed values, identical request repeated four times; not Linux dispersed seed-index mapping",
+          "warmup": "one full same-input request/process per variant, not part of scored arrays",
+          "measurement_mode": "jsonl",
+          "equality_scope": "Full seed/selected-trinket/ordered-witness records; outer seed order normalized; not full generated-world parity"
+        }
+      ],
+      "pair_order": [
+        "AB",
+        "BA",
+        "AB",
+        "BA"
+      ],
+      "timed_pairs_per_cell": 4,
+      "timing": "Internal reported search seconds. Matching setup/query planning precedes requests; CLI internal times include query planning and worker setup and round to milliseconds. External time-wrapper counters are not these throughput timings.",
+      "limitations": [
+        "Complete returned seed/recipe/selected-witness records are compared; this is not complete-world parity.",
+        "Only outer match order and top-level response.seconds are normalized. Witness order and all other fields are exact.",
+        "All equal query/input responses across variants, repeats, steps and workers are compared byte for byte; different inputs are never equated.",
+        "Internal seconds exclude adapter startup/final wire serialization. Whole-session time -l real includes time idle behind the other variant.",
+        "These summaries provide paired observations, not an automatic significance or saturation decision.",
+        "Process-mode CLI comparisons and training response semantics are outside this matching audit; all their files still pass manifest checks.",
+        "Artifact hash consistency is not an independent trust anchor unless a queue-provided archive SHA and/or independent job plan is supplied."
+      ]
+    },
+    {
+      "dataset": "direct_mac_original_c18b_cli",
+      "source_summary_ref": "mac-c18b-original-nine-02/cli-01-retry02-audit/summary.json",
+      "jobs": [
+        {
+          "job_ref": "mac-c18b-original-nine-02/cli-01.json",
+          "audit_ref": "mac-c18b-original-nine-02/cli-01-retry02-audit/provenance.json",
+          "sources": {
+            "baseline": "ae0cb0c07aca55bc4ec31b32f7e6aa15a714a0b0",
+            "candidate": "a5ddec16900fdd4c7da1822a91eefa5cdc702772"
+          },
+          "source_status": {
+            "environment_before": {
+              "baseline": "",
+              "candidate": ""
+            },
+            "environment_after": {
+              "baseline": "",
+              "candidate": ""
+            }
+          },
+          "source_bundle_identifiers": {
+            "environment_before": {
+              "baseline": "bcd5b6b8a5c73f96be2d7c22fe8211841ee5b7838c4b80ab960bcfaaea3b1aeb",
+              "candidate": "e2b62648457db9c797abfd6f47f5040bce5051fcbb82b9f9e4a6db55b0c24fd7"
+            },
+            "environment_after": {
+              "baseline": "bcd5b6b8a5c73f96be2d7c22fe8211841ee5b7838c4b80ab960bcfaaea3b1aeb",
+              "candidate": "e2b62648457db9c797abfd6f47f5040bce5051fcbb82b9f9e4a6db55b0c24fd7"
+            }
+          },
+          "build": {
+            "argv": [
+              "cargo",
+              "build",
+              "--locked",
+              "--offline",
+              "--release",
+              "--target",
+              "aarch64-apple-darwin",
+              "-p",
+              "shpd-seedfinder-cli",
+              "-p",
+              "shpd-seedfinder-ffi",
+              "--bin",
+              "seed-seeker",
+              "--example",
+              "match_benchmark"
+            ],
+            "env": {
+              "CARGO_TARGET_DIR": "${JOB}/work/targets/baseline",
+              "RUSTFLAGS": ""
+            }
+          },
+          "profile": "repository release opt-level 3, fat LTO, one codegen unit; default portable aarch64-apple-darwin; MiMalloc CLI/FFI; no PGO",
+          "frozen_executables": {
+            "baseline": {
+              "seed-seeker": {
+                "sha256": "8d262c15b86ebe2349ec272985a94fe1d68992eb38f07a9213181b4440b64cfa",
+                "bytes": 3891552
+              },
+              "match_benchmark": {
+                "sha256": "39954a82d48566e5de03a15995f4aaf9ec8ff5b5dbec3aa02e00f5f9683d0c65",
+                "bytes": 3924720
+              }
+            },
+            "candidate": {
+              "seed-seeker": {
+                "sha256": "20dd9b5caaa0b89ac28045b03bfff774c947289268bd85e1da50cd3785c97516",
+                "bytes": 3875056
+              },
+              "match_benchmark": {
+                "sha256": "3717da4dbdc9ebb08895ae23e6fba823208ec2ff95f4b563ea56913578863db4",
+                "bytes": 3941264
+              }
+            }
+          },
+          "environment": {
+            "environment_before": {
+              "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: aarch64-apple-darwin\nrelease: 1.98.0\nLLVM version: 22.1.8",
+              "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
+              "architecture": "arm64",
+              "macos": "ProductName:\t\tmacOS\nProductVersion:\t\t26.6.2\nBuildVersion:\t\t25G83",
+              "hardware": "Mac16,8\n12\n12\n51539607552",
+              "performance_cores": "8",
+              "available_cores": "12"
+            },
+            "environment_after": {
+              "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: aarch64-apple-darwin\nrelease: 1.98.0\nLLVM version: 22.1.8",
+              "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
+              "architecture": "arm64",
+              "macos": "ProductName:\t\tmacOS\nProductVersion:\t\t26.6.2\nBuildVersion:\t\t25G83",
+              "hardware": "Mac16,8\n12\n12\n51539607552",
+              "performance_cores": "8",
+              "available_cores": "12"
+            }
+          },
+          "artifact_archive": {
+            "artifact": "mac-c18b-original-nine-02/cli-01-retry02-artifacts.tar.gz",
+            "bytes": 4490770,
+            "sha256": "61587afcdd0d376482d01888061e15714cab7a3d881d90bd23215ab5099cbabc"
+          },
+          "artifact_manifest": {
+            "bytes": 19424,
+            "sha256": "bdb09110fdd5cc630853bef51170dce3a6cb74acbfeec9cdb691c6c0171b7780"
+          },
+          "archive_binding": true
+        }
+      ],
+      "cells": [
+        {
+          "case": "cli-w1-c0-r0",
+          "workers": 1,
+          "query": "cli",
+          "job_ref": "mac-c18b-original-nine-02/cli-01.json",
+          "seeds_per_sample": 13824,
+          "seed_intervals_by_repetition": [
+            [
+              0,
+              13824
+            ],
+            [
+              0,
+              13824
+            ],
+            [
+              0,
+              13824
+            ],
+            [
+              0,
+              13824
+            ]
+          ],
+          "seed_order": "consecutive actual seed values, identical request repeated four times; not Linux dispersed seed-index mapping",
+          "warmup": "one full same-input request/process per variant, not part of scored arrays",
+          "measurement_mode": "process",
+          "equality_scope": "CLI match count only; not item/world/recipe witness equality"
+        },
+        {
+          "case": "cli-w12-c0-r0",
+          "workers": 12,
+          "query": "cli",
+          "job_ref": "mac-c18b-original-nine-02/cli-01.json",
+          "seeds_per_sample": 114432,
+          "seed_intervals_by_repetition": [
+            [
+              0,
+              114432
+            ],
+            [
+              0,
+              114432
+            ],
+            [
+              0,
+              114432
+            ],
+            [
+              0,
+              114432
+            ]
+          ],
+          "seed_order": "consecutive actual seed values, identical request repeated four times; not Linux dispersed seed-index mapping",
+          "warmup": "one full same-input request/process per variant, not part of scored arrays",
+          "measurement_mode": "process",
+          "equality_scope": "CLI match count only; not item/world/recipe witness equality"
+        },
+        {
+          "case": "cli-w8-c0-r0",
+          "workers": 8,
+          "query": "cli",
+          "job_ref": "mac-c18b-original-nine-02/cli-01.json",
+          "seeds_per_sample": 96512,
+          "seed_intervals_by_repetition": [
+            [
+              0,
+              96512
+            ],
+            [
+              0,
+              96512
+            ],
+            [
+              0,
+              96512
+            ],
+            [
+              0,
+              96512
+            ]
+          ],
+          "seed_order": "consecutive actual seed values, identical request repeated four times; not Linux dispersed seed-index mapping",
+          "warmup": "one full same-input request/process per variant, not part of scored arrays",
+          "measurement_mode": "process",
+          "equality_scope": "CLI match count only; not item/world/recipe witness equality"
+        }
+      ],
+      "pair_order": [
+        "AB",
+        "BA",
+        "AB",
+        "BA"
+      ],
+      "timed_pairs_per_cell": 4,
+      "timing": "Internal reported search seconds. Matching setup/query planning precedes requests; CLI internal times include query planning and worker setup and round to milliseconds. External time-wrapper counters are not these throughput timings.",
+      "limitations": [
+        "CLI equality is tested-count and match-count equality only; no matched seed/recipe/item witnesses are emitted.",
+        "Every warmup and measured process has explicit zero exit, six exact stdout lines through EOF, and only approved wrapper stderr.",
+        "Other job-step zero exits are inferred from the full successful receipt and hash-bound reviewed fail-fast runner, not independent per-exec status records.",
+        "Manifest binding covers every artifact, but non-CLI matching/training response semantics and PGO coverage/diagnostics need separate audits.",
+        "CLI internal elapsed is rounded to milliseconds; whole-process wall/time counters include setup/output/shutdown. No CPU affinity is implied.",
+        "CLI always measures the built-in query over [0,count); different worker counts may use different counts and are not equated across those inputs.",
+        "PGO same-source roles, build graph selection and fresh training/merge/use plan are checked; source-defined Cargo profile settings remain pinned-revision provenance.",
+        "CLI PGO training prefixes overlap measured prefixes, so these process-mode results are not held out.",
+        "All four paired signs and raw times are retained; the auditor does not decide statistical significance or optimization acceptance."
+      ]
+    },
+    {
+      "dataset": "incremental_mac_c18b_c19d",
+      "source_summary_ref": "mac-c19d-independent-findings/findings.json",
+      "jobs": [
+        {
+          "job_ref": "mac-c19d-targeted-screen-01/screen-01.json",
+          "audit_ref": "mac-c19d-controls01-matching-independent-audit/provenance.json",
+          "sources": {
+            "baseline": "a5ddec16900fdd4c7da1822a91eefa5cdc702772",
+            "candidate": "2ee20c3f597fb7f00872a1858f59d9424a14d16b"
+          },
+          "source_status": {
+            "environment_before": {
+              "baseline": "",
+              "candidate": ""
+            },
+            "environment_after": {
+              "baseline": "",
+              "candidate": ""
+            }
+          },
+          "source_bundle_identifiers": {
+            "environment_before": {
+              "baseline": "e2b62648457db9c797abfd6f47f5040bce5051fcbb82b9f9e4a6db55b0c24fd7",
+              "candidate": "964586a7be32242e13b76be3a7151d19568f816628eccfa3b07442bd91e607e8"
+            },
+            "environment_after": {
+              "baseline": "e2b62648457db9c797abfd6f47f5040bce5051fcbb82b9f9e4a6db55b0c24fd7",
+              "candidate": "964586a7be32242e13b76be3a7151d19568f816628eccfa3b07442bd91e607e8"
+            }
+          },
+          "build": {
+            "argv": [
+              "cargo",
+              "build",
+              "--locked",
+              "--offline",
+              "--release",
+              "--target",
+              "aarch64-apple-darwin",
+              "-p",
+              "shpd-seedfinder-cli",
+              "-p",
+              "shpd-seedfinder-ffi",
+              "--bin",
+              "seed-seeker",
+              "--example",
+              "match_benchmark"
+            ],
+            "env": {
+              "CARGO_TARGET_DIR": "${JOB}/work/targets/baseline",
+              "RUSTFLAGS": ""
+            }
+          },
+          "profile": "repository release opt-level 3, fat LTO, one codegen unit; default portable aarch64-apple-darwin; MiMalloc CLI/FFI; no PGO",
+          "frozen_executables": {
+            "baseline": {
+              "seed-seeker": {
+                "sha256": "b078e2256d3eddd793b1df0f678c36b80c09a0a39265fca06e53011410e51129",
+                "bytes": 3875056
+              },
+              "match_benchmark": {
+                "sha256": "784067bb1ae8832cacb5ec2a09296c472ea88ac0623986d4ad41ebc6a202be64",
+                "bytes": 3941264
+              }
+            },
+            "candidate": {
+              "seed-seeker": {
+                "sha256": "fcc706295f942184c69a96840ed6fc98264f9c1f32e3173a1d1d4f7658309c84",
+                "bytes": 3875056
+              },
+              "match_benchmark": {
+                "sha256": "6684db93afc8811ee39ca28f0af8c15e99742d2ae0a4869841d641bc61b6ed4e",
+                "bytes": 3941264
+              }
+            }
+          },
+          "environment": {
+            "environment_before": {
+              "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: aarch64-apple-darwin\nrelease: 1.98.0\nLLVM version: 22.1.8",
+              "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
+              "architecture": "arm64",
+              "macos": "ProductName:\t\tmacOS\nProductVersion:\t\t26.6.2\nBuildVersion:\t\t25G83",
+              "hardware": "Mac16,8\n12\n12\n51539607552",
+              "performance_cores": "8",
+              "available_cores": "12"
+            },
+            "environment_after": {
+              "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: aarch64-apple-darwin\nrelease: 1.98.0\nLLVM version: 22.1.8",
+              "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
+              "architecture": "arm64",
+              "macos": "ProductName:\t\tmacOS\nProductVersion:\t\t26.6.2\nBuildVersion:\t\t25G83",
+              "hardware": "Mac16,8\n12\n12\n51539607552",
+              "performance_cores": "8",
+              "available_cores": "12"
+            }
+          },
+          "artifact_archive": {
+            "artifact": "mac-c19d-controls01.tar.gz",
+            "bytes": 9693898,
+            "sha256": "5a880bd890a5a1bf397be12b3de4eb03ae45f9d15d929872f145155679423ede"
+          },
+          "artifact_manifest": {
+            "bytes": 14748,
+            "sha256": "3968c877257e17b86d55751be005df6213cf208ab5aeb3ea7ab783a85c4d8711"
+          },
+          "archive_binding": true
+        },
+        {
+          "job_ref": "mac-c19d-targeted-screen-01/screen-01.json",
+          "audit_ref": "mac-c19d-controls01-cli-independent-audit/provenance.json",
+          "sources": {
+            "baseline": "a5ddec16900fdd4c7da1822a91eefa5cdc702772",
+            "candidate": "2ee20c3f597fb7f00872a1858f59d9424a14d16b"
+          },
+          "source_status": {
+            "environment_before": {
+              "baseline": "",
+              "candidate": ""
+            },
+            "environment_after": {
+              "baseline": "",
+              "candidate": ""
+            }
+          },
+          "source_bundle_identifiers": {
+            "environment_before": {
+              "baseline": "e2b62648457db9c797abfd6f47f5040bce5051fcbb82b9f9e4a6db55b0c24fd7",
+              "candidate": "964586a7be32242e13b76be3a7151d19568f816628eccfa3b07442bd91e607e8"
+            },
+            "environment_after": {
+              "baseline": "e2b62648457db9c797abfd6f47f5040bce5051fcbb82b9f9e4a6db55b0c24fd7",
+              "candidate": "964586a7be32242e13b76be3a7151d19568f816628eccfa3b07442bd91e607e8"
+            }
+          },
+          "build": {
+            "argv": [
+              "cargo",
+              "build",
+              "--locked",
+              "--offline",
+              "--release",
+              "--target",
+              "aarch64-apple-darwin",
+              "-p",
+              "shpd-seedfinder-cli",
+              "-p",
+              "shpd-seedfinder-ffi",
+              "--bin",
+              "seed-seeker",
+              "--example",
+              "match_benchmark"
+            ],
+            "env": {
+              "CARGO_TARGET_DIR": "${JOB}/work/targets/baseline",
+              "RUSTFLAGS": ""
+            }
+          },
+          "profile": "repository release opt-level 3, fat LTO, one codegen unit; default portable aarch64-apple-darwin; MiMalloc CLI/FFI; no PGO",
+          "frozen_executables": {
+            "baseline": {
+              "seed-seeker": {
+                "sha256": "b078e2256d3eddd793b1df0f678c36b80c09a0a39265fca06e53011410e51129",
+                "bytes": 3875056
+              },
+              "match_benchmark": {
+                "sha256": "784067bb1ae8832cacb5ec2a09296c472ea88ac0623986d4ad41ebc6a202be64",
+                "bytes": 3941264
+              }
+            },
+            "candidate": {
+              "seed-seeker": {
+                "sha256": "fcc706295f942184c69a96840ed6fc98264f9c1f32e3173a1d1d4f7658309c84",
+                "bytes": 3875056
+              },
+              "match_benchmark": {
+                "sha256": "6684db93afc8811ee39ca28f0af8c15e99742d2ae0a4869841d641bc61b6ed4e",
+                "bytes": 3941264
+              }
+            }
+          },
+          "environment": {
+            "environment_before": {
+              "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: aarch64-apple-darwin\nrelease: 1.98.0\nLLVM version: 22.1.8",
+              "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
+              "architecture": "arm64",
+              "macos": "ProductName:\t\tmacOS\nProductVersion:\t\t26.6.2\nBuildVersion:\t\t25G83",
+              "hardware": "Mac16,8\n12\n12\n51539607552",
+              "performance_cores": "8",
+              "available_cores": "12"
+            },
+            "environment_after": {
+              "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: aarch64-apple-darwin\nrelease: 1.98.0\nLLVM version: 22.1.8",
+              "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
+              "architecture": "arm64",
+              "macos": "ProductName:\t\tmacOS\nProductVersion:\t\t26.6.2\nBuildVersion:\t\t25G83",
+              "hardware": "Mac16,8\n12\n12\n51539607552",
+              "performance_cores": "8",
+              "available_cores": "12"
+            }
+          },
+          "artifact_archive": {
+            "artifact": "mac-c19d-controls01.tar.gz",
+            "bytes": 9693898,
+            "sha256": "5a880bd890a5a1bf397be12b3de4eb03ae45f9d15d929872f145155679423ede"
+          },
+          "artifact_manifest": {
+            "bytes": 14748,
+            "sha256": "3968c877257e17b86d55751be005df6213cf208ab5aeb3ea7ab783a85c4d8711"
+          },
+          "archive_binding": true
+        },
+        {
+          "job_ref": "mac-c19d-targeted-screen-01/screen-02.json",
+          "audit_ref": "mac-c19d-controls02-matching-independent-audit/provenance.json",
+          "sources": {
+            "baseline": "a5ddec16900fdd4c7da1822a91eefa5cdc702772",
+            "candidate": "2ee20c3f597fb7f00872a1858f59d9424a14d16b"
+          },
+          "source_status": {
+            "environment_before": {
+              "baseline": "",
+              "candidate": ""
+            },
+            "environment_after": {
+              "baseline": "",
+              "candidate": ""
+            }
+          },
+          "source_bundle_identifiers": {
+            "environment_before": {
+              "baseline": "e2b62648457db9c797abfd6f47f5040bce5051fcbb82b9f9e4a6db55b0c24fd7",
+              "candidate": "964586a7be32242e13b76be3a7151d19568f816628eccfa3b07442bd91e607e8"
+            },
+            "environment_after": {
+              "baseline": "e2b62648457db9c797abfd6f47f5040bce5051fcbb82b9f9e4a6db55b0c24fd7",
+              "candidate": "964586a7be32242e13b76be3a7151d19568f816628eccfa3b07442bd91e607e8"
+            }
+          },
+          "build": {
+            "argv": [
+              "cargo",
+              "build",
+              "--locked",
+              "--offline",
+              "--release",
+              "--target",
+              "aarch64-apple-darwin",
+              "-p",
+              "shpd-seedfinder-cli",
+              "-p",
+              "shpd-seedfinder-ffi",
+              "--bin",
+              "seed-seeker",
+              "--example",
+              "match_benchmark"
+            ],
+            "env": {
+              "CARGO_TARGET_DIR": "${JOB}/work/targets/baseline",
+              "RUSTFLAGS": ""
+            }
+          },
+          "profile": "repository release opt-level 3, fat LTO, one codegen unit; default portable aarch64-apple-darwin; MiMalloc CLI/FFI; no PGO",
+          "frozen_executables": {
+            "baseline": {
+              "seed-seeker": {
+                "sha256": "af011c50a6e3d3915a4a56f41a219142ad600309a703e6b31aa283b91e30d8d9",
+                "bytes": 3875056
+              },
+              "match_benchmark": {
+                "sha256": "ca61dbfd34c799d140711441181da972065e5fa546e2935550849b7a68ef7445",
+                "bytes": 3941264
+              }
+            },
+            "candidate": {
+              "seed-seeker": {
+                "sha256": "933e6ce9132d029eb1bffa51fc3ba36376049793b8f8d21472affd1a96f2593b",
+                "bytes": 3875056
+              },
+              "match_benchmark": {
+                "sha256": "432aa4d3a5373da5d0315d516ad94fe6a320d42d9a9ae3d1a5c63ef9d56d662b",
+                "bytes": 3941264
+              }
+            }
+          },
+          "environment": {
+            "environment_before": {
+              "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: aarch64-apple-darwin\nrelease: 1.98.0\nLLVM version: 22.1.8",
+              "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
+              "architecture": "arm64",
+              "macos": "ProductName:\t\tmacOS\nProductVersion:\t\t26.6.2\nBuildVersion:\t\t25G83",
+              "hardware": "Mac16,8\n12\n12\n51539607552",
+              "performance_cores": "8",
+              "available_cores": "12"
+            },
+            "environment_after": {
+              "rustc": "rustc 1.98.0 (88d9e12ae 2026-08-18)\nbinary: rustc\ncommit-hash: 88d9e12ae178fab0fb5cc050a94da85685d449ea\ncommit-date: 2026-08-18\nhost: aarch64-apple-darwin\nrelease: 1.98.0\nLLVM version: 22.1.8",
+              "cargo": "cargo 1.98.0 (797e8a9bc 2026-08-05)",
+              "architecture": "arm64",
+              "macos": "ProductName:\t\tmacOS\nProductVersion:\t\t26.6.2\nBuildVersion:\t\t25G83",
+              "hardware": "Mac16,8\n12\n12\n51539607552",
+              "performance_cores": "8",
+              "available_cores": "12"
+            }
+          },
+          "artifact_archive": {
+            "artifact": "mac-c19d-controls02.tar.gz",
+            "bytes": 17288683,
+            "sha256": "95928065aff408ace14b257aa036c46c2cf89fab882a0c3a60f31b233ba4c8c6"
+          },
+          "artifact_manifest": {
+            "bytes": 10970,
+            "sha256": "6bcc67861a24e00c545267e07ae0af6ad9068cc2db546bd86ec9747d90edb5f9"
+          },
+          "archive_binding": true
+        }
+      ],
+      "cells": [
+        {
+          "case": "cheap-w1-c0-r0",
+          "workers": 1,
+          "query": "cheap",
+          "job_ref": "mac-c19d-targeted-screen-01/screen-01.json",
+          "seeds_per_sample": 387328,
+          "seed_intervals_by_repetition": [
+            [
+              90000000,
+              90387328
+            ],
+            [
+              90000000,
+              90387328
+            ],
+            [
+              90000000,
+              90387328
+            ],
+            [
+              90000000,
+              90387328
+            ]
+          ],
+          "seed_order": "consecutive actual seed values, identical request repeated four times; not Linux dispersed seed-index mapping",
+          "warmup": "one full same-input request/process per variant, not part of scored arrays",
+          "measurement_mode": "jsonl",
+          "equality_scope": "Full seed/selected-trinket/ordered-witness records; outer seed order normalized; not full generated-world parity"
+        },
+        {
+          "case": "blade_might_auto-w1-c0-r0",
+          "workers": 1,
+          "query": "blade_might_auto",
+          "job_ref": "mac-c19d-targeted-screen-01/screen-01.json",
+          "seeds_per_sample": 11008,
+          "seed_intervals_by_repetition": [
+            [
+              91000000,
+              91011008
+            ],
+            [
+              91000000,
+              91011008
+            ],
+            [
+              91000000,
+              91011008
+            ],
+            [
+              91000000,
+              91011008
+            ]
+          ],
+          "seed_order": "consecutive actual seed values, identical request repeated four times; not Linux dispersed seed-index mapping",
+          "warmup": "one full same-input request/process per variant, not part of scored arrays",
+          "measurement_mode": "jsonl",
+          "equality_scope": "Full seed/selected-trinket/ordered-witness records; outer seed order normalized; not full generated-world parity"
+        },
+        {
+          "case": "cli-w1-c0-r0",
+          "workers": 1,
+          "query": "cli",
+          "job_ref": "mac-c19d-targeted-screen-01/screen-01.json",
+          "seeds_per_sample": 13824,
+          "seed_intervals_by_repetition": [
+            [
+              0,
+              13824
+            ],
+            [
+              0,
+              13824
+            ],
+            [
+              0,
+              13824
+            ],
+            [
+              0,
+              13824
+            ]
+          ],
+          "seed_order": "consecutive actual seed values, identical request repeated four times; not Linux dispersed seed-index mapping",
+          "warmup": "one full same-input request/process per variant, not part of scored arrays",
+          "measurement_mode": "process",
+          "equality_scope": "CLI match count only; not item/world/recipe witness equality"
+        },
+        {
+          "case": "cheap-w8-c0-r0",
+          "workers": 8,
+          "query": "cheap",
+          "job_ref": "mac-c19d-targeted-screen-01/screen-02.json",
+          "seeds_per_sample": 926976,
+          "seed_intervals_by_repetition": [
+            [
+              90000000,
+              90926976
+            ],
+            [
+              90000000,
+              90926976
+            ],
+            [
+              90000000,
+              90926976
+            ],
+            [
+              90000000,
+              90926976
+            ]
+          ],
+          "seed_order": "consecutive actual seed values, identical request repeated four times; not Linux dispersed seed-index mapping",
+          "warmup": "one full same-input request/process per variant, not part of scored arrays",
+          "measurement_mode": "jsonl",
+          "equality_scope": "Full seed/selected-trinket/ordered-witness records; outer seed order normalized; not full generated-world parity"
+        }
+      ],
+      "pair_order": [
+        "AB",
+        "BA",
+        "AB",
+        "BA"
+      ],
+      "timed_pairs_per_cell": 4,
+      "timing": "Internal reported search seconds. Matching setup/query planning precedes requests; CLI internal times include query planning and worker setup and round to milliseconds. External time-wrapper counters are not these throughput timings.",
+      "limitations": [
+        "This is a selected three-case one-worker screen plus one short cheap8 control, not the nine-case suite aggregate.",
+        "Cheap8 uses one 926976-seed request per sample, not the complete three-component 2780928-seed workload; measured durations are approximately 7 seconds.",
+        "Cheap1/8 share a start but use different input counts; this is not equal-input strong scaling.",
+        "Whole matching process counters include one warmup plus four samples, setup, JSON and exit; real includes waits for the other variant.",
+        "CLI counters cover individual processes including setup/output/exit; internal CLI seconds are rounded to milliseconds.",
+        "All paired signs are observations; no profile/counter attribution or alignment causality follows from these totals.",
+        "Environment snapshots contain no time series of temperature, clock, core residency or unrelated processes. No CPU affinity or exclusive-host proof is available.",
+        "Returned records preserve recipes and witness order; only outer match order and response.seconds are normalized. CLI emits count equality only. Neither establishes full-world parity."
+      ]
+    },
+    {
+      "dataset": "incremental_linux_c17_c18b",
+      "source_summary_ref": "raw/c18b-screen-summary.json",
+      "baseline_snapshot": "c17",
+      "candidate_snapshot": "c18b",
+      "cells": [
+        {
+          "case": "blade_might",
+          "workers": 1,
+          "query": "blade_might",
+          "seeds_per_sample": 4096,
+          "intervals_by_repetition": [
+            [
+              1000000,
+              1004096
+            ],
+            [
+              1004096,
+              1008192
+            ],
+            [
+              1008192,
+              1012288
+            ],
+            [
+              1012288,
+              1016384
+            ]
+          ],
+          "interval_domain": "dispersed permutation index",
+          "warmup_seeds": 256
+        },
+        {
+          "case": "blade_might_auto",
+          "workers": 1,
+          "query": "blade_might_auto",
+          "seeds_per_sample": 4096,
+          "intervals_by_repetition": [
+            [
+              1000000,
+              1004096
+            ],
+            [
+              1004096,
+              1008192
+            ],
+            [
+              1008192,
+              1012288
+            ],
+            [
+              1012288,
+              1016384
+            ]
+          ],
+          "interval_domain": "dispersed permutation index",
+          "warmup_seeds": 256
+        },
+        {
+          "case": "vault_high_prospect",
+          "workers": 1,
+          "query": "vault_high_prospect",
+          "seeds_per_sample": 4096,
+          "intervals_by_repetition": [
+            [
+              1000000,
+              1004096
+            ],
+            [
+              1004096,
+              1008192
+            ],
+            [
+              1008192,
+              1012288
+            ],
+            [
+              1012288,
+              1016384
+            ]
+          ],
+          "interval_domain": "dispersed permutation index",
+          "warmup_seeds": 256
+        },
+        {
+          "case": "vault_imp_prospect",
+          "workers": 1,
+          "query": "vault_imp_prospect",
+          "seeds_per_sample": 4096,
+          "intervals_by_repetition": [
+            [
+              1000000,
+              1004096
+            ],
+            [
+              1004096,
+              1008192
+            ],
+            [
+              1008192,
+              1012288
+            ],
+            [
+              1012288,
+              1016384
+            ]
+          ],
+          "interval_domain": "dispersed permutation index",
+          "warmup_seeds": 256
+        },
+        {
+          "case": "vault_mixed_or",
+          "workers": 1,
+          "query": "vault_mixed_or",
+          "seeds_per_sample": 4096,
+          "intervals_by_repetition": [
+            [
+              1000000,
+              1004096
+            ],
+            [
+              1004096,
+              1008192
+            ],
+            [
+              1008192,
+              1012288
+            ],
+            [
+              1012288,
+              1016384
+            ]
+          ],
+          "interval_domain": "dispersed permutation index",
+          "warmup_seeds": 256
+        },
+        {
+          "case": "cli",
+          "workers": 1,
+          "query": "cli",
+          "seeds_per_sample": 4096,
+          "intervals_by_repetition": [
+            [
+              0,
+              4096
+            ],
+            [
+              0,
+              4096
+            ],
+            [
+              0,
+              4096
+            ],
+            [
+              0,
+              4096
+            ]
+          ],
+          "interval_domain": "actual consecutive seed values",
+          "warmup_seeds": 0
+        },
+        {
+          "case": "cheap",
+          "workers": 1,
+          "query": "cheap",
+          "seeds_per_sample": 131072,
+          "intervals_by_repetition": [
+            [
+              1000000,
+              1131072
+            ],
+            [
+              1131072,
+              1262144
+            ],
+            [
+              1262144,
+              1393216
+            ],
+            [
+              1393216,
+              1524288
+            ]
+          ],
+          "interval_domain": "dispersed permutation index",
+          "warmup_seeds": 2048
+        },
+        {
+          "case": "early",
+          "workers": 1,
+          "query": "early",
+          "seeds_per_sample": 16384,
+          "intervals_by_repetition": [
+            [
+              1000000,
+              1016384
+            ],
+            [
+              1016384,
+              1032768
+            ],
+            [
+              1032768,
+              1049152
+            ],
+            [
+              1049152,
+              1065536
+            ]
+          ],
+          "interval_domain": "dispersed permutation index",
+          "warmup_seeds": 256
+        },
+        {
+          "case": "vault_feasible",
+          "workers": 1,
+          "query": "vault_feasible",
+          "seeds_per_sample": 4096,
+          "intervals_by_repetition": [
+            [
+              1000000,
+              1004096
+            ],
+            [
+              1004096,
+              1008192
+            ],
+            [
+              1008192,
+              1012288
+            ],
+            [
+              1012288,
+              1016384
+            ]
+          ],
+          "interval_domain": "dispersed permutation index",
+          "warmup_seeds": 256
+        },
+        {
+          "case": "blade_might",
+          "workers": 8,
+          "query": "blade_might",
+          "seeds_per_sample": 16384,
+          "intervals_by_repetition": [
+            [
+              1000000,
+              1016384
+            ],
+            [
+              1016384,
+              1032768
+            ],
+            [
+              1032768,
+              1049152
+            ],
+            [
+              1049152,
+              1065536
+            ]
+          ],
+          "interval_domain": "dispersed permutation index",
+          "warmup_seeds": 256
+        },
+        {
+          "case": "blade_might_auto",
+          "workers": 8,
+          "query": "blade_might_auto",
+          "seeds_per_sample": 16384,
+          "intervals_by_repetition": [
+            [
+              1000000,
+              1016384
+            ],
+            [
+              1016384,
+              1032768
+            ],
+            [
+              1032768,
+              1049152
+            ],
+            [
+              1049152,
+              1065536
+            ]
+          ],
+          "interval_domain": "dispersed permutation index",
+          "warmup_seeds": 256
+        },
+        {
+          "case": "vault_high_prospect",
+          "workers": 8,
+          "query": "vault_high_prospect",
+          "seeds_per_sample": 16384,
+          "intervals_by_repetition": [
+            [
+              1000000,
+              1016384
+            ],
+            [
+              1016384,
+              1032768
+            ],
+            [
+              1032768,
+              1049152
+            ],
+            [
+              1049152,
+              1065536
+            ]
+          ],
+          "interval_domain": "dispersed permutation index",
+          "warmup_seeds": 256
+        },
+        {
+          "case": "vault_imp_prospect",
+          "workers": 8,
+          "query": "vault_imp_prospect",
+          "seeds_per_sample": 16384,
+          "intervals_by_repetition": [
+            [
+              1000000,
+              1016384
+            ],
+            [
+              1016384,
+              1032768
+            ],
+            [
+              1032768,
+              1049152
+            ],
+            [
+              1049152,
+              1065536
+            ]
+          ],
+          "interval_domain": "dispersed permutation index",
+          "warmup_seeds": 256
+        },
+        {
+          "case": "vault_mixed_or",
+          "workers": 8,
+          "query": "vault_mixed_or",
+          "seeds_per_sample": 16384,
+          "intervals_by_repetition": [
+            [
+              1000000,
+              1016384
+            ],
+            [
+              1016384,
+              1032768
+            ],
+            [
+              1032768,
+              1049152
+            ],
+            [
+              1049152,
+              1065536
+            ]
+          ],
+          "interval_domain": "dispersed permutation index",
+          "warmup_seeds": 256
+        },
+        {
+          "case": "cli",
+          "workers": 8,
+          "query": "cli",
+          "seeds_per_sample": 16384,
+          "intervals_by_repetition": [
+            [
+              0,
+              16384
+            ],
+            [
+              0,
+              16384
+            ],
+            [
+              0,
+              16384
+            ],
+            [
+              0,
+              16384
+            ]
+          ],
+          "interval_domain": "actual consecutive seed values",
+          "warmup_seeds": 0
+        },
+        {
+          "case": "cheap",
+          "workers": 8,
+          "query": "cheap",
+          "seeds_per_sample": 524288,
+          "intervals_by_repetition": [
+            [
+              1000000,
+              1524288
+            ],
+            [
+              1524288,
+              2048576
+            ],
+            [
+              2048576,
+              2572864
+            ],
+            [
+              2572864,
+              3097152
+            ]
+          ],
+          "interval_domain": "dispersed permutation index",
+          "warmup_seeds": 2048
+        },
+        {
+          "case": "early",
+          "workers": 8,
+          "query": "early",
+          "seeds_per_sample": 65536,
+          "intervals_by_repetition": [
+            [
+              1000000,
+              1065536
+            ],
+            [
+              1065536,
+              1131072
+            ],
+            [
+              1131072,
+              1196608
+            ],
+            [
+              1196608,
+              1262144
+            ]
+          ],
+          "interval_domain": "dispersed permutation index",
+          "warmup_seeds": 256
+        },
+        {
+          "case": "vault_feasible",
+          "workers": 8,
+          "query": "vault_feasible",
+          "seeds_per_sample": 16384,
+          "intervals_by_repetition": [
+            [
+              1000000,
+              1016384
+            ],
+            [
+              1016384,
+              1032768
+            ],
+            [
+              1032768,
+              1049152
+            ],
+            [
+              1049152,
+              1065536
+            ]
+          ],
+          "interval_domain": "dispersed permutation index",
+          "warmup_seeds": 256
+        }
+      ],
+      "design_ref": "raw/c18b-screen-design.json",
+      "sample_metadata_ref": "raw/c18b-screen-metadata.jsonl",
+      "frozen_sha256": {
+        "candidates/c17/seed-seeker": "1dedb66c95cfe2462b23ad72c49ef356587368314d2c9ee0627c1c402d380260",
+        "candidates/c17/match_benchmark": "13d00b31e35f39db942e64e4a92e5c09d02773fd22e5ce4fe191481cca828d3e",
+        "candidates/c17/change.patch": "894a5c8e84513f27022f5884d14ac784f3cc5f51731c42e19d3c43b18bf616a4",
+        "candidates/c18b/seed-seeker": "615bc0a200b1ce56c0026657ec7386dad6e43018d63f549de199b4f83e92b5e5",
+        "candidates/c18b/match_benchmark": "203be2ab0a8fda8aec4756cf594780f7bee78d2cf128eb835e756cbec2dfbc02",
+        "candidates/c18b/change.patch": "50049958f3941f99c5fbb40b3f1bcc66f951c2efb28bbf3e2033a32024cab924",
+        "screen-c18b.py": "3bfb7a1529e27a4daf2846c1d4a463c7bedc3324a90b098e0f50c6fc63343fef",
+        "measure.py": "96584a4b334598171d178a1897337aa6692b6ed79faf1b13f0cc35b784b3ac23"
+      },
+      "pair_order": [
+        "AB",
+        "BA",
+        "AB",
+        "BA"
+      ],
+      "timed_pairs_per_cell": 4,
+      "seed_mapping": "(index*3355211884971+812345678901) % 26**9; CLI separately repeats [0,count). Adapter warmup starts at index 9000000.",
+      "timing": "Internal search seconds; CLI internal time rounds to milliseconds. Native adapter starts workers each request. Legacy wall timing also includes seed-vector construction. No CLI warmup in this legacy driver.",
+      "environment": {
+        "session_receipt": "environment.json",
+        "platform": "Linux-6.12.107+deb13-amd64-x86_64-with-glibc2.41",
+        "cpu": "8 KVM vCPUs, AMD EPYC-Genoa Processor",
+        "affinity": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7
+        ],
+        "sample_environment_audit_ref": "raw/c18b-screen-environment-audit.json"
+      },
+      "limitations": [
+        "Multicore uses 4x, not 8x, the one-worker seed count. This is not fixed-N strong scaling.",
+        "Legacy measure.py predates lifecycle revision 1: complete recipe/witness signature comparisons are retained, but do not retroactively claim modern trailing-stdout/zero-exit validation for its Service cleanup.",
+        "Original C17 per-build exact argv/compiler receipt unavailable; see snapshot limitation. Guest counters do not prove an exclusive host or a cause for variation."
+      ]
+    },
+    {
+      "dataset": "incremental_wasm_c17_c18b",
+      "source_summary_ref": "raw/c18b-wasm-vault-summary.json",
+      "metadata_ref": "raw/c18b-wasm-vault.metadata.json",
+      "baseline_wasm_snapshot": "c17",
+      "candidate_wasm_snapshot": "c18b",
+      "runs": [
+        {
+          "label": "c18b-wasm-vault",
+          "cases": [
+            "blade_might_auto",
+            "cheap",
+            "cli",
+            "early",
+            "vault_feasible",
+            "vault_high_prospect",
+            "vault_imp_prospect",
+            "vault_mixed_or"
+          ],
+          "runner": {
+            "artifact": "measure-wasm-vault.mjs",
+            "bytes": 11162,
+            "sha256": "5ef1cbc2086e685ea2e6cdcb73a2164aca87d9d6cdfd729ea04edc5bc9e6af6c"
+          },
+          "modules": {
+            "baseline": [
+              {
+                "artifact": "candidates/c17/wasm/seedfinder.js",
+                "bytes": 27479,
+                "sha256": "e6d6b11de1abbe861b878b257b8467bc3ec994a82623793a087b78f735d80162"
+              },
+              {
+                "artifact": "candidates/c17/wasm/seedfinder_bg.wasm",
+                "bytes": 3647362,
+                "sha256": "ef0040c8bdccb790d950ef5818168100b5cac0f7da141858e3dc5ebfc3a66ad7"
+              },
+              {
+                "artifact": "candidates/c17/wasm/package.json",
+                "bytes": 392,
+                "sha256": "a5be96456d374dc7112d6f006799d4e0617931a3b62af349fad9e77df828b293"
+              }
+            ],
+            "candidate": [
+              {
+                "artifact": "candidates/c18b/wasm/seedfinder.js",
+                "bytes": 27479,
+                "sha256": "e6d6b11de1abbe861b878b257b8467bc3ec994a82623793a087b78f735d80162"
+              },
+              {
+                "artifact": "candidates/c18b/wasm/seedfinder_bg.wasm",
+                "bytes": 3651455,
+                "sha256": "936747f1399581e6233fcdf51a2e3e49d270150e59041e4f4bc4bc8611b6c708"
+              },
+              {
+                "artifact": "candidates/c18b/wasm/package.json",
+                "bytes": 392,
+                "sha256": "a5be96456d374dc7112d6f006799d4e0617931a3b62af349fad9e77df828b293"
+              }
+            ]
+          },
+          "node": "24.21.0",
+          "v8": "13.6.233.17-node.53",
+          "exec_argv": [
+            "--no-liftoff",
+            "--no-wasm-lazy-compilation"
+          ],
+          "platform": {
+            "platform": "linux",
+            "arch": "x64",
+            "release": "6.12.107+deb13-amd64",
+            "cpu_models": [
+              "AMD EPYC-Genoa Processor"
+            ],
+            "logical_cpus": 8
+          }
+        }
+      ],
+      "cells": [
+        {
+          "case": "blade_might_auto",
+          "workers": 1,
+          "query": "blade_might_auto",
+          "run": "c18b-wasm-vault",
+          "blocks_per_sample": 8,
+          "seeds_per_sample": 2048,
+          "seed_intervals_by_repetition": [
+            [
+              1000000,
+              1002048
+            ],
+            [
+              1002048,
+              1004096
+            ],
+            [
+              1004096,
+              1006144
+            ],
+            [
+              1006144,
+              1008192
+            ]
+          ],
+          "request_sha256": "94a7b14d80db9e0fe60ef527fc1cfc47c413edab95b65fd94fc9ca567f12b909"
+        },
+        {
+          "case": "vault_mixed_or",
+          "workers": 1,
+          "query": "vault_mixed_or",
+          "run": "c18b-wasm-vault",
+          "blocks_per_sample": 8,
+          "seeds_per_sample": 2048,
+          "seed_intervals_by_repetition": [
+            [
+              1000000,
+              1002048
+            ],
+            [
+              1002048,
+              1004096
+            ],
+            [
+              1004096,
+              1006144
+            ],
+            [
+              1006144,
+              1008192
+            ]
+          ],
+          "request_sha256": "1e8aea9a4919429d344abc5fa0f1c759f92daf4a04a98a7165508a29c704a271"
+        },
+        {
+          "case": "vault_high_prospect",
+          "workers": 1,
+          "query": "vault_high_prospect",
+          "run": "c18b-wasm-vault",
+          "blocks_per_sample": 8,
+          "seeds_per_sample": 2048,
+          "seed_intervals_by_repetition": [
+            [
+              1000000,
+              1002048
+            ],
+            [
+              1002048,
+              1004096
+            ],
+            [
+              1004096,
+              1006144
+            ],
+            [
+              1006144,
+              1008192
+            ]
+          ],
+          "request_sha256": "93cb9bcec39a05830b16e8682f08c896e9f8d5075a48d510c141973ad34eed76"
+        },
+        {
+          "case": "vault_imp_prospect",
+          "workers": 1,
+          "query": "vault_imp_prospect",
+          "run": "c18b-wasm-vault",
+          "blocks_per_sample": 8,
+          "seeds_per_sample": 2048,
+          "seed_intervals_by_repetition": [
+            [
+              1000000,
+              1002048
+            ],
+            [
+              1002048,
+              1004096
+            ],
+            [
+              1004096,
+              1006144
+            ],
+            [
+              1006144,
+              1008192
+            ]
+          ],
+          "request_sha256": "53e2c2f85daece187f672387c45292ccaaa91da03e9cb8d918f3874a8a50494b"
+        },
+        {
+          "case": "cli",
+          "workers": 1,
+          "query": "cli",
+          "run": "c18b-wasm-vault",
+          "blocks_per_sample": 8,
+          "seeds_per_sample": 2048,
+          "seed_intervals_by_repetition": [
+            [
+              1000000,
+              1002048
+            ],
+            [
+              1002048,
+              1004096
+            ],
+            [
+              1004096,
+              1006144
+            ],
+            [
+              1006144,
+              1008192
+            ]
+          ],
+          "request_sha256": "68521828c447fd79c66a9971e891fa80f3ad3409d6a9724f42035d66a7e1c9a3"
+        },
+        {
+          "case": "cheap",
+          "workers": 1,
+          "query": "cheap",
+          "run": "c18b-wasm-vault",
+          "blocks_per_sample": 512,
+          "seeds_per_sample": 131072,
+          "seed_intervals_by_repetition": [
+            [
+              1000000,
+              1131072
+            ],
+            [
+              1131072,
+              1262144
+            ],
+            [
+              1262144,
+              1393216
+            ],
+            [
+              1393216,
+              1524288
+            ]
+          ],
+          "request_sha256": "42b799a34ec52df9a2c537137609ce78e6c6fa73547646cbd0f41bb18368341d"
+        },
+        {
+          "case": "early",
+          "workers": 1,
+          "query": "early",
+          "run": "c18b-wasm-vault",
+          "blocks_per_sample": 64,
+          "seeds_per_sample": 16384,
+          "seed_intervals_by_repetition": [
+            [
+              1000000,
+              1016384
+            ],
+            [
+              1016384,
+              1032768
+            ],
+            [
+              1032768,
+              1049152
+            ],
+            [
+              1049152,
+              1065536
+            ]
+          ],
+          "request_sha256": "f2cf494613545dce38559d9e6507399db8b42991817e0371192252d573644232"
+        },
+        {
+          "case": "vault_feasible",
+          "workers": 1,
+          "query": "vault_feasible",
+          "run": "c18b-wasm-vault",
+          "blocks_per_sample": 8,
+          "seeds_per_sample": 2048,
+          "seed_intervals_by_repetition": [
+            [
+              1000000,
+              1002048
+            ],
+            [
+              1002048,
+              1004096
+            ],
+            [
+              1004096,
+              1006144
+            ],
+            [
+              1006144,
+              1008192
+            ]
+          ],
+          "request_sha256": "4a47d5ede218f7af5897212a4b62e1a9f61f00d1f9ccd35b46504f9b4136e284"
+        }
+      ],
+      "pair_order": [
+        "AB",
+        "BA",
+        "AB",
+        "BA"
+      ],
+      "timed_pairs_per_cell": 4,
+      "warmup": "Four newly constructed 256-seed blocks per variant/query at actual consecutive seeds [9000000,9001024).",
+      "seed_order": "Actual consecutive seeds. Each 256-seed block constructs/frees one session. Repetitions use consecutive disjoint intervals.",
+      "timing": "Sum of performance.now around only session.advance(256). Includes Rust search and return JSON encoding/bridge copying. Module initialization, query decoding/session construction, JSON parsing, free(), hashes, and environment snapshots are outside that clock.",
+      "equality_scope": "Exact complete emitted seed/recipe records with array order preserved; advance does not return item or world witnesses.",
+      "limitations": [
+        "Node/V8 standalone WASM, not browser or phone hardware. Portable wasm32 with dlmalloc; --no-liftoff and --no-wasm-lazy-compilation.",
+        "The case named cli is the CLI query run through WASM SearchSession, not the actual native CLI executable.",
+        "Inputs/recipes are preserved; advance records do not contain item/world witnesses.",
+        "Do not multiply incremental ratios into an original-to-final estimate across different workloads, intervals or machines."
+      ]
+    },
+    {
+      "dataset": "incremental_wasm_c18b_c19d",
+      "source_summary_ref": "c19d-wasm-audit/summary.json",
+      "metadata_ref": "c19d-wasm-audit/measurement-metadata.json",
+      "baseline_wasm_snapshot": "c18b",
+      "candidate_wasm_snapshot": "c19d",
+      "runs": [
+        {
+          "label": "c19d-wasm-cheap",
+          "cases": [
+            "cheap",
+            "cheap_auto"
+          ],
+          "runner": {
+            "artifact": "measure-wasm-reviewed.mjs",
+            "bytes": 11088,
+            "sha256": "9aeace5fb93c1ec853791b4e34cf518fb68df5042c153d587b3d50381b8f3eaf"
+          },
+          "modules": {
+            "baseline": [
+              {
+                "artifact": "candidates/c18b/wasm/seedfinder.js",
+                "bytes": 27479,
+                "sha256": "e6d6b11de1abbe861b878b257b8467bc3ec994a82623793a087b78f735d80162"
+              },
+              {
+                "artifact": "candidates/c18b/wasm/seedfinder_bg.wasm",
+                "bytes": 3651455,
+                "sha256": "936747f1399581e6233fcdf51a2e3e49d270150e59041e4f4bc4bc8611b6c708"
+              },
+              {
+                "artifact": "candidates/c18b/wasm/package.json",
+                "bytes": 392,
+                "sha256": "a5be96456d374dc7112d6f006799d4e0617931a3b62af349fad9e77df828b293"
+              }
+            ],
+            "candidate": [
+              {
+                "artifact": "candidates/c19d/wasm/seedfinder.js",
+                "bytes": 27479,
+                "sha256": "e6d6b11de1abbe861b878b257b8467bc3ec994a82623793a087b78f735d80162"
+              },
+              {
+                "artifact": "candidates/c19d/wasm/seedfinder_bg.wasm",
+                "bytes": 3654049,
+                "sha256": "99a3b6404e942ca4055741f75917c1b7ad26ca4fc82d3d27a98c906e75eb85f0"
+              },
+              {
+                "artifact": "candidates/c19d/wasm/package.json",
+                "bytes": 392,
+                "sha256": "a5be96456d374dc7112d6f006799d4e0617931a3b62af349fad9e77df828b293"
+              }
+            ]
+          },
+          "node": "24.21.0",
+          "v8": "13.6.233.17-node.53",
+          "exec_argv": [
+            "--no-liftoff",
+            "--no-wasm-lazy-compilation"
+          ],
+          "platform": {
+            "platform": "linux",
+            "arch": "x64",
+            "release": "6.12.107+deb13-amd64",
+            "cpu_models": [
+              "AMD EPYC-Genoa Processor"
+            ],
+            "logical_cpus": 8
+          }
+        },
+        {
+          "label": "c19d-wasm-early",
+          "cases": [
+            "early"
+          ],
+          "runner": {
+            "artifact": "measure-wasm-reviewed.mjs",
+            "bytes": 11088,
+            "sha256": "9aeace5fb93c1ec853791b4e34cf518fb68df5042c153d587b3d50381b8f3eaf"
+          },
+          "modules": {
+            "baseline": [
+              {
+                "artifact": "candidates/c18b/wasm/seedfinder.js",
+                "bytes": 27479,
+                "sha256": "e6d6b11de1abbe861b878b257b8467bc3ec994a82623793a087b78f735d80162"
+              },
+              {
+                "artifact": "candidates/c18b/wasm/seedfinder_bg.wasm",
+                "bytes": 3651455,
+                "sha256": "936747f1399581e6233fcdf51a2e3e49d270150e59041e4f4bc4bc8611b6c708"
+              },
+              {
+                "artifact": "candidates/c18b/wasm/package.json",
+                "bytes": 392,
+                "sha256": "a5be96456d374dc7112d6f006799d4e0617931a3b62af349fad9e77df828b293"
+              }
+            ],
+            "candidate": [
+              {
+                "artifact": "candidates/c19d/wasm/seedfinder.js",
+                "bytes": 27479,
+                "sha256": "e6d6b11de1abbe861b878b257b8467bc3ec994a82623793a087b78f735d80162"
+              },
+              {
+                "artifact": "candidates/c19d/wasm/seedfinder_bg.wasm",
+                "bytes": 3654049,
+                "sha256": "99a3b6404e942ca4055741f75917c1b7ad26ca4fc82d3d27a98c906e75eb85f0"
+              },
+              {
+                "artifact": "candidates/c19d/wasm/package.json",
+                "bytes": 392,
+                "sha256": "a5be96456d374dc7112d6f006799d4e0617931a3b62af349fad9e77df828b293"
+              }
+            ]
+          },
+          "node": "24.21.0",
+          "v8": "13.6.233.17-node.53",
+          "exec_argv": [
+            "--no-liftoff",
+            "--no-wasm-lazy-compilation"
+          ],
+          "platform": {
+            "platform": "linux",
+            "arch": "x64",
+            "release": "6.12.107+deb13-amd64",
+            "cpu_models": [
+              "AMD EPYC-Genoa Processor"
+            ],
+            "logical_cpus": 8
+          }
+        },
+        {
+          "label": "c19d-wasm-wand",
+          "cases": [
+            "wand"
+          ],
+          "runner": {
+            "artifact": "measure-wasm-reviewed.mjs",
+            "bytes": 11088,
+            "sha256": "9aeace5fb93c1ec853791b4e34cf518fb68df5042c153d587b3d50381b8f3eaf"
+          },
+          "modules": {
+            "baseline": [
+              {
+                "artifact": "candidates/c18b/wasm/seedfinder.js",
+                "bytes": 27479,
+                "sha256": "e6d6b11de1abbe861b878b257b8467bc3ec994a82623793a087b78f735d80162"
+              },
+              {
+                "artifact": "candidates/c18b/wasm/seedfinder_bg.wasm",
+                "bytes": 3651455,
+                "sha256": "936747f1399581e6233fcdf51a2e3e49d270150e59041e4f4bc4bc8611b6c708"
+              },
+              {
+                "artifact": "candidates/c18b/wasm/package.json",
+                "bytes": 392,
+                "sha256": "a5be96456d374dc7112d6f006799d4e0617931a3b62af349fad9e77df828b293"
+              }
+            ],
+            "candidate": [
+              {
+                "artifact": "candidates/c19d/wasm/seedfinder.js",
+                "bytes": 27479,
+                "sha256": "e6d6b11de1abbe861b878b257b8467bc3ec994a82623793a087b78f735d80162"
+              },
+              {
+                "artifact": "candidates/c19d/wasm/seedfinder_bg.wasm",
+                "bytes": 3654049,
+                "sha256": "99a3b6404e942ca4055741f75917c1b7ad26ca4fc82d3d27a98c906e75eb85f0"
+              },
+              {
+                "artifact": "candidates/c19d/wasm/package.json",
+                "bytes": 392,
+                "sha256": "a5be96456d374dc7112d6f006799d4e0617931a3b62af349fad9e77df828b293"
+              }
+            ]
+          },
+          "node": "24.21.0",
+          "v8": "13.6.233.17-node.53",
+          "exec_argv": [
+            "--no-liftoff",
+            "--no-wasm-lazy-compilation"
+          ],
+          "platform": {
+            "platform": "linux",
+            "arch": "x64",
+            "release": "6.12.107+deb13-amd64",
+            "cpu_models": [
+              "AMD EPYC-Genoa Processor"
+            ],
+            "logical_cpus": 8
+          }
+        },
+        {
+          "label": "c19d-wasm-generation",
+          "cases": [
+            "blade_might_auto",
+            "cli",
+            "late",
+            "vault_feasible"
+          ],
+          "runner": {
+            "artifact": "measure-wasm-reviewed.mjs",
+            "bytes": 11088,
+            "sha256": "9aeace5fb93c1ec853791b4e34cf518fb68df5042c153d587b3d50381b8f3eaf"
+          },
+          "modules": {
+            "baseline": [
+              {
+                "artifact": "candidates/c18b/wasm/seedfinder.js",
+                "bytes": 27479,
+                "sha256": "e6d6b11de1abbe861b878b257b8467bc3ec994a82623793a087b78f735d80162"
+              },
+              {
+                "artifact": "candidates/c18b/wasm/seedfinder_bg.wasm",
+                "bytes": 3651455,
+                "sha256": "936747f1399581e6233fcdf51a2e3e49d270150e59041e4f4bc4bc8611b6c708"
+              },
+              {
+                "artifact": "candidates/c18b/wasm/package.json",
+                "bytes": 392,
+                "sha256": "a5be96456d374dc7112d6f006799d4e0617931a3b62af349fad9e77df828b293"
+              }
+            ],
+            "candidate": [
+              {
+                "artifact": "candidates/c19d/wasm/seedfinder.js",
+                "bytes": 27479,
+                "sha256": "e6d6b11de1abbe861b878b257b8467bc3ec994a82623793a087b78f735d80162"
+              },
+              {
+                "artifact": "candidates/c19d/wasm/seedfinder_bg.wasm",
+                "bytes": 3654049,
+                "sha256": "99a3b6404e942ca4055741f75917c1b7ad26ca4fc82d3d27a98c906e75eb85f0"
+              },
+              {
+                "artifact": "candidates/c19d/wasm/package.json",
+                "bytes": 392,
+                "sha256": "a5be96456d374dc7112d6f006799d4e0617931a3b62af349fad9e77df828b293"
+              }
+            ]
+          },
+          "node": "24.21.0",
+          "v8": "13.6.233.17-node.53",
+          "exec_argv": [
+            "--no-liftoff",
+            "--no-wasm-lazy-compilation"
+          ],
+          "platform": {
+            "platform": "linux",
+            "arch": "x64",
+            "release": "6.12.107+deb13-amd64",
+            "cpu_models": [
+              "AMD EPYC-Genoa Processor"
+            ],
+            "logical_cpus": 8
+          }
+        }
+      ],
+      "cells": [
+        {
+          "case": "cheap",
+          "workers": 1,
+          "query": "cheap",
+          "run": "c19d-wasm-cheap",
+          "blocks_per_sample": 256,
+          "seeds_per_sample": 65536,
+          "seed_intervals_by_repetition": [
+            [
+              1000000,
+              1065536
+            ],
+            [
+              1065536,
+              1131072
+            ],
+            [
+              1131072,
+              1196608
+            ],
+            [
+              1196608,
+              1262144
+            ]
+          ],
+          "request_sha256": "42b799a34ec52df9a2c537137609ce78e6c6fa73547646cbd0f41bb18368341d"
+        },
+        {
+          "case": "cheap_auto",
+          "workers": 1,
+          "query": "cheap_auto",
+          "run": "c19d-wasm-cheap",
+          "blocks_per_sample": 256,
+          "seeds_per_sample": 65536,
+          "seed_intervals_by_repetition": [
+            [
+              1000000,
+              1065536
+            ],
+            [
+              1065536,
+              1131072
+            ],
+            [
+              1131072,
+              1196608
+            ],
+            [
+              1196608,
+              1262144
+            ]
+          ],
+          "request_sha256": "16f925c09b99317b6d29bc4317c40d09ace7cd32df64b59a3d0c59dbb824f0e0"
+        },
+        {
+          "case": "early",
+          "workers": 1,
+          "query": "early",
+          "run": "c19d-wasm-early",
+          "blocks_per_sample": 64,
+          "seeds_per_sample": 16384,
+          "seed_intervals_by_repetition": [
+            [
+              1000000,
+              1016384
+            ],
+            [
+              1016384,
+              1032768
+            ],
+            [
+              1032768,
+              1049152
+            ],
+            [
+              1049152,
+              1065536
+            ]
+          ],
+          "request_sha256": "f2cf494613545dce38559d9e6507399db8b42991817e0371192252d573644232"
+        },
+        {
+          "case": "wand",
+          "workers": 1,
+          "query": "wand",
+          "run": "c19d-wasm-wand",
+          "blocks_per_sample": 32,
+          "seeds_per_sample": 8192,
+          "seed_intervals_by_repetition": [
+            [
+              1000000,
+              1008192
+            ],
+            [
+              1008192,
+              1016384
+            ],
+            [
+              1016384,
+              1024576
+            ],
+            [
+              1024576,
+              1032768
+            ]
+          ],
+          "request_sha256": "8674ef2846637194886aad4281ccd24c342781e0222d96d7cdea852f10d116a7"
+        },
+        {
+          "case": "cli",
+          "workers": 1,
+          "query": "cli",
+          "run": "c19d-wasm-generation",
+          "blocks_per_sample": 16,
+          "seeds_per_sample": 4096,
+          "seed_intervals_by_repetition": [
+            [
+              1000000,
+              1004096
+            ],
+            [
+              1004096,
+              1008192
+            ],
+            [
+              1008192,
+              1012288
+            ],
+            [
+              1012288,
+              1016384
+            ]
+          ],
+          "request_sha256": "68521828c447fd79c66a9971e891fa80f3ad3409d6a9724f42035d66a7e1c9a3"
+        },
+        {
+          "case": "late",
+          "workers": 1,
+          "query": "late",
+          "run": "c19d-wasm-generation",
+          "blocks_per_sample": 16,
+          "seeds_per_sample": 4096,
+          "seed_intervals_by_repetition": [
+            [
+              1000000,
+              1004096
+            ],
+            [
+              1004096,
+              1008192
+            ],
+            [
+              1008192,
+              1012288
+            ],
+            [
+              1012288,
+              1016384
+            ]
+          ],
+          "request_sha256": "363d148917176c9ead2dd9362971bd647dab8420add6ca540e5519ab385e6fc9"
+        },
+        {
+          "case": "vault_feasible",
+          "workers": 1,
+          "query": "vault_feasible",
+          "run": "c19d-wasm-generation",
+          "blocks_per_sample": 16,
+          "seeds_per_sample": 4096,
+          "seed_intervals_by_repetition": [
+            [
+              1000000,
+              1004096
+            ],
+            [
+              1004096,
+              1008192
+            ],
+            [
+              1008192,
+              1012288
+            ],
+            [
+              1012288,
+              1016384
+            ]
+          ],
+          "request_sha256": "4a47d5ede218f7af5897212a4b62e1a9f61f00d1f9ccd35b46504f9b4136e284"
+        },
+        {
+          "case": "blade_might_auto",
+          "workers": 1,
+          "query": "blade_might_auto",
+          "run": "c19d-wasm-generation",
+          "blocks_per_sample": 16,
+          "seeds_per_sample": 4096,
+          "seed_intervals_by_repetition": [
+            [
+              1000000,
+              1004096
+            ],
+            [
+              1004096,
+              1008192
+            ],
+            [
+              1008192,
+              1012288
+            ],
+            [
+              1012288,
+              1016384
+            ]
+          ],
+          "request_sha256": "94a7b14d80db9e0fe60ef527fc1cfc47c413edab95b65fd94fc9ca567f12b909"
+        }
+      ],
+      "pair_order": [
+        "AB",
+        "BA",
+        "AB",
+        "BA"
+      ],
+      "timed_pairs_per_cell": 4,
+      "warmup": "Four newly constructed 256-seed blocks per variant/query at actual consecutive seeds [9000000,9001024).",
+      "seed_order": "Actual consecutive seeds. Each 256-seed block constructs/frees one session. Repetitions use consecutive disjoint intervals.",
+      "timing": "Sum of performance.now around only session.advance(256). Includes Rust search and return JSON encoding/bridge copying. Module initialization, query decoding/session construction, JSON parsing, free(), hashes, and environment snapshots are outside that clock.",
+      "equality_scope": "Exact complete emitted seed/recipe records with array order preserved; advance does not return item or world witnesses.",
+      "limitations": [
+        "Node/V8 standalone WASM, not browser or phone hardware. Portable wasm32 with dlmalloc; --no-liftoff and --no-wasm-lazy-compilation.",
+        "The case named cli is the CLI query run through WASM SearchSession, not the actual native CLI executable.",
+        "Inputs/recipes are preserved; advance records do not contain item/world witnesses.",
+        "Do not multiply incremental ratios into an original-to-final estimate across different workloads, intervals or machines."
+      ]
+    }
+  ],
+  "receipts": {
+    "repository/docs/benchmarks/shared-engine-2026-09-12/historical-timings.json": {
+      "bytes": 27203,
+      "sha256": "6d440154dfffb955e35fc5e1badf9dce6dee0715c1829fa355ccc8a654596319"
+    },
+    "repository/docs/benchmarks/shared-engine-2026-09-12/historical-provenance.json": {
+      "bytes": 1426,
+      "sha256": "4c560c4cf5b67a8e848703b062bfd32660042b3c4ed7eeaf94c464c4f3ac1bec"
+    },
+    "mac-c18b-original-nine-02/matching-07-audit/summary.json": {
+      "bytes": 3947,
+      "sha256": "8a471dcfdc2372292419edf743eec57ed4b15a9e22c3adcb441c4a5a4405510f"
+    },
+    "mac-c18b-original-nine-02/cli-01-retry02-audit/summary.json": {
+      "bytes": 7217,
+      "sha256": "b7f95872617b94201fea1804e2ff540b11749d727effc2a3418b28d0ece0cb7c"
+    },
+    "raw/c18b-screen-summary.json": {
+      "bytes": 7416,
+      "sha256": "61f9c0ecd11dd82b6e9d7ebc1d9493ba9ecb293d8ebe1eeb668ecca22c8704bd"
+    },
+    "raw/c18b-wasm-vault-summary.json": {
+      "bytes": 4479,
+      "sha256": "4827239fe31103c4cda8ebb44b16d61e9c58daa684c36b801de69a41670e6db5"
+    },
+    "mac-c19d-independent-findings/findings.json": {
+      "bytes": 103767,
+      "sha256": "c1485c9b30b154647d344cdd6f2a9862e5d419a825a78c7e480a71cea6ecd096"
+    },
+    "c19d-wasm-audit/summary.json": {
+      "bytes": 12552,
+      "sha256": "aee01901bc59124ff044526f3e03f3661d7a442b534216e63027021fde9a2168"
+    },
+    "raw/c18b-screen-design.json": {
+      "bytes": 8249,
+      "sha256": "7c637df1f472382b4a7b007498ab5845a1163dd1bcc5892f6e4d7bda4b68d1aa"
+    },
+    "candidates/c18b/build-provenance.json": {
+      "bytes": 13513,
+      "sha256": "4d3bc10e1797d9bb22da784ffd610c5685972dc7818c903405c0131817fcbe2d"
+    },
+    "raw/c18b-wasm-vault.metadata.json": {
+      "bytes": 9374,
+      "sha256": "f7eacae5d5d6637037ed02d747a6153b631f7d4f370470000e9d5605093b943a"
+    },
+    "c19d-wasm-audit/measurement-metadata.json": {
+      "bytes": 23313,
+      "sha256": "569bee1d5d1ff871e4d759942f9e5d513bf6b50ae6fb9b8f4447292c266cb015"
+    },
+    "c19d-wasm-audit/build-provenance.json": {
+      "bytes": 2644,
+      "sha256": "e241865310311737515d1c8e82ac8cfe37b0385badfcf0c10a26ad03b4028f9d"
+    },
+    "environment.json": {
+      "bytes": 3935,
+      "sha256": "90ea2c0b670ced9f883fa3fa7d6bffe5ec573ac59d6002d084bc1f4a9da8bbcf"
+    },
+    "candidates/c17/change.patch": {
+      "bytes": 148569,
+      "sha256": "894a5c8e84513f27022f5884d14ac784f3cc5f51731c42e19d3c43b18bf616a4"
+    },
+    "raw/c17-build.log": {
+      "bytes": 565,
+      "sha256": "337690c1b90f2408958581b1ff21d2160e99638cbbb11dcdc1edd3ca1d467b86"
+    },
+    "candidates/c18b/change.patch": {
+      "bytes": 235339,
+      "sha256": "50049958f3941f99c5fbb40b3f1bcc66f951c2efb28bbf3e2033a32024cab924"
+    },
+    "wasm-natural-deadlines.sh": {
+      "bytes": 949,
+      "sha256": "0f31f87a0aceca01ef43f1484d03e97555914d2710a3dc3eb99edd2d3acc8221"
+    },
+    "raw/wasm-c17-build.log": {
+      "bytes": 776,
+      "sha256": "b8a11230f3648fe796ddde1a4787b9bad58290f70ff79ec315470e34b5fd5b5c"
+    },
+    "candidates/c19d/change.patch": {
+      "bytes": 263635,
+      "sha256": "14cafaccbdc4a225f1498eb3d55ba0981ec1ecc0a2907a041cdfcec5b24ee9dc"
+    },
+    "mac-c18b-original-nine-02/matching-07-audit/provenance.json": {
+      "bytes": 10264,
+      "sha256": "0f2d02d8c12953a1337e3307547fbc3e1dddc0e28e16cbccbae970ca2a266f43"
+    },
+    "mac-c18b-original-nine-02/matching-07.json": {
+      "bytes": 4806,
+      "sha256": "187038aa9101b8af98c5bd847317cf57a0f7586524d9ce710fe68b08c35d82c9"
+    },
+    "mac-c18b-original-nine-02/cli-01-retry02-audit/provenance.json": {
+      "bytes": 17283,
+      "sha256": "8a523fb3d0df1e6994aadfe24a1bcb7b5d2353e5943cb65a82162ceeb3d77a4f"
+    },
+    "mac-c18b-original-nine-02/cli-01.json": {
+      "bytes": 8036,
+      "sha256": "5ff3a648495349971d6feae59fd88509f4df04be7521511d720b792d1bc21d80"
+    },
+    "mac-c19d-controls01-matching-independent-audit/provenance.json": {
+      "bytes": 10224,
+      "sha256": "04ed668e57f89522c140d1923ced12022c8789334d724f75c80c6a31372b06e8"
+    },
+    "mac-c19d-controls01-matching-independent-audit/summary.json": {
+      "bytes": 7077,
+      "sha256": "0152efe11e981a8432d3157423782860217a4d7ef7d291035c0cefbdd2e5e1ae"
+    },
+    "mac-c19d-targeted-screen-01/screen-01.json": {
+      "bytes": 13404,
+      "sha256": "239237b8f11bd0c888eaee6431c882c5eee1cca7116013af3b3ec57831e623d9"
+    },
+    "mac-c19d-controls01-cli-independent-audit/provenance.json": {
+      "bytes": 17271,
+      "sha256": "018ff8c679cc67d8bda65ce33ab95734c0a6f8e62797e793495dabeeab164ea6"
+    },
+    "mac-c19d-controls01-cli-independent-audit/summary.json": {
+      "bytes": 3449,
+      "sha256": "3f581f4c5f7b67c9bab7aa8f1d3388dbe31a66792b83645acd9a31bf970f473f"
+    },
+    "mac-c19d-controls02-matching-independent-audit/provenance.json": {
+      "bytes": 10222,
+      "sha256": "121ed810b0fc690fe7d3aa2bbfe5357878e852b8c94d54d5030baf14c4d0b9ed"
+    },
+    "mac-c19d-controls02-matching-independent-audit/summary.json": {
+      "bytes": 3931,
+      "sha256": "6af869de0169ffffbbcf5f0fcf647750c1bc4677eae4e01bc6bde31951a82ff9"
+    },
+    "mac-c19d-targeted-screen-01/screen-02.json": {
+      "bytes": 8081,
+      "sha256": "66493490eb382152aadb98adb52969169b218974264bbacb2b354c4e75796d5d"
+    },
+    "raw/c18b-screen-metadata.jsonl": {
+      "bytes": 4555914,
+      "sha256": "adeddde703ce4376a04a8d761c84f434d46e099cdddbf5610764e9bf15da7d8d"
+    },
+    "raw/c18b-screen-environment-audit.json": {
+      "bytes": 441642,
+      "sha256": "3684349c21b07c53ae82df6625f7881dccabc4c897e2732afecad5f9590489ef"
+    }
+  },
+  "aggregation": "Each historical row uses sum(baseline seconds)/sum(candidate seconds), equal work within pairs. Keep different datasets, targets and worker counts separate. The final Linux nine-case aggregate lives in linux-summary.json."
+}

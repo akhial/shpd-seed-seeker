@@ -1,0 +1,305 @@
+{
+  "queries": {
+    "cheap": {
+      "max_depth": 1,
+      "requirements": [
+        {
+          "kind": "ring"
+        }
+      ],
+      "auto_apply_trinket": false
+    },
+    "early": {
+      "max_depth": 24,
+      "requirements": [
+        {
+          "item": "leather_armor",
+          "upgrade": 3,
+          "source": "ghost_reward"
+        }
+      ],
+      "auto_apply_trinket": false
+    },
+    "wand": {
+      "max_depth": 24,
+      "requirements": [
+        {
+          "item": "wand_fireblast",
+          "upgrade": 3,
+          "source": "wandmaker_reward"
+        }
+      ],
+      "auto_apply_trinket": false
+    },
+    "cli": {
+      "max_depth": 19,
+      "auto_apply_trinket": false,
+      "requirements": [
+        {
+          "item": "runic_blade",
+          "upgrade": 5
+        }
+      ]
+    },
+    "late": {
+      "max_depth": 24,
+      "requirements": [
+        {
+          "item": "runic_blade",
+          "upgrade": 2,
+          "effect": "Grim",
+          "source": "heap"
+        }
+      ],
+      "auto_apply_trinket": false
+    },
+    "vault_feasible": {
+      "max_depth": 24,
+      "requirements": [
+        {
+          "item": "ring_accuracy",
+          "upgrade": 3,
+          "source": "vault_treasure"
+        }
+      ],
+      "auto_apply_trinket": false
+    },
+    "blade_might": {
+      "max_depth": 19,
+      "auto_apply_trinket": false,
+      "requirements": [
+        {
+          "item": "runic_blade",
+          "upgrade": 2,
+          "effect": [
+            "Grim",
+            "Corrupting",
+            "Vampiric",
+            "Crystal"
+          ]
+        },
+        {
+          "item": "ring_might",
+          "upgrade": 2
+        }
+      ]
+    },
+    "blade_might_auto": {
+      "max_depth": 19,
+      "auto_apply_trinket": true,
+      "requirements": [
+        {
+          "item": "runic_blade",
+          "upgrade": 2,
+          "effect": [
+            "Grim",
+            "Corrupting",
+            "Vampiric",
+            "Crystal"
+          ]
+        },
+        {
+          "item": "ring_might",
+          "upgrade": 2
+        }
+      ]
+    },
+    "crossbow": {
+      "max_depth": 19,
+      "auto_apply_trinket": false,
+      "requirements": [
+        {
+          "item": "crossbow",
+          "upgrade": 5
+        }
+      ]
+    }
+  },
+  "runs": [
+    {
+      "started_utc": "2026-09-12T22:07:42.764115+00:00",
+      "argv": [
+        "/home/adel/.t3/worktrees/shpd-seed-seeker/t3code-b11a8beb/tooling/benchmarks/compare_native.py",
+        "--baseline-dir",
+        "/tmp/seed-perf-ae0cb0c/baseline",
+        "--candidate-dir",
+        "/tmp/seed-perf-ae0cb0c/pause-20260912/candidate",
+        "--output",
+        "/tmp/seed-perf-ae0cb0c/pause-20260912/native-controls",
+        "--service-module",
+        "/home/adel/.t3/worktrees/shpd-seed-seeker/t3code-b11a8beb/tooling/benchmarks/effective_matches.py",
+        "--build-metadata",
+        "/tmp/seed-perf-ae0cb0c/pause-20260912/comparison-build-metadata.json",
+        "--cases",
+        "cheap,early",
+        "--workers",
+        "1,8",
+        "--reps",
+        "4",
+        "--scale",
+        "4",
+        "--start",
+        "144000000"
+      ],
+      "arguments": {
+        "baseline_dir": "/tmp/seed-perf-ae0cb0c/baseline",
+        "candidate_dir": "/tmp/seed-perf-ae0cb0c/pause-20260912/candidate",
+        "output": "/tmp/seed-perf-ae0cb0c/pause-20260912/native-controls",
+        "cases": "cheap,early",
+        "workers": "1,8",
+        "reps": 4,
+        "scale": 4.0,
+        "start": 144000000,
+        "seeds": null,
+        "workloads": "/home/adel/.t3/worktrees/shpd-seed-seeker/t3code-b11a8beb/tooling/benchmarks/native_workloads.json",
+        "service_module": "/home/adel/.t3/worktrees/shpd-seed-seeker/t3code-b11a8beb/tooling/benchmarks/effective_matches.py",
+        "build_metadata": "/tmp/seed-perf-ae0cb0c/pause-20260912/comparison-build-metadata.json"
+      },
+      "sample_counts": {
+        "cheap/w1": 131072,
+        "early/w1": 32768,
+        "cheap/w8": 1048576,
+        "early/w8": 262144
+      },
+      "pair_order": "AB, BA, AB, BA; repeat for additional repetitions",
+      "timing": "Internal seconds time search work; wall seconds include adapter protocol/output and shared Service.request response validation. This harness's additional validation, canonicalization, and hashing occur after the wall timer. CLI wall time includes process startup; its internal time includes query planning and worker startup and rounds to milliseconds. Adapter startup/setup are outside samples; each request still starts workers.",
+      "seed_order": "CLI scans [0,count) every repetition; adapters use effective_matches.seeds_at(start + rep*count,count). Adapter index intervals must stay within [0,26**9); mapped seed values are intentionally dispersed modulo 26**9.",
+      "warmup": "One untimed request per adapter/case/worker with min(256 or 2048 cheap, sample count) seeds; --seeds also bounds warmup. CLI uses one untimed subprocess of min(256,count). No adaptive calibration.",
+      "equality": "Exact canonical JSON equality and SHA256 for all adapter recipe/witness records; CLI exposes counts only.",
+      "script": {
+        "path": "/home/adel/.t3/worktrees/shpd-seed-seeker/t3code-b11a8beb/tooling/benchmarks/compare_native.py",
+        "sha256": "c83461b2d941799da10950af38a73e243b827d7144272297f8656769fc685abc"
+      },
+      "service_module": {
+        "path": "/home/adel/.t3/worktrees/shpd-seed-seeker/t3code-b11a8beb/tooling/benchmarks/effective_matches.py",
+        "sha256": "781eca6e54945b246be46a7949c2f22d4da6460b34738eaf190270776717f9a9"
+      }
+    },
+    {
+      "started_utc": "2026-09-12T22:15:00.742859+00:00",
+      "argv": [
+        "/home/adel/.t3/worktrees/shpd-seed-seeker/t3code-b11a8beb/tooling/benchmarks/compare_native.py",
+        "--baseline-dir",
+        "/tmp/seed-perf-ae0cb0c/baseline",
+        "--candidate-dir",
+        "/tmp/seed-perf-ae0cb0c/pause-20260912/candidate",
+        "--output",
+        "/tmp/seed-perf-ae0cb0c/pause-20260912/native-wand",
+        "--service-module",
+        "/home/adel/.t3/worktrees/shpd-seed-seeker/t3code-b11a8beb/tooling/benchmarks/effective_matches.py",
+        "--build-metadata",
+        "/tmp/seed-perf-ae0cb0c/pause-20260912/comparison-build-metadata.json",
+        "--cases",
+        "wand",
+        "--workers",
+        "1,8",
+        "--reps",
+        "4",
+        "--scale",
+        "3",
+        "--start",
+        "144000000"
+      ],
+      "arguments": {
+        "baseline_dir": "/tmp/seed-perf-ae0cb0c/baseline",
+        "candidate_dir": "/tmp/seed-perf-ae0cb0c/pause-20260912/candidate",
+        "output": "/tmp/seed-perf-ae0cb0c/pause-20260912/native-wand",
+        "cases": "wand",
+        "workers": "1,8",
+        "reps": 4,
+        "scale": 3.0,
+        "start": 144000000,
+        "seeds": null,
+        "workloads": "/home/adel/.t3/worktrees/shpd-seed-seeker/t3code-b11a8beb/tooling/benchmarks/native_workloads.json",
+        "service_module": "/home/adel/.t3/worktrees/shpd-seed-seeker/t3code-b11a8beb/tooling/benchmarks/effective_matches.py",
+        "build_metadata": "/tmp/seed-perf-ae0cb0c/pause-20260912/comparison-build-metadata.json"
+      },
+      "sample_counts": {
+        "wand/w1": 12288,
+        "wand/w8": 98304
+      },
+      "pair_order": "AB, BA, AB, BA; repeat for additional repetitions",
+      "timing": "Internal seconds time search work; wall seconds include adapter protocol/output and shared Service.request response validation. This harness's additional validation, canonicalization, and hashing occur after the wall timer. CLI wall time includes process startup; its internal time includes query planning and worker startup and rounds to milliseconds. Adapter startup/setup are outside samples; each request still starts workers.",
+      "seed_order": "CLI scans [0,count) every repetition; adapters use effective_matches.seeds_at(start + rep*count,count). Adapter index intervals must stay within [0,26**9); mapped seed values are intentionally dispersed modulo 26**9.",
+      "warmup": "One untimed request per adapter/case/worker with min(256 or 2048 cheap, sample count) seeds; --seeds also bounds warmup. CLI uses one untimed subprocess of min(256,count). No adaptive calibration.",
+      "equality": "Exact canonical JSON equality and SHA256 for all adapter recipe/witness records; CLI exposes counts only.",
+      "script": {
+        "path": "/home/adel/.t3/worktrees/shpd-seed-seeker/t3code-b11a8beb/tooling/benchmarks/compare_native.py",
+        "sha256": "c83461b2d941799da10950af38a73e243b827d7144272297f8656769fc685abc"
+      },
+      "service_module": {
+        "path": "/home/adel/.t3/worktrees/shpd-seed-seeker/t3code-b11a8beb/tooling/benchmarks/effective_matches.py",
+        "sha256": "781eca6e54945b246be46a7949c2f22d4da6460b34738eaf190270776717f9a9"
+      }
+    },
+    {
+      "started_utc": "2026-09-12T22:19:06.554557+00:00",
+      "argv": [
+        "/home/adel/.t3/worktrees/shpd-seed-seeker/t3code-b11a8beb/tooling/benchmarks/compare_native.py",
+        "--baseline-dir",
+        "/tmp/seed-perf-ae0cb0c/baseline",
+        "--candidate-dir",
+        "/tmp/seed-perf-ae0cb0c/pause-20260912/candidate",
+        "--output",
+        "/tmp/seed-perf-ae0cb0c/pause-20260912/native-generation",
+        "--service-module",
+        "/home/adel/.t3/worktrees/shpd-seed-seeker/t3code-b11a8beb/tooling/benchmarks/effective_matches.py",
+        "--build-metadata",
+        "/tmp/seed-perf-ae0cb0c/pause-20260912/comparison-build-metadata.json",
+        "--cases",
+        "cli,late,vault_feasible,blade_might,blade_might_auto,crossbow",
+        "--workers",
+        "1,8",
+        "--reps",
+        "4",
+        "--scale",
+        "2",
+        "--start",
+        "144000000"
+      ],
+      "arguments": {
+        "baseline_dir": "/tmp/seed-perf-ae0cb0c/baseline",
+        "candidate_dir": "/tmp/seed-perf-ae0cb0c/pause-20260912/candidate",
+        "output": "/tmp/seed-perf-ae0cb0c/pause-20260912/native-generation",
+        "cases": "cli,late,vault_feasible,blade_might,blade_might_auto,crossbow",
+        "workers": "1,8",
+        "reps": 4,
+        "scale": 2.0,
+        "start": 144000000,
+        "seeds": null,
+        "workloads": "/home/adel/.t3/worktrees/shpd-seed-seeker/t3code-b11a8beb/tooling/benchmarks/native_workloads.json",
+        "service_module": "/home/adel/.t3/worktrees/shpd-seed-seeker/t3code-b11a8beb/tooling/benchmarks/effective_matches.py",
+        "build_metadata": "/tmp/seed-perf-ae0cb0c/pause-20260912/comparison-build-metadata.json"
+      },
+      "sample_counts": {
+        "cli/w1": 4096,
+        "late/w1": 4096,
+        "vault_feasible/w1": 4096,
+        "blade_might/w1": 4096,
+        "blade_might_auto/w1": 4096,
+        "crossbow/w1": 4096,
+        "cli/w8": 32768,
+        "late/w8": 32768,
+        "vault_feasible/w8": 32768,
+        "blade_might/w8": 32768,
+        "blade_might_auto/w8": 32768,
+        "crossbow/w8": 32768
+      },
+      "pair_order": "AB, BA, AB, BA; repeat for additional repetitions",
+      "timing": "Internal seconds time search work; wall seconds include adapter protocol/output and shared Service.request response validation. This harness's additional validation, canonicalization, and hashing occur after the wall timer. CLI wall time includes process startup; its internal time includes query planning and worker startup and rounds to milliseconds. Adapter startup/setup are outside samples; each request still starts workers.",
+      "seed_order": "CLI scans [0,count) every repetition; adapters use effective_matches.seeds_at(start + rep*count,count). Adapter index intervals must stay within [0,26**9); mapped seed values are intentionally dispersed modulo 26**9.",
+      "warmup": "One untimed request per adapter/case/worker with min(256 or 2048 cheap, sample count) seeds; --seeds also bounds warmup. CLI uses one untimed subprocess of min(256,count). No adaptive calibration.",
+      "equality": "Exact canonical JSON equality and SHA256 for all adapter recipe/witness records; CLI exposes counts only.",
+      "script": {
+        "path": "/home/adel/.t3/worktrees/shpd-seed-seeker/t3code-b11a8beb/tooling/benchmarks/compare_native.py",
+        "sha256": "c83461b2d941799da10950af38a73e243b827d7144272297f8656769fc685abc"
+      },
+      "service_module": {
+        "path": "/home/adel/.t3/worktrees/shpd-seed-seeker/t3code-b11a8beb/tooling/benchmarks/effective_matches.py",
+        "sha256": "781eca6e54945b246be46a7949c2f22d4da6460b34738eaf190270776717f9a9"
+      }
+    }
+  ],
+  "seed_mapping": "(index * 3355211884971 + 812345678901) % 26**9; CLI scans [0, count) each repetition",
+  "aggregation": "For each case/worker, ratio = sum(baseline seconds)/sum(candidate seconds); geometric mean of nine equally weighted case ratios per worker. No sample excluded. Different worker input counts are not fixed-N strong scaling."
+}

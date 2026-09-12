@@ -1,0 +1,145 @@
+argv,case,equality_scope,group,match_count,rep,seconds,signature_sha256,start_index,tested,variant,wall_seconds,workers
+,cheap,complete_recipe_witness_records,native-controls,16445,0,13.585733971,792101e8e2793c2fbe63f4ad4143939e18fabd76ad541fdc369f11905e329b3c,144000000,131072,baseline,13.682035009987885,1
+,cheap,complete_recipe_witness_records,native-controls,16445,0,12.880773392,792101e8e2793c2fbe63f4ad4143939e18fabd76ad541fdc369f11905e329b3c,144000000,131072,candidate,12.992240966006648,1
+,cheap,complete_recipe_witness_records,native-controls,16540,1,12.398966839,50174fbfe53651867e1d9474baad69852fd0ba6f6b3e796acbb7917c97cbd338,144131072,131072,candidate,12.460653607995482,1
+,cheap,complete_recipe_witness_records,native-controls,16540,1,13.3934053,50174fbfe53651867e1d9474baad69852fd0ba6f6b3e796acbb7917c97cbd338,144131072,131072,baseline,13.463896706001833,1
+,cheap,complete_recipe_witness_records,native-controls,16325,2,13.343409859,04bbd37f2a0fe7984b37b9a669413518703026961193e18b5101a3ff9f9d5d56,144262144,131072,baseline,13.410567541985074,1
+,cheap,complete_recipe_witness_records,native-controls,16325,2,12.53003287,04bbd37f2a0fe7984b37b9a669413518703026961193e18b5101a3ff9f9d5d56,144262144,131072,candidate,12.596303477010224,1
+,cheap,complete_recipe_witness_records,native-controls,16368,3,12.452278426,9189574325ee2680a5512f266511fd034362556f3efbb4fb2aa5efb003b8258b,144393216,131072,candidate,12.5139979319938,1
+,cheap,complete_recipe_witness_records,native-controls,16368,3,13.728654042,9189574325ee2680a5512f266511fd034362556f3efbb4fb2aa5efb003b8258b,144393216,131072,baseline,13.80442068297998,1
+,early,complete_recipe_witness_records,native-controls,804,0,13.964693109,95442a05e00d3b072bdf109328c85bbce86580f3fc358da8e6096056916b6e61,144000000,32768,baseline,13.974979263002751,1
+,early,complete_recipe_witness_records,native-controls,804,0,12.000003072,95442a05e00d3b072bdf109328c85bbce86580f3fc358da8e6096056916b6e61,144000000,32768,candidate,12.008527164987754,1
+,early,complete_recipe_witness_records,native-controls,765,1,12.132633865,32efda477d2be0595407357142726cd09630f1f14fd75fea578df6b0b449b997,144032768,32768,candidate,12.141418421000708,1
+,early,complete_recipe_witness_records,native-controls,765,1,13.909442711,32efda477d2be0595407357142726cd09630f1f14fd75fea578df6b0b449b997,144032768,32768,baseline,13.91898887802381,1
+,early,complete_recipe_witness_records,native-controls,854,2,14.145837054,19426fc245e97820410e291371102da4d8f2a77a8ccea4195ba2196d143cfd0d,144065536,32768,baseline,14.152047815005062,1
+,early,complete_recipe_witness_records,native-controls,854,2,12.002309048,19426fc245e97820410e291371102da4d8f2a77a8ccea4195ba2196d143cfd0d,144065536,32768,candidate,12.01163775700843,1
+,early,complete_recipe_witness_records,native-controls,789,3,11.993662657,ffbfd8e8f91b98d306ae05903ea8106fef305dbd3378abcad00f781fe485ad3c,144098304,32768,candidate,11.999700465996284,1
+,early,complete_recipe_witness_records,native-controls,789,3,14.194202214,ffbfd8e8f91b98d306ae05903ea8106fef305dbd3378abcad00f781fe485ad3c,144098304,32768,baseline,14.20192516001407,1
+,cheap,complete_recipe_witness_records,native-controls,131160,0,13.976777072,492f057517424193fcaad5c1c6a402fd659167f209bc1ab510cff3e4c5fbd757,144000000,1048576,baseline,14.793822190986248,8
+,cheap,complete_recipe_witness_records,native-controls,131160,0,12.963673460999999,492f057517424193fcaad5c1c6a402fd659167f209bc1ab510cff3e4c5fbd757,144000000,1048576,candidate,13.780256283003837,8
+,cheap,complete_recipe_witness_records,native-controls,130328,1,12.939968413999999,6dff55c11036b372cde639c080fd0f80562244f4469a3db9f940900a56395969,145048576,1048576,candidate,13.742441913986113,8
+,cheap,complete_recipe_witness_records,native-controls,130328,1,14.417702544,6dff55c11036b372cde639c080fd0f80562244f4469a3db9f940900a56395969,145048576,1048576,baseline,15.23543485099799,8
+,cheap,complete_recipe_witness_records,native-controls,130385,2,14.29801108,958a4d7dc69f0c537dc03da81e793d4eaf9783dd4885782879ca2afef3bce548,146097152,1048576,baseline,15.213313849992119,8
+,cheap,complete_recipe_witness_records,native-controls,130385,2,12.899236645,958a4d7dc69f0c537dc03da81e793d4eaf9783dd4885782879ca2afef3bce548,146097152,1048576,candidate,13.70875602599699,8
+,cheap,complete_recipe_witness_records,native-controls,130781,3,12.721685401,bb68aa84e27db903132c74d61405d1de7f0334265c46487a52c8b187a6d5f72a,147145728,1048576,candidate,13.587988473009318,8
+,cheap,complete_recipe_witness_records,native-controls,130781,3,13.838055734,bb68aa84e27db903132c74d61405d1de7f0334265c46487a52c8b187a6d5f72a,147145728,1048576,baseline,14.664558265008964,8
+,early,complete_recipe_witness_records,native-controls,6457,0,14.377743638,ab4e326bbac937d6195199637836cef1b4cb7dd3bc93d416ea70e85b21ce759e,144000000,262144,baseline,14.443492015998345,8
+,early,complete_recipe_witness_records,native-controls,6457,0,12.442136551,ab4e326bbac937d6195199637836cef1b4cb7dd3bc93d416ea70e85b21ce759e,144000000,262144,candidate,12.516228043998126,8
+,early,complete_recipe_witness_records,native-controls,6441,1,12.435137132,d0454a6645874b438bce5e2545290d8f1a38a9375ba71755bd5bd667dea19e58,144262144,262144,candidate,12.500554224010557,8
+,early,complete_recipe_witness_records,native-controls,6441,1,14.212595623,d0454a6645874b438bce5e2545290d8f1a38a9375ba71755bd5bd667dea19e58,144262144,262144,baseline,14.279499811003916,8
+,early,complete_recipe_witness_records,native-controls,6644,2,14.272890061,e9a12c013e38129b20447ee71ba5cb679dd92df52de0ed4247c91f9b1c49e60d,144524288,262144,baseline,14.326470182015328,8
+,early,complete_recipe_witness_records,native-controls,6644,2,12.485113889,e9a12c013e38129b20447ee71ba5cb679dd92df52de0ed4247c91f9b1c49e60d,144524288,262144,candidate,12.549209977005376,8
+,early,complete_recipe_witness_records,native-controls,6519,3,12.330355956,f32676b71a0ccbc3c58e3fda2970482113a970e373d0a5c89bc0b1c44207cab2,144786432,262144,candidate,12.379655059979996,8
+,early,complete_recipe_witness_records,native-controls,6519,3,14.399858803,f32676b71a0ccbc3c58e3fda2970482113a970e373d0a5c89bc0b1c44207cab2,144786432,262144,baseline,14.459115332982037,8
+,wand,complete_recipe_witness_records,native-wand,123,0,16.550747033,1a4e21f17a5def18da4f7799bbba41e5bfc299f65db555fd884ea55744889ebb,144000000,12288,baseline,16.553455784975085,1
+,wand,complete_recipe_witness_records,native-wand,123,0,13.915931646,1a4e21f17a5def18da4f7799bbba41e5bfc299f65db555fd884ea55744889ebb,144000000,12288,candidate,13.9223339590244,1
+,wand,complete_recipe_witness_records,native-wand,116,1,13.840544406,96407e6c9a1ad64d4f3d6de0ad56973d12c20097646863c67796190a33900295,144012288,12288,candidate,13.842814705014462,1
+,wand,complete_recipe_witness_records,native-wand,116,1,16.71195525,96407e6c9a1ad64d4f3d6de0ad56973d12c20097646863c67796190a33900295,144012288,12288,baseline,16.713999266998144,1
+,wand,complete_recipe_witness_records,native-wand,121,2,16.343634154,f19e1e5e67797752b97703112deb871cc6f9966a1a64ad69baa8658506d478e1,144024576,12288,baseline,16.345631130010588,1
+,wand,complete_recipe_witness_records,native-wand,121,2,13.749938202,f19e1e5e67797752b97703112deb871cc6f9966a1a64ad69baa8658506d478e1,144024576,12288,candidate,13.751849950989708,1
+,wand,complete_recipe_witness_records,native-wand,121,3,13.774140851,daaf98ef3dc25791e77b46efd8f239f64ccb3caa6e073f251e69d346b4ac15dd,144036864,12288,candidate,13.776158739987295,1
+,wand,complete_recipe_witness_records,native-wand,121,3,16.009695502,daaf98ef3dc25791e77b46efd8f239f64ccb3caa6e073f251e69d346b4ac15dd,144036864,12288,baseline,16.011717599001713,1
+,wand,complete_recipe_witness_records,native-wand,984,0,16.386179252,78bae0f2714d63461c6d12fc3b288c4d5e5d45953373dc99c9ef9a460ed667c0,144000000,98304,baseline,16.407421526993858,8
+,wand,complete_recipe_witness_records,native-wand,984,0,14.182022693,78bae0f2714d63461c6d12fc3b288c4d5e5d45953373dc99c9ef9a460ed667c0,144000000,98304,candidate,14.212591406976571,8
+,wand,complete_recipe_witness_records,native-wand,977,1,14.040078243,218fbca56a043cb9389d0bbada1523db3ff3ed30b5049dfc9bced5ee156958fa,144098304,98304,candidate,14.068331229005707,8
+,wand,complete_recipe_witness_records,native-wand,977,1,16.667148838,218fbca56a043cb9389d0bbada1523db3ff3ed30b5049dfc9bced5ee156958fa,144098304,98304,baseline,16.691349290980725,8
+,wand,complete_recipe_witness_records,native-wand,1046,2,16.6222988,a193a7bffb88d5f71f258d1b22c91f19f8f467a19b77f7556495ae8968759bbe,144196608,98304,baseline,16.63778172500315,8
+,wand,complete_recipe_witness_records,native-wand,1046,2,14.405898484,a193a7bffb88d5f71f258d1b22c91f19f8f467a19b77f7556495ae8968759bbe,144196608,98304,candidate,14.429999598010909,8
+,wand,complete_recipe_witness_records,native-wand,1050,3,14.1037535,4db8d98f50901ac9860bb3e51f83f536443688ceecbdf175cdfd11c924e928a9,144294912,98304,candidate,14.121964386024047,8
+,wand,complete_recipe_witness_records,native-wand,1050,3,16.639452263,4db8d98f50901ac9860bb3e51f83f536443688ceecbdf175cdfd11c924e928a9,144294912,98304,baseline,16.660448976996122,8
+"[""/tmp/seed-perf-ae0cb0c/baseline/seed-seeker"", ""--benchmark"", ""4096"", ""--workers"", ""1""]",cli,cli_count_only,native-generation,109,0,12.703,60716f132257f7ab0aaa9afdb49291556bb49d22f0d60db54888543f010b043f,0,4096,baseline,12.705946022004355,1
+"[""/tmp/seed-perf-ae0cb0c/pause-20260912/candidate/seed-seeker"", ""--benchmark"", ""4096"", ""--workers"", ""1""]",cli,cli_count_only,native-generation,109,0,11.061,60716f132257f7ab0aaa9afdb49291556bb49d22f0d60db54888543f010b043f,0,4096,candidate,11.063491609995253,1
+"[""/tmp/seed-perf-ae0cb0c/pause-20260912/candidate/seed-seeker"", ""--benchmark"", ""4096"", ""--workers"", ""1""]",cli,cli_count_only,native-generation,109,1,10.833,60716f132257f7ab0aaa9afdb49291556bb49d22f0d60db54888543f010b043f,0,4096,candidate,10.835958601004677,1
+"[""/tmp/seed-perf-ae0cb0c/baseline/seed-seeker"", ""--benchmark"", ""4096"", ""--workers"", ""1""]",cli,cli_count_only,native-generation,109,1,12.852,60716f132257f7ab0aaa9afdb49291556bb49d22f0d60db54888543f010b043f,0,4096,baseline,12.857342745992355,1
+"[""/tmp/seed-perf-ae0cb0c/baseline/seed-seeker"", ""--benchmark"", ""4096"", ""--workers"", ""1""]",cli,cli_count_only,native-generation,109,2,12.8,60716f132257f7ab0aaa9afdb49291556bb49d22f0d60db54888543f010b043f,0,4096,baseline,12.802709055016749,1
+"[""/tmp/seed-perf-ae0cb0c/pause-20260912/candidate/seed-seeker"", ""--benchmark"", ""4096"", ""--workers"", ""1""]",cli,cli_count_only,native-generation,109,2,10.935,60716f132257f7ab0aaa9afdb49291556bb49d22f0d60db54888543f010b043f,0,4096,candidate,10.937990078993607,1
+"[""/tmp/seed-perf-ae0cb0c/pause-20260912/candidate/seed-seeker"", ""--benchmark"", ""4096"", ""--workers"", ""1""]",cli,cli_count_only,native-generation,109,3,11.15,60716f132257f7ab0aaa9afdb49291556bb49d22f0d60db54888543f010b043f,0,4096,candidate,11.152465674007544,1
+"[""/tmp/seed-perf-ae0cb0c/baseline/seed-seeker"", ""--benchmark"", ""4096"", ""--workers"", ""1""]",cli,cli_count_only,native-generation,109,3,13.438,60716f132257f7ab0aaa9afdb49291556bb49d22f0d60db54888543f010b043f,0,4096,baseline,13.440489044995047,1
+,late,complete_recipe_witness_records,native-generation,0,0,19.046497728,4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945,144000000,4096,baseline,19.047319300007075,1
+,late,complete_recipe_witness_records,native-generation,0,0,16.262709187,4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945,144000000,4096,candidate,16.263389503990766,1
+,late,complete_recipe_witness_records,native-generation,0,1,16.420811518,4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945,144004096,4096,candidate,16.421533840009943,1
+,late,complete_recipe_witness_records,native-generation,0,1,18.943462674,4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945,144004096,4096,baseline,18.944093107013032,1
+,late,complete_recipe_witness_records,native-generation,0,2,18.826104309,4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945,144008192,4096,baseline,18.826747901999624,1
+,late,complete_recipe_witness_records,native-generation,0,2,16.36468912,4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945,144008192,4096,candidate,16.36533542702091,1
+,late,complete_recipe_witness_records,native-generation,0,3,16.74216336,4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945,144012288,4096,candidate,16.74279464400024,1
+,late,complete_recipe_witness_records,native-generation,0,3,19.073060946,4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945,144012288,4096,baseline,19.07373657799326,1
+,vault_feasible,complete_recipe_witness_records,native-generation,278,0,14.965516462,18c950cfe986afd8e3abd85c52c881ea1ce752355b59a8b80c6dfe205e6448bf,144000000,4096,baseline,14.967211924988078,1
+,vault_feasible,complete_recipe_witness_records,native-generation,278,0,13.202606809,18c950cfe986afd8e3abd85c52c881ea1ce752355b59a8b80c6dfe205e6448bf,144000000,4096,candidate,13.206490747019416,1
+,vault_feasible,complete_recipe_witness_records,native-generation,256,1,13.055198089,73aa04d3ea6361fbaecb51a25d9cf704ddf41e4f792d310b882e69c5ef7e694e,144004096,4096,candidate,13.056685917981667,1
+,vault_feasible,complete_recipe_witness_records,native-generation,256,1,14.984197306,73aa04d3ea6361fbaecb51a25d9cf704ddf41e4f792d310b882e69c5ef7e694e,144004096,4096,baseline,14.98540776502341,1
+,vault_feasible,complete_recipe_witness_records,native-generation,257,2,15.231738303,8cb224aed711fde971d387f3428a88f1ad77d64f237eb1ba0b98bcfcb76f773d,144008192,4096,baseline,15.233189294987824,1
+,vault_feasible,complete_recipe_witness_records,native-generation,257,2,13.1414407,8cb224aed711fde971d387f3428a88f1ad77d64f237eb1ba0b98bcfcb76f773d,144008192,4096,candidate,13.142990691994783,1
+,vault_feasible,complete_recipe_witness_records,native-generation,313,3,13.170528454,6ea2f49864735960168d8cc72686014033b5f7243d21c0a0f69299bf17ed40e9,144012288,4096,candidate,13.17245342201204,1
+,vault_feasible,complete_recipe_witness_records,native-generation,313,3,15.123609202,6ea2f49864735960168d8cc72686014033b5f7243d21c0a0f69299bf17ed40e9,144012288,4096,baseline,15.125311082985718,1
+,blade_might,complete_recipe_witness_records,native-generation,0,0,15.520108324,4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945,144000000,4096,baseline,15.521092139999382,1
+,blade_might,complete_recipe_witness_records,native-generation,0,0,11.550581645,4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945,144000000,4096,candidate,11.5514265219972,1
+,blade_might,complete_recipe_witness_records,native-generation,1,1,11.905568105,309f8b911c5badd3529cd283c2e088604c84e430f6940c69b08fc2aa6ef58b43,144004096,4096,candidate,11.906316995009547,1
+,blade_might,complete_recipe_witness_records,native-generation,1,1,16.124466229,309f8b911c5badd3529cd283c2e088604c84e430f6940c69b08fc2aa6ef58b43,144004096,4096,baseline,16.12530893200892,1
+,blade_might,complete_recipe_witness_records,native-generation,2,2,15.825515304,9fb6c6d1b5b047a533f704727a87278ce8f2070e76c183af8768f763ed6cf540,144008192,4096,baseline,15.826253409002675,1
+,blade_might,complete_recipe_witness_records,native-generation,2,2,11.616301445,9fb6c6d1b5b047a533f704727a87278ce8f2070e76c183af8768f763ed6cf540,144008192,4096,candidate,11.617242748994613,1
+,blade_might,complete_recipe_witness_records,native-generation,0,3,11.679683929,4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945,144012288,4096,candidate,11.680318979982985,1
+,blade_might,complete_recipe_witness_records,native-generation,0,3,15.730120816,4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945,144012288,4096,baseline,15.730813371978002,1
+,blade_might_auto,complete_recipe_witness_records,native-generation,0,0,16.087233078,4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945,144000000,4096,baseline,16.088195202028146,1
+,blade_might_auto,complete_recipe_witness_records,native-generation,0,0,11.812134927,4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945,144000000,4096,candidate,11.81307062000269,1
+,blade_might_auto,complete_recipe_witness_records,native-generation,1,1,12.020108538,309f8b911c5badd3529cd283c2e088604c84e430f6940c69b08fc2aa6ef58b43,144004096,4096,candidate,12.02093648898881,1
+,blade_might_auto,complete_recipe_witness_records,native-generation,1,1,16.272258046,309f8b911c5badd3529cd283c2e088604c84e430f6940c69b08fc2aa6ef58b43,144004096,4096,baseline,16.27315189599176,1
+,blade_might_auto,complete_recipe_witness_records,native-generation,3,2,16.022361464,c0451b8e0c40be6ce40d39ebf59794c76cc6408a391ef6ef39e672c89f433a6b,144008192,4096,baseline,16.023067381000146,1
+,blade_might_auto,complete_recipe_witness_records,native-generation,3,2,11.768566208,c0451b8e0c40be6ce40d39ebf59794c76cc6408a391ef6ef39e672c89f433a6b,144008192,4096,candidate,11.769334278011229,1
+,blade_might_auto,complete_recipe_witness_records,native-generation,0,3,11.973545491,4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945,144012288,4096,candidate,11.9743243289995,1
+,blade_might_auto,complete_recipe_witness_records,native-generation,0,3,16.06258859,4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945,144012288,4096,baseline,16.063251751998905,1
+,crossbow,complete_recipe_witness_records,native-generation,112,0,12.85491819,b4fb0a60f2561628b18a9638dce472a2651ffb11f787c9185f03d5bf77ecaf2a,144000000,4096,baseline,12.855981928005349,1
+,crossbow,complete_recipe_witness_records,native-generation,112,0,11.230264862,b4fb0a60f2561628b18a9638dce472a2651ffb11f787c9185f03d5bf77ecaf2a,144000000,4096,candidate,11.23141342701274,1
+,crossbow,complete_recipe_witness_records,native-generation,101,1,11.69837563,c0570d7c4612c57994ef8b9b920b2ef50f6ecee384f7f3cca1ee1f93c6bf7e84,144004096,4096,candidate,11.699605017987778,1
+,crossbow,complete_recipe_witness_records,native-generation,101,1,13.359076076000001,c0570d7c4612c57994ef8b9b920b2ef50f6ecee384f7f3cca1ee1f93c6bf7e84,144004096,4096,baseline,13.360850666998886,1
+,crossbow,complete_recipe_witness_records,native-generation,89,2,12.926439196,de1c6b54925a8ca0fb906e5d6790009d03d5a1c2830c15b2460a9c61bfc90933,144008192,4096,baseline,12.927655004023109,1
+,crossbow,complete_recipe_witness_records,native-generation,89,2,11.19026451,de1c6b54925a8ca0fb906e5d6790009d03d5a1c2830c15b2460a9c61bfc90933,144008192,4096,candidate,11.191377810988342,1
+,crossbow,complete_recipe_witness_records,native-generation,99,3,11.394139953,6d46f4beba35a224ad9797b1a8110db1ae259db594c10ee3520c68512b80d7c2,144012288,4096,candidate,11.39519492801628,1
+,crossbow,complete_recipe_witness_records,native-generation,99,3,12.96524912,6d46f4beba35a224ad9797b1a8110db1ae259db594c10ee3520c68512b80d7c2,144012288,4096,baseline,12.966641484992579,1
+"[""/tmp/seed-perf-ae0cb0c/baseline/seed-seeker"", ""--benchmark"", ""32768"", ""--workers"", ""8""]",cli,cli_count_only,native-generation,807,0,13.524,e75d099729965284aebbaef7d05e56ee9e369e94be8ff7801f61fc70be279207,0,32768,baseline,13.527069230010966,8
+"[""/tmp/seed-perf-ae0cb0c/pause-20260912/candidate/seed-seeker"", ""--benchmark"", ""32768"", ""--workers"", ""8""]",cli,cli_count_only,native-generation,807,0,11.448,e75d099729965284aebbaef7d05e56ee9e369e94be8ff7801f61fc70be279207,0,32768,candidate,11.459777242998825,8
+"[""/tmp/seed-perf-ae0cb0c/pause-20260912/candidate/seed-seeker"", ""--benchmark"", ""32768"", ""--workers"", ""8""]",cli,cli_count_only,native-generation,807,1,11.407,e75d099729965284aebbaef7d05e56ee9e369e94be8ff7801f61fc70be279207,0,32768,candidate,11.411122427001828,8
+"[""/tmp/seed-perf-ae0cb0c/baseline/seed-seeker"", ""--benchmark"", ""32768"", ""--workers"", ""8""]",cli,cli_count_only,native-generation,807,1,13.38,e75d099729965284aebbaef7d05e56ee9e369e94be8ff7801f61fc70be279207,0,32768,baseline,13.383424452971667,8
+"[""/tmp/seed-perf-ae0cb0c/baseline/seed-seeker"", ""--benchmark"", ""32768"", ""--workers"", ""8""]",cli,cli_count_only,native-generation,807,2,13.175,e75d099729965284aebbaef7d05e56ee9e369e94be8ff7801f61fc70be279207,0,32768,baseline,13.179156696016435,8
+"[""/tmp/seed-perf-ae0cb0c/pause-20260912/candidate/seed-seeker"", ""--benchmark"", ""32768"", ""--workers"", ""8""]",cli,cli_count_only,native-generation,807,2,11.856,e75d099729965284aebbaef7d05e56ee9e369e94be8ff7801f61fc70be279207,0,32768,candidate,11.860278708016267,8
+"[""/tmp/seed-perf-ae0cb0c/pause-20260912/candidate/seed-seeker"", ""--benchmark"", ""32768"", ""--workers"", ""8""]",cli,cli_count_only,native-generation,807,3,11.487,e75d099729965284aebbaef7d05e56ee9e369e94be8ff7801f61fc70be279207,0,32768,candidate,11.49226327802171,8
+"[""/tmp/seed-perf-ae0cb0c/baseline/seed-seeker"", ""--benchmark"", ""32768"", ""--workers"", ""8""]",cli,cli_count_only,native-generation,807,3,13.524,e75d099729965284aebbaef7d05e56ee9e369e94be8ff7801f61fc70be279207,0,32768,baseline,13.527920983004151,8
+,late,complete_recipe_witness_records,native-generation,0,0,19.319715248,4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945,144000000,32768,baseline,19.33091837100801,8
+,late,complete_recipe_witness_records,native-generation,0,0,17.269727122,4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945,144000000,32768,candidate,17.280554147990188,8
+,late,complete_recipe_witness_records,native-generation,1,1,17.048293603,e76ca85c37e1727ce325899b56d8f760068a7d70998dd3cf4070a43e63ed4b50,144032768,32768,candidate,17.052717879007105,8
+,late,complete_recipe_witness_records,native-generation,1,1,19.631363222,e76ca85c37e1727ce325899b56d8f760068a7d70998dd3cf4070a43e63ed4b50,144032768,32768,baseline,19.6369960050215,8
+,late,complete_recipe_witness_records,native-generation,0,2,19.535402286,4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945,144065536,32768,baseline,19.5399854920106,8
+,late,complete_recipe_witness_records,native-generation,0,2,16.907896366,4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945,144065536,32768,candidate,16.91478668199852,8
+,late,complete_recipe_witness_records,native-generation,0,3,16.896096483,4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945,144098304,32768,candidate,16.900163281010464,8
+,late,complete_recipe_witness_records,native-generation,0,3,19.500231959,4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945,144098304,32768,baseline,19.505604378995486,8
+,vault_feasible,complete_recipe_witness_records,native-generation,2153,0,15.241299956,9741a8e06875384eab05ea0b67088a2c7ce2a2b81033fc898494a45e256b0547,144000000,32768,baseline,15.254115666000871,8
+,vault_feasible,complete_recipe_witness_records,native-generation,2153,0,13.426659608,9741a8e06875384eab05ea0b67088a2c7ce2a2b81033fc898494a45e256b0547,144000000,32768,candidate,13.443756440014113,8
+,vault_feasible,complete_recipe_witness_records,native-generation,2121,1,13.69742699,22fa75768d466599e8fae0caa33cf0053bfc6605f6e8d4005fef067df39038bd,144032768,32768,candidate,13.709353476995602,8
+,vault_feasible,complete_recipe_witness_records,native-generation,2121,1,15.178986321,22fa75768d466599e8fae0caa33cf0053bfc6605f6e8d4005fef067df39038bd,144032768,32768,baseline,15.190351550991181,8
+,vault_feasible,complete_recipe_witness_records,native-generation,2159,2,15.602790267,80feb1df31bfdd4bb297f2d8d214ba5c8e08a2c83ce8132a1c2e4643d47d6038,144065536,32768,baseline,15.613563089020317,8
+,vault_feasible,complete_recipe_witness_records,native-generation,2159,2,13.677851195,80feb1df31bfdd4bb297f2d8d214ba5c8e08a2c83ce8132a1c2e4643d47d6038,144065536,32768,candidate,13.692724665015703,8
+,vault_feasible,complete_recipe_witness_records,native-generation,2209,3,13.485689382,5112630f0ebbf49a1d41cc2f29256ff3cdf7750c7703cbaefa14e42bd09e3b83,144098304,32768,candidate,13.496201080997707,8
+,vault_feasible,complete_recipe_witness_records,native-generation,2209,3,15.169137822,5112630f0ebbf49a1d41cc2f29256ff3cdf7750c7703cbaefa14e42bd09e3b83,144098304,32768,baseline,15.188346515991725,8
+,blade_might,complete_recipe_witness_records,native-generation,4,0,16.18086247,653fb9271ce4658bf2a2c7841616d80d3901934d98e7e37fb2c83b238c80c00d,144000000,32768,baseline,16.18541811700561,8
+,blade_might,complete_recipe_witness_records,native-generation,4,0,12.046561359,653fb9271ce4658bf2a2c7841616d80d3901934d98e7e37fb2c83b238c80c00d,144000000,32768,candidate,12.051304959022673,8
+,blade_might,complete_recipe_witness_records,native-generation,9,1,11.92923359,9e13053be764afb471e0de9c9c70e2d94ba0910084939cf5b0cac11b547e50e4,144032768,32768,candidate,11.933292255009292,8
+,blade_might,complete_recipe_witness_records,native-generation,9,1,16.080819912,9e13053be764afb471e0de9c9c70e2d94ba0910084939cf5b0cac11b547e50e4,144032768,32768,baseline,16.085770314006368,8
+,blade_might,complete_recipe_witness_records,native-generation,6,2,16.285092455,1958cd9103b94084fdbcaff6122cd7ab46da7f2be490d9c347dd8b003ce66dc7,144065536,32768,baseline,16.28926323898486,8
+,blade_might,complete_recipe_witness_records,native-generation,6,2,12.238170643,1958cd9103b94084fdbcaff6122cd7ab46da7f2be490d9c347dd8b003ce66dc7,144065536,32768,candidate,12.243597004999174,8
+,blade_might,complete_recipe_witness_records,native-generation,8,3,12.181251106,c4f23bf9468cb4d2d02fc6b7b6608e42fa97f85683ea86a974f4ac6670859fc7,144098304,32768,candidate,12.18578544902266,8
+,blade_might,complete_recipe_witness_records,native-generation,8,3,16.252843507,c4f23bf9468cb4d2d02fc6b7b6608e42fa97f85683ea86a974f4ac6670859fc7,144098304,32768,baseline,16.25999977401807,8
+,blade_might_auto,complete_recipe_witness_records,native-generation,8,0,16.050577833,c17bf67579b028b7022e2bb5655b56936fe8f5ed3a101eb5fe3db847c073d034,144000000,32768,baseline,16.055153388995677,8
+,blade_might_auto,complete_recipe_witness_records,native-generation,8,0,12.517689443,c17bf67579b028b7022e2bb5655b56936fe8f5ed3a101eb5fe3db847c073d034,144000000,32768,candidate,12.522344427998178,8
+,blade_might_auto,complete_recipe_witness_records,native-generation,11,1,12.171149503,b9b1dc608c548f3bb2cbc74a7dd924b0688595a3eb7a2cd07953134598c654ff,144032768,32768,candidate,12.176070641027763,8
+,blade_might_auto,complete_recipe_witness_records,native-generation,11,1,16.171598131,b9b1dc608c548f3bb2cbc74a7dd924b0688595a3eb7a2cd07953134598c654ff,144032768,32768,baseline,16.178238216001773,8
+,blade_might_auto,complete_recipe_witness_records,native-generation,13,2,16.366824089,24178792eda2a6e85e71f5837adc73af0b1e48faaabdd6c8bc6bafae8671aed4,144065536,32768,baseline,16.372358483000426,8
+,blade_might_auto,complete_recipe_witness_records,native-generation,13,2,12.186434132,24178792eda2a6e85e71f5837adc73af0b1e48faaabdd6c8bc6bafae8671aed4,144065536,32768,candidate,12.193319358979352,8
+,blade_might_auto,complete_recipe_witness_records,native-generation,12,3,12.120978539,bf1122b5b142ae761e3bd6a62e9de42e5a3166ae82a7a58dbd50ddeaa65b22a6,144098304,32768,candidate,12.125669489003485,8
+,blade_might_auto,complete_recipe_witness_records,native-generation,12,3,15.888449074,bf1122b5b142ae761e3bd6a62e9de42e5a3166ae82a7a58dbd50ddeaa65b22a6,144098304,32768,baseline,15.896086586988531,8
+,crossbow,complete_recipe_witness_records,native-generation,811,0,13.213534352,20163b284621946016d990d96ce688abd143b83b75769ae245c1c4850c14cfc4,144000000,32768,baseline,13.220936950005125,8
+,crossbow,complete_recipe_witness_records,native-generation,811,0,11.357673832,20163b284621946016d990d96ce688abd143b83b75769ae245c1c4850c14cfc4,144000000,32768,candidate,11.371784238988766,8
+,crossbow,complete_recipe_witness_records,native-generation,764,1,11.563715327,42986acb7d46b7c3ca861ad003e83bc9ea4424cf0ae6b8a0eb2a21893a722c41,144032768,32768,candidate,11.570507162017748,8
+,crossbow,complete_recipe_witness_records,native-generation,764,1,13.313029804,42986acb7d46b7c3ca861ad003e83bc9ea4424cf0ae6b8a0eb2a21893a722c41,144032768,32768,baseline,13.32180922399857,8
+,crossbow,complete_recipe_witness_records,native-generation,763,2,13.315658721,9f3eecb28d513a548b3f2a11d0afe21fe7a2907b057b2f41b27f1696bcce1944,144065536,32768,baseline,13.322364569001365,8
+,crossbow,complete_recipe_witness_records,native-generation,763,2,11.226783016,9f3eecb28d513a548b3f2a11d0afe21fe7a2907b057b2f41b27f1696bcce1944,144065536,32768,candidate,11.23543840800994,8
+,crossbow,complete_recipe_witness_records,native-generation,713,3,11.152014232,43b96b677c9f6fe66dcbf2ee9c69a724971383133acbb16dff714d972b60e5ae,144098304,32768,candidate,11.159252221987117,8
+,crossbow,complete_recipe_witness_records,native-generation,713,3,13.361682522,43b96b677c9f6fe66dcbf2ee9c69a724971383133acbb16dff714d972b60e5ae,144098304,32768,baseline,13.371543835004559,8

@@ -1,0 +1,33 @@
+{
+  "status": "complete",
+  "outputs": {
+    "summary.json": {
+      "bytes": 20024,
+      "sha256": "dbbab73e1c207bbdc23ba865f753e1016bcada62c632c97e1b778a6a31e461dc"
+    },
+    "provenance.json": {
+      "bytes": 19010,
+      "sha256": "b8202102d3b393d4d27fd272c1dfd6e6b7ce1dfbe9c83e5496c4efd20bdf1a8d"
+    },
+    "samples.jsonl": {
+      "bytes": 182021,
+      "sha256": "869c097dd75cc3f8f0d2e7aecae9e5f0d6a7a8bfb88a2f4cb379bc19ba3fcd23"
+    },
+    "sessions.jsonl": {
+      "bytes": 64366,
+      "sha256": "d9f0d5550088f8ceb5a72bbb16ab0d3bf3bc79e3b4760437d360f90684e423a9"
+    },
+    "environment.jsonl": {
+      "bytes": 46841,
+      "sha256": "f502998fd16f1819ffe2bf076e09a76ead0a7d89e246a9ba3640ea76b2aea39b"
+    },
+    "units.json": {
+      "bytes": 75627,
+      "sha256": "768808b23beb4d673dd2eaf054eaa0baecd3d7cfc97337fe9caefd7141f967dc"
+    },
+    "REVIEW.md": {
+      "bytes": 3411,
+      "sha256": "5261ec8a5fc3591805b9814dc5fe73bfcc0b6d14915388f9c253fce8a3d180c6"
+    }
+  }
+}

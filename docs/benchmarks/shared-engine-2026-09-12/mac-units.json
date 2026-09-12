@@ -1,0 +1,2846 @@
+{
+  "cli-w1-c0-r0": {
+    "job": "cli-01",
+    "job_id": "919397b3815f48819637b6f01d998457",
+    "unit": {
+      "case": "cli",
+      "workers": 1,
+      "component": 0,
+      "repetition_block": 0,
+      "global_sample_indices": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "seeds_per_component_sample": 13824,
+      "requests": [],
+      "budget": {
+        "artifact_bytes": 1048576,
+        "max_record_bytes": 65536,
+        "per_process_output_bytes": 65536,
+        "request_counts": []
+      },
+      "estimated_internal_seconds_c17_reference": {
+        "baseline": 19.89478125,
+        "candidate": 19.12696875
+      },
+      "estimated_total_engine_seconds": 195.10875
+    },
+    "step": {
+      "id": "cli-w1-c0-r0",
+      "op": "compare",
+      "mode": "process",
+      "commands": {
+        "baseline": {
+          "argv": [
+            "${JOB}/artifacts/frozen/baseline/seed-seeker",
+            "--benchmark",
+            "13824",
+            "--workers",
+            "${WORKERS}"
+          ],
+          "cwd": "work/checkouts/baseline",
+          "env": {},
+          "stdin": "",
+          "timeout_seconds": 1200,
+          "stdout": "artifacts/logs/baseline-cli-w1-c0-r0.stdout",
+          "stderr": "artifacts/logs/baseline-cli-w1-c0-r0.stderr",
+          "wrappers": [
+            "time"
+          ]
+        },
+        "candidate": {
+          "argv": [
+            "${JOB}/artifacts/frozen/candidate/seed-seeker",
+            "--benchmark",
+            "13824",
+            "--workers",
+            "${WORKERS}"
+          ],
+          "cwd": "work/checkouts/candidate",
+          "env": {},
+          "stdin": "",
+          "timeout_seconds": 1200,
+          "stdout": "artifacts/logs/candidate-cli-w1-c0-r0.stdout",
+          "stderr": "artifacts/logs/candidate-cli-w1-c0-r0.stderr",
+          "wrappers": [
+            "time"
+          ]
+        }
+      },
+      "worker_counts": [
+        1
+      ],
+      "warmups": 1,
+      "samples": 4,
+      "requests": [],
+      "output": "artifacts/results/cli-w1-c0-r0.jsonl"
+    },
+    "summary": {
+      "step": "cli-w1-c0-r0",
+      "count": 13824,
+      "interval": [
+        0,
+        13824
+      ],
+      "warmups": 1,
+      "samples": 4,
+      "workers": {
+        "1": {
+          "baseline": {
+            "seconds": [
+              19.909,
+              19.899,
+              19.924,
+              19.902
+            ],
+            "wall_seconds": [
+              19.925226125,
+              19.908018832,
+              19.933650374,
+              19.912479583
+            ],
+            "matches": [
+              339,
+              339,
+              339,
+              339
+            ],
+            "seeds_per_second": 694.3767737398598
+          },
+          "candidate": {
+            "seconds": [
+              18.947,
+              18.91,
+              18.9,
+              18.911
+            ],
+            "wall_seconds": [
+              18.958389874,
+              18.920291792,
+              18.909501042,
+              18.924185583
+            ],
+            "matches": [
+              339,
+              339,
+              339,
+              339
+            ],
+            "seeds_per_second": 730.7712639424856
+          },
+          "paired_changes_percent": [
+            5.077320947907316,
+            5.2300370174510835,
+            5.417989417989433,
+            5.240336312199245
+          ],
+          "throughput_change_percent": 5.2413173336152585,
+          "paired_geomean_change_percent": 5.241351762437141,
+          "all_four_positive": true,
+          "all_four_negative": false,
+          "minimum_internal_sample_seconds": 18.9
+        }
+      }
+    }
+  },
+  "cli-w12-c0-r0": {
+    "job": "cli-01",
+    "job_id": "919397b3815f48819637b6f01d998457",
+    "unit": {
+      "case": "cli",
+      "workers": 12,
+      "component": 0,
+      "repetition_block": 0,
+      "global_sample_indices": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "seeds_per_component_sample": 114432,
+      "requests": [],
+      "budget": {
+        "artifact_bytes": 1048576,
+        "max_record_bytes": 65536,
+        "per_process_output_bytes": 65536,
+        "request_counts": []
+      },
+      "estimated_internal_seconds_c17_reference": {
+        "baseline": 29.50491015625,
+        "candidate": 28.759328125
+      },
+      "estimated_total_engine_seconds": 291.32119140625
+    },
+    "step": {
+      "id": "cli-w12-c0-r0",
+      "op": "compare",
+      "mode": "process",
+      "commands": {
+        "baseline": {
+          "argv": [
+            "${JOB}/artifacts/frozen/baseline/seed-seeker",
+            "--benchmark",
+            "114432",
+            "--workers",
+            "${WORKERS}"
+          ],
+          "cwd": "work/checkouts/baseline",
+          "env": {},
+          "stdin": "",
+          "timeout_seconds": 1200,
+          "stdout": "artifacts/logs/baseline-cli-w12-c0-r0.stdout",
+          "stderr": "artifacts/logs/baseline-cli-w12-c0-r0.stderr",
+          "wrappers": [
+            "time"
+          ]
+        },
+        "candidate": {
+          "argv": [
+            "${JOB}/artifacts/frozen/candidate/seed-seeker",
+            "--benchmark",
+            "114432",
+            "--workers",
+            "${WORKERS}"
+          ],
+          "cwd": "work/checkouts/candidate",
+          "env": {},
+          "stdin": "",
+          "timeout_seconds": 1200,
+          "stdout": "artifacts/logs/candidate-cli-w12-c0-r0.stdout",
+          "stderr": "artifacts/logs/candidate-cli-w12-c0-r0.stderr",
+          "wrappers": [
+            "time"
+          ]
+        }
+      },
+      "worker_counts": [
+        12
+      ],
+      "warmups": 1,
+      "samples": 4,
+      "requests": [],
+      "output": "artifacts/results/cli-w12-c0-r0.jsonl"
+    },
+    "summary": {
+      "step": "cli-w12-c0-r0",
+      "count": 114432,
+      "interval": [
+        0,
+        114432
+      ],
+      "warmups": 1,
+      "samples": 4,
+      "workers": {
+        "12": {
+          "baseline": {
+            "seconds": [
+              19.146,
+              19.841,
+              20.412,
+              22.573
+            ],
+            "wall_seconds": [
+              19.166628875,
+              19.853658042,
+              20.424131791,
+              22.585713624
+            ],
+            "matches": [
+              2757,
+              2757,
+              2757,
+              2757
+            ],
+            "seeds_per_second": 5583.955496998975
+          },
+          "candidate": {
+            "seconds": [
+              18.112,
+              18.356,
+              19.988,
+              20.664
+            ],
+            "wall_seconds": [
+              18.124195874,
+              18.369572665,
+              20.000580958,
+              20.677704708
+            ],
+            "matches": [
+              2757,
+              2757,
+              2757,
+              2757
+            ],
+            "seeds_per_second": 5935.269709543568
+          },
+          "paired_changes_percent": [
+            5.708922261484117,
+            8.089997820876004,
+            2.1212727636581885,
+            9.238288811459539
+          ],
+          "throughput_change_percent": 6.29149377593361,
+          "paired_geomean_change_percent": 6.254434708430812,
+          "all_four_positive": true,
+          "all_four_negative": false,
+          "minimum_internal_sample_seconds": 18.112
+        }
+      }
+    }
+  },
+  "cli-w8-c0-r0": {
+    "job": "cli-01",
+    "job_id": "919397b3815f48819637b6f01d998457",
+    "unit": {
+      "case": "cli",
+      "workers": 8,
+      "component": 0,
+      "repetition_block": 0,
+      "global_sample_indices": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "seeds_per_component_sample": 96512,
+      "requests": [],
+      "budget": {
+        "artifact_bytes": 1048576,
+        "max_record_bytes": 65536,
+        "per_process_output_bytes": 65536,
+        "request_counts": []
+      },
+      "estimated_internal_seconds_c17_reference": {
+        "baseline": 32.2736298828125,
+        "candidate": 32.313759765625
+      },
+      "estimated_total_engine_seconds": 322.93694824218744
+    },
+    "step": {
+      "id": "cli-w8-c0-r0",
+      "op": "compare",
+      "mode": "process",
+      "commands": {
+        "baseline": {
+          "argv": [
+            "${JOB}/artifacts/frozen/baseline/seed-seeker",
+            "--benchmark",
+            "96512",
+            "--workers",
+            "${WORKERS}"
+          ],
+          "cwd": "work/checkouts/baseline",
+          "env": {},
+          "stdin": "",
+          "timeout_seconds": 1200,
+          "stdout": "artifacts/logs/baseline-cli-w8-c0-r0.stdout",
+          "stderr": "artifacts/logs/baseline-cli-w8-c0-r0.stderr",
+          "wrappers": [
+            "time"
+          ]
+        },
+        "candidate": {
+          "argv": [
+            "${JOB}/artifacts/frozen/candidate/seed-seeker",
+            "--benchmark",
+            "96512",
+            "--workers",
+            "${WORKERS}"
+          ],
+          "cwd": "work/checkouts/candidate",
+          "env": {},
+          "stdin": "",
+          "timeout_seconds": 1200,
+          "stdout": "artifacts/logs/candidate-cli-w8-c0-r0.stdout",
+          "stderr": "artifacts/logs/candidate-cli-w8-c0-r0.stderr",
+          "wrappers": [
+            "time"
+          ]
+        }
+      },
+      "worker_counts": [
+        8
+      ],
+      "warmups": 1,
+      "samples": 4,
+      "requests": [],
+      "output": "artifacts/results/cli-w8-c0-r0.jsonl"
+    },
+    "summary": {
+      "step": "cli-w8-c0-r0",
+      "count": 96512,
+      "interval": [
+        0,
+        96512
+      ],
+      "warmups": 1,
+      "samples": 4,
+      "workers": {
+        "8": {
+          "baseline": {
+            "seconds": [
+              31.042,
+              34.96,
+              33.071,
+              35.416
+            ],
+            "wall_seconds": [
+              31.056229,
+              34.974491957,
+              33.089437249,
+              35.43113125
+            ],
+            "matches": [
+              2315,
+              2315,
+              2315,
+              2315
+            ],
+            "seeds_per_second": 2870.48011361524
+          },
+          "candidate": {
+            "seconds": [
+              32.697,
+              32.054,
+              34.351,
+              33.971
+            ],
+            "wall_seconds": [
+              32.713827665,
+              32.072985334,
+              34.367771666,
+              33.999831749
+            ],
+            "matches": [
+              2315,
+              2315,
+              2315,
+              2315
+            ],
+            "seeds_per_second": 2901.024249847828
+          },
+          "paired_changes_percent": [
+            -5.061626448909684,
+            9.06595120733762,
+            -3.72623795522693,
+            4.253628094551232
+          ],
+          "throughput_change_percent": 1.0640776115365291,
+          "paired_geomean_change_percent": 0.9677142873611988,
+          "all_four_positive": false,
+          "all_four_negative": false,
+          "minimum_internal_sample_seconds": 31.042
+        }
+      }
+    }
+  },
+  "cheap-w12-c0-r0": {
+    "job": "matching-01",
+    "job_id": "14d95b35fdbf416c9a45ff20b43c80f9",
+    "unit": {
+      "case": "cheap",
+      "workers": 12,
+      "component": 0,
+      "repetition_block": 0,
+      "global_sample_indices": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "seeds_per_component_sample": 1137408,
+      "requests": [
+        {
+          "seed_range": {
+            "start": 30000000,
+            "count": 568832
+          }
+        },
+        {
+          "seed_range": {
+            "start": 40000000,
+            "count": 568576
+          }
+        }
+      ],
+      "budget": {
+        "artifact_bytes": 317243112,
+        "max_record_bytes": 7929073,
+        "per_process_output_bytes": 79338426,
+        "request_counts": [
+          568832,
+          568576
+        ]
+      },
+      "estimated_internal_seconds_c17_reference": {
+        "baseline": 6.5211882559555665,
+        "candidate": 6.498840378690308
+      },
+      "estimated_total_engine_seconds": 65.10014317322938
+    },
+    "step": {
+      "id": "cheap-w12-c0-r0",
+      "op": "compare",
+      "mode": "jsonl",
+      "commands": {
+        "baseline": {
+          "argv": [
+            "${JOB}/artifacts/frozen/baseline/match_benchmark",
+            "{\"max_depth\":1,\"requirements\":[{\"kind\":\"ring\"}],\"auto_apply_trinket\":false}",
+            "${WORKERS}"
+          ],
+          "cwd": "work/checkouts/baseline",
+          "env": {},
+          "stdin": "",
+          "timeout_seconds": 1200,
+          "stdout": "artifacts/logs/baseline-cheap-w12-c0-r0.stdout",
+          "stderr": "artifacts/logs/baseline-cheap-w12-c0-r0.stderr",
+          "wrappers": [
+            "time"
+          ]
+        },
+        "candidate": {
+          "argv": [
+            "${JOB}/artifacts/frozen/candidate/match_benchmark",
+            "{\"max_depth\":1,\"requirements\":[{\"kind\":\"ring\"}],\"auto_apply_trinket\":false}",
+            "${WORKERS}"
+          ],
+          "cwd": "work/checkouts/candidate",
+          "env": {},
+          "stdin": "",
+          "timeout_seconds": 1200,
+          "stdout": "artifacts/logs/candidate-cheap-w12-c0-r0.stdout",
+          "stderr": "artifacts/logs/candidate-cheap-w12-c0-r0.stderr",
+          "wrappers": [
+            "time"
+          ]
+        }
+      },
+      "worker_counts": [
+        12
+      ],
+      "warmups": 1,
+      "samples": 4,
+      "requests": [
+        {
+          "seed_range": {
+            "start": 30000000,
+            "count": 568832
+          }
+        },
+        {
+          "seed_range": {
+            "start": 40000000,
+            "count": 568576
+          }
+        }
+      ],
+      "output": "artifacts/results/cheap-w12-c0-r0.jsonl",
+      "ready": {
+        "field": "ready",
+        "equals": true
+      }
+    },
+    "summary": {
+      "step": "cheap-w12-c0-r0",
+      "query": {
+        "auto_apply_trinket": false,
+        "max_depth": 1,
+        "requirements": [
+          {
+            "kind": "ring"
+          }
+        ]
+      },
+      "query_sha256": "4c06e5e2722e172ab5ff356efbf6e0961f9da1bfc3f77ffa60ecffeda0d2ada4",
+      "output": "artifacts/results/cheap-w12-c0-r0.jsonl",
+      "warmups": 1,
+      "samples": 4,
+      "requests": [
+        {
+          "tested": 568832,
+          "input_sha256": "e53a81f220848acef100d25ee50d215f95d5dd8ac2d9ad565c35a545ac19fe5a"
+        },
+        {
+          "tested": 568576,
+          "input_sha256": "a29b4dac809c2628802dc4e0a99b633fd7bd641a4820c55faad0b6fc57f3d029"
+        }
+      ],
+      "workers": {
+        "12": {
+          "baseline": {
+            "seconds": [
+              8.164850209,
+              8.412025458999999,
+              8.210505209,
+              8.823376333999999
+            ],
+            "wall_seconds": [
+              8.427071375,
+              8.675139126,
+              8.560439124,
+              9.10355475
+            ],
+            "tested": [
+              1137408,
+              1137408,
+              1137408,
+              1137408
+            ],
+            "seeds_per_second": 135362.37733171374
+          },
+          "candidate": {
+            "seconds": [
+              8.013390708,
+              8.234715333,
+              8.325074041,
+              8.191266376
+            ],
+            "wall_seconds": [
+              8.269420125,
+              8.49601175,
+              8.60208925,
+              8.472314417
+            ],
+            "tested": [
+              1137408,
+              1137408,
+              1137408,
+              1137408
+            ],
+            "seeds_per_second": 138858.80861231915
+          },
+          "paired_changes_percent": [
+            1.8900800737045698,
+            2.1532028592347485,
+            -1.37618994660903,
+            7.7168770857220625
+          ],
+          "throughput_change_percent": 2.5830155686739964,
+          "paired_geomean_change_percent": 2.5444961163067603,
+          "minimum_internal_sample_seconds": 8.013390708
+        }
+      },
+      "ready": {
+        "link": "QgAaAAA",
+        "preferred": [],
+        "ready": true
+      }
+    }
+  },
+  "late-w12-c0-r0": {
+    "job": "matching-01",
+    "job_id": "14d95b35fdbf416c9a45ff20b43c80f9",
+    "unit": {
+      "case": "late",
+      "workers": 12,
+      "component": 0,
+      "repetition_block": 0,
+      "global_sample_indices": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "seeds_per_component_sample": 63744,
+      "requests": [
+        {
+          "seed_range": {
+            "start": 200060000000,
+            "count": 63744
+          }
+        }
+      ],
+      "budget": {
+        "artifact_bytes": 1426432,
+        "max_record_bytes": 64256,
+        "per_process_output_bytes": 386816,
+        "request_counts": [
+          63744
+        ]
+      },
+      "estimated_internal_seconds_c17_reference": {
+        "baseline": 22.651713513,
+        "candidate": 22.7176842421875
+      },
+      "estimated_total_engine_seconds": 226.8469887759375
+    },
+    "step": {
+      "id": "late-w12-c0-r0",
+      "op": "compare",
+      "mode": "jsonl",
+      "commands": {
+        "baseline": {
+          "argv": [
+            "${JOB}/artifacts/frozen/baseline/match_benchmark",
+            "{\"max_depth\":24,\"requirements\":[{\"item\":\"runic_blade\",\"upgrade\":2,\"effect\":\"Grim\",\"source\":\"heap\"}],\"auto_apply_trinket\":false}",
+            "${WORKERS}"
+          ],
+          "cwd": "work/checkouts/baseline",
+          "env": {},
+          "stdin": "",
+          "timeout_seconds": 1200,
+          "stdout": "artifacts/logs/baseline-late-w12-c0-r0.stdout",
+          "stderr": "artifacts/logs/baseline-late-w12-c0-r0.stderr",
+          "wrappers": [
+            "time"
+          ]
+        },
+        "candidate": {
+          "argv": [
+            "${JOB}/artifacts/frozen/candidate/match_benchmark",
+            "{\"max_depth\":24,\"requirements\":[{\"item\":\"runic_blade\",\"upgrade\":2,\"effect\":\"Grim\",\"source\":\"heap\"}],\"auto_apply_trinket\":false}",
+            "${WORKERS}"
+          ],
+          "cwd": "work/checkouts/candidate",
+          "env": {},
+          "stdin": "",
+          "timeout_seconds": 1200,
+          "stdout": "artifacts/logs/candidate-late-w12-c0-r0.stdout",
+          "stderr": "artifacts/logs/candidate-late-w12-c0-r0.stderr",
+          "wrappers": [
+            "time"
+          ]
+        }
+      },
+      "worker_counts": [
+        12
+      ],
+      "warmups": 1,
+      "samples": 4,
+      "requests": [
+        {
+          "seed_range": {
+            "start": 200060000000,
+            "count": 63744
+          }
+        }
+      ],
+      "output": "artifacts/results/late-w12-c0-r0.jsonl",
+      "ready": {
+        "field": "ready",
+        "equals": true
+      }
+    },
+    "summary": {
+      "step": "late-w12-c0-r0",
+      "query": {
+        "auto_apply_trinket": false,
+        "max_depth": 24,
+        "requirements": [
+          {
+            "effect": "Grim",
+            "item": "runic_blade",
+            "source": "heap",
+            "upgrade": 2
+          }
+        ]
+      },
+      "query_sha256": "e160878037b5c8f07b410676cd878f11c9d411355ba94d6e147950a095ab49cb",
+      "output": "artifacts/results/late-w12-c0-r0.jsonl",
+      "warmups": 1,
+      "samples": 4,
+      "requests": [
+        {
+          "tested": 63744,
+          "input_sha256": "d5a0aa34b624af4c66acf92886eb114233fccc804120167c92c4c940e2bd7bc5"
+        }
+      ],
+      "workers": {
+        "12": {
+          "baseline": {
+            "seconds": [
+              24.620205125,
+              26.250431834,
+              25.612224625,
+              25.657115542
+            ],
+            "wall_seconds": [
+              24.624415292,
+              26.255648291,
+              25.616904375,
+              25.663100667
+            ],
+            "tested": [
+              63744,
+              63744,
+              63744,
+              63744
+            ],
+            "seeds_per_second": 2496.3389181638577
+          },
+          "candidate": {
+            "seconds": [
+              23.998374708,
+              25.313110208,
+              24.924812875,
+              24.748923916
+            ],
+            "wall_seconds": [
+              24.003863417,
+              25.318501125,
+              24.930055417,
+              24.753569125
+            ],
+            "tested": [
+              63744,
+              63744,
+              63744,
+              63744
+            ],
+            "seeds_per_second": 2575.8996707078013
+          },
+          "paired_changes_percent": [
+            2.591135543827927,
+            3.7029097503149533,
+            2.757941467594671,
+            3.669620663437656
+          ],
+          "throughput_change_percent": 3.1870973915057776,
+          "paired_geomean_change_percent": 3.179144113667376,
+          "minimum_internal_sample_seconds": 23.998374708
+        }
+      },
+      "ready": {
+        "link": "QAIlBS9AAA",
+        "preferred": [],
+        "ready": true
+      }
+    }
+  },
+  "cheap-w12-c1-r0": {
+    "job": "matching-02",
+    "job_id": "d9240d1de0e64fc882a5fe6895853f8b",
+    "unit": {
+      "case": "cheap",
+      "workers": 12,
+      "component": 1,
+      "repetition_block": 0,
+      "global_sample_indices": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "seeds_per_component_sample": 1137408,
+      "requests": [
+        {
+          "seed_range": {
+            "start": 1030000000,
+            "count": 568832
+          }
+        },
+        {
+          "seed_range": {
+            "start": 1040000000,
+            "count": 568576
+          }
+        }
+      ],
+      "budget": {
+        "artifact_bytes": 317243112,
+        "max_record_bytes": 7929073,
+        "per_process_output_bytes": 79338426,
+        "request_counts": [
+          568832,
+          568576
+        ]
+      },
+      "estimated_internal_seconds_c17_reference": {
+        "baseline": 6.5211882559555665,
+        "candidate": 6.498840378690308
+      },
+      "estimated_total_engine_seconds": 65.10014317322938
+    },
+    "step": {
+      "id": "cheap-w12-c1-r0",
+      "op": "compare",
+      "mode": "jsonl",
+      "commands": {
+        "baseline": {
+          "argv": [
+            "${JOB}/artifacts/frozen/baseline/match_benchmark",
+            "{\"max_depth\":1,\"requirements\":[{\"kind\":\"ring\"}],\"auto_apply_trinket\":false}",
+            "${WORKERS}"
+          ],
+          "cwd": "work/checkouts/baseline",
+          "env": {},
+          "stdin": "",
+          "timeout_seconds": 1200,
+          "stdout": "artifacts/logs/baseline-cheap-w12-c1-r0.stdout",
+          "stderr": "artifacts/logs/baseline-cheap-w12-c1-r0.stderr",
+          "wrappers": [
+            "time"
+          ]
+        },
+        "candidate": {
+          "argv": [
+            "${JOB}/artifacts/frozen/candidate/match_benchmark",
+            "{\"max_depth\":1,\"requirements\":[{\"kind\":\"ring\"}],\"auto_apply_trinket\":false}",
+            "${WORKERS}"
+          ],
+          "cwd": "work/checkouts/candidate",
+          "env": {},
+          "stdin": "",
+          "timeout_seconds": 1200,
+          "stdout": "artifacts/logs/candidate-cheap-w12-c1-r0.stdout",
+          "stderr": "artifacts/logs/candidate-cheap-w12-c1-r0.stderr",
+          "wrappers": [
+            "time"
+          ]
+        }
+      },
+      "worker_counts": [
+        12
+      ],
+      "warmups": 1,
+      "samples": 4,
+      "requests": [
+        {
+          "seed_range": {
+            "start": 1030000000,
+            "count": 568832
+          }
+        },
+        {
+          "seed_range": {
+            "start": 1040000000,
+            "count": 568576
+          }
+        }
+      ],
+      "output": "artifacts/results/cheap-w12-c1-r0.jsonl",
+      "ready": {
+        "field": "ready",
+        "equals": true
+      }
+    },
+    "summary": {
+      "step": "cheap-w12-c1-r0",
+      "query": {
+        "auto_apply_trinket": false,
+        "max_depth": 1,
+        "requirements": [
+          {
+            "kind": "ring"
+          }
+        ]
+      },
+      "query_sha256": "4c06e5e2722e172ab5ff356efbf6e0961f9da1bfc3f77ffa60ecffeda0d2ada4",
+      "output": "artifacts/results/cheap-w12-c1-r0.jsonl",
+      "warmups": 1,
+      "samples": 4,
+      "requests": [
+        {
+          "tested": 568832,
+          "input_sha256": "1869db48bcd9ac884445a437fe46938d4db8a810348803f1c8102e8895dbc8ca"
+        },
+        {
+          "tested": 568576,
+          "input_sha256": "cd4c31eda4ad4fbc887d0280c3766586236bb6f257c7dd20ef540cf1bf336976"
+        }
+      ],
+      "workers": {
+        "12": {
+          "baseline": {
+            "seconds": [
+              8.297517917,
+              8.780042625,
+              8.921315708,
+              9.547846541
+            ],
+            "wall_seconds": [
+              8.689877083,
+              9.065461499,
+              9.236195708,
+              9.867908959
+            ],
+            "tested": [
+              1137408,
+              1137408,
+              1137408,
+              1137408
+            ],
+            "seeds_per_second": 127990.19551675553
+          },
+          "candidate": {
+            "seconds": [
+              8.278784708,
+              8.585503583000001,
+              8.708260667,
+              9.099311167
+            ],
+            "wall_seconds": [
+              8.553475625,
+              8.865482082,
+              8.96581225,
+              9.541615667
+            ],
+            "tested": [
+              1137408,
+              1137408,
+              1137408,
+              1137408
+            ],
+            "seeds_per_second": 131219.72641783665
+          },
+          "paired_changes_percent": [
+            0.2262796975732284,
+            2.2659013547580598,
+            2.4465854795478803,
+            4.929333284333448
+          ],
+          "throughput_change_percent": 2.523264292270211,
+          "paired_geomean_change_percent": 2.453480233770633,
+          "minimum_internal_sample_seconds": 8.278784708
+        }
+      },
+      "ready": {
+        "link": "QgAaAAA",
+        "preferred": [],
+        "ready": true
+      }
+    }
+  },
+  "cheap-w12-c2-r0": {
+    "job": "matching-03",
+    "job_id": "1ba980e7555b49838a7396a89d3a3900",
+    "unit": {
+      "case": "cheap",
+      "workers": 12,
+      "component": 2,
+      "repetition_block": 0,
+      "global_sample_indices": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "seeds_per_component_sample": 1137408,
+      "requests": [
+        {
+          "seed_range": {
+            "start": 2030000000,
+            "count": 568832
+          }
+        },
+        {
+          "seed_range": {
+            "start": 2040000000,
+            "count": 568576
+          }
+        }
+      ],
+      "budget": {
+        "artifact_bytes": 317243112,
+        "max_record_bytes": 7929073,
+        "per_process_output_bytes": 79338426,
+        "request_counts": [
+          568832,
+          568576
+        ]
+      },
+      "estimated_internal_seconds_c17_reference": {
+        "baseline": 6.5211882559555665,
+        "candidate": 6.498840378690308
+      },
+      "estimated_total_engine_seconds": 65.10014317322938
+    },
+    "step": {
+      "id": "cheap-w12-c2-r0",
+      "op": "compare",
+      "mode": "jsonl",
+      "commands": {
+        "baseline": {
+          "argv": [
+            "${JOB}/artifacts/frozen/baseline/match_benchmark",
+            "{\"max_depth\":1,\"requirements\":[{\"kind\":\"ring\"}],\"auto_apply_trinket\":false}",
+            "${WORKERS}"
+          ],
+          "cwd": "work/checkouts/baseline",
+          "env": {},
+          "stdin": "",
+          "timeout_seconds": 1200,
+          "stdout": "artifacts/logs/baseline-cheap-w12-c2-r0.stdout",
+          "stderr": "artifacts/logs/baseline-cheap-w12-c2-r0.stderr",
+          "wrappers": [
+            "time"
+          ]
+        },
+        "candidate": {
+          "argv": [
+            "${JOB}/artifacts/frozen/candidate/match_benchmark",
+            "{\"max_depth\":1,\"requirements\":[{\"kind\":\"ring\"}],\"auto_apply_trinket\":false}",
+            "${WORKERS}"
+          ],
+          "cwd": "work/checkouts/candidate",
+          "env": {},
+          "stdin": "",
+          "timeout_seconds": 1200,
+          "stdout": "artifacts/logs/candidate-cheap-w12-c2-r0.stdout",
+          "stderr": "artifacts/logs/candidate-cheap-w12-c2-r0.stderr",
+          "wrappers": [
+            "time"
+          ]
+        }
+      },
+      "worker_counts": [
+        12
+      ],
+      "warmups": 1,
+      "samples": 4,
+      "requests": [
+        {
+          "seed_range": {
+            "start": 2030000000,
+            "count": 568832
+          }
+        },
+        {
+          "seed_range": {
+            "start": 2040000000,
+            "count": 568576
+          }
+        }
+      ],
+      "output": "artifacts/results/cheap-w12-c2-r0.jsonl",
+      "ready": {
+        "field": "ready",
+        "equals": true
+      }
+    },
+    "summary": {
+      "step": "cheap-w12-c2-r0",
+      "query": {
+        "auto_apply_trinket": false,
+        "max_depth": 1,
+        "requirements": [
+          {
+            "kind": "ring"
+          }
+        ]
+      },
+      "query_sha256": "4c06e5e2722e172ab5ff356efbf6e0961f9da1bfc3f77ffa60ecffeda0d2ada4",
+      "output": "artifacts/results/cheap-w12-c2-r0.jsonl",
+      "warmups": 1,
+      "samples": 4,
+      "requests": [
+        {
+          "tested": 568832,
+          "input_sha256": "6231cf9bcf9262c95acb05337b06b6bc3f742858000ab73d540c184224a8ff8a"
+        },
+        {
+          "tested": 568576,
+          "input_sha256": "0aa6cd2441e261ba4fc504f575b58b64755bf1655b2a04cc5159dfc13aea5f5d"
+        }
+      ],
+      "workers": {
+        "12": {
+          "baseline": {
+            "seconds": [
+              7.97044775,
+              7.971874583,
+              7.941226958,
+              8.268616917
+            ],
+            "wall_seconds": [
+              8.234463708,
+              8.238646666,
+              8.219723959,
+              8.546435208
+            ],
+            "tested": [
+              1137408,
+              1137408,
+              1137408,
+              1137408
+            ],
+            "seeds_per_second": 141503.1251881242
+          },
+          "candidate": {
+            "seconds": [
+              7.739340626,
+              7.747934458,
+              8.119928208000001,
+              8.055652542
+            ],
+            "wall_seconds": [
+              8.000133584,
+              8.137897875,
+              8.384023792,
+              8.324061
+            ],
+            "tested": [
+              1137408,
+              1137408,
+              1137408,
+              1137408
+            ],
+            "seeds_per_second": 143689.88141349345
+          },
+          "paired_changes_percent": [
+            2.986134545152397,
+            2.890320332650398,
+            -2.2007737682205097,
+            2.643663860744483
+          ],
+          "throughput_change_percent": 1.5453766285811854,
+          "paired_geomean_change_percent": 1.5559119534635624,
+          "minimum_internal_sample_seconds": 7.739340626
+        }
+      },
+      "ready": {
+        "link": "QgAaAAA",
+        "preferred": [],
+        "ready": true
+      }
+    }
+  },
+  "cheap-w8-c0-r0": {
+    "job": "matching-04",
+    "job_id": "4bd30dcf98d34dacbb790409189e6292",
+    "unit": {
+      "case": "cheap",
+      "workers": 8,
+      "component": 0,
+      "repetition_block": 0,
+      "global_sample_indices": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "seeds_per_component_sample": 926976,
+      "requests": [
+        {
+          "seed_range": {
+            "start": 30000000,
+            "count": 926976
+          }
+        }
+      ],
+      "budget": {
+        "artifact_bytes": 258561252,
+        "max_record_bytes": 12920997,
+        "per_process_output_bytes": 64670521,
+        "request_counts": [
+          926976
+        ]
+      },
+      "estimated_internal_seconds_c17_reference": {
+        "baseline": 6.436940871630433,
+        "candidate": 6.4468510221886595
+      },
+      "estimated_total_engine_seconds": 64.41895946909546
+    },
+    "step": {
+      "id": "cheap-w8-c0-r0",
+      "op": "compare",
+      "mode": "jsonl",
+      "commands": {
+        "baseline": {
+          "argv": [
+            "${JOB}/artifacts/frozen/baseline/match_benchmark",
+            "{\"max_depth\":1,\"requirements\":[{\"kind\":\"ring\"}],\"auto_apply_trinket\":false}",
+            "${WORKERS}"
+          ],
+          "cwd": "work/checkouts/baseline",
+          "env": {},
+          "stdin": "",
+          "timeout_seconds": 1200,
+          "stdout": "artifacts/logs/baseline-cheap-w8-c0-r0.stdout",
+          "stderr": "artifacts/logs/baseline-cheap-w8-c0-r0.stderr",
+          "wrappers": [
+            "time"
+          ]
+        },
+        "candidate": {
+          "argv": [
+            "${JOB}/artifacts/frozen/candidate/match_benchmark",
+            "{\"max_depth\":1,\"requirements\":[{\"kind\":\"ring\"}],\"auto_apply_trinket\":false}",
+            "${WORKERS}"
+          ],
+          "cwd": "work/checkouts/candidate",
+          "env": {},
+          "stdin": "",
+          "timeout_seconds": 1200,
+          "stdout": "artifacts/logs/candidate-cheap-w8-c0-r0.stdout",
+          "stderr": "artifacts/logs/candidate-cheap-w8-c0-r0.stderr",
+          "wrappers": [
+            "time"
+          ]
+        }
+      },
+      "worker_counts": [
+        8
+      ],
+      "warmups": 1,
+      "samples": 4,
+      "requests": [
+        {
+          "seed_range": {
+            "start": 30000000,
+            "count": 926976
+          }
+        }
+      ],
+      "output": "artifacts/results/cheap-w8-c0-r0.jsonl",
+      "ready": {
+        "field": "ready",
+        "equals": true
+      }
+    },
+    "summary": {
+      "step": "cheap-w8-c0-r0",
+      "query": {
+        "auto_apply_trinket": false,
+        "max_depth": 1,
+        "requirements": [
+          {
+            "kind": "ring"
+          }
+        ]
+      },
+      "query_sha256": "4c06e5e2722e172ab5ff356efbf6e0961f9da1bfc3f77ffa60ecffeda0d2ada4",
+      "output": "artifacts/results/cheap-w8-c0-r0.jsonl",
+      "warmups": 1,
+      "samples": 4,
+      "requests": [
+        {
+          "tested": 926976,
+          "input_sha256": "40ceae3870f861fe3794e30eda21ba6814ddf95d218d46260894d2846d80345f"
+        }
+      ],
+      "workers": {
+        "8": {
+          "baseline": {
+            "seconds": [
+              6.580919166,
+              6.94035125,
+              6.7227852089999995,
+              6.846515459
+            ],
+            "wall_seconds": [
+              6.760439375,
+              7.123712375,
+              6.905677875,
+              7.034955583
+            ],
+            "tested": [
+              926976,
+              926976,
+              926976,
+              926976
+            ],
+            "seeds_per_second": 136870.64730023098
+          },
+          "candidate": {
+            "seconds": [
+              6.659272792,
+              6.548081334,
+              6.7355691669999995,
+              6.893380959
+            ],
+            "wall_seconds": [
+              6.838634209,
+              6.729887,
+              6.926631542,
+              7.234990333
+            ],
+            "tested": [
+              926976,
+              926976,
+              926976,
+              926976
+            ],
+            "seeds_per_second": 138167.46021291905
+          },
+          "paired_changes_percent": [
+            -1.1766093453046245,
+            5.990608485010607,
+            -0.18979773918190723,
+            -0.67986232414462
+          ],
+          "throughput_change_percent": 0.9474733540519198,
+          "paired_geomean_change_percent": 0.9450078477014179,
+          "minimum_internal_sample_seconds": 6.548081334
+        }
+      },
+      "ready": {
+        "link": "QgAaAAA",
+        "preferred": [],
+        "ready": true
+      }
+    }
+  },
+  "blade_might_auto-w12-c0-r0": {
+    "job": "matching-04",
+    "job_id": "4bd30dcf98d34dacbb790409189e6292",
+    "unit": {
+      "case": "blade_might_auto",
+      "workers": 12,
+      "component": 0,
+      "repetition_block": 0,
+      "global_sample_indices": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "seeds_per_component_sample": 75264,
+      "requests": [
+        {
+          "seed_range": {
+            "start": 500060000000,
+            "count": 75264
+          }
+        }
+      ],
+      "budget": {
+        "artifact_bytes": 1656832,
+        "max_record_bytes": 75776,
+        "per_process_output_bytes": 444416,
+        "request_counts": [
+          75264
+        ]
+      },
+      "estimated_internal_seconds_c17_reference": {
+        "baseline": 22.25080813725,
+        "candidate": 21.750803715375
+      },
+      "estimated_total_engine_seconds": 220.008059263125
+    },
+    "step": {
+      "id": "blade_might_auto-w12-c0-r0",
+      "op": "compare",
+      "mode": "jsonl",
+      "commands": {
+        "baseline": {
+          "argv": [
+            "${JOB}/artifacts/frozen/baseline/match_benchmark",
+            "{\"max_depth\":19,\"auto_apply_trinket\":true,\"requirements\":[{\"item\":\"runic_blade\",\"upgrade\":2,\"effect\":[\"Grim\",\"Corrupting\",\"Vampiric\",\"Crystal\"]},{\"item\":\"ring_might\",\"upgrade\":2}]}",
+            "${WORKERS}"
+          ],
+          "cwd": "work/checkouts/baseline",
+          "env": {},
+          "stdin": "",
+          "timeout_seconds": 1200,
+          "stdout": "artifacts/logs/baseline-blade_might_auto-w12-c0-r0.stdout",
+          "stderr": "artifacts/logs/baseline-blade_might_auto-w12-c0-r0.stderr",
+          "wrappers": [
+            "time"
+          ]
+        },
+        "candidate": {
+          "argv": [
+            "${JOB}/artifacts/frozen/candidate/match_benchmark",
+            "{\"max_depth\":19,\"auto_apply_trinket\":true,\"requirements\":[{\"item\":\"runic_blade\",\"upgrade\":2,\"effect\":[\"Grim\",\"Corrupting\",\"Vampiric\",\"Crystal\"]},{\"item\":\"ring_might\",\"upgrade\":2}]}",
+            "${WORKERS}"
+          ],
+          "cwd": "work/checkouts/candidate",
+          "env": {},
+          "stdin": "",
+          "timeout_seconds": 1200,
+          "stdout": "artifacts/logs/candidate-blade_might_auto-w12-c0-r0.stdout",
+          "stderr": "artifacts/logs/candidate-blade_might_auto-w12-c0-r0.stderr",
+          "wrappers": [
+            "time"
+          ]
+        }
+      },
+      "worker_counts": [
+        12
+      ],
+      "warmups": 1,
+      "samples": 4,
+      "requests": [
+        {
+          "seed_range": {
+            "start": 500060000000,
+            "count": 75264
+          }
+        }
+      ],
+      "output": "artifacts/results/blade_might_auto-w12-c0-r0.jsonl",
+      "ready": {
+        "field": "ready",
+        "equals": true
+      }
+    },
+    "summary": {
+      "step": "blade_might_auto-w12-c0-r0",
+      "query": {
+        "auto_apply_trinket": true,
+        "max_depth": 19,
+        "requirements": [
+          {
+            "effect": [
+              "Grim",
+              "Corrupting",
+              "Vampiric",
+              "Crystal"
+            ],
+            "item": "runic_blade",
+            "upgrade": 2
+          },
+          {
+            "item": "ring_might",
+            "upgrade": 2
+          }
+        ]
+      },
+      "query_sha256": "8a4276b8e29eaaa73b447e084d73873b7aaf07a72d8609654c0910ce81faf2d0",
+      "output": "artifacts/results/blade_might_auto-w12-c0-r0.jsonl",
+      "warmups": 1,
+      "samples": 4,
+      "requests": [
+        {
+          "tested": 75264,
+          "input_sha256": "0f9bd99962360c179832fd35852be93a91b421a1ae99df0c30cf694f9a03aed6"
+        }
+      ],
+      "workers": {
+        "12": {
+          "baseline": {
+            "seconds": [
+              18.122667334,
+              19.582428083,
+              20.224114666,
+              21.777589375
+            ],
+            "wall_seconds": [
+              18.127511959,
+              19.587427709,
+              20.22820025,
+              21.783170834
+            ],
+            "tested": [
+              75264,
+              75264,
+              75264,
+              75264
+            ],
+            "seeds_per_second": 3777.042887773154
+          },
+          "candidate": {
+            "seconds": [
+              15.375416666,
+              15.851583,
+              17.225757416,
+              17.633662458
+            ],
+            "wall_seconds": [
+              15.379998666,
+              15.8563895,
+              17.231081542,
+              17.63800625
+            ],
+            "tested": [
+              75264,
+              75264,
+              75264,
+              75264
+            ],
+            "seeds_per_second": 4555.489646670606
+          },
+          "paired_changes_percent": [
+            17.86781280584777,
+            23.536104141775628,
+            17.406243322659343,
+            23.50009209300701
+          ],
+          "throughput_change_percent": 20.60995286596823,
+          "paired_geomean_change_percent": 20.54158559642676,
+          "minimum_internal_sample_seconds": 15.375416666
+        }
+      },
+      "ready": {
+        "link": "aZAQlBWAAPAAALqCgAA",
+        "preferred": [
+          "parchment_scrap",
+          "mimic_tooth",
+          "cracked_spyglass"
+        ],
+        "ready": true
+      }
+    }
+  },
+  "blade_might_auto-w8-c0-r0": {
+    "job": "matching-04",
+    "job_id": "4bd30dcf98d34dacbb790409189e6292",
+    "unit": {
+      "case": "blade_might_auto",
+      "workers": 8,
+      "component": 0,
+      "repetition_block": 0,
+      "global_sample_indices": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "seeds_per_component_sample": 75264,
+      "requests": [
+        {
+          "seed_range": {
+            "start": 500060000000,
+            "count": 75264
+          }
+        }
+      ],
+      "budget": {
+        "artifact_bytes": 1656832,
+        "max_record_bytes": 75776,
+        "per_process_output_bytes": 444416,
+        "request_counts": [
+          75264
+        ]
+      },
+      "estimated_internal_seconds_c17_reference": {
+        "baseline": 18.799462499999997,
+        "candidate": 19.4082867405
+      },
+      "estimated_total_engine_seconds": 191.03874620249996
+    },
+    "step": {
+      "id": "blade_might_auto-w8-c0-r0",
+      "op": "compare",
+      "mode": "jsonl",
+      "commands": {
+        "baseline": {
+          "argv": [
+            "${JOB}/artifacts/frozen/baseline/match_benchmark",
+            "{\"max_depth\":19,\"auto_apply_trinket\":true,\"requirements\":[{\"item\":\"runic_blade\",\"upgrade\":2,\"effect\":[\"Grim\",\"Corrupting\",\"Vampiric\",\"Crystal\"]},{\"item\":\"ring_might\",\"upgrade\":2}]}",
+            "${WORKERS}"
+          ],
+          "cwd": "work/checkouts/baseline",
+          "env": {},
+          "stdin": "",
+          "timeout_seconds": 1200,
+          "stdout": "artifacts/logs/baseline-blade_might_auto-w8-c0-r0.stdout",
+          "stderr": "artifacts/logs/baseline-blade_might_auto-w8-c0-r0.stderr",
+          "wrappers": [
+            "time"
+          ]
+        },
+        "candidate": {
+          "argv": [
+            "${JOB}/artifacts/frozen/candidate/match_benchmark",
+            "{\"max_depth\":19,\"auto_apply_trinket\":true,\"requirements\":[{\"item\":\"runic_blade\",\"upgrade\":2,\"effect\":[\"Grim\",\"Corrupting\",\"Vampiric\",\"Crystal\"]},{\"item\":\"ring_might\",\"upgrade\":2}]}",
+            "${WORKERS}"
+          ],
+          "cwd": "work/checkouts/candidate",
+          "env": {},
+          "stdin": "",
+          "timeout_seconds": 1200,
+          "stdout": "artifacts/logs/candidate-blade_might_auto-w8-c0-r0.stdout",
+          "stderr": "artifacts/logs/candidate-blade_might_auto-w8-c0-r0.stderr",
+          "wrappers": [
+            "time"
+          ]
+        }
+      },
+      "worker_counts": [
+        8
+      ],
+      "warmups": 1,
+      "samples": 4,
+      "requests": [
+        {
+          "seed_range": {
+            "start": 500060000000,
+            "count": 75264
+          }
+        }
+      ],
+      "output": "artifacts/results/blade_might_auto-w8-c0-r0.jsonl",
+      "ready": {
+        "field": "ready",
+        "equals": true
+      }
+    },
+    "summary": {
+      "step": "blade_might_auto-w8-c0-r0",
+      "query": {
+        "auto_apply_trinket": true,
+        "max_depth": 19,
+        "requirements": [
+          {
+            "effect": [
+              "Grim",
+              "Corrupting",
+              "Vampiric",
+              "Crystal"
+            ],
+            "item": "runic_blade",
+            "upgrade": 2
+          },
+          {
+            "item": "ring_might",
+            "upgrade": 2
+          }
+        ]
+      },
+      "query_sha256": "8a4276b8e29eaaa73b447e084d73873b7aaf07a72d8609654c0910ce81faf2d0",
+      "output": "artifacts/results/blade_might_auto-w8-c0-r0.jsonl",
+      "warmups": 1,
+      "samples": 4,
+      "requests": [
+        {
+          "tested": 75264,
+          "input_sha256": "0f9bd99962360c179832fd35852be93a91b421a1ae99df0c30cf694f9a03aed6"
+        }
+      ],
+      "workers": {
+        "8": {
+          "baseline": {
+            "seconds": [
+              33.465545041,
+              31.369978292,
+              31.276337541,
+              31.248059125
+            ],
+            "wall_seconds": [
+              33.471146542,
+              31.375075083,
+              31.28136,
+              31.2535495
+            ],
+            "tested": [
+              75264,
+              75264,
+              75264,
+              75264
+            ],
+            "seeds_per_second": 2363.8205803078695
+          },
+          "candidate": {
+            "seconds": [
+              26.998707625,
+              27.316869625,
+              27.438632667,
+              27.151452792
+            ],
+            "wall_seconds": [
+              27.004205917,
+              27.321500666,
+              27.444228,
+              27.156030667
+            ],
+            "tested": [
+              75264,
+              75264,
+              75264,
+              75264
+            ],
+            "seeds_per_second": 2764.3741611896976
+          },
+          "paired_changes_percent": [
+            23.952396188074943,
+            14.837383355560817,
+            13.986501880669678,
+            15.087982084726747
+          ],
+          "throughput_change_percent": 16.945176982495823,
+          "paired_geomean_change_percent": 16.89754864511668,
+          "minimum_internal_sample_seconds": 26.998707625
+        }
+      },
+      "ready": {
+        "link": "aZAQlBWAAPAAALqCgAA",
+        "preferred": [
+          "parchment_scrap",
+          "mimic_tooth",
+          "cracked_spyglass"
+        ],
+        "ready": true
+      }
+    }
+  },
+  "late-w8-c0-r0": {
+    "job": "matching-04",
+    "job_id": "4bd30dcf98d34dacbb790409189e6292",
+    "unit": {
+      "case": "late",
+      "workers": 8,
+      "component": 0,
+      "repetition_block": 0,
+      "global_sample_indices": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "seeds_per_component_sample": 63744,
+      "requests": [
+        {
+          "seed_range": {
+            "start": 200060000000,
+            "count": 63744
+          }
+        }
+      ],
+      "budget": {
+        "artifact_bytes": 1426432,
+        "max_record_bytes": 64256,
+        "per_process_output_bytes": 386816,
+        "request_counts": [
+          63744
+        ]
+      },
+      "estimated_internal_seconds_c17_reference": {
+        "baseline": 18.814843971374998,
+        "candidate": 20.390228718750002
+      },
+      "estimated_total_engine_seconds": 196.025363450625
+    },
+    "step": {
+      "id": "late-w8-c0-r0",
+      "op": "compare",
+      "mode": "jsonl",
+      "commands": {
+        "baseline": {
+          "argv": [
+            "${JOB}/artifacts/frozen/baseline/match_benchmark",
+            "{\"max_depth\":24,\"requirements\":[{\"item\":\"runic_blade\",\"upgrade\":2,\"effect\":\"Grim\",\"source\":\"heap\"}],\"auto_apply_trinket\":false}",
+            "${WORKERS}"
+          ],
+          "cwd": "work/checkouts/baseline",
+          "env": {},
+          "stdin": "",
+          "timeout_seconds": 1200,
+          "stdout": "artifacts/logs/baseline-late-w8-c0-r0.stdout",
+          "stderr": "artifacts/logs/baseline-late-w8-c0-r0.stderr",
+          "wrappers": [
+            "time"
+          ]
+        },
+        "candidate": {
+          "argv": [
+            "${JOB}/artifacts/frozen/candidate/match_benchmark",
+            "{\"max_depth\":24,\"requirements\":[{\"item\":\"runic_blade\",\"upgrade\":2,\"effect\":\"Grim\",\"source\":\"heap\"}],\"auto_apply_trinket\":false}",
+            "${WORKERS}"
+          ],
+          "cwd": "work/checkouts/candidate",
+          "env": {},
+          "stdin": "",
+          "timeout_seconds": 1200,
+          "stdout": "artifacts/logs/candidate-late-w8-c0-r0.stdout",
+          "stderr": "artifacts/logs/candidate-late-w8-c0-r0.stderr",
+          "wrappers": [
+            "time"
+          ]
+        }
+      },
+      "worker_counts": [
+        8
+      ],
+      "warmups": 1,
+      "samples": 4,
+      "requests": [
+        {
+          "seed_range": {
+            "start": 200060000000,
+            "count": 63744
+          }
+        }
+      ],
+      "output": "artifacts/results/late-w8-c0-r0.jsonl",
+      "ready": {
+        "field": "ready",
+        "equals": true
+      }
+    },
+    "summary": {
+      "step": "late-w8-c0-r0",
+      "query": {
+        "auto_apply_trinket": false,
+        "max_depth": 24,
+        "requirements": [
+          {
+            "effect": "Grim",
+            "item": "runic_blade",
+            "source": "heap",
+            "upgrade": 2
+          }
+        ]
+      },
+      "query_sha256": "e160878037b5c8f07b410676cd878f11c9d411355ba94d6e147950a095ab49cb",
+      "output": "artifacts/results/late-w8-c0-r0.jsonl",
+      "warmups": 1,
+      "samples": 4,
+      "requests": [
+        {
+          "tested": 63744,
+          "input_sha256": "d5a0aa34b624af4c66acf92886eb114233fccc804120167c92c4c940e2bd7bc5"
+        }
+      ],
+      "workers": {
+        "8": {
+          "baseline": {
+            "seconds": [
+              32.859888958,
+              32.783234375,
+              34.351842709,
+              32.805300209
+            ],
+            "wall_seconds": [
+              32.86335775,
+              32.787102375,
+              34.354993875,
+              32.809022916
+            ],
+            "tested": [
+              63744,
+              63744,
+              63744,
+              63744
+            ],
+            "seeds_per_second": 1919.9961505956694
+          },
+          "candidate": {
+            "seconds": [
+              31.945015417,
+              32.956964708,
+              32.157551792,
+              31.924835
+            ],
+            "wall_seconds": [
+              31.948391541,
+              32.960590625,
+              32.161597583,
+              31.928588125
+            ],
+            "tested": [
+              63744,
+              63744,
+              63744,
+              63744
+            ],
+            "seeds_per_second": 1976.7977011049272
+          },
+          "paired_changes_percent": [
+            2.8639007652916604,
+            -0.5271430016060674,
+            6.823563345844907,
+            2.757931901605759
+          ],
+          "throughput_change_percent": 2.958420020354491,
+          "paired_geomean_change_percent": 2.946716488854606,
+          "minimum_internal_sample_seconds": 31.924835
+        }
+      },
+      "ready": {
+        "link": "QAIlBS9AAA",
+        "preferred": [],
+        "ready": true
+      }
+    }
+  },
+  "cheap-w8-c1-r0": {
+    "job": "matching-05",
+    "job_id": "1a5607c64eee4b5bb7b425f540a81a31",
+    "unit": {
+      "case": "cheap",
+      "workers": 8,
+      "component": 1,
+      "repetition_block": 0,
+      "global_sample_indices": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "seeds_per_component_sample": 926976,
+      "requests": [
+        {
+          "seed_range": {
+            "start": 1030000000,
+            "count": 926976
+          }
+        }
+      ],
+      "budget": {
+        "artifact_bytes": 258561252,
+        "max_record_bytes": 12920997,
+        "per_process_output_bytes": 64670521,
+        "request_counts": [
+          926976
+        ]
+      },
+      "estimated_internal_seconds_c17_reference": {
+        "baseline": 6.436940871630433,
+        "candidate": 6.4468510221886595
+      },
+      "estimated_total_engine_seconds": 64.41895946909546
+    },
+    "step": {
+      "id": "cheap-w8-c1-r0",
+      "op": "compare",
+      "mode": "jsonl",
+      "commands": {
+        "baseline": {
+          "argv": [
+            "${JOB}/artifacts/frozen/baseline/match_benchmark",
+            "{\"max_depth\":1,\"requirements\":[{\"kind\":\"ring\"}],\"auto_apply_trinket\":false}",
+            "${WORKERS}"
+          ],
+          "cwd": "work/checkouts/baseline",
+          "env": {},
+          "stdin": "",
+          "timeout_seconds": 1200,
+          "stdout": "artifacts/logs/baseline-cheap-w8-c1-r0.stdout",
+          "stderr": "artifacts/logs/baseline-cheap-w8-c1-r0.stderr",
+          "wrappers": [
+            "time"
+          ]
+        },
+        "candidate": {
+          "argv": [
+            "${JOB}/artifacts/frozen/candidate/match_benchmark",
+            "{\"max_depth\":1,\"requirements\":[{\"kind\":\"ring\"}],\"auto_apply_trinket\":false}",
+            "${WORKERS}"
+          ],
+          "cwd": "work/checkouts/candidate",
+          "env": {},
+          "stdin": "",
+          "timeout_seconds": 1200,
+          "stdout": "artifacts/logs/candidate-cheap-w8-c1-r0.stdout",
+          "stderr": "artifacts/logs/candidate-cheap-w8-c1-r0.stderr",
+          "wrappers": [
+            "time"
+          ]
+        }
+      },
+      "worker_counts": [
+        8
+      ],
+      "warmups": 1,
+      "samples": 4,
+      "requests": [
+        {
+          "seed_range": {
+            "start": 1030000000,
+            "count": 926976
+          }
+        }
+      ],
+      "output": "artifacts/results/cheap-w8-c1-r0.jsonl",
+      "ready": {
+        "field": "ready",
+        "equals": true
+      }
+    },
+    "summary": {
+      "step": "cheap-w8-c1-r0",
+      "query": {
+        "auto_apply_trinket": false,
+        "max_depth": 1,
+        "requirements": [
+          {
+            "kind": "ring"
+          }
+        ]
+      },
+      "query_sha256": "4c06e5e2722e172ab5ff356efbf6e0961f9da1bfc3f77ffa60ecffeda0d2ada4",
+      "output": "artifacts/results/cheap-w8-c1-r0.jsonl",
+      "warmups": 1,
+      "samples": 4,
+      "requests": [
+        {
+          "tested": 926976,
+          "input_sha256": "27472af6c52d771eba7119750ec3453023c4e79bd6ea4da09ac35c28929f7ce1"
+        }
+      ],
+      "workers": {
+        "8": {
+          "baseline": {
+            "seconds": [
+              8.213654042,
+              8.119420375,
+              7.972197542,
+              8.644507167
+            ],
+            "wall_seconds": [
+              8.420851,
+              8.327508833,
+              8.403482208,
+              8.853329416
+            ],
+            "tested": [
+              926976,
+              926976,
+              926976,
+              926976
+            ],
+            "seeds_per_second": 112531.98347160294
+          },
+          "candidate": {
+            "seconds": [
+              8.119953333,
+              8.073483292,
+              8.319912334,
+              8.332240166
+            ],
+            "wall_seconds": [
+              8.321239875,
+              8.279503375,
+              8.5227735,
+              8.542434
+            ],
+            "tested": [
+              926976,
+              926976,
+              926976,
+              926976
+            ],
+            "seeds_per_second": 112888.94791592506
+          },
+          "paired_changes_percent": [
+            1.1539562502064449,
+            0.5689871563308913,
+            -4.179308363371026,
+            3.7476956350132262
+          ],
+          "throughput_change_percent": 0.3172115458288438,
+          "paired_geomean_change_percent": 0.2815822151958969,
+          "minimum_internal_sample_seconds": 7.972197542
+        }
+      },
+      "ready": {
+        "link": "QgAaAAA",
+        "preferred": [],
+        "ready": true
+      }
+    }
+  },
+  "blade_might_auto-w1-c0-r0": {
+    "job": "matching-05",
+    "job_id": "1a5607c64eee4b5bb7b425f540a81a31",
+    "unit": {
+      "case": "blade_might_auto",
+      "workers": 1,
+      "component": 0,
+      "repetition_block": 0,
+      "global_sample_indices": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "seeds_per_component_sample": 11008,
+      "requests": [
+        {
+          "seed_range": {
+            "start": 500060000000,
+            "count": 11008
+          }
+        }
+      ],
+      "budget": {
+        "artifact_bytes": 371712,
+        "max_record_bytes": 11520,
+        "per_process_output_bytes": 123136,
+        "request_counts": [
+          11008
+        ]
+      },
+      "estimated_internal_seconds_c17_reference": {
+        "baseline": 20.1426867491875,
+        "candidate": 19.486689047687502
+      },
+      "estimated_total_engine_seconds": 198.146878984375
+    },
+    "step": {
+      "id": "blade_might_auto-w1-c0-r0",
+      "op": "compare",
+      "mode": "jsonl",
+      "commands": {
+        "baseline": {
+          "argv": [
+            "${JOB}/artifacts/frozen/baseline/match_benchmark",
+            "{\"max_depth\":19,\"auto_apply_trinket\":true,\"requirements\":[{\"item\":\"runic_blade\",\"upgrade\":2,\"effect\":[\"Grim\",\"Corrupting\",\"Vampiric\",\"Crystal\"]},{\"item\":\"ring_might\",\"upgrade\":2}]}",
+            "${WORKERS}"
+          ],
+          "cwd": "work/checkouts/baseline",
+          "env": {},
+          "stdin": "",
+          "timeout_seconds": 1200,
+          "stdout": "artifacts/logs/baseline-blade_might_auto-w1-c0-r0.stdout",
+          "stderr": "artifacts/logs/baseline-blade_might_auto-w1-c0-r0.stderr",
+          "wrappers": [
+            "time"
+          ]
+        },
+        "candidate": {
+          "argv": [
+            "${JOB}/artifacts/frozen/candidate/match_benchmark",
+            "{\"max_depth\":19,\"auto_apply_trinket\":true,\"requirements\":[{\"item\":\"runic_blade\",\"upgrade\":2,\"effect\":[\"Grim\",\"Corrupting\",\"Vampiric\",\"Crystal\"]},{\"item\":\"ring_might\",\"upgrade\":2}]}",
+            "${WORKERS}"
+          ],
+          "cwd": "work/checkouts/candidate",
+          "env": {},
+          "stdin": "",
+          "timeout_seconds": 1200,
+          "stdout": "artifacts/logs/candidate-blade_might_auto-w1-c0-r0.stdout",
+          "stderr": "artifacts/logs/candidate-blade_might_auto-w1-c0-r0.stderr",
+          "wrappers": [
+            "time"
+          ]
+        }
+      },
+      "worker_counts": [
+        1
+      ],
+      "warmups": 1,
+      "samples": 4,
+      "requests": [
+        {
+          "seed_range": {
+            "start": 500060000000,
+            "count": 11008
+          }
+        }
+      ],
+      "output": "artifacts/results/blade_might_auto-w1-c0-r0.jsonl",
+      "ready": {
+        "field": "ready",
+        "equals": true
+      }
+    },
+    "summary": {
+      "step": "blade_might_auto-w1-c0-r0",
+      "query": {
+        "auto_apply_trinket": true,
+        "max_depth": 19,
+        "requirements": [
+          {
+            "effect": [
+              "Grim",
+              "Corrupting",
+              "Vampiric",
+              "Crystal"
+            ],
+            "item": "runic_blade",
+            "upgrade": 2
+          },
+          {
+            "item": "ring_might",
+            "upgrade": 2
+          }
+        ]
+      },
+      "query_sha256": "8a4276b8e29eaaa73b447e084d73873b7aaf07a72d8609654c0910ce81faf2d0",
+      "output": "artifacts/results/blade_might_auto-w1-c0-r0.jsonl",
+      "warmups": 1,
+      "samples": 4,
+      "requests": [
+        {
+          "tested": 11008,
+          "input_sha256": "ad15c725fe7b3ee4cc378d837e541ef53f3e630bdf5697e1614afeec8c75b0f4"
+        }
+      ],
+      "workers": {
+        "1": {
+          "baseline": {
+            "seconds": [
+              19.368497,
+              19.159957958,
+              19.129379458,
+              19.047024125
+            ],
+            "wall_seconds": [
+              19.3692545,
+              19.160749208,
+              19.129999792,
+              19.047799625
+            ],
+            "tested": [
+              11008,
+              11008,
+              11008,
+              11008
+            ],
+            "seeds_per_second": 574.0444717261838
+          },
+          "candidate": {
+            "seconds": [
+              16.126291459,
+              16.065726791,
+              15.968595584,
+              15.9519695
+            ],
+            "wall_seconds": [
+              16.12702375,
+              16.066332625,
+              15.969191458,
+              15.952536667
+            ],
+            "tested": [
+              11008,
+              11008,
+              11008,
+              11008
+            ],
+            "seeds_per_second": 686.7918544260107
+          },
+          "paired_changes_percent": [
+            20.105090803072034,
+            19.25982688024661,
+            19.793749909772895,
+            19.402335398146285
+          ],
+          "throughput_change_percent": 19.640879453257188,
+          "paired_geomean_change_percent": 19.63979023396467,
+          "minimum_internal_sample_seconds": 15.9519695
+        }
+      },
+      "ready": {
+        "link": "aZAQlBWAAPAAALqCgAA",
+        "preferred": [
+          "parchment_scrap",
+          "mimic_tooth",
+          "cracked_spyglass"
+        ],
+        "ready": true
+      }
+    }
+  },
+  "late-w1-c0-r0": {
+    "job": "matching-05",
+    "job_id": "1a5607c64eee4b5bb7b425f540a81a31",
+    "unit": {
+      "case": "late",
+      "workers": 1,
+      "component": 0,
+      "repetition_block": 0,
+      "global_sample_indices": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "seeds_per_component_sample": 8960,
+      "requests": [
+        {
+          "seed_range": {
+            "start": 200060000000,
+            "count": 8960
+          }
+        }
+      ],
+      "budget": {
+        "artifact_bytes": 330752,
+        "max_record_bytes": 9472,
+        "per_process_output_bytes": 112896,
+        "request_counts": [
+          8960
+        ]
+      },
+      "estimated_internal_seconds_c17_reference": {
+        "baseline": 20.175093839687502,
+        "candidate": 19.2057942715625
+      },
+      "estimated_total_engine_seconds": 196.90444055625
+    },
+    "step": {
+      "id": "late-w1-c0-r0",
+      "op": "compare",
+      "mode": "jsonl",
+      "commands": {
+        "baseline": {
+          "argv": [
+            "${JOB}/artifacts/frozen/baseline/match_benchmark",
+            "{\"max_depth\":24,\"requirements\":[{\"item\":\"runic_blade\",\"upgrade\":2,\"effect\":\"Grim\",\"source\":\"heap\"}],\"auto_apply_trinket\":false}",
+            "${WORKERS}"
+          ],
+          "cwd": "work/checkouts/baseline",
+          "env": {},
+          "stdin": "",
+          "timeout_seconds": 1200,
+          "stdout": "artifacts/logs/baseline-late-w1-c0-r0.stdout",
+          "stderr": "artifacts/logs/baseline-late-w1-c0-r0.stderr",
+          "wrappers": [
+            "time"
+          ]
+        },
+        "candidate": {
+          "argv": [
+            "${JOB}/artifacts/frozen/candidate/match_benchmark",
+            "{\"max_depth\":24,\"requirements\":[{\"item\":\"runic_blade\",\"upgrade\":2,\"effect\":\"Grim\",\"source\":\"heap\"}],\"auto_apply_trinket\":false}",
+            "${WORKERS}"
+          ],
+          "cwd": "work/checkouts/candidate",
+          "env": {},
+          "stdin": "",
+          "timeout_seconds": 1200,
+          "stdout": "artifacts/logs/candidate-late-w1-c0-r0.stdout",
+          "stderr": "artifacts/logs/candidate-late-w1-c0-r0.stderr",
+          "wrappers": [
+            "time"
+          ]
+        }
+      },
+      "worker_counts": [
+        1
+      ],
+      "warmups": 1,
+      "samples": 4,
+      "requests": [
+        {
+          "seed_range": {
+            "start": 200060000000,
+            "count": 8960
+          }
+        }
+      ],
+      "output": "artifacts/results/late-w1-c0-r0.jsonl",
+      "ready": {
+        "field": "ready",
+        "equals": true
+      }
+    },
+    "summary": {
+      "step": "late-w1-c0-r0",
+      "query": {
+        "auto_apply_trinket": false,
+        "max_depth": 24,
+        "requirements": [
+          {
+            "effect": "Grim",
+            "item": "runic_blade",
+            "source": "heap",
+            "upgrade": 2
+          }
+        ]
+      },
+      "query_sha256": "e160878037b5c8f07b410676cd878f11c9d411355ba94d6e147950a095ab49cb",
+      "output": "artifacts/results/late-w1-c0-r0.jsonl",
+      "warmups": 1,
+      "samples": 4,
+      "requests": [
+        {
+          "tested": 8960,
+          "input_sha256": "80210e0135c51733c109619466ae9faadb8ad00068804e8be6c61e81f496017b"
+        }
+      ],
+      "workers": {
+        "1": {
+          "baseline": {
+            "seconds": [
+              19.094632083,
+              19.161683417,
+              19.093305459,
+              19.052096959
+            ],
+            "wall_seconds": [
+              19.095244583,
+              19.162206083,
+              19.093802667,
+              19.052570792
+            ],
+            "tested": [
+              8960,
+              8960,
+              8960,
+              8960
+            ],
+            "seeds_per_second": 469.0993995510173
+          },
+          "candidate": {
+            "seconds": [
+              18.186459458,
+              18.221375959,
+              18.157742083,
+              18.164734625
+            ],
+            "wall_seconds": [
+              18.187080542,
+              18.221882875,
+              18.158241334,
+              18.165195
+            ],
+            "tested": [
+              8960,
+              8960,
+              8960,
+              8960
+            ],
+            "seeds_per_second": 492.77940590166276
+          },
+          "paired_changes_percent": [
+            4.993674701210216,
+            5.1604635133800425,
+            5.152421329279222,
+            4.885082839463717
+          ],
+          "throughput_change_percent": 5.047972001948842,
+          "paired_geomean_change_percent": 5.04784746129745,
+          "minimum_internal_sample_seconds": 18.157742083
+        }
+      },
+      "ready": {
+        "link": "QAIlBS9AAA",
+        "preferred": [],
+        "ready": true
+      }
+    }
+  },
+  "cheap-w8-c2-r0": {
+    "job": "matching-06",
+    "job_id": "7939d6e538c54c8eb6dc64462159d372",
+    "unit": {
+      "case": "cheap",
+      "workers": 8,
+      "component": 2,
+      "repetition_block": 0,
+      "global_sample_indices": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "seeds_per_component_sample": 926976,
+      "requests": [
+        {
+          "seed_range": {
+            "start": 2030000000,
+            "count": 926976
+          }
+        }
+      ],
+      "budget": {
+        "artifact_bytes": 258561252,
+        "max_record_bytes": 12920997,
+        "per_process_output_bytes": 64670521,
+        "request_counts": [
+          926976
+        ]
+      },
+      "estimated_internal_seconds_c17_reference": {
+        "baseline": 6.436940871630433,
+        "candidate": 6.4468510221886595
+      },
+      "estimated_total_engine_seconds": 64.41895946909546
+    },
+    "step": {
+      "id": "cheap-w8-c2-r0",
+      "op": "compare",
+      "mode": "jsonl",
+      "commands": {
+        "baseline": {
+          "argv": [
+            "${JOB}/artifacts/frozen/baseline/match_benchmark",
+            "{\"max_depth\":1,\"requirements\":[{\"kind\":\"ring\"}],\"auto_apply_trinket\":false}",
+            "${WORKERS}"
+          ],
+          "cwd": "work/checkouts/baseline",
+          "env": {},
+          "stdin": "",
+          "timeout_seconds": 1200,
+          "stdout": "artifacts/logs/baseline-cheap-w8-c2-r0.stdout",
+          "stderr": "artifacts/logs/baseline-cheap-w8-c2-r0.stderr",
+          "wrappers": [
+            "time"
+          ]
+        },
+        "candidate": {
+          "argv": [
+            "${JOB}/artifacts/frozen/candidate/match_benchmark",
+            "{\"max_depth\":1,\"requirements\":[{\"kind\":\"ring\"}],\"auto_apply_trinket\":false}",
+            "${WORKERS}"
+          ],
+          "cwd": "work/checkouts/candidate",
+          "env": {},
+          "stdin": "",
+          "timeout_seconds": 1200,
+          "stdout": "artifacts/logs/candidate-cheap-w8-c2-r0.stdout",
+          "stderr": "artifacts/logs/candidate-cheap-w8-c2-r0.stderr",
+          "wrappers": [
+            "time"
+          ]
+        }
+      },
+      "worker_counts": [
+        8
+      ],
+      "warmups": 1,
+      "samples": 4,
+      "requests": [
+        {
+          "seed_range": {
+            "start": 2030000000,
+            "count": 926976
+          }
+        }
+      ],
+      "output": "artifacts/results/cheap-w8-c2-r0.jsonl",
+      "ready": {
+        "field": "ready",
+        "equals": true
+      }
+    },
+    "summary": {
+      "step": "cheap-w8-c2-r0",
+      "query": {
+        "auto_apply_trinket": false,
+        "max_depth": 1,
+        "requirements": [
+          {
+            "kind": "ring"
+          }
+        ]
+      },
+      "query_sha256": "4c06e5e2722e172ab5ff356efbf6e0961f9da1bfc3f77ffa60ecffeda0d2ada4",
+      "output": "artifacts/results/cheap-w8-c2-r0.jsonl",
+      "warmups": 1,
+      "samples": 4,
+      "requests": [
+        {
+          "tested": 926976,
+          "input_sha256": "4d4597cd3ac697498ad1f83ff00b00956bf88f8c3ba8d79152860a747e89e9ca"
+        }
+      ],
+      "workers": {
+        "8": {
+          "baseline": {
+            "seconds": [
+              7.691733833,
+              8.110474958,
+              7.975308459,
+              8.584755958
+            ],
+            "wall_seconds": [
+              7.895398958,
+              8.314856042,
+              8.180875916,
+              8.807795333
+            ],
+            "tested": [
+              926976,
+              926976,
+              926976,
+              926976
+            ],
+            "seeds_per_second": 114574.89330766175
+          },
+          "candidate": {
+            "seconds": [
+              7.776849542,
+              7.9103397090000005,
+              8.228472625,
+              9.043418833
+            ],
+            "wall_seconds": [
+              7.980050708,
+              8.117734208,
+              8.454903875,
+              9.260369625
+            ],
+            "tested": [
+              926976,
+              926976,
+              926976,
+              926976
+            ],
+            "seeds_per_second": 112500.2251348442
+          },
+          "paired_changes_percent": [
+            -1.0944754497347553,
+            2.530046197286495,
+            -3.0766847936132047,
+            -5.071786273199141
+          ],
+          "throughput_change_percent": -1.8107528734472078,
+          "paired_geomean_change_percent": -1.7180378789454331,
+          "minimum_internal_sample_seconds": 7.691733833
+        }
+      },
+      "ready": {
+        "link": "QgAaAAA",
+        "preferred": [],
+        "ready": true
+      }
+    }
+  },
+  "cheap-w1-c0-r0": {
+    "job": "matching-07",
+    "job_id": "a44fa8d57132428fa004c0310cf2ffac",
+    "unit": {
+      "case": "cheap",
+      "workers": 1,
+      "component": 0,
+      "repetition_block": 0,
+      "global_sample_indices": [
+        0,
+        1,
+        2,
+        3
+      ],
+      "seeds_per_component_sample": 387328,
+      "requests": [
+        {
+          "seed_range": {
+            "start": 30000000,
+            "count": 387328
+          }
+        }
+      ],
+      "budget": {
+        "artifact_bytes": 108125572,
+        "max_record_bytes": 5399213,
+        "per_process_output_bytes": 27061601,
+        "request_counts": [
+          387328
+        ]
+      },
+      "estimated_internal_seconds_c17_reference": {
+        "baseline": 18.97931831758203,
+        "candidate": 19.295290108154294
+      },
+      "estimated_total_engine_seconds": 191.37304212868162
+    },
+    "step": {
+      "id": "cheap-w1-c0-r0",
+      "op": "compare",
+      "mode": "jsonl",
+      "commands": {
+        "baseline": {
+          "argv": [
+            "${JOB}/artifacts/frozen/baseline/match_benchmark",
+            "{\"max_depth\":1,\"requirements\":[{\"kind\":\"ring\"}],\"auto_apply_trinket\":false}",
+            "${WORKERS}"
+          ],
+          "cwd": "work/checkouts/baseline",
+          "env": {},
+          "stdin": "",
+          "timeout_seconds": 1200,
+          "stdout": "artifacts/logs/baseline-cheap-w1-c0-r0.stdout",
+          "stderr": "artifacts/logs/baseline-cheap-w1-c0-r0.stderr",
+          "wrappers": [
+            "time"
+          ]
+        },
+        "candidate": {
+          "argv": [
+            "${JOB}/artifacts/frozen/candidate/match_benchmark",
+            "{\"max_depth\":1,\"requirements\":[{\"kind\":\"ring\"}],\"auto_apply_trinket\":false}",
+            "${WORKERS}"
+          ],
+          "cwd": "work/checkouts/candidate",
+          "env": {},
+          "stdin": "",
+          "timeout_seconds": 1200,
+          "stdout": "artifacts/logs/candidate-cheap-w1-c0-r0.stdout",
+          "stderr": "artifacts/logs/candidate-cheap-w1-c0-r0.stderr",
+          "wrappers": [
+            "time"
+          ]
+        }
+      },
+      "worker_counts": [
+        1
+      ],
+      "warmups": 1,
+      "samples": 4,
+      "requests": [
+        {
+          "seed_range": {
+            "start": 30000000,
+            "count": 387328
+          }
+        }
+      ],
+      "output": "artifacts/results/cheap-w1-c0-r0.jsonl",
+      "ready": {
+        "field": "ready",
+        "equals": true
+      }
+    },
+    "summary": {
+      "step": "cheap-w1-c0-r0",
+      "query": {
+        "auto_apply_trinket": false,
+        "max_depth": 1,
+        "requirements": [
+          {
+            "kind": "ring"
+          }
+        ]
+      },
+      "query_sha256": "4c06e5e2722e172ab5ff356efbf6e0961f9da1bfc3f77ffa60ecffeda0d2ada4",
+      "output": "artifacts/results/cheap-w1-c0-r0.jsonl",
+      "warmups": 1,
+      "samples": 4,
+      "requests": [
+        {
+          "tested": 387328,
+          "input_sha256": "086a403f364e7e83546c1552d3b4c8cbfa06912a5c3def026252ade6ae5048bb"
+        }
+      ],
+      "workers": {
+        "1": {
+          "baseline": {
+            "seconds": [
+              18.449856292,
+              18.282069959,
+              18.237070958,
+              18.196561625
+            ],
+            "wall_seconds": [
+              18.514295375,
+              18.346959709,
+              18.299573333,
+              18.25901325
+            ],
+            "tested": [
+              387328,
+              387328,
+              387328,
+              387328
+            ],
+            "seeds_per_second": 21175.427683332826
+          },
+          "candidate": {
+            "seconds": [
+              18.224118833,
+              18.201787958,
+              18.11371575,
+              18.117592208
+            ],
+            "wall_seconds": [
+              18.287488,
+              18.293806958,
+              18.176503833,
+              18.18029825
+            ],
+            "tested": [
+              387328,
+              387328,
+              387328,
+              387328
+            ],
+            "seeds_per_second": 21323.58094584576
+          },
+          "paired_changes_percent": [
+            1.2386742045998878,
+            0.4410665654673407,
+            0.6810044372038915,
+            0.4358714783586404
+          ],
+          "throughput_change_percent": 0.6996470849537806,
+          "paired_geomean_change_percent": 0.6986247022847003,
+          "minimum_internal_sample_seconds": 18.11371575
+        }
+      },
+      "ready": {
+        "link": "QgAaAAA",
+        "preferred": [],
+        "ready": true
+      }
+    }
+  }
+}

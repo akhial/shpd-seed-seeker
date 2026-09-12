@@ -1,0 +1,400 @@
+{
+  "measured_revision": "fbee876f67835d59691de49fed0f3e0f9ac27bb3",
+  "linux_checks": [
+    {
+      "name": "fmt",
+      "argv": [
+        "cargo",
+        "fmt",
+        "--all",
+        "--",
+        "--check"
+      ],
+      "started_utc": "2026-09-12T21:49:03.248607+00:00",
+      "finished_utc": "2026-09-12T21:49:04.852127+00:00",
+      "returncode": 0
+    },
+    {
+      "name": "clippy",
+      "argv": [
+        "cargo",
+        "clippy",
+        "--locked",
+        "--workspace",
+        "--exclude",
+        "shpd-seedfinder-gtk",
+        "--all-targets",
+        "--",
+        "-D",
+        "warnings"
+      ],
+      "started_utc": "2026-09-12T21:49:04.852540+00:00",
+      "finished_utc": "2026-09-12T21:49:25.783030+00:00",
+      "returncode": 0
+    },
+    {
+      "name": "release-tests",
+      "argv": [
+        "cargo",
+        "test",
+        "--locked",
+        "--workspace",
+        "--exclude",
+        "shpd-seedfinder-gtk",
+        "--release"
+      ],
+      "started_utc": "2026-09-12T21:49:25.783357+00:00",
+      "finished_utc": "2026-09-12T21:52:37.768316+00:00",
+      "returncode": 0
+    },
+    {
+      "name": "debug-tests",
+      "argv": [
+        "cargo",
+        "test",
+        "--locked",
+        "--workspace",
+        "--exclude",
+        "shpd-seedfinder-gtk"
+      ],
+      "started_utc": "2026-09-12T21:52:37.768683+00:00",
+      "finished_utc": "2026-09-12T22:03:59.126647+00:00",
+      "returncode": 0
+    },
+    {
+      "name": "service-tests",
+      "argv": [
+        "python3",
+        "tooling/benchmarks/test_services.py"
+      ],
+      "started_utc": "2026-09-12T22:03:59.127045+00:00",
+      "finished_utc": "2026-09-12T22:03:59.779923+00:00",
+      "returncode": 0
+    },
+    {
+      "name": "wasm-check",
+      "argv": [
+        "cargo",
+        "check",
+        "--locked",
+        "--release",
+        "-p",
+        "shpd-seedfinder-wasm",
+        "--target",
+        "wasm32-unknown-unknown"
+      ],
+      "started_utc": "2026-09-12T22:03:59.780337+00:00",
+      "finished_utc": "2026-09-12T22:04:08.157750+00:00",
+      "returncode": 0
+    },
+    {
+      "name": "android-arm-check",
+      "argv": [
+        "cargo",
+        "check",
+        "--locked",
+        "--release",
+        "-p",
+        "shpd-seedfinder-jni",
+        "--target",
+        "aarch64-linux-android"
+      ],
+      "started_utc": "2026-09-12T22:04:08.158235+00:00",
+      "finished_utc": "2026-09-12T22:04:17.789379+00:00",
+      "returncode": 0
+    },
+    {
+      "name": "android-x64-check",
+      "argv": [
+        "cargo",
+        "check",
+        "--locked",
+        "--release",
+        "-p",
+        "shpd-seedfinder-jni",
+        "--target",
+        "x86_64-linux-android"
+      ],
+      "started_utc": "2026-09-12T22:04:17.789775+00:00",
+      "finished_utc": "2026-09-12T22:04:25.609746+00:00",
+      "returncode": 0
+    },
+    {
+      "name": "normal-build",
+      "argv": [
+        "cargo",
+        "build",
+        "--locked",
+        "--release",
+        "-p",
+        "shpd-seedfinder-cli",
+        "-p",
+        "shpd-seedfinder-ffi",
+        "--bin",
+        "seed-seeker",
+        "--example",
+        "match_benchmark"
+      ],
+      "started_utc": "2026-09-12T22:04:25.610131+00:00",
+      "finished_utc": "2026-09-12T22:05:17.922649+00:00",
+      "returncode": 0
+    },
+    {
+      "name": "equivalence-build",
+      "argv": [
+        "cargo",
+        "build",
+        "--locked",
+        "--release",
+        "-p",
+        "shpd-seedfinder-core",
+        "--example",
+        "equivalence"
+      ],
+      "started_utc": "2026-09-12T22:05:17.929737+00:00",
+      "finished_utc": "2026-09-12T22:05:55.545490+00:00",
+      "returncode": 0
+    }
+  ],
+  "oracle": [
+    {
+      "name": "oracle-replay",
+      "argv": [
+        "python3",
+        "tooling/parity/replay_equivalence.py",
+        "/tmp/seed-perf-ae0cb0c/oracle-c02",
+        "/tmp/seed-perf-ae0cb0c/pause-20260912/candidate/equivalence",
+        "pause-fbee"
+      ],
+      "started_utc": "2026-09-12T22:06:47.682354+00:00",
+      "finished_utc": "2026-09-12T22:07:22.752525+00:00",
+      "returncode": 0
+    },
+    {
+      "name": "oracle-negative-controls",
+      "argv": [
+        "python3",
+        "tooling/parity/test_equivalence.py",
+        "--exe",
+        "/tmp/seed-perf-ae0cb0c/pause-20260912/candidate/equivalence",
+        "--oracle-archive",
+        "/tmp/seed-perf-ae0cb0c/oracle-c02/shard-0.oracle.txt.gz"
+      ],
+      "started_utc": "2026-09-12T22:07:22.752895+00:00",
+      "finished_utc": "2026-09-12T22:07:22.898659+00:00",
+      "returncode": 0
+    }
+  ],
+  "oracle_completion": {
+    "status": "complete",
+    "revision": "fbee876f67835d59691de49fed0f3e0f9ac27bb3",
+    "binary_sha256": "769921d51ef09c18253f2d0e4eb28bd9da20323b3dc3fa272bb226397ebb4ad0",
+    "unchanged": true
+  },
+  "mac_correctness": {
+    "id": "14fcaa738b2a4f1db64c5408daee058d",
+    "spec": {
+      "version": 1,
+      "project": "seedfinder",
+      "sources": {
+        "candidate": "fbee876f67835d59691de49fed0f3e0f9ac27bb3"
+      },
+      "steps": [
+        {
+          "id": "fmt",
+          "op": "exec",
+          "command": {
+            "argv": [
+              "cargo",
+              "fmt",
+              "--all",
+              "--",
+              "--check"
+            ],
+            "cwd": "work/checkouts/candidate",
+            "env": {
+              "CARGO_TARGET_DIR": "${JOB}/work/targets/candidate",
+              "RUSTFLAGS": ""
+            },
+            "stdin": "",
+            "timeout_seconds": 3600,
+            "stdout": "artifacts/logs/fmt.stdout",
+            "stderr": "artifacts/logs/fmt.stderr"
+          }
+        },
+        {
+          "id": "clippy",
+          "op": "exec",
+          "command": {
+            "argv": [
+              "cargo",
+              "clippy",
+              "--locked",
+              "--offline",
+              "--workspace",
+              "--exclude",
+              "shpd-seedfinder-gtk",
+              "--all-targets",
+              "--",
+              "-D",
+              "warnings"
+            ],
+            "cwd": "work/checkouts/candidate",
+            "env": {
+              "CARGO_TARGET_DIR": "${JOB}/work/targets/candidate",
+              "RUSTFLAGS": ""
+            },
+            "stdin": "",
+            "timeout_seconds": 3600,
+            "stdout": "artifacts/logs/clippy.stdout",
+            "stderr": "artifacts/logs/clippy.stderr"
+          }
+        },
+        {
+          "id": "test",
+          "op": "exec",
+          "command": {
+            "argv": [
+              "cargo",
+              "test",
+              "--locked",
+              "--offline",
+              "--workspace",
+              "--exclude",
+              "shpd-seedfinder-gtk",
+              "--release"
+            ],
+            "cwd": "work/checkouts/candidate",
+            "env": {
+              "CARGO_TARGET_DIR": "${JOB}/work/targets/candidate",
+              "RUSTFLAGS": ""
+            },
+            "stdin": "",
+            "timeout_seconds": 3600,
+            "stdout": "artifacts/logs/test.stdout",
+            "stderr": "artifacts/logs/test.stderr"
+          }
+        }
+      ]
+    },
+    "status": "succeeded",
+    "created": 1789250164.8682282,
+    "expires": 1789336564.8682282,
+    "started": 1789250164.8738775,
+    "finished": 1789250306.81171,
+    "worker": "macbook-pro",
+    "lease_until": 1789250364.209424,
+    "result": {
+      "frozen": {},
+      "steps_completed": 3,
+      "stop_reason": null,
+      "worker_id": "macbook-pro"
+    },
+    "artifact_sha256": "57bf90d275007b733d3f34d88d3257d3c64c43433b257655d6c171ae1e8863a5",
+    "log_bytes": 71560,
+    "has_artifact": true
+  },
+  "mac_test_summary_lines": [
+    "test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "test result: ok. 510 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 30.40s",
+    "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s",
+    "test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.27s",
+    "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s",
+    "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s",
+    "test result: ok. 2 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.19s",
+    "test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s",
+    "test result: ok. 1 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.01s",
+    "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s",
+    "test result: ok. 0 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s",
+    "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s",
+    "test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.41s",
+    "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s",
+    "test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+  ],
+  "code_ci": {
+    "baseRefName": "main",
+    "headRefOid": "fbee876f67835d59691de49fed0f3e0f9ac27bb3",
+    "isDraft": false,
+    "mergeStateStatus": "CLEAN",
+    "mergeable": "MERGEABLE",
+    "statusCheckRollup": [
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-09-12T22:00:48Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/akhial/shpd-seed-seeker/actions/runs/34721493402/job/103628112865",
+        "name": "Web",
+        "startedAt": "2026-09-12T21:59:50Z",
+        "status": "COMPLETED",
+        "workflowName": "CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-09-12T22:12:52Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/akhial/shpd-seed-seeker/actions/runs/34721493402/job/103628112899",
+        "name": "Rust",
+        "startedAt": "2026-09-12T21:59:50Z",
+        "status": "COMPLETED",
+        "workflowName": "CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-09-12T22:01:15Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/akhial/shpd-seed-seeker/actions/runs/34721493402/job/103628112850",
+        "name": "Linux",
+        "startedAt": "2026-09-12T21:59:50Z",
+        "status": "COMPLETED",
+        "workflowName": "CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-09-12T22:01:18Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/akhial/shpd-seed-seeker/actions/runs/34721493402/job/103628112837",
+        "name": "Android",
+        "startedAt": "2026-09-12T21:59:50Z",
+        "status": "COMPLETED",
+        "workflowName": "CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-09-12T22:01:37Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/akhial/shpd-seed-seeker/actions/runs/34721493402/job/103628112930",
+        "name": "macOS",
+        "startedAt": "2026-09-12T21:59:54Z",
+        "status": "COMPLETED",
+        "workflowName": "CI"
+      },
+      {
+        "__typename": "CheckRun",
+        "completedAt": "2026-09-12T22:18:31Z",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/akhial/shpd-seed-seeker/actions/runs/34721493402/job/103628112793",
+        "name": "Windows",
+        "startedAt": "2026-09-12T21:59:52Z",
+        "status": "COMPLETED",
+        "workflowName": "CI"
+      }
+    ],
+    "url": "https://github.com/akhial/shpd-seed-seeker/pull/126"
+  },
+  "mac_correctness_artifact_review": {
+    "status": "PASS",
+    "job": "14fcaa738b2a4f1db64c5408daee058d",
+    "archive_sha256": "57bf90d275007b733d3f34d88d3257d3c64c43433b257655d6c171ae1e8863a5",
+    "full_plan_and_worker_result_match_queue": true,
+    "fmt_output_empty": true,
+    "release_core_passed": 510,
+    "release_core_ignored": 1,
+    "completion_basis": "Terminal successful result with all3steps; full plan/result/manifest binding and test logs checked. No new tests executed.",
+    "audit_development_note": "Initial ad-hoc comparison expected worker-result.json to be the inner result; inspected schema showed exact status/result envelope. This script validates the entire envelope against the queue."
+  }
+}
