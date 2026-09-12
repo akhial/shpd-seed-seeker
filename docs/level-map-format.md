@@ -95,7 +95,8 @@ Unknown request fields and invalid queries/challenges are rejected.
 
 The optional `trinket` field follows scouting semantics:
 
-- Missing or `null`: resolve selection from the query's selected trinket slots.
+- Missing or `null`: resolve selection using the query's AutoTrinket policy or
+  explicit selected trinket slots, matching scouting.
 - `"none"`: explicitly disable the trinket, overriding the query.
 - A stable trinket ID: override the query with that offer.
 
@@ -192,23 +193,21 @@ the generated map.
 
 ## Source and validation
 
-Generation uses the repository's pinned RC1 engine and saved Java parity
+Generation uses the repository's pinned v4.0.0 engine and saved Java parity
 fixtures. Terrain hashes, dimensions and transitions are tested against those
 fixtures across all five regions. Tests also cover query/override selection,
 pre-brewing behaviour, repeated requests, secret revelation, source/destination
 bounds, animation wrapping and native/wasm document equivalence.
 
-The RC1 release URL recorded in `tooling/oracle-4.0/build.sh` returned 404 while
-this feature was implemented. Sprite assets and their selection tables are
-therefore explicitly pinned to source commit
-`2bb34a4e91d29c8785a9363cad6ddfe5122b1d4f`, separately from the RC1 JAR digest.
+Sprite assets and their selection tables are pinned to the v4.0.0 source commit
+`2bb34a4e91d29c8785a9363cad6ddfe5122b1d4f`. The official release JAR and its
+SHA-256 are pinned in `tooling/oracle-4.0/build.sh`.
 See [asset attribution](../crates/seedfinder-core/assets/level-map/ATTRIBUTION.md)
 for the original files and rules. Mining terrain additionally matches 36 fixtures generated from the unmodified
 v4.0.0 release JAR (both quest types, depths 12–14, three seeds, challenge masks
 0/104). Its separate JAR digest and reproduction instructions are recorded in
 [mining-map fixtures](../tooling/oracle-4.0/tests/mining-maps.md).
-Vault terrain uses the existing RC1-validated generator. No fresh Java
-rendering-parity run is claimed.
+Vault terrain uses the v4.0.0-validated generator and saved vault fixtures.
 
 The raised selectors are checked against the unmodified official v4.0.0 JAR:
 65 full-layer hashes across 13 maps cover every region, Crystal and Gnoll mines,

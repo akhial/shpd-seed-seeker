@@ -1,8 +1,8 @@
 # Raised map rendering fixtures
 
 `raised-map-visuals.expected.json` records all-cell atlas-index hashes from the
-unmodified official **v4.0.0** desktop JAR. This is separate from the generation
-engine's RC1 pin. JAR SHA-256:
+unmodified official **v4.0.0** desktop JAR, matching the generation engine's pin.
+JAR SHA-256:
 
 ```
 b3e6f9508dea1a7a32a9934e2bc18f20a9a905df5732550404294340d31c87a1

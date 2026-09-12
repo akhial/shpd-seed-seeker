@@ -80,6 +80,33 @@ fn selection_matches_scout_query_and_explicit_overrides() {
 }
 
 #[test]
+fn automatic_selection_matches_scout_and_respects_overrides() {
+    let mut request = json!({"seed":"AAA-AAA-AAA", "depth":4,
+        "query":{"auto_apply_trinket":true,
+            "requirements":[{"item":"ring_might", "upgrade":2, "max_depth":9}]}});
+    assert_eq!(
+        decode_request(&request.to_string())
+            .unwrap()
+            .selected_trinket,
+        Some(ItemId::MimicTooth)
+    );
+    request["trinket"] = "none".into();
+    assert_eq!(
+        decode_request(&request.to_string())
+            .unwrap()
+            .selected_trinket,
+        None
+    );
+    request["trinket"] = "parchment_scrap".into();
+    assert_eq!(
+        decode_request(&request.to_string())
+            .unwrap()
+            .selected_trinket,
+        Some(ItemId::ParchmentScrap)
+    );
+}
+
+#[test]
 fn selected_trinket_changes_later_maps_after_brewing_and_is_repeatable() {
     // Find an initial Mossy Clump offer; offer generation doesn't build floors.
     let seed = (0..1000)

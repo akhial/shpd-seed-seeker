@@ -4,9 +4,8 @@
 size, entrance, secret-room bounds and trap cells. It covers three seeds,
 depths 12–14, both Blacksmith variants, and challenge masks 0/104 (36 maps).
 
-These **new mining fixtures use the official v4.0.0 release**, separately from
-this directory's existing RC1 fixtures. The recorded JAR URL and SHA-256 are in
-the JSON; the RC1 download had been removed when these were generated. No game
+These mining fixtures use the **official v4.0.0 release**, matching the
+generation engine's pin. The recorded JAR URL and SHA-256 are in the JSON. No game
 classes are changed: `MiningMapOracle` invokes the existing headless bootstrap,
 forces the requested Blacksmith type, and calls `Dungeon.newLevel()` at branch
 1. There are no bones or equipped trinkets. Map API tests separately validate
