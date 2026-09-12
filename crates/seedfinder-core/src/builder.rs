@@ -229,9 +229,9 @@ fn find_free_space_inner(
         start.x.wrapping_add(max_size),
         start.y.wrapping_add(max_size),
     );
-    // The passes below rescan the collision list repeatedly. Copying the
-    // rectangles up front keeps those scans on a dense array instead of
-    // striding through the much larger `Room` structs. Only rectangles that
+    // Copying the rectangles up front lets ordering and clipping use a dense
+    // array instead of striding through the much larger `Room` structs.
+    // Only rectangles that
     // intersect the initial `space` are kept: every effect a rectangle has in
     // any pass — the `curDiff` sum, the `inside` flag, closest-collision
     // tracking, and the tie-break draw — is gated on intersecting the current
@@ -246,16 +246,20 @@ fn find_free_space_inner(
         // Grow-only: the surviving prefix is fully overwritten below, so
         // stale entries past it never get read.
         if colliding.len() < collision.len() {
-            colliding.resize(collision.len(), Rect::new(0, 0, 0, 0));
+            colliding.resize(collision.len(), Collision::default());
         }
         let kept = match collision {
-            CollisionBounds::Ids(ids) => filter_collisions(
-                ids.iter().map(|&room| rooms[room].bounds),
-                space,
-                &mut colliding,
-            ),
+            // Native searches benefit from skipping the unplaced rooms.
+            // WASM keeps the predicated loop, which benchmarks faster there.
+            CollisionBounds::Ids(ids) => {
+                filter_collisions::<{ cfg!(not(target_arch = "wasm32")) }>(
+                    ids.iter().map(|&room| rooms[room].bounds),
+                    space,
+                    &mut colliding,
+                )
+            }
             CollisionBounds::Rects(rects) => {
-                filter_collisions(rects.iter().copied(), space, &mut colliding)
+                filter_collisions::<false>(rects.iter().copied(), space, &mut colliding)
             }
         };
         free_space_from_collisions(start, &mut colliding[..kept], space, rng)
@@ -266,28 +270,141 @@ fn find_free_space_inner(
 /// scratch prefix. Which rectangles intersect is data-dependent, so the loop
 /// uses an unconditional store and a conditional length bump rather than a
 /// branch per rectangle.
-fn filter_collisions(
+fn filter_collisions<const SKIP_EMPTY: bool>(
     bounds_iter: impl Iterator<Item = Rect>,
     space: Rect,
-    out: &mut [Rect],
+    out: &mut [Collision],
 ) -> usize {
     let mut kept = 0_usize;
+    let space_nonempty = !space.is_empty();
     for bounds in bounds_iter {
+        // Initial room lists retain unplaced rooms across placement retries.
+        // Empty bounds cannot intersect, so skip their predicate and copy.
+        if SKIP_EMPTY && bounds.is_empty() {
+            continue;
+        }
         #[allow(clippy::needless_bitwise_bool)]
-        let intersects = (space.left.max(bounds.left) < space.right.min(bounds.right))
-            & (space.top.max(bounds.top) < space.bottom.min(bounds.bottom));
-        out[kept] = bounds;
+        let intersects = if SKIP_EMPTY {
+            // The earlier check proves these bounds are nonempty. Together
+            // with a nonempty window, cross-edge comparisons are sufficient.
+            space_nonempty
+                & (bounds.left < space.right)
+                & (space.left < bounds.right)
+                & (bounds.top < space.bottom)
+                & (space.top < bounds.bottom)
+        } else {
+            (space.left.max(bounds.left) < space.right.min(bounds.right))
+                & (space.top.max(bounds.top) < space.bottom.min(bounds.bottom))
+        };
+        out[kept].bounds = bounds;
         kept += usize::from(intersects);
     }
     kept
 }
 
+#[derive(Clone, Copy, Default)]
+struct Collision {
+    bounds: Rect,
+    distance: i32,
+}
+
 thread_local! {
-    static COLLIDING_SCRATCH: std::cell::RefCell<Vec<Rect>> =
+    static COLLIDING_SCRATCH: std::cell::RefCell<Vec<Collision>> =
         const { std::cell::RefCell::new(Vec::new()) };
 }
 
 fn free_space_from_collisions(
+    start: Point,
+    colliding: &mut [Collision],
+    mut space: Rect,
+    rng: &mut RandomStack,
+) -> Rect {
+    // Distance and containment depend only on the fixed start and rectangle,
+    // not on the shrinking free space. Compute them once before clipping.
+    // Containment must be checked before any tie-breaking RNG draw.
+    for collision in colliding.iter_mut() {
+        let bounds = collision.bounds;
+        if start.x > bounds.left
+            && start.x < bounds.right
+            && start.y > bounds.top
+            && start.y < bounds.bottom
+        {
+            space.set(start.x, start.y, start.x, start.y);
+            return space;
+        }
+        let x = bounds
+            .left
+            .wrapping_sub(start.x)
+            .max(0)
+            .wrapping_add(start.x.wrapping_sub(bounds.right).max(0));
+        let y = bounds
+            .top
+            .wrapping_sub(start.y)
+            .max(0)
+            .wrapping_add(start.y.wrapping_sub(bounds.bottom).max(0));
+        collision.distance = squared_point_length(x, y);
+    }
+    // The closest remaining collision is the first still-intersecting one
+    // in this stable distance order: neither its distance nor tie order can
+    // change as the free space shrinks.
+    colliding.sort_by_key(|collision| collision.distance);
+    for collision in colliding {
+        let bounds = collision.bounds;
+        if collision.distance == i32::MAX
+            || space.left.max(bounds.left) >= space.right.min(bounds.right)
+            || space.top.max(bounds.top) >= space.bottom.min(bounds.bottom)
+        {
+            continue;
+        }
+        let mut width_difference = i32::MAX;
+        if bounds.left >= start.x {
+            width_difference = space
+                .right
+                .wrapping_sub(bounds.left)
+                .wrapping_mul(space.height().wrapping_add(1));
+        } else if bounds.right <= start.x {
+            width_difference = bounds
+                .right
+                .wrapping_sub(space.left)
+                .wrapping_mul(space.height().wrapping_add(1));
+        }
+
+        let mut height_difference = i32::MAX;
+        if bounds.top >= start.y {
+            height_difference = space
+                .bottom
+                .wrapping_sub(bounds.top)
+                .wrapping_mul(space.width().wrapping_add(1));
+        } else if bounds.bottom <= start.y {
+            height_difference = bounds
+                .bottom
+                .wrapping_sub(space.top)
+                .wrapping_mul(space.width().wrapping_add(1));
+        }
+
+        let reduce_width = width_difference < height_difference
+            || (width_difference == height_difference && rng.int_bound(2) == 0);
+        if reduce_width {
+            if bounds.left >= start.x && bounds.left < space.right {
+                space.right = bounds.left;
+            }
+            if bounds.right <= start.x && bounds.right > space.left {
+                space.left = bounds.right;
+            }
+        } else {
+            if bounds.top >= start.y && bounds.top < space.bottom {
+                space.bottom = bounds.top;
+            }
+            if bounds.bottom <= start.y && bounds.bottom > space.top {
+                space.top = bounds.bottom;
+            }
+        }
+    }
+    space
+}
+
+#[cfg(test)]
+fn free_space_from_collisions_reference(
     start: Point,
     colliding: &mut [Rect],
     mut space: Rect,
@@ -408,6 +525,61 @@ fn free_space_from_collisions(
 
         if count == 0 {
             return space;
+        }
+    }
+}
+
+#[cfg(test)]
+mod collision_differential_tests {
+    use super::*;
+
+    fn compare(start: Point, bounds: &[Rect], max_size: i32, seed: i64) {
+        let space = Rect::new(
+            start.x - max_size,
+            start.y - max_size,
+            start.x + max_size,
+            start.y + max_size,
+        );
+        let mut collisions = vec![Collision::default(); bounds.len()];
+        let count = filter_collisions::<true>(bounds.iter().copied(), space, &mut collisions);
+        let mut reference: Vec<_> = collisions[..count].iter().map(|c| c.bounds).collect();
+        let mut actual_rng = RandomStack::with_base_seed(seed);
+        let mut expected_rng = actual_rng.clone();
+        let expected =
+            free_space_from_collisions_reference(start, &mut reference, space, &mut expected_rng);
+        let actual =
+            free_space_from_collisions(start, &mut collisions[..count], space, &mut actual_rng);
+        assert_eq!(actual, expected, "start {start:?}, bounds {bounds:?}");
+        assert_eq!(
+            actual_rng.current_generator(),
+            expected_rng.current_generator(),
+            "RNG for {bounds:?}"
+        );
+    }
+
+    #[test]
+    fn ordered_collisions_preserve_clipping_and_rng() {
+        // A boundary collision must not consume a tie draw before a later
+        // containing rectangle proves that no free space exists.
+        compare(
+            Point::new(0, 0),
+            &[Rect::new(0, 0, 5, 5), Rect::new(-1, -1, 1, 1)],
+            10,
+            42,
+        );
+        let mut rng = RandomStack::with_base_seed(20_260_912);
+        for count in 0..64 {
+            for _ in 0..256 {
+                let start = Point::new(rng.int_range(-30, 30), rng.int_range(-30, 30));
+                let bounds: Vec<_> = (0..count)
+                    .map(|_| {
+                        let x = rng.int_range(-40, 40);
+                        let y = rng.int_range(-40, 40);
+                        Rect::new(x, y, x + rng.int_range(0, 20), y + rng.int_range(0, 20))
+                    })
+                    .collect();
+                compare(start, &bounds, rng.int_range(1, 30), rng.long());
+            }
         }
     }
 }
@@ -1768,5 +1940,148 @@ mod tests {
             previous = root;
         }
         assert!(merged, "the bound is far looser than documented");
+    }
+    #[test]
+    fn empty_collision_skip_preserves_filtered_prefix_at_signed_extremes() {
+        let values = [i32::MIN, -1, 0, 1, i32::MAX];
+        let mut rectangles = Vec::new();
+        for left in values {
+            for right in values {
+                for top in values {
+                    for bottom in values {
+                        rectangles.push(Rect::new(left, top, right, bottom));
+                    }
+                }
+            }
+        }
+        let mut out = vec![Collision::default(); rectangles.len()];
+        for &space in &rectangles {
+            let expected: Vec<_> = rectangles
+                .iter()
+                .copied()
+                .filter(|bounds| {
+                    (space.left.max(bounds.left) < space.right.min(bounds.right))
+                        && (space.top.max(bounds.top) < space.bottom.min(bounds.bottom))
+                })
+                .collect();
+            let kept = filter_collisions::<true>(rectangles.iter().copied(), space, &mut out);
+            assert_eq!(kept, expected.len());
+            assert!(
+                out[..kept]
+                    .iter()
+                    .map(|collision| collision.bounds)
+                    .eq(expected)
+            );
+        }
+        // Reuse a larger buffer with decreasing, empty, and growing lists.
+        for length in [625, 0, 1, 65, 2, 512, 0, 4] {
+            let input = &rectangles[..length];
+            let space = Rect::new(-2, -2, 2, 2);
+            let expected: Vec<_> = input
+                .iter()
+                .copied()
+                .filter(|bounds| {
+                    (space.left.max(bounds.left) < space.right.min(bounds.right))
+                        && (space.top.max(bounds.top) < space.bottom.min(bounds.bottom))
+                })
+                .collect();
+            let kept = filter_collisions::<true>(input.iter().copied(), space, &mut out);
+            assert_eq!(kept, expected.len());
+            assert!(
+                out[..kept]
+                    .iter()
+                    .map(|collision| collision.bounds)
+                    .eq(expected)
+            );
+        }
+    }
+
+    #[test]
+    fn scratch_reuse_preserves_order_and_both_collision_paths() {
+        let corners = [
+            Rect::new(0, 0, 5, 5),
+            Rect::new(-5, -5, 0, 0),
+            Rect::new(0, -5, 5, 0),
+            Rect::new(-5, 0, 0, 5),
+            Rect::new(-2, 3, 2, 5),
+        ];
+        for seed in 0..64 {
+            for count in [65, 0, 1, 21, 8, 64, 3] {
+                let mut bounds: Vec<_> = (0..count)
+                    .map(|index| match index % 9 {
+                        5 => Rect::new(50, 50, 52, 52),
+                        6 => Rect::new(2, 2, 2, 2),
+                        _ => corners[index % corners.len()],
+                    })
+                    .collect();
+                if count == 21 {
+                    bounds[10] = Rect::new(-1, -1, 1, 1);
+                }
+                if count == 1 {
+                    bounds[0] = Rect::new(50, 50, 52, 52);
+                }
+                if seed % 2 == 0 {
+                    bounds.reverse();
+                }
+                let mut rooms: Vec<_> = bounds
+                    .iter()
+                    .map(|&bounds| {
+                        let mut room = Room::connection(ConnectionRoomKind::Maze);
+                        room.bounds = bounds;
+                        room
+                    })
+                    .collect();
+                rooms.push(Room::connection(ConnectionRoomKind::Maze));
+                let ids: Vec<_> = (0..count).collect();
+                for max_size in [8, 1_500_000_000] {
+                    let start = Point::new(0, 0);
+                    let space = Rect::new(-max_size, -max_size, max_size, max_size);
+                    let mut reference = bounds.clone();
+                    let mut expected_rng = RandomStack::with_base_seed(seed);
+                    expected_rng.push(seed + 123);
+                    let expected = free_space_from_collisions_reference(
+                        start,
+                        &mut reference,
+                        space,
+                        &mut expected_rng,
+                    );
+                    for collision in [CollisionBounds::Ids(&ids), CollisionBounds::Rects(&bounds)] {
+                        let mut random = RandomStack::with_base_seed(seed);
+                        random.push(seed + 123);
+                        assert_eq!(
+                            find_free_space_inner(start, &rooms, collision, max_size, &mut random),
+                            expected
+                        );
+                        assert_eq!(random.current_generator(), expected_rng.current_generator());
+                        random.pop();
+                        let mut untouched = RandomStack::with_base_seed(seed);
+                        assert_eq!(random.current_generator(), untouched.current_generator());
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn filtering_preserves_invalid_id_panic_and_releases_scratch() {
+        let mut room = Room::connection(ConnectionRoomKind::Maze);
+        room.bounds = Rect::new(-1, -1, 1, 1);
+        let rooms = [room];
+        let mut random = RandomStack::with_base_seed(42);
+        random.push(123);
+        let expected = random.current_generator().clone();
+        let failed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            find_free_space(Point::new(0, 0), &rooms, &[0, 1], 8, &mut random)
+        }));
+        assert!(failed.is_err());
+        assert_eq!(random.current_generator(), &expected);
+        assert_eq!(
+            find_free_space(Point::new(0, 0), &rooms, &[0, 0], 8, &mut random),
+            Rect::new(0, 0, 0, 0)
+        );
+        assert_eq!(random.current_generator(), &expected);
+        random.pop();
+        let mut untouched = RandomStack::with_base_seed(42);
+        assert_eq!(random.current_generator(), untouched.current_generator());
     }
 }

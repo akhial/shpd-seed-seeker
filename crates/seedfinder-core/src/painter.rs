@@ -63,6 +63,14 @@ impl std::error::Error for PaintError {}
 
 /// Region- and class-specific room behavior called by [`RegularPainter`].
 pub trait RoomPaintDispatch {
+    /// Allow water, grass, and trap painting to check map and patch eligibility
+    /// before calling the room predicate, skipping it for rejected cells.
+    /// Opt in only when these predicates have no observable side effects and
+    /// all room points can be indexed before the predicate is evaluated.
+    fn can_skip_ineligible_terrain(&self) -> bool {
+        false
+    }
+
     /// Exact concrete `Room.paint(Level)` implementation. This is called only
     /// after all currently reachable null doors for `room` have been placed.
     fn paint_room(
@@ -313,14 +321,19 @@ pub fn generate_patch(
     let length = usize::try_from(length_i32).expect("patch dimensions must be non-negative");
     let mut output = vec![false; length];
     #[allow(clippy::cast_precision_loss)]
-    let mut fill_difference = round_f32(length_i32 as f32 * fill).wrapping_neg();
+    let target_fill = round_f32(length_i32 as f32 * fill);
+    let mut fill_difference = target_fill.wrapping_neg();
 
     if force_fill_rate && clustering > 0 {
         fill += (0.5_f32 - fill) * 0.5_f32;
     }
 
     let generator = rng.current_generator();
-    fill_difference = fill_difference.wrapping_add(generator.fill_f32_below(&mut output, fill));
+    if (2..=64).contains(&width) && clustering > 0 {
+        generator.fill_f32_below_uncounted(&mut output, fill);
+    } else {
+        fill_difference = fill_difference.wrapping_add(generator.fill_f32_below(&mut output, fill));
+    }
 
     let width_usize = usize::try_from(width).expect("patch width is non-negative");
     let needs_correction = force_fill_rate && width.min(height) > 2;
@@ -337,16 +350,19 @@ pub fn generate_patch(
         if clustering > 0 {
             let mut next_rows = vec![0_u64; height_usize];
             for _ in 0..clustering {
-                fill_difference = fill_difference.wrapping_add(clustering_pass_bits(
-                    &rows,
-                    &mut next_rows,
-                    width_usize,
-                    height_usize,
-                ));
+                clustering_pass_bits(&rows, &mut next_rows, width_usize, height_usize);
                 std::mem::swap(&mut rows, &mut next_rows);
             }
         }
         if needs_correction {
+            // Per-pass gains and losses telescope to the final population
+            // minus the requested fill. Count only once, after smoothing.
+            if clustering > 0 {
+                let filled = rows.iter().fold(0_i32, |sum, row| {
+                    sum.wrapping_add(i32::try_from(row.count_ones()).expect("at most 64 cells"))
+                });
+                fill_difference = filled.wrapping_sub(target_fill);
+            }
             correct_fill_bits(&mut rows, width, height, fill_difference, generator);
         }
         for (bits, cells) in rows.iter().zip(output.chunks_exact_mut(width_usize)) {
@@ -488,8 +504,7 @@ fn correct_fill_bits(
 /// "at least half of the in-bounds 3x3 neighbourhood filled" rule becomes a
 /// per-plane comparison against the row-count-dependent threshold. The two
 /// edge columns see only a 2-wide window, so they are patched in scalar form.
-/// Returns the signed change in filled cells, exactly like [`clustering_pass`].
-fn clustering_pass_bits(rows: &[u64], next_rows: &mut [u64], width: usize, height: usize) -> i32 {
+fn clustering_pass_bits(rows: &[u64], next_rows: &mut [u64], width: usize, height: usize) {
     let row_mask = if width == 64 {
         u64::MAX
     } else {
@@ -497,7 +512,6 @@ fn clustering_pass_bits(rows: &[u64], next_rows: &mut [u64], width: usize, heigh
     };
     // Bits 1..=width-2: the columns with a full 3-wide window.
     let interior_mask = row_mask & !1 & !(1 << (width - 1));
-    let mut delta = 0_i32;
     for y in 0..height {
         let above = if y > 0 { rows[y - 1] } else { 0 };
         let mid = rows[y];
@@ -539,14 +553,8 @@ fn clustering_pass_bits(rows: &[u64], next_rows: &mut [u64], width: usize, heigh
             new_row |= 1 << (width - 1);
         }
 
-        #[allow(clippy::cast_possible_wrap)]
-        {
-            delta += (new_row & !mid).count_ones() as i32;
-            delta -= (mid & !new_row).count_ones() as i32;
-        }
         next_rows[y] = new_row;
     }
-    delta
 }
 
 /// One smoothing pass of [`generate_patch`]'s cellular automaton, written with
@@ -773,13 +781,18 @@ impl RegularPainter {
             true,
             rng,
         );
+        let can_skip = dispatch.can_skip_ineligible_terrain();
         for &room in order {
             for point in rooms[room].bounds.points() {
-                if dispatch.can_place_water(level, rooms, room, point) {
-                    let cell = level.point_to_cell(point);
-                    if lake[cell] && level.map.cells[cell] == terrain::EMPTY {
-                        level.map.cells[cell] = terrain::WATER;
-                    }
+                if !can_skip && !dispatch.can_place_water(level, rooms, room, point) {
+                    continue;
+                }
+                let cell = level.point_to_cell(point);
+                if lake[cell]
+                    && level.map.cells[cell] == terrain::EMPTY
+                    && (!can_skip || dispatch.can_place_water(level, rooms, room, point))
+                {
+                    level.map.cells[cell] = terrain::WATER;
                 }
             }
         }
@@ -802,13 +815,18 @@ impl RegularPainter {
             rng,
         );
         let mut grass_cells = Vec::new();
+        let can_skip = dispatch.can_skip_ineligible_terrain();
         for &room in order {
             for point in rooms[room].bounds.points() {
-                if dispatch.can_place_grass(level, rooms, room, point) {
-                    let cell = level.point_to_cell(point);
-                    if grass[cell] && level.map.cells[cell] == terrain::EMPTY {
-                        grass_cells.push(cell);
-                    }
+                if !can_skip && !dispatch.can_place_grass(level, rooms, room, point) {
+                    continue;
+                }
+                let cell = level.point_to_cell(point);
+                if grass[cell]
+                    && level.map.cells[cell] == terrain::EMPTY
+                    && (!can_skip || dispatch.can_place_grass(level, rooms, room, point))
+                {
+                    grass_cells.push(cell);
                 }
             }
         }
@@ -857,13 +875,17 @@ impl RegularPainter {
         rng: &mut RandomStack,
     ) {
         let mut valid_cells = Vec::new();
+        let can_skip = dispatch.can_skip_ineligible_terrain();
         for &room in order {
             for point in rooms[room].bounds.points() {
-                if dispatch.can_place_trap(level, rooms, room, point) {
-                    let cell = level.point_to_cell(point);
-                    if level.map.cells[cell] == terrain::EMPTY {
-                        valid_cells.push(cell);
-                    }
+                if !can_skip && !dispatch.can_place_trap(level, rooms, room, point) {
+                    continue;
+                }
+                let cell = level.point_to_cell(point);
+                if level.map.cells[cell] == terrain::EMPTY
+                    && (!can_skip || dispatch.can_place_trap(level, rooms, room, point))
+                {
+                    valid_cells.push(cell);
                 }
             }
         }
@@ -1448,5 +1470,305 @@ mod tests {
         assert_eq!(level.map.cells[level.map.cell(4, 1)], terrain::EMPTY);
         assert_eq!(level.map.cells[level.map.cell(4, 3)], terrain::EMPTY);
         assert_eq!(level.map.cells[level.map.cell(4, 4)], terrain::WALL);
+    }
+}
+
+#[cfg(test)]
+mod patch_differential_tests {
+    use super::*;
+
+    // Straight scalar neighbourhood and correction loops, independent of
+    // the bit-row representation used by production smoothing.
+    fn reference(
+        width: i32,
+        height: i32,
+        mut fill: f32,
+        clustering: i32,
+        force: bool,
+        rng: &mut RandomStack,
+    ) -> Vec<bool> {
+        let length = width * height;
+        #[allow(clippy::cast_precision_loss)]
+        let mut difference = round_f32(length as f32 * fill).wrapping_neg();
+        if force && clustering > 0 {
+            fill += (0.5_f32 - fill) * 0.5_f32;
+        }
+        let mut cells: Vec<_> = (0..length).map(|_| rng.float() < fill).collect();
+        difference += i32::try_from(cells.iter().filter(|&&cell| cell).count()).unwrap();
+        for _ in 0..clustering {
+            let old = cells.clone();
+            for y in 0..height {
+                for x in 0..width {
+                    let mut count = 0;
+                    let mut total = 0;
+                    for ny in (y - 1).max(0)..=(y + 1).min(height - 1) {
+                        for nx in (x - 1).max(0)..=(x + 1).min(width - 1) {
+                            count += i32::from(old[usize::try_from(nx + ny * width).unwrap()]);
+                            total += 1;
+                        }
+                    }
+                    let index = usize::try_from(x + y * width).unwrap();
+                    cells[index] = 2 * count >= total;
+                    difference += i32::from(cells[index]) - i32::from(old[index]);
+                }
+            }
+        }
+        if force && width.min(height) > 2 {
+            let growing = difference < 0;
+            while difference != 0 {
+                let mut tries = 0;
+                let cell = loop {
+                    let x = rng.int_between(1, width - 1);
+                    let y = rng.int_between(1, height - 1);
+                    let cell = x + y * width;
+                    tries += 1;
+                    if cells[usize::try_from(cell).unwrap()] == growing || tries * 10 >= length {
+                        break cell;
+                    }
+                };
+                for offset in [
+                    -width - 1,
+                    -width,
+                    -width + 1,
+                    -1,
+                    0,
+                    1,
+                    width - 1,
+                    width,
+                    width + 1,
+                ] {
+                    if difference == 0 {
+                        break;
+                    }
+                    let index = usize::try_from(cell + offset).unwrap();
+                    if cells[index] != growing {
+                        cells[index] = growing;
+                        difference += if growing { 1 } else { -1 };
+                    }
+                }
+            }
+        }
+        cells
+    }
+
+    #[test]
+    fn patches_preserve_scalar_cells_and_rng() {
+        for (width, height) in [
+            (0, 0),
+            (1, 1),
+            (1, 9),
+            (2, 7),
+            (3, 3),
+            (5, 9),
+            (17, 11),
+            (17, 79),
+            (63, 5),
+            (64, 1),
+            (64, 2),
+            (64, 64),
+            (65, 9),
+            (79, 13),
+        ] {
+            for fill in [
+                0.0,
+                0.03,
+                0.25,
+                f32::from_bits(0.5_f32.to_bits() - 1),
+                0.5,
+                f32::from_bits(0.5_f32.to_bits() + 1),
+                0.83,
+                1.0,
+            ] {
+                for clustering in [-1, 0, 1, 3] {
+                    for force in [false, true] {
+                        for seed in 0..4 {
+                            let mut actual_rng = RandomStack::with_base_seed(seed);
+                            let mut expected_rng = actual_rng.clone();
+                            let expected = reference(
+                                width,
+                                height,
+                                fill,
+                                clustering,
+                                force,
+                                &mut expected_rng,
+                            );
+                            let actual = generate_patch(
+                                width,
+                                height,
+                                fill,
+                                clustering,
+                                force,
+                                &mut actual_rng,
+                            );
+                            assert_eq!(
+                                actual, expected,
+                                "{width}x{height}, fill {fill}, clustering {clustering}, force {force}, seed {seed}"
+                            );
+                            assert_eq!(
+                                actual_rng.long(),
+                                expected_rng.long(),
+                                "RNG {width}x{height}, fill {fill}, clustering {clustering}, force {force}, seed {seed}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod terrain_filter_tests {
+    use std::cell::RefCell;
+
+    use super::{RegularPainter, RoomPaintDispatch};
+    use crate::geometry::{Point, Rect, terrain};
+    use crate::level::{Feeling, Level, TrapKind, TrapSpec};
+    use crate::rng::RandomStack;
+    use crate::room::{ConnectionRoomKind, Room, RoomId};
+
+    struct PureDispatch<const SKIP: bool>;
+
+    impl<const SKIP: bool> RoomPaintDispatch for PureDispatch<SKIP> {
+        fn can_skip_ineligible_terrain(&self) -> bool {
+            SKIP
+        }
+        fn paint_room(&mut self, _: &mut Level, _: &mut [Room], _: RoomId, _: &mut RandomStack) {
+            unreachable!()
+        }
+        fn can_place_water(&self, _: &Level, _: &[Room], _: RoomId, point: Point) -> bool {
+            (point.x + point.y) % 3 != 0
+        }
+        fn can_place_grass(&self, _: &Level, _: &[Room], _: RoomId, point: Point) -> bool {
+            (point.x + 2 * point.y) % 4 != 0
+        }
+        fn can_place_trap(&self, _: &Level, _: &[Room], _: RoomId, point: Point) -> bool {
+            (point.x + point.y) % 5 != 0
+        }
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)] // Keep setup and each active-stream comparison together.
+    fn reordered_eligibility_preserves_each_paint_pass_and_active_rng() {
+        for seed in 0..128 {
+            for feeling in [Feeling::None, Feeling::Traps] {
+                let mut rooms = vec![Room::connection(ConnectionRoomKind::Tunnel); 2];
+                rooms[0].bounds = Rect::new(1, 1, 11, 9);
+                rooms[1].bounds = Rect::new(6, 1, 16, 9);
+                // Overlapping rooms and repeated visits make candidate ordering
+                // and duplicates observable in grass and trap draws.
+                let order = [1, 0, 1];
+                let mut actual = Level::new(4, feeling);
+                actual.set_size(18, 11);
+                for y in 1..10 {
+                    for x in 1..17 {
+                        let cell = actual.point_to_cell(Point::new(x, y));
+                        actual.map.cells[cell] = if (x + 3 * y) % 7 == 0 {
+                            terrain::WALL
+                        } else {
+                            terrain::EMPTY
+                        };
+                        actual.heap_cells[cell] = cell % 11 == 0;
+                        actual.mob_cells[cell] = cell % 13 == 0;
+                    }
+                }
+                let mut expected = actual.clone();
+                let mut rng = RandomStack::with_base_seed(seed);
+                rng.push(seed.wrapping_mul(17));
+                let mut reference_rng = rng.clone();
+                let mut painter = RegularPainter::default()
+                    .set_water(0.3, 3)
+                    .set_grass(0.6, 2)
+                    .set_traps(
+                        13,
+                        vec![
+                            TrapSpec::new(TrapKind::WornDart),
+                            TrapSpec::new(TrapKind::Gateway).avoids_hallways(),
+                        ],
+                        vec![1.0, 1.0],
+                    )
+                    .set_revealed_trap_chance(0.4);
+                let mut reference = painter.clone();
+                painter.paint_water(&mut actual, &rooms, &order, &PureDispatch::<true>, &mut rng);
+                reference.paint_water(
+                    &mut expected,
+                    &rooms,
+                    &order,
+                    &PureDispatch::<false>,
+                    &mut reference_rng,
+                );
+                assert_eq!(actual, expected, "water seed {seed}");
+                assert_eq!(rng.current_generator(), reference_rng.current_generator());
+                painter.paint_grass(&mut actual, &rooms, &order, &PureDispatch::<true>, &mut rng);
+                reference.paint_grass(
+                    &mut expected,
+                    &rooms,
+                    &order,
+                    &PureDispatch::<false>,
+                    &mut reference_rng,
+                );
+                assert_eq!(actual, expected, "grass seed {seed}");
+                assert_eq!(rng.current_generator(), reference_rng.current_generator());
+                painter.paint_traps(&mut actual, &rooms, &order, &PureDispatch::<true>, &mut rng);
+                reference.paint_traps(
+                    &mut expected,
+                    &rooms,
+                    &order,
+                    &PureDispatch::<false>,
+                    &mut reference_rng,
+                );
+                assert_eq!(actual, expected, "traps seed {seed}");
+                assert_eq!(painter, reference);
+                assert_eq!(rng.current_generator(), reference_rng.current_generator());
+            }
+        }
+    }
+
+    #[derive(Default)]
+    struct RejectDispatch(RefCell<Vec<(u8, RoomId, Point)>>);
+
+    impl RoomPaintDispatch for RejectDispatch {
+        fn paint_room(&mut self, _: &mut Level, _: &mut [Room], _: RoomId, _: &mut RandomStack) {
+            unreachable!()
+        }
+        fn can_place_water(&self, _: &Level, _: &[Room], room: RoomId, point: Point) -> bool {
+            self.0.borrow_mut().push((0, room, point));
+            false
+        }
+        fn can_place_grass(&self, _: &Level, _: &[Room], room: RoomId, point: Point) -> bool {
+            self.0.borrow_mut().push((1, room, point));
+            false
+        }
+        fn can_place_trap(&self, _: &Level, _: &[Room], room: RoomId, point: Point) -> bool {
+            self.0.borrow_mut().push((2, room, point));
+            false
+        }
+    }
+
+    #[test]
+    fn default_dispatch_preserves_callbacks_before_rejected_cell_indexing() {
+        let dispatch = RejectDispatch::default();
+        let object: &dyn RoomPaintDispatch = &dispatch;
+        assert!(!object.can_skip_ineligible_terrain());
+        let mut rooms = vec![Room::connection(ConnectionRoomKind::Tunnel); 2];
+        rooms[0].bounds = Rect::new(-3, -2, 2, 1);
+        rooms[1].bounds = Rect::new(7, 7, 10, 10);
+        let order = [1, 0];
+        let mut level = Level::new(1, Feeling::None);
+        level.set_size(4, 4);
+        let mut painter = RegularPainter::default();
+        let mut rng = RandomStack::with_base_seed(0);
+        painter.paint_water(&mut level, &rooms, &order, &dispatch, &mut rng);
+        painter.paint_grass(&mut level, &rooms, &order, &dispatch, &mut rng);
+        painter.paint_traps(&mut level, &rooms, &order, &dispatch, &mut rng);
+        let mut expected = Vec::new();
+        for pass in 0..3 {
+            for &room in &order {
+                for point in rooms[room].bounds.points() {
+                    expected.push((pass, room, point));
+                }
+            }
+        }
+        assert_eq!(*dispatch.0.borrow(), expected);
     }
 }

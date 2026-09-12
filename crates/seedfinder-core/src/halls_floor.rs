@@ -706,6 +706,10 @@ struct HallsCompositeDispatcher<'a, 's> {
 }
 
 impl RoomPaintDispatch for HallsCompositeDispatcher<'_, '_> {
+    fn can_skip_ineligible_terrain(&self) -> bool {
+        true
+    }
+
     fn paint_room(
         &mut self,
         level: &mut Level,

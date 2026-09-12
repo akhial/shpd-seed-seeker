@@ -23,6 +23,9 @@
 //!   +4/+5 weapons, and because the player carries exactly one item out of
 //!   the vault, both sources together are one mutually exclusive choice —
 //!   one [`Quest::Imp`] pick.
+//! - Ordinary equipment follows the pinned floor-set tier distribution: tier
+//!   two ends at depth 9 and tier three at 19. Shop and vault inventories are
+//!   separate; both can still supply low-tier equipment after those limits.
 //! - Every quest resolves inside a fixed depth window (Ghost 2–4, Wandmaker
 //!   7–9, Blacksmith 12–14, Imp 17–19) and spawns at most once per run, with
 //!   the spawn forced on the window's final floor.
@@ -37,7 +40,7 @@
 //! consumable or torch, so there is no challenge-dependent availability bound
 //! to apply here. Its RNG knock-on effects are handled by generation itself.
 
-use crate::catalog::{ItemKind, WeaponCategory};
+use crate::catalog::{ItemId, ItemKind, WeaponCategory};
 use crate::model::{ItemSource, WorldItem};
 use crate::query::{EffectRequirement, Requirement, SearchQuery, UpgradeRequirement};
 use crate::quests::{QuestSummary, WandmakerQuestType};
@@ -229,8 +232,175 @@ fn effect_reachable(
     }
 }
 
+/// Whether a tier can satisfy both the named identity and the tier filter.
+fn can_match_tier(requirement: &Requirement, tier: u8) -> bool {
+    requirement.tier.matches(Some(tier))
+        && requirement
+            .item
+            .is_none_or(|id| crate::catalog::item(id).tier == Some(tier))
+}
+
+/// Exact equipment rows assigned by `VaultEquipmentLoot::setup_tier`.
+/// Keep disjoint upgrade choices separate: their gaps are not intervals.
+fn vault_inventory_reachable(requirement: &Requirement) -> bool {
+    const MELEE: &[(u8, u8)] = &[(2, 0), (2, 2), (3, 1), (3, 3), (4, 2), (4, 4), (5, 3)];
+    const THROWN_OR_ARMOR: &[(u8, u8)] = &[(2, 0), (3, 1), (4, 2), (5, 3)];
+    let row_matches = |&(tier, upgrade): &(u8, u8)| {
+        can_match_tier(requirement, tier)
+            && upgrade_reachable(requirement.upgrade, upgrade, upgrade)
+            && effect_reachable(
+                requirement.effect,
+                if upgrade == 0 {
+                    EffectPolicy::Never
+                } else {
+                    EffectPolicy::GoodOnly
+                },
+                requirement.require_uncursed,
+            )
+    };
+    match requirement.kind {
+        ItemKind::Weapon => {
+            let category_matches = |category| {
+                requirement
+                    .weapon_category
+                    .is_none_or(|wanted| wanted == category)
+                    && requirement
+                        .item
+                        .is_none_or(|id| id.weapon_category() == Some(category))
+            };
+            (category_matches(WeaponCategory::Melee) && MELEE.iter().any(row_matches))
+                || (category_matches(WeaponCategory::Thrown)
+                    && THROWN_OR_ARMOR.iter().any(row_matches))
+        }
+        ItemKind::Armor => THROWN_OR_ARMOR.iter().any(row_matches),
+        _ => true,
+    }
+}
+
+/// Whether the pinned floor-set distribution can select a matching tier.
+fn floor_set_supports_requirement(requirement: &Requirement, weights: &[f32; 5]) -> bool {
+    weights
+        .iter()
+        .zip(1_u8..=5)
+        .any(|(&weight, tier)| weight > 0.0 && can_match_tier(requirement, tier))
+}
+
+/// Last depth at which this source can first supply a matching item.
+/// Shop stock and quest inventories have their own generation rules; only
+/// ordinary sources share the current-or-higher floor-set tier distribution.
+fn source_generation_deadline(
+    requirement: &Requirement,
+    source: ItemSource,
+    limit: u8,
+) -> Option<u8> {
+    if requirement.level_sum.is_some()
+        || !matches!(requirement.kind, ItemKind::Weapon | ItemKind::Armor)
+    {
+        return Some(limit);
+    }
+    let distributions = &crate::generator::FLOOR_SET_TIER_PROBABILITIES;
+    match source {
+        // Smith rewards explicitly use floor set three for all equipment.
+        ItemSource::BlacksmithReward => {
+            floor_set_supports_requirement(requirement, &distributions[3]).then_some(limit)
+        }
+        ItemSource::Heap
+        | ItemSource::Chest
+        | ItemSource::LockedChest
+        | ItemSource::CrystalChest
+        | ItemSource::Tomb
+        | ItemSource::Skeleton
+        | ItemSource::SacrificialFire
+        | ItemSource::Mimic
+        | ItemSource::GoldenMimic
+        | ItemSource::CrystalMimic
+        | ItemSource::Statue
+        | ItemSource::ArmoredStatue => distributions
+            .iter()
+            .rposition(|weights| floor_set_supports_requirement(requirement, weights))
+            .map(|floor_set| {
+                let last_depth = u8::try_from(5 * floor_set + 4)
+                    .expect("five floor sets end at depths four through twenty-four");
+                limit.min(last_depth)
+            }),
+        // In particular, tier-two tipped darts remain possible in late shops,
+        // and the Vault has fixed tier-two and tier-three equipment rows.
+        _ => Some(limit),
+    }
+}
+
+/// Narrow the kind-level envelope using the pinned Imp and vault inventories.
+/// These restrictions cannot add sources, change effects, or change the RNG.
+fn requirement_source_profile(
+    requirement: &Requirement,
+    source: ItemSource,
+) -> Option<(u8, u8, EffectPolicy)> {
+    let profile = source_profile(source, requirement.kind, requirement.weapon_category)?;
+    // Sum members are optional. Keep their conservative source model until
+    // their shared contribution is considered separately by the planner.
+    if requirement.level_sum.is_some() {
+        return Some(profile);
+    }
+    if source == ItemSource::VaultTreasure && !vault_inventory_reachable(requirement) {
+        return None;
+    }
+    let (mut low, mut high, policy) = profile;
+    match (source, requirement.kind) {
+        (ItemSource::VaultTreasure, ItemKind::Wand | ItemKind::Ring) => {
+            // VaultEquipmentLoot::setup_tier rerolls these identities.
+            if requirement.item.is_some_and(|id| {
+                matches!(
+                    id,
+                    ItemId::WandRegrowth
+                        | ItemId::WandTransfusion
+                        | ItemId::WandCorruption
+                        | ItemId::RingWealth
+                        | ItemId::RingMight
+                        | ItemId::RingForce
+                )
+            }) {
+                return None;
+            }
+        }
+        (ItemSource::VaultTreasure, ItemKind::Weapon) => {
+            // The only treasure above +3 is a tier-four melee weapon.
+            let can_match_melee = requirement.weapon_category != Some(WeaponCategory::Thrown)
+                && requirement
+                    .item
+                    .is_none_or(|id| id.weapon_category() == Some(WeaponCategory::Melee));
+            if !can_match_melee || !can_match_tier(requirement, 4) {
+                high = 3;
+            }
+        }
+        (ItemSource::ImpReward, ItemKind::Weapon) => {
+            // The final options pair tier four (+3..+5) with tier five (+2..+4).
+            match (
+                can_match_tier(requirement, 4),
+                can_match_tier(requirement, 5),
+            ) {
+                (true, true) => {}
+                (true, false) => low = 3,
+                (false, true) => high = 4,
+                (false, false) => return None,
+            }
+        }
+        (ItemSource::ImpReward, ItemKind::Armor)
+            if requirement.item.is_some_and(|id| id != ItemId::PlateArmor)
+                || !requirement.tier.matches(Some(5)) =>
+        {
+            return None;
+        }
+        _ => {}
+    }
+    Some((low, high, policy))
+}
+
 /// Whether `source` can ever produce an item satisfying `requirement`.
-fn source_feasible(requirement: &Requirement, source: ItemSource) -> bool {
+fn source_feasible(
+    requirement: &Requirement,
+    source: ItemSource,
+    profile: &impl Fn(&Requirement, ItemSource) -> Option<(u8, u8, EffectPolicy)>,
+) -> bool {
     if requirement.source.is_some_and(|wanted| wanted != source) {
         return false;
     }
@@ -241,12 +411,10 @@ fn source_feasible(requirement: &Requirement, source: ItemSource) -> bool {
     if requirement.require_uncursed && curses_only {
         return false;
     }
-    source_profile(source, requirement.kind, requirement.weapon_category).is_some_and(
-        |(low, high, policy)| {
-            upgrade_reachable(requirement.upgrade, low, high)
-                && effect_reachable(requirement.effect, policy, requirement.require_uncursed)
-        },
-    )
+    profile(requirement, source).is_some_and(|(low, high, policy)| {
+        upgrade_reachable(requirement.upgrade, low, high)
+            && effect_reachable(requirement.effect, policy, requirement.require_uncursed)
+    })
 }
 
 const ALL_SOURCES: [ItemSource; 18] = [
@@ -296,6 +464,10 @@ struct RequirementPlan {
 pub struct QueryPlan {
     auto_trinket: Option<crate::auto_trinkets::AutoTrinketPolicy>,
     selected_slots: Vec<Vec<Requirement>>,
+    /// Mandatory slots whose alternatives all name initial trinket offers.
+    /// Other predicates remain for the final matcher; absence alone is enough
+    /// to prove that no floor can satisfy one of these slots.
+    required_trinket_slots: Vec<Vec<ItemId>>,
     /// One entry per query slot: a plain requirement alone, or every member
     /// of an alternative group, any one of which satisfies the slot.
     slots: Vec<Vec<RequirementPlan>>,
@@ -311,10 +483,49 @@ pub struct QueryPlan {
     unsatisfiable: bool,
 }
 
+fn required_trinket_slots(slots: &[Vec<RequirementPlan>]) -> Vec<Vec<ItemId>> {
+    slots
+        .iter()
+        .filter(|slot| {
+            slot.iter().all(|plan| {
+                let requirement = &plan.requirement;
+                requirement.kind == ItemKind::Trinket
+                    && requirement.item.is_some()
+                    && requirement.level_sum.is_none()
+            })
+        })
+        .map(|slot| {
+            slot.iter()
+                .map(|plan| plan.requirement.item.expect("named trinket"))
+                .collect()
+        })
+        .collect()
+}
+
 impl QueryPlan {
     /// Derives the plan for a validated query.
     #[must_use]
     pub fn analyze(query: &SearchQuery) -> Self {
+        Self::analyze_with_policies(
+            query,
+            requirement_source_profile,
+            source_generation_deadline,
+        )
+    }
+
+    #[cfg(test)]
+    fn analyze_with_profile(
+        query: &SearchQuery,
+        profile: impl Fn(&Requirement, ItemSource) -> Option<(u8, u8, EffectPolicy)>,
+    ) -> Self {
+        Self::analyze_with_policies(query, profile, |_, _, limit| Some(limit))
+    }
+
+    fn analyze_with_policies(
+        query: &SearchQuery,
+        profile: impl Fn(&Requirement, ItemSource) -> Option<(u8, u8, EffectPolicy)>,
+        deadline: impl Fn(&Requirement, ItemSource, u8) -> Option<u8>,
+    ) -> Self {
         let max_depth = query.max_depth;
         let mut generation_depth = 1;
         let mut needs_vault_treasure = false;
@@ -334,15 +545,20 @@ impl QueryPlan {
                 let mut quests = 0_u8;
                 let mut open_deadline = None;
                 for source in ALL_SOURCES {
-                    if !source_feasible(requirement, source) {
+                    if !source_feasible(requirement, source, &profile) {
                         continue;
                     }
                     if query.exclude_blacksmith_rewards && source == ItemSource::BlacksmithReward {
                         continue;
                     }
+                    let Some(source_max_depth) =
+                        deadline(requirement, source, requirement_max_depth)
+                    else {
+                        continue;
+                    };
                     if let Some(quest) = quest_for_source(source) {
                         let (window_start, window_end) = quest.window();
-                        if window_start <= requirement_max_depth {
+                        if window_start <= source_max_depth {
                             // The vault only exists inside the Imp's window,
                             // so a requirement that stops short of it never
                             // needs the sub-level generated.
@@ -351,19 +567,19 @@ impl QueryPlan {
                             }
                             quests |= quest.bit();
                             generation_depth =
-                                generation_depth.max(window_end.min(requirement_max_depth));
+                                generation_depth.max(window_end.min(source_max_depth));
                         }
                     } else if source == ItemSource::Shop {
                         let deadline = SHOP_DEPTHS
                             .into_iter()
-                            .rfind(|&depth| depth <= requirement_max_depth);
+                            .rfind(|&depth| depth <= source_max_depth);
                         if let Some(deadline) = deadline {
                             open_deadline = Some(open_deadline.unwrap_or(0).max(deadline));
                             generation_depth = generation_depth.max(deadline);
                         }
                     } else {
-                        open_deadline = Some(requirement_max_depth);
-                        generation_depth = generation_depth.max(requirement_max_depth);
+                        open_deadline = Some(open_deadline.unwrap_or(0).max(source_max_depth));
+                        generation_depth = generation_depth.max(source_max_depth);
                     }
                 }
                 members.push(RequirementPlan {
@@ -407,9 +623,12 @@ impl QueryPlan {
             (variant, deadline)
         });
 
+        let required_trinket_slots = required_trinket_slots(&slots);
+
         let mut plan = Self {
             auto_trinket: crate::auto_trinkets::AutoTrinketPolicy::prepare(query),
             selected_slots: crate::trinkets::selection_slots(query),
+            required_trinket_slots,
             slots,
             generation_depth,
             blacksmith_deadline,
@@ -543,6 +762,18 @@ impl QueryPlan {
 }
 
 impl FloorGate for QueryPlan {
+    fn continue_after_run_init(&self, run: &crate::run::RunState) -> bool {
+        if self.required_trinket_slots.is_empty() {
+            return true;
+        }
+        // The catalyst only expands into these initial identities. Peeking
+        // clones its private deck, leaving all generation streams untouched.
+        let offers = crate::trinkets::initial_offers_from_generator(&run.generator);
+        self.required_trinket_slots
+            .iter()
+            .all(|slot| slot.iter().any(|id| offers.contains(id)))
+    }
+
     fn selected_trinket(&self, seed: crate::seed::DungeonSeed) -> Option<crate::catalog::ItemId> {
         if let Some(policy) = &self.auto_trinket {
             return policy.selected_trinket(seed);
@@ -1294,5 +1525,1403 @@ mod tests {
         };
         let mixed = QueryPlan::analyze(&query(vec![capped], 24));
         assert!(!mixed.wants_vault_treasure());
+    }
+}
+
+#[cfg(test)]
+mod trinket_preflight_tests {
+    use super::*;
+    use crate::auto_trinkets::{self, SeedRecipe, TrinketSearchMatch};
+    use crate::catalog::{ITEMS, ItemId};
+    use crate::challenges::Challenges;
+    use crate::main_world::CanonicalMainWorldGenerator;
+    use crate::model::GeneratedWorld;
+    use crate::run::RunState;
+    use crate::search::WorldGenerator;
+    use crate::seed::DungeonSeed;
+
+    struct WithoutInitGate<'a, G>(&'a G);
+    struct PreserveFloorGate<'a>(&'a dyn FloorGate);
+
+    impl FloorGate for PreserveFloorGate<'_> {
+        fn selected_trinket(&self, seed: DungeonSeed) -> Option<ItemId> {
+            self.0.selected_trinket(seed)
+        }
+        fn continue_after_floor(
+            &self,
+            depth: u8,
+            items: &[WorldItem],
+            quests: &QuestSummary,
+        ) -> bool {
+            self.0.continue_after_floor(depth, items, quests)
+        }
+        fn wants_vault_treasure(&self) -> bool {
+            self.0.wants_vault_treasure()
+        }
+        // Intentionally retain only the new hook's default true behavior.
+    }
+
+    impl<G: WorldGenerator> WorldGenerator for WithoutInitGate<'_, G> {
+        fn generate(&self, seed: DungeonSeed, depth: u8) -> GeneratedWorld {
+            self.0.generate(seed, depth)
+        }
+        fn generate_batch_gated(
+            &self,
+            seeds: &[DungeonSeed],
+            depth: u8,
+            gate: &dyn FloorGate,
+        ) -> Vec<Option<GeneratedWorld>> {
+            self.0
+                .generate_batch_gated(seeds, depth, &PreserveFloorGate(gate))
+        }
+    }
+
+    fn comparable(
+        matches: Vec<Option<TrinketSearchMatch>>,
+    ) -> Vec<Option<(SeedRecipe, GeneratedWorld)>> {
+        matches
+            .into_iter()
+            .map(|matched| matched.map(|m| (m.recipe, m.world)))
+            .collect()
+    }
+
+    fn seeds() -> Vec<DungeonSeed> {
+        (0..12_u64)
+            .map(|index| {
+                DungeonSeed::new(
+                    (812_345_678_901 + index * 3_355_211_884_971) % crate::seed::TOTAL_SEEDS,
+                )
+                .unwrap()
+            })
+            .collect()
+    }
+
+    fn compare_paths(query: &SearchQuery, seeds: &[DungeonSeed], replay: bool) -> usize {
+        query.validate().unwrap();
+        let plan = QueryPlan::analyze(query);
+        let generator = CanonicalMainWorldGenerator::with_challenges(query.challenges);
+        let reference = WithoutInitGate(&generator);
+        assert_eq!(
+            comparable(auto_trinkets::search_batch(&generator, query, &plan, seeds)),
+            comparable(auto_trinkets::search_batch(&reference, query, &plan, seeds)),
+            "{query:?}"
+        );
+        let actual = generator.generate_batch_gated(seeds, plan.generation_depth(), &plan);
+        let expected = reference.generate_batch_gated(seeds, plan.generation_depth(), &plan);
+        assert_eq!(actual.len(), seeds.len());
+        assert_eq!(expected.len(), seeds.len());
+        let mut pruned = 0;
+        for (actual, expected) in actual.iter().zip(&expected) {
+            match (actual, expected) {
+                (Some(actual), Some(expected)) => assert_eq!(actual, expected),
+                (None, Some(world)) => {
+                    assert!(!query.matches(world));
+                    pruned += 1;
+                }
+                (None, None) => {}
+                (Some(_), None) => panic!("new gate cannot resurrect an abandoned world"),
+            }
+        }
+        let finished = |worlds: Vec<Option<GeneratedWorld>>| {
+            worlds
+                .into_iter()
+                .flatten()
+                .filter(|world| query.matches(world))
+                .collect()
+        };
+        let actual = auto_trinkets::finish_matches(&generator, query, &plan, finished(actual));
+        let expected = auto_trinkets::finish_matches(&reference, query, &plan, finished(expected));
+        assert_eq!(
+            comparable(actual.into_iter().map(Some).collect()),
+            comparable(expected.into_iter().map(Some).collect())
+        );
+        if replay {
+            for choice in [None, Some(0), Some(3)] {
+                let recipes: Vec<_> = seeds
+                    .iter()
+                    .map(|&seed| SeedRecipe {
+                        seed,
+                        trinket: choice.map(|index| crate::trinkets::trinket_order(seed)[index]),
+                    })
+                    .collect();
+                assert_eq!(
+                    comparable(auto_trinkets::filter_batch(
+                        &generator, query, &plan, &recipes
+                    )),
+                    comparable(auto_trinkets::filter_batch(
+                        &reference, query, &plan, &recipes
+                    ))
+                );
+            }
+        }
+        pruned
+    }
+
+    #[test]
+    fn every_trinket_identity_preserves_worlds_recipes_and_batch_positions() {
+        let seeds = seeds();
+        let mut pruned = 0;
+        for item in ITEMS.iter().filter(|item| item.kind == ItemKind::Trinket) {
+            for depth in [1, 3] {
+                let query = crate::json_query::decode(&format!(
+                    "{{\"max_depth\":{depth},\"auto_apply_trinket\":false,\"requirements\":[{{\"item\":\"{}\"}}]}}",
+                    item.stable_id)).unwrap();
+                pruned += compare_paths(&query, &seeds[..3], false);
+                pruned += compare_paths(&query, &seeds[3..], true);
+            }
+        }
+        assert!(pruned > 0, "exercise newly abandoned worlds");
+    }
+
+    #[test]
+    fn trinket_preflight_keeps_alternatives_selection_and_challenge_semantics() {
+        let seeds = seeds();
+        let requirements = [
+            r#"[{"any_of":[{"item":"mimic_tooth","select_trinket":true},{"item":"rat_skull","select_trinket":true}]}]"#,
+            r#"[{"any_of":[{"item":"trinket_catalyst"},{"item":"mimic_tooth"}]}]"#,
+            r#"[{"any_of":[{"item":"rat_skull"},{"kind":"weapon"}]}]"#,
+            r#"[{"any_of":[{"item":"rat_skull"},{"item":"mimic_tooth"},{"item":"trinket_catalyst"}]}]"#,
+            r#"[{"item":"mimic_tooth"},{"item":"mimic_tooth"}]"#,
+            r#"[{"item":"mimic_tooth","source":"heap","max_depth":1}]"#,
+            r#"[{"item":"mimic_tooth","select_trinket":true},{"kind":"weapon"}]"#,
+            r#"[{"kind":"weapon"}]"#,
+        ];
+        for requirements in requirements {
+            for depth in [3, 19] {
+                let mut query = crate::json_query::decode(&format!(
+                    "{{\"max_depth\":{depth},\"auto_apply_trinket\":true,\"requirements\":{requirements}}}")).unwrap();
+                for challenges in [
+                    Challenges::NONE,
+                    Challenges::DARKNESS,
+                    Challenges::LEVEL_GENERATION,
+                ] {
+                    query.challenges = challenges;
+                    compare_paths(&query, &seeds, true);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn ambiguous_selection_does_not_make_present_offers_impossible() {
+        let query = crate::json_query::decode(
+            r#"{"max_depth":19,"requirements":[{"any_of":[{"item":"mimic_tooth","select_trinket":true},{"item":"parchment_scrap"}]},{"kind":"weapon"}]}"#).unwrap();
+        let plan = QueryPlan::analyze(&query);
+        assert_eq!(plan.selected_trinket(DungeonSeed::MIN), None);
+        assert!(plan.continue_after_run_init(&RunState::new(0)));
+        compare_paths(&query, &[DungeonSeed::MIN], true);
+        let generator = CanonicalMainWorldGenerator::with_challenges(query.challenges);
+        let matches = auto_trinkets::search_batch(&generator, &query, &plan, &[DungeonSeed::MIN]);
+        assert!(
+            matches[0].is_some(),
+            "the ambiguous offers still satisfy the query"
+        );
+        assert_eq!(matches[0].as_ref().unwrap().recipe.trinket, None);
+    }
+
+    #[test]
+    fn preflight_reads_initial_offers_without_mutating_run_state() {
+        let query =
+            crate::json_query::decode(r#"{"max_depth":3,"requirements":[{"item":"mimic_tooth"}]}"#)
+                .unwrap();
+        let plan = QueryPlan::analyze(&query);
+        for seed in 0..256_i64 {
+            let run = RunState::with_challenges(seed, Challenges::LEVEL_GENERATION);
+            let expected = crate::trinkets::order_from_generator(&run.generator)[..4]
+                .contains(&ItemId::MimicTooth);
+            let before = run.clone();
+            assert_eq!(plan.continue_after_run_init(&run), expected);
+            assert_eq!(run, before);
+        }
+    }
+}
+
+#[cfg(test)]
+mod source_refinement_tests {
+    use super::*;
+
+    fn original_plan(query: &SearchQuery) -> QueryPlan {
+        QueryPlan::analyze_with_profile(query, |requirement, source| {
+            source_profile(source, requirement.kind, requirement.weapon_category)
+        })
+    }
+
+    fn decode(requirements: &str) -> SearchQuery {
+        crate::json_query::decode(&format!(
+            r#"{{"max_depth":24,"auto_apply_trinket":false,"requirements":{requirements}}}"#
+        ))
+        .unwrap()
+    }
+
+    fn shape(plan: &QueryPlan) -> (bool, u8, bool) {
+        (
+            plan.is_unsatisfiable(),
+            plan.generation_depth(),
+            plan.needs_vault_treasure,
+        )
+    }
+
+    type PlanShape = (bool, u8, bool);
+    const SOURCE_CASES: &[(&str, PlanShape, PlanShape)] = &[
+        (
+            r#"[{"item":"greatsword","upgrade":4}]"#,
+            (false, 19, true),
+            (false, 19, false),
+        ),
+        (
+            r#"[{"item":"runic_blade","upgrade":4}]"#,
+            (false, 19, true),
+            (false, 19, true),
+        ),
+        (
+            r#"[{"item":"javelin","upgrade":4}]"#,
+            (false, 19, true),
+            (false, 19, false),
+        ),
+        (
+            r#"[{"kind":"thrown_weapon","upgrade":4}]"#,
+            (false, 19, true),
+            (false, 19, false),
+        ),
+        (
+            r#"[{"kind":"weapon","upgrade":4}]"#,
+            (false, 19, true),
+            (false, 19, true),
+        ),
+        (
+            r#"[{"kind":"melee_weapon","tier":{"exact":5},"upgrade":4,"source":"vault_treasure"}]"#,
+            (false, 19, true),
+            (true, 1, false),
+        ),
+        (
+            r#"[{"kind":"melee_weapon","tier":{"at_most":4},"upgrade":4,"source":"vault_treasure"}]"#,
+            (false, 19, true),
+            (false, 19, true),
+        ),
+        (
+            r#"[{"item":"runic_blade","upgrade":2,"source":"imp_reward"}]"#,
+            (false, 19, false),
+            (true, 1, false),
+        ),
+        (
+            r#"[{"item":"runic_blade","upgrade":{"at_least":2},"source":"imp_reward"}]"#,
+            (false, 19, false),
+            (false, 19, false),
+        ),
+        (
+            r#"[{"item":"greatsword","upgrade":2,"source":"imp_reward"}]"#,
+            (false, 19, false),
+            (false, 19, false),
+        ),
+        (
+            r#"[{"kind":"weapon","tier":{"at_most":3},"source":"imp_reward"}]"#,
+            (false, 19, false),
+            (true, 1, false),
+        ),
+        (
+            r#"[{"kind":"weapon","tier":{"at_most":4},"upgrade":2,"source":"imp_reward"}]"#,
+            (false, 19, false),
+            (true, 1, false),
+        ),
+        (
+            r#"[{"kind":"weapon","tier":{"at_least":4},"upgrade":2,"source":"imp_reward"}]"#,
+            (false, 19, false),
+            (false, 19, false),
+        ),
+        (
+            r#"[{"item":"plate_armor","upgrade":4}]"#,
+            (false, 19, false),
+            (false, 19, false),
+        ),
+        (
+            r#"[{"item":"scale_armor","upgrade":4}]"#,
+            (false, 19, false),
+            (true, 1, false),
+        ),
+        (
+            r#"[{"item":"leather_armor","upgrade":4}]"#,
+            (false, 19, false),
+            (true, 1, false),
+        ),
+        (
+            r#"[{"kind":"armor","tier":{"at_most":4},"source":"imp_reward"}]"#,
+            (false, 19, false),
+            (true, 1, false),
+        ),
+        (
+            r#"[{"kind":"armor","tier":{"at_least":4},"source":"imp_reward"}]"#,
+            (false, 19, false),
+            (false, 19, false),
+        ),
+        (
+            r#"[{"item":"ring_might","upgrade":3,"source":"vault_treasure"}]"#,
+            (false, 19, true),
+            (true, 1, false),
+        ),
+        (
+            r#"[{"item":"ring_accuracy","upgrade":3,"source":"vault_treasure"}]"#,
+            (false, 19, true),
+            (false, 19, true),
+        ),
+        (
+            r#"[{"any_of":[{"item":"greatsword","upgrade":4,"source":"vault_treasure"},{"item":"wand_fireblast","upgrade":3,"source":"wandmaker_reward"}]}]"#,
+            (false, 19, true),
+            (false, 9, false),
+        ),
+        (
+            r#"[{"any_of":[{"item":"javelin","upgrade":4,"source":"vault_treasure"},{"item":"runic_blade","upgrade":4,"source":"vault_treasure"}]}]"#,
+            (false, 19, true),
+            (false, 19, true),
+        ),
+        (
+            r#"[{"any_of":[{"item":"ring_might","source":"vault_treasure"},{"item":"ring_accuracy","source":"vault_treasure"}]}]"#,
+            (false, 19, true),
+            (false, 19, true),
+        ),
+        (
+            r#"[{"any_of":[{"item":"ring_might","source":"vault_treasure"},{"item":"ring_force","source":"vault_treasure"}]}]"#,
+            (false, 19, true),
+            (true, 1, false),
+        ),
+    ];
+
+    #[test]
+    fn exact_source_inventory_refines_only_reachable_tiers_and_identities() {
+        for &(requirements, original, refined) in SOURCE_CASES {
+            let query = decode(requirements);
+            assert_eq!(shape(&original_plan(&query)), original, "{requirements}");
+            assert_eq!(
+                shape(&QueryPlan::analyze(&query)),
+                refined,
+                "{requirements}"
+            );
+        }
+        for identity in [
+            "wand_regrowth",
+            "wand_transfusion",
+            "wand_corruption",
+            "ring_wealth",
+            "ring_might",
+            "ring_force",
+        ] {
+            let vault = decode(&format!(
+                r#"[{{"item":"{identity}","upgrade":3,"source":"vault_treasure"}}]"#
+            ));
+            assert!(QueryPlan::analyze(&vault).is_unsatisfiable());
+            let imp = decode(&format!(
+                r#"[{{"item":"{identity}","upgrade":3,"source":"imp_reward"}}]"#
+            ));
+            assert!(!QueryPlan::analyze(&imp).is_unsatisfiable());
+        }
+    }
+
+    #[test]
+    fn source_inventory_preserves_optional_sum_profiles_and_deadlines() {
+        for identity in ["ring_might", "ring_wealth", "ring_force"] {
+            let query = decode(&format!(
+                r#"[{{"item":"{identity}","level_sum":{{"group":1,"at_least":4}}}},{{"kind":"ring","level_sum":{{"group":1,"at_least":4}}}}]"#
+            ));
+            for requirement in &query.requirements {
+                for source in ALL_SOURCES {
+                    assert_eq!(
+                        requirement_source_profile(requirement, source),
+                        source_profile(source, requirement.kind, requirement.weapon_category)
+                    );
+                }
+            }
+            let original = original_plan(&query);
+            let refined = QueryPlan::analyze(&query);
+            assert_eq!(shape(&refined), shape(&original));
+            for depth in [0, 9, 16, 17, 19, 24] {
+                assert_eq!(
+                    refined.viable_after_floor(depth, &[], &QuestSummary::default()),
+                    original.viable_after_floor(depth, &[], &QuestSummary::default())
+                );
+            }
+        }
+        let pinned = decode(
+            r#"[{"item":"ring_might","source":"vault_treasure","level_sum":{"group":1,"at_least":3}},{"item":"ring_accuracy","level_sum":{"group":1,"at_least":3}}]"#,
+        );
+        assert_eq!(
+            shape(&QueryPlan::analyze(&pinned)),
+            shape(&original_plan(&pinned))
+        );
+        assert!(QueryPlan::analyze(&pinned).needs_vault_treasure);
+        let query = decode(
+            r#"[{"item":"ring_might","level_sum":{"group":1,"at_least":1}},{"item":"greatsword","upgrade":4}]"#,
+        );
+        assert_eq!(shape(&original_plan(&query)), (false, 24, true));
+        assert_eq!(shape(&QueryPlan::analyze(&query)), (false, 24, true));
+        for depth in [16, 17, 19] {
+            let mut query = decode(r#"[{"item":"greatsword","upgrade":4}]"#);
+            query.max_depth = depth;
+            let old = original_plan(&query);
+            let new = QueryPlan::analyze(&query);
+            assert_eq!(old.is_unsatisfiable(), new.is_unsatisfiable());
+            assert_eq!(old.generation_depth(), new.generation_depth());
+            assert!(!new.needs_vault_treasure);
+            let mut capped = decode(r#"[{"item":"greatsword","upgrade":4}]"#);
+            capped.requirements[0].max_depth = Some(depth);
+            assert_eq!(shape(&QueryPlan::analyze(&capped)), shape(&new));
+            assert_eq!(shape(&original_plan(&capped)), shape(&old));
+        }
+    }
+    fn assert_produced_source_reachable(item: &WorldItem) {
+        use crate::query::{EffectSet, TierRequirement};
+        let definition = crate::catalog::item(item.item);
+        let mut query = decode(&format!(
+            r#"[{{"item":"{}","uncursed":true}}]"#,
+            definition.stable_id
+        ));
+        let requirement = &mut query.requirements[0];
+        requirement.source = Some(item.source);
+        if item.upgrade > 0 {
+            requirement.upgrade = UpgradeRequirement::Exact(item.upgrade);
+        }
+        if let Some(effect) = item.effect {
+            requirement.effect = EffectRequirement::OneOf(EffectSet::single(effect));
+        }
+        let named = query.requirements[0];
+        let mut requirements = vec![named];
+        if matches!(definition.kind, ItemKind::Weapon | ItemKind::Armor) {
+            let generic = Requirement {
+                item: None,
+                weapon_category: None,
+                ..named
+            };
+            requirements.push(generic);
+            requirements.push(Requirement {
+                tier: TierRequirement::Exact(definition.tier.unwrap()),
+                ..generic
+            });
+            if definition.kind == ItemKind::Weapon {
+                requirements.push(Requirement {
+                    weapon_category: item.item.weapon_category(),
+                    ..generic
+                });
+            }
+        }
+        for requirement in requirements {
+            query.requirements[0] = requirement;
+            query.validate().unwrap();
+            assert!(
+                requirement.matches(item),
+                "produced {item:?}, {requirement:?}"
+            );
+            let (low, high, _) = requirement_source_profile(&requirement, item.source)
+                .expect("produced identity stays feasible");
+            assert!(
+                (low..=high).contains(&item.upgrade),
+                "produced {item:?}, envelope {low}..{high}"
+            );
+            assert!(source_feasible(
+                &requirement,
+                item.source,
+                &requirement_source_profile
+            ));
+        }
+    }
+
+    #[test]
+    fn real_imp_and_vault_equipment_stays_inside_refined_source_envelopes() {
+        use crate::model::Accessibility;
+        use crate::quests::ImpQuest;
+        use crate::rng::{RandomStack, seed_for_depth};
+        use crate::run::RunState;
+        use crate::vault_loot::VaultEquipmentLoot;
+        let mut seen = [false; 8];
+        for seed in 0..64_i64 {
+            let mut run = RunState::new(seed);
+            let mut random = RandomStack::with_base_seed(0);
+            random.push(seed_for_depth(seed, 19, 0));
+            let mut imp = ImpQuest::default();
+            assert!(
+                imp.schedule_room(&mut random, &mut run.generator, 19)
+                    .unwrap()
+            );
+            assert_eq!(imp.reward_options.len(), 6);
+            imp.finish_build_attempt(true);
+            let mut items = Vec::new();
+            imp.append_world_items(0, &mut items);
+            for item in &items {
+                let definition = crate::catalog::item(item.item);
+                if definition.kind == ItemKind::Weapon {
+                    seen[0] |= definition.tier == Some(4) && item.upgrade == 5;
+                    seen[1] |= definition.tier == Some(5) && item.upgrade == 2;
+                    seen[2] |= definition.tier == Some(5) && item.upgrade == 4;
+                    seen[3] |= definition.tier == Some(4)
+                        && item.item.weapon_category() == Some(WeaponCategory::Melee);
+                    seen[4] |= definition.tier == Some(4)
+                        && item.item.weapon_category() == Some(WeaponCategory::Thrown);
+                }
+                seen[5] |= item.item == ItemId::PlateArmor;
+                seen[6] |= definition.kind == ItemKind::Artifact && item.upgrade == 5;
+                assert_produced_source_reachable(item);
+            }
+            random.pop();
+            random.push(seed_for_depth(seed, 19, 1));
+            let mut loot = VaultEquipmentLoot::default();
+            loot.setup_equipment(&mut random);
+            for tier in 0..4 {
+                for equipment in loot.tier(tier).unwrap().iter().flatten() {
+                    let item = WorldItem {
+                        item: equipment.item,
+                        upgrade: equipment.upgrade,
+                        effect: equipment.effect,
+                        cursed: false,
+                        depth: 19,
+                        source: ItemSource::VaultTreasure,
+                        accessibility: Accessibility::Independent,
+                        secret: false,
+                    };
+                    seen[7] |= crate::catalog::item(item.item).tier == Some(4)
+                        && item.item.weapon_category() == Some(WeaponCategory::Melee)
+                        && item.upgrade == 4;
+                    assert_produced_source_reachable(&item);
+                }
+            }
+        }
+        assert!(
+            seen.into_iter().all(|covered| covered),
+            "exercise both Imp weapon pairings and upgrade endpoints"
+        );
+        for seed in [0, 1, 1_334_551, 1_334_612] {
+            for depth in 17..=19 {
+                let vault = crate::vault_floor::generate_vault(
+                    seed,
+                    depth,
+                    crate::challenges::Challenges::NONE,
+                )
+                .unwrap();
+                for item in vault.world_items(depth, 0, 6) {
+                    assert_produced_source_reachable(&item);
+                }
+            }
+        }
+    }
+
+    fn recipes(
+        matches: Vec<Option<crate::auto_trinkets::TrinketSearchMatch>>,
+    ) -> Vec<Option<crate::auto_trinkets::SeedRecipe>> {
+        matches
+            .into_iter()
+            .map(|matched| matched.map(|m| m.recipe))
+            .collect()
+    }
+
+    fn dispersed_seeds() -> Vec<crate::seed::DungeonSeed> {
+        use crate::seed::{DungeonSeed, TOTAL_SEEDS};
+        let mut seeds: Vec<_> = (0..20_u64)
+            .map(|index| {
+                DungeonSeed::new((812_345_678_901 + index * 3_355_211_884_971) % TOTAL_SEEDS)
+                    .unwrap()
+            })
+            .collect();
+        seeds.extend(
+            ["EYY-RUL-LQG", "SRU-YSU-QHS"].map(|code| DungeonSeed::from_code(code).unwrap()),
+        );
+        seeds
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)] // Keep query, oracle, and recipe comparisons together.
+    fn refined_sources_preserve_full_search_matches_recipes_and_forced_choices() {
+        use crate::auto_trinkets::{self, SeedRecipe};
+        use crate::challenges::Challenges;
+        use crate::main_world::{CanonicalMainWorldGenerator, generate_main_world_with_trinket};
+        use crate::search::WorldGenerator;
+        let seeds = dispersed_seeds();
+        let requirements = [
+            r#"[{"item":"runic_blade","upgrade":1,"effect":"Grim"}]"#,
+            r#"[{"item":"ring_might","upgrade":3}]"#,
+            r#"[{"item":"greatsword","upgrade":4}]"#,
+            r#"[{"kind":"thrown_weapon","upgrade":4}]"#,
+            r#"[{"item":"runic_blade","upgrade":2,"source":"imp_reward"}]"#,
+            r#"[{"any_of":[{"item":"greatsword","upgrade":4,"source":"vault_treasure"},{"item":"wand_fireblast","upgrade":3,"source":"wandmaker_reward"}]}]"#,
+            r#"[{"any_of":[{"item":"ring_might","source":"vault_treasure"},{"item":"ring_accuracy","source":"vault_treasure"}]}]"#,
+            r#"[{"item":"mimic_tooth","select_trinket":true},{"kind":"thrown_weapon","upgrade":4}]"#,
+            r#"[{"kind":"weapon","tier":{"exact":4},"upgrade":3}]"#,
+            r#"[{"item":"leather_armor","effect":"any_enchantment"}]"#,
+            r#"[{"item":"runic_blade","upgrade":3}]"#,
+            r#"[{"item":"greatsword","upgrade":2}]"#,
+            r#"[{"any_of":[{"item":"runic_blade","upgrade":3,"source":"vault_treasure"},{"kind":"wand","source":"wandmaker_reward"}]}]"#,
+            r#"[{"any_of":[{"item":"runic_blade","upgrade":3,"source":"vault_treasure"},{"item":"greatsword","upgrade":3,"source":"vault_treasure"}]}]"#,
+            r#"[{"kind":"melee_weapon","tier":{"exact":2},"upgrade":1}]"#,
+            r#"[{"kind":"thrown_weapon","tier":{"exact":2},"upgrade":1}]"#,
+            r#"[{"kind":"weapon","tier":{"exact":3},"source":"heap"}]"#,
+            r#"[{"kind":"armor","tier":{"exact":3},"source":"heap"}]"#,
+        ];
+        let mut natural_deadline_survivors = [0_usize; 5];
+        let mut finite_row_survivors = [0_usize; 2];
+        let mut survivor_count = 0;
+        let mut removed_auto = 0;
+        let mut retained_forced = 0;
+        let mut surviving_omission = 0;
+        for (case, requirements) in requirements.into_iter().enumerate() {
+            for challenges in [
+                Challenges::NONE,
+                Challenges::DARKNESS,
+                Challenges::LEVEL_GENERATION,
+            ] {
+                for auto in [false, true] {
+                    let mut query = decode(requirements);
+                    // These saved recipes exercise auto-removal at their
+                    // original depth; the source-refinement cases cover 24.
+                    if case == 0 {
+                        query.max_depth = 19;
+                    }
+                    query.challenges = challenges;
+                    query.auto_apply_trinket = auto;
+                    query.validate().unwrap();
+                    let old = original_plan(&query);
+                    let previous = previous_candidate_plan(&query);
+                    let deadline_case_index = match case {
+                        9 => Some(0),
+                        14..=17 => Some(case - 13),
+                        _ => None,
+                    };
+                    let new = QueryPlan::analyze(&query);
+                    let generator = CanonicalMainWorldGenerator::with_challenges(challenges);
+                    for batch in seeds.chunks(9) {
+                        let expected =
+                            recipes(auto_trinkets::search_batch(&generator, &query, &old, batch));
+                        let previous_expected = deadline_case_index.map(|_| {
+                            recipes(auto_trinkets::search_batch(
+                                &generator, &query, &previous, batch,
+                            ))
+                        });
+                        let matches = auto_trinkets::search_batch(&generator, &query, &new, batch);
+                        let gated = generator
+                            .generate_batch_gated(batch, new.generation_depth(), &new)
+                            .into_iter()
+                            .flatten()
+                            .filter(|world| query.matches(world))
+                            .collect();
+                        let finished =
+                            auto_trinkets::finish_matches(&generator, &query, &new, gated);
+                        assert_eq!(
+                            finished
+                                .iter()
+                                .map(|m| (m.recipe, &m.world))
+                                .collect::<Vec<_>>(),
+                            matches
+                                .iter()
+                                .flatten()
+                                .map(|m| (m.recipe, &m.world))
+                                .collect::<Vec<_>>(),
+                            "streaming completion matches batch completion"
+                        );
+                        for result in matches.iter().flatten() {
+                            if let Some(index) = deadline_case_index {
+                                assert!(previous.generation_depth() > new.generation_depth());
+                                natural_deadline_survivors[index] += 1;
+                            }
+                            if matches!(case, 8 | 9) {
+                                assert!(old.needs_vault_treasure && !new.needs_vault_treasure);
+                                finite_row_survivors[case - 8] += 1;
+                            }
+                            removed_auto += usize::from(
+                                auto_trinkets::enabled(&query)
+                                    && new.selected_trinket(result.recipe.seed).is_some()
+                                    && result.recipe.trinket.is_none(),
+                            );
+                            surviving_omission +=
+                                usize::from(old.needs_vault_treasure && !new.needs_vault_treasure);
+                            let mut canonical = generate_main_world_with_trinket(
+                                result.recipe.seed,
+                                new.generation_depth(),
+                                challenges,
+                                result.recipe.trinket,
+                            )
+                            .unwrap();
+                            if !new.needs_vault_treasure {
+                                canonical
+                                    .items
+                                    .retain(|item| item.source != ItemSource::VaultTreasure);
+                            }
+                            assert_eq!(
+                                result.world, canonical,
+                                "world belongs to its returned recipe"
+                            );
+                        }
+                        let actual = recipes(matches);
+                        if let Some(previous_expected) = previous_expected {
+                            assert_eq!(
+                                actual, previous_expected,
+                                "immediate C16 reference: {query:?}"
+                            );
+                        }
+                        survivor_count += actual.iter().flatten().count();
+                        assert_eq!(actual, expected, "{query:?}");
+                        for (&seed, actual) in batch.iter().zip(&actual) {
+                            let selected = new.selected_trinket(seed);
+                            let full = generate_main_world_with_trinket(
+                                seed,
+                                query.max_depth,
+                                challenges,
+                                selected,
+                            )
+                            .unwrap();
+                            let expected = if query.matches(&full) {
+                                let choice = if auto_trinkets::enabled(&query)
+                                    && selected.is_some()
+                                    && query.matches(
+                                        &generate_main_world_with_trinket(
+                                            seed,
+                                            query.max_depth,
+                                            challenges,
+                                            None,
+                                        )
+                                        .unwrap(),
+                                    ) {
+                                    None
+                                } else {
+                                    selected
+                                };
+                                Some(SeedRecipe {
+                                    seed,
+                                    trinket: choice,
+                                })
+                            } else {
+                                None
+                            };
+                            assert_eq!(
+                                *actual, expected,
+                                "full canonical {query:?}, seed {seed:?}"
+                            );
+                        }
+                    }
+                    for choice in [None, Some(0), Some(3)] {
+                        let saved: Vec<_> = seeds[..5]
+                            .iter()
+                            .map(|&seed| SeedRecipe {
+                                seed,
+                                trinket: choice
+                                    .map(|index| crate::trinkets::initial_offers(seed)[index]),
+                            })
+                            .collect();
+                        let actual = auto_trinkets::filter_batch(&generator, &query, &new, &saved);
+                        if deadline_case_index.is_some() {
+                            assert_eq!(
+                                actual
+                                    .iter()
+                                    .map(|matched| matched.as_ref().map(|m| m.recipe))
+                                    .collect::<Vec<_>>(),
+                                recipes(auto_trinkets::filter_batch(
+                                    &generator, &query, &previous, &saved
+                                )),
+                                "forced choices against immediate C16 reference: {query:?}",
+                            );
+                        }
+                        for (saved, result) in saved.iter().zip(&actual) {
+                            let full = generate_main_world_with_trinket(
+                                saved.seed,
+                                query.max_depth,
+                                challenges,
+                                saved.trinket,
+                            )
+                            .unwrap();
+                            assert_eq!(
+                                result.is_some(),
+                                query.matches(&full),
+                                "forced full canonical {query:?}"
+                            );
+                            if let Some(result) = result {
+                                retained_forced += usize::from(
+                                    saved.trinket.is_some()
+                                        && result.recipe.trinket == saved.trinket,
+                                );
+                                let mut canonical = generate_main_world_with_trinket(
+                                    result.recipe.seed,
+                                    new.generation_depth(),
+                                    challenges,
+                                    result.recipe.trinket,
+                                )
+                                .unwrap();
+                                if !new.needs_vault_treasure {
+                                    canonical
+                                        .items
+                                        .retain(|item| item.source != ItemSource::VaultTreasure);
+                                }
+                                assert_eq!(result.world, canonical);
+                            }
+                        }
+                        assert_eq!(
+                            recipes(actual),
+                            recipes(auto_trinkets::filter_batch(
+                                &generator, &query, &old, &saved
+                            )),
+                            "forced choices {query:?}"
+                        );
+                    }
+                }
+            }
+        }
+        assert!(
+            finite_row_survivors.into_iter().all(|count| count > 0),
+            "exercise surviving finite upgrade-gap and effect-free-row omissions"
+        );
+        for (label, count) in [
+            "Leather Armor with an enchantment",
+            "tier-two melee weapon +1",
+            "tier-two thrown weapon +1",
+            "tier-three weapon heap",
+            "tier-three armor heap",
+        ]
+        .into_iter()
+        .zip(natural_deadline_survivors)
+        {
+            assert!(
+                count > 0,
+                "exercise surviving deadline reduction for {label}"
+            );
+        }
+        assert!(
+            survivor_count > 0,
+            "exercise surviving matches as well as rejected seeds"
+        );
+        assert!(
+            removed_auto > 0,
+            "exercise replacement with a no-trinket world"
+        );
+        assert!(retained_forced > 0, "exercise retained saved choices");
+        assert!(
+            surviving_omission > 0,
+            "exercise matches after newly skipping vault generation"
+        );
+    }
+
+    #[test]
+    fn skipping_irrelevant_vault_preserves_complete_later_worlds() {
+        use crate::challenges::Challenges;
+        use crate::main_world::CanonicalMainWorldGenerator;
+        use crate::search::WorldGenerator;
+        use crate::seed::DungeonSeed;
+        struct ConditionsOnly<'a>(&'a QueryPlan);
+        impl FloorGate for ConditionsOnly<'_> {
+            fn selected_trinket(&self, seed: DungeonSeed) -> Option<ItemId> {
+                self.0.selected_trinket(seed)
+            }
+            fn wants_vault_treasure(&self) -> bool {
+                self.0.wants_vault_treasure()
+            }
+            fn continue_after_floor(&self, _: u8, _: &[WorldItem], _: &QuestSummary) -> bool {
+                true
+            }
+        }
+        let seeds = dispersed_seeds();
+        let mut removed = 0;
+        for requirements in [
+            r#"[{"item":"ring_might","upgrade":3}]"#,
+            r#"[{"kind":"weapon","tier":{"exact":4},"upgrade":3}]"#,
+        ] {
+            let removed_before = removed;
+            for challenges in [
+                Challenges::NONE,
+                Challenges::DARKNESS,
+                Challenges::LEVEL_GENERATION,
+            ] {
+                let mut query = decode(requirements);
+                query.challenges = challenges;
+                query.auto_apply_trinket = true;
+                let old = original_plan(&query);
+                let new = QueryPlan::analyze(&query);
+                assert!(old.needs_vault_treasure && !new.needs_vault_treasure);
+                let generator = CanonicalMainWorldGenerator::with_challenges(challenges);
+                let original =
+                    generator.generate_batch_gated(&seeds[..9], 24, &ConditionsOnly(&old));
+                let refined =
+                    generator.generate_batch_gated(&seeds[..9], 24, &ConditionsOnly(&new));
+                for (original, refined) in original.into_iter().zip(refined) {
+                    let mut original = original.unwrap();
+                    let refined = refined.unwrap();
+                    let old_witness = crate::query::scout_matches(&original, &query);
+                    let new_witness = crate::query::scout_matches(&refined, &query);
+                    assert_eq!(
+                        old_witness.matched_requirements,
+                        new_witness.matched_requirements
+                    );
+                    assert_eq!(
+                        old_witness
+                            .matched_indices()
+                            .into_iter()
+                            .map(|index| &original.items[index])
+                            .collect::<Vec<_>>(),
+                        new_witness
+                            .matched_indices()
+                            .into_iter()
+                            .map(|index| &refined.items[index])
+                            .collect::<Vec<_>>(),
+                    );
+                    let before = original.items.len();
+                    original
+                        .items
+                        .retain(|item| item.source != ItemSource::VaultTreasure);
+                    removed += before - original.items.len();
+                    assert_eq!(
+                        refined, original,
+                        "including all Halls floors after the vault"
+                    );
+                }
+            }
+            assert!(
+                removed > removed_before,
+                "exercise each source omission: {requirements}"
+            );
+        }
+        assert!(removed > 0, "exercise actually generated vault treasure");
+    }
+    #[test]
+    fn finite_vault_rows_preserve_upgrade_holes_and_tier_zero_effect_rule() {
+        for requirement in [
+            r#"{"item":"runic_blade","upgrade":3}"#,
+            r#"{"item":"greatsword","upgrade":2}"#,
+            r#"{"item":"javelin","upgrade":3}"#,
+            r#"{"item":"scale_armor","upgrade":3}"#,
+            r#"{"kind":"weapon","tier":{"exact":4},"upgrade":3}"#,
+            r#"{"kind":"armor","tier":{"at_most":4},"upgrade":{"at_least":3}}"#,
+            r#"{"item":"leather_armor","effect":"any_enchantment"}"#,
+            r#"{"kind":"thrown_weapon","tier":{"exact":2},"effect":"any_enchantment"}"#,
+        ] {
+            let mut query = decode(&format!("[{requirement}]"));
+            assert!(
+                !QueryPlan::analyze(&query).is_unsatisfiable(),
+                "other sources: {requirement}"
+            );
+            assert!(
+                !QueryPlan::analyze(&query).needs_vault_treasure,
+                "vault omitted: {requirement}"
+            );
+            query.requirements[0].source = Some(ItemSource::VaultTreasure);
+            assert!(
+                QueryPlan::analyze(&query).is_unsatisfiable(),
+                "vault alone: {requirement}"
+            );
+        }
+        for requirement in [
+            r#"{"item":"runic_blade","upgrade":2}"#,
+            r#"{"item":"runic_blade","upgrade":4}"#,
+            r#"{"item":"runic_blade","upgrade":{"at_least":3}}"#,
+            r#"{"item":"greatsword","upgrade":3}"#,
+            r#"{"item":"javelin","upgrade":2}"#,
+            r#"{"item":"scale_armor","upgrade":2}"#,
+            r#"{"item":"mail_armor","effect":"any_enchantment"}"#,
+            r#"{"item":"mail_armor","effect":["Obfuscation","Stench"],"uncursed":true}"#,
+            r#"{"item":"leather_armor"}"#,
+        ] {
+            let mut query = decode(&format!("[{requirement}]"));
+            query.requirements[0].source = Some(ItemSource::VaultTreasure);
+            let plan = QueryPlan::analyze(&query);
+            assert!(
+                !plan.is_unsatisfiable() && plan.needs_vault_treasure,
+                "{requirement}"
+            );
+        }
+        let query = decode(
+            r#"[{"any_of":[{"item":"runic_blade","upgrade":3,"source":"vault_treasure"},{"item":"greatsword","upgrade":3,"source":"vault_treasure"}]}]"#,
+        );
+        assert!(!QueryPlan::analyze(&query).is_unsatisfiable());
+        assert!(QueryPlan::analyze(&query).needs_vault_treasure);
+        let query = decode(
+            r#"[{"any_of":[{"item":"runic_blade","upgrade":3,"source":"vault_treasure"},{"kind":"wand","source":"wandmaker_reward"}]}]"#,
+        );
+        assert!(!QueryPlan::analyze(&query).is_unsatisfiable());
+        assert!(!QueryPlan::analyze(&query).needs_vault_treasure);
+    }
+
+    #[test]
+    fn finite_vault_zero_rows_never_carry_effects() {
+        for requirement in [
+            r#"{"kind":"melee_weapon","tier":{"exact":2},"effect":"any_enchantment"}"#,
+            r#"{"kind":"thrown_weapon","tier":{"exact":2},"effect":"any_enchantment"}"#,
+            r#"{"item":"leather_armor","effect":"any_enchantment"}"#,
+        ] {
+            let mut query = decode(&format!("[{requirement}]"));
+            // Exact(0) is not a validated search predicate, but the internal
+            // row matcher must distinguish +0 from tier two's +2 melee row.
+            let requirement = &mut query.requirements[0];
+            requirement.upgrade = UpgradeRequirement::Exact(0);
+            assert!(!vault_inventory_reachable(requirement));
+            requirement.effect = EffectRequirement::Any;
+            assert!(vault_inventory_reachable(requirement));
+        }
+    }
+    /// Immediate C16 reference: retain its source inventories, but disable
+    /// every new deadline rule, including the Smith tier restriction.
+    fn previous_candidate_plan(query: &SearchQuery) -> QueryPlan {
+        QueryPlan::analyze_with_policies(query, requirement_source_profile, |_, _, limit| {
+            Some(limit)
+        })
+    }
+
+    const NATURAL_DEADLINE_CASES: &[(&str, PlanShape, PlanShape)] = &[
+        (
+            r#"[{"item":"leather_armor","effect":"any_enchantment"}]"#,
+            (false, 24, false),
+            (false, 9, false),
+        ),
+        (
+            r#"[{"kind":"melee_weapon","tier":{"exact":2},"upgrade":1}]"#,
+            (false, 24, false),
+            (false, 9, false),
+        ),
+        (
+            r#"[{"kind":"thrown_weapon","tier":{"exact":2},"upgrade":1}]"#,
+            (false, 24, false),
+            (false, 9, false),
+        ),
+        (
+            r#"[{"kind":"thrown_weapon","tier":{"exact":2},"effect":"any_enchantment"}]"#,
+            (false, 24, false),
+            (false, 9, false),
+        ),
+        (
+            r#"[{"kind":"weapon","tier":{"exact":2},"effect":"any_enchantment"}]"#,
+            (false, 24, true),
+            (false, 19, true),
+        ),
+        (
+            r#"[{"kind":"weapon","tier":{"exact":2}}]"#,
+            (false, 24, true),
+            (false, 21, true),
+        ),
+        (
+            r#"[{"kind":"thrown_weapon","tier":{"exact":2}}]"#,
+            (false, 24, true),
+            (false, 21, true),
+        ),
+        (
+            r#"[{"kind":"weapon","tier":{"exact":3},"source":"heap"}]"#,
+            (false, 24, false),
+            (false, 19, false),
+        ),
+        (
+            r#"[{"kind":"armor","tier":{"at_most":3},"source":"heap"}]"#,
+            (false, 24, false),
+            (false, 19, false),
+        ),
+        (
+            r#"[{"kind":"weapon","tier":{"at_least":3},"source":"heap"}]"#,
+            (false, 24, false),
+            (false, 24, false),
+        ),
+        (
+            r#"[{"kind":"weapon","tier":{"at_least":4},"source":"heap"}]"#,
+            (false, 24, false),
+            (false, 24, false),
+        ),
+        (
+            r#"[{"kind":"armor","tier":{"at_most":4},"source":"heap"}]"#,
+            (false, 24, false),
+            (false, 24, false),
+        ),
+        (
+            r#"[{"item":"quarterstaff","source":"heap"}]"#,
+            (false, 24, false),
+            (false, 9, false),
+        ),
+        (
+            r#"[{"item":"kunai","source":"heap"}]"#,
+            (false, 24, false),
+            (false, 19, false),
+        ),
+        (
+            r#"[{"kind":"weapon","tier":{"exact":2},"source":"blacksmith_reward"}]"#,
+            (false, 14, false),
+            (true, 1, false),
+        ),
+        (
+            r#"[{"kind":"weapon","tier":{"exact":3},"source":"blacksmith_reward"}]"#,
+            (false, 14, false),
+            (false, 14, false),
+        ),
+        (
+            r#"[{"item":"cloth_armor","source":"heap"}]"#,
+            (false, 24, false),
+            (true, 1, false),
+        ),
+        (
+            r#"[{"item":"worn_shortsword","source":"heap"}]"#,
+            (false, 24, false),
+            (true, 1, false),
+        ),
+    ];
+
+    #[test]
+    fn natural_deadlines_preserve_source_specific_exceptions() {
+        for &(requirements, previous, current) in NATURAL_DEADLINE_CASES {
+            let query = decode(requirements);
+            assert_eq!(
+                shape(&previous_candidate_plan(&query)),
+                previous,
+                "{requirements}"
+            );
+            assert_eq!(
+                shape(&QueryPlan::analyze(&query)),
+                current,
+                "{requirements}"
+            );
+        }
+    }
+
+    #[test]
+    fn natural_deadline_limits_do_not_replace_requirement_limits() {
+        for (tier, last_depth) in [(2, 9), (3, 19)] {
+            for limit in [1, 4, 5, 8, 9, 10, 11, 18, 19, 20, 21, 24] {
+                for per_item in [false, true] {
+                    let mut query = decode(&format!(
+                        r#"[{{"kind":"weapon","tier":{{"exact":{tier}}},"source":"heap"}}]"#
+                    ));
+                    if per_item {
+                        query.requirements[0].max_depth = Some(limit);
+                    } else {
+                        query.max_depth = limit;
+                    }
+                    query.validate().unwrap();
+                    let previous = previous_candidate_plan(&query);
+                    let plan = QueryPlan::analyze(&query);
+                    let expected = limit.min(last_depth);
+                    assert_eq!(previous.generation_depth(), limit);
+                    assert_eq!(plan.generation_depth(), expected);
+                    assert_eq!(plan.slots[0][0].open_deadline, Some(expected));
+                    assert_eq!(plan.slots[0][0].max_depth, limit);
+                    assert_eq!(plan.slots[0][0].requirement, query.requirements[0]);
+                    assert!(plan.viable_after_floor(expected - 1, &[], &QuestSummary::default()));
+                    assert!(!plan.viable_after_floor(expected, &[], &QuestSummary::default()));
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn natural_deadline_or_slots_and_world_conditions_keep_later_horizons() {
+        let mixed = decode(
+            r#"[{"any_of":[{"kind":"weapon","tier":{"exact":2},"source":"heap"},{"kind":"ring","source":"heap"}]}]"#,
+        );
+        let plan = QueryPlan::analyze(&mixed);
+        assert_eq!(plan.generation_depth(), 24);
+        assert_eq!(plan.slots[0][0].open_deadline, Some(9));
+        assert_eq!(plan.slots[0][1].open_deadline, Some(24));
+        assert!(plan.viable_after_floor(9, &[], &QuestSummary::default()));
+        let mandatory = decode(
+            r#"[{"kind":"weapon","tier":{"exact":2},"source":"heap"},{"kind":"ring","source":"heap"}]"#,
+        );
+        let plan = QueryPlan::analyze(&mandatory);
+        assert_eq!(plan.generation_depth(), 24);
+        assert!(!plan.viable_after_floor(9, &[], &QuestSummary::default()));
+        let vault = decode(
+            r#"[{"any_of":[{"kind":"weapon","tier":{"exact":2},"source":"heap"},{"item":"ring_accuracy","upgrade":3,"source":"vault_treasure"}]}]"#,
+        );
+        assert_eq!(shape(&QueryPlan::analyze(&vault)), (false, 19, true));
+
+        let mut early = decode(r#"[{"item":"leather_armor","effect":"any_enchantment"}]"#);
+        early.require_blacksmith = true;
+        let plan = QueryPlan::analyze(&early);
+        assert_eq!(plan.generation_depth(), 14);
+        assert_eq!(plan.blacksmith_deadline, Some(14));
+        early.exclude_blacksmith_rewards = true;
+        assert_eq!(QueryPlan::analyze(&early).generation_depth(), 14);
+        early.require_blacksmith = false;
+        assert_eq!(QueryPlan::analyze(&early).generation_depth(), 9);
+
+        let mut quested =
+            decode(r#"[{"kind":"weapon","tier":{"exact":2},"source":"heap","max_depth":3}]"#);
+        quested.wandmaker_quest = Some(crate::quests::WandmakerQuestType::Rotberry);
+        quested.validate().unwrap();
+        let plan = QueryPlan::analyze(&quested);
+        assert_eq!(plan.generation_depth(), 9);
+        assert_eq!(plan.slots[0][0].max_depth, 3);
+        assert_eq!(plan.slots[0][0].open_deadline, Some(3));
+    }
+
+    #[test]
+    fn natural_deadlines_keep_optional_ring_sources_and_slot_limits() {
+        let query = decode(
+            r#"[{"item":"ring_might","source":"vault_treasure","level_sum":{"group":1,"at_least":3}},{"item":"ring_accuracy","level_sum":{"group":1,"at_least":3}},{"kind":"armor","tier":{"exact":2},"source":"heap"}]"#,
+        );
+        let previous = previous_candidate_plan(&query);
+        let current = QueryPlan::analyze(&query);
+        assert_eq!(shape(&current), shape(&previous));
+        for slot in 0..2 {
+            let old = &previous.slots[slot][0];
+            let new = &current.slots[slot][0];
+            assert_eq!(new.requirement, old.requirement);
+            assert_eq!(
+                (new.max_depth, new.quests, new.open_deadline),
+                (old.max_depth, old.quests, old.open_deadline)
+            );
+            for source in ALL_SOURCES {
+                assert_eq!(
+                    source_generation_deadline(&new.requirement, source, 24),
+                    Some(24)
+                );
+            }
+        }
+        assert_eq!(current.slots[2][0].open_deadline, Some(9));
+    }
+
+    #[test]
+    fn natural_deadline_support_matches_pinned_floor_and_category_tables() {
+        use crate::generator::FLOOR_SET_TIER_PROBABILITIES;
+        use crate::run::GeneratorCategory;
+        assert!(
+            FLOOR_SET_TIER_PROBABILITIES
+                .iter()
+                .all(|row| row[0].to_bits() == 0)
+        );
+        for category in [
+            GeneratorCategory::WeaponTier1,
+            GeneratorCategory::MissileTier1,
+        ] {
+            assert_eq!(category.first_probability().to_bits(), 0);
+            assert_eq!(category.second_probability().to_bits(), 0);
+        }
+        for kind in ["weapon", "melee_weapon", "thrown_weapon", "armor"] {
+            for (tier, last_depth) in [(2, 9), (3, 19), (4, 24), (5, 24)] {
+                let query = decode(&format!(
+                    r#"[{{"kind":"{kind}","tier":{{"exact":{tier}}}}}]"#
+                ));
+                let requirement = &query.requirements[0];
+                for source in ALL_SOURCES {
+                    if quest_for_source(source).is_none() && source != ItemSource::Shop {
+                        assert_eq!(
+                            source_generation_deadline(requirement, source, 24),
+                            Some(last_depth),
+                            "{kind}, tier {tier}, {source:?}"
+                        );
+                    }
+                }
+                assert_eq!(
+                    source_generation_deadline(requirement, ItemSource::Shop, 24),
+                    Some(24)
+                );
+                assert_eq!(
+                    source_generation_deadline(requirement, ItemSource::VaultTreasure, 24),
+                    Some(24)
+                );
+                assert_eq!(
+                    source_generation_deadline(requirement, ItemSource::BlacksmithReward, 24),
+                    (tier >= 3).then_some(24)
+                );
+            }
+        }
+        for identity in ["worn_shortsword", "throwing_knife", "cloth_armor"] {
+            let query = decode(&format!(r#"[{{"item":"{identity}"}}]"#));
+            for row in FLOOR_SET_TIER_PROBABILITIES {
+                assert!(!floor_set_supports_requirement(
+                    &query.requirements[0],
+                    &row
+                ));
+            }
+            assert_eq!(
+                source_generation_deadline(&query.requirements[0], ItemSource::Heap, 24),
+                None
+            );
+        }
+    }
+
+    #[test]
+    fn natural_deadline_named_tiers_intersect_filters_without_weakening_validation() {
+        use crate::query::{QueryError, TierRequirement};
+        let query = decode(r#"[{"item":"quarterstaff"}]"#);
+        let mut requirement = query.requirements[0];
+        assert_eq!(
+            source_generation_deadline(&requirement, ItemSource::Heap, 24),
+            Some(9)
+        );
+        // Named items cannot carry an explicit tier filter in a valid query,
+        // but the internal predicate still intersects both constraints.
+        requirement.tier = TierRequirement::Exact(3);
+        assert_eq!(requirement.validate(), Err(QueryError::InvalidTier));
+        assert_eq!(
+            source_generation_deadline(&requirement, ItemSource::Heap, 24),
+            None
+        );
+        requirement.tier = TierRequirement::Any;
+        requirement.weapon_category = Some(WeaponCategory::Thrown);
+        assert_eq!(
+            requirement.validate(),
+            Err(QueryError::InvalidWeaponCategory)
+        );
+    }
+
+    #[test]
+    fn full_worlds_respect_natural_tier_deadlines_and_keep_late_exceptions() {
+        use crate::challenges::Challenges;
+        use crate::main_world::generate_main_world_with_trinket;
+        let mut natural_tiers = [0_usize; 2];
+        let mut natural_boundaries = [0_usize; 2];
+        let mut late_shop_tier_two = 0;
+        let mut late_vault_tier_two = 0;
+        let mut smith_rewards = 0;
+        let base = decode(r#"[{"kind":"weapon"}]"#).requirements[0];
+        for seed in dispersed_seeds() {
+            let choices = std::iter::once(None)
+                .chain(crate::trinkets::initial_offers(seed).into_iter().map(Some));
+            for choice in choices {
+                for challenges in [
+                    Challenges::NONE,
+                    Challenges::DARKNESS,
+                    Challenges::LEVEL_GENERATION,
+                ] {
+                    let world =
+                        generate_main_world_with_trinket(seed, 24, challenges, choice).unwrap();
+                    for item in &world.items {
+                        let definition = crate::catalog::item(item.item);
+                        if !matches!(definition.kind, ItemKind::Weapon | ItemKind::Armor) {
+                            continue;
+                        }
+                        let requirement = Requirement {
+                            kind: definition.kind,
+                            item: Some(item.item),
+                            source: Some(item.source),
+                            ..base
+                        };
+                        assert!(requirement.matches(item));
+                        let deadline = source_generation_deadline(&requirement, item.source, 24)
+                            .expect("an actually generated item keeps a source horizon");
+                        assert!(item.depth <= deadline, "{seed:?} {choice:?} {item:?}");
+                        match item.source {
+                            ItemSource::Shop => {
+                                late_shop_tier_two +=
+                                    usize::from(definition.tier == Some(2) && item.depth >= 20);
+                            }
+                            ItemSource::VaultTreasure => {
+                                late_vault_tier_two +=
+                                    usize::from(definition.tier == Some(2) && item.depth >= 17);
+                            }
+                            ItemSource::BlacksmithReward => {
+                                assert!(definition.tier.is_some_and(|tier| tier >= 3));
+                                smith_rewards += 1;
+                            }
+                            ItemSource::GhostReward
+                            | ItemSource::WandmakerReward
+                            | ItemSource::ImpReward => {}
+                            _ => {
+                                assert!(definition.tier.is_some_and(|tier| tier >= 2));
+                                if let Some(tier @ (2 | 3)) = definition.tier {
+                                    let index = usize::from(tier - 2);
+                                    let limit = if tier == 2 { 9 } else { 19 };
+                                    assert!(item.depth <= limit, "{item:?}");
+                                    natural_tiers[index] += 1;
+                                    natural_boundaries[index] += usize::from(item.depth == limit);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        assert!(natural_tiers.into_iter().all(|count| count > 0));
+        assert!(natural_boundaries.into_iter().all(|count| count > 0));
+        assert!(
+            late_shop_tier_two > 0,
+            "exercise tier-two darts at late shops"
+        );
+        assert!(
+            late_vault_tier_two > 0,
+            "exercise late tier-two vault equipment"
+        );
+        assert!(smith_rewards > 0);
     }
 }

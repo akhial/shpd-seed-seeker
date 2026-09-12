@@ -618,6 +618,10 @@ struct PrisonCompositeDispatcher<'a, 's> {
 }
 
 impl RoomPaintDispatch for PrisonCompositeDispatcher<'_, '_> {
+    fn can_skip_ineligible_terrain(&self) -> bool {
+        true
+    }
+
     fn paint_room(
         &mut self,
         level: &mut Level,

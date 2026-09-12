@@ -29,6 +29,12 @@ pub const PRODUCTION_SEARCH_START_STRIDE: u64 = 3_355_211_884_971;
 /// rolled by the floors generated up to this point, which is what lets a
 /// quest filter prune a seed the moment its giver appears.
 pub trait FloorGate: Sync {
+    /// Check seed-specific facts fixed by run initialization before generating
+    /// a floor. Returning false must prove the query cannot match this seed.
+    fn continue_after_run_init(&self, _run: &crate::run::RunState) -> bool {
+        true
+    }
+
     fn selected_trinket(&self, _seed: DungeonSeed) -> Option<crate::catalog::ItemId> {
         None
     }
@@ -1593,5 +1599,212 @@ mod tests {
         assert_eq!(failure.chunk_start, Some(4));
         assert_eq!(failure.chunk_end_exclusive, Some(8));
         assert!(failure.message.contains("fixture panic at seed six"));
+    }
+    type WorldMap = std::collections::BTreeMap<u64, GeneratedWorld>;
+    type RealRelease = Arc<(Mutex<bool>, std::sync::Condvar)>;
+
+    struct ReleaseCanonicalBatch(RealRelease);
+    impl Drop for ReleaseCanonicalBatch {
+        fn drop(&mut self) {
+            *self
+                .0
+                .0
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = true;
+            self.0.1.notify_all();
+        }
+    }
+
+    struct StalledCanonicalBatch {
+        generator: crate::main_world::CanonicalMainWorldGenerator,
+        first_seed: u64,
+        release: RealRelease,
+        reached: std::sync::mpsc::Sender<()>,
+    }
+    impl WorldGenerator for StalledCanonicalBatch {
+        fn generate(&self, seed: crate::seed::DungeonSeed, max_depth: u8) -> GeneratedWorld {
+            self.generator.generate(seed, max_depth)
+        }
+        fn generate_batch_gated(
+            &self,
+            seeds: &[crate::seed::DungeonSeed],
+            max_depth: u8,
+            gate: &dyn super::FloorGate,
+        ) -> Vec<Option<GeneratedWorld>> {
+            let worlds = self.generator.generate_batch_gated(seeds, max_depth, gate);
+            if seeds
+                .first()
+                .is_some_and(|seed| seed.value() == self.first_seed)
+            {
+                let _ = self.reached.send(());
+                let mut release = self
+                    .release
+                    .0
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                while !*release {
+                    release = self
+                        .release
+                        .1
+                        .wait(release)
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
+                }
+            }
+            worlds
+        }
+    }
+
+    fn merge_finished_worlds(handle: &super::StreamingSearchHandle, worlds: &mut WorldMap) {
+        finish(handle);
+        let drained = handle.drain_results(usize::MAX);
+        assert_eq!(u64::try_from(drained.len()).unwrap(), handle.accepted());
+        for world in drained {
+            if let Some(previous) = worlds.insert(world.seed.value(), world.clone()) {
+                assert_eq!(
+                    previous, world,
+                    "overlapping resumed seeds preserve complete worlds"
+                );
+            }
+        }
+    }
+
+    fn real_stream_fixture() -> (
+        crate::main_world::CanonicalMainWorldGenerator,
+        SearchQuery,
+        SearchOptions,
+        WorldMap,
+    ) {
+        let generator = crate::main_world::CanonicalMainWorldGenerator;
+        let query = crate::json_query::decode(
+            r#"{"auto_apply_trinket":false,"max_depth":1,"requirements":[{"kind":"ring"}]}"#,
+        )
+        .unwrap();
+        let options = SearchOptions {
+            start_seed: 20_000_000,
+            end_seed_exclusive: 20_001_031,
+            workers: NonZeroUsize::new(4).unwrap(),
+            chunk_size: NonZeroUsize::new(4).unwrap(),
+            max_results: NonZeroUsize::MAX,
+        };
+        let expected =
+            search_parallel(&generator, &query, options, &SearchProgress::default()).unwrap();
+        assert_eq!(expected.tested, 1031);
+        assert!(!expected.worlds.is_empty());
+        (
+            generator,
+            query,
+            options,
+            expected
+                .worlds
+                .into_iter()
+                .map(|world| (world.seed.value(), world))
+                .collect(),
+        )
+    }
+
+    #[test]
+    fn canonical_cancelled_wrapped_search_resumes_without_losing_worlds() {
+        let (generator, query, options, expected) = real_stream_fixture();
+        let generator = Arc::new(generator);
+        let start = options.end_seed_exclusive - 3;
+        let (sent, received) = std::sync::mpsc::channel();
+        let release = Arc::new((Mutex::new(false), std::sync::Condvar::new()));
+        let delayed = Arc::new(StalledCanonicalBatch {
+            generator: crate::main_world::CanonicalMainWorldGenerator,
+            first_seed: start,
+            release: Arc::clone(&release),
+            reached: sent,
+        });
+        let handle =
+            spawn_partial_streaming_search(&delayed, query.clone(), options, start, 1031).unwrap();
+        let unblock = ReleaseCanonicalBatch(release);
+        received
+            .recv_timeout(std::time::Duration::from_secs(10))
+            .unwrap();
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while handle.accepted() == 0 {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "other workers must deliver a match"
+            );
+            std::thread::yield_now();
+        }
+        handle.cancel();
+        drop(unblock);
+        let mut actual = WorldMap::new();
+        merge_finished_worlds(&handle, &mut actual);
+        assert_eq!(handle.state(), StreamingSearchState::Cancelled);
+        assert!(
+            !actual.is_empty(),
+            "exercise duplicate delivery across resumed coverage"
+        );
+        let coverage = handle.resume_coverage();
+        assert_eq!(
+            coverage,
+            super::ResumeCoverage {
+                position: start,
+                remaining: 1031
+            }
+        );
+        let resumed = spawn_partial_streaming_search(
+            &generator,
+            query,
+            options,
+            coverage.position,
+            coverage.remaining,
+        )
+        .unwrap();
+        merge_finished_worlds(&resumed, &mut actual);
+        assert_eq!(resumed.state(), StreamingSearchState::Completed);
+        assert_eq!(resumed.resume_coverage().remaining, 0);
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn canonical_capped_passes_cover_every_world_across_wrap() {
+        let (generator, query, mut options, expected) = real_stream_fixture();
+        let generator = Arc::new(generator);
+        options.max_results = NonZeroUsize::new(7).unwrap();
+        let mut coverage = super::ResumeCoverage {
+            position: options.end_seed_exclusive - 3,
+            remaining: 1031,
+        };
+        let mut actual = WorldMap::new();
+        let mut passes = 0;
+        while coverage.remaining > 0 {
+            let handle = spawn_partial_streaming_search(
+                &generator,
+                query.clone(),
+                options,
+                coverage.position,
+                coverage.remaining,
+            )
+            .unwrap();
+            let previous_count = actual.len();
+            merge_finished_worlds(&handle, &mut actual);
+            assert_eq!(handle.state(), StreamingSearchState::Completed);
+            let cap_bound =
+                options.max_results.get() + options.workers.get() * options.chunk_size.get();
+            assert!(
+                handle.accepted() < u64::try_from(cap_bound).unwrap(),
+                "result-cap overshoot is bounded by in-flight chunks"
+            );
+            assert_eq!(
+                u64::try_from(actual.len() - previous_count).unwrap(),
+                handle.accepted(),
+                "cap-only passes must deliver disjoint complete chunks"
+            );
+            let next = handle.resume_coverage();
+            assert_eq!(handle.tested(), coverage.remaining - next.remaining);
+            assert!(
+                next.remaining < coverage.remaining,
+                "each capped pass must advance coverage"
+            );
+            coverage = next;
+            passes += 1;
+            assert!(passes <= 1031);
+        }
+        assert!(passes > 1, "exercise result-cap interruption");
+        assert_eq!(actual, expected);
     }
 }

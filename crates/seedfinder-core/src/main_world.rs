@@ -365,6 +365,9 @@ fn generate_gated_world_with_roots(
     let dungeon_seed = i64::try_from(seed.value()).expect("base-26 seed range fits Java long");
     let mut run = RunState::with_challenges(dungeon_seed, challenges);
     run.generate_vault = gate.wants_vault_treasure();
+    if !gate.continue_after_run_init(&run) {
+        return Ok(None);
+    }
     let mut limited_drops = LimitedDrops::default();
     let mut quests = QuestState::new();
     let mut shop_run = ShopRunState::default();
