@@ -14,8 +14,8 @@ android {
         // Compose 1.9+ (required for Material 3 Expressive) raised the floor to API 23.
         minSdk = 23
         targetSdk = 36
-        versionCode = 18
-        versionName = "0.12.0"
+        versionCode = 19
+        versionName = "0.12.1"
 
         ndk {
             // The Rust build produces exactly these ABIs. Without an explicit filter,
@@ -159,6 +159,10 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling")
 
     testImplementation("junit:junit:4.13.2")
+    testImplementation(composeBom)
+    testImplementation("androidx.compose.ui:ui-test-junit4")
+    testImplementation("org.robolectric:robolectric:4.16.1")
+    debugImplementation("androidx.compose.ui:ui-test-manifest")
     // Real org.json for JVM unit tests; the android.jar copy is a stub.
     testImplementation("org.json:json:20240303")
 }

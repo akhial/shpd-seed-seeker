@@ -30,6 +30,20 @@ This project is licensed under GPL-3.0-or-later. The unmodified `items.png` atla
 
 Shattered Pixel Dungeon is copyright © 2014–2026 Evan Debenham. Pixel Dungeon is copyright © 2012–2015 Oleg Dolya. Seed Seeker is not affiliated with or endorsed by Shattered Pixel Dungeon or its authors.
 
+## Scout scrolling
+
+The seed form scrolls out beneath the app bar. During the last part of that
+scroll, the summary reduces to one line: counts move right and fade, the seed
+becomes slightly smaller, and the requirements capsule wipes its label from
+the right while shrinking into a status circle. Complete matches show a check;
+partial matches keep an info indicator and the full count for accessibility.
+Pagination and trinket controls stay beneath the summary, above sticky floor
+headings. Scrolling back to the top reverses the transition.
+
+`./gradlew :app:testDebugUnitTest :app:lintDebug` runs the Android checks without
+an emulator. The Scout Compose tests use Robolectric's native renderer and save
+review screenshots under `app/build/outputs/scout-ui/`.
+
 ## Trinkets
 
 The requirement picker has a named Trinket category, including either/or groups.
