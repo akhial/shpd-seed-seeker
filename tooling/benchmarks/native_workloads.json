@@ -1,0 +1,276 @@
+{
+  "cli": {
+    "max_depth": 19,
+    "auto_apply_trinket": false,
+    "requirements": [
+      {
+        "item": "runic_blade",
+        "upgrade": 5
+      }
+    ]
+  },
+  "cheap": {
+    "max_depth": 1,
+    "requirements": [
+      {
+        "kind": "ring"
+      }
+    ],
+    "auto_apply_trinket": false
+  },
+  "early": {
+    "max_depth": 24,
+    "requirements": [
+      {
+        "item": "leather_armor",
+        "upgrade": 3,
+        "source": "ghost_reward"
+      }
+    ],
+    "auto_apply_trinket": false
+  },
+  "wand": {
+    "max_depth": 24,
+    "requirements": [
+      {
+        "item": "wand_fireblast",
+        "upgrade": 3,
+        "source": "wandmaker_reward"
+      }
+    ],
+    "auto_apply_trinket": false
+  },
+  "late": {
+    "max_depth": 24,
+    "requirements": [
+      {
+        "item": "runic_blade",
+        "upgrade": 2,
+        "effect": "Grim",
+        "source": "heap"
+      }
+    ],
+    "auto_apply_trinket": false
+  },
+  "vault_feasible": {
+    "max_depth": 24,
+    "requirements": [
+      {
+        "item": "ring_accuracy",
+        "upgrade": 3,
+        "source": "vault_treasure"
+      }
+    ],
+    "auto_apply_trinket": false
+  },
+  "blade_might": {
+    "max_depth": 19,
+    "auto_apply_trinket": false,
+    "requirements": [
+      {
+        "item": "runic_blade",
+        "upgrade": 2,
+        "effect": [
+          "Grim",
+          "Corrupting",
+          "Vampiric",
+          "Crystal"
+        ]
+      },
+      {
+        "item": "ring_might",
+        "upgrade": 2
+      }
+    ]
+  },
+  "blade_might_auto": {
+    "max_depth": 19,
+    "auto_apply_trinket": true,
+    "requirements": [
+      {
+        "item": "runic_blade",
+        "upgrade": 2,
+        "effect": [
+          "Grim",
+          "Corrupting",
+          "Vampiric",
+          "Crystal"
+        ]
+      },
+      {
+        "item": "ring_might",
+        "upgrade": 2
+      }
+    ]
+  },
+  "crossbow": {
+    "max_depth": 19,
+    "auto_apply_trinket": false,
+    "requirements": [
+      {
+        "item": "crossbow",
+        "upgrade": 5
+      }
+    ]
+  },
+  "trinket": {
+    "max_depth": 3,
+    "auto_apply_trinket": false,
+    "requirements": [
+      {
+        "item": "mimic_tooth"
+      }
+    ]
+  },
+  "trinket_deep": {
+    "max_depth": 19,
+    "auto_apply_trinket": false,
+    "requirements": [
+      {
+        "item": "mimic_tooth",
+        "select_trinket": true
+      },
+      {
+        "item": "runic_blade",
+        "upgrade": 1,
+        "effect": "Grim"
+      }
+    ]
+  },
+  "trinket_or": {
+    "max_depth": 3,
+    "auto_apply_trinket": false,
+    "requirements": [
+      {
+        "any_of": [
+          {
+            "item": "mimic_tooth"
+          },
+          {
+            "item": "rat_skull"
+          }
+        ]
+      }
+    ]
+  },
+  "trinket_mixed": {
+    "max_depth": 3,
+    "auto_apply_trinket": false,
+    "requirements": [
+      {
+        "any_of": [
+          {
+            "item": "rat_skull"
+          },
+          {
+            "kind": "weapon"
+          }
+        ]
+      }
+    ]
+  },
+  "cheap_auto": {
+    "max_depth": 1,
+    "requirements": [
+      {
+        "kind": "ring"
+      }
+    ],
+    "auto_apply_trinket": true
+  },
+  "imp_ring": {
+    "max_depth": 24,
+    "auto_apply_trinket": false,
+    "requirements": [
+      {
+        "item": "ring_might",
+        "upgrade": 3
+      }
+    ]
+  },
+  "imp_greatsword": {
+    "max_depth": 24,
+    "auto_apply_trinket": false,
+    "requirements": [
+      {
+        "item": "greatsword",
+        "upgrade": 4
+      }
+    ]
+  },
+  "finite_weapon": {
+    "max_depth": 24,
+    "auto_apply_trinket": false,
+    "requirements": [
+      {
+        "kind": "weapon",
+        "tier": {
+          "exact": 4
+        },
+        "upgrade": 3
+      }
+    ]
+  },
+  "finite_armor": {
+    "max_depth": 24,
+    "auto_apply_trinket": false,
+    "requirements": [
+      {
+        "item": "leather_armor",
+        "effect": "any_enchantment"
+      }
+    ]
+  },
+  "tier2_melee": {
+    "max_depth": 24,
+    "auto_apply_trinket": false,
+    "requirements": [
+      {
+        "kind": "melee_weapon",
+        "tier": {
+          "exact": 2
+        },
+        "upgrade": 1
+      }
+    ]
+  },
+  "tier2_thrown": {
+    "max_depth": 24,
+    "auto_apply_trinket": false,
+    "requirements": [
+      {
+        "kind": "thrown_weapon",
+        "tier": {
+          "exact": 2
+        },
+        "upgrade": 1
+      }
+    ]
+  },
+  "tier3_heap": {
+    "max_depth": 24,
+    "auto_apply_trinket": false,
+    "requirements": [
+      {
+        "kind": "weapon",
+        "tier": {
+          "exact": 3
+        },
+        "source": "heap"
+      }
+    ]
+  },
+  "tier3_armor_heap": {
+    "max_depth": 24,
+    "auto_apply_trinket": false,
+    "requirements": [
+      {
+        "kind": "armor",
+        "tier": {
+          "exact": 3
+        },
+        "source": "heap"
+      }
+    ]
+  }
+}

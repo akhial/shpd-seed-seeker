@@ -16,6 +16,7 @@ if not re.fullmatch(r"[a-z0-9-]+", label):
     raise SystemExit("label must contain only lowercase letters, digits, or hyphens")
 manifest = json.loads((work / "manifest.json").read_text())
 count, workers = manifest["count"], manifest["workers"]
+first_seed = manifest.get("start", 0)
 if (work / f"{label}-progress.json").exists():
     raise SystemExit("replay already exists; use a fresh archive directory to preserve evidence")
 (work / f"{label}-manifest.json").write_text(json.dumps({
@@ -24,7 +25,8 @@ if (work / f"{label}-progress.json").exists():
 }, indent=2))
 
 def replay(index):
-    start, end = count * index // workers, count * (index + 1) // workers
+    start = first_seed + count * index // workers
+    end = first_seed + count * (index + 1) // workers
     prefix = work / f"shard-{index}"
     decoder = zlib.decompressobj(16 + zlib.MAX_WBITS)
     with open(str(prefix) + f".{label}.diff.jsonl", "wb") as output, open(str(prefix) + f".{label}.log", "wb") as log:

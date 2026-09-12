@@ -17,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[2]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("count", type=int)
 parser.add_argument("workers", type=int, nargs="?", default=6)
+parser.add_argument("--start", type=int, default=0, help="first numeric dungeon seed (default: 0)")
 parser.add_argument("--output", type=Path, required=True)
 parser.add_argument("--exe", type=Path, required=True)
 parser.add_argument("--java", default=str(Path(os.environ.get("JAVA_21_HOME", os.environ.get("JAVA_HOME", ""))) / "bin/java") if os.environ.get("JAVA_21_HOME") or os.environ.get("JAVA_HOME") else "java")
@@ -24,6 +25,9 @@ args = parser.parse_args()
 COUNT, WORKERS = args.count, args.workers
 if not 0 < WORKERS <= COUNT:
     parser.error("require 0 < workers <= count")
+START = args.start
+if not 0 <= START < START + COUNT <= 26**9:
+    parser.error("seed interval must fit the nine-letter dungeon seed namespace")
 WORK = args.output.resolve()
 WORK.mkdir(parents=True, exist_ok=False)
 JAVA = args.java
@@ -43,7 +47,7 @@ manifest = {
     "game_commit": "2bb34a4e91d29c8785a9363cad6ddfe5122b1d4f",
     "jar_sha256": jar_hash, "exe_sha256": hashlib.sha256(EXE.read_bytes()).hexdigest(),
     "java_runtime": subprocess.check_output([JAVA, "-version"], stderr=subprocess.STDOUT, text=True).strip(),
-    "start": 0, "count": COUNT, "workers": WORKERS, "floors": 24,
+    "start": START, "count": COUNT, "workers": WORKERS, "floors": 24,
     "vault": True, "challenges": 0, "hero": "Warrior",
     "comparison_fields": ["floor", "source", "item", "upgrade", "cursed", "effect", "branch", "cell", "width", "height", "terrain_cells"],
     "comparison": "exact sorted multisets, duplicate entries retained",
@@ -52,8 +56,8 @@ manifest = {
 (WORK / "manifest.json").write_text(json.dumps(manifest, indent=2))
 
 def worker(index):
-    start=COUNT*index//WORKERS
-    end=COUNT*(index+1)//WORKERS
+    start=START+COUNT*index//WORKERS
+    end=START+COUNT*(index+1)//WORKERS
     prefix=WORK/f"shard-{index}"
     began=time.time()
     with open(str(prefix)+".java.log","wb") as je, open(str(prefix)+".rust.log","wb") as re, open(str(prefix)+".diff.jsonl","wb") as out, gzip.open(str(prefix)+".oracle.txt.gz","wb",compresslevel=1) as archive:
@@ -74,7 +78,7 @@ def worker(index):
     return result
 
 began=time.time()
-(WORK/"run.json").write_text(json.dumps({"pid":os.getpid(),"started_at":began,"count":COUNT,"workers":WORKERS},indent=2))
+(WORK/"run.json").write_text(json.dumps({"pid":os.getpid(),"started_at":began,"start":START,"count":COUNT,"workers":WORKERS},indent=2))
 with concurrent.futures.ThreadPoolExecutor(max_workers=WORKERS) as pool:
     jobs=[pool.submit(worker,n) for n in range(WORKERS)]
     while not all(j.done() for j in jobs):

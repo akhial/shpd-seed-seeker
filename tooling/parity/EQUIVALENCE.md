@@ -72,6 +72,8 @@ Set `JAVA_21_HOME`, `JAVA_HOME`, or pass `--java` with the Java executable.
 The final-release validation used Eclipse Adoptium JDK 25.0.4.1 on macOS arm64.
 The output directory must not exist. The runner freezes the comparator binary
 and records its hash, the Git revision, oracle hash, and exact seed coverage.
+Pass `--start 1310000` to check a different interval; the default starts at zero.
+Replay uses the recorded starting seed and preserves the original shard boundaries.
 
 Each shard retains compressed oracle records, JSON multiset differences,
 stderr, and a completion record. `progress.json` is partial progress only.
