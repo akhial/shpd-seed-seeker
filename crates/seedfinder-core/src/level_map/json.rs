@@ -7,7 +7,7 @@ use crate::catalog::{item, item_by_stable_id};
 use crate::challenges::Challenges;
 use crate::json_query::{self, CHALLENGE_NAMES};
 use crate::seed::DungeonSeed;
-use crate::trinkets::{resolve_selection, selection_slots, trinket_order};
+use crate::trinkets::{selected_for_query, trinket_order};
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -61,9 +61,7 @@ pub fn decode_request(input: &str) -> Result<LevelMapRequest, String> {
         .map(|query| json_query::decode(&query.to_string()))
         .transpose()?;
     let selected_trinket = match request.trinket.as_deref() {
-        None => query
-            .as_ref()
-            .and_then(|q| resolve_selection(seed, &selection_slots(q))),
+        None => query.as_ref().and_then(|q| selected_for_query(seed, q)),
         Some("none") => None,
         Some(id) => Some(
             item_by_stable_id(id)

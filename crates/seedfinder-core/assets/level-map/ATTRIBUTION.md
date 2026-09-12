@@ -26,8 +26,8 @@ Rendering rules are adapted from the same revision's
 half-wall masks in `FogOfWar`, the trap/plant sprite indices,
 `GameScene` water scrolling and `SewerLevel.Sink` pixel particles. The overview
 uses raised sprites, offers concealed/revealed secret layers, and makes ambient animation
-repeatable. The source revision is distinct from the generation engine's RC1
-JAR pin; it is not presented as an RC1 asset extraction.
+repeatable. The source revision matches the generation engine's v4.0.0 pin;
+the release JAR's digest is recorded separately in `tooling/oracle-4.0/build.sh`.
 
 To update, obtain the original PNGs and rendering tables from one explicit
 source revision, update the embedded manifest and bounds/selection tests, and
