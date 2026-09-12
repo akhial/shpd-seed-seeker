@@ -3,6 +3,7 @@
 import argparse
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import ExitStack
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -11,6 +12,8 @@ from pathlib import Path
 import platform
 import random
 import subprocess
+import sys
+import threading
 import time
 
 BINARY = Path('target/benchmark/aarch64-apple-darwin/release/examples/match_benchmark')
@@ -37,18 +40,49 @@ def seeds_at(start, count):
             for i in range(start, start + count)]
 
 
+SERVICE_LIFECYCLE_REVISION = 1
+
+
+def close_services(services):
+    """Close every registered service and retain an in-flight primary failure."""
+    primary = sys.exc_info()[1]
+    try:
+        with ExitStack() as cleanup:
+            for service in services:
+                cleanup.callback(service.close, abort=primary is not None)
+    except BaseException as failure:
+        # ExitStack invokes every callback even when several fail. Its exception
+        # chain retains their failures; preserve a request/constructor exception
+        # as the primary error instead of silently replacing it with shutdown.
+        if primary is not None:
+            raise primary from failure
+        raise
+
+
 class Service:
     def __init__(self, command, log):
-        self.log = log.open('w')
-        self.process = subprocess.Popen(command, stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE, stderr=self.log, text=True)
-        self.ready = self.receive()
-        assert self.ready['ready']
+        self.process = None
+        self.log = None
+        self._closed = False
+        try:
+            self.log = log.open('w')
+            self.process = subprocess.Popen(
+                command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                stderr=self.log, text=True,
+            )
+            self.ready = self.receive()
+            if not isinstance(self.ready, dict) or self.ready.get('ready') is not True:
+                raise RuntimeError(f'adapter did not report ready: see {self.log.name}')
+        except BaseException:
+            close_services([self])
+            raise
 
     def receive(self):
         line = self.process.stdout.readline()
         if not line:
             raise RuntimeError(f'adapter exited: see {self.log.name}')
+        if not line.endswith('\n'):
+            raise RuntimeError(f'adapter response lacks a final newline: see {self.log.name}')
         return json.loads(line)
 
     def request(self, document):
@@ -60,15 +94,105 @@ class Service:
         assert len(set(seeds)) == len(seeds) and set(seeds) <= set(document['seeds'])
         return response
 
-    def close(self):
-        self.process.stdin.close()
+    def close(self, timeout=10.0, cleanup_timeout=2.0, abort=False):
+        """Require empty trailing stdout and exit zero, with bounded cleanup.
+
+        The single-character probe uses the same TextIOWrapper as receive(),
+        including characters prefetched by readline(). It alone owns stdout
+        after shutdown starts. Never close that wrapper from another thread:
+        its blocked read can hold a lock which would make close() block too.
+        Normal shutdown follows a fully flushed request. On a request failure,
+        abort the owned child first so stdin.close() cannot wait for it to read
+        leftover buffered input. No concurrent request may still use the pipes.
+        """
+        if self._closed:
+            return
+        self._closed = True
+        process, log = self.process, self.log
+        self.process = self.log = None
+        log_name = log.name if log is not None else '<no stderr log>'
+        failures = []
+        primary = None
+        probe = None
+        result = {}
+        deadline = time.monotonic() + timeout
+
+        def read_tail():
+            try:
+                result['tail'] = process.stdout.read(1)
+            except Exception as error:
+                result['error'] = str(error)
+            finally:
+                try:
+                    process.stdout.close()
+                except OSError as error:
+                    result['close_error'] = str(error)
+
         try:
-            self.process.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            self.process.kill()
-            self.process.wait()
-        self.process.stdout.close()
-        self.log.close()
+            if process is not None:
+                if process.stdout is not None:
+                    probe = threading.Thread(target=read_tail, daemon=True)
+                    probe.start()
+                if abort and process.poll() is None:
+                    process.kill()
+                    process.wait(timeout=cleanup_timeout)
+                if process.stdin is not None and not process.stdin.closed:
+                    try:
+                        process.stdin.close()
+                    except OSError as error:
+                        failures.append(f'closing stdin failed: {error}')
+                try:
+                    process.wait(timeout=max(0.0, deadline - time.monotonic()))
+                except subprocess.TimeoutExpired:
+                    failures.append(f'adapter did not exit within {timeout:g}s')
+        except BaseException as error:
+            primary = error
+        finally:
+            if process is not None:
+                if process.poll() is None:
+                    try:
+                        process.kill()
+                    except OSError as error:
+                        failures.append(f'killing adapter failed: {error}')
+                    try:
+                        process.wait(timeout=cleanup_timeout)
+                    except subprocess.TimeoutExpired:
+                        failures.append('adapter was not reaped after kill')
+                if probe is not None and probe.ident is not None:
+                    probe.join(timeout=cleanup_timeout)
+                    if probe.is_alive():
+                        failures.append('stdout did not reach EOF after adapter exit')
+                        # A descendant can retain the pipe after our owned child
+                        # exits. Fail promptly; the daemon remains its sole owner
+                        # and closes it when that writer exits or this process ends.
+                    else:
+                        if result.get('tail'):
+                            failures.append(f'unexpected trailing stdout: {result["tail"]!r}')
+                        if 'error' in result:
+                            failures.append(f'reading trailing stdout failed: {result["error"]}')
+                        if 'close_error' in result:
+                            failures.append(f'closing stdout failed: {result["close_error"]}')
+                elif process.stdout is not None:
+                    # Thread creation failed; no concurrent reader owns stdout.
+                    try:
+                        process.stdout.close()
+                    except OSError as error:
+                        failures.append(f'closing stdout failed: {error}')
+                if process.returncode != 0:
+                    failures.append(f'adapter exit status {process.returncode}')
+            if log is not None:
+                try:
+                    log.close()
+                except OSError as error:
+                    failures.append(f'closing stderr log failed: {error}')
+
+        if failures:
+            failure = RuntimeError('; '.join(failures) + f'; see {log_name}')
+            if primary is not None:
+                raise primary from failure
+            raise failure
+        if primary is not None:
+            raise primary
 
 
 def java_request(pool, services, seeds, recipes=None):
@@ -214,6 +338,8 @@ def run_case(args, name, java_class, query):
             for b in (b for b in blocks if b['mode'] == 'java'):
                 replay = native['native_off'].request({'seeds': seeds_at(b['start_index'], b['tested'])})
                 assert {r['seed'] for r in replay['matches']} == {r['seed'] for r in b['matches']}, (name, b['block'], 'Java/native parity')
+            close_services(services)
+            services.clear()
             summary = summarize(blocks)
             summary.update(query=query, verified=dict(verified), java_native_parity=True)
             for m in MODES:
@@ -225,8 +351,7 @@ def run_case(args, name, java_class, query):
             print(name, json.dumps(summary), flush=True)
             return summary
     finally:
-        for service in services:
-            service.close()
+        close_services(services)
 
 
 def main():

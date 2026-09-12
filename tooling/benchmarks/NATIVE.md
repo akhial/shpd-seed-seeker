@@ -41,6 +41,14 @@ Inspect these outputs:
 - `summary.json`: per-workload timings, throughput ratios, paired ratios, regressions, and equal-weight geometric means. Zero or rounded-to-zero durations are explicitly excluded from ratios.
 - `completion.json` or `failure.json`, plus adapter setup records and stderr logs.
 
-Use internal search seconds for engine comparisons. Wall seconds also include process/protocol overhead and the inherited `Service.request` validation; this script's additional validation and hashing are outside the wall timer. Adapter setup is untimed, but each request creates worker threads. CLI samples launch a new process and its reported time rounds to milliseconds. Warmup does not preserve worker-local allocator/TLS state across those new threads or processes.
+Use internal search seconds for engine comparisons. Wall seconds also include process/protocol overhead and the shared `Service.request` validation; this script's additional validation and hashing are outside the wall timer. Adapter setup is untimed, but each request creates worker threads. CLI samples launch a new process and its reported time rounds to milliseconds. Warmup does not preserve worker-local allocator/TLS state across those new threads or processes.
+
+Successful adapter runs require newline-terminated responses, no trailing stdout after the last response, and a zero exit status. Shutdown waits are bounded; failure is recorded before a success summary is published. An explicitly selected `--service-module` must provide the current lifecycle revision (1); older helper modules fail before any adapter launches. Request duration remains unlimited so long real searches are not mistaken for shutdown failures.
 
 Adapter comparisons cover the complete reported recipe/witness records. **CLI equality is match-count-only**, because the existing `--benchmark` interface does not expose individual results. This harness does not run Java or replace Rust correctness tests and oracle/equivalence validation. Review per-workload and per-worker regressions even when the geometric mean improves.
+
+Validate the shared adapter protocol with synthetic subprocesses (these are not engine benchmarks):
+
+```sh
+python3 tooling/benchmarks/test_services.py
+```

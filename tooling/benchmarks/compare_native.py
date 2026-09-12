@@ -93,6 +93,7 @@ def environment_counters():
             fields = value[end + 1:].split()
             processes[path.parent.name] = {
                 "name": value[value.index("(") + 1:end],
+                "ppid": int(fields[1]),
                 "cpu_jiffies": int(fields[11]) + int(fields[12]),
                 "started_jiffies": fields[19],
             }
@@ -136,37 +137,12 @@ def load_service_module(path):
 
 
 def service_class(module):
-    class ManagedService(module.Service):
-        """Also clean up when the inherited constructor fails before ready."""
-        def __init__(self, command, log):
-            self.process = None
-            self.log = None
-            try:
-                super().__init__(command, log)
-            except BaseException:
-                self.close()
-                raise
-
-        def close(self):
-            process = self.process
-            if process is not None:
-                if process.stdin is not None and not process.stdin.closed:
-                    try:
-                        process.stdin.close()
-                    except OSError:
-                        pass
-                try:
-                    process.wait(timeout=10)
-                except subprocess.TimeoutExpired:
-                    process.kill()
-                    process.wait()
-                if process.stdout is not None:
-                    process.stdout.close()
-                self.process = None
-            if self.log is not None:
-                self.log.close()
-                self.log = None
-    return ManagedService
+    if (getattr(module, "SERVICE_LIFECYCLE_REVISION", None) != 1
+            or not callable(getattr(module, "close_services", None))):
+        raise ValueError(
+            "--service-module must provide lifecycle revision 1; "
+            "use the current repository effective_matches.py")
+    return module.Service
 
 
 def validate_adapter_response(result, seeds):
@@ -315,7 +291,7 @@ def main():
         "workloads": {"path": str(suite_path), "sha256": digest(suite_path), "queries": {case: suite[case] for case in cases}},
         "service_module": {"path": str(service_path), "sha256": digest(service_path)},
         "sample_counts": sample_counts, "pair_order": "AB, BA, AB, BA; repeat for additional repetitions",
-        "timing": "Internal seconds time search work; wall seconds include adapter protocol/output and inherited Service.request response validation. This harness's additional validation, canonicalization, and hashing occur after the wall timer. CLI wall time includes process startup; its internal time includes query planning and worker startup and rounds to milliseconds. Adapter startup/setup are outside samples; each request still starts workers.",
+        "timing": "Internal seconds time search work; wall seconds include adapter protocol/output and shared Service.request response validation. This harness's additional validation, canonicalization, and hashing occur after the wall timer. CLI wall time includes process startup; its internal time includes query planning and worker startup and rounds to milliseconds. Adapter startup/setup are outside samples; each request still starts workers.",
         "seed_order": "CLI scans [0,count) every repetition; adapters use effective_matches.seeds_at(start + rep*count,count). Adapter index intervals must stay within [0,26**9); mapped seed values are intentionally dispersed modulo 26**9.",
         "warmup": "One untimed request per adapter/case/worker with min(256 or 2048 cheap, sample count) seeds; --seeds also bounds warmup. CLI uses one untimed subprocess of min(256,count). No adaptive calibration.",
         "equality": "Exact canonical JSON equality and SHA256 for all adapter recipe/witness records; CLI exposes counts only.",
@@ -383,8 +359,7 @@ def main():
                             if not equal:
                                 raise ValueError(f"match equality failed: {case}, workers={worker_count}, rep={rep}; raw records retained")
                     finally:
-                        for service in services.values():
-                            service.close()
+                        module.close_services(services.values())
         final_hashes = {name: {kind: digest(path) for kind, path in paths.items()} for name, paths in binaries.items()}
         if hashes != final_hashes:
             raise ValueError("a frozen executable changed during measurement")
