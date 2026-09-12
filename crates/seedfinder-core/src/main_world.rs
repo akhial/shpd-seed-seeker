@@ -1217,6 +1217,7 @@ mod deferred_vault_tests {
     }
 
     #[test]
+    #[ignore = "extended seed sweep; run with --release --ignored"]
     fn deferred_vault_full_world_order_matches_eager_with_challenges_and_all_offers() {
         struct ChoiceGate<'a>(&'a QueryPlan, Option<ItemId>);
         impl FloorGate for ChoiceGate<'_> {
@@ -1301,8 +1302,43 @@ mod deferred_vault_tests {
         assert!(feeling_profiles.into_iter().all(|seen| seen));
     }
 
+    const DEFERRED_SEARCH_REQUIREMENTS: [&str; 3] = [
+        r#"[{"item":"runic_blade","upgrade":2,"effect":["Grim","Corrupting","Vampiric","Crystal"]},{"item":"ring_might","upgrade":2}]"#,
+        r#"[{"item":"runic_blade","upgrade":2},{"item":"ring_might"}]"#,
+        r#"[{"any_of":[{"item":"runic_blade","upgrade":4,"source":"vault_treasure"},{"item":"greatsword","upgrade":2}]},{"item":"ring_might","upgrade":2}]"#,
+    ];
+
     #[test]
+    #[ignore = "extended seed sweep; run with --release --ignored"]
     fn deferred_vault_search_recipes_replays_and_witnesses_match_eager() {
+        check_deferred_search(
+            &values(),
+            &DEFERRED_SEARCH_REQUIREMENTS,
+            &[
+                Challenges::NONE,
+                Challenges::DARKNESS,
+                Challenges::LEVEL_GENERATION,
+            ],
+        );
+    }
+
+    #[test]
+    fn deferred_vault_smoke_preserves_worlds_recipes_replays_and_witnesses() {
+        // A rejected seed, a surviving vault blade, and a blade requiring
+        // Mimic Tooth. Keep positive/negative and retained-auto coverage in CI.
+        let seeds = [0, 20_013_266, 20_028_874].map(|value| DungeonSeed::new(value).unwrap());
+        check_deferred_search(
+            &seeds,
+            &DEFERRED_SEARCH_REQUIREMENTS[1..2],
+            &[Challenges::NONE],
+        );
+    }
+
+    fn check_deferred_search(
+        seeds: &[DungeonSeed],
+        requirements: &[&str],
+        challenge_modes: &[Challenges],
+    ) {
         use crate::auto_trinkets::{self, SeedRecipe, TrinketSearchMatch};
         fn complete(
             results: Vec<Option<TrinketSearchMatch>>,
@@ -1312,21 +1348,12 @@ mod deferred_vault_tests {
                 .map(|result| result.map(|m| (m.recipe, m.world)))
                 .collect()
         }
-        let seeds = values();
         let mut matches = 0;
         let mut rejected = 0;
         let mut auto_retained = 0;
-        for requirements in [
-            r#"[{"item":"runic_blade","upgrade":2,"effect":["Grim","Corrupting","Vampiric","Crystal"]},{"item":"ring_might","upgrade":2}]"#,
-            r#"[{"item":"runic_blade","upgrade":2},{"item":"ring_might"}]"#,
-            r#"[{"any_of":[{"item":"runic_blade","upgrade":4,"source":"vault_treasure"},{"item":"greatsword","upgrade":2}]},{"item":"ring_might","upgrade":2}]"#,
-        ] {
+        for requirements in requirements {
             for auto in [false, true] {
-                for challenges in [
-                    Challenges::NONE,
-                    Challenges::DARKNESS,
-                    Challenges::LEVEL_GENERATION,
-                ] {
+                for &challenges in challenge_modes {
                     let mut query = query(requirements, 19);
                     query.auto_apply_trinket = auto;
                     query.challenges = challenges;
@@ -1335,8 +1362,8 @@ mod deferred_vault_tests {
                     let actual = CanonicalMainWorldGenerator::with_challenges(challenges);
                     let eager = EagerGenerator(challenges);
                     let expected =
-                        complete(auto_trinkets::search_batch(&eager, &query, &plan, &seeds));
-                    let found = auto_trinkets::search_batch(&actual, &query, &plan, &seeds);
+                        complete(auto_trinkets::search_batch(&eager, &query, &plan, seeds));
+                    let found = auto_trinkets::search_batch(&actual, &query, &plan, seeds);
                     for result in &found {
                         if let Some(m) = result {
                             matches += 1;

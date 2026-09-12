@@ -2,7 +2,7 @@
 
 These compact results accompany [the performance report](../../PERFORMANCE-2026-09-12.md). All timings are seconds. They retain every final scored observation, including negative or mixed pairs. Original generated records, executables, profiles and oracle archives remain in the local resume archive identified by the report and provenance hashes.
 
-The direct comparison is original `ae0cb0c07aca55bc4ec31b32f7e6aa15a714a0b0` → merged accepted candidate `fbee876f67835d59691de49fed0f3e0f9ac27bb3`. Subsequent PR commits only publish documentation/evidence. Historical comparisons have different explicitly identified revisions and must not be multiplied into a cumulative result.
+The direct comparison is original `ae0cb0c07aca55bc4ec31b32f7e6aa15a714a0b0` → merged accepted candidate `fbee876f67835d59691de49fed0f3e0f9ac27bb3`. Subsequent PR commits publish documentation/evidence and bound default CI tests; production engine code is unchanged. Historical comparisons have different explicitly identified revisions and must not be multiplied into a cumulative result.
 
 | File | Contents |
 | --- | --- |
@@ -12,6 +12,7 @@ The direct comparison is original `ae0cb0c07aca55bc4ec31b32f7e6aa15a714a0b0` →
 | `linux-provenance.json`, `linux-audit-provenance.json` | Compiler, target, flags, allocator, source/executable/build/check identities, source-inventory validation, EOF scope and input hashes. The original exact build argv was not saved; its command is explicitly reconstructed. |
 | `historical-timings.json`, `historical-provenance.json`, `historical-design.json` | Selected preceding direct/incremental screens, including regressions and WASM results, with query/count/interval/source maps and explicit missing-receipt limitations; these are acceptance history, not final cumulative measurements. |
 | `validation.json` | Exact-code Linux checks, oracle replay/control receipts, Mac correctness job and code CI. |
+| `ci-tests.json` | Subsequent test-only CI runtime correction, source/log hashes, default debug/release results and explicit extended-sweep results. |
 | `SHA256SUMS` | Hashes of this evidence directory's other files, including raw timing exports. |
 
 Mac data:

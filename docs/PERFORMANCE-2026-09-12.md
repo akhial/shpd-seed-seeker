@@ -117,6 +117,14 @@ C19d's separate WASM scouting validation compared 207 original-baseline/candidat
 
 Source review found no concrete merge blocker in the accepted range. The merged candidate passed formatting, workspace Clippy, release and debug workspace tests (510 core tests, one ignored), all 13 Python protocol tests, and release checks for WASM plus both Android JNI targets. Its normal release comparator replayed seeds 0–9,999 against the retained Java oracle with zero deviations/errors; all nine comparator controls passed. Macqueue also passed the merged candidate's full formatting/Clippy/release-test job. Platform CI status is recorded in the PR.
 
+### Bounded default CI tests
+
+The initial expanded parity matrices made the local core debug suite take 614.92 seconds. After the user identified this CI regression, five broad sweeps were made opt-in: the source-refinement search/recipe matrix, both trinket-preflight matrices, and the two broad deferred-vault matrices. Their full seed/query/challenge/recipe coverage remains available with the release-mode command in [README.md](../README.md#testing).
+
+Default CI retains all focused boundary/state/error checks, two small trinket checks, and a three-seed eager/deferred comparison with a rejection, surviving vault blade, and retained Mimic Tooth recipe. Canonical wrap/cancel/cap tests use 263 seeds with the same partial-chunk, nonempty-result, duplicate-resume and cap-progress assertions. Numerical RNG/collision/patch differentials remain enabled.
+
+On the same devbox, the updated default core debug suite passed **508 tests with six ignored in 17.51 seconds**; the whole debug workspace command took 61.63 seconds including an 11.52-second build. The default core release suite passed in 1.63 seconds, and all five broad library sweeps passed explicitly in release mode in 57.83 seconds. Formatting, Clippy and both debug/release workspace checks passed. These are test-runtime observations, separate from engine throughput benchmarks; [the validation receipt](benchmarks/shared-engine-2026-09-12/ci-tests.json) retains commands, summaries and source/log hashes. All changes after the measured engine revision are documentation or code inside test modules.
+
 ## Rejected and unfinished work
 
 All percentages below are local candidate-versus-accepted comparisons from their own runs; they are not cumulative. Raw samples, source snapshots, and codegen/profile reports remain in the experiment archive.

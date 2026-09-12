@@ -1707,24 +1707,57 @@ mod trinket_preflight_tests {
     }
 
     #[test]
+    #[ignore = "extended seed sweep; run with --release --ignored"]
     fn every_trinket_identity_preserves_worlds_recipes_and_batch_positions() {
-        let seeds = seeds();
+        check_trinket_identities(&seeds());
+    }
+
+    #[test]
+    fn trinket_identity_smoke_preserves_worlds_recipes_and_batch_positions() {
+        check_trinket_identities(&seeds()[..2]);
+    }
+
+    fn check_trinket_identities(seeds: &[DungeonSeed]) {
+        let (plain, saved) = seeds.split_at(seeds.len().min(3));
         let mut pruned = 0;
         for item in ITEMS.iter().filter(|item| item.kind == ItemKind::Trinket) {
             for depth in [1, 3] {
                 let query = crate::json_query::decode(&format!(
                     "{{\"max_depth\":{depth},\"auto_apply_trinket\":false,\"requirements\":[{{\"item\":\"{}\"}}]}}",
                     item.stable_id)).unwrap();
-                pruned += compare_paths(&query, &seeds[..3], false);
-                pruned += compare_paths(&query, &seeds[3..], true);
+                pruned += compare_paths(&query, plain, false);
+                if !saved.is_empty() {
+                    pruned += compare_paths(&query, saved, true);
+                }
             }
         }
         assert!(pruned > 0, "exercise newly abandoned worlds");
     }
 
     #[test]
+    #[ignore = "extended seed sweep; run with --release --ignored"]
     fn trinket_preflight_keeps_alternatives_selection_and_challenge_semantics() {
-        let seeds = seeds();
+        check_trinket_preflight_semantics(
+            &seeds(),
+            &[3, 19],
+            &[
+                Challenges::NONE,
+                Challenges::DARKNESS,
+                Challenges::LEVEL_GENERATION,
+            ],
+        );
+    }
+
+    #[test]
+    fn trinket_preflight_smoke_keeps_alternatives_and_selection_semantics() {
+        check_trinket_preflight_semantics(&seeds()[..2], &[3], &[Challenges::NONE]);
+    }
+
+    fn check_trinket_preflight_semantics(
+        seeds: &[DungeonSeed],
+        depths: &[u8],
+        challenge_modes: &[Challenges],
+    ) {
         let requirements = [
             r#"[{"any_of":[{"item":"mimic_tooth","select_trinket":true},{"item":"rat_skull","select_trinket":true}]}]"#,
             r#"[{"any_of":[{"item":"trinket_catalyst"},{"item":"mimic_tooth"}]}]"#,
@@ -1736,16 +1769,12 @@ mod trinket_preflight_tests {
             r#"[{"kind":"weapon"}]"#,
         ];
         for requirements in requirements {
-            for depth in [3, 19] {
+            for &depth in depths {
                 let mut query = crate::json_query::decode(&format!(
                     "{{\"max_depth\":{depth},\"auto_apply_trinket\":true,\"requirements\":{requirements}}}")).unwrap();
-                for challenges in [
-                    Challenges::NONE,
-                    Challenges::DARKNESS,
-                    Challenges::LEVEL_GENERATION,
-                ] {
+                for &challenges in challenge_modes {
                     query.challenges = challenges;
-                    compare_paths(&query, &seeds, true);
+                    compare_paths(&query, seeds, true);
                 }
             }
         }
@@ -2173,6 +2202,7 @@ mod source_refinement_tests {
     }
 
     #[test]
+    #[ignore = "extended seed sweep; run with --release --ignored"]
     #[allow(clippy::too_many_lines)] // Keep query, oracle, and recipe comparisons together.
     fn refined_sources_preserve_full_search_matches_recipes_and_forced_choices() {
         use crate::auto_trinkets::{self, SeedRecipe};

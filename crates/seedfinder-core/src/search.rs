@@ -1678,6 +1678,10 @@ mod tests {
         }
     }
 
+    // Nonempty ring matches across wraparound and a three-seed chunk tail,
+    // without thousands of canonical generations in an unoptimized CI build.
+    const REAL_STREAM_SEEDS: u64 = 263;
+
     fn real_stream_fixture() -> (
         crate::main_world::CanonicalMainWorldGenerator,
         SearchQuery,
@@ -1691,14 +1695,14 @@ mod tests {
         .unwrap();
         let options = SearchOptions {
             start_seed: 20_000_000,
-            end_seed_exclusive: 20_001_031,
+            end_seed_exclusive: 20_000_000 + REAL_STREAM_SEEDS,
             workers: NonZeroUsize::new(4).unwrap(),
             chunk_size: NonZeroUsize::new(4).unwrap(),
             max_results: NonZeroUsize::MAX,
         };
         let expected =
             search_parallel(&generator, &query, options, &SearchProgress::default()).unwrap();
-        assert_eq!(expected.tested, 1031);
+        assert_eq!(expected.tested, REAL_STREAM_SEEDS);
         assert!(!expected.worlds.is_empty());
         (
             generator,
@@ -1725,8 +1729,14 @@ mod tests {
             release: Arc::clone(&release),
             reached: sent,
         });
-        let handle =
-            spawn_partial_streaming_search(&delayed, query.clone(), options, start, 1031).unwrap();
+        let handle = spawn_partial_streaming_search(
+            &delayed,
+            query.clone(),
+            options,
+            start,
+            REAL_STREAM_SEEDS,
+        )
+        .unwrap();
         let unblock = ReleaseCanonicalBatch(release);
         received
             .recv_timeout(std::time::Duration::from_secs(10))
@@ -1753,7 +1763,7 @@ mod tests {
             coverage,
             super::ResumeCoverage {
                 position: start,
-                remaining: 1031
+                remaining: REAL_STREAM_SEEDS
             }
         );
         let resumed = spawn_partial_streaming_search(
@@ -1777,7 +1787,7 @@ mod tests {
         options.max_results = NonZeroUsize::new(7).unwrap();
         let mut coverage = super::ResumeCoverage {
             position: options.end_seed_exclusive - 3,
-            remaining: 1031,
+            remaining: REAL_STREAM_SEEDS,
         };
         let mut actual = WorldMap::new();
         let mut passes = 0;
@@ -1812,7 +1822,7 @@ mod tests {
             );
             coverage = next;
             passes += 1;
-            assert!(passes <= 1031);
+            assert!(passes <= REAL_STREAM_SEEDS);
         }
         assert!(passes > 1, "exercise result-cap interruption");
         assert_eq!(actual, expected);
