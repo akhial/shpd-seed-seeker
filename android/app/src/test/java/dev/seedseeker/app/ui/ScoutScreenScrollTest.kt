@@ -11,10 +11,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertContentDescriptionEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotDisplayed
@@ -27,10 +29,13 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import dev.seedseeker.app.engine.ScoutMatches
 import dev.seedseeker.app.catalog.ItemCatalog
 import dev.seedseeker.app.model.CatalogItem
@@ -220,5 +225,31 @@ class ScoutScreenScrollTest {
         assertTrue(seed.right <= badge.left)
         compose.onNodeWithText("Copy").assertIsDisplayed()
         screenshot("compact-large-text")
+    }
+
+    @Test fun adjacentScrollFractionsScaleTheSeedWithoutChangingItsGlyphLayout() {
+        val progress = mutableFloatStateOf(0.45f)
+        compose.setContent {
+            SeedSeekerTheme {
+                ScoutSummaryCard(world, ScoutMatches(emptySet(), 5, 5), progress.floatValue, {})
+            }
+        }
+        fun seedLayout(): TextLayoutResult {
+            val results = mutableListOf<TextLayoutResult>()
+            compose.onNodeWithTag("scout-seed").performSemanticsAction(SemanticsActions.GetTextLayoutResult) {
+                it(results)
+            }
+            return results.single()
+        }
+        val beforeLayout = seedLayout()
+        val before = bounds("scout-seed")
+        compose.runOnIdle { progress.floatValue = 0.451f }
+        val afterLayout = seedLayout()
+        val after = bounds("scout-seed")
+        assertEquals(24.sp, beforeLayout.layoutInput.style.fontSize)
+        assertEquals(beforeLayout.layoutInput.style.fontSize, afterLayout.layoutInput.style.fontSize)
+        assertEquals(beforeLayout.size, afterLayout.size)
+        assertTrue("The visible seed width should change by a fraction of a pixel", before.width - after.width in 0.001f..0.2f)
+        assertEquals(before.left, after.left, 0.001f)
     }
 }

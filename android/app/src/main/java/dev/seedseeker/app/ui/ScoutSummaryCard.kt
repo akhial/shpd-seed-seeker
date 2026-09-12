@@ -29,9 +29,11 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.toClipEntry
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -41,6 +43,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.lerp
@@ -48,6 +51,7 @@ import dev.seedseeker.app.engine.ScoutMatches
 import dev.seedseeker.app.model.ScoutItem
 import dev.seedseeker.app.model.ScoutWorld
 import kotlinx.coroutines.launch
+import kotlin.math.ceil
 import kotlin.math.roundToInt
 
 @Composable
@@ -64,6 +68,8 @@ internal fun ScoutSummaryCard(
     val matchText = matches?.let { scoutMatchText(it.matchedSlots, it.totalSlots) }
     val labelStyle = MaterialTheme.typography.labelMedium
     val matchTextSize = rememberTextMeasurer().measure(matchText.orEmpty(), labelStyle, maxLines = 1).size
+    val seedScale = lerp(1f, 20f / 24f, progress)
+    val seedOrigin = if (LocalLayoutDirection.current == LayoutDirection.Ltr) 0f else 1f
     Card(
         modifier = modifier.fillMaxWidth().testTag("scout-summary").semantics {
             if (progress == 1f) contentDescription = "${world.items.size} items, $floors floors"
@@ -75,10 +81,15 @@ internal fun ScoutSummaryCard(
             content = {
                 Text(
                     world.seed,
-                    modifier = Modifier.testTag("scout-seed"),
+                    modifier = Modifier.graphicsLayer {
+                        // Keep glyph layout fixed; scaling the layer avoids font rasterization steps.
+                        scaleX = seedScale
+                        scaleY = seedScale
+                        transformOrigin = TransformOrigin(seedOrigin, 0.5f)
+                    }.testTag("scout-seed"),
                     style = MaterialTheme.typography.headlineSmall.copy(
-                        fontSize = lerp(24f, 20f, progress).sp,
-                        lineHeight = lerp(32f, 28f, progress).sp,
+                        fontSize = 24.sp,
+                        lineHeight = 32.sp,
                         fontFamily = FontFamily.Monospace,
                     ),
                     color = MaterialTheme.colorScheme.tertiary,
@@ -120,11 +131,12 @@ internal fun ScoutSummaryCard(
             val seedWidth = (innerWidth - copy.width - if (badge != null) {
                 ((badgeHeight + 2 * gap) * progress).roundToInt()
             } else 0).coerceAtLeast(0)
-            val seed = measurables[0].measure(Constraints(maxWidth = seedWidth))
+            // Reserve the visible width after scaling, so narrow phones do not ellipsize early.
+            val seed = measurables[0].measure(Constraints(maxWidth = (seedWidth / seedScale).toInt()))
             val counts = measurables[2].measure(Constraints(
                 maxWidth = (innerWidth - expandedBadgeWidth - if (badge != null) gap else 0).coerceAtLeast(0),
             ))
-            val rowHeight = maxOf(copy.height, seed.height, if (badge != null) badgeHeight else 0)
+            val rowHeight = maxOf(copy.height, ceil(seed.height * seedScale).toInt(), if (badge != null) badgeHeight else 0)
             val secondRowHeight = maxOf(counts.height, if (badge != null) badgeHeight else 0)
             val expandedHeight = 8.dp.roundToPx() + rowHeight + 6.dp.roundToPx() + secondRowHeight + 12.dp.roundToPx()
             val compactHeight = rowHeight + 8.dp.roundToPx()
