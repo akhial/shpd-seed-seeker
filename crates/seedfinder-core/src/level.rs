@@ -17,6 +17,8 @@ use crate::room::RoomId;
 /// painting are stored in [`TrapSpec`], so later regions can add their own
 /// exact tables without reflection.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "json-query", derive(serde::Serialize))]
+#[cfg_attr(feature = "json-query", serde(rename_all = "snake_case"))]
 #[repr(u8)]
 pub enum TrapKind {
     Burning,
@@ -50,6 +52,8 @@ pub enum TrapKind {
     Pitfall,
     Distortion,
     Grim,
+    GnollRockfall,
+    VaultFlame,
 }
 
 /// Generation-visible state produced by constructing a Java `Trap` subclass.

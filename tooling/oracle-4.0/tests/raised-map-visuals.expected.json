@@ -1,0 +1,184 @@
+[
+  {
+    "seed": "AAA-AAA-AAA",
+    "depth": 1,
+    "branch": 0,
+    "kind": "regular",
+    "terrainHash": -72472821,
+    "layers": {
+      "terrain": -1516686347,
+      "shadows": 986968729,
+      "features": -1598108724,
+      "raised": -218090853,
+      "walls": -826710732
+    }
+  },
+  {
+    "seed": "AAA-AAA-AAA",
+    "depth": 7,
+    "branch": 0,
+    "kind": "regular",
+    "terrainHash": -2025558282,
+    "layers": {
+      "terrain": 1755656749,
+      "shadows": -935873286,
+      "features": 2033937773,
+      "raised": -1653736975,
+      "walls": -1911189270
+    }
+  },
+  {
+    "seed": "AAA-AAA-AAA",
+    "depth": 12,
+    "branch": 0,
+    "kind": "regular",
+    "terrainHash": 516872055,
+    "layers": {
+      "terrain": -1001559929,
+      "shadows": 637307156,
+      "features": -1030126871,
+      "raised": 1349537821,
+      "walls": 1112747061
+    }
+  },
+  {
+    "seed": "AAA-AAA-AAA",
+    "depth": 16,
+    "branch": 0,
+    "kind": "regular",
+    "terrainHash": -640772373,
+    "layers": {
+      "terrain": 1202258791,
+      "shadows": 434907553,
+      "features": 1867252941,
+      "raised": -1953921791,
+      "walls": 216694091
+    }
+  },
+  {
+    "seed": "AAA-AAA-AAA",
+    "depth": 23,
+    "branch": 0,
+    "kind": "regular",
+    "terrainHash": 675253468,
+    "layers": {
+      "terrain": -1084897324,
+      "shadows": 1895840310,
+      "features": 890199736,
+      "raised": 1479482627,
+      "walls": -1906716704
+    }
+  },
+  {
+    "seed": "JHG-HJJ-BKK",
+    "depth": 1,
+    "branch": 0,
+    "kind": "regular",
+    "terrainHash": -1210420634,
+    "layers": {
+      "terrain": 2131187239,
+      "shadows": 1975375744,
+      "features": -1532864266,
+      "raised": 785588922,
+      "walls": -515767544
+    }
+  },
+  {
+    "seed": "JHG-HJJ-BKK",
+    "depth": 7,
+    "branch": 0,
+    "kind": "regular",
+    "terrainHash": 1964588217,
+    "layers": {
+      "terrain": 103153514,
+      "shadows": -1026295629,
+      "features": -846842613,
+      "raised": -584643076,
+      "walls": 859654774
+    }
+  },
+  {
+    "seed": "JHG-HJJ-BKK",
+    "depth": 12,
+    "branch": 0,
+    "kind": "regular",
+    "terrainHash": 2073801425,
+    "layers": {
+      "terrain": 615675448,
+      "shadows": -1353270961,
+      "features": -1418730988,
+      "raised": 826743997,
+      "walls": -1376312180
+    }
+  },
+  {
+    "seed": "JHG-HJJ-BKK",
+    "depth": 16,
+    "branch": 0,
+    "kind": "regular",
+    "terrainHash": 319139853,
+    "layers": {
+      "terrain": -139252073,
+      "shadows": 1178890099,
+      "features": -1669471468,
+      "raised": 1296449201,
+      "walls": 1150120400
+    }
+  },
+  {
+    "seed": "JHG-HJJ-BKK",
+    "depth": 23,
+    "branch": 0,
+    "kind": "regular",
+    "terrainHash": -1082934667,
+    "layers": {
+      "terrain": 1331405510,
+      "shadows": 123985386,
+      "features": -529609559,
+      "raised": 327981844,
+      "walls": -1595024149
+    }
+  },
+  {
+    "seed": "AAA-AAA-AAA",
+    "depth": 13,
+    "branch": 1,
+    "kind": "blacksmith_crystal",
+    "terrainHash": 1464257821,
+    "layers": {
+      "terrain": 1538409530,
+      "shadows": 147783640,
+      "features": 1690102622,
+      "raised": 2129229449,
+      "walls": 1475430777
+    }
+  },
+  {
+    "seed": "JHG-HJJ-BKK",
+    "depth": 12,
+    "branch": 1,
+    "kind": "blacksmith_gnoll",
+    "terrainHash": 333445870,
+    "layers": {
+      "terrain": -850500630,
+      "shadows": 1588232723,
+      "features": -834661035,
+      "raised": -1946400965,
+      "walls": 257082493
+    }
+  },
+  {
+    "seed": "AAA-AAA-AAA",
+    "depth": 19,
+    "branch": 1,
+    "kind": "imp_vault",
+    "terrainHash": -743826665,
+    "layers": {
+      "terrain": -1026631453,
+      "shadows": -1736484186,
+      "features": -1212409678,
+      "raised": 1706073197,
+      "walls": 1872429370
+    }
+  }
+]

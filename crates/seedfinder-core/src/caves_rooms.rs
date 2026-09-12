@@ -426,14 +426,25 @@ impl<C: SewerRoomContent> CavesRoomDispatcher<C> {
         room: RoomId,
         rng: &mut RandomStack,
     ) {
-        fill_room(level, &rooms[room], terrain::WALL);
-        fill_room_margin(level, &rooms[room], 1, terrain::EMPTY);
-        set_all_doors(rooms, room, DoorType::Regular);
         let scale = rooms[room]
             .width()
             .wrapping_mul(rooms[room].height())
             .min(18 * 18);
         let fill = 0.30_f32 + scale as f32 / 1024.0_f32;
+        self.paint_cave_with_fill(level, rooms, room, fill, rng);
+    }
+
+    pub(crate) fn paint_cave_with_fill(
+        &mut self,
+        level: &mut Level,
+        rooms: &mut [Room],
+        room: RoomId,
+        fill: f32,
+        rng: &mut RandomStack,
+    ) {
+        fill_room(level, &rooms[room], terrain::WALL);
+        fill_room_margin(level, &rooms[room], 1, terrain::EMPTY);
+        set_all_doors(rooms, room, DoorType::Regular);
         self.setup_cave_patch(level, rooms, room, fill, rng);
         let bounds = rooms[room].bounds;
         for y in bounds.top + 1..bounds.bottom {
@@ -957,6 +968,25 @@ impl CavesPainter {
 /// Exact v3.3.8 `CavesPainter.decorate`, including disconnected-neighbour
 /// merges, standard-room corner erosion, floor speckling, and wall gold.
 pub fn decorate_caves(level: &mut Level, rooms: &[Room], order: &[RoomId], rng: &mut RandomStack) {
+    decorate_caves_without_gold(level, rooms, order, rng);
+    let width_usize = usize::try_from(level.width()).expect("positive width");
+    let length = level.len();
+    for cell in 0..length - width_usize {
+        if level.map.cells[cell] == terrain::WALL
+            && caves_floor_tile(level.map.cells[cell + width_usize])
+            && rng.int_bound(4) == 0
+        {
+            level.map.cells[cell] = terrain::WALL_DECO;
+        }
+    }
+}
+
+pub(crate) fn decorate_caves_without_gold(
+    level: &mut Level,
+    rooms: &[Room],
+    order: &[RoomId],
+    rng: &mut RandomStack,
+) {
     let mut merge_dispatch = CavesDecorationMergeDispatch;
     for &room in order {
         for &neighbour in &rooms[room].neighbours {
@@ -1045,15 +1075,6 @@ pub fn decorate_caves(level: &mut Level, rooms: &[Room], order: &[RoomId], rng: 
             if rng.int_bound(6) <= wall_count {
                 level.map.cells[cell] = terrain::EMPTY_DECO;
             }
-        }
-    }
-
-    for cell in 0..length - width_usize {
-        if level.map.cells[cell] == terrain::WALL
-            && caves_floor_tile(level.map.cells[cell + width_usize])
-            && rng.int_bound(4) == 0
-        {
-            level.map.cells[cell] = terrain::WALL_DECO;
         }
     }
 }
