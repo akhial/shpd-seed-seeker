@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
 import init, { level_map, level_map_asset } from "../wasm/pkg/seedfinder.js";
 import { isMapDepthSupported, mapRequestJson } from "./client";
+import { mapSpriteCache } from "./frame-cache";
 import { createLevelMapRenderer, drawLevelMap } from "./render";
 import type { LevelMapDocument, LevelMapRequest, MapBundle } from "./types";
 
@@ -194,7 +195,7 @@ it("caches animation states and repairs overlapping layers without repainting di
   } as unknown as CanvasRenderingContext2D;
   const renderer = createLevelMapRenderer(context, bundle, true, makeCanvas);
   expect(renderer.animated).toBe(true);
-  expect(canvases).toHaveLength(4); // One cached static sprite shared by both terrain cells.
+  expect(canvases).toHaveLength(1); // All unique composite frames share one atlas.
   expect(raster).toHaveBeenCalledTimes(3); // The transparent animation frame has no commands.
   renderer.draw(0);
   expect(blit).toHaveBeenCalledTimes(4);
@@ -206,13 +207,12 @@ it("caches animation states and repairs overlapping layers without repainting di
   renderer.draw(50);
   expect(rect).toHaveBeenCalledWith(0, 0, 16, 16);
   expect(blit.mock.calls).toEqual([
-    [canvases[0], 0, 0], // Restore the terrain under the now-transparent frame.
-    [canvases[2], 0, 0],
-    [canvases[3], 0, 0], // Foreground remains above the animation.
+    [canvases[0], 0, 0, 16, 16, 0, 0, 16, 16], // Restore terrain under the empty frame.
+    [canvases[0], 32, 0, 16, 16, 0, 0, 16, 16], // Preserve the foreground.
   ]);
   blit.mockClear();
   renderer.draw(100);
-  expect(blit.mock.calls[1][0]).toBe(canvases[1]);
+  expect(blit.mock.calls[1]).toEqual([canvases[0], 16, 0, 16, 16, 0, 0, 16, 16]);
   expect(raster).toHaveBeenCalledTimes(3); // Looping never rasterizes a frame again.
   const concealed = createLevelMapRenderer(context, bundle, false, makeCanvas);
   expect(concealed.animated).toBe(false);
@@ -220,4 +220,50 @@ it("caches animation states and repairs overlapping layers without repainting di
   blit.mockClear();
   concealed.draw(1000);
   expect(blit).not.toHaveBeenCalled();
+});
+
+it("shares phase-shifted water frames and uses source textures for single blits", () => {
+  const floor = map(1);
+  const textures = new Map(floor.assets.map(({ id }) => [id, {} as ImageBitmap]));
+  const canvases: HTMLCanvasElement[] = [];
+  const sprites = mapSpriteCache({ map: floor, textures }, () => {
+    const canvas = {
+      getContext: () => ({ fillRect() {}, drawImage() {} }),
+    } as unknown as HTMLCanvasElement;
+    canvases.push(canvas);
+    return canvas;
+  });
+  const water = floor.scene.layers.find((layer) => layer.name === "water")!;
+  const phases = [...new Set(water.cells.filter((index) => index !== null))];
+  expect(phases).toHaveLength(4);
+  const frames = phases.flatMap((index) => sprites[index].frames);
+  expect(frames).toHaveLength(128);
+  expect(new Set(frames).size).toBe(64);
+  expect(canvases).toHaveLength(1);
+  for (const [index, sprite] of floor.scene.sprites.entries()) {
+    for (const [frameIndex, commands] of sprite.frames.entries()) {
+      if (commands.length === 1 && commands[0].kind === "blit") {
+        expect(sprites[index].frames[frameIndex]?.image).toBe(textures.get(commands[0].asset));
+      }
+    }
+  }
+});
+
+it("reuses the same map atlas when changing secret visibility or reopening a map", () => {
+  const floor = map(1);
+  const bundle: MapBundle = {
+    map: floor,
+    textures: new Map(floor.assets.map(({ id }) => [id, {} as ImageBitmap])),
+  };
+  const createElement = vi.fn(() => ({
+    getContext: () => ({ fillRect() {}, drawImage() {} }),
+  }));
+  vi.stubGlobal("document", { createElement });
+  try {
+    const first = mapSpriteCache(bundle);
+    expect(mapSpriteCache(bundle)).toBe(first);
+    expect(createElement).toHaveBeenCalledTimes(1);
+  } finally {
+    vi.unstubAllGlobals();
+  }
 });
