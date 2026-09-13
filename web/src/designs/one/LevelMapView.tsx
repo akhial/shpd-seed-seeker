@@ -105,11 +105,7 @@ function MapSession(props: LevelMapViewProps) {
             strokeLinecap="round"
             strokeLinejoin="round"
           >
-            {bundle && secretCount === 0 ? (
-              <path d="M18 6 6 18M6 6l12 12" />
-            ) : secrets ? (
-              <path d="M20 6 9 17l-5-5" />
-            ) : null}
+            {secrets ? <path d="M20 6 9 17l-5-5" /> : <path d="M18 6 6 18M6 6l12 12" />}
           </svg>
           Secrets
         </button>
