@@ -189,6 +189,16 @@
   flex-direction: column;
   height: calc(100dvh - 48px);
 }
+.d1-map-trinkets {
+  grid-column: 2;
+  display: flex;
+  gap: 4px;
+}
+.d1-map-trinkets .d1-scout-trinket {
+  flex-basis: 32px;
+  width: 32px;
+  height: 32px;
+}
 .d1-map-dialog .d1-map-dialog-header {
   position: static;
   top: auto;
@@ -245,6 +255,8 @@
 }
 
 .d1-map-dialog-header .d1-map-floor-nav {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   flex: 1;
   min-width: 0;
   padding: 0;
@@ -257,14 +269,23 @@
   min-width: 0;
   color: var(--d1-text);
 }
-.d1-map-floor-nav .d1-scout-nav-tools {
-  min-width: 140px;
-  margin-right: 8px;
+.d1-map-header-controls {
+  grid-column: 3;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
 }
-@media (max-width: 600px) {
+.d1-map-floor-nav .d1-scout-nav-tools {
+  flex: 0 1 140px;
+}
+@media (max-width: 720px) {
   .d1-map-floor-nav .d1-scout-nav-tools {
     display: none;
   }
+}
+@media (max-width: 600px) {
   .d1-map-dialog .d1-map-dialog-header {
     padding-right: 8px;
     padding-left: 8px;

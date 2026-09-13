@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
-import type { FloorFeeling, ScoutQuest } from "../../lib/wasm/types";
+import type { FloorFeeling, ScoutQuest, TrinketOffer } from "../../lib/wasm/types";
 import { regionForDepth } from "../../lib/region";
 import { FloorMapLabel } from "./FloorMapHeader";
+import { TrinketShortcuts } from "./TrinketShortcuts";
 import { ExpandIcon, XIcon } from "../../lib/icons";
 import { mapRequestJson, requestLevelMap } from "../../lib/level-map/client";
 import { createMapParticleRenderer } from "../../lib/level-map/particles";
@@ -23,14 +24,25 @@ type LevelMapViewProps = Omit<LevelMapRequest, "branch"> & {
   feeling?: FloorFeeling;
   quest?: ScoutQuest;
   floors?: { depth: number; feeling?: FloorFeeling; quest?: ScoutQuest }[];
+  trinketOffers?: readonly TrinketOffer[];
+  onTrinketChange?: (trinket: string) => void;
+  changingTrinket?: boolean;
 };
 const MAP_HEIGHT = 350;
 
-/** Profile changes remount the viewer so a pinned branch can never show an old run. */
+/** New runs remount; trinket swaps preserve the expanded dialog and current floor. */
 export function LevelMapView(props: LevelMapViewProps) {
-  return <MapSession key={mapRequestJson(props)} {...props} />;
+  return <MapSession key={mapRequestJson({ ...props, selectedTrinket: "none" })} {...props} />;
 }
-function MapSession({ feeling, quest, floors, ...props }: LevelMapViewProps) {
+function MapSession({
+  feeling,
+  quest,
+  floors,
+  trinketOffers,
+  onTrinketChange,
+  changingTrinket,
+  ...props
+}: LevelMapViewProps) {
   const [depth, setDepth] = useState(props.depth);
   const availableFloors = floors ?? [{ depth: props.depth, feeling, quest }];
   const floorIndex = availableFloors.findIndex((floor) => floor.depth === depth);
@@ -50,9 +62,17 @@ function MapSession({ feeling, quest, floors, ...props }: LevelMapViewProps) {
       document.body.style.overflow = previousOverflow;
     };
   }, [expanded]);
-  const [branch, setBranch] = useState(0);
+  const profileKey = mapRequestJson({ ...props, depth });
+  const [branchSelection, selectBranch] = useState<{ key: string; branch: number }>();
+  const branch = branchSelection?.key === profileKey ? branchSelection.branch : 0;
+  const setBranch = (next: number) => selectBranch({ key: profileKey, branch: next });
+  useEffect(() => {
+    // Forget the previous area so switching back to an earlier trinket cannot
+    // revive a branch whose parent metadata is no longer loaded.
+    selectBranch(undefined);
+  }, [profileKey]);
   const [loaded, setLoaded] = useState<{ key: string; bundle: MapBundle }>();
-  const [parent, setParent] = useState<MapBundle>();
+  const [parent, setParent] = useState<{ key: string; bundle: MapBundle }>();
   const [error, setError] = useState<string>();
   const [retry, setRetry] = useState(0);
   const [secrets, setSecrets] = useState(false);
@@ -84,7 +104,7 @@ function MapSession({ feeling, quest, floors, ...props }: LevelMapViewProps) {
       (next) => {
         if (!active) return;
         setLoaded({ key: requestKey, bundle: next });
-        if (branch === 0) setParent(next);
+        if (branch === 0) setParent({ key: requestKey, bundle: next });
       },
       (reason: unknown) => {
         if (active) setError(reason instanceof Error ? reason.message : String(reason));
@@ -97,7 +117,7 @@ function MapSession({ feeling, quest, floors, ...props }: LevelMapViewProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestKey, retry]);
   const bundle = loaded?.key === requestKey ? loaded.bundle : undefined;
-  const branches = parent?.map.branches ?? [];
+  const branches = parent?.key === profileKey ? parent.bundle.map.branches : [];
   const secretCount = bundle
     ? bundle.map.secretRooms.length + bundle.map.secretDoors.length + bundle.map.secretTraps.length
     : 0;
@@ -253,29 +273,45 @@ function MapSession({ feeling, quest, floors, ...props }: LevelMapViewProps) {
                     quest={currentFloor?.quest}
                   />
                 </div>
-                <div className="d1-scout-nav-tools">
-                  <div className="d1-scout-nav-hints" aria-hidden="true">
-                    <span className="d1-scout-nav-hint d1-scout-nav-hint-keys">
-                      <kbd className="d1-keycap">J</kbd>
-                      <span>next</span>
-                      <kbd className="d1-keycap">K</kbd>
-                      <span>prev</span>
-                    </span>
-                    <span className="d1-scout-nav-hint d1-scout-nav-hint-swipe">
-                      swipe to browse
-                    </span>
+                {onTrinketChange && trinketOffers && trinketOffers.length > 0 && (
+                  <TrinketShortcuts
+                    className="d1-map-trinkets"
+                    offers={trinketOffers}
+                    selectedTrinket={props.selectedTrinket}
+                    onSelect={(trinket) => {
+                      // Loading disables the clicked button. Keep keyboard focus
+                      // inside the dialog so J/K navigation continues to work.
+                      dialogRef.current?.focus({ preventScroll: true });
+                      onTrinketChange(trinket);
+                    }}
+                    disabled={changingTrinket}
+                  />
+                )}
+                <div className="d1-map-header-controls">
+                  <div className="d1-scout-nav-tools">
+                    <div className="d1-scout-nav-hints" aria-hidden="true">
+                      <span className="d1-scout-nav-hint d1-scout-nav-hint-keys">
+                        <kbd className="d1-keycap">J</kbd>
+                        <span>next</span>
+                        <kbd className="d1-keycap">K</kbd>
+                        <span>prev</span>
+                      </span>
+                      <span className="d1-scout-nav-hint d1-scout-nav-hint-swipe">
+                        swipe to browse
+                      </span>
+                    </div>
                   </div>
+                  <button
+                    type="button"
+                    className="d1-map-expand d1-map-close"
+                    onClick={close}
+                    autoFocus
+                  >
+                    <XIcon size={14} />
+                    Close
+                  </button>
                 </div>
               </nav>
-              <button
-                type="button"
-                className="d1-map-expand d1-map-close"
-                onClick={close}
-                autoFocus
-              >
-                <XIcon size={14} />
-                Close
-              </button>
             </header>
             {toolbar}
             {mapContent}
