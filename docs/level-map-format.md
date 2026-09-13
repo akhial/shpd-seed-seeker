@@ -169,7 +169,7 @@ and sprite-source compatibility are recorded separately.
 codes (`geometry::terrain`), length `width * height`. `entrance` and `exit` are
 cell indices or `null`. `secretRooms` contains inclusive `[left, top, right,
 bottom]` bounds. `secretDoors` and `secretTraps` contain cell indices. `traps`
-contains `{cell, kind, hidden, active}`, using snake_case trap identities.
+contains `{cell, kind, hidden, active}`, using engine trap class identities in v3.
 
 `assets` lists the required PNGs with `{id, width, height, sha256}`. Load
 and cache them using the asset endpoint; PNG bytes are omitted from JSON.
