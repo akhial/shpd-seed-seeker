@@ -1,8 +1,8 @@
 import { readFile } from "node:fs/promises";
-import { beforeAll, describe, expect, it } from "vite-plus/test";
+import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
 import init, { level_map, level_map_asset } from "../wasm/pkg/seedfinder.js";
 import { isMapDepthSupported, mapRequestJson } from "./client";
-import { drawLevelMap } from "./render";
+import { createLevelMapRenderer, drawLevelMap } from "./render";
 import type { LevelMapDocument, LevelMapRequest, MapBundle } from "./types";
 
 beforeAll(async () => {
@@ -142,4 +142,82 @@ it("composites raised layers and switches secret visibility without drawing anno
   expect(blits[1]).toEqual([texture, 32, 0, 8, 8, 20, 2, 8, 8]);
   expect(outlines).toEqual([]);
   expect(context.imageSmoothingEnabled).toBe(false);
+});
+
+it("caches animation states and repairs overlapping layers without repainting distant tiles", () => {
+  const floor = map(1);
+  const fill = (rgba: [number, number, number, number]) => ({
+    kind: "fill" as const,
+    rgba,
+    destination: [0, 0, 16, 16] as [number, number, number, number],
+  });
+  const bundle: MapBundle = {
+    textures: new Map(),
+    map: {
+      ...floor,
+      width: 4,
+      height: 1,
+      scene: {
+        tileSize: 16,
+        sprites: [
+          { frameDurationMs: 1, frames: [[fill([100, 100, 100, 255])]] },
+          { frameDurationMs: 50, frames: [[fill([255, 0, 0, 255])], []] },
+          { frameDurationMs: 1, frames: [[fill([0, 0, 255, 128])]] },
+        ],
+        layers: [
+          { name: "terrain", cells: [0, null, null, 0] },
+          { name: "animation", cells: [1, null, null, null] },
+          { name: "foreground", cells: [2, null, null, null] },
+        ],
+        concealedLayers: [{ name: "terrain", cells: [0, null, null, 0] }],
+      },
+    },
+  };
+  const raster = vi.fn();
+  const canvases: HTMLCanvasElement[] = [];
+  const makeCanvas = () => {
+    const canvas = { getContext: () => ({ fillRect: raster }) } as unknown as HTMLCanvasElement;
+    canvases.push(canvas);
+    return canvas;
+  };
+  const blit = vi.fn();
+  const rect = vi.fn();
+  const fillRect = vi.fn();
+  const context = {
+    save() {},
+    restore() {},
+    beginPath() {},
+    clip() {},
+    rect,
+    fillRect,
+    drawImage: blit,
+  } as unknown as CanvasRenderingContext2D;
+  const renderer = createLevelMapRenderer(context, bundle, true, makeCanvas);
+  expect(renderer.animated).toBe(true);
+  expect(canvases).toHaveLength(4); // One cached static sprite shared by both terrain cells.
+  expect(raster).toHaveBeenCalledTimes(3); // The transparent animation frame has no commands.
+  renderer.draw(0);
+  expect(blit).toHaveBeenCalledTimes(4);
+  blit.mockClear();
+  fillRect.mockClear();
+  renderer.draw(25);
+  expect(blit).not.toHaveBeenCalled();
+  expect(fillRect).not.toHaveBeenCalled();
+  renderer.draw(50);
+  expect(rect).toHaveBeenCalledWith(0, 0, 16, 16);
+  expect(blit.mock.calls).toEqual([
+    [canvases[0], 0, 0], // Restore the terrain under the now-transparent frame.
+    [canvases[2], 0, 0],
+    [canvases[3], 0, 0], // Foreground remains above the animation.
+  ]);
+  blit.mockClear();
+  renderer.draw(100);
+  expect(blit.mock.calls[1][0]).toBe(canvases[1]);
+  expect(raster).toHaveBeenCalledTimes(3); // Looping never rasterizes a frame again.
+  const concealed = createLevelMapRenderer(context, bundle, false, makeCanvas);
+  expect(concealed.animated).toBe(false);
+  concealed.draw(0);
+  blit.mockClear();
+  concealed.draw(1000);
+  expect(blit).not.toHaveBeenCalled();
 });

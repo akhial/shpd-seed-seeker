@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import { mapRequestJson, requestLevelMap } from "../../lib/level-map/client";
-import { drawLevelMap } from "../../lib/level-map/render";
+import { createLevelMapRenderer } from "../../lib/level-map/render";
 import type { LevelMapRequest, MapBundle } from "../../lib/level-map/types";
 import {
   constrainMapTransform,
@@ -145,7 +145,8 @@ function MapCanvas({
   const [transform, setTransform] = useState(FIT_MAP);
   const transformRef = useRef(transform);
   const gestures = useRef(new MapGesture());
-  const [visible, setVisible] = useState(true);
+  const visibleRef = useRef(true);
+  const resumeRef = useRef<() => void>(() => {});
   const widthPx = map.width * map.scene.tileSize,
     heightPx = map.height * map.scene.tileSize;
   const geometry = useMemo(
@@ -170,7 +171,10 @@ function MapCanvas({
       setSize({ width: entry.contentRect.width, height: entry.contentRect.height });
     });
     resize.observe(viewport);
-    const intersection = new IntersectionObserver(([entry]) => setVisible(entry.isIntersecting));
+    const intersection = new IntersectionObserver(([entry]) => {
+      visibleRef.current = entry.isIntersecting;
+      resumeRef.current();
+    });
     intersection.observe(viewport);
     return () => {
       resize.disconnect();
@@ -205,27 +209,32 @@ function MapCanvas({
   useEffect(() => {
     const context = canvasRef.current?.getContext("2d");
     if (!context) return;
+    const renderer = createLevelMapRenderer(context, bundle, secrets);
     let frame = 0,
       last = -Infinity;
     const start = performance.now();
     const tick = (time: number) => {
       if (time - last >= 50) {
-        drawLevelMap(context, bundle, time - start, secrets);
+        renderer.draw(time - start);
         last = time;
       }
-      if (visible && !document.hidden) frame = requestAnimationFrame(tick);
+      if (renderer.animated && visibleRef.current && !document.hidden)
+        frame = requestAnimationFrame(tick);
     };
     const resume = () => {
       cancelAnimationFrame(frame);
-      if (!document.hidden) frame = requestAnimationFrame(tick);
+      if (renderer.animated && visibleRef.current && !document.hidden)
+        frame = requestAnimationFrame(tick);
     };
+    resumeRef.current = resume;
     tick(start);
     document.addEventListener("visibilitychange", resume);
     return () => {
+      resumeRef.current = () => {};
       cancelAnimationFrame(frame);
       document.removeEventListener("visibilitychange", resume);
     };
-  }, [bundle, visible, secrets]);
+  }, [bundle, secrets]);
   const pointerPoint = (event: ReactPointerEvent<HTMLDivElement>) => {
     const bounds = event.currentTarget.getBoundingClientRect();
     return {
