@@ -22,6 +22,100 @@ fn normalized(value: &str) -> String {
 }
 
 #[test]
+fn enchanted_heaps_glow_without_tinting_containers_or_shadows() {
+    use shpd_seedfinder_core::{catalog::ItemId, level_map::MapGlow};
+    let map = generate_level_map_in_branch(
+        DungeonSeed::from_code("FOI-QDX-EMJ").unwrap(),
+        22,
+        0,
+        Challenges::NONE,
+        Some(ItemId::ParchmentScrap),
+    )
+    .unwrap();
+    // Official v4.0: Unstable javelin, Blocking hammer, Venomous gauntlet in a chest.
+    for (cell, color) in [
+        (1518, [153, 153, 153]),
+        (1660, [0, 0, 255]),
+        (1205, [68, 0, 170]),
+    ] {
+        let heap = map.contents.heaps.iter().find(|h| h.cell == cell).unwrap();
+        assert_eq!(
+            heap.items[0].glow,
+            Some(MapGlow {
+                color,
+                period_ms: 1000
+            })
+        );
+    }
+    let glows: Vec<_> = map
+        .scene
+        .layers
+        .iter()
+        .filter(|l| l.name == "heaps")
+        .flat_map(|l| l.cells.iter().flatten())
+        .flat_map(|&i| &map.scene.sprites[i].frames[0])
+        .filter_map(|draw| match draw {
+            MapDraw::Blit {
+                glow: Some(glow),
+                tint,
+                source,
+                ..
+            } => {
+                assert!(tint.is_none(), "shadows must never pulse");
+                assert_eq!(source[1] / 16, 9, "only exposed missiles pulse");
+                Some(glow.color)
+            }
+            _ => None,
+        })
+        .collect();
+    assert!(glows.contains(&[153, 153, 153]));
+    assert!(glows.contains(&[0, 0, 255]));
+    assert!(
+        !glows.contains(&[68, 0, 170]),
+        "closed chest hides the gauntlet glow"
+    );
+}
+
+#[test]
+fn every_vault_vent_has_a_wall_occluded_warning_emitter() {
+    let map = generate_level_map_in_branch(
+        DungeonSeed::from_code("FOI-QDX-EMJ").unwrap(),
+        18,
+        1,
+        Challenges::NONE,
+        None,
+    )
+    .unwrap();
+    let vents: Vec<_> = map
+        .contents
+        .features
+        .iter()
+        .filter(|f| f.kind == "VaultFlameTrap")
+        .collect();
+    assert!(!vents.is_empty());
+    for vent in vents {
+        let emitter = map
+            .scene
+            .emitters
+            .iter()
+            .find(|e| e.cell == vent.cell)
+            .unwrap();
+        assert!(emitter.wall_mask);
+        assert_eq!(
+            emitter.particles.len(),
+            10,
+            "0.3s warning interval in a 3s loop"
+        );
+        assert!(
+            emitter
+                .particles
+                .iter()
+                .all(|p| p.position.iter().all(|&v| (6900..10100).contains(&v)))
+        );
+    }
+}
+
+#[test]
 fn initial_contents_match_official_engine_in_every_region() {
     let fixture: Value = serde_json::from_str(include_str!("fixtures/map-contents.json")).unwrap();
     for sample in fixture["samples"].as_array().unwrap() {

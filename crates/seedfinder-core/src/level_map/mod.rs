@@ -6,7 +6,9 @@
 
 pub mod assets;
 pub(crate) mod contents;
+mod glow;
 pub use contents::{MapContents, MapEffect, MapFeature, MapHeap, MapItem, MapMob, MapPlant};
+pub use glow::MapGlow;
 #[cfg(feature = "json-query")]
 pub mod json;
 mod particles;
@@ -203,6 +205,9 @@ pub enum MapDraw {
         /// Multiply source RGB, preserving its alpha silhouette.
         #[cfg_attr(feature = "json-query", serde(skip_serializing_if = "Option::is_none"))]
         tint: Option<[u8; 3]>,
+        /// Continuous colour pulse; independent of sprite frame timing.
+        #[cfg_attr(feature = "json-query", serde(skip_serializing_if = "Option::is_none"))]
+        glow: Option<MapGlow>,
         asset: &'static str,
         source: [u16; 4],
         destination: [u16; 4],

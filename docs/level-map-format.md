@@ -64,7 +64,9 @@ selection and animation allocation are never performed by seed search.
 `features`, and supplemental `traps` arrays. Positions are row-major `cell` indices. Heaps contain
 `kind`, `haunted` and top-first `items`; mobs contain `kind` and the inventory
 already rolled during generation, `sleeping`, disguise `stealthy`, and `approximate`. Items contain `kind`, `image` (the game's
-item atlas index), `quantity`, and `deterministic`. Plants include their terrain
+item atlas index), `quantity`, `deterministic`, and optional `glow` (RGB `color`
+and fade-in `periodMs`). Exposed heap/shop items pulse; closed containers and
+sprite shadows do not inherit their contents' glow. Plants include their terrain
 feature `image`; custom features carry `width` and `height` in cells. Object
 kinds identify engine classes; searchable equipment uses catalog stable IDs.
 Metadata always describes the complete floor, irrespective of secret visibility.
@@ -79,6 +81,9 @@ The overview follows the canonical no-remains, no-holiday profile.
 
 Water, well hearts/question marks, alchemy bubbles, sacrificial blue fire,
 eternal green fire, city statue flames, blacksmith sparks and gas have repeatable animation loops.
+Vault flame vents show the game's small green warning particles at each fixed
+vent location, recorded as `VaultFlameTrap` features. This previews the hazard;
+turn-dependent firing sequences and their cooldowns are not advanced.
 The vault entry uses its torn carpets, circular entrance, pulsing barrier and wall banners.
 Actor sprites use their original idle/disguise films, flattened sprite shadows,
 and sleep indicators. Foreground walls and raised terrain occlude heaps/actors.
@@ -205,6 +210,10 @@ is a list of drawing commands in draw order:
   alpha by `opacity / 255` (default 255). Optional `tint: [r,g,b]` multiplies
   each source RGB component by that component / 255, preserving alpha. Black
   tinted, flattened sprite images provide item/actor shadows.
+  Optional `glow: {color: [r,g,b], periodMs}` blends the sprite RGB toward the
+  glow colour, preserving source alpha: `rgb * (1-v) + color * v`, where
+  `phase = (elapsedMs / periodMs) % 2` and `v = min(phase, 2-phase) * 0.6`.
+  Evaluate the glow every display frame, independently of sprite-frame changes.
 - `fill`: fill `destination` with `rgba: [red, green, blue, alpha]`, each 0–255.
 
 Both rectangle types are `[x, y, width, height]` in pixels, with a top-left
@@ -252,8 +261,11 @@ angle = initialAngle + angularSpeed * seconds
 Curves contain `[progress, value]` points in thousandths: linearly interpolate,
 then take the square root if `sqrt` is true. Draw the image centered at the
 resulting position, scaled/rotated with the resulting alpha. `blend: "add"`
-requires the underlying scenery as the blend destination. Effects follow wall
-layers, with geometric darkness applied last. Reduced-motion/static views sample
+requires the underlying scenery as the blend destination. Emitters with
+`wallMask: true` are occluded by the alpha silhouettes of `raised`, `walls`,
+`room_walls`, and `boss_walls`. Status icons use `wallMask: false` and appear
+above those surfaces. Apply geometric darkness last to both groups.
+Reduced-motion/static views sample
 time zero. The browser uses a separate particle canvas, copying only emitter
 bounds from cached scenery before compositing; it pauses offscreen/hidden maps.
 

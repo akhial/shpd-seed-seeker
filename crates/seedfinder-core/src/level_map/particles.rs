@@ -25,6 +25,8 @@ pub struct MapParticle {
 #[cfg_attr(feature = "json-query", derive(serde::Serialize))]
 #[cfg_attr(feature = "json-query", serde(rename_all = "camelCase"))]
 pub struct MapEmitter {
+    /// Foreground terrain occludes world particles; status icons stay above it.
+    pub wall_mask: bool,
     pub cell: usize,
     pub loop_ms: u16,
     pub blend: Option<MapBlend>,

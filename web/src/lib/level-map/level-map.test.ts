@@ -3,7 +3,8 @@ import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
 import init, { level_map, level_map_asset } from "../wasm/pkg/seedfinder.js";
 import { isMapDepthSupported, mapRequestJson } from "./client";
 import { mapSpriteCache } from "./frame-cache";
-import { createLevelMapRenderer, drawLevelMap } from "./render";
+import { createLevelMapRenderer, drawLevelMap, glowAmount } from "./render";
+import { itemGlow } from "../glow";
 import type { LevelMapDocument, LevelMapRequest, MapBundle } from "./types";
 
 beforeAll(async () => {
@@ -17,6 +18,31 @@ const map = (depth: number, branch = 0) =>
   ) as LevelMapDocument;
 
 describe("browser level map contract", () => {
+  it("carries the same enchantment glows as the Scout list through WASM", () => {
+    const result = JSON.parse(
+      level_map(JSON.stringify({ seed: "FOI-QDX-EMJ", depth: 22, trinket: "parchment_scrap" })),
+    ) as LevelMapDocument;
+    for (const [cell, name] of [
+      [1518, "Unstable"],
+      [1660, "Blocking"],
+    ] as const) {
+      const glow = result.contents!.heaps.find((h) => h.cell === cell)!.items[0].glow!;
+      const scout = itemGlow({ cursed: false, effect: { kind: "enchantment", name } })!;
+      expect(`#${glow.color.map((c) => c.toString(16).padStart(2, "0")).join("")}`).toBe(
+        scout.color,
+      );
+      expect(glow.periodMs).toBe(scout.period * 1000);
+    }
+  });
+  it("pulses continuously to the game's 60% peak at display-rate timestamps", () => {
+    expect(glowAmount(1000, 0)).toBe(0);
+    expect(glowAmount(1000, 500)).toBe(0.3);
+    expect(glowAmount(1000, 1000)).toBe(0.6);
+    expect(glowAmount(1000, 1500)).toBe(0.3);
+    expect(glowAmount(1000, 2000)).toBe(0);
+    expect(glowAmount(500, 500)).toBe(0.6);
+    expect(glowAmount(1000, 500 + 1000 / 120)).toBeGreaterThan(glowAmount(1000, 500));
+  });
   it("uses engine coverage, including quest parent floors and supported boss arenas", () => {
     expect([1, 5, 13, 15, 19, 24].every(isMapDepthSupported)).toBe(true);
     expect([0, 10, 20, 25, 26].some(isMapDepthSupported)).toBe(false);

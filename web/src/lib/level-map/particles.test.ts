@@ -3,6 +3,7 @@ import { createMapParticleRenderer, curveValue, particleState } from "./particle
 import type { MapBundle, MapEmitter } from "./types";
 
 const emitter: MapEmitter = {
+  wallMask: true,
   cell: 0,
   loopMs: 3000,
   blend: "add",
@@ -107,6 +108,63 @@ describe("continuous map effects", () => {
           false,
         ).animated,
       ).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("masks world fire behind walls while keeping status icons above walls", () => {
+    const order: string[] = [];
+    const maskContexts = [{ fillRect: vi.fn() }, { fillRect: vi.fn() }];
+    let maskIndex = 0;
+    vi.stubGlobal("document", {
+      createElement: () => {
+        const index = maskIndex++;
+        return { label: index === 0 ? "darkness" : "wall", getContext: () => maskContexts[index] };
+      },
+    });
+    const context = {
+      canvas: { width: 16, height: 16 },
+      save() {},
+      restore() {},
+      setTransform() {},
+      clearRect() {},
+      translate() {},
+      rotate() {},
+      scale() {},
+      drawImage: (image: { label: string }) => order.push(image.label),
+      fillRect: () => order.push("particle"),
+    };
+    const bundle = {
+      textures: new Map(),
+      map: {
+        width: 1,
+        height: 1,
+        scene: {
+          tileSize: 16,
+          sprites: [
+            {
+              frames: [[{ kind: "fill", rgba: [255, 255, 255, 255], destination: [0, 12, 16, 4] }]],
+            },
+          ],
+          layers: [{ name: "walls", cells: [0] }],
+          concealedLayers: [],
+          emitters: [emitter, { ...emitter, wallMask: false }],
+          concealedEmitters: [],
+        },
+      },
+    } as unknown as MapBundle;
+    try {
+      createMapParticleRenderer(
+        context as unknown as CanvasRenderingContext2D,
+        { label: "scenery" } as unknown as HTMLCanvasElement,
+        bundle,
+        true,
+      ).draw(100);
+      expect(maskContexts[1].fillRect).toHaveBeenCalledWith(0, 12, 16, 4);
+      expect(order.lastIndexOf("wall")).toBeGreaterThan(order.indexOf("particle"));
+      expect(order.lastIndexOf("wall")).toBeLessThan(order.lastIndexOf("particle"));
+      expect(order.at(-1)).toBe("darkness");
     } finally {
       vi.unstubAllGlobals();
     }

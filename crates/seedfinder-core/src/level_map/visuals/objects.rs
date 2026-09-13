@@ -1,7 +1,7 @@
 //! Cell-clipped object sprites. Splitting raised images preserves the cell drawing contract
 //! on every frontend, including large actors crossing several neighbouring cells.
 use super::{Level, MapDraw, MapLayer, MapScene, MapSprite, intern, layer};
-use crate::level_map::MapContents;
+use crate::level_map::{MapContents, MapGlow};
 
 pub(super) struct ActorSprite {
     pub asset: &'static str,
@@ -43,7 +43,7 @@ pub(super) fn layers(scene: &mut MapScene, level: &Level, contents: &MapContents
             offset,
             [1.0, 0.25, 0.5],
         );
-        stamp(
+        stamp_scaled(
             scene,
             &mut heaps,
             level,
@@ -52,6 +52,13 @@ pub(super) fn layers(scene: &mut MapScene, level: &Level, contents: &MapContents
             &[[image % 16 * 16, image / 16 * 16, w, h]],
             1,
             offset,
+            [w, h],
+            false,
+            if matches!(heap.kind.as_str(), "Heap" | "ForSale") {
+                heap.items.first().and_then(|item| item.glow)
+            } else {
+                None
+            },
         );
     }
     for mob in &contents.mobs {
@@ -189,6 +196,7 @@ pub(super) fn stamp(
         offset,
         [sources[0][2], sources[0][3]],
         false,
+        None,
     );
 }
 
@@ -227,6 +235,7 @@ fn shadow(
             (f32::from(h) * height).round() as u16,
         ],
         true,
+        None,
     );
 }
 
@@ -242,6 +251,7 @@ fn stamp_scaled(
     offset: [i32; 2],
     size: [u16; 2],
     shadow: bool,
+    glow: Option<MapGlow>,
 ) {
     let point = level.map.cell_to_point(cell);
     let [w, h] = size;
@@ -270,6 +280,7 @@ fn stamp_scaled(
                     vec![MapDraw::Blit {
                         opacity: if shadow { 153 } else { 255 },
                         tint: shadow.then_some([0, 0, 0]),
+                        glow,
                         asset,
                         source: [
                             s[0] + u16::try_from((dx - ox) * i32::from(s[2]) / i32::from(w))

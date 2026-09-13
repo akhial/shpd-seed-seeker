@@ -1,4 +1,5 @@
 import { drawTexture } from "./textures";
+import { drawCommand } from "./render";
 import type { MapBundle, MapCurve, MapEmitter, Rectangle } from "./types";
 
 export function curveValue(curve: MapCurve, progress: number): number {
@@ -113,27 +114,30 @@ export function createMapParticleRenderer(
         Math.max(0, Math.min(height, y + h) - top),
       ];
     });
-  const mask = document.createElement("canvas");
-  mask.width = width;
-  mask.height = height;
-  const maskContext = mask.getContext("2d")!;
   const layers = revealSecrets ? map.scene.layers : map.scene.concealedLayers;
-  for (const layer of layers.filter((layer) => layer.name === "darkness")) {
-    layer.cells.forEach((sprite, cell) => {
-      if (sprite === null) return;
-      for (const draw of map.scene.sprites[sprite].frames[0]) {
-        if (draw.kind !== "fill") continue;
-        const [x, y, w, h] = draw.destination;
-        maskContext.fillStyle = `rgba(0,0,0,${draw.rgba[3] / 255})`;
-        maskContext.fillRect(
-          (cell % map.width) * size + x,
-          Math.floor(cell / map.width) * size + y,
-          w,
-          h,
-        );
-      }
-    });
-  }
+  const makeMask = (names: string[]) => {
+    const mask = document.createElement("canvas");
+    mask.width = width;
+    mask.height = height;
+    const target = mask.getContext("2d")!;
+    target.imageSmoothingEnabled = false;
+    for (const layer of layers.filter((layer) => names.includes(layer.name))) {
+      layer.cells.forEach((sprite, cell) => {
+        if (sprite === null) return;
+        for (const draw of map.scene.sprites[sprite].frames[0])
+          drawCommand(
+            target,
+            bundle,
+            draw,
+            (cell % map.width) * size,
+            Math.floor(cell / map.width) * size,
+          );
+      });
+    }
+    return mask;
+  };
+  const darkness = makeMask(["darkness"]);
+  const walls = makeMask(["raised", "walls", "room_walls", "boss_walls"]);
   // Resolve tinted atlas pixels once, outside the display-rate loop.
   const images = emitters.map((emitter) =>
     emitter.image.kind === "blit" ? drawTexture(bundle, emitter.image) : null,
@@ -158,7 +162,7 @@ export function createMapParticleRenderer(
         context.clearRect(x, y, w, h);
         if (w && h) context.drawImage(scenery, x, y, w, h, x, y, w, h);
       }
-      emitters.forEach((emitter, index) => {
+      const drawEmitter = (emitter: MapEmitter, index: number) => {
         const ox = (emitter.cell % map.width) * size,
           oy = Math.floor(emitter.cell / map.width) * size;
         const image = emitter.image,
@@ -183,11 +187,21 @@ export function createMapParticleRenderer(
           }
           context.restore();
         }
+      };
+      const eraseMask = (mask: HTMLCanvasElement) => {
+        context.globalAlpha = 1;
+        context.globalCompositeOperation = "destination-out";
+        for (const [x, y, w, h] of regions)
+          if (w && h) context.drawImage(mask, x, y, w, h, x, y, w, h);
+      };
+      emitters.forEach((emitter, index) => {
+        if (emitter.wallMask) drawEmitter(emitter, index);
       });
-      context.globalAlpha = 1;
-      context.globalCompositeOperation = "destination-out";
-      for (const [x, y, w, h] of regions)
-        if (w && h) context.drawImage(mask, x, y, w, h, x, y, w, h);
+      eraseMask(walls);
+      emitters.forEach((emitter, index) => {
+        if (!emitter.wallMask) drawEmitter(emitter, index);
+      });
+      eraseMask(darkness);
       context.restore();
     },
   };

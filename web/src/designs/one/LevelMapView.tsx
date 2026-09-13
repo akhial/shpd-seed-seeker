@@ -420,10 +420,9 @@ function MapCanvas({
     const start = performance.now();
     const tick = (time: number) => {
       const elapsed = motion.matches ? 0 : time - start;
-      if (time - last >= 50 || motion.matches) {
-        renderer.draw(elapsed);
-        last = time;
-      }
+      const advanceSprites = time - last >= 50 || motion.matches;
+      renderer.draw(elapsed, advanceSprites);
+      if (advanceSprites) last = time;
       const density = densityRef.current;
       const width = Math.round(widthPx * density),
         height = Math.round(heightPx * density);

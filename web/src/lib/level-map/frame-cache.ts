@@ -72,6 +72,15 @@ function buildSpriteCache(bundle: MapBundle, makeCanvas: () => HTMLCanvasElement
         let frame: CachedFrame | null;
         if (!commands.length) {
           frame = null;
+        } else if (commands.some((draw) => draw.kind === "blit" && draw.glow)) {
+          // Colour pulses are continuous and cannot be baked into sprite frames.
+          frame = {
+            commands,
+            opacity: 255,
+            image: texturesPlaceholder(bundle),
+            source: [0, 0, 0, 0],
+            destination: bounds(commands),
+          };
         } else if (commands.length === 1 && commands[0].kind === "blit") {
           const draw = commands[0];
           frame = {

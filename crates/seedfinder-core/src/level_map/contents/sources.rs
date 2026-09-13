@@ -356,6 +356,15 @@ impl MapContents {
         rewards: &[crate::quests::ImpRewardOption],
     ) -> Self {
         let mut out = Self::from_level(&vault.level, a);
+        for &cell in &vault.flame_traps {
+            // Fixed vent locations, not active fire blobs (those depend on turns).
+            out.features.push(MapFeature {
+                cell,
+                kind: "VaultFlameTrap".to_owned(),
+                width: 1,
+                height: 1,
+            });
+        }
         for heap in &vault.heaps {
             out.heaps.push(MapHeap {
                 cell: heap.cell,

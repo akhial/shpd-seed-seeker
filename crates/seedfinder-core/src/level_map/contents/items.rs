@@ -22,7 +22,7 @@ pub(super) fn generated(value: GeneratedItem, a: &ItemAppearanceState) -> MapIte
             GeneratedItem::TippedDart { quantity, .. } => quantity,
             _ => 1,
         };
-        return equipment(e.item, quantity, a);
+        return with_glow(equipment(e.item, quantity, a), e.roll.effect, e.roll.cursed);
     }
     match value {
         GeneratedItem::Food(kind) => MapItem::new(name(kind), [437, 438, 432][kind as usize], 1),
@@ -237,18 +237,22 @@ pub(super) fn forced(
         I::Regular(i) => regular(*i, a),
         I::EnergyCrystal { quantity } => MapItem::new("EnergyCrystal", 19, *quantity),
         I::AlchemyPage(_) => direct("AlchemyPage", a),
-        I::Shop(S::Searchable(i)) => equipment(
-            i.item,
-            if i.item.is_tipped_dart() {
-                2
-            } else if crate::catalog::item(i.item).weapon_category()
-                == Some(crate::catalog::WeaponCategory::Thrown)
-            {
-                3
-            } else {
-                1
-            },
-            a,
+        I::Shop(S::Searchable(i)) => with_glow(
+            equipment(
+                i.item,
+                if i.item.is_tipped_dart() {
+                    2
+                } else if crate::catalog::item(i.item).weapon_category()
+                    == Some(crate::catalog::WeaponCategory::Thrown)
+                {
+                    3
+                } else {
+                    1
+                },
+                a,
+            ),
+            i.effect,
+            i.cursed,
         ),
         I::Shop(S::Generated(i)) => generated(*i, a),
         I::Shop(S::Direct(D::Bag(ShopBagOffer::Deterministic(bag)))) => direct(&name(bag), a),
@@ -262,7 +266,7 @@ pub(super) fn forced(
 pub(super) fn vault(value: crate::vault_loot::VaultItem, a: &ItemAppearanceState) -> MapItem {
     use crate::vault_loot::{VaultConsumable as C, VaultItem as I};
     match value {
-        I::Equipment(i) => equipment(i.item, i.quantity, a),
+        I::Equipment(i) => with_glow(equipment(i.item, i.quantity, a), i.effect, false),
         I::Dart => MapItem::new("Dart", 160, 2),
         I::Consumable(c) => generated(
             match c {
@@ -303,5 +307,10 @@ pub(super) fn imp(value: crate::quests::ImpRewardOption, a: &ItemAppearanceState
         "chalice_of_blood" | "dried_rose" => 1,
         _ => 0,
     };
+    item
+}
+
+fn with_glow(mut item: MapItem, effect: Option<crate::catalog::Effect>, cursed: bool) -> MapItem {
+    item.glow = crate::level_map::MapGlow::for_item(effect, cursed);
     item
 }

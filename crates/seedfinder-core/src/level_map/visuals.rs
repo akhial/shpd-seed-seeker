@@ -228,6 +228,7 @@ fn branch_structures(scene: &mut MapScene, level: &Level, kind: MapKind) -> MapL
                         frames: vec![vec![MapDraw::Blit {
                             opacity: 255,
                             tint: None,
+                            glow: None,
                             asset,
                             source: [source_x + x * 16, (y + 1) * 16, 16, 16],
                             destination: [0, 0, 16, 16],
@@ -269,6 +270,7 @@ fn tile_sprite(asset: &'static str, tile: u16) -> MapSprite {
         frames: vec![vec![MapDraw::Blit {
             opacity: 255,
             tint: None,
+            glow: None,
             asset,
             source: [(tile % columns) * 16, (tile / columns) * 16, 16, 16],
             destination: [0, 0, 16, 16],
@@ -288,6 +290,7 @@ fn water_sprite(asset: &'static str, x: i32, y: i32) -> MapSprite {
             let mut draws = vec![MapDraw::Blit {
                 opacity: 255,
                 tint: None,
+                glow: None,
                 asset,
                 source: [sx, sy, 16, first],
                 destination: [0, 0, 16, first],
@@ -296,6 +299,7 @@ fn water_sprite(asset: &'static str, x: i32, y: i32) -> MapSprite {
                 draws.push(MapDraw::Blit {
                     opacity: 255,
                     tint: None,
+                    glow: None,
                     asset,
                     source: [sx, 0, 16, 16 - first],
                     destination: [0, first, 16, 16 - first],
@@ -407,6 +411,7 @@ mod tests {
             vec![MapDraw::Blit {
                 opacity: 255,
                 tint: None,
+                glow: None,
                 asset: "terrain_features.png",
                 source: [48, 80, 16, 16],
                 destination: [0, 0, 16, 16]
@@ -464,6 +469,7 @@ mod tests {
             &[MapDraw::Blit {
                 opacity: 255,
                 tint: None,
+                glow: None,
                 asset: "tiles_sewers.png",
                 source: [64, 112, 16, 16],
                 destination: [0, 0, 16, 16]

@@ -15,6 +15,7 @@ enum Particle {
     Bubble,
     Sacrifice,
     Eternal,
+    VaultVent,
     CityFlame,
     Toxic,
 }
@@ -39,6 +40,11 @@ pub(super) fn emitters(level: &Level, contents: &MapContents) -> Vec<MapEmitter>
         .filter(|e| objects::visible(level, e.cell))
         .filter_map(|e| Particle::kind(&e.kind).map(|kind| emitter(e.cell, kind)))
         .collect();
+    for feature in &contents.features {
+        if feature.kind == "VaultFlameTrap" && objects::visible(level, feature.cell) {
+            result.push(emitter(feature.cell, Particle::VaultVent));
+        }
+    }
     if level.depth <= 5 {
         for (cell, &tile) in level.map.cells.iter().enumerate() {
             let below = cell + usize::try_from(level.width()).unwrap();
@@ -71,12 +77,14 @@ pub(super) fn emitters(level: &Level, contents: &MapContents) -> Vec<MapEmitter>
             continue;
         };
         result.push(MapEmitter {
+            wall_mask: false,
             cell: mob.cell,
             loop_ms: 800,
             blend: None,
             image: MapDraw::Blit {
                 opacity: 255,
                 tint: None,
+                glow: None,
                 asset: "icons.png",
                 source: [7, 88, 9, 8],
                 destination: [0, 0, 9, 8],
@@ -127,6 +135,7 @@ fn emitter(cell: usize, kind: Particle) -> MapEmitter {
         Particle::Bubble => (330, 1500, -15, 0, Some(12)),
         Particle::Sacrifice => (100, 600, 0, -100, None),
         Particle::Eternal => (20, 600, 0, -80, None),
+        Particle::VaultVent => (300, 600, 0, -80, None),
         Particle::CityFlame => (100, 600, 0, -40, None),
         Particle::Toxic => (400, 3000, 0, 0, Some(13)),
     };
@@ -153,7 +162,7 @@ fn emitter(cell: usize, kind: Particle) -> MapEmitter {
             points: vec![[0, 0], [500, 4500], [1000, 0]],
             sqrt: true,
         },
-        Particle::Sacrifice | Particle::Eternal | Particle::CityFlame => {
+        Particle::Sacrifice | Particle::Eternal | Particle::VaultVent | Particle::CityFlame => {
             curve(&[[0, 1000], [1000, 0]])
         }
         _ => curve(&[[0, 1000], [1000, 1000]]),
@@ -163,6 +172,7 @@ fn emitter(cell: usize, kind: Particle) -> MapEmitter {
         MapDraw::Blit {
             opacity: 255,
             tint: matches!(kind, Particle::Toxic).then_some([80, 255, 96]),
+            glow: None,
             asset: "specks.png",
             source: [index % columns * 7, index / columns * 7, 7, 7],
             destination: [0, 0, 7, 7],
@@ -195,7 +205,13 @@ fn emitter(cell: usize, kind: Particle) -> MapEmitter {
                 } else {
                     life
                 },
-                position: if matches!(kind, Particle::CityFlame) {
+                position: if matches!(kind, Particle::VaultVent) {
+                    // VaultFlameTraps.use: centered 20% emitter bounds.
+                    [
+                        6900 + (sample(cell, n, 1) * 3200.0) as i32,
+                        6900 + (sample(cell, n, 2) * 3200.0) as i32,
+                    ]
+                } else if matches!(kind, Particle::CityFlame) {
                     // raisedTileCenter (8, 1.6), emitter rect (-2,-5,4,4).
                     [
                         6500 + (sample(cell, n, 1) * 4000.0) as i32,
@@ -225,6 +241,7 @@ fn emitter(cell: usize, kind: Particle) -> MapEmitter {
         })
         .collect();
     MapEmitter {
+        wall_mask: true,
         cell,
         loop_ms,
         blend: if speck.is_none() {
@@ -253,12 +270,14 @@ fn forge_sparks(cell: usize) -> Vec<MapEmitter> {
             let angle = -sample(cell, i, 9) * std::f32::consts::PI;
             let speed = sample(cell, i, 10) * 64.0;
             MapEmitter {
+                wall_mask: true,
                 cell,
                 loop_ms: 792,
                 blend: None,
                 image: MapDraw::Blit {
                     opacity: 255,
                     tint: None,
+                    glow: None,
                     asset: "specks.png",
                     source: [7, 0, 7, 7],
                     destination: [0, 0, 7, 7],
@@ -282,6 +301,7 @@ fn forge_sparks(cell: usize) -> Vec<MapEmitter> {
 
 fn pipe_drips(cell: usize) -> MapEmitter {
     MapEmitter {
+        wall_mask: true,
         cell,
         loop_ms: 400,
         blend: None,

@@ -1,6 +1,43 @@
 import type { MapBundle, MapDraw } from "./types";
 
 const tinted = new WeakMap<MapBundle, Map<string, CanvasImageSource>>();
+type GlowingTexture = { image: HTMLCanvasElement; amount: number };
+const glowing = new WeakMap<MapBundle, Map<string, GlowingTexture>>();
+
+/** Mix RGB inside a small sprite buffer, preserving even translucent source pixels. */
+export function glowTexture(
+  bundle: MapBundle,
+  draw: Extract<MapDraw, { kind: "blit" }>,
+  amount: number,
+): CanvasImageSource {
+  let cache = glowing.get(bundle);
+  if (!cache) {
+    cache = new Map();
+    glowing.set(bundle, cache);
+  }
+  const key = JSON.stringify([draw.asset, draw.source, draw.tint, draw.glow!.color]);
+  let entry = cache.get(key);
+  const [, , width, height] = draw.source;
+  if (!entry) {
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    entry = { image: canvas, amount: -1 };
+    cache.set(key, entry);
+  }
+  if (entry.amount !== amount) {
+    const context = entry.image.getContext("2d")!;
+    context.globalAlpha = 1;
+    context.globalCompositeOperation = "copy";
+    context.drawImage(drawTexture(bundle, draw), ...draw.source, 0, 0, width, height);
+    context.globalCompositeOperation = "source-atop";
+    context.globalAlpha = amount;
+    context.fillStyle = `rgb(${draw.glow!.color.join(",")})`;
+    context.fillRect(0, 0, width, height);
+    entry.amount = amount;
+  }
+  return entry.image;
+}
 /** The game multiplies RGB independently of source alpha (including black shadows). */
 export function drawTexture(
   bundle: MapBundle,

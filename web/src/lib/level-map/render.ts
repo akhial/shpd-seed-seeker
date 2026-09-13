@@ -1,4 +1,4 @@
-import { drawTexture } from "./textures";
+import { drawTexture, glowTexture } from "./textures";
 import { mapSpriteCache, makeFrameCanvas } from "./frame-cache";
 import type { MapBundle, MapDraw, MapSprite } from "./types";
 
@@ -29,7 +29,7 @@ export function drawLevelMap(
       const ox = (cell % map.width) * tileSize;
       const oy = Math.floor(cell / map.width) * tileSize;
       for (const draw of spriteFrame(map.scene.sprites[index], elapsed)) {
-        drawCommand(context, bundle, draw, ox, oy);
+        drawCommand(context, bundle, draw, ox, oy, elapsed);
       }
     }
   }
@@ -37,18 +37,38 @@ export function drawLevelMap(
   context.globalCompositeOperation = "source-over";
 }
 
-function drawCommand(
+export function glowAmount(periodMs: number, elapsed: number): number {
+  const phase = (Math.max(0, elapsed) / Math.max(1, periodMs)) % 2;
+  return (phase <= 1 ? phase : 2 - phase) * 0.6;
+}
+
+export function drawCommand(
   context: CanvasRenderingContext2D,
   bundle: MapBundle,
   draw: MapDraw,
   ox: number,
   oy: number,
+  elapsed = 0,
 ) {
   const [x, y, w, h] = draw.destination;
   context.globalAlpha = draw.kind === "blit" ? (draw.opacity ?? 255) / 255 : 1;
-  if (draw.kind === "blit")
-    context.drawImage(drawTexture(bundle, draw), ...draw.source, ox + x, oy + y, w, h);
-  else {
+  if (draw.kind === "blit") {
+    if (draw.glow) {
+      context.drawImage(
+        glowTexture(bundle, draw, glowAmount(draw.glow.periodMs, elapsed)),
+        0,
+        0,
+        draw.source[2],
+        draw.source[3],
+        ox + x,
+        oy + y,
+        w,
+        h,
+      );
+    } else {
+      context.drawImage(drawTexture(bundle, draw), ...draw.source, ox + x, oy + y, w, h);
+    }
+  } else {
     const [r, g, b, a] = draw.rgba;
     context.fillStyle = `rgba(${r},${g},${b},${a / 255})`;
     context.fillRect(ox + x, oy + y, w, h);
@@ -102,22 +122,29 @@ export function createLevelMapRenderer(
           y,
           cells: coveredCells(x, y, cached.width, cached.height),
           frame: -1,
+          glowing: sprite.frames.some((frame) =>
+            frame.some((draw) => draw.kind === "blit" && draw.glow),
+          ),
         },
       ];
     }),
   );
   let initial = true;
+  let previousElapsed = -1;
   return {
-    animated: entries.some(({ sprite }) => sprite.frames.length > 1),
-    draw(elapsed: number) {
+    animated: entries.some(({ sprite, glowing }) => sprite.frames.length > 1 || glowing),
+    draw(elapsed: number, advanceSprites = true) {
       const changed = entries.filter((entry) => {
         const frame =
-          Math.floor(Math.max(0, elapsed) / Math.max(1, entry.sprite.frameDurationMs)) %
-          entry.sprite.frames.length;
-        if (entry.frame === frame) return false;
+          !advanceSprites && entry.frame >= 0
+            ? entry.frame
+            : Math.floor(Math.max(0, elapsed) / Math.max(1, entry.sprite.frameDurationMs)) %
+              entry.sprite.frames.length;
+        if (entry.frame === frame && !(entry.glowing && elapsed !== previousElapsed)) return false;
         entry.frame = frame;
         return true;
       });
+      previousElapsed = elapsed;
       if (!initial && changed.length === 0) return;
       const dirtyCells = new Set(changed.flatMap((entry) => entry.cells));
       context.save();
@@ -146,6 +173,7 @@ export function createLevelMapRenderer(
                   draw,
                   entry.x - entry.cached.x,
                   entry.y - entry.cached.y,
+                  elapsed,
                 );
               continue;
             }

@@ -1,6 +1,10 @@
 import type { ChallengeName } from "../wasm/types";
 
 export type Rectangle = [number, number, number, number];
+export interface MapGlow {
+  color: [number, number, number];
+  periodMs: number;
+}
 export type MapDraw =
   | {
       kind: "blit";
@@ -8,6 +12,7 @@ export type MapDraw =
       source: Rectangle;
       opacity?: number;
       tint?: [number, number, number];
+      glow?: MapGlow;
       destination: Rectangle;
     }
   | { kind: "fill"; rgba: [number, number, number, number]; destination: Rectangle };
@@ -21,6 +26,7 @@ export interface MapItem {
   image: number;
   quantity: number;
   deterministic: boolean;
+  glow?: MapGlow;
 }
 export interface MapContents {
   heaps: { cell: number; kind: string; haunted: boolean; items: MapItem[] }[];
@@ -93,6 +99,7 @@ export interface MapCurve {
   sqrt: boolean;
 }
 export interface MapEmitter {
+  wallMask?: boolean;
   cell: number;
   loopMs: number;
   blend: "add" | null;

@@ -26,6 +26,8 @@ pub struct MapItem {
     pub quantity: i32,
     /// False means the identity depends on play or unseeded runtime state.
     pub deterministic: bool,
+    #[cfg_attr(feature = "json-query", serde(skip_serializing_if = "Option::is_none"))]
+    pub glow: Option<super::MapGlow>,
 }
 impl MapItem {
     pub(crate) fn new(kind: impl Into<String>, image: u16, quantity: i32) -> Self {
@@ -34,6 +36,7 @@ impl MapItem {
             image,
             quantity,
             deterministic: true,
+            glow: None,
         }
     }
     fn unknown(kind: &str, image: u16) -> Self {
