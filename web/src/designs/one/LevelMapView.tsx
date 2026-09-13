@@ -58,11 +58,11 @@ function MapSession(props: LevelMapViewProps) {
     branch === 0
       ? `Floor ${props.depth} layout`
       : bundle?.map.kind === "imp_vault"
-        ? "Imp vault"
-        : "Blacksmith mine";
+        ? "Imp Vault"
+        : "Blacksmith Mine";
   return (
     <div className="d1-level-map-view">
-      <div className={`d1-map-toolbar${branches.length > 0 ? " d1-map-toolbar-branched" : ""}`}>
+      <div className="d1-map-toolbar">
         {branches.length > 0 && (
           <div className="d1-map-branches" role="group" aria-label="Level area">
             <button type="button" aria-pressed={branch === 0} onClick={() => setBranch(0)}>
@@ -75,7 +75,7 @@ function MapSession(props: LevelMapViewProps) {
                 aria-pressed={branch === entry.branch}
                 onClick={() => setBranch(entry.branch)}
               >
-                {entry.kind === "imp_vault" ? "Imp vault" : "Blacksmith mine"}
+                {entry.kind === "imp_vault" ? "Imp Vault" : "Blacksmith Mine"}
               </button>
             ))}
           </div>
@@ -87,7 +87,11 @@ function MapSession(props: LevelMapViewProps) {
           disabled={secretCount === 0}
           onClick={() => setSecrets((value) => !value)}
           title={
-            secrets ? "Hide secret rooms, doors and traps" : "Reveal secret rooms, doors and traps"
+            bundle && secretCount === 0
+              ? "No secrets on this map"
+              : secrets
+                ? "Hide secret rooms, doors and traps"
+                : "Reveal secret rooms, doors and traps"
           }
         >
           <svg
@@ -101,7 +105,11 @@ function MapSession(props: LevelMapViewProps) {
             strokeLinecap="round"
             strokeLinejoin="round"
           >
-            <path d="M20 6 9 17l-5-5" />
+            {bundle && secretCount === 0 ? (
+              <path d="M18 6 6 18M6 6l12 12" />
+            ) : secrets ? (
+              <path d="M20 6 9 17l-5-5" />
+            ) : null}
           </svg>
           Secrets
         </button>
