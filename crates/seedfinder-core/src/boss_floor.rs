@@ -184,9 +184,9 @@ impl RoomPaintDispatch for BossDispatch<'_> {
                     }
                 }
                 let center = level.point_to_cell(center);
-                level.mark_mob(center);
-                for y in b.top..=b.bottom {
-                    for x in b.left..=b.right {
+                level.record_actor(center, "RatKing");
+                for x in b.left..=b.right {
+                    for y in b.top..=b.bottom {
                         let cell = level.point_to_cell(Point::new(x, y));
                         if cell != center && matches!(level.map.cells[cell], t::EMPTY | t::EMPTY_SP)
                         {
@@ -300,7 +300,7 @@ impl RoomPaintDispatch for BossDispatch<'_> {
                     );
                 }
                 let cell = level.point_to_cell(room.center(rng));
-                level.mark_mob(cell);
+                level.record_actor(cell, "Goo");
             }
             _ => unreachable!(),
         }
@@ -419,6 +419,9 @@ fn caves(rng: &mut RandomStack, challenges: Challenges) -> Level {
         let mut paths = PathFinder::new(33, 42);
         paths.build_distance_map(16 + 25 * 33, &pass);
         if PYLONS.iter().all(|&p| paths.distance[p] != i32::MAX) {
+            for cell in PYLONS {
+                level.record_actor(cell, "Pylon");
+            }
             return level;
         }
     }

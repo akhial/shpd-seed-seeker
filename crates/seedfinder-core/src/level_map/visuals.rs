@@ -1,7 +1,12 @@
 //! Raised `DungeonTerrainTilemap` composition with concealed/revealed secrets. Sprite
 //! indices follow the pinned `DungeonTileSheet` (see `assets::SOURCE_REVISION`).
 
+mod actors;
 mod boss;
+mod item_rects;
+mod objects;
+mod particles;
+mod rooms;
 
 use super::{MapDraw, MapKind, MapLayer, MapScene, MapSprite, TILE_SIZE};
 use crate::geometry::terrain as t;
@@ -14,6 +19,7 @@ pub(super) fn scene(
     level: &Level,
     rooms: &[crate::room::Room],
     kind: MapKind,
+    contents: &super::MapContents,
 ) -> MapScene {
     let root = seed_for_depth(
         i64::try_from(seed.value()).expect("seed fits i64"),
@@ -28,6 +34,8 @@ pub(super) fn scene(
         sprites: Vec::new(),
         layers: Vec::new(),
         concealed_layers: Vec::new(),
+        emitters: Vec::new(),
+        concealed_emitters: Vec::new(),
     };
     let mut revealed = level.clone();
     for tile in &mut revealed.map.cells {
@@ -35,7 +43,9 @@ pub(super) fn scene(
             *tile = t::DOOR;
         }
     }
-    scene.layers = build_layers(&mut scene, &revealed, kind, &variance, true, rooms);
+    scene.layers = build_layers(
+        &mut scene, &revealed, kind, &variance, true, rooms, contents,
+    );
     let mut concealed = level.clone();
     for room in rooms
         .iter()
@@ -52,7 +62,11 @@ pub(super) fn scene(
             }
         }
     }
-    scene.concealed_layers = build_layers(&mut scene, &concealed, kind, &variance, false, rooms);
+    scene.concealed_layers = build_layers(
+        &mut scene, &concealed, kind, &variance, false, rooms, contents,
+    );
+    scene.emitters = particles::emitters(&revealed, contents);
+    scene.concealed_emitters = particles::emitters(&concealed, contents);
     scene
 }
 
@@ -64,6 +78,7 @@ fn build_layers(
     variance: &[i32],
     reveal: bool,
     rooms: &[crate::room::Room],
+    contents: &super::MapContents,
 ) -> Vec<MapLayer> {
     use super::projection::Projection;
     let region = ((level.depth - 1) / 5) as usize;
@@ -84,12 +99,12 @@ fn build_layers(
     let mut features = layer("features", level.len());
     let mut raised = layer("raised", level.len());
     let mut walls = layer("walls", level.len());
-    let mut effects = layer("effects", level.len());
+    let effects = layer("effects", level.len());
     let mut darkness = layer("darkness", level.len());
     let water_sprites: Vec<_> = (0..4)
         .map(|phase| intern(scene, water_sprite(water, phase % 2, phase / 2)))
         .collect();
-    for (cell, &tile) in level.map.cells.iter().enumerate() {
+    for cell in 0..level.len() {
         let point = level.map.cell_to_point(cell);
         let phase =
             usize::try_from(point.x % 2 + 2 * (point.y % 2)).expect("water phase fits usize");
@@ -123,18 +138,23 @@ fn build_layers(
                 },
             ));
         }
-        if region == 0
-            && tile == t::WALL_DECO
-            && !super::projection::wall(projection.at(cell, 0, 1))
-        {
-            effects.cells[cell] = Some(intern(scene, pipe_drips(variance[cell])));
-        }
     }
-    for plant in &level.plants {
+    for plant in &contents.plants {
         if !super::projection::wall(level.map.cells[plant.cell]) {
             features.cells[plant.cell] = Some(intern(
                 scene,
-                tile_sprite("terrain_features.png", 112 + plant_image(plant.seed)),
+                tile_sprite("terrain_features.png", 112 + plant.image),
+            ));
+        }
+    }
+    for trap in &contents.traps {
+        if objects::visible(level, trap.cell) && (reveal || !trap.hidden) {
+            features.cells[trap.cell] = Some(intern(
+                scene,
+                tile_sprite(
+                    "terrain_features.png",
+                    trap_name_image(&trap.kind, trap.active),
+                ),
             ));
         }
     }
@@ -154,24 +174,34 @@ fn build_layers(
         }
     }
     let structures = branch_structures(scene, level, kind);
+    let [room_floor, room_terrain, room_walls] = rooms::layers(scene, level, rooms, contents);
+    let [boss_floor, boss_terrain, boss_walls] =
+        if kind == MapKind::Regular && matches!(level.depth, 5 | 15) {
+            boss::layers(scene, level, rooms, reveal)
+        } else {
+            [
+                layer("boss_floor", level.len()),
+                layer("boss_terrain", level.len()),
+                layer("boss_walls", level.len()),
+            ]
+        };
+    // GameScene: custom floors, occlusion shadows, plants/traps, custom
+    // terrain, heaps, mobs, raised terrain, walls, custom walls, emitters.
+    // Foreground wall lips must occlude the bottom of actors and heaps.
     let mut layers = vec![
         water_layer,
         terrain,
         structures,
+        room_floor,
+        boss_floor,
         shadows,
         features,
-        raised,
-        walls,
-        effects,
-        darkness,
+        room_terrain,
+        boss_terrain,
     ];
-    if kind == MapKind::Regular && matches!(level.depth, 5 | 15) {
-        let [floor_art, terrain_art, overhang, actors] = boss::layers(scene, level, rooms, reveal);
-        layers.insert(3, floor_art);
-        layers.insert(7, terrain_art);
-        layers.insert(10, overhang);
-        layers.insert(11, actors);
-    }
+    layers.extend(objects::layers(scene, level, contents));
+    layers.extend([raised, walls, room_walls, boss_walls, effects]);
+    layers.push(darkness);
     layers
 }
 
@@ -195,6 +225,8 @@ fn branch_structures(scene: &mut MapScene, level: &Level, kind: MapKind) -> MapL
                     MapSprite {
                         frame_duration_ms: 1,
                         frames: vec![vec![MapDraw::Blit {
+                            opacity: 255,
+                            tint: None,
                             asset,
                             source: [source_x + x * 16, (y + 1) * 16, 16, 16],
                             destination: [0, 0, 16, 16],
@@ -209,6 +241,7 @@ fn branch_structures(scene: &mut MapScene, level: &Level, kind: MapKind) -> MapL
 
 fn layer(name: &'static str, length: usize) -> MapLayer {
     MapLayer {
+        blend: None,
         name,
         cells: vec![None; length],
     }
@@ -233,6 +266,8 @@ fn tile_sprite(asset: &'static str, tile: u16) -> MapSprite {
     MapSprite {
         frame_duration_ms: 1,
         frames: vec![vec![MapDraw::Blit {
+            opacity: 255,
+            tint: None,
             asset,
             source: [(tile % columns) * 16, (tile / columns) * 16, 16, 16],
             destination: [0, 0, 16, 16],
@@ -250,12 +285,16 @@ fn water_sprite(asset: &'static str, x: i32, y: i32) -> MapSprite {
             let sy = u16::try_from((y * 16 - step).rem_euclid(32)).expect("water y fits u16");
             let first = 16.min(32 - sy);
             let mut draws = vec![MapDraw::Blit {
+                opacity: 255,
+                tint: None,
                 asset,
                 source: [sx, sy, 16, first],
                 destination: [0, 0, 16, first],
             }];
             if first < 16 {
                 draws.push(MapDraw::Blit {
+                    opacity: 255,
+                    tint: None,
                     asset,
                     source: [sx, 0, 16, 16 - first],
                     destination: [0, first, 16, 16 - first],
@@ -270,69 +309,50 @@ fn water_sprite(asset: &'static str, x: i32, y: i32) -> MapSprite {
     }
 }
 
-// Sewer sinks use 2px, half-alpha green pixel particles with a 0.4s life,
-// emitted every 0.1s. A deterministic loop approximates their unseeded motion.
-// The pipe outlet sits near the base of its raised wall face.
-fn pipe_drips(variance: i32) -> MapSprite {
-    let phase = u16::try_from(variance.rem_euclid(4)).expect("phase fits u16");
-    let frames = (0..8_u16)
-        .map(|frame| {
-            (0..4_u16)
-                .map(|drop| {
-                    let age = (frame + drop * 2 + phase) % 8;
-                    MapDraw::Fill {
-                        destination: [6 + (drop + phase) % 4, 10 + age * age / 16, 2, 2],
-                        rgba: [93, 143, 117, 128],
-                    }
-                })
-                .collect()
-        })
-        .collect();
-    MapSprite {
-        frame_duration_ms: 50,
-        frames,
-    }
+fn trap_image(kind: TrapKind, active: bool) -> u16 {
+    trap_name_image(&format!("{kind:?}"), active)
 }
 
-fn trap_image(kind: TrapKind, active: bool) -> u16 {
-    use TrapKind as K;
+fn trap_name_image(kind: &str, active: bool) -> u16 {
     let (color, shape) = match kind {
-        K::Burning => (1, 0),
-        K::Explosive => (1, 4),
-        K::WornDart => (7, 5),
-        K::PoisonDart => (3, 5),
-        K::Gripping => (7, 0),
-        K::Geyser => (4, 4),
-        K::Chilling => (6, 0),
-        K::Shocking => (2, 0),
-        K::Toxic => (3, 2),
-        K::Alarm | K::VaultFlame => (0, 0),
-        K::Ooze => (3, 0),
-        K::Confusion => (4, 2),
-        K::Flock => (6, 1),
-        K::Summoning => (4, 1),
-        K::Teleportation => (4, 0),
-        K::Gateway => (4, 5),
-        K::Frost => (6, 3),
-        K::Storm => (2, 3),
-        K::Corrosion => (7, 2),
-        K::Blazing => (1, 3),
-        K::Disintegration => (5, 5),
-        K::Rockfall | K::GnollRockfall => (7, 4),
-        K::Flashing => (7, 3),
-        K::Guardian => (0, 3),
-        K::Weakening => (3, 1),
-        K::Disarming => (0, 6),
-        K::Warping => (4, 3),
-        K::Cursing => (5, 1),
-        K::Pitfall => (0, 4),
-        K::Distortion => (4, 6),
-        K::Grim => (7, 6),
+        "Burning" => (1, 0),
+        "Explosive" => (1, 4),
+        "WornDart" => (7, 5),
+        "PoisonDart" => (3, 5),
+        "Gripping" => (7, 0),
+        "Geyser" => (4, 4),
+        "Chilling" => (6, 0),
+        "Shocking" => (2, 0),
+        "Toxic" => (3, 2),
+        "Alarm" | "VaultFlame" => (0, 0),
+        "Ooze" => (3, 0),
+        "Confusion" => (4, 2),
+        "Flock" => (6, 1),
+        "Summoning" => (4, 1),
+        "Teleportation" => (4, 0),
+        "Gateway" => (4, 5),
+        "Frost" => (6, 3),
+        "Storm" => (2, 3),
+        "Corrosion" => (7, 2),
+        "Blazing" => (1, 3),
+        "Disintegration" => (5, 5),
+        "Rockfall" | "GnollRockfall" => (7, 4),
+        "Flashing" => (7, 3),
+        "Guardian" => (0, 3),
+        "Weakening" => (3, 1),
+        "Disarming" => (0, 6),
+        "Warping" => (4, 3),
+        "Cursing" => (5, 1),
+        "Pitfall" => (0, 4),
+        "Distortion" => (4, 6),
+        "Grim" => (7, 6),
+        "ToxicVent" => (8, 2),
+        _ => unreachable!("unregistered map trap {kind}"),
     };
     (if active { color } else { 8 }) + 16 * shape
 }
 
-fn plant_image(seed: crate::generator::SeedKind) -> u16 {
+pub(super) fn plant_image(seed: crate::generator::SeedKind) -> u16 {
     use crate::generator::SeedKind as S;
     match seed {
         S::Rotberry => 0,
@@ -367,7 +387,13 @@ mod tests {
             active: true,
         });
         let before = level.clone();
-        let scene = scene(DungeonSeed::MIN, &level, &[], MapKind::Regular);
+        let scene = scene(
+            DungeonSeed::MIN,
+            &level,
+            &[],
+            MapKind::Regular,
+            &crate::level_map::MapContents::default(),
+        );
         assert_eq!(level, before);
         let features = scene
             .layers
@@ -378,6 +404,8 @@ mod tests {
         assert_eq!(
             sprite.frames[0],
             vec![MapDraw::Blit {
+                opacity: 255,
+                tint: None,
                 asset: "terrain_features.png",
                 source: [48, 80, 16, 16],
                 destination: [0, 0, 16, 16]
@@ -416,7 +444,13 @@ mod tests {
         let mut room = Room::new(RoomKind::Secret(SecretRoomKind::Artillery));
         room.bounds = Rect::new(3, 1, 7, 5);
         let before = level.clone();
-        let map = scene(DungeonSeed::MIN, &level, &[room], MapKind::Regular);
+        let map = scene(
+            DungeonSeed::MIN,
+            &level,
+            &[room],
+            MapKind::Regular,
+            &crate::level_map::MapContents::default(),
+        );
         assert_eq!(level, before);
         let revealed = map.layers.iter().find(|l| l.name == "terrain").unwrap();
         let concealed = map
@@ -427,6 +461,8 @@ mod tests {
         assert_eq!(
             map.sprites[revealed.cells[door].unwrap()].frame(0),
             &[MapDraw::Blit {
+                opacity: 255,
+                tint: None,
                 asset: "tiles_sewers.png",
                 source: [64, 112, 16, 16],
                 destination: [0, 0, 16, 16]
@@ -495,8 +531,5 @@ mod tests {
             water.frame(u64::MAX),
             water.frame((u64::MAX / 200 % 32) * 200)
         );
-        let pipe = pipe_drips(0);
-        assert_eq!(pipe.frame(0), pipe.frame(400));
-        assert_ne!(pipe.frame(0), pipe.frame(100));
     }
 }

@@ -354,8 +354,10 @@ fn generate_main_world_gated_with_challenges(
 
 pub(crate) struct FloorObservation<'a> {
     pub level: &'a crate::level::Level,
+    pub contents: crate::level_map::contents::FloorSource<'a>,
     pub rooms: &'a [crate::room::Room],
     pub quests: crate::quests::QuestSummary,
+    pub imp_rewards: &'a [crate::quests::ImpRewardOption],
     pub trinket: &'a crate::trinkets::TrinketEffects,
     pub vault: Option<&'a crate::vault_floor::GeneratedVault>,
 }
@@ -378,7 +380,7 @@ pub(crate) fn generate_main_world_observed(
         .map(|depth| seed_for_depth(dungeon_seed, depth, 0))
         .collect::<Vec<_>>();
     // Map observers need the vault alongside its parent floor, so replay eagerly.
-    generate_gated_world_attempt(seed, target, &roots, challenges, gate, None, observer)
+    generate_gated_world_attempt(seed, target, &roots, challenges, gate, None, true, observer)
 }
 
 /// Sequential gated composite over the canonical per-region floor generators.
@@ -392,8 +394,16 @@ fn generate_gated_world_with_roots(
     gate: &dyn FloorGate,
 ) -> Result<Option<GeneratedWorld>, MainWorldError> {
     let deferred = gate.deferred_vault_plan(target);
-    let result =
-        generate_gated_world_attempt(seed, target, roots, challenges, gate, deferred, &mut |_| {});
+    let result = generate_gated_world_attempt(
+        seed,
+        target,
+        roots,
+        challenges,
+        gate,
+        deferred,
+        false,
+        &mut |_| {},
+    );
     if deferred.is_some() && result.is_err() {
         // Delaying a vault can change which regional error is encountered
         // first. Discard the entire attempt and reproduce the eager result.
@@ -404,6 +414,7 @@ fn generate_gated_world_with_roots(
             challenges,
             gate,
             None,
+            false,
             &mut |_| {},
         );
     }
@@ -417,7 +428,7 @@ struct PendingVault {
     global_group: u16,
 }
 
-#[allow(clippy::too_many_lines)]
+#[allow(clippy::too_many_lines, clippy::too_many_arguments)]
 fn generate_gated_world_attempt(
     seed: DungeonSeed,
     target: u8,
@@ -425,6 +436,7 @@ fn generate_gated_world_attempt(
     challenges: Challenges,
     gate: &dyn FloorGate,
     deferred: Option<&crate::feasibility::QueryPlan>,
+    acquire_hourglass: bool,
     observer: &mut impl FnMut(FloorObservation<'_>),
 ) -> Result<Option<GeneratedWorld>, MainWorldError> {
     let dungeon_seed = i64::try_from(seed.value()).expect("base-26 seed range fits Java long");
@@ -438,6 +450,7 @@ fn generate_gated_world_attempt(
     let mut quests = QuestState::new();
     let mut shop_run = ShopRunState::default();
     let mut random = RandomStack::with_base_seed(0);
+    random.record_room_order = acquire_hourglass;
     let mut items = Vec::new();
     let mut feelings = Vec::new();
     let mut next_choice_group = 0_u16;
@@ -464,9 +477,11 @@ fn generate_gated_world_attempt(
                     .cells
                     .contains(&crate::geometry::terrain::ALCHEMY);
                 observer(FloorObservation {
+                    contents: crate::level_map::contents::FloorSource::Sewer(&floor),
                     level: &floor.painted.level,
                     rooms: &floor.painted.rooms,
                     quests: quests.summary(),
+                    imp_rewards: &quests.imp.reward_options,
                     trinket: &random.trinket,
                     vault: None,
                 });
@@ -483,9 +498,11 @@ fn generate_gated_world_attempt(
                 )
                 .map_err(MainWorldError::Prison)?;
                 observer(FloorObservation {
+                    contents: crate::level_map::contents::FloorSource::Prison(&floor),
                     level: &floor.painted.level,
                     rooms: &floor.painted.rooms,
                     quests: quests.summary(),
+                    imp_rewards: &quests.imp.reward_options,
                     trinket: &random.trinket,
                     vault: None,
                 });
@@ -502,9 +519,11 @@ fn generate_gated_world_attempt(
                 )
                 .map_err(MainWorldError::Caves)?;
                 observer(FloorObservation {
+                    contents: crate::level_map::contents::FloorSource::Caves(&floor),
                     level: &floor.painted.level,
                     rooms: &floor.painted.rooms,
                     quests: quests.summary(),
+                    imp_rewards: &quests.imp.reward_options,
                     trinket: &random.trinket,
                     vault: None,
                 });
@@ -550,9 +569,11 @@ fn generate_gated_world_attempt(
                     deferred_vault_tests::fault(1)?;
                 }
                 observer(FloorObservation {
+                    contents: crate::level_map::contents::FloorSource::City(&floor),
                     level: &floor.painted.level,
                     rooms: &floor.painted.rooms,
                     quests: quests.summary(),
+                    imp_rewards: &quests.imp.reward_options,
                     trinket: &random.trinket,
                     vault: floor.vault.as_ref(),
                 });
@@ -575,15 +596,31 @@ fn generate_gated_world_attempt(
                 )
                 .map_err(MainWorldError::Halls)?;
                 observer(FloorObservation {
+                    contents: crate::level_map::contents::FloorSource::Halls(&floor),
                     level: &floor.painted.level,
                     rooms: &floor.painted.rooms,
                     quests: quests.summary(),
+                    imp_rewards: &quests.imp.reward_options,
                     trinket: &random.trinket,
                     vault: None,
                 });
                 (floor.world_items, Some(floor.painted.level.feeling))
             }
         };
+        // Map pickup profile: take an obtainable earlier-floor hourglass,
+        // identify and uncurse it. Stock already constructed on this floor is
+        // unchanged; subsequent shops carry sand using the existing bag rules.
+        if acquire_hourglass
+            && floor_items
+                .iter()
+                .any(|item| item.item == crate::catalog::ItemId::TimekeepersHourglass)
+            && matches!(
+                shop_run.hourglass,
+                crate::shop::ShopHourglassState::Ineligible
+            )
+        {
+            shop_run.hourglass = crate::shop::ShopHourglassState::Eligible { sand_bags: 0 };
+        }
         if let Some(feeling) = feeling {
             feelings.push(FloorFeeling {
                 depth: completed,
@@ -1619,6 +1656,7 @@ mod deferred_vault_tests {
             Challenges::NONE,
             &recorder,
             None,
+            false,
             &mut |_| {},
         )
         .unwrap();

@@ -731,6 +731,11 @@ impl RegularPainter {
         level.room_order.clone_from(&order);
 
         for &room in &order {
+            if rng.record_room_order {
+                level
+                    .paint_events
+                    .push(crate::level::PaintEvent::RoomPaint(room));
+            }
             if rooms[room].connected.is_empty() && matches!(rooms[room].kind, RoomKind::Special(_))
             {
                 return Err(PaintError::SpecialRoomWithoutConnections { room });

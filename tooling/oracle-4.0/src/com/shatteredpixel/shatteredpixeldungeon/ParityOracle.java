@@ -159,7 +159,7 @@ public final class ParityOracle {
 				output.emit(levelRecord(level));
 				List<Map<String, Object>> items = itemRecords(level, null);
 				items.addAll(questItems);
-				items.removeIf(item -> !Boolean.TRUE.equals(item.get("searchable")));
+				if (!options.mapContents) items.removeIf(item -> !Boolean.TRUE.equals(item.get("searchable")));
 				sortItemRecords(items);
 				for (Map<String, Object> item : items) output.emit(item);
 			}
@@ -178,6 +178,16 @@ public final class ParityOracle {
 				Dungeon.hero.belongings.backpack.items.add(trinket);
 				brewedTrinket = true;
 			}
+            if (options.acquireHourglass && Dungeon.hero.belongings.getItem(TimekeepersHourglass.class) == null) {
+                List<Map<String,Object>> available = itemRecords(level, null);
+                available.addAll(questItems);
+                if (available.stream().anyMatch(i -> "TimekeepersHourglass".equals(i.get("simple_class")))) {
+                    TimekeepersHourglass glass = new TimekeepersHourglass();
+                    glass.identify();
+                    glass.cursed = false;
+                    Dungeon.hero.belongings.backpack.items.add(glass);
+                }
+            }
 			Dungeon.depth++;
 			if (options.vault && depth >= lastDepth && quests.impDepth > 0) break;
 		}
@@ -268,6 +278,10 @@ public final class ParityOracle {
 		return record;
 	}
 
+    static String mapContentsRecord(Level level) throws Exception {
+        return Json.encode(levelRecord(level));
+    }
+
 	private static Map<String, Object> levelRecord(Level level) throws Exception {
 		Map<String, Object> record = record("level");
 		record.put("depth", Dungeon.depth);
@@ -287,6 +301,48 @@ public final class ParityOracle {
 		record.put("mobs", mobRecords(level));
 		record.put("mob_count", level.mobs == null ? 0 : level.mobs.size());
 		record.put("heap_count", level.heaps == null ? 0 : level.heaps.size);
+        List<Map<String,Object>> heaps = new ArrayList<>();
+        for (Heap heap : level.heaps.valueList()) {
+            Map<String,Object> h = new LinkedHashMap<>();
+            h.put("cell", heap.pos); h.put("kind", heap.type.name());
+            h.put("haunted", heap.haunted);
+            List<Map<String,Object>> contents = new ArrayList<>();
+            for (Item item : heap.items) {
+                Map<String,Object> i = new LinkedHashMap<>();
+                i.put("kind", className(item)); i.put("image", item.image()); i.put("quantity", item.quantity());
+                contents.add(i);
+            }
+            h.put("items", contents); heaps.add(h);
+        }
+        record.put("heap_order", integers(level.heaps.keyArray()));
+        heaps.sort(Comparator.comparingInt(h -> (Integer)h.get("cell")));
+        record.put("heaps", heaps);
+        List<Map<String,Object>> plants = new ArrayList<>();
+        for (com.shatteredpixel.shatteredpixeldungeon.plants.Plant plant : level.plants.valueList()) {
+            Map<String,Object> p = new LinkedHashMap<>();
+            p.put("cell", plant.pos); p.put("kind", className(plant)); p.put("image", plant.image);
+            plants.add(p);
+        }
+        plants.sort(Comparator.comparingInt(p -> (Integer)p.get("cell")));
+        record.put("plants", plants);
+        List<Map<String,Object>> effects = new ArrayList<>();
+        for (com.shatteredpixel.shatteredpixeldungeon.actors.blobs.Blob blob : level.blobs.values()) {
+            if (blob.cur == null) continue;
+            for (int cell=0; cell<blob.cur.length; cell++) if (blob.cur[cell]>0) {
+                Map<String,Object> e = new LinkedHashMap<>();
+                e.put("cell", cell); e.put("kind", className(blob)); effects.add(e);
+            }
+        }
+        effects.sort(Comparator.comparingInt(e -> (Integer)e.get("cell")));
+        record.put("effects", effects);
+        List<Map<String,Object>> traps = new ArrayList<>();
+        for (com.shatteredpixel.shatteredpixeldungeon.levels.traps.Trap trap : level.traps.valueList()) {
+            Map<String,Object> entry = new LinkedHashMap<>();
+            entry.put("cell",trap.pos); entry.put("kind",className(trap)); entry.put("hidden",!trap.visible); entry.put("active",trap.active);
+            traps.add(entry);
+        }
+        traps.sort(Comparator.comparingInt(t -> (Integer)t.get("cell")));
+        record.put("traps",traps);
 		record.put("limited_drops", limitedDrops());
 		record.put("generator_state_hash", generatorStateHash());
 		record.put("generator", generatorState());
@@ -410,6 +466,19 @@ public final class ParityOracle {
 		for (Mob mob : mobs) {
 			Map<String, Object> value = new LinkedHashMap<String, Object>();
 			value.put("class", className(mob));
+            value.put("sprite_class", mob.spriteClass.getName());
+            value.put("sleeping", mob.state == mob.SLEEPING);
+            List<Item> carried = new ArrayList<Item>();
+            if (mob instanceof Mimic && ((Mimic)mob).items != null) carried.addAll(((Mimic)mob).items);
+            if (mob instanceof Statue && ((Statue)mob).weapon() != null) carried.add(((Statue)mob).weapon());
+            if (mob instanceof ArmoredStatue && ((ArmoredStatue)mob).armor() != null) carried.add(((ArmoredStatue)mob).armor());
+            List<Map<String,Object>> inventory = new ArrayList<Map<String,Object>>();
+            for (Item item : carried) {
+                Map<String,Object> entry = new LinkedHashMap<String,Object>();
+                entry.put("kind", className(item)); entry.put("image",item.image()); entry.put("quantity",item.quantity());
+                inventory.add(entry);
+            }
+            value.put("items", inventory);
 			value.put("cell", mob.pos);
 			value.put("room", roomAt(level, mob.pos));
 			value.put("hp", mob.HP);
@@ -954,6 +1023,8 @@ public final class ParityOracle {
 		String seedInput;
 		String seedCode;
 		TreeSet<Integer> depths = new TreeSet<Integer>();
+		boolean mapContents;
+		boolean acquireHourglass;
 		String format = "ndjson";
 		int challenges;
 		boolean runCheckpoints;
@@ -974,7 +1045,11 @@ public final class ParityOracle {
 					result.runCheckpoints = true;
 				} else if ("--boss-skip-checkpoints".equals(arg)) {
 					result.bossSkipCheckpoints = true;
-				} else if ("--vault".equals(arg)) {
+				} else if ("--map-contents".equals(arg)) {
+                    result.mapContents = true;
+                } else if ("--acquire-hourglass".equals(arg)) {
+                    result.acquireHourglass = true;
+                } else if ("--vault".equals(arg)) {
 					result.vault = true;
 				} else if ("--seed".equals(arg)) {
 					result.seedInput = requireValue(args, ++i, arg);

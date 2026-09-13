@@ -153,6 +153,18 @@ impl GridCells {
     }
 }
 
+/// Iteration order of generation-time `SparseArray` heaps. Map scouting uses
+/// this to resolve Ebony Mimic positions without changing search's item path.
+pub(crate) fn sparse_array_order(keys: impl IntoIterator<Item = usize>) -> Vec<usize> {
+    let mut table = GridCells::new();
+    for key in keys {
+        table.put(i32::try_from(key).expect("map cell fits i32"), key);
+    }
+    (0..table.size)
+        .map(|index| table.nth_entry(index).1)
+        .collect()
+}
+
 const fn grid_index(x: i32, y: i32) -> i32 {
     x + 100 + 1000 * (y + 100)
 }

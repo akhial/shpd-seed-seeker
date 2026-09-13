@@ -69,7 +69,7 @@ fn rat_king_art_is_revealed_only_with_secrets_and_pylons_are_visible() {
         .scene
         .layers
         .iter()
-        .find(|layer| layer.name == "boss_actors")
+        .find(|layer| layer.name == "actors")
         .unwrap();
     for cell in [433, 457, 1225, 1249] {
         assert!(actors.cells[cell].is_some(), "pylon at {cell}");

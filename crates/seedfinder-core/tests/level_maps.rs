@@ -139,7 +139,7 @@ fn all_supported_depths_have_bounded_draws_and_explicit_metadata() {
     for depth in SUPPORTED_DEPTHS {
         let map = generate_level_map(DungeonSeed::MIN, depth, Challenges::NONE, None).unwrap();
         let doc = document(&map);
-        assert_eq!(doc["schemaVersion"], 2);
+        assert_eq!(doc["schemaVersion"], 3);
         assert_eq!(doc["selectedTrinket"], Value::Null);
         assert_eq!(doc["shpdVersion"], shpd_seedfinder_core::SHPD_VERSION);
         assert_eq!(
@@ -231,9 +231,11 @@ fn assert_drawing_bounds(map: &LevelMap) {
             for draw in frame {
                 let destination = match draw {
                     MapDraw::Blit {
+                        opacity: _,
                         asset,
                         source: [x, y, w, h],
                         destination,
+                        ..
                     } => {
                         let asset = assets::get(asset).expect("every sprite ships its texture");
                         assert!(*w > 0 && *h > 0 && x + w <= asset.width && y + h <= asset.height);
@@ -248,6 +250,64 @@ fn assert_drawing_bounds(map: &LevelMap) {
             }
         }
     }
+}
+
+#[test]
+fn ambitious_imp_room_has_its_custom_entrance_and_statue_flames() {
+    let map = generate_level_map(DungeonSeed::MIN, 19, Challenges::NONE, None).unwrap();
+    let entrance = map
+        .contents
+        .features
+        .iter()
+        .find(|f| f.kind == "ImpEntrance")
+        .unwrap();
+    let width = usize::try_from(map.width).unwrap();
+    let center = entrance.cell + 2 + 2 * width;
+    let floor = map
+        .scene
+        .layers
+        .iter()
+        .find(|l| l.name == "room_floor")
+        .unwrap();
+    let sprite =
+        &map.scene.sprites[floor.cells[center].expect("the entrance covers the ordinary stairs")];
+    assert!(sprite.frames.len() > 1, "the entrance barrier pulses");
+    assert!(sprite.frames.iter().flatten().all(|draw| matches!(
+        draw,
+        MapDraw::Blit {
+            asset: "carpet.png" | "city_quest.png",
+            ..
+        }
+    )));
+    for cell in [
+        center - 3,
+        center + 3,
+        center - 3 * width,
+        center + 3 * width,
+    ] {
+        assert!(floor.cells[cell].is_some(), "carpet reaches all four arms");
+    }
+    for cell in [
+        center - 2 - 2 * width,
+        center + 2 - 2 * width,
+        center - 2 + 2 * width,
+        center + 2 + 2 * width,
+    ] {
+        assert!(
+            map.scene.emitters.iter().any(|emitter| emitter.cell == cell
+                && emitter.blend == Some(shpd_seedfinder_core::level_map::MapBlend::Add)
+                && emitter.acceleration == [0, -40]),
+            "all four pillars emit green flame"
+        );
+    }
+    let banners = map
+        .scene
+        .layers
+        .iter()
+        .find(|l| l.name == "room_terrain")
+        .unwrap();
+    assert!(banners.cells.iter().flatten().count() >= 8);
+    assert_drawing_bounds(&map);
 }
 
 #[test]
@@ -271,11 +331,7 @@ fn vault_maps_match_saved_java_fixtures_at_every_imp_depth() {
             .iter()
             .fold(1_i32, |h, &v| h.wrapping_mul(31).wrapping_add(v));
         assert_eq!(json!(hash), row["vault"]["map_hash"]);
-        assert!(
-            map.traps
-                .iter()
-                .any(|t| t.kind == shpd_seedfinder_core::level::TrapKind::VaultFlame)
-        );
+        assert!(map.traps.iter().any(|t| t.kind == "VaultFlame"));
         assert_eq!(
             serde_json::from_str::<Value>(&request.generate_document().unwrap()).unwrap(),
             document(&map)

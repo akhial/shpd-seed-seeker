@@ -195,7 +195,7 @@ it("caches animation states and repairs overlapping layers without repainting di
   } as unknown as CanvasRenderingContext2D;
   const renderer = createLevelMapRenderer(context, bundle, true, makeCanvas);
   expect(renderer.animated).toBe(true);
-  expect(canvases).toHaveLength(1); // All unique composite frames share one atlas.
+  expect(canvases.length).toBeLessThan(8); // Shared water atlas plus tinted actor silhouettes. // All unique composite frames share one atlas.
   expect(raster).toHaveBeenCalledTimes(3); // The transparent animation frame has no commands.
   renderer.draw(0);
   expect(blit).toHaveBeenCalledTimes(4);
@@ -239,10 +239,10 @@ it("shares phase-shifted water frames and uses source textures for single blits"
   const frames = phases.flatMap((index) => sprites[index].frames);
   expect(frames).toHaveLength(128);
   expect(new Set(frames).size).toBe(64);
-  expect(canvases).toHaveLength(1);
+  expect(canvases.length).toBeLessThan(8); // Shared water atlas plus tinted actor silhouettes.
   for (const [index, sprite] of floor.scene.sprites.entries()) {
     for (const [frameIndex, commands] of sprite.frames.entries()) {
-      if (commands.length === 1 && commands[0].kind === "blit") {
+      if (commands.length === 1 && commands[0].kind === "blit" && !commands[0].tint) {
         expect(sprites[index].frames[frameIndex]?.image).toBe(textures.get(commands[0].asset));
       }
     }
@@ -261,8 +261,9 @@ it("reuses the same map atlas when changing secret visibility or reopening a map
   vi.stubGlobal("document", { createElement });
   try {
     const first = mapSpriteCache(bundle);
+    const count = createElement.mock.calls.length;
     expect(mapSpriteCache(bundle)).toBe(first);
-    expect(createElement).toHaveBeenCalledTimes(1);
+    expect(createElement).toHaveBeenCalledTimes(count);
   } finally {
     vi.unstubAllGlobals();
   }

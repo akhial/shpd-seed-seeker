@@ -1,4 +1,4 @@
-use super::{Level, MapDraw, MapLayer, MapScene, MapSprite, intern, layer, t, tile_sprite};
+use super::{Level, MapLayer, MapScene, intern, layer, t, tile_sprite};
 
 /// Boss custom tiles are kept in the portable scene so all renderers agree.
 #[allow(clippy::too_many_lines)] // Pinned custom-tile layouts, in game layer order.
@@ -7,12 +7,11 @@ pub(super) fn layers(
     level: &Level,
     rooms: &[crate::room::Room],
     reveal: bool,
-) -> [MapLayer; 4] {
+) -> [MapLayer; 3] {
     use crate::room::{RoomKind, SecretRoomKind, StandardRoomKind as S};
     let mut floor = layer("boss_floor", level.len());
     let mut terrain = layer("boss_terrain", level.len());
     let mut walls = layer("boss_walls", level.len());
-    let mut actors = layer("boss_actors", level.len());
     if level.depth == 15 {
         const ENTRY: [i32; 55] = [
             -1, 7, 7, 7, -1, -1, 1, 2, 3, -1, 8, 1, 2, 3, 12, 16, 9, 10, 11, 20, 16, 16, 22, 20,
@@ -99,7 +98,6 @@ pub(super) fn layers(
                     }
                 }
             }
-            boss_actor(scene, &mut actors, level, cell, "pylon.png", [10, 20, 5]);
         }
     } else {
         for room in rooms {
@@ -141,10 +139,6 @@ pub(super) fn layers(
                     "rat_king_room.png",
                     3,
                 );
-                let cell = level
-                    .map
-                    .point_to_cell(crate::geometry::Point::new(b.left + 3, b.top + 3));
-                boss_actor(scene, &mut actors, level, cell, "ratking.png", [16, 16, 6]);
             } else if matches!(
                 room.kind,
                 RoomKind::Standard(
@@ -215,7 +209,7 @@ pub(super) fn layers(
             }
         }
     }
-    [floor, terrain, walls, actors]
+    [floor, terrain, walls]
 }
 
 fn boss_tile(
@@ -235,37 +229,4 @@ fn boss_tile(
         scene,
         tile_sprite(asset, u16::try_from(tile).expect("boss atlas index")),
     ));
-}
-
-/// Split raised actor art across cells; the scene contract uses unsigned rectangles.
-fn boss_actor(
-    scene: &mut MapScene,
-    layer: &mut MapLayer,
-    level: &Level,
-    cell: usize,
-    asset: &'static str,
-    [width, height, raise]: [u16; 3],
-) {
-    let above = height + raise - 16;
-    for (cell, sy, dy, h) in [
-        (
-            cell - usize::try_from(level.width()).expect("positive map width"),
-            0,
-            16 - above,
-            above,
-        ),
-        (cell, above, 0, height - above),
-    ] {
-        layer.cells[cell] = Some(intern(
-            scene,
-            MapSprite {
-                frame_duration_ms: 1,
-                frames: vec![vec![MapDraw::Blit {
-                    asset,
-                    source: [0, sy, width, h],
-                    destination: [(16 - width) / 2, dy, width, h],
-                }]],
-            },
-        ));
-    }
 }

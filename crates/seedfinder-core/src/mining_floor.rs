@@ -226,9 +226,16 @@ fn paint_secret(
     set_shared_door_type(rooms, room, rooms[room].connected[0].room, DoorType::Hidden);
     if variant == BlacksmithQuestType::Gnoll {
         fill_room_margin(level, &rooms[room], 1, t::EMPTY_SP);
-        *chest_gold += rng.normal_int_range(4, 5);
+        let quantity = rng.normal_int_range(4, 5);
+        *chest_gold += quantity;
         let pos = level.point_to_cell(rooms[room].center(rng));
-        level.mark_heap(pos);
+        for _ in 0..quantity {
+            level.drop_item(
+                crate::level::PaintItem::Direct(crate::level::DirectPaintItem::Other("DarkGold")),
+                pos,
+                crate::level::HeapKind::Chest,
+            );
+        }
     } else {
         fill_room_margin(level, &rooms[room], 1, t::MINE_CRYSTAL);
         for _ in 0..rng.normal_int_range(4, 5) {
@@ -312,9 +319,20 @@ fn paint_mine_room(
             protected.push(level.point_to_cell(rooms[room].center(rng)));
         }
         if matches!(kind, K::MineGiant | K::MineLarge) {
-            rng.int_bound(3); // CrystalGuardian/CrystalSpire sprite colour.
+            let color = usize::try_from(rng.int_bound(3)).unwrap(); // Retain the existing colour draw.
             let pos = protected[0];
-            level.mark_mob(pos);
+            level.record_actor(
+                pos,
+                if kind == K::MineGiant {
+                    ["BlueCrystalSpire", "GreenCrystalSpire", "RedCrystalSpire"][color]
+                } else {
+                    [
+                        "BlueCrystalGuardian",
+                        "GreenCrystalGuardian",
+                        "RedCrystalGuardian",
+                    ][color]
+                },
+            );
             level.map.cells[pos] = t::EMPTY;
         }
         return;
@@ -398,7 +416,7 @@ fn paint_mine_room(
         draw::fill_ellipse_rect(&mut level.map, rect, t::MINE_BOULDER);
         draw::fill_rect_margin(&mut level.map, rect, 2, t::EMPTY_DECO);
         rng.normal_int_range(3, 5); // GnollGeomancer's ability cooldown initializer.
-        level.mark_mob(level.point_to_cell(center));
+        level.record_actor(level.point_to_cell(center), "GnollGeomancer");
     }
 }
 
@@ -415,7 +433,7 @@ fn find_internal(level: &Level, cell: usize, offsets: &[i32; 4], result: &mut Ve
 fn gnoll_camp(level: &mut Level, room: &Room, protected: &mut Vec<usize>, rng: &mut RandomStack) {
     let sapper = level.point_to_cell(random_point(room, 5, rng));
     rng.normal_int_range(4, 6); // GnollSapper ability cooldown initializer.
-    level.mark_mob(sapper);
+    level.record_actor(sapper, "GnollSapper");
     let offsets = PathFinder::new(level.width(), level.height()).neighbours8;
     let guard = loop {
         let pos = offset(sapper, offsets[usize::try_from(rng.int_bound(8)).unwrap()]);
@@ -423,7 +441,7 @@ fn gnoll_camp(level: &mut Level, room: &Room, protected: &mut Vec<usize>, rng: &
             break pos;
         }
     };
-    level.mark_mob(guard);
+    level.record_actor(guard, "GnollGuard");
     protected.extend([sapper, guard]);
     for _ in 0..if rng.int_bound(2) == 0 { 2 } else { 1 } {
         loop {
@@ -608,22 +626,41 @@ fn populate(
     finder.build_distance_map_limited(entrance, &walkable, 8);
     let mut room_index = 0;
     let mut pending = false;
+    let mut actor = "GnollGuard";
     while count > 0 {
         if !pending && variant == BlacksmithQuestType::Crystal {
-            rng.int_bound(3);
+            actor = ["BlueCrystalWisp", "GreenCrystalWisp", "RedCrystalWisp"]
+                [usize::try_from(rng.int_bound(3)).unwrap()];
         }
         let room = candidates[room_index % candidates.len()];
         room_index += 1;
         pending = true;
-        if place_mob(level, &flags, &rooms[room], &fov, &finder.distance, rng) {
+        if place_mob(
+            level,
+            &flags,
+            &rooms[room],
+            &fov,
+            &finder.distance,
+            actor,
+            rng,
+        ) {
             count -= 1;
             pending = false;
             if count > 0 && rng.int_bound(4) == 0 {
                 if variant == BlacksmithQuestType::Crystal {
-                    rng.int_bound(3);
+                    actor = ["BlueCrystalWisp", "GreenCrystalWisp", "RedCrystalWisp"]
+                        [usize::try_from(rng.int_bound(3)).unwrap()];
                 }
                 pending = true;
-                if place_mob(level, &flags, &rooms[room], &fov, &finder.distance, rng) {
+                if place_mob(
+                    level,
+                    &flags,
+                    &rooms[room],
+                    &fov,
+                    &finder.distance,
+                    actor,
+                    rng,
+                ) {
                     count -= 1;
                     pending = false;
                 }
@@ -643,13 +680,21 @@ fn populate(
     } {
         let pos = drop_cell(level, &flags, rooms, rng)?;
         trample(level, &mut flags, pos);
-        crate::vault_loot::random_food_using_defaults(rng);
-        level.mark_heap(pos);
+        let food = crate::vault_loot::random_food_using_defaults(rng);
+        level.drop_item(
+            crate::level::PaintItem::Generated(crate::generator::GeneratedItem::Food(food)),
+            pos,
+            crate::level::HeapKind::Heap,
+        );
     }
     if challenges.contains(Challenges::DARKNESS) {
         let pos = drop_cell(level, &flags, rooms, rng)?;
         trample(level, &mut flags, pos);
-        level.mark_heap(pos);
+        level.drop_item(
+            crate::level::PaintItem::Direct(crate::level::DirectPaintItem::Torch),
+            pos,
+            crate::level::HeapKind::Heap,
+        );
     }
     Ok(())
 }
@@ -665,6 +710,7 @@ fn place_mob(
     room: &Room,
     fov: &[bool],
     distance: &[i32],
+    actor: &'static str,
     rng: &mut RandomStack,
 ) -> bool {
     for attempt in 0..31 {
@@ -678,7 +724,7 @@ fn place_mob(
             && !level.traps.iter().any(|t| t.cell == pos)
             && !level.plants.iter().any(|p| p.cell == pos)
         {
-            level.mark_mob(pos);
+            level.record_actor(pos, actor);
             return true;
         }
     }

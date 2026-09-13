@@ -5,6 +5,7 @@ import { regionForDepth } from "../../lib/region";
 import { FloorMapLabel } from "./FloorMapHeader";
 import { ExpandIcon, XIcon } from "../../lib/icons";
 import { mapRequestJson, requestLevelMap } from "../../lib/level-map/client";
+import { createMapParticleRenderer } from "../../lib/level-map/particles";
 import { createLevelMapRenderer } from "../../lib/level-map/render";
 import type { LevelMapRequest, MapBundle } from "../../lib/level-map/types";
 import {
@@ -295,6 +296,8 @@ function MapCanvas({
 }) {
   const { map } = bundle;
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const particleRef = useRef<HTMLCanvasElement>(null);
+  const densityRef = useRef(1);
   const viewportRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 300, height: MAP_HEIGHT });
   const [transform, setTransform] = useState(FIT_MAP);
@@ -310,6 +313,7 @@ function MapCanvas({
     [size, widthPx, heightPx],
   );
   const scale = mapFitScale(geometry) * transform.zoom;
+  densityRef.current = Math.max(1, Math.min(4, scale * (window.devicePixelRatio || 1)));
   const applyTransform = useCallback((next: MapTransform) => {
     // Pointer and wheel events may arrive before React commits a render.
     transformRef.current = next;
@@ -366,31 +370,50 @@ function MapCanvas({
     const context = canvasRef.current?.getContext("2d");
     if (!context) return;
     const renderer = createLevelMapRenderer(context, bundle, secrets);
+    const particleCanvas = particleRef.current!;
+    const particles = createMapParticleRenderer(
+      particleCanvas.getContext("2d")!,
+      canvasRef.current!,
+      bundle,
+      secrets,
+    );
+    const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const animated = renderer.animated || particles.animated;
     let frame = 0,
       last = -Infinity;
     const start = performance.now();
     const tick = (time: number) => {
-      if (time - last >= 50) {
-        renderer.draw(time - start);
+      const elapsed = motion.matches ? 0 : time - start;
+      if (time - last >= 50 || motion.matches) {
+        renderer.draw(elapsed);
         last = time;
       }
-      if (renderer.animated && visibleRef.current && !document.hidden)
+      const density = densityRef.current;
+      const width = Math.round(widthPx * density),
+        height = Math.round(heightPx * density);
+      if (particleCanvas.width !== width || particleCanvas.height !== height) {
+        particleCanvas.width = width;
+        particleCanvas.height = height;
+      }
+      particles.draw(elapsed);
+      if (animated && !motion.matches && visibleRef.current && !document.hidden)
         frame = requestAnimationFrame(tick);
     };
     const resume = () => {
       cancelAnimationFrame(frame);
-      if (renderer.animated && visibleRef.current && !document.hidden)
-        frame = requestAnimationFrame(tick);
+      if (visibleRef.current && !document.hidden) frame = requestAnimationFrame(tick);
     };
     resumeRef.current = resume;
     tick(start);
     document.addEventListener("visibilitychange", resume);
+    motion.addEventListener("change", resume);
     return () => {
       resumeRef.current = () => {};
       cancelAnimationFrame(frame);
       document.removeEventListener("visibilitychange", resume);
+      motion.removeEventListener("change", resume);
     };
-  }, [bundle, secrets]);
+  }, [bundle, secrets, widthPx, heightPx]);
   const pointerPoint = (event: ReactPointerEvent<HTMLDivElement>) => {
     const bounds = event.currentTarget.getBoundingClientRect();
     return {
@@ -480,6 +503,11 @@ function MapCanvas({
         style={canvasStyle}
         role="img"
         aria-label={label}
+      />
+      <canvas
+        ref={particleRef}
+        style={{ ...canvasStyle, pointerEvents: "none" }}
+        aria-hidden="true"
       />
     </div>
   );
