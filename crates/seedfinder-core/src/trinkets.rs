@@ -24,7 +24,7 @@ pub fn parse_offered(seed: DungeonSeed, id: &str) -> Result<ItemId, String> {
     let selected = crate::catalog::item_by_stable_id(id)
         .ok_or_else(|| format!("unknown trinket: {id}"))?
         .id;
-    if !trinket_order(seed)[..INITIAL_OFFER_COUNT].contains(&selected) {
+    if !initial_offers(seed).contains(&selected) {
         return Err("selected trinket must be one of the four initial catalyst offers".to_owned());
     }
     Ok(selected)
@@ -52,8 +52,8 @@ pub fn resolve_selection(
     if slots.is_empty() {
         return None;
     }
-    let order = trinket_order(seed);
-    let mut matches = order[..INITIAL_OFFER_COUNT].iter().copied().filter(|id| {
+    let offers = initial_offers(seed);
+    let mut matches = offers.iter().copied().filter(|id| {
         slots
             .iter()
             .any(|slot| slot.iter().any(|r| r.item == Some(*id)))
@@ -168,7 +168,24 @@ pub fn trinket_order(seed: DungeonSeed) -> [ItemId; 17] {
     )
 }
 
-fn order_from_generator(generator: &GeneratorState) -> [ItemId; 17] {
+pub(crate) fn order_from_generator(generator: &GeneratorState) -> [ItemId; 17] {
+    draw_order_from_generator(generator)
+}
+
+/// Read just the four initial offers while preserving the full diagnostic order.
+pub(crate) fn initial_offers(seed: DungeonSeed) -> [ItemId; INITIAL_OFFER_COUNT] {
+    initial_offers_from_generator(
+        &RunState::new(i64::try_from(seed.value()).expect("seed fits i64")).generator,
+    )
+}
+
+pub(crate) fn initial_offers_from_generator(
+    generator: &GeneratorState,
+) -> [ItemId; INITIAL_OFFER_COUNT] {
+    draw_order_from_generator(generator)
+}
+
+fn draw_order_from_generator<const N: usize>(generator: &GeneratorState) -> [ItemId; N] {
     let mut generator = generator.clone();
     let mut random = RandomStack::with_base_seed(0);
     std::array::from_fn(|_| {
@@ -207,12 +224,12 @@ pub(crate) fn expand_catalyst_offers(items: &mut Vec<WorldItem>, generator: &Gen
     {
         return;
     }
-    let order = order_from_generator(generator);
+    let offers = initial_offers_from_generator(generator);
     *items = items
         .drain(..)
         .flat_map(|world_item| {
             if world_item.item == ItemId::TrinketCatalyst {
-                order[..INITIAL_OFFER_COUNT]
+                offers
                     .iter()
                     .map(|&item| WorldItem {
                         item,
@@ -417,5 +434,61 @@ mod tests {
             crate::json_query::decode(r#"{"requirements":[{"item":"rat_skull","upgrade":1}]}"#)
                 .is_err()
         );
+    }
+}
+
+#[cfg(test)]
+mod prefix_tests {
+    use super::*;
+
+    #[test]
+    fn initial_offers_are_the_complete_orders_prefix() {
+        for index in 0..512_u64 {
+            let seed = DungeonSeed::new(
+                (index * 3_355_211_884_971 + 812_345_678_901) % crate::seed::TOTAL_SEEDS,
+            )
+            .unwrap();
+            assert_eq!(
+                initial_offers(seed),
+                trinket_order(seed)[..INITIAL_OFFER_COUNT]
+            );
+        }
+        assert_eq!(
+            initial_offers(DungeonSeed::MIN),
+            trinket_order(DungeonSeed::MIN)[..INITIAL_OFFER_COUNT]
+        );
+    }
+
+    #[test]
+    fn private_prefix_preserves_noninitial_decks_and_reset_boundaries() {
+        let seeds = [i64::MIN, -1, 0, i64::MAX]
+            .into_iter()
+            .chain((1..=64_i64).map(|seed| seed.wrapping_mul(3_355_211_884_971)));
+        for seed in seeds {
+            let mut generator = RunState::new(seed).generator;
+            let mut random = RandomStack::with_base_seed(seed.wrapping_add(19));
+            for category in [
+                GeneratorCategory::Potion,
+                GeneratorCategory::Wand,
+                GeneratorCategory::Ring,
+            ] {
+                random_category(&mut random, &mut generator, category, 1).unwrap();
+            }
+            for dropped in 0..=34 {
+                if [0, 1, 3, 13, 14, 15, 16, 17, 18, 33, 34].contains(&dropped) {
+                    let before = generator.clone();
+                    assert_eq!(
+                        initial_offers_from_generator(&generator),
+                        order_from_generator(&generator)[..INITIAL_OFFER_COUNT],
+                        "seed {seed}, dropped {dropped}"
+                    );
+                    assert_eq!(generator, before);
+                }
+                if dropped < 34 {
+                    random_category(&mut random, &mut generator, GeneratorCategory::Trinket, 1)
+                        .unwrap();
+                }
+            }
+        }
     }
 }

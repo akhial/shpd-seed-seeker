@@ -362,9 +362,39 @@ fn generate_gated_world_with_roots(
     challenges: Challenges,
     gate: &dyn FloorGate,
 ) -> Result<Option<GeneratedWorld>, MainWorldError> {
+    let deferred = gate.deferred_vault_plan(target);
+    let result = generate_gated_world_attempt(seed, target, roots, challenges, gate, deferred);
+    if deferred.is_some() && result.is_err() {
+        // Delaying a vault can change which regional error is encountered
+        // first. Discard the entire attempt and reproduce the eager result.
+        return generate_gated_world_attempt(seed, target, roots, challenges, gate, None);
+    }
+    result
+}
+
+struct PendingVault {
+    depth: u8,
+    trinket: crate::trinkets::TrinketEffects,
+    insertion_index: usize,
+    global_group: u16,
+}
+
+#[allow(clippy::too_many_lines)]
+fn generate_gated_world_attempt(
+    seed: DungeonSeed,
+    target: u8,
+    roots: &[i64],
+    challenges: Challenges,
+    gate: &dyn FloorGate,
+    deferred: Option<&crate::feasibility::QueryPlan>,
+) -> Result<Option<GeneratedWorld>, MainWorldError> {
     let dungeon_seed = i64::try_from(seed.value()).expect("base-26 seed range fits Java long");
+    let mut pending_vault = None;
     let mut run = RunState::with_challenges(dungeon_seed, challenges);
     run.generate_vault = gate.wants_vault_treasure();
+    if !gate.continue_after_run_init(&run) {
+        return Ok(None);
+    }
     let mut limited_drops = LimitedDrops::default();
     let mut quests = QuestState::new();
     let mut shop_run = ShopRunState::default();
@@ -421,6 +451,10 @@ fn generate_gated_world_with_roots(
                 (floor.world_items, Some(floor.painted.level.feeling))
             }
             16..=19 => {
+                let wanted_vault = run.generate_vault;
+                if deferred.is_some() {
+                    run.generate_vault = false;
+                }
                 let floor = generate_city_floor(
                     &mut run,
                     &mut limited_drops,
@@ -428,8 +462,33 @@ fn generate_gated_world_with_roots(
                     &mut shop_run,
                     depth,
                     &mut random,
-                )
-                .map_err(MainWorldError::City)?;
+                );
+                run.generate_vault = wanted_vault;
+                let floor = floor.map_err(MainWorldError::City)?;
+                if deferred.is_some()
+                    && wanted_vault
+                    && quests.imp.depth == Some(completed)
+                    && quests.imp.room_accessible
+                {
+                    debug_assert!(pending_vault.is_none());
+                    // City appends regular items after Imp options and vault
+                    // treasure. The Imp's ring keeps its group represented,
+                    // so omitting treasure leaves all later group offsets intact.
+                    pending_vault = Some(PendingVault {
+                        depth: completed,
+                        trinket: random.trinket.clone(),
+                        insertion_index: items.len() + floor.world_items.len()
+                            - floor.regular_items.world_items.len(),
+                        global_group: floor
+                            .painted
+                            .remaining_prizes
+                            .next_choice_group
+                            .checked_add(next_choice_group)
+                            .expect("canonical world choice groups fit u16"),
+                    });
+                    #[cfg(test)]
+                    deferred_vault_tests::fault(1)?;
+                }
                 (floor.world_items, Some(floor.painted.level.feeling))
             }
             20 => (
@@ -457,6 +516,15 @@ fn generate_gated_world_with_roots(
                 feeling,
             });
         }
+        #[cfg(test)]
+        deferred_vault_tests::record_state(
+            completed,
+            &run,
+            &limited_drops,
+            &quests,
+            &shop_run,
+            &random,
+        );
         random.pop();
         if random.trinket.selected.is_none()
             && alchemy_available
@@ -469,6 +537,27 @@ fn generate_gated_world_with_roots(
         if completed < target && !gate.continue_after_floor(completed, &items, &quests.summary()) {
             return Ok(None);
         }
+    }
+    if let Some(pending) = pending_vault {
+        let plan = deferred.expect("only opted-in gates defer vaults");
+        if !plan.viable_with_pending_vault(target, &items, quests.summary(), Some(pending.depth)) {
+            return Ok(None);
+        }
+        #[cfg(test)]
+        deferred_vault_tests::fault(2)?;
+        let vault = crate::vault_floor::generate_vault_with_trinket(
+            dungeon_seed,
+            pending.depth,
+            challenges,
+            &pending.trinket,
+        )
+        .map_err(|error| MainWorldError::City(CityFloorError::Vault(error)))?;
+        let treasure = vault.world_items(
+            pending.depth,
+            pending.global_group,
+            crate::city_floor::VAULT_FIRST_OPTION,
+        );
+        items.splice(pending.insertion_index..pending.insertion_index, treasure);
     }
     Ok(Some(GeneratedWorld {
         seed,
@@ -963,6 +1052,592 @@ mod tests {
             assert_eq!(
                 crate::wire::encode_scout_world(&configured_world).unwrap(),
                 crate::wire::encode_scout_world(&legacy_world).unwrap(),
+            );
+        }
+    }
+}
+
+#[cfg(test)]
+mod deferred_vault_tests {
+    use super::*;
+    use crate::catalog::ItemId;
+    use crate::feasibility::QueryPlan;
+    use crate::model::{Accessibility, ItemSource, WorldItem};
+    use crate::query::{SearchQuery, scout_matches};
+    use crate::quests::QuestSummary;
+
+    struct EagerGate<'a>(&'a dyn FloorGate);
+    impl FloorGate for EagerGate<'_> {
+        fn continue_after_run_init(&self, run: &RunState) -> bool {
+            self.0.continue_after_run_init(run)
+        }
+        fn selected_trinket(&self, seed: DungeonSeed) -> Option<ItemId> {
+            self.0.selected_trinket(seed)
+        }
+        fn continue_after_floor(
+            &self,
+            depth: u8,
+            items: &[WorldItem],
+            quests: &QuestSummary,
+        ) -> bool {
+            self.0.continue_after_floor(depth, items, quests)
+        }
+        fn wants_vault_treasure(&self) -> bool {
+            self.0.wants_vault_treasure()
+        }
+    }
+
+    struct EagerGenerator(Challenges);
+    impl WorldGenerator for EagerGenerator {
+        fn generate(&self, seed: DungeonSeed, depth: u8) -> GeneratedWorld {
+            CanonicalMainWorldGenerator::with_challenges(self.0).generate(seed, depth)
+        }
+        fn generate_batch_gated(
+            &self,
+            seeds: &[DungeonSeed],
+            depth: u8,
+            gate: &dyn FloorGate,
+        ) -> Vec<Option<GeneratedWorld>> {
+            CanonicalMainWorldGenerator::with_challenges(self.0).generate_batch_gated(
+                seeds,
+                depth,
+                &EagerGate(gate),
+            )
+        }
+    }
+
+    fn query(requirements: &str, depth: u8) -> SearchQuery {
+        crate::json_query::decode(&format!(
+            r#"{{"max_depth":{depth},"auto_apply_trinket":false,"requirements":{requirements}}}"#
+        ))
+        .unwrap()
+    }
+
+    fn values() -> Vec<DungeonSeed> {
+        let mut seeds: Vec<_> = (0..20_u64)
+            .map(|i| {
+                DungeonSeed::new(
+                    (812_345_678_901 + i * 3_355_211_884_971) % crate::seed::TOTAL_SEEDS,
+                )
+                .unwrap()
+            })
+            .collect();
+        seeds.extend(
+            [
+                0, 1_334_551, 1_334_612, 20_000_688, 20_013_266, 20_013_756, 20_017_872, 20_028_874,
+            ]
+            .map(|v| DungeonSeed::new(v).unwrap()),
+        );
+        seeds
+    }
+
+    #[test]
+    fn deferred_vault_eligibility_preserves_early_pruning_and_optional_members() {
+        let eligible = [
+            r#"[{"item":"runic_blade","upgrade":2},{"item":"ring_might","upgrade":2}]"#,
+            r#"[{"any_of":[{"item":"runic_blade","upgrade":4,"source":"vault_treasure"},{"item":"greatsword","upgrade":2}]},{"item":"ring_might","upgrade":2}]"#,
+        ];
+        for requirements in eligible {
+            for depth in [17, 18, 19, 24] {
+                let plan = QueryPlan::analyze(&query(requirements, depth));
+                assert!(plan.deferred_vault_plan(depth).is_some());
+                assert!(plan.deferred_vault_plan(depth + 1).is_none());
+            }
+        }
+        for requirements in [
+            r#"[{"item":"runic_blade","upgrade":4,"source":"vault_treasure"},{"item":"ring_might","upgrade":2}]"#,
+            r#"[{"item":"runic_blade","upgrade":2}]"#,
+            r#"[{"kind":"ring"}]"#,
+        ] {
+            let plan = QueryPlan::analyze(&query(requirements, 19));
+            assert!(plan.deferred_vault_plan(19).is_none());
+        }
+        let mut sum = query(eligible[0], 19);
+        sum.requirements[1].level_sum = Some(crate::query::LevelSum {
+            group: 1,
+            minimum_total: 2,
+        });
+        // A sum group requires multiple members. Both remain optional.
+        sum.requirements.push(sum.requirements[1]);
+        sum.validate().unwrap();
+        assert!(QueryPlan::analyze(&sum).deferred_vault_plan(19).is_none());
+    }
+
+    #[test]
+    fn deferred_vault_final_gate_respects_depth_caps_and_one_imp_choice() {
+        let cases = [
+            // The actual depth-18 vault cannot fill the capped alternative.
+            (
+                r#"[{"any_of":[{"item":"runic_blade","upgrade":4,"source":"vault_treasure","max_depth":17},{"item":"greatsword","upgrade":2}]},{"item":"ring_might","upgrade":2}]"#,
+                17,
+                true,
+            ),
+            (
+                r#"[{"any_of":[{"item":"runic_blade","upgrade":4,"source":"vault_treasure","max_depth":17},{"item":"greatsword","upgrade":2}]},{"item":"ring_might","upgrade":2}]"#,
+                18,
+                false,
+            ),
+            // Both unresolved requirements would need the same Imp choice.
+            (
+                r#"[{"item":"runic_blade","upgrade":2},{"item":"ring_might","upgrade":2,"source":"imp_reward"}]"#,
+                18,
+                false,
+            ),
+        ];
+        for (requirements, pending, expected) in cases {
+            let plan = QueryPlan::analyze(&query(requirements, 19));
+            assert!(plan.deferred_vault_plan(19).is_some());
+            let source = if requirements.contains("imp_reward") {
+                ItemSource::ImpReward
+            } else {
+                ItemSource::Heap
+            };
+            let item = WorldItem {
+                item: ItemId::RingMight,
+                upgrade: 2,
+                effect: None,
+                cursed: false,
+                depth: pending,
+                source,
+                accessibility: if source == ItemSource::Heap {
+                    Accessibility::Independent
+                } else {
+                    Accessibility::Choice {
+                        group: 7,
+                        option: 1,
+                    }
+                },
+                secret: false,
+            };
+            assert_eq!(
+                plan.viable_with_pending_vault(19, &[item], QuestSummary::default(), Some(pending)),
+                expected
+            );
+        }
+    }
+
+    #[test]
+    #[ignore = "extended seed sweep; run with --release --ignored"]
+    fn deferred_vault_full_world_order_matches_eager_with_challenges_and_all_offers() {
+        struct ChoiceGate<'a>(&'a QueryPlan, Option<ItemId>);
+        impl FloorGate for ChoiceGate<'_> {
+            fn deferred_vault_plan(&self, target: u8) -> Option<&QueryPlan> {
+                self.0.deferred_vault_plan(target)
+            }
+            fn continue_after_run_init(&self, run: &RunState) -> bool {
+                self.0.continue_after_run_init(run)
+            }
+            fn selected_trinket(&self, _: DungeonSeed) -> Option<ItemId> {
+                self.1
+            }
+            fn continue_after_floor(
+                &self,
+                depth: u8,
+                items: &[WorldItem],
+                quests: &QuestSummary,
+            ) -> bool {
+                self.0.continue_after_floor(depth, items, quests)
+            }
+        }
+        let mut imp_depths = [false; 3];
+        let mut retained = 0;
+        let mut feeling_profiles = [false; 2];
+        for seed in values().into_iter().take(24) {
+            let offers = crate::trinkets::initial_offers(seed);
+            for choice in std::iter::once(None).chain(offers.into_iter().map(Some)) {
+                feeling_profiles[0] |= choice == Some(ItemId::MossyClump);
+                feeling_profiles[1] |= choice == Some(ItemId::TrapMechanism);
+                for challenges in [
+                    Challenges::NONE,
+                    Challenges::DARKNESS,
+                    Challenges::LEVEL_GENERATION,
+                ] {
+                    for depth in [19, 24] {
+                        // Every accessible Imp supplies a ring: this deliberately
+                        // retains many complete vaults and their item ordering.
+                        let query = query(
+                            r#"[{"kind":"weapon"},{"kind":"ring","source":"imp_reward"}]"#,
+                            depth,
+                        );
+                        let plan = QueryPlan::analyze(&query);
+                        assert!(plan.deferred_vault_plan(depth).is_some());
+                        let gate = ChoiceGate(&plan, choice);
+                        let expected = generate_main_world_gated_with_challenges(
+                            seed,
+                            depth,
+                            challenges,
+                            &EagerGate(&gate),
+                        )
+                        .unwrap();
+                        let actual = generate_main_world_gated_with_challenges(
+                            seed, depth, challenges, &gate,
+                        )
+                        .unwrap();
+                        if let Some(world) = actual {
+                            assert_eq!(
+                                Some(&world),
+                                expected.as_ref(),
+                                "seed {seed}, depth {depth}, choice {choice:?}, challenges {challenges:?}"
+                            );
+                            assert_eq!(
+                                scout_matches(&world, &query),
+                                scout_matches(expected.as_ref().unwrap(), &query)
+                            );
+                            for item in world
+                                .items
+                                .iter()
+                                .filter(|item| item.source == ItemSource::VaultTreasure)
+                            {
+                                imp_depths[usize::from(item.depth - 17)] = true;
+                                retained += 1;
+                            }
+                        } else {
+                            assert!(!expected.as_ref().is_some_and(|world| query.matches(world)));
+                        }
+                    }
+                }
+            }
+        }
+        assert!(retained > 0 && imp_depths.into_iter().all(|seen| seen));
+        assert!(feeling_profiles.into_iter().all(|seen| seen));
+    }
+
+    const DEFERRED_SEARCH_REQUIREMENTS: [&str; 3] = [
+        r#"[{"item":"runic_blade","upgrade":2,"effect":["Grim","Corrupting","Vampiric","Crystal"]},{"item":"ring_might","upgrade":2}]"#,
+        r#"[{"item":"runic_blade","upgrade":2},{"item":"ring_might"}]"#,
+        r#"[{"any_of":[{"item":"runic_blade","upgrade":4,"source":"vault_treasure"},{"item":"greatsword","upgrade":2}]},{"item":"ring_might","upgrade":2}]"#,
+    ];
+
+    #[test]
+    #[ignore = "extended seed sweep; run with --release --ignored"]
+    fn deferred_vault_search_recipes_replays_and_witnesses_match_eager() {
+        check_deferred_search(
+            &values(),
+            &DEFERRED_SEARCH_REQUIREMENTS,
+            &[
+                Challenges::NONE,
+                Challenges::DARKNESS,
+                Challenges::LEVEL_GENERATION,
+            ],
+        );
+    }
+
+    #[test]
+    fn deferred_vault_smoke_preserves_worlds_recipes_replays_and_witnesses() {
+        // A rejected seed, a surviving vault blade, and a blade requiring
+        // Mimic Tooth. Keep positive/negative and retained-auto coverage in CI.
+        let seeds = [0, 20_013_266, 20_028_874].map(|value| DungeonSeed::new(value).unwrap());
+        check_deferred_search(
+            &seeds,
+            &DEFERRED_SEARCH_REQUIREMENTS[1..2],
+            &[Challenges::NONE],
+        );
+    }
+
+    fn check_deferred_search(
+        seeds: &[DungeonSeed],
+        requirements: &[&str],
+        challenge_modes: &[Challenges],
+    ) {
+        use crate::auto_trinkets::{self, SeedRecipe, TrinketSearchMatch};
+        fn complete(
+            results: Vec<Option<TrinketSearchMatch>>,
+        ) -> Vec<Option<(SeedRecipe, GeneratedWorld)>> {
+            results
+                .into_iter()
+                .map(|result| result.map(|m| (m.recipe, m.world)))
+                .collect()
+        }
+        let mut matches = 0;
+        let mut rejected = 0;
+        let mut auto_retained = 0;
+        for requirements in requirements {
+            for auto in [false, true] {
+                for &challenges in challenge_modes {
+                    let mut query = query(requirements, 19);
+                    query.auto_apply_trinket = auto;
+                    query.challenges = challenges;
+                    let plan = QueryPlan::analyze(&query);
+                    assert!(plan.deferred_vault_plan(19).is_some());
+                    let actual = CanonicalMainWorldGenerator::with_challenges(challenges);
+                    let eager = EagerGenerator(challenges);
+                    let expected =
+                        complete(auto_trinkets::search_batch(&eager, &query, &plan, seeds));
+                    let found = auto_trinkets::search_batch(&actual, &query, &plan, seeds);
+                    for result in &found {
+                        if let Some(m) = result {
+                            matches += 1;
+                            auto_retained += usize::from(m.recipe.trinket.is_some());
+                        } else {
+                            rejected += 1;
+                        }
+                    }
+                    assert_eq!(complete(found), expected);
+                    for choice_index in 0..5 {
+                        let recipes: Vec<_> = seeds
+                            .iter()
+                            .copied()
+                            .map(|seed| SeedRecipe {
+                                seed,
+                                trinket: if choice_index == 0 {
+                                    None
+                                } else {
+                                    Some(crate::trinkets::initial_offers(seed)[choice_index - 1])
+                                },
+                            })
+                            .collect();
+                        assert_eq!(
+                            complete(auto_trinkets::filter_batch(
+                                &actual, &query, &plan, &recipes
+                            )),
+                            complete(auto_trinkets::filter_batch(&eager, &query, &plan, &recipes))
+                        );
+                        let mut base = query.clone();
+                        base.requirements[0].effect = crate::query::EffectRequirement::Any;
+                        assert_eq!(
+                            complete(auto_trinkets::refine_batch(
+                                &actual, &query, &plan, &base, &recipes
+                            )),
+                            complete(auto_trinkets::refine_batch(
+                                &eager, &query, &plan, &base, &recipes
+                            ))
+                        );
+                    }
+                }
+            }
+        }
+        assert!(matches > 0 && rejected > 0 && auto_retained > 0);
+    }
+    std::thread_local! {
+        static FAULT: std::cell::Cell<u8> = const { std::cell::Cell::new(0) };
+        static FAULT_HITS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+        static STATES: std::cell::RefCell<Option<Vec<String>>> = const { std::cell::RefCell::new(None) };
+    }
+
+    pub(super) fn fault(stage: u8) -> Result<(), MainWorldError> {
+        if FAULT.get() == stage {
+            FAULT.set(0);
+            FAULT_HITS.set(FAULT_HITS.get() + 1);
+            Err(MainWorldError::InvalidMaximumDepth(0))
+        } else {
+            Ok(())
+        }
+    }
+
+    pub(super) fn record_state(
+        depth: u8,
+        run: &RunState,
+        limited: &LimitedDrops,
+        quests: &QuestState,
+        shop: &ShopRunState,
+        random: &RandomStack,
+    ) {
+        STATES.with_borrow_mut(|states| {
+            if let Some(states) = states {
+                states.push(format!(
+                    "{depth}: {run:?} {limited:?} {quests:?} {shop:?} {random:?}"
+                ));
+            }
+        });
+    }
+
+    #[test]
+    fn deferred_vault_preserves_complete_main_rng_and_persistent_state_each_floor() {
+        let query = query(
+            r#"[{"kind":"weapon"},{"kind":"ring","source":"imp_reward"}]"#,
+            24,
+        );
+        let plan = QueryPlan::analyze(&query);
+        assert!(plan.deferred_vault_plan(24).is_some());
+        for seed in values().into_iter().take(8) {
+            for challenges in [Challenges::NONE, Challenges::LEVEL_GENERATION] {
+                STATES.set(Some(Vec::new()));
+                let expected = generate_main_world_gated_with_challenges(
+                    seed,
+                    24,
+                    challenges,
+                    &EagerGate(&plan),
+                )
+                .unwrap();
+                let expected_state = STATES.replace(Some(Vec::new())).unwrap();
+                let actual =
+                    generate_main_world_gated_with_challenges(seed, 24, challenges, &plan).unwrap();
+                let actual_state = STATES.take().unwrap();
+                assert_eq!(actual_state, expected_state, "seed {seed}, {challenges:?}");
+                assert_eq!(actual, expected);
+                assert!(actual_state.len() >= 16);
+            }
+        }
+    }
+
+    #[test]
+    fn deferred_vault_typed_errors_retry_eagerly_once() {
+        let mut eager_none = 0;
+        let mut eager_some = 0;
+        let mut injected = 0;
+        for requirements in [
+            r#"[{"kind":"weapon"},{"kind":"ring","source":"imp_reward"}]"#,
+            r#"[{"item":"runic_blade","upgrade":2},{"item":"ring_might","upgrade":2,"max_depth":18}]"#,
+        ] {
+            let query = query(requirements, 19);
+            let plan = QueryPlan::analyze(&query);
+            assert!(plan.deferred_vault_plan(19).is_some());
+            for seed in values().into_iter().take(16) {
+                let expected = generate_main_world_gated(seed, 19, &EagerGate(&plan));
+                for stage in [1, 2] {
+                    FAULT.set(stage);
+                    FAULT_HITS.set(0);
+                    let actual = generate_main_world_gated(seed, 19, &plan);
+                    FAULT.set(0);
+                    let hits = FAULT_HITS.get();
+                    assert!(hits <= 1);
+                    if hits == 1 {
+                        assert_eq!(actual, expected, "stage {stage}, seed {seed}");
+                        eager_none += usize::from(expected == Ok(None));
+                        eager_some += usize::from(expected.as_ref().is_ok_and(Option::is_some));
+                        injected += 1;
+                    }
+                }
+            }
+        }
+        assert!(injected > 0 && eager_none > 0 && eager_some > 0);
+    }
+
+    #[test]
+    fn deferred_vault_default_custom_gate_receives_complete_eager_prefixes() {
+        struct Recorder<'a> {
+            plan: &'a QueryPlan,
+            calls: std::sync::Mutex<Vec<(u8, Vec<WorldItem>, QuestSummary)>>,
+        }
+        impl FloorGate for Recorder<'_> {
+            fn continue_after_floor(
+                &self,
+                depth: u8,
+                items: &[WorldItem],
+                quests: &QuestSummary,
+            ) -> bool {
+                self.calls
+                    .lock()
+                    .unwrap()
+                    .push((depth, items.to_vec(), *quests));
+                self.plan.continue_after_floor(depth, items, quests)
+            }
+        }
+        let query = query(
+            r#"[{"kind":"weapon"},{"kind":"ring","source":"imp_reward"}]"#,
+            24,
+        );
+        let plan = QueryPlan::analyze(&query);
+        let recorder = Recorder {
+            plan: &plan,
+            calls: std::sync::Mutex::new(Vec::new()),
+        };
+        assert!(recorder.deferred_vault_plan(24).is_none());
+        let seed = DungeonSeed::MIN;
+        let dungeon_seed = i64::try_from(seed.value()).unwrap();
+        let roots: Vec<_> = regular_depths(24)
+            .map(|depth| seed_for_depth(dungeon_seed, depth, 0))
+            .collect();
+        let expected =
+            generate_gated_world_attempt(seed, 24, &roots, Challenges::NONE, &recorder, None)
+                .unwrap();
+        let expected_calls = std::mem::take(&mut *recorder.calls.lock().unwrap());
+        let actual = generate_main_world_gated(seed, 24, &recorder).unwrap();
+        assert_eq!(actual, expected);
+        assert_eq!(*recorder.calls.lock().unwrap(), expected_calls);
+        assert!(expected_calls.iter().any(|(_, items, _)| {
+            items
+                .iter()
+                .any(|item| item.source == ItemSource::VaultTreasure)
+        }));
+    }
+    // Append inside main_world::deferred_vault_tests; reuse its query helper.
+    // These tests select eager versus deferred execution, never match versus
+    // rejection. Every case remains a feasible query that requires the vault.
+    #[test]
+    fn deferred_vault_skips_non_vault_slots_resolved_before_city() {
+        for requirements in [
+            r#"[{"kind":"weapon"},{"kind":"wand","source":"wandmaker_reward"}]"#,
+            r#"[{"kind":"weapon"},{"kind":"armor","source":"ghost_reward"}]"#,
+            r#"[{"kind":"weapon"},{"kind":"armor","source":"blacksmith_reward"}]"#,
+            r#"[{"kind":"weapon"},{"item":"parchment_scrap"}]"#,
+            r#"[{"kind":"weapon"},{"item":"ring_might","source":"heap","max_depth":16}]"#,
+        ] {
+            let plan = QueryPlan::analyze(&query(requirements, 19));
+            assert!(!plan.is_unsatisfiable(), "{requirements}");
+            assert!(plan.wants_vault_treasure(), "{requirements}");
+            assert!(plan.deferred_vault_plan(19).is_none(), "{requirements}");
+        }
+    }
+
+    #[test]
+    fn deferred_vault_late_deadline_and_imp_source_keep_the_strategy_available() {
+        for target in [17, 18, 19, 24] {
+            for (requirements, expected) in [
+                (
+                    r#"[{"kind":"weapon"},{"item":"ring_might","upgrade":2,"source":"heap","max_depth":16}]"#,
+                    false,
+                ),
+                (
+                    r#"[{"kind":"weapon"},{"item":"ring_might","upgrade":2,"source":"heap","max_depth":17}]"#,
+                    true,
+                ),
+                // No identity/upgrade rarity restriction: every accessible
+                // Imp supplies a searchable ring. This high-prospect family
+                // intentionally survives the static late-opportunity guard.
+                (
+                    r#"[{"kind":"weapon"},{"kind":"ring","source":"imp_reward"}]"#,
+                    true,
+                ),
+                (
+                    r#"[{"kind":"weapon"},{"kind":"ring","source":"imp_reward","max_depth":17}]"#,
+                    true,
+                ),
+            ] {
+                let plan = QueryPlan::analyze(&query(requirements, target));
+                assert!(!plan.is_unsatisfiable(), "{target}: {requirements}");
+                assert!(plan.wants_vault_treasure(), "{target}: {requirements}");
+                assert_eq!(
+                    plan.deferred_vault_plan(target).is_some(),
+                    expected,
+                    "{target}: {requirements}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn deferred_vault_late_opportunity_belongs_to_a_wholly_non_vault_slot() {
+        for (requirements, expected) in [
+            // One genuinely late member keeps the entire non-vault OR slot
+            // eligible, even when another alternative is resolved earlier.
+            (
+                r#"[{"kind":"weapon"},{"any_of":[{"kind":"wand","source":"wandmaker_reward"},{"item":"ring_might","source":"heap","max_depth":17}]}]"#,
+                true,
+            ),
+            (
+                r#"[{"kind":"weapon"},{"any_of":[{"kind":"wand","source":"wandmaker_reward"},{"item":"ring_might","source":"heap","max_depth":16}]}]"#,
+                false,
+            ),
+            (
+                r#"[{"kind":"weapon"},{"any_of":[{"kind":"wand","source":"wandmaker_reward"},{"kind":"ring","source":"imp_reward"}]}]"#,
+                true,
+            ),
+            // The late generic ring can itself use the vault. Its OR slot
+            // is not wholly non-vault; the only other non-vault slot here
+            // is an early trinket, which cannot qualify the strategy.
+            (
+                r#"[{"kind":"weapon"},{"any_of":[{"kind":"wand","source":"wandmaker_reward"},{"kind":"ring"}]},{"item":"parchment_scrap"}]"#,
+                false,
+            ),
+        ] {
+            let plan = QueryPlan::analyze(&query(requirements, 19));
+            assert!(!plan.is_unsatisfiable(), "{requirements}");
+            assert!(plan.wants_vault_treasure(), "{requirements}");
+            assert_eq!(
+                plan.deferred_vault_plan(19).is_some(),
+                expected,
+                "{requirements}"
             );
         }
     }

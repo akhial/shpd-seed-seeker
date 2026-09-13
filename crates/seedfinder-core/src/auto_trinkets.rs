@@ -12,7 +12,7 @@ use crate::query::{EffectRequirement, SearchQuery};
 use crate::quests::QuestSummary;
 use crate::search::{FloorGate, WorldGenerator};
 use crate::seed::DungeonSeed;
-use crate::trinkets::{INITIAL_OFFER_COUNT, trinket_order};
+use crate::trinkets::{initial_offers, trinket_order};
 
 /// Reproducible world conditions for a result, independent of editor changes.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -78,6 +78,14 @@ struct RecipeGate<'a> {
 }
 
 impl FloorGate for RecipeGate<'_> {
+    fn deferred_vault_plan(&self, target: u8) -> Option<&QueryPlan> {
+        self.plan.deferred_vault_plan(target)
+    }
+
+    fn continue_after_run_init(&self, run: &crate::run::RunState) -> bool {
+        self.plan.continue_after_run_init(run)
+    }
+
     fn selected_trinket(&self, seed: DungeonSeed) -> Option<ItemId> {
         self.choices.get(&seed.value()).copied().flatten()
     }
@@ -268,7 +276,7 @@ impl AutoTrinketPolicy {
         if self.preferred.is_empty() {
             return None;
         }
-        self.choose(&trinket_order(seed)[..INITIAL_OFFER_COUNT])
+        self.choose(&initial_offers(seed))
     }
 
     pub(crate) fn choose(&self, offers: &[ItemId]) -> Option<ItemId> {

@@ -23,11 +23,18 @@ const ADDEND_7: u64 = MULTIPLIER.wrapping_mul(ADDEND_6).wrapping_add(ADDEND);
 const MULTIPLIER_8: u64 = MULTIPLIER_7.wrapping_mul(MULTIPLIER);
 const ADDEND_8: u64 = MULTIPLIER.wrapping_mul(ADDEND_7).wrapping_add(ADDEND);
 
-// Lemire's exact division-free `x % d` for 32-bit operands: with
+// Native targets use Lemire's exact division-free `x % d` for 32-bit operands: with
 // `magic = floor(2^64 / d) + 1`, the remainder is the high 64 bits of
 // `(magic * x mod 2^64) * d`. Exact for every u32 `x` and `d >= 2`.
 const fn bound_magic(divisor: u64) -> u64 {
-    (u64::MAX / divisor).wrapping_add(1)
+    #[cfg(target_arch = "wasm32")]
+    {
+        wasm_bound_magic(divisor)
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        (u64::MAX / divisor).wrapping_add(1)
+    }
 }
 
 const SMALL_BOUND_MAGIC: [u64; 65] = {
@@ -43,8 +50,37 @@ const SMALL_BOUND_MAGIC: [u64; 65] = {
 #[inline]
 #[allow(clippy::cast_possible_truncation)]
 fn fast_rem_u32(value: u32, divisor: u32, magic: u64) -> u32 {
-    let low = magic.wrapping_mul(u64::from(value));
-    ((u128::from(low) * u128::from(divisor)) >> 64) as u32
+    #[cfg(target_arch = "wasm32")]
+    {
+        wasm_fast_rem_u32(value, divisor, magic)
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let low = magic.wrapping_mul(u64::from(value));
+        ((u128::from(low) * u128::from(divisor)) >> 64) as u32
+    }
+}
+
+// WASM lowers the native formulation's 128-bit product to a costly helper.
+// With m = ceil(2^32 / d), floor(x*m / 2^32) is the quotient or one
+// larger. For positive Java bounds the unwrapped remainder is in
+// [-d+1, d-1], so its high bit identifies the one correction needed.
+#[cfg(any(test, target_arch = "wasm32"))]
+const fn wasm_bound_magic(divisor: u64) -> u64 {
+    0xFFFF_FFFF_u64 / divisor + 1
+}
+
+#[cfg(any(test, target_arch = "wasm32"))]
+#[inline]
+#[allow(clippy::cast_possible_truncation)]
+fn wasm_fast_rem_u32(value: u32, divisor: u32, magic: u64) -> u32 {
+    let quotient = ((u64::from(value) * magic) >> 32) as u32;
+    let remainder = value.wrapping_sub(quotient.wrapping_mul(divisor));
+    if remainder >= 1 << 31 {
+        remainder.wrapping_add(divisor)
+    } else {
+        remainder
+    }
 }
 
 /// The 48-bit linear-congruential generator implemented by `java.util.Random`.
@@ -124,13 +160,38 @@ impl JavaRandom {
         }
     }
 
+    /// Consume the maze's ignored `nextInt(4)`, `nextInt(3)`, and
+    /// `nextInt(2)` draws without serially computing their unused values.
+    /// Only the middle bound can reject a draw; in that case use the
+    /// original sequence from the untouched state, including all retries.
+    pub(crate) fn skip_maze_direction_draws(&mut self) {
+        let second = self.state.wrapping_mul(MULTIPLIER_2).wrapping_add(ADDEND_2) & MASK;
+        if second >> 17 < 2_147_483_646 {
+            self.state = self.state.wrapping_mul(MULTIPLIER_3).wrapping_add(ADDEND_3) & MASK;
+        } else {
+            self.next_i32_bound(4);
+            self.next_i32_bound(3);
+            self.next_i32_bound(2);
+        }
+    }
+
     /// Draws one canonical `nextFloat()` per cell and stores `draw < fill`,
     /// returning how many cells came up filled. The eight-step jump-ahead
     /// constants break the LCG's serial dependency chain so eight draws
     /// compute in parallel; the emitted stream is bit-identical to calling
     /// [`Self::next_f32`] once per cell.
-    #[allow(clippy::cast_precision_loss)]
     pub(crate) fn fill_f32_below(&mut self, cells: &mut [bool], fill: f32) -> i32 {
+        self.fill_f32_below_impl::<true>(cells, fill)
+    }
+
+    /// Fill without reducing the population when the caller will smooth the
+    /// cells and count only the final patch. Draws and stored cells are exact.
+    pub(crate) fn fill_f32_below_uncounted(&mut self, cells: &mut [bool], fill: f32) {
+        self.fill_f32_below_impl::<false>(cells, fill);
+    }
+
+    #[allow(clippy::cast_precision_loss)]
+    fn fill_f32_below_impl<const COUNT: bool>(&mut self, cells: &mut [bool], fill: f32) -> i32 {
         let mut filled = 0_i32;
         let mut state = self.state;
         let mut chunks = cells.chunks_exact_mut(8);
@@ -161,14 +222,18 @@ impl JavaRandom {
             ];
             for (cell, lane_state) in chunk.iter_mut().zip(states) {
                 *cell = ((lane_state & MASK) >> 24) < threshold;
-                filled += i32::from(*cell);
+                if COUNT {
+                    filled += i32::from(*cell);
+                }
             }
             state = states[7] & MASK;
         }
         self.state = state;
         for cell in chunks.into_remainder() {
             *cell = self.next_f32() < fill;
-            filled += i32::from(*cell);
+            if COUNT {
+                filled += i32::from(*cell);
+            }
         }
         filled
     }
@@ -507,5 +572,292 @@ mod tests {
         let mut array = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
         array_stack.shuffle_array(&mut array);
         assert_eq!(array, expected_array);
+    }
+}
+
+#[cfg(test)]
+mod fill_differential_tests {
+    use super::JavaRandom;
+
+    #[test]
+    fn counted_and_uncounted_fills_preserve_scalar_values_and_state() {
+        let fills = [
+            -1.0,
+            0.0,
+            f32::MIN_POSITIVE,
+            0.03,
+            f32::from_bits(0.5_f32.to_bits() - 1),
+            0.5,
+            f32::from_bits(0.5_f32.to_bits() + 1),
+            0.83,
+            1.0,
+            2.0,
+            f32::NAN,
+        ];
+        let mut seeds = JavaRandom::new(20_260_912);
+        for length in (0..=65).chain([127, 128, 129, 511, 512, 513]) {
+            for fill in fills {
+                for _ in 0..8 {
+                    let initial = JavaRandom::new(seeds.next_i64());
+                    let mut scalar = initial.clone();
+                    let expected: Vec<_> = (0..length).map(|_| scalar.next_f32() < fill).collect();
+                    let mut counted = initial.clone();
+                    let mut cells = vec![false; length];
+                    let count = counted.fill_f32_below(&mut cells, fill);
+                    assert_eq!(cells, expected, "counted length {length}, fill {fill}");
+                    assert_eq!(
+                        count,
+                        i32::try_from(expected.iter().filter(|&&cell| cell).count()).unwrap()
+                    );
+                    assert_eq!(counted, scalar);
+                    let mut uncounted = initial;
+                    cells.fill(true);
+                    uncounted.fill_f32_below_uncounted(&mut cells, fill);
+                    assert_eq!(cells, expected, "uncounted length {length}, fill {fill}");
+                    assert_eq!(uncounted, scalar);
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod maze_draw_tests {
+    use super::{ADDEND_2, JavaRandom, MASK, MULTIPLIER_2};
+
+    fn compare(seed: i64) {
+        let mut actual = JavaRandom::new(seed);
+        let mut expected = actual.clone();
+        actual.skip_maze_direction_draws();
+        expected.next_i32_bound(4);
+        expected.next_i32_bound(3);
+        expected.next_i32_bound(2);
+        assert_eq!(actual, expected, "seed {seed}");
+    }
+
+    #[test]
+    fn ignored_maze_draws_preserve_rejection_and_state() {
+        const INVERSE: u64 = 254_681_119_335_897;
+        for (seed, bits) in [
+            (3_849_228_151_867, 2_147_483_645),
+            (42_708_791_094_331, 2_147_483_646),
+            (81_481_411_882_043, 2_147_483_647),
+        ] {
+            let mut probe = JavaRandom::new(seed);
+            probe.next_i32_bound(4);
+            assert_eq!(probe.next_bits(31), bits);
+            compare(seed);
+        }
+        // Invert two LCG transitions to cover both sides of Int(3)'s
+        // rejection boundary with several low-bit patterns.
+        assert_eq!(MULTIPLIER_2.wrapping_mul(INVERSE) & MASK, 1);
+        for bits in [2_147_483_645_u64, 2_147_483_646, 2_147_483_647] {
+            for low in [0, 1, 65_535, 65_536, 131_071] {
+                let second = (bits << 17) | low;
+                let state = second.wrapping_sub(ADDEND_2).wrapping_mul(INVERSE) & MASK;
+                let mut actual = JavaRandom { state };
+                let mut expected = actual.clone();
+                actual.skip_maze_direction_draws();
+                expected.next_i32_bound(4);
+                expected.next_i32_bound(3);
+                expected.next_i32_bound(2);
+                assert_eq!(actual, expected, "bits {bits}, low {low}");
+            }
+        }
+        for seed in [0, 1, -1, i64::MIN, i64::MAX] {
+            compare(seed);
+        }
+        let mut seeds = JavaRandom::new(20_260_912);
+        for _ in 0..20_000 {
+            compare(seeds.next_i64());
+        }
+    }
+}
+
+#[cfg(test)]
+mod remainder_differential_tests {
+    use super::{
+        ADDEND, FastBound, JavaRandom, MASK, MULTIPLIER, RandomStack,
+        wasm_bound_magic as bound_magic, wasm_fast_rem_u32 as fast_rem_u32,
+    };
+
+    fn compare_remainder(value: u32, divisor: u32) {
+        let magic = bound_magic(u64::from(divisor));
+        assert_eq!(
+            fast_rem_u32(value, divisor, magic),
+            value % divisor,
+            "value {value}, divisor {divisor}"
+        );
+        // Keep the previous wide-product formulation as a second reference.
+        let old_magic = (u64::MAX / u64::from(divisor)).wrapping_add(1);
+        let low = old_magic.wrapping_mul(u64::from(value));
+        let old = u32::try_from((u128::from(low) * u128::from(divisor)) >> 64).unwrap();
+        assert_eq!(fast_rem_u32(value, divisor, magic), old);
+    }
+
+    #[test]
+    fn reciprocal_remainders_match_division_at_boundaries_and_across_u32() {
+        let mut random = JavaRandom::new(20_260_912);
+        let mut divisors: Vec<u32> = (2..=128).collect();
+        for power in 2..=31 {
+            let value = 1_u32 << power;
+            divisors.extend([value - 1, value, value + 1]);
+        }
+        divisors.extend([u32::MAX - 1, u32::MAX]);
+        for _ in 0..4096 {
+            divisors.push(u32::from_ne_bytes(random.next_i32().to_ne_bytes()).max(2));
+        }
+        for divisor in divisors {
+            for value in [
+                0,
+                1,
+                divisor - 1,
+                divisor,
+                divisor.saturating_add(1),
+                (1_u32 << 31) - 1,
+                1 << 31,
+                (1 << 31) + 1,
+                u32::MAX - 1,
+                u32::MAX,
+            ] {
+                compare_remainder(value, divisor);
+            }
+            for multiple in [2, 3, 7, u32::MAX / divisor] {
+                if let Some(value) = divisor.checked_mul(multiple) {
+                    for neighbor in [value.saturating_sub(1), value, value.saturating_add(1)] {
+                        compare_remainder(neighbor, divisor);
+                    }
+                }
+            }
+            for _ in 0..64 {
+                compare_remainder(u32::from_ne_bytes(random.next_i32().to_ne_bytes()), divisor);
+            }
+        }
+        // These require the negative-remainder correction with 31-bit inputs.
+        for (value, divisor, expected) in [
+            (2_147_483_645, 7, 6),
+            (2_147_483_639, 10, 9),
+            (2_147_483_646, 2_147_483_647, 2_147_483_646),
+        ] {
+            assert_eq!(
+                fast_rem_u32(value, divisor, bound_magic(u64::from(divisor))),
+                expected
+            );
+        }
+    }
+
+    fn reference_draw(random: &mut JavaRandom, bound: i32) -> i32 {
+        assert!(bound > 0);
+        if (bound & -bound) == bound {
+            return i32::try_from((i64::from(bound) * i64::from(random.next_bits(31))) >> 31)
+                .unwrap();
+        }
+        loop {
+            let bits = i32::try_from(random.next_bits(31)).unwrap();
+            let value = bits % bound;
+            if bits.wrapping_sub(value).wrapping_add(bound - 1) >= 0 {
+                return value;
+            }
+        }
+    }
+
+    fn reciprocal_draw(random: &mut JavaRandom, bound: i32) -> i32 {
+        if (bound & -bound) == bound {
+            return i32::try_from((i64::from(bound) * i64::from(random.next_bits(31))) >> 31)
+                .unwrap();
+        }
+        let divisor = u32::try_from(bound).unwrap();
+        let magic = bound_magic(u64::from(divisor));
+        loop {
+            let bits = random.next_bits(31);
+            let value = i32::try_from(fast_rem_u32(bits, divisor, magic)).unwrap();
+            if i32::try_from(bits)
+                .unwrap()
+                .wrapping_sub(value)
+                .wrapping_add(bound - 1)
+                >= 0
+            {
+                return value;
+            }
+        }
+    }
+
+    fn compare_draws(initial: &JavaRandom, bound: i32) {
+        let mut expected = initial.clone();
+        let mut actual = initial.clone();
+        let mut fast = initial.clone();
+        let mut alternate = initial.clone();
+        let prepared = FastBound::new(bound);
+        for _ in 0..8 {
+            let value = reference_draw(&mut expected, bound);
+            assert_eq!(reciprocal_draw(&mut alternate, bound), value);
+            assert_eq!(alternate, expected);
+            assert_eq!(actual.next_i32_bound(bound), value, "bound {bound}");
+            assert_eq!(
+                fast.next_i32_fast_bound(&prepared),
+                value,
+                "fast bound {bound}"
+            );
+            assert_eq!(actual, expected, "state for bound {bound}");
+            assert_eq!(fast, expected, "fast state for bound {bound}");
+        }
+    }
+
+    #[test]
+    fn reciprocal_draws_preserve_java_rejection_and_complete_state() {
+        const INVERSE: u64 = 246_154_705_703_781;
+        assert_eq!(MULTIPLIER.wrapping_mul(INVERSE) & MASK, 1);
+        let mut bounds: Vec<i32> = (1..=128).collect();
+        for power in 2..=30 {
+            let value = 1_i32 << power;
+            bounds.extend([value - 1, value, value + 1]);
+        }
+        bounds.push(i32::MAX);
+        let mut seeds = JavaRandom::new(20_260_912);
+        for bound in bounds {
+            let divisor = u64::try_from(bound).unwrap();
+            let limit = (1_u64 << 31) - ((1_u64 << 31) % divisor);
+            for bits in [0, 1, limit - 1, limit, limit + 1, (1_u64 << 31) - 1] {
+                if bits >= 1 << 31 {
+                    continue;
+                }
+                for low in [0, 1, 65_535, 65_536, 131_071] {
+                    let next = (bits << 17) | low;
+                    let state = next.wrapping_sub(ADDEND).wrapping_mul(INVERSE) & MASK;
+                    compare_draws(&JavaRandom { state }, bound);
+                }
+            }
+            for seed in [0, 1, -1, i64::MIN, i64::MAX] {
+                compare_draws(&JavaRandom::new(seed), bound);
+            }
+            for _ in 0..256 {
+                compare_draws(&JavaRandom::new(seeds.next_i64()), bound);
+            }
+        }
+    }
+
+    #[test]
+    fn wrapped_shattered_ranges_preserve_zero_and_one_draw_cases() {
+        for (min, max) in [
+            (0_i32, i32::MAX),
+            (i32::MIN, i32::MAX),
+            (i32::MAX, i32::MIN),
+            (i32::MAX, i32::MAX),
+            (-10, -1),
+            (1, 0),
+        ] {
+            for seed in [0, 1, -1, i64::MIN, i64::MAX] {
+                let mut actual = RandomStack::with_base_seed(seed);
+                let mut expected = JavaRandom::new(seed);
+                let width = max.wrapping_sub(min).wrapping_add(1);
+                let offset = if width <= 0 {
+                    0
+                } else {
+                    reference_draw(&mut expected, width)
+                };
+                assert_eq!(actual.int_range(min, max), min.wrapping_add(offset));
+                assert_eq!(actual.current_generator(), &expected);
+            }
+        }
     }
 }

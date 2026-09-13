@@ -201,7 +201,7 @@ impl From<RegularItemsError> for CityFloorError {
 /// Choice option of the first vault treasure item: the Imp's six reward
 /// options occupy 0..=5 (the artifact slot keeps its index even though it is
 /// not searchable).
-const VAULT_FIRST_OPTION: u8 = 6;
+pub(crate) const VAULT_FIRST_OPTION: u8 = 6;
 
 /// Exact world prefix through a regular City depth.
 #[derive(Clone, Copy, Debug, Default)]
@@ -686,6 +686,10 @@ struct CityCompositeDispatcher<'a, 's> {
 }
 
 impl RoomPaintDispatch for CityCompositeDispatcher<'_, '_> {
+    fn can_skip_ineligible_terrain(&self) -> bool {
+        true
+    }
+
     fn paint_room(
         &mut self,
         level: &mut Level,

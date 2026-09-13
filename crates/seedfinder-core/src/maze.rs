@@ -89,6 +89,10 @@ fn build_directions(cols: &[u64], height: i32, directions: &mut [[u64; 4]]) {
 
 fn cached_direction(masks: [u64; 4], y: i32, generator: &mut JavaRandom) -> Option<(i32, i32)> {
     let bit = 1_u64 << y;
+    if (masks[0] | masks[1] | masks[2]) & bit == 0 {
+        generator.skip_maze_direction_draws();
+        return (masks[3] & bit != 0).then_some((-1, 0));
+    }
     if generator.next_i32_bound(4) == 0 && masks[0] & bit != 0 {
         return Some((0, -1));
     }
@@ -300,6 +304,62 @@ mod tests {
                     reference_rng.long(),
                     "RNG after {width}x{height}, seed {seed}"
                 );
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod cached_direction_draw_tests {
+    use super::{JavaRandom, cached_direction};
+
+    fn reference(masks: [u64; 4], y: i32, generator: &mut JavaRandom) -> Option<(i32, i32)> {
+        let bit = 1_u64 << y;
+        if generator.next_i32_bound(4) == 0 && masks[0] & bit != 0 {
+            return Some((0, -1));
+        }
+        if generator.next_i32_bound(3) == 0 && masks[1] & bit != 0 {
+            return Some((1, 0));
+        }
+        if generator.next_i32_bound(2) == 0 && masks[2] & bit != 0 {
+            return Some((0, 1));
+        }
+        (masks[3] & bit != 0).then_some((-1, 0))
+    }
+
+    #[test]
+    fn cached_choices_preserve_direction_and_rng_state() {
+        for pattern in 0..16 {
+            for y in [0, 1, 31, 63] {
+                let masks = std::array::from_fn(|direction| {
+                    let target = if pattern & (1 << direction) != 0 {
+                        1_u64 << y
+                    } else {
+                        0
+                    };
+                    target | (1_u64 << ((y + 7) % 64))
+                });
+                for seed in [
+                    0,
+                    1,
+                    -1,
+                    2,
+                    42,
+                    i64::MIN,
+                    i64::MAX,
+                    3_849_228_151_867,
+                    42_708_791_094_331,
+                    81_481_411_882_043,
+                ] {
+                    let mut actual = JavaRandom::new(seed);
+                    let mut expected = actual.clone();
+                    assert_eq!(
+                        cached_direction(masks, y, &mut actual),
+                        reference(masks, y, &mut expected),
+                        "pattern {pattern}, row {y}, seed {seed}"
+                    );
+                    assert_eq!(actual, expected, "pattern {pattern}, row {y}, seed {seed}");
+                }
             }
         }
     }

@@ -997,6 +997,10 @@ struct SewerCompositeDispatcher<'a> {
 }
 
 impl RoomPaintDispatch for SewerCompositeDispatcher<'_> {
+    fn can_skip_ineligible_terrain(&self) -> bool {
+        true
+    }
+
     fn paint_room(
         &mut self,
         level: &mut Level,
