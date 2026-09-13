@@ -19,10 +19,10 @@ written in Rust — with native apps for Android, Linux, macOS, and Windows.
 </p>
 
 <p align="center">
-  <i>Matches/minute on an Apple M4 Pro (12 cores).</i>
+  <i>Matches/minute on AMD EPYC-Genoa (8) @ 2.25 GHz.</i>
 </p>
 
-- ⚡️ **4.8–7.5× faster** than Java seed finders
+- ⚡️ **4.7–10× faster** than Java seed finders
 - 🔍 **Rich queries**: multiple requirements across melee and thrown weapons, armor, wands, and rings
 - 🔗 **Share links**: short links to share your search
 - 🔮 **Seed scouting**: paste a seed, get every item with floor, upgrade, enchantment, cursed state and source
