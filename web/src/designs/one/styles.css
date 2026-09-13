@@ -2378,7 +2378,8 @@ input[type="range"]::-moz-range-thumb {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 14px;
+  height: 36px;
+  padding: 0 14px;
   background: rgba(27, 29, 35, 0.94);
   backdrop-filter: blur(4px);
   border-bottom: 1px solid var(--d1-border);

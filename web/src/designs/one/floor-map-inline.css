@@ -11,8 +11,8 @@
   align-items: center;
   gap: 8px;
   width: 100%;
-  min-height: 40px;
-  padding: 7px 14px;
+  height: 100%;
+  padding: 0 14px;
   border: 0;
   background: transparent;
   color: inherit;
@@ -74,7 +74,7 @@
 }
 
 .d1-floor-map-disclosure {
-  padding: 8px;
+  padding: 0;
   background: var(--d1-bg);
   border-bottom: 1px solid var(--d1-border);
 }
@@ -91,8 +91,8 @@
 }
 
 @media (pointer: coarse) {
-  .d1-floor-map-toggle {
-    min-height: 44px;
+  .d1-floor-head {
+    height: 44px;
   }
 }
 

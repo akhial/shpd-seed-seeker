@@ -6,7 +6,7 @@
 .d1-map-branches {
   display: flex;
   min-width: 0;
-  gap: 2px;
+  gap: 0;
 }
 .d1-map-toolbar button {
   flex-shrink: 0;
@@ -15,29 +15,26 @@
   color: var(--d1-text-2);
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 4px;
-  padding: 4px 8px;
+  border-radius: 0;
+  padding: 0 12px;
   cursor: pointer;
 }
-.d1-map-branches button[aria-pressed="true"] {
-  background: var(--d1-amber-dim);
-  color: var(--d1-amber);
-}
-.d1-map-toolbar button:hover:not(:disabled) {
+.d1-map-toolbar button:hover:not(:disabled):not([aria-pressed="true"]) {
   color: var(--d1-text);
   background: var(--d1-border);
 }
 .d1-map-toolbar {
   display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 6px 4px;
+  align-items: stretch;
+  min-height: 40px;
+  gap: 0;
+  padding: 0;
   background: var(--d1-bg);
   border-bottom: 1px solid var(--d1-border);
 }
 .d1-map-toolbar button[aria-pressed="true"] {
-  color: var(--d1-amber);
-  background: var(--d1-amber-dim);
+  color: var(--d1-accent);
+  background: color-mix(in srgb, var(--d1-accent) 14%, transparent);
 }
 .d1-map-toolbar button:disabled {
   opacity: 0.4;
@@ -45,8 +42,19 @@
 }
 .d1-map-toolbar button:focus-visible,
 .d1-map-viewport:focus-visible {
-  outline: 2px solid var(--d1-amber);
+  outline: 2px solid var(--d1-accent);
   outline-offset: -2px;
+}
+.d1-map-secrets {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.d1-map-secrets svg {
+  visibility: hidden;
+}
+.d1-map-secrets[aria-pressed="true"] svg {
+  visibility: visible;
 }
 .d1-map-toolbar-branched .d1-map-secrets {
   margin-left: auto;
