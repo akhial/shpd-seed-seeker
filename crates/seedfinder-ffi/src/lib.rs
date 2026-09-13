@@ -773,7 +773,7 @@ mod tests {
                 .png
         );
         for bad in [
-            br#"{"seed":"AAA-AAA-AAA","depth":5}"#.as_slice(),
+            br#"{"seed":"AAA-AAA-AAA","depth":10}"#.as_slice(),
             br#"{"seed":"AAA-AAA-AAA","depth":12,"branch":1}"#,
         ] {
             assert_eq!(
