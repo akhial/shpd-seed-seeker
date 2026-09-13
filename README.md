@@ -319,14 +319,6 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 The workspace includes the GTK app, so the commands above need its system libraries (GTK 4.22 and libadwaita 1.9). Add `--exclude shpd-seedfinder-gtk` on macOS and Windows to exclude the GTK app from the test run.
 
-Keep routine CI searches and full-world generation tests bounded to at most 1,000 seed attempts, counting repeated queries, challenge modes and recipe replays. Broad parity sweeps are marked `#[ignore]`; small fixtures with positive and negative results remain in the default suite. Run the extended core sweeps explicitly in release mode:
-
-```sh
-cargo test --locked -p shpd-seedfinder-core --lib --release -- --ignored --skip vault_debug::dump_vault_for_probe_diff
-```
-
-The skipped diagnostic writes an oracle-probe dump and requires separate environment configuration.
-
 #### Android
 
 ```sh
