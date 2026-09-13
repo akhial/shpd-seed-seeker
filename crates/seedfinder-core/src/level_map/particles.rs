@@ -41,5 +41,8 @@ pub struct MapEmitter {
     pub acceleration: [i16; 2],
     pub alpha: MapCurve,
     pub scale: MapCurve,
+    /// Optional extra scale on the image's local Y axis (beam thinning).
+    #[cfg_attr(feature = "json-query", serde(skip_serializing_if = "Option::is_none"))]
+    pub scale_y: Option<MapCurve>,
     pub particles: Vec<MapParticle>,
 }

@@ -29,6 +29,15 @@ export interface MapItem {
   glow?: MapGlow;
 }
 export interface MapContents {
+  sentries?: {
+    cell: number;
+    initialCooldown: number;
+    cooldown: number;
+    triggers: number;
+    warning: boolean;
+    directions: number[][];
+    scan?: [number, number];
+  }[];
   heaps: { cell: number; kind: string; haunted: boolean; items: MapItem[] }[];
   mobs: {
     cell: number;
@@ -116,6 +125,7 @@ export interface MapEmitter {
   angularSpeed: number;
   alpha: MapCurve;
   scale: MapCurve;
+  scaleY?: MapCurve;
   particles: {
     birthMs: number;
     lifespanMs: number;

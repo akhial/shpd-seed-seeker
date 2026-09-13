@@ -540,6 +540,13 @@ pub const ASSETS: &[MapAsset] = &[
         sha256: "3087ee0e113a6ebe59060be53dbaef18734ebc5f4011fb4a053d361a026b4bae",
         png: include_bytes!("../../assets/level-map/icons.png"),
     },
+    MapAsset {
+        id: "effects.png",
+        width: 32,
+        height: 64,
+        sha256: "230d6a9cd275d6019946426943e68e1128a3bf3f9d00100a585035066f04c4ac",
+        png: include_bytes!("../../assets/level-map/effects.png"),
+    },
 ];
 
 #[must_use]

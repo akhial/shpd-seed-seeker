@@ -20,7 +20,8 @@ without the `custom_tiles/` prefix). Boss maps also embed the same revision’s
 `custom_tiles/rat_king_room.png`, `custom_tiles/carpet.png`, and
 `sprites/pylon.png` and `sprites/ratking.png` (from `core/src/main/assets`).
 Initial contents additionally use `sprites/items.png`, the initial mob/NPC
-sprite atlases in `sprites/`, `effects/specks.png`, `interfaces/icons.png` (sleep indicators), and
+sprite atlases in `sprites/`, `effects/specks.png`, `effects/effects.png`,
+`interfaces/icons.png` (sleep indicators and targeting markers), and
 `environment/custom_tiles/prison_quest.png`, `weak_floor.png`, and
 `halls_special.png`, all from that same revision. No texture was modified.
 Every file's SHA-256 and dimensions are recorded in
@@ -33,6 +34,8 @@ Rendering rules are adapted from the same revision's
 half-wall masks in `FogOfWar`, the trap/plant sprite indices,
 `ItemSpriteSheet`, the corresponding `*Sprite` classes, quest room custom tilemaps,
 `CharSprite`/`ItemSprite` shadows, `EmoIcon.Sleep`, `Speck`, `SacrificialParticle`, `ElmoParticle`,
+`Beam.DeathRay`, `CheckedCell`, `TargetedCell`, `VaultLaser`, `VaultSentry`,
+`Ballistica`, `ConeAOE`,
 `CityLevel.GreenFlame`, `AmbitiousImpRoom` entrance/barrier/banners, `Carpet`,
 `StatuesRoom`, `HallwayRoom`, and `LibraryRingRoom` entrance/exit carpet layouts,
 and `GameScene` water scrolling and `SewerLevel.Sink` pixel particles. The overview

@@ -109,6 +109,8 @@ pub struct VaultLevelState {
     pub flame_traps: Vec<usize>,
     /// Recorded only for map scouting; seed search does not allocate schedules.
     pub flame_cycles: Option<Vec<(usize, VaultFlameCycle)>>,
+    /// Seeded directions and timing, captured only for map scouting.
+    pub sentries: Option<Vec<crate::vault_sentries::VaultSentryPattern>>,
     /// The `BRANCH_ENTRANCE` transition cell.
     pub entrance_cell: Option<usize>,
 }
@@ -127,6 +129,7 @@ impl VaultLevelState {
             mobs: Vec::new(),
             flame_traps: Vec::new(),
             flame_cycles: None,
+            sentries: None,
             entrance_cell: None,
         }
     }
@@ -223,6 +226,15 @@ impl VaultLevelState {
         self.mobs.push(VaultMob { kind, cell });
     }
 
+    pub(crate) fn record_sentry(
+        &mut self,
+        create: impl FnOnce() -> crate::vault_sentries::VaultSentryPattern,
+    ) {
+        if let Some(sentries) = &mut self.sentries {
+            sentries.push(create());
+        }
+    }
+
     /// `VaultLevel.VaultFlameTrap.setupTrap`: the blob bookkeeping draws
     /// nothing; the visible effect is the inactive trap tile.
     pub fn setup_flame_trap(&mut self, cell: usize, initial: u16, cooldown: u16, triggers: u16) {
@@ -255,6 +267,8 @@ pub struct GeneratedVault {
     pub flame_traps: Vec<usize>,
     /// Recorded only for map scouting; seed search does not allocate schedules.
     pub flame_cycles: Option<Vec<(usize, VaultFlameCycle)>>,
+    /// Seeded directions and timing, captured only for map scouting.
+    pub sentries: Option<Vec<crate::vault_sentries::VaultSentryPattern>>,
     pub entrance_cell: usize,
     pub builder_attempts: u32,
 }
@@ -367,6 +381,7 @@ pub fn generate_vault_with_generator(
 ) -> Result<GeneratedVault, VaultError> {
     let mut state = VaultLevelState::new(depth, challenges);
     state.flame_cycles = random.record_room_order.then(Vec::new);
+    state.sentries = random.record_room_order.then(Vec::new);
     let (rooms, attempts) = build(&mut state, random)?;
     let flags = LevelFlags::build_for_generation(&state.level.map);
     create_items(&mut state, &rooms, &flags, random)?;
@@ -382,6 +397,7 @@ pub fn generate_vault_with_generator(
         heaps: state.heaps,
         flame_traps: state.flame_traps,
         flame_cycles: state.flame_cycles,
+        sentries: state.sentries,
         entrance_cell,
         builder_attempts: attempts,
     })
@@ -789,7 +805,7 @@ mod tests {
     }
 
     #[test]
-    fn scouting_flame_capture_does_not_change_search_generation_or_rng() {
+    fn scouting_hazard_capture_does_not_change_search_generation_or_rng() {
         let generate = |record_visuals| {
             let mut random = RandomStack::with_base_seed(0);
             random.record_room_order = record_visuals;
@@ -804,6 +820,8 @@ mod tests {
             "search allocates no flame schedules"
         );
         assert!(!scouting.flame_cycles.take().unwrap().is_empty());
+        assert!(search.sentries.is_none());
+        assert!(!scouting.sentries.take().unwrap().is_empty());
         assert_eq!(search, scouting);
         assert_eq!(search_rng, scouting_rng);
     }

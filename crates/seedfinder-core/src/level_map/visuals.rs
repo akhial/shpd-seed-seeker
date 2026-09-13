@@ -8,6 +8,7 @@ mod item_rects;
 mod objects;
 mod particles;
 mod rooms;
+mod sentries;
 
 use super::{MapDraw, MapKind, MapLayer, MapScene, MapSprite, TILE_SIZE};
 use crate::geometry::terrain as t;

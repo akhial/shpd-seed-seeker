@@ -30,6 +30,47 @@ const emitter: MapEmitter = {
 };
 
 describe("continuous map effects", () => {
+  it("fades and thins a death ray without shortening it at 120 Hz", () => {
+    const beam: MapEmitter = {
+      ...emitter,
+      startMs: 2000,
+      loopMs: 4000,
+      velocity: [0, 0],
+      acceleration: [0, 0],
+      alpha: {
+        points: [
+          [0, 1000],
+          [1000, 0],
+        ],
+        sqrt: false,
+      },
+      scale: {
+        points: [
+          [0, 1000],
+          [1000, 1000],
+        ],
+        sqrt: false,
+      },
+      scaleY: {
+        points: [
+          [0, 1000],
+          [1000, 0],
+        ],
+        sqrt: false,
+      },
+    };
+    const particle = { ...emitter.particles[0], lifespanMs: 500, scale: 1000 };
+    expect(particleState(beam, particle, 1999)).toBeNull();
+    const first = particleState(beam, particle, 2100)!;
+    const next = particleState(beam, particle, 2100 + 1000 / 120)!;
+    expect(first.scale).toBe(1);
+    expect(next.scale).toBe(1);
+    expect(first.scaleY).toBeCloseTo(0.8);
+    expect(next.scaleY).toBeLessThan(first.scaleY);
+    expect(next.alpha).toBeLessThan(first.alpha);
+    expect(particleState(beam, particle, 2500)).toBeNull();
+    expect(particleState(beam, particle, 6100)).toEqual(first);
+  });
   it("starts scheduled hazards on their captured turn without prewarming future particles", () => {
     const scheduled = { ...emitter, startMs: 2000, loopMs: 5000 };
     const particle = { ...emitter.particles[0], birthMs: 1000 };

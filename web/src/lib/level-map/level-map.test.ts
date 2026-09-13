@@ -19,6 +19,38 @@ const map = (depth: number, branch = 0) =>
   ) as LevelMapDocument;
 
 describe("browser level map contract", () => {
+  it("advances Vault rays and scans using their seeded turns through WASM", () => {
+    const result = JSON.parse(
+      level_map(JSON.stringify({ seed: "FOI-QDX-EMJ", depth: 18, branch: 1 })),
+    ) as LevelMapDocument;
+    const emitters = result.scene.emitters!;
+    const beams = emitters.filter(
+      (e) => e.image.kind === "blit" && e.image.asset === "effects.png",
+    );
+    const first = beams.find((e) => e.cell === 391)!;
+    expect(result.contents!.sentries).toHaveLength(38);
+    expect(beams.some((e) => e.cell === 643)).toBe(false); // Inert opposing sentry.
+    expect(first.startMs).toBe(1000);
+    expect(first.loopMs).toBe(7000); // Six firing turns, then one safe turn.
+    expect(particleState(first, first.particles[0], 999)).toBeNull();
+    const state = particleState(first, first.particles[0], 1100)!;
+    expect(state.scale).toBe(1);
+    expect(state.scaleY).toBeCloseTo(0.8);
+    expect(particleState(first, first.particles[0], 1500)).toBeNull();
+    expect(particleState(first, first.particles[0], 8100)).toEqual(state);
+
+    const scans = emitters.filter((e) => e.cell === 2304 && e.image.kind === "fill");
+    expect(scans).toHaveLength(16);
+    expect(scans.map((e) => e.startMs)).toEqual(Array.from({ length: 16 }, (_, i) => i * 1000));
+    expect(scans.every((e) => e.loopMs === 16000 && e.wallMask)).toBe(true);
+    expect(scans[0].particles.map((p) => p.position)).not.toEqual(
+      scans[1].particles.map((p) => p.position),
+    );
+    const far = scans[0].particles.find((p) => p.birthMs > 0)!;
+    expect(particleState(scans[0], far, far.birthMs - 1)).toBeNull();
+    expect(particleState(scans[0], far, far.birthMs)!.alpha).toBeCloseTo(0.8);
+    expect(particleState(scans[0], far, far.birthMs + 1000 / 120)!.alpha).toBeLessThan(0.8);
+  });
   it("alternates Vault warnings instead of lighting every vent at once", () => {
     const result = JSON.parse(
       level_map(JSON.stringify({ seed: "HEL-LOO-WRD", depth: 18, branch: 1 })),

@@ -351,6 +351,7 @@ public final class ParityOracle {
             }
         }
         record.put("flame_cycles", flameCycles);
+        record.put("sentries", sentryRecords(level));
         List<Map<String,Object>> traps = new ArrayList<>();
         for (com.shatteredpixel.shatteredpixeldungeon.levels.traps.Trap trap : level.traps.valueList()) {
             Map<String,Object> entry = new LinkedHashMap<>();
@@ -365,6 +366,56 @@ public final class ParityOracle {
 		record.put("room_queues", roomQueueState());
 		return record;
 	}
+
+    private static List<Map<String,Object>> sentryRecords(Level level) {
+        Level previous = Dungeon.level;
+        Dungeon.level = level;
+        try { return sentryRecordsInLevel(level); }
+        finally { Dungeon.level = previous; }
+    }
+
+    private static List<Map<String,Object>> sentryRecordsInLevel(Level level) {
+        List<Map<String,Object>> out = new ArrayList<>();
+        for (com.shatteredpixel.shatteredpixeldungeon.actors.mobs.Mob mob : level.mobs) {
+            Map<String,Object> p = new LinkedHashMap<>();
+            p.put("cell", mob.pos);
+            List<List<Integer>> coverage = new ArrayList<>();
+            if (mob instanceof com.shatteredpixel.shatteredpixeldungeon.actors.mobs.npcs.VaultLaser laser) {
+                p.put("initialCooldown", laser.curCooldown); p.put("cooldown", laser.afterShotCooldown);
+                p.put("triggers", laser.shotsAfterCooldown); p.put("warning", laser.giveWarning);
+                List<List<Integer>> dirs = new ArrayList<>();
+                for (int target : laser.laserDirs) {
+                    dirs.add(List.of(target));
+                    com.shatteredpixel.shatteredpixeldungeon.mechanics.Ballistica ray = new com.shatteredpixel.shatteredpixeldungeon.mechanics.Ballistica(mob.pos, target, 4);
+                    coverage.add(new ArrayList<>(ray.subPath(1, ray.dist)));
+                }
+                p.put("directions", dirs);
+            } else if (mob instanceof com.shatteredpixel.shatteredpixeldungeon.actors.mobs.npcs.VaultSentry scan) {
+                p.put("initialCooldown", scan.curCooldown); p.put("cooldown", scan.afterScanCooldown);
+                p.put("triggers", scan.scansAfterCooldown); p.put("warning", scan.giveWarning);
+                p.put("scan", List.of(Math.round(scan.scanWidth*1000), Math.round(scan.scanLength*1000)));
+                List<List<Integer>> dirs = new ArrayList<>();
+                boolean[] fov = new boolean[level.length()];
+                level.updateFieldOfView(scan, fov);
+                for (int[] phase : scan.scanDirs) {
+                    dirs.add(integers(phase));
+                    java.util.TreeSet<Integer> cells = new java.util.TreeSet<>();
+                    for (int target : phase) {
+                        com.shatteredpixel.shatteredpixeldungeon.mechanics.Ballistica aim = new com.shatteredpixel.shatteredpixeldungeon.mechanics.Ballistica(mob.pos, target, 0);
+                        com.shatteredpixel.shatteredpixeldungeon.mechanics.ConeAOE cone = new com.shatteredpixel.shatteredpixeldungeon.mechanics.ConeAOE(aim, scan.scanLength, scan.scanWidth, 5);
+                        if (cone.cells.isEmpty() && aim.path.size()>=2) cone.cells.add(aim.path.get(1));
+                        for (int cell : cone.cells) if (fov[cell]) cells.add(cell);
+                    }
+                    coverage.add(new ArrayList<>(cells));
+                }
+                p.put("directions", dirs);
+            } else continue;
+            Map<String,Object> record = new LinkedHashMap<>();
+            record.put("pattern",p); record.put("coverage",coverage); out.add(record);
+        }
+        out.sort(Comparator.comparingInt(r -> (Integer)((Map<?,?>)r.get("pattern")).get("cell")));
+        return out;
+    }
 
 	private static Map<String, Object> generatorCheckpoint(Level level, boolean selected)
 			throws Exception {

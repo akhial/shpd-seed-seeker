@@ -77,6 +77,7 @@ pub mod vault_loot;
 pub mod vault_mobs;
 pub mod vault_paint;
 pub mod vault_rooms;
+pub mod vault_sentries;
 pub mod wire;
 
 /// Upstream generation line this engine targets.

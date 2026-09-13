@@ -18,6 +18,7 @@ use crate::vault_floor::{VaultHeapKind, VaultLevelState};
 use crate::vault_loot::{PrizeFilter, VaultItem};
 use crate::vault_mobs::{VaultMobClass, VaultMobKind, random_tier_two_enemy};
 use crate::vault_rooms::{DoorType, VaultRoom, VaultRoomKind, set_shared_door_type};
+use crate::vault_sentries::VaultSentryPattern;
 
 fn fill_room(state: &mut VaultLevelState, room: &VaultRoom, value: i32) {
     draw::fill(
@@ -387,6 +388,8 @@ fn paint_cross(state: &mut VaultLevelState, rooms: &mut [VaultRoom], room: usize
     set_point(state, this.center(), terrain::PEDESTAL);
     let cell = state.point_to_cell(this.center());
     state.add_mob(VaultMobKind::Sentry, cell);
+    let width = state.width();
+    state.record_sentry(|| VaultSentryPattern::cross(cell, width));
     doors_regular(rooms, room);
 }
 
@@ -809,9 +812,11 @@ fn paint_circle(
     fill_room_margins(state, &this, 1, 4, 1, 4, terrain::EMPTY);
     set_point(state, this.center(), terrain::PEDESTAL);
     // The sentry's scan pattern is chosen with Random.Int(4).
-    let _ = random.int_bound(4);
+    let pattern = random.int_bound(4);
     let cell = state.point_to_cell(this.center());
     state.add_mob(VaultMobKind::Sentry, cell);
+    let width = state.width();
+    state.record_sentry(|| VaultSentryPattern::circle(cell, width, pattern));
     let neighbours: Vec<usize> = this.connected.iter().map(|entry| entry.room).collect();
     for neighbour in neighbours {
         set_shared_door_type(rooms, room, neighbour, DoorType::Regular);
@@ -884,8 +889,23 @@ fn paint_lasers(
             };
             set_cell(state, cell, terrain::PEDESTAL);
             let after_shot = random.int_range(3, 7);
-            let _ = random.int_range(1, after_shot);
+            let initial = random.int_range(1, after_shot);
             state.add_mob(VaultMobKind::Laser, as_cell(cell));
+            let target = if cell / width == b.top + 1 {
+                cell + width
+            } else {
+                cell - width
+            };
+            state.record_sentry(|| {
+                VaultSentryPattern::laser(
+                    as_cell(cell),
+                    as_cell(target),
+                    u32::try_from(initial).unwrap(),
+                    u32::try_from(after_shot).unwrap(),
+                    1,
+                    true,
+                )
+            });
         }
     }
     for y in b.top + 2..=b.bottom - 2 {
@@ -899,8 +919,23 @@ fn paint_lasers(
             };
             set_cell(state, cell, terrain::PEDESTAL);
             let after_shot = random.int_range(3, 7);
-            let _ = random.int_range(1, after_shot);
+            let initial = random.int_range(1, after_shot);
             state.add_mob(VaultMobKind::Laser, as_cell(cell));
+            let target = if cell % width == b.left + 1 {
+                cell + 1
+            } else {
+                cell - 1
+            };
+            state.record_sentry(|| {
+                VaultSentryPattern::laser(
+                    as_cell(cell),
+                    as_cell(target),
+                    u32::try_from(initial).unwrap(),
+                    u32::try_from(after_shot).unwrap(),
+                    1,
+                    true,
+                )
+            });
         }
     }
 }
@@ -1318,9 +1353,34 @@ fn paint_laser_treasure_common(
             let first = area_left - laser_offset + width * y;
             set_cell(state, first, terrain::PEDESTAL);
             state.add_mob(VaultMobKind::Laser, as_cell(first));
+            let initial = if entrance.y == b.top {
+                b.bottom - y
+            } else {
+                y - b.top
+            };
+            state.record_sentry(|| {
+                VaultSentryPattern::laser(
+                    as_cell(first),
+                    as_cell(first + 1),
+                    u32::try_from(initial).unwrap(),
+                    if hard { 2 } else { 3 },
+                    if hard { 6 } else { 1 },
+                    false,
+                )
+            });
             let second = area_left + 4 + laser_offset + width * y;
             set_cell(state, second, terrain::PEDESTAL);
             state.add_mob(VaultMobKind::Laser, as_cell(second));
+            state.record_sentry(|| {
+                VaultSentryPattern::laser(
+                    as_cell(second),
+                    as_cell(second - 1),
+                    i32::MAX as u32,
+                    i32::MAX as u32,
+                    u16::from(!hard),
+                    false,
+                )
+            });
         }
         item_place
     } else {
@@ -1341,9 +1401,34 @@ fn paint_laser_treasure_common(
             let first = x + width * (area_top - laser_offset);
             set_cell(state, first, terrain::PEDESTAL);
             state.add_mob(VaultMobKind::Laser, as_cell(first));
+            let initial = if entrance.x == b.left {
+                b.right - x
+            } else {
+                x - b.left
+            };
+            state.record_sentry(|| {
+                VaultSentryPattern::laser(
+                    as_cell(first),
+                    as_cell(first + width),
+                    u32::try_from(initial).unwrap(),
+                    if hard { 2 } else { 3 },
+                    if hard { 6 } else { 1 },
+                    false,
+                )
+            });
             let second = x + width * (area_top + 4 + laser_offset);
             set_cell(state, second, terrain::PEDESTAL);
             state.add_mob(VaultMobKind::Laser, as_cell(second));
+            state.record_sentry(|| {
+                VaultSentryPattern::laser(
+                    as_cell(second),
+                    as_cell(second - width),
+                    i32::MAX as u32,
+                    i32::MAX as u32,
+                    u16::from(!hard),
+                    false,
+                )
+            });
         }
         item_place
     };
@@ -1518,6 +1603,17 @@ fn paint_circle_scan_treasure(
     );
     let center_cell = state.point_to_cell(c);
     state.add_mob(VaultMobKind::Sentry, center_cell);
+    let clockwise = if entrance.x == b.left {
+        entrance.y >= c.y
+    } else if entrance.y == b.top {
+        entrance.x < c.x
+    } else if entrance.x == b.right {
+        entrance.y < c.y
+    } else {
+        entrance.x >= c.x
+    };
+    let width = state.width();
+    state.record_sentry(|| VaultSentryPattern::circle_treasure(center_cell, width, clockwise));
     let treasure_pos = state.point_to_cell(random_rect_point(treasure, random));
     let equipment = state.equipment.create_equipment(1, random);
     drop_chest(
@@ -1756,6 +1852,9 @@ fn paint_many_scans(
     for cell in corners {
         if state.true_distance(cell, entrance_cell) >= 2.0 {
             state.add_mob(VaultMobKind::Sentry, as_cell(cell));
+            state.record_sentry(|| {
+                VaultSentryPattern::many_scans(as_cell(cell), as_cell(c.x + width * c.y))
+            });
         }
     }
     set_point(state, c, terrain::PEDESTAL);

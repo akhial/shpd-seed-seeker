@@ -15,6 +15,8 @@ pub struct MapContents {
     pub plants: Vec<MapPlant>,
     pub effects: Vec<MapEffect>,
     pub features: Vec<MapFeature>,
+    #[cfg_attr(feature = "json-query", serde(skip_serializing_if = "Vec::is_empty"))]
+    pub sentries: Vec<crate::vault_sentries::VaultSentryPattern>,
     pub traps: Vec<super::MapTrap>,
 }
 

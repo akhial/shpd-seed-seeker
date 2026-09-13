@@ -358,6 +358,8 @@ impl MapContents {
         rewards: &[crate::quests::ImpRewardOption],
     ) -> Self {
         let mut out = Self::from_level(&vault.level, a);
+        out.sentries = vault.sentries.clone().unwrap_or_default();
+        out.sentries.sort_by_key(|sentry| sentry.cell);
         // Flame-path groups overlap at corners; setupTrap overwrites the prior
         // cooldown arrays there, so the final assignment wins.
         let cycles: std::collections::BTreeMap<_, _> =

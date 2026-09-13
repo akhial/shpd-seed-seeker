@@ -87,6 +87,14 @@ second: checkerboard vents alternate, flame paths follow their seeded offsets,
 and treasure-room vents fire continuously. Small green warnings precede each
 burst by one turn. These scouting-only schedules do not advance game simulation
 or allocate additional data during seed search.
+Purple Vault sentries preserve their seeded ray directions, cooldowns, warning
+markers and shot groups. The decorative opposite row in laser treasure rooms
+never fires. Death rays use the original effects atlas and fade/thin over 0.5s.
+Blue sentries preserve the room's rotation (including clockwise/counterclockwise
+treasure scans) or inward-facing perimeter pattern. Their blue checked cells
+respect the game's Ballistica, ConeAOE and field-of-view geometry, propagate
+outward with distance-dependent delays, then shrink and fade over 0.8s. Scouting
+does not invent a hero target or advance terrain destruction/combat.
 The vault entry uses its torn carpets, circular entrance, pulsing barrier and wall banners.
 Actor sprites use their original idle/disguise films, flattened sprite shadows,
 and sleep indicators. Foreground walls and raised terrain occlude heaps/actors.
@@ -261,14 +269,19 @@ position = initialPosition / 1000 + velocity * seconds + acceleration * secondsÂ
 scale = initialScale / 1000 * evaluate(emitter.scale, progress)
 alpha = evaluate(emitter.alpha, progress)
 angle = initialAngle + angularSpeed * seconds
+scaleY = scale * (evaluate(emitter.scaleY, progress) if scaleY exists else 1)
 ```
 
 Optional `startMs` delays scheduled hazards and prevents future emissions from
 wrapping backward before their first cycle. Ambient emitters omit it and prewarm
 their loops. Curves contain `[progress, value]` points in thousandths: linearly interpolate,
 then take the square root if `sqrt` is true. Draw the image centered at the
-resulting position, scaled/rotated with the resulting alpha. `blend: "add"`
-requires the underlying scenery as the blend destination. Emitters with
+resulting position, scaled/rotated with the resulting alpha.
+Optional `scaleY` multiplies the local vertical scale independently, so a beam
+can thin without shortening. `contents.sentries` retains each sentry's initial
+cooldown, repeated cooldown, trigger count, warning flag and target-cell groups;
+optional `scan` stores cone degrees and tile length, both multiplied by 1000.
+`blend: "add"` requires the underlying scenery as the blend destination. Emitters with
 `wallMask: true` are occluded by the alpha silhouettes of `raised`, `walls`,
 `room_walls`, and `boss_walls`. Status icons use `wallMask: false` and appear
 above those surfaces. Apply geometric darkness last to both groups.
@@ -298,6 +311,9 @@ v4.0.0 release JAR (both quest types, depths 12â€“14, three seeds, challenge mas
 0/104). Its separate JAR digest and reproduction instructions are recorded in
 [mining-map fixtures](../tooling/oracle-4.0/tests/mining-maps.md).
 Vault terrain uses the v4.0.0-validated generator and saved vault fixtures.
+Sentry setup and ray/scan coverage match 342 official sentries across nine seeds
+in `tests/fixtures/vault-sentries.json`; regenerate with
+`python3 tooling/oracle-4.0/generate-vault-sentries.py`.
 
 The raised selectors are checked against the unmodified official v4.0.0 JAR:
 65 full-layer hashes across 13 maps cover every region, Crystal and Gnoll mines,

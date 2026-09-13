@@ -41,6 +41,7 @@ export function particleState(
       (emitter.acceleration[1] * seconds * seconds) / 2,
     scale: (particle.scale / 1000) * curveValue(emitter.scale, progress),
     alpha: curveValue(emitter.alpha, progress),
+    scaleY: emitter.scaleY ? curveValue(emitter.scaleY, progress) : 1,
     angle: ((particle.angle + emitter.angularSpeed * seconds) * Math.PI) / 180,
   };
 }
@@ -70,7 +71,16 @@ function emitterBounds(emitter: MapEmitter, width: number, size: number): Rectan
       Math.max(...emitter.particles.map((particle) => particle.scale))) /
     1000;
   const radius =
-    (Math.hypot(emitter.image.destination[2], emitter.image.destination[3]) * maxScale) / 2 + 1;
+    (Math.hypot(
+      emitter.image.destination[2],
+      emitter.image.destination[3] *
+        (emitter.scaleY
+          ? Math.max(...emitter.scaleY.points.map(([x]) => curveValue(emitter.scaleY!, x / 1000)))
+          : 1),
+    ) *
+      maxScale) /
+      2 +
+    1;
   const x = Math.floor(
     (emitter.cell % width) * size + Math.min(...positions.map(([x]) => x)) - radius,
   );
@@ -177,7 +187,7 @@ export function createMapParticleRenderer(
           context.save();
           context.translate(ox + state.x, oy + state.y);
           if (state.angle) context.rotate(state.angle);
-          context.scale(state.scale, state.scale);
+          context.scale(state.scale, state.scale * state.scaleY);
           context.globalAlpha =
             state.alpha *
             (image.kind === "blit" ? (image.opacity ?? 255) / 255 : image.rgba[3] / 255);
