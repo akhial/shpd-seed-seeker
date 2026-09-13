@@ -203,41 +203,22 @@ cargo run --release -p shpd-seedfinder-cli -- -i requirements.json -b 1000 --wor
 
 ## Benchmarks<a id="benchmarks"></a>
 
-**Matching seeds per minute**, through floor 19. The Runic Blade query requires a +2 Grim/Vampiric/Corrupting/Crystal Runic Blade and a +2 Ring of Might.
+**Matching seeds per minute**, through floor 19. +2 Grim/Vampiric/Corrupting/Crystal Runic Blade and +2 Ring of Might.
 
 | Query | Java baseline | AutoTrinket off | AutoTrinket on | AutoTrinket on / Java |
 | --- | ---: | ---: | ---: | ---: |
 | [+2 Runic Blade and +2 Ring of Might](https://shpd-seed-seeker.web.app/#q=QyAhKCsAAeAAAuoKAA) | 3.8 | 25.1 | **37.7** | 10× |
 | +5 Crossbow | 779.3 | 3,633.9 | 3,639.5 | 4.7× |
 
-AutoTrinket improved match throughput by **50.4%** for the Runic Blade + Ring of Might query. For Crossbow, both modes found the same matches without selecting a trinket; the measured throughput difference was 0.2%.
+AutoTrinket improved match throughput by **50.4%**.
 
-- **Machine:** AMD EPYC-Genoa (8) @ 2.25 GHz; 8 native threads / 8 Java processes.
-- **Method:** Linux release build with fat LTO, mimalloc, and fresh PGO; Java 21 with the pinned Shattered Pixel Dungeon v4.0.0 JAR. Ten warmed minutes per mode/query, alternating modes.
-- **Validation:** All 81,820 reported match records passed replay; native search matched the complete Java samples, including nonmatches. [Measurement details after #126](https://github.com/akhial/shpd-seed-seeker/pull/128).
+- **Machine:** AMD EPYC-Genoa (8) @ 2.25 GHz.
 
-Reproduce on Linux from the repository root with Rust, Python 3, and JDK 21 available (`java` and `javac`):
+Reproduce:
 
-```bash
-set -euo pipefail
-rustup component add llvm-tools
-export CARGO_TARGET_DIR="$PWD/target/benchmark"
-mkdir -p "$CARGO_TARGET_DIR"
-BENCH_RAW=$(mktemp -d "$CARGO_TARGET_DIR/profile-raw.XXXXXX")
-BENCH_PROFILE="$CARGO_TARGET_DIR/benchmark.profdata"
-BENCH_PROFDATA="$(rustc --print target-libdir)/../bin/llvm-profdata"
-BENCH_BUILD=(cargo build --locked --release -p shpd-seedfinder-ffi --example match_benchmark)
-RUSTFLAGS="-Cprofile-generate=$BENCH_RAW" "${BENCH_BUILD[@]}"
-python3 tooling/benchmarks/effective_matches.py --train --workers 1 \
-  --binary target/benchmark/release/examples/match_benchmark
-"$BENCH_PROFDATA" merge -o "$BENCH_PROFILE" "$BENCH_RAW"/*.profraw
-RUSTFLAGS="-Cprofile-use=$BENCH_PROFILE" "${BENCH_BUILD[@]}"
-bash tooling/java-finder/build.sh
-python3 tooling/benchmarks/effective_matches.py --minutes 10 --workers 8 \
-  --binary target/benchmark/release/examples/match_benchmark
+```sh
+tooling/benchmarks/run-linux.sh --minutes 10 --workers 8 --output /tmp/seed-seeker-benchmark
 ```
-
-The harness writes raw measurements, verification records, environment details, and summaries to a new timestamped directory under `target/benchmark/`.
 
 ## Development<a id="development"></a>
 
