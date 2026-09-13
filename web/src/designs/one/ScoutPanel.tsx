@@ -440,20 +440,30 @@ export function ScoutPanel({
                               )}
                               <span>{sourceLabel(item.source)}</span>
                             </div>
-                            {note && (
+                            {note && item.accessibility.type !== "choice" && (
                               <p className="d1-item-note">
                                 <ForkIcon size={12} />
                                 {note}
                               </p>
                             )}
                           </div>
-                          {item.matched && (
-                            <span
-                              className="d1-badge d1-badge-match"
-                              title="Selected as part of a jointly obtainable requirement match"
-                            >
-                              <CheckIcon size={12} /> match
-                            </span>
+                          {(item.matched || item.accessibility.type === "choice") && (
+                            <div className="d1-item-status">
+                              {item.matched && (
+                                <span
+                                  className="d1-badge d1-badge-match"
+                                  title="Selected as part of a jointly obtainable requirement match"
+                                >
+                                  <CheckIcon size={12} /> match
+                                </span>
+                              )}
+                              {item.accessibility.type === "choice" && (
+                                <span className="d1-item-choice" title={note} aria-label={note}>
+                                  <ForkIcon size={12} />
+                                  <b>{groupLetter(item.accessibility.group)}</b>
+                                </span>
+                              )}
+                            </div>
                           )}
                         </li>
                       );
@@ -489,15 +499,23 @@ export function CatalystEntry({
     <li className="d1-catalyst">
       <div className="d1-catalyst-head">
         <Sprite art={itemArt(70)} size={32} />
-        <div>
+        <div className="d1-item-body">
           <strong>Magical catalyst</strong>
           <div className="d1-item-meta">
             {sourceLabel(catalyst.source)}
             {catalyst.secret && " · secret room"}
           </div>
         </div>
+        {catalyst.accessibility.type === "choice" && (
+          <div className="d1-item-status">
+            <span className="d1-item-choice" title={note} aria-label={note}>
+              <ForkIcon size={12} />
+              <b>{groupLetter(catalyst.accessibility.group)}</b>
+            </span>
+          </div>
+        )}
       </div>
-      {note && <p className="d1-item-note">{note}</p>}
+      {note && catalyst.accessibility.type !== "choice" && <p className="d1-item-note">{note}</p>}
       <ol className="d1-trinket-choices" aria-label="Initial trinket choices" ref={choicesRef}>
         {initialOffers(offers, order).map((offer) => {
           const contents = (

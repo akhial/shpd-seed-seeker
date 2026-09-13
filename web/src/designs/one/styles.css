@@ -2519,8 +2519,41 @@ input[type="range"]::-moz-range-thumb {
   color: var(--d1-text-3);
 }
 
-.d1-item-note svg {
+.d1-item-status {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  align-self: center;
   flex: 0 0 auto;
+  gap: 4px;
+}
+
+.d1-item-status .d1-badge-match {
+  align-self: flex-end;
+}
+
+.d1-item-choice {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 0 5px;
+  border: 1px solid var(--d1-border-strong);
+  border-radius: 4px;
+  background: rgba(162, 166, 176, 0.08);
+  color: var(--d1-text-2);
+  font-family: var(--d1-mono);
+  font-size: 12px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.d1-item-note svg,
+.d1-item-choice svg {
+  flex: 0 0 auto;
+}
+
+.d1-item-choice svg {
+  align-self: center;
 }
 
 /* ---------- Modal (requirement editor) ---------- */
