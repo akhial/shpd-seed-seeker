@@ -42,7 +42,9 @@ pub(super) fn emitters(level: &Level, contents: &MapContents) -> Vec<MapEmitter>
         .collect();
     for feature in &contents.features {
         if feature.kind == "VaultFlameTrap" && objects::visible(level, feature.cell) {
-            result.push(emitter(feature.cell, Particle::VaultVent));
+            if let Some(cycle) = feature.cycle {
+                result.extend(vent_emitters(feature.cell, cycle));
+            }
         }
     }
     if level.depth <= 5 {
@@ -77,6 +79,7 @@ pub(super) fn emitters(level: &Level, contents: &MapContents) -> Vec<MapEmitter>
             continue;
         };
         result.push(MapEmitter {
+            start_ms: None,
             wall_mask: false,
             cell: mob.cell,
             loop_ms: 800,
@@ -125,6 +128,50 @@ fn curve(points: &[[u16; 2]]) -> MapCurve {
         points: points.to_vec(),
         sqrt: false,
     }
+}
+
+/// Preview one game turn per second. VaultFlameTraps.act first evolves the
+/// previous warning, then decrements/reseeds cooldowns; the burst follows one
+/// turn after its warning. Particle movement remains at display refresh rate.
+fn vent_emitters(cell: usize, cycle: crate::vault_floor::VaultFlameCycle) -> [MapEmitter; 2] {
+    let first_turn = if cycle.initial_cooldown == 0 {
+        cycle.cooldown
+    } else {
+        cycle.initial_cooldown
+    };
+    let first_ms = u32::from(first_turn.saturating_sub(1)) * 1000;
+    let make = |kind, burst| {
+        let mut e = emitter(cell, kind);
+        e.loop_ms = cycle.cooldown * 1000;
+        e.start_ms = Some(first_ms + if burst { 1000 } else { 0 });
+        let samples = e.particles.clone();
+        e.particles.clear();
+        // Continuous treasure vents keep the factory's uninterrupted 0.3s flow.
+        if !burst && cycle.cooldown == cycle.triggers {
+            e.loop_ms = 3000;
+        }
+        let count = if burst {
+            cycle.triggers * 10
+        } else if cycle.cooldown == cycle.triggers {
+            10
+        } else {
+            (cycle.triggers * 1000).div_ceil(300)
+        };
+        for index in 0..count {
+            let mut particle = samples[usize::from(index) % samples.len()].clone();
+            particle.birth_ms = if burst {
+                index / 10 * 1000 + index % 10 * 20
+            } else {
+                index * 300
+            };
+            e.particles.push(particle);
+        }
+        e
+    };
+    [
+        make(Particle::VaultVent, false),
+        make(Particle::Eternal, true),
+    ]
 }
 
 #[allow(clippy::too_many_lines)] // Source factory parameters stay together for auditing.
@@ -241,6 +288,7 @@ fn emitter(cell: usize, kind: Particle) -> MapEmitter {
         })
         .collect();
     MapEmitter {
+        start_ms: None,
         wall_mask: true,
         cell,
         loop_ms,
@@ -270,6 +318,7 @@ fn forge_sparks(cell: usize) -> Vec<MapEmitter> {
             let angle = -sample(cell, i, 9) * std::f32::consts::PI;
             let speed = sample(cell, i, 10) * 64.0;
             MapEmitter {
+                start_ms: None,
                 wall_mask: true,
                 cell,
                 loop_ms: 792,
@@ -301,6 +350,7 @@ fn forge_sparks(cell: usize) -> Vec<MapEmitter> {
 
 fn pipe_drips(cell: usize) -> MapEmitter {
     MapEmitter {
+        start_ms: None,
         wall_mask: true,
         cell,
         loop_ms: 400,

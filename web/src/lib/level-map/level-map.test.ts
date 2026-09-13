@@ -5,6 +5,7 @@ import { isMapDepthSupported, mapRequestJson } from "./client";
 import { mapSpriteCache } from "./frame-cache";
 import { createLevelMapRenderer, drawLevelMap, glowAmount } from "./render";
 import { itemGlow } from "../glow";
+import { particleState } from "./particles";
 import type { LevelMapDocument, LevelMapRequest, MapBundle } from "./types";
 
 beforeAll(async () => {
@@ -18,6 +19,33 @@ const map = (depth: number, branch = 0) =>
   ) as LevelMapDocument;
 
 describe("browser level map contract", () => {
+  it("alternates Vault warnings instead of lighting every vent at once", () => {
+    const result = JSON.parse(
+      level_map(JSON.stringify({ seed: "HEL-LOO-WRD", depth: 18, branch: 1 })),
+    ) as LevelMapDocument;
+    const vents = result.contents!.features.filter((f) => f.cycle);
+    const cells = (cooldown: number) => vents.filter((f) => f.cycle!.cooldown === cooldown);
+    const warnings = (cooldown: number, time: number) =>
+      cells(cooldown)
+        .filter((f) => {
+          const emitter = result.scene.emitters!.find((e) => e.cell === f.cell)!;
+          return emitter.particles.some((p) => particleState(emitter, p, time));
+        })
+        .map((f) => f.cell);
+    const even = warnings(2, 700),
+      odd = warnings(2, 1700);
+    expect(even.length).toBeGreaterThan(0);
+    expect(odd.length).toBeGreaterThan(0);
+    expect(even.some((cell) => odd.includes(cell))).toBe(false);
+    expect(even.length + odd.length).toBe(cells(2).length);
+    expect(warnings(2, 2700)).toEqual(even);
+    const path = warnings(5, 20700);
+    expect(path.length).toBeGreaterThan(0);
+    expect(path.length).toBeLessThan(cells(5).length);
+    expect(warnings(5, 21700)).not.toEqual(path);
+    expect(warnings(1, 20700)).toHaveLength(cells(1).length);
+    expect(warnings(1, 21700)).toHaveLength(cells(1).length);
+  });
   it("carries the same enchantment glows as the Scout list through WASM", () => {
     const result = JSON.parse(
       level_map(JSON.stringify({ seed: "FOI-QDX-EMJ", depth: 22, trinket: "parchment_scrap" })),

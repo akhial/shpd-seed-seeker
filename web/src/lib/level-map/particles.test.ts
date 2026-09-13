@@ -30,6 +30,17 @@ const emitter: MapEmitter = {
 };
 
 describe("continuous map effects", () => {
+  it("starts scheduled hazards on their captured turn without prewarming future particles", () => {
+    const scheduled = { ...emitter, startMs: 2000, loopMs: 5000 };
+    const particle = { ...emitter.particles[0], birthMs: 1000 };
+    expect(particleState(scheduled, particle, 100)).toBeNull();
+    expect(particleState(scheduled, particle, 2999)).toBeNull();
+    const first = particleState(scheduled, particle, 3100)!;
+    expect(first.y).toBeCloseTo(7.6);
+    expect(particleState(scheduled, particle, 3100 + 1000 / 120)!.y).toBeLessThan(first.y);
+    expect(particleState(scheduled, particle, 3700)).toBeNull();
+    expect(particleState(scheduled, particle, 8100)).toEqual(first);
+  });
   it("moves at consecutive 120 Hz timestamps without sprite-frame quantization", () => {
     const particle = emitter.particles[0];
     const first = particleState(emitter, particle, 100)!;

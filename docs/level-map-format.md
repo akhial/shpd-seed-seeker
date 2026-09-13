@@ -81,9 +81,12 @@ The overview follows the canonical no-remains, no-holiday profile.
 
 Water, well hearts/question marks, alchemy bubbles, sacrificial blue fire,
 eternal green fire, city statue flames, blacksmith sparks and gas have repeatable animation loops.
-Vault flame vents show the game's small green warning particles at each fixed
-vent location, recorded as `VaultFlameTrap` features. This previews the hazard;
-turn-dependent firing sequences and their cooldowns are not advanced.
+Vault flame vents retain their seeded `cycle` (`initialCooldown`, `cooldown`,
+`triggers`) on each `VaultFlameTrap` feature. The map previews one game turn per
+second: checkerboard vents alternate, flame paths follow their seeded offsets,
+and treasure-room vents fire continuously. Small green warnings precede each
+burst by one turn. These scouting-only schedules do not advance game simulation
+or allocate additional data during seed search.
 The vault entry uses its torn carpets, circular entrance, pulsing barrier and wall banners.
 Actor sprites use their original idle/disguise films, flattened sprite shadows,
 and sleep indicators. Foreground walls and raised terrain occlude heaps/actors.
@@ -248,7 +251,9 @@ provides `birthMs`, `lifespanMs`, a cell-relative `position` in milli-pixels,
 initial `scale` in thousandths, and an initial `angle` in degrees.
 
 ```text
-ageMs = positiveModulo(elapsedMs - birthMs, loopMs)
+clockMs = elapsedMs - (startMs or 0)
+if startMs is present and clockMs < birthMs: skip
+ageMs = positiveModulo(clockMs - birthMs, loopMs)
 if ageMs >= lifespanMs: skip
 progress = ageMs / lifespanMs
 seconds = ageMs / 1000
@@ -258,7 +263,9 @@ alpha = evaluate(emitter.alpha, progress)
 angle = initialAngle + angularSpeed * seconds
 ```
 
-Curves contain `[progress, value]` points in thousandths: linearly interpolate,
+Optional `startMs` delays scheduled hazards and prevents future emissions from
+wrapping backward before their first cycle. Ambient emitters omit it and prewarm
+their loops. Curves contain `[progress, value]` points in thousandths: linearly interpolate,
 then take the square root if `sqrt` is true. Draw the image centered at the
 resulting position, scaled/rotated with the resulting alpha. `blend: "add"`
 requires the underlying scenery as the blend destination. Emitters with

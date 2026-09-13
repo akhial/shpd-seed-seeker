@@ -85,6 +85,8 @@ pub struct MapEffect {
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "json-query", derive(serde::Serialize))]
 pub struct MapFeature {
+    #[cfg_attr(feature = "json-query", serde(skip_serializing_if = "Option::is_none"))]
+    pub cycle: Option<crate::vault_floor::VaultFlameCycle>,
     pub cell: usize,
     pub width: i32,
     pub height: i32,

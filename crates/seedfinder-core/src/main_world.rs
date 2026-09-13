@@ -661,6 +661,7 @@ fn generate_gated_world_attempt(
             pending.depth,
             challenges,
             &pending.trinket,
+            false,
         )
         .map_err(|error| MainWorldError::City(CityFloorError::Vault(error)))?;
         let treasure = vault.world_items(

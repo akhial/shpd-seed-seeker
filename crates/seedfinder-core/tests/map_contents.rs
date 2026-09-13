@@ -77,41 +77,87 @@ fn enchanted_heaps_glow_without_tinting_containers_or_shadows() {
 }
 
 #[test]
-fn every_vault_vent_has_a_wall_occluded_warning_emitter() {
-    let map = generate_level_map_in_branch(
-        DungeonSeed::from_code("FOI-QDX-EMJ").unwrap(),
-        18,
-        1,
-        Challenges::NONE,
-        None,
-    )
-    .unwrap();
-    let vents: Vec<_> = map
-        .contents
-        .features
-        .iter()
-        .filter(|f| f.kind == "VaultFlameTrap")
-        .collect();
-    assert!(!vents.is_empty());
-    for vent in vents {
-        let emitter = map
-            .scene
-            .emitters
+fn vault_vent_cycles_match_official_engine_and_preview_each_turn() {
+    let fixture: Value = serde_json::from_str(include_str!("fixtures/vault-flames.json")).unwrap();
+    for sample in fixture["samples"].as_array().unwrap() {
+        let code = sample["seed"].as_str().unwrap();
+        let map = generate_level_map_in_branch(
+            DungeonSeed::from_code(code).unwrap(),
+            u8::try_from(sample["depth"].as_u64().unwrap()).unwrap(),
+            1,
+            Challenges::NONE,
+            None,
+        )
+        .unwrap();
+        let vents: Vec<_> = map
+            .contents
+            .features
             .iter()
-            .find(|e| e.cell == vent.cell)
-            .unwrap();
-        assert!(emitter.wall_mask);
+            .filter(|f| f.kind == "VaultFlameTrap")
+            .collect();
+        let actual: Vec<_> = vents
+            .iter()
+            .map(|vent| {
+                let cycle = vent.cycle.unwrap();
+                serde_json::json!([
+                    vent.cell,
+                    cycle.initial_cooldown,
+                    cycle.cooldown,
+                    cycle.triggers
+                ])
+            })
+            .collect();
         assert_eq!(
-            emitter.particles.len(),
-            10,
-            "0.3s warning interval in a 3s loop"
+            actual,
+            *sample["cycles"].as_array().unwrap(),
+            "{code} seeded cooldowns"
         );
-        assert!(
-            emitter
-                .particles
+        for vent in vents {
+            let cycle = vent.cycle.unwrap();
+            let emitters: Vec<_> = map
+                .scene
+                .emitters
                 .iter()
-                .all(|p| p.position.iter().all(|&v| (6900..10100).contains(&v)))
-        );
+                .filter(|e| e.cell == vent.cell && e.start_ms.is_some())
+                .collect();
+            assert_eq!(emitters.len(), 2, "{code} vent {}", vent.cell);
+            assert!(emitters.iter().all(|e| e.wall_mask));
+            let visible = |index: usize, time: u32| {
+                let emitter = emitters[index];
+                emitter.particles.iter().any(|p| {
+                    let first = emitter.start_ms.unwrap() + u32::from(p.birth_ms);
+                    time >= first
+                        && (time - first) % u32::from(emitter.loop_ms) < u32::from(p.lifespan_ms)
+                })
+            };
+            // VaultFlameTraps.act evolves the existing blob, then decrements
+            // cooldowns and seeds warnings. Compare 20 turns, including startup.
+            let mut cooldown = cycle.initial_cooldown;
+            let mut remaining = 0_u16;
+            for turn in 0..20 {
+                let burst = remaining > 0;
+                remaining = remaining.saturating_sub(1);
+                if cooldown == 0 {
+                    cooldown = cycle.cooldown;
+                }
+                cooldown -= 1;
+                if cooldown == 0 {
+                    remaining = cycle.triggers;
+                }
+                assert_eq!(
+                    visible(0, turn * 1000 + 700),
+                    remaining > 0,
+                    "{code} vent {} warning at turn {turn}",
+                    vent.cell
+                );
+                assert_eq!(
+                    visible(1, turn * 1000 + 200),
+                    burst,
+                    "{code} vent {} burst at turn {turn}",
+                    vent.cell
+                );
+            }
+        }
     }
 }
 

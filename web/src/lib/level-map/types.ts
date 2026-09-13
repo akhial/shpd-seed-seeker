@@ -40,7 +40,13 @@ export interface MapContents {
   }[];
   plants: { cell: number; kind: string; image: number }[];
   effects: { cell: number; kind: string }[];
-  features: { cell: number; kind: string; width: number; height: number }[];
+  features: {
+    cell: number;
+    kind: string;
+    width: number;
+    height: number;
+    cycle?: { initialCooldown: number; cooldown: number; triggers: number };
+  }[];
   traps: { cell: number; kind: string; hidden: boolean; active: boolean }[];
 }
 export interface LevelMapDocument {
@@ -99,6 +105,7 @@ export interface MapCurve {
   sqrt: boolean;
 }
 export interface MapEmitter {
+  startMs?: number;
   wallMask?: boolean;
   cell: number;
   loopMs: number;

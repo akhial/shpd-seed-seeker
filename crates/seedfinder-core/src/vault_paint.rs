@@ -840,12 +840,14 @@ fn paint_alternating_fire(
     let item = state.equipment.create_equipment(0, random);
     let cell = i32::try_from(state.point_to_cell(c)).unwrap();
     drop_heap(state, VaultItem::Equipment(item), cell);
+    let mut alternate = false;
     for x in b.left + 1..b.right {
         for y in b.top + 1..b.bottom {
             let cell = cell_of(state, x, y);
             if map_at(state, cell) != terrain::PEDESTAL {
-                state.setup_flame_trap(as_cell(cell));
+                state.setup_flame_trap(as_cell(cell), u16::from(alternate), 2, 1);
             }
+            alternate = !alternate;
         }
     }
 }
@@ -1140,24 +1142,25 @@ fn fill_flame_group(
                 break offset;
             }
         };
-        let mut delay = 0;
         let inner: Vec<i32> = match direction {
             0 => (space.left..=space.right).rev().collect(),
             2 => (space.left..=space.right).collect(),
             1 => (space.top..=space.bottom).rev().collect(),
             _ => (space.top..=space.bottom).collect(),
         };
-        for step in inner {
+        for (delay, step) in inner.into_iter().enumerate() {
             let cell = if rows_first {
                 step + width * line
             } else {
                 line + width * step
             };
-            // setupTrap(level, cell, delay + ofs, 5, 2)
-            state.setup_flame_trap(as_cell(cell));
-            delay += 1;
+            state.setup_flame_trap(
+                as_cell(cell),
+                u16::try_from(delay).unwrap() + u16::try_from(offset).unwrap(),
+                5,
+                2,
+            );
         }
-        let _ = delay;
         prior_offsets.push(offset);
     }
 }
@@ -1699,7 +1702,7 @@ fn paint_flames_treasure(
         for y in b.top + 2..=b.bottom - 2 {
             let cell = x + width * y;
             if map_at(state, cell) == terrain::EMPTY {
-                state.setup_flame_trap(as_cell(cell));
+                state.setup_flame_trap(as_cell(cell), 1, 1, 1);
             }
         }
     }

@@ -118,6 +118,7 @@ impl MapContents {
                 ),
                 E::Blob { cell, kind, .. } => self.effect(*cell, name(kind)),
                 E::Feature { point, kind } => self.features.push(MapFeature {
+                    cycle: None,
                     cell: level.map.point_to_cell(*point),
                     width: 1,
                     height: 1,
@@ -226,6 +227,7 @@ impl MapContents {
                     height,
                     kind,
                 } => self.features.push(MapFeature {
+                    cycle: None,
                     cell: level.map.point_to_cell(*point),
                     width: *width,
                     height: *height,
@@ -356,9 +358,14 @@ impl MapContents {
         rewards: &[crate::quests::ImpRewardOption],
     ) -> Self {
         let mut out = Self::from_level(&vault.level, a);
-        for &cell in &vault.flame_traps {
-            // Fixed vent locations, not active fire blobs (those depend on turns).
+        // Flame-path groups overlap at corners; setupTrap overwrites the prior
+        // cooldown arrays there, so the final assignment wins.
+        let cycles: std::collections::BTreeMap<_, _> =
+            vault.flame_cycles.iter().flatten().copied().collect();
+        for (cell, cycle) in cycles {
+            // Preserve the exact setupTrap turn schedule without advancing the game.
             out.features.push(MapFeature {
+                cycle: Some(cycle),
                 cell,
                 kind: "VaultFlameTrap".to_owned(),
                 width: 1,

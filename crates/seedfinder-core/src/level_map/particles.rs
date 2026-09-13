@@ -25,6 +25,9 @@ pub struct MapParticle {
 #[cfg_attr(feature = "json-query", derive(serde::Serialize))]
 #[cfg_attr(feature = "json-query", serde(rename_all = "camelCase"))]
 pub struct MapEmitter {
+    /// Delayed first emission. Absent means the ambient loop is prewarmed.
+    #[cfg_attr(feature = "json-query", serde(skip_serializing_if = "Option::is_none"))]
+    pub start_ms: Option<u32>,
     /// Foreground terrain occludes world particles; status icons stay above it.
     pub wall_mask: bool,
     pub cell: usize,

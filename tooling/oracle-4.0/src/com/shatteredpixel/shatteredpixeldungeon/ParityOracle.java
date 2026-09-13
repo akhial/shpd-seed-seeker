@@ -335,6 +335,22 @@ public final class ParityOracle {
         }
         effects.sort(Comparator.comparingInt(e -> (Integer)e.get("cell")));
         record.put("effects", effects);
+        List<Map<String,Object>> flameCycles = new ArrayList<>();
+        com.shatteredpixel.shatteredpixeldungeon.actors.blobs.VaultFlameTraps flames =
+                (com.shatteredpixel.shatteredpixeldungeon.actors.blobs.VaultFlameTraps)
+                level.blobs.get(com.shatteredpixel.shatteredpixeldungeon.actors.blobs.VaultFlameTraps.class);
+        if (flames != null && flames.afterTriggerCooldowns != null) {
+            for (int cell = 0; cell < flames.afterTriggerCooldowns.length; cell++) {
+                if (flames.afterTriggerCooldowns[cell] < 0) continue;
+                Map<String,Object> cycle = new LinkedHashMap<>();
+                cycle.put("cell", cell);
+                cycle.put("initialCooldown", flames.curCooldowns[cell]);
+                cycle.put("cooldown", flames.afterTriggerCooldowns[cell]);
+                cycle.put("triggers", flames.triggersAfterCooldown[cell]);
+                flameCycles.add(cycle);
+            }
+        }
+        record.put("flame_cycles", flameCycles);
         List<Map<String,Object>> traps = new ArrayList<>();
         for (com.shatteredpixel.shatteredpixeldungeon.levels.traps.Trap trap : level.traps.valueList()) {
             Map<String,Object> entry = new LinkedHashMap<>();

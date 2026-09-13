@@ -22,9 +22,11 @@ export function particleState(
   particle: MapEmitter["particles"][number],
   elapsed: number,
 ) {
-  const age =
-    (((Math.max(0, elapsed) - particle.birthMs) % emitter.loopMs) + emitter.loopMs) %
-    emitter.loopMs;
+  const clock = Math.max(0, elapsed) - (emitter.startMs ?? 0);
+  // Scheduled hazards start with the captured first turn; ambient emitters
+  // retain their prewarmed loops. Never wrap a future first emission backward.
+  if (emitter.startMs !== undefined && clock < particle.birthMs) return null;
+  const age = (((clock - particle.birthMs) % emitter.loopMs) + emitter.loopMs) % emitter.loopMs;
   if (age >= particle.lifespanMs) return null;
   const seconds = age / 1000,
     progress = age / particle.lifespanMs;
