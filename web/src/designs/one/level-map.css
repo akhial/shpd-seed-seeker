@@ -9,6 +9,8 @@
   gap: 0;
 }
 .d1-map-toolbar button {
+  -webkit-user-select: none;
+  user-select: none;
   flex-shrink: 0;
   white-space: nowrap;
   font: inherit;

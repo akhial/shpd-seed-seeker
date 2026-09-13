@@ -119,6 +119,12 @@ export function ScoutPanel({
     (result?.feelings ?? []).map(({ depth, feeling }) => [depth, feeling]),
   );
   const questByDepth = new Map((result?.quests ?? []).map((quest) => [quest.depth, quest]));
+  const matchedChoices = new Map<number, number>();
+  for (const item of result?.items ?? []) {
+    if (item.matched && item.accessibility.type === "choice") {
+      matchedChoices.set(item.accessibility.group, item.accessibility.option);
+    }
+  }
 
   const copySeed = () => {
     if (!result) return;
@@ -401,9 +407,20 @@ export function ScoutPanel({
                     .filter((item) => item.category !== "trinket")
                     .map((item, index) => {
                       const note = accessibilityNote(item);
+                      const dimmed =
+                        !item.matched &&
+                        item.accessibility.type === "choice" &&
+                        matchedChoices.has(item.accessibility.group) &&
+                        matchedChoices.get(item.accessibility.group) !== item.accessibility.option;
                       return (
                         <li
-                          className={item.matched ? "d1-item d1-item-matched" : "d1-item"}
+                          className={
+                            item.matched
+                              ? "d1-item d1-item-matched"
+                              : dimmed
+                                ? "d1-item d1-item-dimmed"
+                                : "d1-item"
+                          }
                           key={`${item.id}-${index}`}
                         >
                           <Sprite

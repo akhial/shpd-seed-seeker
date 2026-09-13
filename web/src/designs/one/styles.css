@@ -2385,7 +2385,7 @@ input[type="range"]::-moz-range-thumb {
 
 .d1-item {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 11px;
   padding: 6px 8px;
   border-radius: 7px;
@@ -2394,6 +2394,10 @@ input[type="range"]::-moz-range-thumb {
 
 .d1-item:hover {
   background: var(--d1-panel-2);
+}
+
+.d1-item-dimmed {
+  opacity: 0.45;
 }
 
 /* The match highlight bleeds to both pane edges. The list insets items by
@@ -2422,10 +2426,6 @@ input[type="range"]::-moz-range-thumb {
 .d1-item-matched:last-child {
   margin-bottom: -5px;
   padding-bottom: 11px;
-}
-
-.d1-item > .d1-sprite {
-  margin-top: 1px;
 }
 
 .d1-item-body {
