@@ -1,0 +1,32 @@
+--- baseline/plan-drop
+
++++ candidate/plan-drop
+
+@@ -4,9 +4,9 @@
+
+ pushq	%r12
+ pushq	%rbx
+ movq	%rdi, %rbx
+-cmpq	$0x0, 0x48(%rdi)
++cmpq	$0x0, 0x60(%rdi)
+ jle LOCAL+0x1d
+-movq	0x50(%rbx), %rdi
++movq	0x68(%rbx), %rdi
+ callq	*RIP_RELOCATION(%rip)
+ movq	0x8(%rbx), %r14
+ movq	0x10(%rbx), %r15
+@@ -65,8 +65,12 @@
+
+ callq	*%r13
+ jmp LOCAL+0xe0
+ cmpq	$0x0, 0x30(%rbx)
+-je LOCAL+0x113
++je LOCAL+0x10a
+ movq	%r14, %rdi
++callq	*RIP_RELOCATION(%rip)
++cmpq	$0x0, 0x48(%rbx)
++je LOCAL+0x124
++movq	0x50(%rbx), %rdi
+ popq	%rbx
+ popq	%r12
+ popq	%r13

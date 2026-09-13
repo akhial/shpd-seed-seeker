@@ -1,0 +1,17 @@
+{
+  "status": "complete",
+  "decision": "keep",
+  "baseline_commit": "c47e2f57e524b843c8534de3a92d01f4a0512ea3",
+  "candidate_code_commit": "2ab235ce540d9f6faaa5d72a0df4256de7ae90c2",
+  "source_patch_sha256": "57cdf9d6cf012e12541f54420c6b88331cad3db539936a413e955a797996de67",
+  "integrated_source_sha256": {
+    "crates/seedfinder-core/src/feasibility.rs": "dd1c961d9cd00a9787b9c38dc08dacaebad6c9126e8b2dd5bb482f4f5911728a",
+    "crates/seedfinder-core/src/query.rs": "7f189e854d27ed7189ab58acbb511aa6becf8cce7ef8b97ce356526d57b9edcf"
+  },
+  "throughput_audit_completion_sha256": "986ad194635ade1344efdbe161e34e7b790cf03d7d25193cb5a8684676c9e8bb",
+  "planner_audit_completion_sha256": "ae5d2caeda7218d89720b62f81e41ab9d89e3cf780ac25a5ae971af4f1586ce7",
+  "original_export_manifest_sha256": "16805f32e1567dbf23a5c2663c3cf84dac288665a427ea15e1f1b765c73db622",
+  "projection": "Scored throughput data unchanged, TABLE disposition updated; added complete planner audit (queries losslessly gzip compressed), correctness receipt aggregation and normal-release code inspection. Original raw archives remain local.",
+  "local_archive": "/home/adel/.cache/seed-perf-ae0cb0c-results/repeatable-20260913",
+  "decision_basis": "All 32 affected throughput pairs improve across four targets and 1/8 workers; accept one-time planner overhead with all 14 setup cases and control regressions disclosed. No new Mac evidence or broad optimization-saturation claim."
+}

@@ -1,0 +1,9 @@
+--- baseline/gate-wants
+
++++ candidate/gate-wants
+
+@@ -1,2 +1,2 @@
+
+-movzbl	0x64(%rdi), %eax
++movzbl	0x7c(%rdi), %eax
+ retq
