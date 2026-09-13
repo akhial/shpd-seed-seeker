@@ -1,4 +1,4 @@
-//! Generation-time `CustomTilemaps` from the pinned quest room painters.
+//! Generation-time `CustomTilemaps` from the pinned room painters.
 use super::{Level, MapDraw, MapLayer, MapScene, MapSprite, intern, layer, objects, tile_sprite};
 use crate::geometry::terrain as t;
 use crate::level_map::MapContents;
@@ -15,6 +15,7 @@ pub(super) fn layers(
     let mut terrain = layer("room_terrain", level.len());
     let mut walls = layer("room_walls", level.len());
     for room in rooms {
+        super::carpets::statues(scene, &mut floor, level, room);
         if room.kind == RoomKind::Quest(QuestRoomKind::Blacksmith) {
             let b = room.bounds;
             let w = room.width() - 4;

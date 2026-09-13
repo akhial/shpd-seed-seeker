@@ -253,6 +253,70 @@ fn assert_drawing_bounds(map: &LevelMap) {
 }
 
 #[test]
+fn water_feeling_preserves_bookshelves_and_statue_room_carpets() {
+    use shpd_seedfinder_core::geometry::terrain as t;
+    let seed = DungeonSeed::from_code("GSA-DGS-ADG").unwrap();
+    let map = generate_level_map(seed, 19, Challenges::NONE, None).unwrap();
+    // Official v4.0 JAR, ParityOracle --seed GSA-DGS-ADG --floors 19
+    // --map-contents --acquire-hourglass. Every terrain cell also compared
+    // directly while investigating the reported flooded entrance and exit.
+    assert_eq!((map.width, map.height), (38, 46));
+    assert_eq!(map.feeling, shpd_seedfinder_core::level::Feeling::Water);
+    assert_eq!(
+        map.terrain
+            .iter()
+            .fold(1_i32, |h, &v| h.wrapping_mul(31).wrapping_add(v)),
+        606_879_645
+    );
+    assert_eq!(
+        map.terrain.iter().filter(|&&v| v == t::BOOKSHELF).count(),
+        73
+    );
+    assert_eq!(map.terrain.iter().filter(|&&v| v == t::WATER).count(), 319);
+    let floor = map
+        .scene
+        .layers
+        .iter()
+        .find(|l| l.name == "room_floor")
+        .unwrap();
+    for (left, top, right, bottom) in [(3, 14, 14, 26), (23, 15, 36, 25)] {
+        for y in top + 1..bottom {
+            for x in left + 1..right {
+                let cell = x + y * 38;
+                match map.terrain[cell] {
+                    t::CUSTOM_DECO_EMPTY | t::STATUE | t::ENTRANCE => {
+                        let sprite = &map.scene.sprites
+                            [floor.cells[cell].expect("statue blocks and entrance retain carpet")];
+                        assert!(sprite.frames[0].iter().all(|draw| matches!(
+                            draw,
+                            MapDraw::Blit {
+                                asset: "carpet.png",
+                                ..
+                            }
+                        )));
+                    }
+                    t::EXIT => assert!(
+                        floor.cells[cell].is_none(),
+                        "exit remains open through the carpet"
+                    ),
+                    _ => {}
+                }
+            }
+        }
+    }
+    let sprite = &map.scene.sprites[floor.cells[map.entrance.unwrap()].unwrap()];
+    assert!(matches!(
+        sprite.frames[0].last(),
+        Some(MapDraw::Blit {
+            asset: "carpet.png",
+            source: [32, 80, 16, 16],
+            ..
+        })
+    ));
+    assert_drawing_bounds(&map);
+}
+
+#[test]
 fn ambitious_imp_room_has_its_custom_entrance_and_statue_flames() {
     let map = generate_level_map(DungeonSeed::MIN, 19, Challenges::NONE, None).unwrap();
     let entrance = map

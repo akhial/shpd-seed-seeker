@@ -3,6 +3,7 @@
 
 mod actors;
 mod boss;
+mod carpets;
 mod item_rects;
 mod objects;
 mod particles;
