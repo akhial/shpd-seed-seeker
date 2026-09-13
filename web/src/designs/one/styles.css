@@ -1251,7 +1251,7 @@ input[type="range"]::-moz-range-thumb {
   background: conic-gradient(#ff5555, #ffff55, #55ff55, #55ffff, #5555ff, #ff55ff, #ff5555);
 }
 
-/* A stationary circle of equal colour arcs around the effect count. */
+/* A stationary circle of smoothly blended colours around the effect count. */
 .d1-chip-effect-multi {
   position: relative;
   isolation: isolate;

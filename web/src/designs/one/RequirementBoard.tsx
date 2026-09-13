@@ -79,12 +79,11 @@ export function chipTags(requirement: RequirementState): ChipTag[] {
   return tags;
 }
 
-/** Show every selected effect as an equal, stationary arc. */
+/** Blend evenly spaced effect colours around a stationary ring, as on macOS. */
 function effectRingCss(glows: Glow[]): CSSProperties {
   const band = 360 / glows.length;
-  const stops = glows.map(
-    (glow, index) => `${glow.color} ${index * band}deg ${(index + 1) * band}deg`,
-  );
+  const stops = glows.map((glow, index) => `${glow.color} ${index * band}deg`);
+  stops.push(`${glows[0].color} 360deg`);
   return { "--d1-ring": `conic-gradient(${stops.join(", ")})` } as CSSProperties;
 }
 
