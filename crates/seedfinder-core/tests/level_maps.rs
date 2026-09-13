@@ -261,6 +261,9 @@ fn water_feeling_preserves_bookshelves_and_statue_room_carpets() {
     // --map-contents --acquire-hourglass. Every terrain cell also compared
     // directly while investigating the reported flooded entrance and exit.
     assert_eq!((map.width, map.height), (38, 46));
+    // Room.center() chooses integer cells, including either side of the
+    // geometric midpoint in even dimensions. These match the official JAR.
+    assert_eq!((map.entrance, map.exit), (Some(769), Some(789)));
     assert_eq!(map.feeling, shpd_seedfinder_core::level::Feeling::Water);
     assert_eq!(
         map.terrain
@@ -313,6 +316,31 @@ fn water_feeling_preserves_bookshelves_and_statue_room_carpets() {
             ..
         })
     ));
+    // The entrance's center carpet (7,19,4,3) is below the statue carpets.
+    // At their overlap, preserve both draws and the statue carpet's border.
+    let overlap = &map.scene.sprites[floor.cells[7 + 19 * 38].unwrap()];
+    assert_eq!(overlap.frames[0].len(), 2);
+    assert!(matches!(
+        overlap.frames[0].last(),
+        Some(MapDraw::Blit {
+            asset: "carpet.png",
+            source: [64, 80, 16, 16],
+            ..
+        })
+    ));
+    // The reported warlock is in the narrow HallwayRoom, with a 3x3 rug
+    // centered on the generated statue at (21,17), not a different layout.
+    assert!(
+        map.contents
+            .mobs
+            .iter()
+            .any(|m| m.kind == "Warlock" && m.cell == 666)
+    );
+    for y in 16..=18 {
+        for x in 20..=22 {
+            assert!(floor.cells[x + y * 38].is_some());
+        }
+    }
     assert_drawing_bounds(&map);
 }
 

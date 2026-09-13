@@ -15,7 +15,7 @@ pub(super) fn layers(
     let mut terrain = layer("room_terrain", level.len());
     let mut walls = layer("room_walls", level.len());
     for room in rooms {
-        super::carpets::statues(scene, &mut floor, level, room);
+        super::carpets::room(scene, &mut floor, level, room);
         if room.kind == RoomKind::Quest(QuestRoomKind::Blacksmith) {
             let b = room.bounds;
             let w = room.width() - 4;

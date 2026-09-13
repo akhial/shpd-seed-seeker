@@ -1,21 +1,57 @@
-//! City statue-room carpets from `StatuesRoom` and its entrance/exit subclasses.
+//! City carpets from the pinned room painters and their entrance/exit subclasses.
 //! Reconstruct visual rectangles from room bounds and the generated transition;
 //! this never paints terrain or replays the room's random center selection.
 use super::{Level, MapLayer, MapScene, intern, tile_sprite};
 use crate::geometry::{Point, Rect, terrain as t};
 use crate::room::{Room, RoomKind, StandardRoomKind};
 
-pub(super) fn statues(scene: &mut MapScene, floor: &mut MapLayer, level: &Level, room: &Room) {
-    if !(16..=20).contains(&level.depth)
-        || !matches!(
-            room.kind,
-            RoomKind::Standard(StandardRoomKind::Statues)
-                | RoomKind::Entrance(StandardRoomKind::Statues)
-                | RoomKind::Exit(StandardRoomKind::Statues)
-        )
-    {
+pub(super) fn room(scene: &mut MapScene, floor: &mut MapLayer, level: &Level, room: &Room) {
+    if !(16..=20).contains(&level.depth) {
         return;
     }
+    match room.kind {
+        RoomKind::Standard(StandardRoomKind::Statues)
+        | RoomKind::Entrance(StandardRoomKind::Statues)
+        | RoomKind::Exit(StandardRoomKind::Statues) => statues(scene, floor, level, room),
+        RoomKind::Standard(StandardRoomKind::Hallway)
+        | RoomKind::Entrance(StandardRoomKind::Hallway)
+        | RoomKind::Exit(StandardRoomKind::Hallway) => {
+            // HallwayRoom chooses its center before painting. The generated
+            // statue/pedestal/transition preserves that exact random choice.
+            for p in room.bounds.points() {
+                let cell = level.map.point_to_cell(p);
+                if room.inside(p)
+                    && matches!(
+                        level.map.cells[cell],
+                        t::STATUE_SP | t::REGION_DECO_ALT | t::ENTRANCE_SP | t::EXIT
+                    )
+                {
+                    rectangle(
+                        scene,
+                        floor,
+                        level,
+                        Rect::new(p.x - 1, p.y - 1, p.x + 1, p.y + 1),
+                        false,
+                    );
+                }
+            }
+        }
+        RoomKind::Entrance(StandardRoomKind::LibraryRing)
+        | RoomKind::Exit(StandardRoomKind::LibraryRing) => {
+            let b = room.bounds;
+            rectangle(
+                scene,
+                floor,
+                level,
+                Rect::new(b.left + 5, b.top + 5, b.right - 5, b.bottom - 5),
+                false,
+            );
+        }
+        _ => {}
+    }
+}
+
+fn statues(scene: &mut MapScene, floor: &mut MapLayer, level: &Level, room: &Room) {
     let b = room.bounds;
     let width = room.width();
     let height = room.height();
@@ -81,8 +117,10 @@ fn rectangle(scene: &mut MapScene, floor: &mut MapLayer, level: &Level, b: Rect,
                 84
             } else {
                 match level.map.cells[cell] {
-                    t::ENTRANCE => 82,
+                    t::ENTRANCE | t::ENTRANCE_SP => 82,
                     t::EXIT => continue,
+                    t::STATUE_SP => 80,
+                    t::REGION_DECO_ALT => 81,
                     t::REGION_DECO if statues => 81,
                     _ => {
                         48 + u16::from(y == b.top)
@@ -94,6 +132,9 @@ fn rectangle(scene: &mut MapScene, floor: &mut MapLayer, level: &Level, b: Rect,
             };
             let mut sprite = tile_sprite("carpet.png", tile);
             if let Some(index) = floor.cells[cell] {
+                // Carpet.create gives each rectangle its own stitching. The
+                // entrance/exit painter inserts the center carpet at index 0
+                // explicitly so statue carpets overlap it; the game has no union.
                 sprite.frames[0].splice(0..0, scene.sprites[index].frames[0].iter().cloned());
             }
             floor.cells[cell] = Some(intern(scene, sprite));

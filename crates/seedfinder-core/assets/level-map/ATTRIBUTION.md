@@ -34,7 +34,7 @@ half-wall masks in `FogOfWar`, the trap/plant sprite indices,
 `ItemSpriteSheet`, the corresponding `*Sprite` classes, quest room custom tilemaps,
 `CharSprite`/`ItemSprite` shadows, `EmoIcon.Sleep`, `Speck`, `SacrificialParticle`, `ElmoParticle`,
 `CityLevel.GreenFlame`, `AmbitiousImpRoom` entrance/barrier/banners, `Carpet`,
-`StatuesRoom` and its entrance/exit carpet layouts,
+`StatuesRoom`, `HallwayRoom`, and `LibraryRingRoom` entrance/exit carpet layouts,
 and `GameScene` water scrolling and `SewerLevel.Sink` pixel particles. The overview
 uses raised sprites, offers concealed/revealed secret layers, and makes ambient animation
 repeatable. The source revision matches the generation engine's v4.0.0 pin;
