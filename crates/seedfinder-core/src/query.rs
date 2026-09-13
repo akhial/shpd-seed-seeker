@@ -48,7 +48,7 @@ pub const RESERVED_GROUP: u8 = 0;
 pub const MAX_LEVEL_SUM_GROUP: u8 = 4;
 
 /// Upgrade predicate attached to one item requirement.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum UpgradeRequirement {
     Any,
     Exact(u8),
@@ -56,7 +56,7 @@ pub enum UpgradeRequirement {
 }
 
 /// Optional tier predicate for tiered equipment.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum TierRequirement {
     Any,
     Exact(u8),
@@ -251,7 +251,7 @@ fn family_effects(kind: ItemKind) -> Option<Box<dyn Iterator<Item = Effect>>> {
 }
 
 /// Effect predicate attached to one item requirement.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum EffectRequirement {
     /// Wildcard: any effect, or none at all.
     Any,
@@ -300,7 +300,7 @@ impl EffectRequirement {
 ///
 /// Only ring requirements may carry one: a ring's effect scales with its
 /// level, so levels on separate rings add up the way no other family's do.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct LevelSum {
     /// Non-zero group label shared by the participating requirements.
     pub group: u8,
@@ -310,7 +310,7 @@ pub struct LevelSum {
 }
 
 /// One required item. `None` fields are wildcards.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct Requirement {
     pub kind: ItemKind,
     /// Optional melee/thrown narrowing; only meaningful for weapon

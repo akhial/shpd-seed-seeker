@@ -442,7 +442,7 @@ const ALL_SOURCES: [ItemSource; 18] = [
 const SHOP_DEPTHS: [u8; 5] = [6, 11, 16, 20, 21];
 
 /// One requirement's satisfiability horizon.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 struct RequirementPlan {
     requirement: Requirement,
     max_depth: u8,
@@ -472,6 +472,9 @@ pub struct QueryPlan {
     /// One entry per query slot: a plain requirement alone, or every member
     /// of an alternative group, any one of which satisfies the slot.
     slots: Vec<Vec<RequirementPlan>>,
+    /// Equal mandatory ordinary-only slots that need distinct item indices.
+    /// Each entry stores the first slot and the number of required instances.
+    closed_multiplicities: Vec<(usize, usize)>,
     generation_depth: u8,
     /// Latest depth by which a required Blacksmith must have appeared.
     blacksmith_deadline: Option<u8>,
@@ -503,6 +506,54 @@ fn required_trinket_slots(slots: &[Vec<RequirementPlan>]) -> Vec<Vec<ItemId>> {
         .collect()
 }
 
+// Matching uses distinct item indices. Group only identical singleton mandatory
+// slots with no remaining quest source, so their ordinary deadline closes every
+// possible source. Full plan equality preserves caps and all predicate metadata.
+fn closed_multiplicities(slots: &[Vec<RequirementPlan>]) -> Vec<(usize, usize)> {
+    use std::collections::HashMap;
+
+    let eligible = slots.iter().enumerate().filter_map(|(index, slot)| {
+        let [plan] = slot.as_slice() else {
+            return None;
+        };
+        (plan.quests == 0 && plan.open_deadline.is_some() && plan.requirement.level_sum.is_none())
+            .then_some((index, plan))
+    });
+
+    // Distinct item multiplicity needs at least two eligible slots. Avoid
+    // even initializing the map on ordinary zero/one-eligible-slot queries.
+    let mut remaining = eligible.clone();
+    let Some((first_index, first_plan)) = remaining.next() else {
+        return Vec::new();
+    };
+    let Some(second) = remaining.next() else {
+        return Vec::new();
+    };
+
+    // Borrow immutable plans: Hash and Eq include every requirement field and
+    // every derived horizon field. Hash collisions always receive exact Eq.
+    let mut counts: HashMap<&RequirementPlan, (usize, usize)> = HashMap::new();
+    counts.insert(first_plan, (first_index, 1));
+    for (index, plan) in std::iter::once(second).chain(remaining) {
+        counts
+            .entry(plan)
+            .and_modify(|(_, count)| *count += 1)
+            .or_insert((index, 1));
+    }
+
+    // Never iterate the randomized map to choose evaluation order. A second
+    // original-order pass emits each repeated plan at its first slot. Keeping
+    // Vec::new also leaves the retained result unallocated when none repeat.
+    let mut groups = Vec::new();
+    for (index, plan) in eligible {
+        let &(first, required) = counts.get(plan).expect("eligible plan was counted");
+        if index == first && required > 1 {
+            groups.push((first, required));
+        }
+    }
+    groups
+}
+
 impl QueryPlan {
     /// Derives the plan for a validated query.
     #[must_use]
@@ -522,6 +573,7 @@ impl QueryPlan {
         Self::analyze_with_policies(query, profile, |_, _, limit| Some(limit))
     }
 
+    #[allow(clippy::too_many_lines)] // Keep source horizons and their cached constraints together.
     fn analyze_with_policies(
         query: &SearchQuery,
         profile: impl Fn(&Requirement, ItemSource) -> Option<(u8, u8, EffectPolicy)>,
@@ -628,11 +680,13 @@ impl QueryPlan {
         });
 
         let required_trinket_slots = required_trinket_slots(&slots);
+        let closed_multiplicities = closed_multiplicities(&slots);
 
         let mut plan = Self {
             auto_trinket: crate::auto_trinkets::AutoTrinketPolicy::prepare(query),
             selected_slots: crate::trinkets::selection_slots(query),
             required_trinket_slots,
+            closed_multiplicities,
             slots,
             generation_depth,
             blacksmith_deadline,
@@ -693,6 +747,25 @@ impl QueryPlan {
                 }
                 None if completed_depth >= deadline => return false,
                 None => {}
+            }
+        }
+
+        // Once all sources close, these slots need enough different indices in
+        // the finalized prefix. Ignoring accessibility and identity conflicts
+        // only adds candidates; the final matcher still enforces every rule.
+        for &(slot, required) in &self.closed_multiplicities {
+            let plan = &self.slots[slot][0];
+            if plan
+                .open_deadline
+                .is_some_and(|deadline| completed_depth >= deadline)
+                && items
+                    .iter()
+                    .filter(|item| item.depth <= plan.max_depth && plan.requirement.matches(item))
+                    .take(required)
+                    .count()
+                    < required
+            {
+                return false;
             }
         }
 
@@ -1574,6 +1647,1098 @@ mod tests {
         };
         let mixed = QueryPlan::analyze(&query(vec![capped], 24));
         assert!(!mixed.wants_vault_treasure());
+    }
+
+    fn multiplicity_query(requirements: Vec<Requirement>, depth: u8) -> SearchQuery {
+        let result = query(requirements, depth);
+        result.validate().unwrap();
+        result
+    }
+
+    fn multiplicity_world(items: &[WorldItem]) -> crate::model::GeneratedWorld {
+        crate::model::GeneratedWorld {
+            seed: crate::seed::DungeonSeed::MIN,
+            items: items.to_vec(),
+            feelings: Vec::new(),
+            quests: QuestSummary::default(),
+            ring_gems: crate::run::RingGems::UNSHUFFLED,
+        }
+    }
+
+    fn early_wand(upgrade: UpgradeRequirement) -> Requirement {
+        Requirement {
+            max_depth: Some(4),
+            ..requirement(ItemKind::Wand, upgrade)
+        }
+    }
+
+    fn without_closed_multiplicities(plan: &QueryPlan) -> QueryPlan {
+        let mut original = plan.clone();
+        original.closed_multiplicities.clear();
+        original
+    }
+
+    #[test]
+    fn closed_multiplicities_wait_for_deadline_and_count_item_indices() {
+        let wanted = early_wand(UpgradeRequirement::Exact(2));
+        let candidate = item(ItemId::WandFrost, 2, 2, ItemSource::Heap);
+        for count in [2, 3] {
+            let query = multiplicity_query(vec![wanted; count], 24);
+            let plan = QueryPlan::analyze(&query);
+            let original = without_closed_multiplicities(&plan);
+            assert_eq!(plan.closed_multiplicities, vec![(0, count)]);
+            assert!(viable(&plan, 3, std::slice::from_ref(&candidate)));
+            let short = vec![candidate.clone(); count - 1];
+            assert!(
+                viable(&original, 4, &short),
+                "pin the previous shared-item gap"
+            );
+            assert!(!viable(&plan, 4, &short));
+            assert!(!viable(&plan, 6, &short));
+            assert!(!query.matches(&multiplicity_world(&short)));
+            // Equal item values at separate vector indices are separate objects.
+            // Deduplicating by item identity or WorldItem value would be unsound.
+            let enough = vec![candidate.clone(); count];
+            assert!(viable(&plan, 4, &enough));
+            assert!(query.matches(&multiplicity_world(&enough)));
+        }
+    }
+
+    #[test]
+    fn closed_multiplicities_keep_interleaved_groups_and_counts_separate() {
+        let wand = early_wand(UpgradeRequirement::Any);
+        let ring = Requirement {
+            kind: ItemKind::Ring,
+            ..wand
+        };
+        let query = multiplicity_query(vec![wand, ring, wand, ring, ring], 4);
+        let plan = QueryPlan::analyze(&query);
+        assert_eq!(plan.closed_multiplicities, vec![(0, 2), (1, 3)]);
+        let w = item(ItemId::WandFrost, 1, 2, ItemSource::Heap);
+        let r = item(ItemId::RingMight, 1, 3, ItemSource::Heap);
+        let short = [w.clone(), r.clone(), w.clone(), r.clone()];
+        assert!(viable(&without_closed_multiplicities(&plan), 4, &short));
+        assert!(!viable(&plan, 4, &short));
+        let enough = [w.clone(), r.clone(), w, r.clone(), r];
+        assert!(viable(&plan, 4, &enough));
+        assert!(query.matches(&multiplicity_world(&enough)));
+    }
+
+    #[test]
+    fn closed_multiplicities_respect_item_caps_and_earlier_source_deadlines() {
+        let wanted = early_wand(UpgradeRequirement::AtLeast(2));
+        let query = multiplicity_query(vec![wanted; 2], 24);
+        let plan = QueryPlan::analyze(&query);
+        let capped = [
+            item(ItemId::WandFrost, 2, 2, ItemSource::Heap),
+            item(ItemId::WandLightning, 2, 6, ItemSource::Heap),
+        ];
+        // The depth6 item is already present at this callback but exceeds the
+        // requirement's cap4; Requirement::matches alone does not test depth.
+        assert!(viable(&without_closed_multiplicities(&plan), 6, &capped));
+        assert!(!viable(&plan, 6, &capped));
+        assert!(!query.matches(&multiplicity_world(&capped)));
+
+        let natural = Requirement {
+            source: Some(ItemSource::Heap),
+            tier: TierRequirement::Exact(2),
+            ..requirement(ItemKind::Armor, UpgradeRequirement::Any)
+        };
+        let query = multiplicity_query(vec![natural; 2], 24);
+        let plan = QueryPlan::analyze(&query);
+        assert_eq!(plan.slots[0][0].max_depth, 24);
+        assert_eq!(plan.slots[0][0].open_deadline, Some(9));
+        let leather = item(ItemId::LeatherArmor, 0, 2, ItemSource::Heap);
+        assert!(viable(&plan, 8, std::slice::from_ref(&leather)));
+        assert!(!viable(&plan, 9, std::slice::from_ref(&leather)));
+        assert!(viable(&plan, 9, &[leather.clone(), leather]));
+
+        let later = Requirement {
+            max_depth: Some(6),
+            ..wanted
+        };
+        let mixed = multiplicity_query(vec![wanted, later], 24);
+        let mixed_plan = QueryPlan::analyze(&mixed);
+        assert!(mixed_plan.closed_multiplicities.is_empty());
+        // A later deadline must not be pulled forward by a similar earlier slot.
+        assert!(viable(&mixed_plan, 4, &capped[..1]));
+        assert!(mixed.matches(&multiplicity_world(&capped)));
+    }
+
+    #[test]
+    fn closed_multiplicities_exclude_or_members_and_optional_sum_members() {
+        let wand = early_wand(UpgradeRequirement::AtLeast(2));
+        let ring = Requirement {
+            max_depth: Some(4),
+            ..requirement(ItemKind::Ring, UpgradeRequirement::Any)
+        };
+        let alternative = multiplicity_query(
+            vec![
+                wand,
+                Requirement {
+                    alternative_group: Some(1),
+                    ..wand
+                },
+                Requirement {
+                    alternative_group: Some(1),
+                    ..ring
+                },
+            ],
+            4,
+        );
+        let plan = QueryPlan::analyze(&alternative);
+        assert!(plan.closed_multiplicities.is_empty());
+        let items = [
+            item(ItemId::WandFrost, 2, 2, ItemSource::Heap),
+            item(ItemId::RingMight, 2, 3, ItemSource::Heap),
+        ];
+        assert!(viable(&plan, 4, &items));
+        assert!(
+            alternative.matches(&multiplicity_world(&items)),
+            "OR can use the ring"
+        );
+
+        let optional = Requirement {
+            level_sum: Some(crate::query::LevelSum {
+                group: 1,
+                minimum_total: 3,
+            }),
+            ..ring
+        };
+        let sums = multiplicity_query(vec![optional; 2], 4);
+        let plan = QueryPlan::analyze(&sums);
+        assert!(plan.closed_multiplicities.is_empty());
+        assert!(viable(&plan, 4, &items[1..]));
+        assert!(
+            sums.matches(&multiplicity_world(&items[1..])),
+            "one +2 ring fills the sum"
+        );
+
+        let mixed = multiplicity_query(vec![wand, wand, optional, optional], 4);
+        let plan = QueryPlan::analyze(&mixed);
+        assert_eq!(plan.closed_multiplicities, vec![(0, 2)]);
+        let enough = [items[0].clone(), items[0].clone(), items[1].clone()];
+        assert!(viable(&plan, 4, &enough));
+        assert!(mixed.matches(&multiplicity_world(&enough)));
+        assert!(
+            !viable(&plan, 4, &items),
+            "optional groups do not suppress mandatory checks"
+        );
+    }
+
+    #[test]
+    fn closed_multiplicities_do_not_consume_future_quests_or_pending_vault_capacity() {
+        let future = requirement(ItemKind::Wand, UpgradeRequirement::AtLeast(2));
+        let query = multiplicity_query(vec![future; 2], 24);
+        let plan = QueryPlan::analyze(&query);
+        assert_ne!(plan.slots[0][0].quests, 0);
+        assert!(plan.closed_multiplicities.is_empty());
+        assert!(viable(
+            &plan,
+            4,
+            &[item(ItemId::WandFrost, 2, 2, ItemSource::Heap)]
+        ));
+
+        let early = early_wand(UpgradeRequirement::AtLeast(2));
+        let treasure = Requirement {
+            item: Some(ItemId::RunicBlade),
+            source: Some(ItemSource::VaultTreasure),
+            ..requirement(ItemKind::Weapon, UpgradeRequirement::Exact(4))
+        };
+        let query = multiplicity_query(vec![early, early, treasure], 24);
+        let plan = QueryPlan::analyze(&query);
+        let original = without_closed_multiplicities(&plan);
+        assert_eq!(plan.closed_multiplicities, vec![(0, 2)]);
+        assert!(plan.slots[2][0].vault);
+        let short = [
+            item(ItemId::WandFrost, 2, 2, ItemSource::Heap),
+            item(ItemId::RingMight, 2, 18, ItemSource::ImpReward),
+        ];
+        assert!(original.viable_with_pending_vault(19, &short, QuestSummary::default(), Some(18)));
+        assert!(!plan.viable_with_pending_vault(19, &short, QuestSummary::default(), Some(18)));
+        let enough = [short[0].clone(), short[0].clone(), short[1].clone()];
+        assert!(plan.viable_with_pending_vault(19, &enough, QuestSummary::default(), Some(18)));
+        assert!(
+            !viable(&plan, 19, &enough),
+            "without pending treasure the Imp already missed"
+        );
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)] // Compare each predicate against a distinct positive world.
+    fn closed_multiplicities_do_not_merge_different_item_predicates() {
+        fn positive_pair(first: Requirement, second: Requirement, items: &[WorldItem; 2]) {
+            let query = multiplicity_query(vec![first, second], 4);
+            let plan = QueryPlan::analyze(&query);
+            assert!(plan.closed_multiplicities.is_empty());
+            assert!(
+                query.matches(&multiplicity_world(items)),
+                "validated positive metadata control"
+            );
+            assert!(viable(&plan, 4, items));
+        }
+        let base = Requirement {
+            source: Some(ItemSource::Heap),
+            ..early_wand(UpgradeRequirement::Any)
+        };
+        positive_pair(
+            base,
+            Requirement {
+                source: Some(ItemSource::Chest),
+                ..base
+            },
+            &[
+                item(ItemId::WandFrost, 1, 2, ItemSource::Heap),
+                item(ItemId::WandFrost, 1, 2, ItemSource::Chest),
+            ],
+        );
+        positive_pair(
+            Requirement {
+                item: Some(ItemId::WandFrost),
+                ..base
+            },
+            Requirement {
+                item: Some(ItemId::WandLightning),
+                ..base
+            },
+            &[
+                item(ItemId::WandFrost, 1, 2, ItemSource::Heap),
+                item(ItemId::WandLightning, 1, 2, ItemSource::Heap),
+            ],
+        );
+        positive_pair(
+            Requirement {
+                upgrade: UpgradeRequirement::Exact(1),
+                ..base
+            },
+            Requirement {
+                upgrade: UpgradeRequirement::AtLeast(1),
+                ..base
+            },
+            &[
+                item(ItemId::WandFrost, 1, 2, ItemSource::Heap),
+                item(ItemId::WandLightning, 2, 2, ItemSource::Heap),
+            ],
+        );
+        positive_pair(
+            Requirement {
+                require_uncursed: true,
+                ..base
+            },
+            base,
+            &[
+                item(ItemId::WandFrost, 1, 2, ItemSource::Heap),
+                WorldItem {
+                    cursed: true,
+                    ..item(ItemId::WandFrost, 1, 2, ItemSource::Heap)
+                },
+            ],
+        );
+        let armor = Requirement {
+            kind: ItemKind::Armor,
+            ..base
+        };
+        positive_pair(
+            Requirement {
+                tier: TierRequirement::Exact(2),
+                ..armor
+            },
+            Requirement {
+                tier: TierRequirement::Exact(3),
+                ..armor
+            },
+            &[
+                item(ItemId::LeatherArmor, 1, 2, ItemSource::Heap),
+                item(ItemId::MailArmor, 1, 2, ItemSource::Heap),
+            ],
+        );
+        let weapon = Requirement {
+            kind: ItemKind::Weapon,
+            ..base
+        };
+        let grim = Effect::Weapon(WeaponEffect::Grim);
+        let lucky = Effect::Weapon(WeaponEffect::Lucky);
+        positive_pair(
+            Requirement {
+                effect: EffectRequirement::exactly(grim),
+                ..weapon
+            },
+            Requirement {
+                effect: EffectRequirement::exactly(lucky),
+                ..weapon
+            },
+            &[
+                WorldItem {
+                    effect: Some(grim),
+                    ..item(ItemId::Shortsword, 1, 2, ItemSource::Heap)
+                },
+                WorldItem {
+                    effect: Some(lucky),
+                    ..item(ItemId::Shortsword, 1, 2, ItemSource::Heap)
+                },
+            ],
+        );
+        positive_pair(
+            Requirement {
+                weapon_category: Some(crate::catalog::WeaponCategory::Melee),
+                ..weapon
+            },
+            Requirement {
+                weapon_category: Some(crate::catalog::WeaponCategory::Thrown),
+                ..weapon
+            },
+            &[
+                item(ItemId::Shortsword, 1, 2, ItemSource::Heap),
+                item(ItemId::ThrowingKnife, 1, 2, ItemSource::Heap),
+            ],
+        );
+    }
+
+    #[test]
+    fn closed_multiplicities_remain_optimistic_about_identity_and_accessibility() {
+        // Valid identity stacks require bare copies: source/upgrade/item filters
+        // on both members would be rejected as two constrained anchor units.
+        let bare = early_wand(UpgradeRequirement::Any);
+        let identity = Requirement {
+            identity_group: Some(1),
+            ..bare
+        };
+        let query = multiplicity_query(vec![identity; 2], 4);
+        let plan = QueryPlan::analyze(&query);
+        assert_eq!(plan.closed_multiplicities, vec![(0, 2)]);
+        let different_ids = [
+            item(ItemId::WandFrost, 1, 2, ItemSource::Heap),
+            item(ItemId::WandLightning, 1, 2, ItemSource::Heap),
+        ];
+        assert!(viable(&plan, 4, &different_ids));
+        assert!(!query.matches(&multiplicity_world(&different_ids)));
+
+        let query = multiplicity_query(vec![bare; 2], 4);
+        let plan = QueryPlan::analyze(&query);
+        for (first, second) in [
+            (
+                Accessibility::Choice {
+                    group: 7,
+                    option: 0,
+                },
+                Accessibility::Choice {
+                    group: 7,
+                    option: 1,
+                },
+            ),
+            (
+                Accessibility::Scenarios { group: 7, mask: 1 },
+                Accessibility::Scenarios { group: 7, mask: 2 },
+            ),
+        ] {
+            let incompatible = [
+                WorldItem {
+                    accessibility: first,
+                    ..different_ids[0].clone()
+                },
+                WorldItem {
+                    accessibility: second,
+                    ..different_ids[0].clone()
+                },
+            ];
+            assert!(viable(&plan, 4, &incompatible));
+            assert!(!query.matches(&multiplicity_world(&incompatible)));
+        }
+    }
+
+    #[test]
+    fn closed_multiplicity_rejection_implies_nonmatch_for_bounded_complete_worlds() {
+        // 156 ordered vectors of length0..3 over five records, for each of two
+        // predicates: 312 small final-matcher checks, no generation or RNG.
+        // Repetition deliberately creates equal values at distinct item indices.
+        // At completed6 all records are in the prefix, but depth5 exceeds cap4.
+        let pool = [
+            item(ItemId::WandFrost, 1, 2, ItemSource::Heap),
+            item(ItemId::WandLightning, 2, 4, ItemSource::Heap),
+            item(ItemId::WandFrost, 1, 2, ItemSource::Chest),
+            item(ItemId::RingMight, 1, 2, ItemSource::Heap),
+            item(ItemId::WandFrost, 1, 5, ItemSource::Heap),
+        ];
+        let mut newly_rejected = 0;
+        let mut retained_matches = 0;
+        for upgrade in [UpgradeRequirement::Exact(1), UpgradeRequirement::AtLeast(1)] {
+            let wanted = Requirement {
+                source: Some(ItemSource::Heap),
+                ..early_wand(upgrade)
+            };
+            let query = multiplicity_query(vec![wanted; 2], 6);
+            let plan = QueryPlan::analyze(&query);
+            let original = without_closed_multiplicities(&plan);
+            assert_eq!(plan.closed_multiplicities, vec![(0, 2)]);
+            for length in 0_u32..=3 {
+                for mut encoded in 0..pool.len().pow(length) {
+                    let mut items = Vec::new();
+                    for _ in 0..length {
+                        items.push(pool[encoded % pool.len()].clone());
+                        encoded /= pool.len();
+                    }
+                    let before = viable(&original, 6, &items);
+                    let after = viable(&plan, 6, &items);
+                    let matches = query.matches(&multiplicity_world(&items));
+                    assert!(
+                        !after || before,
+                        "adding the guard cannot revive a rejection"
+                    );
+                    if !after {
+                        assert!(!matches, "unsound rejection: {upgrade:?}, {items:?}");
+                    }
+                    newly_rejected += usize::from(before && !after);
+                    retained_matches += usize::from(after && matches);
+                }
+            }
+        }
+        assert!(
+            newly_rejected > 0,
+            "exercise a real improvement over the old planner"
+        );
+        assert!(
+            retained_matches > 0,
+            "property must include matching worlds"
+        );
+    }
+
+    const TRUE_SIX_WAND_SEED: u64 = 4_689_753_124_998;
+    const OBSERVED_EARLY_WAND_MISSES: [u64; 2] = [4_302_629_544_091, 4_830_115_600_014];
+
+    type MultiplicityProductionRecord = (
+        crate::auto_trinkets::SeedRecipe,
+        crate::model::GeneratedWorld,
+        crate::query::ScoutMatches,
+    );
+
+    fn multiplicity_production_records(
+        found: Vec<Option<crate::auto_trinkets::TrinketSearchMatch>>,
+        query: &SearchQuery,
+    ) -> Vec<Option<MultiplicityProductionRecord>> {
+        found
+            .into_iter()
+            .map(|result| {
+                result.map(|m| {
+                    let selection = crate::query::scout_matches(&m.world, query);
+                    (m.recipe, m.world, selection)
+                })
+            })
+            .collect()
+    }
+
+    fn six_wand_query(exact: bool, auto: bool) -> SearchQuery {
+        let mut query = crate::json_query::decode(
+            r#"{"max_depth":24,"auto_apply_trinket":false,"requirements":[
+                {"kind":"wand","upgrade":{"at_least":3}},
+                {"kind":"wand","upgrade":{"at_least":2},"max_depth":4},
+                {"kind":"wand","upgrade":{"at_least":2},"max_depth":4},
+                {"kind":"wand","upgrade":{"at_least":2}},
+                {"kind":"wand","upgrade":{"at_least":4}},
+                {"item":"wondrous_resin"}
+            ]}"#,
+        )
+        .unwrap();
+        query.auto_apply_trinket = auto;
+        if exact {
+            for requirement in &mut query.requirements {
+                if let UpgradeRequirement::AtLeast(value) = requirement.upgrade {
+                    requirement.upgrade = UpgradeRequirement::Exact(value);
+                }
+            }
+        }
+        query.validate().unwrap();
+        query
+    }
+
+    struct MultiplicityProductionCase {
+        label: String,
+        query: SearchQuery,
+        // None means no outcome is asserted for the previously observed seed
+        // under these DIFFERENT conditions, while differential parity is required.
+        known_match: Option<bool>,
+    }
+
+    fn multiplicity_production_cases() -> Vec<MultiplicityProductionCase> {
+        let mut cases = Vec::new();
+        for exact in [false, true] {
+            for auto in [false, true] {
+                cases.push(MultiplicityProductionCase {
+                    label: format!("six/exact={exact}/auto={auto}"),
+                    query: six_wand_query(exact, auto),
+                    known_match: Some(true),
+                });
+            }
+            let mut selected = six_wand_query(exact, true);
+            selected.requirements[5].select_trinket = true;
+            cases.push(MultiplicityProductionCase {
+                label: format!("selected-Resin/exact={exact}"),
+                query: selected,
+                known_match: None,
+            });
+            let mut at_imp = six_wand_query(exact, false);
+            at_imp.max_depth = 18;
+            cases.push(MultiplicityProductionCase {
+                label: format!("target18/exact={exact}"),
+                query: at_imp,
+                known_match: Some(true),
+            });
+        }
+        for (cap, exact, expected) in [(17, false, false), (18, true, true)] {
+            let mut query = six_wand_query(exact, false);
+            query.requirements[4].max_depth = Some(cap);
+            cases.push(MultiplicityProductionCase {
+                label: format!("Imp-cap{cap}"),
+                query,
+                known_match: Some(expected),
+            });
+        }
+        let mut earlier = six_wand_query(false, false);
+        earlier.requirements[1].max_depth = Some(3);
+        earlier.requirements[2].max_depth = Some(3);
+        cases.push(MultiplicityProductionCase {
+            label: "early-cap3".into(),
+            query: earlier,
+            known_match: None,
+        });
+        for (label, challenges, exact) in [
+            ("darkness", crate::challenges::Challenges::DARKNESS, false),
+            (
+                "level-generation",
+                crate::challenges::Challenges::LEVEL_GENERATION,
+                true,
+            ),
+        ] {
+            let mut query = six_wand_query(exact, false);
+            query.challenges = challenges;
+            cases.push(MultiplicityProductionCase {
+                label: label.into(),
+                query,
+                known_match: None,
+            });
+        }
+        for case in &cases {
+            case.query.validate().unwrap();
+        }
+        cases
+    }
+
+    fn multiplicity_production_seeds() -> Vec<crate::seed::DungeonSeed> {
+        use crate::seed::DungeonSeed;
+        let known = DungeonSeed::new(TRUE_SIX_WAND_SEED).unwrap();
+        let mut seeds: Vec<_> = (0..6_u64)
+            .map(|index| {
+                DungeonSeed::new(
+                    (812_345_678_901 + index * 3_355_211_884_971) % crate::seed::TOTAL_SEEDS,
+                )
+                .unwrap()
+            })
+            .collect();
+        seeds.insert(3, known); // Retained positive is lane3 of the first SIMD batch.
+        seeds.extend(OBSERVED_EARLY_WAND_MISSES.map(|seed| DungeonSeed::new(seed).unwrap()));
+        assert_eq!(seeds.len(), 9); // Two four-lane batches plus one scalar remainder.
+        assert_eq!(seeds[3], known);
+        assert!(crate::trinkets::initial_offers(known).contains(&ItemId::WondrousResin));
+        seeds
+    }
+
+    #[test]
+    #[ignore = "extended seed sweep; run with --release --ignored"]
+    fn closed_multiplicities_preserve_production_worlds_recipes_and_selected_witnesses() {
+        assert!(
+            check_closed_multiplicity_production(
+                &multiplicity_production_seeds(),
+                &multiplicity_production_cases(),
+            ) >= 4
+        );
+    }
+
+    #[test]
+    fn closed_multiplicities_preserve_bounded_production_fixtures() {
+        use crate::seed::DungeonSeed;
+        // Keep a positive in lane3, observed misses and a scalar tail. These
+        // four cases cover exact/minimum upgrades, selected Resin and an Imp cap.
+        let seeds = [
+            OBSERVED_EARLY_WAND_MISSES[0],
+            0,
+            OBSERVED_EARLY_WAND_MISSES[1],
+            TRUE_SIX_WAND_SEED,
+            1,
+        ]
+        .map(|value| DungeonSeed::new(value).unwrap());
+        let cases: Vec<_> = multiplicity_production_cases()
+            .into_iter()
+            .enumerate()
+            .filter_map(|(index, case)| [0, 4, 2, 8].contains(&index).then_some(case))
+            .collect();
+        assert!(check_closed_multiplicity_production(&seeds, &cases) >= 2);
+    }
+
+    #[allow(clippy::too_many_lines)] // Keep reference, raw worlds, and consumer equivalence together.
+    fn check_closed_multiplicity_production(
+        seeds: &[crate::seed::DungeonSeed],
+        cases: &[MultiplicityProductionCase],
+    ) -> usize {
+        use crate::auto_trinkets::{self, SeedRecipe};
+        use crate::main_world::CanonicalMainWorldGenerator;
+        use crate::search::{FloorGate, WorldGenerator};
+        use crate::seed::DungeonSeed;
+        let known = DungeonSeed::new(TRUE_SIX_WAND_SEED).unwrap();
+        let known_index = seeds.iter().position(|&seed| seed == known).unwrap();
+        let mut known_positives = 0;
+        let mut retained_worlds = 0;
+        for case in cases {
+            let query = &case.query;
+            let after = QueryPlan::analyze(query);
+            let before = without_closed_multiplicities(&after);
+            assert!(!after.closed_multiplicities.is_empty());
+            assert_eq!(after.generation_depth(), before.generation_depth());
+            assert_eq!(after.wants_vault_treasure(), before.wants_vault_treasure());
+            assert_eq!(
+                after
+                    .deferred_vault_plan(after.generation_depth())
+                    .is_some(),
+                before
+                    .deferred_vault_plan(before.generation_depth())
+                    .is_some()
+            );
+            assert!(
+                !auto_trinkets::enabled(query),
+                "named Resin disables automatic replay"
+            );
+            assert_eq!(
+                after.selected_trinket(known),
+                query.requirements[5]
+                    .select_trinket
+                    .then_some(ItemId::WondrousResin)
+            );
+            let generator = CanonicalMainWorldGenerator::with_challenges(query.challenges);
+            let before_worlds =
+                generator.generate_batch_gated(seeds, before.generation_depth(), &before);
+            let after_worlds =
+                generator.generate_batch_gated(seeds, after.generation_depth(), &after);
+            assert_eq!(before_worlds.len(), seeds.len());
+            assert_eq!(after_worlds.len(), seeds.len());
+            for (index, (actual, original)) in after_worlds.iter().zip(&before_worlds).enumerate() {
+                match (actual, original) {
+                    (Some(actual), Some(original)) => {
+                        assert_eq!(actual, original, "{}, seed {}", case.label, seeds[index]);
+                        assert_eq!(
+                            crate::query::scout_matches(actual, query),
+                            crate::query::scout_matches(original, query)
+                        );
+                        assert_eq!(actual.seed, seeds[index]);
+                        retained_worlds += 1;
+                    }
+                    (None, Some(original)) => assert!(
+                        !query.matches(original),
+                        "new rejection lost a match: {}, seed {}",
+                        case.label,
+                        seeds[index]
+                    ),
+                    (Some(_), None) => {
+                        panic!("new guard revived an abandoned world: {}", case.label)
+                    }
+                    (None, None) => {}
+                }
+            }
+            let actual = multiplicity_production_records(
+                auto_trinkets::search_batch(&generator, query, &after, seeds),
+                query,
+            );
+            let original = multiplicity_production_records(
+                auto_trinkets::search_batch(&generator, query, &before, seeds),
+                query,
+            );
+            assert_eq!(actual, original, "search {}", case.label);
+            if let Some(expected) = case.known_match {
+                assert_eq!(
+                    actual[known_index].is_some(),
+                    expected,
+                    "known fixture {}",
+                    case.label
+                );
+                if expected {
+                    let matched = actual[known_index].as_ref().unwrap();
+                    assert_eq!(
+                        matched.0,
+                        SeedRecipe {
+                            seed: known,
+                            trinket: None
+                        }
+                    );
+                    assert_eq!(matched.2.matched_requirements, 6);
+                    assert_eq!(matched.2.total_requirements, 6);
+                    known_positives += 1;
+                }
+            }
+            let before_ready = before_worlds
+                .into_iter()
+                .flatten()
+                .filter(|w| query.matches(w))
+                .collect();
+            let after_ready = after_worlds
+                .into_iter()
+                .flatten()
+                .filter(|w| query.matches(w))
+                .collect();
+            let before_finished = multiplicity_production_records(
+                auto_trinkets::finish_matches(&generator, query, &before, before_ready)
+                    .into_iter()
+                    .map(Some)
+                    .collect(),
+                query,
+            );
+            let after_finished = multiplicity_production_records(
+                auto_trinkets::finish_matches(&generator, query, &after, after_ready)
+                    .into_iter()
+                    .map(Some)
+                    .collect(),
+                query,
+            );
+            assert_eq!(after_finished, before_finished, "finish {}", case.label);
+            assert_eq!(
+                after_finished.into_iter().flatten().collect::<Vec<_>>(),
+                actual.into_iter().flatten().collect::<Vec<_>>(),
+                "finish/search {}",
+                case.label
+            );
+
+            // Bound replay work to four distinct seeds, including the true seed.
+            // None, first real offer, and Resin-if-offered are three separate
+            // calls: never collapse conflicting choices under the same seed key.
+            for choice in 0..3 {
+                let saved: Vec<_> = seeds
+                    .iter()
+                    .take(4)
+                    .map(|&seed| {
+                        let offers = crate::trinkets::initial_offers(seed);
+                        let trinket = match choice {
+                            0 => None,
+                            1 => Some(offers[0]),
+                            _ => Some(if offers.contains(&ItemId::WondrousResin) {
+                                ItemId::WondrousResin
+                            } else {
+                                offers[0]
+                            }),
+                        };
+                        SeedRecipe { seed, trinket }
+                    })
+                    .collect();
+                let filtered = multiplicity_production_records(
+                    auto_trinkets::filter_batch(&generator, query, &after, &saved),
+                    query,
+                );
+                assert_eq!(
+                    filtered,
+                    multiplicity_production_records(
+                        auto_trinkets::filter_batch(&generator, query, &before, &saved),
+                        query
+                    ),
+                    "filter {}/{choice}",
+                    case.label
+                );
+                for (saved, matched) in saved.iter().zip(&filtered) {
+                    if let Some(matched) = matched {
+                        assert_eq!(matched.0, *saved, "named query retains forced recipe");
+                    }
+                }
+                let mut base = query.clone();
+                base.requirements[3].upgrade = UpgradeRequirement::Any;
+                base.validate().unwrap();
+                assert_ne!(&base, query);
+                let refined = multiplicity_production_records(
+                    auto_trinkets::refine_batch(&generator, query, &after, &base, &saved),
+                    query,
+                );
+                assert_eq!(
+                    refined,
+                    multiplicity_production_records(
+                        auto_trinkets::refine_batch(&generator, query, &before, &base, &saved),
+                        query
+                    ),
+                    "refine {}/{choice}",
+                    case.label
+                );
+                assert_eq!(
+                    refined, filtered,
+                    "named query has no automatic retry/removal"
+                );
+                // Forced or explicit Resin outcomes compare only identical
+                // selected recipes. No positive or None-world equivalence assumed.
+            }
+        }
+        assert!(known_positives > 0 && retained_worlds >= known_positives);
+        known_positives
+    }
+
+    #[test]
+    fn closed_multiplicities_prune_observed_real_floor_four_misses_nonvacuously() {
+        use crate::main_world::generate_main_world_gated;
+        use crate::search::FloorGate;
+        use crate::seed::DungeonSeed;
+        let mut newly_rejected = 0;
+        for exact in [false, true] {
+            let query = six_wand_query(exact, false);
+            let after = QueryPlan::analyze(&query);
+            let before = without_closed_multiplicities(&after);
+            assert_eq!(after.closed_multiplicities, vec![(1, 2)]);
+            for value in OBSERVED_EARLY_WAND_MISSES {
+                let seed = DungeonSeed::new(value).unwrap();
+                assert_eq!(before.selected_trinket(seed), None);
+                assert_eq!(after.selected_trinket(seed), None);
+                // At target4 the normal generator does not invoke the final-floor
+                // callback. Obtain the real prefix under unchanged accepted gates,
+                // then ask precisely the callback the full24 path reaches at4.
+                let prefix = generate_main_world_gated(seed, 4, &before)
+                    .unwrap()
+                    .expect("observed run-init and floors1..3 survive");
+                assert_eq!(
+                    prefix
+                        .items
+                        .iter()
+                        .filter(|item| { item.depth <= 4 && query.requirements[1].matches(item) })
+                        .count(),
+                    1,
+                    "observed single early wand, seed {seed}"
+                );
+                assert!(before.continue_after_floor(4, &prefix.items, &prefix.quests));
+                assert!(!after.continue_after_floor(4, &prefix.items, &prefix.quests));
+                newly_rejected += 1;
+                let original = generate_main_world_gated(seed, 24, &before).unwrap();
+                let actual = generate_main_world_gated(seed, 24, &after).unwrap();
+                assert!(actual.is_none());
+                assert!(!original.as_ref().is_some_and(|world| query.matches(world)));
+                // In the saved observer, old final results were also None (at7
+                // and9). The explicit real-prefix assertion proves earlier work
+                // avoidance that final Option equality alone cannot demonstrate.
+            }
+        }
+        assert!(newly_rejected >= 1);
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)] // Keep the two fixtures and complete consumer comparisons together.
+    fn closed_multiplicities_active_auto_preserve_required_choices_and_replays() {
+        use crate::auto_trinkets::{self, SeedRecipe};
+        use crate::main_world::{CanonicalMainWorldGenerator, generate_main_world_with_trinket};
+        use crate::search::{FloorGate, WorldGenerator};
+        use crate::seed::DungeonSeed;
+
+        let query = crate::json_query::decode(
+            r#"{"max_depth":24,"auto_apply_trinket":true,"requirements":[
+                {"kind":"wand","upgrade":{"at_least":2},"max_depth":4},
+                {"kind":"wand","upgrade":{"at_least":2},"max_depth":4},
+                {"kind":"wand","upgrade":{"at_least":3}}
+            ]}"#,
+        )
+        .unwrap();
+        query.validate().unwrap();
+        assert!(auto_trinkets::enabled(&query));
+        let after = QueryPlan::analyze(&query);
+        let before = without_closed_multiplicities(&after);
+        assert_eq!(after.closed_multiplicities, vec![(0, 2)]);
+        assert_eq!(after.generation_depth(), before.generation_depth());
+        assert_eq!(after.wants_vault_treasure(), before.wants_vault_treasure());
+        assert_eq!(
+            after
+                .deferred_vault_plan(after.generation_depth())
+                .is_some(),
+            before
+                .deferred_vault_plan(before.generation_depth())
+                .is_some()
+        );
+        let seeds =
+            [695_488_469_679, 4_689_753_124_998].map(|value| DungeonSeed::new(value).unwrap());
+        assert_eq!(
+            after.selected_trinket(seeds[0]),
+            Some(ItemId::CrackedSpyglass)
+        );
+        let generator = CanonicalMainWorldGenerator::with_challenges(query.challenges);
+
+        // The reference differs only in the repeated-slot guard. Compare the
+        // complete returned worlds before automatic removal/retry as well.
+        let before_worlds =
+            generator.generate_batch_gated(&seeds, before.generation_depth(), &before);
+        let after_worlds = generator.generate_batch_gated(&seeds, after.generation_depth(), &after);
+        assert_eq!(after_worlds.len(), seeds.len());
+        assert_eq!(after_worlds, before_worlds);
+        for (seed, world) in seeds.iter().zip(&after_worlds) {
+            let world = world.as_ref().expect("both automatic fixtures survive");
+            assert_eq!(world.seed, *seed);
+            assert!(query.matches(world));
+        }
+
+        // Also compare the complete requested 24-floor returned world rather
+        // than calling a shortened search horizon a complete dungeon.
+        let before_full = generator.generate_batch_gated(&seeds, query.max_depth, &before);
+        let after_full = generator.generate_batch_gated(&seeds, query.max_depth, &after);
+        assert_eq!(after_full, before_full);
+        assert_eq!(after_full.len(), seeds.len());
+        for world in after_full.iter().flatten() {
+            assert_eq!(world.feelings.last().unwrap().depth, query.max_depth);
+            assert!(query.matches(world));
+        }
+        assert!(after_full.iter().all(Option::is_some));
+
+        let original = multiplicity_production_records(
+            auto_trinkets::search_batch(&generator, &query, &before, &seeds),
+            &query,
+        );
+        let found = multiplicity_production_records(
+            auto_trinkets::search_batch(&generator, &query, &after, &seeds),
+            &query,
+        );
+        assert_eq!(found, original);
+        for (index, wanted) in [Some(ItemId::CrackedSpyglass), None]
+            .into_iter()
+            .enumerate()
+        {
+            let (recipe, world, scout) = found[index].as_ref().expect("known matching fixture");
+            assert_eq!(
+                *recipe,
+                SeedRecipe {
+                    seed: seeds[index],
+                    trinket: wanted
+                }
+            );
+            assert!(query.matches(world));
+            assert_eq!(scout.matched_requirements, 3);
+            assert_eq!(scout.total_requirements, 3);
+        }
+
+        let before_finished = multiplicity_production_records(
+            auto_trinkets::finish_matches(
+                &generator,
+                &query,
+                &before,
+                before_worlds.into_iter().flatten().collect(),
+            )
+            .into_iter()
+            .map(Some)
+            .collect(),
+            &query,
+        );
+        let after_finished = multiplicity_production_records(
+            auto_trinkets::finish_matches(
+                &generator,
+                &query,
+                &after,
+                after_worlds.into_iter().flatten().collect(),
+            )
+            .into_iter()
+            .map(Some)
+            .collect(),
+            &query,
+        );
+        assert_eq!(after_finished, before_finished);
+        assert_eq!(after_finished, found);
+
+        // Remove an actual mandatory singleton. This is a weaker fixed-world
+        // predicate; no optional-sum capacity or OR membership changes. Automatic
+        // ranking can change with a query, so this test does not infer the separate
+        // SearchQuery::continues/covered-range contract from that implication.
+        let mut base = query.clone();
+        let removed = base.requirements.remove(0);
+        assert!(removed.level_sum.is_none() && removed.alternative_group.is_none());
+        base.validate().unwrap();
+        assert_ne!(base, query);
+        for (_, world, _) in found.iter().flatten() {
+            assert!(base.matches(world));
+        }
+
+        // Each batch has distinct seeds. Conflicting choices for one seed must
+        // stay in separate calls because RecipeGate is keyed by seed value.
+        for choice in 0..5 {
+            let recipes: Vec<_> = seeds
+                .iter()
+                .map(|&seed| {
+                    let offers = crate::trinkets::initial_offers(seed);
+                    let trinket = (choice != 0).then(|| offers[choice - 1]);
+                    if let Some(id) = trinket {
+                        assert_eq!(
+                            crate::trinkets::parse_offered(
+                                seed,
+                                crate::catalog::item(id).stable_id
+                            )
+                            .unwrap(),
+                            id
+                        );
+                    }
+                    SeedRecipe { seed, trinket }
+                })
+                .collect();
+            let old_filtered = multiplicity_production_records(
+                auto_trinkets::filter_batch(&generator, &query, &before, &recipes),
+                &query,
+            );
+            let filtered = multiplicity_production_records(
+                auto_trinkets::filter_batch(&generator, &query, &after, &recipes),
+                &query,
+            );
+            assert_eq!(filtered, old_filtered, "filter choice {choice}");
+            let old_refined = multiplicity_production_records(
+                auto_trinkets::refine_batch(&generator, &query, &before, &base, &recipes),
+                &query,
+            );
+            let refined = multiplicity_production_records(
+                auto_trinkets::refine_batch(&generator, &query, &after, &base, &recipes),
+                &query,
+            );
+            assert_eq!(refined, old_refined, "refine choice {choice}");
+            if choice == 0 {
+                assert!(
+                    filtered[0].is_none(),
+                    "Spyglass is necessary for this target"
+                );
+                assert_eq!(
+                    filtered[1], found[1],
+                    "known six-wand seed needs no trinket"
+                );
+                assert_eq!(
+                    refined, found,
+                    "refinement restores the necessary automatic choice"
+                );
+            }
+            for (saved, result) in recipes
+                .iter()
+                .zip(&filtered)
+                .chain(recipes.iter().zip(&refined))
+            {
+                let Some((recipe, world, scout)) = result else {
+                    continue;
+                };
+                assert_eq!(recipe.seed, saved.seed);
+                if let Some(id) = recipe.trinket {
+                    assert_eq!(
+                        crate::trinkets::parse_offered(
+                            recipe.seed,
+                            crate::catalog::item(id).stable_id
+                        )
+                        .unwrap(),
+                        id
+                    );
+                    assert!(
+                        saved.trinket == Some(id)
+                            || (saved.trinket.is_none()
+                                && after.selected_trinket(saved.seed) == Some(id))
+                    );
+                }
+                assert!(query.matches(world));
+                assert_eq!(scout.matched_requirements, 3);
+                let replay = generate_main_world_with_trinket(
+                    recipe.seed,
+                    query.max_depth,
+                    query.challenges,
+                    recipe.trinket,
+                )
+                .unwrap();
+                assert!(
+                    query.matches(&replay),
+                    "returned recipe survives complete canonical replay"
+                );
+                assert!(base.matches(&replay));
+            }
+        }
     }
 }
 
@@ -3002,5 +4167,440 @@ mod source_refinement_tests {
             "exercise late tier-two vault equipment"
         );
         assert!(smith_rewards > 0);
+    }
+}
+
+#[cfg(test)]
+mod closed_multiplicity_grouping_tests {
+    use super::{QueryPlan, RequirementPlan, closed_multiplicities};
+    use crate::catalog::{
+        ALL_WEAPON_EFFECTS, ArmorEffect, Effect, ItemId, ItemKind, WeaponCategory, WeaponEffect,
+    };
+    use crate::challenges::Challenges;
+    use crate::model::ItemSource;
+    use crate::query::{
+        EffectRequirement, EffectSet, LevelSum, Requirement, SearchQuery, TierRequirement,
+        UpgradeRequirement,
+    };
+
+    fn ordinary_plan() -> RequirementPlan {
+        RequirementPlan {
+            requirement: Requirement {
+                kind: ItemKind::Weapon,
+                weapon_category: None,
+                item: None,
+                tier: TierRequirement::Any,
+                upgrade: UpgradeRequirement::Any,
+                effect: EffectRequirement::Any,
+                require_uncursed: false,
+                select_trinket: false,
+                source: Some(ItemSource::Heap),
+                identity_group: None,
+                max_depth: Some(4),
+                alternative_group: None,
+                level_sum: None,
+            },
+            max_depth: 4,
+            quests: 0,
+            vault: false,
+            open_deadline: Some(4),
+        }
+    }
+
+    // Intentionally quadratic and test-only: neither hashes nor calls the
+    // production eligibility iterator. Equality includes the complete plan.
+    fn suffix_count_oracle(slots: &[Vec<RequirementPlan>]) -> Vec<(usize, usize)> {
+        let mut result = Vec::new();
+        for (first, slot) in slots.iter().enumerate() {
+            let [wanted] = slot.as_slice() else {
+                continue;
+            };
+            if wanted.quests != 0
+                || wanted.open_deadline.is_none()
+                || wanted.requirement.level_sum.is_some()
+            {
+                continue;
+            }
+            if slots[..first].iter().any(|previous| previous == slot) {
+                continue;
+            }
+            let count = slots[first..].iter().filter(|later| *later == slot).count();
+            if count > 1 {
+                result.push((first, count));
+            }
+        }
+        result
+    }
+
+    fn check(slots: &[Vec<RequirementPlan>], expected: &[(usize, usize)]) {
+        assert_eq!(suffix_count_oracle(slots), expected, "oracle fixture");
+        assert_eq!(
+            closed_multiplicities(slots),
+            expected,
+            "complete stable output"
+        );
+    }
+
+    #[test]
+    fn stable_grouping_covers_empty_unique_equal_and_first_repeat_order() {
+        let a = ordinary_plan();
+        let b = RequirementPlan {
+            max_depth: 3,
+            ..a.clone()
+        };
+        check(&[], &[]);
+        check(&[Vec::new()], &[]);
+        check(&[vec![a.clone()]], &[]);
+        check(&[vec![a.clone()], vec![b.clone()]], &[]);
+        check(&[vec![a.clone()], vec![a.clone()]], &[(0, 2)]);
+        check(&vec![vec![a.clone()]; 17], &[(0, 17)]);
+        let unique: Vec<_> = (1..=32)
+            .map(|max_depth| {
+                vec![RequirementPlan {
+                    max_depth,
+                    ..a.clone()
+                }]
+            })
+            .collect();
+        check(&unique, &[]);
+        // B first repeats before A, but A's first slot determines output order.
+        let interleaved = [vec![a.clone()], vec![b.clone()], vec![b], vec![a]];
+        check(&interleaved, &[(0, 2), (1, 2)]);
+    }
+
+    #[test]
+    fn stable_grouping_ignores_ineligible_slots_without_renumbering() {
+        let a = ordinary_plan();
+        let b = RequirementPlan {
+            max_depth: 3,
+            ..a.clone()
+        };
+        let quest = RequirementPlan {
+            quests: 1,
+            ..a.clone()
+        };
+        let no_open_source = RequirementPlan {
+            open_deadline: None,
+            ..a.clone()
+        };
+        let sum = RequirementPlan {
+            requirement: Requirement {
+                level_sum: Some(LevelSum {
+                    group: 1,
+                    minimum_total: 3,
+                }),
+                ..a.requirement
+            },
+            ..a.clone()
+        };
+        let ineligible = [
+            Vec::new(),
+            vec![quest.clone()],
+            vec![quest.clone()],
+            vec![a.clone(), a.clone()],
+            vec![no_open_source.clone()],
+            vec![sum.clone()],
+            vec![sum.clone()],
+        ];
+        check(&ineligible, &[]);
+        let mut just_one = ineligible.to_vec();
+        just_one.push(vec![a.clone()]);
+        check(&just_one, &[]);
+        let slots = [
+            Vec::new(),
+            vec![quest],
+            vec![a.clone(), a.clone()],
+            vec![a.clone()],
+            vec![sum.clone()],
+            vec![b.clone()],
+            vec![no_open_source],
+            vec![b],
+            vec![sum],
+            vec![a],
+            Vec::new(),
+        ];
+        check(&slots, &[(3, 2), (5, 2)]);
+    }
+
+    type Change = fn(&mut RequirementPlan);
+
+    fn predicate_changes() -> [(&'static str, Change); 12] {
+        [
+            ("kind", |p| p.requirement.kind = ItemKind::Armor),
+            ("weapon_category_melee", |p| {
+                p.requirement.weapon_category = Some(WeaponCategory::Melee);
+            }),
+            ("weapon_category_thrown", |p| {
+                p.requirement.weapon_category = Some(WeaponCategory::Thrown);
+            }),
+            ("item", |p| p.requirement.item = Some(ItemId::Sword)),
+            ("tier_exact", |p| {
+                p.requirement.tier = TierRequirement::Exact(2);
+            }),
+            ("tier_at_least", |p| {
+                p.requirement.tier = TierRequirement::AtLeast(2);
+            }),
+            ("tier_at_most", |p| {
+                p.requirement.tier = TierRequirement::AtMost(2);
+            }),
+            ("upgrade_exact", |p| {
+                p.requirement.upgrade = UpgradeRequirement::Exact(2);
+            }),
+            ("upgrade_at_least", |p| {
+                p.requirement.upgrade = UpgradeRequirement::AtLeast(2);
+            }),
+            ("effect_weapon", |p| {
+                p.requirement.effect =
+                    EffectRequirement::exactly(Effect::Weapon(WeaponEffect::Blazing));
+            }),
+            ("effect_armor", |p| {
+                p.requirement.effect =
+                    EffectRequirement::exactly(Effect::Armor(ArmorEffect::Obfuscation));
+            }),
+            ("require_uncursed", |p| {
+                p.requirement.require_uncursed = true;
+            }),
+        ]
+    }
+
+    fn metadata_changes() -> [(&'static str, Change); 12] {
+        [
+            ("select_trinket", |p| p.requirement.select_trinket = true),
+            ("source_chest", |p| {
+                p.requirement.source = Some(ItemSource::Chest);
+            }),
+            ("source_none", |p| p.requirement.source = None),
+            ("identity_group_1", |p| {
+                p.requirement.identity_group = Some(1);
+            }),
+            ("identity_group_2", |p| {
+                p.requirement.identity_group = Some(2);
+            }),
+            ("requirement_max_depth_3", |p| {
+                p.requirement.max_depth = Some(3);
+            }),
+            ("requirement_max_depth_none", |p| {
+                p.requirement.max_depth = None;
+            }),
+            ("alternative_group_1", |p| {
+                p.requirement.alternative_group = Some(1);
+            }),
+            ("alternative_group_2", |p| {
+                p.requirement.alternative_group = Some(2);
+            }),
+            ("plan_max_depth", |p| p.max_depth = 3),
+            ("vault", |p| p.vault = true),
+            ("open_deadline", |p| p.open_deadline = Some(3)),
+        ]
+    }
+
+    #[test]
+    fn stable_grouping_compares_every_eligible_requirement_and_plan_field() {
+        // Synthetic private plans isolate one field at a time. Some are not
+        // valid public queries; the separate analyzer fixtures below are.
+        let base = ordinary_plan();
+        let mut variants = vec![base.clone()];
+        for (name, change) in predicate_changes().into_iter().chain(metadata_changes()) {
+            let mut different = base.clone();
+            change(&mut different);
+            assert_ne!(base, different, "field mutation {name}");
+            check(
+                &[
+                    vec![base.clone()],
+                    vec![different.clone()],
+                    vec![different.clone()],
+                    vec![base.clone()],
+                ],
+                &[(0, 2), (1, 2)],
+            );
+            variants.push(different);
+        }
+        // Also separate e.g. Exact(2) from AtLeast(2), Some(1) from Some(2),
+        // and the two EffectSet families, not just each variant from Any/None.
+        for (index, plan) in variants.iter().enumerate() {
+            assert!(!variants[..index].contains(plan));
+        }
+        let slots: Vec<_> = variants
+            .iter()
+            .chain(variants.iter().rev())
+            .map(|plan| vec![plan.clone()])
+            .collect();
+        let expected: Vec<_> = (0..variants.len()).map(|index| (index, 2)).collect();
+        check(&slots, &expected);
+    }
+
+    #[test]
+    fn stable_grouping_excludes_all_optional_and_quest_field_variants() {
+        let base = ordinary_plan();
+        let mut excluded = Vec::new();
+        // quests has no two unequal eligible values: every nonzero mask is
+        // excluded. Likewise every Some(level_sum) and None(open_deadline).
+        for quests in [1, 2, 4, 8, 16, u8::MAX] {
+            excluded.push(RequirementPlan {
+                quests,
+                ..base.clone()
+            });
+        }
+        excluded.push(RequirementPlan {
+            open_deadline: None,
+            ..base.clone()
+        });
+        for (group, minimum_total) in [(1, 3), (2, 3), (1, 4)] {
+            excluded.push(RequirementPlan {
+                requirement: Requirement {
+                    level_sum: Some(LevelSum {
+                        group,
+                        minimum_total,
+                    }),
+                    ..base.requirement
+                },
+                ..base.clone()
+            });
+        }
+        for plan in &excluded {
+            assert_ne!(plan, &base);
+            check(&[vec![plan.clone()], vec![plan.clone()]], &[]);
+            check(
+                &[
+                    vec![plan.clone()],
+                    vec![base.clone()],
+                    vec![plan.clone()],
+                    vec![base.clone()],
+                ],
+                &[(1, 2)],
+            );
+        }
+    }
+
+    fn analyze(requirements: Vec<Requirement>, max_depth: u8) -> QueryPlan {
+        let query = SearchQuery {
+            auto_apply_trinket: false,
+            requirements,
+            max_depth,
+            challenges: Challenges::NONE,
+            require_blacksmith: false,
+            exclude_blacksmith_rewards: false,
+            wandmaker_quest: None,
+        };
+        query.validate().expect("valid structural analyzer fixture");
+        let plan = QueryPlan::analyze(&query);
+        assert!(!plan.is_unsatisfiable());
+        assert_eq!(plan.closed_multiplicities, suffix_count_oracle(&plan.slots));
+        plan
+    }
+
+    #[test]
+    fn stable_grouping_agrees_for_valid_or_quest_and_sum_slots() {
+        let ordinary = ordinary_plan().requirement;
+        let alternative = Requirement {
+            alternative_group: Some(1),
+            ..ordinary
+        };
+        let quest = Requirement {
+            source: None,
+            max_depth: None,
+            ..ordinary
+        };
+        let optional = Requirement {
+            kind: ItemKind::Ring,
+            level_sum: Some(LevelSum {
+                group: 1,
+                minimum_total: 3,
+            }),
+            ..ordinary
+        };
+        let plan = analyze(
+            vec![
+                alternative,
+                alternative,
+                ordinary,
+                quest,
+                optional,
+                ordinary,
+                quest,
+                optional,
+            ],
+            24,
+        );
+        assert_eq!(plan.slots.len(), 7);
+        assert_eq!(plan.slots[0].len(), 2);
+        assert_ne!(plan.slots[2][0].quests, 0);
+        assert_ne!(plan.slots[5][0].quests, 0);
+        assert!(plan.slots[3][0].requirement.level_sum.is_some());
+        assert!(plan.slots[6][0].requirement.level_sum.is_some());
+        check(&plan.slots, &[(1, 2)]);
+    }
+
+    #[test]
+    fn stable_grouping_handles_bounded_large_valid_effect_sets() {
+        // Bounded quadratic oracle work; this is correctness, not a complexity
+        // benchmark. No private raw masks or invalid/mixed-family EffectSets.
+        const DISTINCT: usize = 512;
+        let effects: Vec<_> = ALL_WEAPON_EFFECTS
+            .iter()
+            .copied()
+            .filter(|effect| !effect.is_curse())
+            .take(10)
+            .map(Effect::Weapon)
+            .collect();
+        assert_eq!(effects.len(), 10);
+        let base = ordinary_plan().requirement;
+        let unique: Vec<_> = (1..=DISTINCT)
+            .map(|mask| {
+                let set =
+                    EffectSet::from_effects(effects.iter().copied().enumerate().filter_map(
+                        |(index, effect)| (mask & (1 << index) != 0).then_some(effect),
+                    ))
+                    .expect("nonempty same-family set");
+                Requirement {
+                    effect: EffectRequirement::OneOf(set),
+                    ..base
+                }
+            })
+            .collect();
+        let unique_plan = analyze(unique.clone(), 4);
+        assert_eq!(unique_plan.slots.len(), DISTINCT);
+        for slot in &unique_plan.slots {
+            let [plan] = slot.as_slice() else {
+                panic!("singleton valid query")
+            };
+            assert_eq!(plan.quests, 0);
+            assert_eq!(plan.open_deadline, Some(4));
+            assert!(!plan.vault);
+        }
+        check(&unique_plan.slots, &[]);
+
+        let paired: Vec<_> = unique.iter().chain(unique.iter().rev()).copied().collect();
+        let paired_plan = analyze(paired, 4);
+        let pairs: Vec<_> = (0..DISTINCT).map(|index| (index, 2)).collect();
+        check(&paired_plan.slots, &pairs);
+
+        let interleaved: Vec<_> = unique.iter().flat_map(|&wanted| [wanted, wanted]).collect();
+        let interleaved_plan = analyze(interleaved, 4);
+        let interleaved_pairs: Vec<_> = (0..DISTINCT).map(|index| (index * 2, 2)).collect();
+        check(&interleaved_plan.slots, &interleaved_pairs);
+        check(
+            &analyze(vec![unique[0]; DISTINCT], 4).slots,
+            &[(0, DISTINCT)],
+        );
+
+        // Construction order does not change a set's logical or hashed key.
+        let forward = EffectSet::from_effects(effects.iter().copied()).unwrap();
+        let reverse = EffectSet::from_effects(effects.iter().rev().copied()).unwrap();
+        assert_eq!(forward, reverse);
+        let equivalent = analyze(
+            vec![
+                Requirement {
+                    effect: EffectRequirement::OneOf(forward),
+                    ..base
+                },
+                Requirement {
+                    effect: EffectRequirement::OneOf(reverse),
+                    ..base
+                },
+            ],
+            4,
+        );
+        check(&equivalent.slots, &[(0, 2)]);
     }
 }
