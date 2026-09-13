@@ -163,7 +163,7 @@ fn malformed_and_unsupported_requests_are_rejected() {
     ] {
         assert!(decode_request(input).is_err(), "{input}");
     }
-    for depth in [0, 5, 10, 15, 20, 25, 255] {
+    for depth in [0, 10, 20, 25, 255] {
         assert_eq!(
             generate_level_map(DungeonSeed::MIN, depth, Challenges::NONE, None),
             Err(MapError::UnsupportedDepth(depth))

@@ -111,6 +111,11 @@ export function ScoutPanel({
     for (const item of result?.items ?? []) {
       byDepth.set(item.depth, [...(byDepth.get(item.depth) ?? []), item]);
     }
+    // Boss maps have no searchable loot or feeling record in the scout packet.
+    const lastDepth = Math.max(0, ...byDepth.keys());
+    for (let depth = 1; depth <= lastDepth; depth++) {
+      if (isMapDepthSupported(depth) && !byDepth.has(depth)) byDepth.set(depth, []);
+    }
     return [...byDepth.entries()].sort(([left], [right]) => left - right);
   }, [result]);
 

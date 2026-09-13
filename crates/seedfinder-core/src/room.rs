@@ -118,6 +118,12 @@ pub enum StandardRoomKind {
     MineSmall,
     MineLarge,
     MineGiant,
+    SewerBossEntrance,
+    SewerBossExit,
+    DiamondGoo,
+    WalledGoo,
+    ThinPillarsGoo,
+    ThickPillarsGoo,
 }
 
 /// Concrete connection-room painter classes.  Their spatial behavior is
@@ -183,6 +189,7 @@ pub enum SecretRoomKind {
     Maze,
     Summoning,
     Mine,
+    RatKing,
 }
 
 /// Quest rooms appended by the Wandmaker, Blacksmith, and Ambitious Imp
@@ -322,13 +329,13 @@ impl Room {
         room
     }
 
-    fn entrance(kind: StandardRoomKind, rng: &mut RandomStack) -> Self {
+    pub(crate) fn entrance(kind: StandardRoomKind, rng: &mut RandomStack) -> Self {
         let mut room = Self::with_category(RoomKind::Entrance(kind), None);
         assert!(room.set_size_category(0, 2, rng));
         room
     }
 
-    fn exit(kind: StandardRoomKind, rng: &mut RandomStack) -> Self {
+    pub(crate) fn exit(kind: StandardRoomKind, rng: &mut RandomStack) -> Self {
         let mut room = Self::with_category(RoomKind::Exit(kind), None);
         assert!(room.set_size_category(0, 2, rng));
         room
@@ -584,7 +591,11 @@ impl Room {
         }
 
         match standard_kind {
-            StandardRoomKind::MineLarge => [0.0, 1.0, 0.0],
+            StandardRoomKind::DiamondGoo
+            | StandardRoomKind::WalledGoo
+            | StandardRoomKind::ThinPillarsGoo
+            | StandardRoomKind::ThickPillarsGoo
+            | StandardRoomKind::MineLarge => [0.0, 1.0, 0.0],
             StandardRoomKind::MineGiant => [0.0, 0.0, 1.0],
             StandardRoomKind::SewerPipe => [3.0, 2.0, 1.0],
             StandardRoomKind::Ring
@@ -611,7 +622,9 @@ impl Room {
                 [6.0, 3.0, 1.0]
             }
             StandardRoomKind::Burned | StandardRoomKind::Minefield => [4.0, 1.0, 0.0],
-            StandardRoomKind::WaterBridge
+            StandardRoomKind::SewerBossEntrance
+            | StandardRoomKind::SewerBossExit
+            | StandardRoomKind::WaterBridge
             | StandardRoomKind::RegionDecoPatch
             | StandardRoomKind::RegionDecoLine
             | StandardRoomKind::ChasmBridge
@@ -643,7 +656,8 @@ impl Room {
                 let base = category.min_dimension();
                 let mut minimum = match kind {
                     StandardRoomKind::MineLarge => 11,
-                    StandardRoomKind::SewerPipe
+                    StandardRoomKind::SewerBossEntrance
+                    | StandardRoomKind::SewerPipe
                     | StandardRoomKind::Ring
                     | StandardRoomKind::Segmented
                     | StandardRoomKind::Pillars
@@ -666,7 +680,7 @@ impl Room {
                     | StandardRoomKind::Fissure
                     | StandardRoomKind::SuspiciousChest
                     | StandardRoomKind::MineGiant => base.max(5),
-                    StandardRoomKind::CirclePit => base.max(8),
+                    StandardRoomKind::SewerBossExit | StandardRoomKind::CirclePit => base.max(8),
                     StandardRoomKind::LibraryRing | StandardRoomKind::Ritual => base.max(9),
                     StandardRoomKind::Platform | StandardRoomKind::MineSmall => base.max(6),
                     StandardRoomKind::CircleBasin => base.wrapping_add(1),
@@ -709,7 +723,7 @@ impl Room {
                 _ => 5,
             },
             RoomKind::Secret(kind) => match kind {
-                SecretRoomKind::Library => 7,
+                SecretRoomKind::Library | SecretRoomKind::RatKing => 7,
                 SecretRoomKind::Larder => 6,
                 SecretRoomKind::ChestChasm => 8,
                 SecretRoomKind::Maze => 14,
@@ -748,7 +762,7 @@ impl Room {
                 _ => 10,
             },
             RoomKind::Secret(kind) => match kind {
-                SecretRoomKind::Mine => 7,
+                SecretRoomKind::Mine | SecretRoomKind::RatKing => 7,
                 SecretRoomKind::ChestChasm => 9,
                 SecretRoomKind::Maze => 18,
                 SecretRoomKind::Summoning => 8,
@@ -1199,6 +1213,10 @@ pub fn can_connect_rooms(
     second: RoomId,
     rng: &mut RandomStack,
 ) -> bool {
+    if rooms[first].kind == RoomKind::Secret(SecretRoomKind::RatKing) && rooms[second].is_entrance()
+    {
+        return false;
+    }
     if matches!(
         rooms[first].kind,
         RoomKind::Quest(QuestRoomKind::Blacksmith)

@@ -7,6 +7,7 @@
 pub mod auto_trinkets;
 pub mod batch;
 mod bit_rows;
+mod boss_floor;
 pub mod builder;
 pub mod catalog;
 pub mod caves_floor;

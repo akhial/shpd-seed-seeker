@@ -134,6 +134,48 @@ pub const ASSETS: &[MapAsset] = &[
         sha256: "405c2c34b3f8815a78ad78a68ed89cc8fd5b8cbdcec88f31532ec266a394b76b",
         png: include_bytes!("../../assets/level-map/raised_terrain.png"),
     },
+    MapAsset {
+        id: "sewer_boss.png",
+        width: 256,
+        height: 32,
+        sha256: "1667875bbbcfa8ef88fba42721aaf97c0c01d5ee40f985f1ee4c98c534b6010f",
+        png: include_bytes!("../../assets/level-map/sewer_boss.png"),
+    },
+    MapAsset {
+        id: "caves_boss.png",
+        width: 128,
+        height: 128,
+        sha256: "ac387d738d4edcf011288ba6f39b429a1ccc9115468960bae610a036b75202e1",
+        png: include_bytes!("../../assets/level-map/caves_boss.png"),
+    },
+    MapAsset {
+        id: "rat_king_room.png",
+        width: 128,
+        height: 16,
+        sha256: "15bf1352e4db0805ce2862f1fb67b68c57f4a4c5f32148b70139208f09149a35",
+        png: include_bytes!("../../assets/level-map/rat_king_room.png"),
+    },
+    MapAsset {
+        id: "carpet.png",
+        width: 256,
+        height: 128,
+        sha256: "d03baf545af6c0eefa23d74dbc399d0aab76406b28975f9ebea3e37141d2933b",
+        png: include_bytes!("../../assets/level-map/carpet.png"),
+    },
+    MapAsset {
+        id: "pylon.png",
+        width: 32,
+        height: 32,
+        sha256: "e86a17446a301973db13484e3ba6e0c9ab7b7547ef96ebf2f25d1640afefbeb0",
+        png: include_bytes!("../../assets/level-map/pylon.png"),
+    },
+    MapAsset {
+        id: "ratking.png",
+        width: 128,
+        height: 128,
+        sha256: "94b93112d4133136a3f2a4973e5647326311ed5f3f1b6b829dd87ce492c546a8",
+        png: include_bytes!("../../assets/level-map/ratking.png"),
+    },
 ];
 
 #[must_use]

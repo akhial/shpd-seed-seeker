@@ -19,13 +19,11 @@ impl Challenges {
     pub const STRONGER_BOSSES: Self = Self(256);
     pub const MAX_VALUE: u16 = 511;
 
-    /// The only challenges the generator consults, and therefore the only
-    /// ones that change what a seed contains: Barren Land removes the grass
+    /// Challenges that change searchable item content: Barren Land removes the grass
     /// the floor builders would have planted, Into Darkness changes the
     /// torches the item placer schedules, and Forbidden Runes halves the
-    /// scheduled Scroll of Upgrade drops. Every other challenge changes
-    /// combat or hunger only, so two masks differing solely in those bits
-    /// generate identical worlds.
+    /// scheduled Scroll of Upgrade drops. Other bits preserve searchable
+    /// worlds. Badder Bosses separately changes on-demand boss terrain maps.
     pub const LEVEL_GENERATION: Self =
         Self(Self::NO_HERBALISM.0 | Self::DARKNESS.0 | Self::NO_SCROLLS.0);
 

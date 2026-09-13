@@ -48,7 +48,7 @@ describe("inline scout maps", () => {
     );
     expect(opened).toContain('aria-expanded="true"');
     expect(opened).toContain('aria-label="Hide floor 18 map"');
-    for (const depth of [5, 10, 15, 20, 25]) {
+    for (const depth of [10, 20, 25]) {
       const html = renderToStaticMarkup(
         <FloorMapHeader depth={depth} expanded={false} onToggle={() => {}} onPrefetch={() => {}} />,
       );
@@ -56,6 +56,32 @@ describe("inline scout maps", () => {
       expect(html).not.toContain("<button");
       expect(html).not.toContain(">Map<");
     }
+  });
+
+  it("offers both boss maps even though scout packets omit their loot and feelings", () => {
+    const result: ScoutResult = {
+      seed: { code: "AAA-AAA-AAA", value: 0 },
+      items: [],
+      feelings: [{ depth: 16, feeling: "none" }],
+      quests: [],
+      ringGems: [],
+      matchedRequirements: 0,
+      totalRequirements: 0,
+    };
+    const html = renderToStaticMarkup(
+      <ScoutPanel
+        input={result.seed.code}
+        onInput={() => {}}
+        onScout={() => {}}
+        loading={false}
+        result={result}
+        renderedChallenges={["badder_bosses"]}
+      />,
+    );
+    expect(html).toContain('aria-label="Show floor 5 map"');
+    expect(html).toContain('aria-label="Show floor 15 map"');
+    expect(html).not.toContain('aria-label="Show floor 10 map"');
+    expect(html).not.toContain('aria-label="Show floor 17 map"');
   });
 
   it("keeps maps discoverable for generated floors with no loot and loads none initially", () => {

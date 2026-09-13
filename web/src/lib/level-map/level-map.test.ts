@@ -17,9 +17,9 @@ const map = (depth: number, branch = 0) =>
   ) as LevelMapDocument;
 
 describe("browser level map contract", () => {
-  it("uses engine coverage, including quest parent floors but excluding boss arenas", () => {
-    expect([1, 13, 19, 24].every(isMapDepthSupported)).toBe(true);
-    expect([0, 5, 10, 15, 20, 25, 26].some(isMapDepthSupported)).toBe(false);
+  it("uses engine coverage, including quest parent floors and supported boss arenas", () => {
+    expect([1, 5, 13, 15, 19, 24].every(isMapDepthSupported)).toBe(true);
+    expect([0, 10, 20, 25, 26].some(isMapDepthSupported)).toBe(false);
   });
   it("canonicalizes challenge order while isolating trinket, floor and branch cache entries", () => {
     const request: LevelMapRequest = {

@@ -460,9 +460,11 @@ export function QueryPanel({
                   <span>
                     {challenge.label}
                     <em>
-                      {LEVEL_GEN_CHALLENGES.has(challenge.value)
-                        ? "changes level generation"
-                        : "no effect on seed content"}
+                      {challenge.value === "badder_bosses"
+                        ? "changes boss layouts"
+                        : LEVEL_GEN_CHALLENGES.has(challenge.value)
+                          ? "changes level generation"
+                          : "no effect on seed content"}
                     </em>
                   </span>
                 </label>
