@@ -1,4 +1,4 @@
-Accepted repeated-item pruning: incremental c47e2f5 → 2ab235c Linux measurements.
+Accepted repeated-item pruning: incremental c47e2f5 → 2ab235c Linux measurements. The historical `six_min`/`six_exact` IDs mean six requirements: five wands plus Wondrous Resin. Exact query bytes and timing labels are preserved.
 
 - `summary.json` and `TABLE.md` retain every throughput cell and independently recomputed aggregate; `samples.jsonl` and `timings.csv` preserve all 128 scored timing/signature observations.
 - `design.json` retains exact queries, inputs, commands, setup receipts and protocol metadata. `provenance.json` binds build/source/binary and audit/raw input hashes. `environment.jsonl` retains lightweight raw counters and derived observations, omitting named process lists.

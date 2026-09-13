@@ -48,14 +48,14 @@ samples lasted 12.31–28.79 seconds. No observation or workload was excluded.
 | Early Ghost armor | 2734.84 → 2771.32 | +1.334% | 21304.27 → 21159.82 | **−0.678%** |
 | Existing CLI benchmark | 374.49 → 374.79 | +0.079% | 2902.86 → 2937.43 | +1.191% |
 | Production blade/Might, automatic trinket | 353.01 → 354.27 | +0.355% | 2703.49 → 2746.15 | +1.578% |
-| Six-wand minimum upgrades + Resin | 7713.37 → 8516.41 | +10.411% | 59527.14 → 66012.79 | +10.895% |
-| Six-wand exact upgrades + Resin | 7694.94 → 8519.39 | +10.714% | 59651.88 → 65971.38 | +10.594% |
+| Five-wand minimum upgrades + Resin | 7713.37 → 8516.41 | +10.411% | 59527.14 → 66012.79 | +10.895% |
+| Five-wand exact upgrades + Resin | 7694.94 → 8519.39 | +10.714% | 59651.88 → 65971.38 | +10.594% |
 | Two rings by floor 6 + late blade | 294.61 → 555.87 | +88.679% | 2286.10 → 4259.90 | +86.339% |
 | Two tier-2 heap armors + late blade | 364.39 → 654.48 | +79.611% | 2826.24 → 5110.96 | +80.839% |
 
 **Eight-case geometric mean: +19.824% / +19.776% at one/eight workers.**
 The four ordinary controls alone give +0.640% / +0.619%. Giving the two
-six-wand variants one combined family weight yields +21.209% / +21.125% over
+five-wand variants one combined family weight yields +21.209% / +21.125% over
 seven families. Each cell ratio is `sum(baseline seconds)/sum(candidate seconds)`;
 means weight case ratios, not raw seed rates or execution stages. This targeted
 suite is not an estimate of the distribution of queries in actual use.
@@ -84,11 +84,12 @@ Cargo. No `target-cpu=native`, new ISA, PGO, or allocator change is introduced.
 Frozen executables are reused between samples; compilation is not timed work.
 
 At w1/w8, literal counts are cheap 196608/1572864; early 49152/393216;
-CLI and production 6144/49152; each six-wand case 196608/1048576;
+CLI and production 6144/49152; each five-wand case 196608/1048576;
 each ring/armor case 8192/65536. Adapter repetition `r` starts at index
 `160000000 + r*N`, mapped by `(index*3355211884971 + 812345678901) % 26**9`.
 CLI repeats `[0,N)`. Different N across workers is not fixed-input scaling.
-Both six-wand cases leave automatic trinket application off; required Resin
+The `six_min`/`six_exact` workload IDs refer to six requirements: five wands
+and Wondrous Resin. Both cases leave automatic trinket application off; required Resin
 identity is distinct from selecting/applying it. Exact query JSON is retained.
 
 The matching timer includes worker setup, generation, matching, witness
@@ -97,7 +98,7 @@ serialization are outside it. CLI includes planning and rounds to milliseconds.
 Each matching service has an untimed warmup. The independent audit passed all
 six stages: 56 complete seed/recipe/ordered-witness pairs and eight CLI count
 pairs. Every case/worker had positive matches, although one repetition of each
-one-worker six-wand query returned none. Empty pairs alone do not prove positive
+one-worker five-wand query returned none. Empty pairs alone do not prove positive
 witness coverage. Full adapter wire stdout and warmup records are not separately
 retained; pinned lifecycle completion establishes shutdown checks, not an
 independent per-process wire transcript.
@@ -121,7 +122,7 @@ calls exclude separately measured destruction. Query decoding and allocator
 availability initialization happen before timing. First calls are not whole-app
 cold starts. Three batches within a process are not independent trials.
 
-**13 of 14 warm planning cases regress.** For the six-wand query, warm setup
+**13 of 14 warm planning cases regress.** For the five-wand query, warm setup
 rises from 0.890 to 1.529 µs (+71.749%); median first-call setup rises from
 5.019 to 33.320 µs. The production blade/Might control rises from 7.304 to
 7.789 ms (+6.644%, all four warm pairs slower). At 4,096 unique requirements,
