@@ -21,25 +21,8 @@ export function FloorMapHeader({
   onPrefetch: () => void;
 }) {
   const available = isMapDepthSupported(depth);
-  const region = regionForDepth(depth);
   const label = (
-    <>
-      <span className="d1-floor-bar" aria-hidden="true" />
-      <span className="d1-floor-label">Floor {depth}</span>
-      <FeelingSprite feeling={feeling} />
-      <span className="d1-floor-region" id={`scout-floor-region-${depth}`}>
-        {region.name}
-      </span>
-      {quest && (
-        <span
-          className="d1-floor-quest"
-          id={`scout-floor-quest-${depth}`}
-          title={`${questLabel(quest.quest)} quest`}
-        >
-          {questVariantLabel(quest.variant)}
-        </span>
-      )}
-    </>
+    <FloorMapLabel depth={depth} feeling={feeling} quest={quest} idPrefix="scout-floor" />
   );
 
   if (!available) return <header className="d1-floor-head">{label}</header>;
@@ -97,5 +80,39 @@ export function FloorMapHeader({
         </span>
       </button>
     </header>
+  );
+}
+
+/** Shared floor identity for the inline disclosure and expanded map. */
+export function FloorMapLabel({
+  depth,
+  feeling,
+  quest,
+  idPrefix,
+}: {
+  depth: number;
+  feeling?: FloorFeeling;
+  quest?: ScoutQuest;
+  idPrefix?: string;
+}) {
+  const region = regionForDepth(depth);
+  return (
+    <>
+      <span className="d1-floor-bar" aria-hidden="true" />
+      <span className="d1-floor-label">Floor {depth}</span>
+      <FeelingSprite feeling={feeling} />
+      <span className="d1-floor-region" id={idPrefix ? `${idPrefix}-region-${depth}` : undefined}>
+        {region.name}
+      </span>
+      {quest && (
+        <span
+          className="d1-floor-quest"
+          id={idPrefix ? `${idPrefix}-quest-${depth}` : undefined}
+          title={`${questLabel(quest.quest)} quest`}
+        >
+          {questVariantLabel(quest.variant)}
+        </span>
+      )}
+    </>
   );
 }

@@ -369,6 +369,15 @@ export function ScoutPanel({
                     <LevelMapView
                       seed={result.seed.code}
                       depth={depth}
+                      feeling={feelingByDepth.get(depth)}
+                      quest={quest}
+                      floors={floors
+                        .filter(([floorDepth]) => isMapDepthSupported(floorDepth))
+                        .map(([floorDepth]) => ({
+                          depth: floorDepth,
+                          feeling: feelingByDepth.get(floorDepth),
+                          quest: questByDepth.get(floorDepth),
+                        }))}
                       challenges={renderedChallenges}
                       selectedTrinket={result.selectedTrinket}
                     />

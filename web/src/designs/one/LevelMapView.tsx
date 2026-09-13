@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
+import type { FloorFeeling, ScoutQuest } from "../../lib/wasm/types";
+import { regionForDepth } from "../../lib/region";
+import { FloorMapLabel } from "./FloorMapHeader";
+import { ExpandIcon, XIcon } from "../../lib/icons";
 import { mapRequestJson, requestLevelMap } from "../../lib/level-map/client";
 import { createLevelMapRenderer } from "../../lib/level-map/render";
 import type { LevelMapRequest, MapBundle } from "../../lib/level-map/types";
@@ -14,21 +18,63 @@ import {
 import type { MapTransform } from "./map-gestures";
 import "./level-map.css";
 
-type LevelMapViewProps = Omit<LevelMapRequest, "branch">;
+type LevelMapViewProps = Omit<LevelMapRequest, "branch"> & {
+  feeling?: FloorFeeling;
+  quest?: ScoutQuest;
+  floors?: { depth: number; feeling?: FloorFeeling; quest?: ScoutQuest }[];
+};
 const MAP_HEIGHT = 350;
 
 /** Profile changes remount the viewer so a pinned branch can never show an old run. */
 export function LevelMapView(props: LevelMapViewProps) {
   return <MapSession key={mapRequestJson(props)} {...props} />;
 }
-function MapSession(props: LevelMapViewProps) {
+function MapSession({ feeling, quest, floors, ...props }: LevelMapViewProps) {
+  const [depth, setDepth] = useState(props.depth);
+  const availableFloors = floors ?? [{ depth: props.depth, feeling, quest }];
+  const floorIndex = availableFloors.findIndex((floor) => floor.depth === depth);
+  const currentFloor = availableFloors[floorIndex];
+  const swipeStart = useRef<{ x: number; y: number } | undefined>(undefined);
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const [expanded, setExpanded] = useState(false);
+  useEffect(() => {
+    if (!expanded) return;
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    dialog.showModal();
+    return () => {
+      dialog.close();
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [expanded]);
   const [branch, setBranch] = useState(0);
   const [loaded, setLoaded] = useState<{ key: string; bundle: MapBundle }>();
   const [parent, setParent] = useState<MapBundle>();
   const [error, setError] = useState<string>();
   const [retry, setRetry] = useState(0);
   const [secrets, setSecrets] = useState(false);
-  const request: LevelMapRequest = { ...props, branch };
+  const changeFloor = (nextDepth: number) => {
+    setDepth(nextDepth);
+    setBranch(0);
+    setParent(undefined);
+    setError(undefined);
+  };
+  const navigate = (delta: number) => {
+    const next = availableFloors[floorIndex + delta];
+    if (next) {
+      // The focused canvas is replaced on floor changes. Keep focus on the
+      // persistent dialog so subsequent shortcuts stay inside the modal.
+      dialogRef.current?.focus({ preventScroll: true });
+      changeFloor(next.depth);
+    }
+  };
+  const close = () => {
+    setExpanded(false);
+    if (depth !== props.depth) changeFloor(props.depth);
+  };
+  const request: LevelMapRequest = { ...props, depth, branch };
   const requestKey = mapRequestJson(request);
   useEffect(() => {
     let active = true;
@@ -56,76 +102,185 @@ function MapSession(props: LevelMapViewProps) {
     : 0;
   const title =
     branch === 0
-      ? `Floor ${props.depth} layout`
+      ? `Floor ${depth} layout`
       : bundle?.map.kind === "imp_vault"
         ? "Imp Vault"
         : "Blacksmith Mine";
-  return (
-    <div className="d1-level-map-view">
-      <div className="d1-map-toolbar">
-        {branches.length > 0 && (
-          <div className="d1-map-branches" role="group" aria-label="Level area">
-            <button type="button" aria-pressed={branch === 0} onClick={() => setBranch(0)}>
-              Main
-            </button>
-            {branches.map((entry) => (
-              <button
-                type="button"
-                key={entry.branch}
-                aria-pressed={branch === entry.branch}
-                onClick={() => setBranch(entry.branch)}
-              >
-                {entry.kind === "imp_vault" ? "Imp Vault" : "Blacksmith Mine"}
-              </button>
-            ))}
-          </div>
-        )}
-        <button
-          type="button"
-          className="d1-map-secrets"
-          aria-pressed={secrets}
-          disabled={secretCount === 0}
-          onClick={() => setSecrets((value) => !value)}
-          title={
-            bundle && secretCount === 0
-              ? "No secrets on this map"
-              : secrets
-                ? "Hide secret rooms, doors and traps"
-                : "Reveal secret rooms, doors and traps"
-          }
-        >
-          <svg
-            aria-hidden="true"
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            {secrets ? <path d="M20 6 9 17l-5-5" /> : <path d="M18 6 6 18M6 6l12 12" />}
-          </svg>
-          Secrets
-        </button>
-      </div>
-      {error ? (
-        <div className="d1-map-message" role="alert" style={{ minHeight: MAP_HEIGHT }}>
-          <p>Couldn’t load this map.</p>
-          <span>{error}</span>
-          <button type="button" className="d1-btn" onClick={() => setRetry((value) => value + 1)}>
-            Try again
+  const toolbar = (
+    <div className="d1-map-toolbar">
+      {branches.length > 0 && (
+        <div className="d1-map-branches" role="group" aria-label="Level area">
+          <button type="button" aria-pressed={branch === 0} onClick={() => setBranch(0)}>
+            Main
           </button>
-        </div>
-      ) : bundle ? (
-        <MapCanvas key={requestKey} bundle={bundle} label={title} secrets={secrets} />
-      ) : (
-        <div className="d1-map-message" role="status" style={{ minHeight: MAP_HEIGHT }}>
-          <span className="d1-map-loading-dot" />
-          <p>Charting {branch === 0 ? `floor ${props.depth}` : "the quest level"}…</p>
+          {branches.map((entry) => (
+            <button
+              type="button"
+              key={entry.branch}
+              aria-pressed={branch === entry.branch}
+              onClick={() => setBranch(entry.branch)}
+            >
+              {entry.kind === "imp_vault" ? "Imp Vault" : "Blacksmith Mine"}
+            </button>
+          ))}
         </div>
       )}
+      <button
+        type="button"
+        className="d1-map-secrets"
+        aria-pressed={secrets}
+        disabled={secretCount === 0}
+        onClick={() => setSecrets((value) => !value)}
+        title={
+          bundle && secretCount === 0
+            ? "No secrets on this map"
+            : secrets
+              ? "Hide secret rooms, doors and traps"
+              : "Reveal secret rooms, doors and traps"
+        }
+      >
+        <svg
+          aria-hidden="true"
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          {secrets ? <path d="M20 6 9 17l-5-5" /> : <path d="M18 6 6 18M6 6l12 12" />}
+        </svg>
+        Secrets
+      </button>
+    </div>
+  );
+  const mapContent = error ? (
+    <div className="d1-map-message" role="alert">
+      <p>Couldn’t load this map.</p>
+      <span>{error}</span>
+      <button type="button" className="d1-btn" onClick={() => setRetry((value) => value + 1)}>
+        Try again
+      </button>
+    </div>
+  ) : bundle ? (
+    <MapCanvas key={requestKey} bundle={bundle} label={title} secrets={secrets} />
+  ) : (
+    <div className="d1-map-message" role="status">
+      <span className="d1-map-loading-dot" />
+      <p>Charting {branch === 0 ? `floor ${depth}` : "the quest level"}…</p>
+    </div>
+  );
+  return (
+    <div className="d1-level-map-view">
+      {toolbar}
+      <div className="d1-map-stage">
+        {mapContent}
+        <button
+          type="button"
+          className="d1-map-expand"
+          aria-haspopup="dialog"
+          aria-expanded={expanded}
+          onClick={() => setExpanded(true)}
+        >
+          <ExpandIcon size={14} />
+          Expand
+        </button>
+      </div>
+      <dialog
+        ref={dialogRef}
+        className="d1-map-dialog"
+        tabIndex={-1}
+        aria-label={`Floor ${depth} expanded map`}
+        style={{ "--region": regionForDepth(depth).color } as CSSProperties}
+        onKeyDownCapture={(event) => {
+          if (event.ctrlKey || event.metaKey || event.altKey) return;
+          const key = event.key.toLowerCase();
+          const delta =
+            key === "j" || event.code === "KeyJ"
+              ? 1
+              : key === "k" || event.code === "KeyK"
+                ? -1
+                : 0;
+          if (delta) {
+            event.preventDefault();
+            event.stopPropagation();
+            navigate(delta);
+          }
+        }}
+        onKeyDown={(event) => event.stopPropagation()}
+        onTouchStart={(event) => {
+          event.stopPropagation();
+          const touch = event.touches[0];
+          const zoomed = (event.target as HTMLElement).closest(".d1-map-zoomed");
+          swipeStart.current =
+            touch && event.touches.length === 1 && !zoomed
+              ? { x: touch.clientX, y: touch.clientY }
+              : undefined;
+        }}
+        onTouchCancel={() => {
+          swipeStart.current = undefined;
+        }}
+        onTouchEnd={(event) => {
+          event.stopPropagation();
+          const start = swipeStart.current;
+          swipeStart.current = undefined;
+          const touch = event.changedTouches[0];
+          if (!start || !touch) return;
+          const dx = touch.clientX - start.x;
+          const dy = touch.clientY - start.y;
+          if (Math.abs(dx) >= 60 && Math.abs(dx) >= 1.5 * Math.abs(dy)) navigate(dx < 0 ? 1 : -1);
+        }}
+        onCancel={(event) => {
+          event.preventDefault();
+          close();
+        }}
+        onClose={close}
+        onClick={(event) => {
+          if (event.target === event.currentTarget) close();
+        }}
+      >
+        {expanded && (
+          <div className="d1-map-dialog-content">
+            <header className="d1-floor-head d1-map-dialog-header">
+              <nav className="d1-scout-nav d1-map-floor-nav" aria-label="Floor navigation">
+                <div className="d1-map-floor-identity" aria-live="polite">
+                  <FloorMapLabel
+                    depth={depth}
+                    feeling={currentFloor?.feeling}
+                    quest={currentFloor?.quest}
+                  />
+                </div>
+                <div className="d1-scout-nav-tools">
+                  <div className="d1-scout-nav-hints" aria-hidden="true">
+                    <span className="d1-scout-nav-hint d1-scout-nav-hint-keys">
+                      <kbd className="d1-keycap">J</kbd>
+                      <span>next</span>
+                      <kbd className="d1-keycap">K</kbd>
+                      <span>prev</span>
+                    </span>
+                    <span className="d1-scout-nav-hint d1-scout-nav-hint-swipe">
+                      swipe to browse
+                    </span>
+                  </div>
+                </div>
+              </nav>
+              <button
+                type="button"
+                className="d1-map-expand d1-map-close"
+                onClick={close}
+                autoFocus
+              >
+                <XIcon size={14} />
+                Close
+              </button>
+            </header>
+            {toolbar}
+            {mapContent}
+          </div>
+        )}
+      </dialog>
     </div>
   );
 }
@@ -143,6 +298,7 @@ function MapCanvas({
   const viewportRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 300, height: MAP_HEIGHT });
   const [transform, setTransform] = useState(FIT_MAP);
+  const [pointerFocus, setPointerFocus] = useState(false);
   const transformRef = useRef(transform);
   const gestures = useRef(new MapGesture());
   const visibleRef = useRef(true);
@@ -246,6 +402,8 @@ function MapCanvas({
     if (event.button !== 0) return;
     event.preventDefault();
     event.stopPropagation();
+    // Programmatic focus can retain the browser’s prior keyboard-focus styling.
+    setPointerFocus(true);
     event.currentTarget.focus({ preventScroll: true });
     event.currentTarget.setPointerCapture(event.pointerId);
     gestures.current.down(event.pointerId, pointerPoint(event), transformRef.current);
@@ -269,8 +427,9 @@ function MapCanvas({
     <div
       ref={viewportRef}
       className={`d1-map-viewport ${transform.zoom > 1 ? "d1-map-zoomed" : ""}`}
-      style={{ height: MAP_HEIGHT }}
       tabIndex={0}
+      data-pointer-focus={pointerFocus || undefined}
+      onBlur={() => setPointerFocus(false)}
       role="region"
       aria-label={label}
       onPointerDown={pointDown}
@@ -279,6 +438,7 @@ function MapCanvas({
       onPointerCancel={pointUp}
       onLostPointerCapture={pointUp}
       onKeyDown={(event) => {
+        setPointerFocus(false);
         if (event.ctrlKey || event.metaKey || event.altKey) return;
         if (
           ["+", "=", "-", "0", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(
