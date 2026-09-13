@@ -30,6 +30,77 @@ const emitter: MapEmitter = {
 };
 
 describe("continuous map effects", () => {
+  it("clips drifting wind to visible chasms without clipping other particles", () => {
+    const rectangles: number[][] = [];
+    vi.stubGlobal(
+      "Path2D",
+      class {
+        rect(...rect: number[]) {
+          rectangles.push(rect);
+        }
+      },
+    );
+    vi.stubGlobal("document", { createElement: () => ({ getContext: () => ({ fillRect() {} }) }) });
+    let clipped = false;
+    const stack: boolean[] = [],
+      draws: boolean[] = [];
+    const context = {
+      canvas: { width: 48, height: 16 },
+      save() {
+        stack.push(clipped);
+      },
+      restore() {
+        clipped = stack.pop()!;
+      },
+      clip() {
+        clipped = true;
+      },
+      setTransform() {},
+      clearRect() {},
+      drawImage() {},
+      translate() {},
+      rotate() {},
+      scale() {},
+      fillRect() {
+        draws.push(clipped);
+      },
+    };
+    const bundle = {
+      textures: new Map(),
+      map: {
+        width: 3,
+        height: 1,
+        scene: {
+          tileSize: 16,
+          sprites: [],
+          layers: [],
+          concealedLayers: [],
+          emitters: [
+            { ...emitter, cell: 0, clipToChasm: true },
+            { ...emitter, cell: 1, clipToChasm: true },
+            { ...emitter, cell: 2 },
+          ],
+          concealedEmitters: [],
+        },
+      },
+    } as unknown as MapBundle;
+    try {
+      createMapParticleRenderer(
+        context as unknown as CanvasRenderingContext2D,
+        {} as HTMLCanvasElement,
+        bundle,
+        true,
+      ).draw(100);
+      expect(rectangles).toEqual([
+        [0, 0, 16, 16],
+        [16, 0, 16, 16],
+      ]);
+      expect(draws).toEqual([true, true, false]);
+      expect(clipped).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
   it("fades and thins a death ray without shortening it at 120 Hz", () => {
     const beam: MapEmitter = {
       ...emitter,

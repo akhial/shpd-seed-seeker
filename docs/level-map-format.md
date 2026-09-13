@@ -95,6 +95,13 @@ treasure scans) or inward-facing perimeter pattern. Their blue checked cells
 respect the game's Ballistica, ConeAOE and field-of-view geometry, propagate
 outward with distance-dependent delays, then shrink and fade over 0.8s. Scouting
 does not invent a hero target or advance terrain destruction/combat.
+Chasms use the game's sparse white `WindParticle` squares: a 2.5s emission
+interval, 1–2s lifetime, size-dependent drift and a triangular fade peaking at
+10% opacity per pixel of size. The scouting visibility heuristic includes room
+interiors and enclosed pits adjoining playable ground. On floor 15, the explicit
+bridge abyss is included through its map-edge and arena-wall boundaries.
+Exterior void and sealed rock pockets stay clear; concealed rooms lose their wind.
+Visual randomness uses a deterministic breeze and never consumes generation RNG.
 The vault entry uses its torn carpets, circular entrance, pulsing barrier and wall banners.
 Actor sprites use their original idle/disguise films, flattened sprite shadows,
 and sleep indicators. Foreground walls and raised terrain occlude heaps/actors.
@@ -285,6 +292,10 @@ optional `scan` stores cone degrees and tile length, both multiplied by 1000.
 `wallMask: true` are occluded by the alpha silhouettes of `raised`, `walls`,
 `room_walls`, and `boss_walls`. Status icons use `wallMask: false` and appear
 above those surfaces. Apply geometric darkness last to both groups.
+Emitters with `clipToChasm: true` draw before other world particles and are
+clipped to the union of the tile rectangles of all `clipToChasm` emitters in
+the selected scene. Keep this clip during movement, so a square can drift
+between adjacent chasms but cannot spill onto floors or into excluded void.
 Reduced-motion/static views sample
 time zero. The browser uses a separate particle canvas, copying only emitter
 bounds from cached scenery before compositing; it pauses offscreen/hidden maps.

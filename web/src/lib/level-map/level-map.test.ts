@@ -19,6 +19,34 @@ const map = (depth: number, branch = 0) =>
   ) as LevelMapDocument;
 
 describe("browser level map contract", () => {
+  it("keeps chasm wind sparse and smooth while excluding unused void", () => {
+    const result = map(22); // Chasm feeling: unused background is also CHASM.
+    const wind = result.scene.emitters!.filter((e) => e.clipToChasm);
+    expect(wind.length).toBeGreaterThan(0);
+    expect(wind.length).toBeLessThan(result.terrain.filter((t) => t === 0).length);
+    for (const emitter of wind) {
+      expect(result.terrain[emitter.cell]).toBe(0);
+      expect(emitter.wallMask).toBe(true);
+      expect(emitter.loopMs).toBe(2500);
+      const p = emitter.particles[0];
+      expect(p.lifespanMs).toBeGreaterThanOrEqual(1000);
+      expect(p.lifespanMs).toBeLessThan(2000);
+      const middle = p.birthMs + p.lifespanMs / 2;
+      const state = particleState(emitter, p, middle)!;
+      expect(state.alpha).toBeCloseTo(state.scale * 0.1, 2);
+      expect(state.x).toBeGreaterThanOrEqual(0.499);
+      expect(state.x).toBeLessThan(16.501);
+      expect(state.y).toBeGreaterThanOrEqual(0.499);
+      expect(state.y).toBeLessThan(16.501);
+    }
+    const breeze = wind.find((e) => e.velocity[0] !== 0)!;
+    const p = breeze.particles[0],
+      time = p.birthMs + p.lifespanMs / 2;
+    expect(particleState(breeze, p, time + 1000 / 120)!.x).not.toBe(
+      particleState(breeze, p, time)!.x,
+    );
+    expect(particleState(breeze, p, time + 2500)).toEqual(particleState(breeze, p, time));
+  });
   it("advances Vault rays and scans using their seeded turns through WASM", () => {
     const result = JSON.parse(
       level_map(JSON.stringify({ seed: "FOI-QDX-EMJ", depth: 18, branch: 1 })),

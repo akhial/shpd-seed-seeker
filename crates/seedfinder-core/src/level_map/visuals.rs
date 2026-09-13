@@ -4,6 +4,7 @@
 mod actors;
 mod boss;
 mod carpets;
+mod chasms;
 mod item_rects;
 mod objects;
 mod particles;
@@ -69,6 +70,12 @@ pub(super) fn scene(
     );
     scene.emitters = particles::emitters(&revealed, contents);
     scene.concealed_emitters = particles::emitters(&concealed, contents);
+    scene
+        .emitters
+        .extend(chasms::emitters(&revealed, rooms, kind));
+    scene
+        .concealed_emitters
+        .extend(chasms::emitters(&concealed, rooms, kind));
     scene
 }
 

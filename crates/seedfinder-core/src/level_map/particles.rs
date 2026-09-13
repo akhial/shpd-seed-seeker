@@ -30,6 +30,12 @@ pub struct MapEmitter {
     pub start_ms: Option<u32>,
     /// Foreground terrain occludes world particles; status icons stay above it.
     pub wall_mask: bool,
+    /// Clip wind to the union of chasm-emitter cells in the selected scene.
+    #[cfg_attr(
+        feature = "json-query",
+        serde(skip_serializing_if = "std::ops::Not::not")
+    )]
+    pub clip_to_chasm: bool,
     pub cell: usize,
     pub loop_ms: u16,
     pub blend: Option<MapBlend>,

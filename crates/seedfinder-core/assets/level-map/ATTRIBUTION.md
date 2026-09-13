@@ -36,6 +36,7 @@ half-wall masks in `FogOfWar`, the trap/plant sprite indices,
 `CharSprite`/`ItemSprite` shadows, `EmoIcon.Sleep`, `Speck`, `SacrificialParticle`, `ElmoParticle`,
 `Beam.DeathRay`, `CheckedCell`, `TargetedCell`, `VaultLaser`, `VaultSentry`,
 `Ballistica`, `ConeAOE`,
+`WindParticle.Wind` and its chasm visibility gate in `Level.addVisuals`,
 `CityLevel.GreenFlame`, `AmbitiousImpRoom` entrance/barrier/banners, `Carpet`,
 `StatuesRoom`, `HallwayRoom`, and `LibraryRingRoom` entrance/exit carpet layouts,
 and `GameScene` water scrolling and `SewerLevel.Sink` pixel particles. The overview

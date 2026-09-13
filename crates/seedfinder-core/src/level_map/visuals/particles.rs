@@ -83,6 +83,7 @@ pub(super) fn emitters(level: &Level, contents: &MapContents) -> Vec<MapEmitter>
             start_ms: None,
             scale_y: None,
             wall_mask: false,
+            clip_to_chasm: false,
             cell: mob.cell,
             loop_ms: 800,
             blend: None,
@@ -114,7 +115,7 @@ pub(super) fn emitters(level: &Level, contents: &MapContents) -> Vec<MapEmitter>
     result
 }
 
-fn sample(cell: usize, particle: usize, component: u32) -> f32 {
+pub(super) fn sample(cell: usize, particle: usize, component: u32) -> f32 {
     let mut v = (cell as u32).wrapping_mul(0x9e37_79b9)
         ^ (particle as u32).wrapping_mul(0x85eb_ca6b)
         ^ component.wrapping_mul(0xc2b2_ae35);
@@ -125,7 +126,7 @@ fn sample(cell: usize, particle: usize, component: u32) -> f32 {
     v ^= v >> 16;
     (v >> 8) as f32 / 16_777_216.0
 }
-fn curve(points: &[[u16; 2]]) -> MapCurve {
+pub(super) fn curve(points: &[[u16; 2]]) -> MapCurve {
     MapCurve {
         points: points.to_vec(),
         sqrt: false,
@@ -293,6 +294,7 @@ fn emitter(cell: usize, kind: Particle) -> MapEmitter {
         start_ms: None,
         scale_y: None,
         wall_mask: true,
+        clip_to_chasm: false,
         cell,
         loop_ms,
         blend: if speck.is_none() {
@@ -324,6 +326,7 @@ fn forge_sparks(cell: usize) -> Vec<MapEmitter> {
                 start_ms: None,
                 scale_y: None,
                 wall_mask: true,
+                clip_to_chasm: false,
                 cell,
                 loop_ms: 792,
                 blend: None,
@@ -357,6 +360,7 @@ fn pipe_drips(cell: usize) -> MapEmitter {
         start_ms: None,
         scale_y: None,
         wall_mask: true,
+        clip_to_chasm: false,
         cell,
         loop_ms: 400,
         blend: None,

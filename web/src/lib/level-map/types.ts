@@ -116,6 +116,7 @@ export interface MapCurve {
 export interface MapEmitter {
   startMs?: number;
   wallMask?: boolean;
+  clipToChasm?: boolean;
   cell: number;
   loopMs: number;
   blend: "add" | null;

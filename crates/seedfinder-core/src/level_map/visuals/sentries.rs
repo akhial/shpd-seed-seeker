@@ -101,6 +101,7 @@ fn base(cell: usize, start: u32, period: u16) -> MapEmitter {
         start_ms: Some(start),
         loop_ms: period,
         wall_mask: true,
+        clip_to_chasm: false,
         blend: None,
         image: MapDraw::Fill {
             rgba: [85, 170, 255, 255],

@@ -114,6 +114,17 @@ export function createMapParticleRenderer(
   const width = map.width * size,
     height = map.height * size;
   const emitters = (revealSecrets ? map.scene.emitters : map.scene.concealedEmitters) ?? [];
+  const wind = emitters.filter((emitter) => emitter.clipToChasm);
+  // The engine chooses visible chasms for this secret-visibility mode. Clip the
+  // complete trajectories, so wind cannot drift onto floors or into outer void.
+  const chasms = wind.length ? new Path2D() : null;
+  for (const emitter of wind)
+    chasms!.rect(
+      (emitter.cell % map.width) * size,
+      Math.floor(emitter.cell / map.width) * size,
+      size,
+      size,
+    );
   const regions = emitters
     .map((emitter) => emitterBounds(emitter, map.width, size))
     .map(([x, y, w, h]): Rectangle => {
@@ -206,12 +217,20 @@ export function createMapParticleRenderer(
         for (const [x, y, w, h] of regions)
           if (w && h) context.drawImage(mask, x, y, w, h, x, y, w, h);
       };
+      if (chasms) {
+        context.save();
+        context.clip(chasms);
+        emitters.forEach((emitter, index) => {
+          if (emitter.clipToChasm) drawEmitter(emitter, index);
+        });
+        context.restore();
+      }
       emitters.forEach((emitter, index) => {
-        if (emitter.wallMask) drawEmitter(emitter, index);
+        if (emitter.wallMask && !emitter.clipToChasm) drawEmitter(emitter, index);
       });
       eraseMask(walls);
       emitters.forEach((emitter, index) => {
-        if (!emitter.wallMask) drawEmitter(emitter, index);
+        if (!emitter.wallMask && !emitter.clipToChasm) drawEmitter(emitter, index);
       });
       eraseMask(darkness);
       context.restore();
