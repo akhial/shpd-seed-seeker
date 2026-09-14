@@ -12,7 +12,6 @@ import dev.seedseeker.app.model.FloorFeeling
 import kotlin.math.roundToInt
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.Orientation
@@ -30,14 +29,12 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -100,8 +97,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.stateDescription
 import dev.seedseeker.app.model.ItemKind
 import dev.seedseeker.app.model.CatalogItem
 import androidx.compose.ui.unit.sp
@@ -456,18 +451,10 @@ private fun ResultNavigationBar(
         Box(Modifier.weight(1f).height(44.dp).clipToBounds(), contentAlignment = Alignment.CenterEnd) {
             if (index != null) Text("swipe to browse", modifier = Modifier.graphicsLayer { alpha = 1f - reveal },
                 style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (reveal > 0) Row(Modifier.graphicsLayer { alpha = reveal; translationY = (1f - reveal) * size.height },
-                horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                offers.forEach { offer ->
-                    val applied = selectedTrinket == offer.id
-                    Surface(selected = applied, onClick = { onSelect(if (applied) "none" else offer.id) }, enabled = enabled,
-                        modifier = Modifier.size(36.dp).semantics { contentDescription = offer.name },
-                        shape = MaterialTheme.shapes.small, border = BorderStroke(if (applied) 2.dp else 1.dp, if (applied) SpdGreen else MaterialTheme.colorScheme.outlineVariant),
-                        color = if (applied) SpdGreen.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceContainerLow) {
-                        Box(contentAlignment = Alignment.Center) { ItemSprite(offer, modifier = Modifier.size(22.dp)) }
-                    }
-                }
-            }
+            if (reveal > 0) TrinketShortcuts(
+                offers = offers, selectedTrinket = selectedTrinket, enabled = enabled, onSelect = onSelect,
+                modifier = Modifier.graphicsLayer { alpha = reveal; translationY = (1f - reveal) * size.height },
+            )
         }
     }
 }
@@ -489,67 +476,6 @@ internal fun formatSeedFieldValue(input: TextFieldValue): TextFieldValue {
             remapOffset(input.selection.end),
         ),
     )
-}
-
-@Composable
-private fun FloorHeading(
-    depth: Int,
-    itemCount: Int,
-    feeling: FloorFeeling? = null,
-    modifier: Modifier = Modifier,
-    questLabel: String? = null,
-    mapExpanded: Boolean = false,
-    onMapToggle: (() -> Unit)? = null,
-) {
-    val region = floorRegionColor(depth)
-    Column(modifier.fillMaxWidth().heightIn(min = 48.dp).then(
-        if (onMapToggle != null) Modifier.clickable(role = Role.Button, onClick = onMapToggle)
-            .semantics { stateDescription = if (mapExpanded) "Map expanded" else "Map collapsed" }
-        else Modifier,
-    )) {
-        Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
-            // Region-coloured bar, as on the web's floor headers.
-            Box(
-                Modifier
-                    .size(width = 3.dp, height = 14.dp)
-                    .background(region, RoundedCornerShape(2.dp)),
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(
-                "FLOOR $depth",
-                style = MaterialTheme.typography.labelLarge,
-                letterSpacing = 1.1.sp,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
-            if (feeling != null && feeling != FloorFeeling.NONE) {
-                Spacer(Modifier.width(6.dp))
-                FloorFeelingSprite(feeling)
-            }
-            Spacer(Modifier.width(8.dp))
-            Text(
-                floorRegion(depth),
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.labelMedium,
-                color = region,
-            )
-            Text(
-                if (itemCount == 1) "1 item" else "$itemCount items",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            if (onMapToggle != null) {
-                Spacer(Modifier.width(8.dp))
-                Icon(Icons.Outlined.Place, null, Modifier.size(16.dp),
-                    tint = if (mapExpanded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("Map", style = MaterialTheme.typography.labelSmall,
-                    color = if (mapExpanded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-        questLabel?.let {
-            Text(it, Modifier.padding(start = 11.dp, bottom = 6.dp),
-                style = MaterialTheme.typography.labelSmall, color = region)
-        }
-    }
 }
 
 @Composable
@@ -623,6 +549,21 @@ private fun ScoutItemCard(
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false),
                     )
+                    if (scoutItem.displayedUpgrade != 0) {
+                        Spacer(Modifier.width(8.dp))
+                        Surface(
+                            shape = MaterialTheme.shapes.extraSmall,
+                            color = SpdUpgrade.copy(alpha = 0.12f),
+                        ) {
+                            Text(
+                                "+${scoutItem.displayedUpgrade}",
+                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontFamily = FontFamily.Monospace,
+                                color = SpdUpgrade,
+                            )
+                        }
+                    }
                     if (scoutItem.cursed) {
                         Spacer(Modifier.width(8.dp))
                         Surface(
@@ -675,20 +616,6 @@ private fun ScoutItemCard(
             }
             Spacer(Modifier.width(10.dp))
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                if (scoutItem.displayedUpgrade != 0) {
-                    Surface(
-                        shape = MaterialTheme.shapes.extraSmall,
-                        color = SpdUpgrade.copy(alpha = 0.12f),
-                    ) {
-                        Text(
-                            "+${scoutItem.displayedUpgrade}",
-                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
-                            style = MaterialTheme.typography.labelMedium,
-                            fontFamily = FontFamily.Monospace,
-                            color = SpdUpgrade,
-                        )
-                    }
-                }
                 if (matches) {
                     Surface(
                         shape = MaterialTheme.shapes.large,

@@ -15,6 +15,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
@@ -79,13 +81,13 @@ class LevelMapScreenTest {
     @Config(qualifiers = "w320dp-h915dp-xhdpi")
     fun expandedFloorSurvivesTrinketChangesAndCloseReturnsToInlineFloor() {
         PackagedCatalog.install()
-        val initial = JniNativeSeedFinder().scoutSelectedSeed("AAA-AAA-AAA", 0, null, "none")
+        val initial = JniNativeSeedFinder().scoutSelectedSeed("MKG-FUN-IHX", 0, null, "none")
         val world = mutableStateOf(initial)
         val offer = initial.trinketOrder.first()
         runBlocking {
-            LevelMaps.load(LevelMapRequest(initial.seed, 1, 0, null))
-            LevelMaps.load(LevelMapRequest(initial.seed, 2, 0, null))
-            LevelMaps.load(LevelMapRequest(initial.seed, 2, 0, offer.id))
+            LevelMaps.load(LevelMapRequest(initial.seed, 18, 0, null))
+            LevelMaps.load(LevelMapRequest(initial.seed, 19, 0, null))
+            LevelMaps.load(LevelMapRequest(initial.seed, 19, 0, offer.id))
         }
         val atlas = compose.activity.assets.open("third_party/shattered-pixel-dungeon/items.png")
             .use(BitmapFactory::decodeStream)!!.asImageBitmap()
@@ -93,7 +95,7 @@ class LevelMapScreenTest {
             SeedSeekerTheme {
                 CompositionLocalProvider(LocalItemAtlas provides atlas) {
                     Box(Modifier.fillMaxWidth().height(350.dp)) {
-                        LevelMapView(world.value, 1, listOf(1, 2), 0, false) { trinket ->
+                        LevelMapView(world.value, 18, listOf(18, 19), 0, false) { trinket ->
                             world.value = world.value.copy(selectedTrinket = trinket.takeUnless { it == "none" })
                         }
                     }
@@ -102,16 +104,29 @@ class LevelMapScreenTest {
         }
         compose.onNodeWithText("Expand map").performClick()
         compose.onNodeWithContentDescription("Next floor").performClick()
-        compose.onNodeWithText("Floor 2 · Sewers").assertIsDisplayed()
+        compose.onNodeWithText("FLOOR 19").assertIsDisplayed()
         initial.trinketOrder.take(4).forEach { compose.onNodeWithContentDescription(it.name).assertIsDisplayed() }
         compose.onNodeWithContentDescription(offer.name).performClick()
-        compose.onNodeWithText("Floor 2 · Sewers").assertIsDisplayed()
+        compose.onNodeWithText("FLOOR 19").assertIsDisplayed()
         compose.runOnIdle { assertEquals(offer.id, world.value.selectedTrinket) }
-        compose.waitUntil(timeoutMillis = 10_000) { compose.onAllNodesWithText("Fit").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithContentDescription(offer.name).assertIsSelected()
+        compose.onNodeWithText("+3").assertDoesNotExist()
+        compose.onNodeWithText("Fit").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Zoom in").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Zoom out").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Next floor").assertIsNotEnabled()
+        val heading = compose.onNodeWithText("FLOOR 19").fetchSemanticsNode().boundsInRoot
+        val previous = compose.onNodeWithContentDescription("Previous floor").fetchSemanticsNode().boundsInRoot
+        val next = compose.onNodeWithContentDescription("Next floor").fetchSemanticsNode().boundsInRoot
+        assertTrue(previous.top > heading.bottom)
+        assertEquals(previous.center.y, next.center.y, 1f)
+        compose.waitUntil(timeoutMillis = 10_000) {
+            compose.onAllNodesWithText("Charting floor 19…").fetchSemanticsNodes().isEmpty()
+        }
         screenshot("expanded-320dp")
         compose.onNodeWithContentDescription("Close map").performClick()
         compose.onNodeWithText("Expand map").performClick()
-        compose.onNodeWithText("Floor 1 · Sewers").assertIsDisplayed()
+        compose.onNodeWithText("FLOOR 18").assertIsDisplayed()
     }
 
     private fun screenshot(name: String) {

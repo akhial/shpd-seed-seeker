@@ -83,9 +83,10 @@ item artwork.
 Tap a supported Scout floor heading to open its map above the loot, or tap again
 to close it. Maps start closed, with one floor open at a time; empty floors and
 boss floors 5 and 15 are included. Tap **Expand map** for a full-screen Material dialog. Pinch
-or double-tap to zoom, drag to pan, and use **Fit** to reset. Previous/next controls
-and horizontal swipes at fit zoom browse floors. The dialog offers the initial
-four trinkets and retains the current floor when a selection changes. Quest-area
+or double-tap to zoom, and drag to pan; double-tap again to return to fit zoom.
+The rounded previous/next control at the bottom and horizontal swipes at fit zoom
+browse floors. The dialog shares the item list’s floor heading, quest badge, and
+compact trinket shortcuts, retaining the current floor when a selection changes. Quest-area
 chips open the Blacksmith Mine or Imp Vault; **Secrets** switches the complete
 concealed/revealed scene without generating another map.
 

@@ -15,7 +15,6 @@ import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.View
 import androidx.compose.foundation.background
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -43,10 +42,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.PlainTooltip
-import androidx.compose.material3.TooltipBox
-import androidx.compose.material3.TooltipDefaults
-import androidx.compose.material3.rememberTooltipState
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -60,7 +56,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
@@ -110,22 +105,27 @@ internal fun LevelMapView(
     fun navigate(delta: Int) { floors.getOrNull(floors.indexOf(depth) + delta)?.let { depth = it } }
 
     val toolbar: @Composable () -> Unit = {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (!parent?.map?.branches.isNullOrEmpty()) {
-                    FilterChip(selected = branch == 0, onClick = { branch = 0 }, label = { Text("Main") })
-                    parent?.map?.branches?.forEach { area ->
-                        FilterChip(selected = branch == area.branch, onClick = { branch = area.branch },
-                            modifier = Modifier.semantics { contentDescription = area.label },
-                            label = { Text(if (area.kind == "imp_vault") "Vault" else "Mine") })
-                    }
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+        ) {
+            if (!parent?.map?.branches.isNullOrEmpty()) {
+                FilterChip(selected = branch == 0, onClick = { branch = 0 }, label = { Text("Main") })
+                parent?.map?.branches?.forEach { area ->
+                    FilterChip(selected = branch == area.branch, onClick = { branch = area.branch },
+                        modifier = Modifier.semantics { contentDescription = area.label },
+                        label = { Text(if (area.kind == "imp_vault") "Vault" else "Mine") })
                 }
             }
             FilterChip(selected = secrets, onClick = { secrets = !secrets },
                 enabled = (bundle?.map?.secretCount ?: 0) > 0,
-                leadingIcon = { Icon(if (secrets) Icons.Filled.Check else Icons.Filled.Close, null, Modifier.size(16.dp)) },
-                label = { Text("Secrets") })
+                label = {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Icon(if (secrets) Icons.Filled.Check else Icons.Filled.Close, null, Modifier.size(16.dp))
+                        Text("Secrets")
+                    }
+                })
         }
     }
     val stage: @Composable (Modifier, Boolean) -> Unit = { modifier, full ->
@@ -161,73 +161,53 @@ internal fun LevelMapView(
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Column(Modifier.fillMaxSize().safeDrawingPadding()) {
-                Row(Modifier.fillMaxWidth().padding(start = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { navigate(-1) }, enabled = floors.indexOf(depth) > 0) {
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Previous floor")
-                    }
-                    Column(Modifier.weight(1f)) {
-                        Text("Floor $depth · ${floorRegion(depth)}", style = MaterialTheme.typography.titleMedium, color = floorRegionColor(depth))
-                        world.quests.firstOrNull { it.depth == depth }?.let {
-                            Text(it.variant.label, style = MaterialTheme.typography.labelSmall)
-                        }
-                    }
-                    world.floorFeelings[depth]?.let { if (it != dev.seedseeker.app.model.FloorFeeling.NONE) FloorFeelingSprite(it) }
-                    IconButton(onClick = { navigate(1) }, enabled = floors.indexOf(depth) < floors.lastIndex) {
-                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Next floor")
-                    }
-                    IconButton(onClick = ::close) { Icon(Icons.Filled.Close, "Close map") }
-                }
-                if (world.trinketOrder.isNotEmpty()) Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-                ) {
-                    world.trinketOrder.take(4).forEach { offer ->
-                        val selected = world.selectedTrinket == offer.id
-                        TooltipBox(positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
-                            tooltip = { PlainTooltip { Text(offer.name + if (selected) " · Applied +3" else "") } },
-                            state = rememberTooltipState()) {
-                            Surface(selected = selected, enabled = !changingTrinket,
-                                onClick = { onSelectTrinket(if (selected) "none" else offer.id) },
-                                modifier = Modifier.size(56.dp).semantics {
-                                    contentDescription = offer.name
-                                    stateDescription = if (selected) "Applied +3" else "Not applied"
-                                }, shape = MaterialTheme.shapes.medium,
-                                color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainer,
-                                border = BorderStroke(1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant)) {
-                                Column(Modifier.fillMaxSize().padding(4.dp), horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Center) {
-                                    ItemSprite(offer, modifier = Modifier.size(if (selected) 28.dp else 32.dp))
-                                    if (selected) Text("+3", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
-                                }
+                FloorHeading(
+                    depth = depth,
+                    itemCount = world.items.count { it.depth == depth },
+                    feeling = world.floorFeelings[depth],
+                    questLabel = world.quests.firstOrNull { it.depth == depth }?.variant?.label,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                    onCloseMap = ::close,
+                )
+                if (world.trinketOrder.isNotEmpty()) TrinketShortcuts(
+                    offers = world.trinketOrder,
+                    selectedTrinket = world.selectedTrinket,
+                    enabled = !changingTrinket,
+                    onSelect = onSelectTrinket,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                )
+                toolbar()
+                Box(Modifier.fillMaxWidth().weight(1f)) {
+                    stage(Modifier.fillMaxSize(), true)
+                    Surface(
+                        modifier = Modifier.align(Alignment.BottomCenter).padding(12.dp),
+                        shape = MaterialTheme.shapes.large,
+                        color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.92f),
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            IconButton(onClick = { navigate(-1) }, enabled = floors.indexOf(depth) > 0) {
+                                Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Previous floor")
+                            }
+                            VerticalDivider(Modifier.height(24.dp))
+                            IconButton(onClick = { navigate(1) }, enabled = floors.indexOf(depth) < floors.lastIndex) {
+                                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Next floor")
                             }
                         }
                     }
                 }
-                toolbar()
-                stage(Modifier.fillMaxWidth().weight(1f), true)
             }
         }
     }
 }
 
-private class MapViewHandle { var view: NativeLevelMapView? = null }
-
 @Composable
 private fun MapCanvas(bundle: LevelMapBundle, secrets: Boolean, label: String, expanded: Boolean, navigate: (Int) -> Unit) {
-    val handle = remember { MapViewHandle() }
-    Box(Modifier.fillMaxSize()) {
-        AndroidView(modifier = Modifier.fillMaxSize(), factory = { context -> NativeLevelMapView(context).also { handle.view = it } },
-            update = { it.bind(bundle, secrets, expanded, navigate); it.contentDescription = label },
-            onRelease = { it.release(); handle.view = null })
-        Surface(modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp), shape = MaterialTheme.shapes.medium,
-            color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.92f)) {
-            Row {
-                TextButton(onClick = { handle.view?.zoomBy(1 / 1.5f) }, modifier = Modifier.semantics { contentDescription = "Zoom out" }) { Text("−") }
-                TextButton(onClick = { handle.view?.reset() }) { Text("Fit") }
-                TextButton(onClick = { handle.view?.zoomBy(1.5f) }, modifier = Modifier.semantics { contentDescription = "Zoom in" }) { Text("+") }
-            }
-        }
-    }
+    AndroidView(
+        modifier = Modifier.fillMaxSize(),
+        factory = { context -> NativeLevelMapView(context) },
+        update = { it.bind(bundle, secrets, expanded, navigate); it.contentDescription = label },
+        onRelease = { it.release() },
+    )
 }
 
 /** Android gestures, accessibility scrolling and animation lifetime stay native. */
@@ -286,7 +266,6 @@ internal class NativeLevelMapView(context: Context) : View(context) {
     }
     fun release() { renderer?.close(); renderer = null; bundle = null }
     fun reset() { zoom = 1f; panX = 0f; panY = 0f; invalidate() }
-    fun zoomBy(factor: Float) = zoomAt(zoom * factor, 0f, 0f)
     private fun zoomAt(next: Float, x: Float, y: Float) {
         val clamped = next.coerceIn(1f, 8f)
         val ratio = clamped / zoom

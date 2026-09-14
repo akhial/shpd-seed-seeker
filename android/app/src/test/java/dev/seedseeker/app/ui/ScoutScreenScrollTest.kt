@@ -68,7 +68,10 @@ class ScoutScreenScrollTest {
         ScoutWorld(
             seed = "EQI-HLQ-RTU",
             items = offers.map { item(it, 1) } + (1..19).map {
-                item(requireNotNull(ItemCatalog.findById("fishing_spear")), it)
+                if (it == 1) item(requireNotNull(ItemCatalog.findById("force_cube")), it).copy(
+                    upgrade = 3, effect = "Chilling", source = ScoutItemSource.IMP_REWARD,
+                    accessibility = ScoutAccessibility.Choice(group = 6, option = 0),
+                ) else item(requireNotNull(ItemCatalog.findById("fishing_spear")), it)
             },
             quests = emptyList(),
             ringGems = RingGems.CATALOG,
@@ -82,7 +85,7 @@ class ScoutScreenScrollTest {
     )
 
     private fun show(
-        matches: ScoutMatches? = ScoutMatches(emptySet(), 5, 5),
+        matches: ScoutMatches? = ScoutMatches(setOf(4), 5, 5),
         fontScale: Float = 1f,
         onStep: (String) -> Unit = {},
         onSelect: (String) -> Unit = {},

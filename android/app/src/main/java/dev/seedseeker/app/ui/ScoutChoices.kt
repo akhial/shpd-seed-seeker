@@ -1,23 +1,22 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package dev.seedseeker.app.ui
 
-import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import dev.seedseeker.app.R
 import dev.seedseeker.app.engine.isMapDepthSupported
 import dev.seedseeker.app.model.ScoutAccessibility
 import dev.seedseeker.app.model.ScoutItem
@@ -46,18 +45,12 @@ internal fun scoutGroupLetter(group: Int): Char = ('A'.code + group % 26).toChar
 internal fun ChoiceGroupChip(choice: ScoutAccessibility.Choice) {
     val letter = scoutGroupLetter(choice.group)
     val color = MaterialTheme.colorScheme.onSurfaceVariant
-    Surface(shape = MaterialTheme.shapes.small, color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    Surface(shape = MaterialTheme.shapes.extraSmall, color = MaterialTheme.colorScheme.surfaceContainerHigh,
         modifier = Modifier.semantics(mergeDescendants = true) { contentDescription = "One reward of choice group $letter (option ${choice.option + 1})" }) {
-        Row(Modifier.padding(horizontal = 8.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically,
+        Row(Modifier.padding(horizontal = 6.dp, vertical = 1.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            Canvas(Modifier.size(12.dp)) {
-                val center = Offset(size.width / 2, size.height * 0.55f)
-                drawLine(color, center, Offset(size.width / 2, size.height), 1.5.dp.toPx(), StrokeCap.Round)
-                drawLine(color, center, Offset(0f, 0f), 1.5.dp.toPx(), StrokeCap.Round)
-                drawLine(color, center, Offset(size.width, 0f), 1.5.dp.toPx(), StrokeCap.Round)
-            }
-            Text(letter.toString(), style = MaterialTheme.typography.labelSmall)
+            Icon(painterResource(R.drawable.ic_git_fork), null, Modifier.size(12.dp), tint = color)
+            Text(letter.toString(), style = MaterialTheme.typography.labelSmall, color = color)
         }
     }
 }
