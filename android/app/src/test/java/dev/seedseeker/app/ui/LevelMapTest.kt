@@ -130,8 +130,8 @@ class LevelMapTest {
     }
 
     @Test fun nativeV3SceneRendersEmbeddedAssetsAndBossFloor() = runBlocking {
-        for (depth in listOf(1, 15)) {
-            val request = LevelMapRequest("AAA-AAA-AAA", depth, 0, null)
+        for ((seed, depth) in listOf("AAA-AAA-AAA" to 1, "AAA-AAA-AAA" to 15, "AAT-TST-BMT" to 17)) {
+            val request = LevelMapRequest(seed, depth, 0, null)
             val bundle = LevelMaps.load(request)
             assertTrue(bundle.map.assets.isNotEmpty())
             assertEquals(depth, bundle.map.depth)
