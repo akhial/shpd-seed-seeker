@@ -53,6 +53,10 @@ the item list stays visible. Expand opens a native sheet with a floor picker, pr
 buttons (K/J), quest branch segments and trinket shortcuts. Scroll or pinch to
 zoom, drag or use arrow keys to pan, and press 0 to fit the map. Secrets start
 hidden and can be revealed without regenerating the scene.
+The sheet starts with the inline map's area and Secrets setting, then browses
+independently. Trinket changes preserve the selected area, zoom and pan.
+Opening an inline map starts loading immediately, even before scroll visibility
+has updated; visibility only controls animation.
 
 Maps use the engine's version 3 sprite scene and embedded PNG assets, including
 initial containers, loot, actors, glow and continuous effects. Generation runs

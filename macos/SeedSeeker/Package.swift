@@ -41,5 +41,6 @@ let package = Package(
         // CSeedFinder is listed so EngineConstantsTests can call
         // `seedfinder_engine_info` directly rather than through a runtime reader.
         .testTarget(name: "SeedSeekerKitTests", dependencies: ["SeedSeekerKit", "CSeedFinder"]),
+        .testTarget(name: "SeedSeekerTests", dependencies: ["SeedSeeker"]),
     ]
 )

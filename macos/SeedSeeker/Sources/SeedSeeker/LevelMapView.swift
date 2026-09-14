@@ -3,8 +3,8 @@ import ImageIO
 import SeedSeekerKit
 import SwiftUI
 
-/// Each row retains its map while offscreen, but only visible rows generate and
-/// animate. The expanded sheet keeps the current floor during trinket changes.
+/// The inline map stays attached to its floor; the sheet owns a separate map
+/// and navigation state. Only the selected trinket belongs to the shared Scout.
 struct LevelMapView: View {
     let world: ScoutWorld
     let depth: Int
@@ -13,80 +13,67 @@ struct LevelMapView: View {
     let active: Bool
     let changingTrinket: Bool
     let onSelectTrinket: (String) -> Void
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var expanded = false
-    @State private var selectedDepth: Int?
-    @State private var branchSelection: (profile: LevelMapRequest, branch: Int)?
-    @State private var secrets = false
-    @State private var bundle: LevelMapBundle?
-    @State private var loadedKey: LevelMapRequest?
-    @State private var parentKey: LevelMapRequest?
-    @State private var parentBranches: [LevelMapDocument.Branch] = []
-    @State private var error: String?
-    @State private var retry = 0
+    @State private var expandedMap: ExpandedMapSelection?
 
-    private var currentDepth: Int { selectedDepth ?? depth }
-    private var profile: LevelMapRequest {
-        LevelMapRequest(seed: world.seed, depth: currentDepth, challenges: challenges,
-                        selectedTrinket: world.selectedTrinket)
+    private struct ExpandedMapSelection: Identifiable {
+        let id = UUID()
+        let branch: Int
+        let secrets: Bool
     }
-    private var branch: Int { branchSelection?.profile == profile ? branchSelection!.branch : 0 }
-    private var request: LevelMapRequest {
-        LevelMapRequest(seed: world.seed, depth: currentDepth, branch: branch,
-                        challenges: challenges, selectedTrinket: world.selectedTrinket)
-    }
-    private var map: LevelMapBundle? { loadedKey == request ? bundle : nil }
-    private var branches: [LevelMapDocument.Branch] { parentKey == profile ? parentBranches : [] }
-    private var title: String {
-        branch == 0 ? "Floor \(currentDepth) layout" : (map?.document.kind == "imp_vault" ? "Imp Vault" : "Blacksmith Mine")
-    }
-    private struct LoadKey: Hashable { let request: LevelMapRequest?; let retry: Int }
 
     var body: some View {
-        VStack(spacing: 6) {
-            toolbar
-            stage(animated: active && !expanded)
-                .frame(height: 260)
-                .overlay(alignment: .topTrailing) {
-                    Button { expanded = true } label: { Label("Expand", systemImage: "arrow.up.left.and.arrow.down.right") }
-                        .controlSize(.small).padding(8)
-                }
-        }
-        .padding(.vertical, 8)
-        .task(id: LoadKey(request: active || expanded ? request : nil, retry: retry)) {
-            guard active || expanded else { return }
-            let requested = request
-            error = nil
-            do {
-                let next = try await LevelMapClient.shared.load(requested)
-                guard !Task.isCancelled, requested == request else { return }
-                bundle = next; loadedKey = requested
-                if requested.branch == 0 { parentKey = requested; parentBranches = next.document.branches }
-            } catch {
-                guard !Task.isCancelled, requested == request else { return }
-                self.error = error.localizedDescription
+        LevelMapPanel(world: world, depth: depth, challenges: challenges,
+                      animated: active && expandedMap == nil, mapHeight: 260, onExpand: { branch, secrets in
+                          expandedMap = ExpandedMapSelection(branch: branch, secrets: secrets)
+                      })
+            .padding(.vertical, 8)
+            .sheet(item: $expandedMap) { selection in
+                ExpandedLevelMapView(world: world, initialDepth: depth, floors: floors,
+                                     initialBranch: selection.branch, initialSecrets: selection.secrets,
+                                     challenges: challenges, changingTrinket: changingTrinket,
+                                     onSelectTrinket: onSelectTrinket)
             }
-        }
-        .onChange(of: profile) { branchSelection = nil }
-        .sheet(isPresented: $expanded, onDismiss: {
-            selectedDepth = nil; branchSelection = nil
-        }) {
-            VStack(spacing: 10) {
-                HStack(spacing: 10) {
-                    Button { navigate(-1) } label: { Image(systemName: "chevron.left") }
+    }
+}
+
+private struct ExpandedLevelMapView: View {
+    let world: ScoutWorld
+    let initialDepth: Int
+    let floors: [Int]
+    let initialBranch: Int
+    let initialSecrets: Bool
+    let challenges: Int
+    let changingTrinket: Bool
+    let onSelectTrinket: (String) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedDepth: Int?
+
+    private var currentDepth: Int { selectedDepth ?? initialDepth }
+
+    var body: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 10) {
+                HStack(spacing: 4) {
+                    Button { navigate(-1) } label: { floorArrow("chevron.left") }
+                        .buttonStyle(.plain)
                         .help("Previous floor (K)").keyboardShortcut("k", modifiers: [])
+                        .accessibilityLabel("Previous floor")
                         .disabled(floors.first == currentDepth)
                     Picker("Floor", selection: Binding(get: { currentDepth }, set: { selectedDepth = $0 })) {
                         ForEach(floors, id: \.self) { Text("Floor \($0)").tag($0) }
-                    }.labelsHidden().frame(width: 120)
-                    Button { navigate(1) } label: { Image(systemName: "chevron.right") }
+                    }.labelsHidden().fixedSize()
+                    Button { navigate(1) } label: { floorArrow("chevron.right") }
+                        .buttonStyle(.plain)
                         .help("Next floor (J)").keyboardShortcut("j", modifiers: [])
+                        .accessibilityLabel("Next floor")
                         .disabled(floors.last == currentDepth)
-                    if let feeling = world.feelings[currentDepth] { FloorFeelingSpriteView(feeling: feeling) }
-                    if let quest = world.quests.first(where: { $0.depth == currentDepth }) {
-                        Text(quest.variant.label).font(.caption).foregroundStyle(.secondary)
-                    }
-                    Spacer(minLength: 0)
+                }
+                if let feeling = world.feelings[currentDepth] { FloorFeelingSpriteView(feeling: feeling) }
+                if let quest = world.quests.first(where: { $0.depth == currentDepth }) {
+                    Text(quest.variant.label).font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+                HStack(spacing: 4) {
                     ForEach(Array(world.trinketOrder.prefix(4))) { item in
                         Button { onSelectTrinket(item.id) } label: {
                             ItemSpriteView(item: item, pointSize: 22).padding(5)
@@ -99,20 +86,117 @@ struct LevelMapView: View {
                         .accessibilityLabel(item.name)
                         .accessibilityValue(world.selectedTrinket == item.id ? "Applied at +3" : "Not selected")
                     }
-                    Button("Done") { expanded = false }.keyboardShortcut(.cancelAction)
                 }
-                toolbar
-                stage(animated: true)
-                Text("Scroll or pinch to zoom · Drag to pan · + / − zoom · 0 fits map · Arrow keys pan · J / K browse floors")
-                    .font(.caption).foregroundStyle(.secondary)
+                Button("Done") { dismiss() }.keyboardShortcut(.cancelAction)
             }
-            .padding(16).frame(minWidth: 780, idealWidth: 980, minHeight: 600, idealHeight: 760)
+            LevelMapPanel(world: world, depth: currentDepth, challenges: challenges, animated: true,
+                          initialBranch: initialBranch, initialSecrets: initialSecrets)
         }
+        .padding(16).frame(minWidth: 780, idealWidth: 980, minHeight: 600, idealHeight: 760)
+    }
+
+    private func floorArrow(_ systemName: String) -> some View {
+        Image(systemName: systemName)
+            .font(.system(size: 11, weight: .medium))
+            .frame(width: 24, height: 24)
+            .background(.quaternary, in: RoundedRectangle(cornerRadius: 6))
+            .contentShape(Rectangle())
     }
 
     private func navigate(_ delta: Int) {
         guard let index = floors.firstIndex(of: currentDepth), floors.indices.contains(index + delta) else { return }
         selectedDepth = floors[index + delta]
+    }
+}
+
+/// Loading follows the disclosed map's request, independently of visibility.
+/// Visibility only pauses animation, so stale scroll geometry cannot strand a
+/// newly opened inline map on its loading indicator.
+struct LevelMapPanel: View {
+    let world: ScoutWorld
+    let depth: Int
+    let challenges: Int
+    let animated: Bool
+    var mapHeight: CGFloat?
+    var onExpand: ((Int, Bool) -> Void)?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var branchSelection: (profile: LevelMapRequest, branch: Int)?
+    @State private var secrets = false
+    @State private var bundle: LevelMapBundle?
+    @State private var loadedKey: LevelMapRequest?
+    @State private var parentKey: LevelMapRequest?
+    @State private var parentBranches: [LevelMapDocument.Branch] = []
+    @State private var error: String?
+    @State private var retry = 0
+
+    init(world: ScoutWorld, depth: Int, challenges: Int, animated: Bool,
+         mapHeight: CGFloat? = nil, onExpand: ((Int, Bool) -> Void)? = nil,
+         initialBranch: Int = 0, initialSecrets: Bool = false) {
+        self.world = world; self.depth = depth; self.challenges = challenges
+        self.animated = animated; self.mapHeight = mapHeight; self.onExpand = onExpand
+        let profile = LevelMapRequest(seed: world.seed, depth: depth, challenges: challenges,
+                                      selectedTrinket: world.selectedTrinket)
+        _branchSelection = State(initialValue: (profile, initialBranch))
+        _secrets = State(initialValue: initialSecrets)
+    }
+
+    private var profile: LevelMapRequest {
+        LevelMapRequest(seed: world.seed, depth: depth, challenges: challenges,
+                        selectedTrinket: world.selectedTrinket)
+    }
+    private var branch: Int {
+        guard let branchSelection, branchSelection.profile.hasSameLocation(as: profile) else { return 0 }
+        return branchSelection.branch
+    }
+    private var request: LevelMapRequest {
+        LevelMapRequest(seed: world.seed, depth: depth, branch: branch,
+                        challenges: challenges, selectedTrinket: world.selectedTrinket)
+    }
+    private var map: LevelMapBundle? { loadedKey == request ? bundle : nil }
+    private var branches: [LevelMapDocument.Branch] { parentKey?.hasSameLocation(as: profile) == true ? parentBranches : [] }
+    private var title: String {
+        branch == 0 ? "Floor \(depth) layout" : (map?.document.kind == "imp_vault" ? "Imp Vault" : "Blacksmith Mine")
+    }
+    private struct LoadKey: Hashable { let request: LevelMapRequest; let retry: Int }
+
+    var body: some View {
+        VStack(spacing: 6) {
+            toolbar
+            stage.frame(height: mapHeight)
+                .overlay(alignment: .topTrailing) {
+                    if let onExpand {
+                        Button { onExpand(branch, secrets) } label: { Label("Expand", systemImage: "arrow.up.left.and.arrow.down.right") }
+                            .controlSize(.small).padding(8)
+                    }
+                }
+        }
+        .task(id: LoadKey(request: request, retry: retry)) {
+            let requested = request, parent = profile
+            error = nil
+            do {
+                // Refresh branch availability with the trinket, while keeping
+                // the selected area when it still exists in the new scene.
+                if parentKey != parent {
+                    let main = try await LevelMapClient.shared.load(parent)
+                    guard !Task.isCancelled, requested == request else { return }
+                    parentKey = parent; parentBranches = main.document.branches
+                    if requested.branch == 0 {
+                        bundle = main; loadedKey = requested
+                        return
+                    }
+                    if !parentBranches.contains(where: { $0.branch == requested.branch }) {
+                        branchSelection = nil
+                        return
+                    }
+                }
+                let next = try await LevelMapClient.shared.load(requested)
+                guard !Task.isCancelled, requested == request else { return }
+                bundle = next; loadedKey = requested
+            } catch {
+                guard !Task.isCancelled, requested == request else { return }
+                self.error = error.localizedDescription
+            }
+        }
     }
 
     private var toolbar: some View {
@@ -121,34 +205,35 @@ struct LevelMapView: View {
                 Picker("Level area", selection: Binding(get: { branch }, set: { branchSelection = (profile, $0) })) {
                     Text("Main").tag(0)
                     ForEach(branches) { Text($0.label).tag($0.branch) }
-                }.pickerStyle(.segmented).fixedSize()
+                }.pickerStyle(.segmented).labelsHidden().fixedSize()
             }
             Spacer(minLength: 0)
-            Toggle("Secrets", isOn: $secrets).toggleStyle(.button).controlSize(.small)
+            Toggle("Secrets", isOn: $secrets).toggleStyle(.button)
                 .disabled(map?.document.secretCount == 0)
                 .help(map?.document.secretCount == 0 ? "No secrets on this map" : "Reveal secret rooms, doors and traps")
         }
     }
 
-    @ViewBuilder private func stage(animated: Bool) -> some View {
+    private var stage: some View {
         ZStack {
             Color.black
+            // Keep the AppKit viewport mounted while loading. Replacing it
+            // with the spinner would discard zoom and pan on trinket changes.
+            TimelineView(.animation(paused: !animated || reduceMotion || map == nil)) { _ in
+                NativeLevelMap(bundle: map, request: request, secrets: secrets,
+                               time: ProcessInfo.processInfo.systemUptime * 1000, reduceMotion: reduceMotion,
+                               label: title)
+            }
             if let error {
                 VStack(spacing: 10) {
                     Text("Couldn’t load this map.").font(.headline)
                     Text(error).font(.caption).multilineTextAlignment(.center)
                     Button("Try Again") { retry += 1 }
                 }.foregroundStyle(.white).padding()
-            } else if let map {
-                TimelineView(.animation(paused: !animated || reduceMotion)) { _ in
-                    NativeLevelMap(bundle: map, request: request, secrets: secrets,
-                                   time: ProcessInfo.processInfo.systemUptime * 1000, reduceMotion: reduceMotion,
-                                   label: title)
-                }
-            } else {
+            } else if map == nil {
                 VStack(spacing: 10) {
                     ProgressView().controlSize(.small)
-                    Text("Charting \(branch == 0 ? "floor \(currentDepth)" : "the quest level")…").font(.caption)
+                    Text("Charting \(branch == 0 ? "floor \(depth)" : "the quest level")…").font(.caption)
                 }.foregroundStyle(.white)
             }
         }
@@ -158,7 +243,7 @@ struct LevelMapView: View {
 }
 
 private struct NativeLevelMap: NSViewRepresentable {
-    let bundle: LevelMapBundle
+    let bundle: LevelMapBundle?
     let request: LevelMapRequest
     let secrets: Bool
     let time: Double
@@ -167,11 +252,7 @@ private struct NativeLevelMap: NSViewRepresentable {
 
     func makeNSView(context: Context) -> MapViewport { MapViewport() }
     func updateNSView(_ view: MapViewport, context: Context) {
-        if view.request != request {
-            view.request = request
-            view.renderer = MapRenderer(bundle)
-            view.zoom = 1; view.pan = .zero; view.clock = LevelMapClock(now: time)
-        }
+        view.update(bundle: bundle, request: request, time: time)
         view.secrets = secrets
         view.elapsed = view.clock.elapsed(at: time, reducedMotion: reduceMotion)
         view.setAccessibilityLabel(label)
@@ -180,29 +261,45 @@ private struct NativeLevelMap: NSViewRepresentable {
 }
 
 /// AppKit consumes wheel, magnification and dragging inside this viewport. It
-/// keeps the surrounding Scout scroll position and respects the native focus ring.
-@MainActor private final class MapViewport: NSView {
-    var request: LevelMapRequest?
-    var renderer: MapRenderer?
+/// keeps the surrounding Scout scroll position and supports keyboard controls
+/// without drawing a focus border over the map.
+@MainActor final class MapViewport: NSView {
+    private(set) var request: LevelMapRequest?
+    private var renderer: MapRenderer?
+    var hasMap: Bool { renderer != nil }
     var secrets = false
     var elapsed: Double = 0
     var clock = LevelMapClock(now: 0)
-    var zoom: CGFloat = 1
-    var pan = CGPoint.zero
+    private(set) var zoom: CGFloat = 1
+    private(set) var pan = CGPoint.zero
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
-    override var focusRingMaskBounds: NSRect { bounds }
-    override func drawFocusRingMask() { NSBezierPath(rect: bounds).fill() }
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
-        focusRingType = .exterior
+        focusRingType = .none
         toolTip = "Scroll or pinch to zoom. Drag to pan. Press 0 to fit the map."
         setAccessibilityElement(true)
         setAccessibilityRole(.image)
         setAccessibilityHelp("Scroll or pinch to zoom. Drag or use arrow keys to pan. Press zero to fit the map.")
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    func update(bundle: LevelMapBundle?, request: LevelMapRequest, time: Double) {
+        let sceneChanged = self.request != request
+        if self.request?.hasSameLocation(as: request) != true {
+            zoom = 1; pan = .zero
+        }
+        self.request = request
+        if let bundle {
+            if renderer == nil || sceneChanged {
+                renderer = MapRenderer(bundle)
+                clock = LevelMapClock(now: time)
+            }
+        } else {
+            renderer = nil
+        }
+    }
 
     private var fitScale: CGFloat {
         guard let renderer else { return 1 }
@@ -250,9 +347,10 @@ private struct NativeLevelMap: NSViewRepresentable {
         constrain(); needsDisplay = true
     }
     override func draw(_ dirtyRect: NSRect) {
-        guard !visibleRect.isEmpty, let renderer, let context = NSGraphicsContext.current?.cgContext else { return }
-        constrain()
+        guard !visibleRect.isEmpty, let context = NSGraphicsContext.current?.cgContext else { return }
         context.setFillColor(NSColor.black.cgColor); context.fill(bounds)
+        guard let renderer else { return }
+        constrain()
         let scale = fitScale * zoom
         context.saveGState()
         context.translateBy(x: bounds.midX + pan.x - CGFloat(renderer.map.pixelWidth) * scale / 2,

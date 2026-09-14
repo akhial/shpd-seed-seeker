@@ -27,6 +27,11 @@ public struct LevelMapRequest: Hashable, Sendable {
         self.challenges = challenges; self.selectedTrinket = selectedTrinket
     }
 
+    /// Trinket changes refresh a scene without navigating away from its map.
+    public func hasSameLocation(as other: Self) -> Bool {
+        seed == other.seed && depth == other.depth && branch == other.branch && challenges == other.challenges
+    }
+
     public func encoded() throws -> Data {
         guard (0...SearchLimits.challengeMask).contains(challenges) else { throw SeedFinderEngineError.invalidArgument }
         let names = EngineInfo.shared.challengeNames.filter { $0.key & challenges != 0 }.map(\.value).sorted()
