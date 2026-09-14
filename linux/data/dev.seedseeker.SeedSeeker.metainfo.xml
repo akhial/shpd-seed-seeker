@@ -40,9 +40,9 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
-    <release version="0.12.1" date="2026-09-12">
+    <release version="0.13.0" date="2026-09-14">
       <description>
-        <p>Improve the Android Scout view with a collapsing summary and smoothly scaling seed text.</p>
+        <p>Explore seeds with interactive floor maps, animated contents, secret toggles, trinket switching, and reward-choice indicators.</p>
       </description>
     </release>
     <release version="0.9.1" date="2026-09-07">
