@@ -3,8 +3,27 @@ package dev.seedseeker.app
 
 import android.app.Application
 import dev.seedseeker.app.catalog.ItemCatalog
+import dev.seedseeker.app.engine.EngineInfo
+import dev.seedseeker.app.engine.NativeSeedFinderFactory
+import dev.seedseeker.app.ui.FileSearchCheckpointStore
+import dev.seedseeker.app.ui.SearchController
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import java.io.File
 
-class SeedSeekerApplication : Application() {
+open class SeedSeekerApplication : Application() {
+    internal val engine by lazy { NativeSeedFinderFactory.create() }
+    internal open val searchController by lazy {
+        SearchController(
+            engine,
+            FileSearchCheckpointStore(File(noBackupFilesDir, "search-session.json"),
+                "${BuildConfig.VERSION_CODE}:${EngineInfo.shpdCommit}:${BuildConfig.USE_DEMO_ENGINE}"),
+            CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate),
+            startService = { SearchService.start(this) },
+        )
+    }
+
     override fun onCreate() {
         super.onCreate()
         // The item catalog is parsed from the packaged asset. Binding it here,

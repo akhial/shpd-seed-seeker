@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package dev.seedseeker.app.ui
 
+import android.Manifest
+import android.os.Build
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
 import android.content.Context
 import android.content.Intent
 import android.graphics.BitmapFactory
@@ -38,7 +42,6 @@ import androidx.compose.ui.platform.LocalUriHandler
 import dev.seedseeker.app.BuildConfig
 import dev.seedseeker.app.catalog.ItemCatalog
 import dev.seedseeker.app.engine.EngineInfo
-import dev.seedseeker.app.engine.NativeSearchSession
 import dev.seedseeker.app.engine.NativeSeedFinder
 import dev.seedseeker.app.engine.ScoutMatches
 import dev.seedseeker.app.engine.SearchWorkers
@@ -54,8 +57,6 @@ import dev.seedseeker.app.model.QueryPreset
 import dev.seedseeker.app.model.ResultsExport
 import dev.seedseeker.app.model.ScoutWorld
 import dev.seedseeker.app.model.SearchRequest
-import dev.seedseeker.app.model.SearchState
-import dev.seedseeker.app.model.SearchStatus
 import dev.seedseeker.app.model.SeedResult
 import dev.seedseeker.app.model.applyEdit
 import dev.seedseeker.app.model.boardItems
@@ -71,8 +72,6 @@ import dev.seedseeker.app.update.UpdateChecker
 import dev.seedseeker.app.update.UpdateInfo
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -103,13 +102,6 @@ private fun readForImport(stream: java.io.InputStream): String {
 }
 
 private enum class Destination { FINDER, SCOUT, SETTINGS, ABOUT }
-private data class SearchRun(
-    val id: Long,
-    val request: SearchRequest,
-    val mode: StartMode,
-    val refine: RefineSpec? = null,
-)
-
 private data class ScoutRun(val id: Long, val seed: String, val challenges: Int, val query: SearchRequest?, val trinket: String? = null)
 
 /**
@@ -120,8 +112,9 @@ private data class ScoutRun(val id: Long, val seed: String, val challenges: Int,
 class SharedLink(val text: String)
 
 @Composable
-fun SeedFinderApp(
+internal fun SeedFinderApp(
     engine: NativeSeedFinder,
+    controller: SearchController,
     fakeLatestVersion: String? = null,
     sharedLink: SharedLink? = null,
 ) {
@@ -179,28 +172,17 @@ fun SeedFinderApp(
     var editingTotal by remember { mutableStateOf<Int?>(null) }
     var editingCopyDepth by remember { mutableStateOf<Int?>(null) }
     var showRequirementSheet by remember { mutableStateOf(false) }
-    var results by remember { mutableStateOf(emptyList<SeedResult>()) }
-    // The run's full collection size: the listed `results` stop at RESULT_CAP
-    // rows, but every seed count the user reads reports this number.
-    var foundCount by remember { mutableStateOf(0) }
-    var searchStatus by remember { mutableStateOf<SearchStatus?>(null) }
-    var searchSeedsPerSecond by remember { mutableStateOf(0.0) }
-    var searchElapsedSeconds by remember { mutableLongStateOf(0L) }
-    var activeSession by remember { mutableStateOf<NativeSearchSession?>(null) }
-    var run by remember { mutableStateOf<SearchRun?>(null) }
-    var nextRunId by remember { mutableLongStateOf(1L) }
-    var lastFinishedRun by remember { mutableStateOf<FinishedRun?>(null) }
-    // The session's Target (docs/search-semantics.md): established by the first
-    // concluded search or an import, refined and filtered by related queries,
-    // and discarded only by Clear.
-    var target by remember { mutableStateOf<TargetState?>(null) }
-    // How the last concluded run related to the Target; a continued detached
-    // scan stays DETACHED so further continuations thread onto the same scan.
-    var lastRunKind by remember { mutableStateOf<StartMode?>(null) }
-    // Null unless a refine run is in flight; distinguishes its filter phase from the resumed scan.
-    var refinePhase by remember { mutableStateOf<RefinePhase?>(null) }
-    var isSearching by remember { mutableStateOf(false) }
-    var searchError by remember { mutableStateOf<String?>(null) }
+    val search = controller.snapshot
+    val results = displayedResults(search.results)
+    val foundCount = search.results.size
+    val searchStatus = search.status
+    val searchSeedsPerSecond = controller.seedsPerSecond
+    val searchElapsedSeconds = search.elapsedSeconds
+    val target = search.target
+    val lastFinishedRun = search.lastRun
+    val refinePhase = controller.refinePhase
+    val isSearching = controller.isSearching || !controller.ready
+    val searchError = search.error
     val snackbarHostState = remember { SnackbarHostState() }
     var scoutInput by remember { mutableStateOf("") }
     var scoutResult by remember { mutableStateOf<ScoutWorld?>(null) }
@@ -215,9 +197,29 @@ fun SeedFinderApp(
     var transferError by remember { mutableStateOf<String?>(null) }
     var linkError by remember { mutableStateOf<String?>(null) }
     var importNotice by remember { mutableStateOf<String?>(null) }
-    // The query that produced the current results, snapshotted at search
-    // start (or import) so an export never reflects later editor changes.
-    var searchedQuery by remember { mutableStateOf<PresetQuery?>(null) }
+    val searchedQuery = search.query
+
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
+    // Restore the board once per activity after disk loading, including a pending refine's query.
+    LaunchedEffect(controller.ready) {
+        if (!controller.ready) return@LaunchedEffect
+        val query = controller.snapshot.pending?.request?.toPresetQuery() ?: controller.snapshot.query
+        if (query != null) {
+            requirements = query.requirements.map { it.copy(key = nextRequirementKey++) }
+            autoApplyTrinket = query.autoApplyTrinket
+            maximumDepth = query.maximumDepth
+            requireBlacksmith = query.requireBlacksmith
+            excludeBlacksmithRewards = query.excludeBlacksmithRewards
+            wandmakerQuest = query.wandmakerQuest
+            challenges = query.challenges
+        }
+    }
+    LaunchedEffect(controller.notice) {
+        val message = controller.notice ?: return@LaunchedEffect
+        snackbarHostState.showSnackbar(message)
+        controller.notice = null
+    }
 
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/json"),
@@ -254,7 +256,7 @@ fun SeedFinderApp(
             outcome.onSuccess { imported ->
                 // A search may have started while the picker was open or the
                 // file was being read.
-                if (isSearching) {
+                if (controller.isSearching || !controller.ready) {
                     transferError = "Stop the search before importing results."
                     return@onSuccess
                 }
@@ -271,33 +273,25 @@ fun SeedFinderApp(
                 val kept = imported.seeds
                 val dropped = imported.dropped
                 val importedResults = kept.mapIndexed { index, seed -> SeedResult(seed, imported.query.requirements.slotCount(), imported.trinkets.getOrNull(index)) }
-                results = importedResults
-                foundCount = importedResults.size
-                searchedQuery = imported.query
-                // Imported results carry no traversal state, so the previous
-                // search's refine base no longer describes the listed seeds.
-                lastFinishedRun = null
-                lastRunKind = null
-                // The imported query and seeds replace the session's Target,
-                // with no coverage: refines of an import are filter-only.
-                target = runCatching {
-                    TargetState(
-                        request = SearchRequest(
-                            requirements = imported.query.requirements,
-                            autoApplyTrinket = imported.query.autoApplyTrinket,
-                            maximumDepth = imported.query.maximumDepth,
-                            challenges = imported.query.challenges,
-                            requireBlacksmith = imported.query.requireBlacksmith,
-                            excludeBlacksmithRewards = imported.query.excludeBlacksmithRewards,
-                            wandmakerQuest = imported.query.wandmakerQuest,
-                        ),
-                        results = importedResults,
-                        resumeFrom = 0,
-                        remaining = 0,
-                    )
-                }.getOrNull()
-                searchStatus = null
-                searchError = null
+                controller.importResults(
+                    imported.query, importedResults,
+                    runCatching {
+                        TargetState(
+                            request = SearchRequest(
+                                requirements = imported.query.requirements,
+                                autoApplyTrinket = imported.query.autoApplyTrinket,
+                                maximumDepth = imported.query.maximumDepth,
+                                challenges = imported.query.challenges,
+                                requireBlacksmith = imported.query.requireBlacksmith,
+                                excludeBlacksmithRewards = imported.query.excludeBlacksmithRewards,
+                                wandmakerQuest = imported.query.wandmakerQuest,
+                            ),
+                            results = importedResults,
+                            resumeFrom = 0,
+                            remaining = 0,
+                        )
+                    }.getOrNull(),
+                )
                 importNotice = buildString {
                     append("Imported ${kept.size} seed${if (kept.size == 1) "" else "s"} from file")
                     if (dropped > 0) {
@@ -317,7 +311,8 @@ fun SeedFinderApp(
         }
     }
 
-    LaunchedEffect(sharedLink) {
+    LaunchedEffect(sharedLink, controller.ready) {
+        if (!controller.ready) return@LaunchedEffect
         val text = sharedLink?.text ?: return@LaunchedEffect
         // App Links deliver every URL on the host; only ones that carry a
         // share code touch the query.
@@ -335,10 +330,7 @@ fun SeedFinderApp(
             wandmakerQuest = query.wandmakerQuest
             challenges = query.challenges
             preferences.edit().putInt(CHALLENGES_KEY, challenges).apply()
-            results = emptyList()
-            searchedQuery = null
-            searchStatus = null
-            searchError = null
+            controller.clearDisplayedResults()
             importNotice = "Loaded shared search"
             destination = Destination.FINDER
         }.onFailure { failure ->
@@ -367,178 +359,6 @@ fun SeedFinderApp(
             Destination.ABOUT -> aboutReturnDestination
             Destination.SETTINGS -> settingsReturnDestination
             else -> Destination.FINDER
-        }
-    }
-
-    LaunchedEffect(run?.id) {
-        val currentRun = run ?: return@LaunchedEffect
-        isSearching = true
-        searchError = null
-        searchStatus = null
-        // Set together with isSearching so the header never reads one without the other.
-        refinePhase = if (currentRun.refine != null) RefinePhase.FILTERING else null
-        searchSeedsPerSecond = 0.0
-        searchElapsedSeconds = 0L
-        // The run's full result set — filter survivors plus scanned finds, in discovery order
-        // and uncapped — unlike the displayed `results`, which stop at RESULT_CAP rows. The
-        // Target and any detached continuation's filter base read this, never the capped display.
-        var collected = emptyList<SeedResult>()
-        // Local to the effect so the limit snackbar fires once per run, never per recomposition.
-        // Only a concluded run announces the cap: while an accumulating scan runs, a full
-        // display is the expected state, not news.
-        var resultLimitNotified = false
-        fun notifyIfResultLimitReached() {
-            if (resultLimitNotified || results.size < RESULT_CAP) return
-            resultLimitNotified = true
-            // Launched on the app scope so the queued snackbar never suspends the search loop.
-            scope.launch { snackbarHostState.showSnackbar("Result limit reached (1,024 seeds).") }
-        }
-
-        val searchStartedAt = System.nanoTime()
-        var previousScannedSeeds = 0L
-        var previousStatusTime = System.nanoTime()
-
-        var session: NativeSearchSession? = null
-        try {
-            val refine = currentRun.refine
-            if (refine == null) {
-                results = emptyList()
-                foundCount = 0
-                if (currentRun.mode == StartMode.DETACHED) {
-                    // The display and the Target Set diverge here; say so once per scan.
-                    scope.launch {
-                        snackbarHostState.showSnackbar(
-                            "Unrelated query — detached search from previous results.",
-                        )
-                    }
-                }
-            } else {
-                // Re-verify the base seeds — the full Target Set for a target refine or
-                // filter, the previous detached run's results for a continuation — then
-                // rescan only the window that base never reached.
-                val kept = withContext(Dispatchers.Default) {
-                    engine.filterRecipes(currentRun.request, refine.base ?: currentRun.request, refine.keepSeeds)
-                }
-                // Every survivor stays collected; the screen lists at most RESULT_CAP of them.
-                collected = kept
-                results = displayedResults(collected)
-                foundCount = collected.size
-                // From here on the listed results match the refined request, so
-                // that is what an export must claim. A cancelled filter phase
-                // leaves the previous results — and their snapshot — untouched.
-                searchedQuery = currentRun.request.toPresetQuery()
-                scope.launch {
-                    // The denominator is the filtered base: the full Target Set, or a
-                    // continued detached run's own results.
-                    snackbarHostState.showSnackbar(
-                        "Kept ${kept.size} of ${refine.keepSeeds.size} previous seeds.",
-                    )
-                }
-                if (refine.remaining == 0L) {
-                    notifyIfResultLimitReached()
-                    searchStatus = SearchStatus(SearchState.COMPLETED, 0, 0)
-                    lastFinishedRun =
-                        FinishedRun(currentRun.request, refine.resumeFrom, 0, collected)
-                    target = settledTarget(
-                        target, currentRun.mode, currentRun.request, collected, refine.resumeFrom, 0,
-                    )
-                    lastRunKind = currentRun.mode.concludedKind
-                    return@LaunchedEffect
-                }
-            }
-
-            // The kept seeds are re-verified; what follows is an ordinary scan of the
-            // window the base run never reached, so the header stops saying "refining".
-            if (refine != null) refinePhase = RefinePhase.SCANNING
-
-            val openedSession = withContext(Dispatchers.Default) {
-                if (refine == null) {
-                    engine.startSearch(currentRun.request, workerCount)
-                } else {
-                    engine.startResumedSearch(
-                        currentRun.request,
-                        refine.resumeFrom,
-                        refine.remaining,
-                        workerCount,
-                    )
-                }
-            }
-            session = openedSession
-            activeSession = openedSession
-
-            val seenSeeds = collected.mapTo(mutableSetOf()) { it.seed }
-            while (true) {
-                val (batch, status) = withContext(Dispatchers.Default) {
-                    openedSession.poll(24) to openedSession.status()
-                }
-                // The results list keys a LazyColumn by seed, so drop seeds the filter kept.
-                val newResults = batch.results.filter { seenSeeds.add(it.seed) }
-                if (newResults.isNotEmpty()) {
-                    // Everything delivered stays collected for the Target and later refines;
-                    // only the displayed list stops at the cap.
-                    collected = collected + newResults
-                    results = displayedResults(collected)
-                    foundCount = collected.size
-                }
-                val statusTime = System.nanoTime()
-                searchElapsedSeconds = (statusTime - searchStartedAt) / 1_000_000_000L
-                val elapsedSeconds = (statusTime - previousStatusTime) / 1_000_000_000.0
-                if (elapsedSeconds > 0.0 && status.scannedSeeds > previousScannedSeeds) {
-                    val instantRate = (status.scannedSeeds - previousScannedSeeds) / elapsedSeconds
-                    searchSeedsPerSecond = if (searchSeedsPerSecond == 0.0) {
-                        instantRate
-                    } else {
-                        searchSeedsPerSecond * 0.7 + instantRate * 0.3
-                    }
-                }
-                previousScannedSeeds = status.scannedSeeds
-                previousStatusTime = statusTime
-                searchStatus = status
-                if (status.state == SearchState.FAILED) {
-                    searchError = when (status.errorCode) {
-                        2_001L -> "A native world-generation worker stopped unexpectedly."
-                        else -> "The native search stopped with error ${status.errorCode}."
-                    }
-                    // A failed run is never a continuation base and settles nothing;
-                    // the Target stays exactly as it was.
-                    lastFinishedRun = null
-                    lastRunKind = null
-                }
-                if (status.state != SearchState.RUNNING) {
-                    if (status.state != SearchState.FAILED) {
-                        notifyIfResultLimitReached()
-                        // The hint is only exact once the session has stopped, and it must be
-                        // read before the finally block closes the handle.
-                        val hint = withContext(Dispatchers.Default) { openedSession.resumeHint() }
-                        lastFinishedRun =
-                            FinishedRun(currentRun.request, hint.position, hint.remaining, collected)
-                        // Every conclusion settles the Target: an anchor establishes it, a
-                        // target refine grows it, anything else leaves it untouched. The
-                        // uncapped collection settles, never the capped display.
-                        target = settledTarget(
-                            target, currentRun.mode, currentRun.request, collected,
-                            hint.position, hint.remaining,
-                        )
-                        lastRunKind = currentRun.mode.concludedKind
-                    }
-                    break
-                }
-                delay(90)
-            }
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (failure: Throwable) {
-            searchError = failure.message ?: "The native search engine could not start."
-            searchStatus = SearchStatus(SearchState.FAILED, 0, 0, -1)
-            lastFinishedRun = null
-            lastRunKind = null
-        } finally {
-            activeSession = null
-            isSearching = false
-            refinePhase = null
-            session?.let {
-                withContext(NonCancellable + Dispatchers.Default) { it.close() }
-            }
         }
     }
 
@@ -732,47 +552,22 @@ fun SeedFinderApp(
                 onSearch = {
                     if (currentRequest != null) {
                         importNotice = null
-                        searchError = null
-                        // Start dispatch per docs/search-semantics.md: a query continuing
-                        // the Target refines its full set and resumes its coverage, one
-                        // sharing an item filters that set, and anything else scans
-                        // detached — continuing the previous detached run when sound.
-                        val plan = startPlanFor(
-                            currentRequest, target, lastFinishedRun, lastRunKind, engine::decideStart,
-                        )
-                        if (plan.refine == null) searchedQuery = currentRequest.toPresetQuery()
-                        // A refine only claims the new query once its filter phase has
-                        // actually rewritten the results, so the snapshot is set there.
-                        run = SearchRun(nextRunId++, currentRequest, plan.mode, plan.refine)
+                        controller.start(currentRequest, workerCount)
+                        if (Build.VERSION.SDK_INT >= 33 &&
+                            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED &&
+                            !preferences.getBoolean("notification_permission_requested", false)
+                        ) {
+                            preferences.edit().putBoolean("notification_permission_requested", true).apply()
+                            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
                     }
                 },
-                onCancel = {
-                    val session = activeSession
-                    if (session != null) {
-                        scope.launch(Dispatchers.Default) { session.cancel() }
-                    } else if (isSearching) {
-                        // The refine filter phase has no native session yet, so cancel the
-                        // driver coroutine itself. The previous results and lastFinishedRun
-                        // are untouched, so the refine can be retried.
-                        run = null
-                    }
-                },
+                onCancel = controller::stop,
                 canExportResults = searchedQuery != null && results.isNotEmpty(),
                 canClearResults = canClearResults,
                 importNotice = importNotice,
                 onClearResults = {
-                    // Drops the Target and the refine base too, so the next search is
-                    // always a fresh anchor scan. Clear is the only action that does.
-                    run = null
-                    results = emptyList()
-                    foundCount = 0
-                    lastFinishedRun = null
-                    lastRunKind = null
-                    target = null
-                    refinePhase = null
-                    searchStatus = null
-                    searchError = null
-                    searchedQuery = null
+                    controller.clear()
                     importNotice = null
                 },
                 onExportResults = {

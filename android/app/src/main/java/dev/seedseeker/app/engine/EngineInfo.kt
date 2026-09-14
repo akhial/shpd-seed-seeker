@@ -26,6 +26,9 @@ object EngineInfo {
     /** Upstream source commit tagged with the engine's target game version. */
     val shpdCommit: String by lazy { document.getString("shpdCommit") }
 
+    /** Maximum newly found matches per search, shared with the native session cap. */
+    val maxResults: Int by lazy { document.getInt("maxResults") }
+
     private val limits: JSONObject by lazy { document.getJSONObject("limits") }
 
     /** Largest results file the engine's importer accepts, in bytes. */
