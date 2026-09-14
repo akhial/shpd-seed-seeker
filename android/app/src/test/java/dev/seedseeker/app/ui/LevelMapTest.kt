@@ -40,6 +40,32 @@ class LevelMapTest {
         0f, 0f, 0f, 0f, 0f, constant, constant, null,
         listOf(MapParticle(0, 1000, x, 8f, 1f, 0f)),
     )
+
+    @Test fun gardenShaftsScaleWidthAndHeightIndependently() = runBlocking {
+        val bundle = LevelMaps.load(LevelMapRequest("AAA-AAA-AAA", 4, 0, null))
+        val shaft = bundle.map.emitters.first { it.scaleX != null }
+        val particle = shaft.particles.first()
+        val middle = requireNotNull(shaft.state(particle, particle.birth + particle.lifespan / 2))
+        assertEquals(2f, middle.scaleX, 0.001f)
+        assertEquals(24f, middle.scaleY, 0.001f)
+
+        val e = emitter(0).copy(
+            image = fill(100, 0, 0, RectF(0f, 0f, 1f, 1f)),
+            scaleX = MapCurve(listOf(0f to 0f, 1000f to 4000f), false),
+            scaleY = MapCurve(listOf(0f to 16000f, 1000f to 32000f), false),
+        )
+        val background = MapSprite(1, listOf(listOf(fill(0, 0, 0))))
+        val map = document(listOf(background),
+            listOf(MapLayer("terrain", false, intArrayOf(0, 0, 0))), listOf(e))
+        val renderer = LevelMapRenderer(LevelMapBundle(map, emptyMap()), true)
+        val output = Bitmap.createBitmap(48, 16, Bitmap.Config.ARGB_8888)
+        renderer.draw(Canvas(output), 500)
+        assertEquals(Color.rgb(100, 0, 0), output.getPixel(7, 0))
+        assertEquals(Color.rgb(100, 0, 0), output.getPixel(8, 15))
+        assertEquals(Color.BLACK, output.getPixel(6, 8))
+        assertEquals(Color.BLACK, output.getPixel(9, 8))
+        renderer.close()
+    }
     private fun document(sprites: List<MapSprite>, layers: List<MapLayer>, emitters: List<MapEmitter> = emptyList()) = LevelMapDocument(
         "AAA-AAA-AAA", 1, 0, "regular", "test", 3, 1, 16, 1, emptyList(), emptyList(),
         sprites, layers, layers, emitters, emitters,

@@ -76,6 +76,7 @@ pub(super) fn actor(kind: &str) -> Option<ActorSprite> {
         "EbonyMimic" => ("mimic.png", 16, 16, &[49, 49, 49, 49, 49, 50], 1000, 5),
         "Eye" => ("eye.png", 16, 18, &[0, 1, 2], 125, 6),
         "FireElemental" => ("elemental.png", 12, 14, &[0, 1, 2], 100, 6),
+        "NewbornFireElemental" => ("elemental.png", 12, 14, &[14, 15, 16], 100, 6),
         "FrostElemental" => ("elemental.png", 12, 14, &[28, 29, 30], 100, 6),
         "Ghost" => ("ghost.png", 14, 15, &[0, 1], 200, 6),
         "Ghoul" | "VaultGhoul" => ("ghoul.png", 12, 14, &[0, 0, 0, 1], 500, 6),

@@ -40,6 +40,7 @@ pub(super) fn emitters(level: &Level, contents: &MapContents) -> Vec<MapEmitter>
         .filter(|e| objects::visible(level, e.cell))
         .filter_map(|e| Particle::kind(&e.kind).map(|kind| emitter(e.cell, kind)))
         .collect();
+    result.extend(super::ambient::emitters(level, contents));
     result.extend(super::sentries::emitters(level, contents));
     for feature in &contents.features {
         if feature.kind == "VaultFlameTrap" && objects::visible(level, feature.cell) {
@@ -81,6 +82,7 @@ pub(super) fn emitters(level: &Level, contents: &MapContents) -> Vec<MapEmitter>
         };
         result.push(MapEmitter {
             start_ms: None,
+            scale_x: None,
             scale_y: None,
             wall_mask: false,
             clip_to_chasm: false,
@@ -292,6 +294,7 @@ fn emitter(cell: usize, kind: Particle) -> MapEmitter {
         .collect();
     MapEmitter {
         start_ms: None,
+        scale_x: None,
         scale_y: None,
         wall_mask: true,
         clip_to_chasm: false,
@@ -324,6 +327,7 @@ fn forge_sparks(cell: usize) -> Vec<MapEmitter> {
             let speed = sample(cell, i, 10) * 64.0;
             MapEmitter {
                 start_ms: None,
+                scale_x: None,
                 scale_y: None,
                 wall_mask: true,
                 clip_to_chasm: false,
@@ -358,6 +362,7 @@ fn forge_sparks(cell: usize) -> Vec<MapEmitter> {
 fn pipe_drips(cell: usize) -> MapEmitter {
     MapEmitter {
         start_ms: None,
+        scale_x: None,
         scale_y: None,
         wall_mask: true,
         clip_to_chasm: false,

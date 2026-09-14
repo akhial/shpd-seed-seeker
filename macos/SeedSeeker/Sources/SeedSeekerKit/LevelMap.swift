@@ -137,7 +137,7 @@ public struct LevelMapDocument: Decodable, Sendable {
         public let angle: Double
     }
     public struct ParticleState: Sendable {
-        public let x: Double, y: Double, scale: Double, scaleY: Double, alpha: Double, angle: Double
+        public let x: Double, y: Double, scale: Double, scaleX: Double, scaleY: Double, alpha: Double, angle: Double
     }
     public struct Emitter: Decodable, Sendable {
         public let startMs: Double?
@@ -152,6 +152,7 @@ public struct LevelMapDocument: Decodable, Sendable {
         public let angularSpeed: Double
         public let alpha: Curve
         public let scale: Curve
+        public let scaleX: Curve?
         public let scaleY: Curve?
         public let particles: [Particle]
 
@@ -166,6 +167,7 @@ public struct LevelMapDocument: Decodable, Sendable {
                 x: particle.position[0] / 1000 + velocity[0] * seconds + acceleration[0] * seconds * seconds / 2,
                 y: particle.position[1] / 1000 + velocity[1] * seconds + acceleration[1] * seconds * seconds / 2,
                 scale: particle.scale / 1000 * scale.value(at: progress),
+                scaleX: scaleX?.value(at: progress) ?? 1,
                 scaleY: scaleY?.value(at: progress) ?? 1, alpha: alpha.value(at: progress),
                 angle: (particle.angle + angularSpeed * seconds) * .pi / 180)
         }
@@ -199,6 +201,7 @@ public struct LevelMapDocument: Decodable, Sendable {
                   (0..<count).contains(emitter.cell) && emitter.loopMs > 0 && validDraw(emitter.image)
                       && emitter.velocity.count == 2 && emitter.acceleration.count == 2
                       && validCurve(emitter.alpha) && validCurve(emitter.scale)
+                      && (emitter.scaleX == nil || validCurve(emitter.scaleX!))
                       && (emitter.scaleY == nil || validCurve(emitter.scaleY!))
                       && emitter.particles.allSatisfy { $0.position.count == 2 && $0.lifespanMs > 0 }
               }) else { throw SeedFinderEngineError.invalidResponse }

@@ -66,12 +66,13 @@ internal data class MapCurve(val points: List<Pair<Float, Float>>, val squareRoo
     }
 }
 internal data class MapParticle(val birth: Long, val lifespan: Long, val x: Float, val y: Float, val scale: Float, val angle: Float)
-internal data class ParticleState(val x: Float, val y: Float, val scale: Float, val scaleY: Float, val alpha: Float, val angle: Float)
+internal data class ParticleState(val x: Float, val y: Float, val scale: Float, val scaleX: Float, val scaleY: Float, val alpha: Float, val angle: Float)
 internal data class MapEmitter(
     val cell: Int, val loop: Long, val start: Long?, val additive: Boolean,
     val wallMask: Boolean, val chasm: Boolean, val image: MapDraw,
     val vx: Float, val vy: Float, val ax: Float, val ay: Float, val angularSpeed: Float,
     val alpha: MapCurve, val scale: MapCurve, val scaleY: MapCurve?, val particles: List<MapParticle>,
+    val scaleX: MapCurve? = null,
 ) {
     fun state(particle: MapParticle, elapsed: Long): ParticleState? {
         val clock = elapsed.coerceAtLeast(0) - (start ?: 0)
@@ -83,7 +84,7 @@ internal data class MapEmitter(
         return ParticleState(
             particle.x + vx * seconds + ax * seconds * seconds / 2,
             particle.y + vy * seconds + ay * seconds * seconds / 2,
-            particle.scale * scale.value(progress), scaleY?.value(progress) ?: 1f,
+            particle.scale * scale.value(progress), scaleX?.value(progress) ?: 1f, scaleY?.value(progress) ?: 1f,
             alpha.value(progress), particle.angle + angularSpeed * seconds,
         )
     }
@@ -162,7 +163,8 @@ internal object LevelMapCodec {
             json.optString("blend") == "add", json.optBoolean("wallMask"), json.optBoolean("clipToChasm"),
             draw(json.getJSONObject("image")), v.f(0), v.f(1), a.f(0), a.f(1), json.getDouble("angularSpeed").toFloat(),
             curve(json.getJSONObject("alpha")), curve(json.getJSONObject("scale")), json.optJSONObject("scaleY")?.let(::curve),
-            json.getJSONArray("particles").objects {
+            scaleX = json.optJSONObject("scaleX")?.let(::curve),
+            particles = json.getJSONArray("particles").objects {
                 val p = it.getJSONArray("position")
                 MapParticle(it.getLong("birthMs"), it.getLong("lifespanMs").also { lifespan -> require(lifespan > 0) },
                     p.f(0) / 1000, p.f(1) / 1000, it.getDouble("scale").toFloat() / 1000, it.getDouble("angle").toFloat())

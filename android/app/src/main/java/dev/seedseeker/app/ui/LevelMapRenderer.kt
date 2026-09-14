@@ -119,11 +119,11 @@ internal class LevelMapRenderer(private val bundle: LevelMapBundle, secrets: Boo
         val y = (emitter.cell / map.width) * map.tileSize.toFloat()
         for (particle in emitter.particles) {
             val state = emitter.state(particle, elapsed) ?: continue
-            if (state.scale <= 0 || state.alpha <= 0) continue
+            if (state.scale <= 0 || state.scaleX <= 0 || state.scaleY <= 0 || state.alpha <= 0) continue
             canvas.save()
             canvas.translate(x + state.x, y + state.y)
             canvas.rotate(state.angle)
-            canvas.scale(state.scale, state.scale * state.scaleY)
+            canvas.scale(state.scale * state.scaleX, state.scale * state.scaleY)
             val destination = emitter.image.destination
             canvas.translate(-destination.centerX(), -destination.centerY())
             drawCommand(canvas, emitter.image, elapsed, emitter.additive, state.alpha)

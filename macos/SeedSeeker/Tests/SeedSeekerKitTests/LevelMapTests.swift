@@ -80,6 +80,7 @@ final class LevelMapTests: XCTestCase, @unchecked Sendable {
             "velocity": [3, -2], "acceleration": [0, 4], "angularSpeed": 10,
             "alpha": ["points": [[0, 1000], [1000, 0]], "sqrt": false],
             "scale": ["points": [[0, 1000], [1000, 1000]], "sqrt": false],
+            "scaleX": ["points": [[0, 0], [1000, 4000]], "sqrt": false],
             "scaleY": ["points": [[0, 1000], [1000, 0]], "sqrt": true],
             "particles": [["birthMs": 500, "lifespanMs": 1000, "position": [1000, 2000], "scale": 2000, "angle": 20]],
         ]
@@ -94,6 +95,7 @@ final class LevelMapTests: XCTestCase, @unchecked Sendable {
         XCTAssertEqual(state.x, 1.75, accuracy: 0.00001)
         XCTAssertEqual(state.y, 1.625, accuracy: 0.00001)
         XCTAssertEqual(state.scale, 2)
+        XCTAssertEqual(state.scaleX, 1)
         XCTAssertEqual(state.alpha, 0.75)
         XCTAssertEqual(state.scaleY, sqrt(0.75), accuracy: 0.00001)
         XCTAssertEqual(state.angle, 22.5 * .pi / 180, accuracy: 0.00001)

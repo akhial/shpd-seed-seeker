@@ -6,6 +6,23 @@ namespace SeedSeeker.Tests;
 
 public sealed class LevelMapTests
 {
+    [Fact]
+    public void GardenShaftsScaleWidthAndHeightIndependently()
+    {
+        var map = NativeEngine.LevelMap(LevelMapDocument.Request("AAA-AAA-AAA", 4, 0, new QuerySettings(), "none"));
+        var shaft = map.Scene.Emitters.First(e => e.ScaleX is not null);
+        var particle = shaft.Particles[0];
+        var state = shaft.State(particle, particle.BirthMs + particle.LifespanMs / 2)!;
+        Assert.Equal(2, state.ScaleX); Assert.Equal(24, state.ScaleY);
+        var emitter = new MapEmitter { LoopMs = 1000,
+            Image = new() { Kind = "fill", Destination = [0, 0, 1, 1], Rgba = [100, 0, 0, 255] },
+            ScaleX = new([[0, 0], [1000, 4000]], false), ScaleY = new([[0, 16000], [1000, 32000]], false),
+            Particles = [new(0, 1000, [8000, 8000], 1000, 0)] };
+        var scene = Scene([new(1, [[Fill(0, 0, 0)]])], [new("terrain", null, [0])], [emitter]);
+        var pixels = new LevelMapRenderer(scene, new Dictionary<string, MapTexture>(), true).Render(500);
+        Assert.Equal(0xff640000u, pixels[7]); Assert.Equal(0xff640000u, pixels[15 * 16 + 8]);
+        Assert.Equal(0xff000000u, pixels[8 * 16 + 6]); Assert.Equal(0xff000000u, pixels[8 * 16 + 9]);
+    }
     private static MapDraw Fill(int r, int g, int b, int a = 255) => new() { Kind = "fill", Destination = [0, 0, 16, 16], Rgba = [r, g, b, a] };
     private static LevelMapDocument Scene(MapSprite[] sprites, MapLayer[] layers, MapEmitter[]? emitters = null, MapLayer[]? concealed = null) => new()
     {

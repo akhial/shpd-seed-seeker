@@ -450,9 +450,9 @@ private struct NativeLevelMap: NSViewRepresentable {
         context.saveGState(); context.setBlendMode(emitter.blend == "add" ? .plusLighter : .normal)
         context.translateBy(x: CGFloat(emitter.cell % map.width * 16), y: CGFloat(emitter.cell / map.width * 16))
         for particle in emitter.particles {
-            guard let state = emitter.state(of: particle, at: elapsed), state.scale > 0, state.alpha > 0 else { continue }
+            guard let state = emitter.state(of: particle, at: elapsed), state.scale > 0, state.scaleX > 0, state.scaleY > 0, state.alpha > 0 else { continue }
             context.saveGState(); context.translateBy(x: state.x, y: state.y)
-            context.rotate(by: state.angle); context.scaleBy(x: state.scale, y: state.scale * state.scaleY)
+            context.rotate(by: state.angle); context.scaleBy(x: state.scale * state.scaleX, y: state.scale * state.scaleY)
             let size = emitter.image.destination
             command(emitter.image, in: context, elapsed: elapsed,
                     target: CGRect(x: -size[2] / 2, y: -size[3] / 2, width: size[2], height: size[3]), alpha: state.alpha)

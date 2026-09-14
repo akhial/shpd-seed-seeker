@@ -42,6 +42,7 @@ pub(super) fn layers(scene: &mut MapScene, level: &Level, contents: &MapContents
             1,
             offset,
             [1.0, 0.25, 0.5],
+            255,
         );
         stamp_scaled(
             scene,
@@ -54,6 +55,7 @@ pub(super) fn layers(scene: &mut MapScene, level: &Level, contents: &MapContents
             offset,
             [w, h],
             false,
+            255,
             if matches!(heap.kind.as_str(), "Heap" | "ForSale") {
                 heap.items.first().and_then(|item| item.glow)
             } else {
@@ -97,6 +99,8 @@ pub(super) fn layers(scene: &mut MapScene, level: &Level, contents: &MapContents
                 })
                 .collect();
             let mut target = layer("actors", level.len());
+            // Keep Ebony mimics discoverable in a scouting overview.
+            let opacity = if mob.kind == "EbonyMimic" { 153 } else { 255 };
             let offset = [
                 (17 - i32::from(sprite.width)).div_euclid(2),
                 16 - i32::from(sprite.height) - sprite.raise,
@@ -129,9 +133,10 @@ pub(super) fn layers(scene: &mut MapScene, level: &Level, contents: &MapContents
                     sprite.duration,
                     offset,
                     shape,
+                    opacity,
                 );
             }
-            stamp(
+            stamp_scaled(
                 scene,
                 &mut target,
                 level,
@@ -140,6 +145,10 @@ pub(super) fn layers(scene: &mut MapScene, level: &Level, contents: &MapContents
                 &sources,
                 sprite.duration,
                 offset,
+                [sprite.width, sprite.height],
+                false,
+                opacity,
+                None,
             );
             // Overlapping actors must keep independent animation clocks. Pack
             // disjoint sprites together, above any earlier overlapping actor.
@@ -172,34 +181,6 @@ pub(super) fn visible(level: &Level, cell: usize) -> bool {
     cell < level.len() && !crate::level_map::projection::wall(level.map.cells[cell])
 }
 
-/// Draw a sprite with signed pixel offset, splitting all source/destination
-/// rectangles at cell boundaries. Animations in a layer share their clock.
-#[allow(clippy::too_many_arguments)]
-pub(super) fn stamp(
-    scene: &mut MapScene,
-    target: &mut MapLayer,
-    level: &Level,
-    cell: usize,
-    asset: &'static str,
-    sources: &[[u16; 4]],
-    duration: u16,
-    offset: [i32; 2],
-) {
-    stamp_scaled(
-        scene,
-        target,
-        level,
-        cell,
-        asset,
-        sources,
-        duration,
-        offset,
-        [sources[0][2], sources[0][3]],
-        false,
-        None,
-    );
-}
-
 #[allow(
     clippy::too_many_arguments,
     clippy::cast_possible_truncation,
@@ -215,6 +196,7 @@ fn shadow(
     duration: u16,
     offset: [i32; 2],
     shape: [f32; 3],
+    opacity: u8,
 ) {
     let [_, _, w, h] = sources[0];
     let [width, height, raise] = shape;
@@ -235,11 +217,13 @@ fn shadow(
             (f32::from(h) * height).round() as u16,
         ],
         true,
+        opacity,
         None,
     );
 }
 
 #[allow(clippy::too_many_arguments)]
+/// Split raised, scaled sprites at cell boundaries, retaining opacity in every frame.
 fn stamp_scaled(
     scene: &mut MapScene,
     target: &mut MapLayer,
@@ -251,6 +235,7 @@ fn stamp_scaled(
     offset: [i32; 2],
     size: [u16; 2],
     shadow: bool,
+    opacity: u8,
     glow: Option<MapGlow>,
 ) {
     let point = level.map.cell_to_point(cell);
@@ -278,7 +263,11 @@ fn stamp_scaled(
                 .iter()
                 .map(|s| {
                     vec![MapDraw::Blit {
-                        opacity: if shadow { 153 } else { 255 },
+                        opacity: if shadow {
+                            u8::try_from(u16::from(opacity) * 153 / 255).unwrap()
+                        } else {
+                            opacity
+                        },
                         tint: shadow.then_some([0, 0, 0]),
                         glow,
                         asset,

@@ -177,7 +177,12 @@ impl MapContents {
                     heap,
                     haunted,
                     reward,
-                } => self.drop(*cell, &name(heap), *haunted, items::forced(&reward.item, a)),
+                } => self.drop(
+                    *cell,
+                    &name(heap),
+                    *haunted,
+                    items::forced(&reward.item, a, level.depth),
+                ),
                 F::Mob { cell, kind } => self.mob(*cell, name(kind), vec![]),
                 F::Blob { cell, kind, .. } => self.effect(*cell, name(kind)),
                 F::SpawnItem(_) | F::PitFallCandidates(_) => {}

@@ -2,6 +2,7 @@
 //! indices follow the pinned `DungeonTileSheet` (see `assets::SOURCE_REVISION`).
 
 mod actors;
+mod ambient;
 mod boss;
 mod carpets;
 mod chasms;
@@ -387,6 +388,57 @@ pub(super) fn plant_image(seed: crate::generator::SeedKind) -> u16 {
 mod tests {
     use super::*;
     use crate::level::{Feeling, PlacedTrap, TrapSpec};
+
+    #[test]
+    fn mimic_disguises_preserve_stealth_and_ebony_opacity_covers_raised_fragments() {
+        use crate::level_map::{MapContents, MapMob};
+        let mut level = Level::new(6, Feeling::None);
+        level.set_size(5, 5);
+        level.map.cells[12] = t::EMPTY;
+        for kind in ["Mimic", "GoldenMimic", "EbonyMimic"] {
+            for stealthy in [false, true] {
+                let contents = MapContents {
+                    mobs: vec![MapMob {
+                        cell: 12,
+                        kind: kind.into(),
+                        stealthy,
+                        sleeping: true,
+                        approximate: false,
+                        items: vec![],
+                    }],
+                    ..MapContents::default()
+                };
+                let scene = scene(DungeonSeed::MIN, &level, &[], MapKind::Regular, &contents);
+                let mut fragments = 0;
+                for sprite in scene
+                    .layers
+                    .iter()
+                    .filter(|l| l.name == "actors")
+                    .flat_map(|l| l.cells.iter().flatten())
+                    .map(|&s| &scene.sprites[s])
+                {
+                    fragments += 1;
+                    if stealthy {
+                        assert_eq!(sprite.frames.len(), 1);
+                    } else {
+                        assert_eq!(sprite.frames.len(), 6);
+                        assert_eq!(sprite.frame_duration_ms, 1000);
+                    }
+                    for draw in sprite.frames.iter().flatten() {
+                        if let MapDraw::Blit { opacity, tint, .. } = draw {
+                            let expected = match (kind == "EbonyMimic", tint.is_some()) {
+                                (true, false) | (false, true) => 153,
+                                (true, true) => 91,
+                                (false, false) => 255,
+                            };
+                            assert_eq!(*opacity, expected);
+                        }
+                    }
+                }
+                assert_eq!(fragments, 2, "raised actor must span both cells");
+            }
+        }
+    }
 
     #[test]
     fn hidden_traps_have_revealed_and_concealed_layers_without_mutation() {

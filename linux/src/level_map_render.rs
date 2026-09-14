@@ -159,6 +159,7 @@ pub struct ParticleState {
     pub x: f64,
     pub y: f64,
     pub scale: f64,
+    pub scale_x: f64,
     pub scale_y: f64,
     pub alpha: f64,
     pub angle: f64,
@@ -188,6 +189,10 @@ pub fn particle_state(
         x: position(0),
         y: position(1),
         scale: f64::from(particle.scale) / 1000.0 * curve_value(&emitter.scale, progress),
+        scale_x: emitter
+            .scale_x
+            .as_ref()
+            .map_or(1.0, |curve| curve_value(curve, progress)),
         scale_y: emitter
             .scale_y
             .as_ref()
@@ -392,7 +397,8 @@ fn draw_emitter(
         let Some(state) = particle_state(emitter, particle, elapsed) else {
             continue;
         };
-        if state.scale <= 0.0 || state.scale_y <= 0.0 || state.alpha <= 0.0 {
+        if state.scale <= 0.0 || state.scale_x <= 0.0 || state.scale_y <= 0.0 || state.alpha <= 0.0
+        {
             continue;
         }
         context.save().map_err(|e| e.to_string())?;
@@ -401,7 +407,7 @@ fn draw_emitter(
             (emitter.cell / map.width as usize) as f64 * 16.0 + state.y,
         );
         context.rotate(state.angle);
-        context.scale(state.scale, state.scale * state.scale_y);
+        context.scale(state.scale * state.scale_x, state.scale * state.scale_y);
         let destination = match &emitter.image {
             MapDraw::Blit { destination, .. } | MapDraw::Fill { destination, .. } => destination,
         };
@@ -458,6 +464,7 @@ mod tests {
             angular_speed: 0,
             alpha: constant(1000),
             scale: constant(1000),
+            scale_x: None,
             scale_y: None,
             particles: vec![MapParticle {
                 birth_ms: 0,
@@ -592,6 +599,39 @@ mod tests {
         assert_eq!(pixel(&mut image, 4, 8), 0xff00_00ff);
         assert_eq!(pixel(&mut image, 15, 8), 0xff3c_1e28);
         assert_eq!(pixel(&mut image, 17, 8), 0);
+    }
+
+    #[test]
+    fn garden_shafts_scale_width_and_height_independently() {
+        let mut map = map();
+        let e = &mut map.scene.emitters[0];
+        e.wall_mask = false;
+        e.blend = None;
+        e.image = MapDraw::Fill {
+            destination: [0, 0, 1, 1],
+            rgba: [0, 0, 255, 255],
+        };
+        e.scale_x = Some(MapCurve {
+            points: vec![[0, 0], [1000, 4000]],
+            sqrt: false,
+        });
+        e.scale_y = Some(MapCurve {
+            points: vec![[0, 16000], [1000, 32000]],
+            sqrt: false,
+        });
+        let state = particle_state(e, &e.particles[0], 500).unwrap();
+        assert!((state.scale_x - 2.0).abs() < 1e-9);
+        assert!((state.scale_y - 24.0).abs() < 1e-9);
+        let mut renderer = Renderer::new(&map).unwrap();
+        let mut image = surface(16, 16).unwrap();
+        {
+            let context = cairo::Context::new(&image).unwrap();
+            renderer.render(&map, true, 500, &context).unwrap();
+        }
+        assert_eq!(pixel(&mut image, 7, 0), 0xff00_00ff);
+        assert_eq!(pixel(&mut image, 8, 15), 0xff00_00ff);
+        assert_ne!(pixel(&mut image, 6, 8), 0xff00_00ff);
+        assert_ne!(pixel(&mut image, 9, 8), 0xff00_00ff);
     }
 
     #[test]

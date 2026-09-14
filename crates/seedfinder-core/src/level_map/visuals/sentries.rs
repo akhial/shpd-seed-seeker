@@ -112,6 +112,7 @@ fn base(cell: usize, start: u32, period: u16) -> MapEmitter {
         angular_speed: 0,
         alpha: curve(&[[0, 1000], [1000, 0]]),
         scale: curve(&[[0, 1000], [1000, 0]]),
+        scale_x: None,
         scale_y: None,
         particles: Vec::new(),
     }

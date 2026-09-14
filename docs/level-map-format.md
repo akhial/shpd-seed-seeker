@@ -72,15 +72,25 @@ kinds identify engine classes; searchable equipment uses catalog stable IDs.
 Metadata always describes the complete floor, irrespective of secret visibility.
 The scene defines the visible result; clients need not render metadata themselves.
 
-Runtime-dependent shop bag ties, secret laboratory/library class-map selections,
-and the vault's unseeded consumable shuffle use explicit placeholder items with
-`deterministic: false`. Their locations and containers remain visible. Future
+Shop bags use the fixed preview sequence Scroll Holder (floor 6), Potion
+Bandolier (floor 11), Magical Holster (floor 16), with `deterministic: false`
+because purchases and inventory can change the in-game choice. This replaces
+all bag offers, including a bag resolved by the canonical inventory profile.
+Secret laboratory/library class-map selections and the vault's unseeded consumable
+shuffle use explicit placeholder items with `deterministic: false`. Their locations and containers remain visible. Future
 mob drops, respawns, quest completion rewards, harvested plant contents, killed
 mimic loot beyond its initial inventory, and player remains are not fabricated.
 The overview follows the canonical no-remains, no-holiday profile.
 
 Water, well hearts/question marks, alchemy bubbles, sacrificial blue fire,
 eternal green fire, city statue flames, blacksmith sparks and gas have repeatable animation loops.
+Fire/newborn fire, frost, shock and chaos elementals carry their original flame,
+magic, spark and rainbow effects. Gardens (including secret gardens) emit rising
+light shafts; hidden secret gardens emit nothing in the concealed scene. The
+shopkeeper tosses his yellow pixel coin on each 0.9s idle loop. Non-stealthy mimics
+use the game's six-second hiding animation; stealthy mimics (including those
+under Mimic Tooth) retain their single-frame disguise. Ebony mimics use 60%
+opacity in the overview, with a matching faded shadow.
 Vault flame vents retain their seeded `cycle` (`initialCooldown`, `cooldown`,
 `triggers`) on each `VaultFlameTrap` feature. The map previews one game turn per
 second: checkerboard vents alternate, flame paths follow their seeded offsets,
@@ -276,6 +286,7 @@ position = initialPosition / 1000 + velocity * seconds + acceleration * secondsÂ
 scale = initialScale / 1000 * evaluate(emitter.scale, progress)
 alpha = evaluate(emitter.alpha, progress)
 angle = initialAngle + angularSpeed * seconds
+scaleX = scale * (evaluate(emitter.scaleX, progress) if scaleX exists else 1)
 scaleY = scale * (evaluate(emitter.scaleY, progress) if scaleY exists else 1)
 ```
 
@@ -284,8 +295,9 @@ wrapping backward before their first cycle. Ambient emitters omit it and prewarm
 their loops. Curves contain `[progress, value]` points in thousandths: linearly interpolate,
 then take the square root if `sqrt` is true. Draw the image centered at the
 resulting position, scaled/rotated with the resulting alpha.
-Optional `scaleY` multiplies the local vertical scale independently, so a beam
-can thin without shortening. `contents.sentries` retains each sentry's initial
+Optional `scaleX` and `scaleY` multiply the local horizontal and vertical scale
+independently. Beams can thin without shortening, and garden shafts can widen
+while growing taller. Both default to 1 for existing documents. `contents.sentries` retains each sentry's initial
 cooldown, repeated cooldown, trigger count, warning flag and target-cell groups;
 optional `scan` stores cone degrees and tile length, both multiplied by 1000.
 `blend: "add"` requires the underlying scenery as the blend destination. Emitters with

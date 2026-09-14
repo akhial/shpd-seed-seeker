@@ -230,8 +230,9 @@ pub(super) fn secret(value: crate::secret_rooms::SecretItem, a: &ItemAppearanceS
 pub(super) fn forced(
     value: &crate::special_forced::ForcedItem,
     a: &ItemAppearanceState,
+    depth: u32,
 ) -> MapItem {
-    use crate::shop::{DirectShopItem as D, ShopBagOffer, ShopStockItem as S};
+    use crate::shop::{DirectShopItem as D, ShopStockItem as S};
     use crate::special_forced::ForcedItem as I;
     match value {
         I::Regular(i) => regular(*i, a),
@@ -255,9 +256,18 @@ pub(super) fn forced(
             i.cursed,
         ),
         I::Shop(S::Generated(i)) => generated(*i, a),
-        I::Shop(S::Direct(D::Bag(ShopBagOffer::Deterministic(bag)))) => direct(&name(bag), a),
-        I::Shop(S::Direct(D::Bag(ShopBagOffer::RuntimeHashMapTie { .. }))) => {
-            MapItem::unknown("RuntimeShopBag", 481)
+        I::Shop(S::Direct(D::Bag(_))) => {
+            // Preview the requested purchase sequence without changing shop RNG,
+            // stock order, or the search engine's inventory assumptions.
+            let kind = match depth {
+                0..=10 => "ScrollHolder",
+                11..=15 => "PotionBandolier",
+                _ => "MagicalHolster",
+            };
+            MapItem {
+                deterministic: false,
+                ..direct(kind, a)
+            }
         }
         I::Shop(S::Direct(D::Alchemize { quantity })) => MapItem::new("Alchemize", 422, *quantity),
         I::Shop(S::Direct(i)) => direct(&name(i), a),

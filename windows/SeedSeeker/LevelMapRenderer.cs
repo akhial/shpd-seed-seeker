@@ -187,10 +187,10 @@ public sealed class LevelMapRenderer
         foreach (var particle in emitter.Particles)
         {
             var state = emitter.State(particle, elapsed);
-            if (state is null || state.Scale <= 0 || state.ScaleY <= 0 || state.Alpha <= 0) continue;
+            if (state is null || state.Scale <= 0 || state.ScaleX <= 0 || state.ScaleY <= 0 || state.Alpha <= 0) continue;
             var cx = left + (emitter.Cell % map.Width * 16 + state.X) * density; var cy = top + (emitter.Cell / map.Width * 16 + state.Y) * density;
             var cos = Math.Cos(state.Angle); var sin = Math.Sin(state.Angle);
-            var halfWidth = width * state.Scale * density / 2; var halfHeight = height * state.Scale * state.ScaleY * density / 2;
+            var halfWidth = width * state.Scale * state.ScaleX * density / 2; var halfHeight = height * state.Scale * state.ScaleY * density / 2;
             var radiusX = Math.Abs(cos) * halfWidth + Math.Abs(sin) * halfHeight;
             var radiusY = Math.Abs(sin) * halfWidth + Math.Abs(cos) * halfHeight;
             for (var y = Math.Max(0, (int)Math.Floor(cy - radiusY)); y < Math.Min(targetHeight, (int)Math.Ceiling(cy + radiusY)); y++)

@@ -22,6 +22,71 @@ fn normalized(value: &str) -> String {
 }
 
 #[test]
+fn garden_shafts_follow_blob_cells_and_secret_visibility() {
+    let mut ordinary = false;
+    let mut secret = false;
+    for depth in [
+        1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14, 16, 17, 18, 19, 21, 22, 23, 24,
+    ] {
+        let map = generate_level_map_in_branch(DungeonSeed::MIN, depth, 0, Challenges::NONE, None)
+            .unwrap();
+        for effect in map.contents.effects.iter().filter(|e| e.kind == "Foliage") {
+            let e = map
+                .scene
+                .emitters
+                .iter()
+                .find(|e| e.cell == effect.cell && e.scale_x.is_some())
+                .unwrap();
+            assert_eq!(e.scale_x.as_ref().unwrap().points, [[0, 0], [1000, 4000]]);
+            assert_eq!(
+                e.scale_y.as_ref().unwrap().points,
+                [[0, 16000], [1000, 32000]]
+            );
+            let x = i32::try_from(effect.cell % usize::try_from(map.width).unwrap()).unwrap();
+            let y = i32::try_from(effect.cell / usize::try_from(map.width).unwrap()).unwrap();
+            let hidden = map
+                .secret_rooms
+                .iter()
+                .any(|&[left, top, right, bottom]| x > left && x < right && y > top && y < bottom);
+            let concealed = map
+                .scene
+                .concealed_emitters
+                .iter()
+                .any(|e| e.cell == effect.cell && e.scale_x.is_some());
+            assert_eq!(concealed, !hidden);
+            secret |= hidden;
+            ordinary |= !hidden;
+        }
+    }
+    assert!(ordinary && secret, "exercise both garden room kinds");
+}
+
+#[test]
+fn shop_bag_previews_follow_the_requested_purchase_sequence() {
+    for (depth, kind, image) in [
+        (6, "ScrollHolder", 483),
+        (11, "PotionBandolier", 484),
+        (16, "MagicalHolster", 485),
+    ] {
+        let map = generate_level_map_in_branch(DungeonSeed::MIN, depth, 0, Challenges::NONE, None)
+            .unwrap();
+        let bags: Vec<_> = map
+            .contents
+            .heaps
+            .iter()
+            .filter(|h| h.kind == "ForSale")
+            .flat_map(|h| &h.items)
+            .filter(|i| (481..=485).contains(&i.image))
+            .collect();
+        assert_eq!(bags.len(), 1);
+        assert_eq!(
+            (bags[0].kind.as_str(), bags[0].image, bags[0].deterministic),
+            (kind, image, false)
+        );
+    }
+}
+
+#[test]
 fn enchanted_heaps_glow_without_tinting_containers_or_shadows() {
     use shpd_seedfinder_core::{catalog::ItemId, level_map::MapGlow};
     let map = generate_level_map_in_branch(
@@ -237,7 +302,9 @@ fn check_heaps(map: &LevelMap, sample: &Value, context: &str) {
                 assert!(
                     matches!(
                         item.kind.as_str(),
-                        "RuntimeShopBag"
+                        "ScrollHolder"
+                            | "PotionBandolier"
+                            | "MagicalHolster"
                             | "RuntimeVaultConsumable"
                             | "RuntimeLaboratoryPotion"
                             | "RuntimeLibraryScroll"

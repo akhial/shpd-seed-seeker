@@ -109,6 +109,7 @@ public sealed class MapEmitter
     public double AngularSpeed { get; init; }
     public MapCurve Alpha { get; init; } = new([[0, 1000]], false);
     public MapCurve Scale { get; init; } = new([[0, 1000]], false);
+    public MapCurve? ScaleX { get; init; }
     public MapCurve? ScaleY { get; init; }
     public MapParticle[] Particles { get; init; } = [];
 
@@ -121,12 +122,12 @@ public sealed class MapEmitter
         var seconds = age / 1000; var progress = age / particle.LifespanMs;
         return new(particle.Position[0] / 1000 + Velocity[0] * seconds + Acceleration[0] * seconds * seconds / 2,
             particle.Position[1] / 1000 + Velocity[1] * seconds + Acceleration[1] * seconds * seconds / 2,
-            particle.Scale / 1000 * Scale.Value(progress), ScaleY?.Value(progress) ?? 1,
+            particle.Scale / 1000 * Scale.Value(progress), ScaleX?.Value(progress) ?? 1, ScaleY?.Value(progress) ?? 1,
             Alpha.Value(progress), (particle.Angle + AngularSpeed * seconds) * Math.PI / 180);
     }
 }
 public sealed record MapParticle(double BirthMs, double LifespanMs, double[] Position, double Scale, double Angle);
-public sealed record MapParticleState(double X, double Y, double Scale, double ScaleY, double Alpha, double Angle);
+public sealed record MapParticleState(double X, double Y, double Scale, double ScaleX, double ScaleY, double Alpha, double Angle);
 
 /// <summary>Choice letters and conflicts follow the jointly obtainable engine match.</summary>
 public static class ScoutChoices

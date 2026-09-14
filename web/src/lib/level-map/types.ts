@@ -126,6 +126,7 @@ export interface MapEmitter {
   angularSpeed: number;
   alpha: MapCurve;
   scale: MapCurve;
+  scaleX?: MapCurve;
   scaleY?: MapCurve;
   particles: {
     birthMs: number;
