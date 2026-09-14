@@ -1,5 +1,6 @@
+import { drawTexture, glowTexture } from "./textures";
 import { mapSpriteCache, makeFrameCanvas } from "./frame-cache";
-import type { MapBundle, MapSprite } from "./types";
+import type { MapBundle, MapDraw, MapSprite } from "./types";
 
 export function spriteFrame(sprite: MapSprite, elapsed: number) {
   return sprite.frames[
@@ -8,32 +9,69 @@ export function spriteFrame(sprite: MapSprite, elapsed: number) {
 }
 export function drawLevelMap(
   context: CanvasRenderingContext2D,
-  { map, textures }: MapBundle,
+  bundle: MapBundle,
   elapsed: number,
   revealSecrets: boolean,
 ) {
+  const { map } = bundle;
   const tileSize = map.scene.tileSize;
+  context.globalCompositeOperation = "source-over";
+  context.globalAlpha = 1;
   context.clearRect(0, 0, map.width * tileSize, map.height * tileSize);
   context.fillStyle = "#000";
   context.fillRect(0, 0, map.width * tileSize, map.height * tileSize);
   context.imageSmoothingEnabled = false;
   for (const layer of revealSecrets ? map.scene.layers : map.scene.concealedLayers) {
+    context.globalCompositeOperation = layer.blend === "add" ? "lighter" : "source-over";
     for (let cell = 0; cell < layer.cells.length; cell++) {
       const index = layer.cells[cell];
       if (index === null) continue;
       const ox = (cell % map.width) * tileSize;
       const oy = Math.floor(cell / map.width) * tileSize;
       for (const draw of spriteFrame(map.scene.sprites[index], elapsed)) {
-        const [x, y, w, h] = draw.destination;
-        if (draw.kind === "blit") {
-          context.drawImage(textures.get(draw.asset)!, ...draw.source, ox + x, oy + y, w, h);
-        } else {
-          const [r, g, b, a] = draw.rgba;
-          context.fillStyle = `rgba(${r},${g},${b},${a / 255})`;
-          context.fillRect(ox + x, oy + y, w, h);
-        }
+        drawCommand(context, bundle, draw, ox, oy, elapsed);
       }
     }
+  }
+  context.globalAlpha = 1;
+  context.globalCompositeOperation = "source-over";
+}
+
+export function glowAmount(periodMs: number, elapsed: number): number {
+  const phase = (Math.max(0, elapsed) / Math.max(1, periodMs)) % 2;
+  return (phase <= 1 ? phase : 2 - phase) * 0.6;
+}
+
+export function drawCommand(
+  context: CanvasRenderingContext2D,
+  bundle: MapBundle,
+  draw: MapDraw,
+  ox: number,
+  oy: number,
+  elapsed = 0,
+) {
+  const [x, y, w, h] = draw.destination;
+  context.globalAlpha = draw.kind === "blit" ? (draw.opacity ?? 255) / 255 : 1;
+  if (draw.kind === "blit") {
+    if (draw.glow) {
+      context.drawImage(
+        glowTexture(bundle, draw, glowAmount(draw.glow.periodMs, elapsed)),
+        0,
+        0,
+        draw.source[2],
+        draw.source[3],
+        ox + x,
+        oy + y,
+        w,
+        h,
+      );
+    } else {
+      context.drawImage(drawTexture(bundle, draw), ...draw.source, ox + x, oy + y, w, h);
+    }
+  } else {
+    const [r, g, b, a] = draw.rgba;
+    context.fillStyle = `rgba(${r},${g},${b},${a / 255})`;
+    context.fillRect(ox + x, oy + y, w, h);
   }
 }
 
@@ -70,25 +108,43 @@ export function createLevelMapRenderer(
       if (index === null) return [];
       const sprite = map.scene.sprites[index];
       const cached = cache[index];
+      const frames =
+        layer.blend === "add" ? (cached.additiveFrames ?? cached.frames) : cached.frames;
       const x = (cell % map.width) * map.scene.tileSize + cached.x;
       const y = Math.floor(cell / map.width) * map.scene.tileSize + cached.y;
       return [
-        { sprite, cached, x, y, cells: coveredCells(x, y, cached.width, cached.height), frame: -1 },
+        {
+          sprite,
+          cached,
+          frames,
+          blend: layer.blend,
+          x,
+          y,
+          cells: coveredCells(x, y, cached.width, cached.height),
+          frame: -1,
+          glowing: sprite.frames.some((frame) =>
+            frame.some((draw) => draw.kind === "blit" && draw.glow),
+          ),
+        },
       ];
     }),
   );
   let initial = true;
+  let previousElapsed = -1;
   return {
-    animated: entries.some(({ sprite }) => sprite.frames.length > 1),
-    draw(elapsed: number) {
+    animated: entries.some(({ sprite, glowing }) => sprite.frames.length > 1 || glowing),
+    draw(elapsed: number, advanceSprites = true) {
       const changed = entries.filter((entry) => {
         const frame =
-          Math.floor(Math.max(0, elapsed) / Math.max(1, entry.sprite.frameDurationMs)) %
-          entry.sprite.frames.length;
-        if (entry.frame === frame) return false;
+          !advanceSprites && entry.frame >= 0
+            ? entry.frame
+            : Math.floor(Math.max(0, elapsed) / Math.max(1, entry.sprite.frameDurationMs)) %
+              entry.sprite.frames.length;
+        if (entry.frame === frame && !(entry.glowing && elapsed !== previousElapsed)) return false;
         entry.frame = frame;
         return true;
       });
+      previousElapsed = elapsed;
       if (!initial && changed.length === 0) return;
       const dirtyCells = new Set(changed.flatMap((entry) => entry.cells));
       context.save();
@@ -99,13 +155,29 @@ export function createLevelMapRenderer(
         }
         context.clip();
       }
+      context.globalAlpha = 1;
+      context.globalCompositeOperation = "source-over";
       context.fillStyle = "#000";
       context.fillRect(0, 0, map.width * map.scene.tileSize, map.height * map.scene.tileSize);
       context.imageSmoothingEnabled = false;
       for (const entry of entries) {
         if (initial || entry.cells.some((cell) => dirtyCells.has(cell))) {
-          const frame = entry.cached.frames[entry.frame];
+          const frame = entry.frames[entry.frame];
           if (frame) {
+            context.globalCompositeOperation = entry.blend === "add" ? "lighter" : "source-over";
+            if (frame.commands) {
+              for (const draw of frame.commands)
+                drawCommand(
+                  context,
+                  bundle,
+                  draw,
+                  entry.x - entry.cached.x,
+                  entry.y - entry.cached.y,
+                  elapsed,
+                );
+              continue;
+            }
+            context.globalAlpha = frame.opacity / 255;
             const [x, y, width, height] = frame.destination;
             context.drawImage(
               frame.image,

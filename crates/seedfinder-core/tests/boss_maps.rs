@@ -69,7 +69,7 @@ fn rat_king_art_is_revealed_only_with_secrets_and_pylons_are_visible() {
         .scene
         .layers
         .iter()
-        .find(|layer| layer.name == "boss_actors")
+        .find(|layer| layer.name == "actors")
         .unwrap();
     for cell in [433, 457, 1225, 1249] {
         assert!(actors.cells[cell].is_some(), "pylon at {cell}");
@@ -77,4 +77,29 @@ fn rat_king_art_is_revealed_only_with_secrets_and_pylons_are_visible() {
     let harder =
         generate_level_map(DungeonSeed::MIN, 15, Challenges::STRONGER_BOSSES, None).unwrap();
     assert_ne!(caves.terrain, harder.terrain);
+}
+
+#[test]
+fn bridge_abyss_animates_to_the_arena_wall_and_map_edges_without_surrounding_rock() {
+    use shpd_seedfinder_core::geometry::terrain as t;
+    let map = generate_level_map(DungeonSeed::MIN, 15, Challenges::NONE, None).unwrap();
+    for emitters in [&map.scene.emitters, &map.scene.concealed_emitters] {
+        let cells: Vec<_> = emitters
+            .iter()
+            .filter(|e| e.clip_to_chasm)
+            .map(|e| e.cell)
+            .collect();
+        let pits: Vec<_> = map
+            .terrain
+            .iter()
+            .enumerate()
+            .filter_map(|(cell, &tile)| (tile == t::CHASM).then_some(cell))
+            .collect();
+        assert_eq!(cells, pits);
+        for cell in [4 * 33, 4 * 33 + 32, 10 * 33 + 13, 10 * 33 + 19] {
+            assert!(cells.contains(&cell), "bridge abyss at {cell}");
+        }
+        assert!(!cells.contains(&(11 * 33 + 13)), "arena wall");
+        assert!(!cells.contains(&(25 * 33)), "outer black rock");
+    }
 }

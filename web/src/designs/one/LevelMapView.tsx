@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
-import type { FloorFeeling, ScoutQuest } from "../../lib/wasm/types";
+import type { FloorFeeling, ScoutQuest, TrinketOffer } from "../../lib/wasm/types";
 import { regionForDepth } from "../../lib/region";
 import { FloorMapLabel } from "./FloorMapHeader";
+import { TrinketShortcuts } from "./TrinketShortcuts";
 import { ExpandIcon, XIcon } from "../../lib/icons";
 import { mapRequestJson, requestLevelMap } from "../../lib/level-map/client";
+import { createMapParticleRenderer } from "../../lib/level-map/particles";
 import { createLevelMapRenderer } from "../../lib/level-map/render";
 import type { LevelMapRequest, MapBundle } from "../../lib/level-map/types";
 import {
@@ -22,14 +24,25 @@ type LevelMapViewProps = Omit<LevelMapRequest, "branch"> & {
   feeling?: FloorFeeling;
   quest?: ScoutQuest;
   floors?: { depth: number; feeling?: FloorFeeling; quest?: ScoutQuest }[];
+  trinketOffers?: readonly TrinketOffer[];
+  onTrinketChange?: (trinket: string) => void;
+  changingTrinket?: boolean;
 };
 const MAP_HEIGHT = 350;
 
-/** Profile changes remount the viewer so a pinned branch can never show an old run. */
+/** New runs remount; trinket swaps preserve the expanded dialog and current floor. */
 export function LevelMapView(props: LevelMapViewProps) {
-  return <MapSession key={mapRequestJson(props)} {...props} />;
+  return <MapSession key={mapRequestJson({ ...props, selectedTrinket: "none" })} {...props} />;
 }
-function MapSession({ feeling, quest, floors, ...props }: LevelMapViewProps) {
+function MapSession({
+  feeling,
+  quest,
+  floors,
+  trinketOffers,
+  onTrinketChange,
+  changingTrinket,
+  ...props
+}: LevelMapViewProps) {
   const [depth, setDepth] = useState(props.depth);
   const availableFloors = floors ?? [{ depth: props.depth, feeling, quest }];
   const floorIndex = availableFloors.findIndex((floor) => floor.depth === depth);
@@ -49,9 +62,17 @@ function MapSession({ feeling, quest, floors, ...props }: LevelMapViewProps) {
       document.body.style.overflow = previousOverflow;
     };
   }, [expanded]);
-  const [branch, setBranch] = useState(0);
+  const profileKey = mapRequestJson({ ...props, depth });
+  const [branchSelection, selectBranch] = useState<{ key: string; branch: number }>();
+  const branch = branchSelection?.key === profileKey ? branchSelection.branch : 0;
+  const setBranch = (next: number) => selectBranch({ key: profileKey, branch: next });
+  useEffect(() => {
+    // Forget the previous area so switching back to an earlier trinket cannot
+    // revive a branch whose parent metadata is no longer loaded.
+    selectBranch(undefined);
+  }, [profileKey]);
   const [loaded, setLoaded] = useState<{ key: string; bundle: MapBundle }>();
-  const [parent, setParent] = useState<MapBundle>();
+  const [parent, setParent] = useState<{ key: string; bundle: MapBundle }>();
   const [error, setError] = useState<string>();
   const [retry, setRetry] = useState(0);
   const [secrets, setSecrets] = useState(false);
@@ -83,7 +104,7 @@ function MapSession({ feeling, quest, floors, ...props }: LevelMapViewProps) {
       (next) => {
         if (!active) return;
         setLoaded({ key: requestKey, bundle: next });
-        if (branch === 0) setParent(next);
+        if (branch === 0) setParent({ key: requestKey, bundle: next });
       },
       (reason: unknown) => {
         if (active) setError(reason instanceof Error ? reason.message : String(reason));
@@ -96,7 +117,7 @@ function MapSession({ feeling, quest, floors, ...props }: LevelMapViewProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestKey, retry]);
   const bundle = loaded?.key === requestKey ? loaded.bundle : undefined;
-  const branches = parent?.map.branches ?? [];
+  const branches = parent?.key === profileKey ? parent.bundle.map.branches : [];
   const secretCount = bundle
     ? bundle.map.secretRooms.length + bundle.map.secretDoors.length + bundle.map.secretTraps.length
     : 0;
@@ -252,29 +273,45 @@ function MapSession({ feeling, quest, floors, ...props }: LevelMapViewProps) {
                     quest={currentFloor?.quest}
                   />
                 </div>
-                <div className="d1-scout-nav-tools">
-                  <div className="d1-scout-nav-hints" aria-hidden="true">
-                    <span className="d1-scout-nav-hint d1-scout-nav-hint-keys">
-                      <kbd className="d1-keycap">J</kbd>
-                      <span>next</span>
-                      <kbd className="d1-keycap">K</kbd>
-                      <span>prev</span>
-                    </span>
-                    <span className="d1-scout-nav-hint d1-scout-nav-hint-swipe">
-                      swipe to browse
-                    </span>
+                {onTrinketChange && trinketOffers && trinketOffers.length > 0 && (
+                  <TrinketShortcuts
+                    className="d1-map-trinkets"
+                    offers={trinketOffers}
+                    selectedTrinket={props.selectedTrinket}
+                    onSelect={(trinket) => {
+                      // Loading disables the clicked button. Keep keyboard focus
+                      // inside the dialog so J/K navigation continues to work.
+                      dialogRef.current?.focus({ preventScroll: true });
+                      onTrinketChange(trinket);
+                    }}
+                    disabled={changingTrinket}
+                  />
+                )}
+                <div className="d1-map-header-controls">
+                  <div className="d1-scout-nav-tools">
+                    <div className="d1-scout-nav-hints" aria-hidden="true">
+                      <span className="d1-scout-nav-hint d1-scout-nav-hint-keys">
+                        <kbd className="d1-keycap">J</kbd>
+                        <span>next</span>
+                        <kbd className="d1-keycap">K</kbd>
+                        <span>prev</span>
+                      </span>
+                      <span className="d1-scout-nav-hint d1-scout-nav-hint-swipe">
+                        swipe to browse
+                      </span>
+                    </div>
                   </div>
+                  <button
+                    type="button"
+                    className="d1-map-expand d1-map-close"
+                    onClick={close}
+                    autoFocus
+                  >
+                    <XIcon size={14} />
+                    Close
+                  </button>
                 </div>
               </nav>
-              <button
-                type="button"
-                className="d1-map-expand d1-map-close"
-                onClick={close}
-                autoFocus
-              >
-                <XIcon size={14} />
-                Close
-              </button>
             </header>
             {toolbar}
             {mapContent}
@@ -295,6 +332,8 @@ function MapCanvas({
 }) {
   const { map } = bundle;
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const particleRef = useRef<HTMLCanvasElement>(null);
+  const densityRef = useRef(1);
   const viewportRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ width: 300, height: MAP_HEIGHT });
   const [transform, setTransform] = useState(FIT_MAP);
@@ -310,6 +349,7 @@ function MapCanvas({
     [size, widthPx, heightPx],
   );
   const scale = mapFitScale(geometry) * transform.zoom;
+  densityRef.current = Math.max(1, Math.min(4, scale * (window.devicePixelRatio || 1)));
   const applyTransform = useCallback((next: MapTransform) => {
     // Pointer and wheel events may arrive before React commits a render.
     transformRef.current = next;
@@ -366,31 +406,49 @@ function MapCanvas({
     const context = canvasRef.current?.getContext("2d");
     if (!context) return;
     const renderer = createLevelMapRenderer(context, bundle, secrets);
+    const particleCanvas = particleRef.current!;
+    const particles = createMapParticleRenderer(
+      particleCanvas.getContext("2d")!,
+      canvasRef.current!,
+      bundle,
+      secrets,
+    );
+    const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const animated = renderer.animated || particles.animated;
     let frame = 0,
       last = -Infinity;
     const start = performance.now();
     const tick = (time: number) => {
-      if (time - last >= 50) {
-        renderer.draw(time - start);
-        last = time;
+      const elapsed = motion.matches ? 0 : time - start;
+      const advanceSprites = time - last >= 50 || motion.matches;
+      renderer.draw(elapsed, advanceSprites);
+      if (advanceSprites) last = time;
+      const density = densityRef.current;
+      const width = Math.round(widthPx * density),
+        height = Math.round(heightPx * density);
+      if (particleCanvas.width !== width || particleCanvas.height !== height) {
+        particleCanvas.width = width;
+        particleCanvas.height = height;
       }
-      if (renderer.animated && visibleRef.current && !document.hidden)
+      particles.draw(elapsed);
+      if (animated && !motion.matches && visibleRef.current && !document.hidden)
         frame = requestAnimationFrame(tick);
     };
     const resume = () => {
       cancelAnimationFrame(frame);
-      if (renderer.animated && visibleRef.current && !document.hidden)
-        frame = requestAnimationFrame(tick);
+      if (visibleRef.current && !document.hidden) frame = requestAnimationFrame(tick);
     };
     resumeRef.current = resume;
     tick(start);
     document.addEventListener("visibilitychange", resume);
+    motion.addEventListener("change", resume);
     return () => {
       resumeRef.current = () => {};
       cancelAnimationFrame(frame);
       document.removeEventListener("visibilitychange", resume);
+      motion.removeEventListener("change", resume);
     };
-  }, [bundle, secrets]);
+  }, [bundle, secrets, widthPx, heightPx]);
   const pointerPoint = (event: ReactPointerEvent<HTMLDivElement>) => {
     const bounds = event.currentTarget.getBoundingClientRect();
     return {
@@ -480,6 +538,11 @@ function MapCanvas({
         style={canvasStyle}
         role="img"
         aria-label={label}
+      />
+      <canvas
+        ref={particleRef}
+        style={{ ...canvasStyle, pointerEvents: "none" }}
+        aria-hidden="true"
       />
     </div>
   );

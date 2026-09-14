@@ -157,15 +157,28 @@ pub struct PaintTransition {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum PaintMob {
-    Piranha { cell: usize, phantom: bool },
-    Mimic { cell: usize, items: Vec<PaintItem> },
+    /// Initial actors retained only by the map-only boss and mine generators.
+    Initial {
+        cell: usize,
+        kind: &'static str,
+    },
+    Piranha {
+        cell: usize,
+        phantom: bool,
+    },
+    Mimic {
+        cell: usize,
+        items: Vec<PaintItem>,
+    },
 }
 
 impl PaintMob {
     #[must_use]
     pub const fn cell(&self) -> usize {
         match self {
-            Self::Piranha { cell, .. } | Self::Mimic { cell, .. } => *cell,
+            Self::Piranha { cell, .. } | Self::Mimic { cell, .. } | Self::Initial { cell, .. } => {
+                *cell
+            }
         }
     }
 }
@@ -179,6 +192,8 @@ pub struct PaintPlant {
 /// Operation-order trace for generation-visible side effects of room paint.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum PaintEvent {
+    /// Optional map-only room ordering; ordinary searches never emit it.
+    RoomPaint(RoomId),
     Transition(PaintTransition),
     Drop {
         cell: usize,
@@ -340,6 +355,10 @@ impl Level {
 
     pub fn mark_heap(&mut self, cell: usize) {
         self.heap_cells[cell] = true;
+    }
+
+    pub(crate) fn record_actor(&mut self, cell: usize, kind: &'static str) {
+        self.add_mob(PaintMob::Initial { cell, kind });
     }
 
     pub fn mark_mob(&mut self, cell: usize) {

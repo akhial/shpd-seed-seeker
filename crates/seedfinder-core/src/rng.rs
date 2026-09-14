@@ -300,6 +300,8 @@ pub const fn scramble_seed(seed: i64) -> i64 {
 /// depend on it, so this type starts with one explicit deterministic base seed.
 #[derive(Clone, Debug)]
 pub struct RandomStack {
+    /// Map scouting retains painter order for spatial hash-table lookups.
+    pub(crate) record_room_order: bool,
     pub(crate) trinket: crate::trinkets::TrinketEffects,
     generators: Vec<JavaRandom>,
 }
@@ -315,6 +317,7 @@ impl RandomStack {
     #[must_use]
     pub fn with_base_seed(base_seed: i64) -> Self {
         Self {
+            record_room_order: false,
             generators: vec![JavaRandom::new(base_seed)],
             trinket: crate::trinkets::TrinketEffects::default(),
         }

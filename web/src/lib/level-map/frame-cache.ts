@@ -1,12 +1,16 @@
+import { drawTexture } from "./textures";
 import type { MapBundle, MapDraw, Rectangle } from "./types";
 
 interface CachedFrame {
+  commands?: MapDraw[];
+  opacity: number;
   image: CanvasImageSource;
   source: Rectangle;
   destination: Rectangle;
 }
 export interface CachedSprite {
   frames: (CachedFrame | null)[];
+  additiveFrames?: (CachedFrame | null)[];
   x: number;
   y: number;
   width: number;
@@ -42,7 +46,8 @@ function bounds(draws: MapDraw[]): Rectangle {
 
 /** Single blits use the original texture. Only composite frames need new pixels;
  * identical commands (including phase-shifted water frames) share one atlas slot. */
-function buildSpriteCache({ map, textures }: MapBundle, makeCanvas: () => HTMLCanvasElement) {
+function buildSpriteCache(bundle: MapBundle, makeCanvas: () => HTMLCanvasElement) {
+  const { map } = bundle;
   type Page = {
     canvas: HTMLCanvasElement;
     width: number;
@@ -50,29 +55,56 @@ function buildSpriteCache({ map, textures }: MapBundle, makeCanvas: () => HTMLCa
     x: number;
     y: number;
     rowHeight: number;
-    draws: { commands: MapDraw[]; source: Rectangle; destination: Rectangle }[];
+    draws: { additive: boolean; commands: MapDraw[]; source: Rectangle; destination: Rectangle }[];
   };
   const pages: Page[] = [];
   const frames = new Map<string, CachedFrame | null>();
-  const sprites = map.scene.sprites.map((sprite): CachedSprite => {
-    const [x, y, width, height] = bounds(sprite.frames.flat());
-    return {
-      x,
-      y,
-      width,
-      height,
-      frames: sprite.frames.map((commands) => {
-        const key = JSON.stringify(commands);
+  const additiveSprites = new Set(
+    [...map.scene.layers, ...map.scene.concealedLayers]
+      .filter((layer) => layer.blend === "add")
+      .flatMap((layer) => layer.cells),
+  );
+  const sprites = map.scene.sprites.map((sprite, index): CachedSprite => {
+    const rasterFrames = (additive: boolean) =>
+      sprite.frames.map((commands) => {
+        const key = JSON.stringify([additive, commands]);
         if (frames.has(key)) return frames.get(key)!;
         let frame: CachedFrame | null;
         if (!commands.length) {
           frame = null;
+        } else if (commands.some((draw) => draw.kind === "blit" && draw.glow)) {
+          // Colour pulses are continuous and cannot be baked into sprite frames.
+          frame = {
+            commands,
+            opacity: 255,
+            image: texturesPlaceholder(bundle),
+            source: [0, 0, 0, 0],
+            destination: bounds(commands),
+          };
         } else if (commands.length === 1 && commands[0].kind === "blit") {
           const draw = commands[0];
           frame = {
-            image: textures.get(draw.asset)!,
+            opacity: draw.opacity ?? 255,
+            image: drawTexture(bundle, draw, makeCanvas),
             source: draw.source,
             destination: draw.destination,
+          };
+        } else if (
+          commands.some(
+            (draw) =>
+              draw.kind === "blit" &&
+              (draw.source[2] !== draw.destination[2] || draw.source[3] !== draw.destination[3]),
+          )
+        ) {
+          // Browser nearest-neighbour ties depend on the destination origin.
+          // Replay scaled composites at their final position so shadows do not
+          // change when packed into an atlas at a different origin.
+          frame = {
+            commands,
+            opacity: 255,
+            image: texturesPlaceholder(bundle),
+            source: [0, 0, 0, 0],
+            destination: bounds(commands),
           };
         } else {
           const destination = bounds(commands);
@@ -96,15 +128,23 @@ function buildSpriteCache({ map, textures }: MapBundle, makeCanvas: () => HTMLCa
             pages.push(page);
           }
           const source: Rectangle = [page.x, page.y, w, h];
-          frame = { image: page.canvas, source, destination };
-          page.draws.push({ commands, source, destination });
+          frame = { opacity: 255, image: page.canvas, source, destination };
+          page.draws.push({ additive, commands, source, destination });
           page.x += w;
           page.rowHeight = Math.max(page.rowHeight, h);
           page.height = Math.max(page.height, page.y + h);
         }
         frames.set(key, frame);
         return frame;
-      }),
+      });
+    const [x, y, width, height] = bounds(sprite.frames.flat());
+    return {
+      x,
+      y,
+      width,
+      height,
+      frames: rasterFrames(false),
+      additiveFrames: additiveSprites.has(index) ? rasterFrames(true) : undefined,
     };
   });
   for (const page of pages) {
@@ -112,13 +152,15 @@ function buildSpriteCache({ map, textures }: MapBundle, makeCanvas: () => HTMLCa
     page.canvas.height = page.height;
     const target = page.canvas.getContext("2d")!;
     target.imageSmoothingEnabled = false;
-    for (const { commands, source, destination } of page.draws) {
+    for (const { additive, commands, source, destination } of page.draws) {
+      target.globalCompositeOperation = additive ? "lighter" : "source-over";
       for (const draw of commands) {
         const [dx, dy, w, h] = draw.destination;
         const x = source[0] + dx - destination[0];
         const y = source[1] + dy - destination[1];
+        target.globalAlpha = draw.kind === "blit" ? (draw.opacity ?? 255) / 255 : 1;
         if (draw.kind === "blit") {
-          target.drawImage(textures.get(draw.asset)!, ...draw.source, x, y, w, h);
+          target.drawImage(drawTexture(bundle, draw, makeCanvas), ...draw.source, x, y, w, h);
         } else {
           const [r, g, b, a] = draw.rgba;
           target.fillStyle = `rgba(${r},${g},${b},${a / 255})`;
@@ -128,4 +170,8 @@ function buildSpriteCache({ map, textures }: MapBundle, makeCanvas: () => HTMLCa
     }
   }
   return sprites;
+}
+
+function texturesPlaceholder(bundle: MapBundle): CanvasImageSource {
+  return bundle.textures.values().next().value!;
 }

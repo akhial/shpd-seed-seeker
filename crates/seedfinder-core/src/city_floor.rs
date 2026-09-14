@@ -445,6 +445,7 @@ pub fn generate_city_floor(
                 depth_u8,
                 run.challenges,
                 &random.trinket,
+                random.record_room_order,
             )?;
             world_items.extend(vault.world_items(depth_u8, imp_group, VAULT_FIRST_OPTION));
             generated_vault = Some(vault);

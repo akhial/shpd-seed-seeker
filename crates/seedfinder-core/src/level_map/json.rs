@@ -119,7 +119,8 @@ pub fn document(map: &LevelMap) -> Value {
         "schemaVersion": SCHEMA_VERSION,
         "shpdVersion": crate::SHPD_VERSION,
         "shpdCommit": crate::SHPD_COMMIT,
-        "profile": "canonical-scout-raised-v2",
+        "profile": "canonical-scout-raised-v3",
+        "pickupAssumptions": {"earlierHourglass": "take_identify_uncurse", "shopSand": "buy"},
         "seed": map.seed.to_code(),
         "depth": map.depth,
         "branch": map.kind.branch(),
@@ -138,7 +139,8 @@ pub fn document(map: &LevelMap) -> Value {
         "secretTraps": map.terrain.iter().enumerate().filter_map(|(cell, &tile)| (tile == crate::geometry::terrain::SECRET_TRAP).then_some(cell)).collect::<Vec<_>>(),
         "traps": map.traps,
         "assetRevision": assets::SOURCE_REVISION,
-        "assets": assets::ASSETS.iter().filter(|asset| map.scene.sprites.iter().flat_map(|sprite| &sprite.frames).flatten().any(|draw| matches!(draw, super::MapDraw::Blit {asset: id,..} if *id == asset.id))).collect::<Vec<_>>(),
+        "assets": assets::ASSETS.iter().filter(|asset| map.scene.sprites.iter().flat_map(|sprite| &sprite.frames).flatten().chain(map.scene.emitters.iter().chain(&map.scene.concealed_emitters).map(|e| &e.image)).any(|draw| matches!(draw, super::MapDraw::Blit {asset: id,..} if *id == asset.id))).collect::<Vec<_>>(),
         "scene": map.scene,
+        "contents": map.contents,
     })
 }

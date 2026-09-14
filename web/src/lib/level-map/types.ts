@@ -1,16 +1,66 @@
 import type { ChallengeName } from "../wasm/types";
 
 export type Rectangle = [number, number, number, number];
+export interface MapGlow {
+  color: [number, number, number];
+  periodMs: number;
+}
 export type MapDraw =
-  | { kind: "blit"; asset: string; source: Rectangle; destination: Rectangle }
+  | {
+      kind: "blit";
+      asset: string;
+      source: Rectangle;
+      opacity?: number;
+      tint?: [number, number, number];
+      glow?: MapGlow;
+      destination: Rectangle;
+    }
   | { kind: "fill"; rgba: [number, number, number, number]; destination: Rectangle };
 export interface MapSprite {
   frameDurationMs: number;
   frames: MapDraw[][];
 }
+/** Objects present after generation; runtime-dependent identities are explicit. */
+export interface MapItem {
+  kind: string;
+  image: number;
+  quantity: number;
+  deterministic: boolean;
+  glow?: MapGlow;
+}
+export interface MapContents {
+  sentries?: {
+    cell: number;
+    initialCooldown: number;
+    cooldown: number;
+    triggers: number;
+    warning: boolean;
+    directions: number[][];
+    scan?: [number, number];
+  }[];
+  heaps: { cell: number; kind: string; haunted: boolean; items: MapItem[] }[];
+  mobs: {
+    cell: number;
+    kind: string;
+    stealthy: boolean;
+    sleeping: boolean;
+    approximate: boolean;
+    items: MapItem[];
+  }[];
+  plants: { cell: number; kind: string; image: number }[];
+  effects: { cell: number; kind: string }[];
+  features: {
+    cell: number;
+    kind: string;
+    width: number;
+    height: number;
+    cycle?: { initialCooldown: number; cooldown: number; triggers: number };
+  }[];
+  traps: { cell: number; kind: string; hidden: boolean; active: boolean }[];
+}
 export interface LevelMapDocument {
   format: "seed-seeker-level-map";
-  schemaVersion: 2;
+  schemaVersion: 2 | 3;
   seed: string;
   depth: number;
   branch: number;
@@ -28,11 +78,16 @@ export interface LevelMapDocument {
   traps: { cell: number; kind: string; hidden: boolean; active: boolean }[];
   branches: { depth: number; branch: number; kind: string; entrance: number }[];
   assets: { id: string; width: number; height: number; sha256: string }[];
+  /** Optional for older v2 engines; drawing is always defined by scene. */
+  contents?: MapContents;
+  pickupAssumptions?: { earlierHourglass: "take_identify_uncurse"; shopSand: "buy" };
   scene: {
+    emitters?: MapEmitter[];
+    concealedEmitters?: MapEmitter[];
     tileSize: number;
     sprites: MapSprite[];
-    layers: { name: string; cells: (number | null)[] }[];
-    concealedLayers: { name: string; cells: (number | null)[] }[];
+    layers: { name: string; blend?: "add"; cells: (number | null)[] }[];
+    concealedLayers: { name: string; blend?: "add"; cells: (number | null)[] }[];
   };
 }
 export interface LevelMapRequest {
@@ -53,3 +108,30 @@ export interface MapWorkerRequest {
 export type MapWorkerResponse =
   | { id: number; map: LevelMapDocument; assets: { id: string; png: ArrayBuffer }[] }
   | { id: number; error: string };
+
+export interface MapCurve {
+  points: [number, number][];
+  sqrt: boolean;
+}
+export interface MapEmitter {
+  startMs?: number;
+  wallMask?: boolean;
+  clipToChasm?: boolean;
+  cell: number;
+  loopMs: number;
+  blend: "add" | null;
+  image: MapDraw;
+  velocity: [number, number];
+  acceleration: [number, number];
+  angularSpeed: number;
+  alpha: MapCurve;
+  scale: MapCurve;
+  scaleY?: MapCurve;
+  particles: {
+    birthMs: number;
+    lifespanMs: number;
+    position: [number, number];
+    scale: number;
+    angle: number;
+  }[];
+}

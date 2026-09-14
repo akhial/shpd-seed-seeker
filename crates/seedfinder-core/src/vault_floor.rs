@@ -82,6 +82,16 @@ impl fmt::Display for VaultError {
 
 impl std::error::Error for VaultError {}
 
+/// Seeded turn schedule passed to VaultFlameTrap.setupTrap.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "json-query", derive(serde::Serialize))]
+#[cfg_attr(feature = "json-query", serde(rename_all = "camelCase"))]
+pub struct VaultFlameCycle {
+    pub initial_cooldown: u16,
+    pub cooldown: u16,
+    pub triggers: u16,
+}
+
 /// Mutable `VaultLevel` state visible to room painting.
 #[derive(Clone, Debug, PartialEq)]
 pub struct VaultLevelState {
@@ -97,6 +107,10 @@ pub struct VaultLevelState {
     pub mobs: Vec<VaultMob>,
     /// Cells given a `VaultFlameTrap`, in setup order.
     pub flame_traps: Vec<usize>,
+    /// Recorded only for map scouting; seed search does not allocate schedules.
+    pub flame_cycles: Option<Vec<(usize, VaultFlameCycle)>>,
+    /// Seeded directions and timing, captured only for map scouting.
+    pub sentries: Option<Vec<crate::vault_sentries::VaultSentryPattern>>,
     /// The `BRANCH_ENTRANCE` transition cell.
     pub entrance_cell: Option<usize>,
 }
@@ -114,6 +128,8 @@ impl VaultLevelState {
             heaps: Vec::new(),
             mobs: Vec::new(),
             flame_traps: Vec::new(),
+            flame_cycles: None,
+            sentries: None,
             entrance_cell: None,
         }
     }
@@ -210,11 +226,30 @@ impl VaultLevelState {
         self.mobs.push(VaultMob { kind, cell });
     }
 
+    pub(crate) fn record_sentry(
+        &mut self,
+        create: impl FnOnce() -> crate::vault_sentries::VaultSentryPattern,
+    ) {
+        if let Some(sentries) = &mut self.sentries {
+            sentries.push(create());
+        }
+    }
+
     /// `VaultLevel.VaultFlameTrap.setupTrap`: the blob bookkeeping draws
     /// nothing; the visible effect is the inactive trap tile.
-    pub fn setup_flame_trap(&mut self, cell: usize) {
+    pub fn setup_flame_trap(&mut self, cell: usize, initial: u16, cooldown: u16, triggers: u16) {
         self.level.map.cells[cell] = terrain::INACTIVE_TRAP;
         self.flame_traps.push(cell);
+        if let Some(cycles) = &mut self.flame_cycles {
+            cycles.push((
+                cell,
+                VaultFlameCycle {
+                    initial_cooldown: initial,
+                    cooldown,
+                    triggers,
+                },
+            ));
+        }
     }
 }
 
@@ -230,6 +265,10 @@ pub struct GeneratedVault {
     pub mobs: Vec<VaultMob>,
     pub heaps: Vec<VaultHeap>,
     pub flame_traps: Vec<usize>,
+    /// Recorded only for map scouting; seed search does not allocate schedules.
+    pub flame_cycles: Option<Vec<(usize, VaultFlameCycle)>>,
+    /// Seeded directions and timing, captured only for map scouting.
+    pub sentries: Option<Vec<crate::vault_sentries::VaultSentryPattern>>,
     pub entrance_cell: usize,
     pub builder_attempts: u32,
 }
@@ -307,6 +346,7 @@ pub fn generate_vault(
         depth,
         challenges,
         &crate::trinkets::TrinketEffects::default(),
+        false,
     )
 }
 
@@ -315,12 +355,14 @@ pub(crate) fn generate_vault_with_trinket(
     depth: u8,
     challenges: Challenges,
     trinket: &crate::trinkets::TrinketEffects,
+    record_visuals: bool,
 ) -> Result<GeneratedVault, VaultError> {
     if !(17..=19).contains(&depth) {
         return Err(VaultError::InvalidDepth(depth));
     }
     let mut random = RandomStack::with_base_seed(0);
     random.trinket = trinket.clone();
+    random.record_room_order = record_visuals;
     random.push(seed_for_depth(dungeon_seed, u32::from(depth), 1));
     let result = generate_vault_with_generator(u32::from(depth), challenges, &mut random);
     random.pop();
@@ -338,6 +380,8 @@ pub fn generate_vault_with_generator(
     random: &mut RandomStack,
 ) -> Result<GeneratedVault, VaultError> {
     let mut state = VaultLevelState::new(depth, challenges);
+    state.flame_cycles = random.record_room_order.then(Vec::new);
+    state.sentries = random.record_room_order.then(Vec::new);
     let (rooms, attempts) = build(&mut state, random)?;
     let flags = LevelFlags::build_for_generation(&state.level.map);
     create_items(&mut state, &rooms, &flags, random)?;
@@ -352,6 +396,8 @@ pub fn generate_vault_with_generator(
         mobs: state.mobs,
         heaps: state.heaps,
         flame_traps: state.flame_traps,
+        flame_cycles: state.flame_cycles,
+        sentries: state.sentries,
         entrance_cell,
         builder_attempts: attempts,
     })
@@ -756,6 +802,28 @@ mod tests {
 
     fn seed(code: &str) -> i64 {
         i64::try_from(DungeonSeed::from_code(code).unwrap().value()).unwrap()
+    }
+
+    #[test]
+    fn scouting_hazard_capture_does_not_change_search_generation_or_rng() {
+        let generate = |record_visuals| {
+            let mut random = RandomStack::with_base_seed(0);
+            random.record_room_order = record_visuals;
+            random.push(seed_for_depth(seed("HEL-LOO-WRD"), 18, 1));
+            let vault = generate_vault_with_generator(18, Challenges::NONE, &mut random).unwrap();
+            (vault, random.long())
+        };
+        let (search, search_rng) = generate(false);
+        let (mut scouting, scouting_rng) = generate(true);
+        assert!(
+            search.flame_cycles.is_none(),
+            "search allocates no flame schedules"
+        );
+        assert!(!scouting.flame_cycles.take().unwrap().is_empty());
+        assert!(search.sentries.is_none());
+        assert!(!scouting.sentries.take().unwrap().is_empty());
+        assert_eq!(search, scouting);
+        assert_eq!(search_rng, scouting_rng);
     }
 
     /// One official v4.0.0-BETA-3 vault, captured with the headless probe

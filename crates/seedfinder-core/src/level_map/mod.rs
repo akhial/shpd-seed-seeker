@@ -5,9 +5,15 @@
 //! See `docs/level-map-format.md` for the platform-neutral sprite contract.
 
 pub mod assets;
+pub(crate) mod contents;
+mod glow;
+pub use contents::{MapContents, MapEffect, MapFeature, MapHeap, MapItem, MapMob, MapPlant};
+pub use glow::MapGlow;
 #[cfg(feature = "json-query")]
 pub mod json;
+mod particles;
 mod projection;
+pub use particles::{MapCurve, MapEmitter, MapParticle};
 mod visuals;
 
 use crate::catalog::ItemId;
@@ -25,7 +31,7 @@ pub const SUPPORTED_DEPTHS: [u8; 22] = [
 ];
 pub const SUPPORTED_BRANCH_DEPTHS: [u8; 6] = [12, 13, 14, 17, 18, 19];
 
-pub const SCHEMA_VERSION: u8 = 2;
+pub const SCHEMA_VERSION: u8 = 3;
 pub const TILE_SIZE: u16 = 16;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -83,6 +89,7 @@ pub struct LevelMap {
     /// Inclusive [left, top, right, bottom] room bounds.
     pub secret_rooms: Vec<[i32; 4]>,
     pub traps: Vec<MapTrap>,
+    pub contents: MapContents,
     pub scene: MapScene,
 }
 
@@ -124,7 +131,7 @@ pub struct MapBranch {
 #[cfg_attr(feature = "json-query", derive(serde::Serialize))]
 pub struct MapTrap {
     pub cell: usize,
-    pub kind: TrapKind,
+    pub kind: String,
     pub hidden: bool,
     pub active: bool,
 }
@@ -140,13 +147,25 @@ pub struct MapScene {
     pub layers: Vec<MapLayer>,
     /// Complete alternative layer stack with undiscovered secrets concealed.
     pub concealed_layers: Vec<MapLayer>,
+    pub emitters: Vec<MapEmitter>,
+    pub concealed_emitters: Vec<MapEmitter>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "json-query", derive(serde::Serialize))]
 pub struct MapLayer {
+    /// Additive light matches Noosa emitter light mode. Absent means source-over.
+    #[cfg_attr(feature = "json-query", serde(skip_serializing_if = "Option::is_none"))]
+    pub blend: Option<MapBlend>,
     pub name: &'static str,
     pub cells: Vec<Option<usize>>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "json-query", derive(serde::Serialize))]
+#[cfg_attr(feature = "json-query", serde(rename_all = "snake_case"))]
+pub enum MapBlend {
+    Add,
 }
 
 /// A static sprite has one frame. Animated frames loop without interpolation;
@@ -181,6 +200,14 @@ impl MapSprite {
 #[cfg_attr(feature = "json-query", serde(tag = "kind", rename_all = "snake_case"))]
 pub enum MapDraw {
     Blit {
+        /// Multiplies source alpha (0–255).
+        opacity: u8,
+        /// Multiply source RGB, preserving its alpha silhouette.
+        #[cfg_attr(feature = "json-query", serde(skip_serializing_if = "Option::is_none"))]
+        tint: Option<[u8; 3]>,
+        /// Continuous colour pulse; independent of sprite frame timing.
+        #[cfg_attr(feature = "json-query", serde(skip_serializing_if = "Option::is_none"))]
+        glow: Option<MapGlow>,
         asset: &'static str,
         source: [u16; 4],
         destination: [u16; 4],
@@ -268,8 +295,15 @@ pub fn generate_level_map_in_branch(
             &level,
             &rooms,
             MapKind::Regular,
+            MapContents::from_level(
+                &level,
+                &crate::run::RunState::new(i64::try_from(seed.value()).expect("seed fits i64"))
+                    .appearances,
+            ),
         ));
     }
+    let appearance =
+        crate::run::RunState::new(i64::try_from(seed.value()).expect("seed fits i64")).appearances;
     let mut result = None;
     generate_main_world_observed(
         seed,
@@ -291,6 +325,9 @@ pub fn generate_level_map_in_branch(
                     floor.level,
                     floor.rooms,
                     MapKind::Regular,
+                    floor
+                        .contents
+                        .collect(&appearance, floor.trinket.is(ItemId::MimicTooth)),
                 );
                 let kind = blacksmith
                     .map(|q| MapKind::blacksmith(q.variant))
@@ -318,6 +355,7 @@ pub fn generate_level_map_in_branch(
                             &mine.level,
                             &mine.rooms,
                             MapKind::blacksmith(quest.variant),
+                            MapContents::from_level(&mine.level, &appearance),
                         )
                     })
                     .map_err(MapError::Mining),
@@ -345,6 +383,7 @@ pub fn generate_level_map_in_branch(
                         &level,
                         &[],
                         MapKind::ImpVault,
+                        MapContents::from_vault(vault, &appearance, floor.imp_rewards),
                     );
                     result = Some(Ok(map));
                 }
@@ -387,6 +426,7 @@ fn branch_link(depth: u8, kind: MapKind, level: &Level, rooms: &[Room]) -> Optio
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn snapshot(
     seed: DungeonSeed,
     depth: u8,
@@ -395,7 +435,10 @@ fn snapshot(
     level: &Level,
     rooms: &[Room],
     kind: MapKind,
+    mut contents: MapContents,
 ) -> LevelMap {
+    contents.add_ghoul_partners(level);
+    contents.normalize();
     LevelMap {
         seed,
         depth,
@@ -424,13 +467,16 @@ fn snapshot(
         traps: level
             .traps
             .iter()
+            .filter(|trap| !contents.traps.iter().any(|extra| extra.cell == trap.cell))
             .map(|trap| MapTrap {
                 cell: trap.cell,
-                kind: trap.spec.kind,
+                kind: format!("{:?}", trap.spec.kind),
                 hidden: !trap.visible,
                 active: trap.active,
             })
+            .chain(contents.traps.iter().cloned())
             .collect(),
-        scene: visuals::scene(seed, level, rooms, kind),
+        scene: visuals::scene(seed, level, rooms, kind, &contents),
+        contents,
     }
 }

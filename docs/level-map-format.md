@@ -1,10 +1,10 @@
-# Engine level maps (version 2)
+# Engine level maps (version 3)
 
 The engine returns a **sprite scene as JSON**, with embedded game PNGs available
 through an asset endpoint. It resolves terrain selection, water/chasm stitching,
 visual variants, trap/plant sprites and animation frames. A platform only draws
 rectangles. There is no graphics dependency, image encoder or runtime asset
-network request in the engine, and no UI is introduced here.
+network request in the engine.
 
 This is an on-demand endpoint separate from item scouting. Search worlds and
 SSC5 packets do not retain maps or carry sprite data. One request replays the
@@ -16,7 +16,7 @@ RNG, seeded with the floor root, and cannot advance generation state.
 
 ## Coverage
 
-Version 2 supports main-branch floors **1–9, 11–19, 21–24**, including boss
+Version 3 supports main-branch floors **1–9, 11–19, 21–24**, including boss
 floors **5 and 15**.
 It also supports **branch 1** at the Blacksmith quest floor (12–14, Crystal or
 Gnoll mine) and the Imp quest floor (17–19, vault). The branch must exist at the
@@ -45,18 +45,74 @@ concealed geometry so secret areas do not leak through neighbouring cells. Prefe
 this stack until the user enables secrets. Original terrain and secret metadata
 remain unchanged. Switching visibility requires no regeneration or extra assets.
 
-This is an initial **terrain overview**, not a screenshot of a running game.
-It includes recorded plants and traps, mine crystals/boulders/gold, the branch
-return stairs, the vault’s flame trap markers, and boss custom tiles. The four
-pylons and the Rat King use static sprites; the Rat King and room artwork are
-hidden in the concealed scene. Other items, heaps, monsters, NPCs, blobs,
-dynamic lighting, room-specific custom tilemaps (such as decorative paintings and quest
-props other than the branch return stairs), ripples and other ambient effects are not drawn. Custom terrain uses
-its base game tile; the underlying layout remains present. Inventory-dependent
-changes and events during play are outside the canonical scout profile.
-The static terrain layers follow the game's sprite choices; this does not claim a
-numeric whole-game pixel-fidelity percentage. Water uses the game texture and scrolling rate; pipe particles use a repeating
-approximation of the game's unseeded particle motion. The JSON does not promise
+This is an overview of the floor immediately after generation. It includes
+heaps and their contents, chest/tomb/skeleton/crystal containers, shop stock,
+keys, planted bushes, initial mobs/NPCs, closed mimics (including Ebony Mimics),
+boss actors and mine actors. Quest custom tiles include the smithy/furnace,
+Mass Grave, ritual marker/tables and demon spawner floor. The Rat King room and
+all its objects are concealed together until secrets are revealed.
+
+Map generation assumes an obtainable hourglass on an earlier floor is taken,
+identified and uncursed, and that its shop sand is purchased. The existing
+shop-generation code then includes the appropriate sand stock and shuffle;
+the acquisition cannot affect a shop already generated on the same floor.
+`pickupAssumptions` records this profile. Ordinary search and loot scouting keep
+their existing inventory profile. In particular, the map snapshot, texture
+selection and animation allocation are never performed by seed search.
+
+`contents` is a v3 object with `heaps`, `mobs`, `plants`, `effects`,
+`features`, and supplemental `traps` arrays. Positions are row-major `cell` indices. Heaps contain
+`kind`, `haunted` and top-first `items`; mobs contain `kind` and the inventory
+already rolled during generation, `sleeping`, disguise `stealthy`, and `approximate`. Items contain `kind`, `image` (the game's
+item atlas index), `quantity`, `deterministic`, and optional `glow` (RGB `color`
+and fade-in `periodMs`). Exposed heap/shop items pulse; closed containers and
+sprite shadows do not inherit their contents' glow. Plants include their terrain
+feature `image`; custom features carry `width` and `height` in cells. Object
+kinds identify engine classes; searchable equipment uses catalog stable IDs.
+Metadata always describes the complete floor, irrespective of secret visibility.
+The scene defines the visible result; clients need not render metadata themselves.
+
+Runtime-dependent shop bag ties, secret laboratory/library class-map selections,
+and the vault's unseeded consumable shuffle use explicit placeholder items with
+`deterministic: false`. Their locations and containers remain visible. Future
+mob drops, respawns, quest completion rewards, harvested plant contents, killed
+mimic loot beyond its initial inventory, and player remains are not fabricated.
+The overview follows the canonical no-remains, no-holiday profile.
+
+Water, well hearts/question marks, alchemy bubbles, sacrificial blue fire,
+eternal green fire, city statue flames, blacksmith sparks and gas have repeatable animation loops.
+Vault flame vents retain their seeded `cycle` (`initialCooldown`, `cooldown`,
+`triggers`) on each `VaultFlameTrap` feature. The map previews one game turn per
+second: checkerboard vents alternate, flame paths follow their seeded offsets,
+and treasure-room vents fire continuously. Small green warnings precede each
+burst by one turn. These scouting-only schedules do not advance game simulation
+or allocate additional data during seed search.
+Purple Vault sentries preserve their seeded ray directions, cooldowns, warning
+markers and shot groups. The decorative opposite row in laser treasure rooms
+never fires. Death rays use the original effects atlas and fade/thin over 0.5s.
+Blue sentries preserve the room's rotation (including clockwise/counterclockwise
+treasure scans) or inward-facing perimeter pattern. Their blue checked cells
+respect the game's Ballistica, ConeAOE and field-of-view geometry, propagate
+outward with distance-dependent delays, then shrink and fade over 0.8s. Scouting
+does not invent a hero target or advance terrain destruction/combat.
+Chasms use the game's sparse white `WindParticle` squares: a 2.5s emission
+interval, 1–2s lifetime, size-dependent drift and a triangular fade peaking at
+10% opacity per pixel of size. The scouting visibility heuristic includes room
+interiors and enclosed pits adjoining playable ground. On floor 15, the explicit
+bridge abyss is included through its map-edge and arena-wall boundaries.
+Exterior void and sealed rock pockets stay clear; concealed rooms lose their wind.
+Visual randomness uses a deterministic breeze and never consumes generation RNG.
+The vault entry uses its torn carpets, circular entrance, pulsing barrier and wall banners.
+Actor sprites use their original idle/disguise films, flattened sprite shadows,
+and sleep indicators. Foreground walls and raised terrain occlude heaps/actors.
+Ordinary ghoul partners receive a suitable adjacent tile with `approximate: true`:
+the game creates them on its first turn using runtime RNG. Vault ghouls do not
+spawn partners. Exact initial objects retain `approximate: false`.
+Particle trajectories sample the game's unseeded visual motion separately from
+generation RNG. Additive fire blending reproduces the bright overlapping glow.
+Dynamic lighting, combat/movement, plant activation and inventory-dependent
+runtime changes other than the stated hourglass assumption are not simulated.
+Water uses the game texture and scrolling rate; this contract does not promise
 pixel identity with a running game's ambient effects.
 
 ## Entry points
@@ -121,8 +177,8 @@ cargo run -p shpd-seedfinder-core --features json-query --example level_map -- \
 
 ## Response and rendering
 
-The envelope identifies `format: "seed-seeker-level-map"`, `schemaVersion: 2`,
-`shpdVersion`, `shpdCommit`, `profile: "canonical-scout-raised-v2"`, `assetRevision`,
+The envelope identifies `format: "seed-seeker-level-map"`, `schemaVersion: 3`,
+`shpdVersion`, `shpdCommit`, `profile: "canonical-scout-raised-v3"`, `assetRevision`,
 `seed`, `depth`, `branch`, `kind`, `challenges`, `selectedTrinket` and `feeling`.
 `kind` is `regular`, `blacksmith_crystal`, `blacksmith_gnoll` or `imp_vault`.
 Regular-floor `branches` lists accessible quest branches as
@@ -136,18 +192,20 @@ and sprite-source compatibility are recorded separately.
 codes (`geometry::terrain`), length `width * height`. `entrance` and `exit` are
 cell indices or `null`. `secretRooms` contains inclusive `[left, top, right,
 bottom]` bounds. `secretDoors` and `secretTraps` contain cell indices. `traps`
-contains `{cell, kind, hidden, active}`, using snake_case trap identities.
+contains `{cell, kind, hidden, active}`, using engine trap class identities in v3.
 
 `assets` lists the required PNGs with `{id, width, height, sha256}`. Load
 and cache them using the asset endpoint; PNG bytes are omitted from JSON.
-The approximately 170 KiB of original textures are embedded once in the engine.
+The original textures are embedded once in the engine; each document lists only
+the assets its scene uses.
 Map documents reuse a sprite palette.
 
-`scene` contains `tileSize: 16`, `sprites`, `layers`, and `concealedLayers`. Every layer has `name`
+`scene` contains `tileSize: 16`, `sprites`, `layers`, `concealedLayers`,
+`emitters`, and `concealedEmitters`. Every layer has `name`
 and `cells`, another row-major array of `width * height` entries. `null` means
 no sprite; an integer indexes `sprites`. Choose exactly one layer stack and draw
-its layers in array order: water, terrain, structures, shadows, features, raised
-terrain, upper walls, effects, darkness. Draw cells in row-major order within each
+its layers in array order, including custom floor art, heaps, actors, custom
+overhangs and particles. Do not assume a fixed list of layer names. Draw cells in row-major order within each
 layer. The last layer supplies opaque geometric wall masks, not a visibility hint
 for the frontend to interpret.
 
@@ -166,15 +224,23 @@ is a list of drawing commands in draw order:
 }
 ```
 
-- `blit`: copy the source PNG rectangle to the destination rectangle.
+- `blit`: copy the source PNG rectangle to the destination rectangle. Multiply
+  alpha by `opacity / 255` (default 255). Optional `tint: [r,g,b]` multiplies
+  each source RGB component by that component / 255, preserving alpha. Black
+  tinted, flattened sprite images provide item/actor shadows.
+  Optional `glow: {color: [r,g,b], periodMs}` blends the sprite RGB toward the
+  glow colour, preserving source alpha: `rgb * (1-v) + color * v`, where
+  `phase = (elapsedMs / periodMs) % 2` and `v = min(phase, 2-phase) * 0.6`.
+  Evaluate the glow every display frame, independently of sprite-frame changes.
 - `fill`: fill `destination` with `rgba: [red, green, blue, alpha]`, each 0–255.
 
 Both rectangle types are `[x, y, width, height]` in pixels, with a top-left
 origin and downward-positive y. Destination coordinates are relative to the
 cell's origin. Use nearest-neighbour sampling and ordinary source-over alpha
-on an opaque black canvas. Assets contain straight alpha. Apply viewport
+on an opaque black canvas; a layer with `blend: "add"` uses additive compositing.
+Assets contain straight alpha. Apply viewport
 translation/zoom after computing map pixel coordinates; an integer scale keeps
-pixel art crisp. Version 2 commands stay inside their cell's 16×16 rectangle.
+pixel art crisp. Version 3 commands stay inside their cell's 16×16 rectangle.
 
 The complete animation algorithm is:
 
@@ -189,9 +255,50 @@ Use a monotonic elapsed time shared by all sprites. There is no interpolation.
 Sprites with one frame are static. Frame zero of every sprite gives a complete
 static/reduced-motion image. Rust consumers can use `MapSprite::frame(time)`.
 Water has 32 frames at 200 ms (5 pixels/second, 6.4-second loop); wrapped texture
-samples are already split into valid rectangles. Pipe drips have eight 50 ms
-frames. Consumers never need to implement water stitching, UV wrapping or a
-particle system, and must not regenerate the map on each animation tick.
+samples are already split into valid rectangles. Pipe drips use continuous emitters. Actors retain their individual frame durations. Do not regenerate maps
+on animation ticks.
+
+Continuous effects use the selected `emitters` / `concealedEmitters` list at every
+display frame, independently of the scenery frame cache (120 Hz on a 120 Hz display).
+Each emitter provides an `image` command, `cell`, `loopMs`, `blend`, velocity and
+acceleration in pixels/second, and `angularSpeed` in degrees/second. Each particle
+provides `birthMs`, `lifespanMs`, a cell-relative `position` in milli-pixels,
+initial `scale` in thousandths, and an initial `angle` in degrees.
+
+```text
+clockMs = elapsedMs - (startMs or 0)
+if startMs is present and clockMs < birthMs: skip
+ageMs = positiveModulo(clockMs - birthMs, loopMs)
+if ageMs >= lifespanMs: skip
+progress = ageMs / lifespanMs
+seconds = ageMs / 1000
+position = initialPosition / 1000 + velocity * seconds + acceleration * seconds² / 2
+scale = initialScale / 1000 * evaluate(emitter.scale, progress)
+alpha = evaluate(emitter.alpha, progress)
+angle = initialAngle + angularSpeed * seconds
+scaleY = scale * (evaluate(emitter.scaleY, progress) if scaleY exists else 1)
+```
+
+Optional `startMs` delays scheduled hazards and prevents future emissions from
+wrapping backward before their first cycle. Ambient emitters omit it and prewarm
+their loops. Curves contain `[progress, value]` points in thousandths: linearly interpolate,
+then take the square root if `sqrt` is true. Draw the image centered at the
+resulting position, scaled/rotated with the resulting alpha.
+Optional `scaleY` multiplies the local vertical scale independently, so a beam
+can thin without shortening. `contents.sentries` retains each sentry's initial
+cooldown, repeated cooldown, trigger count, warning flag and target-cell groups;
+optional `scan` stores cone degrees and tile length, both multiplied by 1000.
+`blend: "add"` requires the underlying scenery as the blend destination. Emitters with
+`wallMask: true` are occluded by the alpha silhouettes of `raised`, `walls`,
+`room_walls`, and `boss_walls`. Status icons use `wallMask: false` and appear
+above those surfaces. Apply geometric darkness last to both groups.
+Emitters with `clipToChasm: true` draw before other world particles and are
+clipped to the union of the tile rectangles of all `clipToChasm` emitters in
+the selected scene. Keep this clip during movement, so a square can drift
+between adjacent chasms but cannot spill onto floors or into excluded void.
+Reduced-motion/static views sample
+time zero. The browser uses a separate particle canvas, copying only emitter
+bounds from cached scenery before compositing; it pauses offscreen/hidden maps.
 
 Cache scenes by generation version, schema/asset revision, seed, depth, branch,
 challenge mask and resolved trinket. Changing the selection must use a fresh
@@ -215,6 +322,9 @@ v4.0.0 release JAR (both quest types, depths 12–14, three seeds, challenge mas
 0/104). Its separate JAR digest and reproduction instructions are recorded in
 [mining-map fixtures](../tooling/oracle-4.0/tests/mining-maps.md).
 Vault terrain uses the v4.0.0-validated generator and saved vault fixtures.
+Sentry setup and ray/scan coverage match 342 official sentries across nine seeds
+in `tests/fixtures/vault-sentries.json`; regenerate with
+`python3 tooling/oracle-4.0/generate-vault-sentries.py`.
 
 The raised selectors are checked against the unmodified official v4.0.0 JAR:
 65 full-layer hashes across 13 maps cover every region, Crystal and Gnoll mines,
@@ -225,5 +335,13 @@ rendering selection, not generation parity or dynamic lighting. See
 the JAR digest and reproduction commands. Secret concealment, geometric black
 masks, animation and draw bounds have separate engine tests.
 
-Version 2 replaces the unreleased flat prototype. Consumers must check
+Version 3 adds initial contents, tinted/alpha sprites, and continuous emitters to
+the raised version 2 scene. Consumers must check
 `schemaVersion` and include it with the rendering profile in persistent cache keys.
+
+Initial contents are validated against 142 official-JAR maps, including four seeds,
+challenge variants, Mimic Tooth, vaults, and both mines. The fixtures compare full
+heaps, generation-time actor inventory, sleeping states, plants, trap placement,
+and blob locations. Regenerate with `python3 tooling/oracle-4.0/generate-map-contents.py`.
+Item atlas bounds are exported from the evaluated official `ItemSpriteSheet.film`
+using `ItemFilmOracle`, including loop assignments and later overrides.

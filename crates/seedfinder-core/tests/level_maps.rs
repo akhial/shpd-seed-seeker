@@ -139,7 +139,7 @@ fn all_supported_depths_have_bounded_draws_and_explicit_metadata() {
     for depth in SUPPORTED_DEPTHS {
         let map = generate_level_map(DungeonSeed::MIN, depth, Challenges::NONE, None).unwrap();
         let doc = document(&map);
-        assert_eq!(doc["schemaVersion"], 2);
+        assert_eq!(doc["schemaVersion"], 3);
         assert_eq!(doc["selectedTrinket"], Value::Null);
         assert_eq!(doc["shpdVersion"], shpd_seedfinder_core::SHPD_VERSION);
         assert_eq!(
@@ -231,9 +231,11 @@ fn assert_drawing_bounds(map: &LevelMap) {
             for draw in frame {
                 let destination = match draw {
                     MapDraw::Blit {
+                        opacity: _,
                         asset,
                         source: [x, y, w, h],
                         destination,
+                        ..
                     } => {
                         let asset = assets::get(asset).expect("every sprite ships its texture");
                         assert!(*w > 0 && *h > 0 && x + w <= asset.width && y + h <= asset.height);
@@ -248,6 +250,156 @@ fn assert_drawing_bounds(map: &LevelMap) {
             }
         }
     }
+}
+
+#[test]
+fn water_feeling_preserves_bookshelves_and_statue_room_carpets() {
+    use shpd_seedfinder_core::geometry::terrain as t;
+    let seed = DungeonSeed::from_code("GSA-DGS-ADG").unwrap();
+    let map = generate_level_map(seed, 19, Challenges::NONE, None).unwrap();
+    // Official v4.0 JAR, ParityOracle --seed GSA-DGS-ADG --floors 19
+    // --map-contents --acquire-hourglass. Every terrain cell also compared
+    // directly while investigating the reported flooded entrance and exit.
+    assert_eq!((map.width, map.height), (38, 46));
+    // Room.center() chooses integer cells, including either side of the
+    // geometric midpoint in even dimensions. These match the official JAR.
+    assert_eq!((map.entrance, map.exit), (Some(769), Some(789)));
+    assert_eq!(map.feeling, shpd_seedfinder_core::level::Feeling::Water);
+    assert_eq!(
+        map.terrain
+            .iter()
+            .fold(1_i32, |h, &v| h.wrapping_mul(31).wrapping_add(v)),
+        606_879_645
+    );
+    assert_eq!(
+        map.terrain.iter().filter(|&&v| v == t::BOOKSHELF).count(),
+        73
+    );
+    assert_eq!(map.terrain.iter().filter(|&&v| v == t::WATER).count(), 319);
+    let floor = map
+        .scene
+        .layers
+        .iter()
+        .find(|l| l.name == "room_floor")
+        .unwrap();
+    for (left, top, right, bottom) in [(3, 14, 14, 26), (23, 15, 36, 25)] {
+        for y in top + 1..bottom {
+            for x in left + 1..right {
+                let cell = x + y * 38;
+                match map.terrain[cell] {
+                    t::CUSTOM_DECO_EMPTY | t::STATUE | t::ENTRANCE => {
+                        let sprite = &map.scene.sprites
+                            [floor.cells[cell].expect("statue blocks and entrance retain carpet")];
+                        assert!(sprite.frames[0].iter().all(|draw| matches!(
+                            draw,
+                            MapDraw::Blit {
+                                asset: "carpet.png",
+                                ..
+                            }
+                        )));
+                    }
+                    t::EXIT => assert!(
+                        floor.cells[cell].is_none(),
+                        "exit remains open through the carpet"
+                    ),
+                    _ => {}
+                }
+            }
+        }
+    }
+    let sprite = &map.scene.sprites[floor.cells[map.entrance.unwrap()].unwrap()];
+    assert!(matches!(
+        sprite.frames[0].last(),
+        Some(MapDraw::Blit {
+            asset: "carpet.png",
+            source: [32, 80, 16, 16],
+            ..
+        })
+    ));
+    // The entrance's center carpet (7,19,4,3) is below the statue carpets.
+    // At their overlap, preserve both draws and the statue carpet's border.
+    let overlap = &map.scene.sprites[floor.cells[7 + 19 * 38].unwrap()];
+    assert_eq!(overlap.frames[0].len(), 2);
+    assert!(matches!(
+        overlap.frames[0].last(),
+        Some(MapDraw::Blit {
+            asset: "carpet.png",
+            source: [64, 80, 16, 16],
+            ..
+        })
+    ));
+    // The reported warlock is in the narrow HallwayRoom, with a 3x3 rug
+    // centered on the generated statue at (21,17), not a different layout.
+    assert!(
+        map.contents
+            .mobs
+            .iter()
+            .any(|m| m.kind == "Warlock" && m.cell == 666)
+    );
+    for y in 16..=18 {
+        for x in 20..=22 {
+            assert!(floor.cells[x + y * 38].is_some());
+        }
+    }
+    assert_drawing_bounds(&map);
+}
+
+#[test]
+fn ambitious_imp_room_has_its_custom_entrance_and_statue_flames() {
+    let map = generate_level_map(DungeonSeed::MIN, 19, Challenges::NONE, None).unwrap();
+    let entrance = map
+        .contents
+        .features
+        .iter()
+        .find(|f| f.kind == "ImpEntrance")
+        .unwrap();
+    let width = usize::try_from(map.width).unwrap();
+    let center = entrance.cell + 2 + 2 * width;
+    let floor = map
+        .scene
+        .layers
+        .iter()
+        .find(|l| l.name == "room_floor")
+        .unwrap();
+    let sprite =
+        &map.scene.sprites[floor.cells[center].expect("the entrance covers the ordinary stairs")];
+    assert!(sprite.frames.len() > 1, "the entrance barrier pulses");
+    assert!(sprite.frames.iter().flatten().all(|draw| matches!(
+        draw,
+        MapDraw::Blit {
+            asset: "carpet.png" | "city_quest.png",
+            ..
+        }
+    )));
+    for cell in [
+        center - 3,
+        center + 3,
+        center - 3 * width,
+        center + 3 * width,
+    ] {
+        assert!(floor.cells[cell].is_some(), "carpet reaches all four arms");
+    }
+    for cell in [
+        center - 2 - 2 * width,
+        center + 2 - 2 * width,
+        center - 2 + 2 * width,
+        center + 2 + 2 * width,
+    ] {
+        assert!(
+            map.scene.emitters.iter().any(|emitter| emitter.cell == cell
+                && emitter.blend == Some(shpd_seedfinder_core::level_map::MapBlend::Add)
+                && emitter.acceleration == [0, -40]),
+            "all four pillars emit green flame"
+        );
+    }
+    let banners = map
+        .scene
+        .layers
+        .iter()
+        .find(|l| l.name == "room_terrain")
+        .unwrap();
+    assert!(banners.cells.iter().flatten().count() >= 8);
+    assert_drawing_bounds(&map);
 }
 
 #[test]
@@ -271,11 +423,7 @@ fn vault_maps_match_saved_java_fixtures_at_every_imp_depth() {
             .iter()
             .fold(1_i32, |h, &v| h.wrapping_mul(31).wrapping_add(v));
         assert_eq!(json!(hash), row["vault"]["map_hash"]);
-        assert!(
-            map.traps
-                .iter()
-                .any(|t| t.kind == shpd_seedfinder_core::level::TrapKind::VaultFlame)
-        );
+        assert!(map.traps.iter().any(|t| t.kind == "VaultFlame"));
         assert_eq!(
             serde_json::from_str::<Value>(&request.generate_document().unwrap()).unwrap(),
             document(&map)

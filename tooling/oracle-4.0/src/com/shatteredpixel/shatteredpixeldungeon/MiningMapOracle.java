@@ -31,6 +31,10 @@ public final class MiningMapOracle {
         Dungeon.depth = Integer.parseInt(args[1]);
         Dungeon.branch = 1;
         Level level = Dungeon.newLevel();
+        if (args.length > 4 && args[4].equals("contents")) {
+            System.out.println(ParityOracle.mapContentsRecord(level));
+            return;
+        }
         StringBuilder secrets = new StringBuilder("[");
         for (Room room : ((RegularLevel) level).rooms()) {
             if (room instanceof SecretRoom) {

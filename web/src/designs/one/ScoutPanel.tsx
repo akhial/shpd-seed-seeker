@@ -15,6 +15,7 @@ import { Sprite } from "./parts";
 import { FloorMapHeader } from "./FloorMapHeader";
 import { LevelMapView } from "./LevelMapView";
 import { TrinketName, TrinketSprite } from "./TrinketArt";
+import { TrinketShortcuts } from "./TrinketShortcuts";
 import { useTrinketDock } from "./useTrinketDock";
 import "./floor-map-inline.css";
 
@@ -287,30 +288,14 @@ export function ScoutPanel({
                     </div>
                   )}
                   {selectTrinket && offers.length > 0 && (
-                    <div
+                    <TrinketShortcuts
                       className="d1-scout-trinkets"
-                      role="group"
-                      aria-label="Trinket shortcuts"
-                      aria-hidden={!dock.visible}
-                      inert={!dock.visible}
-                    >
-                      {offers.map((offer) => (
-                        <button
-                          key={offer.id}
-                          type="button"
-                          className="d1-scout-trinket"
-                          aria-label={offer.name}
-                          title={offer.name}
-                          aria-pressed={result?.selectedTrinket === offer.id}
-                          disabled={loading}
-                          onClick={() =>
-                            selectTrinket(result?.selectedTrinket === offer.id ? "none" : offer.id)
-                          }
-                        >
-                          <Sprite art={itemArt(offer.spriteIndex)} size={18} />
-                        </button>
-                      ))}
-                    </div>
+                      offers={offers}
+                      selectedTrinket={result.selectedTrinket}
+                      onSelect={selectTrinket}
+                      disabled={loading}
+                      hidden={!dock.visible}
+                    />
                   )}
                 </div>
               </div>
@@ -391,6 +376,9 @@ export function ScoutPanel({
                         }))}
                       challenges={renderedChallenges}
                       selectedTrinket={result.selectedTrinket}
+                      trinketOffers={offers}
+                      onTrinketChange={selectTrinket}
+                      changingTrinket={loading}
                     />
                   )}
                 </div>

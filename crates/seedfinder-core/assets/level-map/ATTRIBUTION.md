@@ -19,6 +19,11 @@ without the `custom_tiles/` prefix). Boss maps also embed the same revision’s
 `custom_tiles/sewer_boss.png`, `custom_tiles/caves_boss.png`,
 `custom_tiles/rat_king_room.png`, `custom_tiles/carpet.png`, and
 `sprites/pylon.png` and `sprites/ratking.png` (from `core/src/main/assets`).
+Initial contents additionally use `sprites/items.png`, the initial mob/NPC
+sprite atlases in `sprites/`, `effects/specks.png`, `effects/effects.png`,
+`interfaces/icons.png` (sleep indicators and targeting markers), and
+`environment/custom_tiles/prison_quest.png`, `weak_floor.png`, and
+`halls_special.png`, all from that same revision. No texture was modified.
 Every file's SHA-256 and dimensions are recorded in
 [`level_map/assets.rs`](../../src/level_map/assets.rs) and returned in map JSON.
 
@@ -27,7 +32,14 @@ Rendering rules are adapted from the same revision's
 `DungeonTerrainTilemap`, `DungeonWallsTilemap`, `WallOcclusionTilemap`,
 `RaisedTerrainTilemap`, `TerrainFeaturesTilemap`, `Level.cleanWalls`, the geometric
 half-wall masks in `FogOfWar`, the trap/plant sprite indices,
-`GameScene` water scrolling and `SewerLevel.Sink` pixel particles. The overview
+`ItemSpriteSheet`, the corresponding `*Sprite` classes, quest room custom tilemaps,
+`CharSprite`/`ItemSprite` shadows, `EmoIcon.Sleep`, `Speck`, `SacrificialParticle`, `ElmoParticle`,
+`Beam.DeathRay`, `CheckedCell`, `TargetedCell`, `VaultLaser`, `VaultSentry`,
+`Ballistica`, `ConeAOE`,
+`WindParticle.Wind` and its chasm visibility gate in `Level.addVisuals`,
+`CityLevel.GreenFlame`, `AmbitiousImpRoom` entrance/barrier/banners, `Carpet`,
+`StatuesRoom`, `HallwayRoom`, and `LibraryRingRoom` entrance/exit carpet layouts,
+and `GameScene` water scrolling and `SewerLevel.Sink` pixel particles. The overview
 uses raised sprites, offers concealed/revealed secret layers, and makes ambient animation
 repeatable. The source revision matches the generation engine's v4.0.0 pin;
 the release JAR's digest is recorded separately in `tooling/oracle-4.0/build.sh`.

@@ -3,7 +3,9 @@ import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
 import init, { level_map, level_map_asset } from "../wasm/pkg/seedfinder.js";
 import { isMapDepthSupported, mapRequestJson } from "./client";
 import { mapSpriteCache } from "./frame-cache";
-import { createLevelMapRenderer, drawLevelMap } from "./render";
+import { createLevelMapRenderer, drawLevelMap, glowAmount } from "./render";
+import { itemGlow } from "../glow";
+import { particleState } from "./particles";
 import type { LevelMapDocument, LevelMapRequest, MapBundle } from "./types";
 
 beforeAll(async () => {
@@ -17,6 +19,118 @@ const map = (depth: number, branch = 0) =>
   ) as LevelMapDocument;
 
 describe("browser level map contract", () => {
+  it("keeps chasm wind sparse and smooth while excluding unused void", () => {
+    const result = map(22); // Chasm feeling: unused background is also CHASM.
+    const wind = result.scene.emitters!.filter((e) => e.clipToChasm);
+    expect(wind.length).toBeGreaterThan(0);
+    expect(wind.length).toBeLessThan(result.terrain.filter((t) => t === 0).length);
+    for (const emitter of wind) {
+      expect(result.terrain[emitter.cell]).toBe(0);
+      expect(emitter.wallMask).toBe(true);
+      expect(emitter.loopMs).toBe(2500);
+      const p = emitter.particles[0];
+      expect(p.lifespanMs).toBeGreaterThanOrEqual(1000);
+      expect(p.lifespanMs).toBeLessThan(2000);
+      const middle = p.birthMs + p.lifespanMs / 2;
+      const state = particleState(emitter, p, middle)!;
+      expect(state.alpha).toBeCloseTo(state.scale * 0.1, 2);
+      expect(state.x).toBeGreaterThanOrEqual(0.499);
+      expect(state.x).toBeLessThan(16.501);
+      expect(state.y).toBeGreaterThanOrEqual(0.499);
+      expect(state.y).toBeLessThan(16.501);
+    }
+    const breeze = wind.find((e) => e.velocity[0] !== 0)!;
+    const p = breeze.particles[0],
+      time = p.birthMs + p.lifespanMs / 2;
+    expect(particleState(breeze, p, time + 1000 / 120)!.x).not.toBe(
+      particleState(breeze, p, time)!.x,
+    );
+    expect(particleState(breeze, p, time + 2500)).toEqual(particleState(breeze, p, time));
+  });
+  it("advances Vault rays and scans using their seeded turns through WASM", () => {
+    const result = JSON.parse(
+      level_map(JSON.stringify({ seed: "FOI-QDX-EMJ", depth: 18, branch: 1 })),
+    ) as LevelMapDocument;
+    const emitters = result.scene.emitters!;
+    const beams = emitters.filter(
+      (e) => e.image.kind === "blit" && e.image.asset === "effects.png",
+    );
+    const first = beams.find((e) => e.cell === 391)!;
+    expect(result.contents!.sentries).toHaveLength(38);
+    expect(beams.some((e) => e.cell === 643)).toBe(false); // Inert opposing sentry.
+    expect(first.startMs).toBe(1000);
+    expect(first.loopMs).toBe(7000); // Six firing turns, then one safe turn.
+    expect(particleState(first, first.particles[0], 999)).toBeNull();
+    const state = particleState(first, first.particles[0], 1100)!;
+    expect(state.scale).toBe(1);
+    expect(state.scaleY).toBeCloseTo(0.8);
+    expect(particleState(first, first.particles[0], 1500)).toBeNull();
+    expect(particleState(first, first.particles[0], 8100)).toEqual(state);
+
+    const scans = emitters.filter((e) => e.cell === 2304 && e.image.kind === "fill");
+    expect(scans).toHaveLength(16);
+    expect(scans.map((e) => e.startMs)).toEqual(Array.from({ length: 16 }, (_, i) => i * 1000));
+    expect(scans.every((e) => e.loopMs === 16000 && e.wallMask)).toBe(true);
+    expect(scans[0].particles.map((p) => p.position)).not.toEqual(
+      scans[1].particles.map((p) => p.position),
+    );
+    const far = scans[0].particles.find((p) => p.birthMs > 0)!;
+    expect(particleState(scans[0], far, far.birthMs - 1)).toBeNull();
+    expect(particleState(scans[0], far, far.birthMs)!.alpha).toBeCloseTo(0.8);
+    expect(particleState(scans[0], far, far.birthMs + 1000 / 120)!.alpha).toBeLessThan(0.8);
+  });
+  it("alternates Vault warnings instead of lighting every vent at once", () => {
+    const result = JSON.parse(
+      level_map(JSON.stringify({ seed: "HEL-LOO-WRD", depth: 18, branch: 1 })),
+    ) as LevelMapDocument;
+    const vents = result.contents!.features.filter((f) => f.cycle);
+    const cells = (cooldown: number) => vents.filter((f) => f.cycle!.cooldown === cooldown);
+    const warnings = (cooldown: number, time: number) =>
+      cells(cooldown)
+        .filter((f) => {
+          const emitter = result.scene.emitters!.find((e) => e.cell === f.cell)!;
+          return emitter.particles.some((p) => particleState(emitter, p, time));
+        })
+        .map((f) => f.cell);
+    const even = warnings(2, 700),
+      odd = warnings(2, 1700);
+    expect(even.length).toBeGreaterThan(0);
+    expect(odd.length).toBeGreaterThan(0);
+    expect(even.some((cell) => odd.includes(cell))).toBe(false);
+    expect(even.length + odd.length).toBe(cells(2).length);
+    expect(warnings(2, 2700)).toEqual(even);
+    const path = warnings(5, 20700);
+    expect(path.length).toBeGreaterThan(0);
+    expect(path.length).toBeLessThan(cells(5).length);
+    expect(warnings(5, 21700)).not.toEqual(path);
+    expect(warnings(1, 20700)).toHaveLength(cells(1).length);
+    expect(warnings(1, 21700)).toHaveLength(cells(1).length);
+  });
+  it("carries the same enchantment glows as the Scout list through WASM", () => {
+    const result = JSON.parse(
+      level_map(JSON.stringify({ seed: "FOI-QDX-EMJ", depth: 22, trinket: "parchment_scrap" })),
+    ) as LevelMapDocument;
+    for (const [cell, name] of [
+      [1518, "Unstable"],
+      [1660, "Blocking"],
+    ] as const) {
+      const glow = result.contents!.heaps.find((h) => h.cell === cell)!.items[0].glow!;
+      const scout = itemGlow({ cursed: false, effect: { kind: "enchantment", name } })!;
+      expect(`#${glow.color.map((c) => c.toString(16).padStart(2, "0")).join("")}`).toBe(
+        scout.color,
+      );
+      expect(glow.periodMs).toBe(scout.period * 1000);
+    }
+  });
+  it("pulses continuously to the game's 60% peak at display-rate timestamps", () => {
+    expect(glowAmount(1000, 0)).toBe(0);
+    expect(glowAmount(1000, 500)).toBe(0.3);
+    expect(glowAmount(1000, 1000)).toBe(0.6);
+    expect(glowAmount(1000, 1500)).toBe(0.3);
+    expect(glowAmount(1000, 2000)).toBe(0);
+    expect(glowAmount(500, 500)).toBe(0.6);
+    expect(glowAmount(1000, 500 + 1000 / 120)).toBeGreaterThan(glowAmount(1000, 500));
+  });
   it("uses engine coverage, including quest parent floors and supported boss arenas", () => {
     expect([1, 5, 13, 15, 19, 24].every(isMapDepthSupported)).toBe(true);
     expect([0, 10, 20, 25, 26].some(isMapDepthSupported)).toBe(false);
@@ -195,7 +309,7 @@ it("caches animation states and repairs overlapping layers without repainting di
   } as unknown as CanvasRenderingContext2D;
   const renderer = createLevelMapRenderer(context, bundle, true, makeCanvas);
   expect(renderer.animated).toBe(true);
-  expect(canvases).toHaveLength(1); // All unique composite frames share one atlas.
+  expect(canvases.length).toBeLessThan(8); // Shared water atlas plus tinted actor silhouettes. // All unique composite frames share one atlas.
   expect(raster).toHaveBeenCalledTimes(3); // The transparent animation frame has no commands.
   renderer.draw(0);
   expect(blit).toHaveBeenCalledTimes(4);
@@ -239,10 +353,10 @@ it("shares phase-shifted water frames and uses source textures for single blits"
   const frames = phases.flatMap((index) => sprites[index].frames);
   expect(frames).toHaveLength(128);
   expect(new Set(frames).size).toBe(64);
-  expect(canvases).toHaveLength(1);
+  expect(canvases.length).toBeLessThan(8); // Shared water atlas plus tinted actor silhouettes.
   for (const [index, sprite] of floor.scene.sprites.entries()) {
     for (const [frameIndex, commands] of sprite.frames.entries()) {
-      if (commands.length === 1 && commands[0].kind === "blit") {
+      if (commands.length === 1 && commands[0].kind === "blit" && !commands[0].tint) {
         expect(sprites[index].frames[frameIndex]?.image).toBe(textures.get(commands[0].asset));
       }
     }
@@ -261,8 +375,9 @@ it("reuses the same map atlas when changing secret visibility or reopening a map
   vi.stubGlobal("document", { createElement });
   try {
     const first = mapSpriteCache(bundle);
+    const count = createElement.mock.calls.length;
     expect(mapSpriteCache(bundle)).toBe(first);
-    expect(createElement).toHaveBeenCalledTimes(1);
+    expect(createElement).toHaveBeenCalledTimes(count);
   } finally {
     vi.unstubAllGlobals();
   }
