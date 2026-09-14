@@ -926,7 +926,7 @@ fn item_row(world_item: &WorldItem, gems: RingGems, matched: bool) -> adw::Actio
         .build();
     row.add_prefix(&sprites::item_image(
         ItemSprite::in_run(definition, gems),
-        glow::item(world_item.cursed, world_item.effect),
+        glow::item(definition.kind, world_item.cursed, world_item.effect),
     ));
 
     if world_item.displayed_upgrade() > 0 {

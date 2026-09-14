@@ -64,7 +64,7 @@ public static class ItemGlow
         ["Thorns"] = new(Rgb(0x660022), DefaultPeriod),
     };
 
-    /// <summary>Every curse glows black in the game, at the default period.</summary>
+    /// <summary>Curse glow for equipment other than wands, at the default period.</summary>
     public static SpriteGlow Curse { get; } = new(Rgb(0x000000), DefaultPeriod);
 
     /// <summary>
@@ -72,10 +72,11 @@ public static class ItemGlow
     /// or curse. A beneficial enchantment/glyph wins even on a cursed item
     /// (matching <c>Weapon.glowing()</c>, which returns the enchantment's colour
     /// when one is present — e.g. a curse-infused Kinetic weapon still glows
-    /// yellow); otherwise a cursed item pulses black.
+    /// yellow); otherwise a cursed item other than a wand pulses black. Wands never glow.
     /// </summary>
     public static SpriteGlow? ForItem(ScoutItem item)
     {
+        if (item.Item.Kind == ItemKind.Wand) return null;
         if (item.Effect is string effect && !ItemCatalog.IsCurse(item.Item.Kind, effect))
             return Enchantments.GetValueOrDefault(effect);
         return item.Cursed ? Curse : null;

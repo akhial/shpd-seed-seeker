@@ -22,7 +22,12 @@ pub(super) fn generated(value: GeneratedItem, a: &ItemAppearanceState) -> MapIte
             GeneratedItem::TippedDart { quantity, .. } => quantity,
             _ => 1,
         };
-        return with_glow(equipment(e.item, quantity, a), e.roll.effect, e.roll.cursed);
+        return with_glow(
+            equipment(e.item, quantity, a),
+            e.item,
+            e.roll.effect,
+            e.roll.cursed,
+        );
     }
     match value {
         GeneratedItem::Food(kind) => MapItem::new(name(kind), [437, 438, 432][kind as usize], 1),
@@ -252,6 +257,7 @@ pub(super) fn forced(
                 },
                 a,
             ),
+            i.item,
             i.effect,
             i.cursed,
         ),
@@ -276,7 +282,7 @@ pub(super) fn forced(
 pub(super) fn vault(value: crate::vault_loot::VaultItem, a: &ItemAppearanceState) -> MapItem {
     use crate::vault_loot::{VaultConsumable as C, VaultItem as I};
     match value {
-        I::Equipment(i) => with_glow(equipment(i.item, i.quantity, a), i.effect, false),
+        I::Equipment(i) => with_glow(equipment(i.item, i.quantity, a), i.item, i.effect, false),
         I::Dart => MapItem::new("Dart", 160, 2),
         I::Consumable(c) => generated(
             match c {
@@ -320,7 +326,41 @@ pub(super) fn imp(value: crate::quests::ImpRewardOption, a: &ItemAppearanceState
     item
 }
 
-fn with_glow(mut item: MapItem, effect: Option<crate::catalog::Effect>, cursed: bool) -> MapItem {
-    item.glow = crate::level_map::MapGlow::for_item(effect, cursed);
+fn with_glow(
+    mut item: MapItem,
+    id: ItemId,
+    effect: Option<crate::catalog::Effect>,
+    cursed: bool,
+) -> MapItem {
+    item.glow = crate::level_map::MapGlow::for_item(crate::catalog::item(id).kind, effect, cursed);
     item
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::catalog::{ITEMS, ItemKind};
+    use crate::equipment::EquipmentRoll;
+    use crate::generator::GeneratedEquipment;
+    use crate::run::RunState;
+
+    #[test]
+    fn generated_wands_never_have_a_map_glow() {
+        let appearances = RunState::new(0).appearances;
+        for wand in ITEMS.iter().filter(|i| i.kind == ItemKind::Wand) {
+            for cursed in [false, true] {
+                let value = GeneratedItem::Equipment(GeneratedEquipment {
+                    item: wand.id,
+                    roll: EquipmentRoll {
+                        upgrade: 0,
+                        effect: None,
+                        cursed,
+                    },
+                });
+                let sprite = generated(value, &appearances);
+                assert_eq!(sprite.kind, wand.stable_id);
+                assert_eq!(sprite.glow, None, "{} cursed={cursed}", wand.stable_id);
+            }
+        }
+    }
 }

@@ -4,7 +4,9 @@ package dev.seedseeker.app.ui
 import androidx.compose.ui.graphics.Color
 import dev.seedseeker.app.catalog.ItemCatalog
 import dev.seedseeker.app.catalog.PackagedCatalog
+import dev.seedseeker.app.model.EffectFilter
 import dev.seedseeker.app.model.ItemKind
+import dev.seedseeker.app.model.ItemRequirement
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
@@ -67,10 +69,23 @@ class ItemGlowTest {
     fun `a beneficial enchantment wins over a curse`() {
         assertEquals(
             Glow(Color(0xFFFFFF00), 1f),
-            ItemGlows.forItem(effect = "Kinetic", cursed = true),
+            ItemGlows.forItem(kind = ItemKind.WEAPON, effect = "Kinetic", cursed = true),
         )
-        assertEquals(Glow(black, 1f), ItemGlows.forItem(effect = "Wayward", cursed = true))
-        assertEquals(Glow(black, 1f), ItemGlows.forItem(effect = null, cursed = true))
-        assertNull(ItemGlows.forItem(effect = null, cursed = false))
+        assertEquals(Glow(black, 1f), ItemGlows.forItem(kind = ItemKind.WEAPON, effect = "Wayward", cursed = true))
+        assertEquals(Glow(black, 1f), ItemGlows.forItem(kind = ItemKind.WEAPON, effect = null, cursed = true))
+        assertNull(ItemGlows.forItem(kind = ItemKind.WEAPON, effect = null, cursed = false))
+    }
+
+    @Test
+    fun `cursed and uncursed wands never glow`() {
+        assertNull(ItemGlows.forItem(ItemKind.WAND, effect = null, cursed = true))
+        assertNull(ItemGlows.forItem(ItemKind.WAND, effect = null, cursed = false))
+        for (item in listOf(null, requireNotNull(ItemCatalog.findById("wand_fireblast")))) {
+            for (uncursed in listOf(false, true)) {
+                val requirement = ItemRequirement(key = 1, item = item, upgrade = 1, kind = ItemKind.WAND, requireUncursed = uncursed)
+                assertEquals(EffectFilter.Any, requirement.effect)
+                assertEquals(emptyList<Glow>(), ItemGlows.forFilter(requirement.effect))
+            }
+        }
     }
 }

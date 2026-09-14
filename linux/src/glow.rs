@@ -12,7 +12,7 @@
 //! not app chrome: the surrounding interface stays libadwaita and follows the
 //! system accent and light/dark preference.
 
-use shpd_seedfinder_core::catalog::Effect;
+use shpd_seedfinder_core::catalog::{Effect, ItemKind};
 
 /// Peak blend fraction of the glow colour, matching upstream's glow shader
 /// (`rgb = texel.rgb * (1 - v) + glow * v`, with `v` peaking at 0.6).
@@ -54,7 +54,7 @@ impl Glow {
     }
 }
 
-/// Every curse glows black in the game, at the default period.
+/// Curse glow for equipment other than wands, at the default period.
 pub const CURSE: Glow = Glow::new(0x0000_0000, DEFAULT_PERIOD);
 
 /// Every beneficial weapon enchantment and armor glyph, keyed by the wire name
@@ -110,9 +110,12 @@ pub fn enchantment(wire_name: &str) -> Option<Glow> {
 ///
 /// A beneficial enchantment or glyph wins even on a cursed item, matching
 /// `Weapon.glowing()`: a curse-infused Kinetic weapon still glows yellow.
-/// Otherwise a cursed item pulses black.
+/// Otherwise a cursed item other than a wand pulses black. Wands never glow.
 #[must_use]
-pub fn item(cursed: bool, effect: Option<Effect>) -> Option<Glow> {
+pub fn item(kind: ItemKind, cursed: bool, effect: Option<Effect>) -> Option<Glow> {
+    if kind == ItemKind::Wand {
+        return None;
+    }
     if let Some(effect) = effect
         && !effect.is_curse()
     {
@@ -149,7 +152,7 @@ pub fn value_at(frame_time_micros: i64, period: f64) -> f64 {
 #[cfg(test)]
 mod tests {
     use shpd_seedfinder_core::catalog::{
-        ALL_ARMOR_EFFECTS, ALL_WEAPON_EFFECTS, ArmorEffect, Effect, WeaponEffect,
+        ALL_ARMOR_EFFECTS, ALL_WEAPON_EFFECTS, ArmorEffect, Effect, ItemKind, WeaponEffect,
     };
 
     use super::{CURSE, PEAK, effect, enchantment, item, value_at};
@@ -226,31 +229,58 @@ mod tests {
     #[test]
     fn enchantment_wins_over_a_curse_on_the_same_item() {
         let kinetic = Effect::Weapon(WeaponEffect::Kinetic);
-        assert_eq!(item(true, Some(kinetic)), enchantment("Kinetic"));
-        assert_eq!(item(false, Some(kinetic)), enchantment("Kinetic"));
+        assert_eq!(
+            item(ItemKind::Weapon, true, Some(kinetic)),
+            enchantment("Kinetic")
+        );
+        assert_eq!(
+            item(ItemKind::Weapon, false, Some(kinetic)),
+            enchantment("Kinetic")
+        );
 
         let camouflage = Effect::Armor(ArmorEffect::Camouflage);
-        assert_eq!(item(true, Some(camouflage)), enchantment("Camouflage"));
+        assert_eq!(
+            item(ItemKind::Armor, true, Some(camouflage)),
+            enchantment("Camouflage")
+        );
     }
 
     #[test]
     fn cursed_items_and_curse_effects_pulse_black() {
-        assert_eq!(item(true, None), Some(CURSE));
+        assert_eq!(item(ItemKind::Weapon, true, None), Some(CURSE));
         assert_eq!(
-            item(true, Some(Effect::Weapon(WeaponEffect::Wayward))),
+            item(
+                ItemKind::Weapon,
+                true,
+                Some(Effect::Weapon(WeaponEffect::Wayward))
+            ),
             Some(CURSE)
         );
         assert_eq!(
-            item(true, Some(Effect::Armor(ArmorEffect::Overgrowth))),
+            item(
+                ItemKind::Armor,
+                true,
+                Some(Effect::Armor(ArmorEffect::Overgrowth))
+            ),
             Some(CURSE)
         );
-        assert_eq!(item(false, None), None);
+        assert_eq!(item(ItemKind::Weapon, false, None), None);
         // Generation always sets `cursed` alongside a curse effect, so this
         // case cannot occur in a scouted world; it mirrors the web's `itemGlow`.
         assert_eq!(
-            item(false, Some(Effect::Weapon(WeaponEffect::Wayward))),
+            item(
+                ItemKind::Weapon,
+                false,
+                Some(Effect::Weapon(WeaponEffect::Wayward))
+            ),
             None
         );
+    }
+
+    #[test]
+    fn wands_never_glow() {
+        assert_eq!(item(ItemKind::Wand, true, None), None);
+        assert_eq!(item(ItemKind::Wand, false, None), None);
     }
 
     #[test]

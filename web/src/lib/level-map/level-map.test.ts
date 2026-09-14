@@ -135,7 +135,11 @@ describe("browser level map contract", () => {
       [1660, "Blocking"],
     ] as const) {
       const glow = result.contents!.heaps.find((h) => h.cell === cell)!.items[0].glow!;
-      const scout = itemGlow({ cursed: false, effect: { kind: "enchantment", name } })!;
+      const scout = itemGlow({
+        category: "weapon",
+        cursed: false,
+        effect: { kind: "enchantment", name },
+      })!;
       expect(`#${glow.color.map((c) => c.toString(16).padStart(2, "0")).join("")}`).toBe(
         scout.color,
       );

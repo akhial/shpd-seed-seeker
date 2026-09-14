@@ -560,7 +560,7 @@ internal fun ScoutItemCard(
                 ItemSprite(
                     item = scoutItem.item,
                     spriteIndex = ringGems.spriteIndexFor(scoutItem.item),
-                    glows = listOfNotNull(ItemGlows.forItem(effect = scoutItem.effect, cursed = scoutItem.cursed)),
+                    glows = listOfNotNull(ItemGlows.forItem(kind = scoutItem.item.kind, effect = scoutItem.effect, cursed = scoutItem.cursed)),
                     modifier = Modifier.size(40.dp),
                 )
                 Spacer(Modifier.width(14.dp))
