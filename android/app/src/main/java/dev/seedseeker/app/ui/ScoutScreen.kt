@@ -11,7 +11,6 @@ import androidx.compose.ui.unit.IntSize
 import dev.seedseeker.app.model.FloorFeeling
 import kotlin.math.roundToInt
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.Orientation
@@ -539,7 +538,7 @@ internal fun ScoutItemCard(
             val density = LocalDensity.current
             fun textWidth(text: String, style: androidx.compose.ui.text.TextStyle) =
                 measurer.measure(text, style, softWrap = false).size.width
-            val (compactMatch, stackedBadges) = with(density) {
+            val stackedBadges = with(density) {
                 val titleWidth = textWidth(scoutItem.item.name, typography.titleMedium)
                 val upgradeWidth = if (scoutItem.displayedUpgrade != 0) {
                     textWidth("+${scoutItem.displayedUpgrade}", typography.labelMedium.copy(fontFamily = FontFamily.Monospace)) +
@@ -552,11 +551,9 @@ internal fun ScoutItemCard(
                     textWidth(scoutGroupLetter(it.group).toString(), typography.labelSmall) + 28.dp.roundToPx()
                 } ?: 0
                 // Reserve the sprite, gaps, title badges, and the wider trailing chip.
-                // Always compare against the expanded chip so resizing cannot oscillate.
                 val titleAndBadges = titleWidth + upgradeWidth + curseWidth + secretWidth + 64.dp.roundToPx()
-                val compact = matches && titleAndBadges + maxOf(matchWidth, choiceWidth) > constraints.maxWidth
-                val trailingWidth = maxOf(if (matches) { if (compact) 20.dp.roundToPx() else matchWidth } else 0, choiceWidth)
-                compact to (titleAndBadges + trailingWidth > constraints.maxWidth)
+                val trailingWidth = maxOf(if (matches) matchWidth else 0, choiceWidth)
+                titleAndBadges + trailingWidth > constraints.maxWidth
             }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -572,9 +569,13 @@ internal fun ScoutItemCard(
                 Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        ScoutItemTitle(scoutItem.item.name, Modifier.weight(1f, fill = stackedBadges))
+                        ScoutItemTitle(scoutItem.item.name, Modifier.weight(1f, fill = false))
+                        if (scoutItem.displayedUpgrade != 0) {
+                            Spacer(Modifier.width(8.dp))
+                            ScoutItemUpgrade(scoutItem.displayedUpgrade)
+                        }
                         if (!stackedBadges) {
-                            if (scoutItem.displayedUpgrade != 0 || scoutItem.cursed || scoutItem.secret) {
+                            if (scoutItem.cursed || scoutItem.secret) {
                                 Row(Modifier.padding(start = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     ScoutItemBadges(scoutItem)
                                 }
@@ -588,7 +589,7 @@ internal fun ScoutItemCard(
                             verticalArrangement = Arrangement.spacedBy(4.dp),
                         ) {
                             ScoutItemBadges(scoutItem)
-                            if (matches) ScoutItemMatchChip(compact = true)
+                            if (matches) ScoutItemMatchChip()
                             (scoutItem.accessibility as? ScoutAccessibility.Choice)?.let { ChoiceGroupChip(it) }
                         }
                     }
@@ -620,7 +621,7 @@ internal fun ScoutItemCard(
                 if (!stackedBadges) {
                     Spacer(Modifier.width(10.dp))
                     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        if (matches) ScoutItemMatchChip(compactMatch)
+                        if (matches) ScoutItemMatchChip()
                         (scoutItem.accessibility as? ScoutAccessibility.Choice)?.let { ChoiceGroupChip(it) }
                     }
                 }
@@ -644,21 +645,23 @@ private fun ScoutItemTitle(name: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun ScoutItemBadges(scoutItem: ScoutItem) {
-    if (scoutItem.displayedUpgrade != 0) {
-        Surface(
-            shape = MaterialTheme.shapes.extraSmall,
-            color = SpdUpgrade.copy(alpha = 0.12f),
-        ) {
-            Text(
-                "+${scoutItem.displayedUpgrade}",
-                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
-                style = MaterialTheme.typography.labelMedium,
-                fontFamily = FontFamily.Monospace,
-                color = SpdUpgrade,
-            )
-        }
+private fun ScoutItemUpgrade(upgrade: Int) {
+    Surface(
+        shape = MaterialTheme.shapes.extraSmall,
+        color = SpdUpgrade.copy(alpha = 0.12f),
+    ) {
+        Text(
+            "+$upgrade",
+            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+            style = MaterialTheme.typography.labelMedium,
+            fontFamily = FontFamily.Monospace,
+            color = SpdUpgrade,
+        )
     }
+}
+
+@Composable
+private fun ScoutItemBadges(scoutItem: ScoutItem) {
     if (scoutItem.cursed) {
         Surface(
             shape = MaterialTheme.shapes.extraSmall,
@@ -688,22 +691,20 @@ private fun ScoutItemBadges(scoutItem: ScoutItem) {
 }
 
 @Composable
-private fun ScoutItemMatchChip(compact: Boolean) {
+private fun ScoutItemMatchChip() {
     Surface(
-        shape = if (compact) CircleShape else MaterialTheme.shapes.extraSmall,
+        shape = MaterialTheme.shapes.extraSmall,
         color = SpdGreen.copy(alpha = 0.1f),
     ) {
         Row(
-            modifier = if (compact) Modifier.size(20.dp) else Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.Filled.Check, contentDescription = if (compact) "match" else null,
+            Icon(Icons.Filled.Check, contentDescription = null,
                 modifier = Modifier.size(12.dp), tint = SpdGreen)
-            if (!compact) {
-                Spacer(Modifier.width(4.dp))
-                Text("match", style = MaterialTheme.typography.labelSmall, color = SpdGreen)
-            }
+            Spacer(Modifier.width(4.dp))
+            Text("match", style = MaterialTheme.typography.labelSmall, color = SpdGreen)
         }
     }
 }

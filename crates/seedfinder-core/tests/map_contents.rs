@@ -7,6 +7,37 @@ use shpd_seedfinder_core::{
     seed::DungeonSeed,
 };
 
+#[test]
+fn spyglass_generation_marks_only_phantom_heaps_after_activation() {
+    use shpd_seedfinder_core::catalog::ItemId;
+    let seed = (0..100)
+        .map(|value| DungeonSeed::new(value).unwrap())
+        .find(|&seed| {
+            shpd_seedfinder_core::trinkets::trinket_order(seed)[..4]
+                .contains(&ItemId::CrackedSpyglass)
+        })
+        .unwrap();
+    for (depth, trinket, expected) in [
+        (1, Some(ItemId::CrackedSpyglass), false),
+        (6, None, false),
+        (6, Some(ItemId::CrackedSpyglass), true),
+    ] {
+        let map = generate_level_map_in_branch(seed, depth, 0, Challenges::NONE, trinket).unwrap();
+        let phantoms = map
+            .contents
+            .heaps
+            .iter()
+            .filter(|heap| heap.phantom)
+            .count();
+        if expected {
+            assert!((1..=2).contains(&phantoms));
+            assert!(map.contents.heaps.len() > phantoms);
+        } else {
+            assert_eq!(phantoms, 0);
+        }
+    }
+}
+
 fn normalized(value: &str) -> String {
     let value = value
         .rsplit(['.', '$'])

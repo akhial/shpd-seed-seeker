@@ -263,6 +263,11 @@ impl MapContents {
                     for i in &p.items {
                         self.drop(cell, &name(kind), false, items::regular(*i, a));
                     }
+                    if p.phantom
+                        && let Some(heap) = self.heaps.iter_mut().find(|h| h.cell == cell)
+                    {
+                        heap.phantom = true;
+                    }
                 }
                 D::Mimic(kind) => self.mob(
                     cell,
@@ -384,6 +389,7 @@ impl MapContents {
                 cell: heap.cell,
                 kind: name(heap.kind),
                 haunted: false,
+                phantom: false,
                 items: heap
                     .items
                     .iter()

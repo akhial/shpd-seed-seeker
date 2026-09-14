@@ -38,7 +38,7 @@ export interface MapContents {
     directions: number[][];
     scan?: [number, number];
   }[];
-  heaps: { cell: number; kind: string; haunted: boolean; items: MapItem[] }[];
+  heaps: { cell: number; kind: string; haunted: boolean; phantom?: boolean; items: MapItem[] }[];
   mobs: {
     cell: number;
     kind: string;

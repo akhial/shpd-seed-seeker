@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -44,7 +43,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -79,18 +77,63 @@ internal fun LevelMapView(
     changingTrinket: Boolean,
     onSelectTrinket: (String) -> Unit,
 ) {
-    var expanded by remember(world.seed, challenges) { mutableStateOf(false) }
-    var depth by remember(world.seed, challenges) { mutableIntStateOf(initialDepth) }
-    var secrets by remember(world.seed, challenges) { mutableStateOf(false) }
+    var selection by remember(world.seed, challenges, initialDepth) { mutableStateOf<Pair<Int, Boolean>?>(null) }
+    var depth by remember(world.seed, challenges, initialDepth) { mutableIntStateOf(initialDepth) }
+    LevelMapPanel(world, initialDepth, floors, challenges, changingTrinket, onSelectTrinket,
+        animated = selection == null, onExpand = { branch, secrets ->
+            depth = initialDepth
+            selection = branch to secrets
+        })
+    selection?.let { (branch, secrets) ->
+        Dialog(onDismissRequest = { selection = null },
+            properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+            LevelMapPanel(world, depth, floors, challenges, changingTrinket, onSelectTrinket,
+                full = true, initialBranch = branch, initialSecrets = secrets,
+                close = { selection = null }, navigate = { delta ->
+                    floors.getOrNull(floors.indexOf(depth) + delta)?.let { depth = it }
+                })
+        }
+    }
+}
+
+/** Inline and expanded maps retain separate loads, branches and native viewports. */
+@Composable
+@OptIn(ExperimentalMaterial3Api::class)
+private fun LevelMapPanel(
+    world: ScoutWorld,
+    depth: Int,
+    floors: List<Int>,
+    challenges: Int,
+    changingTrinket: Boolean,
+    onSelectTrinket: (String) -> Unit,
+    full: Boolean = false,
+    animated: Boolean = true,
+    initialBranch: Int = 0,
+    initialSecrets: Boolean = false,
+    onExpand: (Int, Boolean) -> Unit = { _, _ -> },
+    close: () -> Unit = {},
+    navigate: (Int) -> Unit = {},
+) {
+    var secrets by remember(world.seed, challenges) { mutableStateOf(initialSecrets) }
     val profile = LevelMapRequest(world.seed, depth, challenges, world.selectedTrinket)
-    var branch by remember(profile) { mutableIntStateOf(0) }
-    var parent by remember(profile) { mutableStateOf<LevelMapBundle?>(null) }
+    val location = profile.copy(trinket = null)
+    // Initial branch applies only when opening the panel, not when navigating floors.
+    val initialLocation = remember { location }
+    var branch by remember(location) { mutableIntStateOf(if (location == initialLocation) initialBranch else 0) }
+    var parent by remember(location) { mutableStateOf<Pair<LevelMapRequest, LevelMapBundle>?>(null) }
     var retry by remember { mutableIntStateOf(0) }
     val request = profile.copy(branch = branch)
     val loaded by produceState<Pair<LevelMapRequest, Result<LevelMapBundle>>?>(null, request, retry) {
         value = null
         value = try {
-            request to Result.success(LevelMaps.load(request))
+            val main = if (parent?.first == profile) parent!!.second else LevelMaps.load(profile)
+            parent = profile to main
+            if (branch != 0 && main.map.branches.none { it.branch == branch }) {
+                branch = 0
+                null
+            } else {
+                request to Result.success(if (branch == 0) main else LevelMaps.load(request))
+            }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (failure: Throwable) {
@@ -99,10 +142,7 @@ internal fun LevelMapView(
     }
     val current = loaded?.takeIf { it.first == request }?.second
     val bundle = current?.getOrNull()
-    LaunchedEffect(bundle, request) { if (branch == 0 && bundle != null) parent = bundle }
     val title = if (branch == 0) "Floor $depth layout" else if (bundle?.map?.kind == "imp_vault") "Imp Vault" else "Blacksmith Mine"
-    fun close() { expanded = false; depth = initialDepth; branch = 0 }
-    fun navigate(delta: Int) { floors.getOrNull(floors.indexOf(depth) + delta)?.let { depth = it } }
 
     val secretToggle: @Composable () -> Unit = {
         FilterChip(selected = secrets, onClick = { secrets = !secrets },
@@ -120,10 +160,10 @@ internal fun LevelMapView(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = if (spread) Arrangement.SpaceBetween else Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
         ) {
-            if (!parent?.map?.branches.isNullOrEmpty()) {
+            if (!parent?.second?.map?.branches.isNullOrEmpty()) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(selected = branch == 0, onClick = { branch = 0 }, label = { Text("Main") })
-                    parent?.map?.branches?.forEach { area ->
+                    parent?.second?.map?.branches?.forEach { area ->
                         FilterChip(selected = branch == area.branch, onClick = { branch = area.branch },
                             modifier = Modifier.semantics { contentDescription = area.label },
                             label = { Text(if (area.kind == "imp_vault") "Vault" else "Mine") })
@@ -135,6 +175,7 @@ internal fun LevelMapView(
     }
     val stage: @Composable (Modifier, Boolean) -> Unit = { modifier, full ->
         Box(modifier.background(Color.Black), contentAlignment = Alignment.Center) {
+            MapCanvas(bundle, request, secrets, title, full, animated, navigate)
             when {
                 current?.isFailure == true -> Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("Couldn’t load this map.", color = Color.White)
@@ -142,28 +183,25 @@ internal fun LevelMapView(
                         style = MaterialTheme.typography.bodySmall)
                     TextButton(onClick = { retry++; }) { Text("Try again") }
                 }
-                bundle != null -> MapCanvas(bundle, secrets, title, full, ::navigate)
-                else -> Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                bundle == null -> Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     CircularProgressIndicator(Modifier.size(24.dp))
                     Text("Charting ${if (branch == 0) "floor $depth" else "the quest level"}…", color = Color.LightGray)
                 }
             }
             if (!full) Surface(modifier = Modifier.align(Alignment.TopEnd).padding(6.dp), shape = MaterialTheme.shapes.medium,
                 color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.92f)) {
-                TextButton(onClick = { expanded = true }) { Text("Expand map") }
+                TextButton(onClick = { onExpand(branch, secrets) }) { Text("Expand map") }
             }
         }
     }
-    Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow,
+    if (!full) Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow,
         modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)) {
         Column {
             toolbar(false)
-            if (!expanded) stage(Modifier.fillMaxWidth().height(280.dp), false)
-            else Spacer(Modifier.height(280.dp))
+            stage(Modifier.fillMaxWidth().height(280.dp), false)
         }
     }
-    if (expanded) Dialog(onDismissRequest = ::close,
-        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+    else {
         Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
             Column(Modifier.fillMaxSize().safeDrawingPadding()) {
                 FloorHeading(
@@ -172,9 +210,9 @@ internal fun LevelMapView(
                     feeling = world.floorFeelings[depth],
                     questLabel = world.quests.firstOrNull { it.depth == depth }?.variant?.label,
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                    onCloseMap = ::close,
+                    onCloseMap = close,
                 )
-                val hasSublevels = !parent?.map?.branches.isNullOrEmpty()
+                val hasSublevels = !parent?.second?.map?.branches.isNullOrEmpty()
                 Row(
                     Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
                         .padding(horizontal = 16.dp, vertical = 4.dp),
@@ -214,11 +252,11 @@ internal fun LevelMapView(
 }
 
 @Composable
-private fun MapCanvas(bundle: LevelMapBundle, secrets: Boolean, label: String, expanded: Boolean, navigate: (Int) -> Unit) {
+private fun MapCanvas(bundle: LevelMapBundle?, request: LevelMapRequest, secrets: Boolean, label: String, expanded: Boolean, animated: Boolean, navigate: (Int) -> Unit) {
     AndroidView(
         modifier = Modifier.fillMaxSize(),
         factory = { context -> NativeLevelMapView(context) },
-        update = { it.bind(bundle, secrets, expanded, navigate); it.contentDescription = label },
+        update = { it.bind(bundle, request, secrets, expanded, animated, navigate); it.contentDescription = label },
         onRelease = { it.release() },
     )
 }
@@ -230,9 +268,14 @@ internal class NativeLevelMapView(context: Context) : View(context) {
     private var secrets = false
     private var expanded = false
     private var navigate: (Int) -> Unit = {}
-    private var zoom = 1f
-    private var panX = 0f
-    private var panY = 0f
+    internal var zoom = 1f
+        private set
+    internal var panX = 0f
+        private set
+    internal var panY = 0f
+        private set
+    private var request: LevelMapRequest? = null
+    private var active = true
     private var start = SystemClock.uptimeMillis()
     private var animate = true
     private val visible = Rect()
@@ -265,16 +308,21 @@ internal class NativeLevelMapView(context: Context) : View(context) {
 
     init { isFocusable = true; importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES }
 
-    fun bind(next: LevelMapBundle, reveal: Boolean, full: Boolean, onNavigate: (Int) -> Unit) {
+    fun bind(next: LevelMapBundle?, request: LevelMapRequest, reveal: Boolean, full: Boolean, animated: Boolean, onNavigate: (Int) -> Unit) {
         expanded = full
         navigate = onNavigate
+        active = animated
+        if (this.request?.hasSameLocation(request) != true) reset()
+        this.request = request
+        invalidate()
         if (next === bundle && secrets == reveal) return
         val newMap = next !== bundle
         renderer?.close()
-        renderer = LevelMapRenderer(next, reveal)
+        renderer = next?.let { LevelMapRenderer(it, reveal) }
         bundle = next
         secrets = reveal
-        if (newMap) { reset(); start = SystemClock.uptimeMillis() }
+        if (newMap) start = SystemClock.uptimeMillis()
+        constrain()
         invalidate()
     }
     fun release() { renderer?.close(); renderer = null; bundle = null }
@@ -314,7 +362,7 @@ internal class NativeLevelMapView(context: Context) : View(context) {
         scene.draw(canvas, if (animate) SystemClock.uptimeMillis() - start else 0)
         canvas.restore()
         canvas.restore()
-        if (scene.animated && animate && windowVisibility == VISIBLE && isShown && getGlobalVisibleRect(visible)) postInvalidateOnAnimation()
+        if (active && scene.animated && animate && windowVisibility == VISIBLE && isShown && getGlobalVisibleRect(visible)) postInvalidateOnAnimation()
     }
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()

@@ -23,6 +23,9 @@ internal data class LevelMapRequest(
     val trinket: String?,
     val branch: Int = 0,
 ) {
+    fun hasSameLocation(other: LevelMapRequest): Boolean =
+        seed == other.seed && depth == other.depth && branch == other.branch && challenges == other.challenges
+
     fun json(): String = JSONObject().apply {
         put("seed", seed)
         put("depth", depth)

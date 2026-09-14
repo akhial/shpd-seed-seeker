@@ -32,6 +32,7 @@ pub(super) fn layers(scene: &mut MapScene, level: &Level, contents: &MapContents
         let raise = 5 + i32::from(8_u16.saturating_sub(h));
         let sources = [[image % 16 * 16, image / 16 * 16, w, h]];
         let offset = [(17 - i32::from(w)) / 2, 16 - i32::from(h) - raise];
+        let opacity = if heap.phantom { 102 } else { 255 };
         shadow(
             scene,
             &mut heaps,
@@ -42,7 +43,7 @@ pub(super) fn layers(scene: &mut MapScene, level: &Level, contents: &MapContents
             1,
             offset,
             [1.0, 0.25, 0.5],
-            255,
+            opacity,
         );
         stamp_scaled(
             scene,
@@ -55,7 +56,7 @@ pub(super) fn layers(scene: &mut MapScene, level: &Level, contents: &MapContents
             offset,
             [w, h],
             false,
-            255,
+            opacity,
             if matches!(heap.kind.as_str(), "Heap" | "ForSale") {
                 heap.items.first().and_then(|item| item.glow)
             } else {

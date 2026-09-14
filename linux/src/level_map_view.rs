@@ -89,6 +89,7 @@ pub struct FloorMapView {
     map: RefCell<Option<Arc<LevelMap>>>,
     renderer: RefCell<Option<Renderer>>,
     generation: Cell<u64>,
+    viewport_location: Cell<Option<(DungeonSeed, Challenges, u8, u8)>>,
     secrets: Cell<bool>,
     zoom: Cell<f64>,
     pan: Cell<(f64, f64)>,
@@ -207,6 +208,7 @@ impl FloorMapView {
             map: RefCell::new(None),
             renderer: RefCell::new(None),
             generation: Cell::new(0),
+            viewport_location: Cell::new(None),
             secrets: Cell::new(false),
             zoom: Cell::new(1.0),
             pan: Cell::new((0.0, 0.0)),
@@ -517,8 +519,11 @@ impl FloorMapView {
     }
 
     pub fn update_profile(self: &Rc<Self>, profile: MapProfile) {
-        if self.profile.replace(profile) != profile {
-            self.branch.set(0);
+        let previous = self.profile.replace(profile);
+        if previous != profile {
+            if previous.seed != profile.seed || previous.challenges != profile.challenges {
+                self.branch.set(0);
+            }
             self.update_trinkets();
             self.request();
         }
@@ -578,7 +583,16 @@ impl FloorMapView {
         self.generation.set(generation);
         self.map.replace(None);
         self.renderer.replace(None);
-        self.zoom_by(0.0);
+        let profile = self.profile.get();
+        let location = (
+            profile.seed,
+            profile.challenges,
+            self.depth.get(),
+            self.branch.get(),
+        );
+        if self.viewport_location.replace(Some(location)) != Some(location) {
+            self.zoom_by(0.0);
+        }
         self.status.set_label("Loading map…");
         self.retry.set_visible(false);
         self.stack.set_visible_child_name("status");
@@ -603,7 +617,14 @@ impl FloorMapView {
         let key = (self.profile.get(), self.depth.get(), self.branch.get());
         let (sender, receiver) = mpsc::sync_channel(1);
         std::thread::spawn(move || {
-            let _ = sender.send(load(key));
+            let _ = sender.send(load((key.0, key.1, 0)).and_then(|main| {
+                let map = if key.2 != 0 && main.branches.iter().any(|area| area.branch == key.2) {
+                    load(key)?
+                } else {
+                    Arc::clone(&main)
+                };
+                Ok((main, map))
+            }));
         });
         let weak = Rc::downgrade(self);
         glib::timeout_add_local(Duration::from_millis(20), move || {
@@ -620,8 +641,19 @@ impl FloorMapView {
                     Err("Map worker stopped. Please retry.".into())
                 }
             };
-            match result.and_then(|map| Renderer::new(&map).map(|renderer| (map, renderer))) {
-                Ok((map, renderer)) => {
+            match result
+                .and_then(|(main, map)| Renderer::new(&map).map(|renderer| (main, map, renderer)))
+            {
+                Ok((main, map, renderer)) => {
+                    if view.branch.replace(map.kind.branch()) != map.kind.branch() {
+                        view.viewport_location.set(Some((
+                            key.0.seed,
+                            key.0.challenges,
+                            key.1,
+                            map.kind.branch(),
+                        )));
+                        view.zoom_by(0.0);
+                    }
                     view.secrets_button.set_sensitive(
                         !map.secret_rooms.is_empty()
                             || map.traps.iter().any(|t| t.hidden)
@@ -629,9 +661,12 @@ impl FloorMapView {
                                 .terrain
                                 .contains(&shpd_seedfinder_core::geometry::terrain::SECRET_DOOR),
                     );
-                    if view.branch.get() == 0 {
+                    while let Some(child) = view.branches.first_child() {
+                        view.branches.remove(&child);
+                    }
+                    {
                         for (branch, label) in
-                            std::iter::once((0, "Main")).chain(map.branches.iter().map(|b| {
+                            std::iter::once((0, "Main")).chain(main.branches.iter().map(|b| {
                                 (
                                     b.branch,
                                     if b.kind == level_map::MapKind::ImpVault {
@@ -642,7 +677,7 @@ impl FloorMapView {
                                 )
                             }))
                         {
-                            if map.branches.is_empty() {
+                            if main.branches.is_empty() {
                                 break;
                             }
                             let button = gtk::ToggleButton::builder()
@@ -754,6 +789,7 @@ mod tests {
 
     #[test]
     #[ignore = "requires a GTK display"]
+    #[allow(clippy::float_cmp)] // Exact viewport state must survive scene reloads unchanged.
     fn maps_load_expand_navigate_and_keep_the_floor_after_a_trinket_change() {
         adw::init().unwrap();
         gtk::gio::resources_register_include!("dev.seedseeker.SeedSeeker.gresource").unwrap();
@@ -802,6 +838,8 @@ mod tests {
         settle();
         assert_eq!(view.depth.get(), 11); // Unsupported floor 10 is skipped.
         assert!(view.dialog.borrow().is_some());
+        view.zoom.set(2.0);
+        view.pan.set((10.0, -10.0));
         view.update_profile(MapProfile {
             trinket: Some(trinket_order(seed)[0]),
             ..profile
@@ -813,6 +851,12 @@ mod tests {
             Some(trinket_order(seed)[0])
         );
         assert!(view.dialog.borrow().is_some());
+        assert_eq!(view.zoom.get(), 2.0);
+        assert_eq!(view.pan.get(), (10.0, -10.0));
+        view.request(); // Retrying the same location also retains the viewport.
+        settle();
+        assert_eq!(view.zoom.get(), 2.0);
+        assert_eq!(view.pan.get(), (10.0, -10.0));
         view.secrets_button.set_active(true);
         view.zoom.set(2.0);
         view.pan.set((10.0, -10.0));
@@ -825,6 +869,8 @@ mod tests {
         view.close();
         settle();
         assert_eq!(view.depth.get(), 9);
+        assert_eq!(view.zoom.get(), 1.0);
+        assert_eq!(view.pan.get(), (0.0, 0.0));
         assert!(view.dialog.borrow().is_none());
         assert_eq!(
             view.content.parent().as_ref(),

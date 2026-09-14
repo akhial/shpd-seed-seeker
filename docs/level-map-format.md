@@ -62,7 +62,9 @@ selection and animation allocation are never performed by seed search.
 
 `contents` is a v3 object with `heaps`, `mobs`, `plants`, `effects`,
 `features`, and supplemental `traps` arrays. Positions are row-major `cell` indices. Heaps contain
-`kind`, `haunted` and top-first `items`; mobs contain `kind` and the inventory
+`kind`, `haunted`, `phantom` and top-first `items`; Cracked Spyglass phantom heaps
+use 40% opacity (102/255) in the scene, including their glows and proportionally
+dimmed shadows. Older documents omit `phantom`, meaning false. Mobs contain `kind` and the inventory
 already rolled during generation, `sleeping`, disguise `stealthy`, and `approximate`. Items contain `kind`, `image` (the game's
 item atlas index), `quantity`, `deterministic`, and optional `glow` (RGB `color`
 and fade-in `periodMs`). Exposed heap/shop items pulse; closed containers and

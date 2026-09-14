@@ -121,6 +121,7 @@ internal sealed class LevelMapView : Grid
     private int depth, branch, generation;
     private bool live, visible = true, suspended, rendering, updating;
     private string? requestKey;
+    private string? profileLocationKey, viewportLocationKey;
     private double zoom = 1, panX, panY;
     private Point? pointer;
     private bool subscribed;
@@ -241,7 +242,10 @@ internal sealed class LevelMapView : Grid
         trinkets.IsEnabled = !session.Busy;
         updating = false;
         var next = LevelMapDocument.Request(session.World.Seed, depth, 0, session.Query, session.World.SelectedTrinket ?? "none");
-        if (profileKey != next) { profileKey = next; branch = 0; branches = []; requestKey = null; _ = Load(); }
+        var location = LevelMapDocument.Request(session.World.Seed, depth, 0, session.Query, "none");
+        if (profileLocationKey != location) { branch = 0; branches = []; }
+        profileLocationKey = location;
+        if (profileKey != next) { profileKey = next; requestKey = null; _ = Load(); }
     }
     private string? profileKey;
     private async Task Load()
@@ -250,16 +254,28 @@ internal sealed class LevelMapView : Grid
         var request = LevelMapDocument.Request(session.World.Seed, depth, branch, session.Query, session.World.SelectedTrinket ?? "none");
         if (requestKey == request) return;
         requestKey = request; var token = ++generation; bundle = null; renderer = null; art.Source = null;
+        var location = LevelMapDocument.Request(session.World.Seed, depth, branch, session.Query, "none");
+        if (viewportLocationKey != location) { zoom = 1; panX = panY = 0; }
+        viewportLocationKey = location;
+        profileLocationKey = LevelMapDocument.Request(session.World.Seed, depth, 0, session.Query, "none");
+        var parentRequest = LevelMapDocument.Request(session.World.Seed, depth, 0, session.Query, session.World.SelectedTrinket ?? "none");
+        profileKey = parentRequest;
         message.Text = $"Charting floor {depth}…"; status.Visibility = Visibility.Visible; retry.Visibility = Visibility.Collapsed;
         SyncAnimation(); UpdateToolbar();
         try
         {
-            var loaded = await LevelMapCache.Get(request);
+            var main = await LevelMapCache.Get(parentRequest);
+            if (token != generation || !live) return;
+            branches = main.Map.Branches;
+            if (branch != 0 && !branches.Any(area => area.Branch == branch))
+            {
+                branch = 0; requestKey = null; await Load(); return;
+            }
+            var loaded = branch == 0 ? main : await LevelMapCache.Get(request);
             if (token != generation || !live) return;
             bundle = loaded;
-            if (branch == 0) branches = loaded.Map.Branches;
             renderer = new(loaded.Map, loaded.Textures, session.Secrets); clock.Restart();
-            status.Visibility = Visibility.Collapsed; UpdateToolbar(); Reset(); SyncAnimation();
+            status.Visibility = Visibility.Collapsed; UpdateToolbar(); Constrain(); Render(); SyncAnimation();
         }
         catch (Exception ex)
         {
@@ -303,7 +319,7 @@ internal sealed class LevelMapView : Grid
         if (XamlRoot is null) return;
         var view = new LevelMapView(session, depth, true)
         {
-            branch = branch, branches = branches, profileKey = profileKey,
+            branch = branch, branches = branches, profileKey = profileKey, profileLocationKey = profileLocationKey,
             Width = Math.Clamp(XamlRoot.Size.Width - 120, 320, 1100), Height = Math.Max(300, XamlRoot.Size.Height - 180),
         };
         var dialog = new ContentDialog { XamlRoot = XamlRoot, Title = "Floor maps", Content = view, CloseButtonText = "Close" };

@@ -6,6 +6,8 @@ import android.graphics.Bitmap
 import android.os.Handler
 import android.os.Looper
 import android.view.PixelCopy
+import android.view.View
+import android.view.ViewGroup
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.height
@@ -34,6 +36,7 @@ import dev.seedseeker.app.ui.theme.SeedSeekerTheme
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Assert.assertSame
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -105,6 +108,13 @@ class LevelMapScreenTest {
         compose.onNodeWithText("Expand map").performClick()
         compose.onNodeWithContentDescription("Next floor").performClick()
         compose.onNodeWithText("FLOOR 19").assertIsDisplayed()
+        compose.waitUntil(timeoutMillis = 10_000) {
+            compose.onAllNodesWithText("Charting floor 19…").fetchSemanticsNodes().isEmpty()
+        }
+        val expanded = mapView(requireNotNull(ShadowDialog.getLatestDialog().window).decorView)!!
+        compose.runOnIdle { zoomAndPanMap(expanded) }
+        val transform = listOf(expanded.zoom, expanded.panX, expanded.panY)
+        assertTrue(expanded.zoom > 1f)
         initial.trinketOrder.take(4).forEach { compose.onNodeWithContentDescription(it.name).assertIsDisplayed() }
         compose.onNodeWithContentDescription(offer.name).performClick()
         compose.onNodeWithText("FLOOR 19").assertIsDisplayed()
@@ -123,10 +133,20 @@ class LevelMapScreenTest {
         compose.waitUntil(timeoutMillis = 10_000) {
             compose.onAllNodesWithText("Charting floor 19…").fetchSemanticsNodes().isEmpty()
         }
+        assertSame(expanded, mapView(requireNotNull(ShadowDialog.getLatestDialog().window).decorView))
+        assertEquals(transform, listOf(expanded.zoom, expanded.panX, expanded.panY))
         screenshot("expanded-320dp")
         compose.onNodeWithContentDescription("Close map").performClick()
         compose.onNodeWithText("Expand map").performClick()
         compose.onNodeWithText("FLOOR 18").assertIsDisplayed()
+    }
+
+    private fun mapView(view: View): NativeLevelMapView? {
+        if (view is NativeLevelMapView) return view
+        if (view is ViewGroup) for (index in 0 until view.childCount) {
+            mapView(view.getChildAt(index))?.let { return it }
+        }
+        return null
     }
 
     private fun screenshot(name: String) {

@@ -54,7 +54,7 @@ painting, and disabling system animations samples the complete scene at time zer
 Drag to pan, scroll or pinch to zoom, and use the fit button (or `0`) to reset.
 The adaptive expanded dialog includes previous/next floor controls (`K`/`J`) and
 trinket shortcuts. Switching trinkets refreshes the map and loot while keeping the
-dialog's floor, and resets the branch to Main. Native branch tabs open the
+dialog's floor, zoom, pan and selected area when it remains available. Native branch tabs open the
 Blacksmith mine or Imp vault; the Secrets toggle reveals the alternative scene.
 Load failures offer Retry. Choice-group letter chips sit beside match badges;
 only alternatives conflicting with a matched choice are dimmed.

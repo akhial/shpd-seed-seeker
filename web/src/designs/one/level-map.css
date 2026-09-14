@@ -89,7 +89,9 @@
   cursor: grabbing;
 }
 .d1-map-message {
-  min-height: 350px;
+  position: absolute;
+  inset: 0;
+  min-height: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -225,6 +227,12 @@
 }
 .d1-map-dialog .d1-map-toolbar {
   flex-shrink: 0;
+}
+.d1-map-dialog .d1-map-stage {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
 .d1-map-dialog .d1-map-viewport,
 .d1-map-dialog .d1-map-message {

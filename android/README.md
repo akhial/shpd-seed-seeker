@@ -86,7 +86,8 @@ boss floors 5 and 15 are included. Tap **Expand map** for a full-screen Material
 or double-tap to zoom, and drag to pan; double-tap again to return to fit zoom.
 The rounded previous/next control at the bottom and horizontal swipes at fit zoom
 browse floors. The dialog shares the item list’s floor heading, quest badge, and
-compact trinket shortcuts, retaining the current floor when a selection changes. Quest-area
+compact trinket shortcuts, retaining the current floor, zoom, pan and available quest area
+when a selection changes. Inline and expanded maps keep independent viewports. Quest-area
 chips open the Blacksmith Mine or Imp Vault; **Secrets** switches the complete
 concealed/revealed scene without generating another map.
 

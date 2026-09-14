@@ -49,7 +49,8 @@ function MapSession({
   const currentFloor = availableFloors[floorIndex];
   const swipeStart = useRef<{ x: number; y: number } | undefined>(undefined);
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const [expanded, setExpanded] = useState(false);
+  const [selection, setSelection] = useState<{ branch: number; secrets: boolean }>();
+  const expanded = selection !== undefined;
   useEffect(() => {
     if (!expanded) return;
     const dialog = dialogRef.current;
@@ -62,153 +63,25 @@ function MapSession({
       document.body.style.overflow = previousOverflow;
     };
   }, [expanded]);
-  const profileKey = mapRequestJson({ ...props, depth });
-  const [branchSelection, selectBranch] = useState<{ key: string; branch: number }>();
-  const branch = branchSelection?.key === profileKey ? branchSelection.branch : 0;
-  const setBranch = (next: number) => selectBranch({ key: profileKey, branch: next });
-  useEffect(() => {
-    // Forget the previous area so switching back to an earlier trinket cannot
-    // revive a branch whose parent metadata is no longer loaded.
-    selectBranch(undefined);
-  }, [profileKey]);
-  const [loaded, setLoaded] = useState<{ key: string; bundle: MapBundle }>();
-  const [parent, setParent] = useState<{ key: string; bundle: MapBundle }>();
-  const [error, setError] = useState<string>();
-  const [retry, setRetry] = useState(0);
-  const [secrets, setSecrets] = useState(false);
-  const changeFloor = (nextDepth: number) => {
-    setDepth(nextDepth);
-    setBranch(0);
-    setParent(undefined);
-    setError(undefined);
-  };
   const navigate = (delta: number) => {
     const next = availableFloors[floorIndex + delta];
     if (next) {
-      // The focused canvas is replaced on floor changes. Keep focus on the
-      // persistent dialog so subsequent shortcuts stay inside the modal.
       dialogRef.current?.focus({ preventScroll: true });
-      changeFloor(next.depth);
+      setDepth(next.depth);
     }
   };
-  const close = () => {
-    setExpanded(false);
-    if (depth !== props.depth) changeFloor(props.depth);
-  };
-  const request: LevelMapRequest = { ...props, depth, branch };
-  const requestKey = mapRequestJson(request);
-  useEffect(() => {
-    let active = true;
-    setError(undefined);
-    void requestLevelMap(request).then(
-      (next) => {
-        if (!active) return;
-        setLoaded({ key: requestKey, bundle: next });
-        if (branch === 0) setParent({ key: requestKey, bundle: next });
-      },
-      (reason: unknown) => {
-        if (active) setError(reason instanceof Error ? reason.message : String(reason));
-      },
-    );
-    return () => {
-      active = false;
-    };
-    // requestKey contains the entire canonical profile, independent of array identity.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [requestKey, retry]);
-  const bundle = loaded?.key === requestKey ? loaded.bundle : undefined;
-  const branches = parent?.key === profileKey ? parent.bundle.map.branches : [];
-  const secretCount = bundle
-    ? bundle.map.secretRooms.length + bundle.map.secretDoors.length + bundle.map.secretTraps.length
-    : 0;
-  const title =
-    branch === 0
-      ? `Floor ${depth} layout`
-      : bundle?.map.kind === "imp_vault"
-        ? "Imp Vault"
-        : "Blacksmith Mine";
-  const toolbar = (
-    <div className="d1-map-toolbar">
-      {branches.length > 0 && (
-        <div className="d1-map-branches" role="group" aria-label="Level area">
-          <button type="button" aria-pressed={branch === 0} onClick={() => setBranch(0)}>
-            Main
-          </button>
-          {branches.map((entry) => (
-            <button
-              type="button"
-              key={entry.branch}
-              aria-pressed={branch === entry.branch}
-              onClick={() => setBranch(entry.branch)}
-            >
-              {entry.kind === "imp_vault" ? "Imp Vault" : "Blacksmith Mine"}
-            </button>
-          ))}
-        </div>
-      )}
-      <button
-        type="button"
-        className="d1-map-secrets"
-        aria-pressed={secrets}
-        disabled={secretCount === 0}
-        onClick={() => setSecrets((value) => !value)}
-        title={
-          bundle && secretCount === 0
-            ? "No secrets on this map"
-            : secrets
-              ? "Hide secret rooms, doors and traps"
-              : "Reveal secret rooms, doors and traps"
-        }
-      >
-        <svg
-          aria-hidden="true"
-          width="14"
-          height="14"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          {secrets ? <path d="M20 6 9 17l-5-5" /> : <path d="M18 6 6 18M6 6l12 12" />}
-        </svg>
-        Secrets
-      </button>
-    </div>
-  );
-  const mapContent = error ? (
-    <div className="d1-map-message" role="alert">
-      <p>Couldn’t load this map.</p>
-      <span>{error}</span>
-      <button type="button" className="d1-btn" onClick={() => setRetry((value) => value + 1)}>
-        Try again
-      </button>
-    </div>
-  ) : bundle ? (
-    <MapCanvas key={requestKey} bundle={bundle} label={title} secrets={secrets} />
-  ) : (
-    <div className="d1-map-message" role="status">
-      <span className="d1-map-loading-dot" />
-      <p>Charting {branch === 0 ? `floor ${depth}` : "the quest level"}…</p>
-    </div>
-  );
+  const close = () => setSelection(undefined);
   return (
     <div className="d1-level-map-view">
-      {toolbar}
-      <div className="d1-map-stage">
-        {mapContent}
-        <button
-          type="button"
-          className="d1-map-expand"
-          aria-haspopup="dialog"
-          aria-expanded={expanded}
-          onClick={() => setExpanded(true)}
-        >
-          <ExpandIcon size={14} />
-          Expand
-        </button>
-      </div>
+      <MapPanel
+        {...props}
+        animated={!expanded}
+        expanded={expanded}
+        onExpand={(branch, secrets) => {
+          setDepth(props.depth);
+          setSelection({ branch, secrets });
+        }}
+      />
       <dialog
         ref={dialogRef}
         className="d1-map-dialog"
@@ -313,24 +186,194 @@ function MapSession({
                 </div>
               </nav>
             </header>
-            {toolbar}
-            {mapContent}
+            <MapPanel
+              {...props}
+              depth={depth}
+              initialBranch={selection.branch}
+              initialSecrets={selection.secrets}
+            />
           </div>
         )}
       </dialog>
     </div>
   );
 }
+/** Each inline/expanded panel owns its location, load lifecycle and viewport. */
+function MapPanel({
+  initialBranch = 0,
+  initialSecrets = false,
+  animated = true,
+  expanded = false,
+  onExpand,
+  ...props
+}: Omit<LevelMapRequest, "branch"> & {
+  initialBranch?: number;
+  initialSecrets?: boolean;
+  animated?: boolean;
+  expanded?: boolean;
+  onExpand?: (branch: number, secrets: boolean) => void;
+}) {
+  const { depth } = props;
+  const profileKey = mapRequestJson(props);
+  const locationKey = mapRequestJson({ ...props, selectedTrinket: "none" });
+  const [branchSelection, selectBranch] = useState({ key: locationKey, branch: initialBranch });
+  const branch = branchSelection.key === locationKey ? branchSelection.branch : 0;
+  const setBranch = (next: number) => selectBranch({ key: locationKey, branch: next });
+  const [loaded, setLoaded] = useState<{ key: string; bundle: MapBundle }>();
+  const [parent, setParent] = useState<{ key: string; location: string; bundle: MapBundle }>();
+  const [error, setError] = useState<string>();
+  const [retry, setRetry] = useState(0);
+  const [secrets, setSecrets] = useState(initialSecrets);
+  const request: LevelMapRequest = { ...props, depth, branch };
+  const requestKey = mapRequestJson(request);
+  useEffect(() => {
+    let active = true;
+    setError(undefined);
+    void (async () => {
+      try {
+        let next: MapBundle;
+        if (parent?.key !== profileKey) {
+          const main = await requestLevelMap({ ...request, branch: 0 });
+          if (!active) return;
+          setParent({ key: profileKey, location: locationKey, bundle: main });
+          if (branch !== 0 && !main.map.branches.some((area) => area.branch === branch)) {
+            setBranch(0);
+            return;
+          }
+          next = branch === 0 ? main : await requestLevelMap(request);
+        } else {
+          next = await requestLevelMap(request);
+        }
+        if (active) setLoaded({ key: requestKey, bundle: next });
+      } catch (reason) {
+        if (active) setError(reason instanceof Error ? reason.message : String(reason));
+      }
+    })();
+    return () => {
+      active = false;
+    };
+    // requestKey contains the entire canonical profile, independent of array identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestKey, retry]);
+  const bundle = loaded?.key === requestKey ? loaded.bundle : undefined;
+  const branches = parent?.location === locationKey ? parent.bundle.map.branches : [];
+  const secretCount = bundle
+    ? bundle.map.secretRooms.length + bundle.map.secretDoors.length + bundle.map.secretTraps.length
+    : 0;
+  const title =
+    branch === 0
+      ? `Floor ${depth} layout`
+      : bundle?.map.kind === "imp_vault"
+        ? "Imp Vault"
+        : "Blacksmith Mine";
+  const toolbar = (
+    <div className="d1-map-toolbar">
+      {branches.length > 0 && (
+        <div className="d1-map-branches" role="group" aria-label="Level area">
+          <button type="button" aria-pressed={branch === 0} onClick={() => setBranch(0)}>
+            Main
+          </button>
+          {branches.map((entry) => (
+            <button
+              type="button"
+              key={entry.branch}
+              aria-pressed={branch === entry.branch}
+              onClick={() => setBranch(entry.branch)}
+            >
+              {entry.kind === "imp_vault" ? "Imp Vault" : "Blacksmith Mine"}
+            </button>
+          ))}
+        </div>
+      )}
+      <button
+        type="button"
+        className="d1-map-secrets"
+        aria-pressed={secrets}
+        disabled={secretCount === 0}
+        onClick={() => setSecrets((value) => !value)}
+        title={
+          bundle && secretCount === 0
+            ? "No secrets on this map"
+            : secrets
+              ? "Hide secret rooms, doors and traps"
+              : "Reveal secret rooms, doors and traps"
+        }
+      >
+        <svg
+          aria-hidden="true"
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          {secrets ? <path d="M20 6 9 17l-5-5" /> : <path d="M18 6 6 18M6 6l12 12" />}
+        </svg>
+        Secrets
+      </button>
+    </div>
+  );
+  const mapContent = error ? (
+    <div className="d1-map-message" role="alert">
+      <p>Couldn’t load this map.</p>
+      <span>{error}</span>
+      <button type="button" className="d1-btn" onClick={() => setRetry((value) => value + 1)}>
+        Try again
+      </button>
+    </div>
+  ) : !bundle ? (
+    <div className="d1-map-message" role="status">
+      <span className="d1-map-loading-dot" />
+      <p>Charting {branch === 0 ? `floor ${depth}` : "the quest level"}…</p>
+    </div>
+  ) : null;
+  return (
+    <>
+      {toolbar}
+      <div className="d1-map-stage">
+        <MapCanvas
+          key={mapRequestJson({ ...request, selectedTrinket: "none" })}
+          bundle={loaded?.bundle}
+          ready={bundle !== undefined}
+          animated={animated}
+          label={title}
+          secrets={secrets}
+        />
+        {mapContent}
+        {onExpand && (
+          <button
+            type="button"
+            className="d1-map-expand"
+            aria-haspopup="dialog"
+            aria-expanded={expanded}
+            onClick={() => onExpand(branch, secrets)}
+          >
+            <ExpandIcon size={14} />
+            Expand
+          </button>
+        )}
+      </div>
+    </>
+  );
+}
+
 function MapCanvas({
   bundle,
   label,
   secrets,
+  ready,
+  animated: active,
 }: {
-  bundle: MapBundle;
+  bundle?: MapBundle;
+  ready: boolean;
+  animated: boolean;
   label: string;
   secrets: boolean;
 }) {
-  const { map } = bundle;
+  const map = bundle?.map;
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const particleRef = useRef<HTMLCanvasElement>(null);
   const densityRef = useRef(1);
@@ -342,8 +385,8 @@ function MapCanvas({
   const gestures = useRef(new MapGesture());
   const visibleRef = useRef(true);
   const resumeRef = useRef<() => void>(() => {});
-  const widthPx = map.width * map.scene.tileSize,
-    heightPx = map.height * map.scene.tileSize;
+  const widthPx = map ? map.width * map.scene.tileSize : 1,
+    heightPx = map ? map.height * map.scene.tileSize : 1;
   const geometry = useMemo(
     () => ({ ...size, mapWidth: widthPx, mapHeight: heightPx }),
     [size, widthPx, heightPx],
@@ -356,10 +399,11 @@ function MapCanvas({
     setTransform(next);
   }, []);
   useEffect(() => {
+    if (!ready) return;
     const next = constrainMapTransform(transformRef.current, geometry);
     applyTransform(next);
     gestures.current.rebase(next);
-  }, [applyTransform, geometry]);
+  }, [applyTransform, geometry, ready]);
   useEffect(() => {
     const viewport = viewportRef.current;
     if (!viewport) return;
@@ -405,6 +449,12 @@ function MapCanvas({
   useEffect(() => {
     const context = canvasRef.current?.getContext("2d");
     if (!context) return;
+    if (!ready || !bundle) {
+      context.clearRect(0, 0, widthPx, heightPx);
+      const particles = particleRef.current!;
+      particles.getContext("2d")?.clearRect(0, 0, particles.width, particles.height);
+      return;
+    }
     const renderer = createLevelMapRenderer(context, bundle, secrets);
     const particleCanvas = particleRef.current!;
     const particles = createMapParticleRenderer(
@@ -431,7 +481,7 @@ function MapCanvas({
         particleCanvas.height = height;
       }
       particles.draw(elapsed);
-      if (animated && !motion.matches && visibleRef.current && !document.hidden)
+      if (active && animated && !motion.matches && visibleRef.current && !document.hidden)
         frame = requestAnimationFrame(tick);
     };
     const resume = () => {
@@ -448,7 +498,7 @@ function MapCanvas({
       document.removeEventListener("visibilitychange", resume);
       motion.removeEventListener("change", resume);
     };
-  }, [bundle, secrets, widthPx, heightPx]);
+  }, [bundle, ready, active, secrets, widthPx, heightPx]);
   const pointerPoint = (event: ReactPointerEvent<HTMLDivElement>) => {
     const bounds = event.currentTarget.getBoundingClientRect();
     return {

@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package dev.seedseeker.app.ui
 
+import android.graphics.Rect
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.onNodeWithTag
+import kotlin.math.ceil
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Handler
@@ -17,7 +21,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.performSemanticsAction
@@ -44,7 +47,7 @@ import org.robolectric.annotation.GraphicsMode
 class ScoutItemCardTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
-    @Test fun matchCollapsesToPreserveTitleAndExpandsWhenSpaceReturns() {
+    @Test fun matchLabelStaysVisibleWhenCardWidthChanges() {
         val width = mutableStateOf(360.dp)
         val item = ScoutItem(
             item = requireNotNull(ItemCatalog.findById("wand_fireblast")),
@@ -54,19 +57,17 @@ class ScoutItemCardTest {
         )
         compose.setContent {
             SeedSeekerTheme {
-                ScoutItemCard(item, RingGems.CATALOG, matches = true, modifier = Modifier.width(width.value))
+                ScoutItemCard(item, RingGems.CATALOG, matches = true, modifier = Modifier.width(width.value).testTag("item-card"))
             }
         }
-        compose.onNodeWithText("match").assertDoesNotExist()
-        compose.onNodeWithContentDescription("match").assertIsDisplayed()
+        compose.onNodeWithText("match").assertIsDisplayed()
         val layouts = mutableListOf<TextLayoutResult>()
         compose.onNodeWithText(item.item.name).performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
         assertEquals(1, layouts.single().lineCount)
         compose.runOnIdle { width.value = 560.dp }
         compose.onNodeWithText("match").assertIsDisplayed()
         compose.runOnIdle { width.value = 360.dp }
-        compose.onNodeWithText("match").assertDoesNotExist()
-        compose.onNodeWithContentDescription("match").assertIsDisplayed()
+        compose.onNodeWithText("match").assertIsDisplayed()
     }
 
     @Test fun longNamesStayCompleteWithBadgesAndLargeFonts() {
@@ -84,7 +85,7 @@ class ScoutItemCardTest {
         compose.setContent {
             SeedSeekerTheme {
                 CompositionLocalProvider(LocalItemAtlas provides atlas, LocalDensity provides Density(compose.density.density, fontScale.value)) {
-                    ScoutItemCard(item, RingGems.CATALOG, matches = matched.value, modifier = Modifier.width(width.value))
+                    ScoutItemCard(item, RingGems.CATALOG, matches = matched.value, modifier = Modifier.width(width.value).testTag("item-card"))
                 }
             }
         }
@@ -105,11 +106,14 @@ class ScoutItemCardTest {
                     assertFalse(layout.isLineEllipsized(0))
                     assertEquals(item.item.name.length, layout.getLineEnd(0))
                     val titleBounds = title.fetchSemanticsNode().boundsInRoot
-                    for (label in listOf("+1", "cursed", "secret")) {
+                    val upgrade = compose.onNodeWithText("+1").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
+                    assertTrue("Upgrade must follow the title", upgrade.left >= titleBounds.right)
+                    assertTrue("Upgrade must remain on the title row", upgrade.top < titleBounds.bottom && upgrade.bottom > titleBounds.top)
+                    for (label in listOf("cursed", "secret")) {
                         val badge = compose.onNodeWithText(label).assertIsDisplayed().fetchSemanticsNode().boundsInRoot
                         assertTrue("$label must be below the title", badge.top >= titleBounds.bottom)
                     }
-                    if (isMatch) compose.onNodeWithContentDescription("match").assertIsDisplayed()
+                    if (isMatch) compose.onNodeWithText("match").assertIsDisplayed()
                 }
             }
         }
@@ -121,10 +125,12 @@ class ScoutItemCardTest {
         compose.waitForIdle()
         System.setProperty("robolectric.pixelCopyRenderMode", "hardware")
         val window = compose.activity.window
-        val bitmap = Bitmap.createBitmap(window.decorView.width, window.decorView.height, Bitmap.Config.ARGB_8888)
+        val bounds = compose.onNodeWithTag("item-card").fetchSemanticsNode().boundsInRoot
+        val rect = Rect(bounds.left.toInt(), bounds.top.toInt(), ceil(bounds.right).toInt(), ceil(bounds.bottom).toInt())
+        val bitmap = Bitmap.createBitmap(rect.width(), rect.height(), Bitmap.Config.ARGB_8888)
         var copyResult: Int? = null
         compose.runOnIdle {
-            PixelCopy.request(window, bitmap, { copyResult = it }, Handler(Looper.getMainLooper()))
+            PixelCopy.request(window, rect, bitmap, { copyResult = it }, Handler(Looper.getMainLooper()))
         }
         compose.waitUntil { copyResult != null }
         assertEquals(PixelCopy.SUCCESS, copyResult)

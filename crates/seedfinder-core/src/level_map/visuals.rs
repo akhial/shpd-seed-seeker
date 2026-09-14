@@ -390,6 +390,66 @@ mod tests {
     use crate::level::{Feeling, PlacedTrap, TrapSpec};
 
     #[test]
+    fn spyglass_opacity_covers_raised_items_glows_and_shadows_in_both_scenes() {
+        use crate::level_map::{MapContents, MapGlow, MapHeap, MapItem};
+        let mut level = Level::new(6, Feeling::None);
+        level.set_size(5, 5);
+        level.map.cells[12] = t::EMPTY;
+        for phantom in [false, true] {
+            let contents = MapContents {
+                heaps: vec![MapHeap {
+                    cell: 12,
+                    kind: "Heap".into(),
+                    haunted: false,
+                    phantom,
+                    items: vec![MapItem {
+                        glow: Some(MapGlow {
+                            color: [255, 0, 0],
+                            period_ms: 1000,
+                        }),
+                        ..MapItem::new("test_weapon", 160, 1)
+                    }],
+                }],
+                ..MapContents::default()
+            };
+            let scene = scene(DungeonSeed::MIN, &level, &[], MapKind::Regular, &contents);
+            for layers in [&scene.layers, &scene.concealed_layers] {
+                let mut fragments = 0;
+                let mut shadows = 0;
+                for sprite in layers
+                    .iter()
+                    .filter(|l| l.name == "heaps")
+                    .flat_map(|l| l.cells.iter().flatten())
+                    .map(|&s| &scene.sprites[s])
+                {
+                    fragments += 1;
+                    for draw in sprite.frames.iter().flatten() {
+                        if let MapDraw::Blit {
+                            opacity,
+                            tint,
+                            glow,
+                            ..
+                        } = draw
+                        {
+                            let expected = if phantom { 102 } else { 255 };
+                            if tint.is_some() {
+                                shadows += 1;
+                                assert_eq!(u16::from(*opacity), expected * 153 / 255);
+                                assert!(glow.is_none());
+                            } else {
+                                assert_eq!(u16::from(*opacity), expected);
+                                assert!(glow.is_some());
+                            }
+                        }
+                    }
+                }
+                assert!(fragments > 1, "raised item crosses cell boundaries");
+                assert!(shadows > 0);
+            }
+        }
+    }
+
+    #[test]
     fn mimic_disguises_preserve_stealth_and_ebony_opacity_covers_raised_fragments() {
         use crate::level_map::{MapContents, MapMob};
         let mut level = Level::new(6, Feeling::None);

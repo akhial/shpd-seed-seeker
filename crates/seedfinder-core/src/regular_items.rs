@@ -157,6 +157,8 @@ pub trait RegularItemPlacement {
 pub struct RegularItemPlacementRecord {
     pub cell: i32,
     pub destination: RegularItemDestination,
+    /// Cracked Spyglass marks the resulting heap as a phantom.
+    pub phantom: bool,
     pub items: Vec<RegularItem>,
 }
 
@@ -383,6 +385,7 @@ fn place_generated_item<P: RegularItemPlacement>(
             records.push(RegularItemPlacementRecord {
                 cell,
                 destination: RegularItemDestination::NonPrimaryDrop,
+                phantom: false,
                 items: vec![item],
             });
             append_world_item(item, depth, ItemSource::Heap, world_items);
@@ -662,6 +665,7 @@ fn record_heap(
     records.push(RegularItemPlacementRecord {
         cell,
         destination: RegularItemDestination::Heap(kind),
+        phantom: false,
         items: vec![item],
     });
     let source = match kind {
@@ -691,6 +695,7 @@ fn record_mimic(
     records.push(RegularItemPlacementRecord {
         cell,
         destination: RegularItemDestination::Mimic(kind),
+        phantom: false,
         items,
     });
 }
@@ -856,14 +861,13 @@ fn consume_isolated_streams<P: RegularItemPlacement>(
                         .expect("valid default deck"),
                     );
                     placement.drop_item(cell, item);
-                    record_heap(
+                    records.push(RegularItemPlacementRecord {
                         cell,
-                        RegularHeapKind::Heap,
-                        item,
-                        depth,
-                        records,
-                        world_items,
-                    );
+                        destination: RegularItemDestination::Heap(RegularHeapKind::Heap),
+                        phantom: true,
+                        items: vec![item],
+                    });
+                    append_world_item(item, depth, ItemSource::Heap, world_items);
                 }
             }
             IsolatedItemStreamKind::DarknessTorches
