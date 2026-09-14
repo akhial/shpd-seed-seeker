@@ -11,6 +11,7 @@ import androidx.compose.ui.unit.IntSize
 import dev.seedseeker.app.model.FloorFeeling
 import kotlin.math.roundToInt
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.Orientation
@@ -85,6 +86,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.input.ImeAction
@@ -500,7 +502,7 @@ internal fun FloorFeelingSprite(feeling: FloorFeeling) {
 
 /** One row of a scouted world, drawn with the gems [ringGems] says that run holds. */
 @Composable
-private fun ScoutItemCard(
+internal fun ScoutItemCard(
     scoutItem: ScoutItem,
     ringGems: RingGems,
     matches: Boolean,
@@ -527,124 +529,150 @@ private fun ScoutItemCard(
             },
         ),
     ) {
-        Row(
-            modifier = Modifier.padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            // Bare sprite on the row background, like the web's scout rows: the
-            // pulsing masked tint is the only modifier cue, no tile, no halo.
-            ItemSprite(
-                item = scoutItem.item,
-                spriteIndex = ringGems.spriteIndexFor(scoutItem.item),
-                glows = listOfNotNull(ItemGlows.forItem(effect = scoutItem.effect, cursed = scoutItem.cursed)),
-                modifier = Modifier.size(40.dp),
-            )
-            Spacer(Modifier.width(14.dp))
-            Column(Modifier.weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        scoutItem.item.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false),
-                    )
-                    if (scoutItem.displayedUpgrade != 0) {
-                        Spacer(Modifier.width(8.dp))
-                        Surface(
-                            shape = MaterialTheme.shapes.extraSmall,
-                            color = SpdUpgrade.copy(alpha = 0.12f),
-                        ) {
-                            Text(
-                                "+${scoutItem.displayedUpgrade}",
-                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
-                                style = MaterialTheme.typography.labelMedium,
-                                fontFamily = FontFamily.Monospace,
-                                color = SpdUpgrade,
-                            )
-                        }
-                    }
-                    if (scoutItem.cursed) {
-                        Spacer(Modifier.width(8.dp))
-                        Surface(
-                            shape = MaterialTheme.shapes.extraSmall,
-                            color = SpdDanger.copy(alpha = 0.14f),
-                        ) {
-                            Text(
-                                "cursed",
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = SpdCurse,
-                            )
-                        }
-                    }
-                    if (scoutItem.secret) {
-                        Spacer(Modifier.width(8.dp))
-                        Surface(
-                            shape = MaterialTheme.shapes.extraSmall,
-                            color = SpdSecret.copy(alpha = 0.14f),
-                        ) {
-                            Text(
-                                "secret",
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = SpdSecret,
-                            )
-                        }
-                    }
-                }
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    scoutItem.effect?.let { effect ->
+        BoxWithConstraints(Modifier.padding(14.dp)) {
+            val measurer = rememberTextMeasurer()
+            val typography = MaterialTheme.typography
+            val density = LocalDensity.current
+            fun textWidth(text: String, style: androidx.compose.ui.text.TextStyle) =
+                measurer.measure(text, style, softWrap = false).size.width
+            val compactMatch = with(density) {
+                val titleWidth = textWidth(scoutItem.item.name, typography.titleMedium)
+                val upgradeWidth = if (scoutItem.displayedUpgrade != 0) {
+                    textWidth("+${scoutItem.displayedUpgrade}", typography.labelMedium.copy(fontFamily = FontFamily.Monospace)) +
+                        22.dp.roundToPx()
+                } else 0
+                val curseWidth = if (scoutItem.cursed) textWidth("cursed", typography.labelSmall) + 20.dp.roundToPx() else 0
+                val secretWidth = if (scoutItem.secret) textWidth("secret", typography.labelSmall) + 20.dp.roundToPx() else 0
+                val matchWidth = textWidth("match", typography.labelSmall) + 28.dp.roundToPx()
+                val choiceWidth = (scoutItem.accessibility as? ScoutAccessibility.Choice)?.let {
+                    textWidth(scoutGroupLetter(it.group).toString(), typography.labelSmall) + 28.dp.roundToPx()
+                } ?: 0
+                // Reserve the sprite, gaps, title badges, and the wider trailing chip.
+                // Always compare against the expanded chip so resizing cannot oscillate.
+                matches && titleWidth + upgradeWidth + curseWidth + secretWidth +
+                    maxOf(matchWidth, choiceWidth) + 64.dp.roundToPx() > constraints.maxWidth
+            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                // Bare sprite on the row background, like the web's scout rows: the
+                // pulsing masked tint is the only modifier cue, no tile, no halo.
+                ItemSprite(
+                    item = scoutItem.item,
+                    spriteIndex = ringGems.spriteIndexFor(scoutItem.item),
+                    glows = listOfNotNull(ItemGlows.forItem(effect = scoutItem.effect, cursed = scoutItem.cursed)),
+                    modifier = Modifier.size(40.dp),
+                )
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            effect,
+                            scoutItem.item.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        if (scoutItem.displayedUpgrade != 0) {
+                            Spacer(Modifier.width(8.dp))
+                            Surface(
+                                shape = MaterialTheme.shapes.extraSmall,
+                                color = SpdUpgrade.copy(alpha = 0.12f),
+                            ) {
+                                Text(
+                                    "+${scoutItem.displayedUpgrade}",
+                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = SpdUpgrade,
+                                )
+                            }
+                        }
+                        if (scoutItem.cursed) {
+                            Spacer(Modifier.width(8.dp))
+                            Surface(
+                                shape = MaterialTheme.shapes.extraSmall,
+                                color = SpdDanger.copy(alpha = 0.14f),
+                            ) {
+                                Text(
+                                    "cursed",
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = SpdCurse,
+                                )
+                            }
+                        }
+                        if (scoutItem.secret) {
+                            Spacer(Modifier.width(8.dp))
+                            Surface(
+                                shape = MaterialTheme.shapes.extraSmall,
+                                color = SpdSecret.copy(alpha = 0.14f),
+                            ) {
+                                Text(
+                                    "secret",
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = SpdSecret,
+                                )
+                            }
+                        }
+                    }
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        scoutItem.effect?.let { effect ->
+                            Text(
+                                effect,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = if (effectIsCurse) SpdDanger else SpdTeal,
+                                modifier = Modifier.alignByBaseline(),
+                            )
+                        }
+                        Text(
+                            scoutItem.source.label,
                             style = MaterialTheme.typography.bodySmall,
-                            color = if (effectIsCurse) SpdDanger else SpdTeal,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.alignByBaseline(),
                         )
                     }
-                    Text(
-                        scoutItem.source.label,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.alignByBaseline(),
-                    )
-                }
-                accessibilityLabel?.let {
-                    Spacer(Modifier.height(2.dp))
-                    Text(
-                        it,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-            Spacer(Modifier.width(10.dp))
-            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                if (matches) {
-                    Surface(
-                        shape = MaterialTheme.shapes.extraSmall,
-                        color = SpdGreen.copy(alpha = 0.1f),
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Icon(
-                                Icons.Filled.Check,
-                                contentDescription = null,
-                                modifier = Modifier.size(12.dp),
-                                tint = SpdGreen,
-                            )
-                            Spacer(Modifier.width(4.dp))
-                            Text(
-                                "match",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = SpdGreen,
-                            )
-                        }
+                    accessibilityLabel?.let {
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            it,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 }
-                (scoutItem.accessibility as? ScoutAccessibility.Choice)?.let { ChoiceGroupChip(it) }
+                Spacer(Modifier.width(10.dp))
+                Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (matches) {
+                        Surface(
+                            shape = if (compactMatch) CircleShape else MaterialTheme.shapes.extraSmall,
+                            color = SpdGreen.copy(alpha = 0.1f),
+                        ) {
+                            Row(
+                                modifier = if (compactMatch) Modifier.size(20.dp) else Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                                horizontalArrangement = Arrangement.Center,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Icon(
+                                    Icons.Filled.Check,
+                                    contentDescription = if (compactMatch) "match" else null,
+                                    modifier = Modifier.size(12.dp),
+                                    tint = SpdGreen,
+                                )
+                                if (!compactMatch) {
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(
+                                        "match",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = SpdGreen,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    (scoutItem.accessibility as? ScoutAccessibility.Choice)?.let { ChoiceGroupChip(it) }
+                }
             }
         }
     }
