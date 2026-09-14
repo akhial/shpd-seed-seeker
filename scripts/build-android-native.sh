@@ -28,6 +28,9 @@ esac
 TOOLCHAIN=$NDK/toolchains/llvm/prebuilt/$HOST/bin
 
 cd "$ROOT"
+# Keep Android artifacts local to this checkout, even when target/ is shared
+# with another worktree. Copy from the same explicit directory Cargo builds.
+ANDROID_TARGET_DIR="$ROOT/android/build/rust-jni"
 # Drop ABIs left over from a previous, wider run so the packaged set is
 # exactly $ABIS.
 rm -rf "$OUTPUT"
@@ -55,8 +58,11 @@ for ABI in $ABIS; do
     esac
     env CARGO_PROFILE_RELEASE_OPT_LEVEL=2 \
         "$LINKER=$TOOLCHAIN/$CLANG" \
-        cargo build --locked --release -p shpd-seedfinder-jni --target "$TRIPLE"
+        cargo build --locked --release -p shpd-seedfinder-jni --target "$TRIPLE" \
+        --target-dir "$ANDROID_TARGET_DIR"
+    sh "$ROOT/scripts/check-android-jni.sh" "$TOOLCHAIN/llvm-nm" \
+        "$ANDROID_TARGET_DIR/$TRIPLE/release/libshpd_seedfinder.so"
     mkdir -p "$OUTPUT/$ABI"
-    cp "$ROOT/target/$TRIPLE/release/libshpd_seedfinder.so" \
+    cp "$ANDROID_TARGET_DIR/$TRIPLE/release/libshpd_seedfinder.so" \
         "$OUTPUT/$ABI/libshpd_seedfinder.so"
 done

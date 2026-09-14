@@ -110,6 +110,8 @@ val buildRustJni by tasks.registering(Exec::class) {
         rootProject.projectDir.parentFile.resolve("Cargo.toml"),
         rootProject.projectDir.parentFile.resolve("Cargo.lock"),
         rootProject.projectDir.parentFile.resolve("scripts/build-android-native.sh"),
+        rootProject.projectDir.parentFile.resolve("scripts/check-android-jni.sh"),
+        file("src/main/java/dev/seedseeker/app/engine/NativeSeedFinder.kt"),
     )
     outputs.dir(rustJniOutput)
 }
