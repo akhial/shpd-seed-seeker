@@ -240,6 +240,16 @@ server:
 JAVA_HOME=/path/to/java-21 ./android/gradlew -p android :app:assembleRelease
 ```
 
+For a locally signed, release-optimized build that installs beside production:
+
+```sh
+JAVA_HOME=/path/to/java-21 ./android/gradlew -p android :app:assembleDev
+```
+
+This produces `android/app/build/outputs/apk/dev/app-dev.apk`, signed with the
+standard Android debug key, under the app ID `dev.seedseeker.unofficial.dev`
+and launcher name **Seed Seeker Canary**.
+
 #### Signing
 
 ```sh

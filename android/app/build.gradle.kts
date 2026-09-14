@@ -43,6 +43,15 @@ android {
                 "proguard-rules.pro",
             )
         }
+        create("dev") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".dev"
+            versionNameSuffix = "-dev"
+            // A development release should be directly installable without access
+            // to the production signing key. Android creates this keystore locally
+            // when it is absent.
+            signingConfig = signingConfigs.getByName("debug")
+        }
     }
 
     buildFeatures {
@@ -71,7 +80,7 @@ android {
         disable += setOf("GradleDependency", "AndroidGradlePluginVersion")
     }
 
-    // Every APK packages the Rust library. Release runs the whole engine
+    // Every APK packages the Rust library. Release and dev run the whole engine
     // through it; debug keeps DemoNativeSeedFinder as its search engine but
     // still routes the share-link codec through the canonical Rust
     // implementation, so wire formats are never re-derived in Kotlin.
@@ -106,7 +115,9 @@ val buildRustJni by tasks.registering(Exec::class) {
 }
 
 tasks.matching {
-    it.name == "mergeDebugJniLibFolders" || it.name == "mergeReleaseJniLibFolders"
+    it.name == "mergeDebugJniLibFolders" ||
+        it.name == "mergeDevJniLibFolders" ||
+        it.name == "mergeReleaseJniLibFolders"
 }.configureEach {
     dependsOn(buildRustJni)
 }
