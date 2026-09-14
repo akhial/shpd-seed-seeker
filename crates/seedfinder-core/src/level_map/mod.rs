@@ -18,10 +18,10 @@ use crate::room::{Room, RoomKind};
 use crate::search::FloorGate;
 use crate::seed::DungeonSeed;
 
-/// Main floors whose complete initial terrain is implemented. Boss/shop-only
+/// Main floors whose complete initial terrain is implemented. Boss floors 5 and 15 are included; other boss/shop-only
 /// floors are excluded. Quest branches use `SUPPORTED_BRANCH_DEPTHS`.
-pub const SUPPORTED_DEPTHS: [u8; 20] = [
-    1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14, 16, 17, 18, 19, 21, 22, 23, 24,
+pub const SUPPORTED_DEPTHS: [u8; 22] = [
+    1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19, 21, 22, 23, 24,
 ];
 pub const SUPPORTED_BRANCH_DEPTHS: [u8; 6] = [12, 13, 14, 17, 18, 19];
 
@@ -44,7 +44,7 @@ impl std::fmt::Display for MapError {
         match self {
             Self::UnsupportedDepth(depth) => write!(
                 f,
-                "level maps support regular main-branch floors 1..=24, got {depth}"
+                "level maps support regular floors 1..=24 and boss floors 5 and 15, got {depth}"
             ),
             Self::UnsupportedBranch { depth, branch } => {
                 write!(f, "no map generator for depth {depth}, branch {branch}")
@@ -242,6 +242,7 @@ pub(super) fn validate_location(depth: u8, branch: u8) -> Result<(), MapError> {
 /// # Panics
 /// Panics if an internal generation invariant fails; native bridges contain
 /// these panics at their API boundary.
+#[allow(clippy::too_many_lines)] // Explicit dispatch for each supported main/quest branch.
 pub fn generate_level_map_in_branch(
     seed: DungeonSeed,
     depth: u8,
@@ -252,6 +253,22 @@ pub fn generate_level_map_in_branch(
     validate_location(depth, branch)?;
     if selected_trinket.is_some_and(|id| !crate::trinkets::trinket_order(seed)[..4].contains(&id)) {
         return Err(MapError::InvalidTrinket);
+    }
+    if branch == 0 && matches!(depth, 5 | 15) {
+        let (level, rooms) = crate::boss_floor::generate(
+            i64::try_from(seed.value()).expect("seed fits i64"),
+            depth,
+            challenges,
+        );
+        return Ok(snapshot(
+            seed,
+            depth,
+            challenges,
+            selected_trinket,
+            &level,
+            &rooms,
+            MapKind::Regular,
+        ));
     }
     let mut result = None;
     generate_main_world_observed(

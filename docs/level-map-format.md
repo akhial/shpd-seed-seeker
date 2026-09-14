@@ -16,15 +16,20 @@ RNG, seeded with the floor root, and cannot advance generation state.
 
 ## Coverage
 
-Version 2 supports regular main-branch floors **1–4, 6–9, 11–14, 16–19, 21–24**.
+Version 2 supports main-branch floors **1–9, 11–19, 21–24**, including boss
+floors **5 and 15**.
 It also supports **branch 1** at the Blacksmith quest floor (12–14, Crystal or
 Gnoll mine) and the Imp quest floor (17–19, vault). The branch must exist at the
 requested depth in the selected run; its variant is inferred from that run.
 `engine_info.levelMaps` publishes supported main/branch depths, kinds, schema
 version, tile size, projection and asset revision. Unsupported locations fail;
-there is no substitution of the preceding floor. Boss floors 5/10/15 have no
-terrain generator in this engine, and depth 20 only generates Imp shop stock.
-Boss arenas and the final levels need separate map generators.
+there is no substitution of the preceding floor. Boss floors 5 and 15 have
+isolated terrain generators, including the secret Rat King room and the pylon,
+wire, and water layout. Badder Bosses changes floor 15 generation, including
+retries needed to keep every pylon reachable without crossing water or wires.
+Depth 10 remains unsupported, and depth 20 only generates Imp shop stock.
+Search/scout loot packets still omit the state-neutral floors 5/10/15; map
+clients may offer supported boss floors within the scouted prefix.
 
 Maps use Shattered's **raised 16×16 tile layers**: terrain, occlusion shadows,
 terrain features, raised grass, and upper walls/overhangs. The original 4.0 shadow
@@ -42,7 +47,9 @@ remain unchanged. Switching visibility requires no regeneration or extra assets.
 
 This is an initial **terrain overview**, not a screenshot of a running game.
 It includes recorded plants and traps, mine crystals/boulders/gold, the branch
-return stairs, and the vault’s flame trap markers. Items, heaps, monsters, NPCs, blobs,
+return stairs, the vault’s flame trap markers, and boss custom tiles. The four
+pylons and the Rat King use static sprites; the Rat King and room artwork are
+hidden in the concealed scene. Other items, heaps, monsters, NPCs, blobs,
 dynamic lighting, room-specific custom tilemaps (such as decorative paintings and quest
 props other than the branch return stairs), ripples and other ambient effects are not drawn. Custom terrain uses
 its base game tile; the underlying layout remains present. Inventory-dependent

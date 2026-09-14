@@ -1833,7 +1833,7 @@ fn circle8(width: i32) -> [i32; 8] {
     ]
 }
 
-fn paint_perimeter(level: &mut Level, rooms: &[Room], room: RoomId, floor: i32) {
+pub(crate) fn paint_perimeter(level: &mut Level, rooms: &[Room], room: RoomId, floor: i32) {
     let mut points_to_fill: Vec<Point> = room_doors(rooms, room)
         .into_iter()
         .map(|(_, mut point)| {

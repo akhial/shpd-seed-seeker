@@ -15,7 +15,10 @@ Original files are in
 `water0.png` through `water4.png`, `terrain_features.png`,
 `occlusion_shadows.png`, `raised_terrain.png`, and
 `custom_tiles/caves_quest.png` and `custom_tiles/city_quest.png` (stored here
-without the `custom_tiles/` prefix).
+without the `custom_tiles/` prefix). Boss maps also embed the same revision’s
+`custom_tiles/sewer_boss.png`, `custom_tiles/caves_boss.png`,
+`custom_tiles/rat_king_room.png`, `custom_tiles/carpet.png`, and
+`sprites/pylon.png` and `sprites/ratking.png` (from `core/src/main/assets`).
 Every file's SHA-256 and dimensions are recorded in
 [`level_map/assets.rs`](../../src/level_map/assets.rs) and returned in map JSON.
 

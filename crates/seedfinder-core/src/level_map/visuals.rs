@@ -1,6 +1,8 @@
 //! Raised `DungeonTerrainTilemap` composition with concealed/revealed secrets. Sprite
 //! indices follow the pinned `DungeonTileSheet` (see `assets::SOURCE_REVISION`).
 
+mod boss;
+
 use super::{MapDraw, MapKind, MapLayer, MapScene, MapSprite, TILE_SIZE};
 use crate::geometry::terrain as t;
 use crate::level::{Level, TrapKind};
@@ -33,7 +35,7 @@ pub(super) fn scene(
             *tile = t::DOOR;
         }
     }
-    scene.layers = build_layers(&mut scene, &revealed, kind, &variance, true);
+    scene.layers = build_layers(&mut scene, &revealed, kind, &variance, true, rooms);
     let mut concealed = level.clone();
     for room in rooms
         .iter()
@@ -50,16 +52,18 @@ pub(super) fn scene(
             }
         }
     }
-    scene.concealed_layers = build_layers(&mut scene, &concealed, kind, &variance, false);
+    scene.concealed_layers = build_layers(&mut scene, &concealed, kind, &variance, false, rooms);
     scene
 }
 
+#[allow(clippy::too_many_lines)] // Compose layers in the game’s drawing order.
 fn build_layers(
     scene: &mut MapScene,
     level: &Level,
     kind: MapKind,
     variance: &[i32],
     reveal: bool,
+    rooms: &[crate::room::Room],
 ) -> Vec<MapLayer> {
     use super::projection::Projection;
     let region = ((level.depth - 1) / 5) as usize;
@@ -150,7 +154,7 @@ fn build_layers(
         }
     }
     let structures = branch_structures(scene, level, kind);
-    vec![
+    let mut layers = vec![
         water_layer,
         terrain,
         structures,
@@ -160,7 +164,15 @@ fn build_layers(
         walls,
         effects,
         darkness,
-    ]
+    ];
+    if kind == MapKind::Regular && matches!(level.depth, 5 | 15) {
+        let [floor_art, terrain_art, overhang, actors] = boss::layers(scene, level, rooms, reveal);
+        layers.insert(3, floor_art);
+        layers.insert(7, terrain_art);
+        layers.insert(10, overhang);
+        layers.insert(11, actors);
+    }
+    layers
 }
 
 fn branch_structures(scene: &mut MapScene, level: &Level, kind: MapKind) -> MapLayer {
