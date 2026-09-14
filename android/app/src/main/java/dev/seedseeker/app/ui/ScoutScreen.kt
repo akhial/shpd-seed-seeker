@@ -12,7 +12,6 @@ import dev.seedseeker.app.model.FloorFeeling
 import kotlin.math.roundToInt
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.rememberScrollableState
@@ -623,18 +622,17 @@ private fun ScoutItemCard(
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (matches) {
                     Surface(
-                        shape = MaterialTheme.shapes.large,
+                        shape = MaterialTheme.shapes.extraSmall,
                         color = SpdGreen.copy(alpha = 0.1f),
-                        border = BorderStroke(1.dp, SpdGreen.copy(alpha = 0.35f)),
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 4.dp),
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Icon(
                                 Icons.Filled.Check,
                                 contentDescription = null,
-                                modifier = Modifier.size(13.dp),
+                                modifier = Modifier.size(12.dp),
                                 tint = SpdGreen,
                             )
                             Spacer(Modifier.width(4.dp))
