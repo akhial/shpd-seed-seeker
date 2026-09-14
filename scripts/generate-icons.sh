@@ -27,6 +27,21 @@ render() { # render <svg> <size> <out.png>
     rsvg-convert -w "$2" -h "$2" "$1" -o "$3"
 }
 
+canary_svg() { # canary_svg <blue source.svg> <yellow output.svg>
+    sed \
+        -e 's/#0F3272/#FFC107/g' \
+        -e 's/#071D48/#F57F17/g' \
+        -e 's/#E8F0FF/#FFF8E1/g' \
+        -e 's/#0A2149/#4E3400/g' \
+        -e 's/#1E4E9E/#A65F00/g' \
+        -e 's/#F6F9FF/#FFFDE7/g' \
+        -e 's/#2E6AC8/#FFA000/g' \
+        -e 's/#4A8AEA/#FFD54F/g' \
+        -e 's/#050F2E/#2D1B00/g' \
+        -e 's/#B7CDEF/#FFE082/g' \
+        "$1" > "$2"
+}
+
 # --- macOS AppIcon.icns -----------------------------------------------------
 ICONSET="$TMP/AppIcon.iconset"
 mkdir -p "$ICONSET"
@@ -60,11 +75,19 @@ render "$SRC/seed-seeker-small.svg" 32 "$ROOT/web/public/favicon.png"
 # its round twin would look worse than uniform softness, and every Android 8+
 # device uses the adaptive vectors in res/drawable instead, which are exact.
 RES="$ROOT/android/app/src/main/res"
+CANARY_RES="$ROOT/android/app/src/dev/res"
+canary_svg "$SRC/seed-seeker-square.svg" "$TMP/seed-seeker-canary-square.svg"
+canary_svg "$SRC/seed-seeker-round.svg" "$TMP/seed-seeker-canary-round.svg"
 for entry in mdpi:48 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192; do
     density="${entry%%:*}"; px="${entry##*:}"
     mkdir -p "$RES/mipmap-$density"
+    mkdir -p "$CANARY_RES/mipmap-$density"
     render "$SRC/seed-seeker-square.svg" "$px" "$RES/mipmap-$density/ic_launcher.png"
     render "$SRC/seed-seeker-round.svg" "$px" "$RES/mipmap-$density/ic_launcher_round.png"
+    render "$TMP/seed-seeker-canary-square.svg" "$px" \
+        "$CANARY_RES/mipmap-$density/ic_launcher.png"
+    render "$TMP/seed-seeker-canary-round.svg" "$px" \
+        "$CANARY_RES/mipmap-$density/ic_launcher_round.png"
 done
 
 # --- DMG background (1x + 2x combined into a retina tiff) -------------------

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SPDX-License-Identifier: GPL-3.0-or-later -->
+<resources>
+    <color name="launcher_background_top">#FFFFC107</color>
+    <color name="launcher_background_bottom">#FFF57F17</color>
+    <color name="launcher_grid">#FFFFFFFF</color>
+    <color name="launcher_metal_light">#FFFFF8E1</color>
+    <color name="launcher_metal_dark">#FF4E3400</color>
+    <color name="launcher_panel_dark">#FFA65F00</color>
+    <color name="launcher_metal_highlight">#FFFFFDE7</color>
+    <color name="launcher_panel_mid">#FFFFA000</color>
+    <color name="launcher_metal_white">#FFFFFFFF</color>
+    <color name="launcher_panel_light">#FFFFD54F</color>
+    <color name="launcher_keyhole">#FF2D1B00</color>
+    <color name="launcher_metal_shadow">#FFFFE082</color>
+</resources>
