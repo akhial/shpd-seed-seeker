@@ -78,6 +78,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.Modifier
@@ -583,14 +584,33 @@ internal fun ScoutItemCard(
                         }
                     }
                     if (stackedBadges) {
-                        FlowRow(
-                            modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                        ) {
-                            ScoutItemBadges(scoutItem)
-                            if (matches) ScoutItemMatchChip()
-                            (scoutItem.accessibility as? ScoutAccessibility.Choice)?.let { ChoiceGroupChip(it) }
+                        Layout(
+                            modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 2.dp),
+                            content = {
+                                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    ScoutItemBadges(scoutItem)
+                                }
+                                FlowRow(
+                                    modifier = Modifier.testTag("scout-item-match-choices"),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                                ) {
+                                    if (matches) ScoutItemMatchChip()
+                                    (scoutItem.accessibility as? ScoutAccessibility.Choice)?.let { ChoiceGroupChip(it) }
+                                }
+                            },
+                        ) { measurables, constraints ->
+                            val loose = constraints.copy(minWidth = 0, minHeight = 0)
+                            val status = measurables[0].measure(loose)
+                            val trailing = measurables[1].measure(loose)
+                            val separateRows = status.width + 8.dp.roundToPx() + trailing.width > constraints.maxWidth
+                            val height = if (separateRows) status.height + 4.dp.roundToPx() + trailing.height
+                                else maxOf(status.height, trailing.height)
+                            layout(constraints.maxWidth, height) {
+                                status.placeRelative(0, if (separateRows) 0 else (height - status.height) / 2)
+                                trailing.placeRelative(constraints.maxWidth - trailing.width,
+                                    if (separateRows) status.height + 4.dp.roundToPx() else (height - trailing.height) / 2)
+                            }
                         }
                     }
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

@@ -114,6 +114,9 @@ class ScoutItemCardTest {
                         assertTrue("$label must be below the title", badge.top >= titleBounds.bottom)
                     }
                     if (isMatch) compose.onNodeWithText("match").assertIsDisplayed()
+                    val trailing = compose.onNodeWithTag("scout-item-match-choices").fetchSemanticsNode().boundsInRoot
+                    val card = compose.onNodeWithTag("item-card").fetchSemanticsNode().boundsInRoot
+                    assertEquals("Match and choice chips stay at the right padding", card.right - with(compose.density) { 14.dp.toPx() }, trailing.right, 1f)
                 }
             }
         }
