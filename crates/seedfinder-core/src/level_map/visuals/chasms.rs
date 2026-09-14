@@ -117,6 +117,7 @@ fn wind(cell: usize) -> MapEmitter {
         angular_speed: 0,
         alpha: curve(&[[0, 0], [500, (size * 100.0).round() as u16], [1000, 0]]),
         scale: curve(&[[0, 1000], [1000, 1000]]),
+        scale_x: None,
         scale_y: None,
         particles: vec![MapParticle {
             birth_ms: (sample(cell, 0, 34) * 2500.0) as u16,

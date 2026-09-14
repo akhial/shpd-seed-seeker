@@ -628,16 +628,11 @@ private fun AnyEnchantmentDot(description: String) {
     )
 }
 
-/**
- * The colours of an effect badge's ring: an equal band each, the first centred
- * on the seam so there is nothing to give the seam away, and each band running
- * into the next rather than butting against it.
- */
+/** Stationary, evenly spaced colours blend smoothly around the effect count. */
 private fun effectRing(glows: List<Glow>): Array<Pair<Float, Color>> {
     val band = 1f / glows.size
     return (
-        listOf(0f to glows.first().color) +
-            glows.mapIndexed { index, glow -> (index * band + band / 2f) to glow.color } +
+        glows.mapIndexed { index, glow -> (index * band) to glow.color } +
             listOf(1f to glows.first().color)
         ).toTypedArray()
 }

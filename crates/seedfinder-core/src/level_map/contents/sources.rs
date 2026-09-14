@@ -177,7 +177,12 @@ impl MapContents {
                     heap,
                     haunted,
                     reward,
-                } => self.drop(*cell, &name(heap), *haunted, items::forced(&reward.item, a)),
+                } => self.drop(
+                    *cell,
+                    &name(heap),
+                    *haunted,
+                    items::forced(&reward.item, a, level.depth),
+                ),
                 F::Mob { cell, kind } => self.mob(*cell, name(kind), vec![]),
                 F::Blob { cell, kind, .. } => self.effect(*cell, name(kind)),
                 F::SpawnItem(_) | F::PitFallCandidates(_) => {}
@@ -257,6 +262,11 @@ impl MapContents {
                 D::Heap(kind) => {
                     for i in &p.items {
                         self.drop(cell, &name(kind), false, items::regular(*i, a));
+                    }
+                    if p.phantom
+                        && let Some(heap) = self.heaps.iter_mut().find(|h| h.cell == cell)
+                    {
+                        heap.phantom = true;
                     }
                 }
                 D::Mimic(kind) => self.mob(
@@ -379,6 +389,7 @@ impl MapContents {
                 cell: heap.cell,
                 kind: name(heap.kind),
                 haunted: false,
+                phantom: false,
                 items: heap
                     .items
                     .iter()

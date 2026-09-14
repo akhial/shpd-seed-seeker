@@ -111,17 +111,11 @@ button.chip.chip-add:hover {
   color: var(--success-color);
 }
 
-/* Several effects at once: one pill counting them, since no single colour
-   could stand for them all. */
+/* Several effects: a count inside a stationary ring of all selected colours. */
 .effect-count {
-  min-width: 10px;
-  padding: 0 4px;
-  border-radius: 999px;
   font-family: monospace;
   font-size: 0.7em;
   font-weight: bold;
-  color: var(--accent-fg-color);
-  background-color: var(--accent-bg-color);
 }
 
 /* Stack badges: how many items the entry asks for (×N, or ≤N once their

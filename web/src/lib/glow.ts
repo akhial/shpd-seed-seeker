@@ -6,7 +6,7 @@ import type { EffectFilter, ScoutItem } from "./wasm/types";
  * Shattered Pixel Dungeon's `ItemSprite.Glowing` definitions so the scout icons
  * pulse exactly as the game renders them. `period` is the seconds the glow takes
  * to fade fully in — it fades back out over the same span, so a complete pulse
- * cycle lasts `2 × period`. Curses always glow black, matching the game.
+ * cycle lasts `2 × period`. Wand curses have no glow; other curses glow black.
  */
 export interface Glow {
   /** Hex colour the sprite blends toward at the pulse peak. */
@@ -56,7 +56,7 @@ const ENCHANT_GLOW: Record<string, Glow> = {
   Thorns: { color: "#660022", period: DEFAULT_PERIOD },
 };
 
-/** Every curse glows black in the game, at the default period. */
+/** Curse glow for equipment other than wands, at the default period. */
 const CURSE_GLOW: Glow = { color: "#000000", period: DEFAULT_PERIOD };
 
 /**
@@ -64,9 +64,10 @@ const CURSE_GLOW: Glow = { color: "#000000", period: DEFAULT_PERIOD };
  * curse. A beneficial enchantment/glyph wins even on a cursed item (matching
  * `Weapon.glowing()`, which returns the enchantment's colour when one is
  * present — e.g. a curse-infused Kinetic weapon still glows yellow); otherwise a
- * cursed item pulses black.
+ * cursed item other than a wand pulses black. Wands never glow.
  */
-export function itemGlow(item: Pick<ScoutItem, "cursed" | "effect">): Glow | null {
+export function itemGlow(item: Pick<ScoutItem, "category" | "cursed" | "effect">): Glow | null {
+  if (item.category === "wand") return null;
   if (item.effect?.kind === "enchantment") return ENCHANT_GLOW[item.effect.name] ?? null;
   if (item.cursed) return CURSE_GLOW;
   return null;

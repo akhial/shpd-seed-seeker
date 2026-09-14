@@ -62,10 +62,18 @@ final class GlowTableTests: XCTestCase {
         let plain = ScoutItem(item: weapon, depth: 3, upgrade: 0, source: .chest)
         XCTAssertNil(itemGlow(plain))
 
-        // Wands and rings never carry an effect and never glow.
+        // An uncursed ring without an effect does not glow.
         let ring = ScoutItem(item: ItemCatalog.findById("ring_wealth")!, depth: 9, upgrade: 3,
                              source: .tomb)
         XCTAssertNil(itemGlow(ring))
+    }
+
+    func testWandsNeverGlow() {
+        let wand = ItemCatalog.findById("wand_fireblast")!
+        for cursed in [false, true] {
+            XCTAssertNil(itemGlow(ScoutItem(item: wand, depth: 2, upgrade: 0,
+                                           cursed: cursed, source: .heap)))
+        }
     }
 
     func testGlowLerpMaths() {

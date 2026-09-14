@@ -18,6 +18,7 @@
 # SwiftPM build products.
 /macos/SeedSeeker/.build/
 /macos/SeedSeeker/.swiftpm/
+/macos/SeedSeeker/Sources/CSeedFinder/engine_revision.h
 
 # Windows/.NET build products and local restore caches.
 /windows/SeedSeeker/bin/

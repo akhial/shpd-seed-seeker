@@ -313,7 +313,11 @@ PGO_TARGET=x86_64-pc-windows-msvc bash scripts/record-pgo-profile.sh
 The engine exposes on-demand, trinket-aware regular-floor, Blacksmith mine and Imp vault maps as portable sprite
 scenes with animation frames and embedded game textures. See the
 [level-map contract](docs/level-map-format.md) for Rust, C, JNI and wasm APIs.
-This primitive is available for future scout UI integration.
+The web, Android, macOS, Windows and Linux Scout panes expose inline maps and
+expanded views with floor and branch navigation, secret visibility, zoom/pan and
+trinket switching. Native clients use their platform drawing APIs for the same
+version 3 contents, glows and continuous effects; generation remains on demand
+and separate from seed search.
 
 ### Testing
 

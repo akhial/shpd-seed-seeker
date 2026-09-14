@@ -62,7 +62,9 @@ selection and animation allocation are never performed by seed search.
 
 `contents` is a v3 object with `heaps`, `mobs`, `plants`, `effects`,
 `features`, and supplemental `traps` arrays. Positions are row-major `cell` indices. Heaps contain
-`kind`, `haunted` and top-first `items`; mobs contain `kind` and the inventory
+`kind`, `haunted`, `phantom` and top-first `items`; Cracked Spyglass phantom heaps
+use 40% opacity (102/255) in the scene, including their glows and proportionally
+dimmed shadows. Older documents omit `phantom`, meaning false. Mobs contain `kind` and the inventory
 already rolled during generation, `sleeping`, disguise `stealthy`, and `approximate`. Items contain `kind`, `image` (the game's
 item atlas index), `quantity`, `deterministic`, and optional `glow` (RGB `color`
 and fade-in `periodMs`). Exposed heap/shop items pulse; closed containers and
@@ -72,15 +74,25 @@ kinds identify engine classes; searchable equipment uses catalog stable IDs.
 Metadata always describes the complete floor, irrespective of secret visibility.
 The scene defines the visible result; clients need not render metadata themselves.
 
-Runtime-dependent shop bag ties, secret laboratory/library class-map selections,
-and the vault's unseeded consumable shuffle use explicit placeholder items with
-`deterministic: false`. Their locations and containers remain visible. Future
+Shop bags use the fixed preview sequence Scroll Holder (floor 6), Potion
+Bandolier (floor 11), Magical Holster (floor 16), with `deterministic: false`
+because purchases and inventory can change the in-game choice. This replaces
+all bag offers, including a bag resolved by the canonical inventory profile.
+Secret laboratory/library class-map selections and the vault's unseeded consumable
+shuffle use explicit placeholder items with `deterministic: false`. Their locations and containers remain visible. Future
 mob drops, respawns, quest completion rewards, harvested plant contents, killed
 mimic loot beyond its initial inventory, and player remains are not fabricated.
 The overview follows the canonical no-remains, no-holiday profile.
 
 Water, well hearts/question marks, alchemy bubbles, sacrificial blue fire,
 eternal green fire, city statue flames, blacksmith sparks and gas have repeatable animation loops.
+Fire/newborn fire, frost, shock and chaos elementals carry their original flame,
+magic, spark and rainbow effects. Gardens (including secret gardens) emit rising
+light shafts; hidden secret gardens emit nothing in the concealed scene. The
+shopkeeper tosses his yellow pixel coin on each 0.9s idle loop. Non-stealthy mimics
+use the game's six-second hiding animation; stealthy mimics (including those
+under Mimic Tooth) retain their single-frame disguise. Ebony mimics use 60%
+opacity in the overview, with a matching faded shadow.
 Vault flame vents retain their seeded `cycle` (`initialCooldown`, `cooldown`,
 `triggers`) on each `VaultFlameTrap` feature. The map previews one game turn per
 second: checkerboard vents alternate, flame paths follow their seeded offsets,
@@ -105,6 +117,10 @@ Visual randomness uses a deterministic breeze and never consumes generation RNG.
 The vault entry uses its torn carpets, circular entrance, pulsing barrier and wall banners.
 Actor sprites use their original idle/disguise films, flattened sprite shadows,
 and sleep indicators. Foreground walls and raised terrain occlude heaps/actors.
+Decorative overhangs (including mine crystal tips) are interleaved with actors
+by their terrain anchor row, so tall actors cover decorations behind them.
+The ordered stack can contain multiple `walls` layers; structural walls remain
+in front of actors.
 Ordinary ghoul partners receive a suitable adjacent tile with `approximate: true`:
 the game creates them on its first turn using runtime RNG. Vault ghouls do not
 spawn partners. Exact initial objects retain `approximate: false`.
@@ -276,6 +292,7 @@ position = initialPosition / 1000 + velocity * seconds + acceleration * secondsÂ
 scale = initialScale / 1000 * evaluate(emitter.scale, progress)
 alpha = evaluate(emitter.alpha, progress)
 angle = initialAngle + angularSpeed * seconds
+scaleX = scale * (evaluate(emitter.scaleX, progress) if scaleX exists else 1)
 scaleY = scale * (evaluate(emitter.scaleY, progress) if scaleY exists else 1)
 ```
 
@@ -284,8 +301,9 @@ wrapping backward before their first cycle. Ambient emitters omit it and prewarm
 their loops. Curves contain `[progress, value]` points in thousandths: linearly interpolate,
 then take the square root if `sqrt` is true. Draw the image centered at the
 resulting position, scaled/rotated with the resulting alpha.
-Optional `scaleY` multiplies the local vertical scale independently, so a beam
-can thin without shortening. `contents.sentries` retains each sentry's initial
+Optional `scaleX` and `scaleY` multiply the local horizontal and vertical scale
+independently. Beams can thin without shortening, and garden shafts can widen
+while growing taller. Both default to 1 for existing documents. `contents.sentries` retains each sentry's initial
 cooldown, repeated cooldown, trigger count, warning flag and target-cell groups;
 optional `scan` stores cone degrees and tile length, both multiplied by 1000.
 `blend: "add"` requires the underlying scenery as the blend destination. Emitters with
@@ -304,6 +322,23 @@ Cache scenes by generation version, schema/asset revision, seed, depth, branch,
 challenge mask and resolved trinket. Changing the selection must use a fresh
 map document. No UI state, zoom, wall-clock time or platform identifier affects
 the generated map.
+
+## Scout integrations
+
+The web and all four native Scout panes disclose maps from floor headings and
+offer an expanded view. Supported empty and boss floors remain navigable within
+the scouted prefix. Branch controls come from the loaded parent map, secrets
+start concealed, and trinket changes retain the expanded floor while returning
+to its main branch. Each request carries the completed scout's challenge mask
+and resolved trinket, including explicit `"none"` when nothing is selected.
+
+Android uses a native Canvas inside Compose, macOS uses CoreGraphics in SwiftUI,
+Windows uses a native pixel compositor with WinUI controls, and Linux uses Cairo
+with GTK/libadwaita. Generation runs outside the UI thread; each client caches
+scenes and embedded textures and offers retry on failure. Reduced-motion views
+sample time zero and offscreen maps suspend drawing. Platform READMEs describe
+their gestures and controls; native regression tests cover scene composition,
+particle schedules, secret masks and trinket refresh alongside choice matching.
 
 ## Source and validation
 

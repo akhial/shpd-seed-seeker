@@ -55,6 +55,8 @@ pub struct MapHeap {
     pub cell: usize,
     pub kind: String,
     pub haunted: bool,
+    /// Cracked Spyglass phantom heap, rendered at 40% opacity for scouting.
+    pub phantom: bool,
     /// Top item first, matching `Heap.peek()`. Containers keep their contents.
     pub items: Vec<MapItem>,
 }
@@ -155,6 +157,7 @@ impl MapContents {
                     cell,
                     kind: kind.to_owned(),
                     haunted,
+                    phantom: false,
                     items: vec![],
                 });
                 self.heaps.len() - 1

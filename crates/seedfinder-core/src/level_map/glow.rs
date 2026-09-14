@@ -1,5 +1,5 @@
 //! ItemSprite.Glowing colours and fade-in periods, matching the Scout item icons.
-use crate::catalog::Effect;
+use crate::catalog::{Effect, ItemKind};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "json-query", derive(serde::Serialize))]
@@ -11,7 +11,10 @@ pub struct MapGlow {
 }
 
 impl MapGlow {
-    pub(super) fn for_item(effect: Option<Effect>, cursed: bool) -> Option<Self> {
+    pub(super) fn for_item(kind: ItemKind, effect: Option<Effect>, cursed: bool) -> Option<Self> {
+        if kind == ItemKind::Wand {
+            return None;
+        }
         let (color, period_ms) = if let Some(effect) = effect.filter(|e| !e.is_curse()) {
             match effect.wire_name() {
                 "Blazing" | "Brimstone" => ([255, 68, 0], 1000),

@@ -330,25 +330,19 @@
                   <GroupStyle.Panel><ItemsPanelTemplate><StackPanel/></ItemsPanelTemplate></GroupStyle.Panel>
                   <GroupStyle.HeaderTemplate>
                     <DataTemplate>
-                      <StackPanel Orientation="Horizontal" Spacing="8">
-                        <TextBlock Text="{Binding Floor}" Style="{StaticResource BodyStrongTextBlockStyle}"/>
-                        <local:FloorFeelingView Feeling="{Binding Feeling}" VerticalAlignment="Center"/>
-                        <TextBlock Text="{Binding Region}" Style="{StaticResource Caption}" VerticalAlignment="Bottom" Margin="0,0,0,1"/>
-                        <!-- The floor's quest variant, or empty (rendering nothing) on quest-less floors. -->
-                        <TextBlock Text="{Binding Quest}" Style="{StaticResource Caption}" VerticalAlignment="Bottom" Margin="0,0,0,1"/>
-                      </StackPanel>
+                      <ContentControl Content="{Binding Header}" HorizontalContentAlignment="Stretch"/>
                     </DataTemplate>
                   </GroupStyle.HeaderTemplate>
                 </GroupStyle>
               </ListView.GroupStyle>
               <ListView.ItemTemplate>
                 <DataTemplate>
-                  <Grid ColumnSpacing="10" Padding="0,6">
+                  <Grid ColumnSpacing="10" Padding="0,6" Opacity="{Binding RowOpacity}">
                     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                     <local:SpriteView SpriteIndex="{Binding SpriteIndex}" TypeIconIndex="{Binding TypeIconIndex}" SpriteSize="22"
                                       GlowColor="{Binding GlowColor}" GlowPeriod="{Binding GlowPeriod}"
-                                      VerticalAlignment="Top" Margin="0,2,0,0"/>
+                                      VerticalAlignment="Center"/>
                     <StackPanel Grid.Column="1" Spacing="2">
                       <StackPanel Orientation="Horizontal" Spacing="6">
                         <TextBlock Text="{Binding ItemName}" FontWeight="{Binding Weight}" TextWrapping="Wrap"/>
@@ -368,12 +362,21 @@
                       </StackPanel>
                       <TextBlock Text="{Binding Accessibility}" Visibility="{Binding AccessibilityVisibility}" FontSize="11" Foreground="{ThemeResource TextFillColorTertiaryBrush}" TextWrapping="Wrap"/>
                     </StackPanel>
-                    <Border Grid.Column="2" Visibility="{Binding MatchVisibility}" Background="{ThemeResource SystemFillColorSuccessBackgroundBrush}" CornerRadius="10" Padding="8,2" VerticalAlignment="Top" Margin="8,2,0,0">
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <Border Visibility="{Binding MatchVisibility}" Background="{ThemeResource SystemFillColorSuccessBackgroundBrush}" CornerRadius="10" Padding="8,2">
                       <StackPanel Orientation="Horizontal" Spacing="5">
                         <FontIcon Glyph="&#xE73E;" FontSize="10" Foreground="{ThemeResource SystemFillColorSuccessBrush}"/>
                         <TextBlock Text="Match" FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource SystemFillColorSuccessBrush}"/>
                       </StackPanel>
                     </Border>
+                    <Border Visibility="{Binding ChoiceVisibility}" Background="{ThemeResource SubtleFillColorSecondaryBrush}" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="10" Padding="8,2"
+                            ToolTipService.ToolTip="{Binding Accessibility}" AutomationProperties.Name="{Binding Accessibility}">
+                      <StackPanel Orientation="Horizontal" Spacing="5">
+                        <FontIcon Glyph="&#xE8FD;" FontSize="11"/>
+                        <TextBlock Text="{Binding Choice}" FontSize="11" FontWeight="SemiBold"/>
+                      </StackPanel>
+                    </Border>
+                    </StackPanel>
                     <ContentControl Grid.Row="1" Grid.ColumnSpan="3" Content="{Binding TrinketDeck}" HorizontalContentAlignment="Stretch"/>
                   </Grid>
                 </DataTemplate>

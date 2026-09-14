@@ -4,7 +4,7 @@ import Foundation
 /// Shattered Pixel Dungeon's `ItemSprite.Glowing` definitions so scouted items
 /// pulse exactly as the game renders them. `period` is the seconds the glow
 /// takes to fade fully in — it fades back out over the same span, so a complete
-/// pulse cycle lasts `2 × period`. Curses always glow black, as in the game.
+/// pulse cycle lasts `2 × period`. Wand curses have no glow; other curses glow black.
 ///
 /// This is the Swift twin of `web/src/lib/glow.ts`; keep the two in step.
 public struct ItemGlow: Equatable, Hashable, Sendable {
@@ -40,7 +40,7 @@ public struct ItemGlow: Equatable, Hashable, Sendable {
     }
 }
 
-/// Every curse glows black in the game, at the default period.
+/// Curse glow for equipment other than wands, at the default period.
 public let curseGlow = ItemGlow(hex: "#000000")
 
 /// Keyed by the wire names the scout emits (`WeaponEffect` / `ArmorEffect`
@@ -85,8 +85,9 @@ public let enchantmentGlows: [String: ItemGlow] = [
 /// curse. A beneficial enchantment/glyph wins even on a cursed item (matching
 /// `Weapon.glowing()`, which returns the enchantment's colour when one is
 /// present — a curse-infused Kinetic weapon still glows yellow); otherwise a
-/// cursed item pulses black.
+/// cursed item other than a wand pulses black. Wands never glow.
 public func itemGlow(_ item: ScoutItem) -> ItemGlow? {
+    guard item.item.kind != .wand else { return nil }
     if let effect = item.effect, !ItemCatalog.cursesFor(item.item.kind).contains(effect) {
         return enchantmentGlows[effect]
     }

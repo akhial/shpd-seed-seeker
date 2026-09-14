@@ -44,6 +44,21 @@ the application lifecycle, app actions and shortcuts (with a shortcuts dialog), 
 dialog, embedded resources including per-category symbolic icons, a desktop entry, and
 AppStream metadata.
 
+Floor headings disclose an on-demand map, including empty floors and supported
+boss floors within the scouted run. Maps use the engine's version 3 raised sprite
+scene and embedded textures: initial items, actors, animated glows and continuous
+effects retain their seeded schedules, wall occlusion and secret visibility.
+Generation runs off the GTK thread with a bounded scene cache; hidden maps stop
+painting, and disabling system animations samples the complete scene at time zero.
+
+Drag to pan, scroll or pinch to zoom, and use the fit button (or `0`) to reset.
+The adaptive expanded dialog includes previous/next floor controls (`K`/`J`) and
+trinket shortcuts. Switching trinkets refreshes the map and loot while keeping the
+dialog's floor, zoom, pan and selected area when it remains available. Native branch tabs open the
+Blacksmith mine or Imp vault; the Secrets toggle reveals the alternative scene.
+Load failures offer Retry. Choice-group letter chips sit beside match badges;
+only alternatives conflicting with a matched choice are dimmed.
+
 ## Requirements
 
 - Rust 1.97 or newer

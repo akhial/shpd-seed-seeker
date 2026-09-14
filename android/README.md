@@ -77,3 +77,38 @@ The deck ordering is independent of item sorting. Scout floor headings show the
 feeling sprite without visible text; normal floors have no icon. The unmodified
 `dungeon-icons.png` atlas and its upstream attribution are packaged beside the
 item artwork.
+
+## Floor maps and reward choices
+
+Tap a supported Scout floor heading to open its map above the loot, or tap again
+to close it. Maps start closed, with one floor open at a time; empty floors and
+boss floors 5 and 15 are included. Tap **Expand map** for a full-screen Material dialog. Pinch
+or double-tap to zoom, and drag to pan; double-tap again to return to fit zoom.
+The rounded previous/next control at the bottom and horizontal swipes at fit zoom
+browse floors. The dialog shares the item list’s floor heading, quest badge, and
+compact trinket shortcuts, retaining the current floor, zoom, pan and available quest area
+when a selection changes. Inline and expanded maps keep independent viewports. Quest-area
+chips open the Blacksmith Mine or Imp Vault; **Secrets** switches the complete
+concealed/revealed scene without generating another map.
+
+Map requests use the completed scout's challenges and resolved trinket. JNI map
+generation and PNG decoding run off the UI thread, with bounded document and
+atlas caches. The native Canvas renderer implements the engine's version 3
+[sprite scene](../docs/level-map-format.md), including initial items, containers,
+actors, sprite animations, item glows, continuous particles, seeded Vault hazards,
+additive blending, wall/darkness masks and chasm clipping. It redraws only changed
+scenery tiles, renders particles at the display rate, stops animation while hidden,
+and uses time zero when Android's animator duration scale is disabled. The embedded
+map artwork's [attribution](../crates/seedfinder-core/assets/level-map/ATTRIBUTION.md)
+is separate from the older item-picker atlas.
+
+Mutually exclusive rewards carry compact lettered choice chips with accessible
+option descriptions. When the engine marks a reward as a requirement match,
+conflicting alternatives in that group dim; compatible options and unrelated
+groups retain their normal appearance. Requirement effect-count badges use a
+stationary ring with evenly spaced, smoothly blended effect colors.
+
+`LevelMapTest` exercises the real host JNI, generates map review images under
+`app/build/outputs/level-maps/`, and checks particle scheduling, glows, secret
+stacks, additive blending and occlusion. `ScoutChoicesTest` covers choice conflicts
+and supported empty/boss-floor navigation.

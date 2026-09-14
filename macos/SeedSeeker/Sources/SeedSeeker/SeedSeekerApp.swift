@@ -127,9 +127,7 @@ private struct ContentView: View {
                 ResultsView(controller: controller) { seed in scoutResult(seed) }
                     .navigationSplitViewColumnWidth(min: 300, ideal: 380)
             } detail: {
-                SeedDetailView(model: scout, requirements: requirements, maximumDepth: maximumDepth,
-                               autoApplyTrinket: autoApplyTrinket, onScoutSeed: scoutResult,
-                               excludeBlacksmithRewards: excludeBlacksmithRewards, challenges: challenges,
+                SeedDetailView(model: scout, requirements: requirements, onScoutSeed: scoutResult,
                                resultPosition: resultPosition, onNavigateResult: { _ = navigateResult($0) })
                     .navigationSplitViewColumnWidth(min: 380, ideal: 440)
             }
@@ -2005,6 +2003,7 @@ private struct ResultsStatusView: View {
     private var generation = 0
     private(set) var renderedRequest: Data?
     private(set) var renderedQuery: SearchRequest?
+    private(set) var renderedChallenges = 0
     private(set) var matches: ScoutMatches?
     private let engine = ProductionSeedFinderEngine()
     func scout(_ seed: String? = nil, challenges: Int, query: SearchRequest?, trinket: String? = nil) {
@@ -2027,6 +2026,7 @@ private struct ResultsStatusView: View {
                 world = scouted
                 renderedRequest = request
                 renderedQuery = query
+                renderedChallenges = challenges
                 matches = marked
             } catch {
                 guard current == generation else { return }
@@ -2143,9 +2143,25 @@ private struct ScoutTrinketTools: View {
 private struct ScoutFloorHeader: View {
     let depth: Int
     let world: ScoutWorld
+    let mapOpen: Bool
+    let onToggleMap: () -> Void
 
     var body: some View {
+        if EngineInfo.shared.levelMapDepths.contains(depth) {
+            Button(action: onToggleMap) { content }
+                .buttonStyle(.plain)
+                .help(mapOpen ? "Hide floor map" : "Show floor map")
+                .accessibilityValue(mapOpen ? "Map expanded" : "Map collapsed")
+        } else { content }
+    }
+
+    private var content: some View {
         HStack {
+            if EngineInfo.shared.levelMapDepths.contains(depth) {
+                Image(systemName: mapOpen ? "chevron.down" : "chevron.right")
+                    .font(.caption.bold()).foregroundStyle(.secondary)
+                    .frame(width: 10)
+            }
             Text("Floor \(depth)").font(.headline)
             if let feeling = world.feelings[depth] { FloorFeelingSpriteView(feeling: feeling) }
             Text(region).foregroundStyle(.tertiary)
@@ -2175,27 +2191,33 @@ private struct ScoutMovingHeader: View {
     let depth: Int
     let state: ScoutHeaderOffset
     let world: ScoutWorld
+    let mapOpen: Bool
+    let onToggleMap: () -> Void
 
     var body: some View {
-        ScoutFloorHeader(depth: depth, world: world)
+        ScoutFloorHeader(depth: depth, world: world, mapOpen: mapOpen, onToggleMap: onToggleMap)
             .offset(y: state.value)
     }
+}
+
+private struct ScoutMapDisclosure: Equatable {
+    let seed: String
+    let challenges: Int
+    let depth: Int
 }
 
 private struct SeedDetailView: View {
     @Bindable var model: ScoutViewModel
     let requirements: [ItemRequirement]
-    let maximumDepth: Int
-    let autoApplyTrinket: Bool
     let onScoutSeed: (String) -> Void
-    let excludeBlacksmithRewards: Bool
-    let challenges: Int
     let resultPosition: ResultPosition?
     let onNavigateResult: (Int) -> Void
     @FocusState private var focused: Bool
 
     @State private var scrollState = ScoutScrollState()
     @State private var trinketReveal = ScoutTrinketReveal()
+    @State private var visibleMapDepths: Set<Int> = [1]
+    @State private var openedMap: ScoutMapDisclosure?
 
     private func selectTrinket(_ id: String) {
         guard let world = model.world, !model.loading else { return }
@@ -2203,8 +2225,10 @@ private struct SeedDetailView: View {
         if let floor = scrollState.floorFrames.sorted(by: { $0.key < $1.key }).first(where: { $0.value.maxY > 0 }) {
             scrollState.pendingAnchor = (world.seed, selected, floor.key, floor.value.minY)
         }
-        let query = model.renderedQuery ?? scoutQuery
-        model.scout(world.seed, challenges: query?.challenges ?? challenges, query: query, trinket: selected ?? "none")
+        // A trinket switch replays the displayed world. A missing captured
+        // query stays missing; edits in the search pane belong to a new Scout.
+        model.scout(world.seed, challenges: model.renderedChallenges,
+                    query: model.renderedQuery, trinket: selected ?? "none")
     }
 
     var body: some View {
@@ -2262,18 +2286,19 @@ private struct SeedDetailView: View {
     /// The engine's own marks for the scouted world, taken from the same
     /// request the scout used. Without requirements (or with a query the
     /// engine refuses) there is nothing to mark.
-    private var scoutQuery: SearchRequest? {
-        try? SearchRequest(requirements: requirements, maximumDepth: maximumDepth,
-                           excludeBlacksmithRewards: excludeBlacksmithRewards, challenges: challenges, autoApplyTrinket: autoApplyTrinket)
-    }
-
     private func engineMatches(in world: ScoutWorld) -> ScoutMatches? { model.matches }
 
     private func manifest(_ world: ScoutWorld) -> some View {
         let byDepth = Dictionary(grouping: Array(world.items.enumerated()), by: { $0.element.depth })
-        let depths = Set(byDepth.keys).union(world.feelings.keys).sorted()
+        let scoutedDepths = Set(byDepth.keys).union(world.feelings.keys)
+        let prefix = scoutedDepths.max() ?? 0
+        let mapDepths = EngineInfo.shared.levelMapDepths.filter { $0 <= prefix }.sorted()
+        let depths = scoutedDepths.union(mapDepths).sorted()
+        let openMapDepth = openedMap?.seed == world.seed && openedMap?.challenges == model.renderedChallenges
+            ? openedMap?.depth : nil
         let marks = engineMatches(in: world)
         let matches = marks?.matched ?? []
+        let choices = ScoutChoiceStatus(items: world.items, matched: matches)
         // Slots, not rows: an "any of these" group counts once.
         let matched = marks?.matchedRequirements ?? 0
         let total = marks?.totalRequirements ?? requirements.slotCount
@@ -2297,13 +2322,22 @@ private struct SeedDetailView: View {
                         ForEach(depths, id: \.self) { depth in
                             let floorItems = (byDepth[depth] ?? []).filter { $0.element.item.kind != .trinket }
                             VStack(alignment: .leading, spacing: 0) {
-                                ScoutMovingHeader(depth: depth, state: scrollState.headerOffset(for: depth), world: world)
+                                ScoutMovingHeader(depth: depth, state: scrollState.headerOffset(for: depth), world: world,
+                                    mapOpen: openMapDepth == depth, onToggleMap: {
+                                        openedMap = openMapDepth == depth ? nil
+                                            : ScoutMapDisclosure(seed: world.seed, challenges: model.renderedChallenges, depth: depth)
+                                    })
                                     .background(GeometryReader { geometry in
                                         Color.clear.preference(key: ScoutHeaderHeights.self,
                                             value: [depth: geometry.size.height])
                                     })
                                     .zIndex(1)
                                 VStack(alignment: .leading, spacing: 6) {
+                                    if openMapDepth == depth && EngineInfo.shared.levelMapDepths.contains(depth) {
+                                        LevelMapView(world: world, depth: depth, floors: mapDepths,
+                                            challenges: model.renderedChallenges, active: visibleMapDepths.contains(depth),
+                                            changingTrinket: model.loading, onSelectTrinket: selectTrinket)
+                                    }
                                     if let catalyst = byDepth[depth]?.first(where: { $0.element.item.kind == .trinket })?.element {
                                         TrinketScoutRow(catalyst: catalyst, order: world.trinketOrder,
                                             selectedTrinket: world.selectedTrinket, loading: model.loading, onSelect: selectTrinket,
@@ -2311,8 +2345,14 @@ private struct SeedDetailView: View {
                                     }
                                     ForEach(floorItems, id: \.offset) { entry in
                                         ScoutItemRow(item: entry.element, ringGems: world.ringGems, matches: matches.contains(entry.offset))
+                                            .opacity(choices.isDimmed(entry.element.accessibility, matched: matches.contains(entry.offset)) ? 0.42 : 1)
                                             .padding(.vertical, 5)
                                         if entry.offset != floorItems.last?.offset { Divider() }
+                                    }
+                                    if byDepth[depth]?.isEmpty ?? true {
+                                        Text("No notable items on this floor.")
+                                            .font(.caption).foregroundStyle(.secondary)
+                                            .padding(.vertical, 5)
                                     }
                                 }
                                 .padding(.horizontal)
@@ -2328,7 +2368,10 @@ private struct SeedDetailView: View {
                 }
                 .coordinateSpace(name: "scout-manifest")
                 .background(GeometryReader { geometry in Color.clear.preference(key: ScoutViewportHeight.self, value: geometry.size.height) })
-                .onPreferenceChange(ScoutViewportHeight.self) { scrollState.viewportHeight = $0 }
+                .onPreferenceChange(ScoutViewportHeight.self) {
+                    scrollState.viewportHeight = $0
+                    updateVisibleMaps()
+                }
                 .onPreferenceChange(ScoutOfferFrame.self) { frame in
                     let fraction = frame.flatMap { frame -> Double? in
                         guard frame.height > 0 else { return nil }
@@ -2343,13 +2386,15 @@ private struct SeedDetailView: View {
                 .onPreferenceChange(ScoutFloorFrames.self) { frames in
                     scrollState.floorFrames = frames
                     scrollState.updatePinnedHeader()
+                    updateVisibleMaps()
                     // Scroll after layout, never re-enter layout from a
                     // geometry preference callback.
                     if scrollState.pendingAnchor != nil {
                         DispatchQueue.main.async { restoreAnchor(in: world, using: proxy) }
                     }
                 }
-                .onChange(of: world.seed) { scrollState.pendingAnchor = nil }
+                .onChange(of: world.seed) { scrollState.pendingAnchor = nil; openedMap = nil }
+                .onChange(of: model.renderedChallenges) { openedMap = nil }
                 .task(id: world.selectedTrinket) {
                     // An effect-only change may leave every frame identical,
                     // so no preference callback arrives. Consume that anchor
@@ -2360,6 +2405,13 @@ private struct SeedDetailView: View {
                 }
             }
         }
+    }
+
+    private func updateVisibleMaps() {
+        let visible = Set(scrollState.floorFrames.filter {
+            $0.value.maxY > 0 && $0.value.minY < scrollState.viewportHeight
+        }.keys)
+        if visibleMapDepths != visible { visibleMapDepths = visible }
     }
 
     private func restoreAnchor(in world: ScoutWorld, using proxy: ScrollViewProxy) {
@@ -2516,14 +2568,15 @@ private struct TrinketScoutRow: View {
                     switch catalyst.accessibility {
                     case .independent:
                         EmptyView()
-                    case .choice(let group, let option):
-                        Label("One reward of choice group \(group) (option \(option + 1))", systemImage: "arrow.triangle.branch")
-                            .font(.caption2).foregroundStyle(.secondary)
+                    case .choice:
+                        EmptyView()
                     case .scenarios(let group, _):
-                        Label("Only in some outcomes of scenario group \(group)", systemImage: "arrow.triangle.branch")
+                        Label("Only in some outcomes of scenario group \(ScoutChoiceStatus.letter(group))", systemImage: "arrow.triangle.branch")
                             .font(.caption2).foregroundStyle(.secondary)
                     }
                 }
+                Spacer(minLength: 0)
+                ScoutChoiceChip(accessibility: catalyst.accessibility)
             }
             HStack(spacing: 10) {
                 ForEach(Array(order.prefix(4))) { item in
@@ -2586,7 +2639,7 @@ private struct ScoutItemRow: View {
     let matches: Bool
 
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
+        HStack(alignment: .center, spacing: 10) {
             ItemSpriteView(item: item.item, ringGems: ringGems,
                            glow: itemGlow(item), pointSize: 32, label: item.item.name)
                 .padding(.top, 1)
@@ -2619,12 +2672,15 @@ private struct ScoutItemRow: View {
                 accessibilityNote
             }
             Spacer(minLength: 0)
-            if matches {
-                Label("Match", systemImage: "checkmark")
-                    .font(.caption.bold()).foregroundStyle(Color.shatteredMint)
-                    .padding(.horizontal, 7).padding(.vertical, 2)
-                    .background(Color.shatteredMint.opacity(0.12), in: Capsule())
-                    .help("Selected as part of a jointly obtainable requirement match")
+            VStack(alignment: .trailing, spacing: 5) {
+                if matches {
+                    Label("Match", systemImage: "checkmark")
+                        .font(.caption.bold()).foregroundStyle(Color.shatteredMint)
+                        .padding(.horizontal, 7).padding(.vertical, 2)
+                        .background(Color.shatteredMint.opacity(0.12), in: Capsule())
+                        .help("Selected as part of a jointly obtainable requirement match")
+                }
+                ScoutChoiceChip(accessibility: item.accessibility)
             }
         }
         .padding(.vertical, 1)
@@ -2634,12 +2690,25 @@ private struct ScoutItemRow: View {
         switch item.accessibility {
         case .independent:
             EmptyView()
-        case .choice(let group, let option):
-            Label("One reward of choice group \(group) (option \(option + 1))", systemImage: "arrow.triangle.branch")
-                .font(.caption2).foregroundStyle(.secondary)
+        case .choice:
+            EmptyView()
         case .scenarios(let group, _):
-            Label("Only in some outcomes of scenario group \(group)", systemImage: "arrow.triangle.branch")
+            Label("Only in some outcomes of scenario group \(ScoutChoiceStatus.letter(group))", systemImage: "arrow.triangle.branch")
                 .font(.caption2).foregroundStyle(.secondary)
+        }
+    }
+}
+
+private struct ScoutChoiceChip: View {
+    let accessibility: ScoutAccessibility
+    var body: some View {
+        if case let .choice(group, option) = accessibility {
+            let note = "Choice group \(ScoutChoiceStatus.letter(group)), option \(option + 1). Only one option from this group can be taken."
+            Label(ScoutChoiceStatus.letter(group), systemImage: "arrow.triangle.branch")
+                .font(.caption.bold()).foregroundStyle(.secondary)
+                .padding(.horizontal, 7).padding(.vertical, 2)
+                .background(Color.secondary.opacity(0.1), in: Capsule())
+                .help(note).accessibilityLabel(note)
         }
     }
 }

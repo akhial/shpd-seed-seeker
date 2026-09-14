@@ -2,6 +2,7 @@
 //! indices follow the pinned `DungeonTileSheet` (see `assets::SOURCE_REVISION`).
 
 mod actors;
+mod ambient;
 mod boss;
 mod carpets;
 mod chasms;
@@ -208,7 +209,7 @@ fn build_layers(
         room_terrain,
         boss_terrain,
     ];
-    layers.extend(objects::layers(scene, level, contents));
+    layers.extend(objects::layers(scene, level, contents, &mut walls));
     layers.extend([raised, walls, room_walls, boss_walls, effects]);
     layers.push(darkness);
     layers
@@ -254,6 +255,56 @@ fn layer(name: &'static str, length: usize) -> MapLayer {
         blend: None,
         name,
         cells: vec![None; length],
+    }
+}
+
+#[cfg(test)]
+mod occlusion_tests {
+    use super::*;
+    use crate::{
+        level::Feeling,
+        level_map::{MapContents, MapMob},
+    };
+
+    #[test]
+    fn tall_spire_occludes_background_crystal_but_not_foreground_or_structural_walls() {
+        let mut level = Level::new(13, Feeling::None);
+        level.set_size(7, 8);
+        level.map.cells.fill(t::EMPTY);
+        level.map.cells[4 * 7 + 3] = t::MINE_CRYSTAL;
+        level.map.cells[5 * 7 + 4] = t::MINE_CRYSTAL;
+        level.map.cells[4 * 7 + 2] = t::WALL;
+        let contents = MapContents {
+            mobs: vec![MapMob {
+                cell: 5 * 7 + 3,
+                kind: "GreenCrystalSpire".into(),
+                stealthy: false,
+                sleeping: false,
+                approximate: false,
+                items: vec![],
+            }],
+            ..MapContents::default()
+        };
+        let scene = scene(
+            DungeonSeed::MIN,
+            &level,
+            &[],
+            MapKind::BlacksmithCrystal,
+            &contents,
+        );
+        for layers in [&scene.layers, &scene.concealed_layers] {
+            for (cell, behind) in [(3 * 7 + 3, true), (4 * 7 + 4, false), (3 * 7 + 2, false)] {
+                let wall = layers
+                    .iter()
+                    .position(|layer| layer.name == "walls" && layer.cells[cell].is_some())
+                    .unwrap();
+                let actor = layers
+                    .iter()
+                    .position(|layer| layer.name == "actors" && layer.cells[cell].is_some())
+                    .unwrap();
+                assert_eq!(wall < actor, behind, "occlusion at cell {cell}");
+            }
+        }
     }
 }
 
@@ -387,6 +438,117 @@ pub(super) fn plant_image(seed: crate::generator::SeedKind) -> u16 {
 mod tests {
     use super::*;
     use crate::level::{Feeling, PlacedTrap, TrapSpec};
+
+    #[test]
+    fn spyglass_opacity_covers_raised_items_glows_and_shadows_in_both_scenes() {
+        use crate::level_map::{MapContents, MapGlow, MapHeap, MapItem};
+        let mut level = Level::new(6, Feeling::None);
+        level.set_size(5, 5);
+        level.map.cells[12] = t::EMPTY;
+        for phantom in [false, true] {
+            let contents = MapContents {
+                heaps: vec![MapHeap {
+                    cell: 12,
+                    kind: "Heap".into(),
+                    haunted: false,
+                    phantom,
+                    items: vec![MapItem {
+                        glow: Some(MapGlow {
+                            color: [255, 0, 0],
+                            period_ms: 1000,
+                        }),
+                        ..MapItem::new("test_weapon", 160, 1)
+                    }],
+                }],
+                ..MapContents::default()
+            };
+            let scene = scene(DungeonSeed::MIN, &level, &[], MapKind::Regular, &contents);
+            for layers in [&scene.layers, &scene.concealed_layers] {
+                let mut fragments = 0;
+                let mut shadows = 0;
+                for sprite in layers
+                    .iter()
+                    .filter(|l| l.name == "heaps")
+                    .flat_map(|l| l.cells.iter().flatten())
+                    .map(|&s| &scene.sprites[s])
+                {
+                    fragments += 1;
+                    for draw in sprite.frames.iter().flatten() {
+                        if let MapDraw::Blit {
+                            opacity,
+                            tint,
+                            glow,
+                            ..
+                        } = draw
+                        {
+                            let expected = if phantom { 102 } else { 255 };
+                            if tint.is_some() {
+                                shadows += 1;
+                                assert_eq!(u16::from(*opacity), expected * 153 / 255);
+                                assert!(glow.is_none());
+                            } else {
+                                assert_eq!(u16::from(*opacity), expected);
+                                assert!(glow.is_some());
+                            }
+                        }
+                    }
+                }
+                assert!(fragments > 1, "raised item crosses cell boundaries");
+                assert!(shadows > 0);
+            }
+        }
+    }
+
+    #[test]
+    fn mimic_disguises_preserve_stealth_and_ebony_opacity_covers_raised_fragments() {
+        use crate::level_map::{MapContents, MapMob};
+        let mut level = Level::new(6, Feeling::None);
+        level.set_size(5, 5);
+        level.map.cells[12] = t::EMPTY;
+        for kind in ["Mimic", "GoldenMimic", "EbonyMimic"] {
+            for stealthy in [false, true] {
+                let contents = MapContents {
+                    mobs: vec![MapMob {
+                        cell: 12,
+                        kind: kind.into(),
+                        stealthy,
+                        sleeping: true,
+                        approximate: false,
+                        items: vec![],
+                    }],
+                    ..MapContents::default()
+                };
+                let scene = scene(DungeonSeed::MIN, &level, &[], MapKind::Regular, &contents);
+                let mut fragments = 0;
+                for sprite in scene
+                    .layers
+                    .iter()
+                    .filter(|l| l.name == "actors")
+                    .flat_map(|l| l.cells.iter().flatten())
+                    .map(|&s| &scene.sprites[s])
+                {
+                    fragments += 1;
+                    if stealthy {
+                        assert_eq!(sprite.frames.len(), 1);
+                    } else {
+                        assert_eq!(sprite.frames.len(), 6);
+                        assert_eq!(sprite.frame_duration_ms, 1000);
+                    }
+                    for draw in sprite.frames.iter().flatten() {
+                        if let MapDraw::Blit { opacity, tint, .. } = draw {
+                            let expected = match (kind == "EbonyMimic", tint.is_some()) {
+                                (true, false) | (false, true) => 153,
+                                (true, true) => 91,
+                                (false, false) => 255,
+                            };
+                            assert_eq!(*opacity, expected);
+                        }
+                    }
+                }
+                assert_eq!(fragments, 2, "raised actor must span both cells");
+            }
+        }
+    }
 
     #[test]
     fn hidden_traps_have_revealed_and_concealed_layers_without_mutation() {

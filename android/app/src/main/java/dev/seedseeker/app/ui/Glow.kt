@@ -29,8 +29,8 @@ data class Glow(val color: Color, val period: Float)
  * Enchantment / glyph glow colours and pulse periods, mirrored 1:1 from
  * Shattered Pixel Dungeon's `ItemSprite.Glowing` definitions — and kept in step
  * with the web front-end's `web/src/lib/glow.ts`, which is keyed by the same
- * wire names the scout emits. Curses are absent from the table because every
- * curse glows black in the game; the catalog names them.
+ * wire names the scout emits. Curses are absent from the table because weapon and armor
+ * curse effects glow black in the game; the catalog names them.
  */
 object ItemGlows {
     /** Upstream's default `Glowing(color)` period when none is given (1f). */
@@ -71,7 +71,7 @@ object ItemGlows {
         "Thorns" to Glow(Color(0xFF660022), DEFAULT_PERIOD),
     )
 
-    /** Every curse glows black in the game, at the default period. */
+    /** Curse glow for equipment other than wands, at the default period. */
     private val curse = Glow(Color(0xFF000000), DEFAULT_PERIOD)
 
     /** The catalog's own curse names, for weapons and armor alike. */
@@ -84,10 +84,11 @@ object ItemGlows {
      * or curse. A beneficial enchantment/glyph wins even on a cursed item
      * (matching `Weapon.glowing()`, which returns the enchantment's colour when
      * one is present — a curse-infused Kinetic weapon still glows yellow);
-     * otherwise a cursed item pulses black.
+     * otherwise cursed equipment other than wands pulses black. Wands never glow.
      */
-    fun forItem(effect: String?, cursed: Boolean): Glow? =
-        effect?.let(::forEffect) ?: if (cursed) curse else null
+    fun forItem(kind: ItemKind, effect: String?, cursed: Boolean): Glow? =
+        if (kind == ItemKind.WAND) null
+        else effect?.let(::forEffect) ?: if (cursed) curse else null
 
     /**
      * The pulse glow for a bare effect name (as carried by a requirement), or

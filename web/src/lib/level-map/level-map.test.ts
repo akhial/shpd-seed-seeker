@@ -19,6 +19,26 @@ const map = (depth: number, branch = 0) =>
   ) as LevelMapDocument;
 
 describe("browser level map contract", () => {
+  it("decodes garden shaft dimensions and fixed shop bags from the shared engine", () => {
+    const garden = map(4).scene.emitters!.find((e) => e.scaleX)!;
+    expect(garden).toBeDefined();
+    const particle = garden.particles[0];
+    const state = particleState(garden, particle, particle.birthMs + particle.lifespanMs / 2)!;
+    expect(state.scaleX).toBe(2);
+    expect(state.scaleY).toBe(24);
+    expect(state.alpha).toBe(0.5);
+    for (const [depth, kind] of [
+      [6, "ScrollHolder"],
+      [11, "PotionBandolier"],
+      [16, "MagicalHolster"],
+    ] as const) {
+      expect(
+        map(depth)
+          .contents!.heaps.flatMap((h) => h.items)
+          .some((i) => i.kind === kind && !i.deterministic),
+      ).toBe(true);
+    }
+  });
   it("keeps chasm wind sparse and smooth while excluding unused void", () => {
     const result = map(22); // Chasm feeling: unused background is also CHASM.
     const wind = result.scene.emitters!.filter((e) => e.clipToChasm);
@@ -115,7 +135,11 @@ describe("browser level map contract", () => {
       [1660, "Blocking"],
     ] as const) {
       const glow = result.contents!.heaps.find((h) => h.cell === cell)!.items[0].glow!;
-      const scout = itemGlow({ cursed: false, effect: { kind: "enchantment", name } })!;
+      const scout = itemGlow({
+        category: "weapon",
+        cursed: false,
+        effect: { kind: "enchantment", name },
+      })!;
       expect(`#${glow.color.map((c) => c.toString(16).padStart(2, "0")).join("")}`).toBe(
         scout.color,
       );

@@ -41,6 +41,7 @@ export function particleState(
       (emitter.acceleration[1] * seconds * seconds) / 2,
     scale: (particle.scale / 1000) * curveValue(emitter.scale, progress),
     alpha: curveValue(emitter.alpha, progress),
+    scaleX: emitter.scaleX ? curveValue(emitter.scaleX, progress) : 1,
     scaleY: emitter.scaleY ? curveValue(emitter.scaleY, progress) : 1,
     angle: ((particle.angle + emitter.angularSpeed * seconds) * Math.PI) / 180,
   };
@@ -72,7 +73,10 @@ function emitterBounds(emitter: MapEmitter, width: number, size: number): Rectan
     1000;
   const radius =
     (Math.hypot(
-      emitter.image.destination[2],
+      emitter.image.destination[2] *
+        (emitter.scaleX
+          ? Math.max(...emitter.scaleX.points.map(([x]) => curveValue(emitter.scaleX!, x / 1000)))
+          : 1),
       emitter.image.destination[3] *
         (emitter.scaleY
           ? Math.max(...emitter.scaleY.points.map(([x]) => curveValue(emitter.scaleY!, x / 1000)))
@@ -165,6 +169,7 @@ export function createMapParticleRenderer(
   const images = emitters.map((emitter) =>
     emitter.image.kind === "blit" ? drawTexture(bundle, emitter.image) : null,
   );
+  let initial = true;
   return {
     animated: emitters.length > 0,
     draw(elapsed: number) {
@@ -180,6 +185,12 @@ export function createMapParticleRenderer(
       context.imageSmoothingEnabled = false;
       context.globalAlpha = 1;
       context.globalCompositeOperation = "source-over";
+      // A reused overlay may still contain scenery from the previous secret
+      // mode outside these emitters' regions, even when there are no emitters.
+      if (initial) {
+        context.clearRect(0, 0, width, height);
+        initial = false;
+      }
       // Copy all backgrounds before drawing any emitter; overlaps retain particles.
       for (const [x, y, w, h] of regions) {
         context.clearRect(x, y, w, h);
@@ -194,11 +205,18 @@ export function createMapParticleRenderer(
         context.globalCompositeOperation = emitter.blend === "add" ? "lighter" : "source-over";
         for (const particle of emitter.particles) {
           const state = particleState(emitter, particle, elapsed);
-          if (!state || state.scale <= 0 || state.alpha <= 0) continue;
+          if (
+            !state ||
+            state.scale <= 0 ||
+            state.scaleX <= 0 ||
+            state.scaleY <= 0 ||
+            state.alpha <= 0
+          )
+            continue;
           context.save();
           context.translate(ox + state.x, oy + state.y);
           if (state.angle) context.rotate(state.angle);
-          context.scale(state.scale, state.scale * state.scaleY);
+          context.scale(state.scale * state.scaleX, state.scale * state.scaleY);
           context.globalAlpha =
             state.alpha *
             (image.kind === "blit" ? (image.opacity ?? 255) / 255 : image.rgba[3] / 255);

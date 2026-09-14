@@ -13,7 +13,12 @@ pub(super) struct ActorSprite {
 }
 
 #[allow(clippy::too_many_lines)] // Ordered heap/actor composition and animation-clock packing.
-pub(super) fn layers(scene: &mut MapScene, level: &Level, contents: &MapContents) -> Vec<MapLayer> {
+pub(super) fn layers(
+    scene: &mut MapScene,
+    level: &Level,
+    contents: &MapContents,
+    walls: &mut MapLayer,
+) -> Vec<MapLayer> {
     let mut heaps = layer("heaps", level.len());
     let mut actors: Vec<MapLayer> = vec![];
     for heap in &contents.heaps {
@@ -32,6 +37,7 @@ pub(super) fn layers(scene: &mut MapScene, level: &Level, contents: &MapContents
         let raise = 5 + i32::from(8_u16.saturating_sub(h));
         let sources = [[image % 16 * 16, image / 16 * 16, w, h]];
         let offset = [(17 - i32::from(w)) / 2, 16 - i32::from(h) - raise];
+        let opacity = if heap.phantom { 102 } else { 255 };
         shadow(
             scene,
             &mut heaps,
@@ -42,6 +48,7 @@ pub(super) fn layers(scene: &mut MapScene, level: &Level, contents: &MapContents
             1,
             offset,
             [1.0, 0.25, 0.5],
+            opacity,
         );
         stamp_scaled(
             scene,
@@ -54,6 +61,7 @@ pub(super) fn layers(scene: &mut MapScene, level: &Level, contents: &MapContents
             offset,
             [w, h],
             false,
+            opacity,
             if matches!(heap.kind.as_str(), "Heap" | "ForSale") {
                 heap.items.first().and_then(|item| item.glow)
             } else {
@@ -61,11 +69,44 @@ pub(super) fn layers(scene: &mut MapScene, level: &Level, contents: &MapContents
             },
         );
     }
-    for mob in &contents.mobs {
+    let width = usize::try_from(level.width()).expect("positive map width");
+    let mut mobs: Vec<_> = contents.mobs.iter().collect();
+    mobs.sort_by_key(|mob| mob.cell);
+    let mut actor_start = 0;
+    for mob in mobs {
         if !visible(level, mob.cell) {
             continue;
         }
         if let Some(sprite) = super::actors::actor(&mob.kind) {
+            // Decorative overhangs occupy the cell above their terrain anchor.
+            // Draw those behind this actor first; structural walls and terrain
+            // on the actor's row or in front still belong above its sprite.
+            let mut behind = layer("walls", level.len());
+            for (cell, dest) in behind.cells.iter_mut().enumerate() {
+                let below = cell + width;
+                if below < level.len()
+                    && below / width < mob.cell / width
+                    && matches!(
+                        level.map.cells[below],
+                        crate::geometry::terrain::STATUE
+                            | crate::geometry::terrain::STATUE_SP
+                            | crate::geometry::terrain::REGION_DECO
+                            | crate::geometry::terrain::REGION_DECO_ALT
+                            | crate::geometry::terrain::MINE_CRYSTAL
+                            | crate::geometry::terrain::MINE_BOULDER
+                            | crate::geometry::terrain::ALCHEMY
+                            | crate::geometry::terrain::BARRICADE
+                            | crate::geometry::terrain::HIGH_GRASS
+                            | crate::geometry::terrain::FURROWED_GRASS
+                    )
+                {
+                    *dest = walls.cells[cell].take();
+                }
+            }
+            if behind.cells.iter().any(Option::is_some) {
+                actors.push(behind);
+                actor_start = actors.len();
+            }
             let columns = crate::level_map::assets::get(sprite.asset)
                 .expect("actor atlas")
                 .width
@@ -97,6 +138,8 @@ pub(super) fn layers(scene: &mut MapScene, level: &Level, contents: &MapContents
                 })
                 .collect();
             let mut target = layer("actors", level.len());
+            // Keep Ebony mimics discoverable in a scouting overview.
+            let opacity = if mob.kind == "EbonyMimic" { 153 } else { 255 };
             let offset = [
                 (17 - i32::from(sprite.width)).div_euclid(2),
                 16 - i32::from(sprite.height) - sprite.raise,
@@ -129,9 +172,10 @@ pub(super) fn layers(scene: &mut MapScene, level: &Level, contents: &MapContents
                     sprite.duration,
                     offset,
                     shape,
+                    opacity,
                 );
             }
-            stamp(
+            stamp_scaled(
                 scene,
                 &mut target,
                 level,
@@ -140,10 +184,14 @@ pub(super) fn layers(scene: &mut MapScene, level: &Level, contents: &MapContents
                 &sources,
                 sprite.duration,
                 offset,
+                [sprite.width, sprite.height],
+                false,
+                opacity,
+                None,
             );
             // Overlapping actors must keep independent animation clocks. Pack
             // disjoint sprites together, above any earlier overlapping actor.
-            let index = actors
+            let index = actors[actor_start..]
                 .iter()
                 .rposition(|layer| {
                     layer
@@ -152,7 +200,7 @@ pub(super) fn layers(scene: &mut MapScene, level: &Level, contents: &MapContents
                         .zip(&target.cells)
                         .any(|(a, b)| a.is_some() && b.is_some())
                 })
-                .map_or(0, |index| index + 1);
+                .map_or(actor_start, |index| actor_start + index + 1);
             if index == actors.len() {
                 actors.push(layer("actors", level.len()));
             }
@@ -172,34 +220,6 @@ pub(super) fn visible(level: &Level, cell: usize) -> bool {
     cell < level.len() && !crate::level_map::projection::wall(level.map.cells[cell])
 }
 
-/// Draw a sprite with signed pixel offset, splitting all source/destination
-/// rectangles at cell boundaries. Animations in a layer share their clock.
-#[allow(clippy::too_many_arguments)]
-pub(super) fn stamp(
-    scene: &mut MapScene,
-    target: &mut MapLayer,
-    level: &Level,
-    cell: usize,
-    asset: &'static str,
-    sources: &[[u16; 4]],
-    duration: u16,
-    offset: [i32; 2],
-) {
-    stamp_scaled(
-        scene,
-        target,
-        level,
-        cell,
-        asset,
-        sources,
-        duration,
-        offset,
-        [sources[0][2], sources[0][3]],
-        false,
-        None,
-    );
-}
-
 #[allow(
     clippy::too_many_arguments,
     clippy::cast_possible_truncation,
@@ -215,6 +235,7 @@ fn shadow(
     duration: u16,
     offset: [i32; 2],
     shape: [f32; 3],
+    opacity: u8,
 ) {
     let [_, _, w, h] = sources[0];
     let [width, height, raise] = shape;
@@ -235,11 +256,13 @@ fn shadow(
             (f32::from(h) * height).round() as u16,
         ],
         true,
+        opacity,
         None,
     );
 }
 
 #[allow(clippy::too_many_arguments)]
+/// Split raised, scaled sprites at cell boundaries, retaining opacity in every frame.
 fn stamp_scaled(
     scene: &mut MapScene,
     target: &mut MapLayer,
@@ -251,6 +274,7 @@ fn stamp_scaled(
     offset: [i32; 2],
     size: [u16; 2],
     shadow: bool,
+    opacity: u8,
     glow: Option<MapGlow>,
 ) {
     let point = level.map.cell_to_point(cell);
@@ -278,7 +302,11 @@ fn stamp_scaled(
                 .iter()
                 .map(|s| {
                     vec![MapDraw::Blit {
-                        opacity: if shadow { 153 } else { 255 },
+                        opacity: if shadow {
+                            u8::try_from(u16::from(opacity) * 153 / 255).unwrap()
+                        } else {
+                            opacity
+                        },
                         tint: shadow.then_some([0, 0, 0]),
                         glow,
                         asset,
