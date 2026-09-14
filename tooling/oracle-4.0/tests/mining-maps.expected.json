@@ -1,0 +1,1075 @@
+{
+  "jar_url": "https://github.com/00-Evan/shattered-pixel-dungeon/releases/download/v4.0.0/ShatteredPD-v4.0.0-Java.jar",
+  "jar_sha256": "b3e6f9508dea1a7a32a9934e2bc18f20a9a905df5732550404294340d31c87a1",
+  "profile": "isolated branch 1; forced Crystal/Gnoll; no trinket; no bones",
+  "levels": [
+    {
+      "seed": "AAA-AAA-AAA",
+      "depth": 12,
+      "variant": 1,
+      "challenges": 0,
+      "width": 49,
+      "height": 42,
+      "hash": 938234220,
+      "entrance": 596,
+      "secretRooms": [
+        [
+          40,
+          3,
+          45,
+          9
+        ],
+        [
+          17,
+          3,
+          22,
+          7
+        ]
+      ],
+      "traps": []
+    },
+    {
+      "seed": "AAA-AAA-AAA",
+      "depth": 12,
+      "variant": 1,
+      "challenges": 104,
+      "width": 49,
+      "height": 42,
+      "hash": 938234220,
+      "entrance": 596,
+      "secretRooms": [
+        [
+          40,
+          3,
+          45,
+          9
+        ],
+        [
+          17,
+          3,
+          22,
+          7
+        ]
+      ],
+      "traps": []
+    },
+    {
+      "seed": "AAA-AAA-AAA",
+      "depth": 12,
+      "variant": 2,
+      "challenges": 0,
+      "width": 49,
+      "height": 42,
+      "hash": -1597324979,
+      "entrance": 645,
+      "secretRooms": [
+        [
+          40,
+          3,
+          45,
+          9
+        ],
+        [
+          17,
+          3,
+          22,
+          7
+        ]
+      ],
+      "traps": [
+        672,
+        773,
+        921,
+        948,
+        991,
+        997,
+        1168,
+        1308,
+        1314
+      ]
+    },
+    {
+      "seed": "AAA-AAA-AAA",
+      "depth": 12,
+      "variant": 2,
+      "challenges": 104,
+      "width": 49,
+      "height": 42,
+      "hash": -1597324979,
+      "entrance": 645,
+      "secretRooms": [
+        [
+          17,
+          3,
+          22,
+          7
+        ],
+        [
+          40,
+          3,
+          45,
+          9
+        ]
+      ],
+      "traps": [
+        672,
+        773,
+        921,
+        948,
+        991,
+        997,
+        1168,
+        1308,
+        1314
+      ]
+    },
+    {
+      "seed": "AAA-AAA-AAA",
+      "depth": 13,
+      "variant": 1,
+      "challenges": 0,
+      "width": 41,
+      "height": 66,
+      "hash": 1464257821,
+      "entrance": 2079,
+      "secretRooms": [
+        [
+          14,
+          21,
+          18,
+          26
+        ],
+        [
+          8,
+          28,
+          13,
+          32
+        ]
+      ],
+      "traps": []
+    },
+    {
+      "seed": "AAA-AAA-AAA",
+      "depth": 13,
+      "variant": 1,
+      "challenges": 104,
+      "width": 41,
+      "height": 66,
+      "hash": 1464257821,
+      "entrance": 2079,
+      "secretRooms": [
+        [
+          14,
+          21,
+          18,
+          26
+        ],
+        [
+          8,
+          28,
+          13,
+          32
+        ]
+      ],
+      "traps": []
+    },
+    {
+      "seed": "AAA-AAA-AAA",
+      "depth": 13,
+      "variant": 2,
+      "challenges": 0,
+      "width": 41,
+      "height": 66,
+      "hash": 2031489210,
+      "entrance": 2079,
+      "secretRooms": [
+        [
+          8,
+          28,
+          13,
+          32
+        ],
+        [
+          14,
+          21,
+          18,
+          26
+        ]
+      ],
+      "traps": [
+        472,
+        473,
+        517,
+        909,
+        911,
+        2147,
+        2233,
+        2353
+      ]
+    },
+    {
+      "seed": "AAA-AAA-AAA",
+      "depth": 13,
+      "variant": 2,
+      "challenges": 104,
+      "width": 41,
+      "height": 66,
+      "hash": 2031489210,
+      "entrance": 2079,
+      "secretRooms": [
+        [
+          8,
+          28,
+          13,
+          32
+        ],
+        [
+          14,
+          21,
+          18,
+          26
+        ]
+      ],
+      "traps": [
+        472,
+        473,
+        517,
+        909,
+        911,
+        2147,
+        2233,
+        2353
+      ]
+    },
+    {
+      "seed": "AAA-AAA-AAA",
+      "depth": 14,
+      "variant": 1,
+      "challenges": 0,
+      "width": 49,
+      "height": 46,
+      "hash": 1623336572,
+      "entrance": 1725,
+      "secretRooms": [
+        [
+          10,
+          25,
+          14,
+          31
+        ],
+        [
+          22,
+          36,
+          26,
+          42
+        ]
+      ],
+      "traps": []
+    },
+    {
+      "seed": "AAA-AAA-AAA",
+      "depth": 14,
+      "variant": 1,
+      "challenges": 104,
+      "width": 49,
+      "height": 46,
+      "hash": 1623336572,
+      "entrance": 1725,
+      "secretRooms": [
+        [
+          10,
+          25,
+          14,
+          31
+        ],
+        [
+          22,
+          36,
+          26,
+          42
+        ]
+      ],
+      "traps": []
+    },
+    {
+      "seed": "AAA-AAA-AAA",
+      "depth": 14,
+      "variant": 2,
+      "challenges": 0,
+      "width": 49,
+      "height": 46,
+      "hash": 1710991199,
+      "entrance": 1676,
+      "secretRooms": [
+        [
+          22,
+          36,
+          26,
+          42
+        ],
+        [
+          10,
+          25,
+          14,
+          31
+        ]
+      ],
+      "traps": [
+        463,
+        519,
+        613,
+        725,
+        922,
+        970,
+        997,
+        1099,
+        1293
+      ]
+    },
+    {
+      "seed": "AAA-AAA-AAA",
+      "depth": 14,
+      "variant": 2,
+      "challenges": 104,
+      "width": 49,
+      "height": 46,
+      "hash": 1710991199,
+      "entrance": 1676,
+      "secretRooms": [
+        [
+          22,
+          36,
+          26,
+          42
+        ],
+        [
+          10,
+          25,
+          14,
+          31
+        ]
+      ],
+      "traps": [
+        463,
+        519,
+        613,
+        725,
+        922,
+        970,
+        997,
+        1099,
+        1293
+      ]
+    },
+    {
+      "seed": "AAA-AAA-AAB",
+      "depth": 12,
+      "variant": 1,
+      "challenges": 0,
+      "width": 47,
+      "height": 49,
+      "hash": -570116008,
+      "entrance": 1617,
+      "secretRooms": [
+        [
+          31,
+          5,
+          36,
+          9
+        ],
+        [
+          5,
+          26,
+          10,
+          31
+        ]
+      ],
+      "traps": []
+    },
+    {
+      "seed": "AAA-AAA-AAB",
+      "depth": 12,
+      "variant": 1,
+      "challenges": 104,
+      "width": 47,
+      "height": 49,
+      "hash": -570116008,
+      "entrance": 1617,
+      "secretRooms": [
+        [
+          31,
+          5,
+          36,
+          9
+        ],
+        [
+          5,
+          26,
+          10,
+          31
+        ]
+      ],
+      "traps": []
+    },
+    {
+      "seed": "AAA-AAA-AAB",
+      "depth": 12,
+      "variant": 2,
+      "challenges": 0,
+      "width": 47,
+      "height": 49,
+      "hash": -748498488,
+      "entrance": 1617,
+      "secretRooms": [
+        [
+          5,
+          26,
+          10,
+          31
+        ],
+        [
+          31,
+          5,
+          36,
+          9
+        ]
+      ],
+      "traps": [
+        992,
+        1028,
+        1067,
+        1088,
+        1136,
+        1165,
+        1841,
+        1936
+      ]
+    },
+    {
+      "seed": "AAA-AAA-AAB",
+      "depth": 12,
+      "variant": 2,
+      "challenges": 104,
+      "width": 47,
+      "height": 49,
+      "hash": -1504738187,
+      "entrance": 1617,
+      "secretRooms": [
+        [
+          5,
+          26,
+          10,
+          31
+        ],
+        [
+          31,
+          5,
+          36,
+          9
+        ]
+      ],
+      "traps": [
+        992,
+        1028,
+        1067,
+        1088,
+        1136,
+        1165,
+        1841,
+        1936
+      ]
+    },
+    {
+      "seed": "AAA-AAA-AAB",
+      "depth": 13,
+      "variant": 1,
+      "challenges": 0,
+      "width": 46,
+      "height": 53,
+      "hash": 1975382021,
+      "entrance": 1530,
+      "secretRooms": [
+        [
+          20,
+          3,
+          25,
+          8
+        ],
+        [
+          5,
+          37,
+          10,
+          41
+        ]
+      ],
+      "traps": []
+    },
+    {
+      "seed": "AAA-AAA-AAB",
+      "depth": 13,
+      "variant": 1,
+      "challenges": 104,
+      "width": 46,
+      "height": 53,
+      "hash": 1975382021,
+      "entrance": 1530,
+      "secretRooms": [
+        [
+          5,
+          37,
+          10,
+          41
+        ],
+        [
+          20,
+          3,
+          25,
+          8
+        ]
+      ],
+      "traps": []
+    },
+    {
+      "seed": "AAA-AAA-AAB",
+      "depth": 13,
+      "variant": 2,
+      "challenges": 0,
+      "width": 46,
+      "height": 53,
+      "hash": -971334611,
+      "entrance": 1530,
+      "secretRooms": [
+        [
+          5,
+          37,
+          10,
+          41
+        ],
+        [
+          20,
+          3,
+          25,
+          8
+        ]
+      ],
+      "traps": [
+        492,
+        534,
+        583,
+        699,
+        925,
+        1855,
+        2082,
+        2175
+      ]
+    },
+    {
+      "seed": "AAA-AAA-AAB",
+      "depth": 13,
+      "variant": 2,
+      "challenges": 104,
+      "width": 46,
+      "height": 53,
+      "hash": -868968550,
+      "entrance": 1530,
+      "secretRooms": [
+        [
+          5,
+          37,
+          10,
+          41
+        ],
+        [
+          20,
+          3,
+          25,
+          8
+        ]
+      ],
+      "traps": [
+        492,
+        534,
+        583,
+        699,
+        925,
+        1855,
+        2082,
+        2175
+      ]
+    },
+    {
+      "seed": "AAA-AAA-AAB",
+      "depth": 14,
+      "variant": 1,
+      "challenges": 0,
+      "width": 46,
+      "height": 51,
+      "hash": -1420284551,
+      "entrance": 437,
+      "secretRooms": [
+        [
+          34,
+          13,
+          39,
+          19
+        ],
+        [
+          12,
+          4,
+          18,
+          8
+        ]
+      ],
+      "traps": []
+    },
+    {
+      "seed": "AAA-AAA-AAB",
+      "depth": 14,
+      "variant": 1,
+      "challenges": 104,
+      "width": 46,
+      "height": 51,
+      "hash": -1420284551,
+      "entrance": 437,
+      "secretRooms": [
+        [
+          34,
+          13,
+          39,
+          19
+        ],
+        [
+          12,
+          4,
+          18,
+          8
+        ]
+      ],
+      "traps": []
+    },
+    {
+      "seed": "AAA-AAA-AAB",
+      "depth": 14,
+      "variant": 2,
+      "challenges": 0,
+      "width": 46,
+      "height": 51,
+      "hash": 859006920,
+      "entrance": 436,
+      "secretRooms": [
+        [
+          34,
+          13,
+          39,
+          19
+        ],
+        [
+          12,
+          4,
+          18,
+          8
+        ]
+      ],
+      "traps": [
+        1031,
+        1081,
+        1294,
+        1298,
+        1299,
+        1354,
+        1831,
+        1872,
+        1923
+      ]
+    },
+    {
+      "seed": "AAA-AAA-AAB",
+      "depth": 14,
+      "variant": 2,
+      "challenges": 104,
+      "width": 46,
+      "height": 51,
+      "hash": 859006920,
+      "entrance": 436,
+      "secretRooms": [
+        [
+          34,
+          13,
+          39,
+          19
+        ],
+        [
+          12,
+          4,
+          18,
+          8
+        ]
+      ],
+      "traps": [
+        1031,
+        1081,
+        1294,
+        1298,
+        1299,
+        1354,
+        1831,
+        1872,
+        1923
+      ]
+    },
+    {
+      "seed": "AAA-AAA-AAF",
+      "depth": 12,
+      "variant": 1,
+      "challenges": 0,
+      "width": 51,
+      "height": 49,
+      "hash": -1377692782,
+      "entrance": 1522,
+      "secretRooms": [
+        [
+          14,
+          22,
+          18,
+          27
+        ],
+        [
+          3,
+          11,
+          8,
+          16
+        ]
+      ],
+      "traps": []
+    },
+    {
+      "seed": "AAA-AAA-AAF",
+      "depth": 12,
+      "variant": 1,
+      "challenges": 104,
+      "width": 51,
+      "height": 49,
+      "hash": -1377692782,
+      "entrance": 1522,
+      "secretRooms": [
+        [
+          3,
+          11,
+          8,
+          16
+        ],
+        [
+          14,
+          22,
+          18,
+          27
+        ]
+      ],
+      "traps": []
+    },
+    {
+      "seed": "AAA-AAA-AAF",
+      "depth": 12,
+      "variant": 2,
+      "challenges": 0,
+      "width": 51,
+      "height": 49,
+      "hash": -1708993260,
+      "entrance": 1471,
+      "secretRooms": [
+        [
+          14,
+          22,
+          18,
+          27
+        ],
+        [
+          3,
+          11,
+          8,
+          16
+        ]
+      ],
+      "traps": [
+        475,
+        678,
+        679,
+        1061,
+        1160,
+        1715,
+        1766,
+        1921
+      ]
+    },
+    {
+      "seed": "AAA-AAA-AAF",
+      "depth": 12,
+      "variant": 2,
+      "challenges": 104,
+      "width": 51,
+      "height": 49,
+      "hash": -1708993260,
+      "entrance": 1471,
+      "secretRooms": [
+        [
+          14,
+          22,
+          18,
+          27
+        ],
+        [
+          3,
+          11,
+          8,
+          16
+        ]
+      ],
+      "traps": [
+        475,
+        678,
+        679,
+        1061,
+        1160,
+        1715,
+        1766,
+        1921
+      ]
+    },
+    {
+      "seed": "AAA-AAA-AAF",
+      "depth": 13,
+      "variant": 1,
+      "challenges": 0,
+      "width": 42,
+      "height": 55,
+      "hash": 1151685341,
+      "entrance": 2034,
+      "secretRooms": [
+        [
+          14,
+          31,
+          18,
+          36
+        ],
+        [
+          18,
+          4,
+          22,
+          9
+        ]
+      ],
+      "traps": []
+    },
+    {
+      "seed": "AAA-AAA-AAF",
+      "depth": 13,
+      "variant": 1,
+      "challenges": 104,
+      "width": 42,
+      "height": 55,
+      "hash": 1151685341,
+      "entrance": 2034,
+      "secretRooms": [
+        [
+          18,
+          4,
+          22,
+          9
+        ],
+        [
+          14,
+          31,
+          18,
+          36
+        ]
+      ],
+      "traps": []
+    },
+    {
+      "seed": "AAA-AAA-AAF",
+      "depth": 13,
+      "variant": 2,
+      "challenges": 0,
+      "width": 42,
+      "height": 55,
+      "hash": -637457424,
+      "entrance": 2033,
+      "secretRooms": [
+        [
+          18,
+          4,
+          22,
+          9
+        ],
+        [
+          14,
+          31,
+          18,
+          36
+        ]
+      ],
+      "traps": [
+        907,
+        950,
+        1149,
+        1193,
+        1229,
+        1533,
+        1700,
+        1743
+      ]
+    },
+    {
+      "seed": "AAA-AAA-AAF",
+      "depth": 13,
+      "variant": 2,
+      "challenges": 104,
+      "width": 42,
+      "height": 55,
+      "hash": -637457424,
+      "entrance": 2033,
+      "secretRooms": [
+        [
+          14,
+          31,
+          18,
+          36
+        ],
+        [
+          18,
+          4,
+          22,
+          9
+        ]
+      ],
+      "traps": [
+        907,
+        950,
+        1149,
+        1193,
+        1229,
+        1533,
+        1700,
+        1743
+      ]
+    },
+    {
+      "seed": "AAA-AAA-AAF",
+      "depth": 14,
+      "variant": 1,
+      "challenges": 0,
+      "width": 54,
+      "height": 53,
+      "hash": 735213716,
+      "entrance": 1341,
+      "secretRooms": [
+        [
+          38,
+          21,
+          42,
+          27
+        ],
+        [
+          4,
+          8,
+          9,
+          13
+        ]
+      ],
+      "traps": []
+    },
+    {
+      "seed": "AAA-AAA-AAF",
+      "depth": 14,
+      "variant": 1,
+      "challenges": 104,
+      "width": 54,
+      "height": 53,
+      "hash": 735213716,
+      "entrance": 1341,
+      "secretRooms": [
+        [
+          4,
+          8,
+          9,
+          13
+        ],
+        [
+          38,
+          21,
+          42,
+          27
+        ]
+      ],
+      "traps": []
+    },
+    {
+      "seed": "AAA-AAA-AAF",
+      "depth": 14,
+      "variant": 2,
+      "challenges": 0,
+      "width": 54,
+      "height": 53,
+      "hash": -1043439167,
+      "entrance": 1451,
+      "secretRooms": [
+        [
+          38,
+          21,
+          42,
+          27
+        ],
+        [
+          4,
+          8,
+          9,
+          13
+        ]
+      ],
+      "traps": [
+        716,
+        933,
+        1043,
+        1166,
+        1316,
+        1379,
+        1422,
+        1586
+      ]
+    },
+    {
+      "seed": "AAA-AAA-AAF",
+      "depth": 14,
+      "variant": 2,
+      "challenges": 104,
+      "width": 54,
+      "height": 53,
+      "hash": -1043439167,
+      "entrance": 1451,
+      "secretRooms": [
+        [
+          4,
+          8,
+          9,
+          13
+        ],
+        [
+          38,
+          21,
+          42,
+          27
+        ]
+      ],
+      "traps": [
+        716,
+        933,
+        1043,
+        1166,
+        1316,
+        1379,
+        1422,
+        1586
+      ]
+    }
+  ]
+}

@@ -101,6 +101,13 @@ int32_t seedfinder_filter_seeds(const uint8_t *request, size_t request_len, cons
 // seedfinder_buffer_free.
 int32_t seedfinder_share_encode(const uint8_t *query_json, size_t query_json_len, uint8_t **out_packet, size_t *out_len);
 int32_t seedfinder_share_decode(const uint8_t *text, size_t text_len, uint8_t **out_packet, size_t *out_len);
+// On-demand regular-floor map: UTF-8 JSON request/response, as documented in
+// docs/level-map-format.md. Unsupported floors/invalid requests return -1;
+// generation failures return -2. Free buffers with seedfinder_buffer_free.
+int32_t seedfinder_level_map(const uint8_t *request_json, size_t request_len, uint8_t **out_packet, size_t *out_len);
+/* Embedded PNG by UTF-8 asset ID from the map document. Same ownership/errors. */
+int32_t seedfinder_level_map_asset(const uint8_t *asset_id, size_t asset_id_len, uint8_t **out_packet, size_t *out_len);
+
 // Returns the engine's own constants as UTF-8 JSON: {"shpdVersion", "shpdCommit",
 // "totalSeeds", "maxResults", "limits": {"maxDepth", "exactTierMin",
 // "exactTierMax", "boundedTierMin", "boundedTierMax", "identityGroupMax",
