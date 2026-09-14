@@ -117,6 +117,10 @@ Visual randomness uses a deterministic breeze and never consumes generation RNG.
 The vault entry uses its torn carpets, circular entrance, pulsing barrier and wall banners.
 Actor sprites use their original idle/disguise films, flattened sprite shadows,
 and sleep indicators. Foreground walls and raised terrain occlude heaps/actors.
+Decorative overhangs (including mine crystal tips) are interleaved with actors
+by their terrain anchor row, so tall actors cover decorations behind them.
+The ordered stack can contain multiple `walls` layers; structural walls remain
+in front of actors.
 Ordinary ghoul partners receive a suitable adjacent tile with `approximate: true`:
 the game creates them on its first turn using runtime RNG. Vault ghouls do not
 spawn partners. Exact initial objects retain `approximate: false`.

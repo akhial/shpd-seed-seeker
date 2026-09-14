@@ -209,7 +209,7 @@ fn build_layers(
         room_terrain,
         boss_terrain,
     ];
-    layers.extend(objects::layers(scene, level, contents));
+    layers.extend(objects::layers(scene, level, contents, &mut walls));
     layers.extend([raised, walls, room_walls, boss_walls, effects]);
     layers.push(darkness);
     layers
@@ -255,6 +255,56 @@ fn layer(name: &'static str, length: usize) -> MapLayer {
         blend: None,
         name,
         cells: vec![None; length],
+    }
+}
+
+#[cfg(test)]
+mod occlusion_tests {
+    use super::*;
+    use crate::{
+        level::Feeling,
+        level_map::{MapContents, MapMob},
+    };
+
+    #[test]
+    fn tall_spire_occludes_background_crystal_but_not_foreground_or_structural_walls() {
+        let mut level = Level::new(13, Feeling::None);
+        level.set_size(7, 8);
+        level.map.cells.fill(t::EMPTY);
+        level.map.cells[4 * 7 + 3] = t::MINE_CRYSTAL;
+        level.map.cells[5 * 7 + 4] = t::MINE_CRYSTAL;
+        level.map.cells[4 * 7 + 2] = t::WALL;
+        let contents = MapContents {
+            mobs: vec![MapMob {
+                cell: 5 * 7 + 3,
+                kind: "GreenCrystalSpire".into(),
+                stealthy: false,
+                sleeping: false,
+                approximate: false,
+                items: vec![],
+            }],
+            ..MapContents::default()
+        };
+        let scene = scene(
+            DungeonSeed::MIN,
+            &level,
+            &[],
+            MapKind::BlacksmithCrystal,
+            &contents,
+        );
+        for layers in [&scene.layers, &scene.concealed_layers] {
+            for (cell, behind) in [(3 * 7 + 3, true), (4 * 7 + 4, false), (3 * 7 + 2, false)] {
+                let wall = layers
+                    .iter()
+                    .position(|layer| layer.name == "walls" && layer.cells[cell].is_some())
+                    .unwrap();
+                let actor = layers
+                    .iter()
+                    .position(|layer| layer.name == "actors" && layer.cells[cell].is_some())
+                    .unwrap();
+                assert_eq!(wall < actor, behind, "occlusion at cell {cell}");
+            }
+        }
     }
 }
 

@@ -13,7 +13,12 @@ pub(super) struct ActorSprite {
 }
 
 #[allow(clippy::too_many_lines)] // Ordered heap/actor composition and animation-clock packing.
-pub(super) fn layers(scene: &mut MapScene, level: &Level, contents: &MapContents) -> Vec<MapLayer> {
+pub(super) fn layers(
+    scene: &mut MapScene,
+    level: &Level,
+    contents: &MapContents,
+    walls: &mut MapLayer,
+) -> Vec<MapLayer> {
     let mut heaps = layer("heaps", level.len());
     let mut actors: Vec<MapLayer> = vec![];
     for heap in &contents.heaps {
@@ -64,11 +69,44 @@ pub(super) fn layers(scene: &mut MapScene, level: &Level, contents: &MapContents
             },
         );
     }
-    for mob in &contents.mobs {
+    let width = usize::try_from(level.width()).expect("positive map width");
+    let mut mobs: Vec<_> = contents.mobs.iter().collect();
+    mobs.sort_by_key(|mob| mob.cell);
+    let mut actor_start = 0;
+    for mob in mobs {
         if !visible(level, mob.cell) {
             continue;
         }
         if let Some(sprite) = super::actors::actor(&mob.kind) {
+            // Decorative overhangs occupy the cell above their terrain anchor.
+            // Draw those behind this actor first; structural walls and terrain
+            // on the actor's row or in front still belong above its sprite.
+            let mut behind = layer("walls", level.len());
+            for (cell, dest) in behind.cells.iter_mut().enumerate() {
+                let below = cell + width;
+                if below < level.len()
+                    && below / width < mob.cell / width
+                    && matches!(
+                        level.map.cells[below],
+                        crate::geometry::terrain::STATUE
+                            | crate::geometry::terrain::STATUE_SP
+                            | crate::geometry::terrain::REGION_DECO
+                            | crate::geometry::terrain::REGION_DECO_ALT
+                            | crate::geometry::terrain::MINE_CRYSTAL
+                            | crate::geometry::terrain::MINE_BOULDER
+                            | crate::geometry::terrain::ALCHEMY
+                            | crate::geometry::terrain::BARRICADE
+                            | crate::geometry::terrain::HIGH_GRASS
+                            | crate::geometry::terrain::FURROWED_GRASS
+                    )
+                {
+                    *dest = walls.cells[cell].take();
+                }
+            }
+            if behind.cells.iter().any(Option::is_some) {
+                actors.push(behind);
+                actor_start = actors.len();
+            }
             let columns = crate::level_map::assets::get(sprite.asset)
                 .expect("actor atlas")
                 .width
@@ -153,7 +191,7 @@ pub(super) fn layers(scene: &mut MapScene, level: &Level, contents: &MapContents
             );
             // Overlapping actors must keep independent animation clocks. Pack
             // disjoint sprites together, above any earlier overlapping actor.
-            let index = actors
+            let index = actors[actor_start..]
                 .iter()
                 .rposition(|layer| {
                     layer
@@ -162,7 +200,7 @@ pub(super) fn layers(scene: &mut MapScene, level: &Level, contents: &MapContents
                         .zip(&target.cells)
                         .any(|(a, b)| a.is_some() && b.is_some())
                 })
-                .map_or(0, |index| index + 1);
+                .map_or(actor_start, |index| actor_start + index + 1);
             if index == actors.len() {
                 actors.push(layer("actors", level.len()));
             }
