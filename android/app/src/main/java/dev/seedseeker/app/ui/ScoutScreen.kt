@@ -36,6 +36,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -53,6 +55,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -95,6 +98,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.semantics.semantics
@@ -535,7 +539,7 @@ internal fun ScoutItemCard(
             val density = LocalDensity.current
             fun textWidth(text: String, style: androidx.compose.ui.text.TextStyle) =
                 measurer.measure(text, style, softWrap = false).size.width
-            val compactMatch = with(density) {
+            val (compactMatch, stackedBadges) = with(density) {
                 val titleWidth = textWidth(scoutItem.item.name, typography.titleMedium)
                 val upgradeWidth = if (scoutItem.displayedUpgrade != 0) {
                     textWidth("+${scoutItem.displayedUpgrade}", typography.labelMedium.copy(fontFamily = FontFamily.Monospace)) +
@@ -549,8 +553,10 @@ internal fun ScoutItemCard(
                 } ?: 0
                 // Reserve the sprite, gaps, title badges, and the wider trailing chip.
                 // Always compare against the expanded chip so resizing cannot oscillate.
-                matches && titleWidth + upgradeWidth + curseWidth + secretWidth +
-                    maxOf(matchWidth, choiceWidth) + 64.dp.roundToPx() > constraints.maxWidth
+                val titleAndBadges = titleWidth + upgradeWidth + curseWidth + secretWidth + 64.dp.roundToPx()
+                val compact = matches && titleAndBadges + maxOf(matchWidth, choiceWidth) > constraints.maxWidth
+                val trailingWidth = maxOf(if (matches) { if (compact) 20.dp.roundToPx() else matchWidth } else 0, choiceWidth)
+                compact to (titleAndBadges + trailingWidth > constraints.maxWidth)
             }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -566,55 +572,24 @@ internal fun ScoutItemCard(
                 Spacer(Modifier.width(14.dp))
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            scoutItem.item.name,
-                            style = MaterialTheme.typography.titleMedium,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false),
-                        )
-                        if (scoutItem.displayedUpgrade != 0) {
-                            Spacer(Modifier.width(8.dp))
-                            Surface(
-                                shape = MaterialTheme.shapes.extraSmall,
-                                color = SpdUpgrade.copy(alpha = 0.12f),
-                            ) {
-                                Text(
-                                    "+${scoutItem.displayedUpgrade}",
-                                    modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontFamily = FontFamily.Monospace,
-                                    color = SpdUpgrade,
-                                )
+                        ScoutItemTitle(scoutItem.item.name, Modifier.weight(1f, fill = stackedBadges))
+                        if (!stackedBadges) {
+                            if (scoutItem.displayedUpgrade != 0 || scoutItem.cursed || scoutItem.secret) {
+                                Row(Modifier.padding(start = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    ScoutItemBadges(scoutItem)
+                                }
                             }
                         }
-                        if (scoutItem.cursed) {
-                            Spacer(Modifier.width(8.dp))
-                            Surface(
-                                shape = MaterialTheme.shapes.extraSmall,
-                                color = SpdDanger.copy(alpha = 0.14f),
-                            ) {
-                                Text(
-                                    "cursed",
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = SpdCurse,
-                                )
-                            }
-                        }
-                        if (scoutItem.secret) {
-                            Spacer(Modifier.width(8.dp))
-                            Surface(
-                                shape = MaterialTheme.shapes.extraSmall,
-                                color = SpdSecret.copy(alpha = 0.14f),
-                            ) {
-                                Text(
-                                    "secret",
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = SpdSecret,
-                                )
-                            }
+                    }
+                    if (stackedBadges) {
+                        FlowRow(
+                            modifier = Modifier.padding(top = 4.dp, bottom = 2.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            ScoutItemBadges(scoutItem)
+                            if (matches) ScoutItemMatchChip(compact = true)
+                            (scoutItem.accessibility as? ScoutAccessibility.Choice)?.let { ChoiceGroupChip(it) }
                         }
                     }
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -642,37 +617,92 @@ internal fun ScoutItemCard(
                         )
                     }
                 }
-                Spacer(Modifier.width(10.dp))
-                Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (matches) {
-                        Surface(
-                            shape = if (compactMatch) CircleShape else MaterialTheme.shapes.extraSmall,
-                            color = SpdGreen.copy(alpha = 0.1f),
-                        ) {
-                            Row(
-                                modifier = if (compactMatch) Modifier.size(20.dp) else Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
-                                horizontalArrangement = Arrangement.Center,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Icon(
-                                    Icons.Filled.Check,
-                                    contentDescription = if (compactMatch) "match" else null,
-                                    modifier = Modifier.size(12.dp),
-                                    tint = SpdGreen,
-                                )
-                                if (!compactMatch) {
-                                    Spacer(Modifier.width(4.dp))
-                                    Text(
-                                        "match",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = SpdGreen,
-                                    )
-                                }
-                            }
-                        }
+                if (!stackedBadges) {
+                    Spacer(Modifier.width(10.dp))
+                    Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        if (matches) ScoutItemMatchChip(compactMatch)
+                        (scoutItem.accessibility as? ScoutAccessibility.Choice)?.let { ChoiceGroupChip(it) }
                     }
-                    (scoutItem.accessibility as? ScoutAccessibility.Choice)?.let { ChoiceGroupChip(it) }
                 }
+            }
+        }
+    }
+}
+
+
+/** Preserve the complete name even at narrow widths or enlarged system fonts. */
+@Composable
+private fun ScoutItemTitle(name: String, modifier: Modifier = Modifier) {
+    val style = MaterialTheme.typography.titleMedium.copy(color = LocalContentColor.current)
+    BasicText(
+        name,
+        modifier = modifier,
+        style = style,
+        maxLines = 1,
+        autoSize = TextAutoSize.StepBased(minFontSize = 1.sp, maxFontSize = style.fontSize, stepSize = 0.25.sp),
+    )
+}
+
+@Composable
+private fun ScoutItemBadges(scoutItem: ScoutItem) {
+    if (scoutItem.displayedUpgrade != 0) {
+        Surface(
+            shape = MaterialTheme.shapes.extraSmall,
+            color = SpdUpgrade.copy(alpha = 0.12f),
+        ) {
+            Text(
+                "+${scoutItem.displayedUpgrade}",
+                modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                style = MaterialTheme.typography.labelMedium,
+                fontFamily = FontFamily.Monospace,
+                color = SpdUpgrade,
+            )
+        }
+    }
+    if (scoutItem.cursed) {
+        Surface(
+            shape = MaterialTheme.shapes.extraSmall,
+            color = SpdDanger.copy(alpha = 0.14f),
+        ) {
+            Text(
+                "cursed",
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                style = MaterialTheme.typography.labelSmall,
+                color = SpdCurse,
+            )
+        }
+    }
+    if (scoutItem.secret) {
+        Surface(
+            shape = MaterialTheme.shapes.extraSmall,
+            color = SpdSecret.copy(alpha = 0.14f),
+        ) {
+            Text(
+                "secret",
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                style = MaterialTheme.typography.labelSmall,
+                color = SpdSecret,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ScoutItemMatchChip(compact: Boolean) {
+    Surface(
+        shape = if (compact) CircleShape else MaterialTheme.shapes.extraSmall,
+        color = SpdGreen.copy(alpha = 0.1f),
+    ) {
+        Row(
+            modifier = if (compact) Modifier.size(20.dp) else Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Filled.Check, contentDescription = if (compact) "match" else null,
+                modifier = Modifier.size(12.dp), tint = SpdGreen)
+            if (!compact) {
+                Spacer(Modifier.width(4.dp))
+                Text("match", style = MaterialTheme.typography.labelSmall, color = SpdGreen)
             }
         }
     }
