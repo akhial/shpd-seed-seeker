@@ -104,28 +104,33 @@ internal fun LevelMapView(
     fun close() { expanded = false; depth = initialDepth; branch = 0 }
     fun navigate(delta: Int) { floors.getOrNull(floors.indexOf(depth) + delta)?.let { depth = it } }
 
-    val toolbar: @Composable () -> Unit = {
+    val secretToggle: @Composable () -> Unit = {
+        FilterChip(selected = secrets, onClick = { secrets = !secrets },
+            enabled = (bundle?.map?.secretCount ?: 0) > 0,
+            label = {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Icon(if (secrets) Icons.Filled.Check else Icons.Filled.Close, null, Modifier.size(16.dp))
+                    Text("Secrets")
+                }
+            })
+    }
+    val toolbar: @Composable (Boolean) -> Unit = { spread ->
         Row(
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+            horizontalArrangement = if (spread) Arrangement.SpaceBetween else Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
         ) {
             if (!parent?.map?.branches.isNullOrEmpty()) {
-                FilterChip(selected = branch == 0, onClick = { branch = 0 }, label = { Text("Main") })
-                parent?.map?.branches?.forEach { area ->
-                    FilterChip(selected = branch == area.branch, onClick = { branch = area.branch },
-                        modifier = Modifier.semantics { contentDescription = area.label },
-                        label = { Text(if (area.kind == "imp_vault") "Vault" else "Mine") })
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(selected = branch == 0, onClick = { branch = 0 }, label = { Text("Main") })
+                    parent?.map?.branches?.forEach { area ->
+                        FilterChip(selected = branch == area.branch, onClick = { branch = area.branch },
+                            modifier = Modifier.semantics { contentDescription = area.label },
+                            label = { Text(if (area.kind == "imp_vault") "Vault" else "Mine") })
+                    }
                 }
             }
-            FilterChip(selected = secrets, onClick = { secrets = !secrets },
-                enabled = (bundle?.map?.secretCount ?: 0) > 0,
-                label = {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Icon(if (secrets) Icons.Filled.Check else Icons.Filled.Close, null, Modifier.size(16.dp))
-                        Text("Secrets")
-                    }
-                })
+            secretToggle()
         }
     }
     val stage: @Composable (Modifier, Boolean) -> Unit = { modifier, full ->
@@ -152,7 +157,7 @@ internal fun LevelMapView(
     Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow,
         modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)) {
         Column {
-            toolbar()
+            toolbar(false)
             if (!expanded) stage(Modifier.fillMaxWidth().height(280.dp), false)
             else Spacer(Modifier.height(280.dp))
         }
@@ -169,14 +174,22 @@ internal fun LevelMapView(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                     onCloseMap = ::close,
                 )
-                if (world.trinketOrder.isNotEmpty()) TrinketShortcuts(
-                    offers = world.trinketOrder,
-                    selectedTrinket = world.selectedTrinket,
-                    enabled = !changingTrinket,
-                    onSelect = onSelectTrinket,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                )
-                toolbar()
+                val hasSublevels = !parent?.map?.branches.isNullOrEmpty()
+                Row(
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = if (hasSublevels) Arrangement.Center else Arrangement.SpaceBetween,
+                ) {
+                    if (world.trinketOrder.isNotEmpty()) TrinketShortcuts(
+                        offers = world.trinketOrder,
+                        selectedTrinket = world.selectedTrinket,
+                        enabled = !changingTrinket,
+                        onSelect = onSelectTrinket,
+                    )
+                    if (!hasSublevels) secretToggle()
+                }
+                if (hasSublevels) toolbar(true)
                 Box(Modifier.fillMaxWidth().weight(1f)) {
                     stage(Modifier.fillMaxSize(), true)
                     Surface(
