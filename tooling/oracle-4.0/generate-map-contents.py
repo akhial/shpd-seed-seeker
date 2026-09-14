@@ -7,9 +7,27 @@ import subprocess
 
 ROOT = Path(__file__).resolve().parents[2]
 ORACLE = ROOT / 'tooling/oracle-4.0'
-subprocess.run([str(ORACLE / 'build.sh')], check=True, stdout=subprocess.DEVNULL)
 JAVA = ['java', '-cp', f'{ORACLE}/.work/classes:{ORACLE}/.work/ShatteredPD-v4.0.0-Java.jar']
 MAIN = 'com.shatteredpixel.shatteredpixeldungeon.'
+
+def format_fixture(fixture):
+    """Keep sample metadata readable and each heap/actor/effect record on one line."""
+    lines = ['{', '  "source": '+json.dumps(fixture['source'])+',', '  "samples": [']
+    for i, record in enumerate(fixture['samples']):
+        lines.append('    {')
+        for j, (key, value) in enumerate(record.items()):
+            prefix = '      '+json.dumps(key)+': '
+            comma = ',' if j < len(record)-1 else ''
+            if isinstance(value, list) and value:
+                lines.append(prefix+'[')
+                lines += ['        '+json.dumps(entry, separators=(',', ':'))
+                          +(',' if k < len(value)-1 else '') for k, entry in enumerate(value)]
+                lines.append('      ]'+comma)
+            else:
+                lines.append(prefix+json.dumps(value)+comma)
+        lines.append('    }'+(',' if i < len(fixture['samples'])-1 else ''))
+    lines += ['  ]', '}']
+    return '\n'.join(lines)+'\n'
 
 def sample(record, seed, challenge, trinket):
     mobs = []
@@ -37,11 +55,16 @@ def generate(job):
     records = [document] if mine else [r for r in document['records'] if r['record']=='level' and r['depth'] not in (10,20,25)]
     return [sample(r,seed,challenge,trinket) for r in records]
 
-jobs = [(seed,0,None,None) for seed in ('AAA-AAA-AAA','BAD-RAT-KNG','HEL-LOO-WRD','ZZZ-ZZZ-ZZZ')]
-jobs += [('AAA-AAA-AAA',111,None,None), ('AAA-AAA-AAA',0,'mimic_tooth',None)]
-jobs += [(seed,challenge,None,(depth,variant)) for seed,depth,variant in [('AAA-AAA-AAA',13,1),('ZZZ-ZZZ-ZZZ',12,2)] for challenge in (0,32)]
-with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
-    samples = [s for batch in pool.map(generate,jobs) for s in batch]
-fixture = dict(source='official ShatteredPD-v4.0.0-Java.jar; ParityOracle --map-contents --acquire-hourglass', samples=samples)
-(ROOT/'crates/seedfinder-core/tests/fixtures/map-contents.json').write_text(json.dumps(fixture,indent=2)+'\n')
-print(f'Wrote {len(samples)} samples')
+def main():
+    subprocess.run([str(ORACLE / 'build.sh')], check=True, stdout=subprocess.DEVNULL)
+    jobs = [(seed,0,None,None) for seed in ('AAA-AAA-AAA','BAD-RAT-KNG','HEL-LOO-WRD','ZZZ-ZZZ-ZZZ')]
+    jobs += [('AAA-AAA-AAA',111,None,None), ('AAA-AAA-AAA',0,'mimic_tooth',None)]
+    jobs += [(seed,challenge,None,(depth,variant)) for seed,depth,variant in [('AAA-AAA-AAA',13,1),('ZZZ-ZZZ-ZZZ',12,2)] for challenge in (0,32)]
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+        samples = [s for batch in pool.map(generate,jobs) for s in batch]
+    fixture = dict(source='official ShatteredPD-v4.0.0-Java.jar; ParityOracle --map-contents --acquire-hourglass', samples=samples)
+    (ROOT/'crates/seedfinder-core/tests/fixtures/map-contents.json').write_text(format_fixture(fixture))
+    print(f'Wrote {len(samples)} samples')
+
+if __name__ == '__main__':
+    main()
