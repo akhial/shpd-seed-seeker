@@ -14,6 +14,10 @@ public struct EngineInfo: Sendable {
     /// Upstream source commit tagged with the engine's target game version.
     public let shpdCommit: String
 
+    /// Map coverage belongs to the linked engine, including supported boss floors.
+    public let levelMapDepths: Set<Int>
+    public let challengeNames: [Int: String]
+
     /// The one instance, loaded on first use.
     public static let shared = load()
 
@@ -35,6 +39,12 @@ public struct EngineInfo: Sendable {
             // there is no runtime condition under which it can be missing.
             preconditionFailure("the linked engine returned no usable engine-info document")
         }
-        return EngineInfo(shpdVersion: shpdVersion, shpdCommit: shpdCommit)
+        let maps = document["levelMaps"] as? [String: Any]
+        let challengeNames = Dictionary(uniqueKeysWithValues: (document["challenges"] as? [[String: Any]] ?? []).compactMap { entry -> (Int, String)? in
+            guard let mask = entry["mask"] as? Int, let name = entry["name"] as? String else { return nil }
+            return (mask, name)
+        })
+        return EngineInfo(shpdVersion: shpdVersion, shpdCommit: shpdCommit,
+                          levelMapDepths: Set(maps?["supportedDepths"] as? [Int] ?? []), challengeNames: challengeNames)
     }
 }

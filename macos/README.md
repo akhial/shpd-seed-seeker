@@ -46,3 +46,17 @@ The Artifacts category requires a named artifact and supports floor limits,
 source and curse filters, and Either/or groups.
 Scouting shows artifacts alongside other items with their generated upgrade.
 Artifact searches display the engine's measured match probability.
+
+Scout floor headings disclose inline maps, including supported boss floors in
+the scouted prefix. Maps start closed; one heading can be open at a time and
+the item list stays visible. Expand opens a native sheet with a floor picker, previous/next
+buttons (K/J), quest branch segments and trinket shortcuts. Scroll or pinch to
+zoom, drag or use arrow keys to pan, and press 0 to fit the map. Secrets start
+hidden and can be revealed without regenerating the scene.
+
+Maps use the engine's version 3 sprite scene and embedded PNG assets, including
+initial containers, loot, actors, glow and continuous effects. Generation runs
+away from the UI; maps and PNGs are cached, and offscreen maps pause. Reduce Motion
+uses the static time-zero scene. Choice-group letter chips explain mutually
+exclusive rewards; when a requirement matches, conflicting options are dimmed.
+The contract is documented in [`level-map-format.md`](../docs/level-map-format.md).

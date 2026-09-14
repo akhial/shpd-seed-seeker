@@ -71,6 +71,9 @@ public sealed partial class MainWindow : Window
     private (int Depth, double Offset)? scoutAnchor;
     private readonly TranslateTransform trinketDockTransform = new();
     private bool scoutLoading;
+    private LevelMapSession? mapSession;
+    private Expander? openMap;
+    private int? openMapDepth;
 
     private bool searchRunning;
     /// <summary>
@@ -564,7 +567,7 @@ public sealed partial class MainWindow : Window
     {
         if (requirement.Effect.AnyEnchantment) return Dot(Rainbow());
         return requirement.Effect.Effects.Count > 1
-            ? ChipTagPill(requirement.Effect.Effects.Count.ToString(), CautionInk, CautionFill)
+            ? new EffectCountView(requirement.Effect.Effects)
             : null;
     }
 
@@ -1906,20 +1909,30 @@ public sealed partial class MainWindow : Window
             if (generation != scoutGeneration) return;
             var matches = await Task.Run(() => NativeEngine.ScoutMatches(seed, marked.Challenges, marked, chosen));
             if (generation != scoutGeneration) return;
-            var groups = world.Items.Select((item, index) => (Item: item, Index: index))
-                .GroupBy(x => x.Item.Depth).OrderBy(g => g.Key).Select(g =>
+            var preserveMaps = trinket is not null && seed == renderedSeed && mapSession is not null;
+            if (preserveMaps) mapSession!.Update(world, marked);
+            else { openMapDepth = null; mapSession = new(world, marked, selected => ScoutSeed(seed, selected)); }
+            openMap = null;
+            var entries = world.Items.Select((item, index) => (Item: item, Index: index)).ToLookup(x => x.Item.Depth);
+            var depths = entries.Select(g => g.Key).Concat(mapSession!.Floors).Distinct().Order().ToArray();
+            var matchedChoices = ScoutChoices.Matched(world.Items, matches.Matched);
+            var groups = depths.Select(depth =>
             {
-                var group = new ScoutGroup { Depth = g.Key, Floor = $"Floor {g.Key}", Region = Region(g.Key), Quest = QuestLabel(world.Quests, g.Key), Feeling = world.FloorFeelings?.FirstOrDefault(f => f.Depth == g.Key)?.Feeling ?? FloorFeeling.None };
+                var g = entries[depth];
+                var group = new ScoutGroup { Depth = depth, Floor = $"Floor {depth}", Region = Region(depth), Quest = QuestLabel(world.Quests, depth), Feeling = world.FloorFeelings?.FirstOrDefault(f => f.Depth == depth)?.Feeling ?? FloorFeeling.None,
+                    Header = FloorHeader(world, depth) };
                 var trinkets = g.Where(entry => entry.Item.Item.Kind == ItemKind.Trinket).ToList();
                 foreach (var entry in g)
                 {
                     if (entry.Item.Item.Kind != ItemKind.Trinket)
-                        group.Add(ScoutRow.From(entry.Item, matches.Matched.Contains(entry.Index), world.Gems));
+                        group.Add(ScoutRow.From(entry.Item, matches.Matched.Contains(entry.Index), world.Gems,
+                            ScoutChoices.Dimmed(entry.Item, matches.Matched.Contains(entry.Index), matchedChoices)));
                     else if (entry.Index == trinkets[0].Index)
                         group.Add(ScoutRow.Catalyst(entry.Item, world.TrinketOrder ?? trinkets.Select(x => x.Item.Item).ToList(),
                             trinkets.Where(x => matches.Matched.Contains(x.Index)).Select(x => x.Item.Item.Id).ToHashSet(),
                             world.SelectedTrinket, selected => { _ = ScoutSeed(seed, selected); }));
                 }
+                if (group.Count == 0) group.Add(new ScoutRow { Depth = depth, ItemName = "No notable items on this floor.", RowOpacity = .65 });
                 return group;
             }).ToList();
             scoutTrinkets = groups.SelectMany(group => group).Select(row => row.TrinketDeck).OfType<TrinketDeckView>().FirstOrDefault();
@@ -1943,6 +1956,43 @@ public sealed partial class MainWindow : Window
             scoutAnchor = null; scoutedSeed = renderedSeed; UpdateResultNav();
         }
         finally { if (generation == scoutGeneration) { ScoutButton.IsEnabled = SeedCode.IsCanonical(SeedInput.Text); ScoutList.IsEnabled = true; scoutLoading = false; SetTrinketDockEnabled(true); } }
+    }
+
+    private UIElement FloorHeader(ScoutWorld world, int depth)
+    {
+        var title = new WrapPanel { Spacing = 8, LineSpacing = 4 };
+        title.Children.Add(new TextBlock { Text = $"Floor {depth}", FontWeight = FontWeights.SemiBold });
+        title.Children.Add(new FloorFeelingView { Feeling = world.FloorFeelings?.FirstOrDefault(f => f.Depth == depth)?.Feeling ?? FloorFeeling.None, VerticalAlignment = VerticalAlignment.Center });
+        title.Children.Add(new TextBlock { Text = Region(depth), FontSize = 12, Opacity = .7, VerticalAlignment = VerticalAlignment.Center });
+        var quest = QuestLabel(world.Quests, depth);
+        if (quest.Length > 0) title.Children.Add(new TextBlock { Text = quest, FontSize = 12, Opacity = .7, VerticalAlignment = VerticalAlignment.Center });
+        return EngineInfo.MapDepths.Contains(depth) ? MapDisclosure(depth, title) : title;
+    }
+
+    private Expander MapDisclosure(int depth, UIElement title)
+    {
+        var profile = mapSession!;
+        var disclosure = new Expander { Header = title, HorizontalAlignment = HorizontalAlignment.Stretch,
+            HorizontalContentAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 6, 0, 2) };
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(disclosure, $"Floor {depth} map");
+        disclosure.Expanding += (_, _) =>
+        {
+            if (openMap is not null && openMap != disclosure) openMap.IsExpanded = false;
+            openMap = disclosure; openMapDepth = depth;
+            disclosure.Content = new LevelMapView(profile, depth);
+        };
+        disclosure.Collapsed += (_, _) =>
+        {
+            disclosure.Content = null;
+            if (openMap == disclosure) { openMap = null; openMapDepth = null; }
+        };
+        disclosure.KeyDown += (_, e) =>
+        {
+            if (e.Key != VirtualKey.Escape || !disclosure.IsExpanded) return;
+            disclosure.IsExpanded = false; disclosure.Focus(FocusState.Keyboard); e.Handled = true;
+        };
+        if (openMapDepth == depth) disclosure.IsExpanded = true;
+        return disclosure;
     }
     private static IEnumerable<T> Descendants<T>(DependencyObject root) where T : DependencyObject
     {
@@ -2066,6 +2116,7 @@ public sealed partial class MainWindow : Window
 
 public sealed class ScoutGroup : List<ScoutRow>
 {
+    public UIElement? Header { get; init; }
     public int Depth { get; init; }
     public string Floor { get; init; } = "";
     public FloorFeeling Feeling { get; init; }
@@ -2082,8 +2133,9 @@ public sealed class ScoutRow
     {
         Depth = catalyst.Depth, ItemName = "Magical Catalyst", SpriteIndex = 70, Source = Labels.Source(catalyst.Source),
         SecretVisibility = catalyst.Secret ? Visibility.Visible : Visibility.Collapsed,
-        Accessibility = catalyst.AccessibilityTag switch { 1 => $"One reward of choice group {catalyst.AccessibilityGroup}", 2 => $"Only in some outcomes of scenario group {catalyst.AccessibilityGroup}", _ => "" },
-        AccessibilityVisibility = catalyst.AccessibilityTag == 0 ? Visibility.Collapsed : Visibility.Visible,
+        Accessibility = catalyst.AccessibilityTag switch { 1 => $"One reward of choice group {ScoutChoices.Letter(catalyst.AccessibilityGroup)}", 2 => $"Only in some outcomes of scenario group {ScoutChoices.Letter(catalyst.AccessibilityGroup)}", _ => "" },
+        AccessibilityVisibility = catalyst.AccessibilityTag == 2 ? Visibility.Visible : Visibility.Collapsed,
+        Choice = ScoutChoices.Letter(catalyst.AccessibilityGroup), ChoiceVisibility = catalyst.AccessibilityTag == 1 ? Visibility.Visible : Visibility.Collapsed,
         TrinketDeck = new TrinketDeckView(order, matches, selectedTrinket, onSelect),
     };
     public string ItemName { get; init; } = "";
@@ -2098,6 +2150,9 @@ public sealed class ScoutRow
     public string Accessibility { get; init; } = "";
     public Visibility AccessibilityVisibility { get; init; } = Visibility.Collapsed;
     public Visibility MatchVisibility { get; init; } = Visibility.Collapsed;
+    public string Choice { get; init; } = "";
+    public Visibility ChoiceVisibility { get; init; } = Visibility.Collapsed;
+    public double RowOpacity { get; init; } = 1;
     /// <summary>
     /// Row-major index into the upstream item atlas: the cell this run draws the
     /// item in, which for a ring is the gem the seed gave its class.
@@ -2113,9 +2168,9 @@ public sealed class ScoutRow
 
     /// <param name="gems">The scouted run's ring gems, which decide the cell a
     /// ring is drawn in; the same item is a different colour in another run.</param>
-    public static ScoutRow From(ScoutItem x, bool match, RingGems gems)
+    public static ScoutRow From(ScoutItem x, bool match, RingGems gems, bool dimmed = false)
     {
-        var access = x.AccessibilityTag switch { 1 => $"One reward of choice group {x.AccessibilityGroup} (option {x.AccessibilityValue + 1})", 2 => $"Only in some outcomes of scenario group {x.AccessibilityGroup}", _ => "" };
+        var access = x.AccessibilityTag switch { 1 => $"One reward of choice group {ScoutChoices.Letter(x.AccessibilityGroup)} (option {x.AccessibilityValue + 1})", 2 => $"Only in some outcomes of scenario group {ScoutChoices.Letter(x.AccessibilityGroup)}", _ => "" };
         var isCurse = x.Effect is not null && ItemCatalog.IsCurse(x.Item.Kind, x.Effect);
         var glow = ItemGlow.ForItem(x);
         return new()
@@ -2128,7 +2183,9 @@ public sealed class ScoutRow
             Effect = x.Effect ?? "", EffectVisibility = x.Effect is null ? Visibility.Collapsed : Visibility.Visible,
             EffectBrush = isCurse ? (Brush)Application.Current.Resources["SystemFillColorCriticalBrush"] : new SolidColorBrush(Color.FromArgb(255, 42, 160, 176)),
             Source = Labels.Source(x.Source),
-            Accessibility = access, AccessibilityVisibility = access.Length == 0 ? Visibility.Collapsed : Visibility.Visible,
+            Accessibility = access, AccessibilityVisibility = x.AccessibilityTag == 2 ? Visibility.Visible : Visibility.Collapsed,
+            Choice = ScoutChoices.Letter(x.AccessibilityGroup), ChoiceVisibility = x.AccessibilityTag == 1 ? Visibility.Visible : Visibility.Collapsed,
+            RowOpacity = dimmed ? .45 : 1,
             MatchVisibility = match ? Visibility.Visible : Visibility.Collapsed,
             Weight = match ? FontWeights.SemiBold : FontWeights.Normal,
             SpriteIndex = gems.SpriteIndex(x.Item), TypeIconIndex = x.Item.TypeIconIndex ?? -1,

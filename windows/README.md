@@ -18,6 +18,8 @@ On first launch the app registers the `seedseeker://` link scheme for the curren
 
 Scouted items and requirements render the real Shattered Pixel Dungeon sprites, pulsing with the game's enchantment and curse glow colours. The atlas geometry and the glow table mirror `web/src/lib/sprites.ts` and `web/src/lib/glow.ts`; the Fluent palette itself is unchanged, and the only new colours are the per-enchantment glows, which are item data from the game rather than app chrome.
 
+Requirements with several selected effects show their count inside a stationary ring, with the effect colours evenly spaced and smoothly blended around its circumference.
+
 `items.png`, `item_icons.png`, `LICENSE.txt` and `ATTRIBUTION.md` are linked into `Assets\` from `android/app/src/main/assets/third_party/shattered-pixel-dungeon/` rather than duplicated. The artwork is GPL-3.0-or-later, so the app ships those notices and surfaces them: the sidebar footer's upstream-version link — whose text is the engine's own `shpdVersion` — opens an About dialog with the attribution and the full license text.
 
 ## Trinkets
@@ -27,3 +29,13 @@ The Trinket category selects a named trinket and supports the board’s existing
 ## Artifacts
 
 The Artifact category requires a named artifact and supports floor limits, source and curse filters, and OR groups. Artifacts are single items rather than stacks. Scout uses the shared catalog and engine upgrades, including +5 Imp vault rewards, and keeps artifact matches aligned with the full manifest. Artifact queries show the measured match probability and estimated search time.
+
+## Floor maps
+
+Each supported Scout floor heading is a native map disclosure, retaining its feeling, region and quest labels. Floors without notable loot, including supported boss floors 5 and 15, remain available within the scouted prefix. Opening a map loads the engine's v3 scene and embedded PNGs on demand. Main/Mine/Vault area buttons follow the generated parent map's branches. Secrets start concealed and the toggle reveals rooms, doors and traps without regeneration.
+
+Use the mouse wheel or pinch to zoom, drag to pan, and **Fit** to reset. The expanded Fluent dialog includes floor and trinket selectors, Previous/Next buttons, J/K floor navigation, and swipe navigation while fitted. Arrow keys pan, +/− zoom and 0 fits the map. Changing trinkets preserves the expanded dialog and floor while regenerating the map and Scout manifest together. Choice-group letter chips include the complete choice explanation as an accessible tooltip; alternatives conflicting with a matched choice dim to 45% opacity.
+
+`LevelMapRenderer.cs` draws every engine layer in order, including initial contents, actor animation, tint, opacity, item glow and additive layers. Continuous particles use the engine's curves, acceleration, delayed hazard schedules, rotation, vertical scale, wall masks and chasm clipping. Geometric darkness applies last. Scenery redraws only changed cells, textures and a bounded set of documents are cached, and collapsed/offscreen/hidden views stop rendering. Windows' animation preference selects time zero. Native PNG decoding and viewport rasterization retain nearest-neighbour sampling at the display scale; no browser or asset network request is involved. See [the shared map contract](../docs/level-map-format.md) and the shipped `Assets/LEVEL-MAP-ATTRIBUTION.md` notice.
+
+The host-compatible tests include the shipping C ABI, schema rejection, native boss/branch maps and asset hashes, rendering/animation math, concealment, additive wall masking and choice conflicts. Run `dotnet test windows/SeedSeeker.Tests` from the repository root with the Rust toolchain available. The WinUI application itself requires Windows to build and run.

@@ -12,6 +12,7 @@ import dev.seedseeker.app.model.FloorFeeling
 import kotlin.math.roundToInt
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.Orientation
@@ -29,6 +30,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -71,6 +73,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
@@ -97,12 +100,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.stateDescription
 import dev.seedseeker.app.model.ItemKind
 import dev.seedseeker.app.model.CatalogItem
 import androidx.compose.ui.unit.sp
 import dev.seedseeker.app.catalog.ItemCatalog
 import dev.seedseeker.app.engine.ScoutMatches
 import dev.seedseeker.app.engine.SeedCode
+import dev.seedseeker.app.engine.isMapDepthSupported
 import dev.seedseeker.app.model.RingGems
 import dev.seedseeker.app.model.ScoutAccessibility
 import dev.seedseeker.app.model.ScoutItem
@@ -133,6 +139,7 @@ fun ScoutScreen(
     onSettings: () -> Unit,
     onAbout: () -> Unit,
     bottomBar: @Composable () -> Unit,
+    mapChallenges: Int = 0,
 ) {
     val listState = rememberLazyListState()
     val collapseWindow = with(LocalDensity.current) { 96.dp.toPx() }
@@ -152,17 +159,22 @@ fun ScoutScreen(
     LaunchedEffect(error, result == null) {
         if (error != null || result == null) headerScroll.expand()
     }
-    val floors = remember(result) { result?.items?.withIndex()?.groupBy { it.value.depth }?.toSortedMap().orEmpty() }
+    val floors = remember(result) { scoutFloors(result) }
+    val mapFloors = remember(floors) { floors.keys.filter(::isMapDepthSupported) }
+    val matchedChoices = remember(result, matches) { matchedScoutChoices(result?.items.orEmpty(), matches?.items.orEmpty()) }
+    var openMapDepth by remember(result?.seed, mapChallenges) { mutableStateOf<Int?>(null) }
     val offerFloorIndex = floors.values.indexOfFirst { rows -> rows.any { it.value.item.kind == ItemKind.TRINKET } }
+    val offerDepth = floors.keys.elementAtOrNull(offerFloorIndex)
     val offerBodyIndex = if (offerFloorIndex >= 0) 1 + 2 * offerFloorIndex else -1
     var offerTop by remember(result?.seed) { mutableStateOf(0f) }
     var offerHeight by remember(result?.seed) { mutableStateOf(0f) }
+    var offerMapHeight by remember(result?.seed) { mutableStateOf(0f) }
     var floorHeaderHeight by remember { mutableStateOf(0) }
-    val reveal by remember(offerBodyIndex, offerTop, offerHeight, floorHeaderHeight) { derivedStateOf {
+    val reveal by remember(offerBodyIndex, offerTop, offerHeight, floorHeaderHeight, openMapDepth, offerDepth, offerMapHeight) { derivedStateOf {
         val row = listState.layoutInfo.visibleItemsInfo.find { it.index == offerBodyIndex }
         when {
             offerBodyIndex < 0 || offerHeight <= 0 -> 0f
-            row != null -> ((floorHeaderHeight - row.offset - offerTop) / offerHeight).coerceIn(0f, 1f)
+            row != null -> ((floorHeaderHeight - row.offset - offerTop - if (openMapDepth == offerDepth) offerMapHeight else 0f) / offerHeight).coerceIn(0f, 1f)
             listState.firstVisibleItemIndex > offerBodyIndex -> 1f
             else -> 0f
         }
@@ -254,7 +266,7 @@ fun ScoutScreen(
                         modifier = Modifier.testTag("scout-navigation").padding(top = 6.dp),
                     )
                 }
-                LazyColumn(state = listState, modifier = Modifier.weight(1f).fillMaxWidth(),
+                LazyColumn(state = listState, modifier = Modifier.weight(1f).fillMaxWidth().testTag("scout-floors"),
                     contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp)) {
                 if (result == null && !isScouting) {
                     item {
@@ -301,11 +313,22 @@ fun ScoutScreen(
                                     feeling = world.floorFeelings[depth],
                                     itemCount = floorItems.size,
                                     questLabel = questsByDepth[depth]?.variant?.label,
-                                    modifier = Modifier.background(MaterialTheme.colorScheme.background).onSizeChanged { floorHeaderHeight = it.height }.padding(top = 12.dp, bottom = 10.dp),
+                                    mapExpanded = openMapDepth == depth,
+                                    onMapToggle = if (isMapDepthSupported(depth)) ({ openMapDepth = if (openMapDepth == depth) null else depth }) else null,
+                                    modifier = Modifier.background(MaterialTheme.colorScheme.background).onSizeChanged { floorHeaderHeight = it.height }.padding(vertical = 4.dp),
                                 )
                             }
                             item(key = "floor-body-$depth") {
                                 Column {
+                                    if (openMapDepth == depth && isMapDepthSupported(depth)) {
+                                        Box(Modifier.onSizeChanged { if (depth == offerDepth) offerMapHeight = it.height.toFloat() }) {
+                                            LevelMapView(world, depth, mapFloors, mapChallenges, isScouting, onSelectTrinket)
+                                        }
+                                    }
+                                    if (floorItems.isEmpty()) {
+                                        Text("No notable items on this floor.", Modifier.padding(vertical = 8.dp),
+                                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
                                     val trinkets = floorItems.filter { it.value.item.kind == ItemKind.TRINKET }
                                     if (trinkets.isNotEmpty()) {
                                         TrinketCatalystCard(trinkets, world.trinketOrder, matches, world.selectedTrinket, !isScouting, onSelectTrinket,
@@ -314,6 +337,7 @@ fun ScoutScreen(
                                     floorItems.filter { it.value.item.kind != ItemKind.TRINKET }.forEach { indexedItem ->
                                         ScoutItemCard(scoutItem = indexedItem.value, ringGems = world.ringGems,
                                             matches = matches?.items?.contains(indexedItem.index) == true,
+                                            dimmed = isAlternateScoutChoice(indexedItem.value.accessibility, indexedItem.index in matches?.items.orEmpty(), matchedChoices),
                                             modifier = Modifier.padding(bottom = 8.dp))
                                     }
                                 }
@@ -474,57 +498,62 @@ private fun FloorHeading(
     feeling: FloorFeeling? = null,
     modifier: Modifier = Modifier,
     questLabel: String? = null,
+    mapExpanded: Boolean = false,
+    onMapToggle: (() -> Unit)? = null,
 ) {
     val region = floorRegionColor(depth)
-    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        // Region-coloured bar, as on the web's floor headers.
-        Box(
-            Modifier
-                .size(width = 3.dp, height = 14.dp)
-                .background(region, RoundedCornerShape(2.dp)),
-        )
-        Spacer(Modifier.width(8.dp))
-        Text(
-            "FLOOR $depth",
-            style = MaterialTheme.typography.labelLarge,
-            letterSpacing = 1.1.sp,
-            color = MaterialTheme.colorScheme.onSurface,
-        )
-        if (feeling != null && feeling != FloorFeeling.NONE) {
-            Spacer(Modifier.width(6.dp))
-            FloorFeelingSprite(feeling)
-        }
-        Spacer(Modifier.width(8.dp))
-        Text(
-            floorRegion(depth),
-            modifier = Modifier.weight(1f),
-            style = MaterialTheme.typography.labelMedium,
-            color = region,
-        )
-        questLabel?.let {
-            Surface(
-                shape = MaterialTheme.shapes.extraSmall,
-                color = region.copy(alpha = 0.12f),
-            ) {
-                Text(
-                    it,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = region,
-                )
+    Column(modifier.fillMaxWidth().heightIn(min = 48.dp).then(
+        if (onMapToggle != null) Modifier.clickable(role = Role.Button, onClick = onMapToggle)
+            .semantics { stateDescription = if (mapExpanded) "Map expanded" else "Map collapsed" }
+        else Modifier,
+    )) {
+        Row(Modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
+            // Region-coloured bar, as on the web's floor headers.
+            Box(
+                Modifier
+                    .size(width = 3.dp, height = 14.dp)
+                    .background(region, RoundedCornerShape(2.dp)),
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                "FLOOR $depth",
+                style = MaterialTheme.typography.labelLarge,
+                letterSpacing = 1.1.sp,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            if (feeling != null && feeling != FloorFeeling.NONE) {
+                Spacer(Modifier.width(6.dp))
+                FloorFeelingSprite(feeling)
             }
             Spacer(Modifier.width(8.dp))
+            Text(
+                floorRegion(depth),
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.labelMedium,
+                color = region,
+            )
+            Text(
+                if (itemCount == 1) "1 item" else "$itemCount items",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (onMapToggle != null) {
+                Spacer(Modifier.width(8.dp))
+                Icon(Icons.Outlined.Place, null, Modifier.size(16.dp),
+                    tint = if (mapExpanded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Map", style = MaterialTheme.typography.labelSmall,
+                    color = if (mapExpanded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
-        Text(
-            if (itemCount == 1) "1 item" else "$itemCount items",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        questLabel?.let {
+            Text(it, Modifier.padding(start = 11.dp, bottom = 6.dp),
+                style = MaterialTheme.typography.labelSmall, color = region)
+        }
     }
 }
 
 @Composable
-private fun FloorFeelingSprite(feeling: FloorFeeling) {
+internal fun FloorFeelingSprite(feeling: FloorFeeling) {
     val context = LocalContext.current
     val atlas = remember(context) {
         context.assets.open("third_party/shattered-pixel-dungeon/dungeon-icons.png")
@@ -549,20 +578,20 @@ private fun ScoutItemCard(
     scoutItem: ScoutItem,
     ringGems: RingGems,
     matches: Boolean,
+    dimmed: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val effectIsCurse = scoutItem.effect != null &&
         ItemCatalog.cursesFor(scoutItem.item.kind).contains(scoutItem.effect)
     val accessibilityLabel = when (scoutItem.accessibility) {
         ScoutAccessibility.Independent -> null
-        is ScoutAccessibility.Choice ->
-            "Choice group ${scoutItem.accessibility.group + 1} · option ${scoutItem.accessibility.option + 1}"
+        is ScoutAccessibility.Choice -> null
         is ScoutAccessibility.Scenarios ->
-            "Route group ${scoutItem.accessibility.group + 1} · access changes with room choices"
+            "Route group ${scoutGroupLetter(scoutItem.accessibility.group)} · access changes with room choices"
     }
 
     Card(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth().alpha(if (dimmed) 0.45f else 1f),
         shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(
             containerColor = if (matches) {
@@ -685,6 +714,7 @@ private fun ScoutItemCard(
                         }
                     }
                 }
+                (scoutItem.accessibility as? ScoutAccessibility.Choice)?.let { ChoiceGroupChip(it) }
             }
         }
     }
@@ -716,17 +746,18 @@ private fun TrinketCatalystCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 ItemSprite(catalyst, modifier = Modifier.size(36.dp))
                 Spacer(Modifier.width(10.dp))
-                Column {
+                Column(Modifier.weight(1f)) {
                     Text(catalyst.name, style = MaterialTheme.typography.titleMedium)
                     Text(placement.source.label, style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (placement.secret) Text("Secret room", style = MaterialTheme.typography.labelSmall, color = SpdSecret)
                     when (val access = placement.accessibility) {
                         ScoutAccessibility.Independent -> Unit
-                        is ScoutAccessibility.Choice -> Text("Choice group ${access.group + 1} · option ${access.option + 1}", style = MaterialTheme.typography.labelSmall)
-                        is ScoutAccessibility.Scenarios -> Text("Route group ${access.group + 1} · access changes with room choices", style = MaterialTheme.typography.labelSmall)
+                        is ScoutAccessibility.Choice -> Unit
+                        is ScoutAccessibility.Scenarios -> Text("Route group ${scoutGroupLetter(access.group)} · access changes with room choices", style = MaterialTheme.typography.labelSmall)
                     }
                 }
+                (placement.accessibility as? ScoutAccessibility.Choice)?.let { ChoiceGroupChip(it) }
             }
             Row(Modifier.onGloballyPositioned { row ->
                 cardCoordinates?.takeIf { it.isAttached }?.let { card -> onOffersLayout(row.positionInWindow().y - card.positionInWindow().y, row.size.height.toFloat()) }

@@ -16,6 +16,8 @@ internal static partial class Native
     [LibraryImport(Library)] internal static partial void seedfinder_cancel(long handle);
     [LibraryImport(Library)] internal static partial void seedfinder_close(long handle);
     [LibraryImport(Library)] internal static partial int seedfinder_scout(byte[] request, nuint length, out nint packet, out nuint outputLength);
+    [LibraryImport(Library)] internal static partial int seedfinder_level_map(byte[] request, nuint length, out nint packet, out nuint outputLength);
+    [LibraryImport(Library)] internal static partial int seedfinder_level_map_asset(byte[] id, nuint length, out nint packet, out nuint outputLength);
     [LibraryImport(Library)] internal static partial int seedfinder_scout_matches(byte[] request, nuint length, byte[] query, nuint queryLength, out nint packet, out nuint outputLength);
     [LibraryImport(Library)] internal static partial int seedfinder_filter_seeds(byte[] request, nuint length, ulong[] seeds, nuint seedsLength, out nint packet, out nuint outputLength);
     [LibraryImport(Library)] internal static partial int seedfinder_query_continues(byte[] candidate, nuint candidateLength, byte[] baseline, nuint baselineLength);
@@ -251,6 +253,22 @@ public sealed class NativeEngine
         return DecodeScout(CopyAndFree(ptr, len));
     }
 
+    public static LevelMapDocument LevelMap(string requestJson)
+    {
+        var request = Encoding.UTF8.GetBytes(requestJson);
+        var code = Native.seedfinder_level_map(request, (nuint)request.Length, out var ptr, out var len);
+        if (code != 0) throw new InvalidOperationException(code == -1 ? "This floor or area is unavailable for the selected run." : "The engine could not generate this map.");
+        return LevelMapDocument.Parse(CopyAndFree(ptr, len));
+    }
+
+    public static byte[] LevelMapAsset(string id)
+    {
+        var request = Encoding.UTF8.GetBytes(id);
+        var code = Native.seedfinder_level_map_asset(request, (nuint)request.Length, out var ptr, out var len);
+        if (code != 0) throw new InvalidOperationException($"The engine could not load map art ({id}).");
+        return CopyAndFree(ptr, len);
+    }
+
     public static ScoutWorld DecodeScout(byte[] bytes)
     {
         var r = new Reader(bytes); var version = r.Text(4);
@@ -425,6 +443,9 @@ public static class EngineInfo
 
     /// <summary>The import cap the results codec enforces on file text.</summary>
     public static int ResultsFileMaxBytes { get; } = Limit("resultsFileMaxBytes");
+
+    public static IReadOnlyList<int> MapDepths { get; } = Document["levelMaps"]!["supportedDepths"]!.AsArray().Select(x => (int)x!).ToArray();
+    public static string MapRevision { get; } = $"{ShpdCommit}/{Document["levelMaps"]!["schemaVersion"]}/{Document["levelMaps"]!["assetRevision"]}";
 
     private static string Text(string key) => (string?)Document[key]
         ?? throw new InvalidOperationException($"The engine info document has no \"{key}\".");

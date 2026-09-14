@@ -11,6 +11,8 @@ mod config;
 mod detail_pane;
 mod format;
 mod glow;
+mod level_map_render;
+mod level_map_view;
 mod persist;
 mod presets;
 mod presets_dialog;

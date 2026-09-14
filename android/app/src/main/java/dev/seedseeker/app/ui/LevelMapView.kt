@@ -1,0 +1,362 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+package dev.seedseeker.app.ui
+
+import android.content.Context
+import android.database.ContentObserver
+import android.graphics.Canvas
+import android.graphics.Color as AndroidColor
+import android.graphics.Rect
+import android.os.Handler
+import android.os.Looper
+import android.os.SystemClock
+import android.provider.Settings
+import android.view.GestureDetector
+import android.view.MotionEvent
+import android.view.ScaleGestureDetector
+import android.view.View
+import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.PlainTooltip
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
+import androidx.compose.material3.rememberTooltipState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import dev.seedseeker.app.engine.LevelMapBundle
+import dev.seedseeker.app.engine.LevelMapRequest
+import dev.seedseeker.app.engine.LevelMaps
+import dev.seedseeker.app.model.ScoutWorld
+import kotlinx.coroutines.CancellationException
+import kotlin.math.abs
+import kotlin.math.floor
+
+/** Mounted by the lazy floor list. A trinket swap keeps the open map's floor and dialog. */
+@Composable
+@OptIn(ExperimentalMaterial3Api::class)
+internal fun LevelMapView(
+    world: ScoutWorld,
+    initialDepth: Int,
+    floors: List<Int>,
+    challenges: Int,
+    changingTrinket: Boolean,
+    onSelectTrinket: (String) -> Unit,
+) {
+    var expanded by remember(world.seed, challenges) { mutableStateOf(false) }
+    var depth by remember(world.seed, challenges) { mutableIntStateOf(initialDepth) }
+    var secrets by remember(world.seed, challenges) { mutableStateOf(false) }
+    val profile = LevelMapRequest(world.seed, depth, challenges, world.selectedTrinket)
+    var branch by remember(profile) { mutableIntStateOf(0) }
+    var parent by remember(profile) { mutableStateOf<LevelMapBundle?>(null) }
+    var retry by remember { mutableIntStateOf(0) }
+    val request = profile.copy(branch = branch)
+    val loaded by produceState<Pair<LevelMapRequest, Result<LevelMapBundle>>?>(null, request, retry) {
+        value = null
+        value = try {
+            request to Result.success(LevelMaps.load(request))
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (failure: Throwable) {
+            request to Result.failure(failure)
+        }
+    }
+    val current = loaded?.takeIf { it.first == request }?.second
+    val bundle = current?.getOrNull()
+    LaunchedEffect(bundle, request) { if (branch == 0 && bundle != null) parent = bundle }
+    val title = if (branch == 0) "Floor $depth layout" else if (bundle?.map?.kind == "imp_vault") "Imp Vault" else "Blacksmith Mine"
+    fun close() { expanded = false; depth = initialDepth; branch = 0 }
+    fun navigate(delta: Int) { floors.getOrNull(floors.indexOf(depth) + delta)?.let { depth = it } }
+
+    val toolbar: @Composable () -> Unit = {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (!parent?.map?.branches.isNullOrEmpty()) {
+                    FilterChip(selected = branch == 0, onClick = { branch = 0 }, label = { Text("Main") })
+                    parent?.map?.branches?.forEach { area ->
+                        FilterChip(selected = branch == area.branch, onClick = { branch = area.branch },
+                            modifier = Modifier.semantics { contentDescription = area.label },
+                            label = { Text(if (area.kind == "imp_vault") "Vault" else "Mine") })
+                    }
+                }
+            }
+            FilterChip(selected = secrets, onClick = { secrets = !secrets },
+                enabled = (bundle?.map?.secretCount ?: 0) > 0,
+                leadingIcon = { Icon(if (secrets) Icons.Filled.Check else Icons.Filled.Close, null, Modifier.size(16.dp)) },
+                label = { Text("Secrets") })
+        }
+    }
+    val stage: @Composable (Modifier, Boolean) -> Unit = { modifier, full ->
+        Box(modifier.background(Color.Black), contentAlignment = Alignment.Center) {
+            when {
+                current?.isFailure == true -> Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("Couldn’t load this map.", color = Color.White)
+                    Text(current.exceptionOrNull()?.message ?: "Map generation failed", color = Color.LightGray,
+                        style = MaterialTheme.typography.bodySmall)
+                    TextButton(onClick = { retry++; }) { Text("Try again") }
+                }
+                bundle != null -> MapCanvas(bundle, secrets, title, full, ::navigate)
+                else -> Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    CircularProgressIndicator(Modifier.size(24.dp))
+                    Text("Charting ${if (branch == 0) "floor $depth" else "the quest level"}…", color = Color.LightGray)
+                }
+            }
+            if (!full) Surface(modifier = Modifier.align(Alignment.TopEnd).padding(6.dp), shape = MaterialTheme.shapes.medium,
+                color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.92f)) {
+                TextButton(onClick = { expanded = true }) { Text("Expand map") }
+            }
+        }
+    }
+    Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow,
+        modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)) {
+        Column {
+            toolbar()
+            if (!expanded) stage(Modifier.fillMaxWidth().height(280.dp), false)
+            else Spacer(Modifier.height(280.dp))
+        }
+    }
+    if (expanded) Dialog(onDismissRequest = ::close,
+        properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            Column(Modifier.fillMaxSize().safeDrawingPadding()) {
+                Row(Modifier.fillMaxWidth().padding(start = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { navigate(-1) }, enabled = floors.indexOf(depth) > 0) {
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Previous floor")
+                    }
+                    Column(Modifier.weight(1f)) {
+                        Text("Floor $depth · ${floorRegion(depth)}", style = MaterialTheme.typography.titleMedium, color = floorRegionColor(depth))
+                        world.quests.firstOrNull { it.depth == depth }?.let {
+                            Text(it.variant.label, style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                    world.floorFeelings[depth]?.let { if (it != dev.seedseeker.app.model.FloorFeeling.NONE) FloorFeelingSprite(it) }
+                    IconButton(onClick = { navigate(1) }, enabled = floors.indexOf(depth) < floors.lastIndex) {
+                        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Next floor")
+                    }
+                    IconButton(onClick = ::close) { Icon(Icons.Filled.Close, "Close map") }
+                }
+                if (world.trinketOrder.isNotEmpty()) Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                ) {
+                    world.trinketOrder.take(4).forEach { offer ->
+                        val selected = world.selectedTrinket == offer.id
+                        TooltipBox(positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+                            tooltip = { PlainTooltip { Text(offer.name + if (selected) " · Applied +3" else "") } },
+                            state = rememberTooltipState()) {
+                            Surface(selected = selected, enabled = !changingTrinket,
+                                onClick = { onSelectTrinket(if (selected) "none" else offer.id) },
+                                modifier = Modifier.size(56.dp).semantics {
+                                    contentDescription = offer.name
+                                    stateDescription = if (selected) "Applied +3" else "Not applied"
+                                }, shape = MaterialTheme.shapes.medium,
+                                color = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainer,
+                                border = BorderStroke(1.dp, if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant)) {
+                                Column(Modifier.fillMaxSize().padding(4.dp), horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center) {
+                                    ItemSprite(offer, modifier = Modifier.size(if (selected) 28.dp else 32.dp))
+                                    if (selected) Text("+3", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                                }
+                            }
+                        }
+                    }
+                }
+                toolbar()
+                stage(Modifier.fillMaxWidth().weight(1f), true)
+            }
+        }
+    }
+}
+
+private class MapViewHandle { var view: NativeLevelMapView? = null }
+
+@Composable
+private fun MapCanvas(bundle: LevelMapBundle, secrets: Boolean, label: String, expanded: Boolean, navigate: (Int) -> Unit) {
+    val handle = remember { MapViewHandle() }
+    Box(Modifier.fillMaxSize()) {
+        AndroidView(modifier = Modifier.fillMaxSize(), factory = { context -> NativeLevelMapView(context).also { handle.view = it } },
+            update = { it.bind(bundle, secrets, expanded, navigate); it.contentDescription = label },
+            onRelease = { it.release(); handle.view = null })
+        Surface(modifier = Modifier.align(Alignment.BottomEnd).padding(6.dp), shape = MaterialTheme.shapes.medium,
+            color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.92f)) {
+            Row {
+                TextButton(onClick = { handle.view?.zoomBy(1 / 1.5f) }, modifier = Modifier.semantics { contentDescription = "Zoom out" }) { Text("−") }
+                TextButton(onClick = { handle.view?.reset() }) { Text("Fit") }
+                TextButton(onClick = { handle.view?.zoomBy(1.5f) }, modifier = Modifier.semantics { contentDescription = "Zoom in" }) { Text("+") }
+            }
+        }
+    }
+}
+
+/** Android gestures, accessibility scrolling and animation lifetime stay native. */
+internal class NativeLevelMapView(context: Context) : View(context) {
+    private var renderer: LevelMapRenderer? = null
+    private var bundle: LevelMapBundle? = null
+    private var secrets = false
+    private var expanded = false
+    private var navigate: (Int) -> Unit = {}
+    private var zoom = 1f
+    private var panX = 0f
+    private var panY = 0f
+    private var start = SystemClock.uptimeMillis()
+    private var animate = true
+    private val visible = Rect()
+    private val durationObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
+        override fun onChange(selfChange: Boolean) { updateMotion(); invalidate() }
+    }
+    private val pinch = ScaleGestureDetector(context, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+        override fun onScaleBegin(detector: ScaleGestureDetector): Boolean { parent?.requestDisallowInterceptTouchEvent(true); return true }
+        override fun onScale(detector: ScaleGestureDetector): Boolean {
+            zoomAt(zoom * detector.scaleFactor, detector.focusX - width / 2f, detector.focusY - height / 2f)
+            return true
+        }
+    })
+    private val gestures = GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
+        override fun onDown(e: MotionEvent) = true
+        override fun onDoubleTap(e: MotionEvent): Boolean {
+            zoomAt(if (zoom > 1f) 1f else 2.5f, e.x - width / 2f, e.y - height / 2f)
+            return true
+        }
+        override fun onScroll(e1: MotionEvent?, e2: MotionEvent, distanceX: Float, distanceY: Float): Boolean {
+            if (zoom > 1 && !pinch.isInProgress) {
+                panX -= distanceX; panY -= distanceY; constrain(); invalidate()
+            }
+            return true
+        }
+    })
+    private var downX = 0f
+    private var downY = 0f
+    private var multiTouch = false
+
+    init { isFocusable = true; importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES }
+
+    fun bind(next: LevelMapBundle, reveal: Boolean, full: Boolean, onNavigate: (Int) -> Unit) {
+        expanded = full
+        navigate = onNavigate
+        if (next === bundle && secrets == reveal) return
+        val newMap = next !== bundle
+        renderer?.close()
+        renderer = LevelMapRenderer(next, reveal)
+        bundle = next
+        secrets = reveal
+        if (newMap) { reset(); start = SystemClock.uptimeMillis() }
+        invalidate()
+    }
+    fun release() { renderer?.close(); renderer = null; bundle = null }
+    fun reset() { zoom = 1f; panX = 0f; panY = 0f; invalidate() }
+    fun zoomBy(factor: Float) = zoomAt(zoom * factor, 0f, 0f)
+    private fun zoomAt(next: Float, x: Float, y: Float) {
+        val clamped = next.coerceIn(1f, 8f)
+        val ratio = clamped / zoom
+        panX = x - (x - panX) * ratio
+        panY = y - (y - panY) * ratio
+        zoom = clamped
+        constrain(); invalidate()
+    }
+    private fun fit(): Float {
+        val scene = renderer ?: return 1f
+        val fit = minOf(width.toFloat() / scene.width, height.toFloat() / scene.height)
+        return if (fit >= 1) floor(fit) else fit
+    }
+    private fun constrain() {
+        val scene = renderer ?: return
+        val limitX = ((scene.width * fit() * zoom - width) / 2).coerceAtLeast(0f)
+        val limitY = ((scene.height * fit() * zoom - height) / 2).coerceAtLeast(0f)
+        panX = panX.coerceIn(-limitX, limitX); panY = panY.coerceIn(-limitY, limitY)
+    }
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) { constrain() }
+    override fun onDraw(canvas: Canvas) {
+        // Compose's AndroidView does not clip drawing to its layout bounds.
+        // Keep drawColor and zoomed particles inside the map, below the toolbar.
+        canvas.save()
+        canvas.clipRect(0, 0, width, height)
+        canvas.drawColor(AndroidColor.BLACK)
+        val scene = renderer
+        if (scene == null) { canvas.restore(); return }
+        val scale = fit() * zoom
+        canvas.save()
+        canvas.translate((width - scene.width * scale) / 2 + panX, (height - scene.height * scale) / 2 + panY)
+        canvas.scale(scale, scale)
+        scene.draw(canvas, if (animate) SystemClock.uptimeMillis() - start else 0)
+        canvas.restore()
+        canvas.restore()
+        if (scene.animated && animate && windowVisibility == VISIBLE && isShown && getGlobalVisibleRect(visible)) postInvalidateOnAnimation()
+    }
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        context.contentResolver.registerContentObserver(Settings.Global.getUriFor(Settings.Global.ANIMATOR_DURATION_SCALE), false, durationObserver)
+        updateMotion(); invalidate()
+    }
+    override fun onDetachedFromWindow() {
+        context.contentResolver.unregisterContentObserver(durationObserver)
+        super.onDetachedFromWindow()
+    }
+    override fun onWindowVisibilityChanged(visibility: Int) { super.onWindowVisibilityChanged(visibility); if (visibility == VISIBLE) invalidate() }
+    private fun updateMotion() { animate = Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f }
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_DOWN -> {
+                downX = event.x; downY = event.y; multiTouch = false
+                parent?.requestDisallowInterceptTouchEvent(expanded || zoom > 1f)
+            }
+            MotionEvent.ACTION_POINTER_DOWN -> { multiTouch = true; parent?.requestDisallowInterceptTouchEvent(true) }
+            MotionEvent.ACTION_UP -> {
+                val dx = event.x - downX
+                val dy = event.y - downY
+                if (expanded && zoom == 1f && !multiTouch && abs(dx) > 60 * resources.displayMetrics.density && abs(dx) > abs(dy) * 1.5f) {
+                    navigate(if (dx < 0) 1 else -1)
+                }
+                if (!multiTouch && abs(dx) < 8 && abs(dy) < 8) performClick()
+                parent?.requestDisallowInterceptTouchEvent(false)
+            }
+            MotionEvent.ACTION_CANCEL -> parent?.requestDisallowInterceptTouchEvent(false)
+        }
+        pinch.onTouchEvent(event)
+        gestures.onTouchEvent(event)
+        return true
+    }
+    override fun performClick(): Boolean { super.performClick(); return true }
+}

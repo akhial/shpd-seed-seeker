@@ -20,6 +20,7 @@ use shpd_seedfinder_core::seed::{DungeonSeed, format_input};
 use shpd_seedfinder_core::trinkets::trinket_order;
 use shpd_seedfinder_session::production_scout_world_selected;
 
+use crate::level_map_view::{FloorMapView, MapProfile};
 use crate::sprites::ItemSprite;
 use crate::state::{AppState, QuestRow, quest_rows, region, source_label};
 use crate::{glow, sprites};
@@ -56,6 +57,7 @@ pub struct DetailPane {
     selected_trinket: Cell<Option<ItemId>>,
     trinket_override: Cell<TrinketOverride>,
     world_challenges: Cell<Challenges>,
+    open_map: RefCell<Option<(u8, Rc<FloorMapView>)>>,
     updating: Cell<bool>,
     toasts: adw::ToastOverlay,
     on_scout: RefCell<Option<Box<dyn Fn()>>>,
@@ -250,6 +252,7 @@ impl DetailPane {
             selected_trinket: Cell::new(None),
             trinket_override: Cell::new(TrinketOverride::Automatic),
             world_challenges: Cell::new(Challenges::NONE),
+            open_map: RefCell::new(None),
             updating: Cell::new(false),
             toasts: toasts.clone(),
             on_scout: RefCell::new(None),
@@ -482,6 +485,70 @@ impl DetailPane {
         for (index, world_item) in world.items.iter().enumerate() {
             by_depth.entry(world_item.depth).or_default().push(index);
         }
+        for floor in &world.feelings {
+            by_depth.entry(floor.depth).or_default();
+        }
+        let last_depth = by_depth.keys().next_back().copied().unwrap_or(0);
+        for depth in shpd_seedfinder_core::level_map::SUPPORTED_DEPTHS {
+            if depth <= last_depth {
+                by_depth.entry(depth).or_default();
+            }
+        }
+        let floors = by_depth
+            .keys()
+            .copied()
+            .filter(|d| shpd_seedfinder_core::level_map::SUPPORTED_DEPTHS.contains(d))
+            .collect::<Vec<_>>();
+        let profile = MapProfile {
+            seed: world.seed,
+            challenges: self.world_challenges.get(),
+            trinket: self.selected_trinket.get(),
+        };
+        let discard_map = self.open_map.borrow().as_ref().is_some_and(|(_, view)| {
+            view.profile().seed != profile.seed || view.profile().challenges != profile.challenges
+        });
+        if discard_map && let Some((_, view)) = self.open_map.borrow_mut().take() {
+            view.close();
+        }
+        if let Some((_, view)) = self.open_map.borrow().as_ref() {
+            view.update_profile(profile);
+            let weak = Rc::downgrade(self);
+            let trinket_state = state.clone();
+            view.set_trinket_handler(move |id| {
+                if let Some(pane) = weak.upgrade() {
+                    pane.trinket_override.set(TrinketOverride::Manual(
+                        (pane.selected_trinket.get() != Some(id)).then_some(id),
+                    ));
+                    pane.scout_with_override(Some(&profile.seed.to_code()), &trinket_state);
+                }
+            });
+            let weak = Rc::downgrade(self);
+            let state = state.clone();
+            view.set_close_handler(move || {
+                if let Some(pane) = weak.upgrade() {
+                    let previous = pane.open_map.borrow_mut().take();
+                    pane.render(&state);
+                    if let Some((depth, _)) = previous {
+                        pane.focus_floor(depth);
+                    }
+                }
+            });
+            if let Some(parent) = view.widget.parent().and_downcast::<gtk::Box>() {
+                parent.remove(&view.widget);
+            }
+        }
+        let matched_choices = world
+            .items
+            .iter()
+            .zip(&marks.matched)
+            .filter_map(|(item, matched)| {
+                if *matched && let Accessibility::Choice { group, option } = item.accessibility {
+                    Some((group, option))
+                } else {
+                    None
+                }
+            })
+            .collect::<BTreeMap<_, _>>();
 
         self.summary_items.set_label(&format!(
             "{} items across {} floors",
@@ -562,10 +629,87 @@ impl DetailPane {
             {
                 heading.append(&icon);
             }
-            section.append(&heading);
+            if floors.contains(depth) {
+                let map_button = gtk::ToggleButton::builder()
+                    .child(&heading)
+                    .active(
+                        self.open_map
+                            .borrow()
+                            .as_ref()
+                            .is_some_and(|(d, _)| d == depth),
+                    )
+                    .css_classes(["flat"])
+                    .tooltip_text(format!("Show or hide floor {depth} map"))
+                    .build();
+                heading.set_hexpand(true);
+                let map_label = gtk::Label::builder()
+                    .label("Map")
+                    .hexpand(true)
+                    .halign(gtk::Align::End)
+                    .css_classes(["caption", "dim-label"])
+                    .build();
+                heading.append(&map_label);
+                section.append(&map_button);
+                let map_slot = gtk::Box::new(gtk::Orientation::Vertical, 0);
+                if let Some((d, view)) = self.open_map.borrow().as_ref()
+                    && d == depth
+                {
+                    map_slot.append(&view.widget);
+                }
+                section.append(&map_slot);
+                let weak = Rc::downgrade(self);
+                let state = state.clone();
+                let depth = *depth;
+                let floors = floors.clone();
+                map_button.connect_clicked(move |_| {
+                    let Some(pane) = weak.upgrade() else {
+                        return;
+                    };
+                    let previous = pane.open_map.borrow_mut().take();
+                    let closing = previous.as_ref().is_some_and(|(d, _)| *d == depth);
+                    if let Some((_, view)) = previous {
+                        view.close();
+                    }
+                    if !closing {
+                        let weak = Rc::downgrade(&pane);
+                        let state = state.clone();
+                        let profile = MapProfile {
+                            seed: profile.seed,
+                            challenges: profile.challenges,
+                            trinket: pane.selected_trinket.get(),
+                        };
+                        let view = FloorMapView::new(profile, depth, floors.clone(), move |id| {
+                            if let Some(pane) = weak.upgrade() {
+                                pane.trinket_override.set(TrinketOverride::Manual(
+                                    (pane.selected_trinket.get() != Some(id)).then_some(id),
+                                ));
+                                pane.scout_with_override(Some(&profile.seed.to_code()), &state);
+                            }
+                        });
+                        pane.open_map.replace(Some((depth, view)));
+                    }
+                    pane.render(&state);
+                    if closing {
+                        pane.focus_floor(depth);
+                    } else if let Some((_, view)) = pane.open_map.borrow().as_ref() {
+                        view.focus();
+                    }
+                });
+            } else {
+                section.append(&heading);
+            }
             let group = adw::PreferencesGroup::builder()
                 .description(description)
                 .build();
+            if indices.is_empty() {
+                group.add(
+                    &gtk::Label::builder()
+                        .label("No notable items on this floor.")
+                        .css_classes(["caption", "dim-label"])
+                        .xalign(0.0)
+                        .build(),
+                );
+            }
             let mut catalyst_shown = false;
             for index in indices {
                 if item(world.items[*index].item).kind == ItemKind::Trinket {
@@ -595,7 +739,16 @@ impl DetailPane {
                         catalyst_shown = true;
                     }
                 } else {
-                    group.add(&item_row(&world.items[*index], gems, marks.matched[*index]));
+                    let world_item = &world.items[*index];
+                    let row = item_row(world_item, gems, marks.matched[*index]);
+                    if choice_is_dimmed(
+                        world_item.accessibility,
+                        marks.matched[*index],
+                        &matched_choices,
+                    ) {
+                        row.set_opacity(0.45);
+                    }
+                    group.add(&row);
                 }
             }
             section.append(&group);
@@ -626,6 +779,14 @@ impl DetailPane {
             pane.update_dock();
             gtk::glib::ControlFlow::Break
         });
+    }
+
+    fn focus_floor(&self, depth: u8) {
+        if let Some((_, section)) = self.sections.borrow().iter().find(|(d, _)| *d == depth)
+            && let Some(heading) = section.first_child()
+        {
+            heading.grab_focus();
+        }
     }
 }
 
@@ -748,18 +909,12 @@ fn trinket_choices(
 fn item_row(world_item: &WorldItem, gems: RingGems, matched: bool) -> adw::ActionRow {
     let mut subtitle = source_label(world_item.source).to_owned();
     match world_item.accessibility {
-        Accessibility::Independent => {}
-        Accessibility::Choice { group, option } => {
-            let _ = write!(
-                subtitle,
-                "\nOne reward of choice group {group} (option {})",
-                option + 1
-            );
-        }
+        Accessibility::Independent | Accessibility::Choice { .. } => {}
         Accessibility::Scenarios { group, .. } => {
             let _ = write!(
                 subtitle,
-                "\nOnly in some outcomes of scenario group {group}"
+                "\nOnly in some outcomes of scenario group {}",
+                choice_letter(group)
             );
         }
     }
@@ -807,7 +962,31 @@ fn item_row(world_item: &WorldItem, gems: RingGems, matched: bool) -> adw::Actio
         ));
         row.add_suffix(&badge);
     }
+    if let Accessibility::Choice { group, option } = world_item.accessibility {
+        let badge = tag(&format!("⑂ {}", choice_letter(group)), "dim-label");
+        let description = format!(
+            "One reward of choice group {} (option {})",
+            choice_letter(group),
+            option + 1
+        );
+        badge.set_tooltip_text(Some(&description));
+        badge.update_property(&[gtk::accessible::Property::Label(&description)]);
+        row.add_suffix(&badge);
+    }
     row
+}
+
+fn choice_letter(group: u16) -> char {
+    char::from(b'A' + u8::try_from(group % 26).unwrap_or(0))
+}
+
+fn choice_is_dimmed(
+    accessibility: Accessibility,
+    matched: bool,
+    choices: &BTreeMap<u16, u8>,
+) -> bool {
+    !matched
+        && matches!(accessibility,Accessibility::Choice{group,option} if choices.get(&group).is_some_and(|selected|*selected!=option))
 }
 
 fn tag(label: &str, color: &str) -> gtk::Label {
@@ -820,11 +999,58 @@ fn tag(label: &str, color: &str) -> gtk::Label {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn only_conflicting_choices_dim_after_a_match() {
+        use super::{Accessibility, BTreeMap, choice_is_dimmed, choice_letter};
+        let selected = BTreeMap::from([(2, 1)]);
+        assert!(choice_is_dimmed(
+            Accessibility::Choice {
+                group: 2,
+                option: 0
+            },
+            false,
+            &selected
+        ));
+        assert!(!choice_is_dimmed(
+            Accessibility::Choice {
+                group: 2,
+                option: 1
+            },
+            false,
+            &selected
+        ));
+        assert!(!choice_is_dimmed(
+            Accessibility::Choice {
+                group: 3,
+                option: 0
+            },
+            false,
+            &selected
+        ));
+        assert!(!choice_is_dimmed(
+            Accessibility::Choice {
+                group: 2,
+                option: 0
+            },
+            true,
+            &selected
+        ));
+        assert!(!choice_is_dimmed(
+            Accessibility::Independent,
+            false,
+            &selected
+        ));
+        assert_eq!(choice_letter(0), 'A');
+        assert_eq!(choice_letter(25), 'Z');
+        assert_eq!(choice_letter(26), 'A');
+    }
+
     /// Run under Xvfb with --ignored; normal unit tests need no display.
     #[test]
     #[ignore = "requires a GTK display"]
+    #[allow(clippy::too_many_lines)] // End-to-end scrolling, trinket and map continuity.
     fn scout_dock_tracks_scroll_and_trinket_switches() {
-        use super::{AppState, DetailPane};
+        use super::{AppState, DetailPane, Rc};
         use adw::prelude::*;
         adw::init().unwrap();
         gtk::gio::resources_register_include!("dev.seedseeker.SeedSeeker.gresource").unwrap();
@@ -923,6 +1149,33 @@ mod tests {
         settle();
         assert!(pane.selected_trinket.get().is_none());
         assert!((0..4).all(|index| !choice(index).is_active()));
+        // Opening a map survives the manifest rebuild used by trinket changes.
+        adjustment.set_value(0.0);
+        let first_heading = pane.sections.borrow()[0]
+            .1
+            .first_child()
+            .unwrap()
+            .downcast::<gtk::ToggleButton>()
+            .unwrap();
+        first_heading.emit_clicked();
+        settle();
+        let map = Rc::clone(&pane.open_map.borrow().as_ref().unwrap().1);
+        choice(1).emit_clicked();
+        settle();
+        assert!(Rc::ptr_eq(
+            &map,
+            &pane.open_map.borrow().as_ref().unwrap().1
+        ));
+        assert_eq!(map.profile().trinket, pane.selected_trinket.get());
+        let first_heading = pane.sections.borrow()[0]
+            .1
+            .first_child()
+            .unwrap()
+            .downcast::<gtk::ToggleButton>()
+            .unwrap();
+        first_heading.emit_clicked();
+        settle();
+        assert!(pane.open_map.borrow().is_none());
         window.close();
     }
 

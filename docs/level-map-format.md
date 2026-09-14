@@ -305,6 +305,23 @@ challenge mask and resolved trinket. Changing the selection must use a fresh
 map document. No UI state, zoom, wall-clock time or platform identifier affects
 the generated map.
 
+## Scout integrations
+
+The web and all four native Scout panes disclose maps from floor headings and
+offer an expanded view. Supported empty and boss floors remain navigable within
+the scouted prefix. Branch controls come from the loaded parent map, secrets
+start concealed, and trinket changes retain the expanded floor while returning
+to its main branch. Each request carries the completed scout's challenge mask
+and resolved trinket, including explicit `"none"` when nothing is selected.
+
+Android uses a native Canvas inside Compose, macOS uses CoreGraphics in SwiftUI,
+Windows uses a native pixel compositor with WinUI controls, and Linux uses Cairo
+with GTK/libadwaita. Generation runs outside the UI thread; each client caches
+scenes and embedded textures and offers retry on failure. Reduced-motion views
+sample time zero and offscreen maps suspend drawing. Platform READMEs describe
+their gestures and controls; native regression tests cover scene composition,
+particle schedules, secret masks and trinket refresh alongside choice matching.
+
 ## Source and validation
 
 Generation uses the repository's pinned v4.0.0 engine and saved Java parity

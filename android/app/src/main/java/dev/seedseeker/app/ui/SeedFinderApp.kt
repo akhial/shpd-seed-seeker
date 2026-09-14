@@ -618,6 +618,7 @@ fun SeedFinderApp(
     // app never re-derives the selection; null means there is nothing to mark
     // — no runnable query, or an engine that did not produce this world.
     val scoutMatches by produceState<ScoutMatches?>(null, scoutResult, completedScoutRun) {
+        value = null
         val world = scoutResult
         val completedRun = completedScoutRun
         val request = completedRun?.query ?: currentRequest
@@ -825,6 +826,7 @@ fun SeedFinderApp(
             Destination.SCOUT -> ScoutScreen(
                 seedInput = scoutInput,
                 result = scoutResult,
+                mapChallenges = completedScoutRun?.challenges ?: 0,
                 isScouting = isScouting,
                 error = scoutError,
                 matches = scoutMatches,
@@ -838,7 +840,9 @@ fun SeedFinderApp(
                     scoutError = null
                 },
                 onSelectTrinket = { trinket ->
-                    val previous = scoutRun
+                    // Keep the completed scout profile, including an empty query's
+                    // captured challenges, even after editing the finder or a failed retry.
+                    val previous = completedScoutRun
                     if (!isScouting && previous != null && scoutResult != null) {
                         scoutRun = previous.copy(id = nextScoutRunId++, trinket = trinket)
                     }

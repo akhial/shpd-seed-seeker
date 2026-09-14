@@ -1114,11 +1114,58 @@ fn effect_badge(requirement: &UiRequirement) -> Option<gtk::Widget> {
     if set.count() > 1 {
         let count = gtk::Label::builder()
             .label(set.count().to_string())
-            .tooltip_text(label)
             .css_classes(["effect-count"])
             .valign(gtk::Align::Center)
+            .halign(gtk::Align::Center)
             .build();
-        return Some(count.upcast());
+        let ring = gtk::DrawingArea::builder()
+            .content_width(22)
+            .content_height(22)
+            .build();
+        let colors = set
+            .effects()
+            .filter_map(|effect| glow::effect(Some(effect)))
+            .map(glow::Glow::rgb)
+            .collect::<Vec<_>>();
+        ring.set_draw_func(move |_, context, width, height| {
+            // Equal stationary stops, interpolated around a closed ring. The
+            // item sprite still pulses; the count always shows all effects.
+            let radius = f64::from(width.min(height)) / 2.0 - 1.5;
+            context.set_line_width(2.0);
+            for segment in 0_u32..180 {
+                let position = f64::from(segment)
+                    * f64::from(u32::try_from(colors.len()).unwrap_or(1))
+                    / 180.0;
+                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                let index = position.floor() as usize;
+                let fraction = position.fract();
+                let (r0, g0, b0) = colors[index];
+                let (r1, g1, b1) = colors[(index + 1) % colors.len()];
+                context.set_source_rgb(
+                    r0 + (r1 - r0) * fraction,
+                    g0 + (g1 - g0) * fraction,
+                    b0 + (b1 - b0) * fraction,
+                );
+                let start = f64::from(segment) * std::f64::consts::TAU / 180.0
+                    - std::f64::consts::FRAC_PI_2;
+                context.arc(
+                    f64::from(width) / 2.0,
+                    f64::from(height) / 2.0,
+                    radius,
+                    start,
+                    start + std::f64::consts::TAU / 180.0 + 0.01,
+                );
+                let _ = context.stroke();
+            }
+        });
+        let badge = gtk::Overlay::builder()
+            .child(&ring)
+            .tooltip_text(&label)
+            .valign(gtk::Align::Center)
+            .build();
+        badge.add_overlay(&count);
+        badge.update_property(&[gtk::accessible::Property::Label(&label)]);
+        return Some(badge.upcast());
     }
     // A single effect — enchantment or curse — already pulses on a real
     // sprite, and the tooltip names it; a badge would only say it twice.

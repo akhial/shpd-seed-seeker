@@ -24,6 +24,8 @@
          P/Invokes here, so the tests exercise the shipping path rather than a
          second implementation of it. -->
     <Compile Include="..\SeedSeeker\NativeEngine.cs" Link="NativeEngine.cs" />
+    <Compile Include="..\SeedSeeker\LevelMap.cs" Link="LevelMap.cs" />
+    <Compile Include="..\SeedSeeker\LevelMapRenderer.cs" Link="LevelMapRenderer.cs" />
   </ItemGroup>
   <ItemGroup>
     <!-- ItemCatalog reads this beside the test binary exactly as the app reads
