@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -593,18 +594,22 @@ private fun ScoutItemCard(
                         }
                     }
                 }
-                scoutItem.effect?.let { effect ->
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    scoutItem.effect?.let { effect ->
+                        Text(
+                            effect,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (effectIsCurse) SpdDanger else SpdTeal,
+                            modifier = Modifier.alignByBaseline(),
+                        )
+                    }
                     Text(
-                        effect,
+                        scoutItem.source.label,
                         style = MaterialTheme.typography.bodySmall,
-                        color = if (effectIsCurse) SpdDanger else SpdTeal,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.alignByBaseline(),
                     )
                 }
-                Text(
-                    scoutItem.source.label,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
                 accessibilityLabel?.let {
                     Spacer(Modifier.height(2.dp))
                     Text(
