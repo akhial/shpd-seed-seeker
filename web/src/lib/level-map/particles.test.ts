@@ -30,6 +30,63 @@ const emitter: MapEmitter = {
 };
 
 describe("continuous map effects", () => {
+  it.each([false, true])(
+    "clears the reused overlay across secret toggles (concealed effects: %s)",
+    (concealedEffects) => {
+      vi.stubGlobal("document", {
+        createElement: () => ({ getContext: () => ({ fillRect() {} }) }),
+      });
+      const context = {
+        canvas: { width: 128, height: 32 },
+        save() {},
+        restore() {},
+        setTransform: vi.fn(),
+        clearRect: vi.fn(),
+        drawImage() {},
+        translate() {},
+        rotate() {},
+        scale() {},
+        fillRect() {},
+      };
+      const bundle = {
+        textures: new Map(),
+        map: {
+          width: 4,
+          height: 1,
+          scene: {
+            tileSize: 16,
+            sprites: [],
+            layers: [],
+            concealedLayers: [],
+            emitters: [emitter],
+            concealedEmitters: concealedEffects ? [{ ...emitter, cell: 3 }] : [],
+          },
+        },
+      } as unknown as MapBundle;
+      try {
+        for (const revealSecrets of [false, true, false, true, false]) {
+          const renderer = createMapParticleRenderer(
+            context as unknown as CanvasRenderingContext2D,
+            {} as HTMLCanvasElement,
+            bundle,
+            revealSecrets,
+          );
+          context.clearRect.mockClear();
+          renderer.draw(100);
+          // Clear all previous scenery, including areas no longer covered by
+          // emitters. Map coordinates are scaled to the full physical canvas.
+          expect(context.setTransform).toHaveBeenLastCalledWith(2, 0, 0, 2, 0, 0);
+          expect(context.clearRect.mock.calls[0]).toEqual([0, 0, 64, 16]);
+          expect(renderer.animated).toBe(revealSecrets || concealedEffects);
+          context.clearRect.mockClear();
+          renderer.draw(110);
+          expect(context.clearRect).not.toHaveBeenCalledWith(0, 0, 64, 16);
+        }
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    },
+  );
   it("clips drifting wind to visible chasms without clipping other particles", () => {
     const rectangles: number[][] = [];
     vi.stubGlobal(

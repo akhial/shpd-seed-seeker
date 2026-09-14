@@ -169,6 +169,7 @@ export function createMapParticleRenderer(
   const images = emitters.map((emitter) =>
     emitter.image.kind === "blit" ? drawTexture(bundle, emitter.image) : null,
   );
+  let initial = true;
   return {
     animated: emitters.length > 0,
     draw(elapsed: number) {
@@ -184,6 +185,12 @@ export function createMapParticleRenderer(
       context.imageSmoothingEnabled = false;
       context.globalAlpha = 1;
       context.globalCompositeOperation = "source-over";
+      // A reused overlay may still contain scenery from the previous secret
+      // mode outside these emitters' regions, even when there are no emitters.
+      if (initial) {
+        context.clearRect(0, 0, width, height);
+        initial = false;
+      }
       // Copy all backgrounds before drawing any emitter; overlaps retain particles.
       for (const [x, y, w, h] of regions) {
         context.clearRect(x, y, w, h);
