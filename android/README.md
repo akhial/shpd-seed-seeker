@@ -34,7 +34,47 @@ rustup target add aarch64-linux-android x86_64-linux-android
 If a newer JDK is your shell default, set `JAVA_HOME` to JDK 21 before invoking
 the wrapper. `ANDROID_HOME` or `android/local.properties` must identify the SDK.
 
-The app requests no Android permissions. It targets API 36, supports API 23+, opts into edge-to-edge drawing, and uses AndroidX's predictive-back handler for in-app navigation.
+The app targets API 36, supports API 23+, opts into edge-to-edge drawing, and uses AndroidX's predictive-back handler for in-app navigation. It uses Internet access for update checks, foreground-service and wake-lock permissions for background searches, and requests notification permission on Android 13+ when the first search starts. Declining notification permission does not prevent searching; Android still lists the service in its active-apps controls.
+
+## Background searches and recovery
+
+Searches belong to the application and run under a foreground service, so switching
+apps, recreating the activity, removing its recent-apps task, or locking the screen
+does not cancel the native engine. The ongoing **Seed searches** notification opens
+the app and provides a **Stop** action. A partial CPU wake lock is held only while
+the service is running and released when the search finishes, stops, or is interrupted.
+
+Android's deep Doze mode and manufacturer battery restrictions can still suspend
+searching. **Settings → Background search → Battery settings** opens Android's
+battery controls; exempt Seed Seeker from optimization for uninterrupted locked-screen
+searching. This increases battery use. The app does not request an exemption automatically.
+See Android's [Doze documentation](https://developer.android.com/training/monitoring-device-state/doze-standby).
+
+Every 15 seconds, the controller cooperatively stops the native workers, drains all
+matches, atomically saves the exact remaining traversal and full result collection,
+then resumes. The engine's running cursor is never used as a checkpoint. Queries,
+trinket recipes, worker count, Target and detached/refine history survive process
+death. A kill may replay work since the last checkpoint; overlapping results are
+deduplicated. A kill before the first checkpoint restarts the fresh traversal or
+filter. Completed and explicitly stopped searches stay stopped when restored.
+
+Android may restart an interrupted service; otherwise reopening the app resumes
+the saved search. Force-stop and reboot require reopening the app. Recovery files
+are private and excluded from backup. An app/engine version change restores results
+but discards old traversal coverage so searches cannot silently mix engine versions.
+The foreground service uses `specialUse` for user-initiated offline computation;
+its use case is declared in the manifest.
+
+Device verification (use the real-engine Canary build):
+
+1. Start a long search, wait at least 20 seconds, then lock the phone. Unlock and
+   verify progress increased; repeat with battery optimization disabled for a Doze test.
+2. Rotate the phone, switch apps, and remove Seed Seeker from recents. Reopen from
+   the notification and verify the query/results and active search are retained.
+3. Use `adb shell am force-stop dev.seedseeker.unofficial.dev`, reopen, and verify
+   the search resumes with saved results. Repeat during refinement and after a reboot.
+4. Stop through the notification, reopen, and verify no search restarts. Repeat
+   after pressing Clear, and with notification permission denied.
 
 ## Licensing
 

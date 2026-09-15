@@ -8,9 +8,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import dev.seedseeker.app.engine.NativeSeedFinderFactory
 import dev.seedseeker.app.ui.SeedFinderApp
 import dev.seedseeker.app.ui.SharedLink
 import dev.seedseeker.app.ui.theme.SeedSeekerTheme
@@ -29,10 +27,15 @@ class MainActivity : ComponentActivity() {
         sharedLink = intent?.dataString?.let(::SharedLink)
         setContent {
             SeedSeekerTheme {
-                val engine = remember { NativeSeedFinderFactory.create() }
-                SeedFinderApp(engine, fakeLatestVersion, sharedLink)
+                val app = application as SeedSeekerApplication
+                SeedFinderApp(app.engine, app.searchController, fakeLatestVersion, sharedLink)
             }
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        (application as SeedSeekerApplication).searchController.onVisible()
     }
 
     // App Links tapped while the singleTask activity is already running

@@ -4,6 +4,10 @@
     xmlns:tools="http://schemas.android.com/tools">
     <!-- Only used for the update check against GitHub releases. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <application
         android:name=".SeedSeekerApplication"
         android:allowBackup="true"
@@ -14,6 +18,15 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.SeedSeeker"
         tools:targetApi="33">
+        <service
+            android:name=".SearchService"
+            android:exported="false"
+            android:stopWithTask="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="User-initiated, CPU-intensive offline game seed search. Keeps searching with the screen locked, with visible progress and a Stop action, until enough matches are found or the user stops it." />
+        </service>
         <activity
             android:name=".MainActivity"
             android:exported="true"
