@@ -14,6 +14,8 @@ import dev.seedseeker.app.model.SearchState
 import dev.seedseeker.app.model.SearchStatus
 import dev.seedseeker.app.model.ScoutAccessibility
 import dev.seedseeker.app.model.ScoutItem
+import dev.seedseeker.app.model.ScoutItemMapping
+import dev.seedseeker.app.model.ScoutItemMappings
 import dev.seedseeker.app.model.ScoutItemSource
 import dev.seedseeker.app.model.ScoutQuest
 import dev.seedseeker.app.model.ScoutQuestGiver
@@ -392,9 +394,11 @@ class DemoNativeSeedFinder : NativeSeedFinder {
  * the engine's message), so queries are pre-validated locally for friendlier messages.
  * Result packet `SSR1`: magic[4], count:u16, then
  * repeated seedLength:u8, seed:ASCII. State codes are 0 running, 1 complete, 2 cancelled,
- * 3 failed. A non-zero handle is required. Scout requests use `SSQ3`, a little-endian challenge
+ * 3 failed. A non-zero handle is required. Scout requests use `SSQ4`, a little-endian challenge
  * mask, length-prefixed UTF-8 seed and override (little-endian u16 lengths), and canonical query
  * JSON. An empty override means automatic query selection; "none" disables it. Scout packet
+ * `SSC7` extends SSC6 with 12 mappings each for scrolls, potions, and rings:
+ * name and appearance (u16-length UTF-8), then a u16 sprite index, all big-endian.
  * `SSC6` extends SSC5 with a selected ID (big-endian u16 UTF-8 length, empty means none).
  * SSC4 extends the following `SSC3` layout with a 17-entry trinket deck. SSC3 contains the echoed canonical seed,
  * then the run's ring gems — twelve gem ordinals, one per ring class in catalog ring order —
@@ -713,7 +717,7 @@ object ScoutRequestCodec {
         val seedBytes = seed.toByteArray(StandardCharsets.UTF_8)
         val overrideBytes = (trinket ?: "").toByteArray(StandardCharsets.UTF_8)
         require(overrideBytes.size <= 65535) { "Trinket identifier is too long" }
-        return "SSQ3".toByteArray(StandardCharsets.US_ASCII) + u16(challenges) +
+        return "SSQ4".toByteArray(StandardCharsets.US_ASCII) + u16(challenges) +
             u16(seedBytes.size) + seedBytes + u16(overrideBytes.size) + overrideBytes +
             (query?.let(QueryDocument::encode) ?: byteArrayOf())
     }
@@ -763,7 +767,8 @@ object ScoutResultCodec {
     fun decode(packet: ByteArray): ScoutWorld =
         DataInputStream(ByteArrayInputStream(packet)).use { input ->
             val magic = ByteArray(4).also(input::readFully)
-            val hasSelectedTrinket = magic.contentEquals(byteArrayOf(83, 83, 67, 54))
+            val hasItemMappings = magic.contentEquals(byteArrayOf(83, 83, 67, 55))
+            val hasSelectedTrinket = hasItemMappings || magic.contentEquals(byteArrayOf(83, 83, 67, 54))
             val hasFeelings = hasSelectedTrinket || magic.contentEquals(byteArrayOf(83, 83, 67, 53))
             val hasTrinketOrder = hasFeelings || magic.contentEquals(byteArrayOf(83, 83, 67, 52))
             check(hasTrinketOrder || magic.contentEquals(MAGIC)) { "Unexpected native scout packet" }
@@ -883,9 +888,30 @@ object ScoutResultCodec {
                     check(trinketOrder.take(4).any { it.id == id }) { "Selected trinket is not an initial offer" }
                 }
             } else null
+            val itemMappings = if (hasItemMappings) {
+                fun readMappings(spriteBase: Int): List<ScoutItemMapping> = List(12) {
+                    val name = readUtf8(input, input.readUnsignedShort())
+                    check(name.isNotBlank()) { "Empty scout item name" }
+                    val appearance = readUtf8(input, input.readUnsignedShort())
+                    check(appearance.isNotBlank()) { "Empty scout item appearance" }
+                    val spriteIndex = input.readUnsignedShort()
+                    check(spriteIndex in spriteBase until spriteBase + 12) { "Invalid scout appearance sprite" }
+                    ScoutItemMapping(name, appearance, spriteIndex)
+                }.also { entries ->
+                    check(entries.map { it.name }.distinct().size == 12 &&
+                        entries.map { it.appearance }.distinct().size == 12 &&
+                        entries.map { it.spriteIndex }.distinct().size == 12) { "Repeated scout item mapping" }
+                }
+                ScoutItemMappings(readMappings(304), readMappings(352), readMappings(224)).also { mappings ->
+                    check(mappings.rings.map { it.spriteIndex - 224 } == ringGems.ordinals) {
+                        "Scout ring mappings disagree with run gems"
+                    }
+                }
+            } else null
             check(input.available() == 0) { "Trailing bytes in native scout packet" }
             ScoutWorld(seed = seed, items = items, quests = quests, ringGems = ringGems,
-                trinketOrder = trinketOrder, floorFeelings = floorFeelings, selectedTrinket = selectedTrinket)
+                trinketOrder = trinketOrder, floorFeelings = floorFeelings, selectedTrinket = selectedTrinket,
+                itemMappings = itemMappings)
         }
 
     private fun readUtf8(input: DataInputStream, length: Int): String {

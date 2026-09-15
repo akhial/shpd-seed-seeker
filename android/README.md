@@ -123,10 +123,16 @@ again to deselect it. The selected card carries an “Applied +3” badge. Each
 rescout keeps the query and explicit override together so match highlights use
 the same generated world.
 
-Scout requests use SSQ3 (little-endian challenge mask and length-prefixed seed
-and override, followed by canonical query JSON). SSC6 responses extend SSC5
+Scout requests use SSQ4 (little-endian challenge mask and length-prefixed seed
+and override, followed by canonical query JSON). SSC7 responses extend SSC6
+with all 36 [item mappings](../docs/item-mappings.md). The info button beside
+the scouted seed opens scroll runes, potion colors, and ring gems with their
+unidentified sprites, sorted by appearance name. The list scrolls independently
+of the Scout floors. Older packets omit this button.
+
+SSC6 responses extend SSC5
 with a UTF-8 selected ID and big-endian unsigned 16-bit length; an empty ID means
-no selection. The decoder also accepts SSC3, SSC4, and SSC5.
+no selection. The decoder also accepts SSC3, SSC4, SSC5, and SSC6.
 
 SSC5 contains the SSC3 layout followed by a 17-entry trinket deck: a one-byte
 count and UTF-8 IDs with unsigned 16-bit lengths. After the deck, SSC5 carries a one-byte

@@ -29,6 +29,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
@@ -76,6 +78,7 @@ class ScoutScreenScrollTest {
             quests = emptyList(),
             ringGems = RingGems.CATALOG,
             trinketOrder = offers,
+            itemMappings = dev.seedseeker.app.engine.JniNativeSeedFinder().scoutSeed("EQI-HLQ-RTU").itemMappings,
         )
     }
 
@@ -140,6 +143,27 @@ class ScoutScreenScrollTest {
         output.outputStream().use {
             bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
         }
+    }
+
+    @Test fun seedInformationRemainsAccessibleAfterCollapsingAndScrollsThroughEveryCategory() {
+        show()
+        compose.onNodeWithContentDescription("Seed information").assertIsDisplayed()
+        drag(405f)
+        compose.onNodeWithContentDescription("Seed information").performClick()
+        compose.onNodeWithText("Scroll runes").assertIsDisplayed()
+        val mappings = requireNotNull(world.itemMappings)
+        for ((title, entries) in listOf("Scroll runes" to mappings.scrolls, "Potion colors" to mappings.potions, "Ring gems" to mappings.rings)) {
+            compose.onNodeWithTag("seed-mappings").performScrollToNode(hasText(title))
+            compose.onNodeWithText(title).assertIsDisplayed()
+            for (entry in entries) {
+                compose.onNodeWithTag("seed-mappings").performScrollToNode(hasText(entry.name))
+                compose.onNodeWithText(entry.name).assertIsDisplayed()
+                compose.onNodeWithText(entry.appearance).assertIsDisplayed()
+            }
+        }
+        compose.onNodeWithText("Close").performClick()
+        compose.onNodeWithTag("seed-mappings").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Seed information").assertIsDisplayed()
     }
 
     @Test fun formScrollsAwayAndSummaryCollapsesAboveNavigationThenReverses() {

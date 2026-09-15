@@ -127,6 +127,22 @@ fun ItemSprite(
     spriteIndex: Int = item.spriteIndex,
     glows: List<Glow> = emptyList(),
     modifier: Modifier = Modifier,
+) = ItemArtwork(spriteIndex, item.typeIconIndex, item.name, glows, modifier)
+
+/** Draw the engine-resolved unidentified appearance, without a ring type glyph. */
+@Composable
+internal fun ItemAppearanceSprite(
+    entry: dev.seedseeker.app.model.ScoutItemMapping,
+    modifier: Modifier = Modifier,
+) = ItemArtwork(entry.spriteIndex, null, entry.appearance, emptyList(), modifier)
+
+@Composable
+private fun ItemArtwork(
+    spriteIndex: Int,
+    typeIconIndex: Int?,
+    description: String,
+    glows: List<Glow>,
+    modifier: Modifier,
 ) {
     val atlas = LocalItemAtlas.current
     val iconAtlas = LocalItemIconAtlas.current
@@ -159,9 +175,8 @@ fun ItemSprite(
         else IntRect(minX, minY, maxX + 1, maxY + 1)
     }
     Canvas(
-        modifier = modifier.semantics { contentDescription = item.name },
+        modifier = modifier.semantics { contentDescription = description },
     ) {
-        val typeIconIndex = item.typeIconIndex
         val typeIconSize = typeIconIndex?.let { RingTypeIconSizes[it] }
         val scale = size.minDimension / ITEM_SPRITE_SIZE
         // A ring's gem hangs off the cell's top-right corner, past the ring

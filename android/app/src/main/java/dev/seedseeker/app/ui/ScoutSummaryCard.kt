@@ -16,11 +16,16 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -70,6 +75,10 @@ internal fun ScoutSummaryCard(
     val matchTextSize = rememberTextMeasurer().measure(matchText.orEmpty(), labelStyle, maxLines = 1).size
     val seedScale = lerp(1f, 20f / 24f, progress)
     val seedOrigin = if (LocalLayoutDirection.current == LayoutDirection.Ltr) 0f else 1f
+    var showInfo by remember(world.seed) { mutableStateOf(false) }
+    if (showInfo && world.itemMappings != null) {
+        SeedInfoDialog(world.seed, world.itemMappings, onDismiss = { showInfo = false })
+    }
     Card(
         modifier = modifier.fillMaxWidth().testTag("scout-summary").semantics {
             if (progress == 1f) contentDescription = "${world.items.size} items, $floors floors"
@@ -96,11 +105,18 @@ internal fun ScoutSummaryCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                TextButton(onClick = {
-                    scope.launch {
-                        clipboard.setClipEntry(ClipData.newPlainText("Seed", world.seed).toClipEntry())
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (world.itemMappings != null) {
+                        IconButton(onClick = { showInfo = true }) {
+                            Icon(Icons.Filled.Info, contentDescription = "Seed information")
+                        }
                     }
-                }) { Text("Copy") }
+                    TextButton(onClick = {
+                        scope.launch {
+                            clipboard.setClipEntry(ClipData.newPlainText("Seed", world.seed).toClipEntry())
+                        }
+                    }) { Text("Copy") }
+                }
                 Row(
                     modifier = Modifier.graphicsLayer {
                         alpha = (1f - progress * 1.6f).coerceIn(0f, 1f)
