@@ -1351,7 +1351,7 @@ public sealed record RingGems
 /// <param name="Gems">The run's ring gems, which decide what cell each scouted
 /// ring is drawn in.</param>
 public sealed record ScoutWorld(string Seed, IReadOnlyList<ScoutQuest> Quests, IReadOnlyList<ScoutItem> Items,
-    RingGems Gems, IReadOnlyList<CatalogItem>? TrinketOrder = null, IReadOnlyList<ScoutFloorFeeling>? FloorFeelings = null, string? SelectedTrinket = null);
+    RingGems Gems, IReadOnlyList<CatalogItem>? TrinketOrder = null, IReadOnlyList<ScoutFloorFeeling>? FloorFeelings = null, string? SelectedTrinket = null, ScoutItemMappings? ItemMappings = null);
 
 public enum FloorFeeling : byte { None, Chasm, Water, Grass, Dark, Large, Traps, Secrets }
 public sealed record ScoutFloorFeeling(int Depth, FloorFeeling Feeling);

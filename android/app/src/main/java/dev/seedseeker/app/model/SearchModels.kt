@@ -576,6 +576,17 @@ data class ScoutWorld(
     val trinketOrder: List<CatalogItem> = emptyList(),
     val selectedTrinket: String? = null,
     val floorFeelings: Map<Int, FloorFeeling> = emptyMap(),
+    /** Absent in legacy scout packets and seedless demo fixtures. */
+    val itemMappings: ScoutItemMappings? = null,
+)
+
+/** Names and unidentified artwork come from the engine's canonical run state. */
+data class ScoutItemMapping(val name: String, val appearance: String, val spriteIndex: Int)
+
+data class ScoutItemMappings(
+    val scrolls: List<ScoutItemMapping>,
+    val potions: List<ScoutItemMapping>,
+    val rings: List<ScoutItemMapping>,
 )
 
 /** Ordinals match the native SSC5 feeling IDs and dungeon icon frames. */

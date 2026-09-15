@@ -236,6 +236,32 @@ public enum SpriteLayer: Hashable, Sendable {
         return rendered
     }
 
+    /// Full journal frames, centered item and identity glyph flush top right.
+    public func mappingSprite(entry: ScoutItemMapping, art: ItemMappingArtwork.Category,
+                              classIndex: Int, pointSize: Int) -> CGImage? {
+        let pixels = pointSize * Self.pixelScale
+        guard art.iconSizes.indices.contains(classIndex), pixels > 0,
+              let context = CGContext(data: nil, width: pixels, height: pixels,
+                bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        context.interpolationQuality = .none
+        context.setShouldAntialias(false)
+        let box = CGFloat(pixels)
+        let scale = box / CGFloat(ItemMappingArtwork.shared.slotSize)
+        for (sheet, index, cell, frame, glyph) in [
+            (items, entry.spriteIndex, SpriteSheet.cell, art.spriteSize, false),
+            (icons, art.iconBase + classIndex, SpriteSheet.iconCell, art.iconSizes[classIndex], true),
+        ] {
+            let source = CGRect(x: index % 16 * cell, y: index / 16 * cell, width: frame[0], height: frame[1])
+            guard let cropped = sheet.cropping(to: source) else { continue }
+            let width = (CGFloat(frame[0]) * scale).rounded()
+            let height = (CGFloat(frame[1]) * scale).rounded()
+            context.draw(cropped, in: CGRect(x: glyph ? box - width : ((box - width) / 2).rounded(),
+                y: glyph ? box - height : ((box - height) / 2).rounded(), width: width, height: height))
+        }
+        return context.makeImage()
+    }
+
     private func render(spriteIndex: Int, typeIcon: Int?, pointSize: Int, layer: SpriteLayer,
                         typeIconMargin: Int) -> CGImage? {
         let pixels = pointSize * Self.pixelScale

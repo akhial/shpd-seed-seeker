@@ -29,6 +29,7 @@ pub mod grid_builder;
 pub mod halls_floor;
 pub mod halls_mobs;
 pub mod halls_rooms;
+pub mod item_mappings;
 pub mod java_math;
 #[cfg(feature = "json-query")]
 pub mod json_query;

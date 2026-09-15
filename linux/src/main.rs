@@ -11,6 +11,7 @@ mod config;
 mod detail_pane;
 mod format;
 mod glow;
+mod item_mappings;
 mod level_map_render;
 mod level_map_view;
 mod persist;

@@ -14,6 +14,7 @@ import type { ChallengeName, ScoutItem, ScoutResult, TrinketOffer } from "../../
 import { Sprite } from "./parts";
 import { FloorMapHeader } from "./FloorMapHeader";
 import { LevelMapView } from "./LevelMapView";
+import { SeedInfo } from "./SeedInfo";
 import { TrinketName, TrinketSprite } from "./TrinketArt";
 import { TrinketShortcuts } from "./TrinketShortcuts";
 import { useTrinketDock } from "./useTrinketDock";
@@ -212,6 +213,13 @@ export function ScoutPanel({
               >
                 {copied ? <CheckIcon size={14} /> : <CopyIcon size={14} />}
               </button>
+              {result.itemMappings && (
+                <SeedInfo
+                  key={result.seed.code}
+                  seed={result.seed.code}
+                  mappings={result.itemMappings}
+                />
+              )}
             </div>
             <p className="d1-caption">
               {result.items.length} item{result.items.length === 1 ? "" : "s"} across{" "}

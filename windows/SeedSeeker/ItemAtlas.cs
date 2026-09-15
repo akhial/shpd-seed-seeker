@@ -120,6 +120,36 @@ internal sealed class ItemAtlas
         return bitmap;
     }
 
+    /// <summary>Full journal frames with the identity glyph flush top right.</summary>
+    public WriteableBitmap? MappingSprite(ScoutItemMapping entry, MappingArt art, int classIndex, int size)
+    {
+        if (!Contains(entry.SpriteIndex) || size <= 0) return null;
+        var buffer = new byte[size * size * 4];
+        var scale = size / (double)ItemMappingArtwork.Shared.SlotSize;
+        DrawMappingFrame(buffer, size, items, entry.SpriteIndex, Cell, art.SpriteSize, scale, false);
+        DrawMappingFrame(buffer, size, icons, art.IconBase + classIndex, IconCell, art.IconSizes[classIndex], scale, true);
+        return Bitmap(buffer, size);
+    }
+
+    private static void DrawMappingFrame(byte[] buffer, int size, Layer sheet, int index, int cell, int[] frame, double scale, bool glyph)
+    {
+        var width = Math.Max(1, (int)Math.Round(frame[0] * scale));
+        var height = Math.Max(1, (int)Math.Round(frame[1] * scale));
+        var left = glyph ? size - width : (int)Math.Round((size - width) / 2.0);
+        var top = glyph ? 0 : (int)Math.Round((size - height) / 2.0);
+        for (var y = 0; y < height; y++)
+        for (var x = 0; x < width; x++)
+        {
+            var sx = index % Columns * cell + Math.Min(frame[0] - 1, (2 * x + 1) * frame[0] / (2 * width));
+            var sy = index / Columns * cell + Math.Min(frame[1] - 1, (2 * y + 1) * frame[1] / (2 * height));
+            var source = (sy * sheet.Width + sx) * 4;
+            var target = ((top + y) * size + left + x) * 4;
+            var alpha = sheet.Pixels[source + 3];
+            for (var channel = 0; channel < 4; channel++)
+                buffer[target + channel] = (byte)(sheet.Pixels[source + channel] + buffer[target + channel] * (255 - alpha) / 255);
+        }
+    }
+
     /// <summary>
     /// A solid <paramref name="color"/> layer masked to the sprite's opaque pixels,
     /// matched pixel-for-pixel to <see cref="Sprite"/>. Stacking it over the sprite

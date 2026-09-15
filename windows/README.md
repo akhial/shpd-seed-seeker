@@ -24,7 +24,7 @@ Requirements with several selected effects show their count inside a stationary 
 
 ## Trinkets
 
-The Trinket category selects a named trinket and supports the board’s existing OR groups. Its editor offers “Choose matching trinket at +3”, preserved in queries and share links. The engine applies a unique offered match after the first brewing opportunity; ambiguous matches apply no trinket. Scout displays the Magical Catalyst at its source and floor, with four square toggle cards and the remaining deck in one row. Click a card to apply it, or click the applied card again to deselect it. The selected card carries an “Applied +3” badge and matching cards retain a success border. SpriteView renders both sizes with nearest-neighbor scaling, and long card names shrink on one line. SSQ3 requests carry the query and optional override; the SSC6 decoder reads the selected identity and retains SSC3/SSC4/SSC5 response compatibility.
+The Trinket category selects a named trinket and supports the board’s existing OR groups. Its editor offers “Choose matching trinket at +3”, preserved in queries and share links. The engine applies a unique offered match after the first brewing opportunity; ambiguous matches apply no trinket. Scout displays the Magical Catalyst at its source and floor, with four square toggle cards and the remaining deck in one row. Click a card to apply it, or click the applied card again to deselect it. The selected card carries an “Applied +3” badge and matching cards retain a success border. SpriteView renders both sizes with nearest-neighbor scaling, and long card names shrink on one line. SSQ4 requests carry the query and optional override; the SSC7 decoder reads the selected identity and item mappings and retains SSC3/SSC4/SSC5/SSC6 response compatibility.
 
 ## Artifacts
 
@@ -39,3 +39,12 @@ Use the mouse wheel or pinch to zoom, drag to pan, and **Fit** to reset. The exp
 `LevelMapRenderer.cs` draws every engine layer in order, including initial contents, actor animation, tint, opacity, item glow and additive layers. Continuous particles use the engine's curves, acceleration, delayed hazard schedules, rotation, vertical scale, wall masks and chasm clipping. Geometric darkness applies last. Scenery redraws only changed cells, textures and a bounded set of documents are cached, and collapsed/offscreen/hidden views stop rendering. Windows' animation preference selects time zero. Native PNG decoding and viewport rasterization retain nearest-neighbour sampling at the display scale; no browser or asset network request is involved. See [the shared map contract](../docs/level-map-format.md) and the shipped `Assets/LEVEL-MAP-ATTRIBUTION.md` notice.
 
 The host-compatible tests include the shipping C ABI, schema rejection, native boss/branch maps and asset hashes, rendering/animation math, concealment, additive wall masking and choice conflicts. Run `dotnet test windows/SeedSeeker.Tests` from the repository root with the Rust toolchain available. The WinUI application itself requires Windows to build and run.
+
+## Seed information
+
+The info button beside the scouted seed opens all potion colors, scroll runes,
+and ring gems in six-column grids. Sprites use the shared journal frame metadata,
+with each identity glyph flush at the top right. Click a sprite for its name and
+appearance, also available through tooltips and accessible labels. Older scout
+packets omit the control. The packaged `item-mapping-art.json` is shared with
+Android, web, Linux, and macOS.

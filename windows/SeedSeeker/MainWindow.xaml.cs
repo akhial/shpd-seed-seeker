@@ -61,6 +61,7 @@ public sealed partial class MainWindow : Window
     /// flight. A failed request falls back to <see cref="renderedSeed"/>.
     /// </summary>
     private string? scoutedSeed;
+    private ScoutItemMappings? itemMappings;
     /// <summary>The seed whose manifest the scout pane currently shows.</summary>
     private string? renderedSeed;
     /// <summary>Only the latest scout request may publish its manifest.</summary>
@@ -1947,6 +1948,8 @@ public sealed partial class MainWindow : Window
             ScoutStatus.Text = $"{world.Items.Count} items across {groups.Count} floors" + (matches.TotalRequirements == 0 ? "" : $"  ·  {matches.MatchedRequirements} of {matches.TotalRequirements} requirement{(matches.TotalRequirements == 1 ? "" : "s")} matched");
             EmptyScout.Visibility = Visibility.Collapsed; ScoutList.Visibility = Visibility.Visible;
             renderedSeed = seed;
+            itemMappings = world.ItemMappings;
+            SeedInfoButton.Visibility = itemMappings is null ? Visibility.Collapsed : Visibility.Visible;
         }
         catch (Exception ex)
         {
@@ -2110,6 +2113,12 @@ public sealed partial class MainWindow : Window
             Child = text,
         };
     }
+    private async void SeedInfo_Click(object sender, RoutedEventArgs e)
+    {
+        if (renderedSeed is string seed && itemMappings is { } mappings)
+            await SeedInfoDialog.ShowAsync(((FrameworkElement)Content).XamlRoot, seed, mappings);
+    }
+
     private void CopySeed_Click(object sender, RoutedEventArgs e) { if (SeedCode.IsCanonical(SeedInput.Text)) Copy(SeedInput.Text); }
     private static void Copy(string text) { var data = new DataPackage(); data.SetText(text); Clipboard.SetContent(data); }
 }

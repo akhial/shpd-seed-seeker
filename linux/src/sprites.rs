@@ -398,6 +398,59 @@ pub fn feeling_image(feeling: Feeling) -> Option<gtk::Widget> {
     Some(area.upcast())
 }
 
+/// Journal tile using full frames, with its identity glyph flush top right.
+pub fn mapping_image(
+    sprite_index: u16,
+    art: &'static crate::item_mappings::MappingArt,
+    class_index: usize,
+) -> gtk::Widget {
+    let slot = crate::item_mappings::ARTWORK.slot_size;
+    let area = gtk::DrawingArea::builder()
+        .content_width(slot * 3)
+        .content_height(slot * 3)
+        .build();
+    if let Some(atlas) = atlas() {
+        area.set_draw_func(move |area, context, width, height| {
+            let factor = area.scale_factor().max(1);
+            let size = width.min(height) * factor;
+            context.scale(1.0 / f64::from(factor), 1.0 / f64::from(factor));
+            let origin_x = f64::from(width * factor - size) / 2.0;
+            let origin_y = f64::from(height * factor - size) / 2.0;
+            let item = Rect {
+                width: art.sprite_size[0],
+                height: art.sprite_size[1],
+                ..Atlas::cell(sprite_index)
+            };
+            let icon_index = art.icon_base + class_index;
+            let icon = Rect {
+                x: i32::try_from(icon_index % ICON_COLUMNS).unwrap_or(0) * ICON_CELL,
+                y: i32::try_from(icon_index / ICON_COLUMNS).unwrap_or(0) * ICON_CELL,
+                width: art.icon_sizes[class_index][0],
+                height: art.icon_sizes[class_index][1],
+            };
+            for (pixels, frame, glyph) in [(&atlas.items, item, false), (&atlas.icons, icon, true)]
+            {
+                let w = (frame.width * size + slot / 2) / slot;
+                let h = (frame.height * size + slot / 2) / slot;
+                if let Some(surface) = scale_nearest(pixels, frame, w, h) {
+                    let x = if glyph {
+                        f64::from(size - w)
+                    } else {
+                        (f64::from(size - w) / 2.0).round()
+                    };
+                    let y = if glyph {
+                        0.0
+                    } else {
+                        (f64::from(size - h) / 2.0).round()
+                    };
+                    let _ = blit(context, &surface, origin_x + x, origin_y + y);
+                }
+            }
+        });
+    }
+    area.upcast()
+}
+
 /// Whether GTK wants animations; mirrors the web's `prefers-reduced-motion`
 /// check, which freezes the pulse at a static value instead.
 fn animations_enabled() -> bool {

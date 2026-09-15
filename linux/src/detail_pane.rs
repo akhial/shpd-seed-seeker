@@ -39,6 +39,7 @@ pub struct DetailPane {
     entry: gtk::Entry,
     scout_button: gtk::Button,
     copy_button: gtk::Button,
+    info_button: gtk::Button,
     stack: gtk::Stack,
     summary_items: gtk::Label,
     summary_matches: gtk::Label,
@@ -84,6 +85,12 @@ impl DetailPane {
             .tooltip_text("Copy Seed Code")
             .visible(false)
             .build();
+        let info_button = gtk::Button::builder()
+            .icon_name("dialog-information-symbolic")
+            .css_classes(["flat"])
+            .tooltip_text("Seed information")
+            .visible(false)
+            .build();
         let entry_area = gtk::Box::builder()
             .orientation(gtk::Orientation::Horizontal)
             .spacing(6)
@@ -94,6 +101,7 @@ impl DetailPane {
             .build();
         entry_area.append(&entry);
         entry_area.append(&scout_button);
+        entry_area.append(&info_button);
         entry_area.append(&copy_button);
         let entry_clamp = adw::Clamp::builder()
             .child(&entry_area)
@@ -234,6 +242,7 @@ impl DetailPane {
             entry,
             scout_button,
             copy_button,
+            info_button,
             stack,
             summary_items,
             summary_matches,
@@ -300,6 +309,16 @@ impl DetailPane {
         pane.scout_button.connect_clicked({
             let pane = Rc::clone(&pane);
             move |_| pane.request_scout()
+        });
+        pane.info_button.connect_clicked({
+            let weak = Rc::downgrade(&pane);
+            move |button| {
+                if let Some(pane) = weak.upgrade()
+                    && let Some(world) = pane.world.borrow().as_ref()
+                {
+                    crate::item_mappings::present(button, world.seed);
+                }
+            }
         });
         pane.copy_button.connect_clicked({
             let pane = Rc::clone(&pane);
@@ -468,10 +487,12 @@ impl DetailPane {
         let Some(world) = world.as_ref() else {
             self.stack.set_visible_child_name("empty");
             self.copy_button.set_visible(false);
+            self.info_button.set_visible(false);
             return;
         };
         self.stack.set_visible_child_name("manifest");
         self.copy_button.set_visible(true);
+        self.info_button.set_visible(true);
 
         // Which gem each ring class wears is shuffled once per run, so the
         // manifest has to draw this run's table rather than the catalog's.
