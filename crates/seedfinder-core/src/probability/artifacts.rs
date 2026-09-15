@@ -9,7 +9,7 @@ use crate::{
     probability_tables::{prize_group, sources},
     query::EffectRequirement,
 };
-use std::sync::OnceLock;
+use std::{collections::BTreeMap, sync::OnceLock};
 
 struct Placement {
     depth: u8,
@@ -45,8 +45,14 @@ fn worlds() -> &'static [Vec<Placement>] {
 }
 
 pub(super) fn probability(predicates: &[Predicate], open_only: bool) -> f64 {
-    let mut ways = 0_u32;
+    if predicates.len() > artifact_identity_count() {
+        return 0.0;
+    }
+    let mut ways = 0_u64;
     for world in worlds() {
+        if world.len() < predicates.len() {
+            continue;
+        }
         let mut eligible: Vec<Vec<usize>> = predicates
             .iter()
             .map(|predicate| {
@@ -72,6 +78,13 @@ pub(super) fn probability(predicates: &[Predicate], open_only: bool) -> f64 {
                     .collect()
             })
             .collect();
+        let mut reachable = vec![false; world.len()];
+        for &index in eligible.iter().flatten() {
+            reachable[index] = true;
+        }
+        if reachable.into_iter().filter(|&reached| reached).count() < predicates.len() {
+            continue;
+        }
         eligible.sort_by_key(Vec::len);
         ways += assignments(world, &eligible, &mut Vec::new());
     }
@@ -80,13 +93,31 @@ pub(super) fn probability(predicates: &[Predicate], open_only: bool) -> f64 {
     let denominator = (0..predicates.len()).fold(tally(worlds().len()), |denominator, used| {
         denominator * tally(artifact_identity_count() - used)
     });
-    f64::from(ways) / denominator
+    #[allow(clippy::cast_precision_loss)]
+    let probability = ways as f64 / denominator;
+    probability
 }
 
-fn assignments(world: &[Placement], eligible: &[Vec<usize>], chosen: &mut Vec<usize>) -> u32 {
+fn assignments(world: &[Placement], eligible: &[Vec<usize>], chosen: &mut Vec<usize>) -> u64 {
+    count_assignments(world, eligible, chosen, &mut BTreeMap::new())
+}
+
+fn count_assignments(
+    world: &[Placement],
+    eligible: &[Vec<usize>],
+    chosen: &mut Vec<usize>,
+    cache: &mut BTreeMap<Vec<usize>, u64>,
+) -> u64 {
     let Some((choices, tail)) = eligible.split_first() else {
         return 1;
     };
+    // The next identity and all accessibility constraints depend on the set
+    // already taken, not the order in which those placements were assigned.
+    let mut key = chosen.clone();
+    key.sort_unstable();
+    if let Some(&ways) = cache.get(&key) {
+        return ways;
+    }
     let mut ways = 0;
     for &index in choices {
         if chosen.contains(&index) {
@@ -105,9 +136,10 @@ fn assignments(world: &[Placement], eligible: &[Vec<usize>], chosen: &mut Vec<us
             }
         }
         chosen.push(index);
-        ways += assignments(world, tail, chosen);
+        ways += count_assignments(world, tail, chosen, cache);
         chosen.pop();
     }
+    cache.insert(key, ways);
     ways
 }
 
@@ -144,5 +176,15 @@ mod tests {
             0
         );
         assert_eq!(worlds().len(), 4096);
+    }
+
+    #[test]
+    fn full_deck_assignments_count_permutations_without_enumerating_them() {
+        let independent: Vec<_> = (0..11).map(|_| placement(0, 0)).collect();
+        let eligible = vec![(0..11).collect(); 11];
+        assert_eq!(
+            assignments(&independent, &eligible, &mut Vec::new()),
+            39_916_800
+        );
     }
 }
