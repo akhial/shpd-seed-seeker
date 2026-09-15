@@ -51,18 +51,23 @@
 //! is not conditioned on. Mixed equipment/artifact pools retain the same
 //! conservative allocation approximation as equipment-only pools.
 //!
-//! Known simplifications: challenges shift item placement but are ignored, and
-//! a query carrying more requirements than one matching resolves keeps only its
-//! scarcest ones, which read high. Against them, a pool is spent on its single
-//! best use rather than on whichever of them the seed left open; a pool that
-//! reaches two unrelated requirements is read as reaching the easier whenever
-//! it reaches the harder, which understates how often it ends up spent on the
-//! lesser; and duplicate scarcity is measured over a whole line at once, so a
-//! linked group whose members want very different items — one `+3` alongside
-//! two plain ones — is discounted as heavily as one wanting three alike. Those
-//! read low.
+//! Coverage sets contain only distinct intersections of the requested filters,
+//! and their slot counts grow with the query. Repeated requirements share a
+//! coverage set but still need separate items; no query-size cutoff is used.
+//!
+//! Known simplifications: challenges shift item placement but are ignored. A
+//! pool is spent on its single best use rather than on whichever of them the
+//! seed left open; a pool that reaches two unrelated requirements is read as
+//! reaching the easier whenever it reaches the harder, which understates how
+//! often it ends up spent on the lesser. Duplicate scarcity is measured over a
+//! whole line at once, so a linked group whose members want very different
+//! items — one `+3` alongside two plain ones — is discounted as heavily as one
+//! wanting three alike. Those approximations read low.
 
 mod artifacts;
+mod coverage;
+
+use coverage::Coverages;
 
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
@@ -89,6 +94,7 @@ use crate::quests::WandmakerQuestType;
 /// Estimates the fraction of seeds satisfying a query.
 ///
 /// The result is fixed for a search: observed results never feed back into it.
+/// Returns `NaN` for trinket filters without a measured distribution.
 ///
 /// Alternative groups are approximated by their most plentiful member — a
 /// pessimistic simplification, since any member can satisfy the group.
@@ -112,9 +118,10 @@ pub fn estimate_match_probability(query: &SearchQuery) -> f64 {
 }
 
 pub(crate) fn equipment_probability(query: &SearchQuery, profile: Profile) -> f64 {
+    let requirements = effective_requirements(query, profile);
     let mut linked: BTreeMap<u8, Vec<Requirement>> = BTreeMap::new();
     let mut independent: Vec<Requirement> = Vec::new();
-    for requirement in effective_requirements(query, profile) {
+    for requirement in requirements {
         match requirement.identity_group {
             Some(group) => linked.entry(group).or_default().push(requirement),
             None => independent.push(requirement),
@@ -306,7 +313,7 @@ fn complete_with_trinkets(
     while choices != 0 {
         let choice = 1 << choices.trailing_zeros();
         choices &= !choice;
-        best = best.max(complete_with_trinkets(
+        let completed = complete_with_trinkets(
             query,
             slots,
             tail,
@@ -315,11 +322,15 @@ fn complete_with_trinkets(
             residual,
             cache,
             profile,
-        ));
+        );
+        if completed.is_nan() {
+            return completed;
+        }
+        best = best.max(completed);
     }
     if equipment_slots[slot] {
         residual.push(slot);
-        best = best.max(complete_with_trinkets(
+        let completed = complete_with_trinkets(
             query,
             slots,
             tail,
@@ -328,8 +339,12 @@ fn complete_with_trinkets(
             residual,
             cache,
             profile,
-        ));
+        );
         residual.pop();
+        if completed.is_nan() {
+            return completed;
+        }
+        best = best.max(completed);
     }
     best
 }
@@ -656,9 +671,6 @@ fn together_probability(
 }
 
 /// The requirements reduced to filters, scarcest first.
-///
-/// Keeping the scarcest first makes truncation lose the least: a query carrying
-/// more requirements than one matching resolves keeps the ones that decide it.
 fn filters(
     query: &SearchQuery,
     requirements: &[Requirement],
@@ -684,7 +696,6 @@ fn filters(
             .partial_cmp(&expected_slots(right))
             .unwrap_or(Ordering::Equal)
     });
-    ordered.truncate(MAX_REQUIREMENTS);
     ordered
 }
 
@@ -736,8 +747,10 @@ fn matching_chance(ordered: &[Predicate]) -> f64 {
     let mut open = OpenSupply {
         ordered,
         answered: BTreeMap::new(),
+        families: BTreeMap::new(),
+        prizes: BTreeMap::new(),
     };
-    prize_chance(&pools, 0, 0, &mut open).clamp(0.0, 1.0)
+    prize_chance(&pools, 0, &[], &mut open).clamp(0.0, 1.0)
 }
 
 /// The chance every requirement is served once the prize pools from `group`
@@ -756,20 +769,36 @@ fn matching_chance(ordered: &[Predicate]) -> f64 {
 /// one item, where a pool holding the item answers all of them and still only
 /// leaves with one. Where two requirements really are unrelated it understates
 /// how often the pool ends up spent on the lesser of them, which reads low.
-fn prize_chance(pools: &[Vec<f64>], group: usize, discharged: usize, open: &mut OpenSupply) -> f64 {
+fn prize_chance(
+    pools: &[Vec<f64>],
+    group: usize,
+    discharged: &[usize],
+    open: &mut OpenSupply,
+) -> f64 {
     let Some(reach) = pools.get(group) else {
         return open.chance(discharged);
     };
+    if let Some(answer) = open.prizes.get(&(group, discharged.to_vec())) {
+        return *answer;
+    }
     // Best-first over the requirements this pool could still be spent on.
-    let mut spending: Vec<(f64, f64)> = (0..reach.len())
-        .filter(|requirement| discharged & (1 << requirement) == 0 && reach[*requirement] > 0.0)
-        .map(|requirement| {
-            (
-                reach[requirement],
-                prize_chance(pools, group + 1, discharged | (1 << requirement), open),
-            )
-        })
-        .collect();
+    let mut spending = Vec::new();
+    let mut considered = Vec::new();
+    for (requirement, &reached) in reach.iter().enumerate() {
+        if discharged.contains(&requirement)
+            || reached <= 0.0
+            || considered.contains(&open.ordered[requirement])
+        {
+            continue;
+        }
+        // Identical copies are interchangeable, but spending a prize still
+        // removes only one of them. Keep a canonical choice for the cache.
+        considered.push(open.ordered[requirement]);
+        let mut served = discharged.to_vec();
+        let position = served.partition_point(|&index| index < requirement);
+        served.insert(position, requirement);
+        spending.push((reached, prize_chance(pools, group + 1, &served, open)));
+    }
     spending.sort_by(|left, right| right.1.partial_cmp(&left.1).unwrap_or(Ordering::Equal));
 
     // Nesting the reaches makes the walk a partition: each requirement claims
@@ -781,30 +810,34 @@ fn prize_chance(pools: &[Vec<f64>], group: usize, discharged: usize, open: &mut 
         total += (reached - claimed).max(0.0) * served;
         claimed = claimed.max(reached);
     }
-    total + (1.0 - claimed) * prize_chance(pools, group + 1, discharged, open)
+    total += (1.0 - claimed) * prize_chance(pools, group + 1, discharged, open);
+    open.prizes.insert((group, discharged.to_vec()), total);
+    total
 }
 
 /// The family-by-family matching over everything a quest prize is not, with
 /// the answers it has already worked out.
 struct OpenSupply<'a> {
     ordered: &'a [Predicate],
-    answered: BTreeMap<usize, f64>,
+    answered: BTreeMap<Vec<usize>, f64>,
+    families: BTreeMap<Vec<usize>, f64>,
+    prizes: BTreeMap<(usize, Vec<usize>), f64>,
 }
 
 impl OpenSupply<'_> {
     /// Chance the supply outside the prize pools serves every requirement
     /// except the `discharged` ones, which the pools have already answered.
-    fn chance(&mut self, discharged: usize) -> f64 {
-        if let Some(answer) = self.answered.get(&discharged) {
+    fn chance(&mut self, discharged: &[usize]) -> f64 {
+        if let Some(answer) = self.answered.get(discharged) {
             return *answer;
         }
-        let mut families: BTreeMap<usize, Vec<Predicate>> = BTreeMap::new();
+        let mut families: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
         for (requirement, predicate) in self.ordered.iter().enumerate() {
-            if discharged & (1 << requirement) == 0 {
+            if !discharged.contains(&requirement) {
                 families
                     .entry(kind_index(predicate.kind))
                     .or_default()
-                    .push(*predicate);
+                    .push(requirement);
             }
         }
         let spent_artifacts = self
@@ -812,13 +845,16 @@ impl OpenSupply<'_> {
             .iter()
             .enumerate()
             .filter(|(index, predicate)| {
-                predicate.kind == ItemKind::Artifact && discharged & (1 << index) != 0
+                predicate.kind == ItemKind::Artifact && discharged.contains(index)
             })
             .count();
         let answer: f64 = families
             .into_values()
             .map(|family| {
-                let conditional = if family[0].kind == ItemKind::Artifact {
+                let conditional = if self.ordered[family[0]].kind == ItemKind::Artifact {
+                    if family.len() + spent_artifacts > artifact_identity_count() {
+                        return 0.0;
+                    }
                     (0..family.len()).fold(1.0, |factor, used| {
                         factor * tally(artifact_identity_count() - used)
                             / tally(artifact_identity_count() - spent_artifacts - used)
@@ -826,10 +862,15 @@ impl OpenSupply<'_> {
                 } else {
                     1.0
                 };
-                (open_chance(&family) * conditional).min(1.0)
+                let chance = self.families.entry(family.clone()).or_insert_with(|| {
+                    let predicates: Vec<_> =
+                        family.iter().map(|&index| self.ordered[index]).collect();
+                    open_chance(&predicates)
+                });
+                (*chance * conditional).min(1.0)
             })
             .product();
-        self.answered.insert(discharged, answer);
+        self.answered.insert(discharged.to_vec(), answer);
         answer
     }
 }
@@ -839,9 +880,8 @@ impl OpenSupply<'_> {
 ///
 /// Each reward slot in the dungeon covers some set of the requirements, and the
 /// query succeeds exactly when the slots can be matched one-to-one onto the
-/// requirements. By Hall's theorem that holds precisely when no set of
-/// requirements outnumbers the slots covering it, which is what
-/// [`covers_every_requirement`] checks.
+/// requirements. An augmenting-path matching checks that every requirement
+/// can take a distinct slot, including when their accepted items overlap.
 ///
 /// Working in coverage sets rather than per requirement is what stops one slot
 /// from being spent twice: a shop shelf can hold the `+0` wand a query asks for
@@ -871,11 +911,8 @@ fn open_chance(ordered: &[Predicate]) -> f64 {
     if kind == ItemKind::Artifact {
         return artifacts::probability(ordered, true);
     }
-    let wanted = ordered.len();
-    let coverages = 1 << wanted;
-    let shared: Vec<Option<Predicate>> = (0..coverages)
-        .map(|coverage| narrow(ordered, coverage))
-        .collect();
+    let shared = Coverages::of(ordered);
+    let coverages = shared.len();
 
     // Floor limits carve the dungeon into stretches that different requirements
     // can reach. Each is its own supply: two items wanted by floor four compete
@@ -918,7 +955,7 @@ fn open_chance(ordered: &[Predicate]) -> f64 {
                 if supply.bundle == 0 {
                     placed += available;
                 }
-                let covered_by = coverage_shares(&shared, &supply, depth);
+                let covered_by = shared.shares(&supply, depth);
                 if covered_by.iter().skip(1).all(|share| *share <= 0.0) {
                     continue;
                 }
@@ -959,7 +996,7 @@ fn open_chance(ordered: &[Predicate]) -> f64 {
             });
         }
     }
-    matching_probability(wanted, &streams, &slots).clamp(0.0, 1.0)
+    matching_probability(&shared, ordered.len(), &streams, &slots).clamp(0.0, 1.0)
 }
 
 /// How likely one quest's prize pool is to be able to serve each requirement.
@@ -1069,7 +1106,7 @@ impl Stream {
     /// drawing on what the earlier ones left. That is what keeps two
     /// requirements from both being handed an item when the line only ever
     /// produced one, and it fades out on its own as the run grows longer.
-    fn fold(&self, states: BTreeMap<u128, f64>, cap: usize) -> BTreeMap<u128, f64> {
+    fn fold(&self, states: States, cap: usize) -> States {
         let mut states = states;
         // How much of the run earlier sets have taken: the share of its chances
         // they claimed, and the slots they took that a state cannot record.
@@ -1082,18 +1119,18 @@ impl Stream {
             let chance = self
                 .trials
                 .map(|trials| (mean / trials / (1.0 - claimed).max(f64::EPSILON)).clamp(0.0, 1.0));
-            let mut arrivals: BTreeMap<u32, Vec<f64>> = BTreeMap::new();
+            let mut arrivals: BTreeMap<usize, Vec<f64>> = BTreeMap::new();
             let mut next = BTreeMap::new();
             for (state, reached) in &states {
-                let spent = taken(*state, self.covered.len());
+                let spent = state.iter().sum();
                 let counts = arrivals
                     .entry(spent)
-                    .or_insert_with(|| self.counts(f64::from(spent) + hidden, *mean, chance, cap));
+                    .or_insert_with(|| self.counts(tally(spent) + hidden, *mean, chance, cap));
                 for (count, share) in counts.iter().enumerate() {
                     if *share > 0.0 {
                         accumulate(
                             &mut next,
-                            add_count(*state, coverage, count, cap),
+                            add_count(state, coverage, count, cap),
                             reached * share,
                         );
                     }
@@ -1124,70 +1161,19 @@ impl Stream {
     }
 }
 
-/// Slots a packed state already holds, across every coverage set.
-fn taken(state: u128, coverages: usize) -> u32 {
-    (1..coverages)
-        .map(|coverage| slot_count(state, coverage))
-        .sum()
-}
-
-/// The filter matching items that satisfy every requirement in `coverage`.
-fn narrow(ordered: &[Predicate], coverage: usize) -> Option<Predicate> {
-    let mut narrowed: Option<Predicate> = None;
-    for (index, predicate) in ordered.iter().enumerate() {
-        if coverage & (1 << index) == 0 {
-            continue;
-        }
-        narrowed = Some(match narrowed {
-            None => *predicate,
-            Some(narrowed) => narrowed.intersect(*predicate)?,
-        });
-    }
-    narrowed
-}
-
-/// Chance that one slot of `supply` at `depth` covers exactly each set of
-/// requirements.
-fn coverage_shares(shared: &[Option<Predicate>], supply: &Supply, depth: usize) -> Vec<f64> {
-    exact_shares(
-        shared
-            .iter()
-            .map(|narrowed| {
-                narrowed.map_or(0.0, |narrowed| narrowed.slot_probability(supply, depth))
-            })
-            .collect(),
-    )
-}
-
-/// Turns "satisfies at least this set" into "satisfies exactly this set".
-///
-/// The filters overlap, so one slot's chance of covering a set is not its
-/// chance of covering that set and nothing more. Inverting over the subset
-/// lattice turns the first into the second.
-fn exact_shares(mut exact: Vec<f64>) -> Vec<f64> {
-    exact[0] = 1.0;
-    for requirement in 0..exact.len().trailing_zeros() {
-        let bit = 1_usize << requirement;
-        for coverage in 0..exact.len() {
-            if coverage & bit == 0 {
-                exact[coverage] -= exact[coverage | bit];
-            }
-        }
-    }
-    for share in &mut exact {
-        *share = share.max(0.0);
-    }
-    exact
-}
-
 /// Probability that the slots can be matched one-to-one onto the requirements.
 ///
 /// Each scattered line contributes its whole run of chances at once; quest and
 /// shop slots are then folded in one at a time, each covering one set or
-/// nothing. The surviving states are the ones Hall's theorem admits.
-fn matching_probability(wanted: usize, streams: &[Stream], slots: &[Slot]) -> f64 {
-    let cap = wanted.min(MAX_COUNT);
-    let mut states = BTreeMap::from([(0_u128, 1.0)]);
+/// nothing. The surviving states admit a distinct item for every requirement.
+fn matching_probability(
+    coverages: &Coverages,
+    wanted: usize,
+    streams: &[Stream],
+    slots: &[Slot],
+) -> f64 {
+    let cap = wanted;
+    let mut states = BTreeMap::from([(vec![0; coverages.len()].into_boxed_slice(), 1.0)]);
     for stream in streams {
         states = stream.fold(states, cap);
     }
@@ -1199,77 +1185,46 @@ fn matching_probability(wanted: usize, streams: &[Stream], slots: &[Slot]) -> f6
                 if *landed > 0.0 {
                     accumulate(
                         &mut next,
-                        add_count(*state, coverage, 1, cap),
+                        add_count(state, coverage, 1, cap),
                         reached * landed,
                     );
                 }
             }
-            accumulate(&mut next, *state, reached * missed);
+            accumulate(&mut next, state.clone(), reached * missed);
         }
         states = prune(next);
     }
     states
         .iter()
-        .filter(|(state, _)| covers_every_requirement(**state, wanted))
+        .filter(|(state, _)| coverages.matches(state))
         .map(|(_, reached)| reached)
         .sum::<f64>()
         .clamp(0.0, 1.0)
 }
 
-/// Hall's condition: no set of requirements may outnumber the slots covering it.
-fn covers_every_requirement(state: u128, wanted: usize) -> bool {
-    (1..1_usize << wanted).all(|group| {
-        let held: u32 = (1..1_usize << wanted)
-            .filter(|coverage| coverage & group != 0)
-            .map(|coverage| slot_count(state, coverage))
-            .sum();
-        held >= group.count_ones()
-    })
-}
-
-/// Requirements on one family resolved together. Longer lists keep their
-/// scarcest members, which dominate the estimate, and coverage sets stay
-/// packable into a single state.
-const MAX_REQUIREMENTS: usize = 5;
-
-/// Slots per coverage set are packed four bits each.
-const MAX_COUNT: usize = 15;
-
-/// Bits each coverage set's slot count occupies in a packed state.
-const BITS_PER_COVERAGE: usize = 4;
-
-/// Mask covering one coverage set's packed slot count.
-const COVERAGE_MASK: u128 = 0xF;
+/// Slot counts for the query's distinct coverage sets, without fixed bit widths.
+type States = BTreeMap<Box<[usize]>, f64>;
 
 /// States below this carry no weight worth the work of tracking them.
 const STATE_FLOOR: f64 = 1e-15;
 
-/// Largest number of packed states kept between steps.
+/// Largest number of probability states kept between steps.
 const STATE_LIMIT: usize = 4096;
 
-fn coverage_shift(coverage: usize) -> u32 {
-    u32::try_from((coverage - 1) * BITS_PER_COVERAGE).unwrap_or(0)
+fn add_count(state: &[usize], coverage: usize, count: usize, cap: usize) -> Box<[usize]> {
+    let mut next: Box<[usize]> = Box::from(state);
+    next[coverage] = (next[coverage] + count).min(cap);
+    next
 }
 
-fn slot_count(state: u128, coverage: usize) -> u32 {
-    u32::try_from((state >> coverage_shift(coverage)) & COVERAGE_MASK).unwrap_or(0)
-}
-
-fn add_count(state: u128, coverage: usize, count: usize, cap: usize) -> u128 {
-    let shift = coverage_shift(coverage);
-    let current = usize::try_from((state >> shift) & COVERAGE_MASK).unwrap_or(0);
-    let raised = (current + count).min(cap);
-    (state & !(COVERAGE_MASK << shift)) | (u128::try_from(raised).unwrap_or(0) << shift)
-}
-
-fn accumulate(states: &mut BTreeMap<u128, f64>, state: u128, reached: f64) {
+fn accumulate(states: &mut States, state: Box<[usize]>, reached: f64) {
     if reached > 0.0 {
         *states.entry(state).or_insert(0.0) += reached;
     }
 }
 
-fn prune(states: BTreeMap<u128, f64>) -> BTreeMap<u128, f64> {
-    let mut kept: BTreeMap<u128, f64> = states
+fn prune(states: States) -> States {
+    let mut kept: States = states
         .into_iter()
         .filter(|(_, reached)| *reached > STATE_FLOOR)
         .collect();
@@ -1302,7 +1257,7 @@ fn expected_slots(predicate: &Predicate) -> f64 {
 ///
 /// Tiers and upgrades become bit sets so that requirements can be intersected:
 /// the matching needs to know which of them one item could serve at once.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 struct Predicate {
     profile: Profile,
     kind: ItemKind,
@@ -2204,6 +2159,125 @@ mod tests {
             24,
         );
         assert!(estimate_match_probability(&two) < estimate_match_probability(&one));
+    }
+
+    #[test]
+    fn large_queries_still_share_one_quest_prize_across_families() {
+        let mut wanted = query(vec![requirement(ItemKind::Wand); 5], 19);
+        wanted.requirements.push(Requirement {
+            item: Some(ItemId::RingEnergy),
+            upgrade: UpgradeRequirement::Exact(4),
+            ..requirement(ItemKind::Ring)
+        });
+        let before = estimate_match_probability(&wanted);
+        assert!(before.is_finite() && before > 0.0);
+        wanted.requirements.push(Requirement {
+            item: Some(ItemId::ChaliceOfBlood),
+            upgrade: UpgradeRequirement::Exact(5),
+            ..requirement(ItemKind::Artifact)
+        });
+        // Both upgraded items spend the Imp's single reward choice.
+        assert!(estimate_match_probability(&wanted) <= 0.0);
+    }
+
+    #[test]
+    fn large_families_keep_finite_estimates_with_automatic_and_explicit_trinkets() {
+        let mut wanted = query(vec![requirement(ItemKind::Armor); 5], 19);
+        let supported = estimate_match_probability(&wanted);
+        assert!(supported.is_finite() && supported > 0.0);
+        wanted.requirements.push(requirement(ItemKind::Armor));
+        let larger = estimate_match_probability(&wanted);
+        assert!(larger > 0.0 && larger < supported);
+        for auto_apply in [false, true] {
+            wanted.auto_apply_trinket = auto_apply;
+            let probability = estimate_match_probability(&wanted);
+            assert!(probability.is_finite() && probability > 0.0 && probability <= 1.0);
+        }
+        wanted.requirements.push(trinket(ItemId::RatSkull));
+        for selected in [false, true] {
+            wanted.requirements.last_mut().unwrap().select_trinket = selected;
+            let probability = estimate_match_probability(&wanted);
+            assert!(probability.is_finite() && probability > 0.0 && probability < 1.0);
+        }
+        // Both branches of a mixed-family alternative retain the large
+        // residual equipment query.
+        wanted.requirements.last_mut().unwrap().alternative_group = Some(1);
+        wanted.requirements.push(Requirement {
+            alternative_group: Some(1),
+            ..requirement(ItemKind::Ring)
+        });
+        let probability = estimate_match_probability(&wanted);
+        assert!(probability.is_finite() && probability > 0.0 && probability < 1.0);
+    }
+
+    #[test]
+    fn extra_requirements_keep_costing_probability_beyond_five() {
+        let mut previous =
+            estimate_match_probability(&query(vec![requirement(ItemKind::Armor); 5], 19));
+        for count in 6..=20 {
+            let wanted = query(vec![requirement(ItemKind::Armor); count], 19);
+            let probability = estimate_match_probability(&wanted);
+            assert!(
+                probability.is_finite() && probability >= 0.0 && probability <= previous,
+                "{count} armors: {probability} vs {previous}"
+            );
+            previous = probability;
+        }
+    }
+
+    #[test]
+    fn large_queries_do_not_depend_on_machine_word_width() {
+        for count in [32, 64, 128] {
+            let wanted = query(vec![requirement(ItemKind::Armor); count], 24);
+            let probability = estimate_match_probability(&wanted);
+            assert!(probability.is_finite() && (0.0..=1.0).contains(&probability));
+        }
+    }
+
+    #[test]
+    fn large_families_keep_distinct_and_overlapping_filters() {
+        let mut wanted = query(Vec::new(), 24);
+        let mut previous = 1.0;
+        for identity in [
+            ItemId::WandFireblast,
+            ItemId::WandFrost,
+            ItemId::WandLightning,
+            ItemId::WandDisintegration,
+            ItemId::WandPrismaticLight,
+            ItemId::WandCorrosion,
+        ] {
+            wanted.requirements.push(Requirement {
+                item: Some(identity),
+                ..requirement(ItemKind::Wand)
+            });
+            let probability = estimate_match_probability(&wanted);
+            assert!(probability.is_finite() && probability > 0.0 && probability < previous);
+            previous = probability;
+        }
+        wanted.requirements.push(requirement(ItemKind::Wand));
+        let probability = estimate_match_probability(&wanted);
+        assert!(probability > 0.0 && probability < previous);
+    }
+
+    #[test]
+    fn artifact_estimates_support_the_entire_deck() {
+        let mut wanted = query(
+            super::identities(ItemKind::Artifact)
+                .into_iter()
+                .map(|(identity, _)| Requirement {
+                    item: Some(identity),
+                    ..requirement(ItemKind::Artifact)
+                })
+                .collect(),
+            24,
+        );
+        let probability = estimate_match_probability(&wanted);
+        assert!(probability.is_finite() && (0.0..=1.0).contains(&probability));
+        wanted.requirements.push(requirement(ItemKind::Wand));
+        let mixed = estimate_match_probability(&wanted);
+        assert!(mixed.is_finite() && mixed >= 0.0 && mixed <= probability);
+        wanted.requirements.push(wanted.requirements[0]);
+        assert!(estimate_match_probability(&wanted) <= 0.0);
     }
 
     #[test]

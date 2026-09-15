@@ -1,5 +1,6 @@
 //! Artifact estimates are checked against independently sampled full worlds.
 use shpd_seedfinder_core::{
+    catalog::ItemKind,
     challenges::Challenges,
     json_query,
     main_world::CanonicalMainWorldGenerator,
@@ -10,6 +11,64 @@ use shpd_seedfinder_core::{
 
 fn probability(document: &str) -> f64 {
     estimate_match_probability(&json_query::decode(document).unwrap())
+}
+
+#[test]
+fn adding_chalice_to_a_large_equipment_query_reduces_match_probability() {
+    let mut query = json_query::decode(
+        r#"{
+            "auto_apply_trinket": true,
+            "max_depth": 19,
+            "requirements": [
+                {"kind":"wand","upgrade":3,"identity_group":1},
+                {"kind":"wand","identity_group":1},
+                {"kind":"wand","identity_group":1},
+                {"item":"ring_energy","upgrade":4},
+                {"item":"plate_armor","upgrade":3},
+                {"item":"wondrous_resin"},
+                {"kind":"armor","tier":{"at_most":3},"upgrade":3,"max_depth":4}
+            ]
+        }"#,
+    )
+    .unwrap();
+    let without = estimate_match_probability(&query);
+    query.requirements.extend(
+        json_query::decode(r#"{"requirements":[{"item":"chalice_of_blood"}]}"#)
+            .unwrap()
+            .requirements,
+    );
+    let with = estimate_match_probability(&query);
+    eprintln!(
+        "without Chalice: 1 in {}; with Chalice: 1 in {}",
+        1.0 / without,
+        1.0 / with
+    );
+    assert!(without.is_finite() && without > 0.0);
+    assert!(with.is_finite() && with > 0.0);
+    assert!(
+        with < without,
+        "adding Chalice increased the estimate from 1 in {} to 1 in {}",
+        1.0 / without,
+        1.0 / with
+    );
+
+    // The linked wand copies and both armor filters must also stay in the
+    // estimate, regardless of where their chips appear in the editor.
+    for index in 0..query.requirements.len() {
+        if query.requirements[index].kind == ItemKind::Trinket {
+            continue; // Removing an explicit trinket changes the AutoTrinket policy.
+        }
+        let mut relaxed = query.clone();
+        relaxed.requirements.remove(index);
+        let relaxed_probability = estimate_match_probability(&relaxed);
+        assert!(
+            relaxed_probability > with,
+            "requirement {index} was ignored: {relaxed_probability} vs {with}"
+        );
+    }
+    query.requirements.reverse();
+    let reversed = estimate_match_probability(&query);
+    assert!((reversed / with - 1.0).abs() < 1e-10);
 }
 
 #[test]
