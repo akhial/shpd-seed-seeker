@@ -51,16 +51,17 @@
 //! is not conditioned on. Mixed equipment/artifact pools retain the same
 //! conservative allocation approximation as equipment-only pools.
 //!
-//! Known simplifications: challenges shift item placement but are ignored, and
-//! a query carrying more requirements than one matching resolves keeps only its
-//! scarcest ones, which read high. Against them, a pool is spent on its single
-//! best use rather than on whichever of them the seed left open; a pool that
-//! reaches two unrelated requirements is read as reaching the easier whenever
-//! it reaches the harder, which understates how often it ends up spent on the
-//! lesser; and duplicate scarcity is measured over a whole line at once, so a
-//! linked group whose members want very different items — one `+3` alongside
-//! two plain ones — is discounted as heavily as one wanting three alike. Those
-//! read low.
+//! Queries exceeding the matching capacity of one item family have no estimate;
+//! requirements from different families all participate in the shared prizes.
+//!
+//! Known simplifications: challenges shift item placement but are ignored. A
+//! pool is spent on its single best use rather than on whichever of them the
+//! seed left open; a pool that reaches two unrelated requirements is read as
+//! reaching the easier whenever it reaches the harder, which understates how
+//! often it ends up spent on the lesser. Duplicate scarcity is measured over a
+//! whole line at once, so a linked group whose members want very different
+//! items — one `+3` alongside two plain ones — is discounted as heavily as one
+//! wanting three alike. Those approximations read low.
 
 mod artifacts;
 
@@ -89,6 +90,8 @@ use crate::quests::WandmakerQuestType;
 /// Estimates the fraction of seeds satisfying a query.
 ///
 /// The result is fixed for a search: observed results never feed back into it.
+/// Returns `NaN` when a query exceeds the per-family matching capacity or uses
+/// trinket filters without a measured distribution.
 ///
 /// Alternative groups are approximated by their most plentiful member — a
 /// pessimistic simplification, since any member can satisfy the group.
@@ -112,9 +115,23 @@ pub fn estimate_match_probability(query: &SearchQuery) -> f64 {
 }
 
 pub(crate) fn equipment_probability(query: &SearchQuery, profile: Profile) -> f64 {
+    let requirements = effective_requirements(query, profile);
+    let mut family_sizes = BTreeMap::new();
+    for requirement in &requirements {
+        let size = family_sizes
+            .entry(kind_index(requirement.kind))
+            .or_insert(0);
+        *size += 1;
+        if *size > MAX_FAMILY_REQUIREMENTS {
+            // Coverage states are packed per family, not across the query.
+            // Dropping filters here can make an added requirement displace
+            // existing ones and incorrectly increase the estimate.
+            return f64::NAN;
+        }
+    }
     let mut linked: BTreeMap<u8, Vec<Requirement>> = BTreeMap::new();
     let mut independent: Vec<Requirement> = Vec::new();
-    for requirement in effective_requirements(query, profile) {
+    for requirement in requirements {
         match requirement.identity_group {
             Some(group) => linked.entry(group).or_default().push(requirement),
             None => independent.push(requirement),
@@ -306,7 +323,7 @@ fn complete_with_trinkets(
     while choices != 0 {
         let choice = 1 << choices.trailing_zeros();
         choices &= !choice;
-        best = best.max(complete_with_trinkets(
+        let completed = complete_with_trinkets(
             query,
             slots,
             tail,
@@ -315,11 +332,15 @@ fn complete_with_trinkets(
             residual,
             cache,
             profile,
-        ));
+        );
+        if completed.is_nan() {
+            return completed;
+        }
+        best = best.max(completed);
     }
     if equipment_slots[slot] {
         residual.push(slot);
-        best = best.max(complete_with_trinkets(
+        let completed = complete_with_trinkets(
             query,
             slots,
             tail,
@@ -328,8 +349,12 @@ fn complete_with_trinkets(
             residual,
             cache,
             profile,
-        ));
+        );
         residual.pop();
+        if completed.is_nan() {
+            return completed;
+        }
+        best = best.max(completed);
     }
     best
 }
@@ -656,9 +681,6 @@ fn together_probability(
 }
 
 /// The requirements reduced to filters, scarcest first.
-///
-/// Keeping the scarcest first makes truncation lose the least: a query carrying
-/// more requirements than one matching resolves keeps the ones that decide it.
 fn filters(
     query: &SearchQuery,
     requirements: &[Requirement],
@@ -684,7 +706,6 @@ fn filters(
             .partial_cmp(&expected_slots(right))
             .unwrap_or(Ordering::Equal)
     });
-    ordered.truncate(MAX_REQUIREMENTS);
     ordered
 }
 
@@ -1227,10 +1248,10 @@ fn covers_every_requirement(state: u128, wanted: usize) -> bool {
     })
 }
 
-/// Requirements on one family resolved together. Longer lists keep their
-/// scarcest members, which dominate the estimate, and coverage sets stay
-/// packable into a single state.
-const MAX_REQUIREMENTS: usize = 5;
+/// Requirements on one family resolved together, keeping its coverage sets
+/// packable into a single state. Larger families have no estimate; this is
+/// not a cap on the combined requirements across different families.
+const MAX_FAMILY_REQUIREMENTS: usize = 5;
 
 /// Slots per coverage set are packed four bits each.
 const MAX_COUNT: usize = 15;
@@ -2204,6 +2225,50 @@ mod tests {
             24,
         );
         assert!(estimate_match_probability(&two) < estimate_match_probability(&one));
+    }
+
+    #[test]
+    fn large_queries_still_share_one_quest_prize_across_families() {
+        let mut wanted = query(vec![requirement(ItemKind::Wand); 5], 19);
+        wanted.requirements.push(Requirement {
+            item: Some(ItemId::RingEnergy),
+            upgrade: UpgradeRequirement::Exact(4),
+            ..requirement(ItemKind::Ring)
+        });
+        let before = estimate_match_probability(&wanted);
+        assert!(before.is_finite() && before > 0.0);
+        wanted.requirements.push(Requirement {
+            item: Some(ItemId::ChaliceOfBlood),
+            upgrade: UpgradeRequirement::Exact(5),
+            ..requirement(ItemKind::Artifact)
+        });
+        // Both upgraded items spend the Imp's single reward choice.
+        assert!(estimate_match_probability(&wanted) <= 0.0);
+    }
+
+    #[test]
+    fn oversized_families_have_no_estimate_instead_of_dropping_requirements() {
+        let mut wanted = query(vec![requirement(ItemKind::Armor); 5], 19);
+        let supported = estimate_match_probability(&wanted);
+        assert!(supported.is_finite() && supported > 0.0);
+        wanted.requirements.push(requirement(ItemKind::Armor));
+        for auto_apply in [false, true] {
+            wanted.auto_apply_trinket = auto_apply;
+            assert!(estimate_match_probability(&wanted).is_nan());
+        }
+        wanted.requirements.push(trinket(ItemId::RatSkull));
+        for selected in [false, true] {
+            wanted.requirements.last_mut().unwrap().select_trinket = selected;
+            assert!(estimate_match_probability(&wanted).is_nan());
+        }
+        // A mixed-family alternative can also leave an unsupported residual
+        // equipment query, whether its trinket or equipment member is used.
+        wanted.requirements.last_mut().unwrap().alternative_group = Some(1);
+        wanted.requirements.push(Requirement {
+            alternative_group: Some(1),
+            ..requirement(ItemKind::Ring)
+        });
+        assert!(estimate_match_probability(&wanted).is_nan());
     }
 
     #[test]
