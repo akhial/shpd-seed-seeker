@@ -40,9 +40,9 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
-    <release version="0.13.0" date="2026-09-14">
+    <release version="0.13.1" date="2026-09-15">
       <description>
-        <p>Explore seeds with interactive floor maps, animated contents, secret toggles, trinket switching, and reward-choice indicators.</p>
+        <p>Keep all requirements across item families in match probability estimates and support larger probability queries.</p>
       </description>
     </release>
     <release version="0.9.1" date="2026-09-07">
