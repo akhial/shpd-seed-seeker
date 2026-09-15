@@ -207,6 +207,14 @@ mod tests {
             .join("../target/gtk-native/mapping-grid.png");
         std::fs::create_dir_all(output.parent().unwrap()).unwrap();
         texture.save_to_png(output).unwrap();
+        let last = buttons.last().unwrap();
+        assert!(last.grab_focus());
+        settle();
+        let bounds = last.compute_bounds(&dialog).unwrap();
+        assert!(
+            bounds.y() >= 0.0
+                && f64::from(bounds.y() + bounds.height()) <= f64::from(dialog.height())
+        );
         dialog.close();
         window.close();
     }
