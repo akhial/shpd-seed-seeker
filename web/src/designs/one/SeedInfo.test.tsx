@@ -58,14 +58,33 @@ it("opens all 36 real-engine mappings from the scout summary and closes without 
   const dialog = document.querySelector("dialog")!;
   expect(dialog.open).toBe(true);
   expect(dialog.textContent).toContain("ABC-DEF-GHI");
-  expect(dialog.querySelectorAll("dt")).toHaveLength(36);
+  expect(dialog.querySelectorAll(".d1-mapping-tile")).toHaveLength(36);
+  expect([...dialog.querySelectorAll("h3")].map((h) => h.textContent)).toEqual([
+    "Potions (12)",
+    "Scrolls (12)",
+    "Rings (12)",
+  ]);
+  expect(dialog.querySelectorAll(".d1-mapping-grid")).toHaveLength(3);
   for (const category of Object.values(result.itemMappings!)) {
     for (const entry of category) {
-      expect(dialog.textContent).toContain(entry.name);
-      expect(dialog.textContent).toContain(entry.appearance);
+      const tile = dialog.querySelector<HTMLButtonElement>(
+        `button[aria-label="${entry.appearance} — ${entry.name}"]`,
+      )!;
+      expect(tile).not.toBeNull();
+      expect(tile.textContent).toBe("");
+      expect(tile.title).toContain(entry.name);
     }
   }
-  expect(dialog.querySelectorAll('[style*="item_icons.png"]')).toHaveLength(0);
+  expect(dialog.querySelectorAll('[style*="item_icons.png"]')).toHaveLength(36);
+  expect(dialog.querySelectorAll('[style*="/items.png"]')).toHaveLength(36);
+  const label = "TIWAZ — Scroll of upgrade";
+  await click(label);
+  expect(dialog.querySelector('[role="status"]')?.textContent).toBe(label);
+  expect(dialog.querySelector(`button[aria-label="${label}"]`)?.getAttribute("aria-pressed")).toBe(
+    "true",
+  );
+  await click(label);
+  expect(dialog.querySelector('[role="status"]')).toBeNull();
   await click("Close seed information");
   expect(document.querySelector("dialog")).toBeNull();
   expect(host.textContent).toContain("ABC-DEF-GHI");

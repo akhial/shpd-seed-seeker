@@ -5,7 +5,7 @@
 }
 
 .d1-seed-info-dialog {
-  width: min(920px, calc(100% - 24px));
+  width: min(396px, calc(100% - 24px));
   max-height: calc(100dvh - 32px);
   padding: 0;
   border: 1px solid var(--d1-border-strong);
@@ -27,15 +27,13 @@
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 16px 20px;
+  padding: 14px 16px;
   background: var(--d1-panel);
   border-bottom: 1px solid var(--d1-border);
 }
 
 .d1-seed-info-dialog h2,
-.d1-seed-info-dialog p,
-.d1-seed-info-dialog dl,
-.d1-seed-info-dialog dd {
+.d1-seed-info-dialog p {
   margin: 0;
 }
 
@@ -55,34 +53,63 @@
 }
 
 .d1-seed-mappings {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
-  gap: 24px;
-  padding: 16px 20px 24px;
+  container-type: inline-size;
+  padding: 12px 16px 16px;
+}
+
+.d1-seed-mappings section + section {
+  margin-top: 14px;
 }
 
 .d1-seed-mappings h3 {
-  margin: 0 0 8px;
-  font-size: 15px;
-  color: var(--d1-green);
+  margin: 0 0 6px;
+  font-size: 16px;
+  color: var(--d1-amber);
 }
 
-.d1-seed-mapping {
-  min-height: 58px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--d1-border);
-}
-
-.d1-seed-mapping dt {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.d1-seed-mapping dd {
-  padding-left: 40px;
+.d1-seed-mappings h3 span {
   color: var(--d1-text-2);
-  font-size: 12px;
+  font-weight: 400;
+}
+
+.d1-mapping-grid {
+  --mapping-pixel: calc(100cqw / var(--mapping-units));
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: var(--mapping-pixel);
+}
+
+.d1-mapping-tile {
+  position: relative;
+  aspect-ratio: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: rgb(83 86 77 / 60%);
+  cursor: pointer;
+}
+
+.d1-mapping-tile:hover,
+.d1-mapping-tile[aria-pressed="true"] {
+  background: rgb(110 114 99 / 70%);
+}
+
+.d1-mapping-tile:focus-visible {
+  outline: 2px solid var(--d1-amber);
+  outline-offset: -2px;
+}
+
+.d1-mapping-item,
+.d1-mapping-identity {
+  position: absolute;
+  image-rendering: pixelated;
+  pointer-events: none;
+  background-repeat: no-repeat;
+}
+
+.d1-seed-mappings .d1-mapping-detail {
+  margin: 0 0 12px;
+  color: var(--d1-text);
+  font-size: 13px;
 }

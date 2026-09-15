@@ -2,11 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { InfoIcon, XIcon } from "../../lib/icons";
 import type { ItemMappings } from "../../lib/wasm/types";
-import { Sprite } from "./parts";
+import artwork from "../../generated/item-mapping-art.json";
+import type { CSSProperties } from "react";
+import { ItemMappingTile, mappingLabel } from "./ItemMappingTile";
 import "./seed-info.css";
 
 export function SeedInfo({ seed, mappings }: { seed: string; mappings: ItemMappings }) {
   const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState<string>();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -31,7 +34,10 @@ export function SeedInfo({ seed, mappings }: { seed: string; mappings: ItemMappi
         aria-label="Seed information"
         aria-haspopup="dialog"
         title="Scroll runes, potion colors, and ring gems"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          setSelected(undefined);
+          setOpen(true);
+        }}
       >
         <InfoIcon size={18} />
       </button>
@@ -59,29 +65,44 @@ export function SeedInfo({ seed, mappings }: { seed: string; mappings: ItemMappi
                 <XIcon size={20} />
               </button>
             </header>
-            <div className="d1-seed-mappings">
+            <div
+              className="d1-seed-mappings"
+              style={
+                { "--mapping-units": 6 * artwork.slotSize + 5 * artwork.slotGap } as CSSProperties
+              }
+            >
+              {selected && (
+                <p className="d1-mapping-detail" role="status">
+                  {selected}
+                </p>
+              )}
               {(
                 [
-                  ["scrolls", "Scroll runes"],
-                  ["potions", "Potion colors"],
-                  ["rings", "Ring gems"],
+                  ["potions", "Potions"],
+                  ["scrolls", "Scrolls"],
+                  ["rings", "Rings"],
                 ] as const
               ).map(([category, title]) => (
                 <section key={category} aria-label={title}>
-                  <h3>{title}</h3>
-                  <dl>
-                    {[...mappings[category]]
-                      .sort((a, b) => a.appearance.localeCompare(b.appearance))
-                      .map((entry) => (
-                        <div key={entry.appearance} className="d1-seed-mapping">
-                          <dt>
-                            <Sprite art={{ cell: entry.spriteIndex }} size={28} />
-                            <span>{entry.appearance}</span>
-                          </dt>
-                          <dd>{entry.name}</dd>
-                        </div>
-                      ))}
-                  </dl>
+                  <h3>
+                    {title} <span>({mappings[category].length})</span>
+                  </h3>
+                  <div className="d1-mapping-grid">
+                    {mappings[category].map((entry, classIndex) => (
+                      <ItemMappingTile
+                        key={entry.name}
+                        entry={entry}
+                        category={category}
+                        classIndex={classIndex}
+                        selected={selected === mappingLabel(entry)}
+                        onSelect={() =>
+                          setSelected(
+                            selected === mappingLabel(entry) ? undefined : mappingLabel(entry),
+                          )
+                        }
+                      />
+                    ))}
+                  </div>
                 </section>
               ))}
             </div>
