@@ -127,7 +127,8 @@ pub fn protected_scout_seed_packet<G: WorldGenerator + ?Sized>(
 }
 
 /// Scouts a production world using the request's challenge mask and selection.
-/// `SSQ3` carries a query and override; legacy requests use no trinket.
+/// `SSQ3`/`SSQ4` carry a query and override; `SSQ4` also requests item mappings.
+/// Legacy requests use no trinket.
 ///
 /// # Errors
 ///
@@ -142,7 +143,9 @@ pub fn production_scout_packet(request: &[u8]) -> Result<Vec<u8>, ScoutCallError
         decoded.query.as_ref(),
         decoded.trinket_override,
     )?;
-    let packet = if request.starts_with(b"SSQ3") {
+    let packet = if request.starts_with(b"SSQ4") {
+        shpd_seedfinder_core::wire::encode_scout_world_with_mappings(&world, selected)
+    } else if request.starts_with(b"SSQ3") {
         encode_scout_world_with_selection(&world, selected)
     } else {
         encode_scout_world(&world)
@@ -1584,6 +1587,17 @@ mod tests {
             assert_eq!(marks.matched, scout_matches(&world, &decoded_query).matched);
             let tail = selected.map_or("", |id| item(id).stable_id);
             assert!(packet.ends_with(tail.as_bytes()));
+            let mut mapping_request = request;
+            mapping_request[..4].copy_from_slice(b"SSQ4");
+            let mapping_packet = production_scout_packet(&mapping_request).unwrap();
+            assert_eq!(&mapping_packet[..4], b"SSC7");
+            assert_eq!(decode_scout_world(&mapping_packet).unwrap(), world);
+            assert_eq!(
+                production_scout_matches(&mapping_request, query.as_bytes())
+                    .unwrap()
+                    .matched,
+                marks.matched
+            );
         }
         assert!(production_scout_packet(&request(item(offered[4]).stable_id)).is_err());
         assert!(production_scout_packet(b"SSQ3\x00").is_err());

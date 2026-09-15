@@ -35,6 +35,7 @@ pub struct SelectedScoutRequest {
 /// `SSQ3`: magic, LE u16 challenge mask, LE u16-length UTF-8 seed,
 /// LE u16-length override (empty = automatic, `none` = deselected, otherwise
 /// stable item ID), then an optional canonical JSON query in remaining bytes.
+/// `SSQ4` has the same layout and opts into the `SSC7` item mappings response.
 /// Legacy requests remain supported.
 ///
 /// # Errors
@@ -46,7 +47,10 @@ pub fn decode_selected_scout_request(request: &[u8]) -> Result<SelectedScoutRequ
         let len = usize::from(u16::from_le_bytes([bytes[0], bytes[1]]));
         std::str::from_utf8(input.take(len)?).map_err(|_| WireError::InvalidUtf8)
     }
-    let Some(payload) = request.strip_prefix(b"SSQ3") else {
+    let Some(payload) = request
+        .strip_prefix(b"SSQ4")
+        .or_else(|| request.strip_prefix(b"SSQ3"))
+    else {
         let (seed, challenges) = decode_scout_request(request)?;
         return Ok(SelectedScoutRequest {
             seed,
@@ -91,6 +95,7 @@ const SCOUT_RESULT_MAGIC: &[u8; 4] = b"SSC3";
 const SCOUT_RESULT_MAGIC_V4: &[u8; 4] = b"SSC4";
 const SCOUT_RESULT_MAGIC_V5: &[u8; 4] = b"SSC5";
 const SCOUT_RESULT_MAGIC_V6: &[u8; 4] = b"SSC6";
+const SCOUT_RESULT_MAGIC_V7: &[u8; 4] = b"SSC7";
 /// Requirement ceiling of a bridge request; far above anything the UIs
 /// produce, and what the retired binary layout's count field could hold.
 #[cfg(feature = "json-query")]
@@ -346,6 +351,33 @@ pub fn encode_scout_world_with_selection(
     Ok(output)
 }
 
+/// `SSC7` extends `SSC6` with scroll, potion, and ring mappings, in that order.
+/// Each block contains exactly twelve entries in game class order, each encoded
+/// as `name:utf8_u16, appearance:utf8_u16, sprite_index:u16` (big-endian).
+/// Only `SSQ4` callers receive this version; existing clients keep their schema.
+///
+/// # Errors
+/// Returns the same validation errors as [`encode_scout_world_with_selection`].
+pub fn encode_scout_world_with_mappings(
+    world: &GeneratedWorld,
+    selected: Option<crate::catalog::ItemId>,
+) -> Result<Vec<u8>, WireError> {
+    let mut output = encode_scout_world_with_selection(world, selected)?;
+    output[..4].copy_from_slice(SCOUT_RESULT_MAGIC_V7);
+    let mappings = crate::item_mappings::item_mappings(world.seed);
+    for entry in mappings
+        .scrolls
+        .iter()
+        .chain(&mappings.potions)
+        .chain(&mappings.rings)
+    {
+        push_utf8_u16(&mut output, entry.name)?;
+        push_utf8_u16(&mut output, entry.appearance)?;
+        output.extend_from_slice(&entry.sprite_index.to_be_bytes());
+    }
+    Ok(output)
+}
+
 fn validate_feeling_depth(depth: u8, previous: u8) -> Result<(), WireError> {
     if !(1..=24).contains(&depth) || depth % 5 == 0 {
         return Err(WireError::InvalidFeelingDepth);
@@ -519,7 +551,7 @@ const fn quest_depth_range(quest: u8) -> std::ops::RangeInclusive<u8> {
     }
 }
 
-/// Decodes an `SSC3`, `SSC4`, `SSC5`, or `SSC6` scouting response. Deck metadata is
+/// Decodes an `SSC3` through `SSC7` scouting response. Deck metadata is
 /// validated against the seed; typed Rust callers obtain that same order
 /// from [`crate::trinkets::trinket_order`]. Older packets have empty feelings.
 ///
@@ -539,6 +571,7 @@ pub fn decode_scout_world(packet: &[u8]) -> Result<GeneratedWorld, WireError> {
         && magic != SCOUT_RESULT_MAGIC_V4
         && magic != SCOUT_RESULT_MAGIC_V5
         && magic != SCOUT_RESULT_MAGIC_V6
+        && magic != SCOUT_RESULT_MAGIC_V7
     {
         return Err(WireError::BadMagic);
     }
@@ -617,12 +650,15 @@ pub fn decode_scout_world(packet: &[u8]) -> Result<GeneratedWorld, WireError> {
             }
         }
     }
-    let feelings = if magic == SCOUT_RESULT_MAGIC_V5 || magic == SCOUT_RESULT_MAGIC_V6 {
+    let feelings = if magic == SCOUT_RESULT_MAGIC_V5
+        || magic == SCOUT_RESULT_MAGIC_V6
+        || magic == SCOUT_RESULT_MAGIC_V7
+    {
         decode_feelings(&mut input)?
     } else {
         Vec::new()
     };
-    if magic == SCOUT_RESULT_MAGIC_V6 {
+    if magic == SCOUT_RESULT_MAGIC_V6 || magic == SCOUT_RESULT_MAGIC_V7 {
         let selected = input.utf8_u16()?;
         if !selected.is_empty()
             && !crate::trinkets::trinket_order(seed)[..4]
@@ -630,6 +666,22 @@ pub fn decode_scout_world(packet: &[u8]) -> Result<GeneratedWorld, WireError> {
                 .any(|id| item(*id).stable_id == selected)
         {
             return Err(WireError::InvalidTrinketOrder);
+        }
+    }
+    if magic == SCOUT_RESULT_MAGIC_V7 {
+        let mappings = crate::item_mappings::item_mappings(seed);
+        for entry in mappings
+            .scrolls
+            .iter()
+            .chain(&mappings.potions)
+            .chain(&mappings.rings)
+        {
+            if input.utf8_u16()? != entry.name
+                || input.utf8_u16()? != entry.appearance
+                || input.u16()? != entry.sprite_index
+            {
+                return Err(WireError::InvalidItemMappings);
+            }
         }
     }
     if !input.is_empty() {
@@ -770,6 +822,7 @@ pub enum WireError {
     InvalidAccessibility,
     InvalidQuestCount,
     InvalidRingGems,
+    InvalidItemMappings,
     InvalidTrinketOrder,
     InvalidFeelingCount,
     InvalidFeelingDepth,
@@ -811,6 +864,7 @@ impl fmt::Display for WireError {
             Self::InvalidFeelingOrder => "floor feelings must have ascending unique depths",
             Self::UnknownFeeling => "packet names an unknown floor feeling",
             Self::InvalidTrinketOrder => "packet trinket order does not match its seed",
+            Self::InvalidItemMappings => "packet item mappings do not match the seed",
             Self::InvalidRingGems => "packet ring gems are not a permutation of the twelve gems",
             Self::InvalidQuestOrder => "packet quest entries must have ascending unique IDs",
             Self::InvalidQuestDepth => "packet quest depth leaves its canonical floor range",
@@ -1418,6 +1472,31 @@ mod tests {
         world.feelings.clear();
         assert_eq!(decode_scout_world(&legacy_v4), Ok(world.clone()));
         assert_eq!(decode_scout_world(&legacy_v3), Ok(world));
+    }
+
+    #[test]
+    fn mapping_packets_preserve_the_world_and_validate_every_entry() {
+        let world = CanonicalMainWorldGenerator.generate(DungeonSeed::MIN, 24);
+        let legacy = super::encode_scout_world_with_selection(&world, None).unwrap();
+        let packet = super::encode_scout_world_with_mappings(&world, None).unwrap();
+        assert_eq!(&packet[..4], b"SSC7");
+        assert_eq!(&packet[4..legacy.len()], &legacy[4..]);
+        assert_eq!(decode_scout_world(&packet), Ok(world));
+        for end in legacy.len()..packet.len() {
+            assert_eq!(
+                decode_scout_world(&packet[..end]),
+                Err(WireError::Truncated)
+            );
+        }
+        let mut invalid = packet.clone();
+        *invalid.last_mut().unwrap() = 0;
+        assert_eq!(
+            decode_scout_world(&invalid),
+            Err(WireError::InvalidItemMappings)
+        );
+        invalid = packet;
+        invalid.push(0);
+        assert_eq!(decode_scout_world(&invalid), Err(WireError::TrailingData));
     }
 
     #[test]

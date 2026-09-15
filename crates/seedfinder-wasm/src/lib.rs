@@ -114,6 +114,7 @@ impl From<FileChallenge> for Challenges {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct ScoutOutput {
+    item_mappings: shpd_seedfinder_core::item_mappings::ItemMappings,
     selected_trinket: Option<&'static str>,
     trinket_order: Vec<TrinketOutput>,
     seed: SeedOutput,
@@ -671,6 +672,7 @@ fn scout_impl(request_json: &str) -> Result<String, String> {
         .map(|(world_item, matched)| scout_item_output(world_item, matched))
         .collect();
     Ok(to_json(&ScoutOutput {
+        item_mappings: shpd_seedfinder_core::item_mappings::item_mappings(seed),
         selected_trinket: selected.map(|id| item(id).stable_id),
         seed: seed.into(),
         trinket_order: shpd_seedfinder_core::trinkets::trinket_order(seed)
@@ -1097,6 +1099,14 @@ mod tests {
             output["ringGems"],
             serde_json::json!([7, 8, 3, 5, 4, 6, 2, 11, 10, 1, 0, 9])
         );
+
+        let mappings = &output["itemMappings"];
+        for category in ["scrolls", "potions", "rings"] {
+            assert_eq!(mappings[category].as_array().unwrap().len(), 12);
+        }
+        assert_eq!(mappings["rings"][7]["appearance"], "Diamond");
+        assert_eq!(mappings["rings"][7]["spriteIndex"], RING_SPRITE_BASE + 11);
+        assert_eq!(mappings["rings"][7]["name"], "Ring of haste");
 
         let haste = item_by_stable_id("ring_haste").unwrap();
         assert_eq!(haste.sprite_index, RING_SPRITE_BASE + 7);
