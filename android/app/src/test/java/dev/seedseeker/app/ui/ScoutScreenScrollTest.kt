@@ -152,7 +152,7 @@ class ScoutScreenScrollTest {
         compose.onNodeWithContentDescription("Seed information").assertIsDisplayed()
         drag(405f)
         compose.onNodeWithContentDescription("Seed information").performClick()
-        compose.onNodeWithText("Potions (12)").assertIsDisplayed()
+        compose.onNodeWithText("Potions").assertIsDisplayed()
         screenshot("seed-mapping-grid", requireNotNull(ShadowDialog.getLatestDialog().window))
         val mappings = requireNotNull(world.itemMappings)
         for ((category, entries) in listOf("potions" to mappings.potions, "scrolls" to mappings.scrolls, "rings" to mappings.rings)) {

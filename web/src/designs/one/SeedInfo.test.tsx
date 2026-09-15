@@ -60,9 +60,9 @@ it("opens all 36 real-engine mappings from the scout summary and closes without 
   expect(dialog.textContent).toContain("ABC-DEF-GHI");
   expect(dialog.querySelectorAll(".d1-mapping-tile")).toHaveLength(36);
   expect([...dialog.querySelectorAll("h3")].map((h) => h.textContent)).toEqual([
-    "Potions (12)",
-    "Scrolls (12)",
-    "Rings (12)",
+    "Potions",
+    "Scrolls",
+    "Rings",
   ]);
   expect(dialog.querySelectorAll(".d1-mapping-grid")).toHaveLength(3);
   for (const category of Object.values(result.itemMappings!)) {

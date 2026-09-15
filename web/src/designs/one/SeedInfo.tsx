@@ -84,9 +84,7 @@ export function SeedInfo({ seed, mappings }: { seed: string; mappings: ItemMappi
                 ] as const
               ).map(([category, title]) => (
                 <section key={category} aria-label={title}>
-                  <h3>
-                    {title} <span>({mappings[category].length})</span>
-                  </h3>
+                  <h3>{title}</h3>
                   <div className="d1-mapping-grid">
                     {mappings[category].map((entry, classIndex) => (
                       <ItemMappingTile

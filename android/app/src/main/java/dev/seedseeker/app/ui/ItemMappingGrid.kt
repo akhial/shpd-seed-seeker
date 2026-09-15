@@ -2,7 +2,6 @@
 package dev.seedseeker.app.ui
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -16,7 +15,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -65,7 +63,7 @@ internal fun ItemMappingGrid(
     Column(modifier, verticalArrangement = Arrangement.spacedBy(14.dp)) {
         for ((category, entries, art) in groups) {
             Column {
-                Text("${category.replaceFirstChar { it.uppercaseChar() }} (${entries.size})",
+                Text("${category.replaceFirstChar { it.uppercaseChar() }}",
                     modifier = Modifier.padding(bottom = 6.dp),
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.tertiary)
@@ -81,7 +79,6 @@ internal fun ItemMappingGrid(
                                     val isSelected = selectedLabel == label
                                     MappingTile(entry, art, classIndex, slotSize,
                                         Modifier.weight(1f).aspectRatio(1f).testTag("mapping-$category-$classIndex")
-                                            .background(if (isSelected) Color(0xB36E7263) else Color(0x9953564D))
                                             .clickable(role = Role.Button) { onSelect(label) }
                                             .semantics { contentDescription = label; selected = isSelected })
                                 }

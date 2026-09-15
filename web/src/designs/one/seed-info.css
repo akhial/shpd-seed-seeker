@@ -67,11 +67,6 @@
   color: var(--d1-amber);
 }
 
-.d1-seed-mappings h3 span {
-  color: var(--d1-text-2);
-  font-weight: 400;
-}
-
 .d1-mapping-grid {
   --mapping-pixel: calc(100cqw / var(--mapping-units));
   display: grid;
@@ -86,13 +81,8 @@
   padding: 0;
   border: 0;
   border-radius: 0;
-  background: rgb(83 86 77 / 60%);
+  background: transparent;
   cursor: pointer;
-}
-
-.d1-mapping-tile:hover,
-.d1-mapping-tile[aria-pressed="true"] {
-  background: rgb(110 114 99 / 70%);
 }
 
 .d1-mapping-tile:focus-visible {
