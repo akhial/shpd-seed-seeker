@@ -234,11 +234,11 @@ public sealed class NativeEngine
         };
     }
 
-    /// <summary>The SSQ3 request naming one scouted world; scouting it is deterministic.</summary>
+    /// <summary>The SSQ4 request naming one scouted world; scouting it is deterministic.</summary>
     internal static byte[] EncodeScoutRequest(string seed, int challenges, QuerySettings? query = null, string? trinket = null)
     {
         if (!SeedCode.IsCanonical(seed)) throw new ArgumentException("Seed must use XXX-XXX-XXX format");
-        var w = new Writer(); w.Bytes("SSQ3"u8.ToArray()); w.U16Le(challenges);
+        var w = new Writer(); w.Bytes("SSQ4"u8.ToArray()); w.U16Le(challenges);
         var seedBytes = Encoding.UTF8.GetBytes(seed); w.U16Le(seedBytes.Length); w.Bytes(seedBytes);
         var overrideBytes = Encoding.UTF8.GetBytes(trinket ?? ""); w.U16Le(overrideBytes.Length); w.Bytes(overrideBytes);
         if (query is { Requirements.Count: > 0 }) w.Bytes(EncodeQuery(query));
@@ -272,7 +272,7 @@ public sealed class NativeEngine
     public static ScoutWorld DecodeScout(byte[] bytes)
     {
         var r = new Reader(bytes); var version = r.Text(4);
-        if (version is not ("SSC3" or "SSC4" or "SSC5" or "SSC6")) throw new InvalidDataException("Unexpected scout packet");
+        if (version is not ("SSC3" or "SSC4" or "SSC5" or "SSC6" or "SSC7")) throw new InvalidDataException("Unexpected scout packet");
         var returnedSeed = r.Text(r.U8()); var gems = new RingGems(r.Bytes(RingGems.Count));
         var quests = r.Quests(); var items = new List<ScoutItem>(); var count = r.U16();
         for (var i = 0; i < count; i++)
@@ -284,7 +284,7 @@ public sealed class NativeEngine
             items.Add(new(item, depth, upgrade, effect.Length == 0 ? null : effect, (flags & 1) != 0, source, tag, group, value, Secret: (flags & 2) != 0));
         }
         var order = new List<CatalogItem>();
-        if (version is "SSC4" or "SSC5" or "SSC6")
+        if (version is "SSC4" or "SSC5" or "SSC6" or "SSC7")
         {
             var orderCount = r.U8();
             if (orderCount != 17) throw new InvalidDataException("Unexpected trinket deck size");
@@ -297,7 +297,7 @@ public sealed class NativeEngine
             }
         }
         var feelings = new List<ScoutFloorFeeling>();
-        if (version is "SSC5" or "SSC6")
+        if (version is "SSC5" or "SSC6" or "SSC7")
         {
             var feelingCount = r.U8();
             if (feelingCount > 20) throw new InvalidDataException("Unexpected floor feeling count");
@@ -311,12 +311,34 @@ public sealed class NativeEngine
                 previousDepth = depth;
             }
         }
-        var selectedTrinket = version == "SSC6" ? r.Text() : "";
+        var selectedTrinket = version is "SSC6" or "SSC7" ? r.Text() : "";
         if (selectedTrinket.Length == 0) selectedTrinket = null;
         if (selectedTrinket is not null && !order.Take(4).Any(item => item.Id == selectedTrinket))
             throw new InvalidDataException("Selected trinket is not initially offered");
+        ScoutItemMappings? mappings = null;
+        if (version == "SSC7")
+        {
+            mappings = new(ReadMappings(ref r, 304), ReadMappings(ref r, 352), ReadMappings(ref r, 224));
+            if (!mappings.Rings.Select(entry => entry.SpriteIndex - 224).SequenceEqual(gems.Ordinals.Select(x => (int)x)))
+                throw new InvalidDataException("Scout ring mappings disagree with run gems");
+        }
         if (r.Remaining != 0) throw new InvalidDataException("Trailing native data");
-        return new(returnedSeed, quests, items, gems, order, feelings, selectedTrinket);
+        return new(returnedSeed, quests, items, gems, order, feelings, selectedTrinket, mappings);
+    }
+
+    private static IReadOnlyList<ScoutItemMapping> ReadMappings(ref Reader reader, int spriteBase)
+    {
+        var entries = new List<ScoutItemMapping>();
+        for (var i = 0; i < 12; i++)
+        {
+            var name = reader.Text(); var appearance = reader.Text(); var sprite = reader.U16();
+            if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(appearance)
+                || sprite < spriteBase || sprite >= spriteBase + 12
+                || entries.Any(entry => entry.Name == name || entry.Appearance == appearance || entry.SpriteIndex == sprite))
+                throw new InvalidDataException("Invalid scout item mapping");
+            entries.Add(new(name, appearance, sprite));
+        }
+        return entries;
     }
 
     /// <summary>
@@ -325,7 +347,7 @@ public sealed class NativeEngine
     /// indices into the item list <see cref="Scout"/> returns for the same
     /// request. The engine owns the selection — the very matcher the search
     /// runs, so a marked manifest can never disagree with the result list —
-    /// and it is asked over the same SSQ3 request bytes, which name the world
+    /// and it is asked over the same SSQ4 request bytes, which name the world
     /// exactly.
     /// </summary>
     public static ScoutMatches ScoutMatches(string seed, int challenges, QuerySettings query, string? trinket = null)

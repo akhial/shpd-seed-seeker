@@ -15,7 +15,9 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
+    <Content Include="..\..\android\app\src\main\assets\third_party\shattered-pixel-dungeon\item-mapping-art.json" Link="Assets\item-mapping-art.json" CopyToOutputDirectory="PreserveNewest" />
     <Compile Include="..\SeedSeeker\ResultNavigation.cs" Link="ResultNavigation.cs" />
+    <Compile Include="..\SeedSeeker\ItemMappings.cs" Link="ItemMappings.cs" />
     <Compile Include="..\SeedSeeker\Models.cs" Link="Models.cs" />
     <Compile Include="..\SeedSeeker\ScoutQuests.cs" Link="ScoutQuests.cs" />
     <Compile Include="..\SeedSeeker\ResultsExport.cs" Link="ResultsExport.cs" />

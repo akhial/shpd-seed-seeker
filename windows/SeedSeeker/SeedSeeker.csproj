@@ -48,6 +48,7 @@
     <EngineRustFlags Condition="'$(EngineIsa)' == 'avx2'">$(EngineRustFlags) -Ctarget-cpu=x86-64-v3</EngineRustFlags>
   </PropertyGroup>
   <ItemGroup>
+    <Content Include="..\..\android\app\src\main\assets\third_party\shattered-pixel-dungeon\item-mapping-art.json" Link="Assets\item-mapping-art.json" CopyToOutputDirectory="PreserveNewest" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.260317003" />
     <!-- The exe icon covers Explorer; AppWindow.SetIcon needs the .ico on
          disk next to the binary for the title bar and taskbar. -->

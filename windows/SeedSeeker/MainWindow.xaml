@@ -281,7 +281,13 @@
               <TextBox x:Name="SeedInput" PlaceholderText="AAA-AAA-AAA" FontFamily="Cascadia Mono, Consolas" FontSize="17"
                        TextChanged="SeedInput_TextChanged" KeyDown="SeedInput_KeyDown"/>
               <Button Grid.Column="1" x:Name="ScoutButton" Content="Scout" Click="Scout_Click" VerticalAlignment="Stretch"/>
-              <Button Grid.Column="2" Content="Copy" Click="CopySeed_Click" VerticalAlignment="Stretch"/>
+              <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4">
+                <Button x:Name="SeedInfoButton" Click="SeedInfo_Click" Visibility="Collapsed"
+                        AutomationProperties.Name="Seed information" ToolTipService.ToolTip="Seed information">
+                  <FontIcon Glyph="&#xE946;" FontSize="16"/>
+                </Button>
+                <Button Content="Copy" Click="CopySeed_Click" VerticalAlignment="Stretch"/>
+              </StackPanel>
             </Grid>
             <TextBlock x:Name="ScoutStatus" Style="{StaticResource Caption}" Margin="0,-2,0,0"/>
             <!-- One chip per quest of the scouted seed, e.g. "Great Crab · Sad Ghost · F4"; built in code-behind. -->
