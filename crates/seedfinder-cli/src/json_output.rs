@@ -135,10 +135,16 @@ fn write_atomically(path: &Path, contents: &[u8]) -> io::Result<()> {
         .tempfile_in(parent)?;
     temporary.write_all(contents)?;
     temporary.as_file().sync_all()?;
-    // Same-directory persistence atomically replaces the destination on all
-    // supported platforms. Never truncate or remove the published file first.
-    temporary.persist(path).map_err(|error| error.error)?;
-    Ok(())
+    // Clear Windows' temporary-file attribute before publishing, then close
+    // the writer. `keep` also disables automatic cleanup, so handle it below.
+    let (file, temporary_path) = temporary.keep().map_err(|error| error.error)?;
+    drop(file);
+    // Unlike tempfile::persist's MoveFileExW, std's rename can replace a file
+    // with open readers on modern Windows. Keep the same-directory replacement
+    // atomic: never truncate or remove the published file first.
+    fs::rename(&temporary_path, path).inspect_err(|_| {
+        let _ = fs::remove_file(&temporary_path);
+    })
 }
 
 #[cfg(test)]
@@ -222,6 +228,46 @@ mod tests {
             [DungeonSeed::MIN]
         );
         assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn failed_replacement_preserves_destination_and_cleans_up_temporary_file() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("results.json");
+        fs::create_dir(&path).unwrap();
+        let existing = path.join("existing");
+        fs::write(&existing, "preserved").unwrap();
+
+        assert!(write_atomically(&path, b"replacement").is_err());
+
+        assert_eq!(fs::read_to_string(&existing).unwrap(), "preserved");
+        assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 1);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn locked_destination_preserves_export_and_cleans_up_temporary_file() {
+        use std::os::windows::fs::OpenOptionsExt as _;
+
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("results.json");
+        write_atomically(&path, b"previous export").unwrap();
+        let mut reader = fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(&path)
+            .unwrap();
+
+        assert!(write_atomically(&path, b"replacement").is_err());
+
+        let mut contents = String::new();
+        reader.read_to_string(&mut contents).unwrap();
+        assert_eq!(contents, "previous export");
+        assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 1);
+        drop(reader);
+        assert_eq!(fs::read_to_string(&path).unwrap(), "previous export");
+        write_atomically(&path, b"replacement").unwrap();
+        assert_eq!(fs::read_to_string(&path).unwrap(), "replacement");
     }
 
     #[test]
