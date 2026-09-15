@@ -129,13 +129,6 @@ fun ItemSprite(
     modifier: Modifier = Modifier,
 ) = ItemArtwork(spriteIndex, item.typeIconIndex, item.name, glows, modifier)
 
-/** Draw the engine-resolved unidentified appearance, without a ring type glyph. */
-@Composable
-internal fun ItemAppearanceSprite(
-    entry: dev.seedseeker.app.model.ScoutItemMapping,
-    modifier: Modifier = Modifier,
-) = ItemArtwork(entry.spriteIndex, null, entry.appearance, emptyList(), modifier)
-
 @Composable
 private fun ItemArtwork(
     spriteIndex: Int,

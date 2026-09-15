@@ -29,8 +29,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performScrollToNode
-import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
@@ -55,6 +54,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
+import org.robolectric.shadows.ShadowDialog
 
 @RunWith(ScoutRobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "w412dp-h915dp-xhdpi")
@@ -95,10 +95,13 @@ class ScoutScreenScrollTest {
     ) {
         val atlas = compose.activity.assets.open("third_party/shattered-pixel-dungeon/items.png")
             .use(BitmapFactory::decodeStream)!!.asImageBitmap()
+        val iconAtlas = compose.activity.assets.open("third_party/shattered-pixel-dungeon/item_icons.png")
+            .use(BitmapFactory::decodeStream)!!.asImageBitmap()
         compose.setContent {
             SeedSeekerTheme {
                 CompositionLocalProvider(
                     LocalItemAtlas provides atlas,
+                    LocalItemIconAtlas provides iconAtlas,
                     LocalDensity provides Density(compose.density.density, fontScale),
                 ) {
                     ScoutScreen(
@@ -127,10 +130,9 @@ class ScoutScreenScrollTest {
         compose.waitForIdle()
     }
 
-    private fun screenshot(name: String) {
+    private fun screenshot(name: String, window: android.view.Window = compose.activity.window) {
         // PixelCopy directly avoids Compose's VSYNC wait, which has no render thread on Robolectric.
         System.setProperty("robolectric.pixelCopyRenderMode", "hardware")
-        val window = compose.activity.window
         val bitmap = Bitmap.createBitmap(window.decorView.width, window.decorView.height, Bitmap.Config.ARGB_8888)
         var copyResult: Int? = null
         compose.runOnIdle {
@@ -150,16 +152,26 @@ class ScoutScreenScrollTest {
         compose.onNodeWithContentDescription("Seed information").assertIsDisplayed()
         drag(405f)
         compose.onNodeWithContentDescription("Seed information").performClick()
-        compose.onNodeWithText("Scroll runes").assertIsDisplayed()
+        compose.onNodeWithText("Potions (12)").assertIsDisplayed()
+        screenshot("seed-mapping-grid", requireNotNull(ShadowDialog.getLatestDialog().window))
         val mappings = requireNotNull(world.itemMappings)
-        for ((title, entries) in listOf("Scroll runes" to mappings.scrolls, "Potion colors" to mappings.potions, "Ring gems" to mappings.rings)) {
-            compose.onNodeWithTag("seed-mappings").performScrollToNode(hasText(title))
-            compose.onNodeWithText(title).assertIsDisplayed()
+        for ((category, entries) in listOf("potions" to mappings.potions, "scrolls" to mappings.scrolls, "rings" to mappings.rings)) {
+            compose.onNodeWithTag("mapping-$category-0").performScrollTo()
+            val cells = entries.indices.map { bounds("mapping-$category-$it") }
+            assertTrue(cells.take(6).all { it.top == cells[0].top })
+            assertTrue(cells.drop(6).all { it.top == cells[6].top })
+            assertTrue(cells[6].top > cells[0].bottom)
+            assertEquals(cells[0].left, cells[6].left, 1f)
             for (entry in entries) {
-                compose.onNodeWithTag("seed-mappings").performScrollToNode(hasText(entry.name))
-                compose.onNodeWithText(entry.name).assertIsDisplayed()
-                compose.onNodeWithText(entry.appearance).assertIsDisplayed()
+                compose.onNodeWithContentDescription(mappingLabel(entry)).performScrollTo().assertIsDisplayed()
+                compose.onNodeWithText(entry.name).assertDoesNotExist()
             }
+            val label = mappingLabel(entries.first())
+            compose.onNodeWithContentDescription(label).performScrollTo().performClick()
+            compose.onNodeWithTag("mapping-detail").performScrollTo().assertIsDisplayed()
+            compose.onNodeWithText(label).assertIsDisplayed()
+            compose.onNodeWithContentDescription(label).performScrollTo().performClick()
+            compose.onNodeWithTag("mapping-detail").assertDoesNotExist()
         }
         compose.onNodeWithText("Close").performClick()
         compose.onNodeWithTag("seed-mappings").assertDoesNotExist()

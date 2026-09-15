@@ -126,9 +126,12 @@ the same generated world.
 Scout requests use SSQ4 (little-endian challenge mask and length-prefixed seed
 and override, followed by canonical query JSON). SSC7 responses extend SSC6
 with all 36 [item mappings](../docs/item-mappings.md). The info button beside
-the scouted seed opens scroll runes, potion colors, and ring gems with their
-unidentified sprites, sorted by appearance name. The list scrolls independently
-of the Scout floors. Older packets omit this button.
+the scouted seed opens potion, scroll, and ring grids with six columns and two
+full rows per category, in game class order. The seed's actual appearance is
+centered in each tile, with its identity glyph at the top right, using the game's
+journal frame geometry. Tap a tile to show its name and appearance; screen
+readers announce the same description. The dialog scrolls independently of the
+Scout floors. Older packets omit this button.
 
 SSC6 responses extend SSC5
 with a UTF-8 selected ID and big-endian unsigned 16-bit length; an empty ID means
