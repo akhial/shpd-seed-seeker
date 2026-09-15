@@ -76,6 +76,22 @@ cargo run --release -p shpd-seedfinder-cli -- --items requirements.json
 cargo run --release -p shpd-seedfinder-cli -- -i requirements.json -b 1000 --workers 4
 ```
 
+Searches print one matching seed per line to stdout. Use `--output FILE` (or
+`-o FILE`) to write those lines to a file, or add `--json` to export the query
+and matches in the [shared results format](docs/results-export-format.md),
+importable by the macOS, Android, Windows, Linux, and web apps:
+
+```sh
+seed-seeker --items requirements.json --json --output results.json
+```
+
+`--json` requires an output file; stdout and `--output -` are not supported.
+The file starts as a valid empty export and is updated as matches arrive,
+including their trinket choices. Each update atomically replaces the file with
+a complete JSON document, so it stays importable while searching and after
+Ctrl+C. JSON searches stop at the apps' 1,024-result limit. Existing output
+files are replaced. The output options cannot be combined with `--benchmark`.
+
 ## Search queries<a id="search-queries"></a>
 
 ```jsonc

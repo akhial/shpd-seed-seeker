@@ -17,6 +17,13 @@ app snapshots the query when a search starts (or when a file is imported) and
 exports that snapshot, not the live editor state, so a file never claims a
 query that did not produce its seeds.
 
+The CLI writes the same format with
+`seed-seeker --items requirements.json --json --output results.json`, using
+the core codec directly. It publishes a complete empty document before
+searching and atomically replaces it as matches arrive, keeping the output
+importable during a search or after interruption. JSON searches stop at
+`MAX_RESULTS` (1,024 matches), so imports retain every exported match.
+
 ## Envelope
 
 ```json
@@ -60,7 +67,7 @@ bridge decode returns both arrays after deduplication and capping.
 ## The `query` object
 
 The query reuses the existing JSON query-document format shared by the CLI
-(`seed-seeker --query`), the web frontend, and the presets on every platform.
+(`seed-seeker --items`), the web frontend, and the presets on every platform.
 It is decoded by `crates/seedfinder-core/src/json_query.rs`:
 
 - `auto_apply_trinket` — boolean, defaults to `false` in the file format;

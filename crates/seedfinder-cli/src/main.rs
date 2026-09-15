@@ -1,6 +1,8 @@
 #[global_allocator]
 static GLOBAL_ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
+mod json_output;
+
 use std::env;
 use std::fs;
 use std::io::{self, Write as _};
@@ -36,6 +38,8 @@ enum Command {
     Search {
         items: PathBuf,
         workers: Option<NonZeroUsize>,
+        output: Option<PathBuf>,
+        json: bool,
     },
     Help,
     Version,
@@ -53,7 +57,12 @@ fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
-        Ok(Command::Search { items, workers }) => match search_command(&items, workers) {
+        Ok(Command::Search {
+            items,
+            workers,
+            output,
+            json,
+        }) => match search_command(&items, workers, output.as_deref(), json) {
             Ok(()) => ExitCode::SUCCESS,
             Err(error) => {
                 eprintln!("seed-seeker: search failed: {error}");
@@ -80,13 +89,10 @@ fn main() -> ExitCode {
 
 fn parse_args(arguments: impl IntoIterator<Item = String>) -> Result<Command, String> {
     let arguments = arguments.into_iter().collect::<Vec<_>>();
-    if arguments.is_empty() {
-        return Ok(Command::Help);
-    }
-    if arguments.len() == 1 {
-        match arguments[0].as_str() {
-            "--help" | "-h" => return Ok(Command::Help),
-            "--version" | "-V" => return Ok(Command::Version),
+    if arguments.len() <= 1 {
+        match arguments.first().map(String::as_str) {
+            None | Some("--help" | "-h") => return Ok(Command::Help),
+            Some("--version" | "-V") => return Ok(Command::Version),
             _ => {}
         }
     }
@@ -94,6 +100,8 @@ fn parse_args(arguments: impl IntoIterator<Item = String>) -> Result<Command, St
     let mut benchmark_seeds = None;
     let mut workers = None;
     let mut items = None;
+    let mut output = None;
+    let mut json = false;
     let mut index = 0;
     while index < arguments.len() {
         match arguments[index].as_str() {
@@ -131,6 +139,25 @@ fn parse_args(arguments: impl IntoIterator<Item = String>) -> Result<Command, St
                     .ok_or_else(|| "--items requires a JSON file path".to_owned())?;
                 items = Some(PathBuf::from(value));
             }
+            "--output" | "-o" => {
+                if output.is_some() {
+                    return Err("--output may only be specified once".to_owned());
+                }
+                index += 1;
+                let value = arguments
+                    .get(index)
+                    .filter(|value| !value.is_empty() && !value.starts_with('-'))
+                    .ok_or_else(|| {
+                        "--output requires a file path (stdout is not supported)".to_owned()
+                    })?;
+                output = Some(PathBuf::from(value));
+            }
+            "--json" => {
+                if json {
+                    return Err("--json may only be specified once".to_owned());
+                }
+                json = true;
+            }
             "--help" | "-h" | "--version" | "-V" => {
                 return Err("help and version cannot be combined with other options".to_owned());
             }
@@ -139,6 +166,12 @@ fn parse_args(arguments: impl IntoIterator<Item = String>) -> Result<Command, St
         index += 1;
     }
 
+    if json && output.is_none() {
+        return Err("--json requires --output FILE".to_owned());
+    }
+    if output.is_some() && (benchmark_seeds.is_some() || items.is_none()) {
+        return Err("--output and --json require an --items search without --benchmark".to_owned());
+    }
     if let Some(seeds) = benchmark_seeds {
         return Ok(Command::Benchmark(BenchmarkOptions {
             seeds,
@@ -147,7 +180,12 @@ fn parse_args(arguments: impl IntoIterator<Item = String>) -> Result<Command, St
         }));
     }
     if let Some(items) = items {
-        return Ok(Command::Search { items, workers });
+        return Ok(Command::Search {
+            items,
+            workers,
+            output,
+            json,
+        });
     }
     Err("--workers requires --benchmark or --items".to_owned())
 }
@@ -172,13 +210,16 @@ fn help() -> &'static str {
     concat!(
         "Seed Seeker command-line tools\n\n",
         "Usage:\n",
-        "  seed-seeker --items FILE [--workers WORKERS]\n",
+        "  seed-seeker --items FILE [--workers WORKERS] [--output FILE [--json]]\n",
         "  seed-seeker [--items FILE] --benchmark [SEEDS] [--workers WORKERS]\n\n",
         "Options:\n",
         "  -b, --benchmark [SEEDS]  Benchmark a seed search\n",
         "                            [default: 10000]\n",
         "  -i, --items FILE          Read search requirements from a JSON file\n",
         "      --workers WORKERS     Number of search workers [default: available CPUs]\n",
+        "  -o, --output FILE         Write matching seeds to a file (replaces existing)\n",
+        "      --json                Export app-importable JSON; requires --output FILE\n",
+        "                            Keeps the file valid; stops at 1024 matches\n",
         "  -h, --help                Print help\n",
         "  -V, --version             Print version\n",
     )
@@ -227,8 +268,34 @@ fn benchmark_command(benchmark: &BenchmarkOptions) -> Result<String, String> {
     ))
 }
 
-fn search_command(items: &Path, workers: Option<NonZeroUsize>) -> Result<(), String> {
+fn search_command(
+    items: &Path,
+    workers: Option<NonZeroUsize>,
+    output: Option<&Path>,
+    json: bool,
+) -> Result<(), String> {
     let query = load_query(items)?;
+    if let Some(path) = output {
+        if fs::canonicalize(path).ok() == fs::canonicalize(items).ok() {
+            return Err("--output must be different from the --items file".to_owned());
+        }
+    }
+    let workers = workers.unwrap_or_else(SearchOptions::available_parallelism);
+    if json {
+        return json_output::search(
+            &query,
+            workers,
+            output.ok_or("--json requires --output FILE")?,
+        );
+    }
+    let stdout = io::stdout();
+    let mut output: Box<dyn io::Write> = match output {
+        Some(path) => Box::new(io::BufWriter::new(
+            fs::File::create(path)
+                .map_err(|error| format!("could not create '{}': {error}", path.display()))?,
+        )),
+        None => Box::new(io::BufWriter::new(stdout.lock())),
+    };
     if QueryPlan::analyze(&query).is_unsatisfiable() {
         eprintln!(
             "seed-seeker: no seed can satisfy this query within depth {}; nothing to search",
@@ -236,9 +303,6 @@ fn search_command(items: &Path, workers: Option<NonZeroUsize>) -> Result<(), Str
         );
         return Ok(());
     }
-    let workers = workers.unwrap_or_else(SearchOptions::available_parallelism);
-    let stdout = io::stdout();
-    let mut output = io::BufWriter::new(stdout.lock());
     let mut start_seed = 0;
     while start_seed < TOTAL_SEEDS {
         let end_seed_exclusive = start_seed
@@ -378,6 +442,8 @@ mod tests {
             Ok(Command::Search {
                 items: PathBuf::from("requirements.json"),
                 workers: NonZeroUsize::new(3),
+                output: None,
+                json: false,
             })
         );
         assert_eq!(
@@ -385,6 +451,8 @@ mod tests {
             Ok(Command::Search {
                 items: PathBuf::from("requirements.json"),
                 workers: None,
+                output: None,
+                json: false,
             })
         );
     }
@@ -404,6 +472,111 @@ mod tests {
                 items: Some(PathBuf::from("requirements.json")),
             }))
         );
+    }
+
+    #[test]
+    fn accepts_json_and_text_output_files_in_either_option_order() {
+        for arguments in [
+            vec![
+                "--items",
+                "requirements.json",
+                "--json",
+                "--output",
+                "results.json",
+            ],
+            vec!["-o", "results.json", "--json", "-i", "requirements.json"],
+        ] {
+            assert_eq!(
+                parse_args(arguments.into_iter().map(str::to_owned)),
+                Ok(Command::Search {
+                    items: PathBuf::from("requirements.json"),
+                    workers: None,
+                    output: Some(PathBuf::from("results.json")),
+                    json: true,
+                })
+            );
+        }
+        assert_eq!(
+            parse_args(["-i", "requirements.json", "-o", "seeds.txt"].map(str::to_owned)),
+            Ok(Command::Search {
+                items: PathBuf::from("requirements.json"),
+                workers: None,
+                output: Some(PathBuf::from("seeds.txt")),
+                json: false,
+            })
+        );
+    }
+
+    #[test]
+    fn rejects_missing_duplicate_and_benchmark_output_options() {
+        assert_eq!(
+            parse_args(["-i", "requirements.json", "--json"].map(str::to_owned)),
+            Err("--json requires --output FILE".to_owned())
+        );
+        for arguments in [
+            vec!["--json"],
+            vec!["--json", "--output", "results.json"],
+            vec!["--output", "results.txt"],
+            vec!["-i", "requirements.json", "--output"],
+            vec!["-i", "requirements.json", "--output", "--json"],
+            vec!["-i", "requirements.json", "--output", ""],
+            vec!["-i", "requirements.json", "--json", "--output", "-"],
+            vec![
+                "-i",
+                "requirements.json",
+                "--json",
+                "--json",
+                "-o",
+                "results.json",
+            ],
+            vec!["-i", "requirements.json", "--output", "one", "-o", "two"],
+            vec!["--benchmark", "--output", "results.txt"],
+            vec![
+                "-i",
+                "requirements.json",
+                "-b",
+                "--json",
+                "-o",
+                "results.json",
+            ],
+        ] {
+            assert!(
+                parse_args(arguments.iter().map(|value| (*value).to_owned())).is_err(),
+                "{arguments:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn impossible_search_creates_an_importable_empty_export() {
+        let directory = tempfile::tempdir().unwrap();
+        let items = directory.path().join("requirements.json");
+        let output = directory.path().join("results.json");
+        std::fs::write(
+            &items,
+            r#"{"max_depth":1,"requirements":[{"item":"ring_wealth","upgrade":4}]}"#,
+        )
+        .unwrap();
+        super::search_command(&items, NonZeroUsize::new(1), Some(&output), true).unwrap();
+        let imported =
+            shpd_seedfinder_core::results_export::decode(&std::fs::read_to_string(output).unwrap())
+                .unwrap();
+        assert!(imported.seeds.is_empty());
+        assert_eq!(imported.query, super::load_query(&items).unwrap());
+    }
+
+    #[test]
+    fn refuses_to_overwrite_the_input_query() {
+        let directory = tempfile::tempdir().unwrap();
+        let items = directory.path().join("requirements.json");
+        let contents = r#"{"requirements":[{"kind":"ring"}]}"#;
+        std::fs::write(&items, contents).unwrap();
+        for json in [false, true] {
+            assert!(
+                super::search_command(&items, NonZeroUsize::new(1), Some(&items), json).is_err()
+            );
+            assert_eq!(std::fs::read_to_string(&items).unwrap(), contents);
+        }
     }
 
     #[test]
@@ -436,5 +609,7 @@ mod tests {
         assert!(help().contains("-b, --benchmark"));
         assert!(help().contains("-i, --items FILE"));
         assert!(help().contains("--workers WORKERS"));
+        assert!(help().contains("--output FILE"));
+        assert!(help().contains("--json"));
     }
 }
