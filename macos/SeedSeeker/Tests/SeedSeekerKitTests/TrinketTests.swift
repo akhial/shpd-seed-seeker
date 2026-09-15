@@ -107,7 +107,7 @@ final class TrinketTests: XCTestCase {
             let world = try await engine.scoutSeed("AAA-AAA-AAA", challenges: 0, query: query, trinket: override)
             XCTAssertEqual(world.selectedTrinket, override == "none" ? nil : override)
             let request = try ScoutCodec.encodeRequest(seed: world.seed, challenges: 0, query: query, trinket: override)
-            XCTAssertEqual(String(data: request.prefix(4), encoding: .utf8), "SSQ3")
+            XCTAssertEqual(String(data: request.prefix(4), encoding: .utf8), "SSQ4")
             let marks = try ScoutMatches.mark(request, query: QueryDocument.encode(query))
             XCTAssertEqual(marks.matchedRequirements, 1)
             XCTAssertEqual(world.items[try XCTUnwrap(marks.matched.first)].item.id, "mimic_tooth")

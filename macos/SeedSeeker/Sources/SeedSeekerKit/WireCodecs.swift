@@ -114,30 +114,24 @@ public enum ScoutCodec {
         guard SeedCode.isCanonical(seed) else { throw WireCodecError.invalidValue("Seed must use XXX-XXX-XXX format") }
         guard (0...SearchLimits.challengeMask).contains(challenges) else { throw WireCodecError.invalidValue("Challenge mask must be 0..\(SearchLimits.challengeMask)") }
         var output = Writer()
-        if query == nil && trinket == nil {
-            output.bytes("SSQ2".utf8)
-            output.u16LittleEndian(challenges)
-            output.bytes(seed.utf8)
-        } else {
-            let override = trinket ?? ""
-            guard override.isEmpty || override == "none" || ItemCatalog.findById(override)?.kind == .trinket else {
-                throw WireCodecError.invalidValue("Unknown trinket")
-            }
-            output.bytes("SSQ3".utf8)
-            output.u16LittleEndian(challenges)
-            output.u16LittleEndian(seed.utf8.count)
-            output.bytes(seed.utf8)
-            output.u16LittleEndian(override.utf8.count)
-            output.bytes(override.utf8)
-            if let query { output.bytes(try QueryDocument.encode(query)) }
+        let override = trinket ?? ""
+        guard override.isEmpty || override == "none" || ItemCatalog.findById(override)?.kind == .trinket else {
+            throw WireCodecError.invalidValue("Unknown trinket")
         }
+        output.bytes("SSQ4".utf8)
+        output.u16LittleEndian(challenges)
+        output.u16LittleEndian(seed.utf8.count)
+        output.bytes(seed.utf8)
+        output.u16LittleEndian(override.utf8.count)
+        output.bytes(override.utf8)
+        if let query { output.bytes(try QueryDocument.encode(query)) }
         return output.data
     }
 
     public static func decode(_ packet: Data) throws -> ScoutWorld {
         var input = Reader(data: packet)
         let magic = try input.bytes(4)
-        guard ["SSC3", "SSC4", "SSC5", "SSC6"].contains(where: { magic == Data($0.utf8) }) else { throw WireCodecError.badMagic }
+        guard ["SSC3", "SSC4", "SSC5", "SSC6", "SSC7"].contains(where: { magic == Data($0.utf8) }) else { throw WireCodecError.badMagic }
         let seed = try input.ascii(Int(input.u8()))
         guard SeedCode.isCanonical(seed) else { throw WireCodecError.invalidValue("Malformed seed from native scout") }
         // Twelve gem ordinals, one per ring class in the order the catalog
@@ -208,7 +202,7 @@ public enum ScoutCodec {
             }
         }
         var feelings: [Int: FloorFeeling] = [:]
-        if magic == Data("SSC5".utf8) || magic == Data("SSC6".utf8) {
+        if magic == Data("SSC5".utf8) || magic == Data("SSC6".utf8) || magic == Data("SSC7".utf8) {
             let count = Int(try input.u8())
             guard count <= 20 else { throw WireCodecError.invalidValue("Floor feeling count must be 0..20") }
             var previousDepth = 0
@@ -225,15 +219,41 @@ public enum ScoutCodec {
             }
         }
         var selectedTrinket: String?
-        if magic == Data("SSC6".utf8) {
+        if magic == Data("SSC6".utf8) || magic == Data("SSC7".utf8) {
             let id = try input.utf8(input.u16())
             guard id.isEmpty || trinketOrder.prefix(4).contains(where: { $0.id == id }) else {
                 throw WireCodecError.invalidValue("Selected trinket is not initially offered")
             }
             selectedTrinket = id.isEmpty ? nil : id
         }
+        var mappings: ScoutItemMappings?
+        if magic == Data("SSC7".utf8) {
+            mappings = try ScoutItemMappings(scrolls: readMappings(&input, spriteBase: 304),
+                potions: readMappings(&input, spriteBase: 352), rings: readMappings(&input, spriteBase: 224))
+            guard mappings?.rings.map({ $0.spriteIndex - 224 }) == ringGems.ordinals else {
+                throw WireCodecError.invalidValue("Scout ring mappings disagree with run gems")
+            }
+        }
         guard input.remaining == 0 else { throw WireCodecError.trailingBytes }
         return ScoutWorld(seed: seed, quests: quests, items: items, ringGems: ringGems,
-                          trinketOrder: trinketOrder, feelings: feelings, selectedTrinket: selectedTrinket)
+                          trinketOrder: trinketOrder, feelings: feelings, selectedTrinket: selectedTrinket, itemMappings: mappings)
     }
+
+    private static func readMappings(_ input: inout Reader, spriteBase: Int) throws -> [ScoutItemMapping] {
+        var entries: [ScoutItemMapping] = []
+        for _ in 0..<12 {
+            let name = try input.utf8(input.u16())
+            let appearance = try input.utf8(input.u16())
+            let sprite = try input.u16()
+            guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  !appearance.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  (spriteBase..<spriteBase + 12).contains(sprite),
+                  !entries.contains(where: { $0.name == name || $0.appearance == appearance || $0.spriteIndex == sprite }) else {
+                throw WireCodecError.invalidValue("Invalid scout item mapping")
+            }
+            entries.append(ScoutItemMapping(name: name, appearance: appearance, spriteIndex: sprite))
+        }
+        return entries
+    }
+
 }

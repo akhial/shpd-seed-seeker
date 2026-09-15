@@ -726,13 +726,16 @@ public struct ScoutWorld: Sendable {
     public let trinketOrder: [CatalogItem]
     public let selectedTrinket: String?
     public let feelings: [Int: FloorFeeling]
+    public let itemMappings: ScoutItemMappings?
     public init(seed: String, quests: [ScoutQuest] = [], items: [ScoutItem],
                 ringGems: RingGems = .catalogDefault, trinketOrder: [CatalogItem] = [],
-                feelings: [Int: FloorFeeling] = [:], selectedTrinket: String? = nil) {
+                feelings: [Int: FloorFeeling] = [:], selectedTrinket: String? = nil,
+                itemMappings: ScoutItemMappings? = nil) {
         self.seed = seed; self.quests = quests; self.items = items; self.ringGems = ringGems
         self.trinketOrder = trinketOrder
         self.feelings = feelings
         self.selectedTrinket = selectedTrinket
+        self.itemMappings = itemMappings
     }
 }
 

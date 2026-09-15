@@ -64,3 +64,13 @@ away from the UI; maps and PNGs are cached, and offscreen maps pause. Reduce Mot
 uses the static time-zero scene. Choice-group letter chips explain mutually
 exclusive rewards; when a requirement matches, conflicting options are dimmed.
 The contract is documented in [`level-map-format.md`](../docs/level-map-format.md).
+
+## Seed information
+
+The info button beside the scouted seed opens all potion colors, scroll runes,
+and ring gems in six-column grids. Sprites use shared journal frames, with each
+identity glyph flush at the top right. Click a sprite for its name and appearance;
+the same description appears in tooltips and VoiceOver. The client requests SSQ4
+and decodes SSC7, retaining SSC3–SSC6 compatibility and omitting the control when
+legacy packets lack mappings. `build-macos-app.sh` bundles the shared artwork
+metadata with the existing game atlases.

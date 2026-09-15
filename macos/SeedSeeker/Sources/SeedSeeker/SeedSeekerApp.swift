@@ -2218,6 +2218,7 @@ private struct SeedDetailView: View {
     @State private var trinketReveal = ScoutTrinketReveal()
     @State private var visibleMapDepths: Set<Int> = [1]
     @State private var openedMap: ScoutMapDisclosure?
+    @State private var showSeedInfo = false
 
     private func selectTrinket(_ id: String) {
         guard let world = model.world, !model.loading else { return }
@@ -2246,6 +2247,12 @@ private struct SeedDetailView: View {
             Button("") { focused = true }.keyboardShortcut("l", modifiers: .command)
                 .hidden().frame(width: 0, height: 0)
         }
+        .sheet(isPresented: $showSeedInfo) {
+            if let world = model.world, let mappings = world.itemMappings {
+                SeedInfoView(seed: world.seed, mappings: mappings)
+            }
+        }
+        .onChange(of: model.world?.seed) { _, _ in showSeedInfo = false }
         .navigationTitle("Seed Detail")
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
@@ -2257,6 +2264,11 @@ private struct SeedDetailView: View {
                     .onChange(of: model.input) { _, value in let formatted = SeedCode.formatInput(value); if formatted != value { model.input = formatted } }
                     .onSubmit { onScoutSeed(model.input) }
                 Button("Scout") { onScoutSeed(model.input) }.disabled(!SeedCode.isCanonical(model.input))
+                if model.world?.itemMappings != nil {
+                    Button { showSeedInfo = true } label: { Image(systemName: "info.circle") }
+                        .buttonStyle(.borderless).accessibilityLabel("Seed information")
+                        .help("Seed information")
+                }
                 if let seed = model.world?.seed { Button("Copy") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(seed, forType: .string) } }
                 if model.loading { ProgressView().controlSize(.small) }
             }

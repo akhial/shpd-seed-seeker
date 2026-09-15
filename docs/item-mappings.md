@@ -12,7 +12,8 @@ these cells through the ring gem table a second time.
 
 Web scouting includes this data as `itemMappings: { scrolls, potions, rings }`.
 
-Native clients opt in with `SSQ4`, whose request body is identical to `SSQ3`.
+Android, Windows, and macOS request mappings with `SSQ4`, whose request body is
+identical to `SSQ3`. Linux calls `item_mappings(seed)` in process.
 The response is `SSC7`: the entire `SSC6` body followed by three blocks in scroll,
 potion, ring order. Each block contains exactly twelve entries, each encoded as
 `name:utf8_u16, appearance:utf8_u16, sprite_index:u16`. Lengths and sprite indices
@@ -24,7 +25,8 @@ absent, rather than displaying an unshuffled or guessed mapping.
 
 ## Journal grid artwork
 
-Web and Android share `item-mapping-art.json` in the Android artwork directory.
+Web, Android, Linux, Windows, and macOS share `item-mapping-art.json` in the
+Android artwork directory.
 This is display metadata from the pinned v4.0.0 game's
 [`ItemSpriteSheet`](https://github.com/00-Evan/shattered-pixel-dungeon/blob/v4.0.0/core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/sprites/ItemSpriteSheet.java) and
 [`ScrollingGridPane`](https://github.com/00-Evan/shattered-pixel-dungeon/blob/v4.0.0/core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/ui/ScrollingGridPane.java).
@@ -40,4 +42,5 @@ frame (scroll 15×14, potion 12×14, ring 8×10) within the slot. Place an ident
 icon of size `w×h` at `(17-w, 0)`, flush with the top-right corner. Scale both
 layers together with nearest-neighbor filtering. The seed's actual appearances
 replace the journal's generic outlines. Names remain accessible through tile
-labels and on-demand details.
+labels and on-demand details. Category headings omit counts, and tiles have
+transparent backgrounds.
