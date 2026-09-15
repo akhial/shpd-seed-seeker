@@ -280,6 +280,8 @@ export interface ScoutFeeling {
 }
 
 export interface ScoutResult {
+  /** Absent only in responses cached before item mappings were exposed. */
+  itemMappings?: ItemMappings;
   selectedTrinket?: string | null;
   /** Optional for responses cached before floor feelings were exposed. */
   feelings?: ScoutFeeling[];
@@ -297,4 +299,17 @@ export interface ScoutResult {
   quests: ScoutQuest[];
   matchedRequirements: number;
   totalRequirements: number;
+}
+
+export interface ItemMapping {
+  name: string;
+  appearance: string;
+  /** Unidentified appearance sprite; already resolved for this seed. */
+  spriteIndex: number;
+}
+
+export interface ItemMappings {
+  scrolls: ItemMapping[];
+  potions: ItemMapping[];
+  rings: ItemMapping[];
 }
