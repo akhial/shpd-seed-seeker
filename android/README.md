@@ -96,6 +96,14 @@ headings. Scrolling back to the top reverses the transition.
 an emulator. The Scout Compose tests use Robolectric's native renderer and save
 review screenshots under `app/build/outputs/scout-ui/`.
 
+## Search drafts
+
+The Finder automatically saves the current query, including requirements, floor
+limits, quest filters, challenges, and trinket options, and restores it on the
+next launch. Empty drafts are saved too. Fireblast +3 is only the default when
+there is no readable saved draft. Named presets remain separate; search results
+and running searches are not restored.
+
 ## Trinkets
 
 The requirement picker has a named Trinket category, including either/or groups.

@@ -66,7 +66,6 @@ import dev.seedseeker.app.model.removeMember
 import dev.seedseeker.app.model.slotCount
 import dev.seedseeker.app.model.toPresetQuery
 import dev.seedseeker.app.model.validationProblem
-import dev.seedseeker.app.model.WandmakerQuest
 import dev.seedseeker.app.model.WorkerPreference
 import dev.seedseeker.app.update.UpdateChecker
 import dev.seedseeker.app.update.UpdateInfo
@@ -135,6 +134,15 @@ internal fun SeedFinderApp(
         context.getSharedPreferences(SETTINGS_PREFERENCES, Context.MODE_PRIVATE)
     }
     val presetStorage = remember(preferences) { PresetStorage(preferences) }
+    val initialQuery = remember(presetStorage) {
+        presetStorage.loadCurrentQuery() ?: PresetQuery(
+            requirements = listOf(
+                ItemRequirement(1, ItemCatalog.wands.first { it.id == "wand_fireblast" }, 3),
+            ),
+            challenges = preferences.getInt(CHALLENGES_KEY, 0)
+                .takeIf { it in 0..Challenge.ALL_MASK } ?: 0,
+        )
+    }
     val workerPreference = remember(preferences) {
         WorkerPreference(preferences, SearchWorkers.ceiling)
     }
@@ -142,24 +150,30 @@ internal fun SeedFinderApp(
     var destination by remember { mutableStateOf(Destination.FINDER) }
     var aboutReturnDestination by remember { mutableStateOf(Destination.FINDER) }
     var settingsReturnDestination by remember { mutableStateOf(Destination.FINDER) }
-    var requirements by remember {
-        mutableStateOf(
-            listOf(
-                ItemRequirement(1, ItemCatalog.wands.first { it.id == "wand_fireblast" }, 3),
-            ),
-        )
+    var requirements by remember { mutableStateOf(initialQuery.requirements) }
+    var nextRequirementKey by remember {
+        mutableLongStateOf((initialQuery.requirements.maxOfOrNull { it.key } ?: 0L) + 1L)
     }
-    var nextRequirementKey by remember { mutableLongStateOf(2L) }
     var userPresets by remember { mutableStateOf(presetStorage.load()) }
-    var autoApplyTrinket by rememberSaveable { mutableStateOf(true) }
-    var maximumDepth by remember { mutableStateOf(24) }
-    var requireBlacksmith by remember { mutableStateOf(false) }
-    var excludeBlacksmithRewards by remember { mutableStateOf(false) }
-    var wandmakerQuest by remember { mutableStateOf<WandmakerQuest?>(null) }
-    var challenges by remember {
-        mutableStateOf(
-            preferences.getInt(CHALLENGES_KEY, 0).takeIf { it in 0..Challenge.ALL_MASK } ?: 0,
-        )
+    var autoApplyTrinket by remember { mutableStateOf(initialQuery.autoApplyTrinket) }
+    var maximumDepth by remember { mutableStateOf(initialQuery.maximumDepth) }
+    var requireBlacksmith by remember { mutableStateOf(initialQuery.requireBlacksmith) }
+    var excludeBlacksmithRewards by remember { mutableStateOf(initialQuery.excludeBlacksmithRewards) }
+    var wandmakerQuest by remember { mutableStateOf(initialQuery.wandmakerQuest) }
+    var challenges by remember { mutableStateOf(initialQuery.challenges) }
+
+    val currentQuery = PresetQuery(
+        requirements = requirements,
+        maximumDepth = maximumDepth,
+        requireBlacksmith = requireBlacksmith,
+        excludeBlacksmithRewards = excludeBlacksmithRewards,
+        wandmakerQuest = wandmakerQuest,
+        challenges = challenges,
+        autoApplyTrinket = autoApplyTrinket,
+    )
+    // Save edits as they happen, including drafts that haven't been searched yet.
+    LaunchedEffect(presetStorage, currentQuery) {
+        presetStorage.saveCurrentQuery(currentQuery)
     }
     var compactChips by remember { mutableStateOf(preferences.getBoolean(COMPACT_CHIPS_KEY, false)) }
     // Device-local, so unlike the query state above nothing an import, a

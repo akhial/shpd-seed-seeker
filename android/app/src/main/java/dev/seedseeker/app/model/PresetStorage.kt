@@ -7,8 +7,18 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 private const val USER_PRESETS_KEY = "user_presets"
+private const val CURRENT_QUERY_KEY = "current_query"
 
 class PresetStorage(private val preferences: SharedPreferences) {
+    /** The active editor draft is independent of the user's named presets. */
+    fun loadCurrentQuery(): PresetQuery? = runCatching {
+        preferences.getString(CURRENT_QUERY_KEY, null)?.let { decodeQuery(JSONObject(it)) }
+    }.getOrNull()
+
+    fun saveCurrentQuery(query: PresetQuery) {
+        preferences.edit().putString(CURRENT_QUERY_KEY, encodeQuery(query).toString()).apply()
+    }
+
     fun load(): List<QueryPreset> = runCatching {
         val values = JSONArray(preferences.getString(USER_PRESETS_KEY, "[]") ?: "[]")
         buildList {

@@ -15,6 +15,53 @@ class PresetStorageTest {
     init { PackagedCatalog.install() }
 
     @Test
+    fun activeQuerySurvivesReopeningStorageWithoutChangingNamedPresets() {
+        val preferences = MemoryPreferences()
+        val storage = PresetStorage(preferences)
+        val preset = BuiltInPresets.staff21.copy(isBuiltIn = false)
+        storage.save(listOf(preset))
+        val query = preset.query.copy(
+            maximumDepth = 19,
+            requireBlacksmith = true,
+            excludeBlacksmithRewards = true,
+            wandmakerQuest = WandmakerQuest.entries.first(),
+            challenges = Challenge.ALL_MASK,
+            autoApplyTrinket = false,
+        )
+        storage.saveCurrentQuery(query)
+
+        val reopened = PresetStorage(preferences)
+        assertEquals(query, reopened.loadCurrentQuery())
+        assertEquals(listOf(preset), reopened.load())
+        reopened.save(emptyList())
+        assertEquals(query, PresetStorage(preferences).loadCurrentQuery())
+    }
+
+    @Test
+    fun emptyDraftReplacesPreviousQuery() {
+        val preferences = MemoryPreferences()
+        val storage = PresetStorage(preferences)
+        storage.saveCurrentQuery(BuiltInPresets.staff21.query)
+        val empty = PresetQuery(requirements = emptyList())
+        storage.saveCurrentQuery(empty)
+        assertEquals(empty, PresetStorage(preferences).loadCurrentQuery())
+    }
+
+    @Test
+    fun missingOrDamagedActiveQueryFallsBackWithoutLosingPresets() {
+        val preferences = MemoryPreferences()
+        val storage = PresetStorage(preferences)
+        val preset = BuiltInPresets.staff21.copy(isBuiltIn = false)
+        storage.save(listOf(preset))
+        assertEquals(null, storage.loadCurrentQuery())
+        for (value in listOf("not json", "{}", """{"maximumDepth":99,"requirements":[]}""")) {
+            preferences.edit().putString("current_query", value).apply()
+            assertEquals(null, storage.loadCurrentQuery())
+            assertEquals(listOf(preset), storage.load())
+        }
+    }
+
+    @Test
     fun artifactPresetsKeepUpgradeAndFloorLimit() {
         val storage = PresetStorage(MemoryPreferences())
         val query = PresetQuery(requirements = listOf(ItemRequirement(
