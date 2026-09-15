@@ -112,3 +112,11 @@ cargo test -p shpd-seedfinder-gtk
 desktop-file-validate linux/data/dev.seedseeker.SeedSeeker.desktop
 appstreamcli validate --no-net linux/data/dev.seedseeker.SeedSeeker.metainfo.xml
 ```
+
+## Seed information
+
+The info button beside the scouted seed opens all potion colors, scroll runes,
+and ring gems directly from the engine. Each category has six columns and two
+rows of sprites, with identity glyphs at the top right. The shared journal frame
+metadata keeps artwork aligned with the other apps. Click a sprite to reveal its
+name and appearance; tooltips and accessible labels carry the same information.
