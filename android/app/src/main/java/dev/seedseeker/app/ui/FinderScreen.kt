@@ -491,18 +491,12 @@ private fun QueryPage(
             onEdit = onEdit,
             onRemove = onRemove,
             onAdd = onAdd,
+            arcaneResin = arcaneResin,
+            arcaneResinFilter = arcaneResinFilter,
+            onEditResin = onEditResin,
+            onRemoveResin = onRemoveResin,
             modifier = Modifier.fillMaxWidth(),
         )
-        if (arcaneResin > 0) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = onEditResin, enabled = !isSearching, modifier = Modifier.weight(1f)) {
-                    ItemSprite(arcaneResinItem, modifier = Modifier.size(24.dp))
-                    Spacer(Modifier.width(8.dp))
-                    Text("≥$arcaneResin Arcane Resin · ${resinFilterDescription(arcaneResinFilter)}")
-                }
-                TextButton(onClick = onRemoveResin, enabled = !isSearching) { Text("Remove") }
-            }
-        }
         if (validationMessage != null && (requirements.isNotEmpty() || arcaneResin > 0)) {
             Text(
                 validationMessage,

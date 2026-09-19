@@ -37,19 +37,23 @@ fun ArcaneResinSheet(
     var sourceExpanded by remember { mutableStateOf(false) }
     val parsed = minimum.toIntOrNull()?.takeIf { it in 1..65535 }
     ModalBottomSheet(onDismissRequest = onDismiss,
-        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)) {
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        sheetGesturesEnabled = false,
+        dragHandle = null,
+        containerColor = MaterialTheme.colorScheme.surfaceContainer) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
-            .navigationBarsPadding().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            .navigationBarsPadding().padding(start = 20.dp, top = 12.dp, end = 20.dp, bottom = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 ItemSprite(arcaneResinItem, modifier = Modifier.size(40.dp))
                 Text("Arcane Resin", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f).padding(start = 12.dp))
                 TextButton(onClick = onDismiss) { Text("Close") }
             }
-            Text("Surplus wands provide 2 × (upgrade + 1) resin each. Wands needed for other requirements are reserved first.",
-                style = MaterialTheme.typography.bodyMedium)
             OutlinedTextField(value = minimum, onValueChange = { minimum = it }, label = { Text("Minimum resin") },
+                modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true,
-                isError = parsed == null, supportingText = { if (parsed == null) Text("Enter a whole number from 1 through 65535.") })
+                isError = parsed == null,
+                supportingText = if (parsed == null) { { Text("Enter a whole number.") } } else null)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text("Require uncursed wands", modifier = Modifier.weight(1f))
                 Switch(checked = uncursed, onCheckedChange = { uncursed = it })

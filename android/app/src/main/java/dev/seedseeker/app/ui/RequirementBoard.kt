@@ -36,6 +36,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -63,6 +64,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import dev.seedseeker.app.model.ArcaneResinFilter
 import dev.seedseeker.app.model.BoardItem
 import dev.seedseeker.app.model.EffectFilter
 import dev.seedseeker.app.model.ItemRequirement
@@ -111,6 +113,10 @@ fun RequirementBoard(
     onEdit: (BoardItem, Int) -> Unit,
     onRemove: (BoardItem) -> Unit,
     onAdd: () -> Unit,
+    arcaneResin: Int,
+    arcaneResinFilter: ArcaneResinFilter,
+    onEditResin: () -> Unit,
+    onRemoveResin: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val items = remember(requirements) { requirements.boardItems() }
@@ -128,6 +134,8 @@ fun RequirementBoard(
     var board by remember { mutableStateOf<LayoutCoordinates?>(null) }
     var deleteZone by remember { mutableStateOf<LayoutCoordinates?>(null) }
     var dragging by remember { mutableStateOf<Int?>(null) }
+    var resinPlacement by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    var draggingResin by remember { mutableStateOf(false) }
     var dragPosition by remember { mutableStateOf(Offset.Zero) }
 
     fun rectOf(child: LayoutCoordinates?): Rect? {
@@ -151,7 +159,10 @@ fun RequirementBoard(
             ?.let { DropTarget.Join(it.anchor) }
     }
 
-    val target = dragging?.let { targetAt(dragPosition, it) }
+    // Resin is its own requirement and cannot join an either/or item group.
+    val target = if (draggingResin) {
+        DropTarget.Remove.takeIf { rectOf(deleteZone)?.contains(dragPosition) == true }
+    } else dragging?.let { targetAt(dragPosition, it) }
     val hovered = (target as? DropTarget.Join)?.index
     val metrics = if (compact) ChipMetrics.Compact else ChipMetrics.Regular
 
@@ -208,9 +219,33 @@ fun RequirementBoard(
                             )
                         }
                     }
+                    if (arcaneResin > 0) {
+                        ArcaneResinChip(
+                            amount = arcaneResin,
+                            filter = arcaneResinFilter,
+                            enabled = enabled,
+                            dimmed = draggingResin,
+                            onPlaced = { resinPlacement = it },
+                            onClick = onEditResin,
+                            onDragStart = { offset ->
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                draggingResin = true
+                                dragPosition = (rectOf(resinPlacement)?.topLeft ?: Offset.Zero) + offset
+                            },
+                            onDrag = { delta -> dragPosition += delta },
+                            onDragEnd = {
+                                draggingResin = false
+                                if (rectOf(deleteZone)?.contains(dragPosition) == true) {
+                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    onRemoveResin()
+                                }
+                            },
+                            onDragCancel = { draggingResin = false },
+                        )
+                    }
                     AddChip(enabled = enabled, onClick = onAdd)
                 }
-                if (dragging != null) {
+                if (dragging != null || draggingResin) {
                     RemoveZone(
                         over = target == DropTarget.Remove,
                         modifier = Modifier.onGloballyPositioned { deleteZone = it },
@@ -438,12 +473,121 @@ private fun RequirementChip(
     onDragEnd: () -> Unit,
     onDragCancel: () -> Unit,
 ) {
+    val metrics = LocalChipMetrics.current
+    BoardChip(
+        description = chipDescription(requirement, stackCount, total),
+        enabled = enabled,
+        dimmed = dimmed,
+        highlighted = highlighted,
+        modifier = modifier,
+        onPlaced = onPlaced,
+        onClick = onClick,
+        onDragStart = onDragStart,
+        onDrag = onDrag,
+        onDragEnd = onDragEnd,
+        onDragCancel = onDragCancel,
+    ) {
+        SpriteTile(
+            item = requirement.item,
+            glows = ItemGlows.forFilter(requirement.effect),
+            tileSize = metrics.tile,
+        )
+        Spacer(Modifier.width(metrics.spriteGap))
+        ChipTitle(chipTitle(requirement))
+        chipTags(requirement).forEach { tag ->
+            Spacer(Modifier.width(5.dp))
+            ChipTag(text = tag.text, tone = tag.tone)
+        }
+        EffectBadge(requirement)
+        if (requirement.requireUncursed) {
+            Spacer(Modifier.width(5.dp))
+            ChipTag(text = "✓", tone = TagTone.SOFT)
+        }
+        StackBadges(stackCount = stackCount, total = total, enabled = enabled, onClick = onClick)
+    }
+}
+
+@Composable
+private fun ArcaneResinChip(
+    amount: Int,
+    filter: ArcaneResinFilter,
+    enabled: Boolean,
+    dimmed: Boolean,
+    onPlaced: (LayoutCoordinates) -> Unit,
+    onClick: () -> Unit,
+    onDragStart: (Offset) -> Unit,
+    onDrag: (Offset) -> Unit,
+    onDragEnd: () -> Unit,
+    onDragCancel: () -> Unit,
+) {
+    val metrics = LocalChipMetrics.current
+    BoardChip(
+        description = "Arcane Resin, at least $amount, ${resinFilterDescription(filter)}",
+        enabled = enabled,
+        dimmed = dimmed,
+        highlighted = false,
+        onPlaced = onPlaced,
+        onClick = onClick,
+        onDragStart = onDragStart,
+        onDrag = onDrag,
+        onDragEnd = onDragEnd,
+        onDragCancel = onDragCancel,
+    ) {
+        SpriteTile(item = arcaneResinItem, tileSize = metrics.tile)
+        Spacer(Modifier.width(metrics.spriteGap))
+        ChipTitle("Arcane Resin")
+        Spacer(Modifier.width(5.dp))
+        ChipTag(text = "≥$amount", tone = TagTone.QUALIFIER)
+        filter.maximumDepth?.let {
+            Spacer(Modifier.width(5.dp))
+            ChipTag(text = "F≤$it", tone = TagTone.QUALIFIER)
+        }
+        if (filter.uncursed) {
+            Spacer(Modifier.width(5.dp))
+            ChipTag(text = "✓", tone = TagTone.SOFT)
+        }
+    }
+}
+
+@Composable
+private fun RowScope.ChipTitle(title: String) {
+    Text(
+        title,
+        modifier = Modifier.weight(1f, fill = false),
+        style = chipTitleStyle,
+        fontWeight = FontWeight.SemiBold,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
+}
+
+/** Shared appearance and gestures for every draggable requirement chip. */
+@Composable
+private fun BoardChip(
+    description: String,
+    enabled: Boolean,
+    dimmed: Boolean,
+    highlighted: Boolean,
+    modifier: Modifier = Modifier,
+    onPlaced: (LayoutCoordinates) -> Unit,
+    onClick: () -> Unit,
+    onDragStart: (Offset) -> Unit,
+    onDrag: (Offset) -> Unit,
+    onDragEnd: () -> Unit,
+    onDragCancel: () -> Unit,
+    content: @Composable RowScope.() -> Unit,
+) {
     val outline = if (highlighted) {
         MaterialTheme.colorScheme.tertiary
     } else {
         MaterialTheme.colorScheme.outlineVariant
     }
     val metrics = LocalChipMetrics.current
+    // Keep a held gesture alive through recomposition while using current state.
+    val currentOnDragStart by rememberUpdatedState(onDragStart)
+    val currentOnDrag by rememberUpdatedState(onDrag)
+    val currentOnDragEnd by rememberUpdatedState(onDragEnd)
+    val currentOnDragCancel by rememberUpdatedState(onDragCancel)
     Surface(
         // A capsule, not a rounded rectangle: the ends stay half circles
         // however tall the chip grows at a larger font scale.
@@ -456,17 +600,17 @@ private fun RequirementChip(
             .pointerInput(enabled) {
                 if (!enabled) return@pointerInput
                 detectDragGesturesAfterLongPress(
-                    onDragStart = onDragStart,
+                    onDragStart = { currentOnDragStart(it) },
                     onDrag = { change, delta ->
                         change.consume()
-                        onDrag(delta)
+                        currentOnDrag(delta)
                     },
-                    onDragEnd = onDragEnd,
-                    onDragCancel = onDragCancel,
+                    onDragEnd = { currentOnDragEnd() },
+                    onDragCancel = { currentOnDragCancel() },
                 )
             }
             .clickable(enabled = enabled, onClick = onClick)
-            .semantics { contentDescription = chipDescription(requirement, stackCount, total) },
+            .semantics { contentDescription = description },
     ) {
         Row(
             modifier = Modifier.padding(
@@ -476,32 +620,8 @@ private fun RequirementChip(
                 bottom = metrics.verticalPadding,
             ),
             verticalAlignment = Alignment.CenterVertically,
-        ) {
-            SpriteTile(
-                item = requirement.item,
-                glows = ItemGlows.forFilter(requirement.effect),
-                tileSize = metrics.tile,
-            )
-            Spacer(Modifier.width(metrics.spriteGap))
-            Text(
-                chipTitle(requirement),
-                modifier = Modifier.weight(1f, fill = false),
-                style = chipTitleStyle,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            chipTags(requirement).forEach { tag ->
-                Spacer(Modifier.width(5.dp))
-                ChipTag(text = tag.text, tone = tag.tone)
-            }
-            EffectBadge(requirement)
-            if (requirement.requireUncursed) {
-                Spacer(Modifier.width(5.dp))
-                ChipTag(text = "✓", tone = TagTone.SOFT)
-            }
-            StackBadges(stackCount = stackCount, total = total, enabled = enabled, onClick = onClick)
-        }
+            content = content,
+        )
     }
 }
 
