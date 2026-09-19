@@ -352,6 +352,7 @@ fn load_query(path: &Path) -> Result<SearchQuery, String> {
 fn benchmark_query() -> SearchQuery {
     SearchQuery {
         auto_apply_trinket: false,
+        arcane_resin: 0,
         requirements: vec![Requirement {
             kind: ItemKind::Weapon,
             weapon_category: None,

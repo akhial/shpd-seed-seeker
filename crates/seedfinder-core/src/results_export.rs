@@ -366,6 +366,7 @@ mod tests {
     fn sample_query() -> SearchQuery {
         SearchQuery {
             auto_apply_trinket: false,
+            arcane_resin: 0,
             requirements: vec![
                 Requirement {
                     kind: ItemKind::Ring,

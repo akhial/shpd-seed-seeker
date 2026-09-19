@@ -3113,3 +3113,10 @@ input[type="range"]::-moz-range-thumb {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
+.d1-resin-field {
+  margin-top: 16px;
+}
+
+.d1-resin-field .d1-input {
+  width: 100%;
+}

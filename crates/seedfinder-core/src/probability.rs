@@ -104,6 +104,12 @@ use crate::quests::WandmakerQuestType;
 /// the group.
 #[must_use]
 pub fn estimate_match_probability(query: &SearchQuery) -> f64 {
+    // The equipment tables do not model a variable number of surplus wands
+    // contributing resin. Do not report the ordinary slots' probability as
+    // though it described the full query.
+    if query.arcane_resin > 0 {
+        return f64::NAN;
+    }
     if let Some(policy) = crate::auto_trinkets::AutoTrinketPolicy::prepare(query) {
         return crate::auto_trinkets::probability(query, &policy);
     }
@@ -1767,6 +1773,7 @@ mod tests {
     fn query(requirements: Vec<Requirement>, max_depth: u8) -> SearchQuery {
         SearchQuery {
             auto_apply_trinket: false,
+            arcane_resin: 0,
             requirements,
             max_depth,
             challenges: Challenges::NONE,

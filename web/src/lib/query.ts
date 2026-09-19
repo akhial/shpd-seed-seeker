@@ -328,6 +328,8 @@ export function toQueryDocument(state: QueryState): QueryDocument {
     return members.length === 1 ? members[0] : { any_of: members };
   });
   const output: QueryDocument = { requirements: entries };
+  if (state.arcaneResin !== undefined && state.arcaneResin !== 0)
+    output.arcane_resin = state.arcaneResin;
   if (state.autoApplyTrinket) output.auto_apply_trinket = true;
   if (state.maxDepth !== MAX_DEPTH) output.max_depth = state.maxDepth;
   if (state.requireBlacksmith) output.require_blacksmith = true;
@@ -471,7 +473,10 @@ export function fromQueryJson(json: string): QueryState {
     throw new Error("challenges must be a list of challenge names");
   if (document.auto_apply_trinket !== undefined && typeof document.auto_apply_trinket !== "boolean")
     throw new Error("auto_apply_trinket must be a boolean");
+  if (document.arcane_resin !== undefined && !validArcaneResin(document.arcane_resin))
+    throw new Error("Arcane Resin must be a whole number from 0 through 65535.");
   return {
+    ...(document.arcane_resin ? { arcaneResin: document.arcane_resin } : {}),
     autoApplyTrinket: document.auto_apply_trinket ?? false,
     requirements: requirementsFromDocument(document.requirements),
     maxDepth: normalizeFloorLimit(document.max_depth ?? MAX_DEPTH),
@@ -572,7 +577,10 @@ export function validateRequirement(requirement: RequirementState): string[] {
 
 export function validateQuery(state: QueryState): ValidationResult {
   const errors: string[] = [];
-  if (!state.requirements.length) errors.push("Add at least one requirement.");
+  if (!state.requirements.length && !(state.arcaneResin && state.arcaneResin > 0))
+    errors.push("Add at least one requirement.");
+  if (state.arcaneResin !== undefined && !validArcaneResin(state.arcaneResin))
+    errors.push("Arcane Resin must be a whole number from 0 through 65535.");
   if (state.maxDepth < 1 || state.maxDepth > MAX_DEPTH)
     errors.push(`Maximum floor must be 1 through ${MAX_DEPTH}.`);
   state.requirements.forEach((requirement, index) => {
@@ -633,4 +641,8 @@ export function validateQuery(state: QueryState): ValidationResult {
       );
   }
   return { valid: errors.length === 0, errors };
+}
+
+function validArcaneResin(value: number): boolean {
+  return Number.isInteger(value) && value >= 0 && value <= 65535;
 }

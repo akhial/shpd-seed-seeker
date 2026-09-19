@@ -917,6 +917,7 @@ mod tests {
     fn query() -> SearchQuery {
         SearchQuery {
             auto_apply_trinket: false,
+            arcane_resin: 0,
             requirements: vec![Requirement {
                 kind: ItemKind::Wand,
                 weapon_category: None,
@@ -1090,6 +1091,7 @@ mod tests {
         let definition = shpd_seedfinder_core::catalog::item(known.item);
         let satisfiable = SearchQuery {
             auto_apply_trinket: false,
+            arcane_resin: 0,
             requirements: vec![Requirement {
                 kind: definition.kind,
                 weapon_category: None,
@@ -1246,6 +1248,7 @@ mod tests {
         // requested arc so a later satisfiable continuation still covers it.
         let impossible = SearchQuery {
             auto_apply_trinket: false,
+            arcane_resin: 0,
             requirements: vec![Requirement {
                 kind: shpd_seedfinder_core::catalog::ItemKind::Ring,
                 weapon_category: None,
@@ -1354,6 +1357,7 @@ mod tests {
     fn kind_query(kind: ItemKind) -> SearchQuery {
         SearchQuery {
             auto_apply_trinket: false,
+            arcane_resin: 0,
             requirements: vec![kind_requirement(kind)],
             max_depth: 24,
             challenges: Challenges::NONE,

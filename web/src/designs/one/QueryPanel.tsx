@@ -156,11 +156,11 @@ export function QueryPanel({
     });
   };
 
-  const slotTotal = boardCount(query.requirements);
+  const slotTotal = boardCount(query.requirements) + Number((query.arcaneResin ?? 0) > 0);
   const challengeCount = query.challenges.length;
   const wandmakerCount = Number(Boolean(query.wandmakerQuest));
   const blacksmithCount = Number(query.requireBlacksmith) + Number(query.excludeBlacksmithRewards);
-  const hasRequirements = query.requirements.length > 0;
+  const hasRequirements = slotTotal > 0;
   const impossible = Boolean(analysis?.valid && analysis.impossible);
   const startDisabled = !running && (!engineReady || !validation.valid || impossible);
 
@@ -316,6 +316,33 @@ export function QueryPanel({
               })
             }
           />
+          <label className="d1-field d1-resin-field">
+            <span className="d1-field-label">Arcane Resin</span>
+            <span className="d1-field-control">
+              <input
+                className="d1-input"
+                type="number"
+                min={0}
+                max={65535}
+                step={1}
+                placeholder="0"
+                value={query.arcaneResin ?? ""}
+                aria-describedby="arcane-resin-help"
+                onChange={(event) =>
+                  patchQuery({
+                    arcaneResin:
+                      event.currentTarget.value === ""
+                        ? undefined
+                        : event.currentTarget.valueAsNumber,
+                  })
+                }
+              />
+            </span>
+          </label>
+          <p className="d1-caption" id="arcane-resin-help">
+            Minimum from extra uncursed wands within the floor limit. Your required wands are kept.
+            Each +0 wand yields 2, +1 yields 4, and +2 yields 6. Set to 0 for no minimum.
+          </p>
         </section>
 
         <section className="d1-section">

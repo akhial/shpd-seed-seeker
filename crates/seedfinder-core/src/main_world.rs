@@ -826,6 +826,7 @@ mod tests {
         };
         let query = |requirements: Vec<Requirement>| SearchQuery {
             auto_apply_trinket: false,
+            arcane_resin: 0,
             requirements,
             max_depth: 24,
             challenges: crate::challenges::Challenges::NONE,
@@ -894,6 +895,7 @@ mod tests {
 
         let base = SearchQuery {
             auto_apply_trinket: false,
+            arcane_resin: 0,
             requirements: vec![Requirement {
                 kind: ItemKind::Wand,
                 weapon_category: None,
@@ -964,6 +966,7 @@ mod tests {
 
         let query = SearchQuery {
             auto_apply_trinket: false,
+            arcane_resin: 0,
             requirements: vec![Requirement {
                 kind: ItemKind::Weapon,
                 weapon_category: Some(WeaponCategory::Thrown),
@@ -1096,6 +1099,7 @@ mod tests {
         assert!(imp_ring.is_some());
         let query = SearchQuery {
             auto_apply_trinket: false,
+            arcane_resin: 0,
             requirements: vec![Requirement {
                 kind: ItemKind::Ring,
                 weapon_category: None,

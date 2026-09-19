@@ -308,6 +308,7 @@ fn base(kind: ItemKind) -> Requirement {
 fn query(requirements: Vec<Requirement>, max_depth: u8) -> SearchQuery {
     SearchQuery {
         auto_apply_trinket: false,
+        arcane_resin: 0,
         requirements,
         max_depth,
         challenges: Challenges::NONE,

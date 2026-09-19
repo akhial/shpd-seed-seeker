@@ -18,6 +18,8 @@ use serde_json::{Map, Value, json};
 struct QueryDocument {
     #[serde(default)]
     auto_apply_trinket: bool,
+    #[serde(default)]
+    arcane_resin: u16,
     requirements: Vec<Value>,
     #[serde(default = "default_max_depth")]
     max_depth: u8,
@@ -367,6 +369,7 @@ pub fn decode_unvalidated(contents: &str) -> Result<SearchQuery, String> {
         .transpose()?;
     Ok(SearchQuery {
         auto_apply_trinket: document.auto_apply_trinket,
+        arcane_resin: document.arcane_resin,
         requirements,
         max_depth: document.max_depth,
         challenges: document
@@ -522,6 +525,9 @@ pub const fn source_name(source: ItemSource) -> &'static str {
 #[must_use]
 pub fn encode(query: &SearchQuery) -> Value {
     let mut document = Map::new();
+    if query.arcane_resin > 0 {
+        document.insert("arcane_resin".to_owned(), json!(query.arcane_resin));
+    }
     if query.auto_apply_trinket {
         document.insert("auto_apply_trinket".to_owned(), json!(true));
     }
@@ -1028,6 +1034,7 @@ mod tests {
     fn encoding_omits_defaults_and_round_trips_a_loaded_query() {
         let query = SearchQuery {
             auto_apply_trinket: false,
+            arcane_resin: 0,
             requirements: vec![
                 Requirement {
                     kind: ItemKind::Weapon,
@@ -1096,6 +1103,7 @@ mod tests {
     fn encoding_a_minimal_query_emits_requirements_only() {
         let query = SearchQuery {
             auto_apply_trinket: false,
+            arcane_resin: 0,
             requirements: vec![Requirement {
                 kind: ItemKind::Wand,
                 weapon_category: None,

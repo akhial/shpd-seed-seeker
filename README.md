@@ -100,6 +100,11 @@ files are replaced. The output options cannot be combined with `--benchmark`.
   "max_depth"?: 1..24 = 24,
   "require_blacksmith"?: true | false = false,
   "exclude_blacksmith_rewards"?: true | false = false,
+  // Minimum resin from extra uncursed wands, within max_depth. Wands used
+  // by other requirements cannot also provide resin. Each yields
+  // 2 * (upgrade + 1): +0 gives 2, +1 gives 4, +2 gives 6, etc.
+  // A resin-only query may use an empty requirements array.
+  "arcane_resin"?: 0..65535 = 0,
   // The run's Wandmaker (floors 7-9) must ask for this quest item.
   "wandmaker_quest"?: "corpse_dust" | "elemental_embers" | "rotberry",
 

@@ -1,5 +1,7 @@
 //! Multi-item query validation and accessibility-aware matching.
 
+mod resin;
+
 use std::collections::BTreeMap;
 use std::fmt;
 
@@ -564,6 +566,9 @@ pub struct SearchQuery {
     /// Automatically choose one offered trinket at +3 before generation.
     /// Explicit trinket requirements take precedence over this setting.
     pub auto_apply_trinket: bool,
+    /// Minimum Arcane Resin from surplus uncursed wands, after reserving
+    /// distinct items for every ordinary requirement. Zero disables it.
+    pub arcane_resin: u16,
     pub requirements: Vec<Requirement>,
     pub max_depth: u8,
     /// Upstream v3.3.8 challenge mask used while generating candidate worlds.
@@ -623,7 +628,7 @@ impl SearchQuery {
     /// depth is outside the main dungeon, a requirement is inconsistent, or a
     /// cross-requirement group disagrees with itself.
     pub fn validate(&self) -> Result<(), QueryError> {
-        if self.requirements.is_empty() {
+        if self.requirements.is_empty() && self.arcane_resin == 0 {
             return Err(QueryError::Empty);
         }
         if !(1..=MAX_SEARCH_DEPTH).contains(&self.max_depth) {
@@ -746,7 +751,7 @@ impl SearchQuery {
                 }
             }
         }
-        slots.len() - sum_slots + groups.len()
+        slots.len() - sum_slots + groups.len() + usize::from(self.arcane_resin > 0)
     }
 
     /// Whether this query *continues* `base`: identical floor limit and
@@ -768,6 +773,7 @@ impl SearchQuery {
     #[must_use]
     pub fn continues(&self, base: &SearchQuery) -> bool {
         if self.max_depth != base.max_depth
+            || self.arcane_resin < base.arcane_resin
             || self.challenges != base.challenges
             || !crate::auto_trinkets::same_selection(self, base)
             || crate::trinkets::selection_slots(self) != crate::trinkets::selection_slots(base)
@@ -878,6 +884,13 @@ impl SearchQuery {
     /// rather than re-deriving it.
     #[must_use]
     pub fn shares_item(&self, base: &SearchQuery) -> bool {
+        if (self.arcane_resin > 0
+            && (base.arcane_resin > 0
+                || base.requirements.iter().any(|r| r.kind == ItemKind::Wand)))
+            || (base.arcane_resin > 0 && self.requirements.iter().any(|r| r.kind == ItemKind::Wand))
+        {
+            return true;
+        }
         self.requirements.iter().any(|left| {
             base.requirements.iter().any(|right| {
                 left.kind == right.kind
@@ -1031,6 +1044,7 @@ struct Slot<'query> {
 /// Query slots resolved against one world's items: alternatives collapse to
 /// one slot, and every mandatory slot must be served by a distinct item.
 struct Assignment<'query> {
+    resin: resin::ResinSupply,
     items: &'query [WorldItem],
     /// Resolved slots, most constrained slot first.
     slots: Vec<Slot<'query>>,
@@ -1084,6 +1098,7 @@ impl<'query> Assignment<'query> {
         // Fail early by assigning the most constrained slot first.
         slots.sort_by_key(|slot| slot.candidates.len());
         Self {
+            resin: resin::ResinSupply::prepare(query, &world.items),
             items: &world.items,
             slots,
             sum_groups,
@@ -1098,7 +1113,11 @@ impl<'query> Assignment<'query> {
     /// distinct item and every combined-level group to reach its total.
     fn fills_every_slot(&mut self, slot: usize) -> bool {
         if slot == self.slots.len() {
-            return self.level_sums_satisfied();
+            return self.level_sums_satisfied() && self.resin_selection().is_some();
+        }
+        // Surplus supply can only shrink as slots claim items and choices.
+        if self.resin.minimum > 0 && self.resin_selection().is_none() {
+            return false;
         }
         for candidate in 0..self.slots[slot].candidates.len() {
             let (item_index, identity, requirement) = self.slots[slot].candidates[candidate];
@@ -1120,6 +1139,10 @@ impl<'query> Assignment<'query> {
         self.sum_groups.iter().all(|(label, group)| {
             self.sums.get(label).map_or(0, |progress| progress.total) >= group.minimum_total
         })
+    }
+
+    fn resin_selection(&self) -> Option<Vec<usize>> {
+        self.resin.select(self.items, &self.used, &self.scenarios)
     }
 
     /// Places one item into one slot when every cross-item constraint still
@@ -1317,6 +1340,12 @@ impl BestSubset<'_> {
                     Some(_) => {}
                 }
             }
+            if self.assignment.resin.minimum > 0
+                && let Some(resin_items) = self.assignment.resin_selection()
+            {
+                conditions += 1;
+                items.extend(resin_items);
+            }
             if conditions > self.best_conditions {
                 self.best_conditions = conditions;
                 self.best = items;
@@ -1326,7 +1355,11 @@ impl BestSubset<'_> {
         // The remaining slots bound what this branch can still add: each
         // selected item and each remaining slot satisfies at most one
         // condition.
-        if self.selected.len() + (self.assignment.slots.len() - slot) <= self.best_conditions {
+        if self.selected.len()
+            + (self.assignment.slots.len() - slot)
+            + usize::from(self.assignment.resin.minimum > 0)
+            <= self.best_conditions
+        {
             return;
         }
         for candidate in 0..self.assignment.slots[slot].candidates.len() {
@@ -1574,6 +1607,7 @@ mod tests {
     fn continuation_needs_a_compatible_scope_and_a_requirement_superset() {
         let base = SearchQuery {
             auto_apply_trinket: false,
+            arcane_resin: 0,
             requirements: vec![requirement(ItemId::Sword), requirement(ItemId::Sword)],
             max_depth: 4,
             challenges: crate::challenges::Challenges::NONE,
@@ -1663,6 +1697,7 @@ mod tests {
         };
         let query = |requirements: Vec<Requirement>| SearchQuery {
             auto_apply_trinket: false,
+            arcane_resin: 0,
             requirements,
             max_depth: 24,
             challenges: crate::challenges::Challenges::NONE,
@@ -1728,6 +1763,7 @@ mod tests {
     fn sharing_compares_kinds_and_named_items_only() {
         let query = |kind: ItemKind, item: Option<ItemId>| SearchQuery {
             auto_apply_trinket: false,
+            arcane_resin: 0,
             requirements: vec![Requirement {
                 kind,
                 weapon_category: None,
@@ -1781,6 +1817,7 @@ mod tests {
     fn and_query_requires_distinct_item_occurrences() {
         let query = SearchQuery {
             auto_apply_trinket: false,
+            arcane_resin: 0,
             requirements: vec![requirement(ItemId::Sword), requirement(ItemId::Sword)],
             max_depth: 4,
             challenges: crate::challenges::Challenges::NONE,
@@ -1815,6 +1852,7 @@ mod tests {
 
         let mut query = SearchQuery {
             auto_apply_trinket: false,
+            arcane_resin: 0,
             requirements: vec![requirement(ItemId::Sword)],
             max_depth: 24,
             challenges: crate::challenges::Challenges::NONE,
@@ -1883,6 +1921,7 @@ mod tests {
         limited.max_depth = Some(2);
         let mut query = SearchQuery {
             auto_apply_trinket: false,
+            arcane_resin: 0,
             requirements: vec![limited],
             max_depth: 24,
             challenges: crate::challenges::Challenges::NONE,
@@ -1899,6 +1938,7 @@ mod tests {
     fn mutually_exclusive_rewards_cannot_satisfy_and_query() {
         let query = SearchQuery {
             auto_apply_trinket: false,
+            arcane_resin: 0,
             requirements: vec![requirement(ItemId::Sword), requirement(ItemId::MailArmor)],
             max_depth: 4,
             challenges: crate::challenges::Challenges::NONE,
@@ -1935,6 +1975,7 @@ mod tests {
     fn same_choice_option_and_independent_rewards_can_match() {
         let query = SearchQuery {
             auto_apply_trinket: false,
+            arcane_resin: 0,
             requirements: vec![requirement(ItemId::Sword), requirement(ItemId::MailArmor)],
             max_depth: 4,
             challenges: crate::challenges::Challenges::NONE,
@@ -2000,6 +2041,7 @@ mod tests {
 
         let compatible = SearchQuery {
             auto_apply_trinket: false,
+            arcane_resin: 0,
             requirements: vec![requirement(ItemId::Sword), requirement(ItemId::MailArmor)],
             max_depth: 4,
             challenges: crate::challenges::Challenges::NONE,
@@ -2011,6 +2053,7 @@ mod tests {
 
         let incompatible = SearchQuery {
             auto_apply_trinket: false,
+            arcane_resin: 0,
             requirements: vec![requirement(ItemId::Sword), requirement(ItemId::WandFrost)],
             max_depth: 4,
             challenges: crate::challenges::Challenges::NONE,
@@ -2373,6 +2416,7 @@ mod tests {
         };
         let mut query = SearchQuery {
             auto_apply_trinket: false,
+            arcane_resin: 0,
             requirements: vec![
                 linked(
                     UpgradeRequirement::Exact(3),
@@ -2441,6 +2485,7 @@ mod tests {
     fn smith_rewards_can_be_excluded_without_hiding_the_blacksmith() {
         let mut query = SearchQuery {
             auto_apply_trinket: false,
+            arcane_resin: 0,
             requirements: vec![requirement(ItemId::Sword)],
             max_depth: 14,
             challenges: crate::challenges::Challenges::NONE,
@@ -2502,6 +2547,7 @@ mod tests {
         };
         let query = |members: Vec<Requirement>| SearchQuery {
             auto_apply_trinket: false,
+            arcane_resin: 0,
             requirements: members,
             max_depth: 24,
             challenges: crate::challenges::Challenges::NONE,
@@ -3047,6 +3093,7 @@ mod tests {
     fn scout_query(requirements: Vec<Requirement>) -> SearchQuery {
         SearchQuery {
             auto_apply_trinket: false,
+            arcane_resin: 0,
             requirements,
             max_depth: 24,
             challenges: crate::challenges::Challenges::NONE,

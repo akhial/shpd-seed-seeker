@@ -90,6 +90,8 @@ export interface RequirementState {
 }
 
 export interface QueryState {
+  /** Minimum resin from surplus uncursed wands; omitted or zero disables it. */
+  arcaneResin?: number;
   autoApplyTrinket: boolean;
   requirements: RequirementState[];
   maxDepth: number;
@@ -128,6 +130,7 @@ export type RequirementEntryDocument = RequirementDocument | AnyOfDocument;
  * retired keys such as `fast_mode`; both the engine's codec and `fromQueryJson`
  * accept and ignore them. */
 export interface QueryDocument {
+  arcane_resin?: number;
   auto_apply_trinket?: boolean;
   requirements: RequirementEntryDocument[];
   max_depth?: number;
