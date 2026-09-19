@@ -100,6 +100,7 @@ mod tests {
         };
         let query = |kind| SearchQuery {
             auto_apply_trinket: false,
+            arcane_resin_filter: shpd_seedfinder_core::query::ArcaneResinFilter::default(),
             arcane_resin: 0,
             requirements: vec![requirement(kind)],
             max_depth: 24,

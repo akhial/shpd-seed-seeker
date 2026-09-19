@@ -5,8 +5,8 @@ use crate::catalog::{Effect, ItemKind, WeaponCategory, item, item_by_stable_id};
 use crate::challenges::Challenges;
 use crate::model::ItemSource;
 use crate::query::{
-    EffectRequirement, EffectSet, LevelSum, Requirement, SearchQuery, TierRequirement,
-    UpgradeRequirement,
+    ArcaneResinFilter, EffectRequirement, EffectSet, LevelSum, Requirement, SearchQuery,
+    TierRequirement, UpgradeRequirement,
 };
 use crate::quests::WandmakerQuestType;
 use serde::Deserialize;
@@ -20,6 +20,8 @@ struct QueryDocument {
     auto_apply_trinket: bool,
     #[serde(default)]
     arcane_resin: u16,
+    #[serde(default)]
+    arcane_resin_filter: FileArcaneResinFilter,
     requirements: Vec<Value>,
     #[serde(default = "default_max_depth")]
     max_depth: u8,
@@ -35,6 +37,31 @@ struct QueryDocument {
     _fast_mode: bool,
     #[serde(default)]
     challenges: Vec<FileChallenge>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FileArcaneResinFilter {
+    #[serde(default = "default_uncursed")]
+    uncursed: bool,
+    #[serde(default)]
+    max_depth: Option<u8>,
+    #[serde(default)]
+    source: Option<FileItemSource>,
+}
+
+const fn default_uncursed() -> bool {
+    true
+}
+
+impl Default for FileArcaneResinFilter {
+    fn default() -> Self {
+        Self {
+            uncursed: true,
+            max_depth: None,
+            source: None,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Deserialize)]
@@ -370,6 +397,11 @@ pub fn decode_unvalidated(contents: &str) -> Result<SearchQuery, String> {
     Ok(SearchQuery {
         auto_apply_trinket: document.auto_apply_trinket,
         arcane_resin: document.arcane_resin,
+        arcane_resin_filter: ArcaneResinFilter {
+            uncursed: document.arcane_resin_filter.uncursed,
+            max_depth: document.arcane_resin_filter.max_depth,
+            source: document.arcane_resin_filter.source.map(ItemSource::from),
+        },
         requirements,
         max_depth: document.max_depth,
         challenges: document
@@ -527,6 +559,19 @@ pub fn encode(query: &SearchQuery) -> Value {
     let mut document = Map::new();
     if query.arcane_resin > 0 {
         document.insert("arcane_resin".to_owned(), json!(query.arcane_resin));
+    }
+    if query.arcane_resin_filter != ArcaneResinFilter::default() {
+        let mut filter = Map::new();
+        if !query.arcane_resin_filter.uncursed {
+            filter.insert("uncursed".to_owned(), json!(false));
+        }
+        if let Some(depth) = query.arcane_resin_filter.max_depth {
+            filter.insert("max_depth".to_owned(), json!(depth));
+        }
+        if let Some(source) = query.arcane_resin_filter.source {
+            filter.insert("source".to_owned(), json!(source_name(source)));
+        }
+        document.insert("arcane_resin_filter".to_owned(), Value::Object(filter));
     }
     if query.auto_apply_trinket {
         document.insert("auto_apply_trinket".to_owned(), json!(true));
@@ -1034,6 +1079,7 @@ mod tests {
     fn encoding_omits_defaults_and_round_trips_a_loaded_query() {
         let query = SearchQuery {
             auto_apply_trinket: false,
+            arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
             arcane_resin: 0,
             requirements: vec![
                 Requirement {
@@ -1103,6 +1149,7 @@ mod tests {
     fn encoding_a_minimal_query_emits_requirements_only() {
         let query = SearchQuery {
             auto_apply_trinket: false,
+            arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
             arcane_resin: 0,
             requirements: vec![Requirement {
                 kind: ItemKind::Wand,

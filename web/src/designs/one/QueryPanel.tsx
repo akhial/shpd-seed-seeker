@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useStore } from "@tanstack/react-store";
 import { LEVEL_GEN_CHALLENGES, challenges as challengeOptions } from "../../lib/catalog";
 import { probabilityLabel } from "../../lib/format";
+import { sourceLabel } from "../../lib/catalog";
+import { ARCANE_RESIN_SPRITE, itemArt } from "../../lib/sprites";
 import { CheckIcon, CommandIcon, LinkIcon, ReturnIcon, XIcon } from "../../lib/icons";
 import {
   BLACKSMITH_LAST_FLOOR,
@@ -34,9 +36,9 @@ import type {
 } from "../../lib/wasm/types";
 import { RequirementBoard } from "./RequirementBoard";
 import type { StackShape } from "./RequirementBoard";
-import { applyEdit, boardCount } from "./relations";
+import { applyEdit, boardCount, boardItems, removeItem, removeMember } from "./relations";
 import { RequirementEditor } from "./RequirementEditor";
-import { SliderRow } from "./parts";
+import { SliderRow, Sprite } from "./parts";
 
 const patchQuery = (patch: Partial<QueryState>) =>
   queryStore.setState((state) => ({ ...state, ...patch }));
@@ -46,6 +48,7 @@ interface EditorSession {
   index: number | null;
   requirement: RequirementState;
   stack: StackShape;
+  resin?: boolean;
 }
 
 export function QueryPanel({
@@ -135,6 +138,7 @@ export function QueryPanel({
   ) => {
     queryStore.setState((state) => ({
       ...state,
+      ...(session.resin ? { arcaneResin: undefined, arcaneResinFilter: undefined } : {}),
       requirements: applyEdit(
         state.requirements,
         session.index,
@@ -315,34 +319,57 @@ export function QueryPanel({
                 stack: { count: 1, inCluster: false },
               })
             }
-          />
-          <label className="d1-field d1-resin-field">
-            <span className="d1-field-label">Arcane Resin</span>
-            <span className="d1-field-control">
-              <input
-                className="d1-input"
-                type="number"
-                min={0}
-                max={65535}
-                step={1}
-                placeholder="0"
-                value={query.arcaneResin ?? ""}
-                aria-describedby="arcane-resin-help"
-                onChange={(event) =>
-                  patchQuery({
-                    arcaneResin:
-                      event.currentTarget.value === ""
-                        ? undefined
-                        : event.currentTarget.valueAsNumber,
-                  })
-                }
-              />
-            </span>
-          </label>
-          <p className="d1-caption" id="arcane-resin-help">
-            Minimum from extra uncursed wands within the floor limit. Your required wands are kept.
-            Each +0 wand yields 2, +1 yields 4, and +2 yields 6. Set to 0 for no minimum.
-          </p>
+          >
+            {(query.arcaneResin ?? 0) > 0 && (
+              <div className="d1-chip d1-resin-chip" data-no-drag>
+                <button
+                  type="button"
+                  className="d1-resin-edit"
+                  aria-label="Edit Arcane Resin"
+                  title={
+                    query.arcaneResinFilter?.source
+                      ? sourceLabel(query.arcaneResinFilter.source)
+                      : undefined
+                  }
+                  onClick={() =>
+                    setEditor({
+                      index: null,
+                      resin: true,
+                      requirement: {
+                        ...emptyRequirement("wand"),
+                        item: "arcane_resin",
+                        uncursed: true,
+                        ...query.arcaneResinFilter,
+                      },
+                      stack: { count: 1, inCluster: false },
+                    })
+                  }
+                >
+                  <Sprite art={itemArt(ARCANE_RESIN_SPRITE)} size={18} />
+                  <span className="d1-chip-name">Arcane Resin</span>
+                  <span className="d1-chip-tag">≥{query.arcaneResin}</span>
+                  {query.arcaneResinFilter?.maxDepth !== undefined && (
+                    <span className="d1-chip-tag">F≤{query.arcaneResinFilter.maxDepth}</span>
+                  )}
+                  {(query.arcaneResinFilter?.uncursed ?? true) && (
+                    <span className="d1-chip-tag d1-chip-tag-soft" title="Uncursed wands">
+                      ✓
+                    </span>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  className="d1-resin-remove"
+                  aria-label="Remove Arcane Resin"
+                  onClick={() =>
+                    patchQuery({ arcaneResin: undefined, arcaneResinFilter: undefined })
+                  }
+                >
+                  <XIcon size={12} />
+                </button>
+              </div>
+            )}
+          </RequirementBoard>
         </section>
 
         <section className="d1-section">
@@ -548,8 +575,31 @@ export function QueryPanel({
         <RequirementEditor
           key={editor.index ?? "new"}
           requirement={editor.requirement}
-          isNew={editor.index === null}
+          isNew={editor.index === null && !editor.resin}
           stack={editor.stack}
+          resinAmount={query.arcaneResin}
+          onSaveResin={(amount, filter) => {
+            queryStore.setState((state) => {
+              const item = boardItems(state.requirements).find((item) =>
+                item.members.includes(editor.index ?? -1),
+              );
+              return {
+                ...state,
+                arcaneResin: amount,
+                arcaneResinFilter:
+                  !filter.uncursed || filter.maxDepth !== undefined || filter.source
+                    ? filter
+                    : undefined,
+                requirements:
+                  item && editor.index !== null
+                    ? item.cluster !== undefined
+                      ? removeMember(state.requirements, editor.index)
+                      : removeItem(state.requirements, item)
+                    : state.requirements,
+              };
+            });
+            setEditor(null);
+          }}
           onSave={(requirement, count, total, copyDepth) =>
             commitRequirement(editor, requirement, count, total, copyDepth)
           }

@@ -2,7 +2,7 @@ use shpd_seedfinder_core::catalog::ItemId;
 use shpd_seedfinder_core::feasibility::QueryPlan;
 use shpd_seedfinder_core::main_world::{CanonicalMainWorldGenerator, generate_main_world};
 use shpd_seedfinder_core::model::{Accessibility, GeneratedWorld, ItemSource, WorldItem};
-use shpd_seedfinder_core::query::{SearchQuery, scout_matches};
+use shpd_seedfinder_core::query::{ArcaneResinFilter, SearchQuery, scout_matches};
 use shpd_seedfinder_core::quests::QuestSummary;
 use shpd_seedfinder_core::run::RingGems;
 use shpd_seedfinder_core::search::{FloorGate, WorldGenerator};
@@ -125,6 +125,106 @@ fn resin_respects_reward_choices_and_overlapping_scenarios() {
     assert!(resin.matches(&world));
     assert!(!self::query(9, "[]").matches(&world));
     assert_eq!(scout_matches(&world, &resin).matched_indices(), vec![0, 1]);
+}
+
+#[test]
+fn resin_filters_apply_only_to_surplus_wands() {
+    let mut resin = query(4, r#"[{"item":"wand_lightning","upgrade":2}]"#);
+    resin.arcane_resin_filter = ArcaneResinFilter {
+        uncursed: false,
+        max_depth: Some(4),
+        source: Some(ItemSource::Chest),
+    };
+    let mut reserved = wand(2);
+    reserved.depth = 9;
+    let mut surplus = wand(1);
+    surplus.cursed = true;
+    surplus.source = ItemSource::Chest;
+    let candidate = world(vec![reserved.clone(), surplus.clone()]);
+    assert!(resin.matches(&candidate));
+    assert_eq!(
+        scout_matches(&candidate, &resin).matched_indices(),
+        vec![0, 1]
+    );
+    resin.arcane_resin_filter.uncursed = true;
+    assert!(!resin.matches(&candidate));
+    resin.arcane_resin_filter.uncursed = false;
+    surplus.depth = 5;
+    assert!(!resin.matches(&world(vec![reserved.clone(), surplus.clone()])));
+    surplus.depth = 4;
+    surplus.source = ItemSource::Heap;
+    assert!(!resin.matches(&world(vec![reserved, surplus])));
+    // A local limit never extends the global search scope.
+    resin.requirements.clear();
+    resin.arcane_resin_filter.source = None;
+    resin.max_depth = 2;
+    assert!(!resin.matches(&world(vec![wand(1)])));
+}
+
+#[test]
+fn resin_filter_refinement_never_reuses_a_wider_supply() {
+    let mut base = query(4, "[]");
+    base.arcane_resin_filter.uncursed = false;
+    let mut candidate = base.clone();
+    candidate.arcane_resin_filter.uncursed = true;
+    assert!(candidate.continues(&base));
+    assert!(!base.continues(&candidate));
+    base = candidate.clone();
+    candidate.arcane_resin_filter.max_depth = Some(4);
+    assert!(candidate.continues(&base));
+    assert!(!base.continues(&candidate));
+    base = candidate.clone();
+    candidate.arcane_resin_filter.source = Some(ItemSource::Chest);
+    assert!(candidate.continues(&base));
+    assert!(!base.continues(&candidate));
+    base = candidate.clone();
+    candidate.arcane_resin_filter.source = Some(ItemSource::Heap);
+    assert!(!candidate.continues(&base));
+    assert!(!base.continues(&candidate));
+}
+
+#[test]
+fn resin_filters_round_trip_and_reject_invalid_values() {
+    for uncursed in [false, true] {
+        for max_depth in [None, Some(1), Some(24)] {
+            for source in [
+                None,
+                Some(ItemSource::Heap),
+                Some(ItemSource::VaultTreasure),
+            ] {
+                let mut resin = query(6, "[]");
+                resin.arcane_resin_filter = ArcaneResinFilter {
+                    uncursed,
+                    max_depth,
+                    source,
+                };
+                assert_eq!(
+                    json_query::decode(&json_query::encode(&resin).to_string()).unwrap(),
+                    resin
+                );
+                assert_eq!(
+                    deep_link::decode(&deep_link::encode(&resin).unwrap()).unwrap(),
+                    resin
+                );
+                let exported = results_export::encode(&resin, &[DungeonSeed::MIN], "test");
+                assert_eq!(results_export::decode(&exported).unwrap().query, resin);
+            }
+        }
+    }
+    for invalid in [
+        r#"{"uncursed":"yes"}"#,
+        r#"{"max_depth":0}"#,
+        r#"{"max_depth":25}"#,
+        r#"{"source":"unknown"}"#,
+        "null",
+    ] {
+        assert!(
+            json_query::decode(&format!(
+                r#"{{"arcane_resin":2,"arcane_resin_filter":{invalid},"requirements":[]}}"#
+            ))
+            .is_err()
+        );
+    }
 }
 
 #[test]

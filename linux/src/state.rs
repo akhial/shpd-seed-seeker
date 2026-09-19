@@ -295,6 +295,7 @@ impl AppState {
     pub fn unvalidated_query(&self) -> SearchQuery {
         SearchQuery {
             auto_apply_trinket: self.auto_apply_trinket,
+            arcane_resin_filter: shpd_seedfinder_core::query::ArcaneResinFilter::default(),
             arcane_resin: 0,
             requirements: self.requirements.iter().map(|r| r.to_core()).collect(),
             max_depth: self.max_depth,

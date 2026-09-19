@@ -28,6 +28,9 @@ const ICON_CELL = 8;
  */
 export const RING_SPRITE_BASE = 224;
 
+/** ItemSpriteSheet.ARCANE_RESIN (SCROLLS + 13). */
+export const ARCANE_RESIN_SPRITE = 317;
+
 // Art dimensions (w, h) of each ring glyph within its 8×8 cell, index-aligned
 // to the ring classes (Accuracy, Arcana, Elements, … Wealth).
 const RING_ICON_SIZES: [number, number][] = [

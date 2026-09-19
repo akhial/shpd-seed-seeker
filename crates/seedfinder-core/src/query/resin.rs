@@ -7,6 +7,33 @@ use crate::model::{ItemSource, WorldItem};
 
 use super::SearchQuery;
 
+/// Filters on the surplus wands consumed for Arcane Resin.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ArcaneResinFilter {
+    pub uncursed: bool,
+    pub max_depth: Option<u8>,
+    pub source: Option<ItemSource>,
+}
+
+impl Default for ArcaneResinFilter {
+    fn default() -> Self {
+        Self {
+            uncursed: true,
+            max_depth: None,
+            source: None,
+        }
+    }
+}
+
+impl ArcaneResinFilter {
+    pub(super) fn implies(self, base: Self, max_depth: u8) -> bool {
+        (self.uncursed || !base.uncursed)
+            && self.max_depth.unwrap_or(max_depth).min(max_depth)
+                <= base.max_depth.unwrap_or(max_depth).min(max_depth)
+            && base.source.is_none_or(|source| self.source == Some(source))
+    }
+}
+
 pub(super) struct ResinSupply {
     pub minimum: u16,
     candidates: Vec<(usize, u32)>,
@@ -27,8 +54,16 @@ impl ResinSupply {
                 .enumerate()
                 .filter(|(_, candidate)| {
                     item(candidate.item).kind == ItemKind::Wand
-                        && !candidate.cursed
+                        && (!query.arcane_resin_filter.uncursed || !candidate.cursed)
                         && candidate.depth <= query.max_depth
+                        && query
+                            .arcane_resin_filter
+                            .max_depth
+                            .is_none_or(|depth| candidate.depth <= depth)
+                        && query
+                            .arcane_resin_filter
+                            .source
+                            .is_none_or(|source| candidate.source == source)
                         && (!query.exclude_blacksmith_rewards
                             || candidate.source != ItemSource::BlacksmithReward)
                 })

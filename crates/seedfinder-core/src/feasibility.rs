@@ -952,6 +952,7 @@ mod tests {
     fn query(requirements: Vec<Requirement>, max_depth: u8) -> SearchQuery {
         SearchQuery {
             auto_apply_trinket: false,
+            arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
             arcane_resin: 0,
             requirements,
             max_depth,
@@ -4478,6 +4479,7 @@ mod closed_multiplicity_grouping_tests {
     fn analyze(requirements: Vec<Requirement>, max_depth: u8) -> QueryPlan {
         let query = SearchQuery {
             auto_apply_trinket: false,
+            arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
             arcane_resin: 0,
             requirements,
             max_depth,

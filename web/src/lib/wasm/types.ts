@@ -90,8 +90,9 @@ export interface RequirementState {
 }
 
 export interface QueryState {
-  /** Minimum resin from surplus uncursed wands; omitted or zero disables it. */
+  /** Minimum resin from surplus wands; omitted or zero disables it. */
   arcaneResin?: number;
+  arcaneResinFilter?: ArcaneResinFilter;
   autoApplyTrinket: boolean;
   requirements: RequirementState[];
   maxDepth: number;
@@ -100,6 +101,12 @@ export interface QueryState {
   /** Which Wandmaker quest a seed must roll; undefined matches any. */
   wandmakerQuest?: WandmakerQuest;
   challenges: ChallengeName[];
+}
+
+export interface ArcaneResinFilter {
+  uncursed: boolean;
+  maxDepth?: number;
+  source?: ItemSource;
 }
 
 export type TierDocument = "any" | { exact: number } | { at_least: number } | { at_most: number };
@@ -131,6 +138,7 @@ export type RequirementEntryDocument = RequirementDocument | AnyOfDocument;
  * accept and ignore them. */
 export interface QueryDocument {
   arcane_resin?: number;
+  arcane_resin_filter?: { uncursed?: boolean; max_depth?: number; source?: ItemSource };
   auto_apply_trinket?: boolean;
   requirements: RequirementEntryDocument[];
   max_depth?: number;

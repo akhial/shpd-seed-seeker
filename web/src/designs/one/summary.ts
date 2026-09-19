@@ -8,7 +8,7 @@ import {
 } from "../../lib/catalog";
 import { effectNamesOf, isAnyEnchantment } from "../../lib/query";
 import type { ItemArt } from "../../lib/sprites";
-import { itemArt } from "../../lib/sprites";
+import { ARCANE_RESIN_SPRITE, itemArt } from "../../lib/sprites";
 import type { ItemCategory, RequirementKind, RequirementState } from "../../lib/wasm/types";
 
 export const categoryLabel: Record<ItemCategory, string> = {
@@ -57,6 +57,7 @@ export function requirementKind(requirement: RequirementState): ItemCategory | u
  * on screen.
  */
 export function requirementArt(requirement: RequirementState): ItemArt {
+  if (requirement.item === "arcane_resin") return itemArt(ARCANE_RESIN_SPRITE);
   if (requirement.item) {
     const item = getItem(requirement.item);
     if (item) return itemArt(item.sprite);
@@ -66,6 +67,7 @@ export function requirementArt(requirement: RequirementState): ItemArt {
 }
 
 export function requirementTitle(requirement: RequirementState): string {
+  if (requirement.item === "arcane_resin") return "Arcane Resin";
   if (requirement.item) return displayItemName(requirement.item);
   if (requirementKind(requirement) === "trinket") return "Trinket";
   if (requirementKind(requirement) === "artifact") return "Artifact";

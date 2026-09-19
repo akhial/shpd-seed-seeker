@@ -45,8 +45,15 @@ describe("Arcane Resin", () => {
       getItem: (key: string) => storage.get(key) ?? null,
       setItem: (key: string, value: string) => storage.set(key, value),
     });
-    for (const requirements of [[], document.requirements]) {
-      const state = fromQueryJson(JSON.stringify({ ...document, requirements }));
+    for (const [requirements, arcane_resin_filter] of [
+      [[], undefined],
+      [document.requirements, undefined],
+      [[], { uncursed: false, max_depth: 4, source: "chest" }],
+      [document.requirements, { max_depth: 9 }],
+    ]) {
+      const state = fromQueryJson(
+        JSON.stringify({ ...document, requirements, arcane_resin_filter }),
+      );
       expect(validateQuery(state).valid).toBe(true);
       expect(fromQueryJson(toQueryJson(state))).toEqual(state);
       expect(fromQueryJson(decode_share_text(encode_share_link(toQueryJson(state))))).toEqual(
@@ -111,7 +118,7 @@ describe("Arcane Resin", () => {
     }
   });
 
-  it("shows the resin control, allocation help and requirement count without item slots", () => {
+  it("shows a resin requirement chip without the old control or helper text", () => {
     queryStore.setState(() => fromQueryJson('{"arcane_resin":6,"requirements":[]}'));
     const html = renderToStaticMarkup(
       <QueryPanel
@@ -126,10 +133,26 @@ describe("Arcane Resin", () => {
       />,
     );
     expect(html).toContain("Arcane Resin");
-    expect(html).toContain('aria-describedby="arcane-resin-help"');
-    expect(html).toContain('value="6"');
+    expect(html).toContain('aria-label="Edit Arcane Resin"');
+    expect(html).toContain('aria-label="Remove Arcane Resin"');
+    expect(html).toContain("≥6");
     expect(html).toContain("1 requirement");
-    expect(html).toContain("extra uncursed wands");
-    expect(html).toContain("Your required wands are kept.");
+    expect(html).not.toContain("arcane-resin-help");
+    expect(html).not.toContain("extra uncursed wands");
+    expect(html).not.toContain("Your required wands are kept.");
+  });
+
+  it("rejects malformed resin filters before searching", () => {
+    for (const arcane_resin_filter of [
+      null,
+      { uncursed: "yes" },
+      { max_depth: 0 },
+      { max_depth: 25 },
+      { source: "unknown" },
+    ]) {
+      const json = JSON.stringify({ ...document, arcane_resin_filter });
+      expect(() => fromQueryJson(json)).toThrow(/Arcane Resin/);
+      expect(JSON.parse(analyze_query(json)).valid).toBe(false);
+    }
   });
 });

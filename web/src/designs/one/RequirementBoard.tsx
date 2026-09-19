@@ -129,11 +129,13 @@ export function RequirementBoard({
   onChange,
   onEdit,
   onAdd,
+  children,
 }: {
   requirements: RequirementState[];
   onChange: (requirements: RequirementState[]) => void;
   onEdit: (index: number, stack: StackShape) => void;
   onAdd: () => void;
+  children?: ReactNode;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
@@ -595,6 +597,7 @@ export function RequirementBoard({
         }}
       >
         {items.map(renderItem)}
+        {children}
         <button
           type="button"
           className="d1-chip d1-chip-add"
