@@ -59,7 +59,7 @@ it("preserves blankets in saved queries, share links, and results files", () => 
   );
 });
 
-it("shows a separate blanket board and the existing source and upgrade controls", () => {
+it("shows a collapsed blanket board with a count and the existing source and upgrade controls", () => {
   const query = state();
   queryStore.setState(() => query);
   const html = renderToStaticMarkup(
@@ -75,7 +75,10 @@ it("shows a separate blanket board and the existing source and upgrade controls"
     />,
   );
   expect(html).toContain('aria-label="Blanket Requirements"');
-  expect(html).toContain("Each blanket must match at least one item");
+  expect(html).toContain(
+    '<details class="d1-details d1-blanket-details"><summary><span>Blanket Requirements</span><span class="d1-count">1</span></summary>',
+  );
+  expect(html).not.toContain("Each blanket must match at least one item");
   const editor = renderToStaticMarkup(
     <RequirementEditor
       requirement={query.requirements[3]}

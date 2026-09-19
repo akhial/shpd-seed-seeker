@@ -305,46 +305,56 @@ export function QueryPanel({
           const requirements = query.requirements.filter(
             (requirement) => Boolean(requirement.blanket) === blanket,
           );
+          const count = boardCount(requirements);
+          const board = (
+            <RequirementBoard
+              requirements={requirements}
+              onChange={(next) => setRequirements(blanket, next)}
+              onEdit={(index, stack) =>
+                setEditor({
+                  index: query.requirements.indexOf(requirements[index]),
+                  requirement: requirements[index],
+                  stack,
+                })
+              }
+              onAdd={() =>
+                setEditor({
+                  index: null,
+                  requirement: {
+                    ...emptyRequirement(
+                      blanket
+                        ? (query.requirements.find((r) => !r.blanket)?.kind ?? "weapon")
+                        : "weapon",
+                    ),
+                    ...(blanket ? { blanket: true } : {}),
+                  },
+                  stack: { count: 1, inCluster: false },
+                })
+              }
+            />
+          );
           return (
             <section
               className="d1-section"
               key={String(blanket)}
               aria-label={blanket ? "Blanket Requirements" : "Requirements"}
             >
-              <div className="d1-section-head">
-                <h3>{blanket ? "Blanket Requirements" : "Requirements"}</h3>
-              </div>
-              {blanket && (
-                <p className="d1-caption">
-                  Each blanket must match at least one item fulfilling your requirements above. It
-                  does not require another item.
-                </p>
+              {blanket ? (
+                <details className="d1-details d1-blanket-details">
+                  <summary>
+                    <span>Blanket Requirements</span>
+                    {count > 0 && <span className="d1-count">{count}</span>}
+                  </summary>
+                  <div className="d1-details-body">{board}</div>
+                </details>
+              ) : (
+                <>
+                  <div className="d1-section-head">
+                    <h3>Requirements</h3>
+                  </div>
+                  {board}
+                </>
               )}
-              <RequirementBoard
-                requirements={requirements}
-                onChange={(next) => setRequirements(blanket, next)}
-                onEdit={(index, stack) =>
-                  setEditor({
-                    index: query.requirements.indexOf(requirements[index]),
-                    requirement: requirements[index],
-                    stack,
-                  })
-                }
-                onAdd={() =>
-                  setEditor({
-                    index: null,
-                    requirement: {
-                      ...emptyRequirement(
-                        blanket
-                          ? (query.requirements.find((r) => !r.blanket)?.kind ?? "weapon")
-                          : "weapon",
-                      ),
-                      ...(blanket ? { blanket: true } : {}),
-                    },
-                    stack: { count: 1, inCluster: false },
-                  })
-                }
-              />
             </section>
           );
         })}
