@@ -554,7 +554,7 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let items = directory.path().join("resin.json");
         let output = directory.path().join("results.json");
-        std::fs::write(&items, r#"{"max_depth":1,"requirements":[],"arcane_resin":65535,"arcane_resin_filter":{"uncursed":false,"max_depth":4,"source":"chest"}}"#).unwrap();
+        std::fs::write(&items, r#"{"max_depth":1,"require_blacksmith":true,"requirements":[],"arcane_resin":65535,"arcane_resin_filter":{"uncursed":false,"max_depth":4,"source":"chest"}}"#).unwrap();
         let query = super::load_query(&items).unwrap();
         assert_eq!(query.arcane_resin, 65535);
         assert!(!query.arcane_resin_filter.uncursed);
