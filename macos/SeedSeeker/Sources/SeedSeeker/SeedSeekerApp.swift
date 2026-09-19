@@ -572,6 +572,8 @@ private struct QueryView: View {
     @AppStorage(WorkerPersistence.defaultsKey) private var workerCount = WorkerPersistence.unset
     @State private var editor: EditorSession?
     @State private var showingSavePreset = false
+    @State private var blanketsExpanded = false
+    @State private var showingBlanketHelp = false
     @State private var presetName = ""
 
     var body: some View {
@@ -580,6 +582,7 @@ private struct QueryView: View {
                 VStack(alignment: .leading, spacing: 22) {
                     presets
                     requirementBoard
+                    blanketBoard
                     settings
                 }
                 .padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 16)
@@ -719,13 +722,35 @@ private struct QueryView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 7) {
                 SectionLabel("Requirements")
-                if !requirements.isEmpty { CountBadge(requirements.boardCount) }
+                if requirements.contains(where: { !$0.blanket }) { CountBadge(requirements.filter { !$0.blanket }.boardCount) }
             }
             RequirementBoardView(requirements: $requirements, onEdit: openEditor,
-                                 onAdd: addRequirement)
-            if requirements.isEmpty {
+                                 onAdd: { addRequirement() })
+            if !requirements.contains(where: { !$0.blanket }) {
                 Text("No requirements yet. Add one to describe the item you're hunting for.")
                     .font(.callout).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private var blanketBoard: some View {
+        DisclosureGroup(isExpanded: $blanketsExpanded) {
+            RequirementBoardView(requirements: $requirements, blanket: true, onEdit: openEditor,
+                                 onAdd: { addRequirement(blanket: true) })
+                .padding(.top, 8)
+        } label: {
+            HStack(spacing: 7) {
+                SectionLabel("Blanket Requirements")
+                CountBadge(requirements.filter { $0.blanket }.boardCount)
+                Button { showingBlanketHelp.toggle() } label: {
+                    Image(systemName: "info.circle")
+                }
+                .buttonStyle(.plain).help("About blanket requirements")
+                .accessibilityLabel("About blanket requirements")
+                .popover(isPresented: $showingBlanketHelp) {
+                    Text("Each blanket must match at least one item fulfilling your ordinary requirements. It does not ask for an additional item. All filters in one blanket apply to the same item; separate blankets can match the same or different chosen items.\n\nFor example, require Lightning, Disintegration, and Frost at +2 or higher, then add an Any wand blanket at exactly +3 from the Wandmaker.")
+                        .frame(width: 320).padding()
+                }
             }
         }
     }
@@ -800,9 +825,12 @@ private struct QueryView: View {
                               inCluster: item?.cluster != nil))
     }
 
-    private func addRequirement() {
-        if let value = try? ItemRequirement(key: Int64.random(in: 1...Int64.max), item: nil,
-            upgrade: 0, kind: .weapon, upgradeMatch: .any) {
+    private func addRequirement(blanket: Bool = false) {
+        let first = requirements.first(where: { !$0.blanket })
+        let kind: ItemKind = blanket ? first?.kind ?? .weapon : .weapon
+        let item = kind == .trinket || kind == .artifact ? first?.item : nil
+        if let value = try? ItemRequirement(key: Int64.random(in: 1...Int64.max), item: item,
+            upgrade: 0, kind: kind, upgradeMatch: .any, blanket: blanket) {
             editor = EditorSession(requirement: value, isNew: true, index: nil, stack: StackShape())
         }
     }
@@ -823,6 +851,7 @@ private struct QueryView: View {
  */
 private struct RequirementBoardView: View {
     @Binding var requirements: [ItemRequirement]
+    var blanket = false
     let onEdit: (Int) -> Void
     let onAdd: () -> Void
     /// The key of the chip in flight — also what says the bin should show.
@@ -830,7 +859,7 @@ private struct RequirementBoardView: View {
     @State private var overBin = false
 
     var body: some View {
-        let items = requirements.boardItems()
+        let items = requirements.boardItems().filter { requirements[$0.anchor].blanket == blanket }
         let errors = boardErrors(requirements)
         VStack(alignment: .leading, spacing: 6) {
             FlowLayout(spacing: 6, lineSpacing: 8) {
@@ -1164,7 +1193,7 @@ private struct ChipView: View {
     /// The other board entries, named as the menu lists them.
     private var otherChips: [ChipTarget] {
         requirements.boardItems().compactMap { entry in
-            guard !entry.members.contains(index) else { return nil }
+            guard !entry.members.contains(index), requirements[entry.anchor].blanket == requirement.blanket else { return nil }
             return ChipTarget(id: entry.anchor,
                               label: entry.members.map { chipName(requirements[$0]) }
                                   .joined(separator: " or "))
@@ -1499,7 +1528,7 @@ private struct RequirementEditor: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Text(isNew ? "New Requirement" : "Edit Requirement")
+            Text(original.blanket ? (isNew ? "New Blanket Requirement" : "Edit Blanket Requirement") : (isNew ? "New Requirement" : "Edit Requirement"))
                 .font(.headline).padding(.top, 14).padding(.bottom, 4)
             Form {
                 Section("Item") {
@@ -1561,7 +1590,7 @@ private struct RequirementEditor: View {
                         if value.isEmpty { total = nil } else { tierMatch = .any }
                         normalizeUpgrade()
                     }
-                    if kind == .trinket {
+                    if kind == .trinket && !original.blanket {
                         Toggle("Choose matching trinket at +3", isOn: $selectTrinket)
                     }
                     if itemID.isEmpty && (kind.family == .weapon || kind.family == .armor) {
@@ -1635,7 +1664,7 @@ private struct RequirementEditor: View {
                         }
                     }
                 }
-                if kind != .trinket && kind != .artifact && !stack.inCluster {
+                if !original.blanket && kind != .trinket && kind != .artifact && !stack.inCluster {
                     Section("Total item count") {
                         Stepper(value: $count, in: 1...SearchLimits.stackMax) {
                             LabeledContent("How many") {
@@ -1755,7 +1784,7 @@ private struct RequirementEditor: View {
     /// and of rings only, whose effects scale with their level: it needs an
     /// item to be N of, and a cluster is one slot, not a stack.
     private var totalable: Bool {
-        !stack.inCluster && !itemID.isEmpty && count > 1 && kind.family == .ring
+        !original.blanket && !stack.inCluster && !itemID.isEmpty && count > 1 && kind.family == .ring
     }
     private var effectiveTotal: Int? { totalable ? total : nil }
     /// The most levels the stack could add up to, its members taking any
@@ -1819,10 +1848,10 @@ private struct RequirementEditor: View {
                 maximumDepth: kind == .trinket || maximumDepth == 0 ? nil : maximumDepth,
                 requireUncursed: kind != .trinket && requireUncursed,
                 alternativeGroup: original.alternativeGroup,
-                selectTrinket: kind == .trinket && selectTrinket)
+                selectTrinket: !original.blanket && kind == .trinket && selectTrinket, blanket: original.blanket)
             onFinish(EditorResult(
                 requirement: value,
-                count: kind == .trinket || kind == .artifact || stack.inCluster ? 1 : count,
+                count: original.blanket || kind == .trinket || kind == .artifact || stack.inCluster ? 1 : count,
                 total: effectiveTotal,
                 copyDepth: kind == .trinket || kind == .artifact || stack.inCluster || count < 2 || effectiveTotal != nil ? nil : copyDepth))
         } catch {

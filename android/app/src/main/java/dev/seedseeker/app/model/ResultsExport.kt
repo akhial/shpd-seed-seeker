@@ -125,6 +125,7 @@ object ResultsExport {
         encodeEffect(requirement.effect, requirement.kind)?.let { put("effect", it) }
         if (requirement.requireUncursed) put("uncursed", true)
         if (requirement.selectTrinket) put("select_trinket", true)
+        if (requirement.blanket) put("blanket", true)
         requirement.source?.let { put("source", it.name.lowercase()) }
         requirement.identityGroup?.let { put("identity_group", it) }
         requirement.maximumDepth?.let { put("max_depth", it) }
@@ -279,6 +280,7 @@ object ResultsExport {
             maximumDepth = if (entry.has("max_depth")) entry.getInt("max_depth") else null,
             requireUncursed = entry.optBoolean("uncursed"),
             selectTrinket = entry.optBoolean("select_trinket"),
+            blanket = entry.optBoolean("blanket"),
             levelSum = entry.optJSONObject("level_sum")?.let {
                 LevelSum(group = it.getInt("group"), atLeast = it.getInt("at_least"))
             },

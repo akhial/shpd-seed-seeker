@@ -69,6 +69,7 @@ struct Editor {
     floor_value: adw::SpinRow,
     updating: Cell<bool>,
     key: u64,
+    blanket: bool,
     /// The alternative group the row belongs to, kept so a saved member stays
     /// in its cluster.
     alternative_group: Option<u8>,
@@ -115,7 +116,13 @@ pub fn present(
     toolbar_view.add_top_bar(&editor.banner);
     toolbar_view.set_content(Some(&page));
 
-    editor.dialog.set_title(if is_new {
+    editor.dialog.set_title(if requirement.blanket {
+        if is_new {
+            "New Blanket Requirement"
+        } else {
+            "Edit Blanket Requirement"
+        }
+    } else if is_new {
         "New Requirement"
     } else {
         "Edit Requirement"
@@ -256,6 +263,7 @@ fn build(context: AppState, requirement: &UiRequirement, stack: StackShape) -> E
         ),
         updating: Cell::new(false),
         key: requirement.key,
+        blanket: requirement.blanket,
         alternative_group: requirement.alternative_group,
         in_cluster: stack.in_cluster,
         context,
@@ -515,7 +523,9 @@ fn collect(editor: &Rc<Editor>) -> (UiRequirement, usize, Option<u8>, Option<u8>
         upgrade,
         effect: selected_effect(editor),
         require_uncursed: kind != ItemKind::Trinket && editor.uncursed.is_active(),
-        select_trinket: kind == ItemKind::Trinket
+        blanket: editor.blanket,
+        select_trinket: !editor.blanket
+            && kind == ItemKind::Trinket
             && item.is_some()
             && editor.select_trinket.is_active(),
         source,
@@ -683,7 +693,8 @@ fn checked_effects(editor: &Rc<Editor>) -> Vec<Effect> {
 /// How many items the row asks for; a cluster member leaves its stack to the
 /// cluster and always speaks for one.
 fn selected_count(editor: &Rc<Editor>) -> usize {
-    if editor.in_cluster
+    if editor.blanket
+        || editor.in_cluster
         || matches!(
             selected_kind(editor),
             ItemKind::Trinket | ItemKind::Artifact
@@ -701,7 +712,8 @@ fn selected_count(editor: &Rc<Editor>) -> usize {
 /// meaningfully across rings: a ring's effect scales with its level, so a +0
 /// and a +1 together grant what one +2 does.
 fn countable_levels(editor: &Rc<Editor>) -> bool {
-    !editor.in_cluster
+    !editor.blanket
+        && !editor.in_cluster
         && selected_kind(editor) == ItemKind::Ring
         && selected_item(editor).is_some()
         && selected_count(editor) > 1
@@ -935,7 +947,9 @@ fn set_minimum_upgrade(editor: &Rc<Editor>, upgrade: u8) {
 
 fn refresh_visibility(editor: &Rc<Editor>) {
     let kind = selected_kind(editor);
-    editor.select_trinket.set_visible(kind == ItemKind::Trinket);
+    editor
+        .select_trinket
+        .set_visible(!editor.blanket && kind == ItemKind::Trinket);
     if kind != ItemKind::Trinket {
         editor.select_trinket.set_active(false);
     }
@@ -971,9 +985,11 @@ fn refresh_visibility(editor: &Rc<Editor>) {
         .upgrade_group
         .set_visible(!counting_levels && !matches!(kind, ItemKind::Trinket | ItemKind::Artifact));
     editor.details_group.set_visible(kind != ItemKind::Trinket);
-    editor
-        .count_group
-        .set_visible(!editor.in_cluster && !matches!(kind, ItemKind::Trinket | ItemKind::Artifact));
+    editor.count_group.set_visible(
+        !editor.blanket
+            && !editor.in_cluster
+            && !matches!(kind, ItemKind::Trinket | ItemKind::Artifact),
+    );
     editor
         .copy_floor_switch
         .set_visible(stacked && !counting_levels);

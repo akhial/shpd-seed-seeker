@@ -123,7 +123,7 @@ fun FinderScreen(
     onApplyPreset: (QueryPreset) -> Unit,
     onSavePreset: (String) -> Unit,
     onDeletePreset: (QueryPreset) -> Unit,
-    onAdd: () -> Unit,
+    onAdd: (Boolean) -> Unit,
     onEdit: (BoardItem, Int) -> Unit,
     onRequirementsChange: (List<ItemRequirement>) -> Unit,
     onRemove: (BoardItem) -> Unit,
@@ -269,7 +269,7 @@ fun FinderScreen(
                     .widthIn(max = 680.dp),
             ) {
                 PageHeader(
-                    title = "Requirements (${requirements.boardCount()})",
+                    title = "Requirements (${requirements.filterNot { it.blanket }.boardCount()})",
                     summary = requirementsSummaryText(requirements),
                     open = !showResults,
                     openDescription = "Show requirements",
@@ -433,6 +433,7 @@ private fun PageHeader(
 private fun requirementsSummaryText(requirements: List<ItemRequirement>): String =
     requirements.boardItems().joinToString(" · ") { item ->
         buildString {
+            if (requirements[item.anchor].blanket) append("Blanket: ")
             append(item.members.joinToString(" or ") { chipTitle(requirements[it]) })
             if (item.stackCount > 1) append(" ×${item.stackCount}")
         }
@@ -453,7 +454,7 @@ private fun QueryPage(
     isSearching: Boolean,
     validationMessage: String?,
     compactChips: Boolean,
-    onAdd: () -> Unit,
+    onAdd: (Boolean) -> Unit,
     onEdit: (BoardItem, Int) -> Unit,
     onRequirementsChange: (List<ItemRequirement>) -> Unit,
     onRemove: (BoardItem) -> Unit,
@@ -478,9 +479,42 @@ private fun QueryPage(
             onChange = onRequirementsChange,
             onEdit = onEdit,
             onRemove = onRemove,
-            onAdd = onAdd,
+            onAdd = { onAdd(false) },
             modifier = Modifier.fillMaxWidth(),
         )
+        var blanketsExpanded by remember { mutableStateOf(false) }
+        var showBlanketHelp by remember { mutableStateOf(false) }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = { blanketsExpanded = !blanketsExpanded }, modifier = Modifier.weight(1f)) {
+                Text("Blanket Requirements (${requirements.filter { it.blanket }.boardCount()})",
+                    modifier = Modifier.weight(1f))
+                Icon(if (blanketsExpanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                    contentDescription = if (blanketsExpanded) "Collapse blankets" else "Expand blankets")
+            }
+            IconButton(onClick = { showBlanketHelp = true }) {
+                Icon(Icons.Filled.Info, contentDescription = "About blanket requirements")
+            }
+        }
+        if (blanketsExpanded) {
+            RequirementBoard(
+                requirements = requirements, blanket = true, enabled = !isSearching,
+                compact = compactChips, onChange = onRequirementsChange,
+                onEdit = onEdit, onRemove = onRemove, onAdd = { onAdd(true) },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        if (showBlanketHelp) {
+            AlertDialog(
+                onDismissRequest = { showBlanketHelp = false },
+                title = { Text("Blanket Requirements") },
+                text = { Text("Each blanket must match at least one item fulfilling your ordinary requirements. " +
+                    "It does not ask for an additional item. All filters in one blanket apply to the same item; " +
+                    "separate blankets can match the same or different chosen items.\n\n" +
+                    "For example, require Lightning, Disintegration, and Frost at +2 or higher, then add an " +
+                    "Any wand blanket at exactly +3 from the Wandmaker.") },
+                confirmButton = { TextButton(onClick = { showBlanketHelp = false }) { Text("Got it") } },
+            )
+        }
         if (validationMessage != null && requirements.isNotEmpty()) {
             Text(
                 validationMessage,

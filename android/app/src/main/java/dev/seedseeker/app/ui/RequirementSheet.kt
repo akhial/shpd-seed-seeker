@@ -111,6 +111,8 @@ fun RequirementSheet(
     editingTotal: Int? = null,
     editingCopyDepth: Int? = null,
     startWithItemPicker: Boolean = false,
+    blanket: Boolean = editing?.blanket ?: false,
+    initialKind: ItemKind = ItemKind.WEAPON,
     onDismiss: () -> Unit,
     onSave: (requirement: ItemRequirement, count: Int, total: Int?, copyDepth: Int?) -> Unit,
     onRemove: (() -> Unit)? = null,
@@ -120,11 +122,11 @@ fun RequirementSheet(
     var step by remember(identity) {
         mutableStateOf(if (editing == null || startWithItemPicker) SheetStep.ITEM else SheetStep.DETAILS)
     }
-    var kind by remember(identity) { mutableStateOf(editing?.kind ?: ItemKind.WEAPON) }
+    var kind by remember(identity) { mutableStateOf(editing?.kind ?: initialKind) }
     var selectedItem by remember(identity) {
         mutableStateOf<CatalogItem?>(
             if (editing == null) {
-                searchableItems(kind).first()
+                if (blanket && !kind.requiresNamedItem) null else searchableItems(kind).first()
             } else {
                 editing.item
             },
@@ -207,12 +209,13 @@ fun RequirementSheet(
             tierMatch = tierMatch,
             upgradeMatch = if (kind.requiresNamedItem) UpgradeMatch.ANY else upgradeMatch,
             source = if (kind == ItemKind.TRINKET) null else source,
-            identityGroup = if (!kind.supportsStacks) null else editing?.identityGroup,
+            identityGroup = if (blanket || !kind.supportsStacks) null else editing?.identityGroup,
             maximumDepth = if (kind == ItemKind.TRINKET) null else maximumDepth,
             requireUncursed = kind != ItemKind.TRINKET && requireUncursed,
-            selectTrinket = kind == ItemKind.TRINKET && selectTrinket,
+            selectTrinket = !blanket && kind == ItemKind.TRINKET && selectTrinket,
+            blanket = blanket,
             alternativeGroup = editing?.alternativeGroup,
-            levelSum = if (!kind.supportsStacks) null else editing?.levelSum,
+            levelSum = if (blanket || !kind.supportsStacks) null else editing?.levelSum,
         )
     }
 
@@ -236,6 +239,7 @@ fun RequirementSheet(
             ) {
                 Text(
                     when {
+                        blanket -> if (editing == null) "Add blanket requirement" else "Edit blanket requirement"
                         editing == null -> "Add requirement"
                         inAlternativeGroup -> "Edit alternative"
                         else -> "Edit requirement"
@@ -387,7 +391,7 @@ fun RequirementSheet(
                             .verticalScroll(rememberScrollState())
                             .padding(horizontal = 20.dp),
                     ) {
-                        if (kind == ItemKind.TRINKET) {
+                        if (kind == ItemKind.TRINKET && !blanket) {
                             Row(
                                 Modifier.fillMaxWidth().toggleable(
                                     value = selectTrinket,
@@ -771,7 +775,7 @@ fun RequirementSheet(
                             )
                         }
 
-                        if (!inAlternativeGroup && kind.supportsStacks) {
+                        if (!blanket && !inAlternativeGroup && kind.supportsStacks) {
                             Spacer(Modifier.height(18.dp))
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -936,7 +940,7 @@ fun RequirementSheet(
                                         // Only a stack of a concrete ring counts
                                         // levels; an edit away from that drops
                                         // the total it can no longer say.
-                                        val total = if (inAlternativeGroup || selectedItem == null || kind.family != ItemKind.RING) {
+                                        val total = if (blanket || inAlternativeGroup || selectedItem == null || kind.family != ItemKind.RING) {
                                             null
                                         } else {
                                             stackTotal
@@ -948,7 +952,7 @@ fun RequirementSheet(
                                         } else {
                                             copyDepth
                                         }
-                                        onSave(it, if (kind.supportsStacks) stackCount else 1, total, copies)
+                                        onSave(it, if (!blanket && kind.supportsStacks) stackCount else 1, total, copies)
                                     }
                                 },
                                 enabled = draft.isSuccess,

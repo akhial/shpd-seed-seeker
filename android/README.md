@@ -181,3 +181,13 @@ stationary ring with evenly spaced, smoothly blended effect colors.
 `app/build/outputs/level-maps/`, and checks particle scheduling, glows, secret
 stacks, additive blending and occlusion. `ScoutChoicesTest` covers choice conflicts
 and supported empty/boss-floor navigation.
+
+## Blanket requirements
+
+The collapsed **Blanket Requirements** section adds conditions on items already
+chosen to fulfill ordinary requirements. Expand it to add or edit filters,
+including either/or alternatives. Each blanket applies all its filters to one
+chosen item; separate blankets may use the same or different chosen items.
+Blankets do not request extra copies, combined levels, or trinket selection.
+At least one ordinary requirement is required to search. Saved queries, results
+files, and version 7 share links preserve blankets.

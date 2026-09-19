@@ -47,6 +47,7 @@ import dev.seedseeker.app.engine.ScoutMatches
 import dev.seedseeker.app.engine.SearchWorkers
 import dev.seedseeker.app.engine.SeedCode
 import dev.seedseeker.app.model.BoardItem
+import dev.seedseeker.app.model.ItemKind
 import dev.seedseeker.app.model.ItemRequirement
 import dev.seedseeker.app.model.Challenge
 import dev.seedseeker.app.model.DeepLink
@@ -154,6 +155,7 @@ internal fun SeedFinderApp(
     var nextRequirementKey by remember {
         mutableLongStateOf((initialQuery.requirements.maxOfOrNull { it.key } ?: 0L) + 1L)
     }
+    var addingBlanket by remember { mutableStateOf(false) }
     var userPresets by remember { mutableStateOf(presetStorage.load()) }
     var autoApplyTrinket by remember { mutableStateOf(initialQuery.autoApplyTrinket) }
     var maximumDepth by remember { mutableStateOf(initialQuery.maximumDepth) }
@@ -538,7 +540,8 @@ internal fun SeedFinderApp(
                     userPresets = userPresets.filterNot { it.id == preset.id }
                     presetStorage.save(userPresets)
                 },
-                onAdd = {
+                onAdd = { blanket ->
+                    addingBlanket = blanket
                     editingIndex = null
                     editingCount = 1
                     editingTotal = null
@@ -699,6 +702,8 @@ internal fun SeedFinderApp(
         if (showRequirementSheet) {
             RequirementSheet(
                 editing = editingIndex?.let(requirements::get),
+                blanket = editingIndex?.let { requirements[it].blanket } ?: addingBlanket,
+                initialKind = if (addingBlanket) requirements.firstOrNull { !it.blanket }?.kind ?: ItemKind.WEAPON else ItemKind.WEAPON,
                 editingCount = editingCount,
                 editingTotal = editingTotal,
                 editingCopyDepth = editingCopyDepth,

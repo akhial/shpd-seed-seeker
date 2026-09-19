@@ -55,7 +55,7 @@ public struct SavedQuery: Codable, Sendable {
                 maximumDepth: requirement.maximumDepth,
                 requireUncursed: requirement.requireUncursed,
                 alternativeGroup: requirement.alternativeGroup,
-                levelSum: requirement.levelSum, selectTrinket: requirement.selectTrinket)) != nil else { return nil }
+                levelSum: requirement.levelSum, selectTrinket: requirement.selectTrinket, blanket: requirement.blanket)) != nil else { return nil }
         }
         // A combined-level group that no longer adds up, or a same-item group
         // constrained twice, still loads — the editor shows why the search

@@ -120,3 +120,13 @@ and ring gems directly from the engine. Each category has six columns and two
 rows of sprites, with identity glyphs at the top right. The shared journal frame
 metadata keeps artwork aligned with the other apps. Click a sprite to reveal its
 name and appearance; tooltips and accessible labels carry the same information.
+
+## Blanket requirements
+
+The collapsed **Blanket Requirements** section adds conditions on items already
+chosen to fulfill ordinary requirements. Expand it to add or edit filters,
+including either/or alternatives. Each blanket applies all its filters to one
+chosen item; separate blankets may use the same or different chosen items.
+Blankets do not request extra copies, combined levels, or trinket selection.
+At least one ordinary requirement is required to search. Saved queries, results
+files, and version 7 share links preserve blankets.

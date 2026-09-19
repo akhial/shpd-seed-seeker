@@ -83,7 +83,8 @@ fn is_bare(requirement: &UiRequirement) -> bool {
 /// placement bound, not an item property, so a repeat that carries only one
 /// still folds into its stack.
 fn is_plain_item_copy(copy: &UiRequirement, item: ItemId) -> bool {
-    copy.item == Some(item)
+    !copy.blanket
+        && copy.item == Some(item)
         && matches!(copy.tier, TierRequirement::Any)
         && matches!(copy.upgrade, UpgradeRequirement::Any)
         && matches!(copy.effect, EffectRequirement::Any)
@@ -240,6 +241,7 @@ pub fn board_items(requirements: &[UiRequirement]) -> Vec<BoardItem> {
         };
         attach(&mut item, index, requirements, &sums, &identity_extras);
         if let Some(item_id) = requirement.item
+            && !requirement.blanket
             && requirement.level_sum.is_none()
         {
             chip_by_item.insert(item_id, items.len());
@@ -457,7 +459,7 @@ pub fn join_alternatives(
     source: usize,
     target: usize,
 ) -> Vec<UiRequirement> {
-    if source == target {
+    if source == target || requirements[source].blanket != requirements[target].blanket {
         return requirements.to_vec();
     }
     let group = requirements[target]
@@ -488,7 +490,7 @@ pub fn join_alternatives(
         for index in [source, target] {
             let anchor = next[index];
             let Some(item_id) = anchor.item else { continue };
-            if anchor.identity_group.is_some() {
+            if anchor.blanket || anchor.identity_group.is_some() {
                 continue;
             }
             let copies: Vec<usize> = (0..next.len())
@@ -582,7 +584,9 @@ pub fn remove_member(requirements: &[UiRequirement], index: usize) -> Vec<UiRequ
 #[must_use]
 pub fn can_stack(requirements: &[UiRequirement], item: &BoardItem) -> bool {
     let anchor = requirements[item.anchor()].kind;
-    if matches!(anchor, ItemKind::Trinket | ItemKind::Artifact) {
+    if requirements[item.anchor()].blanket
+        || matches!(anchor, ItemKind::Trinket | ItemKind::Artifact)
+    {
         return false;
     }
     item.members
@@ -691,7 +695,7 @@ pub fn set_stack_total(
     total: Option<u8>,
 ) -> Vec<UiRequirement> {
     let anchor = requirements[item.anchor()];
-    if item.cluster.is_some() || anchor.item.is_none() {
+    if anchor.blanket || item.cluster.is_some() || anchor.item.is_none() {
         return requirements.to_vec();
     }
     let indices: HashSet<usize> = std::iter::once(item.anchor())

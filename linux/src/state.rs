@@ -68,6 +68,7 @@ pub struct UiRequirement {
     pub effect: EffectRequirement,
     pub require_uncursed: bool,
     pub select_trinket: bool,
+    pub blanket: bool,
     pub source: Option<ItemSource>,
     pub identity_group: Option<u8>,
     pub max_depth: Option<u8>,
@@ -89,6 +90,7 @@ impl UiRequirement {
             effect: EffectRequirement::Any,
             require_uncursed: false,
             select_trinket: false,
+            blanket: false,
             source: None,
             identity_group: None,
             max_depth: None,
@@ -108,7 +110,7 @@ impl UiRequirement {
             effect: self.effect,
             require_uncursed: self.require_uncursed,
             select_trinket: self.select_trinket,
-            blanket: false,
+            blanket: self.blanket,
             source: self.source,
             identity_group: self.identity_group,
             max_depth: self.max_depth,
@@ -279,6 +281,7 @@ impl AppState {
                 effect: requirement.effect,
                 require_uncursed: requirement.require_uncursed,
                 select_trinket: requirement.select_trinket,
+                blanket: requirement.blanket,
                 source: requirement.source,
                 identity_group: requirement.identity_group,
                 max_depth: requirement.max_depth,
@@ -712,6 +715,63 @@ mod tests {
     };
 
     #[test]
+    fn blankets_survive_queries_links_and_persistence() {
+        let query = shpd_seedfinder_core::json_query::decode(
+            r#"{"requirements":[
+            {"item":"wand_lightning","upgrade":{"at_least":2}},
+            {"item":"wand_disintegration","upgrade":{"at_least":2}},
+            {"item":"wand_frost","upgrade":{"at_least":2}},
+            {"kind":"wand","upgrade":3,"source":"wandmaker_reward","blanket":true}
+        ]}"#,
+        )
+        .unwrap();
+        let state = AppState::from_query(&query);
+        assert_eq!(
+            state
+                .requirements
+                .iter()
+                .map(|r| r.blanket)
+                .collect::<Vec<_>>(),
+            [false, false, false, true]
+        );
+        assert_eq!(state.to_query().unwrap(), query);
+        let link = shpd_seedfinder_core::deep_link::encode(&query).unwrap();
+        let decoded = shpd_seedfinder_core::deep_link::decode(&link).unwrap();
+        assert_eq!(AppState::from_query(&decoded).to_query().unwrap(), query);
+    }
+
+    #[test]
+    fn blankets_stay_separate_from_stacks_and_ordinary_alternatives() {
+        let query = shpd_seedfinder_core::json_query::decode(
+            r#"{"requirements":[
+            {"item":"wand_frost"}, {"item":"wand_frost","blanket":true},
+            {"item":"wand_frost","blanket":true}
+        ]}"#,
+        )
+        .unwrap();
+        let mut state = AppState::from_query(&query);
+        assert_eq!(state.board_count(), 3);
+        assert!(!state.can_stack(2));
+        state.set_stack_count(2, 3);
+        assert_eq!(state.requirements.len(), 3);
+        state.join(1, 2);
+        assert_eq!(state.board_count(), 3);
+        state.join(2, 3);
+        assert_eq!(state.board_count(), 2);
+        assert!(
+            state
+                .requirements
+                .iter()
+                .all(|r| r.identity_group.is_none())
+        );
+        assert!(state.to_query().is_ok());
+        state.detach(2);
+        assert_eq!(state.board_count(), 3);
+        state.requirements.retain(|r| r.blanket);
+        assert!(state.to_query().is_err());
+    }
+
+    #[test]
     fn artifact_scout_matches_the_vault_row_with_its_upgrade() {
         use shpd_seedfinder_core::{
             challenges::Challenges, model::ItemSource, query::scout_matches, seed::DungeonSeed,
@@ -1116,6 +1176,7 @@ mod tests {
             upgrade: UpgradeRequirement::Exact(2),
             require_uncursed: true,
             select_trinket: false,
+            blanket: false,
             max_depth: Some(9),
             ..UiRequirement::new(key)
         });

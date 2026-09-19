@@ -71,6 +71,22 @@
               </StackPanel>
             </Border>
             <TextBlock x:Name="NoRequirements" Text="No requirements yet. Add one to describe the item you're hunting for." Style="{StaticResource Caption}" Margin="1,0,1,10"/>
+            <Expander HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Margin="0,0,0,16">
+              <Expander.Header>
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <TextBlock x:Name="BlanketHeader" Text="Blanket Requirements (0)" VerticalAlignment="Center"/>
+                  <Button AutomationProperties.Name="About blanket requirements" ToolTipService.ToolTip="About blanket requirements">
+                    <FontIcon Glyph="&#xE946;" FontSize="14"/>
+                    <Button.Flyout>
+                      <Flyout>
+                        <TextBlock Width="300" TextWrapping="Wrap" Text="Each blanket must match at least one item fulfilling your ordinary requirements. It does not ask for an additional item. All filters in one blanket apply to the same item; separate blankets can match the same or different chosen items.&#xA;&#xA;For example, require Lightning, Disintegration, and Frost at +2 or higher, then add an Any wand blanket at exactly +3 from the Wandmaker."/>
+                      </Flyout>
+                    </Button.Flyout>
+                  </Button>
+                </StackPanel>
+              </Expander.Header>
+              <local:WrapPanel x:Name="BlanketBoard" Spacing="6" LineSpacing="8" MinHeight="34" Background="Transparent"/>
+            </Expander>
             <!-- The four setting sections sit two to a row while the sidebar is
                  wide enough for it, so the wider sidebar buys less scrolling
                  rather than emptier cards; SettingsGrid_SizeChanged moves the

@@ -219,7 +219,7 @@ files are replaced. The output options cannot be combined with `--benchmark`.
 
 ### Blanket requirements
 
-In the web app, add the items you need under **Requirements**, then add an
+In any app, add the items you need under **Requirements**, then add an
 extra filter under **Blanket Requirements**. Each blanket must match at least
 one of the items chosen to fulfill the ordinary requirements. It does not ask
 for an additional item. Separate blankets may be satisfied by the same item
