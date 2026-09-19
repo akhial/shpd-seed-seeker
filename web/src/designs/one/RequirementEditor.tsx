@@ -158,7 +158,7 @@ export function RequirementEditor({
   // and of rings only, whose effects scale with their level.
   const totalable = stack.inCluster
     ? false
-    : draft.item !== undefined && count > 1 && family === "ring";
+    : !draft.blanket && draft.item !== undefined && count > 1 && family === "ring";
   const effectiveTotal = totalable ? total : undefined;
   const totalCapacity = ringStackCapacity(count);
   const effectMode: EffectMode = isAnyEnchantment(draft.effect)
@@ -261,17 +261,39 @@ export function RequirementEditor({
         className="d1-modal"
         role="dialog"
         aria-modal="true"
-        aria-label={isNew ? "New requirement" : "Edit requirement"}
+        aria-label={
+          draft.blanket
+            ? isNew
+              ? "New blanket requirement"
+              : "Edit blanket requirement"
+            : isNew
+              ? "New requirement"
+              : "Edit requirement"
+        }
       >
         <header className="d1-modal-head">
           <Sprite art={requirementArt(draft)} size={28} />
           <div className="d1-modal-title">
-            <h2>{isNew ? "New Requirement" : "Edit Requirement"}</h2>
+            <h2>
+              {draft.blanket
+                ? isNew
+                  ? "New Blanket Requirement"
+                  : "Edit Blanket Requirement"
+                : isNew
+                  ? "New Requirement"
+                  : "Edit Requirement"}
+            </h2>
             <p className="d1-mono">{requirementTitle(draft)}</p>
           </div>
         </header>
 
         <div className="d1-modal-body">
+          {draft.blanket && (
+            <p className="d1-caption">
+              At least one item used by your ordinary requirements must also match these filters.
+              Choose Any item in a category to cover all required items of that category.
+            </p>
+          )}
           <section className="d1-modal-section">
             <h3>Item</h3>
             <Segmented
@@ -389,7 +411,7 @@ export function RequirementEditor({
             )}
           </section>
 
-          {family === "trinket" && (
+          {family === "trinket" && !draft.blanket && (
             <section className="d1-modal-section">
               <label className="d1-check">
                 <input
@@ -454,7 +476,7 @@ export function RequirementEditor({
             </section>
           )}
 
-          {!stack.inCluster && family !== "trinket" && family !== "artifact" && (
+          {!draft.blanket && !stack.inCluster && family !== "trinket" && family !== "artifact" && (
             <section className="d1-modal-section">
               <div className="d1-modal-section-head">
                 <h3>Total item count</h3>
@@ -672,7 +694,7 @@ export function RequirementEditor({
             onClick={() =>
               onSave(
                 draft,
-                stack.inCluster ? 1 : count,
+                draft.blanket || stack.inCluster ? 1 : count,
                 effectiveTotal,
                 stack.inCluster || count < 2 || effectiveTotal !== undefined
                   ? undefined
@@ -680,7 +702,11 @@ export function RequirementEditor({
               )
             }
           >
-            {isNew ? "Add Requirement" : "Save Changes"}
+            {isNew
+              ? draft.blanket
+                ? "Add Blanket Requirement"
+                : "Add Requirement"
+              : "Save Changes"}
           </button>
         </footer>
       </div>

@@ -516,7 +516,10 @@ fn closed_multiplicities(slots: &[Vec<RequirementPlan>]) -> Vec<(usize, usize)> 
         let [plan] = slot.as_slice() else {
             return None;
         };
-        (plan.quests == 0 && plan.open_deadline.is_some() && plan.requirement.level_sum.is_none())
+        (plan.quests == 0
+            && plan.open_deadline.is_some()
+            && plan.requirement.level_sum.is_none()
+            && !plan.requirement.blanket)
             .then_some((index, plan))
     });
 
@@ -806,7 +809,11 @@ impl QueryPlan {
             if live == 0 {
                 return false;
             }
-            quest_only[usize::from(live)] += 1;
+            // Blankets still need a feasible source, but reuse an ordinary
+            // slot's prize and must not consume a second quest reward.
+            if !slot[0].requirement.blanket {
+                quest_only[usize::from(live)] += 1;
+            }
         }
         for subset in 1_u8..16 {
             let mut needed = 0_u32;
@@ -939,6 +946,7 @@ mod tests {
             effect: EffectRequirement::Any,
             require_uncursed: false,
             select_trinket: false,
+            blanket: false,
             source: None,
             identity_group: None,
             max_depth: None,
@@ -1309,6 +1317,7 @@ mod tests {
             effect: EffectRequirement::exactly(Effect::Weapon(WeaponEffect::Sacrificial)),
             require_uncursed: false,
             select_trinket: false,
+            blanket: false,
             ..requirement(ItemKind::Weapon, UpgradeRequirement::Exact(3))
         };
         let plan = QueryPlan::analyze(&query(vec![cursed], 24));
@@ -1321,6 +1330,7 @@ mod tests {
             effect: EffectRequirement::exactly(Effect::Armor(ArmorEffect::Thorns)),
             require_uncursed: false,
             select_trinket: false,
+            blanket: false,
             ..requirement(ItemKind::Armor, UpgradeRequirement::Exact(3))
         };
         assert!(!QueryPlan::analyze(&query(vec![good], 24)).is_unsatisfiable());
@@ -1329,6 +1339,7 @@ mod tests {
             effect: EffectRequirement::exactly(Effect::Weapon(WeaponEffect::Pressurized)),
             require_uncursed: false,
             select_trinket: false,
+            blanket: false,
             ..requirement(ItemKind::Weapon, UpgradeRequirement::Exact(4))
         };
         assert!(QueryPlan::analyze(&query(vec![cursed_plus_four], 24)).is_unsatisfiable());
@@ -1337,6 +1348,7 @@ mod tests {
             effect: EffectRequirement::exactly(Effect::Weapon(WeaponEffect::Crystal)),
             require_uncursed: true,
             select_trinket: false,
+            blanket: false,
             ..requirement(ItemKind::Weapon, UpgradeRequirement::Exact(5))
         };
         assert!(!QueryPlan::analyze(&query(vec![crystal_plus_five], 24)).is_unsatisfiable());
@@ -1353,6 +1365,7 @@ mod tests {
             ),
             require_uncursed: false,
             select_trinket: false,
+            blanket: false,
             ..requirement(ItemKind::Weapon, UpgradeRequirement::Exact(3))
         };
         assert!(!QueryPlan::analyze(&query(vec![mixed], 24)).is_unsatisfiable());
@@ -1361,6 +1374,7 @@ mod tests {
             effect: EffectRequirement::OneOf(EffectSet::enchantments(ItemKind::Weapon).unwrap()),
             require_uncursed: true,
             select_trinket: false,
+            blanket: false,
             ..requirement(ItemKind::Weapon, UpgradeRequirement::Exact(3))
         };
         assert!(!QueryPlan::analyze(&query(vec![any_enchantment], 24)).is_unsatisfiable());
@@ -4194,6 +4208,7 @@ mod closed_multiplicity_grouping_tests {
                 effect: EffectRequirement::Any,
                 require_uncursed: false,
                 select_trinket: false,
+                blanket: false,
                 source: Some(ItemSource::Heap),
                 identity_group: None,
                 max_depth: Some(4),

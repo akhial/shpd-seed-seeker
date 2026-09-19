@@ -4,7 +4,7 @@
 //! `https://shpd-seed-seeker.web.app/#q=QAMtCYAA`. The payload is a versioned
 //! bit stream, so codes shared today must keep decoding in every future
 //! release: the numeric code tables below are frozen by tests and may only
-//! ever grow at the end. Versions 4, 5 and 6 are supported; versions 1
+//! ever grow at the end. Versions 4 through 7 are supported; versions 1
 //! and 2 were retired while the feature had next to no users (the effect
 //! table was also re-frozen in journal order at the same time), and version
 //! 3 — the same layout plus the retired fast-mode bit — went with the flag,
@@ -33,7 +33,8 @@ pub const URI_SCHEME: &str = "seedseeker";
 
 /// Default format, retained byte-for-byte for queries without selected trinkets.
 /// Version 5 adds a selection bit per requirement; version 6 adds the auto-apply
-/// flag after the version nibble. All carry effect sets as a 32-bit mask,
+/// flag after the version nibble. Version 7 adds a blanket bit after each
+/// selection bit, retaining the auto-apply flag even when false. All carry effect sets as a 32-bit mask,
 /// alternative groups and combined-level groups per requirement. Versions 1
 /// through 3 are rejected as unsupported (3 differed only in carrying the
 /// retired fast-mode bit).
@@ -95,9 +96,13 @@ pub fn encode(query: &SearchQuery) -> Result<String, String> {
     // labels fit the count field; the structure is all that travels.
     let mut alternative_labels: Vec<u8> = Vec::new();
     let mut bits = BitWriter::default();
-    let selected = query.auto_apply_trinket || query.requirements.iter().any(|r| r.select_trinket);
+    let blankets = query.requirements.iter().any(|r| r.blanket);
+    let selected =
+        blankets || query.auto_apply_trinket || query.requirements.iter().any(|r| r.select_trinket);
     bits.push(
-        if query.auto_apply_trinket {
+        if blankets {
+            7
+        } else if query.auto_apply_trinket {
             6
         } else if selected {
             5
@@ -106,8 +111,8 @@ pub fn encode(query: &SearchQuery) -> Result<String, String> {
         },
         4,
     );
-    if query.auto_apply_trinket {
-        bits.push(1, 1);
+    if blankets || query.auto_apply_trinket {
+        bits.push(query.auto_apply_trinket.into(), 1);
     }
     bits.push(query.require_blacksmith.into(), 1);
     bits.push(query.exclude_blacksmith_rewards.into(), 1);
@@ -130,6 +135,9 @@ pub fn encode(query: &SearchQuery) -> Result<String, String> {
         encode_requirement(&mut bits, requirement, &mut alternative_labels);
         if selected {
             bits.push(requirement.select_trinket.into(), 1);
+        }
+        if blankets {
+            bits.push(requirement.blanket.into(), 1);
         }
     }
     Ok(base64url_encode(&bits.finish()))
@@ -166,10 +174,10 @@ pub fn decode(code: &str) -> Result<SearchQuery, String> {
     let bytes = base64url_decode(code.trim())?;
     let mut bits = BitReader::new(&bytes);
     let version = bits.pull(4)?;
-    if version != u32::from(VERSION) && version != 5 && version != 6 {
+    if version != u32::from(VERSION) && version != 5 && version != 6 && version != 7 {
         return Err(format!(
             "this link uses format version {version}; this app only understands \
-             versions {VERSION}, 5 and 6 — it may have been created by a different release"
+             versions {VERSION}, 5, 6 and 7 — it may have been created by a different release"
         ));
     }
     let auto_apply_trinket = version >= 6 && bits.pull(1)? == 1;
@@ -197,6 +205,9 @@ pub fn decode(code: &str) -> Result<SearchQuery, String> {
                 .and_then(|mut requirement| {
                     if version >= 5 {
                         requirement.select_trinket = bits.pull(1)? == 1;
+                    }
+                    if version >= 7 {
+                        requirement.blanket = bits.pull(1)? == 1;
                     }
                     Ok(requirement)
                 })
@@ -409,6 +420,7 @@ fn decode_requirement(bits: &mut BitReader<'_>) -> Result<Requirement, String> {
         effect,
         require_uncursed,
         select_trinket: false,
+        blanket: false,
         source,
         identity_group,
         max_depth,
@@ -778,6 +790,7 @@ mod tests {
             effect: EffectRequirement::Any,
             require_uncursed: false,
             select_trinket: false,
+            blanket: false,
             source: None,
             identity_group: None,
             max_depth: None,
@@ -820,6 +833,7 @@ mod tests {
                     effect: EffectRequirement::exactly(Effect::Weapon(WeaponEffect::Grim)),
                     require_uncursed: true,
                     select_trinket: false,
+                    blanket: false,
                     source: Some(ItemSource::SacrificialFire),
                     identity_group: Some(4),
                     max_depth: Some(21),
@@ -835,6 +849,7 @@ mod tests {
                     effect: EffectRequirement::Any,
                     require_uncursed: false,
                     select_trinket: false,
+                    blanket: false,
                     source: None,
                     identity_group: None,
                     max_depth: None,
@@ -982,8 +997,8 @@ mod tests {
         assert!(decode("").is_err());
         assert!(decode("!!!").is_err());
         assert!(decode("A").is_err());
-        // Unsupported future version (bits 0111 in the top nibble).
-        assert!(decode("cAAA").unwrap_err().contains("version 7"));
+        // Unsupported future version (bits 1000 in the top nibble).
+        assert!(decode("gAAA").unwrap_err().contains("version 8"));
         let code = encode(&minimal(vec![wildcard(ItemKind::Wand)])).unwrap();
         assert!(decode(&code[..code.len() - 1]).is_err());
         assert!(decode(&format!("{code}AAAA")).is_err());
@@ -1536,7 +1551,7 @@ mod tests {
             let error = decode(code).unwrap_err();
             assert!(error.contains("format version"), "{error}");
             assert!(
-                error.contains("only understands versions 4, 5 and 6"),
+                error.contains("only understands versions 4, 5, 6 and 7"),
                 "{error}"
             );
         }

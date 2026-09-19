@@ -40,8 +40,8 @@ bits are written.
 
 | Field | Bits | Meaning |
 | --- | --- | --- |
-| `version` | 4 | `4` for ordinary queries, `5` when a requirement selects a trinket, `6` when auto-apply is enabled. Decoders accept 4–6; retired versions 1–3 and future versions are rejected. Existing tables and layouts are frozen. |
-| `auto_apply_trinket` | 1, version 6 only | Immediately follows the version nibble. Boolean query flag; absent in versions 4–5, which default to false. |
+| `version` | 4 | `4` for ordinary queries, `5` when a requirement selects a trinket, `6` when auto-apply is enabled, `7` when a requirement is a blanket. Decoders accept 4–7; retired versions 1–3 and future versions are rejected. Existing tables and layouts are frozen. |
+| `auto_apply_trinket` | 1, versions 6–7 only | Immediately follows the version nibble. Boolean query flag; absent in versions 4–5, which default to false. |
 | `require_blacksmith` | 1 | Query flag. |
 | `exclude_blacksmith_rewards` | 1 | Query flag. |
 | `max_depth` | 1 (+5) | Present only when not the default 24. Value is `max_depth − 1` (floors 1–24). |
@@ -64,7 +64,8 @@ bits are written.
 | `max_depth` | 1 (+5) | Value is `depth − 1` (floors 1–24). |
 | `alternative_group` | 1 (+6) | Alternative-group label minus one. Records sharing a label form one "any of" slot; labels are renumbered in first-appearance order when encoding. |
 | `level_sum` | 1 (+10) | Combined-level group: two bits of group label minus one (groups 1–4, the editors' A–D), then the eight-bit minimum total in levels (1–255), where a matched item counts its upgrade plus one. |
-| `select_trinket` | 1, versions 5–6 only | Whether this requirement selects its offered trinket. Version 6 includes this bit even when auto-apply is disabled by explicit trinket requirements. |
+| `select_trinket` | 1, versions 5–7 only | Whether this requirement selects its offered trinket. Version 6 includes this bit even when auto-apply is disabled by explicit trinket requirements. |
+| `blanket` | 1, version 7 only | Follows `select_trinket`; requires an item assigned to an ordinary slot to also satisfy this predicate. Absent in versions 4–6, which default to false. |
 
 ### Code tables
 

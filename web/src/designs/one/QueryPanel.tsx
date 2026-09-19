@@ -34,7 +34,7 @@ import type {
 } from "../../lib/wasm/types";
 import { RequirementBoard } from "./RequirementBoard";
 import type { StackShape } from "./RequirementBoard";
-import { applyEdit, boardCount } from "./relations";
+import { applyEdit, boardCount, replaceRequirementSection } from "./relations";
 import { RequirementEditor } from "./RequirementEditor";
 import { SliderRow } from "./parts";
 
@@ -122,8 +122,11 @@ export function QueryPanel({
     savePresets(next);
   };
 
-  const setRequirements = (requirements: RequirementState[]) => {
-    queryStore.setState((state) => ({ ...state, requirements }));
+  const setRequirements = (blanket: boolean, requirements: RequirementState[]) => {
+    queryStore.setState((state) => ({
+      ...state,
+      requirements: replaceRequirementSection(state.requirements, blanket, requirements),
+    }));
   };
 
   const commitRequirement = (
@@ -298,25 +301,53 @@ export function QueryPanel({
           )}
         </section>
 
-        <section className="d1-section">
-          <div className="d1-section-head">
-            <h3>Requirements</h3>
-          </div>
-          <RequirementBoard
-            requirements={query.requirements}
-            onChange={setRequirements}
-            onEdit={(index, stack) =>
-              setEditor({ index, requirement: query.requirements[index], stack })
-            }
-            onAdd={() =>
-              setEditor({
-                index: null,
-                requirement: emptyRequirement("weapon"),
-                stack: { count: 1, inCluster: false },
-              })
-            }
-          />
-        </section>
+        {[false, true].map((blanket) => {
+          const requirements = query.requirements.filter(
+            (requirement) => Boolean(requirement.blanket) === blanket,
+          );
+          return (
+            <section
+              className="d1-section"
+              key={String(blanket)}
+              aria-label={blanket ? "Blanket Requirements" : "Requirements"}
+            >
+              <div className="d1-section-head">
+                <h3>{blanket ? "Blanket Requirements" : "Requirements"}</h3>
+              </div>
+              {blanket && (
+                <p className="d1-caption">
+                  Each blanket must match at least one item fulfilling your requirements above. It
+                  does not require another item.
+                </p>
+              )}
+              <RequirementBoard
+                requirements={requirements}
+                onChange={(next) => setRequirements(blanket, next)}
+                onEdit={(index, stack) =>
+                  setEditor({
+                    index: query.requirements.indexOf(requirements[index]),
+                    requirement: requirements[index],
+                    stack,
+                  })
+                }
+                onAdd={() =>
+                  setEditor({
+                    index: null,
+                    requirement: {
+                      ...emptyRequirement(
+                        blanket
+                          ? (query.requirements.find((r) => !r.blanket)?.kind ?? "weapon")
+                          : "weapon",
+                      ),
+                      ...(blanket ? { blanket: true } : {}),
+                    },
+                    stack: { count: 1, inCluster: false },
+                  })
+                }
+              />
+            </section>
+          );
+        })}
 
         <section className="d1-section">
           <div className="d1-section-head">

@@ -1,0 +1,267 @@
+//! Blanket predicates share the ordinary assignment, including accessibility.
+use shpd_seedfinder_core::{
+    catalog::ItemId,
+    deep_link,
+    feasibility::QueryPlan,
+    json_query,
+    model::{Accessibility, GeneratedWorld, ItemSource, WorldItem},
+    probability::estimate_match_probability,
+    query::{SearchQuery, scout_matches},
+    quests::QuestSummary,
+    results_export,
+    run::RingGems,
+    seed::DungeonSeed,
+};
+
+fn parse_query(requirements: &str) -> SearchQuery {
+    json_query::decode(&format!(
+        r#"{{"max_depth":9,"requirements":[{requirements}]}}"#
+    ))
+    .unwrap()
+}
+
+const WANDS: &str = r#"
+    {"item":"wand_lightning","upgrade":{"at_least":2}},
+    {"item":"wand_disintegration","upgrade":{"at_least":2}},
+    {"item":"wand_frost","upgrade":{"at_least":2}}
+"#;
+const BLANKET: &str = r#"{"kind":"wand","upgrade":3,"source":"wandmaker_reward","blanket":true}"#;
+
+fn wand(item: ItemId, upgrade: u8, source: ItemSource) -> WorldItem {
+    WorldItem {
+        item,
+        upgrade,
+        source,
+        depth: 7,
+        effect: None,
+        cursed: false,
+        accessibility: Accessibility::Independent,
+        secret: false,
+    }
+}
+
+fn world(items: Vec<WorldItem>) -> GeneratedWorld {
+    GeneratedWorld {
+        items,
+        seed: DungeonSeed::MIN,
+        quests: QuestSummary::default(),
+        ring_gems: RingGems::UNSHUFFLED,
+        feelings: Vec::new(),
+    }
+}
+
+#[test]
+fn blanket_matches_each_of_the_three_wands_without_a_fourth_item() {
+    let query = parse_query(&format!("{WANDS},{BLANKET}"));
+    let ids = [
+        ItemId::WandLightning,
+        ItemId::WandDisintegration,
+        ItemId::WandFrost,
+    ];
+    for chosen in 0..3 {
+        let world = world(
+            ids.iter()
+                .enumerate()
+                .map(|(index, &id)| {
+                    wand(
+                        id,
+                        if index == chosen { 3 } else { 2 },
+                        if index == chosen {
+                            ItemSource::WandmakerReward
+                        } else {
+                            ItemSource::Heap
+                        },
+                    )
+                })
+                .collect(),
+        );
+        assert!(query.matches(&world));
+        let marks = scout_matches(&world, &query);
+        assert_eq!(marks.matched_requirements, 4);
+        assert_eq!(marks.total_requirements, 4);
+        assert_eq!(marks.matched_indices(), vec![0, 1, 2]);
+    }
+}
+
+#[test]
+fn an_unrelated_or_unassigned_wand_cannot_witness_the_blanket() {
+    let query = parse_query(&format!("{WANDS},{BLANKET}"));
+    let mut world = world(vec![
+        wand(ItemId::WandLightning, 2, ItemSource::Heap),
+        wand(ItemId::WandDisintegration, 2, ItemSource::Heap),
+        wand(ItemId::WandFrost, 2, ItemSource::Heap),
+        wand(ItemId::WandFireblast, 3, ItemSource::WandmakerReward),
+    ]);
+    assert!(!query.matches(&world));
+    assert_eq!(scout_matches(&world, &query).matched_requirements, 3);
+    world.items[3].item = ItemId::WandLightning;
+    assert!(query.matches(&world));
+    assert_eq!(
+        scout_matches(&world, &query).matched_indices(),
+        vec![1, 2, 3]
+    );
+    world.items[3].source = ItemSource::Heap;
+    assert!(!query.matches(&world));
+}
+
+#[test]
+fn blankets_share_items_but_not_mutually_exclusive_choices() {
+    let query = parse_query(
+        r#"
+        {"kind":"wand"},
+        {"kind":"wand","upgrade":3,"blanket":true},
+        {"kind":"wand","source":"wandmaker_reward","blanket":true}
+    "#,
+    );
+    assert!(query.matches(&world(vec![wand(
+        ItemId::WandFrost,
+        3,
+        ItemSource::WandmakerReward
+    )])));
+    // Both blankets must be witnessed by the single ordinary assignment.
+    assert!(!query.matches(&world(vec![
+        wand(ItemId::WandFrost, 3, ItemSource::Heap),
+        wand(ItemId::WandLightning, 2, ItemSource::WandmakerReward),
+    ])));
+    let mut exclusive = world(vec![
+        wand(ItemId::WandFrost, 3, ItemSource::WandmakerReward),
+        wand(ItemId::WandLightning, 2, ItemSource::WandmakerReward),
+    ]);
+    exclusive.items[0].accessibility = Accessibility::Choice {
+        group: 1,
+        option: 0,
+    };
+    exclusive.items[1].accessibility = Accessibility::Choice {
+        group: 1,
+        option: 1,
+    };
+    let query = parse_query(
+        r#"{"item":"wand_frost"},{"item":"wand_lightning"},{"kind":"wand","upgrade":3,"blanket":true}"#,
+    );
+    assert!(!query.matches(&exclusive));
+}
+
+#[test]
+fn blankets_obey_floor_limits_and_do_not_consume_quest_capacity() {
+    let mut query = parse_query(
+        r#"{"kind":"wand","source":"wandmaker_reward"},{"kind":"wand","source":"wandmaker_reward","upgrade":3,"blanket":true}"#,
+    );
+    let world = world(vec![wand(
+        ItemId::WandFrost,
+        3,
+        ItemSource::WandmakerReward,
+    )]);
+    let plan = QueryPlan::analyze(&query);
+    assert!(!plan.is_unsatisfiable());
+    assert!(plan.viable_after_floor(9, &world.items, &world.quests));
+    assert!(query.matches(&world));
+    query.requirements[1].max_depth = Some(6);
+    assert!(!query.matches(&world));
+    assert!(QueryPlan::analyze(&query).is_unsatisfiable());
+}
+
+#[test]
+fn blanket_alternatives_and_documents_round_trip() {
+    let query = parse_query(
+        r#"
+        {"kind":"wand"},
+        {"any_of":[
+            {"item":"wand_frost","upgrade":3,"blanket":true},
+            {"item":"wand_lightning","source":"wandmaker_reward","blanket":true}
+        ]}
+    "#,
+    );
+    assert!(query.matches(&world(vec![wand(ItemId::WandFrost, 3, ItemSource::Heap)])));
+    assert!(query.matches(&world(vec![wand(
+        ItemId::WandLightning,
+        2,
+        ItemSource::WandmakerReward
+    )])));
+    assert_eq!(
+        json_query::decode(&json_query::encode(&query).to_string()).unwrap(),
+        query
+    );
+    assert_eq!(
+        deep_link::decode(&deep_link::encode(&query).unwrap()).unwrap(),
+        query
+    );
+    assert_eq!(
+        results_export::decode(&results_export::encode(&query, &[], "test"))
+            .unwrap()
+            .query,
+        query
+    );
+}
+
+#[test]
+fn invalid_blanket_structures_are_rejected() {
+    for requirements in [
+        r#"{"kind":"wand","blanket":true}"#,
+        r#"{"kind":"wand"},{"kind":"wand","blanket":"yes"}"#,
+        r#"{"kind":"wand"},{"kind":"wand","blanket":true,"identity_group":1}"#,
+        r#"{"kind":"ring"},{"kind":"ring","blanket":true,"level_sum":{"group":1,"at_least":1}}"#,
+        r#"{"item":"mimic_tooth"},{"item":"mimic_tooth","blanket":true,"select_trinket":true}"#,
+        r#"{"any_of":[{"kind":"wand"},{"kind":"wand","blanket":true}]}"#,
+    ] {
+        assert!(json_query::decode(&format!(r#"{{"requirements":[{requirements}]}}"#)).is_err());
+    }
+}
+
+#[test]
+fn continuation_never_loses_an_existing_blanket() {
+    let ordinary = parse_query(WANDS);
+    let narrowed = parse_query(&format!("{WANDS},{BLANKET}"));
+    assert!(narrowed.continues(&ordinary));
+    assert!(narrowed.continues(&narrowed));
+    assert!(!ordinary.continues(&narrowed));
+    let widened = parse_query(&format!("{WANDS},{BLANKET},{{\"kind\":\"wand\"}}"));
+    assert!(!widened.continues(&narrowed));
+}
+
+#[test]
+fn probability_reuses_supply_and_recognizes_redundancy() {
+    let base = parse_query(r#"{"item":"wand_frost"}"#);
+    let redundant = parse_query(r#"{"item":"wand_frost"},{"kind":"wand","blanket":true}"#);
+    assert!(
+        (estimate_match_probability(&base) - estimate_match_probability(&redundant)).abs() < 1e-12
+    );
+    let direct = parse_query(r#"{"item":"wand_frost","upgrade":3,"source":"wandmaker_reward"}"#);
+    let blanket = parse_query(&format!(r#"{{"item":"wand_frost"}},{BLANKET}"#));
+    assert!(
+        (estimate_match_probability(&direct) - estimate_match_probability(&blanket)).abs() < 1e-12
+    );
+    let impossible =
+        parse_query(r#"{"item":"wand_frost"},{"item":"wand_lightning","blanket":true}"#);
+    assert!(estimate_match_probability(&impossible).abs() < f64::EPSILON);
+    let base = estimate_match_probability(&parse_query(WANDS));
+    let narrowed = estimate_match_probability(&parse_query(&format!("{WANDS},{BLANKET}")));
+    assert!(narrowed > 0.0 && narrowed < base, "{narrowed} / {base}");
+    let duplicated =
+        estimate_match_probability(&parse_query(&format!("{WANDS},{BLANKET},{BLANKET}")));
+    assert!(
+        (duplicated - narrowed).abs() < 1e-12,
+        "{duplicated} != {narrowed}"
+    );
+}
+
+#[test]
+fn probability_keeps_ordinary_alternatives_until_blankets_are_applied() {
+    for wanted in ["wand_frost", "wand_lightning"] {
+        let query = parse_query(&format!(
+            r#"{{"any_of":[{{"item":"wand_frost"}},{{"item":"wand_lightning"}}]}},{{"item":"{wanted}","blanket":true}}"#
+        ));
+        let chance = estimate_match_probability(&query);
+        assert!(chance > 0.0 && chance.is_finite());
+    }
+}
+
+#[test]
+fn probability_blankets_reuse_only_assigned_trinket_offers() {
+    let base = parse_query(r#"{"item":"mimic_tooth"}"#);
+    let repeated = parse_query(r#"{"item":"mimic_tooth"},{"item":"mimic_tooth","blanket":true}"#);
+    assert!(
+        (estimate_match_probability(&base) - estimate_match_probability(&repeated)).abs() < 1e-12
+    );
+    let unrelated = parse_query(r#"{"item":"mimic_tooth"},{"item":"rat_skull","blanket":true}"#);
+    assert!(estimate_match_probability(&unrelated).abs() < f64::EPSILON);
+}

@@ -74,6 +74,8 @@ export interface LevelSum {
 }
 
 export interface RequirementState {
+  /** Extra filter on an item assigned to an ordinary requirement. */
+  blanket?: boolean;
   selectTrinket?: boolean;
   kind?: RequirementKind;
   item?: string;
@@ -104,6 +106,7 @@ export type TierDocument = "any" | { exact: number } | { at_least: number } | { 
 export type UpgradeDocument = number | "any" | { exact: number } | { at_least: number };
 
 export interface RequirementDocument {
+  blanket?: boolean;
   select_trinket?: boolean;
   kind?: RequirementKind;
   item?: string;

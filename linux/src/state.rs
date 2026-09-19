@@ -108,6 +108,7 @@ impl UiRequirement {
             effect: self.effect,
             require_uncursed: self.require_uncursed,
             select_trinket: self.select_trinket,
+            blanket: false,
             source: self.source,
             identity_group: self.identity_group,
             max_depth: self.max_depth,

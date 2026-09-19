@@ -118,6 +118,9 @@ pub fn estimate_match_probability(query: &SearchQuery) -> f64 {
 }
 
 pub(crate) fn equipment_probability(query: &SearchQuery, profile: Profile) -> f64 {
+    if query.requirements.iter().any(|r| r.blanket) {
+        return blanket_probability(query, profile);
+    }
     let requirements = effective_requirements(query, profile);
     let mut linked: BTreeMap<u8, Vec<Requirement>> = BTreeMap::new();
     let mut independent: Vec<Requirement> = Vec::new();
@@ -163,6 +166,162 @@ pub(crate) fn equipment_probability(query: &SearchQuery, profile: Profile) -> f6
     }
 }
 
+/// A blanket constrains one of the ordinary items, not another supply slot.
+/// Expand its possible witnesses by intersecting the filters on those items.
+/// The existing estimates of alternatives and level sums still apply to the
+/// ordinary query. Union the witness estimates conditional on that query:
+/// this approximates overlaps, stays between the largest branch and their sum,
+/// and can never make a stricter query more likely than its ordinary base.
+fn blanket_probability(query: &SearchQuery, profile: Profile) -> f64 {
+    let ordinary = SearchQuery {
+        requirements: query
+            .requirements
+            .iter()
+            .filter(|r| !r.blanket)
+            .copied()
+            .collect(),
+        ..query.clone()
+    };
+    let base = equipment_probability(&ordinary, profile);
+    if base <= 0.0 || !base.is_finite() {
+        return base;
+    }
+    // Preserve ordinary alternatives until blanket intersections have been
+    // considered: the otherwise most plentiful alternative might be the one
+    // a blanket rules out entirely.
+    let Some(variants) = ordinary_variants(&ordinary) else {
+        return f64::NAN;
+    };
+    let mut branches: Vec<_> = variants
+        .into_iter()
+        .map(|requirements| {
+            let variant = SearchQuery {
+                requirements,
+                ..ordinary.clone()
+            };
+            filters(
+                &variant,
+                &effective_requirements(&variant, profile),
+                None,
+                &[],
+                profile,
+            )
+        })
+        .collect();
+    let unconstrained = branches
+        .iter()
+        .map(|branch| matching_chance(branch))
+        .fold(0.0_f64, f64::max);
+    if unconstrained <= 0.0 {
+        return 0.0;
+    }
+    let mut estimate = base;
+    for slot in query.blanket_slots() {
+        let mut next: Vec<Vec<Predicate>> = Vec::new();
+        for branch in &branches {
+            for &member in &slot {
+                let requirement = query.requirements[member];
+                let blanket = Predicate::of(requirement, None)
+                    .within(query, &requirement)
+                    .with_profile(profile);
+                for (index, &predicate) in branch.iter().enumerate() {
+                    let Some(intersection) = predicate.intersect(blanket) else {
+                        continue;
+                    };
+                    let mut narrowed = branch.clone();
+                    narrowed[index] = intersection;
+                    // Broad branches already include stricter ones. In
+                    // particular a redundant blanket leaves exactly the base.
+                    if next
+                        .iter()
+                        .any(|kept| predicate_branch_covers(kept, &narrowed))
+                    {
+                        continue;
+                    }
+                    next.retain(|kept| !predicate_branch_covers(&narrowed, kept));
+                    next.push(narrowed);
+                    // Estimation must stay responsive even for adversarial
+                    // queries; unknown is safer than dropping constraints.
+                    if next.len() > 128 {
+                        return f64::NAN;
+                    }
+                }
+            }
+        }
+        branches = next;
+        let missed = branches.iter().fold(1.0, |missed, branch| {
+            missed * (1.0 - (matching_chance(branch) / unconstrained).clamp(0.0, 1.0))
+        });
+        estimate = estimate.min(base * (1.0 - missed));
+    }
+    // The existing sum approximation can drop an optional member a blanket
+    // needs. A zero from that reduced model does not establish impossibility.
+    if estimate <= 0.0 && !ordinary.level_sum_groups().is_empty() {
+        return f64::NAN;
+    }
+    estimate.clamp(0.0, base)
+}
+
+/// Alternative choices before blanket filtering, with an explicit work cap.
+fn ordinary_variants(query: &SearchQuery) -> Option<Vec<Vec<Requirement>>> {
+    let mut variants = vec![Vec::new()];
+    for slot in query.slots() {
+        if variants.len() * slot.len() > 128 {
+            return None;
+        }
+        variants = variants
+            .into_iter()
+            .flat_map(|chosen| {
+                slot.iter().map(move |&index| {
+                    let mut chosen = chosen.clone();
+                    chosen.push(Requirement {
+                        alternative_group: None,
+                        ..query.requirements[index]
+                    });
+                    chosen
+                })
+            })
+            .collect();
+    }
+    Some(variants)
+}
+
+/// A sufficient implication test, also identifying permutations of identical
+/// copies so they cannot be counted as separate ways to satisfy a blanket.
+fn predicate_branch_covers(broad: &[Predicate], narrow: &[Predicate]) -> bool {
+    fn cover(
+        broad: &[Predicate],
+        narrow: &[Predicate],
+        owners: &mut [Option<usize>],
+        visited: &mut [bool],
+        index: usize,
+    ) -> bool {
+        for (candidate, &predicate) in narrow.iter().enumerate() {
+            if !visited[candidate] && predicate.intersect(broad[index]) == Some(predicate) {
+                visited[candidate] = true;
+                if owners[candidate]
+                    .is_none_or(|owner| cover(broad, narrow, owners, visited, owner))
+                {
+                    owners[candidate] = Some(index);
+                    return true;
+                }
+            }
+        }
+        false
+    }
+    let mut owners = vec![None; narrow.len()];
+    broad.len() == narrow.len()
+        && (0..broad.len()).all(|index| {
+            cover(
+                broad,
+                narrow,
+                &mut owners,
+                &mut vec![false; narrow.len()],
+                index,
+            )
+        })
+}
+
 /// Average over the 2,380 equally likely four-card subsets of the private
 /// trinket deck. Matching consumes identities, so overlapping alternatives and
 /// repeated requirements cannot reuse one offer. The catalyst's common floor
@@ -176,7 +335,6 @@ pub(crate) fn equipment_probability(query: &SearchQuery, profile: Profile) -> f6
 /// filters have no measured distribution and remain unsupported.
 fn trinket_probability(query: &SearchQuery) -> f64 {
     use crate::catalog::ITEMS;
-    use crate::model::{Accessibility, WorldItem};
 
     if query.requirements.iter().any(|requirement| {
         requirement.kind == ItemKind::Trinket
@@ -191,7 +349,12 @@ fn trinket_probability(query: &SearchQuery) -> f64 {
         })
         .map(|definition| definition.id)
         .collect();
-    let slots = query.slots();
+    let ordinary_count = query.ordinary_slots().len();
+    let slots: Vec<_> = query
+        .ordinary_slots()
+        .into_iter()
+        .chain(query.blanket_slots())
+        .collect();
     let selection_slots = crate::trinkets::selection_slots(query);
     let selected_mask = identities
         .iter()
@@ -221,33 +384,7 @@ fn trinket_probability(query: &SearchQuery) -> f64 {
     for depth in 1..=3 {
         let masks: Vec<u32> = slots
             .iter()
-            .map(|members| {
-                identities
-                    .iter()
-                    .enumerate()
-                    .fold(0, |mask, (index, &identity)| {
-                        let candidate = WorldItem {
-                            item: identity,
-                            upgrade: 0,
-                            effect: None,
-                            cursed: false,
-                            depth,
-                            source: ItemSource::Heap,
-                            accessibility: Accessibility::Independent,
-                            secret: false,
-                        };
-                        let matches = members.iter().any(|&member| {
-                            let requirement = query.requirements[member];
-                            requirement.kind == ItemKind::Trinket
-                                && depth
-                                    <= query
-                                        .max_depth
-                                        .min(requirement.max_depth.unwrap_or(query.max_depth))
-                                && requirement.matches(&candidate)
-                        });
-                        mask | if matches { 1 << index } else { 0 }
-                    })
-            })
+            .map(|members| trinket_mask(query, members, &identities, depth))
             .collect();
         for a in 0..identities.len() {
             for b in a + 1..identities.len() {
@@ -258,9 +395,11 @@ fn trinket_probability(query: &SearchQuery) -> f64 {
                         total += complete_with_trinkets(
                             query,
                             &slots,
-                            &masks,
+                            &masks[..ordinary_count],
                             &equipment_slots,
                             available,
+                            0,
+                            &masks[ordinary_count..],
                             &mut Vec::new(),
                             &mut residuals,
                             profile,
@@ -274,6 +413,36 @@ fn trinket_probability(query: &SearchQuery) -> f64 {
     total / f64::from(samples)
 }
 
+/// Offers that could satisfy this slot at the catalyst's floor.
+fn trinket_mask(query: &SearchQuery, members: &[usize], identities: &[ItemId], depth: u8) -> u32 {
+    use crate::model::{Accessibility, WorldItem};
+    identities
+        .iter()
+        .enumerate()
+        .fold(0, |mask, (index, &identity)| {
+            let candidate = WorldItem {
+                item: identity,
+                upgrade: 0,
+                effect: None,
+                cursed: false,
+                depth,
+                source: ItemSource::Heap,
+                accessibility: Accessibility::Independent,
+                secret: false,
+            };
+            let matches = members.iter().any(|&member| {
+                let requirement = query.requirements[member];
+                requirement.kind == ItemKind::Trinket
+                    && depth
+                        <= query
+                            .max_depth
+                            .min(requirement.max_depth.unwrap_or(query.max_depth))
+                    && requirement.matches(&candidate)
+            });
+            mask | if matches { 1 << index } else { 0 }
+        })
+}
+
 /// Try distinct trinkets in successive query slots, retaining equipment-only
 /// slots for the table estimator. Cache each residual query across all decks.
 #[allow(clippy::too_many_arguments)]
@@ -283,30 +452,45 @@ fn complete_with_trinkets(
     masks: &[u32],
     equipment_slots: &[bool],
     available: u32,
+    used: u32,
+    blanket_masks: &[u32],
     residual: &mut Vec<usize>,
     cache: &mut BTreeMap<(Profile, Vec<usize>), f64>,
     profile: Profile,
 ) -> f64 {
-    let slot = slots.len() - masks.len();
+    let ordinary_count = slots.len() - blanket_masks.len();
+    let slot = ordinary_count - masks.len();
     let Some((&mask, tail)) = masks.split_first() else {
-        return *cache.entry((profile, residual.clone())).or_insert_with(|| {
-            let requirements = residual
-                .iter()
-                .flat_map(|&slot| {
-                    slots[slot]
-                        .iter()
-                        .map(|&index| query.requirements[index])
-                        .filter(|requirement| requirement.kind != ItemKind::Trinket)
-                })
-                .collect();
-            equipment_probability(
-                &SearchQuery {
-                    requirements,
-                    ..query.clone()
-                },
-                profile,
-            )
-        });
+        let mut remaining = residual.clone();
+        for (index, &mask) in blanket_masks.iter().enumerate() {
+            if mask & used == 0 {
+                let index = ordinary_count + index;
+                if !equipment_slots[index] {
+                    return 0.0;
+                }
+                remaining.push(index);
+            }
+        }
+        return *cache
+            .entry((profile, remaining.clone()))
+            .or_insert_with(|| {
+                let requirements: Vec<_> = remaining
+                    .iter()
+                    .flat_map(|&slot| {
+                        slots[slot]
+                            .iter()
+                            .map(|&index| query.requirements[index])
+                            .filter(|requirement| requirement.kind != ItemKind::Trinket)
+                    })
+                    .collect();
+                equipment_probability(
+                    &SearchQuery {
+                        requirements,
+                        ..query.clone()
+                    },
+                    profile,
+                )
+            });
     };
     let mut best: f64 = 0.0;
     let mut choices = mask & available;
@@ -319,6 +503,8 @@ fn complete_with_trinkets(
             tail,
             equipment_slots,
             available & !choice,
+            used | choice,
+            blanket_masks,
             residual,
             cache,
             profile,
@@ -336,6 +522,8 @@ fn complete_with_trinkets(
             tail,
             equipment_slots,
             available,
+            used,
+            blanket_masks,
             residual,
             cache,
             profile,
@@ -1756,6 +1944,7 @@ mod tests {
             effect: EffectRequirement::Any,
             require_uncursed: false,
             select_trinket: false,
+            blanket: false,
             source: None,
             identity_group: None,
             max_depth: None,
