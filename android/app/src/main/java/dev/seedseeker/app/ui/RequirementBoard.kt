@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -54,6 +55,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -498,7 +500,7 @@ private fun RequirementChip(
             EffectBadge(requirement)
             if (requirement.requireUncursed) {
                 Spacer(Modifier.width(5.dp))
-                ChipTag(text = "✓", tone = TagTone.SOFT)
+                UncursedTag()
             }
             StackBadges(stackCount = stackCount, total = total, enabled = enabled, onClick = onClick)
         }
@@ -741,7 +743,7 @@ private fun Modifier.dashedOutline(
 }
 
 /** How a qualifier badge is tinted. */
-private enum class TagTone { QUALIFIER, UPGRADE, SOFT }
+private enum class TagTone { QUALIFIER, UPGRADE }
 
 /** A qualifier badge beside a chip's name. */
 private data class ChipTagSpec(val text: String, val tone: TagTone)
@@ -751,12 +753,10 @@ private fun ChipTag(text: String, tone: TagTone) {
     val container = when (tone) {
         TagTone.QUALIFIER -> MaterialTheme.colorScheme.tertiaryContainer
         TagTone.UPGRADE -> SpdUpgrade.copy(alpha = 0.12f)
-        TagTone.SOFT -> SpdGreen.copy(alpha = 0.14f)
     }
     val content = when (tone) {
         TagTone.QUALIFIER -> MaterialTheme.colorScheme.onTertiaryContainer
         TagTone.UPGRADE -> SpdUpgrade
-        TagTone.SOFT -> SpdGreen
     }
     val padding = LocalChipMetrics.current.tagPadding
     Surface(shape = RoundedCornerShape(6.dp), color = container) {
@@ -768,6 +768,28 @@ private fun ChipTag(text: String, tone: TagTone) {
             fontWeight = FontWeight.SemiBold,
             color = content,
         )
+    }
+}
+
+@Composable
+private fun UncursedTag() {
+    val labelHeight = with(LocalDensity.current) { chipLabelStyle.lineHeight.toDp() }
+    val verticalPadding = LocalChipMetrics.current.tagPadding - 4.dp
+    Surface(
+        shape = RoundedCornerShape(6.dp),
+        color = SpdGreen.copy(alpha = 0.14f),
+        // Match text tags at both chip sizes and follow the user's font scale.
+        modifier = Modifier.size(labelHeight + verticalPadding * 2),
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                Icons.Filled.Check,
+                // The parent chip already announces "uncursed".
+                contentDescription = null,
+                tint = SpdGreen,
+                modifier = Modifier.size(labelHeight),
+            )
+        }
     }
 }
 
