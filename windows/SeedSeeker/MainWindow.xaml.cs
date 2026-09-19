@@ -455,21 +455,7 @@ public sealed partial class MainWindow : Window
             if (item.Cluster is null) RequirementBoard.Children.Add(Chip(requirements, item, item.Anchor, problem));
             else RequirementBoard.Children.Add(Cluster(requirements, item, problem));
         }
-        if (query.ArcaneResin > 0)
-        {
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
-            var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
-            content.Children.Add(new SpriteView { SpriteIndex = 317, SpriteSize = 24 });
-            content.Children.Add(new TextBlock { Text = $"≥{query.ArcaneResin} Arcane Resin", VerticalAlignment = VerticalAlignment.Center });
-            var edit = new Button { Content = content };
-            ToolTipService.SetToolTip(edit, query.ArcaneResinFilter.Summary);
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(edit, "Edit Arcane Resin");
-            edit.Click += async (_, _) => await EditArcaneResin();
-            var remove = new Button { Content = new FontIcon { Glyph = "\uE711", FontSize = 10 } };
-            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(remove, "Remove Arcane Resin");
-            remove.Click += (_, _) => { query.ArcaneResin = 0; query.ArcaneResinFilter = new(); SaveSettings(); RefreshQuery(); };
-            row.Children.Add(edit); row.Children.Add(remove); RequirementBoard.Children.Add(row);
-        }
+        if (query.ArcaneResin > 0) RequirementBoard.Children.Add(ArcaneResinChip());
         RequirementBoard.Children.Add(AddChip());
     }
 
@@ -490,22 +476,64 @@ public sealed partial class MainWindow : Window
         if (requirement.RequireUncursed) content.Children.Add(ChipTagPill("\u2713", SuccessInk, SuccessFill));
         // A cluster's badges belong to its capsule, not to any one member.
         if (item.Cluster is null) foreach (var badge in StackBadges(requirements, item)) content.Children.Add(badge);
+        var chip = RequirementChip(content, requirement.Key, ChipMenu(requirements, item, index), problem);
+        ToolTipService.SetToolTip(chip, new TextBlock { Text = QueryRelationships.ChipDetail(requirements, index, item, problem), TextWrapping = TextWrapping.Wrap, MaxWidth = 280 });
+        dropTargets.Add(new DropTarget(DropKind.Chip, chip, requirement.Key));
+        return chip;
+    }
+
+    // Item keys are positive; the query-wide resin requirement has no item row.
+    private const long ArcaneResinKey = -1;
+
+    private Button RequirementChip(StackPanel content, long key, MenuFlyout menu, string? problem = null)
+    {
         var chip = new Button
         {
-            Content = content, Tag = requirement.Key, Height = 30, MinWidth = 0, MinHeight = 0,
+            Content = content, Tag = key, Height = 30, MinWidth = 0, MinHeight = 0,
             Padding = new Thickness(9, 0, 8, 0), CornerRadius = new CornerRadius(15),
             BorderThickness = new Thickness(1), BorderBrush = problem is null ? ChipEdge : DangerInk,
             Background = ChipFill, VerticalAlignment = VerticalAlignment.Center,
-            ContextFlyout = ChipMenu(requirements, item, index),
+            ContextFlyout = menu,
         };
         chip.Click += Chip_Click; chip.KeyDown += Chip_KeyDown;
         // ButtonBase marks the press handled; the drag listens regardless.
         chip.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(Chip_PointerPressed), true);
         chip.AddHandler(UIElement.PointerCaptureLostEvent, new PointerEventHandler(Chip_PointerCaptureLost), true);
         chip.AddHandler(UIElement.PointerCanceledEvent, new PointerEventHandler(Chip_PointerCaptureLost), true);
-        ToolTipService.SetToolTip(chip, new TextBlock { Text = QueryRelationships.ChipDetail(requirements, index, item, problem), TextWrapping = TextWrapping.Wrap, MaxWidth = 280 });
-        dropTargets.Add(new DropTarget(DropKind.Chip, chip, requirement.Key));
         return chip;
+    }
+
+    private StackPanel ArcaneResinContent()
+    {
+        var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
+        content.Children.Add(new SpriteView { SpriteIndex = 317, SpriteSize = 20, VerticalAlignment = VerticalAlignment.Center });
+        content.Children.Add(new TextBlock { Text = "Arcane Resin", FontSize = 13, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+        content.Children.Add(ChipTagPill($"≥{query.ArcaneResin}", SuccessInk, SuccessFill));
+        if (query.ArcaneResinFilter.MaximumDepth is int depth) content.Children.Add(ChipTagPill($"F≤{depth}", CautionInk, CautionFill));
+        if (query.ArcaneResinFilter.Uncursed) content.Children.Add(ChipTagPill("\u2713", SuccessInk, SuccessFill));
+        return content;
+    }
+
+    private Button ArcaneResinChip()
+    {
+        var menu = new MenuFlyout();
+        var edit = new MenuFlyoutItem { Text = "Edit\u2026" };
+        edit.Click += async (_, _) => await EditArcaneResin();
+        var remove = new MenuFlyoutItem { Text = "Remove", Icon = new FontIcon { Glyph = "" } };
+        remove.Click += (_, _) => RemoveArcaneResin();
+        menu.Items.Add(edit); menu.Items.Add(new MenuFlyoutSeparator()); menu.Items.Add(remove);
+        var chip = RequirementChip(ArcaneResinContent(), ArcaneResinKey, menu);
+        var detail = $"≥{query.ArcaneResin} Arcane Resin\n{query.ArcaneResinFilter.Summary}";
+        ToolTipService.SetToolTip(chip, new TextBlock { Text = detail, TextWrapping = TextWrapping.Wrap, MaxWidth = 280 });
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(chip, detail);
+        dropTargets.Add(new DropTarget(DropKind.Chip, chip, ArcaneResinKey));
+        return chip;
+    }
+
+    private void RemoveArcaneResin()
+    {
+        query.ArcaneResin = 0; query.ArcaneResinFilter = new();
+        SaveSettings(); RefreshQuery();
     }
 
     /// <summary>
@@ -726,13 +754,16 @@ public sealed partial class MainWindow : Window
     private async void Chip_Click(object sender, RoutedEventArgs e)
     {
         if (dragClickGuard) return;
-        if ((sender as FrameworkElement)?.Tag is long key) await EditChip(IndexOfKey(key));
+        if ((sender as FrameworkElement)?.Tag is not long key) return;
+        if (key == ArcaneResinKey) await EditArcaneResin();
+        else await EditChip(IndexOfKey(key));
     }
 
     private void Chip_KeyDown(object sender, KeyRoutedEventArgs e)
     {
         if (e.Key is not (VirtualKey.Delete or VirtualKey.Back)) return;
         if ((sender as FrameworkElement)?.Tag is not long key) return;
+        if (key == ArcaneResinKey) { e.Handled = true; RemoveArcaneResin(); return; }
         var index = IndexOfKey(key);
         if (index < 0) return;
         e.Handled = true; RemoveChip(index);
@@ -805,13 +836,13 @@ public sealed partial class MainWindow : Window
     private void BeginDrag(ChipPress current)
     {
         var index = IndexOfKey(current.Key);
-        if (index < 0) { press = null; return; }
+        if (index < 0 && current.Key != ArcaneResinKey) { press = null; return; }
         current.Dragging = true; dragClickGuard = true;
         current.Chip.Opacity = 0.35;
         RemoveZone.Visibility = Visibility.Visible;
         foreach (var target in dropTargets)
             if (target.Element is Button chip && ToolTipService.GetToolTip(chip) is { } tip) { suspendedToolTips.Add((chip, tip)); ToolTipService.SetToolTip(chip, null); }
-        ghost = GhostChip(query.Requirements[index]);
+        ghost = current.Key == ArcaneResinKey ? GhostChip(ArcaneResinContent()) : GhostChip(query.Requirements[index]);
         DragLayer.Children.Add(ghost);
     }
 
@@ -885,6 +916,7 @@ public sealed partial class MainWindow : Window
     /// <summary>What dropping the chip keyed <paramref name="key"/> on <paramref name="target"/> would do, as the ghost's caption; null when nothing.</summary>
     private string? DropCaption(long key, DropTarget? target)
     {
+        if (key == ArcaneResinKey) return query.ArcaneResin > 0 && target?.Kind == DropKind.Remove ? "remove" : null;
         var source = IndexOfKey(key);
         if (source < 0 || target is null) return null;
         switch (target.Kind)
@@ -902,6 +934,7 @@ public sealed partial class MainWindow : Window
     private void CompleteDrop(long key, DropTarget? target)
     {
         if (target is null || DropCaption(key, target) is null) return;
+        if (key == ArcaneResinKey) { RemoveArcaneResin(); return; }
         var source = IndexOfKey(key);
         switch (target.Kind)
         {
@@ -960,6 +993,11 @@ public sealed partial class MainWindow : Window
         var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
         content.Children.Add(ChipArt(requirement));
         content.Children.Add(ChipName(requirement));
+        return GhostChip(content);
+    }
+
+    private Border GhostChip(StackPanel content)
+    {
         ghostCaptionText = new TextBlock { FontFamily = Mono, FontSize = 11, FontWeight = FontWeights.Bold, VerticalAlignment = VerticalAlignment.Center };
         ghostCaption = new Border { Child = ghostCaptionText, CornerRadius = new CornerRadius(8), Padding = new Thickness(5, 0, 5, 0), Height = 16, Visibility = Visibility.Collapsed, VerticalAlignment = VerticalAlignment.Center };
         content.Children.Add(ghostCaption);
@@ -973,9 +1011,6 @@ public sealed partial class MainWindow : Window
         };
     }
 
-    /// <param name="r">The requirement edited in place; left as it was when the dialog is cancelled.</param>
-    /// <param name="stack">The chip's stack as it stands; a cluster member's belongs to the cluster, so its section stays hidden.</param>
-    /// <returns>The stack the editor settled on, or null when the dialog was cancelled.</returns>
     private async Task EditArcaneResin()
     {
         var amount = Number("Minimum resin", query.ArcaneResin > 0 ? query.ArcaneResin : 2, 1, 65535);
@@ -983,7 +1018,6 @@ public sealed partial class MainWindow : Window
         var depth = Combo(new[] { "Search limit" }.Concat(Enumerable.Range(1, SearchLimits.MaxDepth).Select(x => $"Floor {x}")), query.ArcaneResinFilter.MaximumDepth ?? 0);
         var source = Combo(new[] { "Any source" }.Concat(Enum.GetValues<ScoutItemSource>().Select(Labels.Source)), query.ArcaneResinFilter.Source is { } selected ? (int)selected + 1 : 0);
         var content = new StackPanel { Spacing = 16 };
-        content.Children.Add(new TextBlock { Text = "Surplus wands provide 2 × (upgrade + 1) resin each. Wands needed for other requirements are reserved first.", TextWrapping = TextWrapping.Wrap });
         content.Children.Add(amount); content.Children.Add(uncursed);
         content.Children.Add(new TextBlock { Text = "Wand floor limit" }); content.Children.Add(depth);
         content.Children.Add(new TextBlock { Text = "Wand source" }); content.Children.Add(source);
@@ -1000,6 +1034,9 @@ public sealed partial class MainWindow : Window
         SaveSettings(); RefreshQuery();
     }
 
+    /// <param name="r">The requirement edited in place; left as it was when the dialog is cancelled.</param>
+    /// <param name="stack">The chip's stack as it stands; a cluster member's belongs to the cluster, so its section stays hidden.</param>
+    /// <returns>The stack the editor settled on, or null when the dialog was cancelled.</returns>
     private async Task<StackShape?> EditRequirement(ItemRequirement r, StackShape stack, string title, string accept)
     {
         var kind = Combo(Enum.GetValues<ItemKind>().Select(Labels.Kind), (int)r.Kind);
