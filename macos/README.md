@@ -74,3 +74,15 @@ the same description appears in tooltips and VoiceOver. The client requests SSQ4
 and decodes SSC7, retaining SSC3–SSC6 compatibility and omitting the control when
 legacy packets lack mappings. `build-macos-app.sh` bundles the shared artwork
 metadata with the existing game atlases.
+
+## Arcane Resin
+
+Choose **Arcane Resin** when adding a Wand requirement. Set the minimum resin,
+then optionally limit donor wands by curse status, floor, or source. Donors must
+be uncursed by default. Each surplus wand contributes `2 × (upgrade + 1)` resin;
+wands reserved for ordinary requirements cannot also become resin. Resin is one
+separate requirement and can be searched on its own.
+
+The requirement can be edited or removed from the board. Saved drafts, presets,
+share links, result exports, and search refinement retain its amount and filters.
+Scout highlights the contributing wands, and the engine supplies the match estimate.

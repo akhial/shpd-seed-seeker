@@ -43,6 +43,7 @@ class PresetStorage(private val preferences: SharedPreferences) {
     private fun encodeQuery(query: PresetQuery) = JSONObject().apply {
         put("maximumDepth", query.maximumDepth)
         put("autoApplyTrinket", query.autoApplyTrinket)
+        ResultsExport.encodeResin(this, query.arcaneResin, query.arcaneResinFilter)
         put("requireBlacksmith", query.requireBlacksmith)
         put("excludeBlacksmithRewards", query.excludeBlacksmithRewards)
         put("wandmakerQuest", query.wandmakerQuest?.documentName ?: JSONObject.NULL)
@@ -129,6 +130,8 @@ class PresetStorage(private val preferences: SharedPreferences) {
             }
         }
         return PresetQuery(
+            arcaneResin = ResultsExport.decodeResinAmount(value),
+            arcaneResinFilter = ResultsExport.decodeResinFilter(value),
             autoApplyTrinket = value.optBoolean("autoApplyTrinket", false),
             requirements = requirements,
             // Presets saved before empty boss floors were removed may hold 5/10/15;

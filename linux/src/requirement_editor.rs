@@ -110,6 +110,33 @@ pub fn present(
     for group in groups(&editor) {
         page.add(&group);
     }
+    if is_new {
+        let resin = adw::ActionRow::builder()
+            .title("Arcane Resin")
+            .subtitle("Require resin from surplus wands")
+            .activatable(true)
+            .visible(selected_kind(&editor) == ItemKind::Wand)
+            .build();
+        let group = adw::PreferencesGroup::new();
+        group.add(&resin);
+        page.add(&group);
+        editor.category.connect_selected_notify({
+            let editor = Rc::clone(&editor);
+            let group = group.clone();
+            move |_| group.set_visible(selected_kind(&editor) == ItemKind::Wand)
+        });
+        group.set_visible(selected_kind(&editor) == ItemKind::Wand);
+        // The group follows the category; its action row stays visible within it.
+        resin.set_visible(true);
+        resin.connect_activated({
+            let dialog = editor.dialog.clone();
+            let parent = parent.clone();
+            move |_| {
+                dialog.close();
+                let _ = WidgetExt::activate_action(&parent, "win.edit-resin", None);
+            }
+        });
+    }
     let toolbar_view = adw::ToolbarView::new();
     toolbar_view.add_top_bar(&header);
     toolbar_view.add_top_bar(&editor.banner);

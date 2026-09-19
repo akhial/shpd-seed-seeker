@@ -241,7 +241,7 @@ public sealed class NativeEngine
         var w = new Writer(); w.Bytes("SSQ4"u8.ToArray()); w.U16Le(challenges);
         var seedBytes = Encoding.UTF8.GetBytes(seed); w.U16Le(seedBytes.Length); w.Bytes(seedBytes);
         var overrideBytes = Encoding.UTF8.GetBytes(trinket ?? ""); w.U16Le(overrideBytes.Length); w.Bytes(overrideBytes);
-        if (query is { Requirements.Count: > 0 }) w.Bytes(EncodeQuery(query));
+        if (query is { HasRequirements: true }) w.Bytes(EncodeQuery(query));
         return w.Finish();
     }
 
@@ -357,7 +357,7 @@ public sealed class NativeEngine
         // A query the engine cannot decode — one with no requirements, which
         // the scout pane shows a manifest for anyway — marks nothing. Counts
         // are slots: an "any of these" group is one requirement.
-        var slots = QueryRelationships.SlotCount(query.Requirements);
+        var slots = query.SlotCount;
         if (code == -1) return new(new HashSet<int>(), 0, slots);
         if (code != 0) throw new InvalidOperationException($"Native scout matches failed ({code}).");
         var document = JsonNode.Parse(Encoding.UTF8.GetString(CopyAndFree(ptr, len))) as JsonObject

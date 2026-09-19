@@ -303,8 +303,8 @@ public sealed partial class MainWindow : Window
     }
     private void RefreshQuery()
     {
-        BuildBoard(); NoRequirements.Visibility = QueryRelationships.BoardCount(query.Requirements) == 0 ? Visibility.Visible : Visibility.Collapsed;
-        FloorLabel.Text = $"first {query.MaximumDepth} floor{(query.MaximumDepth == 1 ? "" : "s")}"; RequireBlacksmith.IsEnabled = query.MaximumDepth < ScoutQuests.Window(QuestGiver.Blacksmith).Last; StartButton.IsEnabled = search is not null || (!busy && query.Requirements.Count != 0); CopyLinkButton.IsEnabled = !searchRunning && query.Requirements.Count != 0;
+        BuildBoard(); NoRequirements.Visibility = !query.HasRequirements ? Visibility.Visible : Visibility.Collapsed;
+        FloorLabel.Text = $"first {query.MaximumDepth} floor{(query.MaximumDepth == 1 ? "" : "s")}"; RequireBlacksmith.IsEnabled = query.MaximumDepth < ScoutQuests.Window(QuestGiver.Blacksmith).Last; StartButton.IsEnabled = search is not null || (!busy && query.HasRequirements); CopyLinkButton.IsEnabled = !searchRunning && query.HasRequirements;
         var count = BitOperations.PopCount((uint)query.Challenges); ChallengeSummary.Text = count == 0 ? "None" : $"{count} enabled";
     }
     private void FloorSlider_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e) { if (restoring || FloorLabel is null) return; query.MaximumDepth = FloorLimits.Options[Math.Clamp((int)e.NewValue, 0, FloorLimits.Options.Length - 1)]; RefreshQuery(); SaveSettings(); }
@@ -454,6 +454,21 @@ public sealed partial class MainWindow : Window
             });
             if (item.Cluster is null) RequirementBoard.Children.Add(Chip(requirements, item, item.Anchor, problem));
             else RequirementBoard.Children.Add(Cluster(requirements, item, problem));
+        }
+        if (query.ArcaneResin > 0)
+        {
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
+            var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+            content.Children.Add(new SpriteView { SpriteIndex = 317, SpriteSize = 24 });
+            content.Children.Add(new TextBlock { Text = $"≥{query.ArcaneResin} Arcane Resin", VerticalAlignment = VerticalAlignment.Center });
+            var edit = new Button { Content = content };
+            ToolTipService.SetToolTip(edit, query.ArcaneResinFilter.Summary);
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(edit, "Edit Arcane Resin");
+            edit.Click += async (_, _) => await EditArcaneResin();
+            var remove = new Button { Content = new FontIcon { Glyph = "\uE711", FontSize = 10 } };
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(remove, "Remove Arcane Resin");
+            remove.Click += (_, _) => { query.ArcaneResin = 0; query.ArcaneResinFilter = new(); SaveSettings(); RefreshQuery(); };
+            row.Children.Add(edit); row.Children.Add(remove); RequirementBoard.Children.Add(row);
         }
         RequirementBoard.Children.Add(AddChip());
     }
@@ -961,10 +976,35 @@ public sealed partial class MainWindow : Window
     /// <param name="r">The requirement edited in place; left as it was when the dialog is cancelled.</param>
     /// <param name="stack">The chip's stack as it stands; a cluster member's belongs to the cluster, so its section stays hidden.</param>
     /// <returns>The stack the editor settled on, or null when the dialog was cancelled.</returns>
+    private async Task EditArcaneResin()
+    {
+        var amount = Number("Minimum resin", query.ArcaneResin > 0 ? query.ArcaneResin : 2, 1, 65535);
+        var uncursed = new CheckBox { Content = "Require uncursed wands", IsChecked = query.ArcaneResinFilter.Uncursed };
+        var depth = Combo(new[] { "Search limit" }.Concat(Enumerable.Range(1, SearchLimits.MaxDepth).Select(x => $"Floor {x}")), query.ArcaneResinFilter.MaximumDepth ?? 0);
+        var source = Combo(new[] { "Any source" }.Concat(Enum.GetValues<ScoutItemSource>().Select(Labels.Source)), query.ArcaneResinFilter.Source is { } selected ? (int)selected + 1 : 0);
+        var content = new StackPanel { Spacing = 16 };
+        content.Children.Add(new TextBlock { Text = "Surplus wands provide 2 × (upgrade + 1) resin each. Wands needed for other requirements are reserved first.", TextWrapping = TextWrapping.Wrap });
+        content.Children.Add(amount); content.Children.Add(uncursed);
+        content.Children.Add(new TextBlock { Text = "Wand floor limit" }); content.Children.Add(depth);
+        content.Children.Add(new TextBlock { Text = "Wand source" }); content.Children.Add(source);
+        var dialog = new ContentDialog { XamlRoot = Content.XamlRoot, Title = "Arcane Resin", PrimaryButtonText = query.ArcaneResin > 0 ? "Save" : "Add", CloseButtonText = "Cancel", SecondaryButtonText = query.ArcaneResin > 0 ? "Remove" : "", DefaultButton = ContentDialogButton.Primary, Content = VerticalScrollView(content, 440, 460) };
+        bool ValidAmount() => double.IsFinite(amount.Value) && amount.Value == Math.Truncate(amount.Value) && amount.Value is >= 1 and <= 65535;
+        amount.ValueChanged += (_, _) => dialog.IsPrimaryButtonEnabled = ValidAmount();
+        dialog.PrimaryButtonClick += (_, args) => { if (!ValidAmount()) args.Cancel = true; };
+        var result = await dialog.ShowAsync();
+        if (result == ContentDialogResult.None) return;
+        query.ArcaneResin = result == ContentDialogResult.Secondary ? 0 : (int)amount.Value;
+        query.ArcaneResinFilter = result == ContentDialogResult.Secondary ? new() : new(
+            uncursed.IsChecked == true, depth.SelectedIndex == 0 ? null : depth.SelectedIndex,
+            source.SelectedIndex == 0 ? null : (ScoutItemSource)(source.SelectedIndex - 1));
+        SaveSettings(); RefreshQuery();
+    }
+
     private async Task<StackShape?> EditRequirement(ItemRequirement r, StackShape stack, string title, string accept)
     {
         var kind = Combo(Enum.GetValues<ItemKind>().Select(Labels.Kind), (int)r.Kind);
         var item = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch };
+        var resin = new Button { Content = "Arcane Resin", Visibility = Visibility.Collapsed };
         // The list the combo is filled from, so saving reads back the very
         // entries it offered — including an imported tier-1 item the fresh-pick
         // list hides.
@@ -1044,7 +1084,7 @@ public sealed partial class MainWindow : Window
         var effectTitle = SectionTitle("Enchantment");
         var content = new StackPanel { Spacing = 16, Padding = new Thickness(2, 4, 2, 4) };
         foreach (var section in new UIElement[] {
-            Section(SectionTitle("Item"), Row("Category", kind), Row("Item", item), Row("Tier", tierMatch), Row("Exact tier", tier), Row("Minimum tier", tierBound)),
+            Section(SectionTitle("Item"), Row("Category", kind), Row("Item", item), resin, Row("Tier", tierMatch), Row("Exact tier", tier), Row("Minimum tier", tierBound)),
             Section(SectionTitle("Upgrade level"), Row("Predicate", upgradeMatch), Row("Upgrade level", upgrade), Row("Minimum upgrade", upgradeBound)),
             Section(effectTitle, Row("Effect", effectMode), effectGrid),
             Section(null, selectTrinket, uncursed, Row("Source", source), depthRow, Row("Within first floors", depth)),
@@ -1058,6 +1098,7 @@ public sealed partial class MainWindow : Window
         void SyncVisibility()
         {
             var k = (ItemKind)Math.Max(0, kind.SelectedIndex); var trinket = k == ItemKind.Trinket; var generic = item.SelectedIndex == 0 && k.Family() is ItemKind.Weapon or ItemKind.Armor;
+            resin.Visibility = k == ItemKind.Wand && accept == "Add" ? Visibility.Visible : Visibility.Collapsed;
             selectTrinket.Visibility = trinket ? Visibility.Visible : Visibility.Collapsed;
             var predicate = (TierMatch)Math.Max(0, tierMatch.SelectedIndex); var ranged = predicate is TierMatch.AtLeast or TierMatch.AtMost;
             tierMatch.Visibility = generic ? Visibility.Visible : Visibility.Collapsed;
@@ -1157,7 +1198,11 @@ public sealed partial class MainWindow : Window
         copyDepth.ValueChanged += (_, _) => copyDepth.Header = $"Copies within first {FloorOf(copyDepth)} floor{(FloorOf(copyDepth) == 1 ? "" : "s")}";
         Populate(); NormalizeTier(); SyncStack();
         var dialog = new ContentDialog { XamlRoot = Content.XamlRoot, Title = title, PrimaryButtonText = accept, CloseButtonText = "Cancel", DefaultButton = ContentDialogButton.Primary, Content = VerticalScrollView(content, 510, 460) };
-        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return null;
+        var resinRequested = false;
+        resin.Click += (_, _) => { resinRequested = true; dialog.Hide(); };
+        var result = await dialog.ShowAsync();
+        if (resinRequested) { await EditArcaneResin(); return null; }
+        if (result != ContentDialogResult.Primary) return null;
         r.Kind = (ItemKind)kind.SelectedIndex; r.Item = r.Kind.RequiresNamedItem() ? itemChoices[Math.Max(0, item.SelectedIndex)] : item.SelectedIndex > 0 ? itemChoices[item.SelectedIndex - 1] : null; r.TierMatch = r.Item is null && r.Kind.Family() is ItemKind.Weapon or ItemKind.Armor ? (TierMatch)tierMatch.SelectedIndex : TierMatch.Any; r.Tier = r.TierMatch == TierMatch.Any ? 0 : selectedTier;
         r.UpgradeMatch = (UpgradeMatch)upgradeMatch.SelectedIndex; r.Upgrade = r.UpgradeMatch switch { UpgradeMatch.Any => 0, UpgradeMatch.Exactly => (int)upgrade.Value, UpgradeMatch.AtLeast when r.Kind == ItemKind.Ring => (int)upgrade.Value, UpgradeMatch.AtLeast => selectedMinimumUpgrade, _ => 0 };
         r.RequireUncursed = uncursed.IsChecked == true;
@@ -1469,7 +1514,7 @@ public sealed partial class MainWindow : Window
             search = await Task.Run(() => engine.Start(snapshot, workers)); await RunSearch(search, notice); await CaptureBaseRun(snapshot, search, detached ? RunKind.Detached : RunKind.Anchor);
         }
         catch (Exception ex) { SearchStatus.Text = $"Failed: {ex.Message}"; baseRun = null; lastRunDetached = false; }
-        finally { busy = false; search?.Dispose(); search = null; SetStartButton(running: false); StartButton.IsEnabled = query.Requirements.Count != 0; }
+        finally { busy = false; search?.Dispose(); search = null; SetStartButton(running: false); StartButton.IsEnabled = query.HasRequirements; }
     }
     /// <summary>
     /// Refines against the Target: the full Target Set is re-verified through
@@ -1521,7 +1566,7 @@ public sealed partial class MainWindow : Window
         // The Target stays valid on failure: nothing of its coverage was
         // consumed, so the refine can simply be retried.
         catch (Exception ex) { SearchStatus.Text = $"Refine failed: {ex.Message}"; SetStatusBar(null); }
-        finally { busy = false; search?.Dispose(); search = null; SetStartButton(running: false); StartButton.IsEnabled = query.Requirements.Count != 0; }
+        finally { busy = false; search?.Dispose(); search = null; SetStartButton(running: false); StartButton.IsEnabled = query.HasRequirements; }
     }
     /// <summary>
     /// Continues the previous detached scan (the classic pre-Target refine
@@ -1563,7 +1608,7 @@ public sealed partial class MainWindow : Window
         // The previous base run stays valid on failure: nothing of its
         // coverage was consumed, so the refine can simply be retried.
         catch (Exception ex) { SearchStatus.Text = $"Refine failed: {ex.Message}"; SetStatusBar(null); }
-        finally { busy = false; search?.Dispose(); search = null; SetStartButton(running: false); StartButton.IsEnabled = query.Requirements.Count != 0; }
+        finally { busy = false; search?.Dispose(); search = null; SetStartButton(running: false); StartButton.IsEnabled = query.HasRequirements; }
     }
     /// <summary>
     /// Records every unique delivered seed; the visible list is capped while
@@ -1634,7 +1679,7 @@ public sealed partial class MainWindow : Window
         StartLabel.Text = running ? "Cancel Search" : "Start Search";
         PresetPicker.IsEnabled = !running;
         SavePresetButton.IsEnabled = !running;
-        CopyLinkButton.IsEnabled = !running && query.Requirements.Count != 0;
+        CopyLinkButton.IsEnabled = !running && query.HasRequirements;
         DeletePresetButton.IsEnabled = !running
             && PresetPicker.SelectedItem is QueryPreset { IsBuiltIn: false };
         searchRunning = running;

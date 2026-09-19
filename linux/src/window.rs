@@ -112,7 +112,11 @@ pub fn present(app: &adw::Application) {
             persist::save(&snapshot);
             query.refresh(&snapshot);
             detail.render(&snapshot);
-            start_action.set_enabled(!snapshot.requirements.is_empty() || results.is_running());
+            start_action.set_enabled(
+                !snapshot.requirements.is_empty()
+                    || snapshot.arcane_resin > 0
+                    || results.is_running(),
+            );
             clear_action.set_enabled(results.can_clear());
         }
     });
@@ -381,6 +385,30 @@ pub fn present(app: &adw::Application) {
         }
     });
     window.add_action(&clear_action);
+
+    let resin_action = gio::SimpleAction::new("edit-resin", None);
+    resin_action.connect_activate({
+        let state = Rc::clone(&state);
+        let refresh_all = Rc::clone(&refresh_all);
+        let window = window.clone();
+        move |_, _| crate::resin_editor::present(&window, &state, &refresh_all)
+    });
+    window.add_action(&resin_action);
+    let remove_resin = gio::SimpleAction::new("remove-resin", None);
+    remove_resin.connect_activate({
+        let state = Rc::clone(&state);
+        let refresh_all = Rc::clone(&refresh_all);
+        move |_, _| {
+            {
+                let mut state = state.borrow_mut();
+                state.arcane_resin = 0;
+                state.arcane_resin_filter =
+                    shpd_seedfinder_core::query::ArcaneResinFilter::default();
+            }
+            refresh_all();
+        }
+    });
+    window.add_action(&remove_resin);
 
     let add_action = gio::SimpleAction::new("add-requirement", None);
     add_action.connect_activate({

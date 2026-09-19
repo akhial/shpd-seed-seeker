@@ -139,7 +139,7 @@ public final class SearchController {
     /// and `dropped` is what that step removed. Callers must ensure no search
     /// is running.
     public func loadImported(seeds: [String], dropped: Int = 0, query: SavedQuery, trinkets: [String?] = []) {
-        results = seeds.enumerated().map { index, seed in SeedResult(seed: seed, matchedRequirements: query.requirements.slotCount, selectedTrinket: index < trinkets.count ? trinkets[index] : nil) }
+        results = seeds.enumerated().map { index, seed in SeedResult(seed: seed, matchedRequirements: query.slotCount, selectedTrinket: index < trinkets.count ? trinkets[index] : nil) }
         collectedRecipes = Dictionary(uniqueKeysWithValues: results.map { ($0.seed, $0) })
         collected = seeds
         importedDropped = dropped
@@ -156,7 +156,7 @@ public final class SearchController {
             requireBlacksmith: query.requireBlacksmith,
             excludeBlacksmithRewards: query.excludeBlacksmithRewards,
             wandmakerQuest: query.wandmakerQuest,
-            challenges: query.challenges, autoApplyTrinket: query.autoApplyTrinket)
+            challenges: query.challenges, autoApplyTrinket: query.autoApplyTrinket, arcaneResin: query.arcaneResin, arcaneResinFilter: query.arcaneResinFilter)
         target = request.map { TargetState(request: $0, seeds: seeds, resumeFrom: 0, remaining: 0, recipes: collectedRecipes) }
     }
 
@@ -211,7 +211,7 @@ public final class SearchController {
             requireBlacksmith: request.requireBlacksmith,
             excludeBlacksmithRewards: request.excludeBlacksmithRewards,
             wandmakerQuest: request.wandmakerQuest,
-            challenges: request.challenges, autoApplyTrinket: request.autoApplyTrinket)
+            challenges: request.challenges, autoApplyTrinket: request.autoApplyTrinket, arcaneResin: request.arcaneResin, arcaneResinFilter: request.arcaneResinFilter)
         task = Task { [weak self] in
             guard let self else { return }
             await self.run(request, alreadyShown: []) { engine in
@@ -271,7 +271,7 @@ public final class SearchController {
             guard let self else { return }
             let kept: [SeedResult]
             do {
-                kept = try await engine.filterRecipes(request, base: target.request, recipes: baseSeeds.map { target.recipes[$0] ?? SeedResult(seed: $0, matchedRequirements: target.request.requirements.slotCount) })
+                kept = try await engine.filterRecipes(request, base: target.request, recipes: baseSeeds.map { target.recipes[$0] ?? SeedResult(seed: $0, matchedRequirements: target.request.slotCount) })
             } catch is CancellationError {
                 // The user backed out before the filter finished; the Target
                 // was never consumed, so it stays refinable as-is.
@@ -297,7 +297,7 @@ public final class SearchController {
                 requireBlacksmith: request.requireBlacksmith,
                 excludeBlacksmithRewards: request.excludeBlacksmithRewards,
                 wandmakerQuest: request.wandmakerQuest,
-                challenges: request.challenges, autoApplyTrinket: request.autoApplyTrinket)
+                challenges: request.challenges, autoApplyTrinket: request.autoApplyTrinket, arcaneResin: request.arcaneResin, arcaneResinFilter: request.arcaneResinFilter)
             // A filter never scans; a refine resumes the target's remainder.
             if resumesScan && target.remaining > 0 {
                 await self.run(request, alreadyShown: Set(kept.map(\.seed))) { engine in
@@ -327,7 +327,7 @@ public final class SearchController {
             guard let self else { return }
             let kept: [SeedResult]
             do {
-                kept = try await engine.filterRecipes(request, base: base.request, recipes: previousSeeds.map { self.collectedRecipes[$0] ?? SeedResult(seed: $0, matchedRequirements: base.request.requirements.slotCount) })
+                kept = try await engine.filterRecipes(request, base: base.request, recipes: previousSeeds.map { self.collectedRecipes[$0] ?? SeedResult(seed: $0, matchedRequirements: base.request.slotCount) })
             } catch is CancellationError {
                 // The user backed out before the filter finished; the base run
                 // was never consumed, so it stays refinable as-is.
@@ -349,7 +349,7 @@ public final class SearchController {
                 requireBlacksmith: request.requireBlacksmith,
                 excludeBlacksmithRewards: request.excludeBlacksmithRewards,
                 wandmakerQuest: request.wandmakerQuest,
-                challenges: request.challenges, autoApplyTrinket: request.autoApplyTrinket)
+                challenges: request.challenges, autoApplyTrinket: request.autoApplyTrinket, arcaneResin: request.arcaneResin, arcaneResinFilter: request.arcaneResinFilter)
             if base.remaining > 0 {
                 await self.run(request, alreadyShown: Set(kept.map(\.seed))) { engine in
                     try await engine.startResumedSearch(request, resumeFrom: base.resumeFrom,

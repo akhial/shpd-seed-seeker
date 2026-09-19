@@ -49,7 +49,7 @@ public sealed class LevelMapDocument
             ["challenges"] = new JsonArray([.. Challenges.All.Where(c => (query.Challenges & c.Mask) != 0).Select(c => JsonValue.Create(c.Name))]),
             ["trinket"] = trinket,
         };
-        if (query.Requirements.Count > 0) request["query"] = JsonNode.Parse(ResultsExport.EncodeQueryDocument(query));
+        if (query.HasRequirements) request["query"] = JsonNode.Parse(ResultsExport.EncodeQueryDocument(query));
         return request.ToJsonString();
     }
 }

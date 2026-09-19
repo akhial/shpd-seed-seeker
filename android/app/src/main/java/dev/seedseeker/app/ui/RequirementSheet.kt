@@ -107,6 +107,7 @@ private enum class EffectMode(val label: String) {
 @Composable
 fun RequirementSheet(
     editing: ItemRequirement?,
+    onAddResin: (() -> Unit)? = null,
     editingCount: Int = 1,
     editingTotal: Int? = null,
     editingCopyDepth: Int? = null,
@@ -313,6 +314,9 @@ fun RequirementSheet(
                             onClick = { selectedItem = null },
                             label = { Text("Any ${kind.label.lowercase(Locale.ROOT)}", maxLines = 1, softWrap = false) },
                         )
+                        if (kind == ItemKind.WAND && onAddResin != null) {
+                            FilterChip(selected = false, onClick = onAddResin, label = { Text("Arcane Resin") })
+                        }
                         if (kind.family == ItemKind.WEAPON) {
                             listOf(
                                 ItemKind.WEAPON to "All",

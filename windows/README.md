@@ -48,3 +48,15 @@ with each identity glyph flush at the top right. Click a sprite for its name and
 appearance, also available through tooltips and accessible labels. Older scout
 packets omit the control. The packaged `item-mapping-art.json` is shared with
 Android, web, Linux, and macOS.
+
+## Arcane Resin
+
+Choose **Arcane Resin** when adding a Wand requirement. Set the minimum resin,
+then optionally limit donor wands by curse status, floor, or source. Donors must
+be uncursed by default. Each surplus wand contributes `2 × (upgrade + 1)` resin;
+wands reserved for ordinary requirements cannot also become resin. Resin is one
+separate requirement and can be searched on its own.
+
+The requirement can be edited or removed from the board. Saved drafts, presets,
+share links, result exports, and search refinement retain its amount and filters.
+Scout highlights the contributing wands, and the engine supplies the match estimate.
