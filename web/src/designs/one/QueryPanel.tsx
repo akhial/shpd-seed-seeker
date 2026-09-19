@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useStore } from "@tanstack/react-store";
 import { LEVEL_GEN_CHALLENGES, challenges as challengeOptions } from "../../lib/catalog";
 import { probabilityLabel } from "../../lib/format";
-import { CheckIcon, CommandIcon, LinkIcon, ReturnIcon, XIcon } from "../../lib/icons";
+import { CheckIcon, CommandIcon, InfoIcon, LinkIcon, ReturnIcon, XIcon } from "../../lib/icons";
 import {
   BLACKSMITH_LAST_FLOOR,
   FLOOR_LIMIT_OPTIONS,
@@ -75,6 +75,16 @@ export function QueryPanel({
   const [presetName, setPresetName] = useState("");
   const [editor, setEditor] = useState<EditorSession | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [blanketHelpOpen, setBlanketHelpOpen] = useState(false);
+
+  useEffect(() => {
+    if (!blanketHelpOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setBlanketHelpOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [blanketHelpOpen]);
 
   const shareQuery = () => {
     void encodeShareLink(toQueryJson(query))
@@ -344,6 +354,50 @@ export function QueryPanel({
                   <summary>
                     <span>Blanket Requirements</span>
                     {count > 0 && <span className="d1-count">{count}</span>}
+                    <span
+                      className="d1-blanket-help"
+                      onMouseEnter={() => setBlanketHelpOpen(true)}
+                      onMouseLeave={(event) => {
+                        if (!event.currentTarget.contains(document.activeElement))
+                          setBlanketHelpOpen(false);
+                      }}
+                      onFocus={() => setBlanketHelpOpen(true)}
+                      onBlur={() => setBlanketHelpOpen(false)}
+                      onClick={(event) => event.preventDefault()}
+                    >
+                      <button
+                        type="button"
+                        className="d1-blanket-help-button"
+                        aria-label="About blanket requirements"
+                        aria-describedby="blanket-requirements-help"
+                        onClick={() => setBlanketHelpOpen(true)}
+                      >
+                        <InfoIcon size={16} />
+                      </button>
+                      <span
+                        id="blanket-requirements-help"
+                        role="tooltip"
+                        className="d1-blanket-help-tooltip"
+                        hidden={!blanketHelpOpen}
+                      >
+                        <span>
+                          Add the items you need under Requirements, then add extra filters here.
+                          Each blanket must match at least one item fulfilling your requirements
+                          above. It does not require another item.
+                        </span>
+                        <span>
+                          Choose Any item in a category to let any of your required items in that
+                          category satisfy the blanket. All filters in one blanket apply to the same
+                          item; separate blankets can match the same or different items.
+                        </span>
+                        <span>
+                          For example, require Lightning, Disintegration, and Frost wands at +2 or
+                          higher. Add an Any wand blanket with exactly +3 and Wandmaker Reward as
+                          its source to require one of those three wands to be the Wandmaker’s +3
+                          reward.
+                        </span>
+                      </span>
+                    </span>
                   </summary>
                   <div className="d1-details-body">{board}</div>
                 </details>

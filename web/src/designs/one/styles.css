@@ -1672,6 +1672,68 @@ input[type="range"]::-moz-range-thumb {
   display: none;
 }
 
+.d1-blanket-details > summary {
+  position: relative;
+}
+
+.d1-blanket-details > summary::after {
+  flex-shrink: 0;
+  margin-left: 4px;
+}
+
+.d1-blanket-help {
+  display: inline-flex;
+  align-items: center;
+  margin-left: auto;
+}
+
+.d1-blanket-help-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-block: -4px;
+  padding: 0;
+  color: var(--d1-text-3);
+  background: none;
+  border: 0;
+  border-radius: 50%;
+  cursor: help;
+}
+
+.d1-blanket-help-button:hover,
+.d1-blanket-help-button:focus-visible {
+  color: var(--d1-text);
+}
+
+.d1-blanket-help-tooltip {
+  position: absolute;
+  z-index: 150;
+  top: 100%;
+  right: 20px;
+  width: min(340px, calc(100% - 20px));
+  padding: 12px;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--d1-text-2);
+  background: var(--d1-panel);
+  border: 1px solid var(--d1-border-strong);
+  border-radius: 8px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5);
+  cursor: auto;
+  user-select: text;
+}
+
+.d1-blanket-help-tooltip > span {
+  display: block;
+}
+
+.d1-blanket-help-tooltip > span + span {
+  margin-top: 8px;
+}
+
 .d1-challenge-list {
   margin-top: 6px;
   display: flex;

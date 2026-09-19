@@ -288,12 +288,6 @@ export function RequirementEditor({
         </header>
 
         <div className="d1-modal-body">
-          {draft.blanket && (
-            <p className="d1-caption">
-              At least one item used by your ordinary requirements must also match these filters.
-              Choose Any item in a category to cover all required items of that category.
-            </p>
-          )}
           <section className="d1-modal-section">
             <h3>Item</h3>
             <Segmented

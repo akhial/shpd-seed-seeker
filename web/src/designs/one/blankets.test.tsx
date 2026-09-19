@@ -76,9 +76,14 @@ it("shows a collapsed blanket board with a count and the existing source and upg
   );
   expect(html).toContain('aria-label="Blanket Requirements"');
   expect(html).toContain(
-    '<details class="d1-details d1-blanket-details"><summary><span>Blanket Requirements</span><span class="d1-count">1</span></summary>',
+    '<details class="d1-details d1-blanket-details"><summary><span>Blanket Requirements</span><span class="d1-count">1</span>',
   );
-  expect(html).not.toContain("Each blanket must match at least one item");
+  expect(html).toContain('aria-label="About blanket requirements"');
+  expect(html).toContain('aria-describedby="blanket-requirements-help"');
+  expect(html).toContain(
+    'id="blanket-requirements-help" role="tooltip" class="d1-blanket-help-tooltip" hidden=""',
+  );
+  expect(html).toContain("Each blanket must match at least one item");
   const editor = renderToStaticMarkup(
     <RequirementEditor
       requirement={query.requirements[3]}
@@ -92,6 +97,7 @@ it("shows a collapsed blanket board with a count and the existing source and upg
   expect(editor).toContain("Wandmaker");
   expect(editor).toContain("Upgrade");
   expect(editor).not.toContain("Total item count");
+  expect(editor).not.toContain("At least one item used by your ordinary requirements");
 });
 
 it("keeps identical blanket chips separate from item stacks and OR labels on the other board", () => {
