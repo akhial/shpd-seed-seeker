@@ -893,8 +893,8 @@ private struct RequirementBoardView: View {
     }
 }
 
-/// An either/or cluster: its chips share one dashed capsule, with the stack
-/// badges at the capsule's trailing edge, since the stack is the cluster's.
+/// An either/or cluster: its chips wrap within one dashed outline, followed
+/// by the stack badges, since the stack is the cluster's.
 private struct ClusterView: View {
     @Binding var requirements: [ItemRequirement]
     let item: BoardItem
@@ -910,17 +910,19 @@ private struct ClusterView: View {
         // Members that no longer exist are skipped for that one frame; the
         // parent's next pass hands down a fresh item.
         let members = item.members.filter { requirements.indices.contains($0) }
-        HStack(spacing: 2) {
+        FlowLayout(spacing: 2, lineSpacing: 6) {
             ForEach(Array(members.enumerated()), id: \.element) { entry in
-                if entry.offset > 0 {
-                    Text("or")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .foregroundStyle(Color.shatteredYellow.opacity(0.9))
-                        .padding(.horizontal, 2)
+                HStack(spacing: 2) {
+                    if entry.offset > 0 {
+                        Text("or")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .foregroundStyle(Color.shatteredYellow.opacity(0.9))
+                            .padding(.horizontal, 2)
+                    }
+                    ChipView(requirements: $requirements, requirement: requirements[entry.element],
+                             index: entry.element, item: item, inCluster: true,
+                             error: errors[entry.element], dragging: $dragging, onEdit: onEdit)
                 }
-                ChipView(requirements: $requirements, requirement: requirements[entry.element],
-                         index: entry.element, item: item, inCluster: true,
-                         error: errors[entry.element], dragging: $dragging, onEdit: onEdit)
             }
             if (item.stackCount > 1 || item.total != nil) && requirements.indices.contains(item.anchor) {
                 StackBadgesView(requirements: $requirements,
@@ -929,8 +931,8 @@ private struct ClusterView: View {
             }
         }
         .padding(3)
-        .background(Color.shatteredYellow.opacity(0.05), in: Capsule())
-        .overlay(Capsule().strokeBorder(
+        .background(Color.shatteredYellow.opacity(0.05), in: RoundedRectangle(cornerRadius: 18))
+        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(
             isTargeted ? Color.shatteredYellow : Color.shatteredYellow.opacity(0.45),
             style: StrokeStyle(lineWidth: 1, dash: isTargeted ? [] : [4, 3])))
         .dropDestination(for: String.self) { payload, _ in
@@ -2500,50 +2502,51 @@ private struct SettingsCaption: View {
     }
 }
 
-/// Lays its subviews out left to right at their natural size, starting a new
-/// row whenever the next one would overflow. SwiftUI ships no wrapping stack.
+/// Lays its subviews out left to right, starting a new row whenever the next
+/// one would overflow. Oversized subviews get the available width so nested
+/// flows can wrap too. SwiftUI ships no wrapping stack.
 private struct FlowLayout: Layout {
     var spacing: CGFloat
     var lineSpacing: CGFloat
 
-    /// Every subview's origin relative to the layout's top-left, plus the size
+    /// Every subview's frame relative to the layout's top-left, plus the size
     /// the resulting rows occupy.
     ///
     /// Subviews sit on their row's centre line rather than its top edge. A
     /// cluster is a chip plus the inset its dashed capsule needs, so it stands
     /// taller than the chips beside it; centred, its members line up with them
     /// instead of hanging that inset lower.
-    private func flow(_ subviews: Subviews, width: CGFloat) -> (origins: [CGPoint], size: CGSize) {
-        var origins: [CGPoint] = []
-        var heights: [CGFloat] = []
+    private func flow(_ subviews: Subviews, width: CGFloat) -> (frames: [CGRect], size: CGSize) {
+        var frames: [CGRect] = []
         var size = CGSize.zero
         var cursor = CGPoint.zero
         var rowHeight: CGFloat = 0
         var rowStart = 0
         // Only once a row is closed is its height — and so its centre — known.
         func centreRow() {
-            for index in rowStart..<origins.count {
-                origins[index].y += (rowHeight - heights[index]) / 2
+            for index in rowStart..<frames.count {
+                frames[index].origin.y += (rowHeight - frames[index].height) / 2
             }
         }
         for subview in subviews {
-            let item = subview.sizeThatFits(.unspecified)
-            // A row always keeps its first subview, however wide it is.
+            var item = subview.sizeThatFits(.unspecified)
+            if item.width > width {
+                item = subview.sizeThatFits(ProposedViewSize(width: width, height: nil))
+            }
             if cursor.x > 0, cursor.x + item.width > width {
                 centreRow()
-                rowStart = origins.count
+                rowStart = frames.count
                 cursor = CGPoint(x: 0, y: cursor.y + rowHeight + lineSpacing)
                 rowHeight = 0
             }
-            origins.append(cursor)
-            heights.append(item.height)
+            frames.append(CGRect(origin: cursor, size: item))
             cursor.x += item.width + spacing
             rowHeight = max(rowHeight, item.height)
             size.width = max(size.width, cursor.x - spacing)
         }
         centreRow()
         size.height = cursor.y + rowHeight
-        return (origins, size)
+        return (frames, size)
     }
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
@@ -2551,9 +2554,9 @@ private struct FlowLayout: Layout {
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        for (subview, origin) in zip(subviews, flow(subviews, width: bounds.width).origins) {
-            subview.place(at: CGPoint(x: bounds.minX + origin.x, y: bounds.minY + origin.y),
-                          proposal: .unspecified)
+        for (subview, frame) in zip(subviews, flow(subviews, width: bounds.width).frames) {
+            subview.place(at: CGPoint(x: bounds.minX + frame.minX, y: bounds.minY + frame.minY),
+                          proposal: ProposedViewSize(frame.size))
         }
     }
 }
