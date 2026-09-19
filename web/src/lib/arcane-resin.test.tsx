@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vite-plus/test";
 import { QueryPanel } from "../designs/one/QueryPanel";
+import { probabilityLabel } from "./format";
 import {
   defaultQueryState,
   fromQueryJson,
@@ -84,7 +85,7 @@ describe("Arcane Resin", () => {
     expect(JSON.parse(analyze_query(json))).toMatchObject({
       valid: true,
       impossible: false,
-      probability: null,
+      probability: expect.any(Number),
     });
     expect(validateQuery({ ...defaultQueryState(), arcaneResin: 0 }).valid).toBe(false);
   });
@@ -118,6 +119,39 @@ describe("Arcane Resin", () => {
     }
   });
 
+  it("reports probability for resin-only and mixed queries through the real engine", () => {
+    for (const requirements of [[], document.requirements]) {
+      const json = JSON.stringify({ ...document, requirements });
+      const state = fromQueryJson(json);
+      queryStore.setState(() => state);
+      const analysis = JSON.parse(analyze_query(json));
+      expect(analysis).toMatchObject({ valid: true, impossible: false });
+      expect(analysis.probability).toBeGreaterThan(0);
+      expect(analysis.probability).toBeLessThanOrEqual(1);
+      const html = renderToStaticMarkup(
+        <QueryPanel
+          analysis={analysis}
+          validation={validateQuery(state)}
+          running={false}
+          engineReady
+          isMac={false}
+          onToggleSearch={() => {}}
+          shareNotice={undefined}
+          onDismissShareNotice={() => {}}
+        />,
+      );
+      expect(html).toContain(probabilityLabel(analysis.probability));
+      expect(html).not.toContain("Probability unavailable");
+    }
+    const baseline = JSON.parse(
+      analyze_query(JSON.stringify({ ...document, arcane_resin: 0 })),
+    ).probability;
+    const constrained = JSON.parse(
+      analyze_query(JSON.stringify({ ...document, arcane_resin: 12 })),
+    ).probability;
+    expect(constrained).toBeLessThan(baseline);
+  });
+
   it("shows a resin requirement chip without the old control or helper text", () => {
     queryStore.setState(() => fromQueryJson('{"arcane_resin":6,"requirements":[]}'));
     const html = renderToStaticMarkup(
@@ -140,6 +174,15 @@ describe("Arcane Resin", () => {
     expect(html).not.toContain("arcane-resin-help");
     expect(html).not.toContain("extra uncursed wands");
     expect(html).not.toContain("Your required wands are kept.");
+  });
+
+  it("keeps numeric zero estimates distinct from unavailable probabilities", () => {
+    const analysis = JSON.parse(
+      analyze_query(JSON.stringify({ ...document, arcane_resin: 65535, auto_apply_trinket: true })),
+    );
+    expect(analysis).toMatchObject({ valid: true, probability: 0 });
+    expect(probabilityLabel(analysis.probability)).toBe("Match probability ≈ 0");
+    expect(probabilityLabel(null)).toBe("Probability unavailable");
   });
 
   it("rejects malformed resin filters before searching", () => {

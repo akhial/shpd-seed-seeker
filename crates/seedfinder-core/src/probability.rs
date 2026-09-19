@@ -42,6 +42,10 @@
 //! Selected trinkets choose a measured +3 profile per unique initial-offer
 //! match. Those profiles include brewing timing and per-floor modifier shares;
 //! ambiguous offers retain the canonical supply. See [`crate::probability_tables`].
+//! Arcane Resin uses the most probable sufficient donor-wand plan, trying
+//! partitions of its total across generated upgrades. Donors compete with
+//! ordinary requirements for distinct items and quest choices. Like alternative groups, this reads
+//! low because overlapping plans are not summed.
 //! Artifacts use their measured supply for single-item estimates. Joint
 //! artifact requirements average valid identity assignments over sampled
 //! anonymous layouts, retaining floor/source/curse filters and accessibility
@@ -66,6 +70,7 @@
 
 mod artifacts;
 mod coverage;
+mod resin;
 
 use coverage::Coverages;
 
@@ -104,12 +109,6 @@ use crate::quests::WandmakerQuestType;
 /// the group.
 #[must_use]
 pub fn estimate_match_probability(query: &SearchQuery) -> f64 {
-    // The equipment tables do not model a variable number of surplus wands
-    // contributing resin. Do not report the ordinary slots' probability as
-    // though it described the full query.
-    if query.arcane_resin > 0 {
-        return f64::NAN;
-    }
     if let Some(policy) = crate::auto_trinkets::AutoTrinketPolicy::prepare(query) {
         return crate::auto_trinkets::probability(query, &policy);
     }
@@ -124,6 +123,9 @@ pub fn estimate_match_probability(query: &SearchQuery) -> f64 {
 }
 
 pub(crate) fn equipment_probability(query: &SearchQuery, profile: Profile) -> f64 {
+    if query.arcane_resin > 0 {
+        return resin::probability(query, profile);
+    }
     let requirements = effective_requirements(query, profile);
     let mut linked: BTreeMap<u8, Vec<Requirement>> = BTreeMap::new();
     let mut independent: Vec<Requirement> = Vec::new();
@@ -1410,9 +1412,13 @@ impl Predicate {
             // No source that rolls its alternatives as one locks their levels
             // to their tiers, so the identity keeps the tabled tier shares.
             let rolled = self.upgrade_probability(supply) * modifiers;
-            rolled * (1.0 - (1.0 - identity).powf(options))
+            rolled.clamp(0.0, 1.0) * (1.0 - (1.0 - identity.clamp(0.0, 1.0)).powf(options))
         } else {
-            let matched = self.identity_and_upgrade_probability(supply, tiers) * modifiers;
+            // Rounded f32 shares can sum to slightly more than one. A
+            // negative miss chance raised to a fractional option count (as
+            // in selected-trinket profiles) would turn the estimate into NaN.
+            let matched =
+                (self.identity_and_upgrade_probability(supply, tiers) * modifiers).clamp(0.0, 1.0);
             1.0 - (1.0 - matched).powf(options)
         }
     }
@@ -1794,6 +1800,20 @@ mod tests {
     fn assert_probability(requirements: Vec<Requirement>, expected: f64) {
         let actual = estimate_match_probability(&query(requirements, 24));
         assert!((actual - expected).abs() < 1e-10, "{actual} vs {expected}");
+    }
+
+    #[test]
+    fn rounded_shares_keep_fractional_option_counts_finite() {
+        let mut supply = crate::probability_tables::trinkets::Profile::None
+            .supply_for(ItemKind::Wand)
+            .next()
+            .unwrap();
+        supply.upgrades = [0.1, 0.2, 0.3, 0.4, 0.0, 0.0];
+        supply.options = 1.5;
+        supply.shared_roll = false;
+        let predicate = super::Predicate::of(requirement(ItemKind::Wand), None);
+        assert!(predicate.upgrade_probability(&supply) > 1.0);
+        assert!((predicate.slot_probability(&supply, 3) - 1.0).abs() < f64::EPSILON);
     }
 
     #[test]

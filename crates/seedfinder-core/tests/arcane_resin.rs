@@ -293,7 +293,7 @@ fn resin_plans_keep_later_wands_and_vault_supply() {
     assert_eq!(plan.generation_depth(), 24);
     assert!(plan.wants_vault_treasure());
     assert!(!plan.is_unsatisfiable());
-    assert!(shpd_seedfinder_core::probability::estimate_match_probability(&query).is_nan());
+    assert!(shpd_seedfinder_core::probability::estimate_match_probability(&query).is_finite());
 
     // Compare optimized search with complete generation across both sides
     // of the Wandmaker and Imp windows, including resin-only searches.
