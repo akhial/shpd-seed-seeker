@@ -265,9 +265,9 @@ jobs:
 
   macos-app:
     name: macOS app
-    # The linked SDK gates the system appearance; macos-26 ships the current
+    # The linked SDK gates the system appearance; macos-27 ships the current
     # one. Keep in sync with the CI macos job.
-    runs-on: macos-26
+    runs-on: macos-27
     timeout-minutes: 30
 
     # Signing/notarization activates once the repository secrets exist;
