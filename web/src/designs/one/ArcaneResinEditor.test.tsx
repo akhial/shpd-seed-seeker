@@ -22,6 +22,7 @@ afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
   queryStore.setState(defaultQueryState);
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -123,3 +124,114 @@ it("loads legacy resin and can turn it into an ordinary wand requirement", async
   expect(queryStore.state.requirements).toHaveLength(1);
   expect(queryStore.state.requirements[0].item).toBe("wand_lightning");
 });
+
+async function startResinDrag(pointerType = "mouse") {
+  const button = host.querySelector<HTMLButtonElement>(".d1-resin-edit")!;
+  button.setPointerCapture = vi.fn();
+  await act(async () =>
+    button.dispatchEvent(
+      new PointerEvent("pointerdown", {
+        bubbles: true,
+        pointerId: 1,
+        pointerType,
+        button: 0,
+        clientX: 20,
+        clientY: 20,
+      }),
+    ),
+  );
+  await act(async () =>
+    button.dispatchEvent(
+      new PointerEvent("pointermove", {
+        bubbles: true,
+        pointerId: 1,
+        pointerType,
+        clientX: 40,
+        clientY: 60,
+      }),
+    ),
+  );
+  expect(host.querySelector(".d1-resin-chip")!.classList.contains("d1-chip-dragging")).toBe(true);
+  expect(host.querySelector(".d1-chip-ghost")!.textContent).toContain("Arcane Resin");
+  expect(host.querySelector(".d1-chip-ghost")!.textContent).toContain("≥6");
+  expect(host.querySelector(".d1-delete-zone")).not.toBeNull();
+  return button;
+}
+
+it.each(["mouse", "touch"])(
+  "drags resin to remove with %s without changing other requirements",
+  async (pointerType) => {
+    queryStore.setState(() =>
+      fromQueryJson(
+        '{"arcane_resin":6,"arcane_resin_filter":{"max_depth":4},"requirements":[{"item":"wand_lightning"}]}',
+      ),
+    );
+    const requirements = queryStore.state.requirements;
+    await render();
+    vi.spyOn(document, "elementFromPoint").mockImplementation(() =>
+      host.querySelector(".d1-delete-zone"),
+    );
+    const button = await startResinDrag(pointerType);
+    await act(async () =>
+      button.dispatchEvent(
+        new PointerEvent("pointerup", {
+          bubbles: true,
+          pointerId: 1,
+          pointerType,
+          clientX: 40,
+          clientY: 60,
+        }),
+      ),
+    );
+    expect(queryStore.state.arcaneResin).toBeUndefined();
+    expect(queryStore.state.arcaneResinFilter).toBeUndefined();
+    expect(queryStore.state.requirements).toEqual(requirements);
+    expect(host.querySelector(".d1-resin-chip")).toBeNull();
+    expect(host.querySelector(".d1-chip-ghost")).toBeNull();
+    expect(host.querySelector(".d1-delete-zone")).toBeNull();
+    expect(host.querySelector(".d1-modal")).toBeNull();
+  },
+);
+
+it.each(["chip", "board", "outside", "cancel", "escape"])(
+  "preserves resin after dragging onto %s without opening the editor",
+  async (destination) => {
+    queryStore.setState(() =>
+      fromQueryJson('{"arcane_resin":6,"requirements":[{"item":"wand_lightning"}]}'),
+    );
+    const query = toQueryDocument(queryStore.state);
+    await render();
+    vi.spyOn(document, "elementFromPoint").mockImplementation(() =>
+      destination === "outside"
+        ? null
+        : host.querySelector(`[data-drop="${destination === "chip" ? "chip" : "board"}"]`),
+    );
+    const button = await startResinDrag();
+    expect(host.querySelector(".d1-drop-alternative")).toBeNull();
+    expect(host.querySelector(".d1-ghost-alternative")).toBeNull();
+    if (destination === "escape") {
+      await act(async () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })));
+    }
+    await act(async () =>
+      button.dispatchEvent(
+        new PointerEvent(destination === "cancel" ? "pointercancel" : "pointerup", {
+          bubbles: true,
+          pointerId: 1,
+          pointerType: "mouse",
+          clientX: 40,
+          clientY: 60,
+        }),
+      ),
+    );
+    // Browsers can synthesize a click after the captured drag is released.
+    await act(async () =>
+      button.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 })),
+    );
+    expect(toQueryDocument(queryStore.state)).toEqual(query);
+    expect(host.querySelector(".d1-modal")).toBeNull();
+    expect(host.querySelector(".d1-chip-ghost")).toBeNull();
+    expect(host.querySelector(".d1-delete-zone")).toBeNull();
+    await click("Edit Arcane Resin");
+    expect(host.querySelector(".d1-modal")).not.toBeNull();
+  },
+);

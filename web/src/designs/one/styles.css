@@ -3134,6 +3134,11 @@ input[type="range"]::-moz-range-thumb {
   border-radius: inherit;
 }
 
+.d1-resin-edit {
+  cursor: grab;
+  touch-action: none;
+}
+
 .d1-resin-remove {
   padding: 0 8px 0 6px;
   color: var(--d1-text-3);

@@ -2,8 +2,6 @@ import { useState } from "react";
 import { useStore } from "@tanstack/react-store";
 import { LEVEL_GEN_CHALLENGES, challenges as challengeOptions } from "../../lib/catalog";
 import { probabilityLabel } from "../../lib/format";
-import { sourceLabel } from "../../lib/catalog";
-import { ARCANE_RESIN_SPRITE, itemArt } from "../../lib/sprites";
 import { CheckIcon, CommandIcon, LinkIcon, ReturnIcon, XIcon } from "../../lib/icons";
 import {
   BLACKSMITH_LAST_FLOOR,
@@ -38,7 +36,7 @@ import { RequirementBoard } from "./RequirementBoard";
 import type { StackShape } from "./RequirementBoard";
 import { applyEdit, boardCount, boardItems, removeItem, removeMember } from "./relations";
 import { RequirementEditor } from "./RequirementEditor";
-import { SliderRow, Sprite } from "./parts";
+import { SliderRow } from "./parts";
 
 const patchQuery = (patch: Partial<QueryState>) =>
   queryStore.setState((state) => ({ ...state, ...patch }));
@@ -319,57 +317,29 @@ export function QueryPanel({
                 stack: { count: 1, inCluster: false },
               })
             }
-          >
-            {(query.arcaneResin ?? 0) > 0 && (
-              <div className="d1-chip d1-resin-chip" data-no-drag>
-                <button
-                  type="button"
-                  className="d1-resin-edit"
-                  aria-label="Edit Arcane Resin"
-                  title={
-                    query.arcaneResinFilter?.source
-                      ? sourceLabel(query.arcaneResinFilter.source)
-                      : undefined
+            resin={
+              (query.arcaneResin ?? 0) > 0
+                ? {
+                    amount: query.arcaneResin!,
+                    filter: query.arcaneResinFilter,
+                    onEdit: () =>
+                      setEditor({
+                        index: null,
+                        resin: true,
+                        requirement: {
+                          ...emptyRequirement("wand"),
+                          item: "arcane_resin",
+                          uncursed: true,
+                          ...query.arcaneResinFilter,
+                        },
+                        stack: { count: 1, inCluster: false },
+                      }),
+                    onRemove: () =>
+                      patchQuery({ arcaneResin: undefined, arcaneResinFilter: undefined }),
                   }
-                  onClick={() =>
-                    setEditor({
-                      index: null,
-                      resin: true,
-                      requirement: {
-                        ...emptyRequirement("wand"),
-                        item: "arcane_resin",
-                        uncursed: true,
-                        ...query.arcaneResinFilter,
-                      },
-                      stack: { count: 1, inCluster: false },
-                    })
-                  }
-                >
-                  <Sprite art={itemArt(ARCANE_RESIN_SPRITE)} size={18} />
-                  <span className="d1-chip-name">Arcane Resin</span>
-                  <span className="d1-chip-tag">≥{query.arcaneResin}</span>
-                  {query.arcaneResinFilter?.maxDepth !== undefined && (
-                    <span className="d1-chip-tag">F≤{query.arcaneResinFilter.maxDepth}</span>
-                  )}
-                  {(query.arcaneResinFilter?.uncursed ?? true) && (
-                    <span className="d1-chip-tag d1-chip-tag-soft" title="Uncursed wands">
-                      ✓
-                    </span>
-                  )}
-                </button>
-                <button
-                  type="button"
-                  className="d1-resin-remove"
-                  aria-label="Remove Arcane Resin"
-                  onClick={() =>
-                    patchQuery({ arcaneResin: undefined, arcaneResinFilter: undefined })
-                  }
-                >
-                  <XIcon size={12} />
-                </button>
-              </div>
-            )}
-          </RequirementBoard>
+                : undefined
+            }
+          />
         </section>
 
         <section className="d1-section">
