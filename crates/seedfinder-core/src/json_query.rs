@@ -19,7 +19,7 @@ struct QueryDocument {
     #[serde(default)]
     auto_apply_trinket: bool,
     #[serde(default)]
-    arcane_resin: u16,
+    arcane_resin: FileArcaneResin,
     #[serde(default)]
     arcane_resin_filter: FileArcaneResinFilter,
     requirements: Vec<Value>,
@@ -37,6 +37,25 @@ struct QueryDocument {
     _fast_mode: bool,
     #[serde(default)]
     challenges: Vec<FileChallenge>,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum FileArcaneResin {
+    Amount(u16),
+    Auto(AutoResin),
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum AutoResin {
+    Auto,
+}
+
+impl Default for FileArcaneResin {
+    fn default() -> Self {
+        Self::Amount(0)
+    }
 }
 
 #[derive(Deserialize)]
@@ -398,7 +417,11 @@ pub fn decode_unvalidated(contents: &str) -> Result<SearchQuery, String> {
         .transpose()?;
     Ok(SearchQuery {
         auto_apply_trinket: document.auto_apply_trinket,
-        arcane_resin: document.arcane_resin,
+        arcane_resin_auto: matches!(document.arcane_resin, FileArcaneResin::Auto(_)),
+        arcane_resin: match document.arcane_resin {
+            FileArcaneResin::Amount(amount) => amount,
+            FileArcaneResin::Auto(_) => 0,
+        },
         arcane_resin_filter: ArcaneResinFilter {
             uncursed: document.arcane_resin_filter.uncursed,
             max_depth: document.arcane_resin_filter.max_depth,
@@ -560,7 +583,9 @@ pub const fn source_name(source: ItemSource) -> &'static str {
 #[must_use]
 pub fn encode(query: &SearchQuery) -> Value {
     let mut document = Map::new();
-    if query.arcane_resin > 0 {
+    if query.arcane_resin_auto {
+        document.insert("arcane_resin".to_owned(), json!("auto"));
+    } else if query.arcane_resin > 0 {
         document.insert("arcane_resin".to_owned(), json!(query.arcane_resin));
     }
     if query.arcane_resin_filter != ArcaneResinFilter::default() {
@@ -1086,6 +1111,7 @@ mod tests {
         let query = SearchQuery {
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
+            arcane_resin_auto: false,
             arcane_resin: 0,
             requirements: vec![
                 Requirement {
@@ -1158,6 +1184,7 @@ mod tests {
         let query = SearchQuery {
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
+            arcane_resin_auto: false,
             arcane_resin: 0,
             requirements: vec![Requirement {
                 kind: ItemKind::Wand,

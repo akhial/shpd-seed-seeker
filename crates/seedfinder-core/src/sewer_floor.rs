@@ -1426,6 +1426,7 @@ mod tests {
         let query = SearchQuery {
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
+            arcane_resin_auto: false,
             arcane_resin: 0,
             requirements: vec![Requirement {
                 kind: crate::catalog::ItemKind::Armor,

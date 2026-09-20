@@ -125,7 +125,62 @@ it("loads legacy resin and can turn it into an ordinary wand requirement", async
   expect(queryStore.state.requirements[0].item).toBe("wand_lightning");
 });
 
-async function startResinDrag(pointerType = "mouse") {
+it("selects Auto, preserves filters, and restores the mode when editing", async () => {
+  await render();
+  await click("Add");
+  await click("Wand");
+  await selectItem("arcane_resin");
+  await click("Auto");
+  expect(host.querySelector('input[aria-label="Minimum resin"]')).toBeNull();
+  expect(host.querySelector(".d1-modal")!.textContent).toContain("every matched wand to +3");
+  await toggle("Require uncursed wands");
+  await toggle("Limit wands to a floor");
+  await click("Add Requirement");
+  expect(toQueryDocument(queryStore.state)).toMatchObject({
+    arcane_resin: "auto",
+    arcane_resin_filter: { max_depth: 4 },
+  });
+  expect(host.querySelector(".d1-resin-chip")!.textContent).toContain("Auto");
+  expect(host.querySelector(".d1-resin-chip")!.textContent).not.toContain("≥");
+  expect(host.textContent).toContain("1 requirement");
+  await click("Edit Arcane Resin");
+  expect(
+    host.querySelector('[aria-label="Resin amount mode"] [aria-pressed="true"]')!.textContent,
+  ).toBe("Auto");
+  await click("Amount");
+  expect(host.querySelector<HTMLInputElement>('input[aria-label="Minimum resin"]')!.value).toBe(
+    "2",
+  );
+  await click("Save Changes");
+  expect(queryStore.state.arcaneResin).toBe(2);
+  expect(host.querySelector(".d1-resin-chip")!.textContent).toContain("≥2");
+});
+
+it("loads an Auto chip and uses its label while dragging to remove", async () => {
+  queryStore.setState(() =>
+    fromQueryJson('{"arcane_resin":"auto","requirements":[{"kind":"wand"}]}'),
+  );
+  await render();
+  vi.spyOn(document, "elementFromPoint").mockImplementation(() =>
+    host.querySelector(".d1-delete-zone"),
+  );
+  const button = await startResinDrag("mouse", "Auto");
+  await act(async () =>
+    button.dispatchEvent(
+      new PointerEvent("pointerup", {
+        bubbles: true,
+        pointerId: 1,
+        pointerType: "mouse",
+        clientX: 40,
+        clientY: 60,
+      }),
+    ),
+  );
+  expect(queryStore.state.arcaneResin).toBeUndefined();
+  expect(queryStore.state.requirements).toHaveLength(1);
+});
+
+async function startResinDrag(pointerType = "mouse", amountLabel = "≥6") {
   const button = host.querySelector<HTMLButtonElement>(".d1-resin-edit")!;
   button.setPointerCapture = vi.fn();
   await act(async () =>
@@ -153,7 +208,7 @@ async function startResinDrag(pointerType = "mouse") {
   );
   expect(host.querySelector(".d1-resin-chip")!.classList.contains("d1-chip-dragging")).toBe(true);
   expect(host.querySelector(".d1-chip-ghost")!.textContent).toContain("Arcane Resin");
-  expect(host.querySelector(".d1-chip-ghost")!.textContent).toContain("≥6");
+  expect(host.querySelector(".d1-chip-ghost")!.textContent).toContain(amountLabel);
   expect(host.querySelector(".d1-delete-zone")).not.toBeNull();
   return button;
 }

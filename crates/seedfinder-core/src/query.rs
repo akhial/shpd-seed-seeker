@@ -2,6 +2,7 @@
 
 mod resin;
 pub use resin::ArcaneResinFilter;
+pub(crate) use resin::upgrade_cost as resin_upgrade_cost;
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -571,13 +572,18 @@ impl Requirement {
 
 /// All requirements must be obtainable together in the same generated world.
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[allow(clippy::struct_excessive_bools)] // Independent search and generation settings.
 pub struct SearchQuery {
     /// Automatically choose one offered trinket at +3 before generation.
     /// Explicit trinket requirements take precedence over this setting.
     pub auto_apply_trinket: bool,
     /// Minimum Arcane Resin from surplus wands, after reserving
-    /// distinct items for every ordinary requirement. Zero disables it.
+    /// distinct items for every ordinary requirement. Zero disables fixed
+    /// resin; `arcane_resin_auto` derives the amount instead when enabled.
     pub arcane_resin: u16,
+    /// Derive the minimum from the assigned wands' costs to reach +3.
+    /// When enabled, this takes precedence over `arcane_resin`.
+    pub arcane_resin_auto: bool,
     pub arcane_resin_filter: ArcaneResinFilter,
     pub requirements: Vec<Requirement>,
     pub max_depth: u8,
@@ -630,6 +636,12 @@ const fn flag_at_least_as_strict(candidate: bool, base: bool) -> bool {
 type IdentityMember = (usize, Option<u8>, ItemKind, bool);
 
 impl SearchQuery {
+    /// Whether the query reserves surplus wands for a resin condition.
+    #[must_use]
+    pub const fn needs_resin(&self) -> bool {
+        self.arcane_resin_auto || self.arcane_resin > 0
+    }
+
     /// Validates bounds and every requirement.
     ///
     /// # Errors
@@ -642,7 +654,7 @@ impl SearchQuery {
             .requirements
             .iter()
             .all(|requirement| requirement.blanket)
-            && (!self.requirements.is_empty() || self.arcane_resin == 0)
+            && (!self.requirements.is_empty() || !self.needs_resin())
         {
             return Err(QueryError::Empty);
         }
@@ -799,7 +811,7 @@ impl SearchQuery {
                 }
             }
         }
-        slots.len() - sum_slots + groups.len() + usize::from(self.arcane_resin > 0)
+        slots.len() - sum_slots + groups.len() + usize::from(self.needs_resin())
     }
 
     /// Whether this query *continues* `base`: identical floor limit and
@@ -821,8 +833,10 @@ impl SearchQuery {
     #[must_use]
     pub fn continues(&self, base: &SearchQuery) -> bool {
         if self.max_depth != base.max_depth
-            || self.arcane_resin < base.arcane_resin
-            || (base.arcane_resin > 0
+            || (base.needs_resin()
+                && (self.arcane_resin_auto != base.arcane_resin_auto
+                    || (!self.arcane_resin_auto && self.arcane_resin < base.arcane_resin)))
+            || (base.needs_resin()
                 && !self
                     .arcane_resin_filter
                     .implies(base.arcane_resin_filter, self.max_depth))
@@ -973,10 +987,9 @@ impl SearchQuery {
     /// rather than re-deriving it.
     #[must_use]
     pub fn shares_item(&self, base: &SearchQuery) -> bool {
-        if (self.arcane_resin > 0
-            && (base.arcane_resin > 0
-                || base.requirements.iter().any(|r| r.kind == ItemKind::Wand)))
-            || (base.arcane_resin > 0 && self.requirements.iter().any(|r| r.kind == ItemKind::Wand))
+        if (self.needs_resin()
+            && (base.needs_resin() || base.requirements.iter().any(|r| r.kind == ItemKind::Wand)))
+            || (base.needs_resin() && self.requirements.iter().any(|r| r.kind == ItemKind::Wand))
         {
             return true;
         }
@@ -1223,8 +1236,8 @@ impl<'query> Assignment<'query> {
                     .iter()
                     .all(|indices| indices.iter().any(|&index| self.used[index]));
         }
-        // Surplus supply can only shrink as slots claim items and choices.
-        if self.resin.minimum > 0 && self.resin_selection().is_none() {
+        // Supply only shrinks and Auto's cost only grows as slots claim items.
+        if self.resin.enabled() && self.resin_selection().is_none() {
             return false;
         }
         for candidate in 0..self.slots[slot].candidates.len() {
@@ -1455,7 +1468,7 @@ impl BestSubset<'_> {
                 .filter(|indices| indices.iter().any(|index| items.contains(index)))
                 .count();
 
-            if self.assignment.resin.minimum > 0
+            if self.assignment.resin.enabled()
                 && let Some(resin_items) = self.assignment.resin_selection()
             {
                 conditions += 1;
@@ -1473,7 +1486,7 @@ impl BestSubset<'_> {
         if self.selected.len()
             + (self.assignment.slots.len() - slot)
             + self.assignment.blankets.len()
-            + usize::from(self.assignment.resin.minimum > 0)
+            + usize::from(self.assignment.resin.enabled())
             <= self.best_conditions
         {
             return;
@@ -1735,6 +1748,7 @@ mod tests {
         let base = SearchQuery {
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
+            arcane_resin_auto: false,
             arcane_resin: 0,
             requirements: vec![requirement(ItemId::Sword), requirement(ItemId::Sword)],
             max_depth: 4,
@@ -1827,6 +1841,7 @@ mod tests {
         let query = |requirements: Vec<Requirement>| SearchQuery {
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
+            arcane_resin_auto: false,
             arcane_resin: 0,
             requirements,
             max_depth: 24,
@@ -1895,6 +1910,7 @@ mod tests {
         let query = |kind: ItemKind, item: Option<ItemId>| SearchQuery {
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
+            arcane_resin_auto: false,
             arcane_resin: 0,
             requirements: vec![Requirement {
                 kind,
@@ -1951,6 +1967,7 @@ mod tests {
         let query = SearchQuery {
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
+            arcane_resin_auto: false,
             arcane_resin: 0,
             requirements: vec![requirement(ItemId::Sword), requirement(ItemId::Sword)],
             max_depth: 4,
@@ -1987,6 +2004,7 @@ mod tests {
         let mut query = SearchQuery {
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
+            arcane_resin_auto: false,
             arcane_resin: 0,
             requirements: vec![requirement(ItemId::Sword)],
             max_depth: 24,
@@ -2057,6 +2075,7 @@ mod tests {
         let mut query = SearchQuery {
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
+            arcane_resin_auto: false,
             arcane_resin: 0,
             requirements: vec![limited],
             max_depth: 24,
@@ -2075,6 +2094,7 @@ mod tests {
         let query = SearchQuery {
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
+            arcane_resin_auto: false,
             arcane_resin: 0,
             requirements: vec![requirement(ItemId::Sword), requirement(ItemId::MailArmor)],
             max_depth: 4,
@@ -2113,6 +2133,7 @@ mod tests {
         let query = SearchQuery {
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
+            arcane_resin_auto: false,
             arcane_resin: 0,
             requirements: vec![requirement(ItemId::Sword), requirement(ItemId::MailArmor)],
             max_depth: 4,
@@ -2180,6 +2201,7 @@ mod tests {
         let compatible = SearchQuery {
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
+            arcane_resin_auto: false,
             arcane_resin: 0,
             requirements: vec![requirement(ItemId::Sword), requirement(ItemId::MailArmor)],
             max_depth: 4,
@@ -2193,6 +2215,7 @@ mod tests {
         let incompatible = SearchQuery {
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
+            arcane_resin_auto: false,
             arcane_resin: 0,
             requirements: vec![requirement(ItemId::Sword), requirement(ItemId::WandFrost)],
             max_depth: 4,
@@ -2565,6 +2588,7 @@ mod tests {
         let mut query = SearchQuery {
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
+            arcane_resin_auto: false,
             arcane_resin: 0,
             requirements: vec![
                 linked(
@@ -2636,6 +2660,7 @@ mod tests {
         let mut query = SearchQuery {
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
+            arcane_resin_auto: false,
             arcane_resin: 0,
             requirements: vec![requirement(ItemId::Sword)],
             max_depth: 14,
@@ -2700,6 +2725,7 @@ mod tests {
         let query = |members: Vec<Requirement>| SearchQuery {
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
+            arcane_resin_auto: false,
             arcane_resin: 0,
             requirements: members,
             max_depth: 24,
@@ -3250,6 +3276,7 @@ mod tests {
         SearchQuery {
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
+            arcane_resin_auto: false,
             arcane_resin: 0,
             requirements,
             max_depth: 24,

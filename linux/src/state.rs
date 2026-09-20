@@ -306,6 +306,7 @@ impl AppState {
         SearchQuery {
             auto_apply_trinket: self.auto_apply_trinket,
             arcane_resin_filter: self.arcane_resin_filter,
+            arcane_resin_auto: false,
             arcane_resin: self.arcane_resin,
             requirements: self.requirements.iter().map(|r| r.to_core()).collect(),
             max_depth: self.max_depth,

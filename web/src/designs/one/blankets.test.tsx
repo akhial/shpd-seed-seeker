@@ -190,3 +190,62 @@ it("searches and scouts a real Wandmaker reward as one item serving two conditio
   expect(result.items.filter((item) => item.matched)).toHaveLength(1);
   expect(JSON.parse(filter_seeds(JSON.stringify(query), new Float64Array([0])))).toHaveLength(1);
 });
+
+it("keeps Auto resin on the ordinary board and preserves blankets through shared documents", () => {
+  const query = fromQueryJson(JSON.stringify({ ...document, arcane_resin: "auto" }));
+  expect(validateQuery(query).valid).toBe(true);
+  expect(fromQueryJson(decode_share_text(encode_share_link(toQueryJson(query))))).toEqual(query);
+  expect(decodeResultsFile(encodeResultsFile(toQueryDocument(query), [])).query).toEqual(query);
+  queryStore.setState(() => query);
+  const html = renderToStaticMarkup(
+    <QueryPanel
+      analysis={undefined}
+      validation={validateQuery(query)}
+      running={false}
+      engineReady
+      onToggleSearch={() => {}}
+      isMac={false}
+      shareNotice={undefined}
+      onDismissShareNotice={() => {}}
+    />,
+  );
+  expect(html.match(/aria-label="Edit Arcane Resin"/g)).toHaveLength(1);
+  expect(html).toContain("Auto");
+  const blanketBoard = html.slice(html.indexOf('aria-label="Blanket Requirements"'));
+  expect(blanketBoard).not.toContain("d1-resin-chip");
+});
+
+it("analyzes Auto blanket witnesses quickly and scouts the same reserved wand", () => {
+  const query = {
+    arcane_resin: "auto",
+    requirements: [
+      { item: "wand_lightning", upgrade: 2 },
+      { kind: "wand", upgrade: 2, blanket: true },
+    ],
+  };
+  const started = performance.now();
+  const analysis = JSON.parse(analyze_query(JSON.stringify(query)));
+  expect(performance.now() - started).toBeLessThan(1000);
+  expect(analysis).toMatchObject({ valid: true, impossible: false });
+  const direct = JSON.parse(
+    analyze_query(JSON.stringify({ ...query, requirements: query.requirements.slice(0, 1) })),
+  );
+  expect(analysis.probability).toBeCloseTo(direct.probability, 12);
+  const wider = {
+    arcane_resin: "auto",
+    auto_apply_trinket: true,
+    requirements: [
+      ...Array.from({ length: 4 }, () => ({ kind: "wand" })),
+      { kind: "wand", upgrade: { at_least: 1 }, uncursed: true, blanket: true },
+    ],
+  };
+  const wideStarted = performance.now();
+  const wideAnalysis = JSON.parse(analyze_query(JSON.stringify(wider)));
+  expect(performance.now() - wideStarted).toBeLessThan(1000);
+  expect(wideAnalysis).toMatchObject({ valid: true, impossible: false });
+  expect(wideAnalysis.probability).toBeGreaterThan(0);
+  const result = JSON.parse(scout(JSON.stringify({ seed: "AAA-AAA-AAS", query }))) as ScoutResult;
+  expect(result.matchedRequirements).toBe(3);
+  expect(result.totalRequirements).toBe(3);
+  expect(JSON.parse(filter_seeds(JSON.stringify(query), new Float64Array([18])))).toHaveLength(1);
+});

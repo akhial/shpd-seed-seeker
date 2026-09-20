@@ -59,15 +59,32 @@ only action that discards results is the explicit **Clear** button.
   sources. Resin counts as one scout condition, highlighting its contributing
   wands. Raising the minimum or tightening donor filters may continue a query;
   loosening them requires re-filtering or rescanning. Resin searches share an
-  item with other resin searches and wand searches. JSON and share links
-  preserve the minimum (version 7) and donor filters (version 8); links without
-  resin retain their prior encoding. Web, Android, macOS, Windows, and Linux
-  offer Resin in the Wand editor and support resin-only queries, as does the
-  CLI's canonical query input. Probability estimates use the most probable
-  sufficient donor allocation after reserving ordinary requirements, including
-  their blanket filters. Donors cannot witness blankets or consume a quest
-  reward reserved by a blanket witness. Estimates are conservative because
-  overlapping donor allocations are not summed.
+  item with other resin searches and wand searches. With `"arcane_resin":"auto"`,
+  the minimum is calculated for each assignment: each reserved +0 wand needs 6,
+  +1 needs 5, +2 needs 3, and +3 or higher needs none. Only wands actually
+  assigned to ordinary slots contribute; an OR slot contributes its selected
+  member, and a query with no assigned wands needs no resin. Auto remains one
+  scout condition even when no donors are needed. Switching between Auto and
+  a positive fixed amount requires re-filtering or rescanning. Auto can refine
+  another Auto query under the same ordinary narrowing and donor-filter rules.
+  JSON and share links preserve the minimum (version 7), donor filters
+  (version 8), blankets (version 9), and Auto (version 10); existing queries
+  retain their prior encoding. Web, Android, macOS, Windows, and Linux offer Resin in the Wand
+  editor and support resin-only queries, as does the CLI's canonical query
+  input. The engine and web editor support Auto; native editors currently
+  offer fixed amounts. Probability estimates integrate wand upgrades and
+  surplus resin together, reserving each item once and replacing an earlier
+  reservation when a cheaper matching wand arrives. This includes mixed
+  upgrades without enumerating donor plans. Blanket filters narrow only the
+  reserved items before resin is calculated; witnesses add no extra upgrade
+  cost, and donors cannot satisfy blankets. The model uses measured supply
+  counts and keeps quest rewards mutually exclusive. It retains the ordinary
+  equipment estimate's identity-deck and world-condition corrections, with
+  the conditional resin chance calculated from the joint supply. Overlapping
+  filters use a scarcest-first allocation; this remains an estimate rather
+  than an exhaustive count of seeds. Pure supply calculations are cached per
+  worker with bounded storage, including profile and all donor filters in the
+  keys, so repeated trinket scoring does not repeat the supply calculation.
 - **Shares an item**: some requirement of B and some requirement of A have
   the same kind, and either at least one of the two names no specific item or
   both name the same item. Scope and challenge differences are irrelevant

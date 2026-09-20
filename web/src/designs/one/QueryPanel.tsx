@@ -178,7 +178,7 @@ export function QueryPanel({
     });
   };
 
-  const slotTotal = boardCount(query.requirements) + Number((query.arcaneResin ?? 0) > 0);
+  const slotTotal = boardCount(query.requirements) + Number(Boolean(query.arcaneResin));
   const challengeCount = query.challenges.length;
   const wandmakerCount = Number(Boolean(query.wandmakerQuest));
   const blacksmithCount = Number(query.requireBlacksmith) + Number(query.excludeBlacksmithRewards);
@@ -329,7 +329,7 @@ export function QueryPanel({
             <RequirementBoard
               requirements={requirements}
               resin={
-                !blanket && (query.arcaneResin ?? 0) > 0
+                !blanket && query.arcaneResin
                   ? {
                       amount: query.arcaneResin!,
                       filter: query.arcaneResinFilter,

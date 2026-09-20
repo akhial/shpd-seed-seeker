@@ -35,20 +35,37 @@ impl ArcaneResinFilter {
 }
 
 pub(super) struct ResinSupply {
-    pub minimum: u16,
+    minimum: u16,
+    auto: bool,
     candidates: Vec<(usize, u32)>,
 }
 
+/// Resin charges the resulting upgrade level for each step, up to +3.
+pub(crate) const fn upgrade_cost(upgrade: u8) -> u32 {
+    match upgrade {
+        0 => 6,
+        1 => 5,
+        2 => 3,
+        _ => 0,
+    }
+}
+
 impl ResinSupply {
+    pub const fn enabled(&self) -> bool {
+        self.auto || self.minimum > 0
+    }
+
     pub fn prepare(query: &SearchQuery, items: &[WorldItem]) -> Self {
-        if query.arcane_resin == 0 {
+        if !query.needs_resin() {
             return Self {
                 minimum: 0,
+                auto: false,
                 candidates: Vec::new(),
             };
         }
         Self {
             minimum: query.arcane_resin,
+            auto: query.arcane_resin_auto,
             candidates: items
                 .iter()
                 .enumerate()
@@ -83,7 +100,17 @@ impl ResinSupply {
         used: &[bool],
         scenarios: &BTreeMap<u16, u64>,
     ) -> Option<Vec<usize>> {
-        if self.minimum == 0 {
+        let minimum = if self.auto {
+            items
+                .iter()
+                .zip(used)
+                .filter(|(candidate, used)| **used && item(candidate.item).kind == ItemKind::Wand)
+                .map(|(candidate, _)| upgrade_cost(candidate.upgrade))
+                .sum()
+        } else {
+            u32::from(self.minimum)
+        };
+        if minimum == 0 {
             return Some(Vec::new());
         }
         let mut totals: BTreeMap<u16, [u32; 64]> = BTreeMap::new();
@@ -120,7 +147,7 @@ impl ResinSupply {
             }
             selected.push(index);
             total += quantity;
-            if total >= u32::from(self.minimum) {
+            if total >= minimum {
                 return Some(selected);
             }
         }

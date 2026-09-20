@@ -16,7 +16,7 @@ mod parchment_scrap;
 mod rat_skull;
 mod trap_mechanism;
 
-#[derive(Clone, Copy, Debug, Default, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub(crate) enum Profile {
     #[default]
     None,

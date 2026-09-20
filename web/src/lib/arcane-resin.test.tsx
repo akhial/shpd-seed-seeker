@@ -40,30 +40,51 @@ const document = {
 };
 
 describe("Arcane Resin", () => {
+  it("analyzes wider Auto wand queries quickly, including AutoTrinket", () => {
+    for (const count of [4, 8]) {
+      const query = {
+        arcane_resin: "auto",
+        auto_apply_trinket: true,
+        requirements: Array.from({ length: count }, () => ({ kind: "wand" })),
+      };
+      const started = performance.now();
+      const analysis = JSON.parse(analyze_query(JSON.stringify(query)));
+      const elapsed = performance.now() - started;
+      expect(analysis).toMatchObject({ valid: true, impossible: false });
+      expect(analysis.probability).toBeGreaterThanOrEqual(0);
+      expect(analysis.probability).toBeLessThanOrEqual(1);
+      // Allows CI contention while catching the original multi-second stalls.
+      expect(elapsed, `${count} Auto wands took ${elapsed.toFixed(1)} ms`).toBeLessThan(1000);
+      if (count === 4) expect(analysis.probability).toBeGreaterThan(0.1);
+    }
+  });
+
   it("preserves the minimum in editor state, presets, share links and results files", () => {
     const storage = new Map<string, string>();
     vi.stubGlobal("localStorage", {
       getItem: (key: string) => storage.get(key) ?? null,
       setItem: (key: string, value: string) => storage.set(key, value),
     });
-    for (const [requirements, arcane_resin_filter] of [
-      [[], undefined],
-      [document.requirements, undefined],
-      [[], { uncursed: false, max_depth: 4, source: "chest" }],
-      [document.requirements, { max_depth: 9 }],
-    ]) {
-      const state = fromQueryJson(
-        JSON.stringify({ ...document, requirements, arcane_resin_filter }),
-      );
-      expect(validateQuery(state).valid).toBe(true);
-      expect(fromQueryJson(toQueryJson(state))).toEqual(state);
-      expect(fromQueryJson(decode_share_text(encode_share_link(toQueryJson(state))))).toEqual(
-        state,
-      );
-      savePresets([{ name: "Resin", query: state }]);
-      expect(loadPresets()).toEqual([{ name: "Resin", query: state }]);
-      const exported = encodeResultsFile(toQueryDocument(state), ["AAA-AAA-AAS"]);
-      expect(decodeResultsFile(exported).query).toEqual(state);
+    for (const arcane_resin of [3, "auto"] as const) {
+      for (const [requirements, arcane_resin_filter] of [
+        [[], undefined],
+        [document.requirements, undefined],
+        [[], { uncursed: false, max_depth: 4, source: "chest" }],
+        [document.requirements, { max_depth: 9 }],
+      ]) {
+        const state = fromQueryJson(
+          JSON.stringify({ ...document, arcane_resin, requirements, arcane_resin_filter }),
+        );
+        expect(validateQuery(state).valid).toBe(true);
+        expect(fromQueryJson(toQueryJson(state))).toEqual(state);
+        expect(fromQueryJson(decode_share_text(encode_share_link(toQueryJson(state))))).toEqual(
+          state,
+        );
+        savePresets([{ name: "Resin", query: state }]);
+        expect(loadPresets()).toEqual([{ name: "Resin", query: state }]);
+        const exported = encodeResultsFile(toQueryDocument(state), ["AAA-AAA-AAS"]);
+        expect(decodeResultsFile(exported).query).toEqual(state);
+      }
     }
     expect(fromQueryJson('{"requirements":[]}').arcaneResin).toBeUndefined();
     expect(
@@ -72,7 +93,7 @@ describe("Arcane Resin", () => {
   });
 
   it("rejects malformed amounts and allows resin-only searches", () => {
-    for (const value of [-1, 1.5, 65536, "6", true, null]) {
+    for (const value of [-1, 1.5, 65536, "6", "Auto", "automatic", {}, true, null]) {
       const json = JSON.stringify({ ...document, arcane_resin: value });
       expect(() => fromQueryJson(json)).toThrow(/Arcane Resin/);
       expect(JSON.parse(analyze_query(json)).valid).toBe(false);
@@ -88,6 +109,39 @@ describe("Arcane Resin", () => {
       probability: expect.any(Number),
     });
     expect(validateQuery({ ...defaultQueryState(), arcaneResin: 0 }).valid).toBe(false);
+  });
+
+  it("searches, scouts, and refines Auto through the real engine", () => {
+    // This seed's required +2 Lightning needs 3 resin, matching the fixed query.
+    const auto = { ...document, arcane_resin: "auto" };
+    const json = JSON.stringify(auto);
+    const fixed = JSON.stringify(document);
+    const session = new SearchSession(json, 18, 19);
+    try {
+      const found = JSON.parse(session.advance(1)) as SearchAdvance;
+      expect(found.matches.map((match) => match.code)).toEqual(["AAA-AAA-AAS"]);
+      expect(JSON.parse(filter_seeds(json, new Float64Array([18])))).toEqual(found.matches);
+      const manifest = JSON.parse(
+        scout(JSON.stringify({ seed: "AAA-AAA-AAS", query: auto })),
+      ) as ScoutResult;
+      expect(manifest.matchedRequirements).toBe(2);
+      expect(manifest.totalRequirements).toBe(2);
+      expect(manifest.items.filter((item) => item.matched)).toEqual(
+        (
+          JSON.parse(scout(JSON.stringify({ seed: "AAA-AAA-AAS", query: document }))) as ScoutResult
+        ).items.filter((item) => item.matched),
+      );
+      expect(JSON.parse(analyze_query(json))).toMatchObject({
+        valid: true,
+        impossible: false,
+        probability: expect.any(Number),
+      });
+      expect(decide_start(json, fixed, false, true)).toBe("target-filter");
+      expect(decide_start(fixed, json, false, true)).toBe("target-filter");
+      expect(decide_start(json, json, false, true)).toBe("target-refine");
+    } finally {
+      session.free();
+    }
   });
 
   it("reserves the +2 Lightning wand while searching, scouting and refining", () => {
