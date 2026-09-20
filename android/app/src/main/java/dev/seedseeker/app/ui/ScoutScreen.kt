@@ -513,8 +513,7 @@ internal fun ScoutItemCard(
     dimmed: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
-    val effectIsCurse = scoutItem.effect != null &&
-        ItemCatalog.cursesFor(scoutItem.item.kind).contains(scoutItem.effect)
+    val hasStatusBadges = scoutItem.cursed || scoutItem.secret
     val accessibilityLabel = when (scoutItem.accessibility) {
         ScoutAccessibility.Independent -> null
         is ScoutAccessibility.Choice -> null
@@ -576,7 +575,7 @@ internal fun ScoutItemCard(
                             ScoutItemUpgrade(scoutItem.displayedUpgrade)
                         }
                         if (!stackedBadges) {
-                            if (scoutItem.cursed || scoutItem.secret) {
+                            if (hasStatusBadges) {
                                 Row(Modifier.padding(start = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     ScoutItemBadges(scoutItem)
                                 }
@@ -587,8 +586,13 @@ internal fun ScoutItemCard(
                         Layout(
                             modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 2.dp),
                             content = {
-                                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    ScoutItemBadges(scoutItem)
+                                if (hasStatusBadges) {
+                                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        ScoutItemBadges(scoutItem)
+                                    }
+                                } else {
+                                    // Reuse the empty badge space so the source and chips share a line.
+                                    ScoutItemDetails(scoutItem)
                                 }
                                 FlowRow(
                                     modifier = Modifier.testTag("scout-item-match-choices"),
@@ -601,33 +605,21 @@ internal fun ScoutItemCard(
                             },
                         ) { measurables, constraints ->
                             val loose = constraints.copy(minWidth = 0, minHeight = 0)
-                            val status = measurables[0].measure(loose)
+                            val leading = measurables[0].measure(loose)
                             val trailing = measurables[1].measure(loose)
-                            val separateRows = status.width + 8.dp.roundToPx() + trailing.width > constraints.maxWidth
-                            val height = if (separateRows) status.height + 4.dp.roundToPx() + trailing.height
-                                else maxOf(status.height, trailing.height)
+                            val separateRows = leading.width > 0 && trailing.width > 0 &&
+                                leading.width + 8.dp.roundToPx() + trailing.width > constraints.maxWidth
+                            val height = if (separateRows) leading.height + 4.dp.roundToPx() + trailing.height
+                                else maxOf(leading.height, trailing.height)
                             layout(constraints.maxWidth, height) {
-                                status.placeRelative(0, if (separateRows) 0 else (height - status.height) / 2)
+                                leading.placeRelative(0, if (separateRows) 0 else (height - leading.height) / 2)
                                 trailing.placeRelative(constraints.maxWidth - trailing.width,
-                                    if (separateRows) status.height + 4.dp.roundToPx() else (height - trailing.height) / 2)
+                                    if (separateRows) leading.height + 4.dp.roundToPx() else (height - trailing.height) / 2)
                             }
                         }
                     }
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        scoutItem.effect?.let { effect ->
-                            Text(
-                                effect,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = if (effectIsCurse) SpdDanger else SpdTeal,
-                                modifier = Modifier.alignByBaseline(),
-                            )
-                        }
-                        Text(
-                            scoutItem.source.label,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.alignByBaseline(),
-                        )
+                    if (!stackedBadges || hasStatusBadges) {
+                        ScoutItemDetails(scoutItem)
                     }
                     accessibilityLabel?.let {
                         Spacer(Modifier.height(2.dp))
@@ -647,6 +639,28 @@ internal fun ScoutItemCard(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ScoutItemDetails(scoutItem: ScoutItem) {
+    val effectIsCurse = scoutItem.effect != null &&
+        ItemCatalog.cursesFor(scoutItem.item.kind).contains(scoutItem.effect)
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        scoutItem.effect?.let { effect ->
+            Text(
+                effect,
+                style = MaterialTheme.typography.bodySmall,
+                color = if (effectIsCurse) SpdDanger else SpdTeal,
+                modifier = Modifier.alignByBaseline(),
+            )
+        }
+        Text(
+            scoutItem.source.label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.alignByBaseline(),
+        )
     }
 }
 
