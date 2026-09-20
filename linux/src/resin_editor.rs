@@ -39,6 +39,9 @@ pub fn present(
     let filter = snapshot.arcane_resin_filter;
     let amount = adw::SpinRow::builder()
         .title("Minimum resin")
+        .numeric(true)
+        .snap_to_ticks(true)
+        .update_policy(gtk::SpinButtonUpdatePolicy::IfValid)
         .adjustment(&gtk::Adjustment::new(
             f64::from(if snapshot.arcane_resin > 0 {
                 snapshot.arcane_resin
@@ -85,8 +88,7 @@ pub fn present(
                 .map_or(0, |index| u32::try_from(index + 1).unwrap_or(0)),
         )
         .build();
-    let group = adw::PreferencesGroup::builder()
-        .description("Surplus wands provide 2 × (upgrade + 1) resin each. Wands needed for other requirements are reserved first.").build();
+    let group = adw::PreferencesGroup::new();
     group.add(&amount);
     group.add(&uncursed);
     group.add(&limited);
@@ -155,6 +157,7 @@ pub fn present(
         let refresh = Rc::clone(refresh);
         let dialog = dialog.clone();
         move |_| {
+            amount.update();
             let value = amount.value();
             if !value.is_finite() || value.fract() != 0.0 || !(1.0..=65535.0).contains(&value) {
                 return;
