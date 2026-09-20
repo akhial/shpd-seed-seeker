@@ -64,8 +64,10 @@ only action that discards results is the explicit **Clear** button.
   resin retain their prior encoding. Web, Android, macOS, Windows, and Linux
   offer Resin in the Wand editor and support resin-only queries, as does the
   CLI's canonical query input. Probability estimates use the most probable
-  sufficient donor allocation after reserving ordinary requirements; they are
-  conservative because overlapping allocations are not summed.
+  sufficient donor allocation after reserving ordinary requirements, including
+  their blanket filters. Donors cannot witness blankets or consume a quest
+  reward reserved by a blanket witness. Estimates are conservative because
+  overlapping donor allocations are not summed.
 - **Shares an item**: some requirement of B and some requirement of A have
   the same kind, and either at least one of the two names no specific item or
   both name the same item. Scope and challenge differences are irrelevant

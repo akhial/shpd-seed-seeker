@@ -4,7 +4,7 @@
 //! `https://shpd-seed-seeker.web.app/#q=QAMtCYAA`. The payload is a versioned
 //! bit stream, so codes shared today must keep decoding in every future
 //! release: the numeric code tables below are frozen by tests and may only
-//! ever grow at the end. Versions 4 through 8 are supported; versions 1
+//! ever grow at the end. Versions 4 through 9 are supported; versions 1
 //! and 2 were retired while the feature had next to no users (the effect
 //! table was also re-frozen in journal order at the same time), and version
 //! 3 — the same layout plus the retired fast-mode bit — went with the flag,
@@ -36,6 +36,7 @@ pub const URI_SCHEME: &str = "seedseeker";
 /// flag after the version nibble. Version 7 appends a 16-bit resin minimum
 /// after the Wandmaker filter, retaining version 6's other fields.
 /// Version 8 follows the resin minimum with its uncursed, source and floor filters.
+/// Version 9 adds a blanket bit after each selection bit and retains all resin fields.
 /// All carry effect sets as a 32-bit mask,
 /// alternative groups and combined-level groups per requirement. Versions 1
 /// through 3 are rejected as unsupported (3 differed only in carrying the
@@ -98,12 +99,17 @@ pub fn encode(query: &SearchQuery) -> Result<String, String> {
     // labels fit the count field; the structure is all that travels.
     let mut alternative_labels: Vec<u8> = Vec::new();
     let mut bits = BitWriter::default();
+    let blankets = query.requirements.iter().any(|r| r.blanket);
     let resin_filter = query.arcane_resin_filter != ArcaneResinFilter::default();
     let resin = query.arcane_resin > 0 || resin_filter;
-    let selected =
-        resin || query.auto_apply_trinket || query.requirements.iter().any(|r| r.select_trinket);
+    let selected = blankets
+        || resin
+        || query.auto_apply_trinket
+        || query.requirements.iter().any(|r| r.select_trinket);
     bits.push(
-        if resin_filter {
+        if blankets {
+            9
+        } else if resin_filter {
             8
         } else if resin {
             7
@@ -116,7 +122,7 @@ pub fn encode(query: &SearchQuery) -> Result<String, String> {
         },
         4,
     );
-    if resin || query.auto_apply_trinket {
+    if blankets || resin || query.auto_apply_trinket {
         bits.push(query.auto_apply_trinket.into(), 1);
     }
     bits.push(query.require_blacksmith.into(), 1);
@@ -135,10 +141,10 @@ pub fn encode(query: &SearchQuery) -> Result<String, String> {
             2,
         )
     });
-    if resin {
+    if blankets || resin {
         bits.push(query.arcane_resin.into(), 16);
     }
-    if resin_filter {
+    if blankets || resin_filter {
         let filter = query.arcane_resin_filter;
         bits.push(filter.uncursed.into(), 1);
         push_optional(&mut bits, filter.source.is_some(), || {
@@ -153,6 +159,9 @@ pub fn encode(query: &SearchQuery) -> Result<String, String> {
         encode_requirement(&mut bits, requirement, &mut alternative_labels);
         if selected {
             bits.push(requirement.select_trinket.into(), 1);
+        }
+        if blankets {
+            bits.push(requirement.blanket.into(), 1);
         }
     }
     Ok(base64url_encode(&bits.finish()))
@@ -189,10 +198,10 @@ pub fn decode(code: &str) -> Result<SearchQuery, String> {
     let bytes = base64url_decode(code.trim())?;
     let mut bits = BitReader::new(&bytes);
     let version = bits.pull(4)?;
-    if !(u32::from(VERSION)..=8).contains(&version) {
+    if !(u32::from(VERSION)..=9).contains(&version) {
         return Err(format!(
             "this link uses format version {version}; this app only understands \
-             versions {VERSION} through 8 — it may have been created by a different release"
+             versions {VERSION} through 9 — it may have been created by a different release"
         ));
     }
     let auto_apply_trinket = version >= 6 && bits.pull(1)? == 1;
@@ -242,6 +251,9 @@ pub fn decode(code: &str) -> Result<SearchQuery, String> {
                 .and_then(|mut requirement| {
                     if version >= 5 {
                         requirement.select_trinket = bits.pull(1)? == 1;
+                    }
+                    if version >= 9 {
+                        requirement.blanket = bits.pull(1)? == 1;
                     }
                     Ok(requirement)
                 })
@@ -456,6 +468,7 @@ fn decode_requirement(bits: &mut BitReader<'_>) -> Result<Requirement, String> {
         effect,
         require_uncursed,
         select_trinket: false,
+        blanket: false,
         source,
         identity_group,
         max_depth,
@@ -825,6 +838,7 @@ mod tests {
             effect: EffectRequirement::Any,
             require_uncursed: false,
             select_trinket: false,
+            blanket: false,
             source: None,
             identity_group: None,
             max_depth: None,
@@ -871,6 +885,7 @@ mod tests {
                     effect: EffectRequirement::exactly(Effect::Weapon(WeaponEffect::Grim)),
                     require_uncursed: true,
                     select_trinket: false,
+                    blanket: false,
                     source: Some(ItemSource::SacrificialFire),
                     identity_group: Some(4),
                     max_depth: Some(21),
@@ -886,6 +901,7 @@ mod tests {
                     effect: EffectRequirement::Any,
                     require_uncursed: false,
                     select_trinket: false,
+                    blanket: false,
                     source: None,
                     identity_group: None,
                     max_depth: None,
@@ -1033,8 +1049,8 @@ mod tests {
         assert!(decode("").is_err());
         assert!(decode("!!!").is_err());
         assert!(decode("A").is_err());
-        // Unsupported future version (bits 1001 in the top nibble).
-        assert!(decode("kAAA").unwrap_err().contains("version 9"));
+        // Unsupported future version (bits 1010 in the top nibble).
+        assert!(decode("oAAA").unwrap_err().contains("version 10"));
         let code = encode(&minimal(vec![wildcard(ItemKind::Wand)])).unwrap();
         assert!(decode(&code[..code.len() - 1]).is_err());
         assert!(decode(&format!("{code}AAAA")).is_err());
@@ -1587,7 +1603,7 @@ mod tests {
             let error = decode(code).unwrap_err();
             assert!(error.contains("format version"), "{error}");
             assert!(
-                error.contains("only understands versions 4 through 8"),
+                error.contains("only understands versions 4 through 9"),
                 "{error}"
             );
         }

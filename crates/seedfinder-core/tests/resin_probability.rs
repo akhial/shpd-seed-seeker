@@ -106,6 +106,104 @@ fn resin_works_with_selected_and_automatic_trinkets_and_linked_wands() {
 }
 
 #[test]
+fn blanket_and_resin_cannot_both_claim_the_wandmaker_reward() {
+    let mut resin = query(
+        2,
+        r#"[{"kind":"wand"},{"kind":"wand","source":"wandmaker_reward","blanket":true}]"#,
+    );
+    resin.arcane_resin_filter.source = Some(ItemSource::WandmakerReward);
+    for amount in [2, 4, 8] {
+        resin.arcane_resin = amount;
+        assert_eq!(estimate_match_probability(&resin), 0.0);
+    }
+    resin.arcane_resin_filter.source = None;
+    assert!(estimate_match_probability(&resin) > 0.0);
+}
+
+#[test]
+fn resin_with_one_blanket_witness_matches_explicit_filters() {
+    for (blanket, direct) in [
+        (
+            r#"{"kind":"wand","source":"wandmaker_reward","blanket":true}"#,
+            r#"[{"item":"wand_frost","source":"wandmaker_reward"}]"#,
+        ),
+        (
+            r#"{"kind":"wand","upgrade":3,"blanket":true}"#,
+            r#"[{"item":"wand_frost","upgrade":3}]"#,
+        ),
+        (
+            r#"{"kind":"wand","uncursed":true,"max_depth":4,"blanket":true}"#,
+            r#"[{"item":"wand_frost","uncursed":true,"max_depth":4}]"#,
+        ),
+    ] {
+        for amount in [2, 6, 12] {
+            let mut blanket = query(amount, &format!(r#"[{{"item":"wand_frost"}},{blanket}]"#));
+            let mut direct = query(amount, direct);
+            for source in [
+                None,
+                Some(ItemSource::WandmakerReward),
+                Some(ItemSource::Chest),
+            ] {
+                blanket.arcane_resin_filter.source = source;
+                direct.arcane_resin_filter.source = source;
+                let estimate = estimate_match_probability(&blanket);
+                let expected = estimate_match_probability(&direct);
+                assert!(
+                    (estimate - expected).abs() < 1e-12,
+                    "{blanket:?}: {estimate} != {expected}"
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn resin_preserves_unknown_for_an_unmodeled_optional_blanket_witness() {
+    // The level-sum approximation keeps the first sufficient member, but
+    // the blanket needs the other optional member. This is unknown, not zero.
+    for amount in [0, 2] {
+        let resin = query(
+            amount,
+            r#"[
+            {"item":"ring_haste","upgrade":1,"level_sum":{"group":1,"at_least":1}},
+            {"item":"ring_force","upgrade":1,"level_sum":{"group":1,"at_least":1}},
+            {"item":"ring_force","blanket":true}
+        ]"#,
+        );
+        assert!(estimate_match_probability(&resin).is_nan());
+    }
+}
+
+#[test]
+fn mixed_blanket_resin_estimates_preserve_redundancy_and_monotonicity() {
+    for requirements in [
+        r#"[{"kind":"wand"},{"kind":"wand"},{"kind":"wand","upgrade":3,"blanket":true}]"#,
+        r#"[{"any_of":[{"item":"wand_frost"},{"item":"wand_lightning"}]},{"kind":"wand","uncursed":true,"blanket":true}]"#,
+        r#"[{"kind":"wand","identity_group":1},{"kind":"wand","identity_group":1},{"kind":"wand","upgrade":{"at_least":1},"blanket":true}]"#,
+        r#"[{"item":"mimic_tooth","select_trinket":true},{"kind":"wand"},{"kind":"wand","uncursed":true,"blanket":true}]"#,
+    ] {
+        let mut previous = 1.0;
+        for amount in [0, 2, 6, 12, u16::MAX] {
+            let resin = query(amount, requirements);
+            let estimate = estimate_match_probability(&resin);
+            assert!(
+                (0.0..=previous + 1e-12).contains(&estimate),
+                "{resin:?}: {estimate} > {previous}"
+            );
+            previous = estimate;
+            let mut repeated = resin.clone();
+            repeated
+                .requirements
+                .push(*resin.requirements.last().unwrap());
+            assert!((estimate_match_probability(&repeated) - estimate).abs() < 1e-12);
+            let mut ordinary = resin.clone();
+            ordinary.requirements.retain(|r| !r.blanket);
+            assert!(estimate <= estimate_match_probability(&ordinary) + 1e-12);
+        }
+    }
+}
+
+#[test]
 #[ignore = "held-out calibration; run with --release --ignored --nocapture"]
 #[allow(clippy::cast_precision_loss)]
 fn resin_estimates_track_generated_matches() {
@@ -117,7 +215,13 @@ fn resin_estimates_track_generated_matches() {
     let mut queries = Vec::new();
     for depth in [4, 9, 24] {
         for amount in [2, 3, 6, 12, 20] {
-            for requirements in ["[]", r#"[{"item":"wand_lightning"}]"#] {
+            for requirements in [
+                "[]",
+                r#"[{"item":"wand_lightning"}]"#,
+                r#"[{"kind":"wand"},{"kind":"wand","uncursed":true,"blanket":true}]"#,
+                r#"[{"kind":"wand"},{"kind":"wand"},{"kind":"wand","upgrade":3,"blanket":true}]"#,
+                r#"[{"item":"wand_frost"},{"kind":"wand","source":"wandmaker_reward","blanket":true}]"#,
+            ] {
                 let mut resin = query(amount, requirements);
                 resin.max_depth = depth;
                 queries.push(resin);

@@ -81,6 +81,7 @@ import dev.seedseeker.app.model.ItemRequirement
 import dev.seedseeker.app.model.QueryPreset
 import dev.seedseeker.app.model.ScoutQuestGiver
 import dev.seedseeker.app.model.SearchState
+import dev.seedseeker.app.model.ArcaneResinFilter
 import dev.seedseeker.app.model.SearchStatus
 import dev.seedseeker.app.model.SeedResult
 import dev.seedseeker.app.model.WandmakerQuest
@@ -127,7 +128,7 @@ fun FinderScreen(
     onDeletePreset: (QueryPreset) -> Unit,
     onEditResin: () -> Unit,
     onRemoveResin: () -> Unit,
-    onAdd: () -> Unit,
+    onAdd: (Boolean) -> Unit,
     onEdit: (BoardItem, Int) -> Unit,
     onRequirementsChange: (List<ItemRequirement>) -> Unit,
     onRemove: (BoardItem) -> Unit,
@@ -273,7 +274,7 @@ fun FinderScreen(
                     .widthIn(max = 680.dp),
             ) {
                 PageHeader(
-                    title = "Requirements (${requirements.boardCount() + if (arcaneResin > 0) 1 else 0})",
+                    title = "Requirements (${requirements.filterNot { it.blanket }.boardCount() + if (arcaneResin > 0) 1 else 0})",
                     summary = listOf(requirementsSummaryText(requirements), if (arcaneResin > 0) "≥$arcaneResin Arcane Resin" else "").filter { it.isNotEmpty() }.joinToString(" · "),
                     open = !showResults,
                     openDescription = "Show requirements",
@@ -360,6 +361,8 @@ fun FinderScreen(
                                 Text(
                                     when {
                                         isSearching -> "0 matches yet."
+                                        status?.isImpossibleQuery == true ->
+                                            "Impossible query. No seed can satisfy this combination of requirements."
                                         status?.state == SearchState.COMPLETED -> "0 matches."
                                         else -> "No results — run a search."
                                     },
@@ -441,6 +444,7 @@ private fun PageHeader(
 private fun requirementsSummaryText(requirements: List<ItemRequirement>): String =
     requirements.boardItems().joinToString(" · ") { item ->
         buildString {
+            if (requirements[item.anchor].blanket) append("Blanket: ")
             append(item.members.joinToString(" or ") { chipTitle(requirements[it]) })
             if (item.stackCount > 1) append(" ×${item.stackCount}")
         }
@@ -465,7 +469,7 @@ private fun QueryPage(
     compactChips: Boolean,
     onEditResin: () -> Unit,
     onRemoveResin: () -> Unit,
-    onAdd: () -> Unit,
+    onAdd: (Boolean) -> Unit,
     onEdit: (BoardItem, Int) -> Unit,
     onRequirementsChange: (List<ItemRequirement>) -> Unit,
     onRemove: (BoardItem) -> Unit,
@@ -490,13 +494,49 @@ private fun QueryPage(
             onChange = onRequirementsChange,
             onEdit = onEdit,
             onRemove = onRemove,
-            onAdd = onAdd,
+            onAdd = { onAdd(false) },
             arcaneResin = arcaneResin,
             arcaneResinFilter = arcaneResinFilter,
             onEditResin = onEditResin,
             onRemoveResin = onRemoveResin,
+
             modifier = Modifier.fillMaxWidth(),
         )
+        var blanketsExpanded by remember { mutableStateOf(false) }
+        var showBlanketHelp by remember { mutableStateOf(false) }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = { blanketsExpanded = !blanketsExpanded }, modifier = Modifier.weight(1f)) {
+                Text("Blanket Requirements (${requirements.filter { it.blanket }.boardCount()})",
+                    modifier = Modifier.weight(1f))
+                Icon(if (blanketsExpanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                    contentDescription = if (blanketsExpanded) "Collapse blankets" else "Expand blankets")
+            }
+            IconButton(onClick = { showBlanketHelp = true }) {
+                Icon(Icons.Filled.Info, contentDescription = "About blanket requirements")
+            }
+        }
+        if (blanketsExpanded) {
+            RequirementBoard(
+                requirements = requirements, blanket = true, enabled = !isSearching,
+                compact = compactChips, onChange = onRequirementsChange,
+                onEdit = onEdit, onRemove = onRemove, onAdd = { onAdd(true) },
+                arcaneResin = 0, arcaneResinFilter = ArcaneResinFilter(),
+                onEditResin = onEditResin, onRemoveResin = onRemoveResin,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        if (showBlanketHelp) {
+            AlertDialog(
+                onDismissRequest = { showBlanketHelp = false },
+                title = { Text("Blanket Requirements") },
+                text = { Text("Each blanket must match at least one item fulfilling your ordinary requirements. " +
+                    "It does not ask for an additional item. All filters in one blanket apply to the same item; " +
+                    "separate blankets can match the same or different chosen items.\n\n" +
+                    "For example, require Lightning, Disintegration, and Frost at +2 or higher, then add an " +
+                    "Any wand blanket at exactly +3 from the Wandmaker.") },
+                confirmButton = { TextButton(onClick = { showBlanketHelp = false }) { Text("Got it") } },
+            )
+        }
         if (validationMessage != null && (requirements.isNotEmpty() || arcaneResin > 0)) {
             Text(
                 validationMessage,

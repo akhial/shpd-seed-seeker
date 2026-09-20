@@ -226,6 +226,7 @@ data class ItemRequirement(
     val maximumDepth: Int? = null,
     val requireUncursed: Boolean = false,
     val selectTrinket: Boolean = false,
+    val blanket: Boolean = false,
     /**
      * Session-local id of the "any of these" slot this row belongs to, or
      * null for a slot of its own. Members of one group count as a single
@@ -240,6 +241,9 @@ data class ItemRequirement(
         require(!kind.requiresNamedItem || item != null) { "Select a ${kind.singularLabel}" }
         require(kind.supportsStacks || (identityGroup == null && levelSum == null)) {
             "${kind.label} cannot be stacked"
+        }
+        require(!blanket || (identityGroup == null && levelSum == null && !selectTrinket)) {
+            "A blanket cannot request extra copies, combined levels, or trinket selection"
         }
         require(!selectTrinket || kind == ItemKind.TRINKET) { "Only a named trinket can be selected" }
         val tierable = item == null && kind.family in setOf(ItemKind.WEAPON, ItemKind.ARMOR)
@@ -405,6 +409,10 @@ fun List<ItemRequirement>.slotCount(): Int = slots().size
 fun List<ItemRequirement>.validationProblem(arcaneResin: Int = 0): String? {
     if (arcaneResin !in 0..65535) return "Arcane Resin must be 0..65535."
     if (isEmpty() && arcaneResin == 0) return "Add at least one requirement."
+    if (isNotEmpty() && none { !it.blanket }) return "Add at least one ordinary requirement."
+    if (slots().any { slot -> slot.any { it.blanket != slot.first().blanket } }) {
+        return "An either/or group cannot mix ordinary and blanket requirements."
+    }
     // A stack (identity group) has one anchor unit — a lone requirement or one
     // whole alternative group — that may constrain the item it binds to; every
     // other member is a bare copy of the same category.
@@ -778,7 +786,11 @@ data class SearchStatus(
     val totalSeeds: Long,
     val errorCode: Long = 0,
     val matchProbability: Double = 0.0,
-)
+) {
+    /** The engine proves impossibility before scanning a nonempty search range. */
+    val isImpossibleQuery: Boolean
+        get() = state == SearchState.COMPLETED && scannedSeeds == 0L && totalSeeds > 0L
+}
 
 /** Where and how much a follow-up traversal must scan to finish a session's coverage. */
 data class ResumeHint(

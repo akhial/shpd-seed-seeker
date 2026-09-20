@@ -148,6 +148,7 @@ fn random_requirement(rng: &mut Rng) -> Requirement {
         effect,
         require_uncursed: rng.chance(20),
         select_trinket: false,
+        blanket: false,
         source: None,
         identity_group: None,
         max_depth: rng
@@ -158,6 +159,7 @@ fn random_requirement(rng: &mut Rng) -> Requirement {
     }
 }
 
+#[allow(clippy::too_many_lines)] // Keep seeded generation of the interacting query features together.
 fn random_query(rng: &mut Rng) -> Option<SearchQuery> {
     let slots = 1 + rng.below(3);
     let mut requirements = Vec::new();
@@ -233,6 +235,7 @@ fn random_query(rng: &mut Rng) -> Option<SearchQuery> {
                     effect: EffectRequirement::Any,
                     require_uncursed: false,
                     select_trinket: false,
+                    blanket: false,
                     source: None,
                     identity_group: Some(1),
                     max_depth: None,
@@ -240,6 +243,16 @@ fn random_query(rng: &mut Rng) -> Option<SearchQuery> {
                     level_sum: None,
                 });
             }
+        }
+    }
+    if rng.chance(30) {
+        for _ in 0..=rng.below(2) {
+            let mut blanket = random_requirement(rng);
+            blanket.blanket = true;
+            blanket.identity_group = None;
+            blanket.level_sum = None;
+            blanket.alternative_group = rng.chance(30).then_some(100);
+            requirements.push(blanket);
         }
     }
     let query = SearchQuery {
@@ -264,7 +277,7 @@ fn random_query(rng: &mut Rng) -> Option<SearchQuery> {
 /// under the query's floor limits and blacksmith exclusion.
 fn candidates(query: &SearchQuery, world: &GeneratedWorld) -> Vec<Vec<(usize, usize)>> {
     query
-        .slots()
+        .ordinary_slots()
         .into_iter()
         .map(|slot| {
             let mut pairs = Vec::new();
@@ -344,6 +357,23 @@ fn score(
         .keys()
         .filter(|group| satisfied(**group))
         .count();
+    let blankets = query
+        .blanket_slots()
+        .iter()
+        .filter(|slot| {
+            slot.iter().any(|&member| {
+                let requirement = query.requirements[member];
+                chosen.iter().flatten().any(|&(ordinary, index)| {
+                    query.requirements[ordinary]
+                        .level_sum
+                        .is_none_or(|sum| satisfied(sum.group))
+                        && world.items[index].depth
+                            <= requirement.max_depth.unwrap_or(query.max_depth)
+                        && requirement.matches(&world.items[index])
+                })
+            })
+        })
+        .count();
     let resin = query.arcane_resin > 0
         && (0..(1_u64 << world.items.len())).any(|subset| {
             // Exhaustively try every surplus subset, independently of the
@@ -374,7 +404,7 @@ fn score(
             }
             total >= query.arcane_resin
         });
-    Some(plain + groups + usize::from(resin))
+    Some(plain + groups + blankets + usize::from(resin))
 }
 
 fn best_partial(
@@ -424,7 +454,7 @@ fn matcher_and_scout_agree_with_exhaustive_enumeration() {
             continue;
         };
         let world = random_world(&mut rng);
-        let slots = query.slots();
+        let slots = query.ordinary_slots();
         let candidates = candidates(&query, &world);
         // A match fills every plain slot and satisfies every level-sum
         // group, which is exactly a full-mode score of every condition.
@@ -462,16 +492,19 @@ fn matcher_and_scout_agree_with_exhaustive_enumeration() {
         );
         // A satisfied level-sum group flags every contributing item, so the
         // flags can outnumber the conditions but never undercut them.
-        assert!(marks.matched_indices().len() >= marks.matched_requirements);
+        assert!(
+            marks.matched_indices().len() + query.blanket_slots().len()
+                >= marks.matched_requirements
+        );
         if expected {
             assert_eq!(marks.matched_requirements, conditions);
         }
         checked += 1;
         matched += usize::from(expected);
     }
-    // Resin adds a further constraint; still require a healthy mix of matches and misses.
+    // Resin and blankets add constraints; still require a healthy mix of matches and misses.
     assert!(
-        matched > 150 && matched < 2_800,
+        (150..2_800).contains(&matched),
         "{matched} of {checked} matched"
     );
 }

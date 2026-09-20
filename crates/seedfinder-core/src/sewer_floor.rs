@@ -1436,6 +1436,7 @@ mod tests {
                 effect: EffectRequirement::Any,
                 require_uncursed: false,
                 select_trinket: false,
+                blanket: false,
                 source: None,
                 identity_group: None,
                 max_depth: None,

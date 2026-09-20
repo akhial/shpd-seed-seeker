@@ -55,7 +55,7 @@ public struct BoardItem: Hashable, Identifiable, Sendable {
 /// A floor limit is a placement bound, not an item property, so a repeat that
 /// carries only one still folds into its stack.
 private func isPlainItemCopy(_ copy: ItemRequirement, of item: CatalogItem) -> Bool {
-    item.kind != .trinket && item.kind != .artifact
+    !copy.blanket && item.kind != .trinket && item.kind != .artifact
         && copy.item?.id == item.id
         && copy.tierMatch == .any
         && copy.upgradeMatch == .any
@@ -212,7 +212,7 @@ extension Array where Element == ItemRequirement {
             }
             let item = Building(key: "req:\(index)", member: index, cluster: nil)
             attach(item, index)
-            if let named = requirement.item, requirement.levelSum == nil { chipByItem[named.id] = item }
+            if let named = requirement.item, !requirement.blanket, requirement.levelSum == nil { chipByItem[named.id] = item }
             items.append(item)
         }
         // Single-member clusters render as chips.
@@ -314,6 +314,7 @@ extension Array where Element == ItemRequirement {
      */
     public func joinAlternatives(source: Int, target: Int) -> [ItemRequirement] {
         guard source != target, indices.contains(source), indices.contains(target) else { return self }
+        guard self[source].blanket == self[target].blanket else { return self }
         let group = self[target].alternativeGroup ?? nextAlternativeGroup()
         if self[source].alternativeGroup == group { return self }
         let sourceKey = self[source].key
@@ -332,7 +333,7 @@ extension Array where Element == ItemRequirement {
             // Trade plain repeats for identity copies so the stack survives the move.
             for index in [source, target] {
                 let anchor = next[index]
-                guard let named = anchor.item, anchor.identityGroup == nil else { continue }
+                guard !anchor.blanket, let named = anchor.item, anchor.identityGroup == nil else { continue }
                 let copies = next.indices.filter { $0 != index && isPlainItemCopy(next[$0], of: named) }
                 if copies.isEmpty { continue }
                 guard let label = freeGroup(next.map(\.identityGroup), upTo: SearchLimits.identityGroupMax)
@@ -375,7 +376,7 @@ extension Array where Element == ItemRequirement {
     public func canStack(_ item: BoardItem) -> Bool {
         guard let anchor = item.members.first, indices.contains(anchor) else { return false }
         let family = self[anchor].kind.family
-        guard family != .trinket && family != .artifact else { return false }
+        guard !self[anchor].blanket, family != .trinket && family != .artifact else { return false }
         return item.members.allSatisfy { indices.contains($0) && self[$0].kind.family == family }
     }
 
@@ -454,7 +455,7 @@ extension Array where Element == ItemRequirement {
     public func setStackTotal(_ item: BoardItem, _ total: Int?) -> [ItemRequirement] {
         let anchorIndex = item.anchor
         let anchor = self[anchorIndex]
-        guard item.cluster == nil, anchor.item != nil else { return self }
+        guard !anchor.blanket, item.cluster == nil, anchor.item != nil else { return self }
         var next = self
         guard let total else {
             for index in [anchorIndex] + item.extras {

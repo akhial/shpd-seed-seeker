@@ -291,6 +291,7 @@ public sealed partial class ItemRequirement
     public int? MaximumDepth { get; set; }
     public bool RequireUncursed { get; set; }
     public bool SelectTrinket { get; set; }
+    public bool Blanket { get; set; }
     /// <summary>
     /// Requirements sharing a number form one "any of these" slot, satisfied
     /// by any single member. Null for a requirement that stands alone.
@@ -498,7 +499,7 @@ public static class QueryRelationships
     /// property, so a repeat that carries only one still folds into its stack.
     /// </summary>
     private static bool IsPlainItemCopy(ItemRequirement copy, CatalogItem item) =>
-        !copy.Kind.RequiresNamedItem() && copy.Item?.Id == item.Id && copy.TierMatch == TierMatch.Any && copy.UpgradeMatch == UpgradeMatch.Any
+        !copy.Blanket && !copy.Kind.RequiresNamedItem() && copy.Item?.Id == item.Id && copy.TierMatch == TierMatch.Any && copy.UpgradeMatch == UpgradeMatch.Any
         && copy.Effect.IsAny && !copy.RequireUncursed && copy.Source is null
         && copy.IdentityGroup is null && copy.AlternativeGroup is null && copy.LevelSum is null;
 
@@ -611,7 +612,7 @@ public static class QueryRelationships
             }
             var chip = new Building { Key = $"req:{index}", Members = [index] };
             Attach(chip, index);
-            if (requirement.Item is { } named && requirement.LevelSum is null) chipByItem[named.Id] = chip;
+            if (!requirement.Blanket && requirement.Item is { } named && requirement.LevelSum is null) chipByItem[named.Id] = chip;
             items.Add(chip);
         }
         // Single-member clusters render as chips.
@@ -711,7 +712,7 @@ public static class QueryRelationships
     public static List<ItemRequirement> JoinAlternatives(IEnumerable<ItemRequirement> requirements, int source, int target)
     {
         var next = requirements.ToList();
-        if (source == target) return next;
+        if (source == target || next[source].Blanket != next[target].Blanket) return next;
         var group = next[target].AlternativeGroup ?? NextAlternativeGroup(next);
         if (next[source].AlternativeGroup == group) return next;
         // A copy has to name the kind it copies, so only a cluster that stays
@@ -727,7 +728,7 @@ public static class QueryRelationships
             foreach (var index in new[] { source, target })
             {
                 var anchor = next[index];
-                if (anchor.Item is not { } named || anchor.IdentityGroup is not null) continue;
+                if (anchor.Blanket || anchor.Item is not { } named || anchor.IdentityGroup is not null) continue;
                 var copies = Enumerable.Range(0, next.Count).Where(other => other != index && IsPlainItemCopy(next[other], named)).ToList();
                 if (copies.Count == 0) continue;
                 if (FreeGroup(next.Select(requirement => requirement.IdentityGroup), SearchLimits.IdentityGroupMax) is not int label) continue;
@@ -766,7 +767,7 @@ public static class QueryRelationships
     {
         var next = requirements.ToList();
         var family = next[item.Anchor].Kind.Family();
-        return !family.RequiresNamedItem() && item.Members.All(index => next[index].Kind.Family() == family);
+        return !next[item.Anchor].Blanket && !family.RequiresNamedItem() && item.Members.All(index => next[index].Kind.Family() == family);
     }
 
     /// <summary>Pulls the chip at <paramref name="index"/> out of its cluster; it leaves its stack behind.</summary>
@@ -855,7 +856,7 @@ public static class QueryRelationships
     {
         var next = requirements.ToList();
         var anchor = next[item.Anchor];
-        if (item.Cluster is not null || anchor.Item is null) return next;
+        if (anchor.Blanket || item.Cluster is not null || anchor.Item is null) return next;
         var indices = item.Extras.Prepend(item.Anchor).ToList();
         if (total is not int atLeast)
         {
@@ -976,6 +977,13 @@ public static class QueryRelationships
         if (query.ArcaneResin is < 0 or > 65535 || query.ArcaneResinFilter is not { IsValid: true })
             return "Arcane Resin must be 0..65535, with a valid wand floor and source.";
         var requirements = query.Requirements;
+        if (requirements.Count > 0 && requirements.All(r => r.Blanket))
+            return "Add at least one ordinary requirement.";
+        if (requirements.Where(r => r.AlternativeGroup is not null).GroupBy(r => r.AlternativeGroup)
+            .Any(group => group.Select(r => r.Blanket).Distinct().Count() > 1))
+            return "An either/or group cannot mix ordinary and blanket requirements.";
+        if (requirements.Any(r => r.Blanket && (r.IdentityGroup is not null || r.LevelSum is not null || r.SelectTrinket)))
+            return "A blanket cannot request extra copies, combined levels, or trinket selection.";
         foreach (var requirement in requirements)
         {
             var family = requirement.Kind.Family();
@@ -1378,6 +1386,7 @@ public enum FloorFeeling : byte { None, Chasm, Water, Grass, Dark, Large, Traps,
 public sealed record ScoutFloorFeeling(int Depth, FloorFeeling Feeling);
 public sealed record SearchStatus(SearchState State, long Scanned, long Total, long ErrorCode, double Probability)
 {
+    public bool IsImpossibleQuery => State == SearchState.Completed && Scanned == 0 && Total > 0;
     public bool ProbabilityUnavailable => !double.IsFinite(Probability);
     public string ProbabilityDescription => ProbabilityUnavailable ? "unavailable" : Probability > 0 ? $"{Probability:P4}" : "calculating";
 }

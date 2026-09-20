@@ -40,9 +40,11 @@
 //! consumable or torch, so there is no challenge-dependent availability bound
 //! to apply here. Its RNG knock-on effects are handled by generation itself.
 
-use crate::catalog::{ItemId, ItemKind, WeaponCategory};
+use crate::catalog::{ITEMS, ItemId, ItemKind, WeaponCategory};
 use crate::model::{ItemSource, WorldItem};
-use crate::query::{EffectRequirement, Requirement, SearchQuery, UpgradeRequirement};
+use crate::query::{
+    EffectRequirement, Requirement, SearchQuery, TierRequirement, UpgradeRequirement,
+};
 use crate::quests::{QuestSummary, WandmakerQuestType};
 use crate::search::FloorGate;
 
@@ -516,7 +518,10 @@ fn closed_multiplicities(slots: &[Vec<RequirementPlan>]) -> Vec<(usize, usize)> 
         let [plan] = slot.as_slice() else {
             return None;
         };
-        (plan.quests == 0 && plan.open_deadline.is_some() && plan.requirement.level_sum.is_none())
+        (plan.quests == 0
+            && plan.open_deadline.is_some()
+            && plan.requirement.level_sum.is_none()
+            && !plan.requirement.blanket)
             .then_some((index, plan))
     });
 
@@ -554,6 +559,83 @@ fn closed_multiplicities(slots: &[Vec<RequirementPlan>]) -> Vec<(usize, usize)> 
     groups
 }
 
+/// A blanket can only be witnessed by an item assigned to an ordinary slot.
+/// Keep every possible ordinary alternative (including optional sum members),
+/// but require all filters on each candidate witness to hold on the same item.
+/// Catalog identities make tier/category intersections exact even when the
+/// intersection of two tier bounds cannot be expressed as one tier filter.
+fn blanket_witnesses(query: &SearchQuery, blanket: Requirement) -> Vec<Requirement> {
+    let mut witnesses = Vec::new();
+    for ordinary in query.requirements.iter().filter(|r| !r.blanket) {
+        if ordinary.kind != blanket.kind {
+            continue;
+        }
+        let upgrade = match (ordinary.upgrade, blanket.upgrade) {
+            (UpgradeRequirement::Any, other) | (other, UpgradeRequirement::Any) => other,
+            (UpgradeRequirement::Exact(left), UpgradeRequirement::Exact(right)) => {
+                if left != right {
+                    continue;
+                }
+                UpgradeRequirement::Exact(left)
+            }
+            (UpgradeRequirement::AtLeast(left), UpgradeRequirement::AtLeast(right)) => {
+                UpgradeRequirement::AtLeast(left.max(right))
+            }
+            (UpgradeRequirement::Exact(value), UpgradeRequirement::AtLeast(minimum))
+            | (UpgradeRequirement::AtLeast(minimum), UpgradeRequirement::Exact(value)) => {
+                if value < minimum {
+                    continue;
+                }
+                UpgradeRequirement::Exact(value)
+            }
+        };
+        let effect = match (ordinary.effect, blanket.effect) {
+            (EffectRequirement::Any, other) | (other, EffectRequirement::Any) => other,
+            (EffectRequirement::OneOf(left), EffectRequirement::OneOf(right)) => {
+                let Some(shared) = left.intersection(right) else {
+                    continue;
+                };
+                EffectRequirement::OneOf(shared)
+            }
+        };
+        let source = match (ordinary.source, blanket.source) {
+            (Some(left), Some(right)) if left != right => continue,
+            (left, right) => left.or(right),
+        };
+        for item in ITEMS {
+            if ![ordinary, &blanket].iter().all(|r| {
+                r.kind == item.kind
+                    && r.item.is_none_or(|id| id == item.id)
+                    && r.tier.matches(item.tier)
+                    && r.weapon_category
+                        .is_none_or(|category| item.weapon_category() == Some(category))
+            }) {
+                continue;
+            }
+            let witness = Requirement {
+                item: Some(item.id),
+                weapon_category: item.weapon_category(),
+                tier: TierRequirement::Any,
+                upgrade,
+                effect,
+                source,
+                require_uncursed: ordinary.require_uncursed || blanket.require_uncursed,
+                max_depth: Some(
+                    ordinary
+                        .max_depth
+                        .unwrap_or(query.max_depth)
+                        .min(blanket.max_depth.unwrap_or(query.max_depth)),
+                ),
+                ..blanket
+            };
+            if !witnesses.contains(&witness) {
+                witnesses.push(witness);
+            }
+        }
+    }
+    witnesses
+}
+
 impl QueryPlan {
     /// Derives the plan for a validated query.
     #[must_use]
@@ -587,7 +669,15 @@ impl QueryPlan {
         let mut slots: Vec<Vec<RequirementPlan>> = Vec::new();
         for slot in query.slots() {
             let mut members = Vec::with_capacity(slot.len());
-            for requirement in slot.iter().map(|index| &query.requirements[*index]) {
+            let requirements = slot.into_iter().flat_map(|index| {
+                let requirement = query.requirements[index];
+                if requirement.blanket {
+                    blanket_witnesses(query, requirement)
+                } else {
+                    vec![requirement]
+                }
+            });
+            for requirement in requirements {
                 let requirement_max_depth = requirement
                     .max_depth
                     .unwrap_or(max_depth)
@@ -601,14 +691,14 @@ impl QueryPlan {
                 let mut vault = false;
                 let mut open_deadline = None;
                 for source in ALL_SOURCES {
-                    if !source_feasible(requirement, source, &profile) {
+                    if !source_feasible(&requirement, source, &profile) {
                         continue;
                     }
                     if query.exclude_blacksmith_rewards && source == ItemSource::BlacksmithReward {
                         continue;
                     }
                     let Some(source_max_depth) =
-                        deadline(requirement, source, requirement_max_depth)
+                        deadline(&requirement, source, requirement_max_depth)
                     else {
                         continue;
                     };
@@ -640,7 +730,7 @@ impl QueryPlan {
                     }
                 }
                 members.push(RequirementPlan {
-                    requirement: *requirement,
+                    requirement,
                     max_depth: requirement_max_depth,
                     quests,
                     vault,
@@ -808,7 +898,11 @@ impl QueryPlan {
             if live == 0 {
                 return false;
             }
-            quest_only[usize::from(live)] += 1;
+            // Blankets still need a feasible source, but reuse an ordinary
+            // slot's prize and must not consume a second quest reward.
+            if !slot[0].requirement.blanket {
+                quest_only[usize::from(live)] += 1;
+            }
         }
         for subset in 1_u8..16 {
             let mut needed = 0_u32;
@@ -941,6 +1035,7 @@ mod tests {
             effect: EffectRequirement::Any,
             require_uncursed: false,
             select_trinket: false,
+            blanket: false,
             source: None,
             identity_group: None,
             max_depth: None,
@@ -1313,6 +1408,7 @@ mod tests {
             effect: EffectRequirement::exactly(Effect::Weapon(WeaponEffect::Sacrificial)),
             require_uncursed: false,
             select_trinket: false,
+            blanket: false,
             ..requirement(ItemKind::Weapon, UpgradeRequirement::Exact(3))
         };
         let plan = QueryPlan::analyze(&query(vec![cursed], 24));
@@ -1325,6 +1421,7 @@ mod tests {
             effect: EffectRequirement::exactly(Effect::Armor(ArmorEffect::Thorns)),
             require_uncursed: false,
             select_trinket: false,
+            blanket: false,
             ..requirement(ItemKind::Armor, UpgradeRequirement::Exact(3))
         };
         assert!(!QueryPlan::analyze(&query(vec![good], 24)).is_unsatisfiable());
@@ -1333,6 +1430,7 @@ mod tests {
             effect: EffectRequirement::exactly(Effect::Weapon(WeaponEffect::Pressurized)),
             require_uncursed: false,
             select_trinket: false,
+            blanket: false,
             ..requirement(ItemKind::Weapon, UpgradeRequirement::Exact(4))
         };
         assert!(QueryPlan::analyze(&query(vec![cursed_plus_four], 24)).is_unsatisfiable());
@@ -1341,6 +1439,7 @@ mod tests {
             effect: EffectRequirement::exactly(Effect::Weapon(WeaponEffect::Crystal)),
             require_uncursed: true,
             select_trinket: false,
+            blanket: false,
             ..requirement(ItemKind::Weapon, UpgradeRequirement::Exact(5))
         };
         assert!(!QueryPlan::analyze(&query(vec![crystal_plus_five], 24)).is_unsatisfiable());
@@ -1357,6 +1456,7 @@ mod tests {
             ),
             require_uncursed: false,
             select_trinket: false,
+            blanket: false,
             ..requirement(ItemKind::Weapon, UpgradeRequirement::Exact(3))
         };
         assert!(!QueryPlan::analyze(&query(vec![mixed], 24)).is_unsatisfiable());
@@ -1365,6 +1465,7 @@ mod tests {
             effect: EffectRequirement::OneOf(EffectSet::enchantments(ItemKind::Weapon).unwrap()),
             require_uncursed: true,
             select_trinket: false,
+            blanket: false,
             ..requirement(ItemKind::Weapon, UpgradeRequirement::Exact(3))
         };
         assert!(!QueryPlan::analyze(&query(vec![any_enchantment], 24)).is_unsatisfiable());
@@ -4198,6 +4299,7 @@ mod closed_multiplicity_grouping_tests {
                 effect: EffectRequirement::Any,
                 require_uncursed: false,
                 select_trinket: false,
+                blanket: false,
                 source: Some(ItemSource::Heap),
                 identity_group: None,
                 max_depth: Some(4),

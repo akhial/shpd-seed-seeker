@@ -47,6 +47,7 @@ import dev.seedseeker.app.engine.ScoutMatches
 import dev.seedseeker.app.engine.SearchWorkers
 import dev.seedseeker.app.engine.SeedCode
 import dev.seedseeker.app.model.BoardItem
+import dev.seedseeker.app.model.ItemKind
 import dev.seedseeker.app.model.ItemRequirement
 import dev.seedseeker.app.model.Challenge
 import dev.seedseeker.app.model.DeepLink
@@ -154,6 +155,7 @@ internal fun SeedFinderApp(
     var nextRequirementKey by remember {
         mutableLongStateOf((initialQuery.requirements.maxOfOrNull { it.key } ?: 0L) + 1L)
     }
+    var addingBlanket by remember { mutableStateOf(false) }
     var userPresets by remember { mutableStateOf(presetStorage.load()) }
     var arcaneResin by remember { mutableStateOf(initialQuery.arcaneResin) }
     var arcaneResinFilter by remember { mutableStateOf(initialQuery.arcaneResinFilter) }
@@ -561,7 +563,8 @@ internal fun SeedFinderApp(
                 },
                 onEditResin = { showResinSheet = true },
                 onRemoveResin = { arcaneResin = 0; arcaneResinFilter = dev.seedseeker.app.model.ArcaneResinFilter() },
-                onAdd = {
+                onAdd = { blanket ->
+                    addingBlanket = blanket
                     editingIndex = null
                     editingCount = 1
                     editingTotal = null
@@ -729,8 +732,10 @@ internal fun SeedFinderApp(
         }
         if (showRequirementSheet) {
             RequirementSheet(
-                onAddResin = if (editingIndex == null) ({ showRequirementSheet = false; showResinSheet = true }) else null,
+                onAddResin = if (editingIndex == null && !addingBlanket) ({ showRequirementSheet = false; showResinSheet = true }) else null,
                 editing = editingIndex?.let(requirements::get),
+                blanket = editingIndex?.let { requirements[it].blanket } ?: addingBlanket,
+                initialKind = if (addingBlanket) requirements.firstOrNull { !it.blanket }?.kind ?: ItemKind.WEAPON else ItemKind.WEAPON,
                 editingCount = editingCount,
                 editingTotal = editingTotal,
                 editingCopyDepth = editingCopyDepth,

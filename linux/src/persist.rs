@@ -553,4 +553,16 @@ mod tests {
         assert_eq!(presets[0].name, "My preset");
         assert_eq!(predicates(&presets[0].state), predicates(&state));
     }
+    #[test]
+    fn blanket_predicates_survive_saved_drafts() {
+        let state = decode_state(
+            r#"{"requirements":[{"item":"wand_frost"},
+            {"kind":"wand","upgrade":3,"source":"wandmaker_reward","blanket":true}]}"#,
+        )
+        .unwrap();
+        let saved = save_document(&state);
+        assert_eq!(saved["requirements"][1]["blanket"], true);
+        let restored = decode_state(&saved.to_string()).unwrap();
+        assert_eq!(restored.to_query().unwrap(), state.to_query().unwrap());
+    }
 }

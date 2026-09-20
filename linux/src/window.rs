@@ -421,6 +421,22 @@ pub fn present(app: &adw::Application) {
     });
     window.add_action(&add_action);
 
+    let blanket_action = gio::SimpleAction::new("add-blanket", None);
+    blanket_action.connect_activate({
+        let state = Rc::clone(&state);
+        let edit_requirement = Rc::clone(&edit_requirement);
+        move |_, _| {
+            let mut draft = UiRequirement::new(state.borrow_mut().claim_key());
+            draft.blanket = true;
+            if let Some(first) = state.borrow().requirements.iter().find(|r| !r.blanket) {
+                draft.kind = first.kind;
+                draft.weapon_category = first.weapon_category;
+            }
+            edit_requirement(draft, StackShape::lone(), true);
+        }
+    });
+    window.add_action(&blanket_action);
+
     let challenges_action = gio::SimpleAction::new("challenges", None);
     challenges_action.connect_activate({
         let state = Rc::clone(&state);

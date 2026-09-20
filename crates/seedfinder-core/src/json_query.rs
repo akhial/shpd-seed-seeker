@@ -160,6 +160,8 @@ struct FileRequirement {
     #[serde(default)]
     select_trinket: bool,
     #[serde(default)]
+    blanket: bool,
+    #[serde(default)]
     source: Option<FileItemSource>,
     #[serde(default)]
     identity_group: Option<u8>,
@@ -487,6 +489,7 @@ fn convert_requirement(
         effect,
         require_uncursed: requirement.uncursed,
         select_trinket: requirement.select_trinket,
+        blanket: requirement.blanket,
         source: requirement.source.map(ItemSource::from),
         identity_group: requirement.identity_group,
         max_depth: requirement.max_depth,
@@ -675,6 +678,9 @@ fn encode_requirement(requirement: &Requirement) -> Value {
             }
         };
         output.insert("effect".to_owned(), effect);
+    }
+    if requirement.blanket {
+        output.insert("blanket".to_owned(), json!(true));
     }
     if requirement.select_trinket {
         output.insert("select_trinket".to_owned(), json!(true));
@@ -1091,6 +1097,7 @@ mod tests {
                     effect: EffectRequirement::exactly(Effect::Weapon(WeaponEffect::Blazing)),
                     require_uncursed: true,
                     select_trinket: false,
+                    blanket: false,
                     source: Some(ItemSource::LockedChest),
                     identity_group: Some(2),
                     max_depth: Some(9),
@@ -1106,6 +1113,7 @@ mod tests {
                     effect: EffectRequirement::Any,
                     require_uncursed: false,
                     select_trinket: false,
+                    blanket: false,
                     source: None,
                     identity_group: None,
                     max_depth: None,
@@ -1160,6 +1168,7 @@ mod tests {
                 effect: EffectRequirement::Any,
                 require_uncursed: false,
                 select_trinket: false,
+                blanket: false,
                 source: None,
                 identity_group: None,
                 max_depth: None,

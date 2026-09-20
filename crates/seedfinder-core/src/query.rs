@@ -328,6 +328,9 @@ pub struct Requirement {
     pub require_uncursed: bool,
     /// Choose this offer (or its unique matching OR alternative) at +3 after brewing.
     pub select_trinket: bool,
+    /// Extra predicate on an item assigned to an ordinary requirement.
+    /// Blanket slots may reuse that item and never consume another occurrence.
+    pub blanket: bool,
     pub source: Option<ItemSource>,
     /// Requirements in the same non-zero group must resolve to the same item ID.
     pub identity_group: Option<u8>,
@@ -472,6 +475,11 @@ impl Requirement {
     /// another family, an upgrade outside the UI's family-specific range, or
     /// an inconsistent group label.
     pub fn validate(self) -> Result<(), QueryError> {
+        if self.blanket
+            && (self.identity_group.is_some() || self.level_sum.is_some() || self.select_trinket)
+        {
+            return Err(QueryError::BlanketWithRelations);
+        }
         if self.select_trinket && self.kind != ItemKind::Trinket {
             return Err(QueryError::SelectionRequiresTrinket);
         }
@@ -630,7 +638,12 @@ impl SearchQuery {
     /// depth is outside the main dungeon, a requirement is inconsistent, or a
     /// cross-requirement group disagrees with itself.
     pub fn validate(&self) -> Result<(), QueryError> {
-        if self.requirements.is_empty() && self.arcane_resin == 0 {
+        if self
+            .requirements
+            .iter()
+            .all(|requirement| requirement.blanket)
+            && (!self.requirements.is_empty() || self.arcane_resin == 0)
+        {
             return Err(QueryError::Empty);
         }
         if !(1..=MAX_SEARCH_DEPTH).contains(&self.max_depth) {
@@ -660,6 +673,13 @@ impl SearchQuery {
                 if *agreed != sum.minimum_total {
                     return Err(QueryError::InconsistentLevelSum { group: sum.group });
                 }
+            }
+        }
+        for slot in self.slots() {
+            if slot.iter().any(|&index| {
+                self.requirements[index].blanket != self.requirements[slot[0]].blanket
+            }) {
+                return Err(QueryError::MixedBlanketAlternatives);
             }
         }
         // An identity group is a stack: one *anchor unit* — a lone
@@ -716,7 +736,8 @@ impl SearchQuery {
     /// The query's slots: requirement indices grouped so that the members of
     /// one alternative group share a slot, in first-appearance order. Every
     /// other requirement is a slot of its own. A world matches when every
-    /// slot is filled by a distinct item matching one of its members.
+    /// ordinary slot is filled by a distinct item matching one of its members;
+    /// blanket slots constrain that same assignment without consuming items.
     #[must_use]
     pub fn slots(&self) -> Vec<Vec<usize>> {
         let mut slot_of_group: BTreeMap<u8, usize> = BTreeMap::new();
@@ -734,6 +755,24 @@ impl SearchQuery {
             }
         }
         slots
+    }
+
+    /// Slots that require distinct item occurrences.
+    #[must_use]
+    pub fn ordinary_slots(&self) -> Vec<Vec<usize>> {
+        self.slots()
+            .into_iter()
+            .filter(|slot| !self.requirements[slot[0]].blanket)
+            .collect()
+    }
+
+    /// Extra conditions evaluated against the ordinary assignment.
+    #[must_use]
+    pub fn blanket_slots(&self) -> Vec<Vec<usize>> {
+        self.slots()
+            .into_iter()
+            .filter(|slot| self.requirements[slot[0]].blanket)
+            .collect()
     }
 
     /// How many slots the query has — what a frontend counts as "requirements"
@@ -799,8 +838,11 @@ impl SearchQuery {
         {
             return false;
         }
-        let candidate_slots = self.slots();
-        let base_slots = base.slots();
+        if !self.preserves_blankets(base) {
+            return false;
+        }
+        let candidate_slots = self.ordinary_slots();
+        let base_slots = base.ordinary_slots();
         if candidate_slots.len() < base_slots.len() {
             return false;
         }
@@ -883,6 +925,40 @@ impl SearchQuery {
         })
     }
 
+    /// Conservative continuation proof for blanket witnesses.
+    fn preserves_blankets(&self, base: &Self) -> bool {
+        let ordinary = |query: &Self| {
+            query
+                .requirements
+                .iter()
+                .filter(|r| !r.blanket)
+                .copied()
+                .collect::<Vec<_>>()
+        };
+        let base_blankets = base.blanket_slots();
+        // Keeping the ordinary requirements identical ensures a blanket witness
+        // remains among the items assigned by the base query. Adding an ordinary
+        // slot can otherwise move the witness to an item the base cannot use.
+        if !base_blankets.is_empty() {
+            if ordinary(self) != ordinary(base) {
+                return false;
+            }
+            let blankets = self.blanket_slots();
+            if !base_blankets.iter().all(|wanted| {
+                blankets.iter().any(|slot| {
+                    slot.iter().all(|&index| {
+                        wanted.iter().any(|&other| {
+                            self.requirements[index].implies(&base.requirements[other])
+                        })
+                    })
+                })
+            }) {
+                return false;
+            }
+        }
+        true
+    }
+
     /// Whether this query and `base` name a common item: some requirement of
     /// each has the same kind, and either both name the same item or at least
     /// one names none (a kind-level requirement subsumes every item of its
@@ -943,7 +1019,8 @@ impl SearchQuery {
             .iter()
             .filter(|slot| !slot.optional)
             .count();
-        if mandatory > world.items.len()
+        if assignment.blankets.iter().any(Vec::is_empty)
+            || mandatory > world.items.len()
             || assignment
                 .slots
                 .iter()
@@ -1062,6 +1139,8 @@ struct Assignment<'query> {
     /// Resolved slots, most constrained slot first.
     slots: Vec<Slot<'query>>,
     sum_groups: BTreeMap<u8, SumGroup>,
+    /// Eligible item indices for each blanket condition.
+    blankets: Vec<Vec<usize>>,
     used: Vec<bool>,
     scenarios: BTreeMap<u16, u64>,
     identities: BTreeMap<u8, ItemId>,
@@ -1082,7 +1161,9 @@ impl<'query> Assignment<'query> {
     /// blacksmith-reward exclusion, sorted most constrained slot first.
     fn prepare(query: &'query SearchQuery, world: &'query GeneratedWorld) -> Self {
         let mut slots: Vec<Slot<'query>> = Vec::new();
+        let mut blankets = Vec::new();
         for slot in query.slots() {
+            let slot_first = slot[0];
             let mut candidates = Vec::new();
             // Combined-level members never sit in alternative groups, so a
             // slot is optional exactly when its members carry a level sum.
@@ -1102,6 +1183,13 @@ impl<'query> Assignment<'query> {
                     }
                 }
             }
+            if query.requirements[slot_first].blanket {
+                let mut indices: Vec<_> = candidates.iter().map(|&(index, _, _)| index).collect();
+                indices.sort_unstable();
+                indices.dedup();
+                blankets.push(indices);
+                continue;
+            }
             slots.push(Slot {
                 candidates,
                 optional,
@@ -1115,6 +1203,7 @@ impl<'query> Assignment<'query> {
             items: &world.items,
             slots,
             sum_groups,
+            blankets,
             used: vec![false; world.items.len()],
             scenarios: BTreeMap::new(),
             identities: BTreeMap::new(),
@@ -1123,10 +1212,16 @@ impl<'query> Assignment<'query> {
     }
 
     /// Depth-first assignment requiring every mandatory slot to hold a
-    /// distinct item and every combined-level group to reach its total.
+    /// distinct item, every combined-level group to reach its total, and
+    /// every blanket to match at least one of the assigned items.
     fn fills_every_slot(&mut self, slot: usize) -> bool {
         if slot == self.slots.len() {
-            return self.level_sums_satisfied() && self.resin_selection().is_some();
+            return self.level_sums_satisfied()
+                && self.resin_selection().is_some()
+                && self
+                    .blankets
+                    .iter()
+                    .all(|indices| indices.iter().any(|&index| self.used[index]));
         }
         // Surplus supply can only shrink as slots claim items and choices.
         if self.resin.minimum > 0 && self.resin_selection().is_none() {
@@ -1353,6 +1448,13 @@ impl BestSubset<'_> {
                     Some(_) => {}
                 }
             }
+            conditions += self
+                .assignment
+                .blankets
+                .iter()
+                .filter(|indices| indices.iter().any(|index| items.contains(index)))
+                .count();
+
             if self.assignment.resin.minimum > 0
                 && let Some(resin_items) = self.assignment.resin_selection()
             {
@@ -1370,6 +1472,7 @@ impl BestSubset<'_> {
         // condition.
         if self.selected.len()
             + (self.assignment.slots.len() - slot)
+            + self.assignment.blankets.len()
             + usize::from(self.assignment.resin.minimum > 0)
             <= self.best_conditions
         {
@@ -1491,6 +1594,8 @@ pub enum QueryError {
     /// their own constraints; a stack has one anchor and bare copies.
     OverconstrainedIdentityGroup,
     InvalidAlternativeGroup,
+    BlanketWithRelations,
+    MixedBlanketAlternatives,
     InvalidLevelSum,
     /// A combined-level group member of a family other than rings.
     LevelSumOutsideRings,
@@ -1532,7 +1637,15 @@ impl fmt::Display for QueryError {
             _ => {}
         }
         let message = match self {
-            Self::Empty => "at least one item requirement is needed",
+            Self::Empty => {
+                "at least one item requirement is needed; include an ordinary requirement"
+            }
+            Self::BlanketWithRelations => {
+                "a blanket requirement cannot request extra copies, combined levels, or trinket selection"
+            }
+            Self::MixedBlanketAlternatives => {
+                "an alternative group cannot mix ordinary and blanket requirements"
+            }
             Self::InvalidDepth => "maximum depth must be between 1 and 24",
             Self::InvalidUpgrade => {
                 "upgrade must be between +1 and +4; only a tier-4 weapon, melee or thrown, reaches +5"
@@ -1608,6 +1721,7 @@ mod tests {
             effect: EffectRequirement::Any,
             require_uncursed: false,
             select_trinket: false,
+            blanket: false,
             source: None,
             identity_group: None,
             max_depth: None,
@@ -1699,6 +1813,7 @@ mod tests {
             effect: EffectRequirement::Any,
             require_uncursed: false,
             select_trinket: false,
+            blanket: false,
             source: None,
             identity_group: None,
             max_depth: None,
@@ -1734,6 +1849,7 @@ mod tests {
             upgrade: UpgradeRequirement::AtLeast(4),
             require_uncursed: true,
             select_trinket: false,
+            blanket: false,
             max_depth: Some(10),
             ..arcana
         };
@@ -1789,6 +1905,7 @@ mod tests {
                 effect: EffectRequirement::Any,
                 require_uncursed: false,
                 select_trinket: false,
+                blanket: false,
                 source: None,
                 identity_group: None,
                 max_depth: None,
@@ -2098,6 +2215,7 @@ mod tests {
             effect: EffectRequirement::Any,
             require_uncursed: false,
             select_trinket: false,
+            blanket: false,
             source: None,
             identity_group: None,
             max_depth: None,
@@ -2120,6 +2238,7 @@ mod tests {
             effect: EffectRequirement::Any,
             require_uncursed: false,
             select_trinket: false,
+            blanket: false,
             source: None,
             identity_group: None,
             max_depth: None,
@@ -2198,6 +2317,7 @@ mod tests {
             effect: EffectRequirement::exactly(Effect::Weapon(WeaponEffect::Displacing)),
             require_uncursed: true,
             select_trinket: false,
+            blanket: false,
             ..requirement(ItemId::Sword)
         };
         assert_eq!(invalid.validate(), Err(QueryError::UncursedWithCurse));
@@ -2214,6 +2334,7 @@ mod tests {
             effect: EffectRequirement::Any,
             require_uncursed: false,
             select_trinket: false,
+            blanket: false,
             source: None,
             identity_group: None,
             max_depth: None,
@@ -2231,6 +2352,7 @@ mod tests {
             effect: EffectRequirement::Any,
             require_uncursed: false,
             select_trinket: false,
+            blanket: false,
             source: None,
             identity_group: None,
             max_depth: None,
@@ -2266,6 +2388,7 @@ mod tests {
             effect: EffectRequirement::Any,
             require_uncursed: false,
             select_trinket: false,
+            blanket: false,
             source: None,
             identity_group: None,
             max_depth: None,
@@ -2354,6 +2477,7 @@ mod tests {
             effect: EffectRequirement::Any,
             require_uncursed: false,
             select_trinket: false,
+            blanket: false,
             source: None,
             identity_group: None,
             max_depth: None,
@@ -2431,6 +2555,7 @@ mod tests {
             effect: EffectRequirement::Any,
             require_uncursed: false,
             select_trinket: false,
+            blanket: false,
             source,
             identity_group: Some(1),
             max_depth: None,
@@ -2457,6 +2582,7 @@ mod tests {
                     effect: EffectRequirement::Any,
                     require_uncursed: false,
                     select_trinket: false,
+                    blanket: false,
                     source: None,
                     identity_group: None,
                     max_depth: None,
@@ -2564,6 +2690,7 @@ mod tests {
             effect: EffectRequirement::Any,
             require_uncursed: false,
             select_trinket: false,
+            blanket: false,
             source: None,
             identity_group: Some(1),
             max_depth: None,
@@ -2675,6 +2802,7 @@ mod tests {
             effect: EffectRequirement::Any,
             require_uncursed: false,
             select_trinket: false,
+            blanket: false,
             source: None,
             identity_group: None,
             max_depth: None,
@@ -2758,6 +2886,7 @@ mod tests {
                 ),
                 require_uncursed: true,
                 select_trinket: false,
+                blanket: false,
                 ..plain(ItemKind::Weapon)
             }
             .validate(),
@@ -2771,6 +2900,7 @@ mod tests {
                 ),
                 require_uncursed: true,
                 select_trinket: false,
+                blanket: false,
                 ..plain(ItemKind::Weapon)
             }
             .validate(),
@@ -3150,6 +3280,7 @@ mod tests {
             effect: EffectRequirement::Any,
             require_uncursed: false,
             select_trinket: false,
+            blanket: false,
             source: None,
             identity_group: None,
             max_depth: None,

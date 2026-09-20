@@ -40,6 +40,14 @@ final class QueryAnalysisTests: XCTestCase {
         XCTAssertThrowsError(try QueryAnalysis.analyze(Data()))
     }
 
+    func testExactUpgradeBlanketConflictIsImpossible() throws {
+        let document = Data(#"{"requirements":[{"item":"wand_lightning","upgrade":2},{"item":"wand_disintegration","upgrade":2},{"kind":"wand","upgrade":3,"blanket":true}]}"#.utf8)
+        let analysis = try QueryAnalysis.analyze(document)
+        XCTAssertTrue(analysis.impossible)
+        XCTAssertNil(analysis.probability)
+        XCTAssertEqual(analysis.label, "Impossible query")
+    }
+
     func testCompactEstimateMatchesWebPresentation() {
         XCTAssertEqual(QueryAnalysis(impossible: false, probability: 1 / 5_090).label,
                        "Match probability ≈ 1 in 5.09 K")

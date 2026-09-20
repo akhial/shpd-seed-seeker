@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useStore } from "@tanstack/react-store";
 import { LEVEL_GEN_CHALLENGES, challenges as challengeOptions } from "../../lib/catalog";
 import { probabilityLabel } from "../../lib/format";
-import { CheckIcon, CommandIcon, LinkIcon, ReturnIcon, XIcon } from "../../lib/icons";
+import { CheckIcon, CommandIcon, InfoIcon, LinkIcon, ReturnIcon, XIcon } from "../../lib/icons";
 import {
   BLACKSMITH_LAST_FLOOR,
   FLOOR_LIMIT_OPTIONS,
@@ -34,7 +34,14 @@ import type {
 } from "../../lib/wasm/types";
 import { RequirementBoard } from "./RequirementBoard";
 import type { StackShape } from "./RequirementBoard";
-import { applyEdit, boardCount, boardItems, removeItem, removeMember } from "./relations";
+import {
+  applyEdit,
+  boardCount,
+  boardItems,
+  removeItem,
+  removeMember,
+  replaceRequirementSection,
+} from "./relations";
 import { RequirementEditor } from "./RequirementEditor";
 import { SliderRow } from "./parts";
 
@@ -76,6 +83,16 @@ export function QueryPanel({
   const [presetName, setPresetName] = useState("");
   const [editor, setEditor] = useState<EditorSession | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [blanketHelpOpen, setBlanketHelpOpen] = useState(false);
+
+  useEffect(() => {
+    if (!blanketHelpOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setBlanketHelpOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [blanketHelpOpen]);
 
   const shareQuery = () => {
     void encodeShareLink(toQueryJson(query))
@@ -123,8 +140,11 @@ export function QueryPanel({
     savePresets(next);
   };
 
-  const setRequirements = (requirements: RequirementState[]) => {
-    queryStore.setState((state) => ({ ...state, requirements }));
+  const setRequirements = (blanket: boolean, requirements: RequirementState[]) => {
+    queryStore.setState((state) => ({
+      ...state,
+      requirements: replaceRequirementSection(state.requirements, blanket, requirements),
+    }));
   };
 
   const commitRequirement = (
@@ -300,47 +320,129 @@ export function QueryPanel({
           )}
         </section>
 
-        <section className="d1-section">
-          <div className="d1-section-head">
-            <h3>Requirements</h3>
-          </div>
-          <RequirementBoard
-            requirements={query.requirements}
-            onChange={setRequirements}
-            onEdit={(index, stack) =>
-              setEditor({ index, requirement: query.requirements[index], stack })
-            }
-            onAdd={() =>
-              setEditor({
-                index: null,
-                requirement: emptyRequirement("weapon"),
-                stack: { count: 1, inCluster: false },
-              })
-            }
-            resin={
-              (query.arcaneResin ?? 0) > 0
-                ? {
-                    amount: query.arcaneResin!,
-                    filter: query.arcaneResinFilter,
-                    onEdit: () =>
-                      setEditor({
-                        index: null,
-                        resin: true,
-                        requirement: {
-                          ...emptyRequirement("wand"),
-                          item: "arcane_resin",
-                          uncursed: true,
-                          ...query.arcaneResinFilter,
-                        },
-                        stack: { count: 1, inCluster: false },
-                      }),
-                    onRemove: () =>
-                      patchQuery({ arcaneResin: undefined, arcaneResinFilter: undefined }),
-                  }
-                : undefined
-            }
-          />
-        </section>
+        {[false, true].map((blanket) => {
+          const requirements = query.requirements.filter(
+            (requirement) => Boolean(requirement.blanket) === blanket,
+          );
+          const count = boardCount(requirements);
+          const board = (
+            <RequirementBoard
+              requirements={requirements}
+              resin={
+                !blanket && (query.arcaneResin ?? 0) > 0
+                  ? {
+                      amount: query.arcaneResin!,
+                      filter: query.arcaneResinFilter,
+                      onEdit: () =>
+                        setEditor({
+                          index: null,
+                          resin: true,
+                          requirement: {
+                            ...emptyRequirement("wand"),
+                            item: "arcane_resin",
+                            uncursed: true,
+                            ...query.arcaneResinFilter,
+                          },
+                          stack: { count: 1, inCluster: false },
+                        }),
+                      onRemove: () =>
+                        patchQuery({ arcaneResin: undefined, arcaneResinFilter: undefined }),
+                    }
+                  : undefined
+              }
+              onChange={(next) => setRequirements(blanket, next)}
+              onEdit={(index, stack) =>
+                setEditor({
+                  index: query.requirements.indexOf(requirements[index]),
+                  requirement: requirements[index],
+                  stack,
+                })
+              }
+              onAdd={() =>
+                setEditor({
+                  index: null,
+                  requirement: {
+                    ...emptyRequirement(
+                      blanket
+                        ? (query.requirements.find((r) => !r.blanket)?.kind ?? "weapon")
+                        : "weapon",
+                    ),
+                    ...(blanket ? { blanket: true } : {}),
+                  },
+                  stack: { count: 1, inCluster: false },
+                })
+              }
+            />
+          );
+          return (
+            <section
+              className="d1-section"
+              key={String(blanket)}
+              aria-label={blanket ? "Blanket Requirements" : "Requirements"}
+            >
+              {blanket ? (
+                <details className="d1-details d1-blanket-details">
+                  <summary>
+                    <span>Blanket Requirements</span>
+                    {count > 0 && <span className="d1-count">{count}</span>}
+                    <span
+                      className="d1-blanket-help"
+                      onMouseEnter={() => setBlanketHelpOpen(true)}
+                      onMouseLeave={(event) => {
+                        if (!event.currentTarget.contains(document.activeElement))
+                          setBlanketHelpOpen(false);
+                      }}
+                      onFocus={() => setBlanketHelpOpen(true)}
+                      onBlur={() => setBlanketHelpOpen(false)}
+                      onClick={(event) => event.preventDefault()}
+                    >
+                      <button
+                        type="button"
+                        className="d1-blanket-help-button"
+                        aria-label="About blanket requirements"
+                        aria-describedby="blanket-requirements-help"
+                        onClick={() => setBlanketHelpOpen(true)}
+                      >
+                        <InfoIcon size={16} />
+                      </button>
+                      <span
+                        id="blanket-requirements-help"
+                        role="tooltip"
+                        className="d1-blanket-help-tooltip"
+                        hidden={!blanketHelpOpen}
+                      >
+                        <span>
+                          Add the items you need under Requirements, then add extra filters here.
+                          Each blanket must match at least one item fulfilling your requirements
+                          above. It does not require another item.
+                        </span>
+                        <span>
+                          Choose Any item in a category to let any of your required items in that
+                          category satisfy the blanket. All filters in one blanket apply to the same
+                          item; separate blankets can match the same or different items.
+                        </span>
+                        <span>
+                          For example, require Lightning, Disintegration, and Frost wands at +2 or
+                          higher. Add an Any wand blanket with exactly +3 and Wandmaker Reward as
+                          its source to require one of those three wands to be the Wandmaker’s +3
+                          reward.
+                        </span>
+                      </span>
+                    </span>
+                  </summary>
+                  <div className="d1-details-body">{board}</div>
+                </details>
+              ) : (
+                <>
+                  <div className="d1-section-head">
+                    <h3>Requirements</h3>
+                  </div>
+                  {board}
+                </>
+              )}
+            </section>
+          );
+        })}
 
         <section className="d1-section">
           <div className="d1-section-head">

@@ -47,7 +47,7 @@ data class BoardItem(
  * folds into its stack.
  */
 private fun isPlainItemCopy(copy: ItemRequirement, item: CatalogItem): Boolean =
-    item.kind.supportsStacks &&
+    !copy.blanket && item.kind.supportsStacks &&
         copy.item?.id == item.id &&
         copy.tierMatch == TierMatch.ANY &&
         copy.upgradeMatch == UpgradeMatch.ANY &&
@@ -151,7 +151,7 @@ fun List<ItemRequirement>.boardItems(): List<BoardItem> {
         }
         val item = Building("req:$index", mutableListOf(index), null)
         attach(item, index)
-        if (named != null && requirement.levelSum == null) chipByItem[named.id] = item
+        if (!requirement.blanket && named != null && requirement.levelSum == null) chipByItem[named.id] = item
         items += item
     }
     // Single-member clusters render as chips.
@@ -299,7 +299,7 @@ private fun List<ItemRequirement>.moveAfter(
  * which the cluster's members then share.
  */
 fun List<ItemRequirement>.joinAlternatives(source: Int, target: Int): List<ItemRequirement> {
-    if (source == target) return this
+    if (source == target || this[source].blanket != this[target].blanket) return this
     val group = this[target].alternativeGroup ?: nextAlternativeGroup()
     if (this[source].alternativeGroup == group) return this
     val sourceKey = this[source].key
@@ -319,7 +319,7 @@ fun List<ItemRequirement>.joinAlternatives(source: Int, target: Int): List<ItemR
         for (index in listOf(source, target)) {
             val anchor = next[index]
             val named = anchor.item ?: continue
-            if (anchor.identityGroup != null) continue
+            if (anchor.blanket || anchor.identityGroup != null) continue
             val copies = next.indices.filter { it != index && isPlainItemCopy(next[it], named) }
             if (copies.isEmpty()) continue
             val label = freeGroup(next.map { it.identityGroup }, SearchLimits.IDENTITY_GROUP_MAX) ?: continue
@@ -371,7 +371,7 @@ fun List<ItemRequirement>.removeMember(index: Int): List<ItemRequirement> =
  */
 fun List<ItemRequirement>.canStack(item: BoardItem): Boolean {
     val family = this[item.anchor].kind.family
-    return family.supportsStacks && item.members.all { this[it].kind.family == family }
+    return !this[item.anchor].blanket && family.supportsStacks && item.members.all { this[it].kind.family == family }
 }
 
 /** Sets how many items the board item anchored at [item] asks for. */
@@ -438,7 +438,7 @@ fun List<ItemRequirement>.setCopyDepth(item: BoardItem, maximumDepth: Int?): Lis
  */
 fun List<ItemRequirement>.setStackTotal(item: BoardItem, total: Int?): List<ItemRequirement> {
     val anchor = this[item.anchor]
-    if (item.cluster != null || anchor.item == null) return this
+    if (anchor.blanket || item.cluster != null || anchor.item == null) return this
     val indices = (listOf(item.anchor) + item.extras).toSet()
     if (total == null) {
         return mapIndexed { index, requirement ->

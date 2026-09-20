@@ -167,7 +167,7 @@ export function RequirementEditor({
   // and of rings only, whose effects scale with their level.
   const totalable = stack.inCluster
     ? false
-    : draft.item !== undefined && count > 1 && family === "ring";
+    : !draft.blanket && draft.item !== undefined && count > 1 && family === "ring";
   const effectiveTotal = totalable ? total : undefined;
   const totalCapacity = ringStackCapacity(count);
   const effectMode: EffectMode = isAnyEnchantment(draft.effect)
@@ -270,12 +270,28 @@ export function RequirementEditor({
         className="d1-modal"
         role="dialog"
         aria-modal="true"
-        aria-label={isNew ? "New requirement" : "Edit requirement"}
+        aria-label={
+          draft.blanket
+            ? isNew
+              ? "New blanket requirement"
+              : "Edit blanket requirement"
+            : isNew
+              ? "New requirement"
+              : "Edit requirement"
+        }
       >
         <header className="d1-modal-head">
           <Sprite art={requirementArt(draft)} size={28} />
           <div className="d1-modal-title">
-            <h2>{isNew ? "New Requirement" : "Edit Requirement"}</h2>
+            <h2>
+              {draft.blanket
+                ? isNew
+                  ? "New Blanket Requirement"
+                  : "Edit Blanket Requirement"
+                : isNew
+                  ? "New Requirement"
+                  : "Edit Requirement"}
+            </h2>
             <p className="d1-mono">{requirementTitle(draft)}</p>
           </div>
         </header>
@@ -342,7 +358,7 @@ export function RequirementEditor({
                 {family !== "trinket" && family !== "artifact" && (
                   <option value="">{WILDCARD_LABELS[kind]}</option>
                 )}
-                {family === "wand" && onSaveResin && (
+                {!draft.blanket && family === "wand" && onSaveResin && (
                   <option value="arcane_resin">Arcane Resin</option>
                 )}
                 {family === "weapon"
@@ -415,7 +431,7 @@ export function RequirementEditor({
             )}
           </section>
 
-          {family === "trinket" && (
+          {family === "trinket" && !draft.blanket && (
             <section className="d1-modal-section">
               <label className="d1-check">
                 <input
@@ -500,77 +516,83 @@ export function RequirementEditor({
               </section>
             )}
 
-          {!resin && !stack.inCluster && family !== "trinket" && family !== "artifact" && (
-            <section className="d1-modal-section">
-              <div className="d1-modal-section-head">
-                <h3>Total item count</h3>
-                <Stepper
-                  value={count}
-                  min={1}
-                  max={STACK_MAX}
-                  format={(value) => `×${value}`}
-                  onChange={(value) => {
-                    setCount(value);
-                    if (value < 2) setTotal(undefined);
-                    else if (total !== undefined)
-                      setTotal(clamp(total, 1, ringStackCapacity(value)));
-                  }}
-                  ariaLabel="How many of this"
-                />
-              </div>
-              {count > 1 && effectiveTotal === undefined && (
-                <>
-                  <label className="d1-check">
-                    <input
-                      type="checkbox"
-                      checked={copyDepth !== undefined}
-                      onChange={(event) =>
-                        setCopyDepth(event.currentTarget.checked ? 4 : undefined)
-                      }
-                    />
-                    <span>Limit the extra copies to a floor</span>
-                  </label>
-                  {copyDepth !== undefined && (
-                    <SliderRow
-                      label="Copies within first"
-                      valueLabel={`${copyDepth} floor${copyDepth === 1 ? "" : "s"}`}
-                      values={FLOOR_LIMIT_OPTIONS}
-                      value={copyDepth}
-                      fill
-                      onChange={setCopyDepth}
-                    />
-                  )}
-                </>
-              )}
-              {totalable && (
-                <>
-                  <label className="d1-check">
-                    <input
-                      type="checkbox"
-                      checked={total !== undefined}
-                      onChange={(event) =>
-                        setTotal(
-                          event.currentTarget.checked ? clamp(count, 1, totalCapacity) : undefined,
-                        )
-                      }
-                    />
-                    <span>Count levels together</span>
-                  </label>
-                  {total !== undefined && (
-                    <SliderRow
-                      label="Levels reach"
-                      valueLabel={`≥ ${total} across up to ${count}`}
-                      min={1}
-                      max={totalCapacity}
-                      value={clamp(total, 1, totalCapacity)}
-                      fill
-                      onChange={setTotal}
-                    />
-                  )}
-                </>
-              )}
-            </section>
-          )}
+          {!resin &&
+            !draft.blanket &&
+            !stack.inCluster &&
+            family !== "trinket" &&
+            family !== "artifact" && (
+              <section className="d1-modal-section">
+                <div className="d1-modal-section-head">
+                  <h3>Total item count</h3>
+                  <Stepper
+                    value={count}
+                    min={1}
+                    max={STACK_MAX}
+                    format={(value) => `×${value}`}
+                    onChange={(value) => {
+                      setCount(value);
+                      if (value < 2) setTotal(undefined);
+                      else if (total !== undefined)
+                        setTotal(clamp(total, 1, ringStackCapacity(value)));
+                    }}
+                    ariaLabel="How many of this"
+                  />
+                </div>
+                {count > 1 && effectiveTotal === undefined && (
+                  <>
+                    <label className="d1-check">
+                      <input
+                        type="checkbox"
+                        checked={copyDepth !== undefined}
+                        onChange={(event) =>
+                          setCopyDepth(event.currentTarget.checked ? 4 : undefined)
+                        }
+                      />
+                      <span>Limit the extra copies to a floor</span>
+                    </label>
+                    {copyDepth !== undefined && (
+                      <SliderRow
+                        label="Copies within first"
+                        valueLabel={`${copyDepth} floor${copyDepth === 1 ? "" : "s"}`}
+                        values={FLOOR_LIMIT_OPTIONS}
+                        value={copyDepth}
+                        fill
+                        onChange={setCopyDepth}
+                      />
+                    )}
+                  </>
+                )}
+                {totalable && (
+                  <>
+                    <label className="d1-check">
+                      <input
+                        type="checkbox"
+                        checked={total !== undefined}
+                        onChange={(event) =>
+                          setTotal(
+                            event.currentTarget.checked
+                              ? clamp(count, 1, totalCapacity)
+                              : undefined,
+                          )
+                        }
+                      />
+                      <span>Count levels together</span>
+                    </label>
+                    {total !== undefined && (
+                      <SliderRow
+                        label="Levels reach"
+                        valueLabel={`≥ ${total} across up to ${count}`}
+                        min={1}
+                        max={totalCapacity}
+                        value={clamp(total, 1, totalCapacity)}
+                        fill
+                        onChange={setTotal}
+                      />
+                    )}
+                  </>
+                )}
+              </section>
+            )}
 
           {family !== "trinket" && (
             <section className="d1-modal-section">
@@ -724,7 +746,7 @@ export function RequirementEditor({
                   })
                 : onSave(
                     draft,
-                    stack.inCluster ? 1 : count,
+                    draft.blanket || stack.inCluster ? 1 : count,
                     effectiveTotal,
                     stack.inCluster || count < 2 || effectiveTotal !== undefined
                       ? undefined
@@ -732,7 +754,11 @@ export function RequirementEditor({
                   )
             }
           >
-            {isNew ? "Add Requirement" : "Save Changes"}
+            {isNew
+              ? draft.blanket
+                ? "Add Blanket Requirement"
+                : "Add Requirement"
+              : "Save Changes"}
           </button>
         </footer>
       </div>

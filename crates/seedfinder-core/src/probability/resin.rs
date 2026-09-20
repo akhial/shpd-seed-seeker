@@ -7,7 +7,8 @@
 //! and selected-trinket supply.
 
 use super::{
-    HIGHEST_TABLED_UPGRADE, Predicate, Profile, STATE_FLOOR, equipment_probability, expected_slots,
+    HIGHEST_TABLED_UPGRADE, Predicate, Profile, STATE_FLOOR, blanket_probability,
+    equipment_probability, expected_slots,
 };
 use crate::{
     catalog::ItemKind,
@@ -25,6 +26,7 @@ pub(super) fn probability(query: &SearchQuery, profile: Profile) -> f64 {
         effect: EffectRequirement::Any,
         require_uncursed: query.arcane_resin_filter.uncursed,
         select_trinket: false,
+        blanket: false,
         source: query.arcane_resin_filter.source,
         identity_group: None,
         max_depth: query.arcane_resin_filter.max_depth,
@@ -53,6 +55,7 @@ pub(super) fn probability(query: &SearchQuery, profile: Profile) -> f64 {
         profile,
         donor,
         means,
+        donors: Vec::new(),
         bounds: BTreeMap::new(),
         best: 0.0,
     };
@@ -70,6 +73,8 @@ struct Plans {
     donor: Requirement,
     /// Expected eligible wands at or above each upgrade.
     means: Vec<f64>,
+    /// Synthetic donors remain separate from ordinary blanket witnesses.
+    donors: Vec<Requirement>,
     bounds: BTreeMap<(u8, u16), f64>,
     best: f64,
 }
@@ -79,7 +84,7 @@ impl Plans {
     /// (upgrade + 1), highest first. Minimum upgrades also admit overpayment,
     /// so this covers every sufficient allocation without enumerating it twice.
     fn visit(&mut self, remaining: u16, level: u8, used: u16) {
-        if self.best >= 1.0 {
+        if self.best >= 1.0 || self.best.is_nan() {
             return;
         }
         let minimum_count = used + remaining.div_ceil(u16::from(level));
@@ -87,21 +92,32 @@ impl Plans {
             return;
         }
         if remaining == 0 {
-            self.best = self
-                .best
-                .max(equipment_probability(&self.query, self.profile));
+            let probability = if self.query.requirements.iter().any(|r| r.blanket) {
+                blanket_probability(&self.query, self.profile, &self.donors)
+            } else {
+                let mut allocated = self.query.clone();
+                allocated.requirements.extend_from_slice(&self.donors);
+                equipment_probability(&allocated, self.profile)
+            };
+            // An unsupported blanket branch must stay unknown rather than
+            // becoming a false zero through f64::max's NaN handling.
+            self.best = if probability.is_nan() {
+                probability
+            } else {
+                self.best.max(probability)
+            };
             return;
         }
         let upgrade = level - 1;
         let maximum = remaining / u16::from(level);
         let from = if level == 1 { maximum } else { 0 };
-        let original = self.query.requirements.len();
+        let original = self.donors.len();
         for count in from..=maximum {
             if !self.can_improve(upgrade, used + count) {
                 break;
             }
-            self.query.requirements.truncate(original);
-            self.query.requirements.extend(std::iter::repeat_n(
+            self.donors.truncate(original);
+            self.donors.extend(std::iter::repeat_n(
                 Requirement {
                     upgrade: UpgradeRequirement::AtLeast(upgrade),
                     ..self.donor
@@ -113,7 +129,7 @@ impl Plans {
                 self.visit(left, upgrade.max(1), used + count);
             }
         }
-        self.query.requirements.truncate(original);
+        self.donors.truncate(original);
     }
 
     /// Every partial plan needs this many donors at this upgrade or better.

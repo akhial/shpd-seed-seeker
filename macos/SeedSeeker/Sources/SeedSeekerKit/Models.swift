@@ -245,7 +245,7 @@ public enum ModelValidationError: Error, Equatable, LocalizedError {
     case levelSumMismatch(group: Int)
     case levelSumUnattainable(group: Int, needed: Int, maximum: Int)
     case arcaneResin
-    case emptyRequirements, maximumDepth, challenges
+    case emptyRequirements, maximumDepth, challenges, blanketStack, mixedBlanketAlternatives
     public var errorDescription: String? {
         switch self {
         case .itemKind: "Selected item must belong to its category"
@@ -268,7 +268,9 @@ public enum ModelValidationError: Error, Equatable, LocalizedError {
         case .levelSumUnattainable(let group, let needed, let maximum):
             "Combined level group \(groupLetter(group)) needs \(needed) levels but its items can reach at most \(maximum)"
         case .arcaneResin: "Arcane Resin must be 0..65535, with a wand floor from 1 through 24"
-        case .emptyRequirements: "At least one requirement is needed"
+        case .emptyRequirements: "Blanket requirements need at least one ordinary item; otherwise add an item or Arcane Resin"
+        case .blanketStack: "A blanket cannot request extra copies, combined levels, or trinket selection"
+        case .mixedBlanketAlternatives: "An either/or group cannot mix ordinary and blanket requirements"
         case .maximumDepth: "Maximum floor must be 1..\(SearchLimits.maxDepth)"
         case .challenges: "Challenge mask must be 0..\(SearchLimits.challengeMask)"
         }
@@ -353,6 +355,7 @@ public struct ItemRequirement: Codable, Hashable, Identifiable, Sendable {
     public var maximumDepth: Int?
     public var requireUncursed: Bool
     public var selectTrinket: Bool
+    public var blanket: Bool
     /// Requirements sharing a group are alternatives for one slot: any member
     /// satisfies it. The number is session-local; documents renumber.
     public var alternativeGroup: Int?
@@ -370,7 +373,10 @@ public struct ItemRequirement: Codable, Hashable, Identifiable, Sendable {
                 source: ScoutItemSource? = nil, identityGroup: Int? = nil,
                 maximumDepth: Int? = nil, requireUncursed: Bool = false,
                 alternativeGroup: Int? = nil, levelSum: LevelSum? = nil,
-                selectTrinket: Bool = false) throws {
+                selectTrinket: Bool = false, blanket: Bool = false) throws {
+        guard !blanket || (identityGroup == nil && levelSum == nil && !selectTrinket) else {
+            throw ModelValidationError.blanketStack
+        }
         guard !selectTrinket || (kind == .trinket && item != nil) else { throw ModelValidationError.itemKind }
         guard (kind != .trinket && kind != .artifact) || item != nil else { throw ModelValidationError.itemKind }
         guard item == nil || item.map(kind.accepts) == true else { throw ModelValidationError.itemKind }
@@ -414,6 +420,7 @@ public struct ItemRequirement: Codable, Hashable, Identifiable, Sendable {
         self.maximumDepth = maximumDepth
         self.requireUncursed = requireUncursed
         self.selectTrinket = selectTrinket
+        self.blanket = blanket
         self.alternativeGroup = alternativeGroup
         self.levelSum = levelSum
     }
@@ -447,7 +454,7 @@ public struct ItemRequirement: Codable, Hashable, Identifiable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case key, item, upgrade, modifier, effect, kind, tier, tierMatch, upgradeMatch, source
-        case identityGroup, maximumDepth, requireUncursed, alternativeGroup, levelSum, selectTrinket
+        case identityGroup, maximumDepth, requireUncursed, alternativeGroup, levelSum, selectTrinket, blanket
     }
 
     /// How the saved-query JSON spells the effect filter, beside the classic
@@ -484,7 +491,8 @@ public struct ItemRequirement: Codable, Hashable, Identifiable, Sendable {
             requireUncursed: values.decodeIfPresent(Bool.self, forKey: .requireUncursed) ?? false,
             alternativeGroup: values.decodeIfPresent(Int.self, forKey: .alternativeGroup),
             levelSum: values.decodeIfPresent(LevelSum.self, forKey: .levelSum),
-            selectTrinket: values.decodeIfPresent(Bool.self, forKey: .selectTrinket) ?? false
+            selectTrinket: values.decodeIfPresent(Bool.self, forKey: .selectTrinket) ?? false,
+            blanket: values.decodeIfPresent(Bool.self, forKey: .blanket) ?? false
         )
     }
 
@@ -507,6 +515,7 @@ public struct ItemRequirement: Codable, Hashable, Identifiable, Sendable {
         try values.encodeIfPresent(maximumDepth, forKey: .maximumDepth)
         try values.encode(requireUncursed, forKey: .requireUncursed)
         try values.encode(selectTrinket, forKey: .selectTrinket)
+        try values.encode(blanket, forKey: .blanket)
         try values.encodeIfPresent(alternativeGroup, forKey: .alternativeGroup)
         try values.encodeIfPresent(levelSum, forKey: .levelSum)
     }
@@ -571,6 +580,15 @@ extension Array where Element == ItemRequirement {
     /// copies of its category — and every combined-level group agrees on one
     /// total that its members can reach together, counted in levels.
     public func validateGroups() throws {
+        for requirement in self where requirement.blanket {
+            guard requirement.identityGroup == nil && requirement.levelSum == nil && !requirement.selectTrinket else {
+                throw ModelValidationError.blanketStack
+            }
+        }
+        let alternatives = Dictionary(grouping: filter { $0.alternativeGroup != nil }, by: { $0.alternativeGroup! })
+        guard alternatives.values.allSatisfy({ Set($0.map(\.blanket)).count == 1 }) else {
+            throw ModelValidationError.mixedBlanketAlternatives
+        }
         let stacks = Dictionary(grouping: self.filter { $0.identityGroup != nil }, by: { $0.identityGroup! })
         for (group, members) in stacks.sorted(by: { $0.key < $1.key }) {
             guard Set(members.map(\.kind.family)).count == 1 else {
@@ -662,7 +680,7 @@ public struct SearchRequest: Codable, Sendable {
                 challenges: Int = 0, autoApplyTrinket: Bool = false,
                 arcaneResin: Int = 0, arcaneResinFilter: ArcaneResinFilter = .init()) throws {
         guard (0...65535).contains(arcaneResin), arcaneResinFilter.isValid else { throw ModelValidationError.arcaneResin }
-        guard !requirements.isEmpty || arcaneResin > 0 else { throw ModelValidationError.emptyRequirements }
+        guard requirements.contains(where: { !$0.blanket }) || (requirements.isEmpty && arcaneResin > 0) else { throw ModelValidationError.emptyRequirements }
         guard (1...SearchLimits.maxDepth).contains(maximumDepth) else { throw ModelValidationError.maximumDepth }
         guard (0...SearchLimits.challengeMask).contains(challenges) else { throw ModelValidationError.challenges }
         try requirements.validateGroups()

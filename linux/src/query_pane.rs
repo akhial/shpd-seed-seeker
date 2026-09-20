@@ -88,6 +88,8 @@ pub struct QueryPane {
     board_root: gtk::Box,
     /// One chip or cluster capsule per board entry, wrapping as they fill.
     board: adw::WrapBox,
+    blanket_board: adw::WrapBox,
+    blanket_expander: adw::ExpanderRow,
     remove_revealer: gtk::Revealer,
     menu: gtk::PopoverMenu,
     /// The "How many" radio action, whose state is set to the chip's own
@@ -164,6 +166,31 @@ impl QueryPane {
         board_root.append(&board);
         board_root.append(&remove_revealer);
         requirements_group.add(&board_root);
+        let blanket_board = adw::WrapBox::builder()
+            .child_spacing(6)
+            .line_spacing(6)
+            .margin_start(12)
+            .margin_end(12)
+            .margin_bottom(12)
+            .build();
+        let blanket_expander = adw::ExpanderRow::builder()
+            .title("Blanket Requirements")
+            .build();
+        let help = gtk::Label::builder().label(
+            "Each blanket must match at least one item fulfilling your ordinary requirements, without asking for an additional item. All filters in one blanket apply to the same item; separate blankets can match the same or different chosen items.\n\nFor example, require Lightning, Disintegration, and Frost at +2 or higher, then add an Any wand blanket at exactly +3 from the Wandmaker.")
+            .wrap(true).max_width_chars(42).xalign(0.0).margin_start(12).margin_end(12).margin_top(12).margin_bottom(12).build();
+        let help_popover = gtk::Popover::builder().child(&help).build();
+        let help_button = gtk::MenuButton::builder()
+            .icon_name("dialog-information-symbolic")
+            .popover(&help_popover)
+            .valign(gtk::Align::Center)
+            .css_classes(["flat"])
+            .tooltip_text("About blanket requirements")
+            .build();
+        blanket_expander.add_suffix(&help_button);
+        blanket_expander.add_row(&blanket_board);
+        let blankets_group = adw::PreferencesGroup::new();
+        blankets_group.add(&blanket_expander);
 
         let stack_title = gtk::Label::builder()
             .css_classes(["caption-heading"])
@@ -257,6 +284,7 @@ impl QueryPane {
         let preferences_page = adw::PreferencesPage::new();
         preferences_page.add(&presets_group);
         preferences_page.add(&requirements_group);
+        preferences_page.add(&blankets_group);
         preferences_page.add(&scope_group);
         preferences_page.add(&wandmaker_group);
         preferences_page.add(&blacksmith_group);
@@ -313,6 +341,8 @@ impl QueryPane {
             requirements_group,
             board_root,
             board,
+            blanket_board,
+            blanket_expander,
             remove_revealer,
             menu: gtk::PopoverMenu::from_model(None::<&gio::Menu>),
             count_action: gio::SimpleAction::new_stateful(
@@ -352,10 +382,11 @@ impl QueryPane {
         });
         // Dropping a cluster member on the board's own background — anywhere
         // no chip sits — pulls it out of its cluster.
-        pane.board
-            .add_controller(pane.drop_target(move |pane, key| {
+        for board in [&pane.board, &pane.blanket_board] {
+            board.add_controller(pane.drop_target(move |pane, key| {
                 pane.emit(BoardAction::Detach(key));
             }));
+        }
         remove_zone.add_controller(pane.drop_target(move |pane, key| {
             pane.emit(BoardAction::Remove(key));
         }));
@@ -490,41 +521,61 @@ impl QueryPane {
         // with the drag it was carrying — goes with it, so the bin is put
         // away here rather than waiting for a drag that may never end.
         self.remove_revealer.set_reveal_child(false);
-        self.board.remove_all();
-        self.requirements_group.set_title(&requirements_title(
-            state.board_count() + usize::from(state.arcane_resin > 0),
-        ));
-        let items = state.board();
-        if items.is_empty() && state.arcane_resin == 0 {
-            let empty = gtk::Label::builder()
-                .label("Nothing yet — add the item you are hunting for")
-                .css_classes(["dim-label"])
-                .build();
-            self.board.append(&empty);
-        }
-        for item in &items {
-            if item.cluster.is_some() {
-                self.board.append(&self.cluster(state, item, &items));
+        let all_items = state.board();
+        for (blanket, board) in [(false, &self.board), (true, &self.blanket_board)] {
+            board.remove_all();
+            let items: Vec<_> = all_items
+                .iter()
+                .filter(|item| state.requirements[item.anchor()].blanket == blanket)
+                .cloned()
+                .collect();
+            if blanket {
+                self.blanket_expander
+                    .set_title(&format!("Blanket Requirements ({})", items.len()));
             } else {
-                self.board
-                    .append(&self.chip(state, item.anchor(), item, &items, false));
+                self.requirements_group.set_title(&requirements_title(
+                    items.len() + usize::from(state.arcane_resin > 0),
+                ));
             }
+            if !blanket && state.board_count() == 0 && state.arcane_resin == 0 {
+                board.append(
+                    &gtk::Label::builder()
+                        .label("Nothing yet — add the item you are hunting for")
+                        .css_classes(["dim-label"])
+                        .build(),
+                );
+            }
+            for item in &items {
+                if item.cluster.is_some() {
+                    board.append(&self.cluster(state, item, &items));
+                } else {
+                    board.append(&self.chip(state, item.anchor(), item, &items, false));
+                }
+            }
+            if !blanket && state.arcane_resin > 0 {
+                board.append(&self.resin_chip(state));
+            }
+            let add = gtk::Button::builder()
+                .child(
+                    &adw::ButtonContent::builder()
+                        .icon_name("list-add-symbolic")
+                        .label("Add")
+                        .build(),
+                )
+                .css_classes(["chip", "chip-add"])
+                .action_name(if blanket {
+                    "win.add-blanket"
+                } else {
+                    "win.add-requirement"
+                })
+                .tooltip_text(if blanket {
+                    "Add Blanket Requirement"
+                } else {
+                    "Add Requirement"
+                })
+                .build();
+            board.append(&add);
         }
-        if state.arcane_resin > 0 {
-            self.board.append(&self.resin_chip(state));
-        }
-        let add = gtk::Button::builder()
-            .child(
-                &adw::ButtonContent::builder()
-                    .icon_name("list-add-symbolic")
-                    .label("Add")
-                    .build(),
-            )
-            .css_classes(["chip", "chip-add"])
-            .action_name("win.add-requirement")
-            .tooltip_text("Add Requirement")
-            .build();
-        self.board.append(&add);
     }
 
     fn resin_chip(self: &Rc<Self>, state: &AppState) -> gtk::Widget {

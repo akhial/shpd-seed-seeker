@@ -49,6 +49,16 @@ appearance, also available through tooltips and accessible labels. Older scout
 packets omit the control. The packaged `item-mapping-art.json` is shared with
 Android, web, Linux, and macOS.
 
+## Blanket requirements
+
+The collapsed **Blanket Requirements** section adds conditions on items already
+chosen to fulfill ordinary requirements. Expand it to add or edit filters,
+including either/or alternatives. Each blanket applies all its filters to one
+chosen item; separate blankets may use the same or different chosen items.
+Blankets do not request extra copies, combined levels, or trinket selection.
+At least one ordinary requirement is required to search. Saved queries, results
+files, and version 9 share links preserve blankets.
+
 ## Arcane Resin
 
 Choose **Arcane Resin** when adding a Wand requirement. Set the minimum resin,

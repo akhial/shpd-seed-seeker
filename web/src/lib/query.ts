@@ -310,6 +310,7 @@ function requirementToDocument(requirement: RequirementState): RequirementDocume
     if (effect !== undefined) output.effect = effect;
   }
   if (requirement.uncursed) output.uncursed = true;
+  if (requirement.blanket) output.blanket = true;
   if (requirement.selectTrinket) output.select_trinket = true;
   if (requirement.source) output.source = requirement.source;
   if (requirement.identityGroup) output.identity_group = requirement.identityGroup;
@@ -441,6 +442,10 @@ function requirementFromDocument(
   if (raw.select_trinket !== undefined && typeof raw.select_trinket !== "boolean") {
     throw new Error("select_trinket must be a boolean");
   }
+  if (raw.blanket !== undefined && typeof raw.blanket !== "boolean") {
+    throw new Error("blanket must be a boolean");
+  }
+  if (value.blanket) requirement.blanket = true;
   if (value.select_trinket) requirement.selectTrinket = true;
   if (alternativeGroup !== undefined) requirement.alternativeGroup = alternativeGroup;
   // The unreleased upgrade_sum key is refused rather than reinterpreted.
@@ -526,6 +531,13 @@ export interface ValidationResult {
 
 export function validateRequirement(requirement: RequirementState): string[] {
   const errors: string[] = [];
+  if (
+    requirement.blanket &&
+    (requirement.identityGroup || requirement.levelSum || requirement.selectTrinket)
+  )
+    errors.push(
+      "A blanket requirement cannot request extra copies, combined levels, or trinket selection.",
+    );
   if (requirement.selectTrinket && requirementFamily(requirement) !== "trinket")
     errors.push("Only a trinket can be selected.");
   if (requirementFamily(requirement) === "trinket" && !requirement.item)
@@ -614,6 +626,21 @@ export function validateQuery(state: QueryState): ValidationResult {
   if (state.arcaneResin !== undefined && !validArcaneResin(state.arcaneResin))
     errors.push("Arcane Resin must be a whole number from 0 through 65535.");
   if (state.arcaneResinFilter) errors.push(...validateArcaneResinFilter(state.arcaneResinFilter));
+  if (
+    state.requirements.length > 0 &&
+    !state.requirements.some((requirement) => !requirement.blanket)
+  )
+    errors.push("Add at least one ordinary requirement.");
+  for (const slot of querySlots(state.requirements)) {
+    if (
+      slot.members.some(
+        (index) =>
+          Boolean(state.requirements[index].blanket) !==
+          Boolean(state.requirements[slot.members[0]].blanket),
+      )
+    )
+      errors.push("An either/or group cannot mix ordinary and blanket requirements.");
+  }
   if (state.maxDepth < 1 || state.maxDepth > MAX_DEPTH)
     errors.push(`Maximum floor must be 1 through ${MAX_DEPTH}.`);
   state.requirements.forEach((requirement, index) => {

@@ -161,6 +161,7 @@ public enum ResultsExport {
         }
         if requirement.requireUncursed { output["uncursed"] = true }
         if requirement.selectTrinket { output["select_trinket"] = true }
+        if requirement.blanket { output["blanket"] = true }
         if let source = requirement.source { output["source"] = sourceNames[source.rawValue] }
         if let group = requirement.identityGroup { output["identity_group"] = group }
         if let depth = requirement.maximumDepth { output["max_depth"] = depth }
@@ -319,7 +320,8 @@ public enum ResultsExport {
             maximumDepth: intField(entry, "max_depth"),
             requireUncursed: boolField(entry, "uncursed"),
             alternativeGroup: alternativeGroup,
-            levelSum: levelSum, selectTrinket: boolField(entry, "select_trinket"))
+            levelSum: levelSum, selectTrinket: boolField(entry, "select_trinket"),
+            blanket: boolField(entry, "blanket"))
     }
 }
 

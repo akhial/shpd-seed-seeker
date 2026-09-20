@@ -121,6 +121,16 @@ rows of sprites, with identity glyphs at the top right. The shared journal frame
 metadata keeps artwork aligned with the other apps. Click a sprite to reveal its
 name and appearance; tooltips and accessible labels carry the same information.
 
+## Blanket requirements
+
+The collapsed **Blanket Requirements** section adds conditions on items already
+chosen to fulfill ordinary requirements. Expand it to add or edit filters,
+including either/or alternatives. Each blanket applies all its filters to one
+chosen item; separate blankets may use the same or different chosen items.
+Blankets do not request extra copies, combined levels, or trinket selection.
+At least one ordinary requirement is required to search. Saved queries, results
+files, and version 9 share links preserve blankets.
+
 ## Arcane Resin
 
 Choose **Arcane Resin** when adding a Wand requirement. Set the minimum resin,

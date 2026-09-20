@@ -47,6 +47,7 @@ export const stackCount = (item: BoardItem): number => 1 + item.extras.length;
  * A floor limit is a placement bound, not an item property, so a repeat
  * that carries only one still folds into its stack. */
 const isPlainItemCopy = (copy: RequirementState, item: string): boolean =>
+  !copy.blanket &&
   requirementFamily(copy) !== "trinket" &&
   requirementFamily(copy) !== "artifact" &&
   copy.item === item &&
@@ -152,7 +153,11 @@ export function boardItems(requirements: readonly RequirementState[]): BoardItem
       return;
     }
     // A plain repeat of an earlier chip's item folds into that chip.
-    if (requirement.item !== undefined && isPlainItemCopy(requirement, requirement.item)) {
+    if (
+      !requirement.blanket &&
+      requirement.item !== undefined &&
+      isPlainItemCopy(requirement, requirement.item)
+    ) {
       const earlier = chipByItem.get(requirement.item);
       if (earlier && earlier.total === undefined && stackCount(earlier) < STACK_MAX) {
         earlier.extras.push(index);
@@ -161,7 +166,11 @@ export function boardItems(requirements: readonly RequirementState[]): BoardItem
     }
     const item: BoardItem = { key: `req:${index}`, members: [index], extras: [] };
     attach(item, index);
-    if (requirement.item !== undefined && requirement.levelSum === undefined)
+    if (
+      !requirement.blanket &&
+      requirement.item !== undefined &&
+      requirement.levelSum === undefined
+    )
       chipByItem.set(requirement.item, item);
     items.push(item);
   });
@@ -328,7 +337,11 @@ export function joinAlternatives(
   source: number,
   target: number,
 ): RequirementState[] {
-  if (source === target) return requirements;
+  if (
+    source === target ||
+    Boolean(requirements[source].blanket) !== Boolean(requirements[target].blanket)
+  )
+    return requirements;
   const group = requirements[target].alternativeGroup ?? nextAlternativeGroup(requirements);
   if (requirements[source].alternativeGroup === group) return requirements;
   let next = [...requirements];
@@ -349,7 +362,8 @@ export function joinAlternatives(
     // Trade plain repeats for identity copies so the stack survives the move.
     for (const index of [source, target]) {
       const anchor = next[index];
-      if (anchor.item === undefined || anchor.identityGroup !== undefined) continue;
+      if (anchor.blanket || anchor.item === undefined || anchor.identityGroup !== undefined)
+        continue;
       const copies = next
         .map((requirement, i) => ({ requirement, i }))
         .filter(
@@ -401,6 +415,7 @@ export function joinAlternatives(
 export const canStack = (requirements: readonly RequirementState[], item: BoardItem): boolean => {
   const family = requirementFamily(requirements[item.members[0]]);
   return (
+    !requirements[item.members[0]].blanket &&
     family !== "trinket" &&
     family !== "artifact" &&
     item.members.every((index) => requirementFamily(requirements[index]) === family)
@@ -600,4 +615,32 @@ export function applyEdit(
     if (refreshed) next = setCopyDepth(next, refreshed, copyDepth);
   }
   return next;
+}
+
+/** Replace one board while keeping its OR labels separate from the other board. */
+export function replaceRequirementSection(
+  requirements: RequirementState[],
+  blanket: boolean,
+  replacement: RequirementState[],
+): RequirementState[] {
+  const other = requirements.filter((requirement) => Boolean(requirement.blanket) !== blanket);
+  const used = new Set(
+    other.flatMap((requirement) =>
+      requirement.alternativeGroup === undefined ? [] : [requirement.alternativeGroup],
+    ),
+  );
+  const groups = new Map<number, number>();
+  const next = replacement.map((requirement) => {
+    const group = requirement.alternativeGroup;
+    if (group === undefined) return requirement;
+    let label = groups.get(group);
+    if (label === undefined) {
+      label = group;
+      while (used.has(label)) label += 1;
+      used.add(label);
+      groups.set(group, label);
+    }
+    return { ...requirement, alternativeGroup: label };
+  });
+  return blanket ? [...other, ...next] : [...next, ...other];
 }

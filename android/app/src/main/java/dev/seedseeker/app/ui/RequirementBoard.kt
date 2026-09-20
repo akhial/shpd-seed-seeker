@@ -111,6 +111,7 @@ fun RequirementBoard(
     requirements: List<ItemRequirement>,
     enabled: Boolean,
     compact: Boolean = false,
+    blanket: Boolean = false,
     onChange: (List<ItemRequirement>) -> Unit,
     onEdit: (BoardItem, Int) -> Unit,
     onRemove: (BoardItem) -> Unit,
@@ -121,7 +122,9 @@ fun RequirementBoard(
     onRemoveResin: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val items = remember(requirements) { requirements.boardItems() }
+    val items = remember(requirements, blanket) {
+        requirements.boardItems().filter { requirements[it.anchor].blanket == blanket }
+    }
     val haptics = LocalHapticFeedback.current
     // Live layout handles, so a drop can name what it landed on. Bounds are
     // resolved against the board only at hit-test time, which keeps them right

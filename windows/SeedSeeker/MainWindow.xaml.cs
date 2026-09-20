@@ -303,7 +303,7 @@ public sealed partial class MainWindow : Window
     }
     private void RefreshQuery()
     {
-        BuildBoard(); NoRequirements.Visibility = !query.HasRequirements ? Visibility.Visible : Visibility.Collapsed;
+        BuildBoard(); NoRequirements.Visibility = !query.Requirements.Any(r => !r.Blanket) && query.ArcaneResin == 0 ? Visibility.Visible : Visibility.Collapsed;
         FloorLabel.Text = $"first {query.MaximumDepth} floor{(query.MaximumDepth == 1 ? "" : "s")}"; RequireBlacksmith.IsEnabled = query.MaximumDepth < ScoutQuests.Window(QuestGiver.Blacksmith).Last; StartButton.IsEnabled = search is not null || (!busy && query.HasRequirements); CopyLinkButton.IsEnabled = !searchRunning && query.HasRequirements;
         var count = BitOperations.PopCount((uint)query.Challenges); ChallengeSummary.Text = count == 0 ? "None" : $"{count} enabled";
     }
@@ -339,8 +339,10 @@ public sealed partial class MainWindow : Window
 
     private async void AddRequirement_Click(object sender, RoutedEventArgs e)
     {
-        var requirement = new ItemRequirement { Kind = ItemKind.Weapon, UpgradeMatch = UpgradeMatch.Any };
-        if (await EditRequirement(requirement, StackShape.Lone, "New Requirement", "Add") is not { } stack) return;
+        var blanket = sender is FrameworkElement { Tag: true };
+        var kind = blanket ? query.Requirements.FirstOrDefault(r => !r.Blanket)?.Kind ?? ItemKind.Weapon : ItemKind.Weapon;
+        var requirement = new ItemRequirement { Kind = kind, Blanket = blanket, UpgradeMatch = UpgradeMatch.Any };
+        if (await EditRequirement(requirement, StackShape.Lone, blanket ? "New Blanket Requirement" : "New Requirement", "Add") is not { } stack) return;
         SetRequirements(QueryRelationships.ApplyEdit(query.Requirements, null, requirement, stack.Count, stack.Total, stack.CopyDepth));
     }
     /// <summary>Opens the chip at <paramref name="index"/> in the editor; the stack it reports comes back through <see cref="QueryRelationships.ApplyEdit"/>.</summary>
@@ -349,7 +351,7 @@ public sealed partial class MainWindow : Window
         if (index < 0 || index >= query.Requirements.Count) return;
         var shape = QueryRelationships.ItemOf(query.Requirements, index) is { } item ? StackShape.Of(query.Requirements, item) : StackShape.Lone;
         var copy = query.Requirements[index].Clone();
-        if (await EditRequirement(copy, shape, "Edit Requirement", "Save") is not { } stack) return;
+        if (await EditRequirement(copy, shape, copy.Blanket ? "Edit Blanket Requirement" : "Edit Requirement", "Save") is not { } stack) return;
         SetRequirements(QueryRelationships.ApplyEdit(query.Requirements, index, copy, stack.Count, stack.Total, stack.CopyDepth));
     }
     /// <summary>Deletes the chip at <paramref name="index"/>: a whole board entry with its hidden copies, or one member of a cluster.</summary>
@@ -442,21 +444,24 @@ public sealed partial class MainWindow : Window
     private void BuildBoard()
     {
         CancelDrag();
-        RequirementBoard.Children.Clear(); dropTargets.Clear();
+        RequirementBoard.Children.Clear(); BlanketBoard.Children.Clear(); dropTargets.Clear();
+        BlanketHeader.Text = $"Blanket Requirements ({QueryRelationships.BoardCount(query.Requirements.Where(r => r.Blanket))})";
         var requirements = query.Requirements.ToList();
         foreach (var item in QueryRelationships.BoardItems(requirements))
         {
             // The whole entry is validated at once, so a stack's total is
             // weighed against every member that helps reach it.
-            var problem = QueryRelationships.Validate(new QuerySettings
+            var board = requirements[item.Anchor].Blanket ? BlanketBoard : RequirementBoard;
+            var problem = requirements[item.Anchor].Blanket ? null : QueryRelationships.Validate(new QuerySettings
             {
                 Requirements = new(item.Members.Concat(item.Extras).Select(index => requirements[index])),
             });
-            if (item.Cluster is null) RequirementBoard.Children.Add(Chip(requirements, item, item.Anchor, problem));
-            else RequirementBoard.Children.Add(Cluster(requirements, item, problem));
+            if (item.Cluster is null) board.Children.Add(Chip(requirements, item, item.Anchor, problem));
+            else board.Children.Add(Cluster(requirements, item, problem));
         }
         if (query.ArcaneResin > 0) RequirementBoard.Children.Add(ArcaneResinChip());
         RequirementBoard.Children.Add(AddChip());
+        BlanketBoard.Children.Add(AddChip(blanket: true));
     }
 
     /// <summary>
@@ -571,7 +576,7 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>The dashed "+ Add" chip that closes the board; Ctrl+N reaches it from anywhere.</summary>
-    private Button AddChip()
+    private Button AddChip(bool blanket = false)
     {
         var label = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center };
         label.Children.Add(new FontIcon { Glyph = "", FontSize = 12, VerticalAlignment = VerticalAlignment.Center });
@@ -588,8 +593,9 @@ public sealed partial class MainWindow : Window
             Foreground = ThemeBrush("TextFillColorSecondaryBrush", Microsoft.UI.Colors.Gray),
             VerticalAlignment = VerticalAlignment.Center,
         };
-        ToolTipService.SetToolTip(chip, "Add a requirement");
-        chip.KeyboardAccelerators.Add(new KeyboardAccelerator { Modifiers = VirtualKeyModifiers.Control, Key = VirtualKey.N });
+        chip.Tag = blanket;
+        ToolTipService.SetToolTip(chip, blanket ? "Add a blanket requirement" : "Add a requirement");
+        if (!blanket) chip.KeyboardAccelerators.Add(new KeyboardAccelerator { Modifiers = VirtualKeyModifiers.Control, Key = VirtualKey.N });
         chip.Click += AddRequirement_Click;
         return chip;
     }
@@ -696,7 +702,7 @@ public sealed partial class MainWindow : Window
         // "Either/or with…" names the other chips, the menu's way of saying the
         // drop a pointer would make.
         var join = new MenuFlyoutSubItem { Text = "Either/or with\u2026" };
-        foreach (var other in QueryRelationships.BoardItems(requirements).Where(entry => !entry.Members.Contains(index)).SelectMany(entry => entry.Members))
+        foreach (var other in QueryRelationships.BoardItems(requirements).Where(entry => !entry.Members.Contains(index) && requirements[entry.Anchor].Blanket == requirements[index].Blanket).SelectMany(entry => entry.Members))
         {
             var targetKey = requirements[other].Key;
             var choice = new MenuFlyoutItem { Text = requirements[other].ShortTitle };
@@ -903,6 +909,7 @@ public sealed partial class MainWindow : Window
     {
         foreach (var target in dropTargets) if (Contains(target.Element, position)) return target;
         if (Contains(RemoveZone, position)) return new DropTarget(DropKind.Remove, RemoveZone);
+        if (Contains(BlanketBoard, position)) return new DropTarget(DropKind.Board, BlanketBoard);
         if (Contains(RequirementBoard, position)) return new DropTarget(DropKind.Board, RequirementBoard);
         return null;
     }
@@ -967,10 +974,10 @@ public sealed partial class MainWindow : Window
                 RemoveZone.Background = DangerInk; RemoveZoneIcon.Foreground = ink; RemoveZoneLabel.Foreground = ink;
                 unlight = () => { RemoveZone.Background = zoneFill; RemoveZoneIcon.Foreground = iconInk; RemoveZoneLabel.Foreground = labelInk; };
                 break;
-            case { Kind: DropKind.Board }:
-                var boardFill = RequirementBoard.Background;
-                RequirementBoard.Background = ThemeBrush("SubtleFillColorSecondaryBrush", Microsoft.UI.Colors.Transparent);
-                unlight = () => RequirementBoard.Background = boardFill;
+            case { Kind: DropKind.Board, Element: WrapPanel board }:
+                var boardFill = board.Background;
+                board.Background = ThemeBrush("SubtleFillColorSecondaryBrush", Microsoft.UI.Colors.Transparent);
+                unlight = () => board.Background = boardFill;
                 break;
         }
     }
@@ -1135,8 +1142,8 @@ public sealed partial class MainWindow : Window
         void SyncVisibility()
         {
             var k = (ItemKind)Math.Max(0, kind.SelectedIndex); var trinket = k == ItemKind.Trinket; var generic = item.SelectedIndex == 0 && k.Family() is ItemKind.Weapon or ItemKind.Armor;
-            resin.Visibility = k == ItemKind.Wand && accept == "Add" ? Visibility.Visible : Visibility.Collapsed;
-            selectTrinket.Visibility = trinket ? Visibility.Visible : Visibility.Collapsed;
+            resin.Visibility = !r.Blanket && k == ItemKind.Wand && accept == "Add" ? Visibility.Visible : Visibility.Collapsed;
+            selectTrinket.Visibility = !r.Blanket && trinket ? Visibility.Visible : Visibility.Collapsed;
             var predicate = (TierMatch)Math.Max(0, tierMatch.SelectedIndex); var ranged = predicate is TierMatch.AtLeast or TierMatch.AtMost;
             tierMatch.Visibility = generic ? Visibility.Visible : Visibility.Collapsed;
             tier.Visibility = generic && predicate == TierMatch.Exactly ? Visibility.Visible : Visibility.Collapsed;
@@ -1164,8 +1171,8 @@ public sealed partial class MainWindow : Window
         void SyncStack()
         {
             var namedOnly = ((ItemKind)Math.Max(0, kind.SelectedIndex)).RequiresNamedItem();
-            count.Visibility = namedOnly || stack.InCluster ? Visibility.Collapsed : Visibility.Visible;
-            var many = !namedOnly && !stack.InCluster && Counted() > 1;
+            count.Visibility = r.Blanket || namedOnly || stack.InCluster ? Visibility.Collapsed : Visibility.Visible;
+            var many = !r.Blanket && !namedOnly && !stack.InCluster && Counted() > 1;
             // A combined level is a property of a concrete stack of two or more
             // — and of rings only, whose effects scale with their level.
             var ring = ((ItemKind)Math.Max(0, kind.SelectedIndex)).Family() == ItemKind.Ring;
@@ -1243,7 +1250,7 @@ public sealed partial class MainWindow : Window
         r.Kind = (ItemKind)kind.SelectedIndex; r.Item = r.Kind.RequiresNamedItem() ? itemChoices[Math.Max(0, item.SelectedIndex)] : item.SelectedIndex > 0 ? itemChoices[item.SelectedIndex - 1] : null; r.TierMatch = r.Item is null && r.Kind.Family() is ItemKind.Weapon or ItemKind.Armor ? (TierMatch)tierMatch.SelectedIndex : TierMatch.Any; r.Tier = r.TierMatch == TierMatch.Any ? 0 : selectedTier;
         r.UpgradeMatch = (UpgradeMatch)upgradeMatch.SelectedIndex; r.Upgrade = r.UpgradeMatch switch { UpgradeMatch.Any => 0, UpgradeMatch.Exactly => (int)upgrade.Value, UpgradeMatch.AtLeast when r.Kind == ItemKind.Ring => (int)upgrade.Value, UpgradeMatch.AtLeast => selectedMinimumUpgrade, _ => 0 };
         r.RequireUncursed = uncursed.IsChecked == true;
-        r.SelectTrinket = r.Kind == ItemKind.Trinket && selectTrinket.IsChecked == true;
+        r.SelectTrinket = !r.Blanket && r.Kind == ItemKind.Trinket && selectTrinket.IsChecked == true;
         // One checked effect is a single name, as before effect sets existed; an empty "Specific" means any.
         r.Effect = effectMode.Visibility != Visibility.Visible ? EffectFilter.Any() : effectMode.SelectedIndex switch
         {
@@ -1270,7 +1277,7 @@ public sealed partial class MainWindow : Window
         }
         var settled = CountingLevels();
         return new StackShape(
-            stack.InCluster ? 1 : Counted(),
+            r.Blanket || stack.InCluster ? 1 : Counted(),
             settled ? (int)total.Value : null,
             !stack.InCluster && !settled && Counted() > 1 && copyDepthToggle.IsChecked == true ? FloorOf(copyDepth) : null,
             stack.InCluster);
@@ -1911,7 +1918,9 @@ public sealed partial class MainWindow : Window
             // "0 seeds searched" would read as a malfunction rather than as
             // the proof it is. A failed run's count is unknown.
             var searched = status.Scanned > 0 ? $" · {status.Scanned:N0} seeds searched" : "";
-            SearchStatus.Text = status.State == SearchState.Running ? $"Seed match probability: {probability} · TTS @ {rate:N0} seeds/s: {tts}\nTime elapsed: {FormatDuration(seconds)} · Seeds searched: {status.Scanned:N0}" : status.State switch { SearchState.Completed => $"Completed{searched}", SearchState.Cancelled => $"Cancelled{searched}", _ => $"Failed (error {status.ErrorCode})" };
+            SearchStatus.Text = status.IsImpossibleQuery && results.Count == 0
+                ? "Impossible query. No seed can satisfy this combination of requirements."
+                : status.State == SearchState.Running ? $"Seed match probability: {probability} · TTS @ {rate:N0} seeds/s: {tts}\nTime elapsed: {FormatDuration(seconds)} · Seeds searched: {status.Scanned:N0}" : status.State switch { SearchState.Completed => $"Completed{searched}", SearchState.Cancelled => $"Cancelled{searched}", _ => $"Failed (error {status.ErrorCode})" };
             // The engine reports a terminal state only once every queued match
             // has been drained, so breaking here never leaves seeds behind —
             // including a session that stopped itself at its accept cap.

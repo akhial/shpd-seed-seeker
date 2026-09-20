@@ -931,6 +931,7 @@ mod tests {
                 max_depth: None,
                 require_uncursed: false,
                 select_trinket: false,
+                blanket: false,
                 alternative_group: None,
                 level_sum: None,
             }],
@@ -1106,6 +1107,7 @@ mod tests {
                 max_depth: None,
                 require_uncursed: false,
                 select_trinket: false,
+                blanket: false,
                 alternative_group: None,
                 level_sum: None,
             }],
@@ -1261,6 +1263,7 @@ mod tests {
                 effect: EffectRequirement::Any,
                 require_uncursed: false,
                 select_trinket: false,
+                blanket: false,
                 source: None,
                 identity_group: None,
                 max_depth: None,
@@ -1276,6 +1279,22 @@ mod tests {
         let session = NativeSession::production_resumed(impossible, 42, 1_000, None).unwrap();
         wait(&session);
         assert_eq!(session.status()[0], STATE_COMPLETED);
+        assert_eq!(session.resume_hint(), [42, 1_000]);
+    }
+
+    #[test]
+    fn conflicting_blanket_completes_without_scanning_or_consuming_coverage() {
+        let query = shpd_seedfinder_core::json_query::decode(
+            r#"{"requirements":[{"item":"wand_lightning","upgrade":2},
+                {"item":"wand_disintegration","upgrade":2},
+                {"kind":"wand","upgrade":3,"blanket":true}]}"#,
+        )
+        .unwrap();
+        let session = NativeSession::production_resumed(query, 42, 1_000, None).unwrap();
+        wait(&session);
+        assert_eq!(session.status()[0], STATE_COMPLETED);
+        assert_eq!(session.status()[1], 0);
+        assert!(session.drain_worlds(1).is_empty());
         assert_eq!(session.resume_hint(), [42, 1_000]);
     }
 
@@ -1349,6 +1368,7 @@ mod tests {
             effect: EffectRequirement::Any,
             require_uncursed: false,
             select_trinket: false,
+            blanket: false,
             source: None,
             identity_group: None,
             max_depth: None,
