@@ -222,6 +222,7 @@
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
               <!-- Download/Upload glyphs, so the arrow directions match the
                    other platforms: into the app for import, out of it for export. -->
+              <Button x:Name="FilterLoadedSeedsButton" Style="{StaticResource SubtleLabelButton}" Click="FilterLoadedSeeds_Click" Content="Filter loaded seeds" IsEnabled="False" />
               <Button x:Name="ImportResultsButton" Style="{StaticResource SubtleLabelButton}" Click="ImportResults_Click" ToolTipService.ToolTip="Import results from a file">
                 <StackPanel Orientation="Horizontal" Spacing="6">
                   <FontIcon Glyph="&#xE896;" FontSize="14" VerticalAlignment="Center"/>

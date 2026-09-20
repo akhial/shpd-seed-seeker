@@ -321,6 +321,7 @@ internal fun SeedFinderApp(
                             results = importedResults,
                             resumeFrom = 0,
                             remaining = 0,
+                            hasCoverage = false,
                         )
                     }.getOrNull(),
                 )
@@ -599,6 +600,13 @@ internal fun SeedFinderApp(
                 onWandmakerQuestChange = { wandmakerQuest = it },
                 onWorkerCountChange = { workerCount = workerPreference.save(it) },
                 validationMessage = validationMessage,
+                canFilterLoadedSeeds = controller.snapshot.target?.results?.isNotEmpty() == true,
+                onFilterLoadedSeeds = {
+                    if (currentRequest != null) {
+                        importNotice = null
+                        controller.start(currentRequest, workerCount, filterOnly = true)
+                    }
+                },
                 onSearch = {
                     if (currentRequest != null) {
                         importNotice = null

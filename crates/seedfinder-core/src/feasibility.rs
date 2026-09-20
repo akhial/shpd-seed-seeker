@@ -2800,10 +2800,11 @@ mod tests {
                     filtered[1], found[1],
                     "known six-wand seed needs no trinket"
                 );
-                assert_eq!(
-                    refined, found,
-                    "refinement restores the necessary automatic choice"
+                assert!(
+                    refined[0].is_none(),
+                    "the parent's choice must not be replaced by the edited query's Spyglass"
                 );
+                assert_eq!(refined[1], found[1]);
             }
             for (saved, result) in recipes
                 .iter()
@@ -2826,7 +2827,8 @@ mod tests {
                     assert!(
                         saved.trinket == Some(id)
                             || (saved.trinket.is_none()
-                                && after.selected_trinket(saved.seed) == Some(id))
+                                && QueryPlan::analyze(&base).selected_trinket(saved.seed)
+                                    == Some(id))
                     );
                 }
                 assert!(query.matches(world));

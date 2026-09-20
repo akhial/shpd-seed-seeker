@@ -43,6 +43,10 @@ interface NativeSeedFinder {
      */
     fun startSearch(request: SearchRequest, workers: Int): NativeSearchSession
 
+    /** Retain the original search's automatic choices throughout a refinement. */
+    fun startRefinedSearch(request: SearchRequest, base: SearchRequest, window: ResumeHint?, workers: Int): NativeSearchSession =
+        window?.let { startResumedSearch(request, it.position, it.remaining, workers) } ?: startSearch(request, workers)
+
     /** Resumes a traversal over `scanLen` seeds from [resumeFrom]; [workers] is [startSearch]'s. */
     fun startResumedSearch(
         request: SearchRequest,
@@ -442,6 +446,15 @@ class JniNativeSeedFinder(
 
     override fun startSearch(request: SearchRequest, workers: Int): NativeSearchSession {
         val handle = bindings.startSearch(QueryDocument.encode(request), workers)
+        check(handle != 0L) { "Native seed finder returned an invalid handle" }
+        return JniSession(handle, request.slotCount, bindings)
+    }
+
+    override fun startRefinedSearch(request: SearchRequest, base: SearchRequest, window: ResumeHint?, workers: Int): NativeSearchSession {
+        val packet = JSONObject().put("query", ResultsExport.encodeQuery(request))
+            .put("refine_base", ResultsExport.encodeQuery(base)).toString().toByteArray()
+        val handle = window?.let { bindings.startResumedSearch(packet, it.position, it.remaining, workers) }
+            ?: bindings.startSearch(packet, workers)
         check(handle != 0L) { "Native seed finder returned an invalid handle" }
         return JniSession(handle, request.slotCount, bindings)
     }

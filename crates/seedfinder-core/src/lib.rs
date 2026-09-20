@@ -54,6 +54,7 @@ pub mod quests;
 pub mod regular_items;
 pub mod regular_level;
 pub mod regular_placement;
+pub mod refinement;
 #[cfg(feature = "json-query")]
 pub mod results_export;
 pub mod rng;

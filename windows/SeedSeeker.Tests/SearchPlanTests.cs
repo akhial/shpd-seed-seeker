@@ -64,14 +64,14 @@ public sealed class SearchPlanTests
     }
 
     [Fact]
-    public void ATargetRelatedQueryNeverContinuesADetachedScan()
+    public void AProvenDetachedContinuationWinsOverAFilterOnlyTargetRelationship()
     {
         // Even when the query would continue the last (detached) run, a
         // relationship to the Target wins: the Target Set is the base.
         var target = Target(Query(Ring()));
         Assert.Equal(StartMode.TargetRefine, NativeEngine.DecideStart(Query(Ring()), target, Query(Ring())));
         var narrowed = Query(Ring()); narrowed.MaximumDepth = 5;
-        Assert.Equal(StartMode.TargetFilter, NativeEngine.DecideStart(narrowed, target, narrowed));
+        Assert.Equal(StartMode.ContinueDetached, NativeEngine.DecideStart(narrowed, target, narrowed));
     }
 
     [Fact]
@@ -100,11 +100,11 @@ public sealed class SearchPlanTests
     }
 
     [Fact]
-    public void AnImportedTargetIsFilterOnly()
+    public void AnImportedTargetHasUnknownCoverage()
     {
         // Imports carry no coverage (Remaining = 0): a continuation still
         // refines — its scan phase is simply empty — and sharing filters.
-        var imported = new TargetRun(Query(Ring()), ["AAA-AAA-AAA"], 0, 0);
+        var imported = new TargetRun(Query(Ring()), ["AAA-AAA-AAA"], 0, 0, HasCoverage: false);
         Assert.Equal(StartMode.TargetRefine, NativeEngine.DecideStart(Query(Ring(), Wand()), imported));
         var narrowed = Query(Ring()); narrowed.MaximumDepth = 5;
         Assert.Equal(StartMode.TargetFilter, NativeEngine.DecideStart(narrowed, imported));

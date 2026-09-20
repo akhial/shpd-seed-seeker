@@ -165,7 +165,7 @@ public sealed partial class MainWindow : Window
 
     private sealed class UpdateState { public string? SkippedVersion { get; set; } public DateTimeOffset LastChecked { get; set; } }
 
-    private sealed record BaseRun(QuerySettings Query, IReadOnlyList<string> Seeds, long ResumeFrom, long Remaining, IReadOnlyDictionary<string, SeedResult> Recipes);
+    private sealed record BaseRun(QuerySettings Query, IReadOnlyList<string> Seeds, long ResumeFrom, long Remaining, IReadOnlyDictionary<string, SeedResult> Recipes, QuerySettings? SelectionQuery = null);
 
     private async Task CheckForUpdatesAsync()
     {
@@ -1532,35 +1532,36 @@ public sealed partial class MainWindow : Window
         // relationship rules are checked here first, with a message that
         // names the offending group.
         if (QueryRelationships.Validate(query) is string problem) { await ShowTransferMessage(problem); return; }
-        // Start is the single entry point: the query's relationship to the
-        // session's Target decides what happens (docs/search-semantics.md).
-        // A continuation refines the Target Set and resumes its coverage, a
-        // query sharing an item filters the full set, and anything else scans
-        // the whole range without touching the Target — continuing the
-        // previous detached scan when that is sound. None of this is a user
-        // decision; only Clear Results discards anything.
+        // Search filters saved results, then scans under the original selection
+        // and coverage when safe, or with a fresh traversal otherwise.
         switch (NativeEngine.DecideStart(query, target, lastRunDetached ? baseRun?.Query : null))
         {
             case StartMode.TargetRefine: await RefineTarget(target!, resume: true); return;
-            case StartMode.TargetFilter: await RefineTarget(target!, resume: false); return;
+            case StartMode.TargetFilter: await RefineTarget(target!, resume: false, rescan: true); return;
             case StartMode.ContinueDetached: await RefineSearch(baseRun!); return;
-            case StartMode.Detached: await StartScan(detached: true); return;
+            case StartMode.Detached:
+                if (target is { Seeds.Count: > 0 }) await RefineTarget(target, resume: false, rescan: true);
+                else await StartScan(detached: true);
+                return;
             default: await StartScan(detached: false); return;
         }
     }
-    /// <summary>Status-bar notice for a fresh detached scan, shown while the
-    /// display and the Target Set diverge; cleared at the usual clear points.</summary>
-    private const string UnrelatedNotice = "Unrelated query — detached search from previous results.";
     /// <summary>
     /// Scans the full seed range from scratch, replacing the displayed
     /// results. An anchor scan establishes the Target when it concludes; a
     /// detached scan leaves the existing Target untouched for later related
-    /// searches and announces that in the status bar.
+    /// searches.
     /// </summary>
+    private async void FilterLoadedSeeds_Click(object sender, RoutedEventArgs e)
+    {
+        if (busy || search is not null || target is null || !query.HasRequirements) return;
+        if (QueryRelationships.Validate(query) is string problem) { await ShowTransferMessage(problem); return; }
+        await RefineTarget(target, resume: false);
+    }
     private async Task StartScan(bool detached)
     {
         busy = true; collected.Clear(); collectedSet.Clear(); collectedRecipes.Clear(); results.Clear(); SearchStatus.Text = "Starting search…";
-        var notice = detached ? UnrelatedNotice : null;
+        string? notice = null;
         SetStatusBar(notice); SetStartButton(running: true);
         try
         {
@@ -1568,7 +1569,7 @@ public sealed partial class MainWindow : Window
             // Snapshot the query so an export always describes the query that
             // actually produced the listed results, even after later edits.
             searchedQuery = snapshot;
-            search = await Task.Run(() => engine.Start(snapshot, workers)); await RunSearch(search, notice); await CaptureBaseRun(snapshot, search, detached ? RunKind.Detached : RunKind.Anchor);
+            search = await Task.Run(() => engine.Start(snapshot, workers)); await RunSearch(search, snapshot, summary: notice); await CaptureBaseRun(snapshot, search, detached ? RunKind.Detached : RunKind.Anchor);
         }
         catch (Exception ex) { SearchStatus.Text = $"Failed: {ex.Message}"; baseRun = null; lastRunDetached = false; }
         finally { busy = false; search?.Dispose(); search = null; SetStartButton(running: false); StartButton.IsEnabled = query.HasRequirements; }
@@ -1584,7 +1585,7 @@ public sealed partial class MainWindow : Window
     /// and the Target fully intact. Only <see cref="Start_Click"/> calls this,
     /// after its own re-entry guards, so the session slot is never contested.
     /// </summary>
-    private async Task RefineTarget(TargetRun anchor, bool resume)
+    private async Task RefineTarget(TargetRun anchor, bool resume, bool rescan = false)
     {
         busy = true;
         var snapshot = query.Clone(); SetStatusBar("Verifying previous results…"); SetStartButton(running: true); StartButton.IsEnabled = false;
@@ -1603,7 +1604,7 @@ public sealed partial class MainWindow : Window
             // query may no longer continue an older detached scan.
             lastRunDetached = false;
             var summary = $"Refined: kept {kept.Count} of {anchor.Seeds.Count} previous seed{(anchor.Seeds.Count == 1 ? "" : "s")}";
-            if (resume && anchor.Remaining > 0)
+            if (rescan || (resume && (!anchor.HasCoverage || anchor.Remaining > 0)))
             {
                 // Always resume, even when the survivors already fill the
                 // display: the engine accepts up to another cap's worth of new
@@ -1612,9 +1613,11 @@ public sealed partial class MainWindow : Window
                 // listed. Repeating an identical query therefore keeps growing
                 // the Target Set by roughly a cap per run.
                 SetStatusBar($"{summary} — searching for more…");
-                search = await Task.Run(() => engine.StartResumed(snapshot, anchor.ResumeFrom, anchor.Remaining, workers));
+                search = await Task.Run(() => resume
+                    ? engine.StartRefined(snapshot, anchor.Query, anchor.HasCoverage ? (anchor.ResumeFrom, anchor.Remaining) : null, workers)
+                    : engine.Start(snapshot, workers));
                 StartButton.IsEnabled = true;
-                await RunSearch(search, summary); await CaptureBaseRun(snapshot, search, RunKind.TargetRefine);
+                await RunSearch(search, snapshot, resume ? anchor.Query : null, summary); await CaptureBaseRun(snapshot, search!, resume ? RunKind.TargetRefine : RunKind.Detached, resume ? anchor.Query : null);
             }
             // A filter-only run (or a refine with nothing left to scan) scans
             // nothing: the Target Set and its coverage stay exactly as they were.
@@ -1642,7 +1645,7 @@ public sealed partial class MainWindow : Window
         {
             // Filter before touching the displayed results, so a failure here
             // leaves the previous run (and its refinable base) fully intact.
-            var kept = await Task.Run(() => engine.FilterRecipes(snapshot, previous.Query, previous.Seeds.Select(seed => previous.Recipes.GetValueOrDefault(seed) ?? new SeedResult(seed, 0)).ToArray()));
+            var kept = await Task.Run(() => engine.FilterRecipes(snapshot, previous.SelectionQuery ?? previous.Query, previous.Seeds.Select(seed => previous.Recipes.GetValueOrDefault(seed) ?? new SeedResult(seed, 0)).ToArray()));
             results.Clear(); collected.Clear(); collectedSet.Clear(); collectedRecipes.Clear();
             Collect(kept);
             // From here on the listed results match the refined query, so
@@ -1656,11 +1659,11 @@ public sealed partial class MainWindow : Window
                 // display: new finds beyond the cap still enter `collected`,
                 // the continuation base a later refine filters.
                 SetStatusBar($"{summary} — searching for more…");
-                search = await Task.Run(() => engine.StartResumed(snapshot, previous.ResumeFrom, previous.Remaining, workers));
+                search = await Task.Run(() => engine.StartRefined(snapshot, previous.SelectionQuery ?? previous.Query, (previous.ResumeFrom, previous.Remaining), workers));
                 StartButton.IsEnabled = true;
-                await RunSearch(search, summary); await CaptureBaseRun(snapshot, search, RunKind.Detached);
+                await RunSearch(search, snapshot, previous.SelectionQuery ?? previous.Query, summary); await CaptureBaseRun(snapshot, search!, RunKind.Detached, previous.SelectionQuery ?? previous.Query);
             }
-            else { SearchStatus.Text = "Completed"; SetStatusBar(results.Count >= ResultCap ? WithCapNotice(summary) : summary); baseRun = new(snapshot, [.. collected], previous.ResumeFrom, 0, new Dictionary<string, SeedResult>(collectedRecipes)); }
+            else { SearchStatus.Text = "Completed"; SetStatusBar(results.Count >= ResultCap ? WithCapNotice(summary) : summary); baseRun = new(snapshot, [.. collected], previous.ResumeFrom, 0, new Dictionary<string, SeedResult>(collectedRecipes), previous.SelectionQuery ?? previous.Query); }
         }
         // The previous base run stays valid on failure: nothing of its
         // coverage was consumed, so the refine can simply be retried.
@@ -1697,12 +1700,12 @@ public sealed partial class MainWindow : Window
     /// failed run establishes nothing — its coverage is unknown — and never
     /// touches the Target.
     /// </summary>
-    private async Task CaptureBaseRun(QuerySettings ranQuery, NativeSearch active, RunKind kind)
+    private async Task CaptureBaseRun(QuerySettings ranQuery, NativeSearch active, RunKind kind, QuerySettings? selectionQuery = null)
     {
         var status = await Task.Run(active.Status);
         if (status.State == SearchState.Failed) { baseRun = null; lastRunDetached = false; return; }
         var (resumeFrom, remaining) = await Task.Run(active.ResumeHint);
-        baseRun = new(ranQuery, [.. collected], resumeFrom, remaining, new Dictionary<string, SeedResult>(collectedRecipes));
+        baseRun = new(ranQuery, [.. collected], resumeFrom, remaining, new Dictionary<string, SeedResult>(collectedRecipes), selectionQuery);
         lastRunDetached = kind == RunKind.Detached;
         if (kind == RunKind.Anchor)
             target = new(ranQuery, [.. collected], resumeFrom, remaining, new Dictionary<string, SeedResult>(collectedRecipes));
@@ -1746,6 +1749,7 @@ public sealed partial class MainWindow : Window
     private void UpdateTransferButtons()
     {
         ImportResultsButton.IsEnabled = !searchRunning;
+        FilterLoadedSeedsButton.IsEnabled = !searchRunning && !busy && target is { Seeds.Count: > 0 };
         ExportResultsButton.IsEnabled = !searchRunning && results.Count > 0 && searchedQuery is not null;
         // `busy` also covers a refine's filter phase, which owns the results
         // even though no native session exists yet.
@@ -1841,8 +1845,8 @@ public sealed partial class MainWindow : Window
             // The engine already deduplicated and capped the imported seeds.
             Collect(imported.Seeds.Select((seed, index) => new SeedResult(seed, index + 1, imported.Trinkets?.ElementAtOrDefault(index))));
             // The imported query and seeds become the session's Target, with
-            // no coverage: refines of an import are filter-only.
-            target = new(snapshot, results.Select(x => x.Seed).ToList(), 0, 0, new Dictionary<string, SeedResult>(collectedRecipes));
+            // unknown coverage: Search filters the import, then scans afresh.
+            target = new(snapshot, results.Select(x => x.Seed).ToList(), 0, 0, new Dictionary<string, SeedResult>(collectedRecipes), HasCoverage: false);
             var dropped = imported.Dropped;
             var status = $"Imported {results.Count} seed{(results.Count == 1 ? "" : "s")} from file.";
             if (dropped > 0)
@@ -1918,13 +1922,15 @@ public sealed partial class MainWindow : Window
     /// refine passes its summary so the status bar keeps reporting the refine
     /// while the scan runs, and so the result-cap notice can join it.
     /// </summary>
-    private async Task RunSearch(NativeSearch active, string? summary = null)
+    private async Task RunSearch(NativeSearch active, QuerySettings ranQuery, QuerySettings? selectionQuery = null, string? summary = null)
     {
+        var goal = collected.Count >= ResultCap ? collected.Count + ResultCap : ResultCap;
         var timer = Stopwatch.StartNew(); long lastScanned = 0; var lastTime = 0d;
         while (true)
         {
             await Task.Delay(150); var batch = await Task.Run(() => active.PollRecipes(128)); Collect(batch);
             var status = await Task.Run(active.Status); var seconds = timer.Elapsed.TotalSeconds; var rate = seconds > lastTime ? (status.Scanned - lastScanned) / (seconds - lastTime) : 0; lastScanned = status.Scanned; lastTime = seconds;
+            if (status.State == SearchState.Cancelled && collected.Count >= goal) status = status with { State = SearchState.Completed };
             var probability = status.ProbabilityDescription; var tts = status.ProbabilityUnavailable ? "unavailable" : status.Probability > 0 && rate > 0 ? FormatDuration(1 / status.Probability / rate) : "calculating";
             // A concluded run keeps its counter, except where nothing was
             // scanned: an impossible query is proven before the first seed and
@@ -1937,7 +1943,21 @@ public sealed partial class MainWindow : Window
             // The engine reports a terminal state only once every queued match
             // has been drained, so breaking here never leaves seeds behind —
             // including a session that stopped itself at its accept cap.
-            if (status.State != SearchState.Running) break;
+            if (status.State == SearchState.Running && collected.Count >= goal) active.Cancel();
+            if (status.State != SearchState.Running)
+            {
+                var window = await Task.Run(active.ResumeHint);
+                if (status.State == SearchState.Completed && status.Scanned > 0 && window.Remaining > 0 && collected.Count < goal)
+                {
+                    active.Dispose();
+                    search = active = await Task.Run(() => selectionQuery is null
+                        ? engine.StartResumed(ranQuery, window.ResumeFrom, window.Remaining, workers)
+                        : engine.StartRefined(ranQuery, selectionQuery, (window.ResumeFrom, window.Remaining), workers));
+                    lastScanned = 0;
+                    continue;
+                }
+                break;
+            }
         }
         // Only the concluded run announces the cap: a full display during an
         // accumulating scan is the expected state ("searching for more…" says

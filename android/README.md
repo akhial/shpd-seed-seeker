@@ -38,6 +38,21 @@ The app targets API 36, supports API 23+, opts into edge-to-edge drawing, and us
 
 ## Background searches and recovery
 
+**Search** checks saved seeds against the current query and then looks for
+more matches, filling the list toward 1,024 unique seeds. Imported results
+have no scan history, so searching them starts a fresh scan after filtering.
+Edited queries reuse prior scan progress only when the engine proves that it
+is safe; otherwise they recheck saved seeds and scan afresh. The original
+saved set remains available until Clear or a new import. Refinement keeps the
+original automatic trinket selection rules, including reapplying a choice that
+was previously removed as unnecessary, before testing the edited query.
+
+**Filter loaded seeds**, shown beneath Search when saved seeds are available,
+checks only that saved set. It also accepts unrelated queries: load results
+for A, then filter for B to find seeds in that list satisfying B. Filtering
+does not scan or discard the original set, so loosening a filter can bring
+seeds back.
+
 Searches belong to the application and run under a foreground service, so switching
 apps, recreating the activity, removing its recent-apps task, or locking the screen
 does not cancel the native engine. The ongoing **Seed searches** notification opens

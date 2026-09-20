@@ -18,12 +18,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * Search is the only entry point: docs/search-semantics.md decides what it does. A query
- * continuing the Target Query refines the full Target Set and resumes its coverage, one sharing
- * an item filters that set, and anything else scans detached without touching the Target.
+ * Search filters saved seeds and continues looking; Filter loaded seeds only filters.
+ * Coverage is reused only when the engine proves continuation.
  *
  * The choice itself is the engine's, so [planFor] feeds the plan the real
- * `JniBindings.decideStart` (see QueryContinuationTest for the host library these JVM tests
+ * `JniBindings.queryContinues` (see QueryContinuationTest for the host library these JVM tests
  * load) rather than a stub that would let the two drift apart unnoticed.
  */
 class RefinePlanTest {
@@ -66,29 +65,27 @@ class RefinePlanTest {
         val plan = planFor(
             request(frost, maximumDepth = 12), target, narrowedRun, StartMode.TARGET_REFINE,
         )
-        assertEquals(StartPlan(StartMode.TARGET_FILTER, RefineSpec(4_096, 0, seeds, target.request)), plan)
+        assertEquals(StartPlan(StartMode.TARGET_RESCAN, RefineSpec(0, 0, seeds, target.request, freshScan = true)), plan)
     }
 
     @Test
-    fun aQuerySharingAnItemFiltersWithoutScanning() {
-        // A scope change breaks continuation but keeps the shared requirement; the plan
-        // filters the Target Set with nothing left to resume.
+    fun aQuerySharingAnItemFiltersThenScansWithoutReusingUnsafeCoverage() {
         val scopeChanged = planFor(
             request(frost, challenges = Challenge.DARKNESS.bit), target, null, null,
         )
-        assertEquals(StartPlan(StartMode.TARGET_FILTER, RefineSpec(4_096, 0, seeds, target.request)), scopeChanged)
+        assertEquals(StartPlan(StartMode.TARGET_RESCAN, RefineSpec(0, 0, seeds, target.request, freshScan = true)), scopeChanged)
         // A kind-level wildcard subsumes every item of its kind.
         val wildcard = planFor(request(anyWand, maximumDepth = 12), target, null, null)
-        assertEquals(StartMode.TARGET_FILTER, wildcard.mode)
+        assertEquals(StartMode.TARGET_RESCAN, wildcard.mode)
     }
 
     @Test
-    fun anUnrelatedQueryScansDetached() {
+    fun anUnrelatedQueryChecksSavedSeedsBeforeScanning() {
         val plan = planFor(request(ring), target, null, null)
-        assertEquals(StartPlan(StartMode.DETACHED), plan)
-        // A different item of the Target's kind is just as unrelated.
+        assertEquals(StartPlan(StartMode.TARGET_RESCAN, RefineSpec(0, 0, seeds, target.request, freshScan = true)), plan)
+        // A different item of the Target's kind also rechecks imported seeds.
         assertEquals(
-            StartPlan(StartMode.DETACHED),
+            StartPlan(StartMode.TARGET_RESCAN, RefineSpec(0, 0, seeds, target.request, freshScan = true)),
             planFor(request(fireblast), TargetState(request(frost), seeds, 0, 0), null, null),
         )
     }
@@ -104,14 +101,56 @@ class RefinePlanTest {
         // A continued detached scan is remembered as detached, so a further
         // continuation keeps threading onto the same scan.
         assertEquals(StartMode.DETACHED, StartMode.CONTINUE_DETACHED.concludedKind)
+        assertEquals(StartMode.DETACHED, StartMode.TARGET_RESCAN.concludedKind)
         // Without a detached predecessor the same query rescans from scratch.
         assertEquals(
-            StartPlan(StartMode.DETACHED),
+            StartPlan(StartMode.TARGET_RESCAN, RefineSpec(0, 0, seeds, target.request, freshScan = true)),
             planFor(request(ring), target, detachedRun, StartMode.TARGET_FILTER),
         )
         assertEquals(
-            StartPlan(StartMode.DETACHED),
+            StartPlan(StartMode.TARGET_RESCAN, RefineSpec(0, 0, seeds, target.request, freshScan = true)),
             planFor(request(ring), target, null, null),
+        )
+    }
+
+    @Test
+    fun importedSeedsAreFilteredBeforeAFreshScanButExhaustedCoverageStaysExhausted() {
+        val imported = target.copy(resumeFrom = 0, remaining = 0, hasCoverage = false)
+        assertEquals(
+            StartPlan(StartMode.TARGET_REFINE, RefineSpec(0, 0, seeds, target.request, freshScan = true)),
+            planFor(request(frost, fireblast), imported, null, null),
+        )
+        assertEquals(
+            StartPlan(StartMode.TARGET_REFINE, RefineSpec(0, 0, seeds, target.request)),
+            planFor(request(frost, fireblast), imported.copy(hasCoverage = true), null, null),
+        )
+    }
+
+    @Test
+    fun explicitFilterAcceptsUnrelatedQueriesAndNeverScans() {
+        for (candidate in listOf(request(ring), request(fireblast), request(frost), request(anyWand))) {
+            assertEquals(
+                StartPlan(StartMode.TARGET_FILTER, RefineSpec(4_096, 0, seeds, target.request)),
+                startPlanFor(candidate, target, null, null, engine::queryContinues, filterOnly = true),
+            )
+        }
+    }
+
+    @Test
+    fun changedAutoTrinketPolicyStillFiltersSavedSeedsAndSearchesForMore() {
+        val base = request(ring).copy(autoApplyTrinket = true)
+        val candidate = base.copy(autoApplyTrinket = false)
+        val anchored = target.copy(request = base)
+        assertFalse(engine.queryContinues(candidate, base))
+        assertEquals(
+            StartPlan(StartMode.TARGET_RESCAN, RefineSpec(0, 0, seeds, base, freshScan = true)),
+            planFor(candidate, anchored, null, null),
+        )
+        // Repeating this search resumes its own traversal, not the incompatible Target's.
+        val previous = FinishedRun(candidate, 8_192, 256, seeds.take(1))
+        assertEquals(
+            StartPlan(StartMode.CONTINUE_DETACHED, RefineSpec(8_192, 256, seeds.take(1), candidate)),
+            planFor(candidate, anchored, previous, StartMode.TARGET_RESCAN.concludedKind),
         )
     }
 
@@ -189,7 +228,7 @@ class RefinePlanTest {
 
     @Test
     fun filtersAndDetachedRunsLeaveTheTargetUntouched() {
-        for (mode in listOf(StartMode.TARGET_FILTER, StartMode.CONTINUE_DETACHED, StartMode.DETACHED)) {
+        for (mode in listOf(StartMode.TARGET_FILTER, StartMode.TARGET_RESCAN, StartMode.CONTINUE_DETACHED, StartMode.DETACHED)) {
             assertSame(target, settledTarget(target, mode, request(ring), seeds.take(1), 1, 1))
         }
         assertNull(settledTarget(null, StartMode.DETACHED, request(ring), seeds, 1, 1))
@@ -200,7 +239,7 @@ class RefinePlanTest {
         target: TargetState?,
         lastRun: FinishedRun?,
         lastRunKind: StartMode?,
-    ) = startPlanFor(request, target, lastRun, lastRunKind, engine::decideStart)
+    ) = startPlanFor(request, target, lastRun, lastRunKind, engine::queryContinues)
 
     /** A distinct well-formed seed code per index, e.g. 1 -> "AAA-AAA-AAB". */
     private fun seedCode(index: Int): String {

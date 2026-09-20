@@ -66,7 +66,8 @@ export function decideStart(state: CoordinatorState, query: QueryDocument): Star
       JSON.stringify(query),
       target?.queryJson,
       !target || target.matches.length === 0,
-      target !== undefined && segmentsLength(target.remainder) > 0,
+      target !== undefined &&
+        (target.hasCoverage === false || segmentsLength(target.remainder) > 0),
       detachedBase,
     ) as StartMode;
   } catch {

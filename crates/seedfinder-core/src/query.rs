@@ -832,6 +832,18 @@ impl SearchQuery {
     /// this single predicate rather than re-deriving it.
     #[must_use]
     pub fn continues(&self, base: &SearchQuery) -> bool {
+        self.continues_with_selection(base, false)
+    }
+
+    /// Containment when the execution retains the base search's trinket
+    /// choices. Ranking changes caused by added predicates do not change
+    /// this execution's worlds. Explicit selection/setting changes still do.
+    #[must_use]
+    pub fn refines(&self, base: &SearchQuery) -> bool {
+        self.continues_with_selection(base, true)
+    }
+
+    fn continues_with_selection(&self, base: &SearchQuery, preserve_selection: bool) -> bool {
         if self.max_depth != base.max_depth
             || (base.needs_resin()
                 && (self.arcane_resin_auto != base.arcane_resin_auto
@@ -841,7 +853,11 @@ impl SearchQuery {
                     .arcane_resin_filter
                     .implies(base.arcane_resin_filter, self.max_depth))
             || self.challenges != base.challenges
-            || !crate::auto_trinkets::same_selection(self, base)
+            || if preserve_selection {
+                crate::auto_trinkets::enabled(self) != crate::auto_trinkets::enabled(base)
+            } else {
+                !crate::auto_trinkets::same_selection(self, base)
+            }
             || crate::trinkets::selection_slots(self) != crate::trinkets::selection_slots(base)
             || !flag_at_least_as_strict(self.require_blacksmith, base.require_blacksmith)
             || !flag_at_least_as_strict(
@@ -1553,7 +1569,7 @@ impl StartDecision {
 /// `detached_base` is the last concluded run's query when — and only when —
 /// that run was itself detached; a failed run is never a continuation base.
 ///
-/// Continuation itself is [`SearchQuery::continues`] and sharing is
+/// Continuation under preserved selection is [`SearchQuery::refines`] and sharing is
 /// [`SearchQuery::shares_item`], both consulted here: callers get the whole
 /// decision from this one call and must not re-derive either half.
 #[must_use]
@@ -1567,7 +1583,7 @@ pub fn decide_start(
     let Some(target) = target else {
         return StartDecision::Anchor;
     };
-    let continues_target = candidate.continues(target);
+    let continues_target = candidate.refines(target);
     if target_set_empty {
         return if continues_target && target_has_uncovered_seeds {
             StartDecision::TargetRefine
@@ -1578,13 +1594,13 @@ pub fn decide_start(
     if continues_target {
         return StartDecision::TargetRefine;
     }
-    if candidate.shares_item(target) && crate::auto_trinkets::same_selection(candidate, target) {
+    if detached_base.is_some_and(|base| candidate.refines(base)) {
+        return StartDecision::ContinueDetached;
+    }
+    if candidate.shares_item(target) {
         return StartDecision::TargetFilter;
     }
-    match detached_base {
-        Some(base) if candidate.continues(base) => StartDecision::ContinueDetached,
-        _ => StartDecision::Detached,
-    }
+    StartDecision::Detached
 }
 
 /// Invalid user query.

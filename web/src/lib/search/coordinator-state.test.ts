@@ -210,6 +210,7 @@ describe("settleRun", () => {
   it("establishes the Target from a concluded anchor run", () => {
     const settled = settleRun(concluded({ runKind: "anchor" }));
     expect(settled.target).toEqual({
+      hasCoverage: true,
       queryJson: JSON.stringify(query),
       query,
       matches: [match(11), match(22)],
@@ -321,4 +322,33 @@ describe("per-run accept quota", () => {
     });
     expect(updated.state).toBe("completed");
   });
+});
+
+it("counts imported survivors toward the 1024 unique-match goal", () => {
+  const survivors = Array.from({ length: 108 }, (_, value) => match(value));
+  const state: CoordinatorState = {
+    ...initialCoordinatorState(10000),
+    state: "running",
+    sessionId: 1,
+    workerCount: 1,
+    matches: survivors,
+    sessionBaseline: survivors.length,
+  };
+  const stillShort = applyProgress(state, {
+    sessionId: 1,
+    workerId: 0,
+    scanned: [1000],
+    matches: [...survivors, ...Array.from({ length: 915 }, (_, value) => match(value + 108))],
+    now: 1000,
+  });
+  expect(runSaturated(stillShort)).toBe(false);
+  const full = applyProgress(stillShort, {
+    sessionId: 1,
+    workerId: 0,
+    scanned: [1001],
+    matches: [match(1023)],
+    now: 1100,
+  });
+  expect(full.matches).toHaveLength(1024);
+  expect(runSaturated(full)).toBe(true);
 });

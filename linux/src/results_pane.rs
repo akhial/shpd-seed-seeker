@@ -34,6 +34,7 @@ const DRAIN_BATCH: usize = 256;
 const DISPLAY_CAP: usize = MAX_RESULTS;
 
 struct ActiveSearch {
+    selection_query: Option<SearchQuery>,
     replay_failed: bool,
     session: Rc<NativeSession>,
     query: SearchQuery,
@@ -52,11 +53,23 @@ struct ActiveSearch {
     refined: Option<(u64, u64)>,
 }
 
+impl ActiveSearch {
+    fn result_goal(&self) -> u64 {
+        let kept = self.refined.map_or(0, |(kept, _)| kept);
+        if kept >= MAX_RESULTS as u64 {
+            kept + MAX_RESULTS as u64
+        } else {
+            MAX_RESULTS as u64
+        }
+    }
+}
+
 /// Everything needed to continue the last concluded run: the query it ran and
 /// where its traversal stopped. The engine guarantees every match in the
 /// region before `resume_from` was delivered, so combining the filtered
 /// result list with a scan of the `remaining` seeds loses nothing.
 struct BaseRun {
+    selection_query: Option<SearchQuery>,
     query: SearchQuery,
     resume_from: u64,
     remaining: u64,
@@ -73,6 +86,7 @@ struct BaseRun {
 /// is a superset of any related run's display, which is what lets a loosened
 /// query bring seeds back.
 struct Target {
+    has_coverage: bool,
     recipes: HashMap<String, SeedRecipe>,
     query: SearchQuery,
     seeds: Vec<String>,
@@ -82,6 +96,8 @@ struct Target {
 
 /// An in-flight re-verification of previously found seeds on a worker thread.
 struct PendingRefine {
+    selection_query: Option<SearchQuery>,
+    fresh_scan: bool,
     receiver: mpsc::Receiver<Result<Vec<TrinketSearchMatch>, SearchError>>,
     query: SearchQuery,
     mode: StartDecision,
@@ -186,6 +202,12 @@ impl ResultsPane {
         header_bar.pack_end(&export_button);
         header_bar.pack_end(&import_button);
         header_bar.pack_end(&clear_button);
+        header_bar.pack_end(
+            &gtk::Button::builder()
+                .label("Filter loaded seeds")
+                .action_name("win.filter-results")
+                .build(),
+        );
         let toolbar_view = adw::ToolbarView::new();
         toolbar_view.add_top_bar(&header_bar);
         toolbar_view.set_content(Some(&stack));
@@ -284,7 +306,7 @@ impl ResultsPane {
             query,
             target.map(|target| &target.query),
             target.is_none_or(|target| target.seeds.is_empty()),
-            target.is_some_and(|target| target.remaining > 0),
+            target.is_some_and(|target| !target.has_coverage || target.remaining > 0),
             detached_base,
         )
     }
@@ -383,6 +405,7 @@ impl ResultsPane {
         // search's refine base no longer describes the listed seeds.
         self.base.replace(None);
         self.target.replace(Some(Target {
+            has_coverage: false,
             recipes: self.recipes.borrow().clone(),
             query: query.clone(),
             seeds: imported.to_vec(),
@@ -440,12 +463,26 @@ impl ResultsPane {
         });
     }
 
-    /// Runs `query`, dispatching on its relationship to the session's Target
-    /// (docs/search-semantics.md): a continuation refines the Target Set and
-    /// resumes its coverage, a query sharing an item filters the full set,
-    /// and an unrelated query scans the whole range without touching the
-    /// Target — continuing the previous detached scan when that is sound.
-    /// None of this is a user decision; only Clear Results discards anything.
+    /// Whether an explicit filter can recheck the retained Target Set.
+    pub fn can_filter(&self) -> bool {
+        !self.is_running()
+            && self
+                .target
+                .borrow()
+                .as_ref()
+                .is_some_and(|target| !target.seeds.is_empty())
+    }
+
+    pub fn filter_loaded_seeds(self: &Rc<Self>, query: SearchQuery) {
+        if !self.can_filter() {
+            return;
+        }
+        let seeds = self.target.borrow().as_ref().unwrap().seeds.clone();
+        self.begin_filter(query, &seeds, 0, 0, StartDecision::TargetFilter);
+    }
+
+    /// Search checks saved seeds, then preserves selection and coverage when
+    /// containment is proved, or starts a fresh traversal otherwise.
     pub fn start_search(self: &Rc<Self>, query: SearchQuery) {
         if self.is_running() {
             return;
@@ -469,7 +506,7 @@ impl ResultsPane {
                 // trusting the decision helper: the soundness of resuming
                 // depends on it. A filter never scans at all.
                 let (resume_from, remaining) = if mode == StartDecision::TargetRefine {
-                    if !query.continues(&target_query) {
+                    if !query.refines(&target_query) {
                         self.start_scan(query, StartDecision::Detached);
                         return;
                     }
@@ -477,7 +514,17 @@ impl ResultsPane {
                 } else {
                     (0, 0)
                 };
-                self.begin_filter(query, &seeds, resume_from, remaining, mode);
+                self.begin_filter(
+                    query,
+                    &seeds,
+                    resume_from,
+                    remaining,
+                    if mode == StartDecision::TargetFilter {
+                        StartDecision::Detached
+                    } else {
+                        mode
+                    },
+                );
             }
             StartDecision::ContinueDetached => {
                 // The classic pre-Target refine, scoped to the detached
@@ -492,7 +539,7 @@ impl ResultsPane {
                     self.start_scan(query, StartDecision::Detached);
                     return;
                 };
-                if !query.continues(&base_query) {
+                if !query.refines(&base_query) {
                     self.start_scan(query, StartDecision::Detached);
                     return;
                 }
@@ -506,8 +553,37 @@ impl ResultsPane {
                 );
             }
             mode @ (StartDecision::Anchor | StartDecision::Detached) => {
-                self.start_scan(query, mode);
+                let seeds = self
+                    .target
+                    .borrow()
+                    .as_ref()
+                    .map(|target| target.seeds.clone());
+                if let Some(seeds) = seeds.filter(|seeds| !seeds.is_empty()) {
+                    self.begin_filter(query, &seeds, 0, 0, StartDecision::Detached);
+                } else {
+                    self.start_scan(query, mode);
+                }
             }
+        }
+    }
+
+    fn new_session(
+        &self,
+        query: &SearchQuery,
+        selection: Option<&SearchQuery>,
+        window: Option<(u64, u64)>,
+    ) -> Result<NativeSession, SearchError> {
+        if let Some(base) = selection {
+            NativeSession::production_preserving(query.clone(), base, window, self.workers.get())
+        } else if let Some((position, remaining)) = window {
+            NativeSession::production_resumed(
+                query.clone(),
+                position,
+                remaining,
+                self.workers.get(),
+            )
+        } else {
+            NativeSession::production(query.clone(), self.workers.get())
         }
     }
 
@@ -516,13 +592,6 @@ impl ResultsPane {
     /// Target when it concludes; a `Detached` run leaves it untouched.
     fn start_scan(self: &Rc<Self>, query: SearchQuery, mode: StartDecision) {
         self.base.replace(None);
-        if mode == StartDecision::Detached {
-            // The display and the Target Set diverge here: the earlier
-            // results stay held by the Target until a related search.
-            self.toasts.add_toast(adw::Toast::new(
-                "Unrelated query — detached search from previous results",
-            ));
-        }
         let session = match NativeSession::production(query.clone(), self.workers.get()) {
             Ok(session) => Rc::new(session),
             Err(error) => {
@@ -544,6 +613,7 @@ impl ResultsPane {
         self.progress_line.set_visible(true);
         let now = Instant::now();
         self.active.replace(Some(ActiveSearch {
+            selection_query: None,
             replay_failed: false,
             session,
             query,
@@ -580,20 +650,32 @@ impl ResultsPane {
     ) {
         let (base_query, saved) = if matches!(
             mode,
-            StartDecision::TargetRefine | StartDecision::TargetFilter
+            StartDecision::TargetRefine | StartDecision::TargetFilter | StartDecision::Detached
         ) {
             let target = self.target.borrow();
             let target = target.as_ref().expect("target filter has a target");
             (target.query.clone(), target.recipes.clone())
         } else {
             (
-                self.base
-                    .borrow()
-                    .as_ref()
-                    .map_or_else(|| query.clone(), |b| b.query.clone()),
+                self.base.borrow().as_ref().map_or_else(
+                    || query.clone(),
+                    |b| b.selection_query.as_ref().unwrap_or(&b.query).clone(),
+                ),
                 self.recipes.borrow().clone(),
             )
         };
+        let fresh_scan = mode == StartDecision::Detached
+            || (mode == StartDecision::TargetRefine
+                && self
+                    .target
+                    .borrow()
+                    .as_ref()
+                    .is_some_and(|target| !target.has_coverage));
+        let selection_query = matches!(
+            mode,
+            StartDecision::TargetRefine | StartDecision::ContinueDetached
+        )
+        .then(|| base_query.clone());
         let recipes: Vec<_> = seed_codes
             .iter()
             .filter_map(|code| saved.get(code).copied())
@@ -609,6 +691,8 @@ impl ResultsPane {
             ));
         });
         self.pending_refine.replace(Some(PendingRefine {
+            selection_query,
+            fresh_scan,
             receiver,
             query,
             mode,
@@ -684,13 +768,14 @@ impl ResultsPane {
         }
         let kept = kept_worlds.len() as u64;
 
-        if pending.remaining == 0 {
+        if pending.remaining == 0 && !pending.fresh_scan {
             // Nothing left to scan: a target filter never scans by design,
             // and for the other modes the base traversal already covered
             // every seed. The Target is untouched either way — for a target
             // refine the survivors were already members and the coverage was
             // already exhausted.
             self.base.replace(Some(BaseRun {
+                selection_query: pending.selection_query,
                 query: pending.query,
                 resume_from: pending.resume_from,
                 remaining: 0,
@@ -700,30 +785,28 @@ impl ResultsPane {
             return glib::ControlFlow::Break;
         }
 
-        let session = match NativeSession::production_resumed(
-            pending.query.clone(),
-            pending.resume_from,
-            pending.remaining,
-            self.workers.get(),
-        ) {
-            Ok(session) => Rc::new(session),
-            Err(error) => {
-                self.restore_count_subtitle();
-                self.stats_line
-                    .set_label("Refine failed · kept seeds are listed");
-                self.toasts.add_toast(adw::Toast::new(&format!(
-                    "Could not resume the search: {error:?}"
-                )));
-                self.finish();
-                return glib::ControlFlow::Break;
-            }
-        };
+        let window = (!pending.fresh_scan).then_some((pending.resume_from, pending.remaining));
+        let session =
+            match self.new_session(&pending.query, pending.selection_query.as_ref(), window) {
+                Ok(session) => Rc::new(session),
+                Err(error) => {
+                    self.restore_count_subtitle();
+                    self.stats_line
+                        .set_label("Refine failed · kept seeds are listed");
+                    self.toasts.add_toast(adw::Toast::new(&format!(
+                        "Could not resume the search: {error:?}"
+                    )));
+                    self.finish();
+                    return glib::ControlFlow::Break;
+                }
+            };
         self.title.set_subtitle("Searching…");
         self.stats_line.set_label("Measuring search speed…");
         self.progress_line.set_label("Resuming…");
         self.progress_line.set_visible(true);
         let now = Instant::now();
         self.active.replace(Some(ActiveSearch {
+            selection_query: pending.selection_query,
             replay_failed: false,
             session,
             query: pending.query,
@@ -787,6 +870,7 @@ impl ResultsPane {
         match mode {
             StartDecision::Anchor => {
                 self.target.replace(Some(Target {
+                    has_coverage: true,
                     recipes: self.recipes.borrow().clone(),
                     query: query.clone(),
                     seeds: self.seeds.borrow().clone(),
@@ -816,12 +900,35 @@ impl ResultsPane {
                     target.seeds.extend(new_finds);
                     target.resume_from = concluded.resume_from;
                     target.remaining = concluded.remaining;
+                    target.has_coverage = true;
                 }
             }
             StartDecision::TargetFilter
             | StartDecision::ContinueDetached
             | StartDecision::Detached => {}
         }
+    }
+
+    /// Commit only a concluded scan's query, recipes, and exact coverage.
+    fn remember_scan(&self, active: &ActiveSearch, search_state: i64) {
+        let base =
+            (search_state == STATE_COMPLETED || search_state == STATE_CANCELLED).then(|| {
+                let [resume_from, remaining] = active.session.resume_hint();
+                BaseRun {
+                    selection_query: active.selection_query.clone(),
+                    query: active.query.clone(),
+                    resume_from: resume_from.max(0).unsigned_abs(),
+                    remaining: remaining.max(0).unsigned_abs(),
+                    detached: matches!(
+                        active.mode,
+                        StartDecision::Detached | StartDecision::ContinueDetached
+                    ),
+                }
+            });
+        if let Some(concluded) = base.as_ref() {
+            self.settle_target(active.mode, &active.query, concluded);
+        }
+        self.base.replace(base);
     }
 
     fn tick(self: &Rc<Self>) -> glib::ControlFlow {
@@ -860,7 +967,11 @@ impl ResultsPane {
             count => format!("{} seeds", group_digits(count)),
         });
 
+        let goal = active.result_goal();
         if search_state == STATE_RUNNING {
+            if active.matches >= goal {
+                active.session.cancel();
+            }
             self.stats_line
                 .set_label(&search_statistics(probability, active.seeds_per_second));
             self.progress_line.set_label(&format!(
@@ -873,47 +984,47 @@ impl ResultsPane {
 
         // Catch matches that raced the terminal state transition.
         Self::drain_matches(self, active);
-        let search_state = if active.replay_failed {
+        let mut search_state = if active.replay_failed {
             STATE_FAILED
+        } else if search_state == STATE_CANCELLED && active.matches >= goal {
+            STATE_COMPLETED
         } else {
             search_state
         };
+        let mut resume_error = None;
+        let [position, remaining] = active.session.resume_hint();
+        if search_state == STATE_COMPLETED && tested > 0 && remaining > 0 && active.matches < goal {
+            let next = self.new_session(
+                &active.query,
+                active.selection_query.as_ref(),
+                Some((
+                    position.max(0).unsigned_abs(),
+                    remaining.max(0).unsigned_abs(),
+                )),
+            );
+            match next {
+                Ok(session) => {
+                    active.session = Rc::new(session);
+                    active.last_tested = 0;
+                    return glib::ControlFlow::Continue;
+                }
+                Err(error) => {
+                    search_state = STATE_FAILED;
+                    resume_error = Some(format!("Could not resume the search: {error:?}"));
+                }
+            }
+        }
         let matches = active.matches;
         let refined = active.refined;
         let diagnostic = if search_state == STATE_FAILED {
-            active
-                .session
-                .take_failure_diagnostic()
+            resume_error
+                .or_else(|| active.session.take_failure_diagnostic())
                 .unwrap_or_else(|| "unknown worker failure".to_owned())
         } else {
             String::new()
         };
-        // A completed or stopped traversal can be refined later: remember its
-        // query and the exact position a narrower follow-up scan resumes from.
-        // A failed run leaves neither a base nor a Target behind — its
-        // coverage is unknown.
-        let mode = active.mode;
-        // The engine proves some queries unsatisfiable before generating a
-        // single world; the conclusion says so instead of reporting an
-        // ordinary empty result.
         let unsatisfiable = QueryPlan::analyze(&active.query).is_unsatisfiable();
-        let base =
-            (search_state == STATE_COMPLETED || search_state == STATE_CANCELLED).then(|| {
-                let [resume_from, remaining] = active.session.resume_hint();
-                BaseRun {
-                    query: active.query.clone(),
-                    resume_from: resume_from.max(0).unsigned_abs(),
-                    remaining: remaining.max(0).unsigned_abs(),
-                    detached: matches!(
-                        mode,
-                        StartDecision::Detached | StartDecision::ContinueDetached
-                    ),
-                }
-            });
-        if let Some(concluded) = base.as_ref() {
-            self.settle_target(mode, &active.query, concluded);
-        }
-        self.base.replace(base);
+        self.remember_scan(active, search_state);
         *active_slot = None;
         drop(active_slot);
 

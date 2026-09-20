@@ -616,8 +616,7 @@ private struct QueryView: View {
                 QueryEstimateView(document: document)
             }
             // Starting a search that narrows — or just repeats — the last
-            // finished run refines it automatically; the controller decides,
-            // so there is no second button here.
+            // finished run refines it automatically; explicit filtering is also available.
             Button {
                 if controller.isRunning { controller.cancel() }
                 else if let request = builtRequest { controller.start(request, workers: workers) }
@@ -628,6 +627,11 @@ private struct QueryView: View {
             }.buttonStyle(.borderedProminent).tint(controller.isRunning ? .red : .accentColor)
                 .disabled(builtRequest == nil && !controller.isRunning).keyboardShortcut(.return, modifiers: .command)
                 .padding()
+            if controller.canFilterLoadedSeeds {
+                Button("Filter loaded seeds") {
+                    if let request = builtRequest { controller.filterLoadedSeeds(request, workers: workers) }
+                }.disabled(builtRequest == nil).padding(.bottom)
+            }
         }
         .navigationTitle("Query")
         .sheet(item: $editor) { session in

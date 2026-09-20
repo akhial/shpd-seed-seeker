@@ -38,6 +38,7 @@ private final class FakeEngine: SeedFinderEngine, @unchecked Sendable {
     private(set) var filteredSeeds: [[String]] = []
     private(set) var resumedCalls: [(resumeFrom: Int64, scanLen: Int64)] = []
     private(set) var freshCalls = 0
+    private(set) var selectionQueries: [SearchRequest] = []
     /// The worker count each native start was handed, in call order: the
     /// controller must pass the device-local preference through untouched to
     /// both the fresh scan and a refine's resumed remainder.
@@ -65,6 +66,11 @@ private final class FakeEngine: SeedFinderEngine, @unchecked Sendable {
             resumedWorkers.append(workers)
             return nextSession(&resumedSessions)
         }
+    }
+    func startRefinedSearch(_ request: SearchRequest, base: SearchRequest, window: ResumeHint?, workers: Int) async throws -> any SeedFinderSearchSession {
+        lock.withLock { selectionQueries.append(base) }
+        if let window { return try await startResumedSearch(request, resumeFrom: window.position, scanLen: window.remaining, workers: workers) }
+        return try await startSearch(request, workers: workers)
     }
     func filterSeeds(_ request: SearchRequest, seeds: [String]) async throws -> [String] {
         if let filterDelay { try await Task.sleep(for: filterDelay) }
@@ -312,13 +318,13 @@ final class RefineSearchTests: XCTestCase {
         try await waitUntilIdle(controller)
         XCTAssertEqual(controller.refinedKept, 1)
 
-        // An unrelated query is the one start that runs fresh here: it clears
-        // the refine caption while the Target keeps the earlier results.
+        // An unrelated query filters first, then runs a fresh traversal.
+        engine.filterResult = []
         engine.startSessions = [FakeSearchSession(
             batches: [], hint: ResumeHint(position: 0, remaining: 0))]
         controller.start(try ringRequest())
         try await waitUntilIdle(controller)
-        XCTAssertNil(controller.refinedKept, "a fresh detached scan must clear the refine caption")
+        XCTAssertEqual(controller.refinedKept, 0)
         XCTAssertTrue(controller.results.isEmpty)
         XCTAssertEqual(controller.target?.seeds, ["AAA-AAA-AAA"])
     }
@@ -395,7 +401,7 @@ final class RefineSearchTests: XCTestCase {
         XCTAssertFalse(controller.canRefine(with: rescoped))
         XCTAssertEqual(controller.decideStart(rescoped), .targetFilter)
         engine.filterResult = ["AAA-AAA-AAB"]
-        controller.start(rescoped)
+        controller.filterLoadedSeeds(rescoped)
         try await waitUntilIdle(controller)
 
         XCTAssertEqual(engine.filteredSeeds, [["AAA-AAA-AAA", "AAA-AAA-AAB"]],
@@ -443,9 +449,9 @@ final class RefineSearchTests: XCTestCase {
         controller.start(try ringRequest())
         try await waitUntilIdle(controller)
         XCTAssertEqual(engine.freshCalls, 2)
-        XCTAssertTrue(engine.filteredSeeds.isEmpty)
+        XCTAssertEqual(engine.filteredSeeds, [["AAA-AAA-AAA", "AAA-AAA-AAB"]])
         XCTAssertEqual(controller.results.map(\.seed), ["ZZZ-AAA-AAA"])
-        XCTAssertNil(controller.refinedKept, "a fresh detached scan is not a refine")
+        XCTAssertEqual(controller.refinedKept, 0)
         XCTAssertEqual(controller.runKind, .detached)
         XCTAssertEqual(controller.target?.seeds, ["AAA-AAA-AAA", "AAA-AAA-AAB"],
                        "the Target must survive a detached scan untouched")
@@ -455,18 +461,27 @@ final class RefineSearchTests: XCTestCase {
         XCTAssertEqual(controller.decideStart(try ringRequest(count: 2)), .continueDetached)
         engine.filterResult = ["ZZZ-AAA-AAA"]
         engine.resumedSessions = [FakeSearchSession(
-            batches: [[result("ZZZ-AAA-AAB", matched: 2)]], hint: ResumeHint(position: 0, remaining: 0))]
+            batches: [[result("ZZZ-AAA-AAB", matched: 2)]], hint: ResumeHint(position: 8, remaining: 60))]
         controller.start(try ringRequest(count: 2))
         try await waitUntilIdle(controller)
-        XCTAssertEqual(engine.filteredSeeds, [["ZZZ-AAA-AAA"]])
+        XCTAssertEqual(engine.filteredSeeds.last, ["ZZZ-AAA-AAA"])
         XCTAssertEqual(engine.resumedCalls.count, 1)
         XCTAssertEqual(engine.resumedCalls.first?.resumeFrom, 7)
         XCTAssertEqual(engine.resumedCalls.first?.scanLen, 70)
         XCTAssertEqual(controller.results.map(\.seed), ["ZZZ-AAA-AAA", "ZZZ-AAA-AAB"])
         XCTAssertEqual(controller.refinedKept, 1)
         XCTAssertEqual(controller.refinedOf, 1)
+        XCTAssertEqual(engine.selectionQueries.last?.requirements.count, 1)
         XCTAssertEqual(controller.runKind, .detached, "a continued detached scan stays detached")
         XCTAssertEqual(controller.target?.seeds, ["AAA-AAA-AAA", "AAA-AAA-AAB"])
+
+        // A third query retains the first detached query's selection rules.
+        engine.filterResult = ["ZZZ-AAA-AAA"]
+        engine.resumedSessions = [FakeSearchSession(batches: [], hint: ResumeHint(position: 9, remaining: 0))]
+        controller.start(try ringRequest(count: 3))
+        try await waitUntilIdle(controller)
+        XCTAssertEqual(engine.selectionQueries.map { $0.requirements.count }, [1, 1])
+        XCTAssertEqual(controller.baseRun?.selectionQuery?.requirements.count, 1)
 
         // Returning to the Target Query refines the full Target Set and
         // resumes the target's own coverage, not the detached thread's.
@@ -651,7 +666,7 @@ final class RefineSearchTests: XCTestCase {
 
     /// Import establishes the Target with no coverage: related queries filter
     /// the imported set, and nothing ever resumes a scan from it.
-    func testImportedResultsBecomeAFilterOnlyTarget() async throws {
+    func testImportedResultsFilterThenSearchWithTheOriginalSelection() async throws {
         let engine = FakeEngine()
         let controller = SearchController(engine: engine)
         controller.loadImported(seeds: ["AAA-AAA-AAA", "AAA-AAA-AAB"],
@@ -661,13 +676,15 @@ final class RefineSearchTests: XCTestCase {
         engine.filterResult = ["AAA-AAA-AAB"]
         controller.start(try wandRequest(count: 2))
         try await waitUntilIdle(controller)
-        XCTAssertEqual(engine.freshCalls, 0)
+        XCTAssertEqual(engine.freshCalls, 1)
         XCTAssertTrue(engine.resumedCalls.isEmpty, "an import carries no coverage to resume")
         XCTAssertEqual(engine.filteredSeeds, [["AAA-AAA-AAA", "AAA-AAA-AAB"]])
         XCTAssertEqual(controller.state, .completed)
         XCTAssertEqual(controller.results.map(\.seed), ["AAA-AAA-AAB"])
         XCTAssertEqual(controller.refinedKept, 1)
         XCTAssertEqual(controller.refinedOf, 2)
+        XCTAssertEqual(engine.selectionQueries.first?.requirements.count, 1)
+        XCTAssertEqual(controller.target?.hasCoverage, true)
 
         // Loosening back re-filters the full imported set.
         engine.filterResult = ["AAA-AAA-AAA", "AAA-AAA-AAB"]
@@ -675,7 +692,7 @@ final class RefineSearchTests: XCTestCase {
         try await waitUntilIdle(controller)
         XCTAssertEqual(controller.results.map(\.seed), ["AAA-AAA-AAA", "AAA-AAA-AAB"])
         XCTAssertTrue(engine.resumedCalls.isEmpty)
-        XCTAssertEqual(engine.freshCalls, 0)
+        XCTAssertEqual(engine.freshCalls, 1)
     }
 
     /// A run can deliver more seeds than the display holds — the list caps at

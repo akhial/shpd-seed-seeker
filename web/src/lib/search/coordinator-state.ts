@@ -35,6 +35,7 @@ export interface TargetState {
   matches: ParsedSeed[];
   /** Seed ranges the target traversal has not covered; empty for imports. */
   remainder: SeedRange[];
+  hasCoverage?: boolean;
 }
 export interface CoordinatorState {
   sessionId: number;
@@ -62,11 +63,8 @@ export interface CoordinatorState {
   queryJson: string;
   /** Set while the current results came from refining a previous run. */
   refined?: RefineSummary;
-  /** How many unique matches existed when the current scan started (the
-   * refine survivors; zero for a fresh scan). The scan stops once it has
-   * added `RESULT_CAP` matches beyond this — the per-session accept cap the
-   * native engines enforce — so repeating a query keeps growing the
-   * collection while each run stays bounded. */
+  /** Unique matches kept by the filter. Survivors count toward RESULT_CAP;
+   * an already-full collection requests RESULT_CAP additional matches. */
   sessionBaseline: number;
   /** True while a refine is re-verifying the previous results and no worker
    * has started scanning yet. */
@@ -74,6 +72,8 @@ export interface CoordinatorState {
   error?: string;
   /** The query that produced `matches` (captured at search start or import). */
   query?: QueryDocument;
+  /** Original trinket policy, retained across successive refinements. */
+  selectionQuery?: QueryDocument;
   /** Imported entries dropped as duplicates or beyond the result cap. */
   importedDropped?: number;
   /** The session's Target, if one has been established. */
@@ -106,7 +106,10 @@ export const initialCoordinatorState = (total = 0): CoordinatorState => ({
 /** Whether the current run has delivered its per-session quota of new
  * matches; the coordinator stops the workers once it has. */
 export function runSaturated(state: CoordinatorState): boolean {
-  return state.matches.length - state.sessionBaseline >= RESULT_CAP;
+  return (
+    state.matches.length >=
+    (state.sessionBaseline >= RESULT_CAP ? state.sessionBaseline + RESULT_CAP : RESULT_CAP)
+  );
 }
 
 /**
@@ -151,8 +154,7 @@ export function calculateRate(samples: RateSample[]): number {
  * engine's decoder already deduplicated and capped the seeds — identically on
  * every platform — and counted the entries that removed, so `dropped` is
  * reported straight to the UI. The import becomes the session's Target with
- * empty coverage — related queries filter it, but nothing ever resumes a scan
- * from it.
+ * unknown coverage — Search filters it and begins a fresh traversal.
  */
 export function importedResultsState(
   state: CoordinatorState,
@@ -169,8 +171,8 @@ export function importedResultsState(
     query,
     importedDropped: dropped,
     // The imported query and seeds become the session's Target, with no
-    // coverage: refines of an import are filter-only.
-    target: { queryJson: JSON.stringify(query), query, matches, remainder: [] },
+    // coverage: Search begins a fresh traversal after filtering.
+    target: { queryJson: JSON.stringify(query), query, matches, remainder: [], hasCoverage: false },
   };
 }
 
@@ -191,13 +193,22 @@ export function settleRun(state: CoordinatorState): CoordinatorState {
     if (!state.query) return state;
     return {
       ...state,
-      target: { queryJson: state.queryJson, query: state.query, matches: state.matches, remainder },
+      target: {
+        queryJson: state.queryJson,
+        query: state.query,
+        matches: state.matches,
+        remainder,
+        hasCoverage: true,
+      },
     };
   }
   // The refined run's survivors were already members; only new finds from
   // the resumed scan grow the set. The stored set is never capped.
   const merged = mergeMatches(state.target.matches, state.matches, Number.POSITIVE_INFINITY);
-  return { ...state, target: { ...state.target, matches: merged.matches, remainder } };
+  return {
+    ...state,
+    target: { ...state.target, matches: merged.matches, remainder, hasCoverage: true },
+  };
 }
 
 const sumScanned = (workerScanned: Record<number, number[]>): number =>
@@ -231,7 +242,7 @@ export function applyProgress(state: CoordinatorState, update: ProgressUpdate): 
   // `capped` reports display truncation; the run itself ends on its own
   // accept quota, so a refine whose survivors already fill the display still
   // scans for more.
-  const saturated = merged.matches.length - state.sessionBaseline >= RESULT_CAP;
+  const saturated = runSaturated({ ...state, matches: merged.matches });
   return settleRun({
     ...state,
     workerScanned,

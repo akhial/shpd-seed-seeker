@@ -447,6 +447,18 @@ export default function App() {
             running={running}
             engineReady={engine !== undefined}
             onToggleSearch={toggleSearch}
+            onFilterLoadedSeeds={
+              searchStore.state.target?.matches.length
+                ? () => {
+                    if (!validateQuery(queryStore.state).valid) return;
+                    coordinator.current?.filterLoadedSeeds(
+                      toQueryDocument(queryStore.state),
+                      workerCountStore.state,
+                    );
+                    setActiveTab("results");
+                  }
+                : undefined
+            }
             isMac={isMac}
             shareNotice={shareNotice}
             onDismissShareNotice={() => setShareNotice(undefined)}

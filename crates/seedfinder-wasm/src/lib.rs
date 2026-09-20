@@ -349,8 +349,8 @@ pub fn level_map_asset(asset_id: &str) -> Result<Vec<u8>, JsError> {
 /// `trinkets_json` carries an array of saved IDs or nulls, parallel to the seeds.
 /// Automatic queries replay those choices; explicit requirements resolve their
 /// own selection rules. With `base_query_json`, changed automatic queries
-/// retry failed no-trinket recipes with the policy's choice, which may now
-/// be necessary.
+/// reapply the original automatic choice before testing, including choices
+/// previously removed as unnecessary.
 /// This backs the filter-and-resume flow.
 ///
 /// # Errors
@@ -390,7 +390,7 @@ pub fn query_continues(candidate_json: &str, base_json: &str) -> Result<bool, Js
 }
 
 fn query_continues_impl(candidate_json: &str, base_json: &str) -> Result<bool, String> {
-    Ok(json_query::decode(candidate_json)?.continues(&json_query::decode(base_json)?))
+    Ok(json_query::decode(candidate_json)?.refines(&json_query::decode(base_json)?))
 }
 
 /// Reports what pressing Start Search must do with the query in
@@ -453,6 +453,7 @@ fn decide_start_impl(
 pub struct SearchSession {
     query: SearchQuery,
     plan: QueryPlan,
+    preserved: Option<shpd_seedfinder_core::refinement::PreservedSearch>,
     generator: ConfiguredMainWorldGenerator,
     cursor: u64,
     end_seed_exclusive: u64,
@@ -492,8 +493,10 @@ impl SearchSession {
             let seeds = (self.cursor..batch_end)
                 .filter_map(|value| DungeonSeed::new(value).ok())
                 .collect::<Vec<_>>();
-            let results =
-                auto_trinkets::search_batch(&self.generator, &self.query, &self.plan, &seeds);
+            let results = self.preserved.as_ref().map_or_else(
+                || auto_trinkets::search_batch(&self.generator, &self.query, &self.plan, &seeds),
+                |preserved| preserved.search_batch(&self.generator, &seeds),
+            );
             for result in results {
                 self.cursor += 1;
                 self.tested += 1;
@@ -530,7 +533,9 @@ impl SearchSession {
         start_seed: f64,
         end_seed_exclusive: f64,
     ) -> Result<Self, String> {
-        let query = json_query::decode(query_json)?;
+        let (query, base) =
+            shpd_seedfinder_core::refinement::decode_execution(query_json.as_bytes())
+                .map_err(|error| error.to_string())?;
         let start_seed = seed_bound(start_seed, false)?;
         let end_seed_exclusive = seed_bound(end_seed_exclusive, true)?;
         if start_seed >= end_seed_exclusive {
@@ -539,6 +544,9 @@ impl SearchSession {
         let plan = QueryPlan::analyze(&query);
         let completed = plan.is_unsatisfiable();
         Ok(Self {
+            preserved: base.map(|base| {
+                shpd_seedfinder_core::refinement::PreservedSearch::new(query.clone(), &base)
+            }),
             generator: CanonicalMainWorldGenerator::with_challenges(query.challenges),
             query,
             plan,
@@ -860,6 +868,20 @@ mod tests {
         encode_share_link_impl, engine_info, engine_info_document, filter_seeds_impl,
         format_seed_code, parse_seed_code_impl, query_continues_impl, scout_impl,
     };
+
+    #[test]
+    #[allow(clippy::cast_precision_loss)] // Dungeon seeds are below 2^53.
+    fn preserved_execution_reapplies_the_original_trinket() {
+        let packet = r#"{"refine_base":{"auto_apply_trinket":true,"max_depth":19,"requirements":[{"item":"runic_blade","upgrade":1,"effect":"Grim"}]},"query":{"auto_apply_trinket":true,"max_depth":19,"requirements":[{"item":"runic_blade","upgrade":1,"effect":"Grim"},{"item":"whip","effect":"Venomous"}]}}"#;
+        let seed = DungeonSeed::from_code("EYY-RUL-LQG").unwrap();
+        let value = seed.value() as f64;
+        let mut session = SearchSession::new_impl(packet, value, value + 1.0).unwrap();
+        let result: serde_json::Value = serde_json::from_str(&session.advance(1)).unwrap();
+        assert_eq!(result["state"], "completed");
+        assert_eq!(result["tested"], 1);
+        assert_eq!(result["matches"][0]["code"], seed.to_code());
+        assert_eq!(result["matches"][0]["selectedTrinket"], "parchment_scrap");
+    }
 
     #[test]
     fn map_bridge_uses_shared_document_and_scout_selection() {

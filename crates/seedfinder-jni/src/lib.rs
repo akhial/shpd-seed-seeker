@@ -372,7 +372,8 @@ pub extern "system" fn Java_dev_seedseeker_app_engine_JniBindings_filterSeeds<'l
 }
 
 /// Reports whether the query in `candidate` continues the one in
-/// `base` — the soundness precondition for the filter-and-resume refine flow.
+/// `base` under its preserved trinket policy. Refinement starts must pass the
+/// `refine_base` execution envelope; filtering saved seeds is unrestricted.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_dev_seedseeker_app_engine_JniBindings_queryContinues<'local>(
     mut env: JNIEnv<'local>,

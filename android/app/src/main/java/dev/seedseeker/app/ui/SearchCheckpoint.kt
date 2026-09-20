@@ -23,6 +23,8 @@ internal data class PendingSearch(
     val scanned: Long = 0,
     val total: Long = 0,
     val scanMatches: Int = 0,
+    val scanLimit: Int = RESULT_CAP,
+    val selectionQuery: SearchRequest? = null,
 )
 
 internal data class SearchSnapshot(
@@ -59,7 +61,7 @@ internal class FileSearchCheckpointStore(file: File, private val engineVersion: 
         // Never carry traversal coverage across a game/engine update. Keep the user's finds.
         return saved.copy(
             pending = null, lastRun = null, lastKind = null,
-            target = saved.target?.copy(resumeFrom = 0, remaining = 0),
+            target = saved.target?.copy(resumeFrom = 0, remaining = 0, hasCoverage = false),
             status = null,
             error = "The engine changed. Saved results were restored; start a search to recheck them.",
         )
@@ -89,10 +91,12 @@ internal object SearchCheckpointCodec {
         }
         put("elapsed", value.elapsedSeconds)
         value.target?.let {
-            put("target", run(it.request, it.results, it.resumeFrom, it.remaining))
+            put("target", run(it.request, it.results, it.resumeFrom, it.remaining).put("hasCoverage", it.hasCoverage))
         }
         value.lastRun?.let {
-            put("last", run(it.request, it.results, it.resumeFrom, it.remaining))
+            put("last", run(it.request, it.results, it.resumeFrom, it.remaining).apply {
+                it.selectionQuery?.let { query -> put("selectionQuery", ResultsExport.encodeQuery(query)) }
+            })
         }
         value.lastKind?.let { put("kind", it.name) }
         value.pending?.let { pending ->
@@ -103,10 +107,13 @@ internal object SearchCheckpointCodec {
                 put("scanned", pending.scanned)
                 put("total", pending.total)
                 put("scanMatches", pending.scanMatches)
+                put("scanLimit", pending.scanLimit)
+                pending.selectionQuery?.let { put("selectionQuery", ResultsExport.encodeQuery(it)) }
                 pending.window?.let { put("window", window(it.position, it.remaining)) }
                 pending.refine?.let { refine ->
                     put("refine", window(refine.resumeFrom, refine.remaining).apply {
                         put("results", results(refine.keepSeeds))
+                        put("freshScan", refine.freshScan)
                         refine.base?.let { put("base", ResultsExport.encodeQuery(it)) }
                     })
                 }
@@ -125,11 +132,13 @@ internal object SearchCheckpointCodec {
         elapsedSeconds = value.getLong("elapsed"),
         target = value.optJSONObject("target")?.let {
             TargetState(request(it.getJSONObject("request")), readResults(it.getJSONArray("results")),
-                it.getLong("position"), it.getLong("remaining"))
+                it.getLong("position"), it.getLong("remaining"),
+                it.optBoolean("hasCoverage", it.getLong("position") != 0L || it.getLong("remaining") != 0L))
         },
         lastRun = value.optJSONObject("last")?.let {
             FinishedRun(request(it.getJSONObject("request")), it.getLong("position"),
-                it.getLong("remaining"), readResults(it.getJSONArray("results")))
+                it.getLong("remaining"), readResults(it.getJSONArray("results")),
+                it.optJSONObject("selectionQuery")?.let(::request))
         },
         lastKind = (value.opt("kind") as? String)?.let(StartMode::valueOf),
         pending = value.optJSONObject("pending")?.let {
@@ -139,13 +148,15 @@ internal object SearchCheckpointCodec {
                 refine = it.optJSONObject("refine")?.let { refine ->
                     RefineSpec(refine.getLong("position"), refine.getLong("remaining"),
                         readResults(refine.getJSONArray("results")),
-                        refine.optJSONObject("base")?.let(::request))
+                        refine.optJSONObject("base")?.let(::request), refine.optBoolean("freshScan", false))
                 },
                 window = it.optJSONObject("window")?.let { window ->
                     ResumeHint(window.getLong("position"), window.getLong("remaining"))
                 },
                 scanned = it.getLong("scanned"), total = it.getLong("total"),
                 scanMatches = it.getInt("scanMatches"),
+                scanLimit = it.optInt("scanLimit", RESULT_CAP).coerceIn(1, RESULT_CAP),
+                selectionQuery = it.optJSONObject("selectionQuery")?.let(::request),
             )
         },
         error = value.opt("error") as? String,

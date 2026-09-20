@@ -106,22 +106,26 @@ export class SearchCoordinator {
     return this.workers.slice(0, target);
   }
 
-  /**
-   * Runs `query`, dispatching on its relationship to the session's Target
-   * (docs/search-semantics.md): a continuation refines the Target Set and
-   * resumes its coverage, a query sharing an item filters the full set, and
-   * an unrelated query scans the whole range without touching the Target —
-   * continuing the previous detached scan when that is sound. None of this
-   * is a user decision; only the Clear button discards anything.
-   */
+  /** Search rechecks saved seeds, then scans with preserved selection and
+   * coverage when containment is proved, or starts a fresh traversal otherwise.
+   * Only an explicit filterLoadedSeeds call omits the scan phase. */
   start(query: QueryDocument, workerCount = Math.max(1, navigator.hardwareConcurrency ?? 4)): void {
     const state = searchStore.state;
     if (state.state === "running" || state.state === "stopping") return;
     const mode = decideStart(state, query);
-    if (mode === "target-refine" || mode === "target-filter")
-      this.refineTarget(query, mode, workerCount);
+    if (mode === "target-refine") this.refineTarget(query, mode, workerCount);
     else if (mode === "continue-detached") this.continueDetached(query, workerCount);
-    else this.startFresh(query, workerCount, mode);
+    else if (state.target?.matches.length) this.refineTarget(query, "detached", workerCount);
+    else this.startFresh(query, workerCount, mode === "anchor" ? "anchor" : "detached");
+  }
+
+  filterLoadedSeeds(
+    query: QueryDocument,
+    workerCount = Math.max(1, navigator.hardwareConcurrency ?? 4),
+  ): void {
+    const state = searchStore.state;
+    if (state.state === "running" || state.state === "stopping" || !state.target) return;
+    this.refineTarget(query, "target-filter", workerCount);
   }
 
   /** Scans the whole seed space from a fresh traversal start, replacing the
@@ -177,7 +181,7 @@ export class SearchCoordinator {
    */
   private refineTarget(
     query: QueryDocument,
-    mode: "target-refine" | "target-filter",
+    mode: "target-refine" | "target-filter" | "detached",
     workerCount: number,
   ): void {
     const previous = searchStore.state;
@@ -208,8 +212,13 @@ export class SearchCoordinator {
       .then((kept) => {
         if (this.filterRestore?.sessionId !== sessionId) return;
         this.filterRestore = undefined;
-        // A filter never scans; a refine resumes the target's remainder.
-        const remainder = mode === "target-refine" ? target.remainder : [];
+        // Explicit filters stop here; imports and detached searches scan afresh.
+        const remainder =
+          mode === "target-filter"
+            ? []
+            : mode === "target-refine" && target.hasCoverage !== false
+              ? target.remainder
+              : partitionRotated(this.totalSeeds, 1, this.claimTraversalStart()).flat();
         this.beginResumedScan(
           query,
           remainder,
@@ -217,6 +226,7 @@ export class SearchCoordinator {
           target.matches.length,
           workerCount,
           sessionId,
+          mode === "target-refine" ? target.query : undefined,
         );
       })
       .catch((error: unknown) => {
@@ -257,7 +267,12 @@ export class SearchCoordinator {
       runKind: "detached",
       error: undefined,
     }));
-    void this.filterSeeds(queryJson, previousMatches, workerCount, previous.queryJson)
+    void this.filterSeeds(
+      queryJson,
+      previousMatches,
+      workerCount,
+      JSON.stringify(previous.selectionQuery ?? previous.query),
+    )
       .then((kept) => {
         if (this.filterRestore?.sessionId !== sessionId) return;
         this.filterRestore = undefined;
@@ -272,6 +287,7 @@ export class SearchCoordinator {
           previousMatches.length,
           workerCount,
           sessionId,
+          previous.selectionQuery ?? previous.query,
         );
       })
       .catch((error: unknown) => {
@@ -344,8 +360,12 @@ export class SearchCoordinator {
     previousCount: number,
     workerCount: number,
     sessionId: number,
+    selectionQuery?: QueryDocument,
   ): void {
     const queryJson = JSON.stringify(query);
+    const executionJson = selectionQuery
+      ? JSON.stringify({ query, refine_base: selectionQuery })
+      : queryJson;
     const startedAt = performance.now();
     const refined = { kept: kept.length, of: previousCount };
     // Nothing left to scan: a target filter arrives here with an empty
@@ -365,6 +385,7 @@ export class SearchCoordinator {
           // that is what an export must claim. A cancelled or failed filter
           // phase leaves the previous matches — and their snapshot — untouched.
           query,
+          selectionQuery,
           refined,
           startedAt,
           elapsed: 0,
@@ -391,6 +412,7 @@ export class SearchCoordinator {
       sessionBaseline: kept.length,
       queryJson,
       query,
+      selectionQuery,
       refined,
       startedAt,
       elapsed: 0,
@@ -407,7 +429,7 @@ export class SearchCoordinator {
     workers.forEach((worker, index) => {
       worker.postMessage({
         type: "search:start",
-        queryJson,
+        queryJson: executionJson,
         segments: segments[index],
         sessionId,
       } satisfies SearchWorkerRequest);

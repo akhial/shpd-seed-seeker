@@ -1218,7 +1218,7 @@ public enum StartMode
 /// bring seeds back. <see cref="Remaining"/> is zero for imports, whose refines
 /// are filter-only.
 /// </summary>
-public sealed record TargetRun(QuerySettings Query, IReadOnlyList<string> Seeds, long ResumeFrom, long Remaining, IReadOnlyDictionary<string, SeedResult>? Recipes = null);
+public sealed record TargetRun(QuerySettings Query, IReadOnlyList<string> Seeds, long ResumeFrom, long Remaining, IReadOnlyDictionary<string, SeedResult>? Recipes = null, bool HasCoverage = true);
 
 public sealed class QueryPreset
 {

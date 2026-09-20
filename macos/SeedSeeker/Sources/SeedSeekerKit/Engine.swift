@@ -28,12 +28,17 @@ public protocol SeedFinderEngine: Sendable {
     /// request rather than inside it.
     func startSearch(_ request: SearchRequest, workers: Int) async throws -> any SeedFinderSearchSession
     func startResumedSearch(_ request: SearchRequest, resumeFrom: Int64, scanLen: Int64, workers: Int) async throws -> any SeedFinderSearchSession
+    func startRefinedSearch(_ request: SearchRequest, base: SearchRequest, window: ResumeHint?, workers: Int) async throws -> any SeedFinderSearchSession
     func filterSeeds(_ request: SearchRequest, seeds: [String]) async throws -> [String]
     func filterRecipes(_ request: SearchRequest, base: SearchRequest, recipes: [SeedResult]) async throws -> [SeedResult]
     func scoutSeed(_ seed: String, challenges: Int) async throws -> ScoutWorld
 }
 
 extension SeedFinderEngine {
+    public func startRefinedSearch(_ request: SearchRequest, base: SearchRequest, window: ResumeHint?, workers: Int) async throws -> any SeedFinderSearchSession {
+        if let window { return try await startResumedSearch(request, resumeFrom: window.position, scanLen: window.remaining, workers: workers) }
+        return try await startSearch(request, workers: workers)
+    }
     public func filterRecipes(_ request: SearchRequest, base: SearchRequest, recipes: [SeedResult]) async throws -> [SeedResult] {
         try await filterSeeds(request, seeds: recipes.map(\.seed)).map { SeedResult(seed: $0, matchedRequirements: request.slotCount) }
     }
@@ -201,6 +206,25 @@ public struct ScoutMatches: Sendable {
 
 public struct ProductionSeedFinderEngine: SeedFinderEngine {
     public init() {}
+
+    public func startRefinedSearch(_ request: SearchRequest, base: SearchRequest, window: ResumeHint?, workers: Int) async throws -> any SeedFinderSearchSession {
+        let encoded = try JSONSerialization.data(withJSONObject: [
+            "query": try JSONSerialization.jsonObject(with: QueryDocument.encode(request)),
+            "refine_base": try JSONSerialization.jsonObject(with: QueryDocument.encode(base)),
+        ])
+        let count = ffiWorkers(workers)
+        let handle: Int64 = await Task.detached {
+            encoded.withUnsafeBytes { bytes in
+                if let window {
+                    return seedfinder_start_resumed_search(bytes.bindMemory(to: UInt8.self).baseAddress, bytes.count,
+                        UInt64(bitPattern: window.position), UInt64(bitPattern: window.remaining), count)
+                }
+                return seedfinder_start_search(bytes.bindMemory(to: UInt8.self).baseAddress, bytes.count, count)
+            }
+        }.value
+        guard handle != 0 else { throw SeedFinderEngineError.invalidArgument }
+        return NativeSearchSession(handle: handle, requirementCount: request.slotCount)
+    }
 
     public func startSearch(_ request: SearchRequest, workers: Int) async throws -> any SeedFinderSearchSession {
         let encoded = try QueryDocument.encode(request)

@@ -75,18 +75,25 @@ internal class SearchController(
         }
     }
 
-    fun start(request: SearchRequest, workers: Int) {
+    fun start(request: SearchRequest, workers: Int, filterOnly: Boolean = false) {
         if (!ready || isSearching) return
-        val plan = startPlanFor(request, snapshot.target, snapshot.lastRun, snapshot.lastKind, engine::decideStart)
+        if (filterOnly && snapshot.target == null) return
+        val plan = startPlanFor(request, snapshot.target, snapshot.lastRun, snapshot.lastKind,
+            engine::queryContinues, filterOnly)
         stopRequested = false
         pauseRequested = false
         snapshot = snapshot.copy(
-            pending = PendingSearch(request, plan.mode, workers, plan.refine),
+            pending = PendingSearch(request, plan.mode, workers, plan.refine,
+                selectionQuery = when (plan.mode) {
+                    StartMode.TARGET_REFINE -> snapshot.target?.request
+                    StartMode.CONTINUE_DETACHED -> snapshot.lastRun?.let { it.selectionQuery ?: it.request }
+                    else -> null
+                }),
             results = if (plan.refine == null) emptyList() else snapshot.results,
             query = if (plan.refine == null) request.toPresetQuery() else snapshot.query,
             status = null, error = null, elapsedSeconds = 0,
         )
-        if (plan.mode == StartMode.DETACHED) notice = "Unrelated query — detached search from previous results."
+        notice = null
         requestService()
     }
 
@@ -192,7 +199,13 @@ internal class SearchController(
                 }
             }
             if (!stopRequested && !pauseRequested) {
-                pending = pending.copy(refine = null, window = ResumeHint(refine.resumeFrom, refine.remaining))
+                pending = pending.copy(
+                    refine = null,
+                    window = if (refine.freshScan) null else ResumeHint(refine.resumeFrom, refine.remaining),
+                    // Fill the visible list; when already full, Search explicitly asks for
+                    // another batch so repeated searches still advance the traversal.
+                    scanLimit = (EngineInfo.maxResults - kept.size).takeIf { it > 0 } ?: EngineInfo.maxResults,
+                )
                 snapshot = snapshot.copy(pending = pending, results = kept.toList(), query = pending.request.toPresetQuery())
                 notice = "Kept ${kept.size} of ${refine.keepSeeds.size} previous seeds."
                 save()
@@ -201,7 +214,7 @@ internal class SearchController(
 
         while (!stopRequested && !pauseRequested) {
             val window = pending.window
-            if (window != null && (window.remaining == 0L || pending.scanMatches >= EngineInfo.maxResults)) {
+            if (window != null && (window.remaining == 0L || pending.scanMatches >= pending.scanLimit)) {
                 finish(pending, window, SearchState.COMPLETED)
                 return
             }
@@ -215,14 +228,16 @@ internal class SearchController(
                 // Assign inside the dispatcher block: coroutine cancellation during dispatch
                 // back to main must not orphan a just-created JNI handle.
                 withContext(workerDispatcher) {
-                    session = pending.window?.let {
+                    session = pending.selectionQuery?.let {
+                        engine.startRefinedSearch(pending.request, it, pending.window, pending.workers)
+                    } ?: pending.window?.let {
                         engine.startResumedSearch(pending.request, it.position, it.remaining, pending.workers)
                     } ?: engine.startSearch(pending.request, pending.workers)
                 }
                 val opened = checkNotNull(session)
                 val seen = snapshot.results.mapTo(mutableSetOf()) { it.seed }
                 while (true) {
-                    if (stopRequested || pauseRequested || pending.scanMatches >= EngineInfo.maxResults || now() - startedAt >= checkpointMillis) {
+                    if (stopRequested || pauseRequested || pending.scanMatches >= pending.scanLimit || now() - startedAt >= checkpointMillis) {
                         checkpointing = true
                         withContext(workerDispatcher) { opened.cancel() }
                     }
@@ -258,7 +273,11 @@ internal class SearchController(
                         val hint = withContext(workerDispatcher) { opened.resumeHint() }
                         pending = pending.copy(window = hint, scanned = scanned, total = total)
                         snapshot = snapshot.copy(pending = pending)
-                        if (stopRequested || !checkpointing || hint.remaining == 0L || pending.scanMatches >= EngineInfo.maxResults) {
+                        // A native session's cap includes duplicates already kept by the
+                        // filter. Keep scanning its remainder until enough unique seeds
+                        // arrive. A zero-work terminal session is an impossible query.
+                        if (stopRequested || hint.remaining == 0L || pending.scanMatches >= pending.scanLimit ||
+                            (!checkpointing && status.scannedSeeds == 0L)) {
                             finish(pending, hint, if (stopRequested) SearchState.CANCELLED else SearchState.COMPLETED)
                             return
                         }
@@ -288,7 +307,7 @@ internal class SearchController(
         snapshot = snapshot.copy(
             pending = null,
             status = (snapshot.status ?: SearchStatus(state, 0, 0)).copy(state = state),
-            lastRun = FinishedRun(pending.request, hint.position, hint.remaining, snapshot.results),
+            lastRun = FinishedRun(pending.request, hint.position, hint.remaining, snapshot.results, pending.selectionQuery),
             lastKind = pending.mode.concludedKind,
             target = settledTarget(snapshot.target, pending.mode, pending.request, snapshot.results, hint.position, hint.remaining),
             error = null,

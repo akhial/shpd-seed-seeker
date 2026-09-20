@@ -61,6 +61,9 @@ int32_t seedfinder_resume_hint(int64_t handle, int64_t out_hint[2]);
 // base requirement covered by a distinct candidate requirement at least as
 // strict (equal or strengthened). Only a continuing query may reuse
 // a stopped session's results and resume hint (filter-and-resume refining).
+// This verdict assumes preservation of the original trinket policy: start
+// searches with {"query": candidate, "refine_base": original_base}. Retain
+// original_base through successive refinements. Filtering alone is unrestricted.
 // Returns 1 when it continues, 0 when it does not, negative on invalid packets.
 int32_t seedfinder_query_continues(const uint8_t *candidate, size_t candidate_len, const uint8_t *base, size_t base_len);
 // Reports what pressing Start Search must do with the query in candidate,

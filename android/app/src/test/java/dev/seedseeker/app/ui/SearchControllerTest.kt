@@ -160,6 +160,104 @@ class SearchControllerTest {
         fixture.scope.cancel()
     }
 
+    @Test fun filteringAnUnrelatedQueryOnlyChecksTheFullLoadedSet() = runTest {
+        val base = SearchRequest(listOf(ItemRequirement(2, ItemCatalog.rings.first(), 1)))
+        val seeds = listOf(a, b, c)
+        val target = TargetState(base, seeds, 50, 900)
+        val fixture = fixture(MemoryStore(SearchSnapshot(results = listOf(a), query = base.toPresetQuery(), target = target)))
+        fixture.engine.filter = { it.filter { result -> result == b } }
+        fixture.controller.start(request, 2, filterOnly = true)
+        fixture.controller.runPending()
+        advanceUntilIdle()
+        assertEquals(seeds, fixture.engine.filtered)
+        assertEquals(listOf(b), fixture.controller.snapshot.results)
+        assertEquals(request.toPresetQuery(), fixture.controller.snapshot.query)
+        assertEquals(target, fixture.controller.snapshot.target)
+        assertTrue(fixture.engine.sessions.isEmpty())
+        assertEquals(SearchState.COMPLETED, fixture.controller.snapshot.status?.state)
+        fixture.scope.cancel()
+    }
+
+    @Test fun searchingImportedResultsFiltersThenStartsAFreshScan() = runTest {
+        val target = TargetState(request, listOf(a, b), 0, 0)
+        val fixture = fixture(MemoryStore(SearchSnapshot(results = target.results, query = request.toPresetQuery(), target = target)))
+        fixture.engine.filter = { it.filter { result -> result == a } }
+        fixture.engine.completedBatches += listOf(a, c) to ResumeHint(1_000, 0)
+        fixture.controller.start(request, 2)
+        fixture.controller.runPending()
+        advanceUntilIdle()
+        assertEquals(listOf(a, b), fixture.engine.filtered)
+        assertEquals(listOf(a, c), fixture.controller.snapshot.results)
+        assertEquals(1, fixture.engine.sessions.size)
+        assertTrue(fixture.engine.windows.isEmpty())
+        assertEquals(listOf(request), fixture.engine.selectionQueries)
+        assertEquals(listOf(a, b, c), fixture.controller.snapshot.target?.results)
+        assertTrue(fixture.controller.snapshot.target!!.hasCoverage)
+        fixture.scope.cancel()
+    }
+
+    @Test fun refinementResumesAndFillsTheLimitWithUniqueMatchesAcrossNativeSessions() = runTest {
+        val seeds = List(RESULT_CAP - 2) { SeedResult("loaded-$it", 1) }
+        val target = TargetState(request, seeds, 50, 950)
+        val fixture = fixture(MemoryStore(SearchSnapshot(results = seeds, query = request.toPresetQuery(), target = target)))
+        // A native accept cap can include seeds already kept by the filter. It must not
+        // terminate the whole search while the list still has room for unique matches.
+        fixture.engine.completedBatches += listOf(seeds.first(), b) to ResumeHint(100, 900)
+        fixture.engine.completedBatches += listOf(b, c) to ResumeHint(200, 800)
+        fixture.controller.start(request, 2)
+        fixture.controller.runPending()
+        advanceUntilIdle()
+        assertEquals(listOf(ResumeHint(50, 950), ResumeHint(100, 900)), fixture.engine.windows)
+        assertEquals(seeds + listOf(b, c), fixture.controller.snapshot.results)
+        assertEquals(RESULT_CAP, fixture.controller.snapshot.results.size)
+        assertEquals(800L, fixture.controller.snapshot.target?.remaining)
+        assertTrue(fixture.engine.sessions.all { it.closed })
+        assertEquals(listOf(request, request), fixture.engine.selectionQueries)
+        fixture.scope.cancel()
+    }
+
+    @Test fun unrelatedSearchFiltersThenScansAndPreservesTheOriginalTarget() = runTest {
+        val base = SearchRequest(listOf(ItemRequirement(2, ItemCatalog.rings.first(), 1)))
+        val target = TargetState(base, listOf(a, b), 50, 950)
+        val fixture = fixture(MemoryStore(SearchSnapshot(results = target.results, query = base.toPresetQuery(), target = target)))
+        fixture.engine.filter = { it.filter { result -> result == b } }
+        fixture.engine.completedBatches += listOf(c) to ResumeHint(100, 900)
+        fixture.controller.start(request, 2)
+        assertNull(fixture.controller.notice)
+        fixture.controller.runPending()
+        runCurrent()
+        assertEquals(listOf(b, c, a), fixture.controller.snapshot.results)
+        assertEquals(target, fixture.controller.snapshot.target)
+        // The fresh native batch completed below the cap, so Search resumed its remainder.
+        assertEquals(listOf(ResumeHint(100, 900)), fixture.engine.windows)
+        fixture.controller.stop()
+        advanceUntilIdle()
+        assertEquals(target, fixture.controller.snapshot.target)
+        assertEquals(StartMode.DETACHED, fixture.controller.snapshot.lastKind)
+        fixture.scope.cancel()
+    }
+
+    @Test fun detachedRefinementsKeepTheOriginalSelectionAcrossRecovery() = runTest {
+        val original = request
+        val previous = request.copy(requirements = request.requirements + request.requirements.map { it.copy(key = 2) })
+        val next = previous.copy(requirements = previous.requirements + request.requirements.map { it.copy(key = 3) })
+        val targetQuery = SearchRequest(listOf(ItemRequirement(9, ItemCatalog.rings.first(), 1)))
+        val saved = SearchSnapshot(
+            results = listOf(a), target = TargetState(targetQuery, listOf(b), 50, 950),
+            lastRun = FinishedRun(previous, 100, 900, listOf(a), original), lastKind = StartMode.DETACHED,
+        )
+        val fixture = fixture(MemoryStore(saved))
+        fixture.engine.completedBatches += listOf(c) to ResumeHint(1000, 0)
+        fixture.controller.start(next, 2)
+        assertEquals(original, fixture.controller.snapshot.pending?.selectionQuery)
+        assertEquals(original, fixture.controller.snapshot.pending?.refine?.base)
+        fixture.controller.runPending()
+        advanceUntilIdle()
+        assertEquals(listOf(original), fixture.engine.selectionQueries)
+        assertEquals(original, fixture.controller.snapshot.lastRun?.selectionQuery)
+        fixture.scope.cancel()
+    }
+
     @Test fun failedForegroundStartPreservesPendingSearchForVisibleRetry() = runTest {
         val fixture = fixture()
         fixture.failService = true
@@ -219,29 +317,40 @@ class SearchControllerTest {
     private inner class FakeEngine : NativeSeedFinder by DemoNativeSeedFinder() {
         val sessions = mutableListOf<FakeSession>()
         val windows = mutableListOf<ResumeHint>()
+        val selectionQueries = mutableListOf<SearchRequest>()
+        val filtered = mutableListOf<SeedResult>()
+        val completedBatches = ArrayDeque<Pair<List<SeedResult>, ResumeHint>>()
+        var filter: (List<SeedResult>) -> List<SeedResult> = { it }
         var onFilter: () -> Unit = {}
         override fun startSearch(request: SearchRequest, workers: Int): NativeSearchSession = open()
+        override fun startRefinedSearch(request: SearchRequest, base: SearchRequest, window: ResumeHint?, workers: Int): NativeSearchSession {
+            selectionQueries += base
+            return if (window == null) startSearch(request, workers)
+            else startResumedSearch(request, window.position, window.remaining, workers)
+        }
         override fun startResumedSearch(request: SearchRequest, resumeFrom: Long, scanLen: Long, workers: Int): NativeSearchSession {
             windows += ResumeHint(resumeFrom, scanLen)
             return open()
         }
         override fun filterRecipes(request: SearchRequest, base: SearchRequest, recipes: List<SeedResult>): List<SeedResult> {
             onFilter()
-            return recipes
+            filtered += recipes
+            return filter(recipes)
         }
         private fun open(): NativeSearchSession {
             assertTrue("Previous handle must close before resuming", sessions.all { it.closed })
-            return FakeSession().also { sessions += it }
+            return FakeSession(completedBatches.removeFirstOrNull()).also { sessions += it }
         }
     }
 
-    private inner class FakeSession : NativeSearchSession {
+    private inner class FakeSession(private val completed: Pair<List<SeedResult>, ResumeHint>? = null) : NativeSearchSession {
         var closed = false
         var cancelled = false
         private var emittedInitial = false
         private var drained = 0
         override fun poll(maxResults: Int): SearchBatch {
             check(!closed)
+            if (completed != null) return SearchBatch(completed.first)
             return SearchBatch(when {
                 !emittedInitial -> listOf(a).also { emittedInitial = true }
                 cancelled && drained < 2 -> listOf(listOf(b, c)[drained++])
@@ -249,9 +358,10 @@ class SearchControllerTest {
             })
         }
         override fun status() = SearchStatus(
-            if (cancelled && drained == 2) SearchState.CANCELLED else SearchState.RUNNING, 100, 1_000,
+            if (completed != null) SearchState.COMPLETED else if (cancelled && drained == 2) SearchState.CANCELLED else SearchState.RUNNING, 100, 1_000,
         )
         override fun resumeHint(): ResumeHint {
+            if (completed != null) return completed.second
             check(cancelled && drained == 2) { "Unsafe cursor read before draining" }
             return ResumeHint(100, 900)
         }

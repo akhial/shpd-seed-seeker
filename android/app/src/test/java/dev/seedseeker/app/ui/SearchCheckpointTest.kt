@@ -37,10 +37,10 @@ class SearchCheckpointTest {
                 status = SearchStatus(SearchState.RUNNING, 4_000, 50_000, matchProbability = 0.003),
                 elapsedSeconds = 27,
                 target = TargetState(targetRequest, results.reversed(), 55, 90_000),
-                lastRun = FinishedRun(request, 123, 50_000, results),
+                lastRun = FinishedRun(request, 123, 50_000, results, targetRequest),
                 lastKind = StartMode.DETACHED,
                 pending = PendingSearch(request, StartMode.CONTINUE_DETACHED, 3,
-                    RefineSpec(123, 50_000, results, request)),
+                    RefineSpec(123, 50_000, results, targetRequest), selectionQuery = targetRequest),
             )
             val restored = SearchCheckpointCodec.decode(JSONObject(SearchCheckpointCodec.encode(saved).toString()))
             assertEquals(saved, restored)
@@ -75,5 +75,26 @@ class SearchCheckpointTest {
         val path = temporary.newFile("search.json")
         path.writeText("{broken")
         assertThrows(Exception::class.java) { FileSearchCheckpointStore(path, "engine").load() }
+    }
+
+    @Test fun freshScanAndCoverageKnowledgeSurviveRecovery() {
+        val saved = SearchSnapshot(
+            results = results, query = request.toPresetQuery(),
+            target = TargetState(request, results, 0, 0, hasCoverage = false),
+            pending = PendingSearch(request, StartMode.TARGET_RESCAN, 2,
+                RefineSpec(0, 0, results, request, freshScan = true), scanLimit = 7),
+        )
+        assertEquals(saved, SearchCheckpointCodec.decode(SearchCheckpointCodec.encode(saved)))
+        val exhausted = saved.copy(target = saved.target!!.copy(hasCoverage = true))
+        assertEquals(exhausted, SearchCheckpointCodec.decode(SearchCheckpointCodec.encode(exhausted)))
+        // Older checkpoints did not distinguish an import from an exhausted scan.
+        val legacy = SearchCheckpointCodec.encode(saved)
+        legacy.getJSONObject("target").remove("hasCoverage")
+        legacy.getJSONObject("pending").remove("scanLimit")
+        legacy.getJSONObject("pending").getJSONObject("refine").remove("freshScan")
+        val restored = SearchCheckpointCodec.decode(legacy)
+        assertFalse(restored.target!!.hasCoverage)
+        assertFalse(restored.pending!!.refine!!.freshScan)
+        assertEquals(RESULT_CAP, restored.pending.scanLimit)
     }
 }

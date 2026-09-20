@@ -19,6 +19,8 @@ interface StubMessage {
   type: string;
   seeds?: number[];
   queryJson?: string;
+  baseQueryJson?: string;
+  segments?: { startSeed: number; endSeedExclusive: number }[];
   requestId?: number;
 }
 
@@ -27,8 +29,11 @@ class StubWorker {
    * statically because the filter worker is a module-level singleton: it
    * outlives the test that first created it. */
   static posted: StubMessage[] = [];
+  static listeners: ((event: MessageEvent) => void)[] = [];
   constructor() {}
-  addEventListener(): void {}
+  addEventListener(_name: string, listener: (event: MessageEvent) => void): void {
+    StubWorker.listeners.push(listener);
+  }
   postMessage(message: StubMessage): void {
     StubWorker.posted.push(message);
   }
@@ -50,6 +55,7 @@ beforeAll(() => vi.stubGlobal("Worker", StubWorker));
 afterAll(() => vi.unstubAllGlobals());
 beforeEach(() => {
   StubWorker.posted = [];
+  StubWorker.listeners = [];
 });
 
 const TOTAL = 1_000;
@@ -148,28 +154,75 @@ describe("implicit refine on start", () => {
     expect(postedTypes()).toEqual(["filter", "filter", "filter"]);
   });
 
-  it("runs an unrelated query as a detached scan that keeps the Target", () => {
+  it("filters unrelated loaded seeds before starting a fresh scan", async () => {
     const coordinator = new SearchCoordinator(TOTAL);
     seedFinishedRun(baseQuery);
     coordinator.start(unrelated, 2);
-
-    const state = searchStore.state;
-    expect(state.state).toBe("running");
-    expect(state.runKind).toBe("detached");
-    expect(state.filtering).toBe(false);
-    expect(state.refined).toBeUndefined();
-    expect(state.matches).toEqual([]);
-    expect(state.workerScanned).toEqual({});
-    // A detached scan covers the whole seed space, not just the untouched
-    // tail — and the Target survives it for later related searches.
+    expect(searchStore.state.runKind).toBe("detached");
+    expect(searchStore.state.filtering).toBe(true);
+    expect(searchStore.state.matches.map((item) => item.value)).toEqual([11, 22]);
+    const filter = StubWorker.posted[0];
+    StubWorker.listeners[0]({
+      data: {
+        type: "filter:result",
+        requestId: filter.requestId,
+        resultJson: JSON.stringify([match(11)]),
+      },
+    } as MessageEvent);
+    await vi.waitFor(() => expect(searchStore.state.filtering).toBe(false));
+    expect(searchStore.state.matches.map((item) => item.value)).toEqual([11]);
     expect(
-      state.segments
+      searchStore.state.segments
         .flat()
-        .reduce((sum, range) => sum + (range.endSeedExclusive - range.startSeed), 0),
+        .reduce((sum, range) => sum + range.endSeedExclusive - range.startSeed, 0),
     ).toBe(TOTAL);
-    expect(state.target?.matches.map((item) => item.value)).toEqual([11, 22]);
-    expect(state.target?.query).toEqual(baseQuery);
-    expect(postedTypes()).toEqual(["search:start", "search:start"]);
+    expect(searchStore.state.target?.matches.map((item) => item.value)).toEqual([11, 22]);
+    expect(
+      StubWorker.posted
+        .filter((m) => m.type === "search:start")
+        .every((m) => m.queryJson === JSON.stringify(unrelated)),
+    ).toBe(true);
+  });
+
+  it("filters an unrelated query without scanning when explicitly requested", async () => {
+    const coordinator = new SearchCoordinator(TOTAL);
+    seedFinishedRun(baseQuery);
+    coordinator.filterLoadedSeeds(unrelated, 1);
+    const filter = StubWorker.posted[0];
+    StubWorker.listeners[0]({
+      data: {
+        type: "filter:result",
+        requestId: filter.requestId,
+        resultJson: JSON.stringify([match(11)]),
+      },
+    } as MessageEvent);
+    await vi.waitFor(() => expect(searchStore.state.state).toBe("completed"));
+    expect(postedTypes()).toEqual(["filter"]);
+    expect(searchStore.state.target?.matches).toHaveLength(2);
+  });
+
+  it("starts an imported refinement with its original trinket policy", async () => {
+    const coordinator = new SearchCoordinator(TOTAL);
+    seedFinishedRun(baseQuery);
+    searchStore.setState((state) => ({
+      ...state,
+      target: { ...state.target!, remainder: [], hasCoverage: false },
+    }));
+    coordinator.start(superset, 1);
+    const filter = StubWorker.posted[0];
+    StubWorker.listeners[0]({
+      data: {
+        type: "filter:result",
+        requestId: filter.requestId,
+        resultJson: JSON.stringify([match(11)]),
+      },
+    } as MessageEvent);
+    await vi.waitFor(() => expect(searchStore.state.filtering).toBe(false));
+    const scan = StubWorker.posted.find((m) => m.type === "search:start")!;
+    expect(JSON.parse(scan.queryJson!)).toEqual({ query: superset, refine_base: baseQuery });
+    expect(searchStore.state.query).toEqual(superset);
+    expect(searchStore.state.selectionQuery).toEqual(baseQuery);
+    expect(searchStore.state.total).toBe(TOTAL);
   });
 
   it("fans a large filter phase out across the worker pool in contiguous slices", () => {
@@ -204,7 +257,7 @@ describe("implicit refine on start", () => {
 
     const state = searchStore.state;
     expect(state.state).toBe("running");
-    expect(state.runKind).toBe("target-filter");
+    expect(state.runKind).toBe("detached");
     expect(state.filtering).toBe(true);
     expect(state.refined).toEqual({ kept: 0, of: 2 });
     expect(StubWorker.posted).toEqual([
@@ -277,7 +330,7 @@ describe("clearing results", () => {
   });
 });
 
-it("starts a detached traversal when automatic choices change", () => {
+it("filters before a fresh traversal when automatic selection is toggled", () => {
   const coordinator = new SearchCoordinator(TOTAL);
   const query: QueryDocument = {
     max_depth: 19,
@@ -287,9 +340,9 @@ it("starts a detached traversal when automatic choices change", () => {
   const target = searchStore.state.target;
   coordinator.start({ ...query, auto_apply_trinket: true }, 1);
   expect(searchStore.state.runKind).toBe("detached");
-  expect(searchStore.state.filtering).toBe(false);
+  expect(searchStore.state.filtering).toBe(true);
   expect(searchStore.state.target).toBe(target);
-  expect(postedTypes()).toEqual(["search:start"]);
+  expect(postedTypes()).toEqual(["filter"]);
 });
 
 it("passes saved choices to filter workers when continuing the same policy", () => {
@@ -317,4 +370,32 @@ it("passes saved choices to filter workers when continuing the same policy", () 
     seeds: [11, 22],
     trinkets: ["parchment_scrap", null],
   });
+});
+
+it("retains the original selection query across a detached refinement chain", async () => {
+  const coordinator = new SearchCoordinator(TOTAL);
+  seedFinishedRun(baseQuery);
+  const first: QueryDocument = { requirements: [{ kind: "wand" }] };
+  const second: QueryDocument = { requirements: [{ kind: "wand" }, { kind: "armor" }] };
+  const third: QueryDocument = { requirements: [...second.requirements, { kind: "weapon" }] };
+  searchStore.setState((state) => ({
+    ...state,
+    query: second,
+    queryJson: JSON.stringify(second),
+    selectionQuery: first,
+    runKind: "detached",
+  }));
+  coordinator.start(third, 1);
+  const filter = StubWorker.posted[0];
+  expect(JSON.parse(filter.baseQueryJson!)).toEqual(first);
+  StubWorker.listeners[0]({
+    data: {
+      type: "filter:result",
+      requestId: filter.requestId,
+      resultJson: JSON.stringify([match(11)]),
+    },
+  } as MessageEvent);
+  await vi.waitFor(() => expect(searchStore.state.filtering).toBe(false));
+  const scan = StubWorker.posted.find((message) => message.type === "search:start")!;
+  expect(JSON.parse(scan.queryJson!)).toEqual({ query: third, refine_base: first });
 });

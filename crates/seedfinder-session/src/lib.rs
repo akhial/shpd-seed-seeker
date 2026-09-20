@@ -19,6 +19,7 @@ use shpd_seedfinder_core::model::GeneratedWorld;
 use shpd_seedfinder_core::probability::estimate_match_probability;
 use shpd_seedfinder_core::query::{ScoutMatches, SearchQuery, scout_matches};
 pub use shpd_seedfinder_core::query::{StartDecision, decide_start};
+use shpd_seedfinder_core::refinement::{PreservedSearch, decode_execution};
 pub use shpd_seedfinder_core::results_export::MAX_RESULTS;
 pub use shpd_seedfinder_core::search::{PRODUCTION_SEARCH_START_STRIDE, SearchError};
 use shpd_seedfinder_core::search::{
@@ -446,14 +447,15 @@ pub enum FilterPacketError {
 /// strict as the base's, and every requirement of `base` covered by a distinct
 /// candidate requirement at least as strict (equal or strengthened).
 /// This is the soundness precondition for refining a search — only a
-/// continuing query may filter a stopped session's delivered results and
-/// resume its uncovered remainder. See [`SearchQuery::continues`].
+/// continuing query may resume its uncovered remainder under the original
+/// selection policy. Filtering saved seeds itself is unrestricted.
+/// See [`SearchQuery::refines`] and the `refine_base` execution envelope.
 ///
 /// # Errors
 ///
 /// Returns the decode error of the first undecodable packet.
 pub fn queries_continue(candidate: &[u8], base: &[u8]) -> Result<bool, WireError> {
-    Ok(decode_query(candidate)?.continues(&decode_query(base)?))
+    Ok(decode_query(candidate)?.refines(&decode_query(base)?))
 }
 
 /// Packet form of [`decide_start`]: the queries arrive as query requests, an
@@ -500,6 +502,42 @@ pub struct NativeSession {
     search: StreamingSearchHandle,
     match_probability: f64,
     diagnostic_claimed: AtomicBool,
+}
+
+/// Only matched recipes are retained, bounded by the streaming accept cap and
+/// active chunks. Polling drains them together with their corresponding worlds.
+struct PreservedGenerator {
+    generator: Arc<ConfiguredMainWorldGenerator>,
+    search: PreservedSearch,
+    recipes: Mutex<HashMap<u64, SeedRecipe>>,
+}
+
+impl WorldGenerator for PreservedGenerator {
+    fn generate(&self, seed: DungeonSeed, depth: u8) -> GeneratedWorld {
+        self.generator.generate(seed, depth)
+    }
+
+    fn generate_batch_gated(
+        &self,
+        seeds: &[DungeonSeed],
+        _depth: u8,
+        _gate: &dyn shpd_seedfinder_core::search::FloorGate,
+    ) -> Vec<Option<GeneratedWorld>> {
+        let matches = self.search.search_batch(self.generator.as_ref(), seeds);
+        let mut recipes = self
+            .recipes
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        matches
+            .into_iter()
+            .map(|result| {
+                result.map(|result| {
+                    recipes.insert(result.recipe.seed.value(), result.recipe);
+                    result.world
+                })
+            })
+            .collect()
+    }
 }
 
 impl NativeSession {
@@ -575,8 +613,67 @@ impl NativeSession {
         request: &[u8],
         workers: Option<NonZeroUsize>,
     ) -> Result<Self, StartSessionError> {
-        let query = decode_query(request).map_err(StartSessionError::Request)?;
-        Self::production(query, workers).map_err(StartSessionError::Spawn)
+        let (query, base) = decode_execution(request).map_err(StartSessionError::Request)?;
+        match base {
+            Some(base) => Self::production_preserving(query, &base, None, workers),
+            None => Self::production(query, workers),
+        }
+        .map_err(StartSessionError::Spawn)
+    }
+
+    /// Search with the parent's selection rules and the narrowed query's matcher.
+    /// The caller validates `query.refines(base)`; no candidate reranking is used.
+    ///
+    /// # Errors
+    /// Returns a search error for invalid queries, ranges, or worker failures.
+    ///
+    /// # Panics
+    /// Panics if an internal matched world loses its saved recipe.
+    pub fn production_preserving(
+        query: SearchQuery,
+        base: &SearchQuery,
+        window: Option<(u64, u64)>,
+        workers: Option<NonZeroUsize>,
+    ) -> Result<Self, SearchError> {
+        let options = SearchOptions {
+            start_seed: 0,
+            end_seed_exclusive: TOTAL_SEEDS,
+            workers: effective_workers(workers),
+            chunk_size: NonZeroUsize::new(SEARCH_CHUNK_SIZE).unwrap_or(NonZeroUsize::MIN),
+            max_results: NonZeroUsize::new(MAX_RESULTS).unwrap_or(NonZeroUsize::MIN),
+        };
+        let generator = Arc::new(PreservedGenerator {
+            generator: canonical_generator(query.challenges),
+            search: PreservedSearch::new(query.clone(), base),
+            recipes: Mutex::new(HashMap::new()),
+        });
+        let (position, remaining) =
+            window.unwrap_or_else(|| (production_search_start(), TOTAL_SEEDS));
+        let match_probability = estimate_match_probability(&query);
+        let search =
+            spawn_partial_streaming_search(&generator, query, options, position, remaining)?;
+        Ok(Self {
+            search,
+            recipe_packets: true,
+            // The ordinary estimate is a heuristic; execution always uses the parent policy.
+            match_probability,
+            diagnostic_claimed: AtomicBool::new(false),
+            finish_matches: Box::new(move |worlds| {
+                let mut recipes = generator
+                    .recipes
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                worlds
+                    .into_iter()
+                    .map(|world| TrinketSearchMatch {
+                        recipe: recipes
+                            .remove(&world.seed.value())
+                            .expect("matched world must retain its recipe"),
+                        world,
+                    })
+                    .collect()
+            }),
+        })
     }
 
     /// Starts a production search which resumes a previous traversal: it scans
@@ -618,9 +715,14 @@ impl NativeSession {
         scan_len: u64,
         workers: Option<NonZeroUsize>,
     ) -> Result<Self, StartSessionError> {
-        let query = decode_query(request).map_err(StartSessionError::Request)?;
-        Self::production_resumed(query, resume_from, scan_len, workers)
-            .map_err(StartSessionError::Spawn)
+        let (query, base) = decode_execution(request).map_err(StartSessionError::Request)?;
+        match base {
+            Some(base) => {
+                Self::production_preserving(query, &base, Some((resume_from, scan_len)), workers)
+            }
+            None => Self::production_resumed(query, resume_from, scan_len, workers),
+        }
+        .map_err(StartSessionError::Spawn)
     }
 
     /// Where and how much a follow-up traversal must scan to finish this
@@ -942,6 +1044,33 @@ mod tests {
             exclude_blacksmith_rewards: false,
             wandmaker_quest: None,
         }
+    }
+
+    #[test]
+    fn preserved_execution_reapplies_the_original_trinket() {
+        let packet = br#"{"refine_base":{"auto_apply_trinket":true,"max_depth":19,"requirements":[{"item":"runic_blade","upgrade":1,"effect":"Grim"}]},"query":{"auto_apply_trinket":true,"max_depth":19,"requirements":[{"item":"runic_blade","upgrade":1,"effect":"Grim"},{"item":"whip","effect":"Venomous"}]}}"#;
+        let seed = DungeonSeed::from_code("EYY-RUL-LQG").unwrap();
+        let session = NativeSession::production_resumed_from_packet(
+            packet,
+            seed.value(),
+            1,
+            Some(NonZeroUsize::MIN),
+        )
+        .unwrap();
+        wait(&session);
+        let matches = session.drain_matches(10).unwrap();
+        assert_eq!(matches.len(), 1);
+        assert_eq!(
+            matches[0].recipe,
+            SeedRecipe {
+                seed,
+                trinket: Some(ItemId::ParchmentScrap)
+            }
+        );
+        assert_eq!(
+            session.resume_hint(),
+            [i64::try_from(seed.value() + 1).unwrap(), 0]
+        );
     }
 
     #[test]

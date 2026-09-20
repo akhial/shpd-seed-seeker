@@ -134,6 +134,19 @@ public sealed class NativeEngine
         return new NativeSearch(handle);
     }
 
+    public NativeSearch StartRefined(QuerySettings query, QuerySettings selectionQuery, (long Position, long Remaining)? window, int workers = 0)
+    {
+        var packet = Encoding.UTF8.GetBytes(new JsonObject {
+            ["query"] = JsonNode.Parse(ResultsExport.EncodeQueryDocument(query)),
+            ["refine_base"] = JsonNode.Parse(ResultsExport.EncodeQueryDocument(selectionQuery)),
+        }.ToJsonString());
+        var handle = window is { } range
+            ? Native.seedfinder_start_resumed_search(packet, (nuint)packet.Length, (ulong)range.Position, (ulong)range.Remaining, Workers(workers))
+            : Native.seedfinder_start_search(packet, (nuint)packet.Length, Workers(workers));
+        if (handle == 0) throw new InvalidOperationException("The native engine rejected the refinement.");
+        return new NativeSearch(handle);
+    }
+
     /// <summary>A worker count as the FFI takes it: negatives, like 0, mean every core.</summary>
     private static uint Workers(int workers) => workers <= 0 ? 0u : (uint)workers;
 
@@ -218,7 +231,7 @@ public sealed class NativeEngine
             candidate, (nuint)candidate.Length,
             targetPacket, (nuint)(targetPacket?.Length ?? 0),
             target is { Seeds.Count: 0 } ? 1 : 0,
-            target is { Remaining: > 0 } ? 1 : 0,
+            target is { HasCoverage: false } or { Remaining: > 0 } ? 1 : 0,
             detachedPacket, (nuint)(detachedPacket?.Length ?? 0),
             out var ptr, out var len);
         if (code != 0) throw new InvalidOperationException($"Native start decision failed ({code}).");
