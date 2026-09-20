@@ -1365,6 +1365,7 @@ public enum FloorFeeling : byte { None, Chasm, Water, Grass, Dark, Large, Traps,
 public sealed record ScoutFloorFeeling(int Depth, FloorFeeling Feeling);
 public sealed record SearchStatus(SearchState State, long Scanned, long Total, long ErrorCode, double Probability)
 {
+    public bool IsImpossibleQuery => State == SearchState.Completed && Scanned == 0 && Total > 0;
     public bool ProbabilityUnavailable => !double.IsFinite(Probability);
     public string ProbabilityDescription => ProbabilityUnavailable ? "unavailable" : Probability > 0 ? $"{Probability:P4}" : "calculating";
 }

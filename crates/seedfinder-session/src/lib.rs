@@ -1277,6 +1277,22 @@ mod tests {
     }
 
     #[test]
+    fn conflicting_blanket_completes_without_scanning_or_consuming_coverage() {
+        let query = shpd_seedfinder_core::json_query::decode(
+            r#"{"requirements":[{"item":"wand_lightning","upgrade":2},
+                {"item":"wand_disintegration","upgrade":2},
+                {"kind":"wand","upgrade":3,"blanket":true}]}"#,
+        )
+        .unwrap();
+        let session = NativeSession::production_resumed(query, 42, 1_000, None).unwrap();
+        wait(&session);
+        assert_eq!(session.status()[0], STATE_COMPLETED);
+        assert_eq!(session.status()[1], 0);
+        assert!(session.drain_worlds(1).is_empty());
+        assert_eq!(session.resume_hint(), [42, 1_000]);
+    }
+
+    #[test]
     fn resumed_sessions_continue_a_stopped_traversal_without_losing_seeds() {
         let generator = Arc::new(MatchingGenerator);
         let session = NativeSession::start(&generator, query(), options(64, 16)).unwrap();

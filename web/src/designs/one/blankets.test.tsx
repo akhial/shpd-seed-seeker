@@ -145,6 +145,35 @@ it("estimates narrowing without charging for a fourth wand", () => {
   expect(narrowed.probability).toBeLessThan(base.probability);
 });
 
+it("warns and disables search when a +3 blanket conflicts with exact +2 wands", () => {
+  const query = fromQueryJson(
+    JSON.stringify({
+      requirements: [
+        { item: "wand_lightning", upgrade: 2 },
+        { item: "wand_disintegration", upgrade: 2 },
+        { kind: "wand", upgrade: 3, blanket: true },
+      ],
+    }),
+  );
+  queryStore.setState(() => query);
+  const analysis = JSON.parse(analyze_query(toQueryJson(query)));
+  expect(analysis).toMatchObject({ valid: true, impossible: true, probability: null });
+  const html = renderToStaticMarkup(
+    <QueryPanel
+      analysis={analysis}
+      validation={validateQuery(query)}
+      running={false}
+      engineReady
+      onToggleSearch={() => {}}
+      isMac={false}
+      shareNotice={undefined}
+      onDismissShareNotice={() => {}}
+    />,
+  );
+  expect(html).toContain("Impossible query");
+  expect(html).toMatch(/<button[^>]*disabled=""[^>]*><span>Start Search/);
+});
+
 it("searches and scouts a real Wandmaker reward as one item serving two conditions", () => {
   const seed = "AAA-AAA-AAA";
   const initial = JSON.parse(scout(JSON.stringify({ seed }))) as ScoutResult;

@@ -65,4 +65,22 @@ public sealed class BlanketRequirementsTests
         blanket.IdentityGroup = null; blanket.SelectTrinket = true;
         Assert.NotNull(QueryRelationships.Validate(new() { Requirements = [Wand(), blanket] }));
     }
+
+    [Fact]
+    public void ConflictingBlanketStopsBeforeScanningAndReportsImpossible()
+    {
+        var query = new QuerySettings { Requirements = new(new[] { "wand_lightning", "wand_disintegration" }
+            .Select(id => new ItemRequirement { Kind = ItemKind.Wand, Item = ItemCatalog.Find(id), Upgrade = 2, UpgradeMatch = UpgradeMatch.Exactly })) };
+        query.Requirements.Add(new() { Kind = ItemKind.Wand, Blanket = true, Upgrade = 3,
+            UpgradeMatch = UpgradeMatch.Exactly });
+        using var search = new NativeEngine().StartResumed(query, 42, 1_000, 1);
+        var status = search.Status();
+        Assert.True(status.IsImpossibleQuery);
+        Assert.Equal(0, status.Scanned);
+        Assert.Empty(search.Poll(1));
+        Assert.Equal((42L, 1_000L), search.ResumeHint());
+        Assert.False(new SearchStatus(SearchState.Completed, 0, 0, 0, 0).IsImpossibleQuery);
+        Assert.False(new SearchStatus(SearchState.Cancelled, 0, 1_000, 0, 0).IsImpossibleQuery);
+        Assert.False(new SearchStatus(SearchState.Completed, 1_000, 1_000, 0, 0).IsImpossibleQuery);
+    }
 }

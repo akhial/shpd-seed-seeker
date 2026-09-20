@@ -708,6 +708,15 @@ mod tests {
         );
         assert_eq!(probability.to_bits(), 0.0_f64.to_bits());
 
+        let blanket = br#"{"requirements":[{"item":"wand_lightning","upgrade":2},
+            {"item":"wand_disintegration","upgrade":2},
+            {"kind":"wand","upgrade":3,"blanket":true}]}"#;
+        assert_eq!(
+            seedfinder_analyze_query(blanket.as_ptr(), blanket.len(), &raw mut probability),
+            1
+        );
+        assert_eq!(probability.to_bits(), 0.0_f64.to_bits());
+
         for invalid in [b"bad".as_slice(), b"", &[0xff]] {
             probability = 1.0;
             assert_eq!(

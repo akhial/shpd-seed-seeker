@@ -352,6 +352,8 @@ fun FinderScreen(
                                 Text(
                                     when {
                                         isSearching -> "0 matches yet."
+                                        status?.isImpossibleQuery == true ->
+                                            "Impossible query. No seed can satisfy this combination of requirements."
                                         status?.state == SearchState.COMPLETED -> "0 matches."
                                         else -> "No results — run a search."
                                     },

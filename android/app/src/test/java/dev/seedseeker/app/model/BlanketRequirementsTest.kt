@@ -3,6 +3,7 @@ package dev.seedseeker.app.model
 
 import dev.seedseeker.app.catalog.ItemCatalog
 import dev.seedseeker.app.catalog.PackagedCatalog
+import dev.seedseeker.app.engine.JniNativeSeedFinder
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -68,5 +69,24 @@ class BlanketRequirementsTest {
             ItemRequirement(1, ItemCatalog.trinkets.first(), 0, upgradeMatch = UpgradeMatch.ANY,
                 blanket = true, selectTrinket = true)
         }
+    }
+
+    @Test fun conflictingBlanketStopsBeforeScanningAndReportsImpossible() {
+        val requirements = listOf("wand_lightning", "wand_disintegration").mapIndexed { i, id ->
+            ItemRequirement(i + 1L, ItemCatalog.findById(id)!!, 2, upgradeMatch = UpgradeMatch.EXACT)
+        } + ItemRequirement(3, null, 3, kind = ItemKind.WAND, blanket = true)
+        JniNativeSeedFinder().startResumedSearch(
+            SearchRequest(requirements = requirements, maximumDepth = 24), 42, 1_000, 1,
+        ).use { session ->
+            val status = session.status()
+            assertTrue(status.isImpossibleQuery)
+            assertEquals(0L, status.scannedSeeds)
+            assertTrue(session.poll().results.isEmpty())
+            assertEquals(ResumeHint(42, 1_000), session.resumeHint())
+        }
+        // A filter-only refinement has no scan range; an empty result is not a proof.
+        assertFalse(SearchStatus(SearchState.COMPLETED, 0, 0).isImpossibleQuery)
+        assertFalse(SearchStatus(SearchState.CANCELLED, 0, 1_000).isImpossibleQuery)
+        assertFalse(SearchStatus(SearchState.COMPLETED, 1_000, 1_000).isImpossibleQuery)
     }
 }

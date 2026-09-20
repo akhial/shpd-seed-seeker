@@ -772,7 +772,11 @@ data class SearchStatus(
     val totalSeeds: Long,
     val errorCode: Long = 0,
     val matchProbability: Double = 0.0,
-)
+) {
+    /** The engine proves impossibility before scanning a nonempty search range. */
+    val isImpossibleQuery: Boolean
+        get() = state == SearchState.COMPLETED && scannedSeeds == 0L && totalSeeds > 0L
+}
 
 /** Where and how much a follow-up traversal must scan to finish a session's coverage. */
 data class ResumeHint(

@@ -76,6 +76,9 @@ fn blanket_matches_each_of_the_three_wands_without_a_fourth_item() {
                 .collect(),
         );
         assert!(query.matches(&world));
+        let plan = QueryPlan::analyze(&query);
+        assert!(!plan.is_unsatisfiable());
+        assert!(plan.viable_after_floor(9, &world.items, &world.quests));
         let marks = scout_matches(&world, &query);
         assert_eq!(marks.matched_requirements, 4);
         assert_eq!(marks.total_requirements, 4);
@@ -158,6 +161,64 @@ fn blankets_obey_floor_limits_and_do_not_consume_quest_capacity() {
     query.requirements[1].max_depth = Some(6);
     assert!(!query.matches(&world));
     assert!(QueryPlan::analyze(&query).is_unsatisfiable());
+}
+
+#[test]
+fn exact_upgrade_blanket_conflicts_are_impossible() {
+    let mut query = parse_query(
+        r#"{"item":"wand_lightning","upgrade":2},
+           {"item":"wand_disintegration","upgrade":2},
+           {"kind":"wand","upgrade":3,"blanket":true}"#,
+    );
+    for depth in [9, 24] {
+        query.max_depth = depth;
+        assert!(QueryPlan::analyze(&query).is_unsatisfiable());
+    }
+    query.requirements[0].upgrade = shpd_seedfinder_core::query::UpgradeRequirement::AtLeast(2);
+    assert!(!QueryPlan::analyze(&query).is_unsatisfiable());
+}
+
+#[test]
+fn blankets_need_a_reachable_item_satisfying_all_filters() {
+    for requirements in [
+        r#"{"item":"wand_frost"},{"item":"wand_lightning","blanket":true}"#,
+        r#"{"kind":"ring"},{"kind":"wand","blanket":true}"#,
+        r#"{"kind":"wand","upgrade":{"at_least":3}},{"kind":"wand","upgrade":2,"blanket":true}"#,
+        r#"{"kind":"wand","upgrade":2},{"kind":"wand","upgrade":{"at_least":3},"blanket":true}"#,
+        r#"{"kind":"wand","source":"chest"},{"kind":"wand","source":"wandmaker_reward","blanket":true}"#,
+        r#"{"kind":"wand","max_depth":6},{"kind":"wand","upgrade":3,"blanket":true}"#,
+        r#"{"kind":"wand","source":"chest"},{"kind":"wand","upgrade":3,"blanket":true}"#,
+        r#"{"kind":"weapon","tier":{"exact":2}},{"kind":"weapon","tier":{"exact":3},"blanket":true}"#,
+        r#"{"item":"sword"},{"kind":"thrown_weapon","blanket":true}"#,
+        r#"{"kind":"weapon","effect":"Blazing"},{"kind":"weapon","effect":"Chilling","blanket":true}"#,
+        r#"{"kind":"weapon","effect":"Annoying"},{"kind":"weapon","uncursed":true,"blanket":true}"#,
+        r#"{"item":"wand_frost","upgrade":2},{"item":"wand_lightning","upgrade":3},{"item":"wand_frost","upgrade":3,"blanket":true}"#,
+        r#"{"item":"mimic_tooth"},{"item":"rat_skull","blanket":true}"#,
+    ] {
+        assert!(
+            QueryPlan::analyze(&parse_query(requirements)).is_unsatisfiable(),
+            "{requirements}"
+        );
+    }
+}
+
+#[test]
+fn blanket_witnesses_preserve_alternatives_optional_members_and_reuse() {
+    for requirements in [
+        r#"{"any_of":[{"item":"wand_frost","upgrade":2},{"item":"wand_lightning","upgrade":3}]},{"kind":"wand","upgrade":3,"blanket":true}"#,
+        r#"{"item":"wand_frost","upgrade":2},{"any_of":[{"kind":"wand","upgrade":3,"blanket":true},{"kind":"wand","upgrade":2,"blanket":true}]}"#,
+        r#"{"item":"wand_frost","upgrade":3},{"kind":"wand","upgrade":3,"blanket":true},{"kind":"wand","source":"wandmaker_reward","blanket":true}"#,
+        r#"{"item":"wand_frost","upgrade":2},{"item":"wand_lightning","upgrade":3},{"kind":"wand","upgrade":2,"blanket":true},{"kind":"wand","upgrade":3,"blanket":true}"#,
+        r#"{"kind":"ring","level_sum":{"group":1,"at_least":1}},{"kind":"ring","level_sum":{"group":1,"at_least":1}},{"item":"ring_haste","upgrade":2,"blanket":true}"#,
+        r#"{"item":"mimic_tooth"},{"item":"mimic_tooth","blanket":true}"#,
+        r#"{"kind":"weapon","tier":{"at_least":3}},{"kind":"weapon","tier":{"at_most":4},"blanket":true}"#,
+        r#"{"kind":"weapon","effect":["Blazing","Chilling"]},{"kind":"weapon","effect":["Chilling","Lucky"],"blanket":true}"#,
+    ] {
+        assert!(
+            !QueryPlan::analyze(&parse_query(requirements)).is_unsatisfiable(),
+            "{requirements}"
+        );
+    }
 }
 
 #[test]
