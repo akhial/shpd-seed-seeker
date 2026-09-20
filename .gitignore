@@ -49,3 +49,6 @@ pgo/*.profraw
 /tooling/oracle-4.0/.work/
 /tooling/java-finder/.work/
 /.work-uv/
+
+# Kotlin compiler sessions
+android/.kotlin/

@@ -78,7 +78,12 @@ class BlanketRequirementsTest {
         JniNativeSeedFinder().startResumedSearch(
             SearchRequest(requirements = requirements, maximumDepth = 24), 42, 1_000, 1,
         ).use { session ->
-            val status = session.status()
+            val deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(5)
+            var status = session.status()
+            while (status.state == SearchState.RUNNING && System.nanoTime() < deadline) {
+                Thread.sleep(10)
+                status = session.status()
+            }
             assertTrue(status.isImpossibleQuery)
             assertEquals(0L, status.scannedSeeds)
             assertTrue(session.poll().results.isEmpty())

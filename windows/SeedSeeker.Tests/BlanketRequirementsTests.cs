@@ -74,6 +74,8 @@ public sealed class BlanketRequirementsTests
         query.Requirements.Add(new() { Kind = ItemKind.Wand, Blanket = true, Upgrade = 3,
             UpgradeMatch = UpgradeMatch.Exactly });
         using var search = new NativeEngine().StartResumed(query, 42, 1_000, 1);
+        Assert.True(SpinWait.SpinUntil(() => search.Status().State != SearchState.Running,
+            TimeSpan.FromSeconds(5)));
         var status = search.Status();
         Assert.True(status.IsImpossibleQuery);
         Assert.Equal(0, status.Scanned);

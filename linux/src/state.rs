@@ -222,6 +222,8 @@ pub fn effect_label(effect: EffectRequirement) -> Option<String> {
 /// The whole persisted query state shared by all panes.
 #[derive(Clone, Debug)]
 pub struct AppState {
+    pub arcane_resin: u16,
+    pub arcane_resin_filter: shpd_seedfinder_core::query::ArcaneResinFilter,
     pub auto_apply_trinket: bool,
     pub requirements: Vec<UiRequirement>,
     pub max_depth: u8,
@@ -236,6 +238,8 @@ impl Default for AppState {
     fn default() -> Self {
         Self {
             auto_apply_trinket: true,
+            arcane_resin: 0,
+            arcane_resin_filter: shpd_seedfinder_core::query::ArcaneResinFilter::default(),
             requirements: Vec::new(),
             max_depth: 24,
             require_blacksmith: false,
@@ -261,6 +265,8 @@ impl AppState {
     pub fn from_query(query: &SearchQuery) -> Self {
         let mut state = Self {
             auto_apply_trinket: query.auto_apply_trinket,
+            arcane_resin: query.arcane_resin,
+            arcane_resin_filter: query.arcane_resin_filter,
             requirements: Vec::with_capacity(query.requirements.len()),
             max_depth: query.max_depth,
             require_blacksmith: query.require_blacksmith,
@@ -299,6 +305,8 @@ impl AppState {
     pub fn unvalidated_query(&self) -> SearchQuery {
         SearchQuery {
             auto_apply_trinket: self.auto_apply_trinket,
+            arcane_resin_filter: self.arcane_resin_filter,
+            arcane_resin: self.arcane_resin,
             requirements: self.requirements.iter().map(|r| r.to_core()).collect(),
             max_depth: self.max_depth,
             challenges: self.challenges,
@@ -893,6 +901,21 @@ mod tests {
         let document = shpd_seedfinder_core::json_query::encode(&query);
         let decoded = shpd_seedfinder_core::json_query::decode(&document.to_string()).unwrap();
         assert_eq!(AppState::from_query(&decoded).to_query().unwrap(), query);
+    }
+
+    #[test]
+    fn resin_only_state_preserves_filters_and_search_semantics() {
+        let query = shpd_seedfinder_core::json_query::decode(
+            r#"{"requirements":[],"arcane_resin":3,"arcane_resin_filter":{"uncursed":false,"max_depth":12,"source":"wandmaker_reward"}}"#,
+        ).unwrap();
+        let state = AppState::from_query(&query);
+        assert!(state.requirements.is_empty());
+        assert_eq!(state.arcane_resin, 3);
+        assert_eq!(state.to_query().unwrap(), query);
+        let mut harder = state.clone();
+        harder.arcane_resin = 6;
+        assert!(harder.to_query().unwrap().continues(&query));
+        assert!(!query.continues(&harder.to_query().unwrap()));
     }
 
     #[test]

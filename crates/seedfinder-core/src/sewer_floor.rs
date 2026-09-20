@@ -1425,6 +1425,8 @@ mod tests {
     fn live_streaming_search_finds_a_real_multi_floor_seed() {
         let query = SearchQuery {
             auto_apply_trinket: false,
+            arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
+            arcane_resin: 0,
             requirements: vec![Requirement {
                 kind: crate::catalog::ItemKind::Armor,
                 weapon_category: None,

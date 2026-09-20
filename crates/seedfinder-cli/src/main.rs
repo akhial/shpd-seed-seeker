@@ -352,6 +352,8 @@ fn load_query(path: &Path) -> Result<SearchQuery, String> {
 fn benchmark_query() -> SearchQuery {
     SearchQuery {
         auto_apply_trinket: false,
+        arcane_resin_filter: shpd_seedfinder_core::query::ArcaneResinFilter::default(),
+        arcane_resin: 0,
         requirements: vec![Requirement {
             kind: ItemKind::Weapon,
             weapon_category: None,
@@ -546,6 +548,27 @@ mod tests {
                 "{arguments:?}"
             );
         }
+    }
+
+    #[test]
+    fn resin_only_search_loads_filters_and_exports_the_query() {
+        let directory = tempfile::tempdir().unwrap();
+        let items = directory.path().join("resin.json");
+        let output = directory.path().join("results.json");
+        std::fs::write(&items, r#"{"max_depth":1,"require_blacksmith":true,"requirements":[],"arcane_resin":65535,"arcane_resin_filter":{"uncursed":false,"max_depth":4,"source":"chest"}}"#).unwrap();
+        let query = super::load_query(&items).unwrap();
+        assert_eq!(query.arcane_resin, 65535);
+        assert!(!query.arcane_resin_filter.uncursed);
+        assert_eq!(
+            query.arcane_resin_filter.source,
+            Some(shpd_seedfinder_core::model::ItemSource::Chest)
+        );
+        super::search_command(&items, NonZeroUsize::new(1), Some(&output), true).unwrap();
+        let imported =
+            shpd_seedfinder_core::results_export::decode(&std::fs::read_to_string(output).unwrap())
+                .unwrap();
+        assert_eq!(imported.query, query);
+        assert!(imported.seeds.is_empty());
     }
 
     #[test]

@@ -50,6 +50,24 @@ only action that discards results is the explicit **Clear** button.
   `seedfinder_query_continues` (C), `JniBindings.queryContinues` (Android)
   and `query_continues` (wasm) — and frontends should call it rather than
   re-derive it.
+- **Arcane Resin** — `arcane_resin` is a minimum yield from surplus wands
+  within the query's floor limit. Donors must be uncursed by default;
+  `arcane_resin_filter` can allow cursed wands or narrow their floor and source.
+  Each generated wand contributes `2 * (upgrade + 1)`, without resin upgrades
+  or hero talent bonuses. The engine reserves items for the ordinary slots and
+  chooses compatible surplus wands, respecting all reward choices and excluded
+  sources. Resin counts as one scout condition, highlighting its contributing
+  wands. Raising the minimum or tightening donor filters may continue a query;
+  loosening them requires re-filtering or rescanning. Resin searches share an
+  item with other resin searches and wand searches. JSON and share links
+  preserve the minimum (version 7) and donor filters (version 8); links without
+  resin retain their prior encoding. Web, Android, macOS, Windows, and Linux
+  offer Resin in the Wand editor and support resin-only queries, as does the
+  CLI's canonical query input. Probability estimates use the most probable
+  sufficient donor allocation after reserving ordinary requirements, including
+  their blanket filters. Donors cannot witness blankets or consume a quest
+  reward reserved by a blanket witness. Estimates are conservative because
+  overlapping donor allocations are not summed.
 - **Shares an item**: some requirement of B and some requirement of A have
   the same kind, and either at least one of the two names no specific item or
   both name the same item. Scope and challenge differences are irrelevant

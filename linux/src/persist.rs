@@ -260,6 +260,15 @@ mod tests {
     }
 
     #[test]
+    fn resin_only_draft_survives_persistence() {
+        let document = r#"{"requirements":[],"arcane_resin":3,"arcane_resin_filter":{"uncursed":false,"max_depth":12,"source":"wandmaker_reward"}}"#;
+        let state = decode_state(document).unwrap();
+        let restored = decode_state(&save_document(&state).to_string()).unwrap();
+        assert_eq!(restored.to_query().unwrap(), state.to_query().unwrap());
+        assert_eq!(restored.arcane_resin, 3);
+    }
+
+    #[test]
     fn saved_queries_round_trip_as_canonical_documents() {
         let state = populated_state();
         let document = save_document(&state);

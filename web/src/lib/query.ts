@@ -5,9 +5,11 @@ import {
   isCurseForCategory,
   kindFamily,
   kindWeaponClass,
+  sources,
 } from "./catalog";
 import { ANY_ENCHANTMENT, WANDMAKER_QUESTS } from "./wasm/types";
 import type {
+  ArcaneResinFilter,
   EffectFilter,
   QueryDocument,
   QueryState,
@@ -329,6 +331,19 @@ export function toQueryDocument(state: QueryState): QueryDocument {
     return members.length === 1 ? members[0] : { any_of: members };
   });
   const output: QueryDocument = { requirements: entries };
+  if (state.arcaneResin !== undefined && state.arcaneResin !== 0)
+    output.arcane_resin = state.arcaneResin;
+  const resinFilter = state.arcaneResinFilter;
+  if (
+    resinFilter &&
+    (!resinFilter.uncursed || resinFilter.maxDepth !== undefined || resinFilter.source)
+  ) {
+    output.arcane_resin_filter = {
+      ...(!resinFilter.uncursed ? { uncursed: false } : {}),
+      ...(resinFilter.maxDepth !== undefined ? { max_depth: resinFilter.maxDepth } : {}),
+      ...(resinFilter.source ? { source: resinFilter.source } : {}),
+    };
+  }
   if (state.autoApplyTrinket) output.auto_apply_trinket = true;
   if (state.maxDepth !== MAX_DEPTH) output.max_depth = state.maxDepth;
   if (state.requireBlacksmith) output.require_blacksmith = true;
@@ -476,7 +491,29 @@ export function fromQueryJson(json: string): QueryState {
     throw new Error("challenges must be a list of challenge names");
   if (document.auto_apply_trinket !== undefined && typeof document.auto_apply_trinket !== "boolean")
     throw new Error("auto_apply_trinket must be a boolean");
+  if (document.arcane_resin !== undefined && !validArcaneResin(document.arcane_resin))
+    throw new Error("Arcane Resin must be a whole number from 0 through 65535.");
+  let arcaneResinFilter: ArcaneResinFilter | undefined;
+  if (document.arcane_resin_filter !== undefined) {
+    const filter = document.arcane_resin_filter;
+    if (
+      !isRecord(filter) ||
+      (filter.uncursed !== undefined && typeof filter.uncursed !== "boolean")
+    )
+      throw new Error("Invalid Arcane Resin filters.");
+    const parsed = {
+      uncursed: filter.uncursed ?? true,
+      ...(filter.max_depth !== undefined ? { maxDepth: filter.max_depth } : {}),
+      ...(filter.source !== undefined ? { source: filter.source } : {}),
+    };
+    const errors = validateArcaneResinFilter(parsed);
+    if (errors.length) throw new Error(errors[0]);
+    if (!parsed.uncursed || parsed.maxDepth !== undefined || parsed.source)
+      arcaneResinFilter = parsed;
+  }
   return {
+    ...(document.arcane_resin ? { arcaneResin: document.arcane_resin } : {}),
+    ...(arcaneResinFilter ? { arcaneResinFilter } : {}),
     autoApplyTrinket: document.auto_apply_trinket ?? false,
     requirements: requirementsFromDocument(document.requirements),
     maxDepth: normalizeFloorLimit(document.max_depth ?? MAX_DEPTH),
@@ -584,7 +621,15 @@ export function validateRequirement(requirement: RequirementState): string[] {
 
 export function validateQuery(state: QueryState): ValidationResult {
   const errors: string[] = [];
-  if (!state.requirements.some((requirement) => !requirement.blanket))
+  if (!state.requirements.length && !(state.arcaneResin && state.arcaneResin > 0))
+    errors.push("Add at least one requirement.");
+  if (state.arcaneResin !== undefined && !validArcaneResin(state.arcaneResin))
+    errors.push("Arcane Resin must be a whole number from 0 through 65535.");
+  if (state.arcaneResinFilter) errors.push(...validateArcaneResinFilter(state.arcaneResinFilter));
+  if (
+    state.requirements.length > 0 &&
+    !state.requirements.some((requirement) => !requirement.blanket)
+  )
     errors.push("Add at least one ordinary requirement.");
   for (const slot of querySlots(state.requirements)) {
     if (
@@ -656,4 +701,21 @@ export function validateQuery(state: QueryState): ValidationResult {
       );
   }
   return { valid: errors.length === 0, errors };
+}
+
+function validArcaneResin(value: number): boolean {
+  return Number.isInteger(value) && value >= 0 && value <= 65535;
+}
+
+function validateArcaneResinFilter(filter: ArcaneResinFilter): string[] {
+  const errors: string[] = [];
+  if (typeof filter.uncursed !== "boolean") errors.push("Invalid Arcane Resin uncursed filter.");
+  if (
+    filter.maxDepth !== undefined &&
+    (!Number.isInteger(filter.maxDepth) || filter.maxDepth < 1 || filter.maxDepth > MAX_DEPTH)
+  )
+    errors.push(`Arcane Resin floor must be 1 through ${MAX_DEPTH}.`);
+  if (filter.source !== undefined && !sources.some((source) => source.value === filter.source))
+    errors.push("Invalid Arcane Resin source.");
+  return errors;
 }

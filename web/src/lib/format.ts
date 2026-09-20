@@ -17,6 +17,7 @@ export function formatDuration(milliseconds: number): string {
 }
 
 export function probabilityLabel(probability: number | null): string {
+  if (probability === 0) return "Match probability ≈ 0";
   if (!probability || probability <= 0) return "Probability unavailable";
   return `Match probability ≈ 1 in ${compactNumber(1 / probability)}`;
 }

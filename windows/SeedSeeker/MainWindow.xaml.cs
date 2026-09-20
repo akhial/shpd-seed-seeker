@@ -303,8 +303,8 @@ public sealed partial class MainWindow : Window
     }
     private void RefreshQuery()
     {
-        BuildBoard(); NoRequirements.Visibility = QueryRelationships.BoardCount(query.Requirements.Where(r => !r.Blanket)) == 0 ? Visibility.Visible : Visibility.Collapsed;
-        FloorLabel.Text = $"first {query.MaximumDepth} floor{(query.MaximumDepth == 1 ? "" : "s")}"; RequireBlacksmith.IsEnabled = query.MaximumDepth < ScoutQuests.Window(QuestGiver.Blacksmith).Last; StartButton.IsEnabled = search is not null || (!busy && query.Requirements.Count != 0); CopyLinkButton.IsEnabled = !searchRunning && query.Requirements.Count != 0;
+        BuildBoard(); NoRequirements.Visibility = !query.Requirements.Any(r => !r.Blanket) && query.ArcaneResin == 0 ? Visibility.Visible : Visibility.Collapsed;
+        FloorLabel.Text = $"first {query.MaximumDepth} floor{(query.MaximumDepth == 1 ? "" : "s")}"; RequireBlacksmith.IsEnabled = query.MaximumDepth < ScoutQuests.Window(QuestGiver.Blacksmith).Last; StartButton.IsEnabled = search is not null || (!busy && query.HasRequirements); CopyLinkButton.IsEnabled = !searchRunning && query.HasRequirements;
         var count = BitOperations.PopCount((uint)query.Challenges); ChallengeSummary.Text = count == 0 ? "None" : $"{count} enabled";
     }
     private void FloorSlider_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e) { if (restoring || FloorLabel is null) return; query.MaximumDepth = FloorLimits.Options[Math.Clamp((int)e.NewValue, 0, FloorLimits.Options.Length - 1)]; RefreshQuery(); SaveSettings(); }
@@ -459,6 +459,7 @@ public sealed partial class MainWindow : Window
             if (item.Cluster is null) board.Children.Add(Chip(requirements, item, item.Anchor, problem));
             else board.Children.Add(Cluster(requirements, item, problem));
         }
+        if (query.ArcaneResin > 0) RequirementBoard.Children.Add(ArcaneResinChip());
         RequirementBoard.Children.Add(AddChip());
         BlanketBoard.Children.Add(AddChip(blanket: true));
     }
@@ -480,22 +481,64 @@ public sealed partial class MainWindow : Window
         if (requirement.RequireUncursed) content.Children.Add(ChipTagPill("\u2713", SuccessInk, SuccessFill));
         // A cluster's badges belong to its capsule, not to any one member.
         if (item.Cluster is null) foreach (var badge in StackBadges(requirements, item)) content.Children.Add(badge);
+        var chip = RequirementChip(content, requirement.Key, ChipMenu(requirements, item, index), problem);
+        ToolTipService.SetToolTip(chip, new TextBlock { Text = QueryRelationships.ChipDetail(requirements, index, item, problem), TextWrapping = TextWrapping.Wrap, MaxWidth = 280 });
+        dropTargets.Add(new DropTarget(DropKind.Chip, chip, requirement.Key));
+        return chip;
+    }
+
+    // Item keys are positive; the query-wide resin requirement has no item row.
+    private const long ArcaneResinKey = -1;
+
+    private Button RequirementChip(StackPanel content, long key, MenuFlyout menu, string? problem = null)
+    {
         var chip = new Button
         {
-            Content = content, Tag = requirement.Key, Height = 30, MinWidth = 0, MinHeight = 0,
+            Content = content, Tag = key, Height = 30, MinWidth = 0, MinHeight = 0,
             Padding = new Thickness(9, 0, 8, 0), CornerRadius = new CornerRadius(15),
             BorderThickness = new Thickness(1), BorderBrush = problem is null ? ChipEdge : DangerInk,
             Background = ChipFill, VerticalAlignment = VerticalAlignment.Center,
-            ContextFlyout = ChipMenu(requirements, item, index),
+            ContextFlyout = menu,
         };
         chip.Click += Chip_Click; chip.KeyDown += Chip_KeyDown;
         // ButtonBase marks the press handled; the drag listens regardless.
         chip.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(Chip_PointerPressed), true);
         chip.AddHandler(UIElement.PointerCaptureLostEvent, new PointerEventHandler(Chip_PointerCaptureLost), true);
         chip.AddHandler(UIElement.PointerCanceledEvent, new PointerEventHandler(Chip_PointerCaptureLost), true);
-        ToolTipService.SetToolTip(chip, new TextBlock { Text = QueryRelationships.ChipDetail(requirements, index, item, problem), TextWrapping = TextWrapping.Wrap, MaxWidth = 280 });
-        dropTargets.Add(new DropTarget(DropKind.Chip, chip, requirement.Key));
         return chip;
+    }
+
+    private StackPanel ArcaneResinContent()
+    {
+        var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
+        content.Children.Add(new SpriteView { SpriteIndex = 317, SpriteSize = 20, VerticalAlignment = VerticalAlignment.Center });
+        content.Children.Add(new TextBlock { Text = "Arcane Resin", FontSize = 13, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+        content.Children.Add(ChipTagPill($"≥{query.ArcaneResin}", SuccessInk, SuccessFill));
+        if (query.ArcaneResinFilter.MaximumDepth is int depth) content.Children.Add(ChipTagPill($"F≤{depth}", CautionInk, CautionFill));
+        if (query.ArcaneResinFilter.Uncursed) content.Children.Add(ChipTagPill("\u2713", SuccessInk, SuccessFill));
+        return content;
+    }
+
+    private Button ArcaneResinChip()
+    {
+        var menu = new MenuFlyout();
+        var edit = new MenuFlyoutItem { Text = "Edit\u2026" };
+        edit.Click += async (_, _) => await EditArcaneResin();
+        var remove = new MenuFlyoutItem { Text = "Remove", Icon = new FontIcon { Glyph = "" } };
+        remove.Click += (_, _) => RemoveArcaneResin();
+        menu.Items.Add(edit); menu.Items.Add(new MenuFlyoutSeparator()); menu.Items.Add(remove);
+        var chip = RequirementChip(ArcaneResinContent(), ArcaneResinKey, menu);
+        var detail = $"≥{query.ArcaneResin} Arcane Resin\n{query.ArcaneResinFilter.Summary}";
+        ToolTipService.SetToolTip(chip, new TextBlock { Text = detail, TextWrapping = TextWrapping.Wrap, MaxWidth = 280 });
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(chip, detail);
+        dropTargets.Add(new DropTarget(DropKind.Chip, chip, ArcaneResinKey));
+        return chip;
+    }
+
+    private void RemoveArcaneResin()
+    {
+        query.ArcaneResin = 0; query.ArcaneResinFilter = new();
+        SaveSettings(); RefreshQuery();
     }
 
     /// <summary>
@@ -717,13 +760,16 @@ public sealed partial class MainWindow : Window
     private async void Chip_Click(object sender, RoutedEventArgs e)
     {
         if (dragClickGuard) return;
-        if ((sender as FrameworkElement)?.Tag is long key) await EditChip(IndexOfKey(key));
+        if ((sender as FrameworkElement)?.Tag is not long key) return;
+        if (key == ArcaneResinKey) await EditArcaneResin();
+        else await EditChip(IndexOfKey(key));
     }
 
     private void Chip_KeyDown(object sender, KeyRoutedEventArgs e)
     {
         if (e.Key is not (VirtualKey.Delete or VirtualKey.Back)) return;
         if ((sender as FrameworkElement)?.Tag is not long key) return;
+        if (key == ArcaneResinKey) { e.Handled = true; RemoveArcaneResin(); return; }
         var index = IndexOfKey(key);
         if (index < 0) return;
         e.Handled = true; RemoveChip(index);
@@ -796,13 +842,13 @@ public sealed partial class MainWindow : Window
     private void BeginDrag(ChipPress current)
     {
         var index = IndexOfKey(current.Key);
-        if (index < 0) { press = null; return; }
+        if (index < 0 && current.Key != ArcaneResinKey) { press = null; return; }
         current.Dragging = true; dragClickGuard = true;
         current.Chip.Opacity = 0.35;
         RemoveZone.Visibility = Visibility.Visible;
         foreach (var target in dropTargets)
             if (target.Element is Button chip && ToolTipService.GetToolTip(chip) is { } tip) { suspendedToolTips.Add((chip, tip)); ToolTipService.SetToolTip(chip, null); }
-        ghost = GhostChip(query.Requirements[index]);
+        ghost = current.Key == ArcaneResinKey ? GhostChip(ArcaneResinContent()) : GhostChip(query.Requirements[index]);
         DragLayer.Children.Add(ghost);
     }
 
@@ -877,6 +923,7 @@ public sealed partial class MainWindow : Window
     /// <summary>What dropping the chip keyed <paramref name="key"/> on <paramref name="target"/> would do, as the ghost's caption; null when nothing.</summary>
     private string? DropCaption(long key, DropTarget? target)
     {
+        if (key == ArcaneResinKey) return query.ArcaneResin > 0 && target?.Kind == DropKind.Remove ? "remove" : null;
         var source = IndexOfKey(key);
         if (source < 0 || target is null) return null;
         switch (target.Kind)
@@ -894,6 +941,7 @@ public sealed partial class MainWindow : Window
     private void CompleteDrop(long key, DropTarget? target)
     {
         if (target is null || DropCaption(key, target) is null) return;
+        if (key == ArcaneResinKey) { RemoveArcaneResin(); return; }
         var source = IndexOfKey(key);
         switch (target.Kind)
         {
@@ -952,6 +1000,11 @@ public sealed partial class MainWindow : Window
         var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
         content.Children.Add(ChipArt(requirement));
         content.Children.Add(ChipName(requirement));
+        return GhostChip(content);
+    }
+
+    private Border GhostChip(StackPanel content)
+    {
         ghostCaptionText = new TextBlock { FontFamily = Mono, FontSize = 11, FontWeight = FontWeights.Bold, VerticalAlignment = VerticalAlignment.Center };
         ghostCaption = new Border { Child = ghostCaptionText, CornerRadius = new CornerRadius(8), Padding = new Thickness(5, 0, 5, 0), Height = 16, Visibility = Visibility.Collapsed, VerticalAlignment = VerticalAlignment.Center };
         content.Children.Add(ghostCaption);
@@ -965,6 +1018,29 @@ public sealed partial class MainWindow : Window
         };
     }
 
+    private async Task EditArcaneResin()
+    {
+        var amount = Number("Minimum resin", query.ArcaneResin > 0 ? query.ArcaneResin : 2, 1, 65535);
+        var uncursed = new CheckBox { Content = "Require uncursed wands", IsChecked = query.ArcaneResinFilter.Uncursed };
+        var depth = Combo(new[] { "Search limit" }.Concat(Enumerable.Range(1, SearchLimits.MaxDepth).Select(x => $"Floor {x}")), query.ArcaneResinFilter.MaximumDepth ?? 0);
+        var source = Combo(new[] { "Any source" }.Concat(Enum.GetValues<ScoutItemSource>().Select(Labels.Source)), query.ArcaneResinFilter.Source is { } selected ? (int)selected + 1 : 0);
+        var content = new StackPanel { Spacing = 16 };
+        content.Children.Add(amount); content.Children.Add(uncursed);
+        content.Children.Add(new TextBlock { Text = "Wand floor limit" }); content.Children.Add(depth);
+        content.Children.Add(new TextBlock { Text = "Wand source" }); content.Children.Add(source);
+        var dialog = new ContentDialog { XamlRoot = Content.XamlRoot, Title = "Arcane Resin", PrimaryButtonText = query.ArcaneResin > 0 ? "Save" : "Add", CloseButtonText = "Cancel", SecondaryButtonText = query.ArcaneResin > 0 ? "Remove" : "", DefaultButton = ContentDialogButton.Primary, Content = VerticalScrollView(content, 440, 460) };
+        bool ValidAmount() => double.IsFinite(amount.Value) && amount.Value == Math.Truncate(amount.Value) && amount.Value is >= 1 and <= 65535;
+        amount.ValueChanged += (_, _) => dialog.IsPrimaryButtonEnabled = ValidAmount();
+        dialog.PrimaryButtonClick += (_, args) => { if (!ValidAmount()) args.Cancel = true; };
+        var result = await dialog.ShowAsync();
+        if (result == ContentDialogResult.None) return;
+        query.ArcaneResin = result == ContentDialogResult.Secondary ? 0 : (int)amount.Value;
+        query.ArcaneResinFilter = result == ContentDialogResult.Secondary ? new() : new(
+            uncursed.IsChecked == true, depth.SelectedIndex == 0 ? null : depth.SelectedIndex,
+            source.SelectedIndex == 0 ? null : (ScoutItemSource)(source.SelectedIndex - 1));
+        SaveSettings(); RefreshQuery();
+    }
+
     /// <param name="r">The requirement edited in place; left as it was when the dialog is cancelled.</param>
     /// <param name="stack">The chip's stack as it stands; a cluster member's belongs to the cluster, so its section stays hidden.</param>
     /// <returns>The stack the editor settled on, or null when the dialog was cancelled.</returns>
@@ -972,6 +1048,7 @@ public sealed partial class MainWindow : Window
     {
         var kind = Combo(Enum.GetValues<ItemKind>().Select(Labels.Kind), (int)r.Kind);
         var item = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch };
+        var resin = new Button { Content = "Arcane Resin", Visibility = Visibility.Collapsed };
         // The list the combo is filled from, so saving reads back the very
         // entries it offered — including an imported tier-1 item the fresh-pick
         // list hides.
@@ -1051,7 +1128,7 @@ public sealed partial class MainWindow : Window
         var effectTitle = SectionTitle("Enchantment");
         var content = new StackPanel { Spacing = 16, Padding = new Thickness(2, 4, 2, 4) };
         foreach (var section in new UIElement[] {
-            Section(SectionTitle("Item"), Row("Category", kind), Row("Item", item), Row("Tier", tierMatch), Row("Exact tier", tier), Row("Minimum tier", tierBound)),
+            Section(SectionTitle("Item"), Row("Category", kind), Row("Item", item), resin, Row("Tier", tierMatch), Row("Exact tier", tier), Row("Minimum tier", tierBound)),
             Section(SectionTitle("Upgrade level"), Row("Predicate", upgradeMatch), Row("Upgrade level", upgrade), Row("Minimum upgrade", upgradeBound)),
             Section(effectTitle, Row("Effect", effectMode), effectGrid),
             Section(null, selectTrinket, uncursed, Row("Source", source), depthRow, Row("Within first floors", depth)),
@@ -1065,6 +1142,7 @@ public sealed partial class MainWindow : Window
         void SyncVisibility()
         {
             var k = (ItemKind)Math.Max(0, kind.SelectedIndex); var trinket = k == ItemKind.Trinket; var generic = item.SelectedIndex == 0 && k.Family() is ItemKind.Weapon or ItemKind.Armor;
+            resin.Visibility = !r.Blanket && k == ItemKind.Wand && accept == "Add" ? Visibility.Visible : Visibility.Collapsed;
             selectTrinket.Visibility = !r.Blanket && trinket ? Visibility.Visible : Visibility.Collapsed;
             var predicate = (TierMatch)Math.Max(0, tierMatch.SelectedIndex); var ranged = predicate is TierMatch.AtLeast or TierMatch.AtMost;
             tierMatch.Visibility = generic ? Visibility.Visible : Visibility.Collapsed;
@@ -1164,7 +1242,11 @@ public sealed partial class MainWindow : Window
         copyDepth.ValueChanged += (_, _) => copyDepth.Header = $"Copies within first {FloorOf(copyDepth)} floor{(FloorOf(copyDepth) == 1 ? "" : "s")}";
         Populate(); NormalizeTier(); SyncStack();
         var dialog = new ContentDialog { XamlRoot = Content.XamlRoot, Title = title, PrimaryButtonText = accept, CloseButtonText = "Cancel", DefaultButton = ContentDialogButton.Primary, Content = VerticalScrollView(content, 510, 460) };
-        if (await dialog.ShowAsync() != ContentDialogResult.Primary) return null;
+        var resinRequested = false;
+        resin.Click += (_, _) => { resinRequested = true; dialog.Hide(); };
+        var result = await dialog.ShowAsync();
+        if (resinRequested) { await EditArcaneResin(); return null; }
+        if (result != ContentDialogResult.Primary) return null;
         r.Kind = (ItemKind)kind.SelectedIndex; r.Item = r.Kind.RequiresNamedItem() ? itemChoices[Math.Max(0, item.SelectedIndex)] : item.SelectedIndex > 0 ? itemChoices[item.SelectedIndex - 1] : null; r.TierMatch = r.Item is null && r.Kind.Family() is ItemKind.Weapon or ItemKind.Armor ? (TierMatch)tierMatch.SelectedIndex : TierMatch.Any; r.Tier = r.TierMatch == TierMatch.Any ? 0 : selectedTier;
         r.UpgradeMatch = (UpgradeMatch)upgradeMatch.SelectedIndex; r.Upgrade = r.UpgradeMatch switch { UpgradeMatch.Any => 0, UpgradeMatch.Exactly => (int)upgrade.Value, UpgradeMatch.AtLeast when r.Kind == ItemKind.Ring => (int)upgrade.Value, UpgradeMatch.AtLeast => selectedMinimumUpgrade, _ => 0 };
         r.RequireUncursed = uncursed.IsChecked == true;
@@ -1476,7 +1558,7 @@ public sealed partial class MainWindow : Window
             search = await Task.Run(() => engine.Start(snapshot, workers)); await RunSearch(search, notice); await CaptureBaseRun(snapshot, search, detached ? RunKind.Detached : RunKind.Anchor);
         }
         catch (Exception ex) { SearchStatus.Text = $"Failed: {ex.Message}"; baseRun = null; lastRunDetached = false; }
-        finally { busy = false; search?.Dispose(); search = null; SetStartButton(running: false); StartButton.IsEnabled = query.Requirements.Count != 0; }
+        finally { busy = false; search?.Dispose(); search = null; SetStartButton(running: false); StartButton.IsEnabled = query.HasRequirements; }
     }
     /// <summary>
     /// Refines against the Target: the full Target Set is re-verified through
@@ -1528,7 +1610,7 @@ public sealed partial class MainWindow : Window
         // The Target stays valid on failure: nothing of its coverage was
         // consumed, so the refine can simply be retried.
         catch (Exception ex) { SearchStatus.Text = $"Refine failed: {ex.Message}"; SetStatusBar(null); }
-        finally { busy = false; search?.Dispose(); search = null; SetStartButton(running: false); StartButton.IsEnabled = query.Requirements.Count != 0; }
+        finally { busy = false; search?.Dispose(); search = null; SetStartButton(running: false); StartButton.IsEnabled = query.HasRequirements; }
     }
     /// <summary>
     /// Continues the previous detached scan (the classic pre-Target refine
@@ -1570,7 +1652,7 @@ public sealed partial class MainWindow : Window
         // The previous base run stays valid on failure: nothing of its
         // coverage was consumed, so the refine can simply be retried.
         catch (Exception ex) { SearchStatus.Text = $"Refine failed: {ex.Message}"; SetStatusBar(null); }
-        finally { busy = false; search?.Dispose(); search = null; SetStartButton(running: false); StartButton.IsEnabled = query.Requirements.Count != 0; }
+        finally { busy = false; search?.Dispose(); search = null; SetStartButton(running: false); StartButton.IsEnabled = query.HasRequirements; }
     }
     /// <summary>
     /// Records every unique delivered seed; the visible list is capped while
@@ -1641,7 +1723,7 @@ public sealed partial class MainWindow : Window
         StartLabel.Text = running ? "Cancel Search" : "Start Search";
         PresetPicker.IsEnabled = !running;
         SavePresetButton.IsEnabled = !running;
-        CopyLinkButton.IsEnabled = !running && query.Requirements.Count != 0;
+        CopyLinkButton.IsEnabled = !running && query.HasRequirements;
         DeletePresetButton.IsEnabled = !running
             && PresetPicker.SelectedItem is QueryPreset { IsBuiltIn: false };
         searchRunning = running;

@@ -157,6 +157,9 @@ internal fun SeedFinderApp(
     }
     var addingBlanket by remember { mutableStateOf(false) }
     var userPresets by remember { mutableStateOf(presetStorage.load()) }
+    var arcaneResin by remember { mutableStateOf(initialQuery.arcaneResin) }
+    var arcaneResinFilter by remember { mutableStateOf(initialQuery.arcaneResinFilter) }
+    var showResinSheet by remember { mutableStateOf(false) }
     var autoApplyTrinket by remember { mutableStateOf(initialQuery.autoApplyTrinket) }
     var maximumDepth by remember { mutableStateOf(initialQuery.maximumDepth) }
     var requireBlacksmith by remember { mutableStateOf(initialQuery.requireBlacksmith) }
@@ -172,6 +175,8 @@ internal fun SeedFinderApp(
         wandmakerQuest = wandmakerQuest,
         challenges = challenges,
         autoApplyTrinket = autoApplyTrinket,
+        arcaneResin = arcaneResin,
+        arcaneResinFilter = arcaneResinFilter,
     )
     // Save edits as they happen, including drafts that haven't been searched yet.
     LaunchedEffect(presetStorage, currentQuery) {
@@ -224,6 +229,8 @@ internal fun SeedFinderApp(
         if (query != null) {
             requirements = query.requirements.map { it.copy(key = nextRequirementKey++) }
             autoApplyTrinket = query.autoApplyTrinket
+            arcaneResin = query.arcaneResin
+            arcaneResinFilter = query.arcaneResinFilter
             maximumDepth = query.maximumDepth
             requireBlacksmith = query.requireBlacksmith
             excludeBlacksmithRewards = query.excludeBlacksmithRewards
@@ -278,6 +285,8 @@ internal fun SeedFinderApp(
                 }
                 requirements = imported.query.requirements.map { it.copy(key = nextRequirementKey++) }
                 autoApplyTrinket = imported.query.autoApplyTrinket
+                arcaneResin = imported.query.arcaneResin
+                arcaneResinFilter = imported.query.arcaneResinFilter
                 maximumDepth = imported.query.maximumDepth
                 requireBlacksmith = imported.query.requireBlacksmith
                 excludeBlacksmithRewards = imported.query.excludeBlacksmithRewards
@@ -288,7 +297,7 @@ internal fun SeedFinderApp(
                 // reported what that removed.
                 val kept = imported.seeds
                 val dropped = imported.dropped
-                val importedResults = kept.mapIndexed { index, seed -> SeedResult(seed, imported.query.requirements.slotCount(), imported.trinkets.getOrNull(index)) }
+                val importedResults = kept.mapIndexed { index, seed -> SeedResult(seed, (imported.query.requirements.slotCount() + if (imported.query.arcaneResin > 0) 1 else 0), imported.trinkets.getOrNull(index)) }
                 controller.importResults(
                     imported.query, importedResults,
                     runCatching {
@@ -296,6 +305,8 @@ internal fun SeedFinderApp(
                             request = SearchRequest(
                                 requirements = imported.query.requirements,
                                 autoApplyTrinket = imported.query.autoApplyTrinket,
+                                arcaneResin = imported.query.arcaneResin,
+                                arcaneResinFilter = imported.query.arcaneResinFilter,
                                 maximumDepth = imported.query.maximumDepth,
                                 challenges = imported.query.challenges,
                                 requireBlacksmith = imported.query.requireBlacksmith,
@@ -340,6 +351,8 @@ internal fun SeedFinderApp(
         runCatching { DeepLink.decode(code) }.onSuccess { query ->
             requirements = query.requirements.map { it.copy(key = nextRequirementKey++) }
             autoApplyTrinket = query.autoApplyTrinket
+            arcaneResin = query.arcaneResin
+            arcaneResinFilter = query.arcaneResinFilter
             maximumDepth = query.maximumDepth
             requireBlacksmith = query.requireBlacksmith
             excludeBlacksmithRewards = query.excludeBlacksmithRewards
@@ -402,12 +415,14 @@ internal fun SeedFinderApp(
 
     // Why the query cannot run yet — no requirements, an unattainable combined
     // upgrade total, … — shown in the header instead of silently disabling Search.
-    val validationMessage = requirements.validationProblem()
+    val validationMessage = requirements.validationProblem(arcaneResin)
     // Null while the query is not runnable.
     val currentRequest = runCatching {
         SearchRequest(
             requirements = requirements,
             autoApplyTrinket = autoApplyTrinket,
+            arcaneResin = arcaneResin,
+            arcaneResinFilter = arcaneResinFilter,
             maximumDepth = maximumDepth,
             challenges = challenges,
             requireBlacksmith = requireBlacksmith,
@@ -424,7 +439,7 @@ internal fun SeedFinderApp(
             val saved = results.find { it.seed == formatted }
             val query = if (saved != null) searchedQuery?.let {
                 SearchRequest(it.requirements, it.maximumDepth, it.challenges, it.requireBlacksmith,
-                    it.excludeBlacksmithRewards, it.wandmakerQuest, it.autoApplyTrinket)
+                    it.excludeBlacksmithRewards, it.wandmakerQuest, it.autoApplyTrinket, it.arcaneResin, it.arcaneResinFilter)
             } ?: currentRequest else currentRequest
             scoutRun = ScoutRun(nextScoutRunId++, formatted, query?.challenges ?: challenges, query,
                 if (saved != null) saved.selectedTrinket ?: "none" else null)
@@ -479,6 +494,8 @@ internal fun SeedFinderApp(
             Destination.FINDER -> FinderScreen(
                 requirements = requirements,
                 autoApplyTrinket = autoApplyTrinket,
+                arcaneResin = arcaneResin,
+                arcaneResinFilter = arcaneResinFilter,
                 maximumDepth = maximumDepth,
                 requireBlacksmith = requireBlacksmith,
                 excludeBlacksmithRewards = excludeBlacksmithRewards,
@@ -508,6 +525,8 @@ internal fun SeedFinderApp(
                 onApplyPreset = { preset ->
                     requirements = preset.query.requirements.map { it.copy(key = nextRequirementKey++) }
                     autoApplyTrinket = preset.query.autoApplyTrinket
+                    arcaneResin = preset.query.arcaneResin
+                    arcaneResinFilter = preset.query.arcaneResinFilter
                     maximumDepth = preset.query.maximumDepth
                     requireBlacksmith = preset.query.requireBlacksmith
                     excludeBlacksmithRewards = preset.query.excludeBlacksmithRewards
@@ -521,6 +540,8 @@ internal fun SeedFinderApp(
                         val query = PresetQuery(
                             requirements = requirements,
                             autoApplyTrinket = autoApplyTrinket,
+                            arcaneResin = arcaneResin,
+                            arcaneResinFilter = arcaneResinFilter,
                             maximumDepth = maximumDepth,
                             requireBlacksmith = requireBlacksmith,
                             excludeBlacksmithRewards = excludeBlacksmithRewards,
@@ -540,6 +561,8 @@ internal fun SeedFinderApp(
                     userPresets = userPresets.filterNot { it.id == preset.id }
                     presetStorage.save(userPresets)
                 },
+                onEditResin = { showResinSheet = true },
+                onRemoveResin = { arcaneResin = 0; arcaneResinFilter = dev.seedseeker.app.model.ArcaneResinFilter() },
                 onAdd = { blanket ->
                     addingBlanket = blanket
                     editingIndex = null
@@ -615,6 +638,8 @@ internal fun SeedFinderApp(
                             PresetQuery(
                                 requirements = requirements,
                                 autoApplyTrinket = autoApplyTrinket,
+                                arcaneResin = arcaneResin,
+                                arcaneResinFilter = arcaneResinFilter,
                                 maximumDepth = maximumDepth,
                                 requireBlacksmith = requireBlacksmith,
                                 excludeBlacksmithRewards = excludeBlacksmithRewards,
@@ -699,8 +724,15 @@ internal fun SeedFinderApp(
             Destination.ABOUT -> AboutScreen(onBack = { destination = aboutReturnDestination })
         }
 
+        if (showResinSheet) {
+            ArcaneResinSheet(arcaneResin, arcaneResinFilter,
+                onDismiss = { showResinSheet = false },
+                onSave = { amount, filter -> arcaneResin = amount; arcaneResinFilter = filter; showResinSheet = false },
+                onRemove = { arcaneResin = 0; arcaneResinFilter = dev.seedseeker.app.model.ArcaneResinFilter(); showResinSheet = false })
+        }
         if (showRequirementSheet) {
             RequirementSheet(
+                onAddResin = if (editingIndex == null && !addingBlanket) ({ showRequirementSheet = false; showResinSheet = true }) else null,
                 editing = editingIndex?.let(requirements::get),
                 blanket = editingIndex?.let { requirements[it].blanket } ?: addingBlanket,
                 initialKind = if (addingBlanket) requirements.firstOrNull { !it.blanket }?.kind ?: ItemKind.WEAPON else ItemKind.WEAPON,

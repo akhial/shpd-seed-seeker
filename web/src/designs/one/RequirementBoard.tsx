@@ -17,7 +17,8 @@ import {
   requirementFamily,
   validateRequirement,
 } from "../../lib/query";
-import type { RequirementState } from "../../lib/wasm/types";
+import { ARCANE_RESIN_SPRITE, itemArt } from "../../lib/sprites";
+import type { ArcaneResinFilter, RequirementState } from "../../lib/wasm/types";
 import { Sprite } from "./parts";
 import {
   boardItems,
@@ -93,8 +94,10 @@ type DropTarget =
   | { kind: "delete" }
   | { kind: "board" };
 
+type DragSource = number | "resin";
+
 interface DragState {
-  source: number;
+  source: DragSource;
   x: number;
   y: number;
   over: DropTarget | null;
@@ -129,11 +132,18 @@ export function RequirementBoard({
   onChange,
   onEdit,
   onAdd,
+  resin,
 }: {
   requirements: RequirementState[];
   onChange: (requirements: RequirementState[]) => void;
   onEdit: (index: number, stack: StackShape) => void;
   onAdd: () => void;
+  resin?: {
+    amount: number;
+    filter?: ArcaneResinFilter;
+    onEdit: () => void;
+    onRemove: () => void;
+  };
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
@@ -144,13 +154,14 @@ export function RequirementBoard({
     null,
   );
   const pressRef = useRef<{
-    index: number;
+    index: DragSource;
     x: number;
     y: number;
     timer: number | undefined;
     dragging: boolean;
   } | null>(null);
   const dragRef = useRef<DragState | null>(null);
+  const suppressResinClick = useRef(false);
 
   const items = boardItems(requirements);
   const itemOf = (index: number): BoardItem | undefined =>
@@ -178,10 +189,12 @@ export function RequirementBoard({
 
   // ---- drag -----------------------------------------------------------------
 
-  const targetAt = (x: number, y: number): DropTarget | null => {
+  const targetAt = (x: number, y: number, source: DragSource): DropTarget | null => {
     const element = document.elementFromPoint(x, y)?.closest<HTMLElement>("[data-drop]");
     if (!element || !wrapRef.current?.contains(element)) return null;
     const kind = element.dataset.drop;
+    // Resin can be removed by dragging, but never joins an either/or group.
+    if (kind === "resin" || (source === "resin" && kind !== "delete")) return null;
     if (kind === "chip") return { kind: "chip", index: Number(element.dataset.chip) };
     if (kind === "cluster") return { kind: "cluster", group: Number(element.dataset.group) };
     if (kind === "delete") return { kind: "delete" };
@@ -196,6 +209,10 @@ export function RequirementBoard({
   const completeDrop = (state: DragState) => {
     const { source, over } = state;
     if (!over) return;
+    if (source === "resin") {
+      if (over.kind === "delete") resin?.onRemove();
+      return;
+    }
     const current = requirements[source];
     let next: RequirementState[] | undefined;
     if (over.kind === "chip") {
@@ -218,12 +235,13 @@ export function RequirementBoard({
     if (next && next !== requirements) onChange(next);
   };
 
-  const onChipPointerDown = (index: number) => (event: ReactPointerEvent<HTMLElement>) => {
+  const onChipPointerDown = (index: DragSource) => (event: ReactPointerEvent<HTMLElement>) => {
     if (event.button !== 0) return;
     if ((event.target as HTMLElement).closest("[data-no-drag]")) return;
+    if (index === "resin") suppressResinClick.current = false;
     event.currentTarget.setPointerCapture(event.pointerId);
     const timer =
-      event.pointerType === "mouse"
+      event.pointerType === "mouse" || index === "resin"
         ? undefined
         : window.setTimeout(() => {
             const press = pressRef.current;
@@ -242,6 +260,7 @@ export function RequirementBoard({
       if (Math.hypot(event.clientX - press.x, event.clientY - press.y) < DRAG_THRESHOLD) return;
       window.clearTimeout(press.timer);
       press.dragging = true;
+      if (press.index === "resin") suppressResinClick.current = true;
       setMenu(null);
       setHovered(null);
       setPick(null);
@@ -251,7 +270,7 @@ export function RequirementBoard({
       source: press.index,
       x: event.clientX,
       y: event.clientY,
-      over: targetAt(event.clientX, event.clientY),
+      over: targetAt(event.clientX, event.clientY, press.index),
     });
   };
 
@@ -268,9 +287,12 @@ export function RequirementBoard({
     if (press.dragging) {
       const state = dragRef.current;
       updateDrag(null);
-      if (state) completeDrop({ ...state, over: targetAt(event.clientX, event.clientY) });
+      if (state)
+        completeDrop({ ...state, over: targetAt(event.clientX, event.clientY, state.source) });
       return;
     }
+    // The resin edit button handles its native click, including keyboard activation.
+    if (press.index === "resin") return;
     if (pick) {
       if (pick.source !== press.index)
         onChange(joinAlternatives(requirements, pick.source, press.index));
@@ -344,7 +366,9 @@ export function RequirementBoard({
           : true);
     if (!same) return "";
     if (over.kind === "board") {
-      return drag && requirements[drag.source].alternativeGroup !== undefined
+      return drag &&
+        drag.source !== "resin" &&
+        requirements[drag.source].alternativeGroup !== undefined
         ? " d1-drop-detach"
         : "";
     }
@@ -577,7 +601,8 @@ export function RequirementBoard({
     );
   };
 
-  const dragSource = drag ? requirements[drag.source] : null;
+  const dragSource = drag && drag.source !== "resin" ? requirements[drag.source] : null;
+  const draggingResin = drag?.source === "resin" && resin;
   const statusLine = pick ? "Either/or with… choose a chip" : null;
 
   return (
@@ -595,6 +620,56 @@ export function RequirementBoard({
         }}
       >
         {items.map(renderItem)}
+        {resin && (
+          <div
+            className={`d1-chip d1-resin-chip${draggingResin ? " d1-chip-dragging" : ""}`}
+            data-drop="resin"
+          >
+            <button
+              type="button"
+              className="d1-resin-edit"
+              aria-label="Edit Arcane Resin"
+              title={resin.filter?.source ? sourceLabel(resin.filter.source) : undefined}
+              onPointerDown={onChipPointerDown("resin")}
+              onPointerMove={onChipPointerMove}
+              onPointerUp={onChipPointerUp}
+              onPointerCancel={onChipPointerCancel}
+              onClick={(event) => {
+                const suppressed = suppressResinClick.current && event.detail > 0;
+                suppressResinClick.current = false;
+                if (suppressed) return;
+                resin.onEdit();
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Delete" || event.key === "Backspace") {
+                  event.preventDefault();
+                  resin.onRemove();
+                }
+              }}
+            >
+              <Sprite art={itemArt(ARCANE_RESIN_SPRITE)} size={18} />
+              <span className="d1-chip-name">Arcane Resin</span>
+              <span className="d1-chip-tag">≥{resin.amount}</span>
+              {resin.filter?.maxDepth !== undefined && (
+                <span className="d1-chip-tag">F≤{resin.filter.maxDepth}</span>
+              )}
+              {(resin.filter?.uncursed ?? true) && (
+                <span className="d1-chip-tag d1-chip-tag-soft" title="Uncursed wands">
+                  ✓
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              className="d1-resin-remove"
+              aria-label="Remove Arcane Resin"
+              data-no-drag
+              onClick={resin.onRemove}
+            >
+              <XIcon size={12} />
+            </button>
+          </div>
+        )}
         <button
           type="button"
           className="d1-chip d1-chip-add"
@@ -627,14 +702,18 @@ export function RequirementBoard({
           style={{ left: hovered.left, top: hovered.top }}
         />
       )}
-      {drag && dragSource && (
+      {drag && (dragSource || draggingResin) && (
         <div
           className="d1-chip d1-chip-ghost"
           style={{ left: drag.x, top: drag.y }}
           aria-hidden="true"
         >
-          <Sprite art={requirementArt(dragSource)} size={18} />
-          <span className="d1-chip-name">{chipName(dragSource)}</span>
+          <Sprite
+            art={dragSource ? requirementArt(dragSource) : itemArt(ARCANE_RESIN_SPRITE)}
+            size={18}
+          />
+          <span className="d1-chip-name">{dragSource ? chipName(dragSource) : "Arcane Resin"}</span>
+          {draggingResin && <span className="d1-chip-tag">≥{resin.amount}</span>}
           {(drag.over?.kind === "chip" || drag.over?.kind === "cluster") && (
             <span className="d1-chip-ghost-tag d1-ghost-alternative">or</span>
           )}

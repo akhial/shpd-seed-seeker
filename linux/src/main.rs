@@ -20,6 +20,7 @@ mod presets_dialog;
 mod query_pane;
 mod relations;
 mod requirement_editor;
+mod resin_editor;
 mod result_navigation;
 mod results_pane;
 mod sprites;

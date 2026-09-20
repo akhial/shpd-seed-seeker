@@ -391,6 +391,16 @@ impl QueryPane {
             pane.emit(BoardAction::Remove(key));
         }));
 
+        remove_zone.add_controller(
+            pane.typed_drop_target(String::static_type(), |pane, value| {
+                if value.get::<String>().as_deref() != Ok("arcane_resin") {
+                    return false;
+                }
+                pane.remove_chip(None);
+                true
+            }),
+        );
+
         skip_empty_boss_floors(&pane.depth_row);
         pane.depth_row.connect_value_notify({
             let pane = Rc::clone(&pane);
@@ -523,10 +533,11 @@ impl QueryPane {
                 self.blanket_expander
                     .set_title(&format!("Blanket Requirements ({})", items.len()));
             } else {
-                self.requirements_group
-                    .set_title(&requirements_title(items.len()));
+                self.requirements_group.set_title(&requirements_title(
+                    items.len() + usize::from(state.arcane_resin > 0),
+                ));
             }
-            if !blanket && state.board_count() == 0 {
+            if !blanket && state.board_count() == 0 && state.arcane_resin == 0 {
                 board.append(
                     &gtk::Label::builder()
                         .label("Nothing yet — add the item you are hunting for")
@@ -540,6 +551,9 @@ impl QueryPane {
                 } else {
                     board.append(&self.chip(state, item.anchor(), item, &items, false));
                 }
+            }
+            if !blanket && state.arcane_resin > 0 {
+                board.append(&self.resin_chip(state));
             }
             let add = gtk::Button::builder()
                 .child(
@@ -562,6 +576,41 @@ impl QueryPane {
                 .build();
             board.append(&add);
         }
+    }
+
+    fn resin_chip(self: &Rc<Self>, state: &AppState) -> gtk::Widget {
+        let detail = format!(
+            "≥{} Arcane Resin\n{}",
+            state.arcane_resin,
+            crate::resin_editor::summary(state.arcane_resin_filter),
+        );
+        let chip = gtk::Box::builder()
+            .spacing(6)
+            .css_classes(["chip"])
+            .focusable(true)
+            .accessible_role(gtk::AccessibleRole::Button)
+            .tooltip_text(&detail)
+            .build();
+        chip.update_property(&[gtk::accessible::Property::Label(&detail)]);
+        chip.append(&sprites::arcane_resin_image());
+        chip.append(&gtk::Label::new(Some("Arcane Resin")));
+        chip.append(&chip_tag(
+            &format!("≥{}", state.arcane_resin),
+            "chip-tag-up",
+        ));
+        if let Some(depth) = state.arcane_resin_filter.max_depth {
+            chip.append(&chip_tag(&format!("F≤{depth}"), "chip-tag-plain"));
+        }
+        if state.arcane_resin_filter.uncursed {
+            chip.append(&chip_tag("\u{2713}", "chip-tag-soft"));
+        }
+        let menu = gio::Menu::new();
+        menu.append(Some("Edit…"), Some("win.edit-resin"));
+        let removal = gio::Menu::new();
+        removal.append(Some("Remove"), Some("win.remove-resin"));
+        menu.append_section(None, &removal);
+        self.wire_chip(&chip, None, 1, &menu);
+        chip.upcast()
     }
 
     /// One either/or cluster: its members share a dashed capsule, with the
@@ -632,12 +681,7 @@ impl QueryPane {
                 .build(),
         );
         for (text, class) in chip_tags(requirement) {
-            chip.append(
-                &gtk::Label::builder()
-                    .label(text)
-                    .css_classes(["chip-tag", class])
-                    .build(),
-            );
+            chip.append(&chip_tag(&text, class));
         }
         if let Some(badge) = effect_badge(requirement) {
             chip.append(&badge);
@@ -656,7 +700,19 @@ impl QueryPane {
                 chip.append(&badge);
             }
         }
-        self.wire_chip(&chip, state, index, item, items);
+        let key = requirement.key;
+        self.wire_chip(
+            &chip,
+            Some(key),
+            item.stack_count(),
+            &Self::chip_menu(state, index, item, items),
+        );
+        chip.add_controller(self.drop_target(move |pane, source| {
+            pane.emit(BoardAction::Join {
+                source,
+                target: key,
+            });
+        }));
         chip.upcast()
     }
 
@@ -665,15 +721,10 @@ impl QueryPane {
     fn wire_chip(
         self: &Rc<Self>,
         chip: &gtk::Box,
-        state: &AppState,
-        index: usize,
-        item: &BoardItem,
-        items: &[BoardItem],
+        key: Option<u64>,
+        count: usize,
+        menu: &gio::Menu,
     ) {
-        let key = state.requirements[index].key;
-        let count = item.stack_count();
-        let menu = Self::chip_menu(state, index, item, items);
-
         let click = gtk::GestureClick::builder()
             .button(gdk::BUTTON_PRIMARY)
             .build();
@@ -681,7 +732,7 @@ impl QueryPane {
             let pane = Rc::clone(self);
             move |gesture, _, _, _| {
                 gesture.set_state(gtk::EventSequenceState::Claimed);
-                pane.emit(BoardAction::Edit(key));
+                pane.edit_chip(key);
             }
         });
         chip.add_controller(click);
@@ -730,9 +781,9 @@ impl QueryPane {
                     keyval,
                     gdk::Key::Return | gdk::Key::KP_Enter | gdk::Key::space
                 ) {
-                    pane.emit(BoardAction::Edit(key));
+                    pane.edit_chip(key);
                 } else if matches!(keyval, gdk::Key::Delete | gdk::Key::BackSpace) {
-                    pane.emit(BoardAction::Remove(key));
+                    pane.remove_chip(key);
                 } else {
                     return glib::Propagation::Proceed;
                 }
@@ -747,7 +798,10 @@ impl QueryPane {
         drag.connect_prepare(move |source, _, _| {
             let widget = source.widget()?;
             source.set_icon(Some(&gtk::WidgetPaintable::new(Some(&widget))), 0, 0);
-            Some(gdk::ContentProvider::for_value(&key.to_value()))
+            Some(gdk::ContentProvider::for_value(&key.map_or_else(
+                || "arcane_resin".to_value(),
+                |key| key.to_value(),
+            )))
         });
         drag.connect_drag_begin({
             let pane = Rc::clone(self);
@@ -768,18 +822,41 @@ impl QueryPane {
             }
         });
         chip.add_controller(drag);
+    }
 
-        chip.add_controller(self.drop_target(move |pane, source| {
-            pane.emit(BoardAction::Join {
-                source,
-                target: key,
-            });
-        }));
+    fn edit_chip(&self, key: Option<u64>) {
+        if let Some(key) = key {
+            self.emit(BoardAction::Edit(key));
+        } else {
+            let _ = WidgetExt::activate_action(&self.page, "win.edit-resin", None);
+        }
+    }
+
+    fn remove_chip(&self, key: Option<u64>) {
+        if let Some(key) = key {
+            self.emit(BoardAction::Remove(key));
+        } else {
+            let _ = WidgetExt::activate_action(&self.page, "win.remove-resin", None);
+        }
     }
 
     /// A drop zone for a chip in flight, lit while the pointer is over it.
     fn drop_target(self: &Rc<Self>, dropped: impl Fn(&Rc<Self>, u64) + 'static) -> gtk::DropTarget {
-        let target = gtk::DropTarget::new(u64::static_type(), gdk::DragAction::MOVE);
+        self.typed_drop_target(u64::static_type(), move |pane, value| {
+            let Ok(source) = value.get::<u64>() else {
+                return false;
+            };
+            dropped(pane, source);
+            true
+        })
+    }
+
+    fn typed_drop_target(
+        self: &Rc<Self>,
+        payload_type: glib::Type,
+        dropped: impl Fn(&Rc<Self>, &glib::Value) -> bool + 'static,
+    ) -> gtk::DropTarget {
+        let target = gtk::DropTarget::new(payload_type, gdk::DragAction::MOVE);
         target.connect_enter(|target, _, _| {
             if let Some(widget) = target.widget() {
                 widget.add_css_class("drop-target");
@@ -796,11 +873,7 @@ impl QueryPane {
             if let Some(widget) = target.widget() {
                 widget.remove_css_class("drop-target");
             }
-            let Ok(source) = value.get::<u64>() else {
-                return false;
-            };
-            dropped(&pane, source);
-            true
+            dropped(&pane, value)
         });
         target
     }
@@ -916,9 +989,17 @@ impl QueryPane {
         }
     }
 
-    fn show_menu(self: &Rc<Self>, chip: &gtk::Widget, menu: &gio::Menu, key: u64, count: usize) {
-        self.count_action
-            .set_state(&(key, count as u64).to_variant());
+    fn show_menu(
+        self: &Rc<Self>,
+        chip: &gtk::Widget,
+        menu: &gio::Menu,
+        key: Option<u64>,
+        count: usize,
+    ) {
+        if let Some(key) = key {
+            self.count_action
+                .set_state(&(key, count as u64).to_variant());
+        }
         self.menu.set_menu_model(Some(menu));
         self.point_at(self.menu.upcast_ref(), chip);
         self.menu.popup();
@@ -1121,6 +1202,13 @@ fn levels_capacity(state: &AppState, item: &BoardItem) -> u8 {
     let generated = (MAX_GENERATED_UPGRADE + 1)
         .saturating_add((count - 1).saturating_mul(MAX_STANDARD_RING_UPGRADE + 1));
     count.saturating_mul(per_item).min(generated).max(1)
+}
+
+fn chip_tag(text: &str, class: &str) -> gtk::Label {
+    gtk::Label::builder()
+        .label(text)
+        .css_classes(["chip-tag", class])
+        .build()
 }
 
 /// The tiny qualifiers beside a chip's name: tier, upgrade, floor. A named

@@ -35,7 +35,7 @@ public protocol SeedFinderEngine: Sendable {
 
 extension SeedFinderEngine {
     public func filterRecipes(_ request: SearchRequest, base: SearchRequest, recipes: [SeedResult]) async throws -> [SeedResult] {
-        try await filterSeeds(request, seeds: recipes.map(\.seed)).map { SeedResult(seed: $0, matchedRequirements: request.requirements.slotCount) }
+        try await filterSeeds(request, seeds: recipes.map(\.seed)).map { SeedResult(seed: $0, matchedRequirements: request.slotCount) }
     }
 }
 
@@ -209,7 +209,7 @@ public struct ProductionSeedFinderEngine: SeedFinderEngine {
             encoded.withUnsafeBytes { bytes in seedfinder_start_search(bytes.bindMemory(to: UInt8.self).baseAddress, bytes.count, count) }
         }.value
         guard handle != 0 else { throw SeedFinderEngineError.invalidArgument }
-        return NativeSearchSession(handle: handle, requirementCount: request.requirements.slotCount)
+        return NativeSearchSession(handle: handle, requirementCount: request.slotCount)
     }
 
     public func startResumedSearch(_ request: SearchRequest, resumeFrom: Int64, scanLen: Int64, workers: Int) async throws -> any SeedFinderSearchSession {
@@ -222,7 +222,7 @@ public struct ProductionSeedFinderEngine: SeedFinderEngine {
             }
         }.value
         guard handle != 0 else { throw SeedFinderEngineError.invalidArgument }
-        return NativeSearchSession(handle: handle, requirementCount: request.requirements.slotCount)
+        return NativeSearchSession(handle: handle, requirementCount: request.slotCount)
     }
 
     public func filterSeeds(_ request: SearchRequest, seeds: [String]) async throws -> [String] {
@@ -232,7 +232,7 @@ public struct ProductionSeedFinderEngine: SeedFinderEngine {
             guard let parsed = SeedCode.parse(seed) else { throw SeedFinderEngineError.invalidArgument }
             return UInt64(parsed.value)
         }
-        let count = request.requirements.slotCount
+        let count = request.slotCount
         let packet: Data = try await Task.detached {
             var pointer: UnsafeMutablePointer<UInt8>?
             var length = 0
@@ -260,7 +260,7 @@ public struct ProductionSeedFinderEngine: SeedFinderEngine {
             guard let parsed = SeedCode.parse(seed) else { throw SeedFinderEngineError.invalidArgument }
             return UInt64(parsed.value)
         }
-        let count = request.requirements.slotCount
+        let count = request.slotCount
         let packet: Data = try await Task.detached {
             var pointer: UnsafeMutablePointer<UInt8>?
             var length = 0

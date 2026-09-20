@@ -244,6 +244,7 @@ public enum ModelValidationError: Error, Equatable, LocalizedError {
     case levelSum, levelSumOutsideRings, levelSumInAlternative
     case levelSumMismatch(group: Int)
     case levelSumUnattainable(group: Int, needed: Int, maximum: Int)
+    case arcaneResin
     case emptyRequirements, maximumDepth, challenges, blanketStack, mixedBlanketAlternatives
     public var errorDescription: String? {
         switch self {
@@ -266,7 +267,8 @@ public enum ModelValidationError: Error, Equatable, LocalizedError {
             "Combined level group \(groupLetter(group)) must share one total across its items"
         case .levelSumUnattainable(let group, let needed, let maximum):
             "Combined level group \(groupLetter(group)) needs \(needed) levels but its items can reach at most \(maximum)"
-        case .emptyRequirements: "At least one ordinary requirement is needed"
+        case .arcaneResin: "Arcane Resin must be 0..65535, with a wand floor from 1 through 24"
+        case .emptyRequirements: "Blanket requirements need at least one ordinary item; otherwise add an item or Arcane Resin"
         case .blanketStack: "A blanket cannot request extra copies, combined levels, or trinket selection"
         case .mixedBlanketAlternatives: "An either/or group cannot mix ordinary and blanket requirements"
         case .maximumDepth: "Maximum floor must be 1..\(SearchLimits.maxDepth)"
@@ -644,7 +646,24 @@ public enum WandmakerQuest: Int, CaseIterable, Codable, Sendable {
     }
 }
 
+public struct ArcaneResinFilter: Codable, Hashable, Sendable {
+    public var uncursed: Bool
+    public var maximumDepth: Int?
+    public var source: ScoutItemSource?
+    public init(uncursed: Bool = true, maximumDepth: Int? = nil, source: ScoutItemSource? = nil) {
+        self.uncursed = uncursed; self.maximumDepth = maximumDepth; self.source = source
+    }
+    public var isValid: Bool { maximumDepth.map { (1...SearchLimits.maxDepth).contains($0) } ?? true }
+    public var summary: String {
+        ([uncursed ? "uncursed wands" : "any wands"] +
+         [maximumDepth.map { "≤ floor \($0)" }, source?.label].compactMap { $0 }).joined(separator: " · ")
+    }
+}
+
 public struct SearchRequest: Codable, Sendable {
+    public var arcaneResin: Int
+    public var arcaneResinFilter: ArcaneResinFilter
+    public var slotCount: Int { requirements.slotCount + (arcaneResin > 0 ? 1 : 0) }
     public var requirements: [ItemRequirement]
     public var autoApplyTrinket: Bool
     public var maximumDepth: Int
@@ -658,8 +677,10 @@ public struct SearchRequest: Codable, Sendable {
     public init(requirements: [ItemRequirement], maximumDepth: Int = SearchLimits.maxDepth,
                 requireBlacksmith: Bool = false, excludeBlacksmithRewards: Bool = false,
                 wandmakerQuest: WandmakerQuest? = nil,
-                challenges: Int = 0, autoApplyTrinket: Bool = false) throws {
-        guard requirements.contains(where: { !$0.blanket }) else { throw ModelValidationError.emptyRequirements }
+                challenges: Int = 0, autoApplyTrinket: Bool = false,
+                arcaneResin: Int = 0, arcaneResinFilter: ArcaneResinFilter = .init()) throws {
+        guard (0...65535).contains(arcaneResin), arcaneResinFilter.isValid else { throw ModelValidationError.arcaneResin }
+        guard requirements.contains(where: { !$0.blanket }) || (requirements.isEmpty && arcaneResin > 0) else { throw ModelValidationError.emptyRequirements }
         guard (1...SearchLimits.maxDepth).contains(maximumDepth) else { throw ModelValidationError.maximumDepth }
         guard (0...SearchLimits.challengeMask).contains(challenges) else { throw ModelValidationError.challenges }
         try requirements.validateGroups()
@@ -669,10 +690,15 @@ public struct SearchRequest: Codable, Sendable {
         self.wandmakerQuest = wandmakerQuest
         self.challenges = challenges
         self.autoApplyTrinket = autoApplyTrinket
+        self.arcaneResin = arcaneResin; self.arcaneResinFilter = arcaneResinFilter
     }
 }
 
 extension SearchRequest {
+    public init(from decoder: Decoder) throws {
+        self = try SavedQuery(from: decoder).searchRequest()
+    }
+
     /// Whether this request refines `base`: an identical floor limit and
     /// challenge set, world conditions (the blacksmith settings and
     /// the Wandmaker filter) at least as strict as `base`'s, plus, for every base

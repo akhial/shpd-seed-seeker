@@ -476,6 +476,30 @@ pub fn item_image(sprite: ItemSprite, glow: Option<Glow>) -> gtk::Widget {
     item_image_sized(sprite, glow, SIZE)
 }
 
+/// The query-wide resin requirement uses the same cropped atlas artwork as item chips.
+pub fn arcane_resin_image() -> gtk::Widget {
+    let area = gtk::DrawingArea::builder()
+        .content_width(SIZE)
+        .content_height(SIZE)
+        .valign(gtk::Align::Center)
+        .halign(gtk::Align::Center)
+        .accessible_role(gtk::AccessibleRole::Img)
+        .build();
+    area.update_property(&[gtk::accessible::Property::Label("Arcane Resin")]);
+    if let Some(atlas) = atlas() {
+        area.set_draw_func(move |area, context, width, height| {
+            let factor = area.scale_factor().max(1);
+            context.scale(1.0 / f64::from(factor), 1.0 / f64::from(factor));
+            if let Some(art) = atlas.art(317, SIZE * factor) {
+                let x = f64::from(width * factor - art.width()) / 2.0;
+                let y = f64::from(height * factor - art.height()) / 2.0;
+                let _ = blit(context, &art, x.round(), y.round());
+            }
+        });
+    }
+    area.upcast()
+}
+
 pub fn item_image_sized(sprite: ItemSprite, glow: Option<Glow>, size: i32) -> gtk::Widget {
     let definition = sprite.definition;
     let Some(atlas) = atlas() else {

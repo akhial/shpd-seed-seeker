@@ -59,6 +59,8 @@ private struct ContentView: View {
     @AppStorage("savedPresets") private var savedPresetsJSON = ""
     @AppStorage("challenges") private var challenges = 0
     @State private var requirements: [ItemRequirement] = []
+    @State private var arcaneResin = 0
+    @State private var arcaneResinFilter = ArcaneResinFilter()
     @State private var autoApplyTrinket = true
     @State private var maximumDepth = 24
     @State private var requireBlacksmith = false
@@ -105,7 +107,7 @@ private struct ContentView: View {
             // at two fifths of the default window and may grow to most of it,
             // rather than being dealt the drawer's usual share.
             NavigationSplitView {
-                QueryView(requirements: $requirements, maximumDepth: $maximumDepth, autoApplyTrinket: $autoApplyTrinket,
+                QueryView(requirements: $requirements, maximumDepth: $maximumDepth, autoApplyTrinket: $autoApplyTrinket, arcaneResin: $arcaneResin, arcaneResinFilter: $arcaneResinFilter,
                           requireBlacksmith: $requireBlacksmith,
                           excludeBlacksmithRewards: $excludeBlacksmithRewards,
                           wandmakerQuest: $wandmakerQuest,
@@ -196,6 +198,7 @@ private struct ContentView: View {
             guard !restored else { return }; restored = true
             let saved = QueryPersistence.decode(savedQueryJSON)
             requirements = saved.requirements; maximumDepth = saved.maximumDepth; autoApplyTrinket = saved.autoApplyTrinket
+            arcaneResin = saved.arcaneResin; arcaneResinFilter = saved.arcaneResinFilter
             requireBlacksmith = saved.requireBlacksmith
             excludeBlacksmithRewards = saved.excludeBlacksmithRewards
             wandmakerQuest = saved.wandmakerQuest
@@ -208,6 +211,8 @@ private struct ContentView: View {
         .onChange(of: requirements) { save() }
         .onChange(of: maximumDepth) { save() }
         .onChange(of: autoApplyTrinket) { save() }
+        .onChange(of: arcaneResin) { save() }
+        .onChange(of: arcaneResinFilter) { save() }
         .onChange(of: requireBlacksmith) { save() }
         .onChange(of: excludeBlacksmithRewards) { save() }
         .onChange(of: wandmakerQuest) { save() }
@@ -266,7 +271,7 @@ private struct ContentView: View {
         try SearchRequest(requirements: requirements, maximumDepth: maximumDepth,
                           requireBlacksmith: requireBlacksmith,
                           excludeBlacksmithRewards: excludeBlacksmithRewards,
-                          wandmakerQuest: wandmakerQuest, challenges: challenges, autoApplyTrinket: autoApplyTrinket)
+                          wandmakerQuest: wandmakerQuest, challenges: challenges, autoApplyTrinket: autoApplyTrinket, arcaneResin: arcaneResin, arcaneResinFilter: arcaneResinFilter)
     }
 
     /// Where the scouted seed sits in the search results, or nil when it did
@@ -337,7 +342,7 @@ private struct ContentView: View {
             maximumDepth: maximumDepth, requireBlacksmith: requireBlacksmith,
             excludeBlacksmithRewards: excludeBlacksmithRewards,
             wandmakerQuest: wandmakerQuest,
-            challenges: challenges, autoApplyTrinket: autoApplyTrinket)) ?? ""
+            challenges: challenges, autoApplyTrinket: autoApplyTrinket, arcaneResin: arcaneResin, arcaneResinFilter: arcaneResinFilter)) ?? ""
     }
 
     private func apply(_ preset: QueryPreset) { apply(preset.query) }
@@ -349,6 +354,7 @@ private struct ContentView: View {
             return copy
         }
         autoApplyTrinket = saved.autoApplyTrinket
+        arcaneResin = saved.arcaneResin; arcaneResinFilter = saved.arcaneResinFilter
         maximumDepth = saved.maximumDepth
         requireBlacksmith = saved.requireBlacksmith
         excludeBlacksmithRewards = saved.excludeBlacksmithRewards
@@ -391,7 +397,7 @@ private struct ContentView: View {
                 requirements: requirements, maximumDepth: maximumDepth,
                 requireBlacksmith: requireBlacksmith,
                 excludeBlacksmithRewards: excludeBlacksmithRewards,
-                wandmakerQuest: wandmakerQuest, challenges: challenges, autoApplyTrinket: autoApplyTrinket))
+                wandmakerQuest: wandmakerQuest, challenges: challenges, autoApplyTrinket: autoApplyTrinket, arcaneResin: arcaneResin, arcaneResinFilter: arcaneResinFilter))
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(link, forType: .string)
             // Brief checkmark in the toolbar icon as the "copied" feedback.
@@ -457,7 +463,7 @@ private struct ContentView: View {
         let query = SavedQuery(requirements: requirements, maximumDepth: maximumDepth,
                                requireBlacksmith: requireBlacksmith,
                                excludeBlacksmithRewards: excludeBlacksmithRewards,
-                               wandmakerQuest: wandmakerQuest, challenges: challenges, autoApplyTrinket: autoApplyTrinket)
+                               wandmakerQuest: wandmakerQuest, challenges: challenges, autoApplyTrinket: autoApplyTrinket, arcaneResin: arcaneResin, arcaneResinFilter: arcaneResinFilter)
         if let index = userPresets.firstIndex(where: { $0.name.localizedCaseInsensitiveCompare(cleanName) == .orderedSame }) {
             userPresets[index].query = query
         } else {
@@ -531,6 +537,7 @@ private struct EditorSession: Identifiable {
     let index: Int?
     /// The chip's stack as the board holds it; the editor may reshape it.
     let stack: StackShape
+    var isResin = false
     var id: Int64 { requirement.key }
 }
 
@@ -556,6 +563,8 @@ private struct QueryView: View {
     @Binding var requirements: [ItemRequirement]
     @Binding var maximumDepth: Int
     @Binding var autoApplyTrinket: Bool
+    @Binding var arcaneResin: Int
+    @Binding var arcaneResinFilter: ArcaneResinFilter
     @Binding var requireBlacksmith: Bool
     @Binding var excludeBlacksmithRewards: Bool
     @Binding var wandmakerQuest: WandmakerQuest?
@@ -620,7 +629,11 @@ private struct QueryView: View {
         .navigationTitle("Query")
         .sheet(item: $editor) { session in
             RequirementEditor(requirement: session.requirement, isNew: session.isNew,
-                              stack: session.stack) { result in
+                              stack: session.stack, isResin: session.isResin,
+                              resinAmount: arcaneResin, resinFilter: arcaneResinFilter,
+                              onSaveResin: { amount, filter in
+                arcaneResin = amount; arcaneResinFilter = filter; editor = nil
+            }) { result in
                 if let result {
                     requirements = requirements.applyEdit(
                         index: session.index, requirement: result.requirement,
@@ -663,7 +676,7 @@ private struct QueryView: View {
     /// Why the query cannot be searched as it stands (a combined-level
     /// group that no longer adds up, say), or nil when it can.
     private var requestError: String? {
-        guard !requirements.isEmpty else { return nil }
+        guard !requirements.isEmpty || arcaneResin > 0 else { return nil }
         do { _ = try buildRequest(); return nil } catch {
             return (error as? LocalizedError)?.errorDescription ?? "The query cannot be searched"
         }
@@ -673,7 +686,7 @@ private struct QueryView: View {
         try SearchRequest(requirements: requirements, maximumDepth: maximumDepth,
                           requireBlacksmith: requireBlacksmith,
                           excludeBlacksmithRewards: excludeBlacksmithRewards,
-                          wandmakerQuest: wandmakerQuest, challenges: challenges, autoApplyTrinket: autoApplyTrinket)
+                          wandmakerQuest: wandmakerQuest, challenges: challenges, autoApplyTrinket: autoApplyTrinket, arcaneResin: arcaneResin, arcaneResinFilter: arcaneResinFilter)
     }
 
     private var presets: some View {
@@ -722,11 +735,12 @@ private struct QueryView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 7) {
                 SectionLabel("Requirements")
-                if requirements.contains(where: { !$0.blanket }) { CountBadge(requirements.filter { !$0.blanket }.boardCount) }
+                if requirements.contains(where: { !$0.blanket }) || arcaneResin > 0 { CountBadge(requirements.filter { !$0.blanket }.boardCount + (arcaneResin > 0 ? 1 : 0)) }
             }
-            RequirementBoardView(requirements: $requirements, onEdit: openEditor,
-                                 onAdd: { addRequirement() })
-            if !requirements.contains(where: { !$0.blanket }) {
+            RequirementBoardView(requirements: $requirements, arcaneResin: $arcaneResin,
+                                 arcaneResinFilter: $arcaneResinFilter, onEdit: openEditor,
+                                 onEditResin: openResinEditor, onAdd: { addRequirement() })
+            if !requirements.contains(where: { !$0.blanket }) && arcaneResin == 0 {
                 Text("No requirements yet. Add one to describe the item you're hunting for.")
                     .font(.callout).foregroundStyle(.secondary)
             }
@@ -735,7 +749,9 @@ private struct QueryView: View {
 
     private var blanketBoard: some View {
         DisclosureGroup(isExpanded: $blanketsExpanded) {
-            RequirementBoardView(requirements: $requirements, blanket: true, onEdit: openEditor,
+            RequirementBoardView(requirements: $requirements, blanket: true,
+                                 arcaneResin: $arcaneResin, arcaneResinFilter: $arcaneResinFilter,
+                                 onEdit: openEditor, onEditResin: openResinEditor,
                                  onAdd: { addRequirement(blanket: true) })
                 .padding(.top, 8)
         } label: {
@@ -825,6 +841,14 @@ private struct QueryView: View {
                               inCluster: item?.cluster != nil))
     }
 
+    private func openResinEditor() {
+        if let value = try? ItemRequirement(key: Int64.random(in: 1...Int64.max), item: nil,
+            upgrade: 0, kind: .wand, upgradeMatch: .any) {
+            editor = EditorSession(requirement: value, isNew: false, index: nil,
+                                   stack: StackShape(), isResin: true)
+        }
+    }
+
     private func addRequirement(blanket: Bool = false) {
         let first = requirements.first(where: { !$0.blanket })
         let kind: ItemKind = blanket ? first?.kind ?? .weapon : .weapon
@@ -852,10 +876,14 @@ private struct QueryView: View {
 private struct RequirementBoardView: View {
     @Binding var requirements: [ItemRequirement]
     var blanket = false
+
+    @Binding var arcaneResin: Int
+    @Binding var arcaneResinFilter: ArcaneResinFilter
     let onEdit: (Int) -> Void
+    let onEditResin: () -> Void
     let onAdd: () -> Void
     /// The key of the chip in flight — also what says the bin should show.
-    @State private var dragging: Int64?
+    @State private var dragging: RequirementChipDrag?
     @State private var overBin = false
 
     var body: some View {
@@ -872,6 +900,11 @@ private struct RequirementBoardView: View {
                         ClusterView(requirements: $requirements, item: item, errors: errors,
                                     dragging: $dragging, onEdit: onEdit)
                     }
+                }
+                if !blanket && arcaneResin > 0 {
+                    ArcaneResinChip(amount: arcaneResin, filter: arcaneResinFilter,
+                                    dragging: $dragging, onEdit: onEditResin,
+                                    onRemove: removeResin)
                 }
                 AddChipView(action: onAdd)
             }
@@ -895,6 +928,11 @@ private struct RequirementBoardView: View {
         }
     }
 
+    private func removeResin() {
+        arcaneResin = 0
+        arcaneResinFilter = .init()
+    }
+
     /// The bin: only there while a chip is in flight, and the pointer's only
     /// way to delete one.
     private var bin: some View {
@@ -912,6 +950,7 @@ private struct RequirementBoardView: View {
             style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
         .dropDestination(for: String.self) { payload, _ in
             dragging = nil; overBin = false
+            if payload.first == arcaneResinItem.id { removeResin(); return true }
             guard let source = draggedIndex(payload, in: requirements),
                   let item = requirements.boardItem(holding: source) else { return false }
             requirements = item.cluster != nil
@@ -922,13 +961,13 @@ private struct RequirementBoardView: View {
     }
 }
 
-/// An either/or cluster: its chips share one dashed capsule, with the stack
-/// badges at the capsule's trailing edge, since the stack is the cluster's.
+/// An either/or cluster: its chips wrap within one dashed outline, followed
+/// by the stack badges, since the stack is the cluster's.
 private struct ClusterView: View {
     @Binding var requirements: [ItemRequirement]
     let item: BoardItem
     let errors: [Int: String]
-    @Binding var dragging: Int64?
+    @Binding var dragging: RequirementChipDrag?
     let onEdit: (Int) -> Void
     @State private var isTargeted = false
 
@@ -939,17 +978,19 @@ private struct ClusterView: View {
         // Members that no longer exist are skipped for that one frame; the
         // parent's next pass hands down a fresh item.
         let members = item.members.filter { requirements.indices.contains($0) }
-        HStack(spacing: 2) {
+        FlowLayout(spacing: 2, lineSpacing: 6) {
             ForEach(Array(members.enumerated()), id: \.element) { entry in
-                if entry.offset > 0 {
-                    Text("or")
-                        .font(.system(size: 10, weight: .bold, design: .monospaced))
-                        .foregroundStyle(Color.shatteredYellow.opacity(0.9))
-                        .padding(.horizontal, 2)
+                HStack(spacing: 2) {
+                    if entry.offset > 0 {
+                        Text("or")
+                            .font(.system(size: 10, weight: .bold, design: .monospaced))
+                            .foregroundStyle(Color.shatteredYellow.opacity(0.9))
+                            .padding(.horizontal, 2)
+                    }
+                    ChipView(requirements: $requirements, requirement: requirements[entry.element],
+                             index: entry.element, item: item, inCluster: true,
+                             error: errors[entry.element], dragging: $dragging, onEdit: onEdit)
                 }
-                ChipView(requirements: $requirements, requirement: requirements[entry.element],
-                         index: entry.element, item: item, inCluster: true,
-                         error: errors[entry.element], dragging: $dragging, onEdit: onEdit)
             }
             if (item.stackCount > 1 || item.total != nil) && requirements.indices.contains(item.anchor) {
                 StackBadgesView(requirements: $requirements,
@@ -958,8 +999,8 @@ private struct ClusterView: View {
             }
         }
         .padding(3)
-        .background(Color.shatteredYellow.opacity(0.05), in: Capsule())
-        .overlay(Capsule().strokeBorder(
+        .background(Color.shatteredYellow.opacity(0.05), in: RoundedRectangle(cornerRadius: 18))
+        .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(
             isTargeted ? Color.shatteredYellow : Color.shatteredYellow.opacity(0.45),
             style: StrokeStyle(lineWidth: 1, dash: isTargeted ? [] : [4, 3])))
         .dropDestination(for: String.self) { payload, _ in
@@ -986,7 +1027,7 @@ private struct ChipView: View {
     let inCluster: Bool
     /// What the query's cross-requirement validation blames this chip for.
     let error: String?
-    @Binding var dragging: Int64?
+    @Binding var dragging: RequirementChipDrag?
     let onEdit: (Int) -> Void
     @State private var isTargeted = false
     @FocusState private var focused: Bool
@@ -1029,14 +1070,14 @@ private struct ChipView: View {
         .frame(height: 30)
         .background(Color(nsColor: .controlBackgroundColor), in: Capsule())
         .overlay(Capsule().strokeBorder(borderColour, lineWidth: focused ? 2 : 1))
-        .opacity(dragging == requirement.key ? 0.35 : 1)
+        .opacity(dragging == .item(requirement.key) ? 0.35 : 1)
         .contentShape(Capsule())
         .help(helpText)
         .focusable()
         .focused($focused)
         .onKeyPress(.delete) { removeSelf(); return .handled }
         .onDrag {
-            dragging = requirement.key
+            dragging = .item(requirement.key)
             return NSItemProvider(object: NSString(string: "\(requirement.key)"))
         }
         .dropDestination(for: String.self) { payload, _ in
@@ -1478,6 +1519,10 @@ private struct RequirementEditor: View {
     /// belong to the whole chip, so a cluster member never sees them.
     let stack: StackShape
     let onFinish: (EditorResult?) -> Void
+    let editingResin: Bool
+    let onSaveResin: (Int, ArcaneResinFilter) -> Void
+    @State private var resinAmount: Int
+    @State private var resinFilter: ArcaneResinFilter
     @State private var kind: ItemKind
     @State private var itemID: String
     @State private var tierMatch: TierMatch
@@ -1497,9 +1542,15 @@ private struct RequirementEditor: View {
     @State private var validationMessage: String?
 
     init(requirement: ItemRequirement, isNew: Bool, stack: StackShape,
+         isResin: Bool, resinAmount: Int, resinFilter: ArcaneResinFilter,
+         onSaveResin: @escaping (Int, ArcaneResinFilter) -> Void,
          onFinish: @escaping (EditorResult?) -> Void) {
+        editingResin = isResin
+        self.onSaveResin = onSaveResin
+        _resinAmount = State(initialValue: resinAmount > 0 ? resinAmount : 2)
+        _resinFilter = State(initialValue: resinFilter)
         original = requirement; self.isNew = isNew; self.stack = stack; self.onFinish = onFinish
-        _kind = State(initialValue: requirement.kind); _itemID = State(initialValue: requirement.item?.id ?? "")
+        _kind = State(initialValue: requirement.kind); _itemID = State(initialValue: isResin ? arcaneResinItem.id : requirement.item?.id ?? "")
         _tierMatch = State(initialValue: requirement.tierMatch)
         _tier = State(initialValue: max(SearchLimits.exactTiers.lowerBound, requirement.tier))
         _match = State(initialValue: requirement.upgradeMatch)
@@ -1526,6 +1577,8 @@ private struct RequirementEditor: View {
         _copyDepth = State(initialValue: stack.copyDepth)
     }
 
+    private var isResin: Bool { itemID == arcaneResinItem.id }
+
     var body: some View {
         VStack(spacing: 0) {
             Text(original.blanket ? (isNew ? "New Blanket Requirement" : "Edit Blanket Requirement") : (isNew ? "New Requirement" : "Edit Requirement"))
@@ -1540,6 +1593,7 @@ private struct RequirementEditor: View {
                             accessibilityLabel: "Category")
                     }
                     .frame(maxWidth: .infinity)
+                    .disabled(editingResin)
                     .onChange(of: kind) { previous, value in
                         if previous.family != value.family {
                             itemID = ""; tierMatch = .any; tier = 2; selectTrinket = false
@@ -1563,6 +1617,11 @@ private struct RequirementEditor: View {
                         .pickerStyle(.segmented)
                     }
                     Picker("Item", selection: $itemID) {
+                        if !original.blanket && kind == .wand && (isNew || editingResin) {
+                            Label { Text(arcaneResinItem.name) } icon: {
+                                ItemSpriteIcon(item: arcaneResinItem)
+                            }.tag(arcaneResinItem.id)
+                        }
                         if kind != .trinket && kind != .artifact { Text("Any \(kind.singularLabel)").tag("") }
                         if kind.family == .weapon {
                             // Tier-1 weapons are starting gear and never spawn in the
@@ -1586,6 +1645,7 @@ private struct RequirementEditor: View {
                             }
                         }
                     }
+                    .disabled(editingResin)
                     .onChange(of: itemID) { _, value in
                         if value.isEmpty { total = nil } else { tierMatch = .any }
                         normalizeUpgrade()
@@ -1627,9 +1687,12 @@ private struct RequirementEditor: View {
                         }
                     }
                 }
+                if isResin {
+                    ArcaneResinFields(amount: $resinAmount, filter: $resinFilter)
+                }
                 // A combined level speaks for the whole stack, so its members
                 // take any upgrade and the per-item choice has nothing to say.
-                if kind != .trinket && kind != .artifact && effectiveTotal == nil {
+                if !isResin && kind != .trinket && kind != .artifact && effectiveTotal == nil {
                     Section("Upgrade level") {
                         Picker("Predicate", selection: $match) {
                             ForEach(UpgradeMatch.allCases, id: \.self) { Text($0.label).tag($0) }
@@ -1664,7 +1727,7 @@ private struct RequirementEditor: View {
                         }
                     }
                 }
-                if !original.blanket && kind != .trinket && kind != .artifact && !stack.inCluster {
+                if !isResin && !original.blanket && kind != .trinket && kind != .artifact && !stack.inCluster {
                     Section("Total item count") {
                         Stepper(value: $count, in: 1...SearchLimits.stackMax) {
                             LabeledContent("How many") {
@@ -1712,7 +1775,7 @@ private struct RequirementEditor: View {
                         }
                     }
                 }
-                if let label = kind.modifierLabel {
+                if !isResin, let label = kind.modifierLabel {
                     Section(label) {
                         // Labelled by hand rather than by the Picker: a grouped
                         // Form pins a labelled control to its trailing column,
@@ -1738,7 +1801,7 @@ private struct RequirementEditor: View {
                         }
                     }
                 }
-                if kind != .trinket {
+                if !isResin && kind != .trinket {
                 Section {
                     Toggle("Require uncursed", isOn: $requireUncursed)
                         .toggleStyle(.checkbox)
@@ -1768,16 +1831,19 @@ private struct RequirementEditor: View {
             Divider()
             HStack {
                 Button("Cancel") { onFinish(nil) }.keyboardShortcut(.cancelAction)
-                if let validationMessage {
+                if !isResin, let validationMessage {
                     Text(validationMessage).font(.caption).foregroundStyle(.orange)
                         .lineLimit(2).padding(.leading, 8)
                 }
                 Spacer()
-                Button(isNew ? "Add" : "Save") { save() }
+                Button(isNew ? "Add" : "Save") {
+                    if isResin { onSaveResin(resinAmount, resinFilter) }
+                    else { save() }
+                }
                     .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
             }.padding(12)
         }
-        .frame(width: 480, height: kind == .trinket ? 300 : kind.modifierLabel == nil ? 580 : 660)
+        .frame(width: 480, height: isResin ? 430 : kind == .trinket ? 300 : kind.modifierLabel == nil ? 580 : 660)
     }
 
     /// A combined level is a property of a concrete stack of two or more —
@@ -2529,50 +2595,51 @@ private struct SettingsCaption: View {
     }
 }
 
-/// Lays its subviews out left to right at their natural size, starting a new
-/// row whenever the next one would overflow. SwiftUI ships no wrapping stack.
+/// Lays its subviews out left to right, starting a new row whenever the next
+/// one would overflow. Oversized subviews get the available width so nested
+/// flows can wrap too. SwiftUI ships no wrapping stack.
 private struct FlowLayout: Layout {
     var spacing: CGFloat
     var lineSpacing: CGFloat
 
-    /// Every subview's origin relative to the layout's top-left, plus the size
+    /// Every subview's frame relative to the layout's top-left, plus the size
     /// the resulting rows occupy.
     ///
     /// Subviews sit on their row's centre line rather than its top edge. A
     /// cluster is a chip plus the inset its dashed capsule needs, so it stands
     /// taller than the chips beside it; centred, its members line up with them
     /// instead of hanging that inset lower.
-    private func flow(_ subviews: Subviews, width: CGFloat) -> (origins: [CGPoint], size: CGSize) {
-        var origins: [CGPoint] = []
-        var heights: [CGFloat] = []
+    private func flow(_ subviews: Subviews, width: CGFloat) -> (frames: [CGRect], size: CGSize) {
+        var frames: [CGRect] = []
         var size = CGSize.zero
         var cursor = CGPoint.zero
         var rowHeight: CGFloat = 0
         var rowStart = 0
         // Only once a row is closed is its height — and so its centre — known.
         func centreRow() {
-            for index in rowStart..<origins.count {
-                origins[index].y += (rowHeight - heights[index]) / 2
+            for index in rowStart..<frames.count {
+                frames[index].origin.y += (rowHeight - frames[index].height) / 2
             }
         }
         for subview in subviews {
-            let item = subview.sizeThatFits(.unspecified)
-            // A row always keeps its first subview, however wide it is.
+            var item = subview.sizeThatFits(.unspecified)
+            if item.width > width {
+                item = subview.sizeThatFits(ProposedViewSize(width: width, height: nil))
+            }
             if cursor.x > 0, cursor.x + item.width > width {
                 centreRow()
-                rowStart = origins.count
+                rowStart = frames.count
                 cursor = CGPoint(x: 0, y: cursor.y + rowHeight + lineSpacing)
                 rowHeight = 0
             }
-            origins.append(cursor)
-            heights.append(item.height)
+            frames.append(CGRect(origin: cursor, size: item))
             cursor.x += item.width + spacing
             rowHeight = max(rowHeight, item.height)
             size.width = max(size.width, cursor.x - spacing)
         }
         centreRow()
         size.height = cursor.y + rowHeight
-        return (origins, size)
+        return (frames, size)
     }
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
@@ -2580,9 +2647,9 @@ private struct FlowLayout: Layout {
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        for (subview, origin) in zip(subviews, flow(subviews, width: bounds.width).origins) {
-            subview.place(at: CGPoint(x: bounds.minX + origin.x, y: bounds.minY + origin.y),
-                          proposal: .unspecified)
+        for (subview, frame) in zip(subviews, flow(subviews, width: bounds.width).frames) {
+            subview.place(at: CGPoint(x: bounds.minX + frame.minX, y: bounds.minY + frame.minY),
+                          proposal: ProposedViewSize(frame.size))
         }
     }
 }

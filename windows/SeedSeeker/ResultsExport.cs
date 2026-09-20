@@ -100,6 +100,15 @@ public static class ResultsExport
             : new JsonObject { ["any_of"] = new JsonArray([.. slot.Select(member => (JsonNode)EncodeRequirement(member))]) });
         var output = new JsonObject { ["requirements"] = new JsonArray([.. entries]) };
         if (query.MaximumDepth != 24) output["max_depth"] = query.MaximumDepth;
+        if (query.ArcaneResin > 0) output["arcane_resin"] = query.ArcaneResin;
+        if (query.ArcaneResinFilter != new ArcaneResinFilter())
+        {
+            var filter = new JsonObject();
+            if (!query.ArcaneResinFilter.Uncursed) filter["uncursed"] = false;
+            if (query.ArcaneResinFilter.MaximumDepth is int depth) filter["max_depth"] = depth;
+            if (query.ArcaneResinFilter.Source is ScoutItemSource source) filter["source"] = SourceNames[(int)source];
+            output["arcane_resin_filter"] = filter;
+        }
         if (query.AutoApplyTrinket) output["auto_apply_trinket"] = true;
         if (query.RequireBlacksmith) output["require_blacksmith"] = true;
         if (query.ExcludeBlacksmithRewards) output["exclude_blacksmith_rewards"] = true;
@@ -181,8 +190,14 @@ public static class ResultsExport
             var match = ChallengeNames.FirstOrDefault(c => c.Name == name);
             if (match.Name is not null) challenges |= match.Bit;
         }
+        var filter = value["arcane_resin_filter"] as JsonObject ?? new JsonObject();
+        var sourceIndex = Array.IndexOf(SourceNames, TolerantString(filter, "source"));
         return new QuerySettings
         {
+            ArcaneResin = IntField(value, "arcane_resin") ?? 0,
+            ArcaneResinFilter = new ArcaneResinFilter(
+                !filter.ContainsKey("uncursed") || BoolField(filter, "uncursed"),
+                IntField(filter, "max_depth"), sourceIndex < 0 ? null : (ScoutItemSource)sourceIndex),
             Requirements = requirements,
             MaximumDepth = IntField(value, "max_depth") ?? 24,
             AutoApplyTrinket = BoolField(value, "auto_apply_trinket"),

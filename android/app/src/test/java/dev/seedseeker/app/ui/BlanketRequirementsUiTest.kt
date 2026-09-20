@@ -34,7 +34,9 @@ class BlanketRequirementsUiTest {
         compose.setContent {
             SeedSeekerTheme {
                 RequirementBoard(requirements, enabled = true, blanket = true,
-                    onChange = {}, onEdit = { _, index -> editedIndex = index }, onRemove = {}, onAdd = {})
+                    onChange = {}, onEdit = { _, index -> editedIndex = index }, onRemove = {}, onAdd = {},
+                    arcaneResin = 0, arcaneResinFilter = ArcaneResinFilter(),
+                    onEditResin = {}, onRemoveResin = {})
             }
         }
         compose.onNodeWithText("Any wand").performClick()

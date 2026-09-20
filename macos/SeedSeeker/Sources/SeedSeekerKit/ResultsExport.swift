@@ -120,6 +120,14 @@ public enum ResultsExport {
             slot.count == 1 ? encodeRequirement(slot[0]) : ["any_of": slot.map(encodeRequirement)]
         }
         var output: [String: Any] = ["requirements": entries]
+        if query.arcaneResin > 0 { output["arcane_resin"] = query.arcaneResin }
+        if query.arcaneResinFilter != ArcaneResinFilter() {
+            var filter: [String: Any] = [:]
+            if !query.arcaneResinFilter.uncursed { filter["uncursed"] = false }
+            if let depth = query.arcaneResinFilter.maximumDepth { filter["max_depth"] = depth }
+            if let source = query.arcaneResinFilter.source { filter["source"] = sourceNames[source.rawValue] }
+            output["arcane_resin_filter"] = filter
+        }
         if query.autoApplyTrinket { output["auto_apply_trinket"] = true }
         if query.maximumDepth != 24 { output["max_depth"] = query.maximumDepth }
         if query.requireBlacksmith { output["require_blacksmith"] = true }
@@ -213,13 +221,18 @@ public enum ResultsExport {
         // A `fast_mode` key from a document written before the flag was
         // retired is read past and ignored, exactly as the engine's own
         // decoder does, so those files and links still open.
+        let filter = value["arcane_resin_filter"] as? [String: Any] ?? [:]
+        let resinFilter = ArcaneResinFilter(uncursed: filter["uncursed"] as? Bool ?? true,
+            maximumDepth: intField(filter, "max_depth"),
+            source: (filter["source"] as? String).flatMap { sourceNames.firstIndex(of: $0) }.flatMap(ScoutItemSource.init(rawValue:)))
         return SavedQuery(
             requirements: requirements,
             maximumDepth: intField(value, "max_depth") ?? 24,
             requireBlacksmith: boolField(value, "require_blacksmith"),
             excludeBlacksmithRewards: boolField(value, "exclude_blacksmith_rewards"),
             wandmakerQuest: wandmakerQuest,
-            challenges: challenges, autoApplyTrinket: boolField(value, "auto_apply_trinket"))
+            challenges: challenges, autoApplyTrinket: boolField(value, "auto_apply_trinket"),
+            arcaneResin: intField(value, "arcane_resin") ?? 0, arcaneResinFilter: resinFilter)
     }
 
     private static func decodeRequirement(_ entry: [String: Any], key: Int64,
@@ -324,7 +337,7 @@ public enum QueryDocument {
             requireBlacksmith: request.requireBlacksmith,
             excludeBlacksmithRewards: request.excludeBlacksmithRewards,
             wandmakerQuest: request.wandmakerQuest,
-            challenges: request.challenges, autoApplyTrinket: request.autoApplyTrinket))
+            challenges: request.challenges, autoApplyTrinket: request.autoApplyTrinket, arcaneResin: request.arcaneResin, arcaneResinFilter: request.arcaneResinFilter))
     }
 
     /// UTF-8 JSON bytes of the document, keys sorted so equal queries encode

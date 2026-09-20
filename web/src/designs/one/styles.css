@@ -1201,7 +1201,8 @@ input[type="range"]::-moz-range-thumb {
   text-overflow: ellipsis;
 }
 /* The name belongs to the sprite beside it, so it sits closer than the tags do. */
-.d1-chip > .d1-sprite {
+.d1-chip > .d1-sprite,
+.d1-resin-edit > .d1-sprite {
   margin-right: -8px;
 }
 
@@ -3178,4 +3179,37 @@ input[type="range"]::-moz-range-thumb {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+}
+.d1-resin-chip {
+  padding: 0;
+  gap: 0;
+}
+
+.d1-resin-edit,
+.d1-resin-remove {
+  display: inline-flex;
+  align-self: stretch;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  padding: 0 0 0 9px;
+  border-radius: inherit;
+}
+
+.d1-resin-edit {
+  cursor: grab;
+  touch-action: none;
+}
+
+.d1-resin-remove {
+  padding: 0 8px 0 6px;
+  color: var(--d1-text-3);
+}
+
+.d1-resin-remove:hover {
+  color: var(--d1-danger);
 }

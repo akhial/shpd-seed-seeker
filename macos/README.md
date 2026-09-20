@@ -83,4 +83,16 @@ including either/or alternatives. Each blanket applies all its filters to one
 chosen item; separate blankets may use the same or different chosen items.
 Blankets do not request extra copies, combined levels, or trinket selection.
 At least one ordinary requirement is required to search. Saved queries, results
-files, and version 7 share links preserve blankets.
+files, and version 9 share links preserve blankets.
+
+## Arcane Resin
+
+Choose **Arcane Resin** when adding a Wand requirement. Set the minimum resin,
+then optionally limit donor wands by curse status, floor, or source. Donors must
+be uncursed by default. Each surplus wand contributes `2 × (upgrade + 1)` resin;
+wands reserved for ordinary requirements cannot also become resin. Resin is one
+separate requirement and can be searched on its own.
+
+The requirement can be edited or removed from the board. Saved drafts, presets,
+share links, result exports, and search refinement retain its amount and filters.
+Scout highlights the contributing wands, and the engine supplies the match estimate.

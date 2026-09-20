@@ -255,6 +255,77 @@ fn blanket_alternatives_and_documents_round_trip() {
 }
 
 #[test]
+fn blankets_reserve_their_witness_instead_of_consuming_resin_donors() {
+    let mut query =
+        parse_query(r#"{"item":"wand_frost"},{"kind":"wand","upgrade":3,"blanket":true}"#);
+    query.arcane_resin = 4;
+    let mut world = world(vec![
+        wand(ItemId::WandFrost, 2, ItemSource::Heap),
+        wand(ItemId::WandLightning, 3, ItemSource::WandmakerReward),
+    ]);
+    // The +3 donor is not an ordinary assignment, so it cannot witness a blanket.
+    assert!(!query.matches(&world));
+    let marks = scout_matches(&world, &query);
+    assert_eq!(marks.matched_requirements, 2);
+    assert_eq!(marks.total_requirements, 3);
+    world.items[0].upgrade = 3;
+    world.items[0].source = ItemSource::WandmakerReward;
+    world.items[1].upgrade = 1;
+    world.items[1].source = ItemSource::Heap;
+    assert!(query.matches(&world));
+    let marks = scout_matches(&world, &query);
+    assert_eq!(marks.matched_requirements, 3);
+    assert_eq!(marks.matched_indices(), vec![0, 1]);
+    world.items.pop();
+    assert!(!query.matches(&world));
+}
+
+#[test]
+fn version_nine_preserves_blankets_and_resin_without_changing_older_formats() {
+    let mut query = parse_query(&format!("{WANDS},{BLANKET}"));
+    for resin in [0, 8] {
+        query.arcane_resin = resin;
+        for uncursed in [true, false] {
+            query.arcane_resin_filter.uncursed = uncursed;
+            query.arcane_resin_filter.source = Some(ItemSource::Chest);
+            query.arcane_resin_filter.max_depth = Some(4);
+            let code = deep_link::encode(&query).unwrap();
+            assert!(
+                code.starts_with('k'),
+                "version 9 starts with the 100100 bits"
+            );
+            assert_eq!(deep_link::decode(&code).unwrap(), query);
+            assert_eq!(
+                json_query::decode(&json_query::encode(&query).to_string()).unwrap(),
+                query
+            );
+        }
+    }
+    assert!(json_query::decode(r#"{"arcane_resin":4,"requirements":[]}"#).is_ok());
+    assert!(
+        json_query::decode(r#"{"arcane_resin":4,"requirements":[{"kind":"wand","blanket":true}]}"#)
+            .is_err()
+    );
+}
+
+#[test]
+fn probability_keeps_blankets_off_resin_donors() {
+    let mut query = parse_query(
+        r#"{"item":"wand_frost","upgrade":2},{"kind":"wand","upgrade":3,"blanket":true}"#,
+    );
+    query.arcane_resin = 8;
+    assert!(estimate_match_probability(&query).abs() < f64::EPSILON);
+    query.requirements[0].upgrade = shpd_seedfinder_core::query::UpgradeRequirement::AtLeast(2);
+    let combined = estimate_match_probability(&query);
+    assert!(combined > 0.0);
+    let mut ordinary = query.clone();
+    ordinary.requirements.pop();
+    assert!(combined <= estimate_match_probability(&ordinary));
+    query.arcane_resin = 0;
+    assert!(combined <= estimate_match_probability(&query));
+}
+
+#[test]
 fn invalid_blanket_structures_are_rejected() {
     for requirements in [
         r#"{"kind":"wand","blanket":true}"#,

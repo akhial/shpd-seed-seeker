@@ -42,6 +42,10 @@
 //! Selected trinkets choose a measured +3 profile per unique initial-offer
 //! match. Those profiles include brewing timing and per-floor modifier shares;
 //! ambiguous offers retain the canonical supply. See [`crate::probability_tables`].
+//! Arcane Resin uses the most probable sufficient donor-wand plan, trying
+//! partitions of its total across generated upgrades. Donors compete with
+//! ordinary requirements for distinct items and quest choices. Like alternative groups, this reads
+//! low because overlapping plans are not summed.
 //! Artifacts use their measured supply for single-item estimates. Joint
 //! artifact requirements average valid identity assignments over sampled
 //! anonymous layouts, retaining floor/source/curse filters and accessibility
@@ -66,6 +70,7 @@
 
 mod artifacts;
 mod coverage;
+mod resin;
 
 use coverage::Coverages;
 
@@ -118,8 +123,11 @@ pub fn estimate_match_probability(query: &SearchQuery) -> f64 {
 }
 
 pub(crate) fn equipment_probability(query: &SearchQuery, profile: Profile) -> f64 {
+    if query.arcane_resin > 0 {
+        return resin::probability(query, profile);
+    }
     if query.requirements.iter().any(|r| r.blanket) {
-        return blanket_probability(query, profile);
+        return blanket_probability(query, profile, &[]);
     }
     let requirements = effective_requirements(query, profile);
     let mut linked: BTreeMap<u8, Vec<Requirement>> = BTreeMap::new();
@@ -172,7 +180,7 @@ pub(crate) fn equipment_probability(query: &SearchQuery, profile: Profile) -> f6
 /// ordinary query. Union the witness estimates conditional on that query:
 /// this approximates overlaps, stays between the largest branch and their sum,
 /// and can never make a stricter query more likely than its ordinary base.
-fn blanket_probability(query: &SearchQuery, profile: Profile) -> f64 {
+fn blanket_probability(query: &SearchQuery, profile: Profile, donors: &[Requirement]) -> f64 {
     let ordinary = SearchQuery {
         requirements: query
             .requirements
@@ -182,7 +190,9 @@ fn blanket_probability(query: &SearchQuery, profile: Profile) -> f64 {
             .collect(),
         ..query.clone()
     };
-    let base = equipment_probability(&ordinary, profile);
+    let mut allocated = ordinary.clone();
+    allocated.requirements.extend_from_slice(donors);
+    let base = equipment_probability(&allocated, profile);
     if base <= 0.0 || !base.is_finite() {
         return base;
     }
@@ -208,9 +218,18 @@ fn blanket_probability(query: &SearchQuery, profile: Profile) -> f64 {
             )
         })
         .collect();
+    // Donors compete for the same supply, including single-choice quest
+    // prizes, but only ordinary assignments may witness a blanket.
+    let donor_filters = filters(query, donors, None, &[], profile);
+    let chance = |branch: &[Predicate]| {
+        let mut allocated = branch.to_vec();
+        allocated.extend_from_slice(&donor_filters);
+        sort_filters(&mut allocated);
+        matching_chance(&allocated)
+    };
     let unconstrained = branches
         .iter()
-        .map(|branch| matching_chance(branch))
+        .map(|branch| chance(branch))
         .fold(0.0_f64, f64::max);
     if unconstrained <= 0.0 {
         return 0.0;
@@ -250,7 +269,7 @@ fn blanket_probability(query: &SearchQuery, profile: Profile) -> f64 {
         }
         branches = next;
         let missed = branches.iter().fold(1.0, |missed, branch| {
-            missed * (1.0 - (matching_chance(branch) / unconstrained).clamp(0.0, 1.0))
+            missed * (1.0 - (chance(branch) / unconstrained).clamp(0.0, 1.0))
         });
         estimate = estimate.min(base * (1.0 - missed));
     }
@@ -879,12 +898,16 @@ fn filters(
                 .with_profile(profile)
         }))
         .collect();
+    sort_filters(&mut ordered);
+    ordered
+}
+
+fn sort_filters(ordered: &mut [Predicate]) {
     ordered.sort_by(|left, right| {
         expected_slots(left)
             .partial_cmp(&expected_slots(right))
             .unwrap_or(Ordering::Equal)
     });
-    ordered
 }
 
 /// Probability that the supply can serve every filter with a distinct item.
@@ -1592,9 +1615,13 @@ impl Predicate {
             // No source that rolls its alternatives as one locks their levels
             // to their tiers, so the identity keeps the tabled tier shares.
             let rolled = self.upgrade_probability(supply) * modifiers;
-            rolled * (1.0 - (1.0 - identity).powf(options))
+            rolled.clamp(0.0, 1.0) * (1.0 - (1.0 - identity.clamp(0.0, 1.0)).powf(options))
         } else {
-            let matched = self.identity_and_upgrade_probability(supply, tiers) * modifiers;
+            // Rounded f32 shares can sum to slightly more than one. A
+            // negative miss chance raised to a fractional option count (as
+            // in selected-trinket profiles) would turn the estimate into NaN.
+            let matched =
+                (self.identity_and_upgrade_probability(supply, tiers) * modifiers).clamp(0.0, 1.0);
             1.0 - (1.0 - matched).powf(options)
         }
     }
@@ -1956,6 +1983,8 @@ mod tests {
     fn query(requirements: Vec<Requirement>, max_depth: u8) -> SearchQuery {
         SearchQuery {
             auto_apply_trinket: false,
+            arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
+            arcane_resin: 0,
             requirements,
             max_depth,
             challenges: Challenges::NONE,
@@ -1975,6 +2004,20 @@ mod tests {
     fn assert_probability(requirements: Vec<Requirement>, expected: f64) {
         let actual = estimate_match_probability(&query(requirements, 24));
         assert!((actual - expected).abs() < 1e-10, "{actual} vs {expected}");
+    }
+
+    #[test]
+    fn rounded_shares_keep_fractional_option_counts_finite() {
+        let mut supply = crate::probability_tables::trinkets::Profile::None
+            .supply_for(ItemKind::Wand)
+            .next()
+            .unwrap();
+        supply.upgrades = [0.1, 0.2, 0.3, 0.4, 0.0, 0.0];
+        supply.options = 1.5;
+        supply.shared_roll = false;
+        let predicate = super::Predicate::of(requirement(ItemKind::Wand), None);
+        assert!(predicate.upgrade_probability(&supply) > 1.0);
+        assert!((predicate.slot_probability(&supply, 3) - 1.0).abs() < f64::EPSILON);
     }
 
     #[test]
