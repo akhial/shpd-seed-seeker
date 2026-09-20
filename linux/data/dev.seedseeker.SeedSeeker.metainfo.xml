@@ -40,9 +40,9 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
-    <release version="0.14.0" date="2026-09-16">
+    <release version="0.15.0" date="2026-09-20">
       <description>
-        <p>Add scouted seed mappings across all app platforms.</p>
+        <p>Add Arcane Resin search with automatic minimum selection and blanket requirements across all app platforms.</p>
       </description>
     </release>
     <release version="0.9.1" date="2026-09-07">
