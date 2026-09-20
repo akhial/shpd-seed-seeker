@@ -221,8 +221,10 @@ pub fn effect_label(effect: EffectRequirement) -> Option<String> {
 
 /// The whole persisted query state shared by all panes.
 #[derive(Clone, Debug)]
+#[allow(clippy::struct_excessive_bools)] // Mirrors independent engine query options.
 pub struct AppState {
     pub arcane_resin: u16,
+    pub arcane_resin_auto: bool,
     pub arcane_resin_filter: shpd_seedfinder_core::query::ArcaneResinFilter,
     pub auto_apply_trinket: bool,
     pub requirements: Vec<UiRequirement>,
@@ -239,6 +241,7 @@ impl Default for AppState {
         Self {
             auto_apply_trinket: true,
             arcane_resin: 0,
+            arcane_resin_auto: false,
             arcane_resin_filter: shpd_seedfinder_core::query::ArcaneResinFilter::default(),
             requirements: Vec::new(),
             max_depth: 24,
@@ -252,6 +255,18 @@ impl Default for AppState {
 }
 
 impl AppState {
+    pub const fn needs_resin(&self) -> bool {
+        self.arcane_resin_auto || self.arcane_resin > 0
+    }
+
+    pub fn resin_label(&self) -> String {
+        if self.arcane_resin_auto {
+            "Auto".to_owned()
+        } else {
+            format!("≥{}", self.arcane_resin)
+        }
+    }
+
     /// Hands out a fresh row key, unique within this session.
     pub const fn claim_key(&mut self) -> u64 {
         let key = self.next_key;
@@ -266,6 +281,7 @@ impl AppState {
         let mut state = Self {
             auto_apply_trinket: query.auto_apply_trinket,
             arcane_resin: query.arcane_resin,
+            arcane_resin_auto: query.arcane_resin_auto,
             arcane_resin_filter: query.arcane_resin_filter,
             requirements: Vec::with_capacity(query.requirements.len()),
             max_depth: query.max_depth,
@@ -306,7 +322,7 @@ impl AppState {
         SearchQuery {
             auto_apply_trinket: self.auto_apply_trinket,
             arcane_resin_filter: self.arcane_resin_filter,
-            arcane_resin_auto: false,
+            arcane_resin_auto: self.arcane_resin_auto,
             arcane_resin: self.arcane_resin,
             requirements: self.requirements.iter().map(|r| r.to_core()).collect(),
             max_depth: self.max_depth,
@@ -917,6 +933,22 @@ mod tests {
         harder.arcane_resin = 6;
         assert!(harder.to_query().unwrap().continues(&query));
         assert!(!query.continues(&harder.to_query().unwrap()));
+    }
+
+    #[test]
+    fn auto_resin_and_blankets_survive_editor_and_share_round_trips() {
+        let query = shpd_seedfinder_core::json_query::decode(r#"{"arcane_resin":"auto","requirements":[{"item":"wand_lightning","upgrade":2},{"kind":"wand","upgrade":2,"blanket":true}]}"#).unwrap();
+        let state = AppState::from_query(&query);
+        assert!(state.needs_resin());
+        assert_eq!(state.resin_label(), "Auto");
+        assert_eq!(state.to_query().unwrap(), query);
+        let link = shpd_seedfinder_core::deep_link::encode(&state.to_query().unwrap()).unwrap();
+        let restored = shpd_seedfinder_core::deep_link::decode(&link).unwrap();
+        assert_eq!(AppState::from_query(&restored).to_query().unwrap(), query);
+        let mut removed = state;
+        removed.arcane_resin_auto = false;
+        assert!(!removed.needs_resin());
+        assert!(!removed.to_query().unwrap().needs_resin());
     }
 
     #[test]

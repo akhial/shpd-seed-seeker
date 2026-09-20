@@ -77,7 +77,7 @@ object ResultsExport {
     /** The query half of the document; [DeepLink] and the engine transport share it with the Rust codec. */
     internal fun encodeQuery(query: PresetQuery) = JSONObject().apply {
         put("requirements", encodeRequirements(query.requirements))
-        encodeResin(this, query.arcaneResin, query.arcaneResinFilter)
+        encodeResin(this, query.arcaneResin, query.arcaneResinFilter, query.arcaneResinAuto)
         if (query.autoApplyTrinket) put("auto_apply_trinket", true)
         if (query.maximumDepth != 24) put("max_depth", query.maximumDepth)
         if (query.requireBlacksmith) put("require_blacksmith", true)
@@ -89,9 +89,10 @@ object ResultsExport {
         if (challenges.isNotEmpty()) put("challenges", JSONArray(challenges))
     }
 
-    internal fun encodeResin(value: JSONObject, amount: Int, filter: ArcaneResinFilter) {
+    internal fun encodeResin(value: JSONObject, amount: Int, filter: ArcaneResinFilter, auto: Boolean) {
         require(amount in 0..65535) { "Arcane Resin must be 0..65535." }
-        if (amount > 0) value.put("arcane_resin", amount)
+        if (auto) value.put("arcane_resin", "auto")
+        else if (amount > 0) value.put("arcane_resin", amount)
         if (filter != ArcaneResinFilter()) value.put("arcane_resin_filter", JSONObject().apply {
             if (!filter.uncursed) put("uncursed", false)
             filter.maximumDepth?.let { put("max_depth", it) }
@@ -102,8 +103,9 @@ object ResultsExport {
     internal fun decodeResinAmount(value: JSONObject): Int {
         if (!value.has("arcane_resin")) return 0
         val amount = value.get("arcane_resin")
+        if (amount == "auto") return 0
         require(amount is Number && amount.toDouble() == amount.toInt().toDouble() && amount.toInt() in 0..65535) {
-            "Arcane Resin must be a whole number from 0 through 65535."
+            "Arcane Resin must be a whole number from 0 through 65535 or auto."
         }
         return amount.toInt()
     }
@@ -219,6 +221,7 @@ object ResultsExport {
         }
         return PresetQuery(
             arcaneResin = decodeResinAmount(value),
+            arcaneResinAuto = value.opt("arcane_resin") == "auto",
             arcaneResinFilter = decodeResinFilter(value),
             autoApplyTrinket = value.optBoolean("auto_apply_trinket", false),
             requirements = requirements,
@@ -333,6 +336,7 @@ fun SearchRequest.toPresetQuery() = PresetQuery(
     autoApplyTrinket = autoApplyTrinket,
     arcaneResin = arcaneResin,
     arcaneResinFilter = arcaneResinFilter,
+    arcaneResinAuto = arcaneResinAuto,
     requirements = requirements,
     maximumDepth = maximumDepth,
     requireBlacksmith = requireBlacksmith,

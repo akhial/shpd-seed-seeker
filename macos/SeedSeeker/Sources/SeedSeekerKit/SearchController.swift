@@ -156,7 +156,7 @@ public final class SearchController {
             requireBlacksmith: query.requireBlacksmith,
             excludeBlacksmithRewards: query.excludeBlacksmithRewards,
             wandmakerQuest: query.wandmakerQuest,
-            challenges: query.challenges, autoApplyTrinket: query.autoApplyTrinket, arcaneResin: query.arcaneResin, arcaneResinFilter: query.arcaneResinFilter)
+            challenges: query.challenges, autoApplyTrinket: query.autoApplyTrinket, arcaneResin: query.arcaneResin, arcaneResinFilter: query.arcaneResinFilter, arcaneResinAuto: query.arcaneResinAuto)
         target = request.map { TargetState(request: $0, seeds: seeds, resumeFrom: 0, remaining: 0, recipes: collectedRecipes) }
     }
 
@@ -211,7 +211,7 @@ public final class SearchController {
             requireBlacksmith: request.requireBlacksmith,
             excludeBlacksmithRewards: request.excludeBlacksmithRewards,
             wandmakerQuest: request.wandmakerQuest,
-            challenges: request.challenges, autoApplyTrinket: request.autoApplyTrinket, arcaneResin: request.arcaneResin, arcaneResinFilter: request.arcaneResinFilter)
+            challenges: request.challenges, autoApplyTrinket: request.autoApplyTrinket, arcaneResin: request.arcaneResin, arcaneResinFilter: request.arcaneResinFilter, arcaneResinAuto: request.arcaneResinAuto)
         task = Task { [weak self] in
             guard let self else { return }
             await self.run(request, alreadyShown: []) { engine in
@@ -297,7 +297,7 @@ public final class SearchController {
                 requireBlacksmith: request.requireBlacksmith,
                 excludeBlacksmithRewards: request.excludeBlacksmithRewards,
                 wandmakerQuest: request.wandmakerQuest,
-                challenges: request.challenges, autoApplyTrinket: request.autoApplyTrinket, arcaneResin: request.arcaneResin, arcaneResinFilter: request.arcaneResinFilter)
+                challenges: request.challenges, autoApplyTrinket: request.autoApplyTrinket, arcaneResin: request.arcaneResin, arcaneResinFilter: request.arcaneResinFilter, arcaneResinAuto: request.arcaneResinAuto)
             // A filter never scans; a refine resumes the target's remainder.
             if resumesScan && target.remaining > 0 {
                 await self.run(request, alreadyShown: Set(kept.map(\.seed))) { engine in
@@ -349,7 +349,7 @@ public final class SearchController {
                 requireBlacksmith: request.requireBlacksmith,
                 excludeBlacksmithRewards: request.excludeBlacksmithRewards,
                 wandmakerQuest: request.wandmakerQuest,
-                challenges: request.challenges, autoApplyTrinket: request.autoApplyTrinket, arcaneResin: request.arcaneResin, arcaneResinFilter: request.arcaneResinFilter)
+                challenges: request.challenges, autoApplyTrinket: request.autoApplyTrinket, arcaneResin: request.arcaneResin, arcaneResinFilter: request.arcaneResinFilter, arcaneResinAuto: request.arcaneResinAuto)
             if base.remaining > 0 {
                 await self.run(request, alreadyShown: Set(kept.map(\.seed))) { engine in
                     try await engine.startResumedSearch(request, resumeFrom: base.resumeFrom,

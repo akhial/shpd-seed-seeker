@@ -534,10 +534,10 @@ impl QueryPane {
                     .set_title(&format!("Blanket Requirements ({})", items.len()));
             } else {
                 self.requirements_group.set_title(&requirements_title(
-                    items.len() + usize::from(state.arcane_resin > 0),
+                    items.len() + usize::from(state.needs_resin()),
                 ));
             }
-            if !blanket && state.board_count() == 0 && state.arcane_resin == 0 {
+            if !blanket && state.board_count() == 0 && !state.needs_resin() {
                 board.append(
                     &gtk::Label::builder()
                         .label("Nothing yet — add the item you are hunting for")
@@ -552,7 +552,7 @@ impl QueryPane {
                     board.append(&self.chip(state, item.anchor(), item, &items, false));
                 }
             }
-            if !blanket && state.arcane_resin > 0 {
+            if !blanket && state.needs_resin() {
                 board.append(&self.resin_chip(state));
             }
             let add = gtk::Button::builder()
@@ -580,8 +580,8 @@ impl QueryPane {
 
     fn resin_chip(self: &Rc<Self>, state: &AppState) -> gtk::Widget {
         let detail = format!(
-            "≥{} Arcane Resin\n{}",
-            state.arcane_resin,
+            "{} Arcane Resin\n{}",
+            state.resin_label(),
             crate::resin_editor::summary(state.arcane_resin_filter),
         );
         let chip = gtk::Box::builder()
@@ -594,10 +594,7 @@ impl QueryPane {
         chip.update_property(&[gtk::accessible::Property::Label(&detail)]);
         chip.append(&sprites::arcane_resin_image());
         chip.append(&gtk::Label::new(Some("Arcane Resin")));
-        chip.append(&chip_tag(
-            &format!("≥{}", state.arcane_resin),
-            "chip-tag-up",
-        ));
+        chip.append(&chip_tag(&state.resin_label(), "chip-tag-up"));
         if let Some(depth) = state.arcane_resin_filter.max_depth {
             chip.append(&chip_tag(&format!("F≤{depth}"), "chip-tag-plain"));
         }

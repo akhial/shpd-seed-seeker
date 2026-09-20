@@ -22,7 +22,7 @@ object DeepLink {
      * @throws IllegalArgumentException with a user-facing message.
      */
     fun encodeLink(query: PresetQuery): String {
-        require((query.requirements.isNotEmpty() || query.arcaneResin > 0)) { "Add at least one requirement to share a search." }
+        require((query.requirements.isNotEmpty() || query.arcaneResinAuto || query.arcaneResin > 0)) { "Add at least one requirement to share a search." }
         val document = ResultsExport.encodeQuery(query).toString()
         return String(JniBindings.shareEncode(document.toByteArray()), Charsets.UTF_8)
     }

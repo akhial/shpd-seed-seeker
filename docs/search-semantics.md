@@ -71,8 +71,7 @@ only action that discards results is the explicit **Clear** button.
   (version 8), blankets (version 9), and Auto (version 10); existing queries
   retain their prior encoding. Web, Android, macOS, Windows, and Linux offer Resin in the Wand
   editor and support resin-only queries, as does the CLI's canonical query
-  input. The engine and web editor support Auto; native editors currently
-  offer fixed amounts. Probability estimates integrate wand upgrades and
+  input. All five editors support both Amount and Auto modes. Probability estimates integrate wand upgrades and
   surplus resin together, reserving each item once and replacing an earlier
   reservation when a cheaper matching wand arrives. This includes mixed
   upgrades without enumerating donor plans. Blanket filters narrow only the

@@ -14,6 +14,7 @@ data class PresetQuery(
     val autoApplyTrinket: Boolean = true,
     val arcaneResin: Int = 0,
     val arcaneResinFilter: ArcaneResinFilter = ArcaneResinFilter(),
+    val arcaneResinAuto: Boolean = false,
 )
 
 data class QueryPreset(

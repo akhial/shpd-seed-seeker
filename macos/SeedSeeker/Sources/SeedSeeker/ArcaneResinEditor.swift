@@ -11,13 +11,23 @@ enum RequirementChipDrag: Equatable {
 /// Resin-specific fields inside the requirement editor's existing form.
 struct ArcaneResinFields: View {
     @Binding var amount: Int
+    @Binding var auto: Bool
     @Binding var filter: ArcaneResinFilter
 
     var body: some View {
         Section {
-            Stepper(value: $amount, in: 1...65535) {
-                LabeledContent("Minimum resin") {
-                    Text("\(amount)").monospacedDigit().foregroundStyle(.secondary)
+            Picker("Minimum resin", selection: $auto) {
+                Text("Amount").tag(false)
+                Text("Auto").tag(true)
+            }.pickerStyle(.segmented)
+            if auto {
+                Text("Find enough resin to upgrade every matched wand to +3.")
+                    .foregroundStyle(.secondary)
+            } else {
+                Stepper(value: $amount, in: 1...65535) {
+                    LabeledContent("Minimum resin") {
+                        Text("\(amount)").monospacedDigit().foregroundStyle(.secondary)
+                    }
                 }
             }
             Toggle("Require uncursed wands", isOn: $filter.uncursed)
@@ -38,6 +48,8 @@ struct ArcaneResinFields: View {
 /// while item-only relationships (alternatives and stacks) do not apply.
 struct ArcaneResinChip: View {
     let amount: Int
+    let auto: Bool
+    private var amountLabel: String { auto ? "Auto" : "≥\(amount)" }
     let filter: ArcaneResinFilter
     @Binding var dragging: RequirementChipDrag?
     let onEdit: () -> Void
@@ -49,7 +61,7 @@ struct ArcaneResinChip: View {
             ItemSpriteView(item: arcaneResinItem, pointSize: 16)
             Text(arcaneResinItem.name)
                 .font(.system(size: 12, weight: .semibold)).lineLimit(1)
-            tag("≥\(amount)", color: .shatteredGreen)
+            tag(amountLabel, color: .shatteredGreen)
             if let depth = filter.maximumDepth { tag("F≤\(depth)", color: .shatteredYellow) }
             if filter.uncursed { tag("✓", color: .shatteredMint) }
         }
@@ -61,7 +73,7 @@ struct ArcaneResinChip: View {
         .opacity(dragging == .resin ? 0.35 : 1)
         .contentShape(Capsule())
         .onTapGesture(perform: onEdit)
-        .help("≥\(amount) Arcane Resin\n\(filter.summary)")
+        .help("\(amountLabel) Arcane Resin\n\(filter.summary)")
         .focusable()
         .focused($focused)
         .onKeyPress(.delete) { onRemove(); return .handled }
@@ -76,7 +88,7 @@ struct ArcaneResinChip: View {
             Button("Remove", role: .destructive, action: onRemove)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("≥\(amount) Arcane Resin, \(filter.summary)")
+        .accessibilityLabel("\(amountLabel) Arcane Resin, \(filter.summary)")
         .accessibilityAddTraits(.isButton)
         .accessibilityAction { onEdit() }
     }

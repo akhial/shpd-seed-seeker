@@ -576,7 +576,7 @@ impl DetailPane {
             world.items.len(),
             by_depth.len()
         ));
-        if state.requirements.is_empty() && state.arcane_resin == 0 {
+        if state.requirements.is_empty() && !state.needs_resin() {
             self.summary_matches.set_label("");
         } else {
             self.summary_matches

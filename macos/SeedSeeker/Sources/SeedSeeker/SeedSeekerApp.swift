@@ -60,6 +60,7 @@ private struct ContentView: View {
     @AppStorage("challenges") private var challenges = 0
     @State private var requirements: [ItemRequirement] = []
     @State private var arcaneResin = 0
+    @State private var arcaneResinAuto = false
     @State private var arcaneResinFilter = ArcaneResinFilter()
     @State private var autoApplyTrinket = true
     @State private var maximumDepth = 24
@@ -107,7 +108,7 @@ private struct ContentView: View {
             // at two fifths of the default window and may grow to most of it,
             // rather than being dealt the drawer's usual share.
             NavigationSplitView {
-                QueryView(requirements: $requirements, maximumDepth: $maximumDepth, autoApplyTrinket: $autoApplyTrinket, arcaneResin: $arcaneResin, arcaneResinFilter: $arcaneResinFilter,
+                QueryView(requirements: $requirements, maximumDepth: $maximumDepth, autoApplyTrinket: $autoApplyTrinket, arcaneResin: $arcaneResin, arcaneResinFilter: $arcaneResinFilter, arcaneResinAuto: $arcaneResinAuto,
                           requireBlacksmith: $requireBlacksmith,
                           excludeBlacksmithRewards: $excludeBlacksmithRewards,
                           wandmakerQuest: $wandmakerQuest,
@@ -198,7 +199,7 @@ private struct ContentView: View {
             guard !restored else { return }; restored = true
             let saved = QueryPersistence.decode(savedQueryJSON)
             requirements = saved.requirements; maximumDepth = saved.maximumDepth; autoApplyTrinket = saved.autoApplyTrinket
-            arcaneResin = saved.arcaneResin; arcaneResinFilter = saved.arcaneResinFilter
+            arcaneResinAuto = saved.arcaneResinAuto; arcaneResin = saved.arcaneResin; arcaneResinFilter = saved.arcaneResinFilter
             requireBlacksmith = saved.requireBlacksmith
             excludeBlacksmithRewards = saved.excludeBlacksmithRewards
             wandmakerQuest = saved.wandmakerQuest
@@ -212,6 +213,7 @@ private struct ContentView: View {
         .onChange(of: maximumDepth) { save() }
         .onChange(of: autoApplyTrinket) { save() }
         .onChange(of: arcaneResin) { save() }
+        .onChange(of: arcaneResinAuto) { save() }
         .onChange(of: arcaneResinFilter) { save() }
         .onChange(of: requireBlacksmith) { save() }
         .onChange(of: excludeBlacksmithRewards) { save() }
@@ -271,7 +273,7 @@ private struct ContentView: View {
         try SearchRequest(requirements: requirements, maximumDepth: maximumDepth,
                           requireBlacksmith: requireBlacksmith,
                           excludeBlacksmithRewards: excludeBlacksmithRewards,
-                          wandmakerQuest: wandmakerQuest, challenges: challenges, autoApplyTrinket: autoApplyTrinket, arcaneResin: arcaneResin, arcaneResinFilter: arcaneResinFilter)
+                          wandmakerQuest: wandmakerQuest, challenges: challenges, autoApplyTrinket: autoApplyTrinket, arcaneResin: arcaneResin, arcaneResinFilter: arcaneResinFilter, arcaneResinAuto: arcaneResinAuto)
     }
 
     /// Where the scouted seed sits in the search results, or nil when it did
@@ -342,7 +344,7 @@ private struct ContentView: View {
             maximumDepth: maximumDepth, requireBlacksmith: requireBlacksmith,
             excludeBlacksmithRewards: excludeBlacksmithRewards,
             wandmakerQuest: wandmakerQuest,
-            challenges: challenges, autoApplyTrinket: autoApplyTrinket, arcaneResin: arcaneResin, arcaneResinFilter: arcaneResinFilter)) ?? ""
+            challenges: challenges, autoApplyTrinket: autoApplyTrinket, arcaneResin: arcaneResin, arcaneResinFilter: arcaneResinFilter, arcaneResinAuto: arcaneResinAuto)) ?? ""
     }
 
     private func apply(_ preset: QueryPreset) { apply(preset.query) }
@@ -354,7 +356,7 @@ private struct ContentView: View {
             return copy
         }
         autoApplyTrinket = saved.autoApplyTrinket
-        arcaneResin = saved.arcaneResin; arcaneResinFilter = saved.arcaneResinFilter
+        arcaneResinAuto = saved.arcaneResinAuto; arcaneResin = saved.arcaneResin; arcaneResinFilter = saved.arcaneResinFilter
         maximumDepth = saved.maximumDepth
         requireBlacksmith = saved.requireBlacksmith
         excludeBlacksmithRewards = saved.excludeBlacksmithRewards
@@ -397,7 +399,7 @@ private struct ContentView: View {
                 requirements: requirements, maximumDepth: maximumDepth,
                 requireBlacksmith: requireBlacksmith,
                 excludeBlacksmithRewards: excludeBlacksmithRewards,
-                wandmakerQuest: wandmakerQuest, challenges: challenges, autoApplyTrinket: autoApplyTrinket, arcaneResin: arcaneResin, arcaneResinFilter: arcaneResinFilter))
+                wandmakerQuest: wandmakerQuest, challenges: challenges, autoApplyTrinket: autoApplyTrinket, arcaneResin: arcaneResin, arcaneResinFilter: arcaneResinFilter, arcaneResinAuto: arcaneResinAuto))
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(link, forType: .string)
             // Brief checkmark in the toolbar icon as the "copied" feedback.
@@ -463,7 +465,7 @@ private struct ContentView: View {
         let query = SavedQuery(requirements: requirements, maximumDepth: maximumDepth,
                                requireBlacksmith: requireBlacksmith,
                                excludeBlacksmithRewards: excludeBlacksmithRewards,
-                               wandmakerQuest: wandmakerQuest, challenges: challenges, autoApplyTrinket: autoApplyTrinket, arcaneResin: arcaneResin, arcaneResinFilter: arcaneResinFilter)
+                               wandmakerQuest: wandmakerQuest, challenges: challenges, autoApplyTrinket: autoApplyTrinket, arcaneResin: arcaneResin, arcaneResinFilter: arcaneResinFilter, arcaneResinAuto: arcaneResinAuto)
         if let index = userPresets.firstIndex(where: { $0.name.localizedCaseInsensitiveCompare(cleanName) == .orderedSame }) {
             userPresets[index].query = query
         } else {
@@ -565,6 +567,7 @@ private struct QueryView: View {
     @Binding var autoApplyTrinket: Bool
     @Binding var arcaneResin: Int
     @Binding var arcaneResinFilter: ArcaneResinFilter
+    @Binding var arcaneResinAuto: Bool
     @Binding var requireBlacksmith: Bool
     @Binding var excludeBlacksmithRewards: Bool
     @Binding var wandmakerQuest: WandmakerQuest?
@@ -630,9 +633,9 @@ private struct QueryView: View {
         .sheet(item: $editor) { session in
             RequirementEditor(requirement: session.requirement, isNew: session.isNew,
                               stack: session.stack, isResin: session.isResin,
-                              resinAmount: arcaneResin, resinFilter: arcaneResinFilter,
-                              onSaveResin: { amount, filter in
-                arcaneResin = amount; arcaneResinFilter = filter; editor = nil
+                              resinAmount: arcaneResin, resinAuto: arcaneResinAuto, resinFilter: arcaneResinFilter,
+                              onSaveResin: { amount, filter, auto in
+                arcaneResinAuto = auto; arcaneResin = amount; arcaneResinFilter = filter; editor = nil
             }) { result in
                 if let result {
                     requirements = requirements.applyEdit(
@@ -676,7 +679,7 @@ private struct QueryView: View {
     /// Why the query cannot be searched as it stands (a combined-level
     /// group that no longer adds up, say), or nil when it can.
     private var requestError: String? {
-        guard !requirements.isEmpty || arcaneResin > 0 else { return nil }
+        guard !requirements.isEmpty || (arcaneResinAuto || arcaneResin > 0) else { return nil }
         do { _ = try buildRequest(); return nil } catch {
             return (error as? LocalizedError)?.errorDescription ?? "The query cannot be searched"
         }
@@ -686,7 +689,7 @@ private struct QueryView: View {
         try SearchRequest(requirements: requirements, maximumDepth: maximumDepth,
                           requireBlacksmith: requireBlacksmith,
                           excludeBlacksmithRewards: excludeBlacksmithRewards,
-                          wandmakerQuest: wandmakerQuest, challenges: challenges, autoApplyTrinket: autoApplyTrinket, arcaneResin: arcaneResin, arcaneResinFilter: arcaneResinFilter)
+                          wandmakerQuest: wandmakerQuest, challenges: challenges, autoApplyTrinket: autoApplyTrinket, arcaneResin: arcaneResin, arcaneResinFilter: arcaneResinFilter, arcaneResinAuto: arcaneResinAuto)
     }
 
     private var presets: some View {
@@ -735,12 +738,12 @@ private struct QueryView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 7) {
                 SectionLabel("Requirements")
-                if requirements.contains(where: { !$0.blanket }) || arcaneResin > 0 { CountBadge(requirements.filter { !$0.blanket }.boardCount + (arcaneResin > 0 ? 1 : 0)) }
+                if requirements.contains(where: { !$0.blanket }) || (arcaneResinAuto || arcaneResin > 0) { CountBadge(requirements.filter { !$0.blanket }.boardCount + ((arcaneResinAuto || arcaneResin > 0) ? 1 : 0)) }
             }
             RequirementBoardView(requirements: $requirements, arcaneResin: $arcaneResin,
-                                 arcaneResinFilter: $arcaneResinFilter, onEdit: openEditor,
+                                 arcaneResinFilter: $arcaneResinFilter, arcaneResinAuto: $arcaneResinAuto, onEdit: openEditor,
                                  onEditResin: openResinEditor, onAdd: { addRequirement() })
-            if !requirements.contains(where: { !$0.blanket }) && arcaneResin == 0 {
+            if !requirements.contains(where: { !$0.blanket }) && arcaneResin == 0 && !arcaneResinAuto {
                 Text("No requirements yet. Add one to describe the item you're hunting for.")
                     .font(.callout).foregroundStyle(.secondary)
             }
@@ -750,7 +753,7 @@ private struct QueryView: View {
     private var blanketBoard: some View {
         DisclosureGroup(isExpanded: $blanketsExpanded) {
             RequirementBoardView(requirements: $requirements, blanket: true,
-                                 arcaneResin: $arcaneResin, arcaneResinFilter: $arcaneResinFilter,
+                                 arcaneResin: $arcaneResin, arcaneResinFilter: $arcaneResinFilter, arcaneResinAuto: $arcaneResinAuto,
                                  onEdit: openEditor, onEditResin: openResinEditor,
                                  onAdd: { addRequirement(blanket: true) })
                 .padding(.top, 8)
@@ -879,6 +882,7 @@ private struct RequirementBoardView: View {
 
     @Binding var arcaneResin: Int
     @Binding var arcaneResinFilter: ArcaneResinFilter
+    @Binding var arcaneResinAuto: Bool
     let onEdit: (Int) -> Void
     let onEditResin: () -> Void
     let onAdd: () -> Void
@@ -901,8 +905,8 @@ private struct RequirementBoardView: View {
                                     dragging: $dragging, onEdit: onEdit)
                     }
                 }
-                if !blanket && arcaneResin > 0 {
-                    ArcaneResinChip(amount: arcaneResin, filter: arcaneResinFilter,
+                if !blanket && (arcaneResinAuto || arcaneResin > 0) {
+                    ArcaneResinChip(amount: arcaneResin, auto: arcaneResinAuto, filter: arcaneResinFilter,
                                     dragging: $dragging, onEdit: onEditResin,
                                     onRemove: removeResin)
                 }
@@ -930,6 +934,7 @@ private struct RequirementBoardView: View {
 
     private func removeResin() {
         arcaneResin = 0
+        arcaneResinAuto = false
         arcaneResinFilter = .init()
     }
 
@@ -1520,8 +1525,9 @@ private struct RequirementEditor: View {
     let stack: StackShape
     let onFinish: (EditorResult?) -> Void
     let editingResin: Bool
-    let onSaveResin: (Int, ArcaneResinFilter) -> Void
+    let onSaveResin: (Int, ArcaneResinFilter, Bool) -> Void
     @State private var resinAmount: Int
+    @State private var resinAuto: Bool
     @State private var resinFilter: ArcaneResinFilter
     @State private var kind: ItemKind
     @State private var itemID: String
@@ -1542,11 +1548,12 @@ private struct RequirementEditor: View {
     @State private var validationMessage: String?
 
     init(requirement: ItemRequirement, isNew: Bool, stack: StackShape,
-         isResin: Bool, resinAmount: Int, resinFilter: ArcaneResinFilter,
-         onSaveResin: @escaping (Int, ArcaneResinFilter) -> Void,
+         isResin: Bool, resinAmount: Int, resinAuto: Bool, resinFilter: ArcaneResinFilter,
+         onSaveResin: @escaping (Int, ArcaneResinFilter, Bool) -> Void,
          onFinish: @escaping (EditorResult?) -> Void) {
         editingResin = isResin
         self.onSaveResin = onSaveResin
+        _resinAuto = State(initialValue: resinAuto)
         _resinAmount = State(initialValue: resinAmount > 0 ? resinAmount : 2)
         _resinFilter = State(initialValue: resinFilter)
         original = requirement; self.isNew = isNew; self.stack = stack; self.onFinish = onFinish
@@ -1688,7 +1695,7 @@ private struct RequirementEditor: View {
                     }
                 }
                 if isResin {
-                    ArcaneResinFields(amount: $resinAmount, filter: $resinFilter)
+                    ArcaneResinFields(amount: $resinAmount, auto: $resinAuto, filter: $resinFilter)
                 }
                 // A combined level speaks for the whole stack, so its members
                 // take any upgrade and the per-item choice has nothing to say.
@@ -1837,7 +1844,7 @@ private struct RequirementEditor: View {
                 }
                 Spacer()
                 Button(isNew ? "Add" : "Save") {
-                    if isResin { onSaveResin(resinAmount, resinFilter) }
+                    if isResin { onSaveResin(resinAuto ? 0 : resinAmount, resinFilter, resinAuto) }
                     else { save() }
                 }
                     .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)

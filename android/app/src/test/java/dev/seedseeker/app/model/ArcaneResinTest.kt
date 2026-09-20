@@ -11,9 +11,9 @@ class ArcaneResinTest {
 
     @Test fun resinOnlyQueriesSurviveEveryPortableAndLocalFormat() {
         val storage = PresetStorage(MemoryPreferences())
-        for (amount in listOf(1, 3, 65535)) {
+        for (amount in listOf(0, 1, 3, 65535)) {
             for (filter in listOf(ArcaneResinFilter(), ArcaneResinFilter(false, 12, ScoutItemSource.WANDMAKER_REWARD))) {
-                val query = SearchRequest(emptyList(), arcaneResin = amount, arcaneResinFilter = filter).toPresetQuery()
+                val query = SearchRequest(emptyList(), arcaneResin = amount, arcaneResinAuto = amount == 0, arcaneResinFilter = filter).toPresetQuery()
                 assertEquals(query, ResultsExport.decodeQuery(ResultsExport.encodeQuery(query)))
                 assertEquals(query, DeepLink.decode(DeepLink.encodeLink(query)))
                 assertEquals(query, ResultsExport.decode(ResultsExport.encode(query, listOf("AAA-AAA-AAA"), "test")).query)
@@ -50,4 +50,28 @@ class ArcaneResinTest {
         assertTrue(engine.queryContinues(harder, query))
         assertFalse(engine.queryContinues(query, harder))
     }
+    @Test fun autoBlanketSharesItsWitnessAndPreservesTheEngineEstimate() {
+        val preset = ResultsExport.decodeQuery(JSONObject("""{"arcane_resin":"auto","requirements":[{"item":"wand_lightning","upgrade":2},{"kind":"wand","upgrade":2,"blanket":true}]}"""))
+        assertTrue(preset.arcaneResinAuto)
+        assertEquals(preset, DeepLink.decode(DeepLink.encodeLink(preset)))
+        val query = SearchRequest(preset.requirements, arcaneResinAuto = preset.arcaneResinAuto)
+        val engine = JniNativeSeedFinder()
+        assertEquals(3, query.slotCount)
+        assertEquals(listOf("AAA-AAA-AAS"), engine.filterSeeds(query, listOf("AAA-AAA-AAS")))
+        val marks = engine.scoutMatches("AAA-AAA-AAS", 0, query)
+        assertEquals(3, marks.totalSlots)
+        assertEquals(3, marks.matchedSlots)
+        val direct = query.copy(requirements = query.requirements.filterNot { it.blanket })
+        fun probability(request: SearchRequest) = engine.startResumedSearch(request, 18, 0, 1).use { it.status().matchProbability }
+        val estimate = probability(query)
+        assertTrue(estimate > 0.0)
+        assertEquals(probability(direct), estimate, 1e-12)
+        val zeroCost = query.copy(requirements = emptyList())
+        assertEquals(1, engine.scoutMatches("AAA-AAA-AAA", 0, zeroCost).matchedSlots)
+        assertTrue(engine.queryContinues(query, query))
+        assertThrows(IllegalArgumentException::class.java) {
+            query.copy(requirements = query.requirements.filter { it.blanket })
+        }
+    }
+
 }

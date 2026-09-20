@@ -44,6 +44,7 @@ class RequirementBoardTest {
     )
     private val requirements = mutableStateOf(original)
     private val amount = mutableStateOf(6)
+    private val automatic = mutableStateOf(false)
     private val compact = mutableStateOf(false)
     private val enabled = mutableStateOf(true)
     private var edits = 0
@@ -60,8 +61,8 @@ class RequirementBoardTest {
                             requirements = requirements.value, enabled = enabled.value, compact = compact.value,
                             onChange = { requirements.value = it }, onEdit = { _, _ -> },
                             onRemove = { item -> requirements.value = requirements.value.filterIndexed { index, _ -> index !in item.members } },
-                            onAdd = {}, arcaneResin = amount.value, arcaneResinFilter = ArcaneResinFilter(),
-                            onEditResin = { edits++ }, onRemoveResin = { removals++; amount.value = 0 },
+                            onAdd = {}, arcaneResin = amount.value, arcaneResinAuto = automatic.value, arcaneResinFilter = ArcaneResinFilter(),
+                            onEditResin = { edits++ }, onRemoveResin = { removals++; amount.value = 0; automatic.value = false },
                             modifier = Modifier.width(380.dp).padding(16.dp),
                         )
                     }
@@ -101,6 +102,22 @@ class RequirementBoardTest {
             compose.captureResinScreenshot(if (isCompact) "board-compact" else "board", compose.activity.window)
         }
         compose.runOnIdle { assertEquals(2, edits) }
+    }
+
+    @Test fun autoChipSupportsBothDisplayModesAndRemovalWithZeroFixedAmount() {
+        amount.value = 0
+        automatic.value = true
+        show()
+        for (isCompact in listOf(false, true)) {
+            compose.runOnIdle { compact.value = isCompact }
+            compose.onNodeWithText("Auto", useUnmergedTree = true).assertIsDisplayed()
+            resin().performClick()
+        }
+        compose.captureResinScreenshot("board-auto", compose.activity.window)
+        compose.runOnIdle { assertEquals(2, edits) }
+        pickUp(resin())
+        dropOn(compose.onNodeWithText("Drop to remove"))
+        resin().assertDoesNotExist()
     }
 
     @Test fun resinCanBeRemovedByDraggingButCannotJoinAnItemGroup() {

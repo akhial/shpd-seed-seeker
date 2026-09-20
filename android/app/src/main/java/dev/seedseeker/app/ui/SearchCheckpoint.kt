@@ -153,7 +153,7 @@ internal object SearchCheckpointCodec {
 
     private fun request(value: JSONObject): SearchRequest = ResultsExport.decodeQuery(value).let {
         SearchRequest(it.requirements, it.maximumDepth, it.challenges, it.requireBlacksmith,
-            it.excludeBlacksmithRewards, it.wandmakerQuest, it.autoApplyTrinket, it.arcaneResin, it.arcaneResinFilter)
+            it.excludeBlacksmithRewards, it.wandmakerQuest, it.autoApplyTrinket, it.arcaneResin, it.arcaneResinFilter, it.arcaneResinAuto)
     }
 
     private fun window(position: Long, remaining: Long) =

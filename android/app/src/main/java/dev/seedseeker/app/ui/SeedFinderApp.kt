@@ -157,6 +157,7 @@ internal fun SeedFinderApp(
     }
     var addingBlanket by remember { mutableStateOf(false) }
     var userPresets by remember { mutableStateOf(presetStorage.load()) }
+    var arcaneResinAuto by remember { mutableStateOf(initialQuery.arcaneResinAuto) }
     var arcaneResin by remember { mutableStateOf(initialQuery.arcaneResin) }
     var arcaneResinFilter by remember { mutableStateOf(initialQuery.arcaneResinFilter) }
     var showResinSheet by remember { mutableStateOf(false) }
@@ -177,6 +178,7 @@ internal fun SeedFinderApp(
         autoApplyTrinket = autoApplyTrinket,
         arcaneResin = arcaneResin,
         arcaneResinFilter = arcaneResinFilter,
+        arcaneResinAuto = arcaneResinAuto,
     )
     // Save edits as they happen, including drafts that haven't been searched yet.
     LaunchedEffect(presetStorage, currentQuery) {
@@ -230,6 +232,7 @@ internal fun SeedFinderApp(
             requirements = query.requirements.map { it.copy(key = nextRequirementKey++) }
             autoApplyTrinket = query.autoApplyTrinket
             arcaneResin = query.arcaneResin
+            arcaneResinAuto = query.arcaneResinAuto
             arcaneResinFilter = query.arcaneResinFilter
             maximumDepth = query.maximumDepth
             requireBlacksmith = query.requireBlacksmith
@@ -286,6 +289,7 @@ internal fun SeedFinderApp(
                 requirements = imported.query.requirements.map { it.copy(key = nextRequirementKey++) }
                 autoApplyTrinket = imported.query.autoApplyTrinket
                 arcaneResin = imported.query.arcaneResin
+                arcaneResinAuto = imported.query.arcaneResinAuto
                 arcaneResinFilter = imported.query.arcaneResinFilter
                 maximumDepth = imported.query.maximumDepth
                 requireBlacksmith = imported.query.requireBlacksmith
@@ -297,7 +301,7 @@ internal fun SeedFinderApp(
                 // reported what that removed.
                 val kept = imported.seeds
                 val dropped = imported.dropped
-                val importedResults = kept.mapIndexed { index, seed -> SeedResult(seed, (imported.query.requirements.slotCount() + if (imported.query.arcaneResin > 0) 1 else 0), imported.trinkets.getOrNull(index)) }
+                val importedResults = kept.mapIndexed { index, seed -> SeedResult(seed, (imported.query.requirements.slotCount() + if (imported.query.arcaneResinAuto || imported.query.arcaneResin > 0) 1 else 0), imported.trinkets.getOrNull(index)) }
                 controller.importResults(
                     imported.query, importedResults,
                     runCatching {
@@ -307,6 +311,7 @@ internal fun SeedFinderApp(
                                 autoApplyTrinket = imported.query.autoApplyTrinket,
                                 arcaneResin = imported.query.arcaneResin,
                                 arcaneResinFilter = imported.query.arcaneResinFilter,
+                                arcaneResinAuto = imported.query.arcaneResinAuto,
                                 maximumDepth = imported.query.maximumDepth,
                                 challenges = imported.query.challenges,
                                 requireBlacksmith = imported.query.requireBlacksmith,
@@ -352,6 +357,7 @@ internal fun SeedFinderApp(
             requirements = query.requirements.map { it.copy(key = nextRequirementKey++) }
             autoApplyTrinket = query.autoApplyTrinket
             arcaneResin = query.arcaneResin
+            arcaneResinAuto = query.arcaneResinAuto
             arcaneResinFilter = query.arcaneResinFilter
             maximumDepth = query.maximumDepth
             requireBlacksmith = query.requireBlacksmith
@@ -415,7 +421,7 @@ internal fun SeedFinderApp(
 
     // Why the query cannot run yet — no requirements, an unattainable combined
     // upgrade total, … — shown in the header instead of silently disabling Search.
-    val validationMessage = requirements.validationProblem(arcaneResin)
+    val validationMessage = requirements.validationProblem(arcaneResin, arcaneResinAuto)
     // Null while the query is not runnable.
     val currentRequest = runCatching {
         SearchRequest(
@@ -423,6 +429,7 @@ internal fun SeedFinderApp(
             autoApplyTrinket = autoApplyTrinket,
             arcaneResin = arcaneResin,
             arcaneResinFilter = arcaneResinFilter,
+            arcaneResinAuto = arcaneResinAuto,
             maximumDepth = maximumDepth,
             challenges = challenges,
             requireBlacksmith = requireBlacksmith,
@@ -439,7 +446,7 @@ internal fun SeedFinderApp(
             val saved = results.find { it.seed == formatted }
             val query = if (saved != null) searchedQuery?.let {
                 SearchRequest(it.requirements, it.maximumDepth, it.challenges, it.requireBlacksmith,
-                    it.excludeBlacksmithRewards, it.wandmakerQuest, it.autoApplyTrinket, it.arcaneResin, it.arcaneResinFilter)
+                    it.excludeBlacksmithRewards, it.wandmakerQuest, it.autoApplyTrinket, it.arcaneResin, it.arcaneResinFilter, it.arcaneResinAuto)
             } ?: currentRequest else currentRequest
             scoutRun = ScoutRun(nextScoutRunId++, formatted, query?.challenges ?: challenges, query,
                 if (saved != null) saved.selectedTrinket ?: "none" else null)
@@ -496,6 +503,7 @@ internal fun SeedFinderApp(
                 autoApplyTrinket = autoApplyTrinket,
                 arcaneResin = arcaneResin,
                 arcaneResinFilter = arcaneResinFilter,
+                arcaneResinAuto = arcaneResinAuto,
                 maximumDepth = maximumDepth,
                 requireBlacksmith = requireBlacksmith,
                 excludeBlacksmithRewards = excludeBlacksmithRewards,
@@ -526,6 +534,7 @@ internal fun SeedFinderApp(
                     requirements = preset.query.requirements.map { it.copy(key = nextRequirementKey++) }
                     autoApplyTrinket = preset.query.autoApplyTrinket
                     arcaneResin = preset.query.arcaneResin
+                    arcaneResinAuto = preset.query.arcaneResinAuto
                     arcaneResinFilter = preset.query.arcaneResinFilter
                     maximumDepth = preset.query.maximumDepth
                     requireBlacksmith = preset.query.requireBlacksmith
@@ -542,6 +551,7 @@ internal fun SeedFinderApp(
                             autoApplyTrinket = autoApplyTrinket,
                             arcaneResin = arcaneResin,
                             arcaneResinFilter = arcaneResinFilter,
+                            arcaneResinAuto = arcaneResinAuto,
                             maximumDepth = maximumDepth,
                             requireBlacksmith = requireBlacksmith,
                             excludeBlacksmithRewards = excludeBlacksmithRewards,
@@ -562,7 +572,7 @@ internal fun SeedFinderApp(
                     presetStorage.save(userPresets)
                 },
                 onEditResin = { showResinSheet = true },
-                onRemoveResin = { arcaneResin = 0; arcaneResinFilter = dev.seedseeker.app.model.ArcaneResinFilter() },
+                onRemoveResin = { arcaneResin = 0; arcaneResinAuto = false; arcaneResinFilter = dev.seedseeker.app.model.ArcaneResinFilter() },
                 onAdd = { blanket ->
                     addingBlanket = blanket
                     editingIndex = null
@@ -640,6 +650,7 @@ internal fun SeedFinderApp(
                                 autoApplyTrinket = autoApplyTrinket,
                                 arcaneResin = arcaneResin,
                                 arcaneResinFilter = arcaneResinFilter,
+                                arcaneResinAuto = arcaneResinAuto,
                                 maximumDepth = maximumDepth,
                                 requireBlacksmith = requireBlacksmith,
                                 excludeBlacksmithRewards = excludeBlacksmithRewards,
@@ -725,10 +736,10 @@ internal fun SeedFinderApp(
         }
 
         if (showResinSheet) {
-            ArcaneResinSheet(arcaneResin, arcaneResinFilter,
+            ArcaneResinSheet(arcaneResin, arcaneResinFilter, auto = arcaneResinAuto,
                 onDismiss = { showResinSheet = false },
-                onSave = { amount, filter -> arcaneResin = amount; arcaneResinFilter = filter; showResinSheet = false },
-                onRemove = { arcaneResin = 0; arcaneResinFilter = dev.seedseeker.app.model.ArcaneResinFilter(); showResinSheet = false })
+                onSave = { amount, filter, auto -> arcaneResin = amount; arcaneResinAuto = auto; arcaneResinFilter = filter; showResinSheet = false },
+                onRemove = { arcaneResin = 0; arcaneResinAuto = false; arcaneResinFilter = dev.seedseeker.app.model.ArcaneResinFilter(); showResinSheet = false })
         }
         if (showRequirementSheet) {
             RequirementSheet(
