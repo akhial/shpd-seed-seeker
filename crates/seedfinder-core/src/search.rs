@@ -893,6 +893,7 @@ mod tests {
         let query = SearchQuery {
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
+            arcane_resin_auto: false,
             arcane_resin: 0,
             requirements: vec![Requirement {
                 kind: ItemKind::Wand,
@@ -984,6 +985,7 @@ mod tests {
         let query = SearchQuery {
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
+            arcane_resin_auto: false,
             arcane_resin: 0,
             requirements: vec![Requirement {
                 kind: ItemKind::Wand,
@@ -1060,6 +1062,7 @@ mod tests {
         let query = SearchQuery {
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
+            arcane_resin_auto: false,
             arcane_resin: 0,
             requirements: vec![Requirement {
                 kind: ItemKind::Wand,
@@ -1137,6 +1140,7 @@ mod tests {
         let query = SearchQuery {
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
+            arcane_resin_auto: false,
             arcane_resin: 0,
             requirements: vec![Requirement {
                 kind: ItemKind::Wand,
@@ -1182,6 +1186,7 @@ mod tests {
         SearchQuery {
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
+            arcane_resin_auto: false,
             arcane_resin: 0,
             requirements: vec![Requirement {
                 kind: ItemKind::Wand,
@@ -1331,6 +1336,7 @@ mod tests {
         let impossible = SearchQuery {
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
+            arcane_resin_auto: false,
             arcane_resin: 0,
             requirements: vec![Requirement {
                 kind: ItemKind::Ring,
@@ -1588,6 +1594,7 @@ mod tests {
         let query = SearchQuery {
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
+            arcane_resin_auto: false,
             arcane_resin: 0,
             requirements: vec![Requirement {
                 kind: ItemKind::Wand,

@@ -117,6 +117,7 @@ fun RequirementBoard(
     onRemove: (BoardItem) -> Unit,
     onAdd: () -> Unit,
     arcaneResin: Int,
+    arcaneResinAuto: Boolean = false,
     arcaneResinFilter: ArcaneResinFilter,
     onEditResin: () -> Unit,
     onRemoveResin: () -> Unit,
@@ -224,9 +225,10 @@ fun RequirementBoard(
                             )
                         }
                     }
-                    if (arcaneResin > 0) {
+                    if (arcaneResinAuto || arcaneResin > 0) {
                         ArcaneResinChip(
                             amount = arcaneResin,
+                            auto = arcaneResinAuto,
                             filter = arcaneResinFilter,
                             enabled = enabled,
                             dimmed = draggingResin,
@@ -515,6 +517,7 @@ private fun RequirementChip(
 @Composable
 private fun ArcaneResinChip(
     amount: Int,
+    auto: Boolean,
     filter: ArcaneResinFilter,
     enabled: Boolean,
     dimmed: Boolean,
@@ -527,7 +530,7 @@ private fun ArcaneResinChip(
 ) {
     val metrics = LocalChipMetrics.current
     BoardChip(
-        description = "Arcane Resin, at least $amount, ${resinFilterDescription(filter)}",
+        description = "Arcane Resin, ${if (auto) "Auto, upgrade matched wands to +3" else "at least $amount"}, ${resinFilterDescription(filter)}",
         enabled = enabled,
         dimmed = dimmed,
         highlighted = false,
@@ -542,7 +545,7 @@ private fun ArcaneResinChip(
         Spacer(Modifier.width(metrics.spriteGap))
         ChipTitle("Arcane Resin")
         Spacer(Modifier.width(5.dp))
-        ChipTag(text = "≥$amount", tone = TagTone.QUALIFIER)
+        ChipTag(text = if (auto) "Auto" else "≥$amount", tone = TagTone.QUALIFIER)
         filter.maximumDepth?.let {
             Spacer(Modifier.width(5.dp))
             ChipTag(text = "F≤$it", tone = TagTone.QUALIFIER)

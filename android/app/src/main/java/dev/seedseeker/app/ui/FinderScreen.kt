@@ -99,6 +99,7 @@ fun FinderScreen(
     maximumDepth: Int,
     autoApplyTrinket: Boolean,
     arcaneResin: Int,
+    arcaneResinAuto: Boolean = false,
     arcaneResinFilter: dev.seedseeker.app.model.ArcaneResinFilter,
     requireBlacksmith: Boolean,
     excludeBlacksmithRewards: Boolean,
@@ -168,7 +169,7 @@ fun FinderScreen(
     // outlives the run by a frame, so the last batch of a finishing search,
     // which may land in the same frame as the run ending, is covered too.
     var runOwnsResults by remember { mutableStateOf(false) }
-    LaunchedEffect(requirements, arcaneResin, arcaneResinFilter) { showResults = false }
+    LaunchedEffect(requirements, arcaneResin, arcaneResinAuto, arcaneResinFilter) { showResults = false }
     LaunchedEffect(results) { if (results.isNotEmpty() && !runOwnsResults) showResults = true }
     LaunchedEffect(isSearching) {
         if (isSearching) {
@@ -204,7 +205,7 @@ fun FinderScreen(
                         ) {
                             DropdownMenuItem(
                                 text = { Text("Share search…") },
-                                enabled = requirements.isNotEmpty() || arcaneResin > 0,
+                                enabled = requirements.isNotEmpty() || (arcaneResinAuto || arcaneResin > 0),
                                 onClick = {
                                     showOverflowMenu = false
                                     onShareQuery()
@@ -274,8 +275,8 @@ fun FinderScreen(
                     .widthIn(max = 680.dp),
             ) {
                 PageHeader(
-                    title = "Requirements (${requirements.filterNot { it.blanket }.boardCount() + if (arcaneResin > 0) 1 else 0})",
-                    summary = listOf(requirementsSummaryText(requirements), if (arcaneResin > 0) "≥$arcaneResin Arcane Resin" else "").filter { it.isNotEmpty() }.joinToString(" · "),
+                    title = "Requirements (${requirements.filterNot { it.blanket }.boardCount() + if (arcaneResinAuto || arcaneResin > 0) 1 else 0})",
+                    summary = listOf(requirementsSummaryText(requirements), if (arcaneResinAuto || arcaneResin > 0) (if (arcaneResinAuto) "Auto Arcane Resin" else "≥$arcaneResin Arcane Resin") else "").filter { it.isNotEmpty() }.joinToString(" · "),
                     open = !showResults,
                     openDescription = "Show requirements",
                     onOpen = { showResults = false },
@@ -287,6 +288,7 @@ fun FinderScreen(
                         autoApplyTrinket = autoApplyTrinket,
                         arcaneResin = arcaneResin,
                         arcaneResinFilter = arcaneResinFilter,
+                        arcaneResinAuto = arcaneResinAuto,
                         requireBlacksmith = requireBlacksmith,
                         excludeBlacksmithRewards = excludeBlacksmithRewards,
                         wandmakerQuest = wandmakerQuest,
@@ -457,6 +459,7 @@ private fun QueryPage(
     maximumDepth: Int,
     autoApplyTrinket: Boolean,
     arcaneResin: Int,
+    arcaneResinAuto: Boolean = false,
     arcaneResinFilter: dev.seedseeker.app.model.ArcaneResinFilter,
     requireBlacksmith: Boolean,
     excludeBlacksmithRewards: Boolean,
@@ -497,6 +500,7 @@ private fun QueryPage(
             onAdd = { onAdd(false) },
             arcaneResin = arcaneResin,
             arcaneResinFilter = arcaneResinFilter,
+            arcaneResinAuto = arcaneResinAuto,
             onEditResin = onEditResin,
             onRemoveResin = onRemoveResin,
 
@@ -537,7 +541,7 @@ private fun QueryPage(
                 confirmButton = { TextButton(onClick = { showBlanketHelp = false }) { Text("Got it") } },
             )
         }
-        if (validationMessage != null && (requirements.isNotEmpty() || arcaneResin > 0)) {
+        if (validationMessage != null && (requirements.isNotEmpty() || (arcaneResinAuto || arcaneResin > 0))) {
             Text(
                 validationMessage,
                 style = MaterialTheme.typography.bodySmall,

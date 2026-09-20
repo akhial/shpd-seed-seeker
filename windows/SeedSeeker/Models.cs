@@ -1140,11 +1140,14 @@ public sealed class QuerySettings
     public int MaximumDepth { get; set; } = SearchLimits.MaxDepth;
     public bool AutoApplyTrinket { get; set; }
     public int ArcaneResin { get; set; }
+    public bool ArcaneResinAuto { get; set; }
+    [JsonIgnore]
+    public bool NeedsResin => ArcaneResinAuto || ArcaneResin > 0;
     public ArcaneResinFilter ArcaneResinFilter { get; set; } = new();
     [System.Text.Json.Serialization.JsonIgnore]
-    public bool HasRequirements => Requirements.Count > 0 || ArcaneResin > 0;
+    public bool HasRequirements => Requirements.Count > 0 || NeedsResin;
     [System.Text.Json.Serialization.JsonIgnore]
-    public int SlotCount => QueryRelationships.SlotCount(Requirements) + (ArcaneResin > 0 ? 1 : 0);
+    public int SlotCount => QueryRelationships.SlotCount(Requirements) + (NeedsResin ? 1 : 0);
     public bool RequireBlacksmith { get; set; }
     public bool ExcludeBlacksmithRewards { get; set; }
     public WandmakerQuest WandmakerQuest { get; set; } = WandmakerQuest.Any;
@@ -1156,6 +1159,7 @@ public sealed class QuerySettings
         MaximumDepth = MaximumDepth,
         AutoApplyTrinket = AutoApplyTrinket,
         ArcaneResin = ArcaneResin,
+        ArcaneResinAuto = ArcaneResinAuto,
         ArcaneResinFilter = ArcaneResinFilter with { },
         RequireBlacksmith = RequireBlacksmith,
         ExcludeBlacksmithRewards = ExcludeBlacksmithRewards,

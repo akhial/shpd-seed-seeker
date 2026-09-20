@@ -4,9 +4,9 @@ import XCTest
 
 final class ArcaneResinTests: XCTestCase {
     func testResinOnlyQueriesPreserveAmountsAndFiltersAcrossFormats() throws {
-        for amount in [1, 3, 65535] {
+        for amount in [0, 1, 3, 65535] {
             for filter in [ArcaneResinFilter(), ArcaneResinFilter(uncursed: false, maximumDepth: 12, source: .wandmakerReward)] {
-                let query = SavedQuery(autoApplyTrinket: false, arcaneResin: amount, arcaneResinFilter: filter)
+                let query = SavedQuery(autoApplyTrinket: false, arcaneResin: amount, arcaneResinFilter: filter, arcaneResinAuto: amount == 0)
                 let request = try query.searchRequest()
                 XCTAssertEqual(request.slotCount, 1)
                 XCTAssertNotNil(query.validated())
@@ -39,4 +39,22 @@ final class ArcaneResinTests: XCTestCase {
         XCTAssertFalse(query.isRefinement(of: harder))
         XCTAssertNotNil(try QueryAnalysis.analyze(QueryDocument.encode(query)).probability)
     }
+    func testAutoBlanketSharesItsWitnessAndPreservesTheEngineEstimate() throws {
+        let document = Data(#"{"arcane_resin":"auto","requirements":[{"item":"wand_lightning","upgrade":2},{"kind":"wand","upgrade":2,"blanket":true}]}"#.utf8)
+        let saved = try ResultsExport.decodeQuery(JSONSerialization.jsonObject(with: document) as! [String: Any])
+        XCTAssertTrue(saved.arcaneResinAuto)
+        XCTAssertEqual(saved, try DeepLink.decode(DeepLink.encodeLink(for: saved)))
+        let query = try saved.searchRequest()
+        XCTAssertEqual(query.slotCount, 3)
+        let marks = try ScoutMatches.mark(seed: "AAA-AAA-AAS", challenges: 0, query: query)
+        XCTAssertEqual(marks.totalRequirements, 3)
+        XCTAssertEqual(marks.matchedRequirements, 3)
+        var direct = query; direct.requirements.removeAll { $0.blanket }
+        let probability = try XCTUnwrap(QueryAnalysis.analyze(QueryDocument.encode(query)).probability)
+        let directProbability = try XCTUnwrap(QueryAnalysis.analyze(QueryDocument.encode(direct)).probability)
+        XCTAssertEqual(probability, directProbability, accuracy: 1e-12)
+        XCTAssertTrue(query.isRefinement(of: query))
+        XCTAssertThrowsError(try SearchRequest(requirements: query.requirements.filter { $0.blanket }, arcaneResinAuto: true))
+    }
+
 }

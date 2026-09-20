@@ -104,7 +104,9 @@ files are replaced. The output options cannot be combined with `--benchmark`.
   // by other requirements cannot also provide resin. Each yields
   // 2 * (upgrade + 1): +0 gives 2, +1 gives 4, +2 gives 6, etc.
   // A resin-only query may use an empty requirements array.
-  "arcane_resin"?: 0..65535 = 0,
+  // "auto" finds enough resin to bring every reserved wand to +3:
+  // +0 needs 6, +1 needs 5, +2 needs 3, and +3 or higher needs none.
+  "arcane_resin"?: 0..65535 | "auto" = 0,
   // The run's Wandmaker (floors 7-9) must ask for this quest item.
   "wandmaker_quest"?: "corpse_dust" | "elemental_embers" | "rotberry",
 

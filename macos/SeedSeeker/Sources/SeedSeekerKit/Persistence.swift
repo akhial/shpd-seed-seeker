@@ -2,8 +2,9 @@ import Foundation
 
 public struct SavedQuery: Codable, Sendable {
     public var arcaneResin: Int
+    public var arcaneResinAuto: Bool
     public var arcaneResinFilter: ArcaneResinFilter
-    public var slotCount: Int { requirements.slotCount + (arcaneResin > 0 ? 1 : 0) }
+    public var slotCount: Int { requirements.slotCount + (arcaneResinAuto || arcaneResin > 0 ? 1 : 0) }
     public var requirements: [ItemRequirement]
     public var autoApplyTrinket: Bool
     public var maximumDepth: Int
@@ -15,21 +16,23 @@ public struct SavedQuery: Codable, Sendable {
                 requireBlacksmith: Bool = false, excludeBlacksmithRewards: Bool = false,
                 wandmakerQuest: WandmakerQuest? = nil,
                 challenges: Int = 0, autoApplyTrinket: Bool = true,
-                arcaneResin: Int = 0, arcaneResinFilter: ArcaneResinFilter = .init()) {
+                arcaneResin: Int = 0, arcaneResinFilter: ArcaneResinFilter = .init(), arcaneResinAuto: Bool = false) {
         self.requirements = requirements; self.maximumDepth = maximumDepth
         self.requireBlacksmith = requireBlacksmith
         self.excludeBlacksmithRewards = excludeBlacksmithRewards
         self.wandmakerQuest = wandmakerQuest
         self.challenges = challenges
         self.autoApplyTrinket = autoApplyTrinket
+        self.arcaneResinAuto = arcaneResinAuto
         self.arcaneResin = arcaneResin; self.arcaneResinFilter = arcaneResinFilter
     }
     private enum CodingKeys: String, CodingKey {
         case requirements, maximumDepth, requireBlacksmith, excludeBlacksmithRewards
-        case wandmakerQuest, challenges, autoApplyTrinket, arcaneResin, arcaneResinFilter
+        case wandmakerQuest, challenges, autoApplyTrinket, arcaneResin, arcaneResinFilter, arcaneResinAuto
     }
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        arcaneResinAuto = try container.decodeIfPresent(Bool.self, forKey: .arcaneResinAuto) ?? false
         arcaneResin = try container.decodeIfPresent(Int.self, forKey: .arcaneResin) ?? 0
         arcaneResinFilter = try container.decodeIfPresent(ArcaneResinFilter.self, forKey: .arcaneResinFilter) ?? .init()
         autoApplyTrinket = try container.decodeIfPresent(Bool.self, forKey: .autoApplyTrinket) ?? false
@@ -238,6 +241,6 @@ public extension SavedQuery {
     func searchRequest() throws -> SearchRequest {
         try SearchRequest(requirements: requirements, maximumDepth: maximumDepth,
                           requireBlacksmith: requireBlacksmith, excludeBlacksmithRewards: excludeBlacksmithRewards,
-                          wandmakerQuest: wandmakerQuest, challenges: challenges, autoApplyTrinket: autoApplyTrinket, arcaneResin: arcaneResin, arcaneResinFilter: arcaneResinFilter)
+                          wandmakerQuest: wandmakerQuest, challenges: challenges, autoApplyTrinket: autoApplyTrinket, arcaneResin: arcaneResin, arcaneResinFilter: arcaneResinFilter, arcaneResinAuto: arcaneResinAuto)
     }
 }

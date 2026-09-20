@@ -918,6 +918,7 @@ mod tests {
         SearchQuery {
             auto_apply_trinket: false,
             arcane_resin_filter: shpd_seedfinder_core::query::ArcaneResinFilter::default(),
+            arcane_resin_auto: false,
             arcane_resin: 0,
             requirements: vec![Requirement {
                 kind: ItemKind::Wand,
@@ -1094,6 +1095,7 @@ mod tests {
         let satisfiable = SearchQuery {
             auto_apply_trinket: false,
             arcane_resin_filter: shpd_seedfinder_core::query::ArcaneResinFilter::default(),
+            arcane_resin_auto: false,
             arcane_resin: 0,
             requirements: vec![Requirement {
                 kind: definition.kind,
@@ -1253,6 +1255,7 @@ mod tests {
         let impossible = SearchQuery {
             auto_apply_trinket: false,
             arcane_resin_filter: shpd_seedfinder_core::query::ArcaneResinFilter::default(),
+            arcane_resin_auto: false,
             arcane_resin: 0,
             requirements: vec![Requirement {
                 kind: shpd_seedfinder_core::catalog::ItemKind::Ring,
@@ -1381,6 +1384,7 @@ mod tests {
         SearchQuery {
             auto_apply_trinket: false,
             arcane_resin_filter: shpd_seedfinder_core::query::ArcaneResinFilter::default(),
+            arcane_resin_auto: false,
             arcane_resin: 0,
             requirements: vec![kind_requirement(kind)],
             max_depth: 24,

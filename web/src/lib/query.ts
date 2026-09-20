@@ -492,7 +492,7 @@ export function fromQueryJson(json: string): QueryState {
   if (document.auto_apply_trinket !== undefined && typeof document.auto_apply_trinket !== "boolean")
     throw new Error("auto_apply_trinket must be a boolean");
   if (document.arcane_resin !== undefined && !validArcaneResin(document.arcane_resin))
-    throw new Error("Arcane Resin must be a whole number from 0 through 65535.");
+    throw new Error("Arcane Resin must be Auto or a whole number from 0 through 65535.");
   let arcaneResinFilter: ArcaneResinFilter | undefined;
   if (document.arcane_resin_filter !== undefined) {
     const filter = document.arcane_resin_filter;
@@ -621,10 +621,10 @@ export function validateRequirement(requirement: RequirementState): string[] {
 
 export function validateQuery(state: QueryState): ValidationResult {
   const errors: string[] = [];
-  if (!state.requirements.length && !(state.arcaneResin && state.arcaneResin > 0))
+  if (!state.requirements.length && !state.arcaneResin)
     errors.push("Add at least one requirement.");
   if (state.arcaneResin !== undefined && !validArcaneResin(state.arcaneResin))
-    errors.push("Arcane Resin must be a whole number from 0 through 65535.");
+    errors.push("Arcane Resin must be Auto or a whole number from 0 through 65535.");
   if (state.arcaneResinFilter) errors.push(...validateArcaneResinFilter(state.arcaneResinFilter));
   if (
     state.requirements.length > 0 &&
@@ -703,8 +703,11 @@ export function validateQuery(state: QueryState): ValidationResult {
   return { valid: errors.length === 0, errors };
 }
 
-function validArcaneResin(value: number): boolean {
-  return Number.isInteger(value) && value >= 0 && value <= 65535;
+function validArcaneResin(value: unknown): boolean {
+  return (
+    value === "auto" ||
+    (typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 65535)
+  );
 }
 
 function validateArcaneResinFilter(filter: ArcaneResinFilter): string[] {

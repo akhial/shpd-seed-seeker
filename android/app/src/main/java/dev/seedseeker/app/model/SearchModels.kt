@@ -406,9 +406,9 @@ fun List<ItemRequirement>.slotCount(): Int = slots().size
  * enforces the same rules; this form exists so the editor can show the
  * message instead of silently disabling Search.
  */
-fun List<ItemRequirement>.validationProblem(arcaneResin: Int = 0): String? {
+fun List<ItemRequirement>.validationProblem(arcaneResin: Int = 0, arcaneResinAuto: Boolean = false): String? {
     if (arcaneResin !in 0..65535) return "Arcane Resin must be 0..65535."
-    if (isEmpty() && arcaneResin == 0) return "Add at least one requirement."
+    if (isEmpty() && arcaneResin == 0 && !arcaneResinAuto) return "Add at least one requirement."
     if (isNotEmpty() && none { !it.blanket }) return "Add at least one ordinary requirement."
     if (slots().any { slot -> slot.any { it.blanket != slot.first().blanket } }) {
         return "An either/or group cannot mix ordinary and blanket requirements."
@@ -542,16 +542,17 @@ data class SearchRequest(
     val autoApplyTrinket: Boolean = false,
     val arcaneResin: Int = 0,
     val arcaneResinFilter: ArcaneResinFilter = ArcaneResinFilter(),
+    val arcaneResinAuto: Boolean = false,
 ) {
     init {
-        requirements.validationProblem(arcaneResin)?.let { throw IllegalArgumentException(it) }
+        requirements.validationProblem(arcaneResin, arcaneResinAuto)?.let { throw IllegalArgumentException(it) }
         require(maximumDepth in 1..SearchLimits.MAX_DEPTH) { "Maximum floor must be 1..${SearchLimits.MAX_DEPTH}" }
         require(challenges in 0..Challenge.ALL_MASK) { "Challenge mask must be 0..${Challenge.ALL_MASK}" }
     }
 
     /** How many slots the engine sees: what result rows report as matched requirements. */
     val slotCount: Int
-        get() = requirements.slotCount() + if (arcaneResin > 0) 1 else 0
+        get() = requirements.slotCount() + if (arcaneResinAuto || arcaneResin > 0) 1 else 0
 }
 
 enum class Challenge(

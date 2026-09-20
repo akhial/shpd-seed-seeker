@@ -209,6 +209,7 @@ fn random_query(rng: &mut Rng) -> Option<SearchQuery> {
             let query = SearchQuery {
                 auto_apply_trinket: false,
                 arcane_resin_filter: shpd_seedfinder_core::query::ArcaneResinFilter::default(),
+                arcane_resin_auto: false,
                 arcane_resin: 0,
                 requirements: requirements.clone(),
                 max_depth: 10,
@@ -258,6 +259,7 @@ fn random_query(rng: &mut Rng) -> Option<SearchQuery> {
     let query = SearchQuery {
         auto_apply_trinket: false,
         arcane_resin_filter: shpd_seedfinder_core::query::ArcaneResinFilter::default(),
+        arcane_resin_auto: rng.chance(25),
         arcane_resin: if rng.chance(35) {
             1 + u16::try_from(rng.below(10)).unwrap()
         } else {
@@ -297,6 +299,20 @@ fn candidates(query: &SearchQuery, world: &GeneratedWorld) -> Vec<Vec<(usize, us
             pairs
         })
         .collect()
+}
+
+fn required_resin(query: &SearchQuery, world: &GeneratedWorld, used: &[bool]) -> u16 {
+    if query.arcane_resin_auto {
+        world
+            .items
+            .iter()
+            .zip(used)
+            .filter(|(candidate, used)| **used && item(candidate.item).kind == ItemKind::Wand)
+            .map(|(candidate, _)| ((u16::from(candidate.upgrade) + 1)..=3).sum::<u16>())
+            .sum()
+    } else {
+        query.arcane_resin
+    }
 }
 
 /// Whether a full or partial assignment respects every cross-item rule, and
@@ -374,7 +390,8 @@ fn score(
             })
         })
         .count();
-    let resin = query.arcane_resin > 0
+    let minimum = required_resin(query, world, &used);
+    let resin = query.needs_resin()
         && (0..(1_u64 << world.items.len())).any(|subset| {
             // Exhaustively try every surplus subset, independently of the
             // production matcher's per-scenario maximum calculation.
@@ -402,7 +419,7 @@ fn score(
                 }
                 total += 2 * (u16::from(candidate.upgrade) + 1);
             }
-            total >= query.arcane_resin
+            total >= minimum
         });
     Some(plain + groups + blankets + usize::from(resin))
 }
@@ -492,8 +509,11 @@ fn matcher_and_scout_agree_with_exhaustive_enumeration() {
         );
         // A satisfied level-sum group flags every contributing item, so the
         // flags can outnumber the conditions but never undercut them.
+        // Auto can satisfy its condition without donors when its cost is zero.
         assert!(
-            marks.matched_indices().len() + query.blanket_slots().len()
+            marks.matched_indices().len()
+                + query.blanket_slots().len()
+                + usize::from(query.arcane_resin_auto)
                 >= marks.matched_requirements
         );
         if expected {
@@ -515,6 +535,7 @@ fn mutate(rng: &mut Rng, base: &SearchQuery) -> Option<SearchQuery> {
     let mut query = base.clone();
     if rng.chance(35) {
         query.arcane_resin = u16::try_from(rng.below(12)).unwrap();
+        query.arcane_resin_auto = rng.chance(40);
     }
     for _ in 0..=rng.below(3) {
         let index = rng.below(query.requirements.len());

@@ -303,7 +303,7 @@ public sealed partial class MainWindow : Window
     }
     private void RefreshQuery()
     {
-        BuildBoard(); NoRequirements.Visibility = !query.Requirements.Any(r => !r.Blanket) && query.ArcaneResin == 0 ? Visibility.Visible : Visibility.Collapsed;
+        BuildBoard(); NoRequirements.Visibility = !query.Requirements.Any(r => !r.Blanket) && !query.NeedsResin ? Visibility.Visible : Visibility.Collapsed;
         FloorLabel.Text = $"first {query.MaximumDepth} floor{(query.MaximumDepth == 1 ? "" : "s")}"; RequireBlacksmith.IsEnabled = query.MaximumDepth < ScoutQuests.Window(QuestGiver.Blacksmith).Last; StartButton.IsEnabled = search is not null || (!busy && query.HasRequirements); CopyLinkButton.IsEnabled = !searchRunning && query.HasRequirements;
         var count = BitOperations.PopCount((uint)query.Challenges); ChallengeSummary.Text = count == 0 ? "None" : $"{count} enabled";
     }
@@ -459,7 +459,7 @@ public sealed partial class MainWindow : Window
             if (item.Cluster is null) board.Children.Add(Chip(requirements, item, item.Anchor, problem));
             else board.Children.Add(Cluster(requirements, item, problem));
         }
-        if (query.ArcaneResin > 0) RequirementBoard.Children.Add(ArcaneResinChip());
+        if (query.NeedsResin) RequirementBoard.Children.Add(ArcaneResinChip());
         RequirementBoard.Children.Add(AddChip());
         BlanketBoard.Children.Add(AddChip(blanket: true));
     }
@@ -513,7 +513,7 @@ public sealed partial class MainWindow : Window
         var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
         content.Children.Add(new SpriteView { SpriteIndex = 317, SpriteSize = 20, VerticalAlignment = VerticalAlignment.Center });
         content.Children.Add(new TextBlock { Text = "Arcane Resin", FontSize = 13, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
-        content.Children.Add(ChipTagPill($"≥{query.ArcaneResin}", SuccessInk, SuccessFill));
+        content.Children.Add(ChipTagPill(query.ArcaneResinAuto ? "Auto" : $"≥{query.ArcaneResin}", SuccessInk, SuccessFill));
         if (query.ArcaneResinFilter.MaximumDepth is int depth) content.Children.Add(ChipTagPill($"F≤{depth}", CautionInk, CautionFill));
         if (query.ArcaneResinFilter.Uncursed) content.Children.Add(ChipTagPill("\u2713", SuccessInk, SuccessFill));
         return content;
@@ -528,7 +528,7 @@ public sealed partial class MainWindow : Window
         remove.Click += (_, _) => RemoveArcaneResin();
         menu.Items.Add(edit); menu.Items.Add(new MenuFlyoutSeparator()); menu.Items.Add(remove);
         var chip = RequirementChip(ArcaneResinContent(), ArcaneResinKey, menu);
-        var detail = $"≥{query.ArcaneResin} Arcane Resin\n{query.ArcaneResinFilter.Summary}";
+        var detail = $"{(query.ArcaneResinAuto ? "Auto" : $"≥{query.ArcaneResin}")} Arcane Resin\n{query.ArcaneResinFilter.Summary}";
         ToolTipService.SetToolTip(chip, new TextBlock { Text = detail, TextWrapping = TextWrapping.Wrap, MaxWidth = 280 });
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(chip, detail);
         dropTargets.Add(new DropTarget(DropKind.Chip, chip, ArcaneResinKey));
@@ -537,7 +537,7 @@ public sealed partial class MainWindow : Window
 
     private void RemoveArcaneResin()
     {
-        query.ArcaneResin = 0; query.ArcaneResinFilter = new();
+        query.ArcaneResin = 0; query.ArcaneResinAuto = false; query.ArcaneResinFilter = new();
         SaveSettings(); RefreshQuery();
     }
 
@@ -923,7 +923,7 @@ public sealed partial class MainWindow : Window
     /// <summary>What dropping the chip keyed <paramref name="key"/> on <paramref name="target"/> would do, as the ghost's caption; null when nothing.</summary>
     private string? DropCaption(long key, DropTarget? target)
     {
-        if (key == ArcaneResinKey) return query.ArcaneResin > 0 && target?.Kind == DropKind.Remove ? "remove" : null;
+        if (key == ArcaneResinKey) return query.NeedsResin && target?.Kind == DropKind.Remove ? "remove" : null;
         var source = IndexOfKey(key);
         if (source < 0 || target is null) return null;
         switch (target.Kind)
@@ -1020,21 +1020,34 @@ public sealed partial class MainWindow : Window
 
     private async Task EditArcaneResin()
     {
+        var mode = Combo(new[] { "Amount", "Auto" }, query.ArcaneResinAuto ? 1 : 0);
+        mode.Header = "Minimum resin";
+        var explanation = new TextBlock { Text = "Find enough resin to upgrade every matched wand to +3.", TextWrapping = TextWrapping.Wrap };
         var amount = Number("Minimum resin", query.ArcaneResin > 0 ? query.ArcaneResin : 2, 1, 65535);
         var uncursed = new CheckBox { Content = "Require uncursed wands", IsChecked = query.ArcaneResinFilter.Uncursed };
         var depth = Combo(new[] { "Search limit" }.Concat(Enumerable.Range(1, SearchLimits.MaxDepth).Select(x => $"Floor {x}")), query.ArcaneResinFilter.MaximumDepth ?? 0);
         var source = Combo(new[] { "Any source" }.Concat(Enum.GetValues<ScoutItemSource>().Select(Labels.Source)), query.ArcaneResinFilter.Source is { } selected ? (int)selected + 1 : 0);
         var content = new StackPanel { Spacing = 16 };
+        content.Children.Add(mode); content.Children.Add(explanation);
         content.Children.Add(amount); content.Children.Add(uncursed);
         content.Children.Add(new TextBlock { Text = "Wand floor limit" }); content.Children.Add(depth);
         content.Children.Add(new TextBlock { Text = "Wand source" }); content.Children.Add(source);
-        var dialog = new ContentDialog { XamlRoot = Content.XamlRoot, Title = "Arcane Resin", PrimaryButtonText = query.ArcaneResin > 0 ? "Save" : "Add", CloseButtonText = "Cancel", SecondaryButtonText = query.ArcaneResin > 0 ? "Remove" : "", DefaultButton = ContentDialogButton.Primary, Content = VerticalScrollView(content, 440, 460) };
-        bool ValidAmount() => double.IsFinite(amount.Value) && amount.Value == Math.Truncate(amount.Value) && amount.Value is >= 1 and <= 65535;
+        var dialog = new ContentDialog { XamlRoot = Content.XamlRoot, Title = "Arcane Resin", PrimaryButtonText = query.NeedsResin ? "Save" : "Add", CloseButtonText = "Cancel", SecondaryButtonText = query.NeedsResin ? "Remove" : "", DefaultButton = ContentDialogButton.Primary, Content = VerticalScrollView(content, 440, 460) };
+        bool ValidAmount() => mode.SelectedIndex == 1 || (double.IsFinite(amount.Value) && amount.Value == Math.Truncate(amount.Value) && amount.Value is >= 1 and <= 65535);
+        void UpdateMode()
+        {
+            amount.Visibility = mode.SelectedIndex == 0 ? Visibility.Visible : Visibility.Collapsed;
+            explanation.Visibility = mode.SelectedIndex == 1 ? Visibility.Visible : Visibility.Collapsed;
+            dialog.IsPrimaryButtonEnabled = ValidAmount();
+        }
+        mode.SelectionChanged += (_, _) => UpdateMode();
+        UpdateMode();
         amount.ValueChanged += (_, _) => dialog.IsPrimaryButtonEnabled = ValidAmount();
         dialog.PrimaryButtonClick += (_, args) => { if (!ValidAmount()) args.Cancel = true; };
         var result = await dialog.ShowAsync();
         if (result == ContentDialogResult.None) return;
-        query.ArcaneResin = result == ContentDialogResult.Secondary ? 0 : (int)amount.Value;
+        query.ArcaneResinAuto = result != ContentDialogResult.Secondary && mode.SelectedIndex == 1;
+        query.ArcaneResin = result == ContentDialogResult.Secondary || query.ArcaneResinAuto ? 0 : (int)amount.Value;
         query.ArcaneResinFilter = result == ContentDialogResult.Secondary ? new() : new(
             uncursed.IsChecked == true, depth.SelectedIndex == 0 ? null : depth.SelectedIndex,
             source.SelectedIndex == 0 ? null : (ScoutItemSource)(source.SelectedIndex - 1));

@@ -120,7 +120,8 @@ public enum ResultsExport {
             slot.count == 1 ? encodeRequirement(slot[0]) : ["any_of": slot.map(encodeRequirement)]
         }
         var output: [String: Any] = ["requirements": entries]
-        if query.arcaneResin > 0 { output["arcane_resin"] = query.arcaneResin }
+        if query.arcaneResinAuto { output["arcane_resin"] = "auto" }
+        else if query.arcaneResin > 0 { output["arcane_resin"] = query.arcaneResin }
         if query.arcaneResinFilter != ArcaneResinFilter() {
             var filter: [String: Any] = [:]
             if !query.arcaneResinFilter.uncursed { filter["uncursed"] = false }
@@ -232,7 +233,7 @@ public enum ResultsExport {
             excludeBlacksmithRewards: boolField(value, "exclude_blacksmith_rewards"),
             wandmakerQuest: wandmakerQuest,
             challenges: challenges, autoApplyTrinket: boolField(value, "auto_apply_trinket"),
-            arcaneResin: intField(value, "arcane_resin") ?? 0, arcaneResinFilter: resinFilter)
+            arcaneResin: intField(value, "arcane_resin") ?? 0, arcaneResinFilter: resinFilter, arcaneResinAuto: value["arcane_resin"] as? String == "auto")
     }
 
     private static func decodeRequirement(_ entry: [String: Any], key: Int64,
@@ -337,7 +338,7 @@ public enum QueryDocument {
             requireBlacksmith: request.requireBlacksmith,
             excludeBlacksmithRewards: request.excludeBlacksmithRewards,
             wandmakerQuest: request.wandmakerQuest,
-            challenges: request.challenges, autoApplyTrinket: request.autoApplyTrinket, arcaneResin: request.arcaneResin, arcaneResinFilter: request.arcaneResinFilter))
+            challenges: request.challenges, autoApplyTrinket: request.autoApplyTrinket, arcaneResin: request.arcaneResin, arcaneResinFilter: request.arcaneResinFilter, arcaneResinAuto: request.arcaneResinAuto))
     }
 
     /// UTF-8 JSON bytes of the document, keys sorted so equal queries encode

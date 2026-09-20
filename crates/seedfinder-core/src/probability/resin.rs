@@ -1,23 +1,50 @@
-//! Resin is estimated through sufficient sets of distinct donor wands. For
-//! each split of the required levels across generated upgrades, score the
-//! complete query and keep its most probable sufficient donor plan.
-//! This is conservative, like the estimator's alternative and combined-level
-//! groups: it does not sum overlapping donor plans. Every plan shares the
-//! ordinary equipment allocation, including quest prizes, reserved wands,
-//! and selected-trinket supply.
+//! Joint supply and resin-balance estimate. Each item is spent once: on the
+//! scarcest outstanding ordinary requirement it covers, or as surplus resin.
+//! Upgrade outcomes are integrated in one pass, including mixed upgrades.
+//! As in the equipment model, supply counts use the measured variance and
+//! quest offers form one mutually exclusive choice, never independent donors.
+use std::collections::BTreeMap;
 
 use super::{
-    HIGHEST_TABLED_UPGRADE, Predicate, Profile, STATE_FLOOR, blanket_probability,
-    equipment_probability, expected_slots,
+    Coverages, HIGHEST_TABLED_UPGRADE, Predicate, Profile, STATE_FLOOR, STATE_LIMIT, Stream,
+    binomial_counts, effective_requirements, equipment_probability, expected_slots, filters,
+    poisson_counts, repeated_identity,
 };
 use crate::{
     catalog::ItemKind,
-    query::{EffectRequirement, Requirement, SearchQuery, TierRequirement, UpgradeRequirement},
+    probability_tables::{
+        DEPTHS, LINES_ORDER, PRIZE_GROUPS, Supply, prize_group, source_index, spread_index,
+    },
+    query::{
+        EffectRequirement, Requirement, SearchQuery, TierRequirement, UpgradeRequirement,
+        resin_upgrade_cost,
+    },
 };
-use std::collections::BTreeMap;
 
 pub(super) fn probability(query: &SearchQuery, profile: Profile) -> f64 {
-    let donor = Requirement {
+    let mut ordinary = query.clone();
+    ordinary.arcane_resin = 0;
+    ordinary.arcane_resin_auto = false;
+    let donor = donor_requirement(query);
+    // Every eligible donor yields at least two resin, so this is exactly one
+    // extra ordinary wand and should use the same equipment calculation.
+    if !query.arcane_resin_auto && query.arcane_resin <= 2 {
+        ordinary.requirements.push(donor);
+        return equipment_probability(&ordinary, profile);
+    }
+    let baseline = equipment_probability(&ordinary, profile);
+    let ordered = filters(
+        query,
+        &effective_requirements(query, profile),
+        None,
+        &[],
+        profile,
+    );
+    with_resin(query, profile, &ordered, baseline)
+}
+
+fn donor_requirement(query: &SearchQuery) -> Requirement {
+    Requirement {
         kind: ItemKind::Wand,
         weapon_category: None,
         item: None,
@@ -32,137 +59,584 @@ pub(super) fn probability(query: &SearchQuery, profile: Profile) -> f64 {
         max_depth: query.arcane_resin_filter.max_depth,
         alternative_group: None,
         level_sum: None,
-    };
-    let means: Vec<_> = (0..=HIGHEST_TABLED_UPGRADE)
-        .map(|upgrade| {
-            expected_slots(
-                &Predicate::of(
-                    Requirement {
-                        upgrade: UpgradeRequirement::AtLeast(upgrade),
-                        ..donor
-                    },
-                    None,
-                )
-                .within(query, &donor)
-                .with_profile(profile),
-            )
+    }
+}
+
+/// Apply resin to an ordinary assignment, after any blanket intersections.
+/// Donors are separate filters: they cannot witness blankets or add Auto cost.
+pub(super) fn with_resin(
+    query: &SearchQuery,
+    profile: Profile,
+    ordered: &[Predicate],
+    baseline: f64,
+) -> f64 {
+    if !baseline.is_finite() {
+        return baseline;
+    }
+    if baseline <= STATE_FLOOR {
+        return 0.0;
+    }
+    if query.arcane_resin_auto
+        && ordered
+            .iter()
+            .all(|p| p.kind != ItemKind::Wand || p.upgrades.trailing_zeros() >= 3)
+    {
+        return baseline;
+    }
+    let donor = donor_requirement(query);
+    let donor = Predicate::of(donor, None)
+        .within(query, &donor)
+        .with_profile(profile);
+    if !query.arcane_resin_auto
+        && count_bound(
+            expected_slots(&donor),
+            query
+                .arcane_resin
+                .div_ceil(2 * (u16::from(HIGHEST_TABLED_UPGRADE) + 1)),
+        ) <= STATE_FLOOR
+    {
+        return 0.0;
+    }
+    if !query.arcane_resin_auto && query.arcane_resin <= 2 {
+        let mut allocated = ordered.to_vec();
+        allocated.push(donor);
+        super::sort_filters(&mut allocated);
+        return baseline
+            * (super::matching_chance(&allocated) / super::matching_chance(ordered))
+                .clamp(0.0, 1.0);
+    }
+    baseline
+        * super::cache::resin(ordered, donor, query, || {
+            conditional_probability(query, profile, ordered, donor)
+        })
+}
+
+fn conditional_probability(
+    query: &SearchQuery,
+    profile: Profile,
+    ordered: &[Predicate],
+    donor: Predicate,
+) -> f64 {
+    let mut predicates = Vec::new();
+    let mut wanted = Vec::new();
+    for p in ordered {
+        if let Some(index) = predicates.iter().position(|held| held == p) {
+            wanted[index] += 1;
+        } else {
+            predicates.push(*p);
+            wanted.push(1);
+        }
+    }
+    let mut start = 0;
+    let slots = wanted
+        .into_iter()
+        .map(|count| {
+            let range = start..start + count;
+            start += count;
+            range
         })
         .collect();
-    let mut planned = query.clone();
-    planned.arcane_resin = 0;
-    let mut plans = Plans {
-        query: planned,
-        profile,
-        donor,
-        means,
-        donors: Vec::new(),
-        bounds: BTreeMap::new(),
-        best: 0.0,
+    let model = Model {
+        auto: query.arcane_resin_auto,
+        slots,
+        wands: predicates
+            .iter()
+            .map(|p| p.kind == ItemKind::Wand)
+            .collect(),
     };
-    plans.visit(
-        query.arcane_resin.div_ceil(2),
-        HIGHEST_TABLED_UPGRADE + 1,
-        0,
-    );
-    plans.best
-}
-
-struct Plans {
-    query: SearchQuery,
-    profile: Profile,
-    donor: Requirement,
-    /// Expected eligible wands at or above each upgrade.
-    means: Vec<f64>,
-    /// Synthetic donors remain separate from ordinary blanket witnesses.
-    donors: Vec<Requirement>,
-    bounds: BTreeMap<(u8, u16), f64>,
-    best: f64,
-}
-
-impl Plans {
-    /// Enumerate integer partitions of the required total in wand levels
-    /// (upgrade + 1), highest first. Minimum upgrades also admit overpayment,
-    /// so this covers every sufficient allocation without enumerating it twice.
-    fn visit(&mut self, remaining: u16, level: u8, used: u16) {
-        if self.best >= 1.0 || self.best.is_nan() {
-            return;
-        }
-        let minimum_count = used + remaining.div_ceil(u16::from(level));
-        if !self.can_improve(0, minimum_count) {
-            return;
-        }
-        if remaining == 0 {
-            let probability = if self.query.requirements.iter().any(|r| r.blanket) {
-                blanket_probability(&self.query, self.profile, &self.donors)
+    predicates.push(donor);
+    let shared = Coverages::of(&predicates);
+    let covers: Vec<_> = (0..shared.len())
+        .map(|coverage| shared.members(coverage))
+        .collect();
+    let mut states = BTreeMap::from([(
+        State {
+            held: vec![EMPTY; ordered.len()].into_boxed_slice(),
+            balance: if model.auto {
+                0
             } else {
-                let mut allocated = self.query.clone();
-                allocated.requirements.extend_from_slice(&self.donors);
-                equipment_probability(&allocated, self.profile)
-            };
-            // An unsupported blanket branch must stay unknown rather than
-            // becoming a false zero through f64::max's NaN handling.
-            self.best = if probability.is_nan() {
-                probability
-            } else {
-                self.best.max(probability)
-            };
-            return;
-        }
-        let upgrade = level - 1;
-        let maximum = remaining / u16::from(level);
-        let from = if level == 1 { maximum } else { 0 };
-        let original = self.donors.len();
-        for count in from..=maximum {
-            if !self.can_improve(upgrade, used + count) {
-                break;
+                -i32::from(query.arcane_resin)
+            },
+        },
+        1.0,
+    )]);
+    let supply = SupplyPlan {
+        predicates,
+        shared,
+        covers,
+    };
+    states = supply.prizes(&model, profile, query.max_depth, states);
+    states = supply.open(&model, profile, ordered, states);
+    let mut ordinary_mass = 0.0;
+    let mut resin_mass = 0.0;
+    for (state, mass) in states {
+        if Model::complete(&state) {
+            ordinary_mass += mass;
+            if state.balance >= 0 {
+                resin_mass += mass;
             }
-            self.donors.truncate(original);
-            self.donors.extend(std::iter::repeat_n(
-                Requirement {
-                    upgrade: UpgradeRequirement::AtLeast(upgrade),
-                    ..self.donor
+        }
+    }
+    // Retain the equipment model's identity-deck correction and world filters;
+    // use the joint model for the conditional chance of sufficient surplus.
+    if ordinary_mass > 0.0 {
+        (resin_mass / ordinary_mass).clamp(0.0, 1.0)
+    } else {
+        0.0
+    }
+}
+
+struct SupplyPlan {
+    predicates: Vec<Predicate>,
+    shared: Coverages,
+    covers: Vec<Vec<usize>>,
+}
+
+type WeightedOffers = Vec<(f64, Offer)>;
+type Bundles = BTreeMap<(usize, usize), (u8, WeightedOffers)>;
+
+impl SupplyPlan {
+    fn prizes(&self, model: &Model, profile: Profile, max_depth: u8, mut states: States) -> States {
+        // Resolve reward choices together across families before the open supply.
+        for group in PRIZE_GROUPS {
+            let mut choices = Vec::new();
+            for depth in 1..=usize::from(max_depth) {
+                let mut appeared = 0.0_f64;
+                let mut offers = Vec::new();
+                for kind in kinds(&self.predicates) {
+                    for supply in profile
+                        .supply_for(kind)
+                        .filter(|s| prize_group(s.source) == Some(group))
+                    {
+                        appeared = appeared.max(f64::from(supply.depth_slots[depth - 1]));
+                        if supply.depth_slots[depth - 1] > 0.0 {
+                            offers.push(offer(
+                                &self.shared,
+                                &self.covers,
+                                &supply,
+                                depth,
+                                self.predicates.len() - 1,
+                            ));
+                        }
+                    }
+                }
+                if appeared > 0.0 {
+                    choices.push((appeared, offers));
+                }
+            }
+            if !choices.is_empty() {
+                states = model.prize(states, &choices);
+            }
+        }
+        states
+    }
+    fn open(
+        &self,
+        model: &Model,
+        profile: Profile,
+        ordered: &[Predicate],
+        mut states: States,
+    ) -> States {
+        let mut limits: Vec<_> = self
+            .predicates
+            .iter()
+            .map(|p| usize::from(p.max_depth).min(DEPTHS))
+            .collect();
+        limits.sort_unstable();
+        limits.dedup();
+        for kind in kinds(&self.predicates) {
+            let steady = repeated_identity(
+                &ordered
+                    .iter()
+                    .copied()
+                    .filter(|p| p.kind == kind)
+                    .collect::<Vec<_>>(),
+            )
+            .is_none();
+            for line in LINES_ORDER {
+                for (from, until) in super::stretches(&limits) {
+                    let mut placed = 0.0;
+                    let mut offers = Vec::new();
+                    let mut bundles: Bundles = BTreeMap::new();
+                    for supply in profile
+                        .supply_for(kind)
+                        .filter(|s| s.line == line && prize_group(s.source).is_none())
+                    {
+                        for depth in from..=until {
+                            let available = f64::from(supply.depth_slots[depth - 1]);
+                            if available <= 0.0 {
+                                continue;
+                            }
+                            let offer = offer(
+                                &self.shared,
+                                &self.covers,
+                                &supply,
+                                depth,
+                                self.predicates.len() - 1,
+                            );
+                            if supply.bundle == 0 {
+                                placed += available;
+                                offers.push((available, offer));
+                            } else {
+                                bundles
+                                    .entry((source_index(supply.source), depth))
+                                    .or_insert((supply.bundle, Vec::new()))
+                                    .1
+                                    .push((available / f64::from(supply.bundle), offer));
+                            }
+                        }
+                    }
+                    if placed > 0.0 {
+                        let stream = Stream::of(
+                            profile,
+                            spread_index(kind, line),
+                            until,
+                            placed,
+                            Vec::new(),
+                            steady,
+                        );
+                        let counts = supply_counts(&stream, placed);
+                        for (weight, _) in &mut offers {
+                            *weight /= placed;
+                        }
+                        let offers = collapse(offers);
+                        states = model.stream(states, &offers, &counts);
+                    }
+                    for (count, mut offers) in bundles.into_values() {
+                        let total: f64 = offers.iter().map(|(weight, _)| weight).sum();
+                        for (weight, _) in &mut offers {
+                            *weight /= total.max(1.0);
+                        }
+                        let offers = collapse(offers);
+                        for _ in 0..count {
+                            states = model.draw(states, &offers);
+                        }
+                    }
+                }
+            }
+        }
+        states
+    }
+}
+
+/// Include the whole bounded run, or a Poisson tail below numerical precision.
+/// Counting only as many draws as the resin needs would drop later uncursed
+/// donors whenever an earlier draw was cursed or reserved for a requirement.
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // Nonnegative, small measured supply counts.
+fn supply_counts(stream: &Stream, mean: f64) -> Vec<f64> {
+    stream.trials.map_or_else(
+        || poisson_counts(mean, (mean + 12.0 * mean.sqrt() + 32.0).ceil() as usize),
+        |trials| binomial_counts(trials, (mean / trials).min(1.0), trials.ceil() as usize),
+    )
+}
+
+fn kinds(predicates: &[Predicate]) -> Vec<ItemKind> {
+    let mut kinds = Vec::new();
+    for predicate in predicates {
+        if !kinds.contains(&predicate.kind) {
+            kinds.push(predicate.kind);
+        }
+    }
+    kinds
+}
+
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+struct Event {
+    /// Distinct ordinary predicates this item can serve, scarcest first.
+    covers: Vec<usize>,
+    /// Yield if consumed, zero when it fails the donor filters.
+    resin: i32,
+    /// Cost to bring this generated wand to +3 (zero for other kinds).
+    cost: i32,
+}
+struct Offer {
+    outcomes: Vec<(Event, f64)>,
+    options: f64,
+}
+
+fn collapse(offers: Vec<(f64, Offer)>) -> Vec<(f64, Offer)> {
+    let mut single = BTreeMap::new();
+    let mut mass = 0.0;
+    let mut choices = Vec::new();
+    for (weight, offer) in offers {
+        if (offer.options - 1.0).abs() < f64::EPSILON {
+            mass += weight;
+            for (event, chance) in offer.outcomes {
+                *single.entry(event).or_insert(0.0) += weight * chance;
+            }
+        } else {
+            choices.push((weight, offer));
+        }
+    }
+    if mass > 0.0 {
+        choices.push((
+            mass,
+            Offer {
+                outcomes: single
+                    .into_iter()
+                    .map(|(event, chance)| (event, chance / mass))
+                    .collect(),
+                options: 1.0,
+            },
+        ));
+    }
+    choices
+}
+
+fn offer(
+    shared: &Coverages,
+    covers: &[Vec<usize>],
+    supply: &Supply,
+    depth: usize,
+    donor: usize,
+) -> Offer {
+    let mut outcomes = BTreeMap::new();
+    let mut single = *supply;
+    single.options = 1.0;
+    let levels: Vec<_> = if supply.kind == ItemKind::Wand {
+        supply
+            .upgrades
+            .iter()
+            .enumerate()
+            .filter(|(_, chance)| **chance > 0.0)
+            .map(|(level, chance)| (level, f64::from(*chance)))
+            .collect()
+    } else {
+        vec![(0, 1.0)]
+    };
+    for (level, chance) in levels {
+        if supply.kind == ItemKind::Wand {
+            single.upgrades.fill(0.0);
+            single.upgrades[level] = 1.0;
+        }
+        for (coverage, share) in shared
+            .shares(&single, depth)
+            .into_iter()
+            .enumerate()
+            .skip(1)
+        {
+            if share <= 0.0 {
+                continue;
+            }
+            let event = Event {
+                covers: covers[coverage]
+                    .iter()
+                    .copied()
+                    .filter(|&member| member != donor)
+                    .collect(),
+                resin: if covers[coverage].contains(&donor) {
+                    2 * i32::try_from(level + 1).unwrap()
+                } else {
+                    0
                 },
-                usize::from(count),
-            ));
-            let left = remaining - count * u16::from(level);
-            if left == 0 || level > 1 {
-                self.visit(left, upgrade.max(1), used + count);
-            }
+                cost: if supply.kind == ItemKind::Wand {
+                    i32::try_from(resin_upgrade_cost(u8::try_from(level).unwrap())).unwrap()
+                } else {
+                    0
+                },
+            };
+            *outcomes.entry(event).or_insert(0.0) += chance * share;
         }
-        self.donors.truncate(original);
     }
-
-    /// Every partial plan needs this many donors at this upgrade or better.
-    /// Cache that simpler query as a tighter bound than its mean count alone;
-    /// it also rules out spending the same quest prize several times. The
-    /// analytical bound runs first, before allocating any donor requirements.
-    fn can_improve(&mut self, upgrade: u8, count: u16) -> bool {
-        let threshold = self.best.max(STATE_FLOOR);
-        if count_bound(self.means[usize::from(upgrade)], count) <= threshold {
-            return false;
-        }
-        if count == 0 {
-            return true;
-        }
-        let probability = self.bounds.entry((upgrade, count)).or_insert_with(|| {
-            let mut bound = self.query.clone();
-            bound.requirements = vec![
-                Requirement {
-                    upgrade: UpgradeRequirement::AtLeast(upgrade),
-                    ..self.donor
-                };
-                usize::from(count)
-            ];
-            equipment_probability(&bound, self.profile)
-        });
-        *probability > threshold
+    let total: f64 = outcomes.values().sum();
+    Offer {
+        outcomes: outcomes
+            .into_iter()
+            .map(|(event, mass)| (event, mass / total.max(1.0)))
+            .collect(),
+        options: f64::from(supply.options),
     }
 }
 
-/// Chernoff's upper bound on the donor-count tail for the model's independent
-/// Bernoulli/Poisson supply. Prune plans that cannot improve the estimate or
-/// whose entire probability is below the matching state's numerical floor.
-/// Large resin amounts are bounded before any synthetic slots are allocated.
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+struct State {
+    /// Sorted opportunity costs in each predicate's fixed range: donor yield
+    /// plus Auto upgrade cost, or EMPTY for an outstanding requirement.
+    held: Box<[u8]>,
+    /// Surplus resin less the selected wands' upgrade costs (Auto) or the
+    /// fixed target. Nonnegative means the resin condition is satisfied.
+    balance: i32,
+}
+struct Model {
+    auto: bool,
+    slots: Vec<std::ops::Range<usize>>,
+    wands: Vec<bool>,
+}
+type States = BTreeMap<State, f64>;
+const EMPTY: u8 = u8::MAX;
+
+impl Model {
+    fn target(&self, state: &State, event: &Event) -> Option<usize> {
+        event
+            .covers
+            .iter()
+            .copied()
+            .find(|&index| state.held[self.slots[index].end - 1] == EMPTY)
+    }
+    fn rank(&self, state: &State, event: &Event) -> (usize, i32) {
+        match self.target(state, event) {
+            Some(index) => (index, if self.auto { event.cost } else { event.resin }),
+            None => (self.slots.len(), -event.resin),
+        }
+    }
+    fn complete(state: &State) -> bool {
+        !state.held.contains(&EMPTY)
+    }
+    fn take(&self, state: &State, event: &Event) -> State {
+        if Self::complete(state) && state.balance >= 0 {
+            return state.clone();
+        }
+        let mut next = state.clone();
+        let cost = event.resin + if self.auto { event.cost } else { 0 };
+        let stored_cost = u8::try_from(cost).unwrap();
+        next.balance += event.resin;
+        if let Some(index) = self.target(state, event) {
+            insert_cost(&mut next.held[self.slots[index].clone()], stored_cost);
+            next.balance -= cost;
+        } else if let Some((index, previous)) = event
+            .covers
+            .iter()
+            .filter_map(|&index| {
+                let previous = i32::from(state.held[self.slots[index].end - 1]);
+                (previous > cost).then_some((index, previous))
+            })
+            .max_by_key(|&(_, previous)| previous)
+        {
+            // A later, cheaper matching wand replaces an earlier reservation.
+            // Its predecessor becomes a donor. This integrates all upgrade
+            // mixtures instead of forcing every reserved wand to one floor.
+            insert_cost(&mut next.held[self.slots[index].clone()], stored_cost);
+            next.balance += previous - cost;
+        }
+        let remaining = if self.auto {
+            self.slots
+                .iter()
+                .zip(&self.wands)
+                .filter(|(_, wand)| **wand)
+                .map(|(range, _)| {
+                    (range.len() - next.held[range.clone()].partition_point(|&cost| cost != EMPTY))
+                        * 6
+                })
+                .sum()
+        } else {
+            0
+        };
+        next.balance = next
+            .balance
+            .min(i32::try_from(remaining).unwrap_or(i32::MAX));
+        if Self::complete(&next) && next.balance >= 0 {
+            // Once satisfied, reservation costs cannot change success.
+            next.held.fill(0);
+        }
+        next
+    }
+    fn choices(&self, state: &State, offers: &[Offer]) -> Vec<(State, f64)> {
+        if let [offer] = offers
+            && (offer.options - 1.0).abs() < f64::EPSILON
+        {
+            let mut outcomes: Vec<_> = offer
+                .outcomes
+                .iter()
+                .map(|(event, chance)| (self.take(state, event), *chance))
+                .collect();
+            let mass: f64 = offer.outcomes.iter().map(|(_, chance)| chance).sum();
+            outcomes.push((state.clone(), (1.0 - mass).max(0.0)));
+            return outcomes;
+        }
+        let mut events: Vec<_> = offers
+            .iter()
+            .flat_map(|offer| offer.outcomes.iter().map(|(event, _)| event))
+            .collect();
+        events.sort_by_key(|event| (self.rank(state, event), *event));
+        events.dedup();
+        let mut cumulative = vec![0.0; offers.len()];
+        let mut missing = 1.0;
+        let mut choices = Vec::new();
+        for event in events {
+            for (index, offer) in offers.iter().enumerate() {
+                cumulative[index] += offer
+                    .outcomes
+                    .iter()
+                    .filter(|(other, _)| other == event)
+                    .map(|(_, chance)| chance)
+                    .sum::<f64>();
+            }
+            let next_missing: f64 = offers
+                .iter()
+                .zip(&cumulative)
+                .map(|(offer, &mass)| (1.0 - mass).clamp(0.0, 1.0).powf(offer.options))
+                .product();
+            if missing > next_missing {
+                choices.push((self.take(state, event), missing - next_missing));
+            }
+            missing = next_missing;
+        }
+        choices.push((state.clone(), missing));
+        choices
+    }
+    fn draw(&self, states: States, offers: &[(f64, Offer)]) -> States {
+        let mut next = BTreeMap::new();
+        let missed = (1.0 - offers.iter().map(|(weight, _)| weight).sum::<f64>()).max(0.0);
+        for (state, mass) in states {
+            for (weight, offer) in offers {
+                for (outcome, chance) in self.choices(&state, std::slice::from_ref(offer)) {
+                    *next.entry(outcome).or_insert(0.0) += mass * weight * chance;
+                }
+            }
+            *next.entry(state).or_insert(0.0) += mass * missed;
+        }
+        prune(next)
+    }
+    fn prize(&self, states: States, choices: &[(f64, Vec<Offer>)]) -> States {
+        let mut next = BTreeMap::new();
+        let missed = (1.0 - choices.iter().map(|(weight, _)| weight).sum::<f64>()).max(0.0);
+        for (state, mass) in states {
+            for (weight, offers) in choices {
+                for (outcome, chance) in self.choices(&state, offers) {
+                    *next.entry(outcome).or_insert(0.0) += mass * weight * chance;
+                }
+            }
+            *next.entry(state).or_insert(0.0) += mass * missed;
+        }
+        prune(next)
+    }
+    fn stream(&self, mut states: States, offers: &[(f64, Offer)], counts: &[f64]) -> States {
+        let mut mixed = BTreeMap::new();
+        for (count, &chance) in counts.iter().enumerate() {
+            if count > 0 {
+                states = self.draw(states, offers);
+            }
+            if chance > 0.0 {
+                for (state, mass) in &states {
+                    *mixed.entry(state.clone()).or_insert(0.0) += mass * chance;
+                }
+            }
+        }
+        prune(mixed)
+    }
+}
+
+/// Fill an empty reservation or replace the most expensive one. Fixed ranges
+/// keep the state in one compact allocation, independent of duplicate count.
+fn insert_cost(held: &mut [u8], cost: u8) {
+    let end = held
+        .partition_point(|&held| held != EMPTY)
+        .min(held.len() - 1);
+    let position = held[..end].partition_point(|&held| held <= cost);
+    held.copy_within(position..end, position + 1);
+    held[position] = cost;
+}
+
+fn prune(mut states: States) -> States {
+    states.retain(|_, mass| *mass > STATE_FLOOR);
+    if states.len() > STATE_LIMIT {
+        let mut masses: Vec<_> = states.values().copied().collect();
+        masses.sort_by(|a, b| b.total_cmp(a));
+        states.retain(|_, mass| *mass > masses[STATE_LIMIT]);
+    }
+    states
+}
+
 fn count_bound(mean: f64, count: u16) -> f64 {
     if count == 0 {
         return 1.0;

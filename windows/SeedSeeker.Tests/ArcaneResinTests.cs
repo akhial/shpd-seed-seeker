@@ -8,10 +8,10 @@ public sealed class ArcaneResinTests
     [Fact]
     public void ResinOnlyQueriesKeepTheirAmountAndFiltersAcrossFormats()
     {
-        foreach (var amount in new[] { 1, 3, 65535 })
+        foreach (var amount in new[] { 0, 1, 3, 65535 })
         foreach (var filter in new[] { new ArcaneResinFilter(), new ArcaneResinFilter(false, 12, ScoutItemSource.WandmakerReward) })
         {
-            var query = new QuerySettings { ArcaneResin = amount, ArcaneResinFilter = filter };
+            var query = new QuerySettings { ArcaneResin = amount, ArcaneResinAuto = amount == 0, ArcaneResinFilter = filter };
             Assert.True(query.HasRequirements);
             Assert.Equal(1, query.SlotCount);
             Assert.Null(QueryRelationships.Validate(query));
@@ -44,4 +44,26 @@ public sealed class ArcaneResinTests
         Assert.True(QueryRefinement.CanRefine(harder, query));
         Assert.False(QueryRefinement.CanRefine(query, harder));
     }
+    [Fact]
+    public void AutoBlanketSharesItsWitnessAndPreservesTheEngineEstimate()
+    {
+        var query = ResultsExport.DecodeQueryDocument("""{"arcane_resin":"auto","requirements":[{"item":"wand_lightning","upgrade":2},{"kind":"wand","upgrade":2,"blanket":true}]}""");
+        Assert.True(query.ArcaneResinAuto);
+        var document = ResultsExport.EncodeQueryDocument(query);
+        Assert.Equal(document, ResultsExport.EncodeQueryDocument(ResultsExport.DecodeQueryDocument(
+            NativeEngine.TryDecodeShareText(NativeEngine.TryEncodeShareLink(document)!)!)));
+        Assert.Equal(3, query.SlotCount);
+        var marks = NativeEngine.ScoutMatches("AAA-AAA-AAS", 0, query);
+        Assert.Equal(3, marks.MatchedRequirements);
+        Assert.Equal(3, marks.TotalRequirements);
+        var direct = query.Clone(); direct.Requirements = new(direct.Requirements.Where(r => !r.Blanket));
+        using var search = new NativeEngine().StartResumed(query, 18, 0, 1);
+        using var directSearch = new NativeEngine().StartResumed(direct, 18, 0, 1);
+        Assert.True(search.Status().Probability > 0);
+        Assert.Equal(directSearch.Status().Probability, search.Status().Probability, 12);
+        Assert.True(QueryRefinement.CanRefine(query, query));
+        query.Requirements = new(query.Requirements.Where(r => r.Blanket));
+        Assert.NotNull(QueryRelationships.Validate(query));
+    }
+
 }

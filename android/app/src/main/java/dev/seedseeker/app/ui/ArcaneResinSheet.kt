@@ -26,10 +26,12 @@ internal fun resinFilterDescription(filter: ArcaneResinFilter): String = listOfN
 fun ArcaneResinSheet(
     amount: Int,
     filter: ArcaneResinFilter,
+    auto: Boolean = false,
     onDismiss: () -> Unit,
-    onSave: (Int, ArcaneResinFilter) -> Unit,
+    onSave: (Int, ArcaneResinFilter, Boolean) -> Unit,
     onRemove: () -> Unit,
 ) {
+    var automatic by remember { mutableStateOf(auto) }
     var minimum by remember { mutableStateOf((amount.takeIf { it > 0 } ?: 2).toString()) }
     var uncursed by remember { mutableStateOf(filter.uncursed) }
     var depth by remember { mutableStateOf(filter.maximumDepth) }
@@ -49,7 +51,14 @@ fun ArcaneResinSheet(
                 Text("Arcane Resin", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f).padding(start = 12.dp))
                 TextButton(onClick = onDismiss) { Text("Close") }
             }
-            OutlinedTextField(value = minimum, onValueChange = { minimum = it }, label = { Text("Minimum resin") },
+            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                listOf("Amount", "Auto").forEachIndexed { index, label ->
+                    SegmentedButton(selected = automatic == (index == 1), onClick = { automatic = index == 1 },
+                        shape = SegmentedButtonDefaults.itemShape(index, 2)) { Text(label) }
+                }
+            }
+            if (automatic) Text("Find enough resin to upgrade every matched wand to +3.")
+            else OutlinedTextField(value = minimum, onValueChange = { minimum = it }, label = { Text("Minimum resin") },
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true,
                 isError = parsed == null,
@@ -73,9 +82,9 @@ fun ArcaneResinSheet(
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (amount > 0) OutlinedButton(onClick = onRemove) { Text("Remove") }
-                Button(onClick = { parsed?.let { onSave(it, ArcaneResinFilter(uncursed, depth, source)) } },
-                    enabled = parsed != null, modifier = Modifier.weight(1f)) { Text(if (amount > 0) "Save" else "Add") }
+                if (auto || amount > 0) OutlinedButton(onClick = onRemove) { Text("Remove") }
+                Button(onClick = { if (automatic || parsed != null) onSave(if (automatic) 0 else parsed!!, ArcaneResinFilter(uncursed, depth, source), automatic) },
+                    enabled = automatic || parsed != null, modifier = Modifier.weight(1f)) { Text(if (auto || amount > 0) "Save" else "Add") }
             }
         }
     }

@@ -662,8 +662,9 @@ public struct ArcaneResinFilter: Codable, Hashable, Sendable {
 
 public struct SearchRequest: Codable, Sendable {
     public var arcaneResin: Int
+    public var arcaneResinAuto: Bool
     public var arcaneResinFilter: ArcaneResinFilter
-    public var slotCount: Int { requirements.slotCount + (arcaneResin > 0 ? 1 : 0) }
+    public var slotCount: Int { requirements.slotCount + (arcaneResinAuto || arcaneResin > 0 ? 1 : 0) }
     public var requirements: [ItemRequirement]
     public var autoApplyTrinket: Bool
     public var maximumDepth: Int
@@ -678,9 +679,9 @@ public struct SearchRequest: Codable, Sendable {
                 requireBlacksmith: Bool = false, excludeBlacksmithRewards: Bool = false,
                 wandmakerQuest: WandmakerQuest? = nil,
                 challenges: Int = 0, autoApplyTrinket: Bool = false,
-                arcaneResin: Int = 0, arcaneResinFilter: ArcaneResinFilter = .init()) throws {
+                arcaneResin: Int = 0, arcaneResinFilter: ArcaneResinFilter = .init(), arcaneResinAuto: Bool = false) throws {
         guard (0...65535).contains(arcaneResin), arcaneResinFilter.isValid else { throw ModelValidationError.arcaneResin }
-        guard requirements.contains(where: { !$0.blanket }) || (requirements.isEmpty && arcaneResin > 0) else { throw ModelValidationError.emptyRequirements }
+        guard requirements.contains(where: { !$0.blanket }) || (requirements.isEmpty && (arcaneResinAuto || arcaneResin > 0)) else { throw ModelValidationError.emptyRequirements }
         guard (1...SearchLimits.maxDepth).contains(maximumDepth) else { throw ModelValidationError.maximumDepth }
         guard (0...SearchLimits.challengeMask).contains(challenges) else { throw ModelValidationError.challenges }
         try requirements.validateGroups()
@@ -690,6 +691,7 @@ public struct SearchRequest: Codable, Sendable {
         self.wandmakerQuest = wandmakerQuest
         self.challenges = challenges
         self.autoApplyTrinket = autoApplyTrinket
+        self.arcaneResinAuto = arcaneResinAuto
         self.arcaneResin = arcaneResin; self.arcaneResinFilter = arcaneResinFilter
     }
 }

@@ -100,7 +100,8 @@ public static class ResultsExport
             : new JsonObject { ["any_of"] = new JsonArray([.. slot.Select(member => (JsonNode)EncodeRequirement(member))]) });
         var output = new JsonObject { ["requirements"] = new JsonArray([.. entries]) };
         if (query.MaximumDepth != 24) output["max_depth"] = query.MaximumDepth;
-        if (query.ArcaneResin > 0) output["arcane_resin"] = query.ArcaneResin;
+        if (query.ArcaneResinAuto) output["arcane_resin"] = "auto";
+        else if (query.ArcaneResin > 0) output["arcane_resin"] = query.ArcaneResin;
         if (query.ArcaneResinFilter != new ArcaneResinFilter())
         {
             var filter = new JsonObject();
@@ -194,7 +195,8 @@ public static class ResultsExport
         var sourceIndex = Array.IndexOf(SourceNames, TolerantString(filter, "source"));
         return new QuerySettings
         {
-            ArcaneResin = IntField(value, "arcane_resin") ?? 0,
+            ArcaneResin = TolerantString(value, "arcane_resin") == "auto" ? 0 : IntField(value, "arcane_resin") ?? 0,
+            ArcaneResinAuto = TolerantString(value, "arcane_resin") == "auto",
             ArcaneResinFilter = new ArcaneResinFilter(
                 !filter.ContainsKey("uncursed") || BoolField(filter, "uncursed"),
                 IntField(filter, "max_depth"), sourceIndex < 0 ? null : (ScoutItemSource)sourceIndex),

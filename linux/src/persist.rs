@@ -269,6 +269,18 @@ mod tests {
     }
 
     #[test]
+    fn auto_resin_drafts_preserve_blankets_and_donor_filters() {
+        let document = r#"{"requirements":[{"kind":"wand"},{"kind":"wand","upgrade":3,"blanket":true}],"arcane_resin":"auto","arcane_resin_filter":{"uncursed":false,"max_depth":12,"source":"wandmaker_reward"}}"#;
+        let state = decode_state(document).unwrap();
+        let saved = save_document(&state);
+        assert_eq!(saved["arcane_resin"], "auto");
+        let restored = decode_state(&saved.to_string()).unwrap();
+        assert!(restored.arcane_resin_auto);
+        assert_eq!(restored.to_query().unwrap(), state.to_query().unwrap());
+        assert_eq!(save_document(&restored), saved);
+    }
+
+    #[test]
     fn saved_queries_round_trip_as_canonical_documents() {
         let state = populated_state();
         let document = save_document(&state);

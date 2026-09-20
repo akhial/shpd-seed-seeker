@@ -55,6 +55,16 @@ pub fn present(
             0.0,
         ))
         .build();
+    let mode = adw::ComboRow::builder()
+        .title("Minimum resin")
+        .model(&gtk::StringList::new(&["Amount", "Auto"]))
+        .selected(u32::from(snapshot.arcane_resin_auto))
+        .build();
+    let explanation = adw::ActionRow::builder()
+        .title("Find enough resin to upgrade every matched wand to +3.")
+        .visible(snapshot.arcane_resin_auto)
+        .build();
+    amount.set_visible(!snapshot.arcane_resin_auto);
     let uncursed = adw::SwitchRow::builder()
         .title("Require uncursed wands")
         .active(filter.uncursed)
@@ -89,6 +99,8 @@ pub fn present(
         )
         .build();
     let group = adw::PreferencesGroup::new();
+    group.add(&mode);
+    group.add(&explanation);
     group.add(&amount);
     group.add(&uncursed);
     group.add(&limited);
@@ -101,7 +113,7 @@ pub fn present(
         .show_end_title_buttons(false)
         .build();
     let cancel = gtk::Button::with_label("Cancel");
-    let save = gtk::Button::with_label(if snapshot.arcane_resin > 0 {
+    let save = gtk::Button::with_label(if snapshot.needs_resin() {
         "Save"
     } else {
         "Add"
@@ -119,7 +131,7 @@ pub fn present(
         .child(&view)
         .build();
     dialog.set_default_widget(Some(&save));
-    if snapshot.arcane_resin > 0 {
+    if snapshot.needs_resin() {
         let remove = gtk::Button::builder()
             .label("Remove Arcane Resin")
             .css_classes(["destructive-action"])
@@ -134,6 +146,7 @@ pub fn present(
                 {
                     let mut state = state.borrow_mut();
                     state.arcane_resin = 0;
+                    state.arcane_resin_auto = false;
                     state.arcane_resin_filter = ArcaneResinFilter::default();
                 }
                 dialog.close();
@@ -142,6 +155,13 @@ pub fn present(
         });
     }
     drop(snapshot);
+    mode.connect_selected_notify({
+        let amount = amount.clone();
+        move |row| {
+            amount.set_visible(row.selected() == 0);
+            explanation.set_visible(row.selected() == 1);
+        }
+    });
     limited.connect_active_notify({
         let depth = depth.clone();
         move |row| depth.set_visible(row.is_active())
@@ -159,14 +179,21 @@ pub fn present(
         move |_| {
             amount.update();
             let value = amount.value();
-            if !value.is_finite() || value.fract() != 0.0 || !(1.0..=65535.0).contains(&value) {
+            if mode.selected() == 0
+                && (!value.is_finite() || value.fract() != 0.0 || !(1.0..=65535.0).contains(&value))
+            {
                 return;
             }
             {
                 let mut state = state.borrow_mut();
                 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
                 {
-                    state.arcane_resin = value as u16;
+                    state.arcane_resin_auto = mode.selected() == 1;
+                    state.arcane_resin = if state.arcane_resin_auto {
+                        0
+                    } else {
+                        value as u16
+                    };
                 }
                 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
                 let max_depth = limited.is_active().then(|| depth.value().round() as u8);

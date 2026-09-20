@@ -92,8 +92,8 @@ export interface RequirementState {
 }
 
 export interface QueryState {
-  /** Minimum resin from surplus wands; omitted or zero disables it. */
-  arcaneResin?: number;
+  /** Minimum resin, or Auto to upgrade the matched wands to +3. Zero disables it. */
+  arcaneResin?: ArcaneResinAmount;
   arcaneResinFilter?: ArcaneResinFilter;
   autoApplyTrinket: boolean;
   requirements: RequirementState[];
@@ -104,6 +104,8 @@ export interface QueryState {
   wandmakerQuest?: WandmakerQuest;
   challenges: ChallengeName[];
 }
+
+export type ArcaneResinAmount = number | "auto";
 
 export interface ArcaneResinFilter {
   uncursed: boolean;
@@ -140,7 +142,7 @@ export type RequirementEntryDocument = RequirementDocument | AnyOfDocument;
  * retired keys such as `fast_mode`; both the engine's codec and `fromQueryJson`
  * accept and ignore them. */
 export interface QueryDocument {
-  arcane_resin?: number;
+  arcane_resin?: ArcaneResinAmount;
   arcane_resin_filter?: { uncursed?: boolean; max_depth?: number; source?: ItemSource };
   auto_apply_trinket?: boolean;
   requirements: RequirementEntryDocument[];

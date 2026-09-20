@@ -29,20 +29,23 @@ class SearchCheckpointTest {
     private val results = List(1_200) { SeedResult("seed-$it", 1, if (it % 2 == 0) "mossy_clump" else null) }
 
     @Test fun roundTripKeepsUncappedTargetDetachedHistoryAndRefineRecipes() {
-        val targetRequest = request.copy(maximumDepth = 12)
-        val saved = SearchSnapshot(
-            results = results, query = request.toPresetQuery(),
-            status = SearchStatus(SearchState.RUNNING, 4_000, 50_000, matchProbability = 0.003),
-            elapsedSeconds = 27,
-            target = TargetState(targetRequest, results.reversed(), 55, 90_000),
-            lastRun = FinishedRun(request, 123, 50_000, results),
-            lastKind = StartMode.DETACHED,
-            pending = PendingSearch(request, StartMode.CONTINUE_DETACHED, 3,
-                RefineSpec(123, 50_000, results, request)),
-        )
-        val restored = SearchCheckpointCodec.decode(JSONObject(SearchCheckpointCodec.encode(saved).toString()))
-        assertEquals(saved, restored)
-        assertEquals(1_200, restored.target?.results?.size)
+        for (automatic in listOf(false, true)) {
+            val request = request.copy(arcaneResin = if (automatic) 0 else 6, arcaneResinAuto = automatic)
+            val targetRequest = request.copy(maximumDepth = 12)
+            val saved = SearchSnapshot(
+                results = results, query = request.toPresetQuery(),
+                status = SearchStatus(SearchState.RUNNING, 4_000, 50_000, matchProbability = 0.003),
+                elapsedSeconds = 27,
+                target = TargetState(targetRequest, results.reversed(), 55, 90_000),
+                lastRun = FinishedRun(request, 123, 50_000, results),
+                lastKind = StartMode.DETACHED,
+                pending = PendingSearch(request, StartMode.CONTINUE_DETACHED, 3,
+                    RefineSpec(123, 50_000, results, request)),
+            )
+            val restored = SearchCheckpointCodec.decode(JSONObject(SearchCheckpointCodec.encode(saved).toString()))
+            assertEquals(saved, restored)
+            assertEquals(1_200, restored.target?.results?.size)
+        }
     }
 
     @Test fun atomicFileRetainsThePreviousCheckpointAfterAnInterruptedWrite() {

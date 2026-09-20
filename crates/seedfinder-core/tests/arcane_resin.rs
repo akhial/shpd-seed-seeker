@@ -16,6 +16,13 @@ fn query(amount: u16, requirements: &str) -> SearchQuery {
     .unwrap()
 }
 
+fn auto_query(requirements: &str) -> SearchQuery {
+    json_query::decode(&format!(
+        r#"{{"arcane_resin":"auto","requirements":{requirements}}}"#
+    ))
+    .unwrap()
+}
+
 fn wand(upgrade: u8) -> WorldItem {
     WorldItem {
         item: ItemId::WandLightning,
@@ -37,6 +44,217 @@ fn world(items: Vec<WorldItem>) -> GeneratedWorld {
         quests: QuestSummary::default(),
         ring_gems: RingGems::UNSHUFFLED,
     }
+}
+
+#[test]
+fn auto_upgrades_every_reserved_wand_to_three() {
+    let query = auto_query(r#"[{"kind":"wand","max_depth":3},{"kind":"wand","max_depth":3}]"#);
+    // Keep donors outside the requested wands' scope so their upgrades
+    // cannot change which pair is reserved by the two wildcard slots.
+    for (upgrades, needed) in [
+        ([1, 0], 11),
+        ([2, 3], 3),
+        ([0, 0], 12),
+        ([1, 1], 10),
+        ([3, 3], 0),
+        ([4, 3], 0),
+    ] {
+        let mut items: Vec<_> = upgrades.into_iter().map(wand).collect();
+        for supplied in (0..=12).step_by(2) {
+            items.truncate(2);
+            items.extend((0..supplied / 2).map(|_| WorldItem {
+                depth: 4,
+                ..wand(0)
+            }));
+            let world = world(items.clone());
+            assert_eq!(
+                query.matches(&world),
+                supplied >= needed,
+                "{upgrades:?}, {supplied}"
+            );
+            let marks = scout_matches(&world, &query);
+            assert_eq!(marks.total_requirements, 3);
+            assert_eq!(marks.matched_requirements == 3, supplied >= needed);
+            if supplied >= needed {
+                assert_eq!(
+                    marks.matched_indices().len(),
+                    2 + usize::try_from((needed + 1) / 2).unwrap()
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn auto_backtracks_over_wands_and_alternatives() {
+    let query = auto_query(r#"[{"kind":"wand"}]"#);
+    // A +0 costs 6 with just 4 available; reserving +1 costs 5 with only 2.
+    assert!(!query.matches(&world(vec![wand(0), wand(1)])));
+    // Reserving +0 first fails, but +3 needs no donors at all.
+    let candidate = world(vec![
+        WorldItem {
+            accessibility: Accessibility::Choice {
+                group: 1,
+                option: 0,
+            },
+            ..wand(0)
+        },
+        WorldItem {
+            accessibility: Accessibility::Choice {
+                group: 1,
+                option: 1,
+            },
+            ..wand(3)
+        },
+    ]);
+    assert!(query.matches(&candidate));
+    assert_eq!(scout_matches(&candidate, &query).matched_indices(), vec![1]);
+    let alternatives =
+        auto_query(r#"[{"any_of":[{"item":"wand_lightning"},{"item":"ring_haste"}]}]"#);
+    let ring = WorldItem {
+        item: ItemId::RingHaste,
+        ..wand(0)
+    };
+    let candidate = world(vec![wand(0), ring]);
+    assert!(alternatives.matches(&candidate));
+    assert_eq!(
+        scout_matches(&candidate, &alternatives).matched_indices(),
+        vec![1]
+    );
+    assert!(auto_query("[]").matches(&world(vec![])));
+}
+
+#[test]
+fn auto_preserves_donor_filters_and_reward_choices() {
+    let mut query = auto_query(r#"[{"item":"wand_lightning","upgrade":2}]"#);
+    let mut reserved = wand(2);
+    reserved.accessibility = Accessibility::Choice {
+        group: 1,
+        option: 0,
+    };
+    let mut donor = WorldItem {
+        item: ItemId::WandFrost,
+        ..wand(1)
+    };
+    donor.accessibility = Accessibility::Choice {
+        group: 1,
+        option: 1,
+    };
+    assert!(!query.matches(&world(vec![reserved.clone(), donor.clone()])));
+    donor.accessibility = Accessibility::Choice {
+        group: 1,
+        option: 0,
+    };
+    assert!(query.matches(&world(vec![reserved.clone(), donor.clone()])));
+    donor.cursed = true;
+    assert!(!query.matches(&world(vec![reserved.clone(), donor.clone()])));
+    query.arcane_resin_filter.uncursed = false;
+    assert!(query.matches(&world(vec![reserved.clone(), donor.clone()])));
+    query.arcane_resin_filter.max_depth = Some(2);
+    assert!(!query.matches(&world(vec![reserved.clone(), donor.clone()])));
+    query.arcane_resin_filter.max_depth = None;
+    query.arcane_resin_filter.source = Some(ItemSource::Chest);
+    assert!(!query.matches(&world(vec![reserved.clone(), donor.clone()])));
+    donor.source = ItemSource::Chest;
+    assert!(query.matches(&world(vec![reserved, donor])));
+}
+
+#[test]
+fn auto_blankets_share_reserved_wands_and_do_not_add_upgrade_cost() {
+    let query =
+        auto_query(r#"[{"kind":"wand","max_depth":3},{"kind":"wand","upgrade":1,"blanket":true}]"#);
+    let mut candidate = world(vec![
+        wand(0),
+        wand(1),
+        WorldItem {
+            depth: 4,
+            ..wand(1)
+        },
+    ]);
+    // The blanket forces the +1 reservation: five resin, paid by the other
+    // two wands' six resin. The witness must not add another five to the cost.
+    assert!(query.matches(&candidate));
+    let marks = scout_matches(&candidate, &query);
+    assert_eq!(marks.total_requirements, 3);
+    assert_eq!(marks.matched_requirements, 3);
+    assert_eq!(marks.matched_indices(), vec![0, 1, 2]);
+    candidate.items[1].accessibility = Accessibility::Choice {
+        group: 1,
+        option: 0,
+    };
+    candidate.items[2].accessibility = Accessibility::Choice {
+        group: 1,
+        option: 1,
+    };
+    assert!(!query.matches(&candidate));
+}
+
+#[test]
+fn auto_donors_cannot_witness_blankets_and_zero_cost_still_counts() {
+    let query =
+        auto_query(r#"[{"item":"wand_lightning"},{"kind":"wand","upgrade":3,"blanket":true}]"#);
+    let mut candidate = world(vec![
+        wand(1),
+        WorldItem {
+            item: ItemId::WandFrost,
+            ..wand(3)
+        },
+    ]);
+    assert!(!query.matches(&candidate));
+    assert_eq!(scout_matches(&candidate, &query).matched_requirements, 2);
+    candidate.items[0].upgrade = 3;
+    candidate.items.pop();
+    assert!(query.matches(&candidate));
+    let marks = scout_matches(&candidate, &query);
+    assert_eq!(marks.total_requirements, 3);
+    assert_eq!(marks.matched_requirements, 3);
+    assert_eq!(marks.matched_indices(), vec![0]);
+}
+
+#[test]
+fn auto_round_trips_and_only_refines_compatible_modes() {
+    for requirements in [
+        "[]",
+        r#"[{"kind":"wand"},{"kind":"wand"}]"#,
+        r#"[{"kind":"wand"},{"any_of":[{"kind":"wand","upgrade":3,"blanket":true},{"kind":"wand","source":"wandmaker_reward","blanket":true}]}]"#,
+    ] {
+        let mut auto = auto_query(requirements);
+        for filtered in [false, true] {
+            if filtered {
+                auto.auto_apply_trinket = true;
+                auto.arcane_resin_filter = ArcaneResinFilter {
+                    uncursed: false,
+                    max_depth: Some(9),
+                    source: Some(ItemSource::Chest),
+                };
+            }
+            assert_eq!(json_query::encode(&auto)["arcane_resin"], "auto");
+            assert_eq!(
+                json_query::decode(&json_query::encode(&auto).to_string()).unwrap(),
+                auto
+            );
+            assert_eq!(
+                deep_link::decode(&deep_link::encode(&auto).unwrap()).unwrap(),
+                auto
+            );
+            let exported = results_export::encode(&auto, &[DungeonSeed::MIN], "test");
+            assert_eq!(results_export::decode(&exported).unwrap().query, auto);
+        }
+    }
+    let auto = auto_query(r#"[{"kind":"wand"}]"#);
+    let named = auto_query(r#"[{"item":"wand_lightning","upgrade":2}]"#);
+    assert!(auto.continues(&auto));
+    assert!(named.continues(&auto));
+    assert!(!auto.continues(&named));
+    assert!(auto.continues(&query(0, r#"[{"kind":"wand"}]"#)));
+    let fixed = query(3, r#"[{"kind":"wand"}]"#);
+    assert!(!auto.continues(&fixed));
+    assert!(!fixed.continues(&auto));
+    let mut filtered = auto.clone();
+    filtered.arcane_resin_filter.max_depth = Some(4);
+    assert!(filtered.continues(&auto));
+    assert!(!auto.continues(&filtered));
+    assert!(auto.shares_item(&fixed));
 }
 
 #[test]
@@ -310,21 +528,24 @@ fn resin_plans_keep_later_wands_and_vault_supply() {
             r#"[{"kind":"wand"}]"#,
             r#"[{"kind":"wand","source":"wandmaker_reward"}]"#,
         ] {
-            let mut query = self::query(6, requirements);
-            query.max_depth = depth;
-            let plan = QueryPlan::analyze(&query);
-            let generated = CanonicalMainWorldGenerator.generate_batch_gated(
-                &seeds,
-                plan.generation_depth(),
-                &plan,
-            );
-            for (full, gated) in worlds.iter().zip(generated) {
-                assert_eq!(
-                    gated.is_some_and(|world| query.matches(&world)),
-                    query.matches(full),
-                    "seed {:?}, query {query:?}",
-                    full.seed
+            for auto in [false, true] {
+                let mut query = self::query(6, requirements);
+                query.arcane_resin_auto = auto;
+                query.max_depth = depth;
+                let plan = QueryPlan::analyze(&query);
+                let generated = CanonicalMainWorldGenerator.generate_batch_gated(
+                    &seeds,
+                    plan.generation_depth(),
+                    &plan,
                 );
+                for (full, gated) in worlds.iter().zip(generated) {
+                    assert_eq!(
+                        gated.is_some_and(|world| query.matches(&world)),
+                        query.matches(full),
+                        "seed {:?}, query {query:?}",
+                        full.seed
+                    );
+                }
             }
         }
     }

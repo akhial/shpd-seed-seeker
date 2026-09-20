@@ -43,7 +43,7 @@ class PresetStorage(private val preferences: SharedPreferences) {
     private fun encodeQuery(query: PresetQuery) = JSONObject().apply {
         put("maximumDepth", query.maximumDepth)
         put("autoApplyTrinket", query.autoApplyTrinket)
-        ResultsExport.encodeResin(this, query.arcaneResin, query.arcaneResinFilter)
+        ResultsExport.encodeResin(this, query.arcaneResin, query.arcaneResinFilter, query.arcaneResinAuto)
         put("requireBlacksmith", query.requireBlacksmith)
         put("excludeBlacksmithRewards", query.excludeBlacksmithRewards)
         put("wandmakerQuest", query.wandmakerQuest?.documentName ?: JSONObject.NULL)
@@ -133,6 +133,7 @@ class PresetStorage(private val preferences: SharedPreferences) {
         }
         return PresetQuery(
             arcaneResin = ResultsExport.decodeResinAmount(value),
+            arcaneResinAuto = value.opt("arcane_resin") == "auto",
             arcaneResinFilter = ResultsExport.decodeResinFilter(value),
             autoApplyTrinket = value.optBoolean("autoApplyTrinket", false),
             requirements = requirements,

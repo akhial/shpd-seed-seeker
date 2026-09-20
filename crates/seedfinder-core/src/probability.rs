@@ -42,10 +42,9 @@
 //! Selected trinkets choose a measured +3 profile per unique initial-offer
 //! match. Those profiles include brewing timing and per-floor modifier shares;
 //! ambiguous offers retain the canonical supply. See [`crate::probability_tables`].
-//! Arcane Resin uses the most probable sufficient donor-wand plan, trying
-//! partitions of its total across generated upgrades. Donors compete with
-//! ordinary requirements for distinct items and quest choices. Like alternative groups, this reads
-//! low because overlapping plans are not summed.
+//! Arcane Resin integrates generated upgrades and surplus resin in a joint
+//! supply model. A wand is reserved or consumed, and later cheaper matches can
+//! replace earlier reservations. Reward pools still supply just one choice.
 //! Artifacts use their measured supply for single-item estimates. Joint
 //! artifact requirements average valid identity assignments over sampled
 //! anonymous layouts, retaining floor/source/curse filters and accessibility
@@ -69,6 +68,7 @@
 //! wanting three alike. Those approximations read low.
 
 mod artifacts;
+mod cache;
 mod coverage;
 mod resin;
 
@@ -123,11 +123,11 @@ pub fn estimate_match_probability(query: &SearchQuery) -> f64 {
 }
 
 pub(crate) fn equipment_probability(query: &SearchQuery, profile: Profile) -> f64 {
-    if query.arcane_resin > 0 {
-        return resin::probability(query, profile);
-    }
     if query.requirements.iter().any(|r| r.blanket) {
-        return blanket_probability(query, profile, &[]);
+        return blanket_probability(query, profile);
+    }
+    if query.needs_resin() {
+        return resin::probability(query, profile);
     }
     let requirements = effective_requirements(query, profile);
     let mut linked: BTreeMap<u8, Vec<Requirement>> = BTreeMap::new();
@@ -180,7 +180,7 @@ pub(crate) fn equipment_probability(query: &SearchQuery, profile: Profile) -> f6
 /// ordinary query. Union the witness estimates conditional on that query:
 /// this approximates overlaps, stays between the largest branch and their sum,
 /// and can never make a stricter query more likely than its ordinary base.
-fn blanket_probability(query: &SearchQuery, profile: Profile, donors: &[Requirement]) -> f64 {
+fn blanket_probability(query: &SearchQuery, profile: Profile) -> f64 {
     let ordinary = SearchQuery {
         requirements: query
             .requirements
@@ -190,9 +190,7 @@ fn blanket_probability(query: &SearchQuery, profile: Profile, donors: &[Requirem
             .collect(),
         ..query.clone()
     };
-    let mut allocated = ordinary.clone();
-    allocated.requirements.extend_from_slice(donors);
-    let base = equipment_probability(&allocated, profile);
+    let base = equipment_probability(&ordinary, profile);
     if base <= 0.0 || !base.is_finite() {
         return base;
     }
@@ -220,12 +218,15 @@ fn blanket_probability(query: &SearchQuery, profile: Profile, donors: &[Requirem
         .collect();
     // Donors compete for the same supply, including single-choice quest
     // prizes, but only ordinary assignments may witness a blanket.
-    let donor_filters = filters(query, donors, None, &[], profile);
     let chance = |branch: &[Predicate]| {
-        let mut allocated = branch.to_vec();
-        allocated.extend_from_slice(&donor_filters);
-        sort_filters(&mut allocated);
-        matching_chance(&allocated)
+        let mut ordered = branch.to_vec();
+        sort_filters(&mut ordered);
+        let baseline = matching_chance(&ordered);
+        if query.needs_resin() {
+            resin::with_resin(query, profile, &ordered, baseline)
+        } else {
+            baseline
+        }
     };
     let unconstrained = branches
         .iter()
@@ -924,6 +925,10 @@ fn sort_filters(ordered: &mut [Predicate]) {
 /// family. Conditioning on what each pool reaches turns the estimate into a
 /// sum over those reaches of the best use the query can make of them.
 fn matching_chance(ordered: &[Predicate]) -> f64 {
+    cache::matching(ordered, || matching_chance_uncached(ordered))
+}
+
+fn matching_chance_uncached(ordered: &[Predicate]) -> f64 {
     if ordered.is_empty() {
         return 1.0;
     }
@@ -1098,6 +1103,10 @@ impl OpenSupply<'_> {
 /// from being spent twice: a shop shelf can hold the `+0` wand a query asks for
 /// or one of its plain wands, never both.
 fn open_chance(ordered: &[Predicate]) -> f64 {
+    cache::open(ordered, || open_chance_uncached(ordered))
+}
+
+fn open_chance_uncached(ordered: &[Predicate]) -> f64 {
     let Some(kind) = ordered.first().map(|predicate| predicate.kind) else {
         return 1.0;
     };
@@ -1450,6 +1459,10 @@ fn prune(states: States) -> States {
 
 /// Expected number of slots one requirement can draw on.
 fn expected_slots(predicate: &Predicate) -> f64 {
+    cache::mean(*predicate, || expected_slots_uncached(predicate))
+}
+
+fn expected_slots_uncached(predicate: &Predicate) -> f64 {
     predicate
         .profile
         .supply_for(predicate.kind)
@@ -1468,7 +1481,7 @@ fn expected_slots(predicate: &Predicate) -> f64 {
 ///
 /// Tiers and upgrades become bit sets so that requirements can be intersected:
 /// the matching needs to know which of them one item could serve at once.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 struct Predicate {
     profile: Profile,
     kind: ItemKind,
@@ -1984,6 +1997,7 @@ mod tests {
         SearchQuery {
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
+            arcane_resin_auto: false,
             arcane_resin: 0,
             requirements,
             max_depth,

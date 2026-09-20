@@ -26,6 +26,7 @@ import {
 } from "../../lib/query";
 import { ANY_ENCHANTMENT } from "../../lib/wasm/types";
 import type {
+  ArcaneResinAmount,
   ArcaneResinFilter,
   ItemCategory,
   ItemSource,
@@ -125,8 +126,8 @@ export function RequirementEditor({
   isNew: boolean;
   /** The chip's stack shape; a cluster member's belongs to the cluster. */
   stack: StackShape;
-  resinAmount?: number;
-  onSaveResin?: (amount: number, filter: ArcaneResinFilter) => void;
+  resinAmount?: ArcaneResinAmount;
+  onSaveResin?: (amount: ArcaneResinAmount, filter: ArcaneResinFilter) => void;
   onSave: (
     requirement: RequirementState,
     count: number,
@@ -142,7 +143,8 @@ export function RequirementEditor({
   const [count, setCount] = useState(stack.count);
   const [total, setTotal] = useState(stack.total);
   const [copyDepth, setCopyDepth] = useState(stack.copyDepth);
-  const [amount, setAmount] = useState(resinAmount ?? 2);
+  const [amount, setAmount] = useState(resinAmount === "auto" ? 2 : (resinAmount ?? 2));
+  const [autoResin, setAutoResin] = useState(resinAmount === "auto");
   // "Specific…" with nothing ticked yet is a transient editor state, not a
   // filter, so it lives outside the draft; saving it means "any".
   const [choosingEffects, setChoosingEffects] = useState(false);
@@ -161,7 +163,7 @@ export function RequirementEditor({
   const enchantments = family === "weapon" ? weaponEnchantments : armorGlyphs;
   const curses = family === "weapon" ? weaponCurses : armorCurses;
   const errors = validateRequirement(draft);
-  if (resin && (!Number.isInteger(amount) || amount < 1 || amount > 65535))
+  if (resin && !autoResin && (!Number.isInteger(amount) || amount < 1 || amount > 65535))
     errors.push("Enter an amount from 1 to 65535.");
   // A combined level is a property of a concrete stack of two or more —
   // and of rings only, whose effects scale with their level.
@@ -454,17 +456,32 @@ export function RequirementEditor({
           {resin && (
             <section className="d1-modal-section">
               <Field label="Minimum resin">
-                <input
-                  className="d1-input"
-                  type="number"
-                  aria-label="Minimum resin"
-                  min={1}
-                  max={65535}
-                  step={1}
-                  value={Number.isNaN(amount) ? "" : amount}
-                  onChange={(event) => setAmount(event.currentTarget.valueAsNumber)}
+                <Segmented
+                  value={autoResin ? "auto" : "amount"}
+                  options={[
+                    { value: "amount", label: "Amount" },
+                    { value: "auto", label: "Auto" },
+                  ]}
+                  onChange={(mode) => setAutoResin(mode === "auto")}
+                  ariaLabel="Resin amount mode"
                 />
               </Field>
+              {autoResin ? (
+                <p className="d1-caption">Find enough resin to upgrade every matched wand to +3.</p>
+              ) : (
+                <Field label="Amount">
+                  <input
+                    className="d1-input"
+                    type="number"
+                    aria-label="Minimum resin"
+                    min={1}
+                    max={65535}
+                    step={1}
+                    value={Number.isNaN(amount) ? "" : amount}
+                    onChange={(event) => setAmount(event.currentTarget.valueAsNumber)}
+                  />
+                </Field>
+              )}
             </section>
           )}
 
@@ -739,7 +756,7 @@ export function RequirementEditor({
             disabled={errors.length > 0}
             onClick={() =>
               resin
-                ? onSaveResin?.(amount, {
+                ? onSaveResin?.(autoResin ? "auto" : amount, {
                     uncursed: draft.uncursed,
                     maxDepth: draft.maxDepth,
                     source: draft.source,

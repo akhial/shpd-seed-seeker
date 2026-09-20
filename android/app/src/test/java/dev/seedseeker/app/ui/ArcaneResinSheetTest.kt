@@ -31,7 +31,7 @@ class ArcaneResinSheetTest {
             .use(BitmapFactory::decodeStream)!!.asImageBitmap()
         compose.setContent { SeedSeekerTheme {
             CompositionLocalProvider(LocalItemAtlas provides atlas) {
-                ArcaneResinSheet(6, filter, onDismiss = {}, onSave = { amount, selected -> saved = amount to selected }, onRemove = { removed = true })
+                ArcaneResinSheet(6, filter, onDismiss = {}, onSave = { amount, selected, _ -> saved = amount to selected }, onRemove = { removed = true })
             }
         } }
         compose.onNodeWithText("Surplus wands provide", substring = true).assertDoesNotExist()
@@ -56,4 +56,31 @@ class ArcaneResinSheetTest {
         compose.onNodeWithText("Remove").performClick()
         compose.runOnIdle { assertTrue(removed) }
     }
+    @Test fun autoCanBeSavedWithInvalidHiddenAmountAndKeepsFilters() {
+        val filter = ArcaneResinFilter(false, 12, ScoutItemSource.WANDMAKER_REWARD)
+        var saved: Triple<Int, ArcaneResinFilter, Boolean>? = null
+        val atlas = compose.activity.assets.open("third_party/shattered-pixel-dungeon/items.png")
+            .use(BitmapFactory::decodeStream)!!.asImageBitmap()
+        compose.setContent { SeedSeekerTheme {
+            CompositionLocalProvider(LocalItemAtlas provides atlas) {
+                ArcaneResinSheet(0, filter, auto = true, onDismiss = {},
+                    onSave = { amount, selected, auto -> saved = Triple(amount, selected, auto) }, onRemove = {})
+            }
+        } }
+        compose.onNodeWithText("Auto").assertIsSelected()
+        compose.onNodeWithText("Minimum resin").assertDoesNotExist()
+        compose.onNodeWithText("Remove").assertIsDisplayed()
+        compose.onNodeWithText("Amount").performClick()
+        compose.onNodeWithText("Minimum resin").performTextReplacement("1.5")
+        compose.onNodeWithText("Save").assertIsNotEnabled()
+        compose.onNodeWithText("Auto").performClick()
+        compose.onNodeWithText("Save").assertIsEnabled().performClick()
+        compose.runOnIdle { assertEquals(Triple(0, filter, true), saved) }
+        compose.captureResinScreenshot("sheet-auto", requireNotNull(ShadowDialog.getLatestDialog().window))
+        compose.onNodeWithText("Amount").performClick()
+        compose.onNodeWithText("Minimum resin").performTextReplacement("3")
+        compose.onNodeWithText("Save").performClick()
+        compose.runOnIdle { assertEquals(Triple(3, filter, false), saved) }
+    }
+
 }

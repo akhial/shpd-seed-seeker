@@ -18,7 +18,7 @@ import {
   validateRequirement,
 } from "../../lib/query";
 import { ARCANE_RESIN_SPRITE, itemArt } from "../../lib/sprites";
-import type { ArcaneResinFilter, RequirementState } from "../../lib/wasm/types";
+import type { ArcaneResinAmount, ArcaneResinFilter, RequirementState } from "../../lib/wasm/types";
 import { Sprite } from "./parts";
 import {
   boardItems,
@@ -139,7 +139,7 @@ export function RequirementBoard({
   onEdit: (index: number, stack: StackShape) => void;
   onAdd: () => void;
   resin?: {
-    amount: number;
+    amount: ArcaneResinAmount;
     filter?: ArcaneResinFilter;
     onEdit: () => void;
     onRemove: () => void;
@@ -649,7 +649,16 @@ export function RequirementBoard({
             >
               <Sprite art={itemArt(ARCANE_RESIN_SPRITE)} size={18} />
               <span className="d1-chip-name">Arcane Resin</span>
-              <span className="d1-chip-tag">≥{resin.amount}</span>
+              <span
+                className="d1-chip-tag"
+                title={
+                  resin.amount === "auto"
+                    ? "Enough resin to upgrade all matched wands to +3"
+                    : undefined
+                }
+              >
+                {resin.amount === "auto" ? "Auto" : `≥${resin.amount}`}
+              </span>
               {resin.filter?.maxDepth !== undefined && (
                 <span className="d1-chip-tag">F≤{resin.filter.maxDepth}</span>
               )}
@@ -713,7 +722,18 @@ export function RequirementBoard({
             size={18}
           />
           <span className="d1-chip-name">{dragSource ? chipName(dragSource) : "Arcane Resin"}</span>
-          {draggingResin && <span className="d1-chip-tag">≥{resin.amount}</span>}
+          {draggingResin && (
+            <span
+              className="d1-chip-tag"
+              title={
+                resin.amount === "auto"
+                  ? "Enough resin to upgrade all matched wands to +3"
+                  : undefined
+              }
+            >
+              {resin.amount === "auto" ? "Auto" : `≥${resin.amount}`}
+            </span>
+          )}
           {(drag.over?.kind === "chip" || drag.over?.kind === "cluster") && (
             <span className="d1-chip-ghost-tag d1-ghost-alternative">or</span>
           )}

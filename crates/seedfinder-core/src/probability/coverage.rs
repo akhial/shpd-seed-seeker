@@ -80,6 +80,14 @@ impl Coverages {
         self.predicates.len()
     }
 
+    pub(super) fn members(&self, coverage: usize) -> Vec<usize> {
+        self.choices
+            .iter()
+            .enumerate()
+            .filter_map(|(index, choices)| choices.contains(&coverage).then_some(index))
+            .collect()
+    }
+
     /// Convert the probability of satisfying at least a set of filters into
     /// the probability of satisfying exactly that set, subtracting supersets.
     pub(super) fn shares(&self, supply: &Supply, depth: usize) -> Vec<f64> {

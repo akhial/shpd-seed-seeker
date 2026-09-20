@@ -133,12 +133,16 @@ files, and version 9 share links preserve blankets.
 
 ## Arcane Resin
 
-Choose **Arcane Resin** when adding a Wand requirement. Set the minimum resin,
-then optionally limit donor wands by curse status, floor, or source. Donors must
+Choose **Arcane Resin** when adding a Wand requirement. Set a minimum amount or
+choose **Auto** to find enough resin to upgrade every matched wand to +3.
+Auto counts each reserved wand once, including blanket witnesses; wands already
+at +3 or higher need no resin. The requirement chip shows **Auto**.
+Optionally limit donor wands by curse status, floor, or source. Donors must
 be uncursed by default. Each surplus wand contributes `2 × (upgrade + 1)` resin;
 wands reserved for ordinary requirements cannot also become resin. Resin is one
 separate requirement and can be searched on its own.
 
 The requirement can be edited or removed from the board. Saved drafts, presets,
-share links, result exports, and search refinement retain its amount and filters.
+share links, result exports, and search refinement retain its mode, amount, and filters.
+Auto uses version 10 share links; existing fixed-amount links remain compatible.
 Scout highlights the contributing wands, and the engine supplies the match estimate.
