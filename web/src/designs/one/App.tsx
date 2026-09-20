@@ -93,7 +93,7 @@ export default function App() {
   // Debounced query analysis (probability / impossibility).
   const serialized = toQueryJson(query);
   const debouncedJson = useDebounced(serialized, 250);
-  const hasRequirements = query.requirements.length > 0;
+  const hasRequirements = query.requirements.length > 0 || (query.arcaneResin ?? 0) > 0;
   const [analysis, setAnalysis] = useState<AnalysisResult | undefined>(undefined);
   useEffect(() => {
     if (!hasRequirements) {
@@ -192,7 +192,7 @@ export default function App() {
     const query =
       saved && searchStore.state.query
         ? searchStore.state.query
-        : state.requirements.length > 0
+        : state.requirements.length > 0 || (state.arcaneResin ?? 0) > 0
           ? toQueryDocument(state)
           : undefined;
     const selected = trinket ?? (saved?.selectedTrinket === null ? "none" : saved?.selectedTrinket);

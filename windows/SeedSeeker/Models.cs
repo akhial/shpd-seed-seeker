@@ -973,6 +973,8 @@ public static class QueryRelationships
     /// </summary>
     public static string? Validate(QuerySettings query)
     {
+        if (query.ArcaneResin is < 0 or > 65535 || query.ArcaneResinFilter is not { IsValid: true })
+            return "Arcane Resin must be 0..65535, with a valid wand floor and source.";
         var requirements = query.Requirements;
         foreach (var requirement in requirements)
         {
@@ -1113,11 +1115,28 @@ public static class WandmakerQuests
     };
 }
 
+public sealed record ArcaneResinFilter(bool Uncursed = true, int? MaximumDepth = null, ScoutItemSource? Source = null)
+{
+    public bool IsValid => (MaximumDepth is null or >= 1 and <= SearchLimits.MaxDepth) &&
+        (Source is null || Enum.IsDefined(Source.Value));
+    public string Summary => string.Join(" · ", new[] {
+        Uncursed ? "uncursed wands" : "any wands",
+        MaximumDepth is int depth ? $"≤ floor {depth}" : null,
+        Source is ScoutItemSource source ? Labels.Source(source) : null,
+    }.OfType<string>());
+}
+
 public sealed class QuerySettings
 {
     public ObservableCollection<ItemRequirement> Requirements { get; set; } = [];
     public int MaximumDepth { get; set; } = SearchLimits.MaxDepth;
     public bool AutoApplyTrinket { get; set; }
+    public int ArcaneResin { get; set; }
+    public ArcaneResinFilter ArcaneResinFilter { get; set; } = new();
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool HasRequirements => Requirements.Count > 0 || ArcaneResin > 0;
+    [System.Text.Json.Serialization.JsonIgnore]
+    public int SlotCount => QueryRelationships.SlotCount(Requirements) + (ArcaneResin > 0 ? 1 : 0);
     public bool RequireBlacksmith { get; set; }
     public bool ExcludeBlacksmithRewards { get; set; }
     public WandmakerQuest WandmakerQuest { get; set; } = WandmakerQuest.Any;
@@ -1128,6 +1147,8 @@ public sealed class QuerySettings
         Requirements = new ObservableCollection<ItemRequirement>(Requirements.Select(x => x.Clone())),
         MaximumDepth = MaximumDepth,
         AutoApplyTrinket = AutoApplyTrinket,
+        ArcaneResin = ArcaneResin,
+        ArcaneResinFilter = ArcaneResinFilter with { },
         RequireBlacksmith = RequireBlacksmith,
         ExcludeBlacksmithRewards = ExcludeBlacksmithRewards,
         WandmakerQuest = WandmakerQuest,

@@ -206,6 +206,8 @@ fn random_query(rng: &mut Rng) -> Option<SearchQuery> {
         let slots: Vec<Vec<usize>> = {
             let query = SearchQuery {
                 auto_apply_trinket: false,
+                arcane_resin_filter: shpd_seedfinder_core::query::ArcaneResinFilter::default(),
+                arcane_resin: 0,
                 requirements: requirements.clone(),
                 max_depth: 10,
                 challenges: Challenges::NONE,
@@ -242,6 +244,12 @@ fn random_query(rng: &mut Rng) -> Option<SearchQuery> {
     }
     let query = SearchQuery {
         auto_apply_trinket: false,
+        arcane_resin_filter: shpd_seedfinder_core::query::ArcaneResinFilter::default(),
+        arcane_resin: if rng.chance(35) {
+            1 + u16::try_from(rng.below(10)).unwrap()
+        } else {
+            0
+        },
         requirements,
         max_depth: 10,
         challenges: Challenges::NONE,
@@ -336,7 +344,37 @@ fn score(
         .keys()
         .filter(|group| satisfied(**group))
         .count();
-    Some(plain + groups)
+    let resin = query.arcane_resin > 0
+        && (0..(1_u64 << world.items.len())).any(|subset| {
+            // Exhaustively try every surplus subset, independently of the
+            // production matcher's per-scenario maximum calculation.
+            let mut compatible = scenarios.clone();
+            let mut total = 0;
+            for (index, candidate) in world.items.iter().enumerate() {
+                if subset & (1 << index) == 0 {
+                    continue;
+                }
+                if used[index]
+                    || item(candidate.item).kind != ItemKind::Wand
+                    || candidate.cursed
+                    || candidate.depth > query.max_depth
+                    || (query.exclude_blacksmith_rewards
+                        && candidate.source == ItemSource::BlacksmithReward)
+                {
+                    return false;
+                }
+                if let Some((group, mask)) = candidate.accessibility.scenario_constraint() {
+                    let remaining = compatible.entry(group).or_insert(u64::MAX);
+                    *remaining &= mask;
+                    if *remaining == 0 {
+                        return false;
+                    }
+                }
+                total += 2 * (u16::from(candidate.upgrade) + 1);
+            }
+            total >= query.arcane_resin
+        });
+    Some(plain + groups + usize::from(resin))
 }
 
 fn best_partial(
@@ -431,9 +469,9 @@ fn matcher_and_scout_agree_with_exhaustive_enumeration() {
         checked += 1;
         matched += usize::from(expected);
     }
-    // The generator must produce a healthy mix of matches and misses.
+    // Resin adds a further constraint; still require a healthy mix of matches and misses.
     assert!(
-        matched > 200 && matched < 2_800,
+        matched > 150 && matched < 2_800,
         "{matched} of {checked} matched"
     );
 }
@@ -442,6 +480,9 @@ fn matcher_and_scout_agree_with_exhaustive_enumeration() {
 /// true and its soundness can be checked on real worlds.
 fn mutate(rng: &mut Rng, base: &SearchQuery) -> Option<SearchQuery> {
     let mut query = base.clone();
+    if rng.chance(35) {
+        query.arcane_resin = u16::try_from(rng.below(12)).unwrap();
+    }
     for _ in 0..=rng.below(3) {
         let index = rng.below(query.requirements.len());
         let requirement = &mut query.requirements[index];

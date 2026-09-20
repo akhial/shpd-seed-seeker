@@ -120,3 +120,15 @@ and ring gems directly from the engine. Each category has six columns and two
 rows of sprites, with identity glyphs at the top right. The shared journal frame
 metadata keeps artwork aligned with the other apps. Click a sprite to reveal its
 name and appearance; tooltips and accessible labels carry the same information.
+
+## Arcane Resin
+
+Choose **Arcane Resin** when adding a Wand requirement. Set the minimum resin,
+then optionally limit donor wands by curse status, floor, or source. Donors must
+be uncursed by default. Each surplus wand contributes `2 × (upgrade + 1)` resin;
+wands reserved for ordinary requirements cannot also become resin. Resin is one
+separate requirement and can be searched on its own.
+
+The requirement can be edited or removed from the board. Saved drafts, presets,
+share links, result exports, and search refinement retain its amount and filters.
+Scout highlights the contributing wands, and the engine supplies the match estimate.

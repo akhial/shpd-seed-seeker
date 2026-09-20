@@ -34,7 +34,7 @@ import type {
 } from "../../lib/wasm/types";
 import { RequirementBoard } from "./RequirementBoard";
 import type { StackShape } from "./RequirementBoard";
-import { applyEdit, boardCount } from "./relations";
+import { applyEdit, boardCount, boardItems, removeItem, removeMember } from "./relations";
 import { RequirementEditor } from "./RequirementEditor";
 import { SliderRow } from "./parts";
 
@@ -46,6 +46,7 @@ interface EditorSession {
   index: number | null;
   requirement: RequirementState;
   stack: StackShape;
+  resin?: boolean;
 }
 
 export function QueryPanel({
@@ -135,6 +136,7 @@ export function QueryPanel({
   ) => {
     queryStore.setState((state) => ({
       ...state,
+      ...(session.resin ? { arcaneResin: undefined, arcaneResinFilter: undefined } : {}),
       requirements: applyEdit(
         state.requirements,
         session.index,
@@ -156,11 +158,11 @@ export function QueryPanel({
     });
   };
 
-  const slotTotal = boardCount(query.requirements);
+  const slotTotal = boardCount(query.requirements) + Number((query.arcaneResin ?? 0) > 0);
   const challengeCount = query.challenges.length;
   const wandmakerCount = Number(Boolean(query.wandmakerQuest));
   const blacksmithCount = Number(query.requireBlacksmith) + Number(query.excludeBlacksmithRewards);
-  const hasRequirements = query.requirements.length > 0;
+  const hasRequirements = slotTotal > 0;
   const impossible = Boolean(analysis?.valid && analysis.impossible);
   const startDisabled = !running && (!engineReady || !validation.valid || impossible);
 
@@ -314,6 +316,28 @@ export function QueryPanel({
                 requirement: emptyRequirement("weapon"),
                 stack: { count: 1, inCluster: false },
               })
+            }
+            resin={
+              (query.arcaneResin ?? 0) > 0
+                ? {
+                    amount: query.arcaneResin!,
+                    filter: query.arcaneResinFilter,
+                    onEdit: () =>
+                      setEditor({
+                        index: null,
+                        resin: true,
+                        requirement: {
+                          ...emptyRequirement("wand"),
+                          item: "arcane_resin",
+                          uncursed: true,
+                          ...query.arcaneResinFilter,
+                        },
+                        stack: { count: 1, inCluster: false },
+                      }),
+                    onRemove: () =>
+                      patchQuery({ arcaneResin: undefined, arcaneResinFilter: undefined }),
+                  }
+                : undefined
             }
           />
         </section>
@@ -521,8 +545,31 @@ export function QueryPanel({
         <RequirementEditor
           key={editor.index ?? "new"}
           requirement={editor.requirement}
-          isNew={editor.index === null}
+          isNew={editor.index === null && !editor.resin}
           stack={editor.stack}
+          resinAmount={query.arcaneResin}
+          onSaveResin={(amount, filter) => {
+            queryStore.setState((state) => {
+              const item = boardItems(state.requirements).find((item) =>
+                item.members.includes(editor.index ?? -1),
+              );
+              return {
+                ...state,
+                arcaneResin: amount,
+                arcaneResinFilter:
+                  !filter.uncursed || filter.maxDepth !== undefined || filter.source
+                    ? filter
+                    : undefined,
+                requirements:
+                  item && editor.index !== null
+                    ? item.cluster !== undefined
+                      ? removeMember(state.requirements, editor.index)
+                      : removeItem(state.requirements, item)
+                    : state.requirements,
+              };
+            });
+            setEditor(null);
+          }}
           onSave={(requirement, count, total, copyDepth) =>
             commitRequirement(editor, requirement, count, total, copyDepth)
           }

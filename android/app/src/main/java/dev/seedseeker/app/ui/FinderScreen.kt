@@ -97,6 +97,8 @@ fun FinderScreen(
     requirements: List<ItemRequirement>,
     maximumDepth: Int,
     autoApplyTrinket: Boolean,
+    arcaneResin: Int,
+    arcaneResinFilter: dev.seedseeker.app.model.ArcaneResinFilter,
     requireBlacksmith: Boolean,
     excludeBlacksmithRewards: Boolean,
     wandmakerQuest: WandmakerQuest?,
@@ -123,6 +125,8 @@ fun FinderScreen(
     onApplyPreset: (QueryPreset) -> Unit,
     onSavePreset: (String) -> Unit,
     onDeletePreset: (QueryPreset) -> Unit,
+    onEditResin: () -> Unit,
+    onRemoveResin: () -> Unit,
     onAdd: () -> Unit,
     onEdit: (BoardItem, Int) -> Unit,
     onRequirementsChange: (List<ItemRequirement>) -> Unit,
@@ -163,7 +167,7 @@ fun FinderScreen(
     // outlives the run by a frame, so the last batch of a finishing search,
     // which may land in the same frame as the run ending, is covered too.
     var runOwnsResults by remember { mutableStateOf(false) }
-    LaunchedEffect(requirements) { showResults = false }
+    LaunchedEffect(requirements, arcaneResin, arcaneResinFilter) { showResults = false }
     LaunchedEffect(results) { if (results.isNotEmpty() && !runOwnsResults) showResults = true }
     LaunchedEffect(isSearching) {
         if (isSearching) {
@@ -199,7 +203,7 @@ fun FinderScreen(
                         ) {
                             DropdownMenuItem(
                                 text = { Text("Share search…") },
-                                enabled = requirements.isNotEmpty(),
+                                enabled = requirements.isNotEmpty() || arcaneResin > 0,
                                 onClick = {
                                     showOverflowMenu = false
                                     onShareQuery()
@@ -269,8 +273,8 @@ fun FinderScreen(
                     .widthIn(max = 680.dp),
             ) {
                 PageHeader(
-                    title = "Requirements (${requirements.boardCount()})",
-                    summary = requirementsSummaryText(requirements),
+                    title = "Requirements (${requirements.boardCount() + if (arcaneResin > 0) 1 else 0})",
+                    summary = listOf(requirementsSummaryText(requirements), if (arcaneResin > 0) "≥$arcaneResin Arcane Resin" else "").filter { it.isNotEmpty() }.joinToString(" · "),
                     open = !showResults,
                     openDescription = "Show requirements",
                     onOpen = { showResults = false },
@@ -280,6 +284,8 @@ fun FinderScreen(
                         requirements = requirements,
                         maximumDepth = maximumDepth,
                         autoApplyTrinket = autoApplyTrinket,
+                        arcaneResin = arcaneResin,
+                        arcaneResinFilter = arcaneResinFilter,
                         requireBlacksmith = requireBlacksmith,
                         excludeBlacksmithRewards = excludeBlacksmithRewards,
                         wandmakerQuest = wandmakerQuest,
@@ -289,6 +295,8 @@ fun FinderScreen(
                         isSearching = isSearching,
                         validationMessage = validationMessage,
                         compactChips = compactChips,
+                        onEditResin = onEditResin,
+                        onRemoveResin = onRemoveResin,
                         onAdd = onAdd,
                         onEdit = onEdit,
                         onRequirementsChange = onRequirementsChange,
@@ -444,6 +452,8 @@ private fun QueryPage(
     requirements: List<ItemRequirement>,
     maximumDepth: Int,
     autoApplyTrinket: Boolean,
+    arcaneResin: Int,
+    arcaneResinFilter: dev.seedseeker.app.model.ArcaneResinFilter,
     requireBlacksmith: Boolean,
     excludeBlacksmithRewards: Boolean,
     wandmakerQuest: WandmakerQuest?,
@@ -453,6 +463,8 @@ private fun QueryPage(
     isSearching: Boolean,
     validationMessage: String?,
     compactChips: Boolean,
+    onEditResin: () -> Unit,
+    onRemoveResin: () -> Unit,
     onAdd: () -> Unit,
     onEdit: (BoardItem, Int) -> Unit,
     onRequirementsChange: (List<ItemRequirement>) -> Unit,
@@ -479,9 +491,13 @@ private fun QueryPage(
             onEdit = onEdit,
             onRemove = onRemove,
             onAdd = onAdd,
+            arcaneResin = arcaneResin,
+            arcaneResinFilter = arcaneResinFilter,
+            onEditResin = onEditResin,
+            onRemoveResin = onRemoveResin,
             modifier = Modifier.fillMaxWidth(),
         )
-        if (validationMessage != null && requirements.isNotEmpty()) {
+        if (validationMessage != null && (requirements.isNotEmpty() || arcaneResin > 0)) {
             Text(
                 validationMessage,
                 style = MaterialTheme.typography.bodySmall,

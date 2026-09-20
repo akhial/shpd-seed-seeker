@@ -12,6 +12,8 @@ data class PresetQuery(
     val wandmakerQuest: WandmakerQuest? = null,
     val challenges: Int = 0,
     val autoApplyTrinket: Boolean = true,
+    val arcaneResin: Int = 0,
+    val arcaneResinFilter: ArcaneResinFilter = ArcaneResinFilter(),
 )
 
 data class QueryPreset(

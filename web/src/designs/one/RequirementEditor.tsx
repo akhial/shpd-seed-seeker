@@ -26,6 +26,7 @@ import {
 } from "../../lib/query";
 import { ANY_ENCHANTMENT } from "../../lib/wasm/types";
 import type {
+  ArcaneResinFilter,
   ItemCategory,
   ItemSource,
   RequirementKind,
@@ -115,6 +116,8 @@ export function RequirementEditor({
   requirement,
   isNew,
   stack,
+  resinAmount,
+  onSaveResin,
   onSave,
   onCancel,
 }: {
@@ -122,6 +125,8 @@ export function RequirementEditor({
   isNew: boolean;
   /** The chip's stack shape; a cluster member's belongs to the cluster. */
   stack: StackShape;
+  resinAmount?: number;
+  onSaveResin?: (amount: number, filter: ArcaneResinFilter) => void;
   onSave: (
     requirement: RequirementState,
     count: number,
@@ -137,6 +142,7 @@ export function RequirementEditor({
   const [count, setCount] = useState(stack.count);
   const [total, setTotal] = useState(stack.total);
   const [copyDepth, setCopyDepth] = useState(stack.copyDepth);
+  const [amount, setAmount] = useState(resinAmount ?? 2);
   // "Specific…" with nothing ticked yet is a transient editor state, not a
   // filter, so it lives outside the draft; saving it means "any".
   const [choosingEffects, setChoosingEffects] = useState(false);
@@ -149,11 +155,14 @@ export function RequirementEditor({
 
   const kind = draft.kind ?? "weapon";
   const family = kindFamily(kind);
+  const resin = draft.item === "arcane_resin";
   const maxUpgrade = maxUpgradeOf(draft);
   const wildcardGear = !draft.item && (family === "weapon" || family === "armor");
   const enchantments = family === "weapon" ? weaponEnchantments : armorGlyphs;
   const curses = family === "weapon" ? weaponCurses : armorCurses;
   const errors = validateRequirement(draft);
+  if (resin && (!Number.isInteger(amount) || amount < 1 || amount > 65535))
+    errors.push("Enter an amount from 1 to 65535.");
   // A combined level is a property of a concrete stack of two or more —
   // and of rings only, whose effects scale with their level.
   const totalable = stack.inCluster
@@ -308,16 +317,33 @@ export function RequirementEditor({
                 value={draft.item ?? ""}
                 onChange={(event) => {
                   const id = event.currentTarget.value || undefined;
+                  if (id === "arcane_resin") {
+                    setCount(1);
+                    setTotal(undefined);
+                    setCopyDepth(undefined);
+                  }
                   if (!id) setTotal(undefined);
                   reviseDraft((current) => ({
                     ...current,
                     item: id,
+                    ...(id === "arcane_resin"
+                      ? {
+                          upgrade: { mode: "any" as const, value: 0 },
+                          effect: undefined,
+                          identityGroup: undefined,
+                          alternativeGroup: undefined,
+                          levelSum: undefined,
+                        }
+                      : {}),
                     tier: id ? { mode: "any", value: current.tier.value } : current.tier,
                   }));
                 }}
               >
                 {family !== "trinket" && family !== "artifact" && (
                   <option value="">{WILDCARD_LABELS[kind]}</option>
+                )}
+                {family === "wand" && onSaveResin && (
+                  <option value="arcane_resin">Arcane Resin</option>
                 )}
                 {family === "weapon"
                   ? range(EXACT_TIER_MIN, EXACT_TIER_MAX).map((tier) => (
@@ -409,52 +435,72 @@ export function RequirementEditor({
             </section>
           )}
 
-          {effectiveTotal === undefined && family !== "trinket" && family !== "artifact" && (
+          {resin && (
             <section className="d1-modal-section">
-              <h3>Upgrade level</h3>
-              <Segmented
-                value={draft.upgrade.mode}
-                options={[...UPGRADE_OPTIONS]}
-                onChange={setUpgradeMode}
-                ariaLabel="Upgrade predicate"
-                fill
-              />
-              {draft.upgrade.mode === "exact" && (
-                <SliderRow
-                  label="Exactly"
-                  valueLabel={`+${draft.upgrade.value}`}
+              <Field label="Minimum resin">
+                <input
+                  className="d1-input"
+                  type="number"
+                  aria-label="Minimum resin"
                   min={1}
-                  max={maxUpgrade}
-                  value={draft.upgrade.value}
-                  onChange={(value) =>
-                    reviseDraft((current) => ({
-                      ...current,
-                      upgrade: { ...current.upgrade, value },
-                    }))
-                  }
+                  max={65535}
+                  step={1}
+                  value={Number.isNaN(amount) ? "" : amount}
+                  onChange={(event) => setAmount(event.currentTarget.valueAsNumber)}
                 />
-              )}
-              {draft.upgrade.mode === "at_least" && (
-                // Under v4.0.0's ceilings every family spans at least +1…+3
-                // (weapons +1…+4), enough range to warrant a slider.
-                <SliderRow
-                  label="Minimum upgrade"
-                  valueLabel={`+${draft.upgrade.value} or higher`}
-                  min={1}
-                  max={maxUpgrade - 1}
-                  value={draft.upgrade.value}
-                  onChange={(value) =>
-                    reviseDraft((current) => ({
-                      ...current,
-                      upgrade: { ...current.upgrade, value },
-                    }))
-                  }
-                />
-              )}
+              </Field>
             </section>
           )}
 
-          {!stack.inCluster && family !== "trinket" && family !== "artifact" && (
+          {!resin &&
+            effectiveTotal === undefined &&
+            family !== "trinket" &&
+            family !== "artifact" && (
+              <section className="d1-modal-section">
+                <h3>Upgrade level</h3>
+                <Segmented
+                  value={draft.upgrade.mode}
+                  options={[...UPGRADE_OPTIONS]}
+                  onChange={setUpgradeMode}
+                  ariaLabel="Upgrade predicate"
+                  fill
+                />
+                {draft.upgrade.mode === "exact" && (
+                  <SliderRow
+                    label="Exactly"
+                    valueLabel={`+${draft.upgrade.value}`}
+                    min={1}
+                    max={maxUpgrade}
+                    value={draft.upgrade.value}
+                    onChange={(value) =>
+                      reviseDraft((current) => ({
+                        ...current,
+                        upgrade: { ...current.upgrade, value },
+                      }))
+                    }
+                  />
+                )}
+                {draft.upgrade.mode === "at_least" && (
+                  // Under v4.0.0's ceilings every family spans at least +1…+3
+                  // (weapons +1…+4), enough range to warrant a slider.
+                  <SliderRow
+                    label="Minimum upgrade"
+                    valueLabel={`+${draft.upgrade.value} or higher`}
+                    min={1}
+                    max={maxUpgrade - 1}
+                    value={draft.upgrade.value}
+                    onChange={(value) =>
+                      reviseDraft((current) => ({
+                        ...current,
+                        upgrade: { ...current.upgrade, value },
+                      }))
+                    }
+                  />
+                )}
+              </section>
+            )}
+
+          {!resin && !stack.inCluster && family !== "trinket" && family !== "artifact" && (
             <section className="d1-modal-section">
               <div className="d1-modal-section-head">
                 <h3>Total item count</h3>
@@ -607,7 +653,7 @@ export function RequirementEditor({
                     });
                   }}
                 />
-                <span>Require uncursed</span>
+                <span>{resin ? "Require uncursed wands" : "Require uncursed"}</span>
               </label>
               <Field label="Source">
                 <select
@@ -637,7 +683,7 @@ export function RequirementEditor({
                     reviseDraft((current) => ({ ...current, maxDepth: limited ? 4 : undefined }));
                   }}
                 />
-                <span>Limit this item to a floor</span>
+                <span>{resin ? "Limit wands to a floor" : "Limit this item to a floor"}</span>
               </label>
               {draft.maxDepth !== undefined && (
                 <SliderRow
@@ -670,14 +716,20 @@ export function RequirementEditor({
             className="d1-btn d1-btn-primary"
             disabled={errors.length > 0}
             onClick={() =>
-              onSave(
-                draft,
-                stack.inCluster ? 1 : count,
-                effectiveTotal,
-                stack.inCluster || count < 2 || effectiveTotal !== undefined
-                  ? undefined
-                  : copyDepth,
-              )
+              resin
+                ? onSaveResin?.(amount, {
+                    uncursed: draft.uncursed,
+                    maxDepth: draft.maxDepth,
+                    source: draft.source,
+                  })
+                : onSave(
+                    draft,
+                    stack.inCluster ? 1 : count,
+                    effectiveTotal,
+                    stack.inCluster || count < 2 || effectiveTotal !== undefined
+                      ? undefined
+                      : copyDepth,
+                  )
             }
           >
             {isNew ? "Add Requirement" : "Save Changes"}

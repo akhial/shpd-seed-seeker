@@ -1,6 +1,9 @@
 import Foundation
 
 public struct SavedQuery: Codable, Sendable {
+    public var arcaneResin: Int
+    public var arcaneResinFilter: ArcaneResinFilter
+    public var slotCount: Int { requirements.slotCount + (arcaneResin > 0 ? 1 : 0) }
     public var requirements: [ItemRequirement]
     public var autoApplyTrinket: Bool
     public var maximumDepth: Int
@@ -11,20 +14,24 @@ public struct SavedQuery: Codable, Sendable {
     public init(requirements: [ItemRequirement] = [], maximumDepth: Int = 24,
                 requireBlacksmith: Bool = false, excludeBlacksmithRewards: Bool = false,
                 wandmakerQuest: WandmakerQuest? = nil,
-                challenges: Int = 0, autoApplyTrinket: Bool = true) {
+                challenges: Int = 0, autoApplyTrinket: Bool = true,
+                arcaneResin: Int = 0, arcaneResinFilter: ArcaneResinFilter = .init()) {
         self.requirements = requirements; self.maximumDepth = maximumDepth
         self.requireBlacksmith = requireBlacksmith
         self.excludeBlacksmithRewards = excludeBlacksmithRewards
         self.wandmakerQuest = wandmakerQuest
         self.challenges = challenges
         self.autoApplyTrinket = autoApplyTrinket
+        self.arcaneResin = arcaneResin; self.arcaneResinFilter = arcaneResinFilter
     }
     private enum CodingKeys: String, CodingKey {
         case requirements, maximumDepth, requireBlacksmith, excludeBlacksmithRewards
-        case wandmakerQuest, challenges, autoApplyTrinket
+        case wandmakerQuest, challenges, autoApplyTrinket, arcaneResin, arcaneResinFilter
     }
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        arcaneResin = try container.decodeIfPresent(Int.self, forKey: .arcaneResin) ?? 0
+        arcaneResinFilter = try container.decodeIfPresent(ArcaneResinFilter.self, forKey: .arcaneResinFilter) ?? .init()
         autoApplyTrinket = try container.decodeIfPresent(Bool.self, forKey: .autoApplyTrinket) ?? false
         requirements = try container.decode([ItemRequirement].self, forKey: .requirements)
         // Queries saved before empty boss floors were removed may hold 5/10/15;
@@ -42,6 +49,7 @@ public struct SavedQuery: Codable, Sendable {
         challenges = try container.decodeIfPresent(Int.self, forKey: .challenges) ?? 0
     }
     public func validated() -> SavedQuery? {
+        guard (0...65535).contains(arcaneResin), arcaneResinFilter.isValid else { return nil }
         guard (1...SearchLimits.maxDepth).contains(maximumDepth), (0...SearchLimits.challengeMask).contains(challenges) else { return nil }
         for requirement in requirements {
             if let item = requirement.item, ItemCatalog.findById(item.id) != item { return nil }
@@ -230,6 +238,6 @@ public extension SavedQuery {
     func searchRequest() throws -> SearchRequest {
         try SearchRequest(requirements: requirements, maximumDepth: maximumDepth,
                           requireBlacksmith: requireBlacksmith, excludeBlacksmithRewards: excludeBlacksmithRewards,
-                          wandmakerQuest: wandmakerQuest, challenges: challenges, autoApplyTrinket: autoApplyTrinket)
+                          wandmakerQuest: wandmakerQuest, challenges: challenges, autoApplyTrinket: autoApplyTrinket, arcaneResin: arcaneResin, arcaneResinFilter: arcaneResinFilter)
     }
 }

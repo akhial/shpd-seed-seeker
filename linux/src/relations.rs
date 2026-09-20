@@ -869,6 +869,8 @@ mod tests {
     fn valid(requirements: &[UiRequirement]) -> Result<(), String> {
         SearchQuery {
             auto_apply_trinket: false,
+            arcane_resin_filter: shpd_seedfinder_core::query::ArcaneResinFilter::default(),
+            arcane_resin: 0,
             requirements: requirements.iter().map(|row| row.to_core()).collect(),
             max_depth: 24,
             challenges: shpd_seedfinder_core::challenges::Challenges::NONE,

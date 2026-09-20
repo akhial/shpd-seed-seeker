@@ -580,8 +580,10 @@ impl QueryPlan {
         deadline: impl Fn(&Requirement, ItemSource, u8) -> Option<u8>,
     ) -> Self {
         let max_depth = query.max_depth;
-        let mut generation_depth = 1;
-        let mut needs_vault_treasure = false;
+        // Surplus wands may appear anywhere in scope, including the vault,
+        // even when every ordinary requirement's sources close earlier.
+        let mut generation_depth = if query.arcane_resin > 0 { max_depth } else { 1 };
+        let mut needs_vault_treasure = query.arcane_resin > 0 && max_depth >= Quest::Imp.window().0;
         let mut slots: Vec<Vec<RequirementPlan>> = Vec::new();
         for slot in query.slots() {
             let mut members = Vec::with_capacity(slot.len());
@@ -950,6 +952,8 @@ mod tests {
     fn query(requirements: Vec<Requirement>, max_depth: u8) -> SearchQuery {
         SearchQuery {
             auto_apply_trinket: false,
+            arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
+            arcane_resin: 0,
             requirements,
             max_depth,
             challenges: crate::challenges::Challenges::NONE,
@@ -4475,6 +4479,8 @@ mod closed_multiplicity_grouping_tests {
     fn analyze(requirements: Vec<Requirement>, max_depth: u8) -> QueryPlan {
         let query = SearchQuery {
             auto_apply_trinket: false,
+            arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
+            arcane_resin: 0,
             requirements,
             max_depth,
             challenges: Challenges::NONE,

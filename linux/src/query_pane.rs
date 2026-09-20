@@ -481,10 +481,11 @@ impl QueryPane {
         // away here rather than waiting for a drag that may never end.
         self.remove_revealer.set_reveal_child(false);
         self.board.remove_all();
-        self.requirements_group
-            .set_title(&requirements_title(state.board_count()));
+        self.requirements_group.set_title(&requirements_title(
+            state.board_count() + usize::from(state.arcane_resin > 0),
+        ));
         let items = state.board();
-        if items.is_empty() {
+        if items.is_empty() && state.arcane_resin == 0 {
             let empty = gtk::Label::builder()
                 .label("Nothing yet — add the item you are hunting for")
                 .css_classes(["dim-label"])
@@ -498,6 +499,22 @@ impl QueryPane {
                 self.board
                     .append(&self.chip(state, item.anchor(), item, &items, false));
             }
+        }
+        if state.arcane_resin > 0 {
+            let chip = gtk::Box::new(gtk::Orientation::Horizontal, 4);
+            let edit = gtk::Button::builder()
+                .label(format!("≥{} Arcane Resin", state.arcane_resin))
+                .tooltip_text(crate::resin_editor::summary(state.arcane_resin_filter))
+                .action_name("win.edit-resin")
+                .build();
+            let remove = gtk::Button::builder()
+                .icon_name("window-close-symbolic")
+                .tooltip_text("Remove Arcane Resin")
+                .action_name("win.remove-resin")
+                .build();
+            chip.append(&edit);
+            chip.append(&remove);
+            self.board.append(&chip);
         }
         let add = gtk::Button::builder()
             .child(

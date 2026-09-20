@@ -402,8 +402,9 @@ fun List<ItemRequirement>.slotCount(): Int = slots().size
  * enforces the same rules; this form exists so the editor can show the
  * message instead of silently disabling Search.
  */
-fun List<ItemRequirement>.validationProblem(): String? {
-    if (isEmpty()) return "Add at least one requirement."
+fun List<ItemRequirement>.validationProblem(arcaneResin: Int = 0): String? {
+    if (arcaneResin !in 0..65535) return "Arcane Resin must be 0..65535."
+    if (isEmpty() && arcaneResin == 0) return "Add at least one requirement."
     // A stack (identity group) has one anchor unit — a lone requirement or one
     // whole alternative group — that may constrain the item it binds to; every
     // other member is a bare copy of the same category.
@@ -509,6 +510,18 @@ enum class WandmakerQuest(val variant: ScoutQuestVariant, val documentName: Stri
     }
 }
 
+data class ArcaneResinFilter(
+    val uncursed: Boolean = true,
+    val maximumDepth: Int? = null,
+    val source: ScoutItemSource? = null,
+) {
+    init {
+        require(maximumDepth == null || maximumDepth in 1..SearchLimits.MAX_DEPTH) {
+            "Arcane Resin floor must be 1..${SearchLimits.MAX_DEPTH}"
+        }
+    }
+}
+
 data class SearchRequest(
     val requirements: List<ItemRequirement>,
     val maximumDepth: Int = SearchLimits.MAX_DEPTH,
@@ -519,17 +532,18 @@ data class SearchRequest(
     /** Which Wandmaker quest the run must roll; null accepts any. */
     val wandmakerQuest: WandmakerQuest? = null,
     val autoApplyTrinket: Boolean = false,
+    val arcaneResin: Int = 0,
+    val arcaneResinFilter: ArcaneResinFilter = ArcaneResinFilter(),
 ) {
     init {
-        require(requirements.isNotEmpty()) { "At least one requirement is needed" }
-        requirements.validationProblem()?.let { throw IllegalArgumentException(it) }
+        requirements.validationProblem(arcaneResin)?.let { throw IllegalArgumentException(it) }
         require(maximumDepth in 1..SearchLimits.MAX_DEPTH) { "Maximum floor must be 1..${SearchLimits.MAX_DEPTH}" }
         require(challenges in 0..Challenge.ALL_MASK) { "Challenge mask must be 0..${Challenge.ALL_MASK}" }
     }
 
     /** How many slots the engine sees: what result rows report as matched requirements. */
     val slotCount: Int
-        get() = requirements.slotCount()
+        get() = requirements.slotCount() + if (arcaneResin > 0) 1 else 0
 }
 
 enum class Challenge(

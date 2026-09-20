@@ -892,6 +892,8 @@ mod tests {
     fn parallel_results_are_sorted_and_bounded() {
         let query = SearchQuery {
             auto_apply_trinket: false,
+            arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
+            arcane_resin: 0,
             requirements: vec![Requirement {
                 kind: ItemKind::Wand,
                 weapon_category: None,
@@ -980,6 +982,8 @@ mod tests {
 
         let query = SearchQuery {
             auto_apply_trinket: false,
+            arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
+            arcane_resin: 0,
             requirements: vec![Requirement {
                 kind: ItemKind::Wand,
                 weapon_category: None,
@@ -1053,6 +1057,8 @@ mod tests {
 
         let query = SearchQuery {
             auto_apply_trinket: false,
+            arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
+            arcane_resin: 0,
             requirements: vec![Requirement {
                 kind: ItemKind::Wand,
                 weapon_category: None,
@@ -1127,6 +1133,8 @@ mod tests {
     fn streaming_status_stays_running_until_terminal_results_are_drained() {
         let query = SearchQuery {
             auto_apply_trinket: false,
+            arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
+            arcane_resin: 0,
             requirements: vec![Requirement {
                 kind: ItemKind::Wand,
                 weapon_category: None,
@@ -1169,6 +1177,8 @@ mod tests {
     fn wand_query() -> SearchQuery {
         SearchQuery {
             auto_apply_trinket: false,
+            arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
+            arcane_resin: 0,
             requirements: vec![Requirement {
                 kind: ItemKind::Wand,
                 weapon_category: None,
@@ -1315,6 +1325,8 @@ mod tests {
         // later satisfiable continuation can still cover it.
         let impossible = SearchQuery {
             auto_apply_trinket: false,
+            arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
+            arcane_resin: 0,
             requirements: vec![Requirement {
                 kind: ItemKind::Ring,
                 weapon_category: None,
@@ -1569,6 +1581,8 @@ mod tests {
 
         let query = SearchQuery {
             auto_apply_trinket: false,
+            arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
+            arcane_resin: 0,
             requirements: vec![Requirement {
                 kind: ItemKind::Wand,
                 weapon_category: None,
