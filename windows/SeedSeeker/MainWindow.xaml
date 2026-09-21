@@ -79,7 +79,7 @@
                     <FontIcon Glyph="&#xE946;" FontSize="14"/>
                     <Button.Flyout>
                       <Flyout>
-                        <TextBlock Width="300" TextWrapping="Wrap" Text="Each blanket must match at least one item fulfilling your ordinary requirements. It does not ask for an additional item. All filters in one blanket apply to the same item; separate blankets can match the same or different chosen items.&#xA;&#xA;For example, require Lightning, Disintegration, and Frost at +2 or higher, then add an Any wand blanket at exactly +3 from the Wandmaker."/>
+                        <TextBlock Width="300" TextWrapping="Wrap" Text="Each blanket must match at least one item fulfilling your ordinary requirements or contributing Arcane Resin. It does not ask for an additional item. All filters in one blanket apply to the same item; separate blankets can match the same or different chosen items.&#xA;&#xA;For example, require Lightning, Disintegration, and Frost at +2 or higher, then add an Any wand blanket at exactly +3 from the Wandmaker."/>
                       </Flyout>
                     </Button.Flyout>
                   </Button>

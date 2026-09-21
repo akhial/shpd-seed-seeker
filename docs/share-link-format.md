@@ -69,7 +69,7 @@ bits are written.
 | `alternative_group` | 1 (+6) | Alternative-group label minus one. Records sharing a label form one "any of" slot; labels are renumbered in first-appearance order when encoding. |
 | `level_sum` | 1 (+10) | Combined-level group: two bits of group label minus one (groups 1–4, the editors' A–D), then the eight-bit minimum total in levels (1–255), where a matched item counts its upgrade plus one. |
 | `select_trinket` | 1, versions 5–10 only | Whether this requirement selects its offered trinket. Version 6 includes this bit even when auto-apply is disabled by explicit trinket requirements. |
-| `blanket` | 1, versions 9–10 only | Follows `select_trinket`; requires an item assigned to an ordinary slot to also satisfy this predicate. Absent in versions 4–8, which default to false. |
+| `blanket` | 1, versions 9–10 only | Follows `select_trinket`; requires an item assigned to an ordinary slot or selected as an Arcane Resin donor to also satisfy this predicate. Absent in versions 4–8, which default to false. |
 
 ### Code tables
 

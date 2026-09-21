@@ -759,7 +759,7 @@ private struct QueryView: View {
                 .buttonStyle(.plain).help("About blanket requirements")
                 .accessibilityLabel("About blanket requirements")
                 .popover(isPresented: $showingBlanketHelp) {
-                    Text("Each blanket must match at least one item fulfilling your ordinary requirements. It does not ask for an additional item. All filters in one blanket apply to the same item; separate blankets can match the same or different chosen items.\n\nFor example, require Lightning, Disintegration, and Frost at +2 or higher, then add an Any wand blanket at exactly +3 from the Wandmaker.")
+                    Text("Each blanket must match at least one item fulfilling your ordinary requirements or contributing Arcane Resin. It does not ask for an additional item. All filters in one blanket apply to the same item; separate blankets can match the same or different chosen items.\n\nFor example, require Lightning, Disintegration, and Frost at +2 or higher, then add an Any wand blanket at exactly +3 from the Wandmaker.")
                         .frame(width: 320).padding()
                 }
             }

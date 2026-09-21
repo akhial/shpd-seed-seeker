@@ -99,7 +99,8 @@ use crate::quests::WandmakerQuestType;
 /// Estimates the fraction of seeds satisfying a query.
 ///
 /// The result is fixed for a search: observed results never feed back into it.
-/// Returns `NaN` for trinket filters without a measured distribution.
+/// Returns `NaN` for filters the supply model cannot estimate, including
+/// blankets that can be witnessed by resin donors.
 ///
 /// Alternative groups are approximated by their most plentiful member — a
 /// pessimistic simplification, since any member can satisfy the group.
@@ -181,6 +182,11 @@ pub(crate) fn equipment_probability(query: &SearchQuery, profile: Profile) -> f6
 /// this approximates overlaps, stays between the largest branch and their sum,
 /// and can never make a stricter query more likely than its ordinary base.
 fn blanket_probability(query: &SearchQuery, profile: Profile) -> f64 {
+    if resin::blankets_can_match_donors(query) {
+        // The resin model tracks yield, not donor witnesses. Restricting
+        // witnesses to ordinary slots would incorrectly report impossible odds.
+        return f64::NAN;
+    }
     let ordinary = SearchQuery {
         requirements: query
             .requirements
@@ -216,8 +222,8 @@ fn blanket_probability(query: &SearchQuery, profile: Profile) -> f64 {
             )
         })
         .collect();
-    // Donors compete for the same supply, including single-choice quest
-    // prizes, but only ordinary assignments may witness a blanket.
+    // These blankets cannot match donors; those still compete for the same
+    // supply, including single-choice quest prizes.
     let chance = |branch: &[Predicate]| {
         let mut ordered = branch.to_vec();
         sort_filters(&mut ordered);

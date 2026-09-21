@@ -117,7 +117,12 @@ fn cached_resin_estimates_keep_query_filters_and_profiles_separate() {
         .zip(&fresh)
         .chain(variants.iter().zip(&fresh).rev())
     {
-        assert_eq!(estimate_match_probability(query), *expected, "{query:?}");
+        let actual = estimate_match_probability(query);
+        if expected.is_nan() {
+            assert!(actual.is_nan(), "{query:?}");
+        } else {
+            assert_eq!(actual, *expected, "{query:?}");
+        }
     }
 }
 
@@ -157,6 +162,10 @@ fn auto_resin_estimates_track_generated_wand_combinations() {
     }
     for (query, hits) in queries.iter().zip(hits) {
         let estimate = estimate_match_probability(query);
+        if query.requirements.iter().any(|r| r.blanket) {
+            assert!(estimate.is_nan(), "donor blanket needs a coverage model");
+            continue;
+        }
         let observed = hits as f64 / WORLDS as f64;
         let noise = 3.0 * (observed * (1.0 - observed) / WORLDS as f64).sqrt();
         assert!(
@@ -309,7 +318,7 @@ fn resin_works_with_selected_and_automatic_trinkets_and_linked_wands() {
 }
 
 #[test]
-fn blanket_and_resin_cannot_both_claim_the_wandmaker_reward() {
+fn blanket_on_a_wandmaker_donor_is_not_reported_as_impossible() {
     let mut resin = query(
         2,
         r#"[{"kind":"wand"},{"kind":"wand","source":"wandmaker_reward","blanket":true}]"#,
@@ -317,10 +326,10 @@ fn blanket_and_resin_cannot_both_claim_the_wandmaker_reward() {
     resin.arcane_resin_filter.source = Some(ItemSource::WandmakerReward);
     for amount in [2, 4, 8] {
         resin.arcane_resin = amount;
-        assert_eq!(estimate_match_probability(&resin), 0.0);
+        assert!(estimate_match_probability(&resin).is_nan());
     }
     resin.arcane_resin_filter.source = None;
-    assert!(estimate_match_probability(&resin) > 0.0);
+    assert!(estimate_match_probability(&resin).is_nan());
 }
 
 #[test]
@@ -331,12 +340,12 @@ fn resin_with_one_blanket_witness_matches_explicit_filters() {
             r#"[{"item":"wand_frost","source":"wandmaker_reward"}]"#,
         ),
         (
-            r#"{"kind":"wand","upgrade":3,"blanket":true}"#,
-            r#"[{"item":"wand_frost","upgrade":3}]"#,
+            r#"{"kind":"wand","upgrade":3,"source":"wandmaker_reward","blanket":true}"#,
+            r#"[{"item":"wand_frost","upgrade":3,"source":"wandmaker_reward"}]"#,
         ),
         (
-            r#"{"kind":"wand","uncursed":true,"max_depth":4,"blanket":true}"#,
-            r#"[{"item":"wand_frost","uncursed":true,"max_depth":4}]"#,
+            r#"{"kind":"wand","uncursed":true,"max_depth":4,"source":"heap","blanket":true}"#,
+            r#"[{"item":"wand_frost","uncursed":true,"max_depth":4,"source":"heap"}]"#,
         ),
     ] {
         for amount in [0, 2, 6, 12] {
@@ -352,6 +361,10 @@ fn resin_with_one_blanket_witness_matches_explicit_filters() {
                 blanket.arcane_resin_filter.source = source;
                 direct.arcane_resin_filter.source = source;
                 let estimate = estimate_match_probability(&blanket);
+                if source.is_none() || source == blanket.requirements[1].source {
+                    assert!(estimate.is_nan(), "donors can witness this blanket");
+                    continue;
+                }
                 let expected = estimate_match_probability(&direct);
                 assert!(
                     (estimate - expected).abs() < 1e-12,
@@ -390,7 +403,11 @@ fn mixed_blanket_resin_estimates_preserve_redundancy_and_monotonicity() {
     ] {
         let mut previous = 1.0;
         for amount in [0, 2, 6, 12, u16::MAX] {
-            let resin = query(amount, requirements);
+            let mut resin = query(amount, requirements);
+            // Keep the numeric estimate cases on ordinary witnesses: the
+            // donor and blanket sources cannot overlap.
+            resin.arcane_resin_filter.source = Some(ItemSource::Heap);
+            resin.requirements.last_mut().unwrap().source = Some(ItemSource::WandmakerReward);
             let estimate = estimate_match_probability(&resin);
             assert!(
                 (0.0..=previous + 1e-12).contains(&estimate),
@@ -421,6 +438,9 @@ fn auto_blankets_preserve_bounds_redundancy_and_unsupported_estimates() {
             let mut resin = query(0, requirements);
             resin.arcane_resin_auto = true;
             resin.auto_apply_trinket = automatic;
+            assert!(estimate_match_probability(&resin).is_nan());
+            resin.arcane_resin_filter.source = Some(ItemSource::Heap);
+            resin.requirements.last_mut().unwrap().source = Some(ItemSource::WandmakerReward);
             let estimate = estimate_match_probability(&resin);
             assert!(estimate > 0.0 && estimate <= 1.0, "{resin:?}: {estimate}");
             let mut repeated = resin.clone();
@@ -458,19 +478,18 @@ fn auto_blankets_preserve_bounds_redundancy_and_unsupported_estimates() {
 }
 
 #[test]
-fn auto_blanket_reward_is_reserved_even_when_donors_share_its_source() {
+fn auto_blanket_reward_can_be_reserved_or_consumed_when_donors_share_its_source() {
     let mut resin = query(
         0,
         r#"[{"kind":"wand"},{"kind":"wand","upgrade":2,"source":"wandmaker_reward","blanket":true}]"#,
     );
     resin.arcane_resin_auto = true;
     resin.arcane_resin_filter.source = Some(ItemSource::WandmakerReward);
-    assert_eq!(estimate_match_probability(&resin), 0.0);
+    assert!(estimate_match_probability(&resin).is_nan());
     resin.requirements[1].upgrade = shpd_seedfinder_core::query::UpgradeRequirement::Exact(3);
-    let estimate = estimate_match_probability(&resin);
-    assert!(estimate > 0.0);
+    assert!(estimate_match_probability(&resin).is_nan());
     resin.arcane_resin_auto = false;
-    assert!((estimate_match_probability(&resin) - estimate).abs() < 1e-12);
+    assert!(estimate_match_probability(&resin) > 0.0);
 }
 
 #[test]

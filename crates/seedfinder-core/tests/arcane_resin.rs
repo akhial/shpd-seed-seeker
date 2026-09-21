@@ -190,7 +190,7 @@ fn auto_blankets_share_reserved_wands_and_do_not_add_upgrade_cost() {
 }
 
 #[test]
-fn auto_donors_cannot_witness_blankets_and_zero_cost_still_counts() {
+fn auto_donors_can_witness_blankets_and_zero_cost_still_counts() {
     let query =
         auto_query(r#"[{"item":"wand_lightning"},{"kind":"wand","upgrade":3,"blanket":true}]"#);
     let mut candidate = world(vec![
@@ -200,8 +200,8 @@ fn auto_donors_cannot_witness_blankets_and_zero_cost_still_counts() {
             ..wand(3)
         },
     ]);
-    assert!(!query.matches(&candidate));
-    assert_eq!(scout_matches(&candidate, &query).matched_requirements, 2);
+    assert!(query.matches(&candidate));
+    assert_eq!(scout_matches(&candidate, &query).matched_requirements, 3);
     candidate.items[0].upgrade = 3;
     candidate.items.pop();
     assert!(query.matches(&candidate));

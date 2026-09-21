@@ -535,7 +535,7 @@ private fun QueryPage(
             AlertDialog(
                 onDismissRequest = { showBlanketHelp = false },
                 title = { Text("Blanket Requirements") },
-                text = { Text("Each blanket must match at least one item fulfilling your ordinary requirements. " +
+                text = { Text("Each blanket must match at least one item fulfilling your ordinary requirements or contributing Arcane Resin. " +
                     "It does not ask for an additional item. All filters in one blanket apply to the same item; " +
                     "separate blankets can match the same or different chosen items.\n\n" +
                     "For example, require Lightning, Disintegration, and Frost at +2 or higher, then add an " +

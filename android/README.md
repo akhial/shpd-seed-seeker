@@ -197,9 +197,9 @@ and supported empty/boss-floor navigation.
 ## Blanket requirements
 
 The collapsed **Blanket Requirements** section adds conditions on items already
-chosen to fulfill ordinary requirements. Expand it to add or edit filters,
-including either/or alternatives. Each blanket applies all its filters to one
-chosen item; separate blankets may use the same or different chosen items.
+chosen to fulfill ordinary requirements or supply Arcane Resin. Expand it to
+add or edit filters, including either/or alternatives. Each blanket applies all
+its filters to one chosen item; separate blankets may use the same or different chosen items.
 Blankets do not request extra copies, combined levels, or trinket selection.
 At least one ordinary requirement is required to search. Saved queries, results
 files, and version 9 share links preserve blankets.
@@ -207,9 +207,10 @@ files, and version 9 share links preserve blankets.
 ## Arcane Resin
 
 Choose **Arcane Resin** when adding a Wand requirement. Set a minimum amount or
-choose **Auto** to find enough resin to upgrade every matched wand to +3.
-Auto counts each reserved wand once, including blanket witnesses; wands already
-at +3 or higher need no resin. The requirement chip shows **Auto**.
+choose **Auto** to find enough resin to upgrade every reserved wand to +3.
+Auto counts each reserved wand once. Donor wands are consumed for resin, including
+those witnessing blankets, and add no upgrade cost. Wands already at +3 or higher
+need no resin. The requirement chip shows **Auto**.
 Optionally limit donor wands by curse status, floor, or source. Donors must
 be uncursed by default. Each surplus wand contributes `2 × (upgrade + 1)` resin;
 wands reserved for ordinary requirements cannot also become resin. Resin is one

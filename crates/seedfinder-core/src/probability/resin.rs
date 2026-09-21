@@ -15,11 +15,25 @@ use crate::{
     probability_tables::{
         DEPTHS, LINES_ORDER, PRIZE_GROUPS, Supply, prize_group, source_index, spread_index,
     },
-    query::{
-        EffectRequirement, Requirement, SearchQuery, TierRequirement, UpgradeRequirement,
-        resin_upgrade_cost,
-    },
+    query::{SearchQuery, resin_donor_requirement as donor_requirement, resin_upgrade_cost},
 };
+
+pub(super) fn blankets_can_match_donors(query: &SearchQuery) -> bool {
+    if !query.needs_resin() {
+        return false;
+    }
+    let requirement = donor_requirement(query);
+    let donor = Predicate::of(requirement, None).within(query, &requirement);
+    query
+        .requirements
+        .iter()
+        .filter(|r| r.blanket)
+        .any(|blanket| {
+            donor
+                .intersect(Predicate::of(*blanket, None).within(query, blanket))
+                .is_some()
+        })
+}
 
 pub(super) fn probability(query: &SearchQuery, profile: Profile) -> f64 {
     let mut ordinary = query.clone();
@@ -43,27 +57,9 @@ pub(super) fn probability(query: &SearchQuery, profile: Profile) -> f64 {
     with_resin(query, profile, &ordered, baseline)
 }
 
-fn donor_requirement(query: &SearchQuery) -> Requirement {
-    Requirement {
-        kind: ItemKind::Wand,
-        weapon_category: None,
-        item: None,
-        tier: TierRequirement::Any,
-        upgrade: UpgradeRequirement::Any,
-        effect: EffectRequirement::Any,
-        require_uncursed: query.arcane_resin_filter.uncursed,
-        select_trinket: false,
-        blanket: false,
-        source: query.arcane_resin_filter.source,
-        identity_group: None,
-        max_depth: query.arcane_resin_filter.max_depth,
-        alternative_group: None,
-        level_sum: None,
-    }
-}
-
 /// Apply resin to an ordinary assignment, after any blanket intersections.
-/// Donors are separate filters: they cannot witness blankets or add Auto cost.
+/// Donors do not add Auto cost. Blanket estimates involving donors are
+/// unavailable until this model tracks their coverage as well as their yield.
 pub(super) fn with_resin(
     query: &SearchQuery,
     profile: Profile,
