@@ -10,10 +10,16 @@ ASSETS="$ROOT/android/app/src/main/assets/third_party/shattered-pixel-dungeon"
 
 bash "$ROOT/scripts/build-macos-native.sh"
 
+# Swift 6.4 needs an explicit Clang -isysroot at link time; otherwise the
+# executable can record SDK 14.0 and trigger legacy SwiftUI appearance/behavior.
+MACOS_SDK_PATH="$(xcrun --sdk macosx --show-sdk-path)"
+
 cd "$PACKAGE"
 CLANG_MODULE_CACHE_PATH="${CLANG_MODULE_CACHE_PATH:-$ROOT/target/swift-clang-cache}" \
 SWIFTPM_MODULECACHE_OVERRIDE="${SWIFTPM_MODULECACHE_OVERRIDE:-$ROOT/target/swift-module-cache}" \
-swift build -c release --disable-sandbox
+xcrun --sdk macosx swift build -c release --disable-sandbox --sdk "$MACOS_SDK_PATH" \
+    -Xswiftc -Xclang-linker -Xswiftc -isysroot \
+    -Xswiftc -Xclang-linker -Xswiftc "$MACOS_SDK_PATH"
 
 # The engine must be statically linked; a dyld reference here means the app
 # only launches on the machine that built it.
