@@ -178,6 +178,30 @@ class SearchControllerTest {
         fixture.scope.cancel()
     }
 
+    @Test fun fullImportedPoolsFinishVerificationAndReportEveryCheckedSeed() = runTest {
+        for (count in listOf(11, 1023, 1024, 1025)) {
+            val seeds = List(count) { SeedResult("loaded-$it", 1) }
+            val pool = TargetState(request, seeds)
+            val fixture = fixture(MemoryStore(SearchSnapshot(results = seeds,
+                query = request.toPresetQuery(), target = pool)))
+            val progress = mutableListOf<RefineProgress?>()
+            fixture.engine.onFilter = { progress += fixture.controller.refineProgress }
+            fixture.engine.filter = { emptyList() }
+            fixture.engine.completedBatches += listOf(c) to ResumeHint(1000, 0)
+            fixture.controller.start(request, 2)
+            fixture.controller.runPending()
+            advanceUntilIdle()
+            assertEquals((0 until count step 24).map { RefineProgress(it, count) }, progress)
+            assertEquals(seeds, fixture.engine.filtered)
+            assertEquals(listOf(c), fixture.controller.snapshot.results)
+            assertEquals(seeds + c, fixture.controller.snapshot.target!!.results)
+            assertEquals(1, fixture.engine.sessions.size)
+            assertFalse(fixture.controller.isSearching)
+            assertNull(fixture.controller.refineProgress)
+            fixture.scope.cancel()
+        }
+    }
+
     @Test fun refinementResumesAndFillsTheLimitWithUniqueMatchesAcrossNativeSessions() = runTest {
         val seeds = List(RESULT_CAP - 2) { SeedResult("loaded-$it", 1) }
         val target = TargetState(request, seeds)

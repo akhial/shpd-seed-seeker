@@ -12,6 +12,9 @@ import dev.seedseeker.app.model.SeedResult
  */
 internal const val RESULT_CAP = 1_024
 
+/** Progress through the saved pool; it is separate from newly scanned seeds. */
+data class RefineProgress(val checked: Int, val total: Int)
+
 /** The displayed slice of a run's collected results: discovery order, at most [RESULT_CAP] rows. */
 internal fun displayedResults(collected: List<SeedResult>): List<SeedResult> =
     if (collected.size <= RESULT_CAP) collected else collected.subList(0, RESULT_CAP)

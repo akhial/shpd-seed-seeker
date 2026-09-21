@@ -46,6 +46,8 @@ internal class SearchController(
     var seedsPerSecond by mutableStateOf(0.0)
         private set
     var notice by mutableStateOf<String?>(null)
+    var refineProgress by mutableStateOf<RefineProgress?>(null)
+        private set
     val refinePhase: RefinePhase?
         get() = if (isSearching && snapshot.pending?.refine != null) RefinePhase.FILTERING else null
 
@@ -88,6 +90,7 @@ internal class SearchController(
             status = null, error = null, elapsedSeconds = 0,
         )
         notice = null
+        refineProgress = refine?.let { RefineProgress(0, it.keepSeeds.size) }
         requestService()
     }
 
@@ -133,6 +136,7 @@ internal class SearchController(
                 )
                 saveSafely()
             } finally {
+                refineProgress = null
                 isSearching = false
             }
         }
@@ -188,12 +192,19 @@ internal class SearchController(
         val refine = pending.refine
         if (refine != null) {
             val kept = mutableListOf<SeedResult>()
+            var checked = 0
+            val startedAt = now()
+            val elapsedBefore = snapshot.elapsedSeconds
+            refineProgress = RefineProgress(0, refine.keepSeeds.size)
             for (chunk in refine.keepSeeds.chunked(24)) {
                 if (stopRequested || pauseRequested) break
                 kept += withContext(workerDispatcher) {
                     chunk.groupBy { refine.sources[it.seed] ?: refine.base ?: pending.request }
                         .flatMap { (source, seeds) -> engine.filterRecipes(pending.request, source, seeds) }
                 }
+                checked += chunk.size
+                refineProgress = RefineProgress(checked, refine.keepSeeds.size)
+                snapshot = snapshot.copy(elapsedSeconds = elapsedBefore + (now() - startedAt) / 1000)
             }
             if (!stopRequested && !pauseRequested) {
                 pending = pending.copy(
@@ -204,6 +215,7 @@ internal class SearchController(
                     scanLimit = (EngineInfo.maxResults - kept.size).takeIf { it > 0 } ?: EngineInfo.maxResults,
                 )
                 snapshot = snapshot.copy(pending = pending, results = kept.toList(), query = pending.request.toPresetQuery())
+                refineProgress = null
                 notice = "Kept ${kept.size} of ${refine.keepSeeds.size} previous seeds."
                 save()
             }

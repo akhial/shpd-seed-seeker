@@ -518,6 +518,7 @@ internal fun SeedFinderApp(
                 elapsedSeconds = searchElapsedSeconds,
                 isSearching = isSearching,
                 refinePhase = refinePhase,
+                refineProgress = controller.refineProgress,
                 error = searchError,
                 snackbarHostState = snackbarHostState,
                 onAbout = {

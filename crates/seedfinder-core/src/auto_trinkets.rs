@@ -13,6 +13,8 @@ use crate::quests::QuestSummary;
 use crate::search::{FloorGate, WorldGenerator};
 use crate::seed::DungeonSeed;
 use crate::trinkets::{initial_offers, trinket_order};
+use std::collections::VecDeque;
+use std::sync::Mutex;
 
 /// Reproducible world conditions for a result, independent of editor changes.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -234,11 +236,40 @@ pub const CANDIDATES: [ItemId; 4] = [
     ItemId::CrackedSpyglass,
 ];
 
-/// The complete deterministic choice rule. Equality means identical choices
-/// for every offer deck, which is needed for safe filter-and-resume searches.
+/// The complete deterministic choice rule for the initial offer deck.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AutoTrinketPolicy {
     preferred: Vec<ItemId>,
+}
+
+// Filtering is split into cancellable batches and native worker slices. Ranking
+// the same query in every slice can cost much more than generating the worlds,
+// especially with automatic resin. Keep a small, process-local cache shared by
+// those workers. Complete query equality prevents stale choices after edits.
+const POLICY_CACHE_CAPACITY: usize = 8;
+static POLICY_CACHE: Mutex<PolicyCache> = Mutex::new(PolicyCache(VecDeque::new()));
+
+struct PolicyCache(VecDeque<(SearchQuery, AutoTrinketPolicy)>);
+
+impl PolicyCache {
+    fn get_or_prepare(
+        &mut self,
+        query: &SearchQuery,
+        prepare: impl FnOnce() -> AutoTrinketPolicy,
+    ) -> AutoTrinketPolicy {
+        let entry = self
+            .0
+            .iter()
+            .position(|(cached, _)| cached == query)
+            .and_then(|index| self.0.remove(index))
+            .unwrap_or_else(|| (query.clone(), prepare()));
+        let policy = entry.1.clone();
+        self.0.push_back(entry);
+        if self.0.len() > POLICY_CACHE_CAPACITY {
+            self.0.pop_front();
+        }
+        policy
+    }
 }
 
 impl AutoTrinketPolicy {
@@ -249,6 +280,18 @@ impl AutoTrinketPolicy {
         if !enabled(query) {
             return None;
         }
+        // Hold the lock during preparation so concurrent native workers do not
+        // all repeat the same expensive cold calculation. Generation never
+        // holds this lock.
+        Some(
+            POLICY_CACHE
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .get_or_prepare(query, || Self::prepare_uncached(query)),
+        )
+    }
+
+    fn prepare_uncached(query: &SearchQuery) -> Self {
         let baseline = equipment_probability(query, Profile::None);
         let forbids_parchment = query.requirements.iter().any(|r| match r.effect {
             EffectRequirement::OneOf(set) => set.effects().any(Effect::is_curse),
@@ -261,13 +304,13 @@ impl AutoTrinketPolicy {
             .collect();
         // Stable sorting gives a fixed tie-break, independent of offer order.
         scores.sort_by(|a, b| finite_score(b.1).total_cmp(&finite_score(a.1)));
-        Some(Self {
+        Self {
             preferred: scores
                 .iter()
                 .filter(|(_, p)| baseline.is_finite() && p.is_finite() && *p > baseline * 1.05)
                 .map(|&(id, _)| id)
                 .collect(),
-        })
+        }
     }
 
     /// Choose a beneficial initial offer, or none, without generating floors.
@@ -349,6 +392,49 @@ mod tests {
             r#"{{"auto_apply_trinket":true,"max_depth":19,"requirements":{requirements}}}"#
         ))
         .unwrap()
+    }
+
+    #[test]
+    fn filtering_workers_rank_an_unchanged_query_only_once_across_batches() {
+        let query = query(r#"[{"item":"runic_blade","upgrade":1,"effect":"Grim"}]"#);
+        let cache = Mutex::new(PolicyCache(VecDeque::new()));
+        let preparations = AtomicUsize::new(0);
+        std::thread::scope(|scope| {
+            for _ in 0..8 {
+                scope.spawn(|| {
+                    // The Android controller checks 1,024 saved seeds in 43 batches.
+                    for _ in 0..43 {
+                        let policy = cache.lock().unwrap().get_or_prepare(&query, || {
+                            preparations.fetch_add(1, Ordering::Relaxed);
+                            AutoTrinketPolicy::prepare_uncached(&query)
+                        });
+                        assert_eq!(policy.preferred()[0], ItemId::ParchmentScrap);
+                    }
+                });
+            }
+        });
+        assert_eq!(preparations.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn cached_policies_follow_query_edits_and_have_a_bounded_lifetime() {
+        let mut cache = PolicyCache(VecDeque::new());
+        let base = query(r#"[{"kind":"armor","upgrade":1}]"#);
+        for depth in 1..=24 {
+            let mut edited = base.clone();
+            edited.max_depth = depth;
+            let expected = AutoTrinketPolicy::prepare_uncached(&edited);
+            assert_eq!(cache.get_or_prepare(&edited, || expected.clone()), expected);
+            assert_eq!(
+                cache.get_or_prepare(&edited, || panic!("cached query reranked")),
+                expected
+            );
+            assert!(cache.0.len() <= POLICY_CACHE_CAPACITY);
+        }
+        let mut edited = base;
+        edited.requirements.push(edited.requirements[0]);
+        let expected = AutoTrinketPolicy::prepare_uncached(&edited);
+        assert_eq!(cache.get_or_prepare(&edited, || expected.clone()), expected);
     }
 
     struct CountingGenerator(AtomicUsize);
