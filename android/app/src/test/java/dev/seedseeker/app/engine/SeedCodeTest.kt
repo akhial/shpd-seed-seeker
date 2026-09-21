@@ -8,7 +8,7 @@ import org.junit.Test
 /**
  * Seed-code text handling, asserted against the engine that owns it: these
  * cases call `JniBindings.formatSeedCode`/`parseSeedCode` through the host
- * build of the Rust library (see QueryContinuationTest for how Gradle provides
+ * build of the Rust library (see JniNativeSeedFinderTest for how Gradle provides
  * it), so the app can never drift from `seed::format_input` and
  * `DungeonSeed::from_code`.
  */

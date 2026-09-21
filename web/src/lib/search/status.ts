@@ -1,10 +1,10 @@
 import type { CoordinatorState } from "./coordinator-state";
 
-/** One relocated status note: refine progress, the detached-scan notice, or
+/** One relocated status note: refine progress or
  * the result-cap notice. `kind` lets the footer tint the cap warning without
  * re-parsing the text. */
 export interface StatusNote {
-  kind: "refine" | "detached" | "cap";
+  kind: "refine" | "cap";
   text: string;
 }
 
@@ -33,15 +33,6 @@ export function searchStatusNotes(state: CoordinatorState): StatusNote[] {
     notes.push({
       kind: "refine",
       text: `Refined: kept ${state.refined.kept.toLocaleString()} of ${state.refined.of.toLocaleString()} previous seed${plural(state.refined.of)}.`,
-    });
-  }
-  // A fresh detached scan is the one moment the display and the kept results
-  // diverge, so say what happened to them. A continued detached scan tells
-  // its own story through the refined note above.
-  if (state.runKind === "detached" && state.target && !state.refined && state.state !== "idle") {
-    notes.push({
-      kind: "detached",
-      text: "Unrelated query — detached search from previous results.",
     });
   }
   // The cap notice only speaks once a run has concluded: while an

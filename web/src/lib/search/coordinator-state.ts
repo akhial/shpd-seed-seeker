@@ -1,6 +1,4 @@
 import type { ParsedSeed, QueryDocument } from "../wasm/types";
-// Type-only in the other direction, so this runtime import is not a cycle.
-import { remainingSegments } from "./refine";
 import type { SeedRange } from "./traversal";
 
 export type SearchStatus =
@@ -20,22 +18,12 @@ export interface RefineSummary {
   of: number;
 }
 
-/** How the current (or last) run relates to the Target — see
- * docs/search-semantics.md. A continued detached scan stays 'detached'. */
-export type RunKind = "anchor" | "target-refine" | "target-filter" | "detached";
-
-/** The session's anchor: established by the first concluded search (or an
- * import) and reset only by Clear. `matches` is uncapped and a superset of
- * any related run's display, which is what lets a loosened query bring
- * seeds back. */
+/** Every loaded or discovered seed, retained until Clear. */
 export interface TargetState {
-  queryJson: string;
   query: QueryDocument;
-  /** Every unique match delivered for the Target Query, sorted by value. */
+  /** Every loaded or discovered seed, sorted by value. */
   matches: ParsedSeed[];
-  /** Seed ranges the target traversal has not covered; empty for imports. */
-  remainder: SeedRange[];
-  hasCoverage?: boolean;
+  sources?: Record<number, QueryDocument>;
 }
 export interface CoordinatorState {
   sessionId: number;
@@ -72,13 +60,10 @@ export interface CoordinatorState {
   error?: string;
   /** The query that produced `matches` (captured at search start or import). */
   query?: QueryDocument;
-  /** Original trinket policy, retained across successive refinements. */
-  selectionQuery?: QueryDocument;
   /** Imported entries dropped as duplicates or beyond the result cap. */
   importedDropped?: number;
   /** The session's Target, if one has been established. */
   target?: TargetState;
-  runKind: RunKind;
 }
 
 export const RESULT_CAP = 1_024;
@@ -99,7 +84,6 @@ export const initialCoordinatorState = (total = 0): CoordinatorState => ({
   segments: [],
   queryJson: "",
   filtering: false,
-  runKind: "anchor",
   sessionBaseline: 0,
 });
 
@@ -149,13 +133,7 @@ export function calculateRate(samples: RateSample[]): number {
   return seconds > 0 ? (last.tested - first.tested) / seconds : 0;
 }
 
-/**
- * Replaces the whole search state with results restored from a file. The
- * engine's decoder already deduplicated and capped the seeds — identically on
- * every platform — and counted the entries that removed, so `dropped` is
- * reported straight to the UI. The import becomes the session's Target with
- * unknown coverage — Search filters it and begins a fresh traversal.
- */
+/** Imports replace the current view and add their entries to the retained pool. */
 export function importedResultsState(
   state: CoordinatorState,
   matches: ParsedSeed[],
@@ -170,44 +148,35 @@ export function importedResultsState(
     capped: matches.length >= RESULT_CAP,
     query,
     importedDropped: dropped,
-    // The imported query and seeds become the session's Target, with no
-    // coverage: Search begins a fresh traversal after filtering.
-    target: { queryJson: JSON.stringify(query), query, matches, remainder: [], hasCoverage: false },
+    target: {
+      query: state.target?.query ?? query,
+      matches: mergeMatches(state.target?.matches ?? [], matches).matches,
+      sources: poolSources(state.target, matches, query),
+    },
   };
 }
 
-/**
- * Folds a run that just reached a terminal state into the Target, per
- * docs/search-semantics.md: an anchor run (or the first run of a session)
- * establishes the Target from its own results and coverage; a target refine
- * grows the set with its new finds and advances the coverage; a target
- * filter or detached run leaves the Target exactly as it was. Every
- * transition into 'completed' or 'cancelled' must pass through here.
- * A failed run establishes nothing — its coverage is unknown.
- */
+function poolSources(
+  pool: TargetState | undefined,
+  matches: ParsedSeed[],
+  query: QueryDocument,
+): Record<number, QueryDocument> {
+  const sources = { ...pool?.sources };
+  for (const match of pool?.matches ?? []) sources[match.value] ??= pool!.query;
+  for (const match of matches) sources[match.value] ??= query;
+  return sources;
+}
+
+/** Retain every discovery, including partial results from failed runs. */
 export function settleRun(state: CoordinatorState): CoordinatorState {
-  if (state.state !== "completed" && state.state !== "cancelled") return state;
-  if (state.runKind === "target-filter" || state.runKind === "detached") return state;
-  const remainder = remainingSegments(state.segments, state.workerScanned);
-  if (state.runKind === "anchor" || !state.target) {
-    if (!state.query) return state;
-    return {
-      ...state,
-      target: {
-        queryJson: state.queryJson,
-        query: state.query,
-        matches: state.matches,
-        remainder,
-        hasCoverage: true,
-      },
-    };
-  }
-  // The refined run's survivors were already members; only new finds from
-  // the resumed scan grow the set. The stored set is never capped.
-  const merged = mergeMatches(state.target.matches, state.matches, Number.POSITIVE_INFINITY);
+  if (!state.query) return state;
   return {
     ...state,
-    target: { ...state.target, matches: merged.matches, remainder, hasCoverage: true },
+    target: {
+      query: state.target?.query ?? state.query,
+      matches: mergeMatches(state.target?.matches ?? [], state.matches).matches,
+      sources: poolSources(state.target, state.matches, state.query),
+    },
   };
 }
 
@@ -230,7 +199,7 @@ export function applyProgress(state: CoordinatorState, update: ProgressUpdate): 
   // and counts from the region recorded as scanned, which a refine relies on.
   if (
     update.sessionId !== state.sessionId ||
-    (state.state !== "running" && state.state !== "stopping")
+    (state.state !== "running" && state.state !== "stopping" && state.state !== "failed")
   )
     return state;
   const workerScanned = { ...state.workerScanned, [update.workerId]: update.scanned };
@@ -249,7 +218,7 @@ export function applyProgress(state: CoordinatorState, update: ProgressUpdate): 
     tested,
     matches: merged.matches,
     capped: merged.capped,
-    state: saturated && state.state === "running" ? "completed" : state.state,
+    state: saturated && state.state === "running" ? "stopping" : state.state,
     elapsed: update.now - state.startedAt,
     rateSamples,
     rate: calculateRate(rateSamples),
@@ -278,7 +247,11 @@ export function markWorkerDone(state: CoordinatorState, update: WorkerTerminal):
     workerScanned,
     tested: sumScanned(workerScanned),
     completedWorkers,
-    state: finished ? (state.state === "stopping" ? "cancelled" : "completed") : state.state,
+    state: finished
+      ? state.state === "stopping" && !runSaturated(state)
+        ? "cancelled"
+        : "completed"
+      : state.state,
     elapsed: update.now - state.startedAt,
   });
 }

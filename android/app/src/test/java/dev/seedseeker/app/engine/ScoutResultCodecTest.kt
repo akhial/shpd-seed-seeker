@@ -563,14 +563,6 @@ class ScoutResultCodecTest {
         override fun scoutMatches(request: ByteArray, query: ByteArray): ByteArray =
             error("not used")
         override fun filterSeeds(request: ByteArray, seeds: LongArray): ByteArray = error("not used")
-        override fun queryContinues(candidate: ByteArray, base: ByteArray): Boolean =
-            error("not used")
-        override fun decideStart(
-            candidate: ByteArray,
-            target: ByteArray?,
-            targetSetEmpty: Boolean,
-            targetHasUncoveredSeeds: Boolean,
-            detachedBase: ByteArray?,
-        ): ByteArray = error("not used")
+
     }
 }

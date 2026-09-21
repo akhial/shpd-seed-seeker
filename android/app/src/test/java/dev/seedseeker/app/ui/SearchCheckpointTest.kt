@@ -28,7 +28,7 @@ class SearchCheckpointTest {
         arcaneResinFilter = dev.seedseeker.app.model.ArcaneResinFilter(false, 12, dev.seedseeker.app.model.ScoutItemSource.WANDMAKER_REWARD))
     private val results = List(1_200) { SeedResult("seed-$it", 1, if (it % 2 == 0) "mossy_clump" else null) }
 
-    @Test fun roundTripKeepsUncappedTargetDetachedHistoryAndRefineRecipes() {
+    @Test fun roundTripKeepsUncappedPoolSourcesAndRefineRecipes() {
         for (automatic in listOf(false, true)) {
             val request = request.copy(arcaneResin = if (automatic) 0 else 6, arcaneResinAuto = automatic)
             val targetRequest = request.copy(maximumDepth = 12)
@@ -36,11 +36,10 @@ class SearchCheckpointTest {
                 results = results, query = request.toPresetQuery(),
                 status = SearchStatus(SearchState.RUNNING, 4_000, 50_000, matchProbability = 0.003),
                 elapsedSeconds = 27,
-                target = TargetState(targetRequest, results.reversed(), 55, 90_000),
-                lastRun = FinishedRun(request, 123, 50_000, results, targetRequest),
-                lastKind = StartMode.DETACHED,
-                pending = PendingSearch(request, StartMode.CONTINUE_DETACHED, 3,
-                    RefineSpec(123, 50_000, results, targetRequest), selectionQuery = targetRequest),
+                target = TargetState(targetRequest, results.reversed(), sources = mapOf(results.first().seed to request)),
+                lastRun = FinishedRun(request, 123, 50_000, results),
+                pending = PendingSearch(request, 3,
+                    RefineSpec(123, 50_000, results, targetRequest, sources = mapOf(results.first().seed to request))),
             )
             val restored = SearchCheckpointCodec.decode(JSONObject(SearchCheckpointCodec.encode(saved).toString()))
             assertEquals(saved, restored)
@@ -51,7 +50,7 @@ class SearchCheckpointTest {
     @Test fun atomicFileRetainsThePreviousCheckpointAfterAnInterruptedWrite() {
         val path = temporary.root.resolve("search.json")
         val saved = SearchSnapshot(results = results, query = request.toPresetQuery(),
-            pending = PendingSearch(request, StartMode.ANCHOR, 2, window = ResumeHint(100, 900), scanMatches = 12))
+            pending = PendingSearch(request, 2, window = ResumeHint(100, 900), scanMatches = 12))
         FileSearchCheckpointStore(path, "engine-1").save(saved)
         AtomicFile(path).startWrite().use { it.write("{incomplete checkpoint".toByteArray()) }
         assertEquals(saved, FileSearchCheckpointStore(path, "engine-1").load())
@@ -61,12 +60,13 @@ class SearchCheckpointTest {
         val path = temporary.root.resolve("search.json")
         FileSearchCheckpointStore(path, "old-engine").save(SearchSnapshot(
             results = results, query = request.toPresetQuery(),
-            target = TargetState(request, results, 123, 90_000),
-            pending = PendingSearch(request, StartMode.ANCHOR, 2),
+            target = TargetState(request, results),
+            pending = PendingSearch(request, 2),
         ))
         val restored = FileSearchCheckpointStore(path, "new-engine").load()
         assertEquals(results, restored.results)
-        assertEquals(0L, restored.target?.remaining)
+        assertEquals(results, restored.target?.results)
+        assertNull(restored.lastRun)
         assertNull(restored.pending)
         assertNotNull(restored.error)
     }
@@ -77,24 +77,40 @@ class SearchCheckpointTest {
         assertThrows(Exception::class.java) { FileSearchCheckpointStore(path, "engine").load() }
     }
 
-    @Test fun freshScanAndCoverageKnowledgeSurviveRecovery() {
+    @Test fun freshScanSurvivesRecovery() {
         val saved = SearchSnapshot(
             results = results, query = request.toPresetQuery(),
-            target = TargetState(request, results, 0, 0, hasCoverage = false),
-            pending = PendingSearch(request, StartMode.TARGET_RESCAN, 2,
+            target = TargetState(request, results),
+            pending = PendingSearch(request, 2,
                 RefineSpec(0, 0, results, request, freshScan = true), scanLimit = 7),
         )
         assertEquals(saved, SearchCheckpointCodec.decode(SearchCheckpointCodec.encode(saved)))
-        val exhausted = saved.copy(target = saved.target!!.copy(hasCoverage = true))
-        assertEquals(exhausted, SearchCheckpointCodec.decode(SearchCheckpointCodec.encode(exhausted)))
         // Older checkpoints did not distinguish an import from an exhausted scan.
         val legacy = SearchCheckpointCodec.encode(saved)
-        legacy.getJSONObject("target").remove("hasCoverage")
         legacy.getJSONObject("pending").remove("scanLimit")
         legacy.getJSONObject("pending").getJSONObject("refine").remove("freshScan")
         val restored = SearchCheckpointCodec.decode(legacy)
-        assertFalse(restored.target!!.hasCoverage)
         assertFalse(restored.pending!!.refine!!.freshScan)
         assertEquals(RESULT_CAP, restored.pending.scanLimit)
     }
+    @Test fun legacyRoutingCheckpointKeepsBothCollectionsAndRestartsCoverage() {
+        val other = request.copy(maximumDepth = 12)
+        val saved = SearchSnapshot(
+            results = results.takeLast(1), query = other.toPresetQuery(),
+            target = TargetState(request, results.take(1)),
+            lastRun = FinishedRun(other, 100, 900, results.takeLast(1)),
+            pending = PendingSearch(other, 2, window = ResumeHint(100, 900)),
+        )
+        val legacy = SearchCheckpointCodec.encode(saved).put("kind", "DETACHED")
+        legacy.getJSONObject("pending").put("mode", "CONTINUE_DETACHED")
+        val restored = SearchCheckpointCodec.decode(legacy)
+        assertEquals(results.take(1) + results.takeLast(1), restored.target!!.results)
+        assertEquals(request, restored.target.sources[results.first().seed])
+        assertEquals(other, restored.target.sources[results.last().seed])
+        assertNull(restored.lastRun)
+        assertNull(restored.pending!!.window)
+        assertTrue(restored.pending.refine!!.freshScan)
+        assertEquals(restored.target.results, restored.pending.refine.keepSeeds)
+    }
+
 }

@@ -142,8 +142,6 @@ fun FinderScreen(
     /** Why the query cannot run yet, shown in the header; null when it is runnable. */
     validationMessage: String?,
     onSearch: () -> Unit,
-    canFilterLoadedSeeds: Boolean = false,
-    onFilterLoadedSeeds: () -> Unit = {},
     onCancel: () -> Unit,
     canExportResults: Boolean,
     canClearResults: Boolean,
@@ -250,11 +248,6 @@ fun FinderScreen(
             Column {
                 SearchActionBar(
                     canSearch = validationMessage == null,
-                    canFilterLoadedSeeds = canFilterLoadedSeeds,
-                    onFilterLoadedSeeds = {
-                        showResults = true
-                        onFilterLoadedSeeds()
-                    },
                     status = status,
                     seedsPerSecond = seedsPerSecond,
                     elapsedSeconds = elapsedSeconds,
@@ -822,8 +815,6 @@ private fun ResultRow(result: SeedResult, onScout: () -> Unit) {
 @Composable
 private fun SearchActionBar(
     canSearch: Boolean,
-    canFilterLoadedSeeds: Boolean,
-    onFilterLoadedSeeds: () -> Unit,
     status: SearchStatus?,
     seedsPerSecond: Double,
     elapsedSeconds: Long,
@@ -867,15 +858,6 @@ private fun SearchActionBar(
                     shapes = ButtonDefaults.shapes(),
                 ) {
                     Text("Search", style = MaterialTheme.typography.titleMedium)
-                }
-                if (canFilterLoadedSeeds) {
-                    TextButton(
-                        onClick = onFilterLoadedSeeds,
-                        enabled = canSearch,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Text("Filter loaded seeds")
-                    }
                 }
             }
         }

@@ -70,6 +70,8 @@ async function runSearch(message: Extract<SearchWorkerRequest, { type: "search:s
     if (stopRequested) post({ type: "search:stopped", sessionId, scanned });
     else post({ type: "search:done", sessionId, scanned });
   } catch (error) {
+    // Preserve discoveries made since the last progress report.
+    flush();
     post({
       type: "search:error",
       sessionId,

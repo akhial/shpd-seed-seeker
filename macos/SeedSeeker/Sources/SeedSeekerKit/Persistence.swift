@@ -185,7 +185,7 @@ public enum QueryPersistence {
 ///
 /// Deliberately not a `SavedQuery` field: it describes this machine's cores,
 /// not the seeds a query matches, so it stays out of query documents, presets,
-/// results exports, share links and the continuation predicate. A query that
+/// results exports and share links. A query that
 /// travels to another machine must search the same seeds there.
 ///
 /// The stored form is a plain `UserDefaults` integer under

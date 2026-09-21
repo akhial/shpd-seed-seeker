@@ -100,7 +100,6 @@ pub fn present(app: &adw::Application) {
 
     let start_action = gio::SimpleAction::new("start-search", None);
     let clear_action = gio::SimpleAction::new("clear-results", None);
-    let filter_action = gio::SimpleAction::new("filter-results", None);
     let refresh_all: Rc<dyn Fn()> = Rc::new({
         let state = Rc::clone(&state);
         let query = Rc::clone(&query);
@@ -108,7 +107,6 @@ pub fn present(app: &adw::Application) {
         let results = Rc::clone(&results);
         let start_action = start_action.clone();
         let clear_action = clear_action.clone();
-        let filter_action = filter_action.clone();
         move || {
             let snapshot = state.borrow();
             persist::save(&snapshot);
@@ -118,7 +116,6 @@ pub fn present(app: &adw::Application) {
                 !snapshot.requirements.is_empty() || snapshot.needs_resin() || results.is_running(),
             );
             clear_action.set_enabled(results.can_clear());
-            filter_action.set_enabled(results.can_filter());
         }
     });
 
@@ -352,10 +349,7 @@ pub fn present(app: &adw::Application) {
             }
             match state.borrow().to_query() {
                 Ok(search_query) => {
-                    // The pane dispatches on the query's relationship to the
-                    // session's Target (docs/search-semantics.md): related
-                    // queries refine or filter the Target Set, unrelated ones
-                    // scan detached without touching it.
+                    // Every search checks the retained pool and then scans for more matches.
                     results.start_search(search_query.clone());
                     if results.is_running() {
                         exported_query.replace(Some(search_query));
@@ -370,27 +364,6 @@ pub fn present(app: &adw::Application) {
         }
     });
     window.add_action(&start_action);
-
-    filter_action.connect_activate({
-        let results = Rc::clone(&results);
-        let state = Rc::clone(&state);
-        let query = Rc::clone(&query);
-        let exported_query = Rc::clone(&exported_query);
-        let refresh_all = Rc::clone(&refresh_all);
-        let toasts = toasts.clone();
-        move |_, _| match state.borrow().to_query() {
-            Ok(search_query) => {
-                results.filter_loaded_seeds(search_query.clone());
-                if results.is_running() {
-                    exported_query.replace(Some(search_query));
-                    query.set_running(true);
-                    refresh_all();
-                }
-            }
-            Err(message) => toasts.add_toast(adw::Toast::new(&message)),
-        }
-    });
-    window.add_action(&filter_action);
 
     clear_action.connect_activate({
         let results = Rc::clone(&results);

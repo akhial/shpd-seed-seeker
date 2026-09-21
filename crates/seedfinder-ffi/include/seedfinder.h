@@ -54,29 +54,6 @@ int32_t seedfinder_status(int64_t handle, int64_t out_status[5]);
 // stopped (any terminal state implies that); meaningless while it is
 // running — never resume from a running session's hint.
 int32_t seedfinder_resume_hint(int64_t handle, int64_t out_hint[2]);
-// Reports whether the query in candidate continues the one in base:
-// an identical depth and challenge set, world conditions (the
-// blacksmith flags and the Wandmaker filter) at least as strict as base's,
-// and every
-// base requirement covered by a distinct candidate requirement at least as
-// strict (equal or strengthened). Only a continuing query may reuse
-// a stopped session's results and resume hint (filter-and-resume refining).
-// This verdict assumes preservation of the original trinket policy: start
-// searches with {"query": candidate, "refine_base": original_base}. Retain
-// original_base through successive refinements. Filtering alone is unrestricted.
-// Returns 1 when it continues, 0 when it does not, negative on invalid packets.
-int32_t seedfinder_query_continues(const uint8_t *candidate, size_t candidate_len, const uint8_t *base, size_t base_len);
-// Reports what pressing Start Search must do with the query in candidate,
-// per docs/search-semantics.md. target is the Target Query (NULL when there is
-// no Target, which always anchors), target_set_empty and
-// target_has_uncovered_seeds (non-zero for true) describe the Target Set and
-// its coverage, and detached_base is the last concluded run's query when — and
-// only when — that run was itself detached (NULL otherwise). The returned
-// UTF-8 text is one of "anchor", "target-refine", "target-filter",
-// "continue-detached" or "detached"; the continuation predicate is part of the
-// decision, so callers must not call seedfinder_query_continues separately for
-// it. The return packet is freed with seedfinder_buffer_free.
-int32_t seedfinder_decide_start(const uint8_t *candidate, size_t candidate_len, const uint8_t *target, size_t target_len, int32_t target_set_empty, int32_t target_has_uncovered_seeds, const uint8_t *detached_base, size_t detached_base_len, uint8_t **out_packet, size_t *out_len);
 void    seedfinder_cancel(int64_t handle);
 void    seedfinder_close(int64_t handle);
 int32_t seedfinder_scout(const uint8_t *request, size_t request_len, uint8_t **out_packet, size_t *out_len);

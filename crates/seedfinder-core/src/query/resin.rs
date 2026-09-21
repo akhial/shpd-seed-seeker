@@ -25,15 +25,6 @@ impl Default for ArcaneResinFilter {
     }
 }
 
-impl ArcaneResinFilter {
-    pub(super) fn implies(self, base: Self, max_depth: u8) -> bool {
-        (self.uncursed || !base.uncursed)
-            && self.max_depth.unwrap_or(max_depth).min(max_depth)
-                <= base.max_depth.unwrap_or(max_depth).min(max_depth)
-            && base.source.is_none_or(|source| self.source == Some(source))
-    }
-}
-
 pub(super) struct ResinSupply {
     minimum: u16,
     auto: bool,

@@ -234,9 +234,6 @@ final class QueryDocumentTests: XCTestCase {
         let resumed = try await engine.startResumedSearch(request, resumeFrom: 0, scanLen: 1, workers: 0)
         await resumed.cancel(); await resumed.close()
         _ = try await engine.filterSeeds(request, seeds: ["AAA-AAA-AAA"])
-        XCTAssertTrue(request.isRefinement(of: request))
-        XCTAssertEqual(StartDecision.decide(candidate: request, target: request, targetSetEmpty: false,
-                                            targetHasUncoveredSeeds: false, detachedBase: nil), .targetRefine)
         XCTAssertEqual(try ScoutMatches.mark(seed: "AAA-AAA-AAA", challenges: 0, query: request).totalRequirements, 1)
     }
 

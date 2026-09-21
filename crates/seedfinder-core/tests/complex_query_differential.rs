@@ -3,9 +3,7 @@
 //! accessibility
 //! scenarios are all exercised on random small worlds and random queries,
 //! and the engine's answers are compared with an exhaustive enumeration of
-//! every assignment. The continuation predicate is checked for soundness the
-//! same way: whenever `candidate.continues(base)` holds, every world the
-//! candidate matches must be a world the base matches.
+//! every assignment.
 
 use std::collections::BTreeMap;
 
@@ -526,108 +524,5 @@ fn matcher_and_scout_agree_with_exhaustive_enumeration() {
     assert!(
         (150..2_800).contains(&matched),
         "{matched} of {checked} matched"
-    );
-}
-
-/// Random narrowing or widening edits, so that continuation is sometimes
-/// true and its soundness can be checked on real worlds.
-fn mutate(rng: &mut Rng, base: &SearchQuery) -> Option<SearchQuery> {
-    let mut query = base.clone();
-    if rng.chance(35) {
-        query.arcane_resin = u16::try_from(rng.below(12)).unwrap();
-        query.arcane_resin_auto = rng.chance(40);
-    }
-    for _ in 0..=rng.below(3) {
-        let index = rng.below(query.requirements.len());
-        let requirement = &mut query.requirements[index];
-        match rng.below(9) {
-            0 => {
-                requirement.item = Some(POOL[rng.below(POOL.len())]);
-                requirement.kind = item(requirement.item.unwrap()).kind;
-            }
-            1 => {
-                requirement.upgrade =
-                    UpgradeRequirement::AtLeast(1 + u8::try_from(rng.below(3)).unwrap());
-            }
-            2 => requirement.upgrade = UpgradeRequirement::Any,
-            3 => requirement.require_uncursed = !requirement.require_uncursed,
-            4 => {
-                requirement.max_depth = rng
-                    .chance(50)
-                    .then(|| 1 + u8::try_from(rng.below(10)).unwrap());
-            }
-            5 => {
-                // Drop an alternative member.
-                if requirement.alternative_group.is_some() {
-                    query.requirements.remove(index);
-                }
-            }
-            6 => {
-                // Raise or lower a sum total for a whole group.
-                if let Some(sum) = requirement.level_sum {
-                    let delta = if rng.chance(50) { 1 } else { -1 };
-                    let total = i16::from(sum.minimum_total) + delta;
-                    let total = u8::try_from(total.max(1)).unwrap();
-                    for other in &mut query.requirements {
-                        if let Some(other_sum) = &mut other.level_sum
-                            && other_sum.group == sum.group
-                        {
-                            other_sum.minimum_total = total;
-                        }
-                    }
-                }
-            }
-            7 => {
-                // Add a requirement, possibly as a new alternative of a slot.
-                let mut added = random_requirement(rng);
-                if rng.chance(50) {
-                    added.alternative_group = requirement.alternative_group;
-                }
-                query.requirements.push(added);
-            }
-            _ => {
-                // Drop a sum group from everyone.
-                for other in &mut query.requirements {
-                    other.level_sum = None;
-                }
-            }
-        }
-        if query.requirements.is_empty() {
-            return None;
-        }
-    }
-    query.validate().ok().map(|()| query)
-}
-
-#[test]
-fn continuation_never_admits_a_world_the_base_rejects() {
-    let mut rng = Rng(0xD1B5_4A32_D192_ED03);
-    let worlds: Vec<GeneratedWorld> = (0..400).map(|_| random_world(&mut rng)).collect();
-    let mut continued = 0;
-    let mut checked = 0;
-    while checked < 2_000 {
-        let Some(base) = random_query(&mut rng) else {
-            continue;
-        };
-        let Some(candidate) = mutate(&mut rng, &base) else {
-            continue;
-        };
-        checked += 1;
-        if !candidate.continues(&base) {
-            continue;
-        }
-        continued += 1;
-        for world in &worlds {
-            if candidate.matches(world) {
-                assert!(
-                    base.matches(world),
-                    "{candidate:?} continues {base:?} but matches a world the base rejects: {world:?}"
-                );
-            }
-        }
-    }
-    assert!(
-        continued > 100,
-        "only {continued} of {checked} pairs continued"
     );
 }

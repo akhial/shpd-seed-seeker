@@ -212,52 +212,6 @@ fn auto_donors_cannot_witness_blankets_and_zero_cost_still_counts() {
 }
 
 #[test]
-fn auto_round_trips_and_only_refines_compatible_modes() {
-    for requirements in [
-        "[]",
-        r#"[{"kind":"wand"},{"kind":"wand"}]"#,
-        r#"[{"kind":"wand"},{"any_of":[{"kind":"wand","upgrade":3,"blanket":true},{"kind":"wand","source":"wandmaker_reward","blanket":true}]}]"#,
-    ] {
-        let mut auto = auto_query(requirements);
-        for filtered in [false, true] {
-            if filtered {
-                auto.auto_apply_trinket = true;
-                auto.arcane_resin_filter = ArcaneResinFilter {
-                    uncursed: false,
-                    max_depth: Some(9),
-                    source: Some(ItemSource::Chest),
-                };
-            }
-            assert_eq!(json_query::encode(&auto)["arcane_resin"], "auto");
-            assert_eq!(
-                json_query::decode(&json_query::encode(&auto).to_string()).unwrap(),
-                auto
-            );
-            assert_eq!(
-                deep_link::decode(&deep_link::encode(&auto).unwrap()).unwrap(),
-                auto
-            );
-            let exported = results_export::encode(&auto, &[DungeonSeed::MIN], "test");
-            assert_eq!(results_export::decode(&exported).unwrap().query, auto);
-        }
-    }
-    let auto = auto_query(r#"[{"kind":"wand"}]"#);
-    let named = auto_query(r#"[{"item":"wand_lightning","upgrade":2}]"#);
-    assert!(auto.continues(&auto));
-    assert!(named.continues(&auto));
-    assert!(!auto.continues(&named));
-    assert!(auto.continues(&query(0, r#"[{"kind":"wand"}]"#)));
-    let fixed = query(3, r#"[{"kind":"wand"}]"#);
-    assert!(!auto.continues(&fixed));
-    assert!(!fixed.continues(&auto));
-    let mut filtered = auto.clone();
-    filtered.arcane_resin_filter.max_depth = Some(4);
-    assert!(filtered.continues(&auto));
-    assert!(!auto.continues(&filtered));
-    assert!(auto.shares_item(&fixed));
-}
-
-#[test]
 fn resin_totals_accept_overpayment_and_reserve_required_wands() {
     let resin = query(6, "[]");
     for upgrades in [vec![0, 0, 0], vec![0, 1], vec![2], vec![3]] {
@@ -380,28 +334,6 @@ fn resin_filters_apply_only_to_surplus_wands() {
 }
 
 #[test]
-fn resin_filter_refinement_never_reuses_a_wider_supply() {
-    let mut base = query(4, "[]");
-    base.arcane_resin_filter.uncursed = false;
-    let mut candidate = base.clone();
-    candidate.arcane_resin_filter.uncursed = true;
-    assert!(candidate.continues(&base));
-    assert!(!base.continues(&candidate));
-    base = candidate.clone();
-    candidate.arcane_resin_filter.max_depth = Some(4);
-    assert!(candidate.continues(&base));
-    assert!(!base.continues(&candidate));
-    base = candidate.clone();
-    candidate.arcane_resin_filter.source = Some(ItemSource::Chest);
-    assert!(candidate.continues(&base));
-    assert!(!base.continues(&candidate));
-    base = candidate.clone();
-    candidate.arcane_resin_filter.source = Some(ItemSource::Heap);
-    assert!(!candidate.continues(&base));
-    assert!(!base.continues(&candidate));
-}
-
-#[test]
 fn resin_filters_round_trip_and_reject_invalid_values() {
     for uncursed in [false, true] {
         for max_depth in [None, Some(1), Some(24)] {
@@ -443,62 +375,6 @@ fn resin_filters_round_trip_and_reject_invalid_values() {
             .is_err()
         );
     }
-}
-
-#[test]
-fn resin_continuation_and_portable_formats_preserve_the_minimum() {
-    let base = query(3, r#"[{"kind":"wand"}]"#);
-    assert!(query(6, r#"[{"item":"wand_lightning"}]"#).continues(&base));
-    assert!(!query(2, r#"[{"kind":"wand"}]"#).continues(&base));
-    assert!(!query(0, r#"[{"kind":"wand"}]"#).continues(&base));
-    assert!(base.shares_item(&query(6, "[]")));
-    assert!(query(6, "[]").shares_item(&query(0, r#"[{"kind":"wand"}]"#)));
-    assert!(!query(6, "[]").shares_item(&query(0, r#"[{"kind":"ring"}]"#)));
-    for amount in [1, 3, 6, u16::MAX] {
-        for automatic in [false, true] {
-            for requirements in ["[]", r#"[{"item":"wand_lightning","upgrade":2}]"#] {
-                let mut query = query(amount, requirements);
-                query.auto_apply_trinket = automatic;
-                assert_eq!(
-                    json_query::decode(&json_query::encode(&query).to_string()).unwrap(),
-                    query
-                );
-                assert_eq!(
-                    deep_link::decode(&deep_link::encode(&query).unwrap()).unwrap(),
-                    query
-                );
-                let exported = results_export::encode(&query, &[DungeonSeed::MIN], "test");
-                assert_eq!(results_export::decode(&exported).unwrap().query, query);
-            }
-        }
-    }
-    for invalid in ["-1", "1.5", "65536", "true", "null", "\"6\""] {
-        assert!(
-            json_query::decode(&format!(
-                r#"{{"arcane_resin":{invalid},"requirements":[]}}"#
-            ))
-            .is_err()
-        );
-    }
-    assert!(json_query::decode(r#"{"requirements":[]}"#).is_err());
-    // Freeze version 7 so future format changes must still read these links.
-    let frozen = query(3, r#"[{"item":"wand_lightning","upgrade":2}]"#);
-    assert_eq!(deep_link::encode(&frozen).unwrap(), "cAAAwZbCgAA");
-    assert_eq!(deep_link::decode("cAAAwZbCgAA").unwrap(), frozen);
-    let selected = query(
-        6,
-        r#"[{"item":"mimic_tooth","select_trinket":true},{"any_of":[{"item":"wand_lightning"},{"item":"wand_frost"}]}]"#,
-    );
-    assert_eq!(
-        deep_link::decode(&deep_link::encode(&selected).unwrap()).unwrap(),
-        selected
-    );
-    let old = query(0, r#"[{"kind":"wand"}]"#);
-    assert!(json_query::encode(&old).get("arcane_resin").is_none());
-    assert_eq!(
-        deep_link::decode(&deep_link::encode(&old).unwrap()).unwrap(),
-        old
-    );
 }
 
 #[test]

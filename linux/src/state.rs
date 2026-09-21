@@ -921,21 +921,6 @@ mod tests {
     }
 
     #[test]
-    fn resin_only_state_preserves_filters_and_search_semantics() {
-        let query = shpd_seedfinder_core::json_query::decode(
-            r#"{"requirements":[],"arcane_resin":3,"arcane_resin_filter":{"uncursed":false,"max_depth":12,"source":"wandmaker_reward"}}"#,
-        ).unwrap();
-        let state = AppState::from_query(&query);
-        assert!(state.requirements.is_empty());
-        assert_eq!(state.arcane_resin, 3);
-        assert_eq!(state.to_query().unwrap(), query);
-        let mut harder = state.clone();
-        harder.arcane_resin = 6;
-        assert!(harder.to_query().unwrap().continues(&query));
-        assert!(!query.continues(&harder.to_query().unwrap()));
-    }
-
-    #[test]
     fn auto_resin_and_blankets_survive_editor_and_share_round_trips() {
         let query = shpd_seedfinder_core::json_query::decode(r#"{"arcane_resin":"auto","requirements":[{"item":"wand_lightning","upgrade":2},{"kind":"wand","upgrade":2,"blanket":true}]}"#).unwrap();
         let state = AppState::from_query(&query);
@@ -968,62 +953,6 @@ mod tests {
                 .unwrap()
                 .auto_apply_trinket
         );
-    }
-
-    #[test]
-    fn refinement_requires_identical_scope_and_no_fewer_requirements() {
-        // This fixture exercises requirement containment with a fixed baseline world.
-        // AutoTrinket policy changes deliberately require a fresh traversal.
-        let mut base_state = AppState {
-            auto_apply_trinket: false,
-            ..AppState::default()
-        };
-        let mut first = UiRequirement::new(base_state.claim_key());
-        first.kind = ItemKind::Ring;
-        first.upgrade = UpgradeRequirement::AtLeast(2);
-        base_state.requirements.push(first);
-        let base = base_state.to_query().unwrap();
-
-        // Adding a requirement refines; row keys are irrelevant.
-        let mut extended_state = base_state.clone();
-        let mut added = UiRequirement::new(999);
-        added.kind = ItemKind::Weapon;
-        added.upgrade = UpgradeRequirement::Exact(3);
-        extended_state.requirements.push(added);
-        let extended = extended_state.to_query().unwrap();
-        assert!(extended.continues(&base));
-
-        // An identical query still qualifies: the filter keeps every seed and
-        // the scan resumes, so a stopped session continues instead of resetting.
-        assert!(base.continues(&base));
-
-        // Tightening a base requirement strengthens the query, so it still
-        // continues: every match it can find was already a base match.
-        let mut tightened = extended.clone();
-        tightened.requirements[0].upgrade = UpgradeRequirement::AtLeast(3);
-        assert!(tightened.continues(&base));
-        let mut named = extended.clone();
-        named.requirements[0].item = Some(ItemId::RingArcana);
-        assert!(named.continues(&base));
-
-        // Dropping a requirement, loosening a base requirement, and any
-        // scope change all force a fresh search instead.
-        assert!(!base.continues(&extended));
-        let mut loosened = extended.clone();
-        loosened.requirements[0].upgrade = UpgradeRequirement::AtLeast(1);
-        assert!(!loosened.continues(&base));
-        let mut deeper = extended.clone();
-        deeper.max_depth = 9;
-        assert!(!deeper.continues(&base));
-
-        // Duplicates are counted as a multiset: two copies of the base
-        // requirement satisfy a two-copy base, one copy does not.
-        let mut doubled_base = base.clone();
-        doubled_base.requirements.push(base.requirements[0]);
-        let mut doubled_extended = doubled_base.clone();
-        doubled_extended.requirements.push(extended.requirements[1]);
-        assert!(doubled_extended.continues(&doubled_base));
-        assert!(!extended.continues(&doubled_base));
     }
 
     #[test]

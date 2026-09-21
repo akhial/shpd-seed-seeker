@@ -72,28 +72,6 @@ pub fn search_batch<G: WorldGenerator>(
     remove_unnecessary_trinkets(generator, query, plan, results)
 }
 
-/// Search with the parent's choice and the candidate's predicates/pruning.
-pub(crate) fn search_batch_with_selection<G: WorldGenerator>(
-    generator: &G,
-    query: &SearchQuery,
-    plan: &QueryPlan,
-    selection: &QueryPlan,
-    seeds: &[DungeonSeed],
-) -> Vec<Option<TrinketSearchMatch>> {
-    if plan.is_unsatisfiable() {
-        return seeds.iter().map(|_| None).collect();
-    }
-    let gate = RecipeGate {
-        plan,
-        choices: seeds
-            .iter()
-            .map(|&seed| (seed.value(), selection.selected_trinket(seed)))
-            .collect(),
-    };
-    let results = match_batch(generator, query, &gate, plan.generation_depth(), seeds);
-    remove_unnecessary_trinkets(generator, query, plan, results)
-}
-
 struct RecipeGate<'a> {
     plan: &'a QueryPlan,
     choices: std::collections::BTreeMap<u64, Option<ItemId>>,
@@ -329,12 +307,6 @@ pub fn enabled(query: &SearchQuery) -> bool {
             .any(|r| r.kind == ItemKind::Trinket)
 }
 
-/// Queries can share scanned coverage only when their choice rules agree.
-#[must_use]
-pub fn same_selection(candidate: &SearchQuery, base: &SearchQuery) -> bool {
-    candidate == base || AutoTrinketPolicy::prepare(candidate) == AutoTrinketPolicy::prepare(base)
-}
-
 /// Probability of the chosen policy, averaged over all 2,380 offer subsets.
 /// Equipment profiles already include the first brewing opportunity.
 pub(crate) fn probability(query: &SearchQuery, policy: &AutoTrinketPolicy) -> f64 {
@@ -370,7 +342,6 @@ mod tests {
     use crate::challenges::Challenges;
     use crate::json_query;
     use crate::main_world::{CanonicalMainWorldGenerator, generate_main_world_with_trinket};
-    use crate::query::{StartDecision, decide_start};
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     fn query(requirements: &str) -> SearchQuery {
@@ -545,18 +516,8 @@ mod tests {
         .requirements[0];
         let mut candidate = base.clone();
         candidate.requirements.push(armor);
-        assert!(candidate.continues(&base));
-        assert!(candidate.shares_item(&base));
         base.auto_apply_trinket = true;
         candidate.auto_apply_trinket = true;
-        assert!(candidate.shares_item(&base));
-        assert!(!same_selection(&candidate, &base));
-        assert!(!candidate.continues(&base));
-        assert!(candidate.refines(&base));
-        assert_eq!(
-            decide_start(&candidate, Some(&base), false, true, None),
-            StartDecision::TargetRefine
-        );
 
         // A changed ranking must not change the choice, even when a null
         // recipe records a trinket that was unnecessary for the parent.
@@ -587,32 +548,6 @@ mod tests {
             .is_none()
         );
         assert_eq!(generator.calls.load(Ordering::Relaxed), 1);
-    }
-
-    #[test]
-    fn changed_world_settings_can_filter_but_cannot_reuse_coverage() {
-        let base = query(r#"[{"item":"runic_blade","upgrade":1,"effect":"Grim"}]"#);
-        assert!(base.continues(&base));
-        assert_eq!(
-            decide_start(&base, Some(&base), false, true, None),
-            StartDecision::TargetRefine
-        );
-        let mut disabled = base.clone();
-        disabled.auto_apply_trinket = false;
-        assert!(!disabled.continues(&base));
-        assert_eq!(
-            decide_start(&disabled, Some(&base), false, true, None),
-            StartDecision::TargetFilter
-        );
-        let cursed = query(r#"[{"item":"runic_blade","upgrade":1,"effect":"Annoying"}]"#);
-        assert_eq!(
-            decide_start(&cursed, Some(&base), false, true, None),
-            StartDecision::TargetFilter
-        );
-        let explicit = query(r#"[{"item":"rat_skull"}]"#);
-        let mut explicit_off = explicit.clone();
-        explicit_off.auto_apply_trinket = false;
-        assert!(explicit.continues(&explicit_off));
     }
 
     #[test]
@@ -722,42 +657,5 @@ mod tests {
             Some(ItemId::ParchmentScrap)
         );
         assert_eq!(generator.0.load(Ordering::Relaxed), 8); // Manual choices are preserved.
-    }
-
-    #[test]
-    fn refinement_can_restore_a_trinket_removed_for_the_base_query() {
-        let seed = DungeonSeed::from_code("EYY-RUL-LQG").unwrap();
-        let base = query(r#"[{"item":"runic_blade","upgrade":1,"effect":"Grim"}]"#);
-        let narrowed = query(
-            r#"[{"item":"runic_blade","upgrade":1,"effect":"Grim"},
-            {"item":"whip","effect":"Venomous"}]"#,
-        );
-        assert!(narrowed.continues(&base));
-        let generator = CanonicalMainWorldGenerator;
-        let base_plan = QueryPlan::analyze(&base);
-        let plan = QueryPlan::analyze(&narrowed);
-        let original = search_batch(&generator, &base, &base_plan, &[seed]);
-        let recipe = original[0].as_ref().unwrap().recipe;
-        assert_eq!(recipe.trinket, None);
-        assert!(filter_batch(&generator, &narrowed, &plan, &[recipe])[0].is_none());
-
-        let refined = refine_batch(&generator, &narrowed, &plan, &base, &[recipe]);
-        let refined = refined[0].as_ref().unwrap();
-        assert_eq!(refined.recipe.trinket, Some(ItemId::ParchmentScrap));
-        assert!(narrowed.matches(&refined.world));
-        let replay =
-            generate_main_world_with_trinket(seed, 24, Challenges::NONE, refined.recipe.trinket)
-                .unwrap();
-        assert!(narrowed.matches(&replay));
-
-        // Refining back removes the choice, including when replaying an old
-        // imported result whose trinket was unnecessary for the same query.
-        let widened = refine_batch(&generator, &base, &base_plan, &narrowed, &[refined.recipe]);
-        assert_eq!(widened[0].as_ref().unwrap().recipe, recipe);
-        let imported = refine_batch(&generator, &base, &base_plan, &base, &[refined.recipe]);
-        assert_eq!(
-            imported[0].as_ref().unwrap().world,
-            original[0].as_ref().unwrap().world
-        );
     }
 }

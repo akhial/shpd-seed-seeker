@@ -2741,8 +2741,8 @@ mod tests {
 
         // Remove an actual mandatory singleton. This is a weaker fixed-world
         // predicate; no optional-sum capacity or OR membership changes. Automatic
-        // ranking can change with a query, so this test does not infer the separate
-        // SearchQuery::continues/covered-range contract from that implication.
+        // ranking can change with a query, so this implication applies only
+        // to the same generated worlds.
         let mut base = query.clone();
         let removed = base.requirements.remove(0);
         assert!(removed.level_sum.is_none() && removed.alternative_group.is_none());

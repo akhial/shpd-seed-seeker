@@ -14,7 +14,7 @@ use shpd_seedfinder_core::main_world::{
 };
 use shpd_seedfinder_core::model::{Accessibility, ItemSource, WorldItem};
 use shpd_seedfinder_core::probability::estimate_match_probability;
-use shpd_seedfinder_core::query::{SearchQuery, decide_start as decide_start_query, scout_matches};
+use shpd_seedfinder_core::query::{SearchQuery, scout_matches};
 use shpd_seedfinder_core::quests::{
     BlacksmithQuestType, GhostQuestType, ImpQuestType, QuestSummary, WandmakerQuestType,
 };
@@ -373,87 +373,11 @@ pub fn filter_seeds(
     .map_err(|error| JsError::new(&error))
 }
 
-/// Reports whether the query in `candidate_json` continues the one in
-/// `base_json`: an identical depth and challenge set, world
-/// conditions (the blacksmith flags and the Wandmaker filter) at least as
-/// strict as the base's, and every base requirement covered by a distinct candidate
-/// requirement at least as strict (equal or strengthened). Only a continuing
-/// query may reuse a stopped search's results and coverage remainder (the
-/// filter-and-resume refine flow).
-///
-/// # Errors
-///
-/// Returns a JavaScript error when either query fails to decode.
-#[wasm_bindgen]
-pub fn query_continues(candidate_json: &str, base_json: &str) -> Result<bool, JsError> {
-    query_continues_impl(candidate_json, base_json).map_err(|error| JsError::new(&error))
-}
-
-fn query_continues_impl(candidate_json: &str, base_json: &str) -> Result<bool, String> {
-    Ok(json_query::decode(candidate_json)?.refines(&json_query::decode(base_json)?))
-}
-
-/// Reports what pressing Start Search must do with the query in
-/// `candidate_json`, per `docs/search-semantics.md`. `target_json` is the
-/// Target Query (`null`/`undefined` when there is no Target, which always
-/// anchors), `target_set_empty` and `target_has_uncovered_seeds` describe the
-/// Target Set and its coverage, and `detached_base_json` is the last concluded
-/// run's query when — and only when — that run was itself detached. The
-/// returned name is one of `anchor`, `target-refine`, `target-filter`,
-/// `continue-detached` or `detached`.
-///
-/// The continuation predicate is part of this decision: callers must not call
-/// `query_continues` separately for it.
-///
-/// # Errors
-///
-/// Returns a JavaScript error when any supplied query fails to decode.
-#[wasm_bindgen]
-#[allow(clippy::needless_pass_by_value)] // wasm-bindgen requires owned strings.
-pub fn decide_start(
-    candidate_json: &str,
-    target_json: Option<String>,
-    target_set_empty: bool,
-    target_has_uncovered_seeds: bool,
-    detached_base_json: Option<String>,
-) -> Result<String, JsError> {
-    decide_start_impl(
-        candidate_json,
-        target_json.as_deref(),
-        target_set_empty,
-        target_has_uncovered_seeds,
-        detached_base_json.as_deref(),
-    )
-    .map_err(|error| JsError::new(&error))
-}
-
-fn decide_start_impl(
-    candidate_json: &str,
-    target_json: Option<&str>,
-    target_set_empty: bool,
-    target_has_uncovered_seeds: bool,
-    detached_base_json: Option<&str>,
-) -> Result<String, String> {
-    let candidate = json_query::decode(candidate_json)?;
-    let target = target_json.map(json_query::decode).transpose()?;
-    let detached_base = detached_base_json.map(json_query::decode).transpose()?;
-    Ok(decide_start_query(
-        &candidate,
-        target.as_ref(),
-        target_set_empty,
-        target_has_uncovered_seeds,
-        detached_base.as_ref(),
-    )
-    .as_str()
-    .to_owned())
-}
-
 /// Cooperative, single-threaded browser search state.
 #[wasm_bindgen]
 pub struct SearchSession {
     query: SearchQuery,
     plan: QueryPlan,
-    preserved: Option<shpd_seedfinder_core::refinement::PreservedSearch>,
     generator: ConfiguredMainWorldGenerator,
     cursor: u64,
     end_seed_exclusive: u64,
@@ -493,10 +417,8 @@ impl SearchSession {
             let seeds = (self.cursor..batch_end)
                 .filter_map(|value| DungeonSeed::new(value).ok())
                 .collect::<Vec<_>>();
-            let results = self.preserved.as_ref().map_or_else(
-                || auto_trinkets::search_batch(&self.generator, &self.query, &self.plan, &seeds),
-                |preserved| preserved.search_batch(&self.generator, &seeds),
-            );
+            let results =
+                auto_trinkets::search_batch(&self.generator, &self.query, &self.plan, &seeds);
             for result in results {
                 self.cursor += 1;
                 self.tested += 1;
@@ -533,9 +455,7 @@ impl SearchSession {
         start_seed: f64,
         end_seed_exclusive: f64,
     ) -> Result<Self, String> {
-        let (query, base) =
-            shpd_seedfinder_core::refinement::decode_execution(query_json.as_bytes())
-                .map_err(|error| error.to_string())?;
+        let query = json_query::decode(query_json)?;
         let start_seed = seed_bound(start_seed, false)?;
         let end_seed_exclusive = seed_bound(end_seed_exclusive, true)?;
         if start_seed >= end_seed_exclusive {
@@ -544,9 +464,6 @@ impl SearchSession {
         let plan = QueryPlan::analyze(&query);
         let completed = plan.is_unsatisfiable();
         Ok(Self {
-            preserved: base.map(|base| {
-                shpd_seedfinder_core::refinement::PreservedSearch::new(query.clone(), &base)
-            }),
             generator: CanonicalMainWorldGenerator::with_challenges(query.challenges),
             query,
             plan,
@@ -864,23 +781,24 @@ mod tests {
     use shpd_seedfinder_core::seed::DungeonSeed;
 
     use super::{
-        MAX_RESULTS, SearchSession, analyze_query, decide_start_impl, decode_share_text_impl,
-        encode_share_link_impl, engine_info, engine_info_document, filter_seeds_impl,
-        format_seed_code, parse_seed_code_impl, query_continues_impl, scout_impl,
+        MAX_RESULTS, SearchSession, analyze_query, decode_share_text_impl, encode_share_link_impl,
+        engine_info, engine_info_document, filter_seeds_impl, format_seed_code,
+        parse_seed_code_impl, scout_impl,
     };
 
     #[test]
     #[allow(clippy::cast_precision_loss)] // Dungeon seeds are below 2^53.
-    fn preserved_execution_reapplies_the_original_trinket() {
-        let packet = r#"{"refine_base":{"auto_apply_trinket":true,"max_depth":19,"requirements":[{"item":"runic_blade","upgrade":1,"effect":"Grim"}]},"query":{"auto_apply_trinket":true,"max_depth":19,"requirements":[{"item":"runic_blade","upgrade":1,"effect":"Grim"},{"item":"whip","effect":"Venomous"}]}}"#;
+    fn filtering_reapplies_the_original_trinket() {
+        let base = r#"{"auto_apply_trinket":true,"max_depth":19,"requirements":[{"item":"runic_blade","upgrade":1,"effect":"Grim"}]}"#;
+        let query = r#"{"auto_apply_trinket":true,"max_depth":19,"requirements":[{"item":"runic_blade","upgrade":1,"effect":"Grim"},{"item":"whip","effect":"Venomous"}]}"#;
         let seed = DungeonSeed::from_code("EYY-RUL-LQG").unwrap();
-        let value = seed.value() as f64;
-        let mut session = SearchSession::new_impl(packet, value, value + 1.0).unwrap();
-        let result: serde_json::Value = serde_json::from_str(&session.advance(1)).unwrap();
-        assert_eq!(result["state"], "completed");
-        assert_eq!(result["tested"], 1);
-        assert_eq!(result["matches"][0]["code"], seed.to_code());
-        assert_eq!(result["matches"][0]["selectedTrinket"], "parchment_scrap");
+        let result: Value = serde_json::from_str(
+            &super::filter_recipes_impl(query, &[seed.value() as f64], Some("[null]"), Some(base))
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(result[0]["code"], seed.to_code());
+        assert_eq!(result[0]["selectedTrinket"], "parchment_scrap");
     }
 
     #[test]
@@ -969,19 +887,6 @@ mod tests {
     }
 
     #[test]
-    fn query_continuation_matches_scope_and_requirement_multiset() {
-        let base = r#"{"requirements":[{"kind":"ring","upgrade":{"at_least":1}}],"max_depth":6}"#;
-        let narrowed = r#"{"requirements":[{"kind":"ring","upgrade":{"at_least":1}},{"kind":"wand"}],"max_depth":6}"#;
-        let rescoped =
-            r#"{"requirements":[{"kind":"ring","upgrade":{"at_least":1}}],"max_depth":7}"#;
-        assert!(query_continues_impl(base, base).unwrap());
-        assert!(query_continues_impl(narrowed, base).unwrap());
-        assert!(!query_continues_impl(base, narrowed).unwrap());
-        assert!(!query_continues_impl(rescoped, base).unwrap());
-        assert!(query_continues_impl("not json", base).is_err());
-    }
-
-    #[test]
     fn share_links_round_trip_the_canonical_document() {
         let document = r#"{"requirements":[{"item":"wand_fireblast","upgrade":{"at_least":3}}]}"#;
         let link = encode_share_link_impl(document).unwrap();
@@ -992,58 +897,6 @@ mod tests {
         assert_eq!(decode_share_text_impl("QAMtCYAA").unwrap(), canonical);
         assert!(encode_share_link_impl(r#"{"requirements":[]}"#).is_err());
         assert!(decode_share_text_impl("https://example.com/").is_err());
-    }
-
-    #[test]
-    fn start_decision_reports_the_documented_names() {
-        let target = r#"{"requirements":[{"kind":"ring"}],"max_depth":6}"#;
-        let shallower = r#"{"requirements":[{"kind":"ring"}],"max_depth":5}"#;
-        let armor = r#"{"requirements":[{"kind":"armor"}],"max_depth":6}"#;
-        let narrowed = r#"{"requirements":[{"kind":"armor"},{"kind":"armor","upgrade":{"at_least":2}}],"max_depth":6}"#;
-
-        assert_eq!(
-            decide_start_impl(target, Some(target), false, true, None).unwrap(),
-            "target-refine"
-        );
-        assert_eq!(
-            decide_start_impl(shallower, Some(target), false, true, None).unwrap(),
-            "target-filter"
-        );
-        assert_eq!(
-            decide_start_impl(armor, Some(target), false, true, None).unwrap(),
-            "detached"
-        );
-        assert_eq!(
-            decide_start_impl(narrowed, Some(target), false, true, Some(armor)).unwrap(),
-            "continue-detached"
-        );
-        // No Target anchors, and so does an empty Target Set the query does
-        // not continue.
-        assert_eq!(
-            decide_start_impl(target, None, false, true, None).unwrap(),
-            "anchor"
-        );
-        assert_eq!(
-            decide_start_impl(shallower, Some(target), true, true, None).unwrap(),
-            "anchor"
-        );
-
-        // Sharing needs equal kinds: a named ring shares with "any ring",
-        // a named wand shares with neither.
-        let tenacity = r#"{"requirements":[{"item":"ring_tenacity"}],"max_depth":5}"#;
-        let fireblast = r#"{"requirements":[{"item":"wand_fireblast"}],"max_depth":5}"#;
-        assert_eq!(
-            decide_start_impl(tenacity, Some(target), false, true, None).unwrap(),
-            "target-filter"
-        );
-        assert_eq!(
-            decide_start_impl(fireblast, Some(target), false, true, None).unwrap(),
-            "detached"
-        );
-
-        assert!(decide_start_impl("not json", None, false, true, None).is_err());
-        assert!(decide_start_impl(target, Some("not json"), false, true, None).is_err());
-        assert!(decide_start_impl(target, None, false, true, Some("not json")).is_err());
     }
 
     #[test]

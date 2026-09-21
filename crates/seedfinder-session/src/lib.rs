@@ -18,8 +18,6 @@ use shpd_seedfinder_core::main_world::{CanonicalMainWorldGenerator, ConfiguredMa
 use shpd_seedfinder_core::model::GeneratedWorld;
 use shpd_seedfinder_core::probability::estimate_match_probability;
 use shpd_seedfinder_core::query::{ScoutMatches, SearchQuery, scout_matches};
-pub use shpd_seedfinder_core::query::{StartDecision, decide_start};
-use shpd_seedfinder_core::refinement::{PreservedSearch, decode_execution};
 pub use shpd_seedfinder_core::results_export::MAX_RESULTS;
 pub use shpd_seedfinder_core::search::{PRODUCTION_SEARCH_START_STRIDE, SearchError};
 use shpd_seedfinder_core::search::{
@@ -441,48 +439,6 @@ pub enum FilterPacketError {
     Panicked,
 }
 
-/// Decodes two query requests and reports whether `candidate`
-/// continues `base`: an identical depth and challenge set, world
-/// conditions (the blacksmith flags and the Wandmaker filter) at least as
-/// strict as the base's, and every requirement of `base` covered by a distinct
-/// candidate requirement at least as strict (equal or strengthened).
-/// This is the soundness precondition for refining a search — only a
-/// continuing query may resume its uncovered remainder under the original
-/// selection policy. Filtering saved seeds itself is unrestricted.
-/// See [`SearchQuery::refines`] and the `refine_base` execution envelope.
-///
-/// # Errors
-///
-/// Returns the decode error of the first undecodable packet.
-pub fn queries_continue(candidate: &[u8], base: &[u8]) -> Result<bool, WireError> {
-    Ok(decode_query(candidate)?.refines(&decode_query(base)?))
-}
-
-/// Packet form of [`decide_start`]: the queries arrive as query requests, an
-/// absent Target or detached base as `None`.
-///
-/// # Errors
-///
-/// Returns the decode error of the first undecodable packet.
-pub fn decide_start_packets(
-    candidate: &[u8],
-    target: Option<&[u8]>,
-    target_set_empty: bool,
-    target_has_uncovered_seeds: bool,
-    detached_base: Option<&[u8]>,
-) -> Result<StartDecision, WireError> {
-    let candidate = decode_query(candidate)?;
-    let target = target.map(decode_query).transpose()?;
-    let detached_base = detached_base.map(decode_query).transpose()?;
-    Ok(decide_start(
-        &candidate,
-        target.as_ref(),
-        target_set_empty,
-        target_has_uncovered_seeds,
-        detached_base.as_ref(),
-    ))
-}
-
 type FinishMatches = dyn Fn(Vec<GeneratedWorld>) -> Vec<TrinketSearchMatch> + Send + Sync;
 
 #[derive(Debug)]
@@ -502,42 +458,6 @@ pub struct NativeSession {
     search: StreamingSearchHandle,
     match_probability: f64,
     diagnostic_claimed: AtomicBool,
-}
-
-/// Only matched recipes are retained, bounded by the streaming accept cap and
-/// active chunks. Polling drains them together with their corresponding worlds.
-struct PreservedGenerator {
-    generator: Arc<ConfiguredMainWorldGenerator>,
-    search: PreservedSearch,
-    recipes: Mutex<HashMap<u64, SeedRecipe>>,
-}
-
-impl WorldGenerator for PreservedGenerator {
-    fn generate(&self, seed: DungeonSeed, depth: u8) -> GeneratedWorld {
-        self.generator.generate(seed, depth)
-    }
-
-    fn generate_batch_gated(
-        &self,
-        seeds: &[DungeonSeed],
-        _depth: u8,
-        _gate: &dyn shpd_seedfinder_core::search::FloorGate,
-    ) -> Vec<Option<GeneratedWorld>> {
-        let matches = self.search.search_batch(self.generator.as_ref(), seeds);
-        let mut recipes = self
-            .recipes
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        matches
-            .into_iter()
-            .map(|result| {
-                result.map(|result| {
-                    recipes.insert(result.recipe.seed.value(), result.recipe);
-                    result.world
-                })
-            })
-            .collect()
-    }
 }
 
 impl NativeSession {
@@ -613,74 +533,15 @@ impl NativeSession {
         request: &[u8],
         workers: Option<NonZeroUsize>,
     ) -> Result<Self, StartSessionError> {
-        let (query, base) = decode_execution(request).map_err(StartSessionError::Request)?;
-        match base {
-            Some(base) => Self::production_preserving(query, &base, None, workers),
-            None => Self::production(query, workers),
-        }
-        .map_err(StartSessionError::Spawn)
-    }
-
-    /// Search with the parent's selection rules and the narrowed query's matcher.
-    /// The caller validates `query.refines(base)`; no candidate reranking is used.
-    ///
-    /// # Errors
-    /// Returns a search error for invalid queries, ranges, or worker failures.
-    ///
-    /// # Panics
-    /// Panics if an internal matched world loses its saved recipe.
-    pub fn production_preserving(
-        query: SearchQuery,
-        base: &SearchQuery,
-        window: Option<(u64, u64)>,
-        workers: Option<NonZeroUsize>,
-    ) -> Result<Self, SearchError> {
-        let options = SearchOptions {
-            start_seed: 0,
-            end_seed_exclusive: TOTAL_SEEDS,
-            workers: effective_workers(workers),
-            chunk_size: NonZeroUsize::new(SEARCH_CHUNK_SIZE).unwrap_or(NonZeroUsize::MIN),
-            max_results: NonZeroUsize::new(MAX_RESULTS).unwrap_or(NonZeroUsize::MIN),
-        };
-        let generator = Arc::new(PreservedGenerator {
-            generator: canonical_generator(query.challenges),
-            search: PreservedSearch::new(query.clone(), base),
-            recipes: Mutex::new(HashMap::new()),
-        });
-        let (position, remaining) =
-            window.unwrap_or_else(|| (production_search_start(), TOTAL_SEEDS));
-        let match_probability = estimate_match_probability(&query);
-        let search =
-            spawn_partial_streaming_search(&generator, query, options, position, remaining)?;
-        Ok(Self {
-            search,
-            recipe_packets: true,
-            // The ordinary estimate is a heuristic; execution always uses the parent policy.
-            match_probability,
-            diagnostic_claimed: AtomicBool::new(false),
-            finish_matches: Box::new(move |worlds| {
-                let mut recipes = generator
-                    .recipes
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                worlds
-                    .into_iter()
-                    .map(|world| TrinketSearchMatch {
-                        recipe: recipes
-                            .remove(&world.seed.value())
-                            .expect("matched world must retain its recipe"),
-                        world,
-                    })
-                    .collect()
-            }),
-        })
+        let query = decode_query(request).map_err(StartSessionError::Request)?;
+        Self::production(query, workers).map_err(StartSessionError::Spawn)
     }
 
     /// Starts a production search which resumes a previous traversal: it scans
     /// only the `scan_len` seeds starting at `resume_from`, wrapping at the end
     /// of the seed space. Frontends refine a stopped or completed search by
     /// passing the previous session's [`Self::resume_hint`] values together
-    /// with a strictly narrower query (the old requirements plus new ones).
+    /// with the unchanged query. Edited queries start fresh traversals.
     ///
     /// # Errors
     ///
@@ -715,14 +576,9 @@ impl NativeSession {
         scan_len: u64,
         workers: Option<NonZeroUsize>,
     ) -> Result<Self, StartSessionError> {
-        let (query, base) = decode_execution(request).map_err(StartSessionError::Request)?;
-        match base {
-            Some(base) => {
-                Self::production_preserving(query, &base, Some((resume_from, scan_len)), workers)
-            }
-            None => Self::production_resumed(query, resume_from, scan_len, workers),
-        }
-        .map_err(StartSessionError::Spawn)
+        let query = decode_query(request).map_err(StartSessionError::Request)?;
+        Self::production_resumed(query, resume_from, scan_len, workers)
+            .map_err(StartSessionError::Spawn)
     }
 
     /// Where and how much a follow-up traversal must scan to finish this
@@ -1044,33 +900,6 @@ mod tests {
             exclude_blacksmith_rewards: false,
             wandmaker_quest: None,
         }
-    }
-
-    #[test]
-    fn preserved_execution_reapplies_the_original_trinket() {
-        let packet = br#"{"refine_base":{"auto_apply_trinket":true,"max_depth":19,"requirements":[{"item":"runic_blade","upgrade":1,"effect":"Grim"}]},"query":{"auto_apply_trinket":true,"max_depth":19,"requirements":[{"item":"runic_blade","upgrade":1,"effect":"Grim"},{"item":"whip","effect":"Venomous"}]}}"#;
-        let seed = DungeonSeed::from_code("EYY-RUL-LQG").unwrap();
-        let session = NativeSession::production_resumed_from_packet(
-            packet,
-            seed.value(),
-            1,
-            Some(NonZeroUsize::MIN),
-        )
-        .unwrap();
-        wait(&session);
-        let matches = session.drain_matches(10).unwrap();
-        assert_eq!(matches.len(), 1);
-        assert_eq!(
-            matches[0].recipe,
-            SeedRecipe {
-                seed,
-                trinket: Some(ItemId::ParchmentScrap)
-            }
-        );
-        assert_eq!(
-            session.resume_hint(),
-            [i64::try_from(seed.value() + 1).unwrap(), 0]
-        );
     }
 
     #[test]
@@ -1522,190 +1351,6 @@ mod tests {
             exclude_blacksmith_rewards: false,
             wandmaker_quest: None,
         }
-    }
-
-    #[test]
-    fn starting_refines_an_extension_of_the_target_without_asking() {
-        let base = kind_query(ItemKind::Ring);
-        let mut extended = base.clone();
-        extended.requirements.push(Requirement {
-            upgrade: UpgradeRequirement::AtLeast(2),
-            ..kind_requirement(ItemKind::Weapon)
-        });
-
-        // Adding a requirement after a concluded run refines it implicitly.
-        assert_eq!(
-            decide_start(&extended, Some(&base), false, true, None),
-            StartDecision::TargetRefine,
-            "an extending query must reuse the Target"
-        );
-
-        // Starting again with the query unchanged continues the session: the
-        // filter keeps every seed and the scan picks up where it stopped. This
-        // is the stop-then-start-again case, which must never wipe results.
-        assert_eq!(
-            decide_start(&base, Some(&base), false, true, None),
-            StartDecision::TargetRefine,
-            "an unchanged query must continue the previous run"
-        );
-        assert_eq!(
-            decide_start(&extended, Some(&extended), false, true, None),
-            StartDecision::TargetRefine
-        );
-
-        // A populated Target refines even with its range fully covered: the
-        // filter half of the refine still has the whole Target Set to keep.
-        assert_eq!(
-            decide_start(&extended, Some(&base), false, false, None),
-            StartDecision::TargetRefine
-        );
-
-        // Clearing the results drops the Target, so even an extending query
-        // anchors a fresh session.
-        assert_eq!(
-            decide_start(&extended, None, false, true, None),
-            StartDecision::Anchor
-        );
-    }
-
-    #[test]
-    fn queries_sharing_an_item_filter_the_target_set_without_scanning() {
-        let base = kind_query(ItemKind::Ring);
-
-        // A narrower scope breaks the continuation rule but still names a
-        // ring, so the full Target Set is filtered instead of rescanned.
-        let mut deeper = base.clone();
-        deeper.max_depth = 9;
-        assert!(!deeper.continues(&base));
-        assert_eq!(
-            decide_start(&deeper, Some(&base), false, true, None),
-            StartDecision::TargetFilter
-        );
-
-        // Dropping back to fewer requirements is a filter too — the base is
-        // the full Target Set, so loosening brings seeds back.
-        let mut extended = base.clone();
-        extended
-            .requirements
-            .push(kind_requirement(ItemKind::Weapon));
-        assert_eq!(
-            decide_start(&base, Some(&extended), false, true, None),
-            StartDecision::TargetFilter
-        );
-
-        // An unrelated kind shares nothing and scans detached.
-        assert_eq!(
-            decide_start(&kind_query(ItemKind::Armor), Some(&base), false, true, None),
-            StartDecision::Detached
-        );
-    }
-
-    #[test]
-    fn unrelated_queries_continue_only_the_detached_thread() {
-        let target = kind_query(ItemKind::Ring);
-        let detached = kind_query(ItemKind::Armor);
-
-        // First unrelated query: a fresh detached scan.
-        assert_eq!(
-            decide_start(&detached, Some(&target), false, true, None),
-            StartDecision::Detached
-        );
-
-        // Extending the detached run continues it instead of rescanning.
-        let mut narrowed = detached.clone();
-        narrowed.requirements.push(Requirement {
-            upgrade: UpgradeRequirement::AtLeast(2),
-            ..kind_requirement(ItemKind::Armor)
-        });
-        assert_eq!(
-            decide_start(&narrowed, Some(&target), false, true, Some(&detached)),
-            StartDecision::ContinueDetached
-        );
-
-        // But never when the last concluded run was not detached (or failed):
-        // without a detached base, an unrelated query rescans.
-        assert_eq!(
-            decide_start(&narrowed, Some(&target), false, true, None),
-            StartDecision::Detached
-        );
-
-        // And the Target always wins: a query continuing the Target refines
-        // it even when it would also continue the detached run.
-        assert_eq!(
-            decide_start(&target, Some(&target), false, true, Some(&target)),
-            StartDecision::TargetRefine
-        );
-    }
-
-    #[test]
-    fn an_empty_target_set_resumes_a_continuation_and_reanchors_otherwise() {
-        let target = kind_query(ItemKind::Ring);
-
-        // A continuing query still resumes the uncovered remainder.
-        assert_eq!(
-            decide_start(&target, Some(&target), true, true, None),
-            StartDecision::TargetRefine
-        );
-        // With nothing left to scan either, the search re-anchors.
-        assert_eq!(
-            decide_start(&target, Some(&target), true, false, None),
-            StartDecision::Anchor
-        );
-        // Any other query re-anchors: an empty set holds nothing worth
-        // preserving, even for a query that shares the ring kind.
-        let mut deeper = target.clone();
-        deeper.max_depth = 9;
-        assert_eq!(
-            decide_start(&deeper, Some(&target), true, true, None),
-            StartDecision::Anchor
-        );
-    }
-
-    #[test]
-    fn start_decisions_travel_as_query_documents_and_lowercase_names() {
-        let target = kind_query(ItemKind::Ring);
-        let detached = kind_query(ItemKind::Armor);
-        let mut narrowed = detached.clone();
-        narrowed.requirements.push(Requirement {
-            upgrade: UpgradeRequirement::AtLeast(2),
-            ..kind_requirement(ItemKind::Armor)
-        });
-        let mut deeper = target.clone();
-        deeper.max_depth = 9;
-        let packet = query_request;
-
-        for (candidate, base, decision, name) in [
-            (&target, None, StartDecision::TargetRefine, "target-refine"),
-            (&deeper, None, StartDecision::TargetFilter, "target-filter"),
-            (&detached, None, StartDecision::Detached, "detached"),
-            (
-                &narrowed,
-                Some(&detached),
-                StartDecision::ContinueDetached,
-                "continue-detached",
-            ),
-        ] {
-            let reported = decide_start_packets(
-                &packet(candidate),
-                Some(&packet(&target)),
-                false,
-                true,
-                base.map(&packet).as_deref(),
-            )
-            .unwrap();
-            assert_eq!(reported, decision);
-            assert_eq!(reported.as_str(), name);
-        }
-        assert_eq!(
-            decide_start_packets(&packet(&target), None, false, true, None).unwrap(),
-            StartDecision::Anchor
-        );
-        assert_eq!(StartDecision::Anchor.as_str(), "anchor");
-
-        // Any undecodable packet is reported rather than silently ignored.
-        assert!(decide_start_packets(b"bad", None, false, true, None).is_err());
-        assert!(decide_start_packets(&packet(&target), Some(b"bad"), false, true, None).is_err());
-        assert!(decide_start_packets(&packet(&target), None, false, true, Some(b"bad")).is_err());
     }
 
     #[test]

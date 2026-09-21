@@ -75,22 +75,16 @@ internal class SearchController(
         }
     }
 
-    fun start(request: SearchRequest, workers: Int, filterOnly: Boolean = false) {
+    fun start(request: SearchRequest, workers: Int) {
         if (!ready || isSearching) return
-        if (filterOnly && snapshot.target == null) return
-        val plan = startPlanFor(request, snapshot.target, snapshot.lastRun, snapshot.lastKind,
-            engine::queryContinues, filterOnly)
+        val refine = refineFor(request, snapshot.target, snapshot.lastRun)
         stopRequested = false
         pauseRequested = false
         snapshot = snapshot.copy(
-            pending = PendingSearch(request, plan.mode, workers, plan.refine,
-                selectionQuery = when (plan.mode) {
-                    StartMode.TARGET_REFINE -> snapshot.target?.request
-                    StartMode.CONTINUE_DETACHED -> snapshot.lastRun?.let { it.selectionQuery ?: it.request }
-                    else -> null
-                }),
-            results = if (plan.refine == null) emptyList() else snapshot.results,
-            query = if (plan.refine == null) request.toPresetQuery() else snapshot.query,
+            pending = PendingSearch(request, workers, refine),
+            target = snapshot.target ?: TargetState(request, emptyList()),
+            results = if (refine == null) emptyList() else snapshot.results,
+            query = if (refine == null) request.toPresetQuery() else snapshot.query,
             status = null, error = null, elapsedSeconds = 0,
         )
         notice = null
@@ -132,7 +126,7 @@ internal class SearchController(
                 throw cancelled
             } catch (failure: Exception) {
                 snapshot = snapshot.copy(
-                    pending = null, lastRun = null, lastKind = null,
+                    pending = null, lastRun = null,
                     status = snapshot.status?.copy(state = SearchState.FAILED)
                         ?: SearchStatus(SearchState.FAILED, 0, 0, -1),
                     error = failure.message ?: "The native search engine could not start.",
@@ -180,7 +174,9 @@ internal class SearchController(
 
     fun importResults(query: PresetQuery, results: List<SeedResult>, target: TargetState?) {
         if (!ready || isSearching) return
-        snapshot = SearchSnapshot(results = results, query = query, target = target)
+        snapshot = SearchSnapshot(results = results, query = query, target = target?.let {
+            settledTarget(snapshot.target, it.request, it.results)
+        } ?: snapshot.target)
         scope.launch { saveSafely() }
     }
 
@@ -195,7 +191,8 @@ internal class SearchController(
             for (chunk in refine.keepSeeds.chunked(24)) {
                 if (stopRequested || pauseRequested) break
                 kept += withContext(workerDispatcher) {
-                    engine.filterRecipes(pending.request, refine.base ?: pending.request, chunk)
+                    chunk.groupBy { refine.sources[it.seed] ?: refine.base ?: pending.request }
+                        .flatMap { (source, seeds) -> engine.filterRecipes(pending.request, source, seeds) }
                 }
             }
             if (!stopRequested && !pauseRequested) {
@@ -228,9 +225,7 @@ internal class SearchController(
                 // Assign inside the dispatcher block: coroutine cancellation during dispatch
                 // back to main must not orphan a just-created JNI handle.
                 withContext(workerDispatcher) {
-                    session = pending.selectionQuery?.let {
-                        engine.startRefinedSearch(pending.request, it, pending.window, pending.workers)
-                    } ?: pending.window?.let {
+                    session = pending.window?.let {
                         engine.startResumedSearch(pending.request, it.position, it.remaining, pending.workers)
                     } ?: engine.startSearch(pending.request, pending.workers)
                 }
@@ -257,6 +252,7 @@ internal class SearchController(
                     val scanned = (pending.scanned + status.scannedSeeds).coerceAtMost(total)
                     snapshot = snapshot.copy(
                         results = if (added.isEmpty()) snapshot.results else snapshot.results + added,
+                        target = settledTarget(snapshot.target, pending.request, added),
                         status = status.copy(
                             state = if (checkpointing && status.state == SearchState.CANCELLED) SearchState.RUNNING else status.state,
                             scannedSeeds = scanned, totalSeeds = total,
@@ -307,9 +303,8 @@ internal class SearchController(
         snapshot = snapshot.copy(
             pending = null,
             status = (snapshot.status ?: SearchStatus(state, 0, 0)).copy(state = state),
-            lastRun = FinishedRun(pending.request, hint.position, hint.remaining, snapshot.results, pending.selectionQuery),
-            lastKind = pending.mode.concludedKind,
-            target = settledTarget(snapshot.target, pending.mode, pending.request, snapshot.results, hint.position, hint.remaining),
+            lastRun = FinishedRun(pending.request, hint.position, hint.remaining, snapshot.results),
+            target = settledTarget(snapshot.target, pending.request, snapshot.results),
             error = null,
         )
         if (snapshot.results.size >= RESULT_CAP) notice = "Result limit reached (1,024 seeds)."

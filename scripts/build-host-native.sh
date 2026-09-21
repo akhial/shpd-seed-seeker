@@ -2,9 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
 # Builds the JNI library for the *host* so the Android JVM unit tests can load
-# the real engine. The refine continuation predicate is single-sourced in Rust
-# (SearchQuery::continues, exported as JniBindings.queryContinues), so a
-# Kotlin-only test of it would assert nothing about the shipped behaviour.
+# the real engine for query validation, recipe filtering, and bridge tests.
 # Nothing here goes into an APK — scripts/build-android-native.sh does that.
 set -eu
 
@@ -18,8 +16,7 @@ case "$(uname -s)" in
 esac
 
 cd "$ROOT"
-# The dev profile keeps this cheap: the tests decode two query packets and
-# never search, so nothing here is performance sensitive.
+# Use the dev profile for host-side unit and bridge tests.
 cargo build --locked -p shpd-seedfinder-jni
 
 TARGET_DIR=${CARGO_TARGET_DIR:-$ROOT/target}

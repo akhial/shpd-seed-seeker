@@ -194,65 +194,28 @@ describe("stop bookkeeping", () => {
   });
 });
 
-describe("settleRun", () => {
-  const query = { requirements: [{ kind: "ring" as const }] };
-  const concluded = (overrides: Partial<CoordinatorState>): CoordinatorState => ({
-    ...initialCoordinatorState(1_000),
-    state: "completed",
-    query,
-    queryJson: JSON.stringify(query),
-    matches: [match(11), match(22)],
-    segments: [[{ startSeed: 0, endSeedExclusive: 1_000 }]],
-    workerScanned: { 0: [400] },
-    ...overrides,
-  });
-
-  it("establishes the Target from a concluded anchor run", () => {
-    const settled = settleRun(concluded({ runKind: "anchor" }));
-    expect(settled.target).toEqual({
-      hasCoverage: true,
-      queryJson: JSON.stringify(query),
-      query,
-      matches: [match(11), match(22)],
-      remainder: [{ startSeed: 400, endSeedExclusive: 1_000 }],
+describe("persistent pool", () => {
+  it("retains discoveries from every query, even if the run fails", () => {
+    const a = { requirements: [{ kind: "wand" as const }] };
+    const b = { requirements: [{ kind: "armor" as const }] };
+    const first = settleRun({
+      ...initialCoordinatorState(),
+      query: a,
+      matches: [match(1), match(2)],
+      state: "completed",
     });
-  });
-
-  it("grows the Target Set and advances coverage after a target refine", () => {
-    const target = {
-      queryJson: JSON.stringify(query),
-      query,
-      matches: [match(11), match(22), match(33)],
-      remainder: [{ startSeed: 400, endSeedExclusive: 1_000 }],
-    };
-    // The refined run kept 11 and found 44 while scanning 400..700 of the remainder.
-    const settled = settleRun(
-      concluded({
-        runKind: "target-refine",
-        target,
-        matches: [match(11), match(44)],
-        segments: [[{ startSeed: 400, endSeedExclusive: 1_000 }]],
-        workerScanned: { 0: [300] },
-      }),
-    );
-    expect(settled.target?.matches.map((item) => item.value)).toEqual([11, 22, 33, 44]);
-    expect(settled.target?.remainder).toEqual([{ startSeed: 700, endSeedExclusive: 1_000 }]);
-    expect(settled.target?.query).toEqual(query);
-  });
-
-  it("leaves the Target alone after a target filter or a detached run", () => {
-    const target = { queryJson: JSON.stringify(query), query, matches: [match(11)], remainder: [] };
-    for (const runKind of ["target-filter", "detached"] as const) {
-      const settled = settleRun(concluded({ runKind, target, matches: [match(99)] }));
-      expect(settled.target).toBe(target);
-    }
-  });
-
-  it("does nothing for a run that has not concluded, or that failed", () => {
-    for (const state of ["running", "stopping", "failed", "idle"] as const) {
-      const input = concluded({ state, runKind: "anchor" });
-      expect(settleRun(input).target).toBeUndefined();
-    }
+    const second = settleRun({
+      ...first,
+      query: b,
+      matches: [match(2), match(3)],
+      state: "failed",
+    });
+    expect(second.target?.matches.map((m) => m.value)).toEqual([1, 2, 3]);
+    expect(second.target?.sources?.[2]).toEqual(a);
+    expect(second.target?.sources?.[3]).toEqual(b);
+    const imported = importedResultsState(second, [match(4)], a);
+    expect(imported.target?.matches.map((m) => m.value)).toEqual([1, 2, 3, 4]);
+    expect(imported.matches).toEqual([match(4)]);
   });
 });
 
@@ -263,7 +226,6 @@ describe("imported results as Target", () => {
     });
     expect(state.target?.matches.map((item) => item.value)).toEqual([5, 6]);
     expect(state.target?.query).toEqual({ requirements: [{ kind: "wand" }] });
-    expect(state.target?.remainder).toEqual([]);
   });
 });
 
@@ -281,7 +243,6 @@ describe("per-run accept quota", () => {
       matches: survivors,
       sessionBaseline: survivors.length,
       capped: true,
-      runKind: "target-refine",
     };
     const partial = applyProgress(base, {
       sessionId: 1,
@@ -301,7 +262,7 @@ describe("per-run accept quota", () => {
       now: 2_000,
     });
     expect(runSaturated(saturated)).toBe(true);
-    expect(saturated.state).toBe("completed");
+    expect(saturated.state).toBe("stopping");
     expect(saturated.matches).toHaveLength(2_048);
   });
 
@@ -320,7 +281,7 @@ describe("per-run accept quota", () => {
       matches: Array.from({ length: 1_024 }, (_, value) => match(value)),
       now: 1_000,
     });
-    expect(updated.state).toBe("completed");
+    expect(updated.state).toBe("stopping");
   });
 });
 
@@ -351,4 +312,51 @@ it("counts imported survivors toward the 1024 unique-match goal", () => {
   });
   expect(full.matches).toHaveLength(1024);
   expect(runSaturated(full)).toBe(true);
+});
+
+it("retains worker flushes after reaching the cap and after a failure", () => {
+  const base: CoordinatorState = {
+    ...initialCoordinatorState(10000),
+    state: "running",
+    sessionId: 1,
+    query: { requirements: [] },
+    workerCount: 2,
+  };
+  const full = applyProgress(base, {
+    sessionId: 1,
+    workerId: 0,
+    scanned: [1024],
+    matches: Array.from({ length: 1024 }, (_, value) => match(value)),
+    now: 1000,
+  });
+  expect(full.state).toBe("stopping");
+  const flushed = applyProgress(full, {
+    sessionId: 1,
+    workerId: 1,
+    scanned: [1],
+    matches: [match(5000)],
+    now: 1100,
+  });
+  expect(flushed.target?.matches).toHaveLength(1025);
+  let done = markWorkerDone(flushed, {
+    sessionId: 1,
+    workerId: 0,
+    scanned: [1024],
+    kind: "stopped",
+    now: 1200,
+  });
+  done = markWorkerDone(done, {
+    sessionId: 1,
+    workerId: 1,
+    scanned: [1],
+    kind: "stopped",
+    now: 1200,
+  });
+  expect(done.state).toBe("completed");
+  const failed = applyProgress(
+    { ...base, state: "failed" },
+    { sessionId: 1, workerId: 1, scanned: [1], matches: [match(5000)], now: 1100 },
+  );
+  expect(failed.state).toBe("failed");
+  expect(failed.target?.matches).toEqual([match(5000)]);
 });

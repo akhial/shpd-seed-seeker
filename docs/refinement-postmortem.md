@@ -1,81 +1,60 @@
-# Refinement and automatic trinkets — postmortem
+# Refinement postmortem
 
-## What happened
+## Symptoms and causes
 
-Adding an armor requirement to an imported 108-seed query could report
-“Unrelated query” and start over. Other refinements only checked the imported
-list and stopped, even with fewer than 1,024 matches. The same underlying
-selection and start-decision rules affected all five graphical platforms.
+Adding armor to an imported query could trigger an “Unrelated query” message.
+Automatic trinket ranking depends on all requirements, and the old continuation
+check treated a changed ranking as an incompatible search. The same shared
+rules affected all five graphical platforms.
 
-## Causes
+Saved-seed verification was coupled to that coverage check. Some queries only
+filtered, while others bypassed the saved seeds. Imported files had no scan
+history, represented as an empty remaining range; that was mistaken for an
+exhausted traversal. Native result caps also counted rediscovered saved seeds,
+allowing searches to stop below 1,024 unique matches. The web coordinator also
+marked a capped search complete before every worker flushed its final discoveries;
+it now drains those reports into the pool before completing.
 
-1. Automatic trinket ranking depends on the whole query. Adding armor could
-   change that ranking, and the continuation predicate treated the change as
-   a different generated world. That guard was correct for a freshly ranked
-   search, but the application offered no way to preserve the original policy.
-2. Eligibility to reuse scan coverage was also used to decide whether saved
-   seeds could be checked at all. Shared-item relationships became filter-only;
-   unrelated queries skipped the saved list.
-3. Imports used an empty remaining range to represent missing scan history.
-   Controllers interpreted it as a completed traversal, so there was no scan
-   after filtering.
-4. Native accept limits count delivered matches, including rediscovered saved
-   seeds. A controller must count unique results across both phases and resume
-   a capped native batch if the displayed list is still short.
+An initial fix preserved selection during resumed scans and added a separate
+filter action. That left unnecessary choices in the UI and separate collections
+for different query relationships. It did not match the requested simple model.
 
-Existing tests asserted several of these old behaviors, so passing them did
-not protect the intended workflow.
+## Final behavior
 
-## Changes
+All platforms now have one Search action. It checks the entire retained pool,
+shows current matches, then searches for more. Every loaded or discovered seed
+joins the pool, including imports and partial results from cancelled or failed
+scans. Only Clear results discards it. Hidden seeds remain available to all
+future queries.
 
-- Refinement keeps the original automatic selection rules through filtering,
-  continued scanning, repeated refinements, and Android process recovery.
-  Added requirements can change a fresh search's ranking without preventing
-  refinement under the original ranking.
-- A previously unnecessary trinket is reapplied before testing the refined
-  query. Successful matches get the normal no-trinket cleanup. A failure in
-  the selected world is accepted; there is no plain-world fallback to rescue
-  it. This preserves the initial search's accepted tradeoff.
-- Search checks saved results, then scans toward 1,024 unique results. Imports
-  have explicitly unknown coverage and begin a fresh traversal after filtering.
-  Known exhausted ranges remain exhausted. A full list can still request
-  another batch, preserving the existing accumulating-search behavior.
-- Every graphical platform has **Filter loaded seeds** for an intentional
-  filter without scanning, including unrelated queries. Filtering B over a
-  saved A list finds their intersection within that list. The full original
-  list remains available for subsequent filters.
+The related/unrelated classification, containment proofs, routing modes, bridge
+APIs, separate filter buttons, and special scan-selection envelope are removed.
+Only an unchanged query resumes its previous cursor; query edits scan afresh.
+This trades coverage reuse across edits for predictable behavior without
+relationship inference.
 
-The engine separates ordinary freshly ranked continuation from containment
-under a preserved selection policy. Native and browser execution use the same
-prepared policy and authoritative matcher. Frontends retain the source query
-separately from the current query, rather than changing the user's editor.
+Each saved seed retains its original recipe and source query. A removed
+automatic trinket is reapplied before testing, without predicting whether it
+will help. Misses in that world are accepted. Successful matches get the usual
+no-trinket cleanup. New scans use the current query and record it as the source
+of newly discovered seeds.
 
-## Validation and limits
+## Verification and remaining limits
 
-Regression tests cover the armor/ranking change, reapplying a removed trinket,
-accepted misses without a plain-world retry, native/browser execution parity,
-imported scans, unrelated filtering, duplicate results at the limit, repeated
-refinements, and Android checkpoint recovery.
+Regression coverage checks the full pool across different queries and imports,
+recovery of hidden matches, retention after failure/cancellation, original
+trinket sources, unchanged-query resume, duplicate result quotas, and Android
+checkpoint recovery. Tests of the removed relationship APIs were replaced by
+these behavioral checks. Validation:
 
-- Shared Rust engine and bridges: 704 tests passed; Clippy passed.
-- Web: 286 tests passed; type checking, lint, and production build passed.
-- Windows: 262 tests passed; the full WinUI build passed.
-- Android: 42 targeted tests passed; debug lint passed.
-- Linux: 126 tests passed; Clippy passed in Fedora 44 with the required GTK
-  and libadwaita versions.
-- macOS: implementation and regression tests updated, but not run because
-  this environment has no macOS runner.
+- Android: all 259 JVM tests and debug lint passed, including real host JNI tests.
+- Web: all 265 tests, type/lint checks, and the production build passed with rebuilt WASM.
+- Windows: all 241 tests and the application build passed.
+- Linux: all 124 enabled tests and strict Clippy checks passed (three tests remain ignored).
+- Shared Rust core, session, FFI, and WASM tests passed; strict Clippy checks also
+  cover the JNI bridge.
 
-The Rust and Linux suites retained 13 and 3 pre-existing ignored tests,
-respectively. No Android APK was built as part of this change.
-
-The result-file format has not changed. Non-null trinket recipes replay exactly.
-The original selection query is retained within a session (and Android's
-private checkpoint), but is not included in exported files. After exporting a
-refined query and importing it into a new session, a null recipe uses the
-exported query's policy when automatic selection is reapplied.
-
-Search remains heuristic: preserving automatic choices deliberately accepts
-their misses. Cancellation, impossible queries, and exhausted coverage can
-stop below the display limit. As before, mixed refinements do not claim an
-exhaustive enumeration of every earlier, broader query.
+macOS needs a macOS runner for its application build and tests. No Android APK
+was built. The results-file schema is unchanged: exported matches retain their
+recipes, but private source queries are not exported. A null recipe reimported
+later uses the exported query's automatic selection policy.

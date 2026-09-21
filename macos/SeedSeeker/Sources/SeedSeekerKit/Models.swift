@@ -700,28 +700,6 @@ extension SearchRequest {
     public init(from decoder: Decoder) throws {
         self = try SavedQuery(from: decoder).searchRequest()
     }
-
-    /// Whether this request refines `base`: an identical floor limit and
-    /// challenge set, world conditions (the blacksmith settings and
-    /// the Wandmaker filter) at least as strict as `base`'s, plus, for every base
-    /// requirement, a distinct requirement of this request at least as strict
-    /// — equal, added-to, or strengthened (a named item, a tightened bound).
-    ///
-    /// Equality qualifies deliberately: restarting an unchanged query must
-    /// continue the session — the filter keeps every seed and the scan resumes
-    /// where it stopped — rather than throw the results away and rescan.
-    ///
-    /// The rule itself is the engine's (`SearchQuery::continues`, bridged as
-    /// `seedfinder_query_continues`): both queries go over the same canonical
-    /// JSON document the search takes, so refine eligibility is decided once
-    /// for every platform instead of being re-derived here. Row identity
-    /// (`key`) drops out for free — it is not part of the document. A query
-    /// that cannot be encoded continues nothing.
-    public func isRefinement(of base: SearchRequest) -> Bool {
-        guard let candidate = try? QueryDocument.encode(self),
-              let encodedBase = try? QueryDocument.encode(base) else { return false }
-        return QueryContinuation.continues(candidate, base: encodedBase)
-    }
 }
 
 /// Where a follow-up search must pick up to complete a stopped session's

@@ -62,7 +62,6 @@ export function QueryPanel({
   running,
   engineReady,
   onToggleSearch,
-  onFilterLoadedSeeds,
   isMac,
   shareNotice,
   onDismissShareNotice,
@@ -72,7 +71,6 @@ export function QueryPanel({
   running: boolean;
   engineReady: boolean;
   onToggleSearch: () => void;
-  onFilterLoadedSeeds?: () => void;
   isMac: boolean;
   shareNotice: string | undefined;
   onDismissShareNotice: () => void;
@@ -643,16 +641,6 @@ export function QueryPanel({
             <ReturnIcon size={13} />
           </kbd>
         </button>
-        {onFilterLoadedSeeds && !running && (
-          <button
-            type="button"
-            className="d1-btn"
-            disabled={startDisabled}
-            onClick={onFilterLoadedSeeds}
-          >
-            Filter loaded seeds
-          </button>
-        )}
       </div>
 
       {editor && (
