@@ -1192,6 +1192,33 @@ mod tests {
     }
 
     #[test]
+    fn native_refinement_keeps_early_resin_donor_blanket_witnesses() {
+        let mut query = decode_query(include_bytes!(
+            "../../seedfinder-core/tests/fixtures/resin-blanket-floor.json"
+        ))
+        .unwrap();
+        let recipe = SeedRecipe {
+            seed: DungeonSeed::from_code("AAA-CAJ-QCN").unwrap(),
+            trinket: Some(shpd_seedfinder_core::catalog::ItemId::MimicTooth),
+        };
+        let mut base = query.clone();
+        base.requirements.last_mut().unwrap().max_depth = None;
+        for cap in [None, Some(4), Some(2)] {
+            query.requirements.last_mut().unwrap().max_depth = cap;
+            let found = filter_matching_recipes(&query, &base, &[recipe]).unwrap();
+            assert_eq!(found.len(), 1, "cap={cap:?}");
+            assert_eq!(found[0].recipe, recipe);
+            assert!(query.matches(&found[0].world));
+        }
+        query.requirements.last_mut().unwrap().max_depth = Some(1);
+        assert!(
+            filter_matching_recipes(&query, &base, &[recipe])
+                .unwrap()
+                .is_empty()
+        );
+    }
+
+    #[test]
     fn native_refinement_obeys_current_trinket_requirements() {
         // False positives from the macOS/Android report: each offers
         // Resin, but only its saved Tooth/Spyglass world satisfies the loot.

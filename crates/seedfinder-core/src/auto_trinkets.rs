@@ -590,7 +590,7 @@ mod tests {
     }
 
     #[test]
-    fn adding_armor_to_auto_resin_query_keeps_items_but_can_change_world_policy() {
+    fn adding_glyphed_armor_to_auto_resin_query_keeps_items_but_can_change_world_policy() {
         let mut base = json_query::decode(
             r#"{"max_depth":24,"exclude_blacksmith_rewards":true,"arcane_resin":"auto",
                 "requirements":[
@@ -603,7 +603,7 @@ mod tests {
         )
         .unwrap();
         let armor = json_query::decode(
-            r#"{"requirements":[{"kind":"armor","tier":{"at_most":3},"upgrade":3}]}"#,
+            r#"{"requirements":[{"kind":"armor","tier":{"at_most":3},"upgrade":3,"effect":"Brimstone"}]}"#,
         )
         .unwrap()
         .requirements[0];

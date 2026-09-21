@@ -2,6 +2,7 @@
 
 mod resin;
 pub use resin::ArcaneResinFilter;
+pub(crate) use resin::donor_requirement as resin_donor_requirement;
 pub(crate) use resin::upgrade_cost as resin_upgrade_cost;
 
 use std::collections::BTreeMap;
@@ -292,7 +293,7 @@ pub struct Requirement {
     pub require_uncursed: bool,
     /// Choose this offer (or its unique matching OR alternative) at +3 after brewing.
     pub select_trinket: bool,
-    /// Extra predicate on an item assigned to an ordinary requirement.
+    /// Extra predicate on an ordinary assigned item or a selected resin donor.
     /// Blanket slots may reuse that item and never consume another occurrence.
     pub blanket: bool,
     pub source: Option<ItemSource>,
@@ -646,7 +647,8 @@ impl SearchQuery {
     /// one alternative group share a slot, in first-appearance order. Every
     /// other requirement is a slot of its own. A world matches when every
     /// ordinary slot is filled by a distinct item matching one of its members;
-    /// blanket slots constrain that same assignment without consuming items.
+    /// blanket slots constrain that assignment and its resin donors without
+    /// consuming extra items.
     #[must_use]
     pub fn slots(&self) -> Vec<Vec<usize>> {
         let mut slot_of_group: BTreeMap<u8, usize> = BTreeMap::new();
@@ -675,7 +677,7 @@ impl SearchQuery {
             .collect()
     }
 
-    /// Extra conditions evaluated against the ordinary assignment.
+    /// Extra conditions evaluated against the assignment and its resin donors.
     #[must_use]
     pub fn blanket_slots(&self) -> Vec<Vec<usize>> {
         self.slots()
@@ -901,15 +903,20 @@ impl<'query> Assignment<'query> {
 
     /// Depth-first assignment requiring every mandatory slot to hold a
     /// distinct item, every combined-level group to reach its total, and
-    /// every blanket to match at least one of the assigned items.
+    /// every blanket to match an assigned item or a selected resin donor.
     fn fills_every_slot(&mut self, slot: usize) -> bool {
         if slot == self.slots.len() {
             return self.level_sums_satisfied()
-                && self.resin_selection().is_some()
                 && self
-                    .blankets
-                    .iter()
-                    .all(|indices| indices.iter().any(|&index| self.used[index]));
+                    .resin
+                    .select_with_blankets(
+                        self.items,
+                        &self.used,
+                        &self.scenarios,
+                        &self.blankets,
+                        true,
+                    )
+                    .is_some();
         }
         // Supply only shrinks and Auto's cost only grows as slots claim items.
         if self.resin.enabled() && self.resin_selection().is_none() {
@@ -1136,19 +1143,38 @@ impl BestSubset<'_> {
                     Some(_) => {}
                 }
             }
+            if self.assignment.resin.enabled() {
+                // An item assigned to an incomplete combined-level group
+                // remains reserved but cannot witness a Scout blanket.
+                let blankets: Vec<_> = self
+                    .assignment
+                    .blankets
+                    .iter()
+                    .map(|indices| {
+                        indices
+                            .iter()
+                            .copied()
+                            .filter(|&index| !self.assignment.used[index] || items.contains(&index))
+                            .collect()
+                    })
+                    .collect();
+                if let Some(resin_items) = self.assignment.resin.select_with_blankets(
+                    self.assignment.items,
+                    &self.assignment.used,
+                    &self.assignment.scenarios,
+                    &blankets,
+                    false,
+                ) {
+                    conditions += 1;
+                    items.extend(resin_items);
+                }
+            }
             conditions += self
                 .assignment
                 .blankets
                 .iter()
                 .filter(|indices| indices.iter().any(|index| items.contains(index)))
                 .count();
-
-            if self.assignment.resin.enabled()
-                && let Some(resin_items) = self.assignment.resin_selection()
-            {
-                conditions += 1;
-                items.extend(resin_items);
-            }
             if conditions > self.best_conditions {
                 self.best_conditions = conditions;
                 self.best = items;

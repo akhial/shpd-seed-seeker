@@ -414,7 +414,8 @@ export function QueryPanel({
                         <span>
                           Add the items you need under Requirements, then add extra filters here.
                           Each blanket must match at least one item fulfilling your requirements
-                          above. It does not require another item.
+                          above, including wands contributing Arcane Resin. It does not require
+                          another item.
                         </span>
                         <span>
                           Choose Any item in a category to let any of your required items in that

@@ -228,8 +228,10 @@ files are replaced. The output options cannot be combined with `--benchmark`.
 
 In any app, add the items you need under **Requirements**, then add an
 extra filter under **Blanket Requirements**. Each blanket must match at least
-one of the items chosen to fulfill the ordinary requirements. It does not ask
-for an additional item. Separate blankets may be satisfied by the same item
+one of the items chosen to fulfill the ordinary requirements or supply Arcane
+Resin. Donor witnesses obey the resin donor filters as well as the blanket's
+filters; Auto does not add their upgrade cost. A blanket does not ask for an
+additional item. Separate blankets may be satisfied by the same item
 or different chosen items; filters within one blanket apply to the same item.
 
 For Lightning, Disintegration, and Frost at +2 or higher, with one of those
@@ -246,18 +248,21 @@ three supplied by the Wandmaker at +3:
 }
 ```
 
-An unrelated +3 wand does not satisfy this blanket. Either/or alternatives
-are supported within the blanket section. Blankets use the usual source,
+An unrelated +3 wand does not satisfy this blanket unless it supplies required
+Arcane Resin. Either/or alternatives are supported within the blanket section.
+Blankets use the usual source,
 upgrade, effect, uncursed, tier, and floor filters, but do not request stacks,
 combined levels, or trinket selection. At least one ordinary requirement is
 required. Saved queries, results files, and share links preserve blankets;
 blanket share links use format 9 and require an app that supports it.
 
-The probability estimate intersects blanket filters with the ordinary item
-filters and considers their possible witnesses. Overlap between those ways
-is approximated conditional on the ordinary query, so a blanket never raises
-the estimate above the ordinary query's rate. Existing approximations for
-alternatives, combined levels, and item supply still apply. Queries with more
+The probability estimate intersects blanket filters with ordinary item and
+resin donor filters and considers their possible witnesses. Donor witnesses
+contribute resin once, can satisfy several blankets, and add no Auto upgrade
+cost. Auto donor witnesses require a reserved wand below +3. Overlap between
+those ways is approximated conditional on the ordinary query, so a blanket
+never raises the estimate above the ordinary query's rate. Existing
+approximations for alternatives, combined levels, and item supply still apply. Queries with more
 than 128 intermediate witness combinations show an unavailable estimate.
 The estimate is also unavailable when the combined-level approximation drops
 an optional member needed to witness a blanket.

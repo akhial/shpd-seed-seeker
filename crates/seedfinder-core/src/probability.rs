@@ -68,6 +68,7 @@
 //! wanting three alike. Those approximations read low.
 
 mod artifacts;
+mod blankets;
 mod cache;
 mod coverage;
 mod resin;
@@ -99,7 +100,8 @@ use crate::quests::WandmakerQuestType;
 /// Estimates the fraction of seeds satisfying a query.
 ///
 /// The result is fixed for a search: observed results never feed back into it.
-/// Returns `NaN` for trinket filters without a measured distribution.
+/// Returns `NaN` for filters the supply model cannot estimate or witness
+/// assignments exceeding its bounded work budget.
 ///
 /// Alternative groups are approximated by their most plentiful member — a
 /// pessimistic simplification, since any member can satisfy the group.
@@ -124,7 +126,7 @@ pub fn estimate_match_probability(query: &SearchQuery) -> f64 {
 
 pub(crate) fn equipment_probability(query: &SearchQuery, profile: Profile) -> f64 {
     if query.requirements.iter().any(|r| r.blanket) {
-        return blanket_probability(query, profile);
+        return blankets::probability(query, profile);
     }
     if query.needs_resin() {
         return resin::probability(query, profile);
@@ -172,174 +174,6 @@ pub(crate) fn equipment_probability(query: &SearchQuery, profile: Profile) -> f6
     } else {
         probability.min(1.0)
     }
-}
-
-/// A blanket constrains one of the ordinary items, not another supply slot.
-/// Expand its possible witnesses by intersecting the filters on those items.
-/// The existing estimates of alternatives and level sums still apply to the
-/// ordinary query. Union the witness estimates conditional on that query:
-/// this approximates overlaps, stays between the largest branch and their sum,
-/// and can never make a stricter query more likely than its ordinary base.
-fn blanket_probability(query: &SearchQuery, profile: Profile) -> f64 {
-    let ordinary = SearchQuery {
-        requirements: query
-            .requirements
-            .iter()
-            .filter(|r| !r.blanket)
-            .copied()
-            .collect(),
-        ..query.clone()
-    };
-    let base = equipment_probability(&ordinary, profile);
-    if base <= 0.0 || !base.is_finite() {
-        return base;
-    }
-    // Preserve ordinary alternatives until blanket intersections have been
-    // considered: the otherwise most plentiful alternative might be the one
-    // a blanket rules out entirely.
-    let Some(variants) = ordinary_variants(&ordinary) else {
-        return f64::NAN;
-    };
-    let mut branches: Vec<_> = variants
-        .into_iter()
-        .map(|requirements| {
-            let variant = SearchQuery {
-                requirements,
-                ..ordinary.clone()
-            };
-            filters(
-                &variant,
-                &effective_requirements(&variant, profile),
-                None,
-                &[],
-                profile,
-            )
-        })
-        .collect();
-    // Donors compete for the same supply, including single-choice quest
-    // prizes, but only ordinary assignments may witness a blanket.
-    let chance = |branch: &[Predicate]| {
-        let mut ordered = branch.to_vec();
-        sort_filters(&mut ordered);
-        let baseline = matching_chance(&ordered);
-        if query.needs_resin() {
-            resin::with_resin(query, profile, &ordered, baseline)
-        } else {
-            baseline
-        }
-    };
-    let unconstrained = branches
-        .iter()
-        .map(|branch| chance(branch))
-        .fold(0.0_f64, f64::max);
-    if unconstrained <= 0.0 {
-        return 0.0;
-    }
-    let mut estimate = base;
-    for slot in query.blanket_slots() {
-        let mut next: Vec<Vec<Predicate>> = Vec::new();
-        for branch in &branches {
-            for &member in &slot {
-                let requirement = query.requirements[member];
-                let blanket = Predicate::of(requirement, None)
-                    .within(query, &requirement)
-                    .with_profile(profile);
-                for (index, &predicate) in branch.iter().enumerate() {
-                    let Some(intersection) = predicate.intersect(blanket) else {
-                        continue;
-                    };
-                    let mut narrowed = branch.clone();
-                    narrowed[index] = intersection;
-                    // Broad branches already include stricter ones. In
-                    // particular a redundant blanket leaves exactly the base.
-                    if next
-                        .iter()
-                        .any(|kept| predicate_branch_covers(kept, &narrowed))
-                    {
-                        continue;
-                    }
-                    next.retain(|kept| !predicate_branch_covers(&narrowed, kept));
-                    next.push(narrowed);
-                    // Estimation must stay responsive even for adversarial
-                    // queries; unknown is safer than dropping constraints.
-                    if next.len() > 128 {
-                        return f64::NAN;
-                    }
-                }
-            }
-        }
-        branches = next;
-        let missed = branches.iter().fold(1.0, |missed, branch| {
-            missed * (1.0 - (chance(branch) / unconstrained).clamp(0.0, 1.0))
-        });
-        estimate = estimate.min(base * (1.0 - missed));
-    }
-    // The existing sum approximation can drop an optional member a blanket
-    // needs. A zero from that reduced model does not establish impossibility.
-    if estimate <= 0.0 && !ordinary.level_sum_groups().is_empty() {
-        return f64::NAN;
-    }
-    estimate.clamp(0.0, base)
-}
-
-/// Alternative choices before blanket filtering, with an explicit work cap.
-fn ordinary_variants(query: &SearchQuery) -> Option<Vec<Vec<Requirement>>> {
-    let mut variants = vec![Vec::new()];
-    for slot in query.slots() {
-        if variants.len() * slot.len() > 128 {
-            return None;
-        }
-        variants = variants
-            .into_iter()
-            .flat_map(|chosen| {
-                slot.iter().map(move |&index| {
-                    let mut chosen = chosen.clone();
-                    chosen.push(Requirement {
-                        alternative_group: None,
-                        ..query.requirements[index]
-                    });
-                    chosen
-                })
-            })
-            .collect();
-    }
-    Some(variants)
-}
-
-/// A sufficient implication test, also identifying permutations of identical
-/// copies so they cannot be counted as separate ways to satisfy a blanket.
-fn predicate_branch_covers(broad: &[Predicate], narrow: &[Predicate]) -> bool {
-    fn cover(
-        broad: &[Predicate],
-        narrow: &[Predicate],
-        owners: &mut [Option<usize>],
-        visited: &mut [bool],
-        index: usize,
-    ) -> bool {
-        for (candidate, &predicate) in narrow.iter().enumerate() {
-            if !visited[candidate] && predicate.intersect(broad[index]) == Some(predicate) {
-                visited[candidate] = true;
-                if owners[candidate]
-                    .is_none_or(|owner| cover(broad, narrow, owners, visited, owner))
-                {
-                    owners[candidate] = Some(index);
-                    return true;
-                }
-            }
-        }
-        false
-    }
-    let mut owners = vec![None; narrow.len()];
-    broad.len() == narrow.len()
-        && (0..broad.len()).all(|index| {
-            cover(
-                broad,
-                narrow,
-                &mut owners,
-                &mut vec![false; narrow.len()],
-                index,
-            )
-        })
 }
 
 /// Average over the 2,380 equally likely four-card subsets of the private

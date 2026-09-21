@@ -559,14 +559,22 @@ fn closed_multiplicities(slots: &[Vec<RequirementPlan>]) -> Vec<(usize, usize)> 
     groups
 }
 
-/// A blanket can only be witnessed by an item assigned to an ordinary slot.
+/// A blanket needs an ordinary assigned item or an eligible resin donor.
 /// Keep every possible ordinary alternative (including optional sum members),
 /// but require all filters on each candidate witness to hold on the same item.
 /// Catalog identities make tier/category intersections exact even when the
 /// intersection of two tier bounds cannot be expressed as one tier filter.
 fn blanket_witnesses(query: &SearchQuery, blanket: Requirement) -> Vec<Requirement> {
     let mut witnesses = Vec::new();
-    for ordinary in query.requirements.iter().filter(|r| !r.blanket) {
+    let donor = query
+        .needs_resin()
+        .then(|| crate::query::resin_donor_requirement(query));
+    for ordinary in query
+        .requirements
+        .iter()
+        .filter(|r| !r.blanket)
+        .chain(donor.iter())
+    {
         if ordinary.kind != blanket.kind {
             continue;
         }
@@ -898,8 +906,8 @@ impl QueryPlan {
             if live == 0 {
                 return false;
             }
-            // Blankets still need a feasible source, but reuse an ordinary
-            // slot's prize and must not consume a second quest reward.
+            // Blankets still need a feasible source, but may reuse an ordinary
+            // prize or a resin donor and do not consume another quest reward.
             if !slot[0].requirement.blanket {
                 quest_only[usize::from(live)] += 1;
             }

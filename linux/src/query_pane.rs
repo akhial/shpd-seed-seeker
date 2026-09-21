@@ -177,7 +177,7 @@ impl QueryPane {
             .title("Blanket Requirements")
             .build();
         let help = gtk::Label::builder().label(
-            "Each blanket must match at least one item fulfilling your ordinary requirements, without asking for an additional item. All filters in one blanket apply to the same item; separate blankets can match the same or different chosen items.\n\nFor example, require Lightning, Disintegration, and Frost at +2 or higher, then add an Any wand blanket at exactly +3 from the Wandmaker.")
+            "Each blanket must match at least one item fulfilling your ordinary requirements or contributing Arcane Resin, without asking for an additional item. All filters in one blanket apply to the same item; separate blankets can match the same or different chosen items.\n\nFor example, require Lightning, Disintegration, and Frost at +2 or higher, then add an Any wand blanket at exactly +3 from the Wandmaker.")
             .wrap(true).max_width_chars(42).xalign(0.0).margin_start(12).margin_end(12).margin_top(12).margin_bottom(12).build();
         let help_popover = gtk::Popover::builder().child(&help).build();
         let help_button = gtk::MenuButton::builder()

@@ -371,28 +371,61 @@ fn score(
         .keys()
         .filter(|group| satisfied(**group))
         .count();
-    let blankets = query
+    let witnesses: Vec<_> = chosen
+        .iter()
+        .flatten()
+        .filter(|(member, _)| {
+            query.requirements[*member]
+                .level_sum
+                .is_none_or(|sum| satisfied(sum.group))
+        })
+        .map(|&(_, index)| index)
+        .collect();
+    let blankets = blanket_score(query, world, &witnesses, 0);
+    let with_resin = resin_score(query, world, &used, &scenarios, &witnesses);
+    Some(plain + groups + blankets.max(with_resin))
+}
+
+fn blanket_score(
+    query: &SearchQuery,
+    world: &GeneratedWorld,
+    witnesses: &[usize],
+    donors: u64,
+) -> usize {
+    query
         .blanket_slots()
         .iter()
         .filter(|slot| {
             slot.iter().any(|&member| {
                 let requirement = query.requirements[member];
-                chosen.iter().flatten().any(|&(ordinary, index)| {
-                    query.requirements[ordinary]
-                        .level_sum
-                        .is_none_or(|sum| satisfied(sum.group))
-                        && world.items[index].depth
-                            <= requirement.max_depth.unwrap_or(query.max_depth)
-                        && requirement.matches(&world.items[index])
+                world.items.iter().enumerate().any(|(index, item)| {
+                    (witnesses.contains(&index) || donors & (1 << index) != 0)
+                        && item.depth <= requirement.max_depth.unwrap_or(query.max_depth)
+                        && requirement.matches(item)
                 })
             })
         })
-        .count();
-    let minimum = required_resin(query, world, &used);
-    let resin = query.needs_resin()
-        && (0..(1_u64 << world.items.len())).any(|subset| {
+        .count()
+}
+
+fn resin_score(
+    query: &SearchQuery,
+    world: &GeneratedWorld,
+    used: &[bool],
+    scenarios: &BTreeMap<u16, u64>,
+    witnesses: &[usize],
+) -> usize {
+    if !query.needs_resin() {
+        return 0;
+    }
+    let minimum = required_resin(query, world, used);
+    (0..(1_u64 << world.items.len()))
+        .filter_map(|subset| {
             // Exhaustively try every surplus subset, independently of the
-            // production matcher's per-scenario maximum calculation.
+            // production matcher's blanket witnesses and scenario maximization.
+            if minimum == 0 && subset != 0 {
+                return None;
+            }
             let mut compatible = scenarios.clone();
             let mut total = 0;
             for (index, candidate) in world.items.iter().enumerate() {
@@ -401,25 +434,34 @@ fn score(
                 }
                 if used[index]
                     || item(candidate.item).kind != ItemKind::Wand
-                    || candidate.cursed
+                    || (query.arcane_resin_filter.uncursed && candidate.cursed)
                     || candidate.depth > query.max_depth
+                    || query
+                        .arcane_resin_filter
+                        .max_depth
+                        .is_some_and(|depth| candidate.depth > depth)
+                    || query
+                        .arcane_resin_filter
+                        .source
+                        .is_some_and(|source| candidate.source != source)
                     || (query.exclude_blacksmith_rewards
                         && candidate.source == ItemSource::BlacksmithReward)
                 {
-                    return false;
+                    return None;
                 }
                 if let Some((group, mask)) = candidate.accessibility.scenario_constraint() {
                     let remaining = compatible.entry(group).or_insert(u64::MAX);
                     *remaining &= mask;
                     if *remaining == 0 {
-                        return false;
+                        return None;
                     }
                 }
                 total += 2 * (u16::from(candidate.upgrade) + 1);
             }
-            total >= minimum
-        });
-    Some(plain + groups + blankets + usize::from(resin))
+            (total >= minimum).then(|| 1 + blanket_score(query, world, witnesses, subset))
+        })
+        .max()
+        .unwrap_or(0)
 }
 
 fn best_partial(

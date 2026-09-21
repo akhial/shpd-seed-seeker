@@ -106,7 +106,8 @@ It is decoded by `crates/seedfinder-core/src/json_query.rs`:
     being a placement bound rather than an item property),
   - `max_depth` — integer 1–24,
   - `blanket` — optional boolean, default false. When true, this condition must
-    match an item assigned to an ordinary requirement and consumes no extra
+    match an item assigned to an ordinary requirement or selected as an Arcane
+    Resin donor and consumes no extra
     item. An `any_of` group must contain either all blankets or all ordinary
     requirements. Blankets cannot carry `identity_group`, `level_sum`, or
     `select_trinket: true`; every query needs an ordinary requirement.

@@ -1,0 +1,18 @@
+{
+  "max_depth": 22,
+  "auto_apply_trinket": true,
+  "exclude_blacksmith_rewards": true,
+  "arcane_resin": "auto",
+  "requirements": [
+    { "item": "wand_disintegration" },
+    { "item": "wand_lightning" },
+    { "item": "wand_prismatic_light" },
+    { "item": "ring_energy", "level_sum": { "group": 1, "at_least": 5 } },
+    { "item": "ring_energy", "level_sum": { "group": 1, "at_least": 5 } },
+    { "item": "ring_energy", "level_sum": { "group": 1, "at_least": 5 } },
+    { "item": "chalice_of_blood" },
+    { "item": "horn_of_plenty" },
+    { "item": "mail_armor", "upgrade": 3, "max_depth": 7 },
+    { "kind": "wand", "upgrade": 2, "blanket": true, "max_depth": 4 }
+  ]
+}

@@ -1,5 +1,6 @@
 //! Joint supply and resin-balance estimate. Each item is spent once: on the
-//! scarcest outstanding ordinary requirement it covers, or as surplus resin.
+//! scarcest outstanding reservation or donor witness it covers, or as surplus
+//! resin. Donor witnesses contribute yield without adding upgrade costs.
 //! Upgrade outcomes are integrated in one pass, including mixed upgrades.
 //! As in the equipment model, supply counts use the measured variance and
 //! quest offers form one mutually exclusive choice, never independent donors.
@@ -13,12 +14,9 @@ use super::{
 use crate::{
     catalog::ItemKind,
     probability_tables::{
-        DEPTHS, LINES_ORDER, PRIZE_GROUPS, Supply, prize_group, source_index, spread_index,
+        DEPTHS, LINES_ORDER, Line, PRIZE_GROUPS, Supply, prize_group, source_index, spread_index,
     },
-    query::{
-        EffectRequirement, Requirement, SearchQuery, TierRequirement, UpgradeRequirement,
-        resin_upgrade_cost,
-    },
+    query::{SearchQuery, resin_donor_requirement as donor_requirement, resin_upgrade_cost},
 };
 
 pub(super) fn probability(query: &SearchQuery, profile: Profile) -> f64 {
@@ -40,34 +38,17 @@ pub(super) fn probability(query: &SearchQuery, profile: Profile) -> f64 {
         &[],
         profile,
     );
-    with_resin(query, profile, &ordered, baseline)
-}
-
-fn donor_requirement(query: &SearchQuery) -> Requirement {
-    Requirement {
-        kind: ItemKind::Wand,
-        weapon_category: None,
-        item: None,
-        tier: TierRequirement::Any,
-        upgrade: UpgradeRequirement::Any,
-        effect: EffectRequirement::Any,
-        require_uncursed: query.arcane_resin_filter.uncursed,
-        select_trinket: false,
-        blanket: false,
-        source: query.arcane_resin_filter.source,
-        identity_group: None,
-        max_depth: query.arcane_resin_filter.max_depth,
-        alternative_group: None,
-        level_sum: None,
-    }
+    with_resin(query, profile, &ordered, &[], baseline)
 }
 
 /// Apply resin to an ordinary assignment, after any blanket intersections.
-/// Donors are separate filters: they cannot witness blankets or add Auto cost.
+/// Witness donors occupy their own supply slots, contribute resin once and
+/// add no Auto cost. Ordinary reservations cannot donate their resin.
 pub(super) fn with_resin(
     query: &SearchQuery,
     profile: Profile,
     ordered: &[Predicate],
+    witnesses: &[Predicate],
     baseline: f64,
 ) -> f64 {
     if !baseline.is_finite() {
@@ -81,7 +62,7 @@ pub(super) fn with_resin(
             .iter()
             .all(|p| p.kind != ItemKind::Wand || p.upgrades.trailing_zeros() >= 3)
     {
-        return baseline;
+        return if witnesses.is_empty() { baseline } else { 0.0 };
     }
     let donor = donor_requirement(query);
     let donor = Predicate::of(donor, None)
@@ -98,6 +79,9 @@ pub(super) fn with_resin(
         return 0.0;
     }
     if !query.arcane_resin_auto && query.arcane_resin <= 2 {
+        if !witnesses.is_empty() {
+            return baseline;
+        }
         let mut allocated = ordered.to_vec();
         allocated.push(donor);
         super::sort_filters(&mut allocated);
@@ -106,8 +90,8 @@ pub(super) fn with_resin(
                 .clamp(0.0, 1.0);
     }
     baseline
-        * super::cache::resin(ordered, donor, query, || {
-            conditional_probability(query, profile, ordered, donor)
+        * super::cache::resin(ordered, witnesses, donor, query, || {
+            conditional_probability(query, profile, ordered, witnesses, donor)
         })
 }
 
@@ -115,15 +99,29 @@ fn conditional_probability(
     query: &SearchQuery,
     profile: Profile,
     ordered: &[Predicate],
+    witnesses: &[Predicate],
     donor: Predicate,
 ) -> f64 {
+    let mut allocated: Vec<_> = ordered
+        .iter()
+        .map(|p| (*p, false))
+        .chain(witnesses.iter().map(|p| (*p, true)))
+        .collect();
+    allocated
+        .sort_by(|(left, _), (right, _)| expected_slots(left).total_cmp(&expected_slots(right)));
     let mut predicates = Vec::new();
+    let mut donors = Vec::new();
     let mut wanted = Vec::new();
-    for p in ordered {
-        if let Some(index) = predicates.iter().position(|held| held == p) {
+    for &(p, is_donor) in &allocated {
+        if let Some(index) = predicates
+            .iter()
+            .zip(&donors)
+            .position(|(held, donor)| *held == p && *donor == is_donor)
+        {
             wanted[index] += 1;
         } else {
-            predicates.push(*p);
+            predicates.push(p);
+            donors.push(is_donor);
             wanted.push(1);
         }
     }
@@ -141,8 +139,10 @@ fn conditional_probability(
         slots,
         wands: predicates
             .iter()
-            .map(|p| p.kind == ItemKind::Wand)
+            .zip(&donors)
+            .map(|(p, is_donor)| !is_donor && p.kind == ItemKind::Wand)
             .collect(),
+        donors,
     };
     predicates.push(donor);
     let shared = Coverages::of(&predicates);
@@ -151,7 +151,7 @@ fn conditional_probability(
         .collect();
     let mut states = BTreeMap::from([(
         State {
-            held: vec![EMPTY; ordered.len()].into_boxed_slice(),
+            held: vec![EMPTY; allocated.len()].into_boxed_slice(),
             balance: if model.auto {
                 0
             } else {
@@ -166,7 +166,8 @@ fn conditional_probability(
         covers,
     };
     states = supply.prizes(&model, profile, query.max_depth, states);
-    states = supply.open(&model, profile, ordered, states);
+    let allocated: Vec<_> = allocated.into_iter().map(|(p, _)| p).collect();
+    states = supply.open(&model, profile, &allocated, states);
     let mut ordinary_mass = 0.0;
     let mut resin_mass = 0.0;
     for (state, mass) in states {
@@ -253,7 +254,10 @@ impl SupplyPlan {
                     .collect::<Vec<_>>(),
             )
             .is_none();
-            for line in LINES_ORDER {
+            for line in LINES_ORDER
+                .into_iter()
+                .filter(|line| kind == ItemKind::Weapon || *line == Line::Plain)
+            {
                 for (from, until) in super::stretches(&limits) {
                     let mut placed = 0.0;
                     let mut offers = Vec::new();
@@ -312,7 +316,39 @@ impl SupplyPlan {
                             states = model.draw(states, &offers);
                         }
                     }
+                    if kind != ItemKind::Weapon {
+                        states = self.condition_on_closed_slots(model, kind, until, states);
+                    }
                 }
+            }
+            states = self.condition_on_closed_slots(model, kind, usize::MAX, states);
+        }
+        states
+    }
+
+    fn condition_on_closed_slots(
+        &self,
+        model: &Model,
+        kind: ItemKind,
+        depth: usize,
+        mut states: States,
+    ) -> States {
+        // All prizes and this family's open supply through `depth` are done.
+        // States missing a slot whose floor limit has closed can contribute to
+        // neither side of the conditional ratio. Rescale the surviving mass to
+        // preserve rare combinations and avoid carrying failed early donors
+        // through the entire dungeon. Weapons close after all generator lines.
+        states.retain(|state, _| {
+            model.slots.iter().enumerate().all(|(index, range)| {
+                self.predicates[index].kind != kind
+                    || usize::from(self.predicates[index].max_depth) > depth
+                    || state.held[range.end - 1] != EMPTY
+            })
+        });
+        let mass: f64 = states.values().sum();
+        if mass > 0.0 {
+            for probability in states.values_mut() {
+                *probability /= mass;
             }
         }
         states
@@ -342,7 +378,7 @@ fn kinds(predicates: &[Predicate]) -> Vec<ItemKind> {
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 struct Event {
-    /// Distinct ordinary predicates this item can serve, scarcest first.
+    /// Distinct reservation or donor predicates, scarcest first.
     covers: Vec<usize>,
     /// Yield if consumed, zero when it fails the donor filters.
     resin: i32,
@@ -451,7 +487,8 @@ fn offer(
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 struct State {
     /// Sorted opportunity costs in each predicate's fixed range: donor yield
-    /// plus Auto upgrade cost, or EMPTY for an outstanding requirement.
+    /// plus Auto upgrade cost for reservations, zero for consumed witnesses,
+    /// or EMPTY for an outstanding requirement.
     held: Box<[u8]>,
     /// Surplus resin less the selected wands' upgrade costs (Auto) or the
     /// fixed target. Nonnegative means the resin condition is satisfied.
@@ -461,6 +498,8 @@ struct Model {
     auto: bool,
     slots: Vec<std::ops::Range<usize>>,
     wands: Vec<bool>,
+    /// Slots whose selected item is consumed as resin and witnesses blankets.
+    donors: Vec<bool>,
 }
 type States = BTreeMap<State, f64>;
 const EMPTY: u8 = u8::MAX;
@@ -475,6 +514,7 @@ impl Model {
     }
     fn rank(&self, state: &State, event: &Event) -> (usize, i32) {
         match self.target(state, event) {
+            Some(index) if self.donors[index] => (index, -event.resin),
             Some(index) => (index, if self.auto { event.cost } else { event.resin }),
             None => (self.slots.len(), -event.resin),
         }
@@ -491,8 +531,12 @@ impl Model {
         let stored_cost = u8::try_from(cost).unwrap();
         next.balance += event.resin;
         if let Some(index) = self.target(state, event) {
-            insert_cost(&mut next.held[self.slots[index].clone()], stored_cost);
-            next.balance -= cost;
+            if self.donors[index] {
+                insert_cost(&mut next.held[self.slots[index].clone()], 0);
+            } else {
+                insert_cost(&mut next.held[self.slots[index].clone()], stored_cost);
+                next.balance -= cost;
+            }
         } else if let Some((index, previous)) = event
             .covers
             .iter()
@@ -576,11 +620,24 @@ impl Model {
     }
     fn draw(&self, states: States, offers: &[(f64, Offer)]) -> States {
         let mut next = BTreeMap::new();
-        let missed = (1.0 - offers.iter().map(|(weight, _)| weight).sum::<f64>()).max(0.0);
+        let mut missed = (1.0 - offers.iter().map(|(weight, _)| weight).sum::<f64>()).max(0.0);
+        for (weight, offer) in offers {
+            if (offer.options - 1.0).abs() < f64::EPSILON {
+                let mass: f64 = offer.outcomes.iter().map(|(_, chance)| chance).sum();
+                missed += weight * (1.0 - mass).max(0.0);
+            }
+        }
         for (state, mass) in states {
             for (weight, offer) in offers {
-                for (outcome, chance) in self.choices(&state, std::slice::from_ref(offer)) {
-                    *next.entry(outcome).or_insert(0.0) += mass * weight * chance;
+                if (offer.options - 1.0).abs() < f64::EPSILON {
+                    for (event, chance) in &offer.outcomes {
+                        *next.entry(self.take(&state, event)).or_insert(0.0) +=
+                            mass * weight * chance;
+                    }
+                } else {
+                    for (outcome, chance) in self.choices(&state, std::slice::from_ref(offer)) {
+                        *next.entry(outcome).or_insert(0.0) += mass * weight * chance;
+                    }
                 }
             }
             *next.entry(state).or_insert(0.0) += mass * missed;
@@ -631,7 +688,7 @@ fn prune(mut states: States) -> States {
     states.retain(|_, mass| *mass > STATE_FLOOR);
     if states.len() > STATE_LIMIT {
         let mut masses: Vec<_> = states.values().copied().collect();
-        masses.sort_by(|a, b| b.total_cmp(a));
+        masses.select_nth_unstable_by(STATE_LIMIT, |a, b| b.total_cmp(a));
         states.retain(|_, mass| *mass > masses[STATE_LIMIT]);
     }
     states
