@@ -1192,6 +1192,99 @@ mod tests {
     }
 
     #[test]
+    fn native_refinement_obeys_current_trinket_requirements() {
+        // False positives from the macOS/Android report: each offers
+        // Resin, but only its saved Tooth/Spyglass world satisfies the loot.
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../seedfinder-core/tests/fixtures/refinement-trinket-override.json"
+        ))
+        .unwrap();
+        let base = decode_query(fixture["base_query"].to_string().as_bytes()).unwrap();
+        let recipes: Vec<_> = fixture["recipes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|value| {
+                let seed = DungeonSeed::from_code(value["seed"].as_str().unwrap()).unwrap();
+                let trinket =
+                    shpd_seedfinder_core::results_export::decode_trinket(seed, &value["trinket"])
+                        .unwrap();
+                SeedRecipe { seed, trinket }
+            })
+            .collect();
+        let values: Vec<_> = recipes.iter().map(|recipe| recipe.seed.value()).collect();
+        let choices: Vec<_> = fixture["recipes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|value| value["trinket"].clone())
+            .collect();
+        let mut query = fixture["base_query"].clone();
+        query["requirements"]
+            .as_array_mut()
+            .unwrap()
+            .push(fixture["added_requirements"][0].clone());
+        let armor_only = decode_query(query.to_string().as_bytes()).unwrap();
+        assert_eq!(
+            filter_matching_recipes(&armor_only, &base, &recipes)
+                .unwrap()
+                .len(),
+            recipes.len()
+        );
+        query["requirements"]
+            .as_array_mut()
+            .unwrap()
+            .push(fixture["added_requirements"][1].clone());
+        for selected in [true, false] {
+            query["requirements"]
+                .as_array_mut()
+                .unwrap()
+                .last_mut()
+                .unwrap()["select_trinket"] = selected.into();
+            let request = serde_json::json!({
+                "query": query, "base_query": fixture["base_query"], "trinkets": choices
+            });
+            assert_eq!(
+                production_filter_packet(request.to_string().as_bytes(), &values).unwrap(),
+                b"SSR2\0\0",
+                "selected={selected}"
+            );
+        }
+        query["requirements"].as_array_mut().unwrap().pop();
+        query["auto_apply_trinket"] = false.into();
+        let disabled = decode_query(query.to_string().as_bytes()).unwrap();
+        assert!(
+            filter_matching_recipes(&disabled, &base, &recipes)
+                .unwrap()
+                .is_empty()
+        );
+
+        // A valid explicit choice is applied, not rejected just because the
+        // saved recipe names a different trinket (or has no trinket).
+        let explicit = decode_query(br#"{"auto_apply_trinket":true,"max_depth":24,"requirements":[{"item":"wondrous_resin","select_trinket":true}]}"#).unwrap();
+        for saved in [
+            recipes.clone(),
+            recipes
+                .iter()
+                .map(|r| SeedRecipe {
+                    trinket: None,
+                    ..*r
+                })
+                .collect(),
+        ] {
+            let matches = filter_matching_recipes(&explicit, &base, &saved).unwrap();
+            assert_eq!(matches.len(), recipes.len());
+            for found in matches {
+                assert_eq!(
+                    found.recipe.trinket,
+                    Some(shpd_seedfinder_core::catalog::ItemId::WondrousResin)
+                );
+                assert!(explicit.matches(&found.world));
+            }
+        }
+    }
+
+    #[test]
     fn native_recipe_filter_validates_envelope_and_preserves_explicit_none() {
         let request = br#"{"query":{"auto_apply_trinket":true,"max_depth":19,"requirements":[{"item":"runic_blade","upgrade":1,"effect":"Grim"}]},"base_query":{"auto_apply_trinket":true,"max_depth":19,"requirements":[{"item":"runic_blade","upgrade":1,"effect":"Grim"}]},"trinkets":[null]}"#;
         let seed = DungeonSeed::from_code("EYY-RUL-LQG").unwrap();

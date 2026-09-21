@@ -39,9 +39,13 @@ Each pool entry retains its original recipe and source query. Entries from
 different searches or imports can coexist. Verification groups seeds by their
 source query and uses the shared engine matcher:
 
-- A saved non-null recipe keeps that trinket.
-- With automatic selection enabled, a null recipe can represent a choice
-  removed as unnecessary. The engine reconstructs the original choice from
+- When the current query contains any trinket requirement, or AutoTrinket is
+  off, its explicit selection (or no selected trinket) overrides saved recipes.
+  Having a trinket in the offer deck does not make loot generated under another
+  trinket valid for the selected one. This rule lives in the shared core.
+- Otherwise, a saved non-null recipe keeps that trinket.
+- With automatic selection enabled in both queries, a null recipe can represent
+  a choice removed as unnecessary. The engine reconstructs the original choice from
   the source query and reapplies it **before testing** the current query.
 - A failure in the chosen world is accepted; it is not retried in a plain world.
   Successful matches receive the normal cleanup that removes an unnecessary

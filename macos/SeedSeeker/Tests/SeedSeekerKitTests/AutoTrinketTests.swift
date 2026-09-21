@@ -32,4 +32,20 @@ final class AutoTrinketTests: XCTestCase {
         let restored = try await engine.filterRecipes(refined, base: query, recipes: [matches[1]])
         XCTAssertEqual(restored.map(\.selectedTrinket), ["parchment_scrap"])
     }
+
+    func testCurrentTrinketRequirementsOverrideSavedAutomaticRecipes() async throws {
+        let engine = ProductionSeedFinderEngine()
+        let base = try query().searchRequest()
+        let recipes = [SeedResult(seed: "SRU-YSU-QHS", matchedRequirements: 1, selectedTrinket: "parchment_scrap")]
+        for selected in [false, true] {
+            let saved = try ResultsExport.decodeQuery(["max_depth": 19, "auto_apply_trinket": true,
+                "requirements": [["item": "runic_blade", "upgrade": 1, "effect": "Grim"],
+                                 ["item": "parchment_scrap", "select_trinket": selected]]])
+            let matches = try await engine.filterRecipes(saved.searchRequest(), base: base, recipes: recipes)
+            XCTAssertEqual(matches.map(\.selectedTrinket), selected ? ["parchment_scrap"] : [])
+        }
+        let disabled = try SearchRequest(requirements: base.requirements, maximumDepth: 19, autoApplyTrinket: false)
+        let matches = try await engine.filterRecipes(disabled, base: base, recipes: recipes)
+        XCTAssertTrue(matches.isEmpty)
+    }
 }

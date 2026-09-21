@@ -2565,12 +2565,23 @@ mod tests {
                     "refine {}/{choice}",
                     case.label
                 );
+                // These queries explicitly require Resin. User refinement
+                // follows that current selection (or none), whereas the
+                // low-level filter above deliberately forces saved worlds.
+                assert!(!auto_trinkets::enabled(query));
                 assert_eq!(
-                    refined, filtered,
-                    "named query has no automatic retry/removal"
+                    refined,
+                    multiplicity_production_records(
+                        auto_trinkets::search_batch(
+                            &generator,
+                            query,
+                            &after,
+                            &saved.iter().map(|recipe| recipe.seed).collect::<Vec<_>>()
+                        ),
+                        query
+                    ),
+                    "named query overrides saved choices"
                 );
-                // Forced or explicit Resin outcomes compare only identical
-                // selected recipes. No positive or None-world equivalence assumed.
             }
         }
         assert!(known_positives > 0 && retained_worlds >= known_positives);

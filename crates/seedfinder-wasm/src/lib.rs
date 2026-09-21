@@ -505,7 +505,7 @@ fn filter_recipes_impl(
         return Ok(to_json::<Vec<SeedOutput>>(&Vec::new()));
     }
     let generator = CanonicalMainWorldGenerator::with_challenges(query.challenges);
-    let results = if let Some(choices) = trinkets_json.filter(|_| auto_trinkets::enabled(&query)) {
+    let results = if let Some(choices) = trinkets_json {
         let values: Vec<Value> = serde_json::from_str(choices).map_err(|e| e.to_string())?;
         if values.len() != seeds.len() {
             return Err("trinkets must contain one choice per seed".to_owned());
@@ -520,8 +520,12 @@ fn filter_recipes_impl(
             .collect::<Result<Vec<_>, _>>()?;
         if let Some(base) = base {
             auto_trinkets::refine_batch(&generator, &query, &plan, &base, &recipes)
-        } else {
+        } else if auto_trinkets::enabled(&query) {
             auto_trinkets::filter_batch(&generator, &query, &plan, &recipes)
+        } else {
+            // Legacy callers without a source query cannot restore stripped
+            // choices. Explicit selections still override their saved recipe.
+            auto_trinkets::search_batch(&generator, &query, &plan, &seeds)
         }
     } else {
         auto_trinkets::search_batch(&generator, &query, &plan, &seeds)
@@ -799,6 +803,73 @@ mod tests {
         .unwrap();
         assert_eq!(result[0]["code"], seed.to_code());
         assert_eq!(result[0]["selectedTrinket"], "parchment_scrap");
+    }
+
+    #[test]
+    #[allow(clippy::cast_precision_loss)] // Dungeon seeds are below 2^53.
+    fn refinement_obeys_current_trinket_requirements() {
+        // The same reported worlds exercise both Web entry paths: recipes
+        // with their source query and legacy recipes without one.
+        let fixture: Value = serde_json::from_str(include_str!(
+            "../../seedfinder-core/tests/fixtures/refinement-trinket-override.json"
+        ))
+        .unwrap();
+        let recipes = fixture["recipes"].as_array().unwrap();
+        let seeds: Vec<_> = recipes
+            .iter()
+            .map(|r| {
+                DungeonSeed::from_code(r["seed"].as_str().unwrap())
+                    .unwrap()
+                    .value() as f64
+            })
+            .collect();
+        let choices =
+            Value::Array(recipes.iter().map(|r| r["trinket"].clone()).collect()).to_string();
+        let no_choices = Value::Array(vec![Value::Null; seeds.len()]).to_string();
+        let base = fixture["base_query"].to_string();
+        let mut query = fixture["base_query"].clone();
+        query["requirements"].as_array_mut().unwrap().extend(
+            fixture["added_requirements"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .cloned(),
+        );
+        for source in [Some(base.as_str()), None] {
+            for selected in [true, false] {
+                query["requirements"]
+                    .as_array_mut()
+                    .unwrap()
+                    .last_mut()
+                    .unwrap()["select_trinket"] = selected.into();
+                let result =
+                    super::filter_recipes_impl(&query.to_string(), &seeds, Some(&choices), source)
+                        .unwrap();
+                assert_eq!(result, "[]", "selected={selected}, source={source:?}");
+            }
+            let explicit = r#"{"auto_apply_trinket":true,"max_depth":24,"requirements":[{"item":"wondrous_resin","select_trinket":true}]}"#;
+            for saved in [choices.as_str(), no_choices.as_str()] {
+                let result: Value = serde_json::from_str(
+                    &super::filter_recipes_impl(explicit, &seeds, Some(saved), source).unwrap(),
+                )
+                .unwrap();
+                let matches = result.as_array().unwrap();
+                assert_eq!(matches.len(), seeds.len());
+                assert!(
+                    matches
+                        .iter()
+                        .all(|r| r["selectedTrinket"] == "wondrous_resin")
+                );
+            }
+            let mut disabled = query.clone();
+            disabled["requirements"].as_array_mut().unwrap().pop();
+            disabled["auto_apply_trinket"] = false.into();
+            assert_eq!(
+                super::filter_recipes_impl(&disabled.to_string(), &seeds, Some(&choices), source)
+                    .unwrap(),
+                "[]"
+            );
+        }
     }
 
     #[test]

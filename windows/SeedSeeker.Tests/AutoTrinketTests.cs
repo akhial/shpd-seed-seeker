@@ -37,4 +37,21 @@ public sealed class AutoTrinketTests
         Assert.Equal("parchment_scrap", restored.SelectedTrinket);
         Assert.Equal(0, NativeEngine.ScoutMatches(matches[0].Seed, 0, query, "none").MatchedRequirements);
     }
+
+    [Fact]
+    public void CurrentTrinketRequirementsOverrideSavedAutomaticRecipes()
+    {
+        var engine = new NativeEngine(); var baseline = Query();
+        SeedResult[] recipes = [new("SRU-YSU-QHS", 1, "parchment_scrap")];
+        var explicitQuery = ResultsExport.DecodeQueryDocument("""
+            {"max_depth":19,"auto_apply_trinket":true,"requirements":[
+              {"item":"runic_blade","upgrade":1,"effect":"Grim"},
+              {"item":"parchment_scrap"}]}
+            """);
+        Assert.Empty(engine.FilterRecipes(explicitQuery, baseline, recipes));
+        var disabled = baseline.Clone(); disabled.AutoApplyTrinket = false;
+        Assert.Empty(engine.FilterRecipes(disabled, baseline, recipes));
+        explicitQuery.Requirements[1].SelectTrinket = true;
+        Assert.Equal("parchment_scrap", Assert.Single(engine.FilterRecipes(explicitQuery, baseline, recipes)).SelectedTrinket);
+    }
 }

@@ -1,0 +1,30 @@
+{
+  "base_query": {
+    "auto_apply_trinket": true,
+    "max_depth": 24,
+    "exclude_blacksmith_rewards": true,
+    "arcane_resin": "auto",
+    "requirements": [
+      { "item": "wand_disintegration" },
+      { "item": "wand_lightning" },
+      { "kind": "wand" },
+      { "item": "ring_energy", "upgrade": 4 },
+      { "item": "ring_energy" },
+      { "item": "ring_energy" },
+      { "item": "chalice_of_blood" },
+      { "item": "horn_of_plenty" }
+    ]
+  },
+  "added_requirements": [
+    { "kind": "armor", "tier": { "at_most": 3 }, "upgrade": 3, "max_depth": 4 },
+    { "item": "wondrous_resin", "select_trinket": true }
+  ],
+  "recipes": [
+    { "seed": "AAA-ACG-UXC", "trinket": "cracked_spyglass" },
+    { "seed": "AAA-CKS-RJP", "trinket": "mimic_tooth" },
+    { "seed": "AAA-DQF-LLU", "trinket": "mimic_tooth" },
+    { "seed": "AAA-EXR-MBJ", "trinket": "mimic_tooth" },
+    { "seed": "AAA-FMQ-XXJ", "trinket": "mimic_tooth" },
+    { "seed": "AAA-IFG-WTG", "trinket": "mimic_tooth" }
+  ]
+}

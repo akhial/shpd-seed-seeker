@@ -140,6 +140,8 @@ fn remove_unnecessary_trinkets<G: WorldGenerator>(
 
 /// Verify saved recipes against new item predicates while retaining their
 /// original world conditions, then remove any unnecessary automatic choice.
+/// User-facing refinement should use [`refine_batch`] to honor current trinket
+/// requirements; this lower-level replay also serves generation parity checks.
 #[must_use]
 pub fn filter_batch<G: WorldGenerator>(
     generator: &G,
@@ -164,7 +166,9 @@ pub fn filter_batch<G: WorldGenerator>(
 
 /// Refine under the original automatic choice, including choices previously
 /// removed as unnecessary. Test that world first; only successful matches get
-/// the usual no-trinket cleanup. Never rerank using the edited query.
+/// the usual no-trinket cleanup. Never rerank using the edited query while
+/// automatic selection remains enabled. Explicit trinket requirements or
+/// disabling automatic selection instead use the current query's world.
 #[must_use]
 pub fn refine_batch<G: WorldGenerator>(
     generator: &G,
@@ -176,8 +180,12 @@ pub fn refine_batch<G: WorldGenerator>(
     if plan.is_unsatisfiable() {
         return recipes.iter().map(|_| None).collect();
     }
+    let seeds: Vec<_> = recipes.iter().map(|r| r.seed).collect();
+    if !enabled(query) {
+        return search_batch(generator, query, plan, &seeds);
+    }
     let original = QueryPlan::analyze(base);
-    let reapply = enabled(query) && enabled(base);
+    let reapply = enabled(base);
     let gate = RecipeGate {
         plan,
         choices: recipes
@@ -196,7 +204,6 @@ pub fn refine_batch<G: WorldGenerator>(
             })
             .collect(),
     };
-    let seeds: Vec<_> = recipes.iter().map(|r| r.seed).collect();
     let results = match_batch(generator, query, &gate, plan.generation_depth(), &seeds);
     remove_unnecessary_trinkets(generator, query, plan, results)
 }
