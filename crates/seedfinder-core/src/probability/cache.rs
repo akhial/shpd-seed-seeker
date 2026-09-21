@@ -8,7 +8,7 @@ use std::{cell::RefCell, collections::HashMap};
 use super::Predicate;
 use crate::query::SearchQuery;
 
-type ResinKey = (Vec<Predicate>, Predicate, bool, u16, u8);
+type ResinKey = (Vec<Predicate>, Vec<Predicate>, Predicate, bool, u16, u8);
 
 const LIMIT: usize = 4096;
 
@@ -21,12 +21,14 @@ thread_local! {
 
 pub(super) fn resin(
     predicates: &[Predicate],
+    witnesses: &[Predicate],
     donor: Predicate,
     query: &SearchQuery,
     compute: impl FnOnce() -> f64,
 ) -> f64 {
     let key = (
         predicates.to_vec(),
+        witnesses.to_vec(),
         donor,
         query.arcane_resin_auto,
         if query.arcane_resin_auto {

@@ -314,10 +314,10 @@ fn probability_does_not_report_donor_blankets_as_impossible() {
         r#"{"item":"wand_frost","upgrade":2},{"kind":"wand","upgrade":3,"blanket":true}"#,
     );
     query.arcane_resin = 8;
-    assert!(estimate_match_probability(&query).is_nan());
+    assert!(estimate_match_probability(&query) > 0.0);
     query.requirements[0].upgrade = shpd_seedfinder_core::query::UpgradeRequirement::AtLeast(2);
     let combined = estimate_match_probability(&query);
-    assert!(combined.is_nan());
+    assert!(combined > 0.0);
     query.arcane_resin = 0;
     assert!(estimate_match_probability(&query) > 0.0);
     query.arcane_resin = 8;

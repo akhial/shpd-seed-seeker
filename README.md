@@ -256,16 +256,16 @@ combined levels, or trinket selection. At least one ordinary requirement is
 required. Saved queries, results files, and share links preserve blankets;
 blanket share links use format 9 and require an app that supports it.
 
-The probability estimate intersects blanket filters with the ordinary item
-filters and considers their possible witnesses. Overlap between those ways
-is approximated conditional on the ordinary query, so a blanket never raises
-the estimate above the ordinary query's rate. Existing approximations for
-alternatives, combined levels, and item supply still apply. Queries with more
+The probability estimate intersects blanket filters with ordinary item and
+resin donor filters and considers their possible witnesses. Donor witnesses
+contribute resin once, can satisfy several blankets, and add no Auto upgrade
+cost. Auto donor witnesses require a reserved wand below +3. Overlap between
+those ways is approximated conditional on the ordinary query, so a blanket
+never raises the estimate above the ordinary query's rate. Existing
+approximations for alternatives, combined levels, and item supply still apply. Queries with more
 than 128 intermediate witness combinations show an unavailable estimate.
 The estimate is also unavailable when the combined-level approximation drops
 an optional member needed to witness a blanket.
-Estimates are also unavailable when a blanket can be witnessed by a resin donor;
-search and refinement still evaluate those queries fully.
 
 ## Benchmarks<a id="benchmarks"></a>
 
