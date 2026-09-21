@@ -40,9 +40,9 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
-    <release version="0.15.1" date="2026-09-21">
+    <release version="0.15.2" date="2026-09-22">
       <description>
-        <p>Refine searches against loaded seeds across all app platforms.</p>
+        <p>Allow Arcane Resin donors to satisfy blanket requirements and fix macOS SDK selection for Swift builds.</p>
       </description>
     </release>
     <release version="0.9.1" date="2026-09-07">
