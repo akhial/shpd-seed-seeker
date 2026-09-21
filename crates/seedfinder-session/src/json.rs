@@ -9,9 +9,8 @@
 //! call here; the shapes below are the contract the frontends parse.
 
 use serde_json::json;
-use shpd_seedfinder_core::wire::WireError;
 
-use crate::{ScoutMatchError, StartDecision, decide_start_packets, production_scout_matches};
+use crate::{ScoutMatchError, production_scout_matches};
 
 /// Marks which items of the world named by an `SSQ2` (or legacy raw seed)
 /// scout request satisfy the query, as `{"matched": [<item indices>],
@@ -34,30 +33,6 @@ pub fn scout_matches_document(request: &[u8], query: &[u8]) -> Result<String, Sc
     .to_string())
 }
 
-/// The documented name of [`decide_start_packets`]'s decision: one of
-/// `anchor`, `target-refine`, `target-filter`, `continue-detached` or
-/// `detached`.
-///
-/// # Errors
-///
-/// Returns the decode error of the first undecodable packet.
-pub fn decide_start_name(
-    candidate: &[u8],
-    target: Option<&[u8]>,
-    target_set_empty: bool,
-    target_has_uncovered_seeds: bool,
-    detached_base: Option<&[u8]>,
-) -> Result<&'static str, WireError> {
-    decide_start_packets(
-        candidate,
-        target,
-        target_set_empty,
-        target_has_uncovered_seeds,
-        detached_base,
-    )
-    .map(StartDecision::as_str)
-}
-
 #[cfg(test)]
 mod tests {
     use serde_json::Value;
@@ -74,86 +49,6 @@ mod tests {
     /// document.
     fn query_request(query: &shpd_seedfinder_core::query::SearchQuery) -> Vec<u8> {
         json_query::encode(query).to_string().into_bytes()
-    }
-
-    #[test]
-    fn start_decision_names_are_the_documented_ones() {
-        use shpd_seedfinder_core::catalog::ItemKind;
-        use shpd_seedfinder_core::query::{
-            EffectRequirement, Requirement, SearchQuery, TierRequirement, UpgradeRequirement,
-        };
-
-        let requirement = |kind| Requirement {
-            kind,
-            weapon_category: None,
-            item: None,
-            tier: TierRequirement::Any,
-            upgrade: UpgradeRequirement::Any,
-            effect: EffectRequirement::Any,
-            require_uncursed: false,
-            select_trinket: false,
-            blanket: false,
-            source: None,
-            identity_group: None,
-            max_depth: None,
-            alternative_group: None,
-            level_sum: None,
-        };
-        let query = |kind| SearchQuery {
-            auto_apply_trinket: false,
-            arcane_resin_filter: shpd_seedfinder_core::query::ArcaneResinFilter::default(),
-            arcane_resin_auto: false,
-            arcane_resin: 0,
-            requirements: vec![requirement(kind)],
-            max_depth: 24,
-            challenges: Challenges::NONE,
-            require_blacksmith: false,
-            exclude_blacksmith_rewards: false,
-            wandmaker_quest: None,
-        };
-        let target = query_request(&query(ItemKind::Ring));
-        let deeper = query_request(&SearchQuery {
-            max_depth: 9,
-            ..query(ItemKind::Ring)
-        });
-        let armor = query_request(&query(ItemKind::Armor));
-        let mut narrowed_query = query(ItemKind::Armor);
-        narrowed_query.requirements.push(Requirement {
-            upgrade: UpgradeRequirement::AtLeast(2),
-            ..requirement(ItemKind::Armor)
-        });
-        let narrowed = query_request(&narrowed_query);
-
-        assert_eq!(
-            decide_start_name(&target, Some(&target), false, true, None).unwrap(),
-            "target-refine"
-        );
-        assert_eq!(
-            decide_start_name(&deeper, Some(&target), false, true, None).unwrap(),
-            "target-filter"
-        );
-        assert_eq!(
-            decide_start_name(&armor, Some(&target), false, true, None).unwrap(),
-            "detached"
-        );
-        assert_eq!(
-            decide_start_name(&narrowed, Some(&target), false, true, Some(&armor)).unwrap(),
-            "continue-detached"
-        );
-        // A missing Target anchors, and so does an empty Target Set the query
-        // does not continue.
-        assert_eq!(
-            decide_start_name(&target, None, false, true, None).unwrap(),
-            "anchor"
-        );
-        assert_eq!(
-            decide_start_name(&deeper, Some(&target), true, true, None).unwrap(),
-            "anchor"
-        );
-
-        assert!(decide_start_name(b"bad", Some(&target), false, true, None).is_err());
-        assert!(decide_start_name(&target, Some(b"bad"), false, true, None).is_err());
-        assert!(decide_start_name(&target, None, false, true, Some(b"bad")).is_err());
     }
 
     #[test]

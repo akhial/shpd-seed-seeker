@@ -16,9 +16,8 @@ use std::ptr;
 use shpd_seedfinder_core::{deep_link, engine_info, json_query, results_export, seed};
 use shpd_seedfinder_session::{
     FilterPacketError, MAX_RESULTS, NativeSession, ScoutCallError, ScoutMatchError,
-    ScoutPacketError, SearchError, StartSessionError, available_workers, close_session,
-    decide_start_packets, json, production_filter_packet, production_scout_packet,
-    queries_continue, registry,
+    ScoutPacketError, SearchError, StartSessionError, available_workers, close_session, json,
+    production_filter_packet, production_scout_packet, registry,
 };
 
 const OK: i32 = 0;
@@ -215,84 +214,6 @@ pub extern "C" fn seedfinder_filter_seeds(
                 | FilterPacketError::Panicked,
             ) => INTERNAL,
             Err(FilterPacketError::Request(_) | FilterPacketError::Filter(_)) => INVALID,
-        }
-    }))
-    .unwrap_or(INTERNAL)
-}
-
-/// Reports whether the query in `candidate` continues the one in
-/// `base`: a scope the candidate never widens and every base requirement
-/// covered by a distinct candidate requirement at least as strict (equal or
-/// strengthened).
-/// Only a continuing query may reuse a stopped session's results and resume
-/// hint (the filter-and-resume refine flow). Returns 1 when it continues,
-/// 0 when it does not, and a negative code for an undecodable packet.
-#[unsafe(no_mangle)]
-pub extern "C" fn seedfinder_query_continues(
-    candidate: *const u8,
-    candidate_len: usize,
-    base: *const u8,
-    base_len: usize,
-) -> i32 {
-    catch_unwind(AssertUnwindSafe(|| {
-        let (Some(candidate), Some(base)) = (
-            request_slice(candidate, candidate_len),
-            request_slice(base, base_len),
-        ) else {
-            return INVALID;
-        };
-        match queries_continue(candidate, base) {
-            Ok(continues) => i32::from(continues),
-            Err(_) => INVALID,
-        }
-    }))
-    .unwrap_or(INTERNAL)
-}
-
-/// Reports what pressing Start Search must do with the query in
-/// `candidate`, per `docs/search-semantics.md`. `target` is the Target Query
-/// (null when there is no Target, which always anchors), `target_set_empty`
-/// and `target_has_uncovered_seeds` describe the Target Set and its coverage,
-/// and `detached_base` is the last concluded run's query when — and only when
-/// — that run was itself detached (null otherwise). The returned UTF-8 text is
-/// one of `anchor`, `target-refine`, `target-filter`, `continue-detached` or
-/// `detached`.
-///
-/// The continuation predicate is part of this decision: callers must not call
-/// `seedfinder_query_continues` separately for it.
-#[unsafe(no_mangle)]
-#[allow(clippy::too_many_arguments)] // The C ABI spells every input out flat.
-pub extern "C" fn seedfinder_decide_start(
-    candidate: *const u8,
-    candidate_len: usize,
-    target: *const u8,
-    target_len: usize,
-    target_set_empty: i32,
-    target_has_uncovered_seeds: i32,
-    detached_base: *const u8,
-    detached_base_len: usize,
-    out_packet: *mut *mut u8,
-    out_len: *mut usize,
-) -> i32 {
-    clear_outputs(out_packet, out_len);
-    catch_unwind(AssertUnwindSafe(|| {
-        if out_packet.is_null() || out_len.is_null() {
-            return INVALID;
-        }
-        let Some(candidate) = request_slice(candidate, candidate_len) else {
-            return INVALID;
-        };
-        match decide_start_packets(
-            candidate,
-            request_slice(target, target_len),
-            target_set_empty != 0,
-            target_has_uncovered_seeds != 0,
-            request_slice(detached_base, detached_base_len),
-        ) {
-            Ok(decision) => {
-                return_packet(decision.as_str().as_bytes().to_vec(), out_packet, out_len)
-            }
-            Err(_) => INVALID,
         }
     }))
     .unwrap_or(INTERNAL)
@@ -968,28 +889,6 @@ mod tests {
     }
 
     #[test]
-    fn query_continuation_bridge_decodes_and_compares() {
-        let request = query_packet();
-        assert_eq!(
-            seedfinder_query_continues(
-                request.as_ptr(),
-                request.len(),
-                request.as_ptr(),
-                request.len()
-            ),
-            1
-        );
-        assert_eq!(
-            seedfinder_query_continues(b"bad".as_ptr(), 3, request.as_ptr(), request.len()),
-            INVALID
-        );
-        assert_eq!(
-            seedfinder_query_continues(ptr::null(), 0, request.as_ptr(), request.len()),
-            INVALID
-        );
-    }
-
-    #[test]
     fn engine_info_returns_the_shared_document() {
         let mut pointer = ptr::null_mut();
         let mut len = 0;
@@ -1034,68 +933,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn start_decision_bridge_maps_nulls_flags_and_error_codes() {
-        let target = query_packet();
-        let call = |candidate: &[u8], target: Option<&[u8]>, base: Option<&[u8]>| {
-            let mut pointer = ptr::null_mut();
-            let mut len = 0;
-            let (target_pointer, target_len) =
-                target.map_or((ptr::null(), 0), |packet| (packet.as_ptr(), packet.len()));
-            let (base_pointer, base_len) =
-                base.map_or((ptr::null(), 0), |packet| (packet.as_ptr(), packet.len()));
-            let code = seedfinder_decide_start(
-                candidate.as_ptr(),
-                candidate.len(),
-                target_pointer,
-                target_len,
-                0,
-                1,
-                base_pointer,
-                base_len,
-                &raw mut pointer,
-                &raw mut len,
-            );
-            if code != OK {
-                return Err(code);
-            }
-            Ok(String::from_utf8(unsafe { take_packet(pointer, len) }).unwrap())
-        };
-
-        // A null Target is "no Target"; a present one reaches the decision.
-        assert_eq!(
-            call(&target, None, None).unwrap(),
-            json::decide_start_name(&target, None, false, true, None).unwrap()
-        );
-        assert_eq!(
-            call(&target, Some(&target), None).unwrap(),
-            json::decide_start_name(&target, Some(&target), false, true, None).unwrap()
-        );
-        assert_eq!(call(&target, Some(&target), None).unwrap(), "target-refine");
-
-        // Every undecodable packet is rejected, as is a null candidate.
-        assert_eq!(call(b"bad", Some(&target), None), Err(INVALID));
-        assert_eq!(call(&target, Some(b"bad"), None), Err(INVALID));
-        assert_eq!(call(&target, None, Some(b"bad")), Err(INVALID));
-        assert_eq!(call(&[], Some(&target), None), Err(INVALID));
-
-        let mut len = 0;
-        assert_eq!(
-            seedfinder_decide_start(
-                target.as_ptr(),
-                target.len(),
-                ptr::null(),
-                0,
-                0,
-                1,
-                ptr::null(),
-                0,
-                ptr::null_mut(),
-                &raw mut len
-            ),
-            INVALID
-        );
-    }
     #[test]
     fn filter_seeds_returns_ssr1_and_rejects_invalid_input() {
         let request = query_packet();

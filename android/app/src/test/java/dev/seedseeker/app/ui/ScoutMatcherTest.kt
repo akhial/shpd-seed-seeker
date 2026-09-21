@@ -22,7 +22,7 @@ import org.junit.Test
 /**
  * Which scouted items explain which requirements, asserted against the engine that owns the
  * selection. These cases call the real `JniBindings.scoutMatches` through the host build of the
- * Rust library (see QueryContinuationTest for how Gradle provides it), over the world the engine
+ * Rust library (see JniNativeSeedFinderTest for how Gradle provides it), over the world the engine
  * really generates for [SEED] — the marks index that world's own item list, so every case scouts
  * it first and checks what the marked items are.
  */

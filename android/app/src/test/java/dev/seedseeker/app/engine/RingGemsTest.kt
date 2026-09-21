@@ -13,7 +13,7 @@ import org.junit.Test
 /**
  * Which colour a scouted ring is drawn in, asserted against the engine that
  * owns the shuffle. The table comes from the run's own `SSC3` scout packet
- * through the host build of the Rust library (see [QueryContinuationTest] for
+ * through the host build of the Rust library (see [JniNativeSeedFinderTest] for
  * how Gradle provides it), so a drift between the engine's shuffle and what the
  * app draws fails here instead of shipping twelve fixed ring colours.
  */

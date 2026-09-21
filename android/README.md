@@ -38,6 +38,18 @@ The app targets API 36, supports API 23+, opts into edge-to-edge drawing, and us
 
 ## Background searches and recovery
 
+**Search** checks every seed in the saved pool against the current query,
+shows its matches, and then looks for more toward 1,024 unique results. All
+loaded and discovered seeds stay in the pool until **Clear results**. Imports
+add to it. Query changes and non-matches never discard seeds, so any later
+search can bring hidden matches back.
+
+An unchanged query resumes its previous scan; an edited query starts a fresh
+traversal after checking the full pool. Each saved seed retains its source
+query and original recipe, allowing a previously unnecessary automatic
+trinket to be reapplied before testing. There is no separate filter action or
+related/unrelated classification.
+
 Searches belong to the application and run under a foreground service, so switching
 apps, recreating the activity, removing its recent-apps task, or locking the screen
 does not cancel the native engine. The ongoing **Seed searches** notification opens

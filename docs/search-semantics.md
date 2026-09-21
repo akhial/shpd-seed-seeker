@@ -1,193 +1,65 @@
-# Search semantics: the Target Set
+# Search semantics: one action and a retained seed pool
 
-Every frontend implements the same search lifecycle. The model exists so that
-a user's found seeds are never thrown away by starting another search: the
-only action that discards results is the explicit **Clear** button.
+Web, Android, Windows, macOS, and Linux have one **Search** action.
 
-## Definitions
+1. Search re-verifies every seed in the saved pool against the current query.
+2. Matching seeds become the current results view.
+3. Search continues looking for matches, counting the verified survivors toward
+   the 1,024-result goal. If the current matches already fill the list, another
+   Search asks for another batch. Cancellation, an impossible query, or an
+   exhausted traversal can finish below the goal.
 
-- **Target Query** — the query of the first search after boot (or after
-  Clear, or the query embedded in an imported results file). It stays fixed
-  until Clear or a new import.
-- **Target Set** — every unique match the Target Query's traversal has
-  delivered, uncapped (the display cap only limits what is listed). It grows
-  when an extending search scans previously uncovered range; it never
-  shrinks. The *displayed* list is capped at 1,024 rows on every platform —
-  a run's full result set (survivors plus new finds) can exceed that, and
-  the excess must still reach the Target Set and any later refine, just not
-  the screen.
-- **Target coverage** — the portion of the seed space the target traversal
-  has scanned, kept as resume state (uncovered remainder). Imported results
-  carry no coverage.
-- **World conditions** — the query-level conditions that judge an otherwise
-  unchanged world: require an accessible blacksmith, exclude the Smith
-  rewards, and demand a Wandmaker quest. Switching one on, or naming a quest
-  where none was demanded, only ever *removes* seeds, so one query's
-  conditions can be **at least as strict** as another's: every flag the base
-  sets is also set, and a base quest is demanded unchanged (an unfiltered base
-  accepts any). The floor limit and challenges are not world
-  conditions — they change which world is generated.
-- **Continuation**: query B continues query A when the floor limit and
-  challenge set are identical, B's world conditions are at least as
-  strict as A's, and every
-  slot of A is covered by a *distinct* slot of B at least as strict — a slot
-  being one requirement, or one "any of these" group of alternatives — where
-  B's slot is at least as strict when each of its members implies some
-  member of A's: equal, or strengthened by an item named where A wanted any
-  of its kind, a tightened upgrade/tier bound, a demanded source, a narrowed
-  effect set, curse state, per-item floor limit, or a dropped alternative.
-  (A plain requirement multiset superset is the special case where the
-  covering requirements are equal.) A combined-level group of A must be
-  carried over intact: the slots covering its members must form exactly one
-  group of B, of the same size, with at least A's total — and since a
-  combined-level member is optional (any subset of its group may carry the
-  total), it can never cover a plain slot of A. Only then is
-  every B-match inside A's covered region already in A's matches, which is
-  what makes filter-and-resume sound; loosening any requirement, adding an
-  alternative, or lowering a total breaks the containment and B must rescan.
-  The engine owns this
-  predicate — `SearchQuery::continues` in `seedfinder-core`, exposed as
-  `seedfinder_query_continues` (C), `JniBindings.queryContinues` (Android)
-  and `query_continues` (wasm) — and frontends should call it rather than
-  re-derive it.
-- **Arcane Resin** — `arcane_resin` is a minimum yield from surplus wands
-  within the query's floor limit. Donors must be uncursed by default;
-  `arcane_resin_filter` can allow cursed wands or narrow their floor and source.
-  Each generated wand contributes `2 * (upgrade + 1)`, without resin upgrades
-  or hero talent bonuses. The engine reserves items for the ordinary slots and
-  chooses compatible surplus wands, respecting all reward choices and excluded
-  sources. Resin counts as one scout condition, highlighting its contributing
-  wands. Raising the minimum or tightening donor filters may continue a query;
-  loosening them requires re-filtering or rescanning. Resin searches share an
-  item with other resin searches and wand searches. With `"arcane_resin":"auto"`,
-  the minimum is calculated for each assignment: each reserved +0 wand needs 6,
-  +1 needs 5, +2 needs 3, and +3 or higher needs none. Only wands actually
-  assigned to ordinary slots contribute; an OR slot contributes its selected
-  member, and a query with no assigned wands needs no resin. Auto remains one
-  scout condition even when no donors are needed. Switching between Auto and
-  a positive fixed amount requires re-filtering or rescanning. Auto can refine
-  another Auto query under the same ordinary narrowing and donor-filter rules.
-  JSON and share links preserve the minimum (version 7), donor filters
-  (version 8), blankets (version 9), and Auto (version 10); existing queries
-  retain their prior encoding. Web, Android, macOS, Windows, and Linux offer Resin in the Wand
-  editor and support resin-only queries, as does the CLI's canonical query
-  input. All five editors support both Amount and Auto modes. Probability estimates integrate wand upgrades and
-  surplus resin together, reserving each item once and replacing an earlier
-  reservation when a cheaper matching wand arrives. This includes mixed
-  upgrades without enumerating donor plans. Blanket filters narrow only the
-  reserved items before resin is calculated; witnesses add no extra upgrade
-  cost, and donors cannot satisfy blankets. The model uses measured supply
-  counts and keeps quest rewards mutually exclusive. It retains the ordinary
-  equipment estimate's identity-deck and world-condition corrections, with
-  the conditional resin chance calculated from the joint supply. Overlapping
-  filters use a scarcest-first allocation; this remains an estimate rather
-  than an exhaustive count of seeds. Pure supply calculations are cached per
-  worker with bounded storage, including profile and all donor filters in the
-  keys, so repeated trinket scoring does not repeat the supply calculation.
-- **Shares an item**: some requirement of B and some requirement of A have
-  the same kind, and either at least one of the two names no specific item or
-  both name the same item. Scope and challenge differences are irrelevant
-  here — a filter re-verifies seeds from scratch under B. The engine owns
-  this predicate too — `SearchQuery::shares_item` in `seedfinder-core` — and
-  frontends should call it rather than re-derive it.
+Every loaded or discovered seed remains in the pool until the user chooses
+**Clear results**. Changing requirements, a zero-match filter, cancelling,
+failed scans, importing another file, and the 1,024-row display limit never
+remove saved seeds. New imports add to the pool and become the current view.
+Previously hidden seeds can reappear when any later query matches them.
 
-## Start decision
+The pool is uncapped; only the current results view is capped. Exports describe
+that view and its query. Existing result-file decoding limits still apply to
+new imports. Android saves the pool in its private checkpoint; the other
+frontends retain it for the current app session.
 
-The engine owns the whole decision below and every frontend reads it from
-there: `decide_start` in `seedfinder-core` (beside the two predicates it
-consults), exposed as `seedfinder_decide_start` (C),
-`JniBindings.decideStart` (Android) and `decide_start` (wasm), each returning
-one of the lowercase names `anchor`, `target-refine`, `target-filter`,
-`continue-detached`, `detached`. Continuation is part of the answer, so a
-caller must not consult the continuation predicate separately; what the
-frontend still owns is executing the decision — which phases to run, what to
-display, and what to keep.
+## Scanning and coverage
 
-When Start Search runs query `Q` and a Target exists with a non-empty Target
-Set:
+A completed or cancelled traversal records its query and exact remaining range.
+An unchanged query can resume that range after checking the entire pool again.
+An edited query starts a fresh traversal after checking the pool. Imports have
+no scan cursor. No item-overlap, containment, related/unrelated, anchor, or
+separate-search classification is used. The old decision APIs are removed.
 
-1. **`Q` continues the Target Query** → *target refine*: re-verify the whole
-   Target Set against `Q` (filter phase), display the survivors, then always
-   resume scanning the target's uncovered remainder — even when the
-   survivors already fill the display cap. Each resumed scan stops after it
-   accepts about `RESULT_CAP` (1,024) *new* finds, the engine's per-session
-   accept cap (the cap gates claiming work, so a scan may deliver slightly
-   more than the cap but is guaranteed to advance coverage — a resumed pass
-   never treads water). New finds match the Target Query by construction, so
-   they join the Target Set and the coverage advances; repeating an identical
-   query therefore keeps growing the Target Set by roughly a cap's worth of
-   seeds per run. An *unsatisfiable* refine completes instantly with its
-   coverage untouched: proving no seed can match consumes none of the
-   remainder, so removing the impossible requirement later resumes where the
-   target actually stopped.
-2. **`Q` shares an item with the Target Query and has the same automatic trinket policy** → *target filter*: re-verify
-   the whole Target Set against `Q` and display the survivors. No scanning;
-   the Target Set and its coverage are untouched. Because the base is always
-   the full Target Set — not the last run's survivors — loosening a
-   requirement brings seeds back.
-3. **Otherwise (unrelated)** → *detached scan*: a fresh full-range scan whose
-   results replace the display, while the Target Query/Set/coverage are kept
-   untouched for later related searches. If the previous run was itself a
-   detached scan that `Q` continues, continue it (filter its results, resume
-   its remainder) instead of rescanning — the classic pre-Target behaviour,
-   scoped to the detached thread.
+Native accept limits include rediscovered seeds. Frontends deduplicate matches
+and continue capped batches until enough unique current matches arrive, the
+traversal ends, or the user cancels. Failed scans retain delivered seeds but do
+not create new reusable coverage.
 
-With no Target (boot, after Clear, or after a failed first run), the search
-is an *anchor scan*: a fresh full-range scan that, on completion or cancel,
-establishes the Target Query, Target Set, and coverage. A run that fails
-establishes nothing. If the Target Set is empty (an anchor that found 0),
-a continuing `Q` still resumes its coverage (case 1), but any other `Q`
-re-anchors instead — an empty set holds nothing worth preserving.
+## Original trinket choices
 
-Displayed results are always genuine matches of the query that produced
-them. After mixed refines the display is not necessarily *exhaustive* for
-the covered range (a narrower query may have skipped seeds an earlier one
-would have kept); the tool trades exhaustiveness for never losing results.
+Each pool entry retains its original recipe and source query. Entries from
+different searches or imports can coexist. Verification groups seeds by their
+source query and uses the shared engine matcher:
 
-## Import, Clear, failure
+- When the current query contains any trinket requirement, or AutoTrinket is
+  off, its explicit selection (or no selected trinket) overrides saved recipes.
+  Having a trinket in the offer deck does not make loot generated under another
+  trinket valid for the selected one. This rule lives in the shared core.
+- Otherwise, a saved non-null recipe keeps that trinket.
+- With automatic selection enabled in both queries, a null recipe can represent
+  a choice removed as unnecessary. The engine reconstructs the original choice from
+  the source query and reapplies it **before testing** the current query.
+- A failure in the chosen world is accepted; it is not retried in a plain world.
+  Successful matches receive the normal cleanup that removes an unnecessary
+  trinket when the plain world also matches.
 
-- **Import** replaces everything: the imported query becomes the Target
-  Query, the imported seeds the Target Set, with empty coverage (refines of
-  an import are filter-only).
-- **Clear** drops the display, the Target, and all coverage. It is the only
-  way to do so.
-- **Failure** leaves the Target as it was; a failed run is never a
-  continuation base.
+New scans use the current query's automatic selection rules. Their discoveries
+retain that query as their own source; they do not overwrite earlier pool
+entries or their original choices. Query relationships are irrelevant to
+verification and retention.
 
-## Surfacing
+Android checkpoints preserve sources and pending work. Older checkpoints keep
+their known seeds and discard traversal assumptions from the removed routing
+model. A pending search restarts verification and scanning under this model.
 
-The status surfaces introduced for refine progress (desktop footer/status
-bar, mobile snackbar, GNOME toasts) also carry the target notes:
-
-- Target refine / target filter reuse the existing "Verifying…", "Kept X of
-  Y…", "Refined: kept X of Y" notes, with *Y = the Target Set size*.
-- A detached scan announces that the query is unrelated and the earlier
-  results are kept (returning on a related search), since the display and
-  the Target Set diverge at that moment.
-
-The result cap, stats box, chips, and impossible-query warning are
-unchanged.
-
-## Automatic trinket world conditions
-
-`auto_apply_trinket` selects one initial offer before generation. The prepared
-policy is part of world identity: continuation requires identical preferred
-rankings (or automatic selection disabled in both queries).
-Explicit trinket selection slots still must agree for continuation. Changing
-automatic choices starts a detached traversal, preserving the target, even
-when the queries share an item. Merely filtering the target could miss seeds
-that failed under the old choice and pass under the new one.
-
-Auto-applied matches are rechecked without the trinket. If the full query still
-matches, both the world and recipe are replaced with the no-trinket result.
-This cleanup does not change which initial searches succeed or their coverage.
-
-The engine owns this decision. The web passes the exact saved choices and base
-query to filter workers. The engine first replays those choices, removing
-unnecessary trinkets. If a saved no-trinket recipe fails a changed automatic
-query, `refine_batch` retries it with the policy's choice: stripping a trinket
-for the base query must not lose a seed that needs it for a refinement. Saved
-recipes that still match are retained. Manual trinket
-requirements continue to use their explicit selection rules. Imports carry
-no scanned coverage; their recipes continue to control scouting and export
-independently of editor changes.
+The results-file schema remains unchanged. Exporting current matches and
+reimporting them does not carry the private per-seed source queries; imported
+null recipes use the exported query as their source.

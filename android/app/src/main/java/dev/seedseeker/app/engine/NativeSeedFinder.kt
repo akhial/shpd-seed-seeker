@@ -71,39 +71,7 @@ interface NativeSeedFinder {
      */
     fun scoutMatches(seed: String, challenges: Int, request: SearchRequest): ScoutMatches?
 
-    /**
-     * Whether [candidate] never widens [base]: an identical floor limit and challenge set,
-     * world conditions (blacksmith flags, Wandmaker quest) at least as strict as the base's,
-     * and every base requirement covered by a distinct candidate requirement
-     * at least as strict — equal or strengthened (a named item, a tightened bound)
-     * (UI list keys are not part of the wire query, so re-keying is invisible here). Only such a
-     * query may reuse the base run's results and finish by rescanning the seeds it never reached,
-     * which is what makes filter-and-resume sound; per docs/search-semantics.md the engine owns
-     * this predicate and frontends call it rather than re-derive it.
-     *
-     * An unchanged query qualifies on purpose: filtering then keeps every seed and the resumed
-     * scan simply continues the base run, which is what a second Search tap after a cancel must
-     * do. Only an explicit Clear starts over.
-     */
-    fun queryContinues(candidate: SearchRequest, base: SearchRequest): Boolean
 
-    /**
-     * What pressing Search must do with [candidate], per docs/search-semantics.md: one of
-     * `anchor`, `target-refine`, `target-filter`, `continue-detached` or `detached`. [target] is
-     * the Target Query (null when there is no Target, which always anchors), [targetSetEmpty] and
-     * [targetHasUncoveredSeeds] describe the Target Set and its coverage, and [detachedBase] is
-     * the last concluded run's query when — and only when — that run was itself detached.
-     *
-     * The whole multi-way choice is the engine's, continuation predicate included, so callers ask
-     * this instead of combining [queryContinues] with a policy of their own.
-     */
-    fun decideStart(
-        candidate: SearchRequest,
-        target: SearchRequest?,
-        targetSetEmpty: Boolean,
-        targetHasUncoveredSeeds: Boolean,
-        detachedBase: SearchRequest?,
-    ): String
 }
 
 /**
@@ -164,31 +132,6 @@ class DemoNativeSeedFinder : NativeSeedFinder {
 
     override fun filterSeeds(request: SearchRequest, seeds: List<String>): List<String> =
         seeds.filterIndexed { index, _ -> index % 2 == 0 }
-
-    // A wrong continuation verdict would send a demo search down a refine
-    // branch the shipped app would never take, so this is the one answer the
-    // demo never stands in for: the engine owns the rule
-    // (docs/search-semantics.md), and every APK packages its library.
-    override fun queryContinues(candidate: SearchRequest, base: SearchRequest): Boolean =
-        JniBindings.queryContinues(QueryDocument.encode(candidate), QueryDocument.encode(base))
-
-    // Same reasoning for the whole start decision the predicate is part of.
-    override fun decideStart(
-        candidate: SearchRequest,
-        target: SearchRequest?,
-        targetSetEmpty: Boolean,
-        targetHasUncoveredSeeds: Boolean,
-        detachedBase: SearchRequest?,
-    ): String = String(
-        JniBindings.decideStart(
-            QueryDocument.encode(candidate),
-            target?.let(QueryDocument::encode),
-            targetSetEmpty,
-            targetHasUncoveredSeeds,
-            detachedBase?.let(QueryDocument::encode),
-        ),
-        StandardCharsets.UTF_8,
-    )
 
     // The demo scout hands back a fabricated world rather than an engine SSC3
     // packet, so the engine's marks — computed over the world this seed really
@@ -383,8 +326,6 @@ class DemoNativeSeedFinder : NativeSeedFinder {
  *    scan to finish this session's coverage; exact once the session has stopped.
  * 9. `filterSeeds(requestBytes, seedValues) -> resultBytes` re-verifies numeric seed values
  *    against the full query and returns the survivors, in input order, as a result packet.
- * 10. `queryContinues(candidateBytes, baseBytes) -> boolean` reports whether the candidate query
- *    may reuse a run of the base query, throwing for an undecodable packet.
  * 11. `availableWorkers() -> int` reports the logical processors available to search workers,
  *    never less than one: the ceiling the app's worker selector offers.
  *
@@ -446,6 +387,7 @@ class JniNativeSeedFinder(
         return JniSession(handle, request.slotCount, bindings)
     }
 
+
     override fun startResumedSearch(
         request: SearchRequest,
         resumeFrom: Long,
@@ -473,28 +415,6 @@ class JniNativeSeedFinder(
         val values = LongArray(recipes.size) { SeedCode.value(recipes[it].seed) }
         return ResultCodec.decode(bindings.filterSeeds(envelope.toString().toByteArray(), values), request.slotCount)
     }
-
-    /** Asks the engine, so the refine soundness rule has exactly one implementation. */
-    override fun queryContinues(candidate: SearchRequest, base: SearchRequest): Boolean =
-        bindings.queryContinues(QueryDocument.encode(candidate), QueryDocument.encode(base))
-
-    /** Asks the engine, so docs/search-semantics.md has exactly one implementation. */
-    override fun decideStart(
-        candidate: SearchRequest,
-        target: SearchRequest?,
-        targetSetEmpty: Boolean,
-        targetHasUncoveredSeeds: Boolean,
-        detachedBase: SearchRequest?,
-    ): String = String(
-        bindings.decideStart(
-            QueryDocument.encode(candidate),
-            target?.let(QueryDocument::encode),
-            targetSetEmpty,
-            targetHasUncoveredSeeds,
-            detachedBase?.let(QueryDocument::encode),
-        ),
-        StandardCharsets.UTF_8,
-    )
 
     private class JniSession(
         private val handle: Long,
@@ -563,14 +483,7 @@ interface NativeBindings {
     fun scoutSeed(request: ByteArray): ByteArray
     fun scoutMatches(request: ByteArray, query: ByteArray): ByteArray
     fun filterSeeds(request: ByteArray, seeds: LongArray): ByteArray
-    fun queryContinues(candidate: ByteArray, base: ByteArray): Boolean
-    fun decideStart(
-        candidate: ByteArray,
-        target: ByteArray?,
-        targetSetEmpty: Boolean,
-        targetHasUncoveredSeeds: Boolean,
-        detachedBase: ByteArray?,
-    ): ByteArray
+
 }
 
 /** Exact class and static method names are retained by ProGuard for Rust's exported JNI symbols. */
@@ -603,17 +516,6 @@ object JniBindings {
     @JvmStatic external fun scoutSeed(request: ByteArray): ByteArray
     @JvmStatic external fun scoutMatches(request: ByteArray, query: ByteArray): ByteArray
     @JvmStatic external fun filterSeeds(request: ByteArray, seeds: LongArray): ByteArray
-    @JvmStatic external fun queryContinues(candidate: ByteArray, base: ByteArray): Boolean
-
-    /** The start decision of docs/search-semantics.md; null packets mean "absent". */
-    @JvmStatic external fun decideStart(
-        candidate: ByteArray,
-        target: ByteArray?,
-        targetSetEmpty: Boolean,
-        targetHasUncoveredSeeds: Boolean,
-        detachedBase: ByteArray?,
-    ): ByteArray
-
     // Share-link codec (docs/share-link-format.md): UTF-8 in, UTF-8 out.
     // Unlike the search entry points above, these also run in debug APKs,
     // which package the library solely for them.
@@ -656,17 +558,7 @@ private object JniBindingsAdapter : NativeBindings {
         JniBindings.scoutMatches(request, query)
     override fun filterSeeds(request: ByteArray, seeds: LongArray) =
         JniBindings.filterSeeds(request, seeds)
-    override fun queryContinues(candidate: ByteArray, base: ByteArray) =
-        JniBindings.queryContinues(candidate, base)
-    override fun decideStart(
-        candidate: ByteArray,
-        target: ByteArray?,
-        targetSetEmpty: Boolean,
-        targetHasUncoveredSeeds: Boolean,
-        detachedBase: ByteArray?,
-    ) = JniBindings.decideStart(
-        candidate, target, targetSetEmpty, targetHasUncoveredSeeds, detachedBase,
-    )
+
 }
 
 /**

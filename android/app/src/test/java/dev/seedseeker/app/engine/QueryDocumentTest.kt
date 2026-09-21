@@ -25,7 +25,7 @@ import org.junit.Test
  * the writer rules every platform shares — omitted defaults, the bare-number
  * upgrade, one `any_of` per alternative group, the effect forms — and the
  * engine-backed cases hand the bytes to the real library through
- * `JniBindings.queryContinues` / `scoutMatches`, which decode them with the
+ * `JniBindings.filterSeeds` / `scoutMatches`, which decode them with the
  * same codec the search uses.
  */
 class QueryDocumentTest {
@@ -237,7 +237,7 @@ class QueryDocumentTest {
         assertTrue(bytes.first() == '{'.code.toByte())
         // An identical query always continues itself; the engine had to decode
         // both documents — groups, sums and effect sets included — to say so.
-        assertTrue(JniBindings.queryContinues(bytes, bytes))
+        JniBindings.filterSeeds(bytes, longArrayOf())
         val marks = JSONObject(
             String(JniBindings.scoutMatches(ScoutRequestCodec.encode("AAA-AAA-BUH", 0), bytes), Charsets.UTF_8),
         )
@@ -282,7 +282,7 @@ class QueryDocumentTest {
             """{"requirements":[{"any_of":[{"any_of":[{"item":"sword"}]}]}]}""",
         )) {
             assertThrows(rejected, IllegalArgumentException::class.java) {
-                JniBindings.queryContinues(rejected.encodeToByteArray(), valid)
+                JniBindings.filterSeeds(rejected.encodeToByteArray(), longArrayOf())
             }
         }
     }

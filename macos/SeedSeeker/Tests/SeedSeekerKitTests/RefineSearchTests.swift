@@ -38,6 +38,7 @@ private final class FakeEngine: SeedFinderEngine, @unchecked Sendable {
     private(set) var filteredSeeds: [[String]] = []
     private(set) var resumedCalls: [(resumeFrom: Int64, scanLen: Int64)] = []
     private(set) var freshCalls = 0
+    private(set) var filterSources: [SearchRequest] = []
     /// The worker count each native start was handed, in call order: the
     /// controller must pass the device-local preference through untouched to
     /// both the fresh scan and a refine's resumed remainder.
@@ -74,6 +75,11 @@ private final class FakeEngine: SeedFinderEngine, @unchecked Sendable {
             return filterResult
         }
     }
+    func filterRecipes(_ request: SearchRequest, base: SearchRequest, recipes: [SeedResult]) async throws -> [SeedResult] {
+        lock.withLock { filterSources.append(base) }
+        let matches = try await filterSeeds(request, seeds: recipes.map(\.seed))
+        return recipes.filter { matches.contains($0.seed) }
+    }
     func scoutSeed(_ seed: String, challenges: Int) async throws -> ScoutWorld {
         throw SeedFinderEngineError.invalidArgument
     }
@@ -109,579 +115,78 @@ final class RefineSearchTests: XCTestCase {
         XCTAssertFalse(controller.isRunning)
     }
 
-    /// The headline of the implicit model: the same Start Search action that
-    /// ran the base run narrows it, with no separate refine gesture.
-    func testStartingANarrowedQueryRefinesFilteringThenStreamingDedupedResumedResults() async throws {
+    func testEveryQueryChecksTheWholePoolAndDiscoveriesKeepTheirSources() async throws {
         let engine = FakeEngine()
         let controller = SearchController(engine: engine)
-        let base = try wandRequest(count: 1)
-        let refined = try wandRequest(count: 2)
-
-        engine.startSessions = [FakeSearchSession(
-            batches: [[result("AAA-AAA-AAA"), result("AAA-AAA-AAB")], [result("AAA-AAA-AAC")]],
-            hint: ResumeHint(position: 500, remaining: 100))]
-        controller.start(base)
+        let a = try wandRequest(count: 1)
+        let b = try ringRequest()
+        engine.startSessions = [FakeSearchSession(batches: [[result("AAA-AAA-AAA"), result("AAA-AAA-AAB")]], hint: ResumeHint(position: 500, remaining: 100))]
+        controller.start(a)
         try await waitUntilIdle(controller)
-        XCTAssertEqual(controller.state, .completed)
-        XCTAssertEqual(controller.results.map(\.seed), ["AAA-AAA-AAA", "AAA-AAA-AAB", "AAA-AAA-AAC"])
-        XCTAssertNil(controller.refinedKept)
-        XCTAssertEqual(controller.baseRun?.resumeFrom, 500)
-        XCTAssertEqual(controller.baseRun?.remaining, 100)
-
-        XCTAssertTrue(controller.canRefine(with: refined))
-        XCTAssertTrue(controller.canRefine(with: base),
-                      "an unchanged request continues the run rather than rescanning")
-
-        engine.filterResult = ["AAA-AAA-AAA", "AAA-AAA-AAC"]
-        engine.resumedSessions = [FakeSearchSession(
-            // The resumed scan re-reports AAA-AAA-AAC, which must be deduplicated.
-            batches: [[result("AAA-AAA-AAC", matched: 2), result("AAA-AAA-AAD", matched: 2)]],
-            hint: ResumeHint(position: 0, remaining: 0))]
-        controller.start(refined)
-        try await waitUntilIdle(controller)
-
-        XCTAssertEqual(engine.filteredSeeds, [["AAA-AAA-AAA", "AAA-AAA-AAB", "AAA-AAA-AAC"]])
-        XCTAssertEqual(engine.freshCalls, 1, "the narrowed start must not rescan from zero")
-        XCTAssertEqual(engine.resumedCalls.count, 1)
-        XCTAssertEqual(engine.resumedCalls.first?.resumeFrom, 500)
-        XCTAssertEqual(engine.resumedCalls.first?.scanLen, 100)
-        XCTAssertEqual(controller.state, .completed)
-        XCTAssertEqual(controller.results.map(\.seed), ["AAA-AAA-AAA", "AAA-AAA-AAC", "AAA-AAA-AAD"])
-        XCTAssertEqual(controller.refinedKept, 2)
-        // The refined run is the new base and is chainable.
-        XCTAssertEqual(controller.baseRun?.remaining, 0)
-        XCTAssertEqual(controller.baseRun?.request.requirements.count, 2)
-    }
-
-    func testRefineWithNothingRemainingCompletesWithFilteredSubsetOnly() async throws {
-        let engine = FakeEngine()
-        let controller = SearchController(engine: engine)
-        let base = try wandRequest(count: 1)
-        let refined = try wandRequest(count: 2)
-
-        engine.startSessions = [FakeSearchSession(
-            batches: [[result("AAA-AAA-AAA"), result("AAA-AAA-AAB")]],
-            hint: ResumeHint(position: 0, remaining: 0))]
-        controller.start(base)
-        try await waitUntilIdle(controller)
-
         engine.filterResult = ["AAA-AAA-AAB"]
-        controller.start(refined)
+        engine.startSessions = [FakeSearchSession(batches: [[result("AAA-AAA-AAC")]], hint: ResumeHint(position: 800, remaining: 100))]
+        controller.start(b)
         try await waitUntilIdle(controller)
-
-        XCTAssertEqual(controller.state, .completed)
-        XCTAssertTrue(engine.resumedCalls.isEmpty)
-        XCTAssertEqual(controller.results.map(\.seed), ["AAA-AAA-AAB"])
-        XCTAssertEqual(controller.refinedKept, 1)
-        XCTAssertEqual(controller.baseRun?.remaining, 0)
-        XCTAssertTrue(controller.canRefine(with: try wandRequest(count: 3)),
-                      "a finished refine must itself be refinable")
-    }
-
-    /// The worker count is a device-local setting, so the controller carries it
-    /// to every native start of the run it was given for — the fresh scan and
-    /// the resumed remainder of a later refine alike — and changes nothing else.
-    func testWorkerCountReachesBothNativeStarts() async throws {
-        let engine = FakeEngine()
-        let controller = SearchController(engine: engine)
-        let base = try wandRequest(count: 1)
-        let refined = try wandRequest(count: 2)
-
-        engine.startSessions = [FakeSearchSession(
-            batches: [[result("AAA-AAA-AAA")]],
-            hint: ResumeHint(position: 500, remaining: 100))]
-        controller.start(base, workers: 3)
-        try await waitUntilIdle(controller)
-        XCTAssertEqual(engine.startWorkers, [3])
-
-        engine.filterResult = ["AAA-AAA-AAA"]
-        engine.resumedSessions = [FakeSearchSession(
-            batches: [[result("AAA-AAA-AAB", matched: 2)]],
-            hint: ResumeHint(position: 0, remaining: 0))]
-        // A different count on the next start: nothing about the run is
-        // pinned to the previous choice.
-        controller.start(refined, workers: 5)
-        try await waitUntilIdle(controller)
-        XCTAssertEqual(engine.resumedWorkers, [5])
-        XCTAssertEqual(engine.startWorkers, [3], "the refine must not have rescanned")
-        XCTAssertEqual(controller.results.map(\.seed), ["AAA-AAA-AAA", "AAA-AAA-AAB"])
-    }
-
-    /// Omitting the count means the FFI's "every available core", not one
-    /// worker: a caller that never learned about the preference still gets a
-    /// full-speed search.
-    func testDefaultedWorkerCountAsksTheEngineForEveryCore() async throws {
-        let engine = FakeEngine()
-        let controller = SearchController(engine: engine)
-        engine.startSessions = [FakeSearchSession(
-            batches: [[result("AAA-AAA-AAA")]], hint: ResumeHint(position: 0, remaining: 0))]
-        controller.start(try wandRequest(count: 1))
-        try await waitUntilIdle(controller)
-        XCTAssertEqual(engine.startWorkers, [WorkerPersistence.unset])
-    }
-
-    /// Runs a base search then one successful refine, leaving the controller
-    /// idle with results ["AAA-AAA-AAA"], refinedKept == 1, and a chainable
-    /// base run at (600, 50) for the two-requirement request.
-    private func makeRefinedController(engine: FakeEngine) async throws -> SearchController {
-        let controller = SearchController(engine: engine)
-        engine.startSessions = [FakeSearchSession(
-            batches: [[result("AAA-AAA-AAA"), result("AAA-AAA-AAB")]],
-            hint: ResumeHint(position: 500, remaining: 100))]
-        controller.start(try wandRequest(count: 1))
-        try await waitUntilIdle(controller)
-
-        engine.filterResult = ["AAA-AAA-AAA"]
-        engine.resumedSessions = [FakeSearchSession(
-            batches: [], hint: ResumeHint(position: 600, remaining: 50))]
-        controller.start(try wandRequest(count: 2))
-        try await waitUntilIdle(controller)
-        XCTAssertEqual(controller.results.map(\.seed), ["AAA-AAA-AAA"])
-        XCTAssertEqual(controller.refinedKept, 1)
-        XCTAssertEqual(controller.baseRun?.resumeFrom, 600)
-        return controller
-    }
-
-    func testCancelDuringFilterPhaseKeepsResultsAndBaseRun() async throws {
-        let engine = FakeEngine()
-        let controller = try await makeRefinedController(engine: engine)
-
-        engine.filterDelay = .seconds(60)
-        controller.start(try wandRequest(count: 3))
-        XCTAssertTrue(controller.isRunning)
-        controller.cancel()
-        try await waitUntilIdle(controller)
-
-        XCTAssertEqual(controller.state, .cancelled)
-        XCTAssertNil(controller.message)
-        XCTAssertNil(controller.refinedKept, "a cancelled filter must clear the stale kept caption")
-        XCTAssertEqual(controller.results.map(\.seed), ["AAA-AAA-AAA"],
-                       "cancelling the filter phase must not touch the base results")
-        XCTAssertEqual(controller.baseRun?.resumeFrom, 600)
-        XCTAssertEqual(controller.baseRun?.remaining, 50)
-        XCTAssertTrue(controller.canRefine(with: try wandRequest(count: 3)),
-                      "the untouched base run must stay refinable")
-    }
-
-    func testFilterFailureKeepsBaseRunForRetry() async throws {
-        let engine = FakeEngine()
-        let controller = try await makeRefinedController(engine: engine)
-
-        engine.filterError = SeedFinderEngineError.invalidArgument
-        controller.start(try wandRequest(count: 3))
-        try await waitUntilIdle(controller)
-
-        XCTAssertEqual(controller.state, .failed)
-        XCTAssertNotNil(controller.message)
-        XCTAssertNil(controller.refinedKept, "a failed filter must clear the stale kept caption")
-        XCTAssertEqual(controller.results.map(\.seed), ["AAA-AAA-AAA"])
-        XCTAssertEqual(controller.baseRun?.resumeFrom, 600)
-        XCTAssertEqual(controller.baseRun?.remaining, 50)
-        XCTAssertTrue(controller.canRefine(with: try wandRequest(count: 3)),
-                      "the intact base run must allow a retry")
-
-        engine.filterError = nil
-        engine.filterResult = ["AAA-AAA-AAA"]
-        engine.resumedSessions = [FakeSearchSession(
-            batches: [], hint: ResumeHint(position: 0, remaining: 0))]
-        controller.start(try wandRequest(count: 3))
-        try await waitUntilIdle(controller)
-        XCTAssertEqual(controller.state, .completed)
-        XCTAssertEqual(controller.refinedKept, 1)
-    }
-
-    func testCancelledRunStillBecomesTargetAndADetachedStartClearsRefinedKept() async throws {
-        let engine = FakeEngine()
-        let controller = SearchController(engine: engine)
-        let base = try wandRequest(count: 1)
-
-        engine.startSessions = [FakeSearchSession(
-            batches: [[result("AAA-AAA-AAA")]], finalState: .cancelled,
-            hint: ResumeHint(position: 123, remaining: 456))]
-        controller.start(base)
-        try await waitUntilIdle(controller)
-        XCTAssertEqual(controller.state, .cancelled)
-        XCTAssertEqual(controller.baseRun?.resumeFrom, 123)
-        XCTAssertEqual(controller.baseRun?.remaining, 456)
-        XCTAssertTrue(controller.canRefine(with: try wandRequest(count: 2)))
-
-        engine.filterResult = ["AAA-AAA-AAA"]
-        engine.resumedSessions = [FakeSearchSession(
-            batches: [], hint: ResumeHint(position: 0, remaining: 0))]
-        controller.start(try wandRequest(count: 2))
-        try await waitUntilIdle(controller)
-        XCTAssertEqual(controller.refinedKept, 1)
-
-        // An unrelated query is the one start that runs fresh here: it clears
-        // the refine caption while the Target keeps the earlier results.
-        engine.startSessions = [FakeSearchSession(
-            batches: [], hint: ResumeHint(position: 0, remaining: 0))]
-        controller.start(try ringRequest())
-        try await waitUntilIdle(controller)
-        XCTAssertNil(controller.refinedKept, "a fresh detached scan must clear the refine caption")
-        XCTAssertTrue(controller.results.isEmpty)
-        XCTAssertEqual(controller.target?.seeds, ["AAA-AAA-AAA"])
-    }
-
-    /// QA repro: the session survives every Start/Cancel cycle until an
-    /// explicit Clear. Re-running an untouched query continues the cancelled
-    /// run — the filter trivially keeps every seed and the scan resumes —
-    /// rather than falling back to a fresh scan that wipes the results.
-    func testRestartingAnUnchangedQueryAfterCancelContinuesInsteadOfWiping() async throws {
-        let engine = FakeEngine()
-        let controller = SearchController(engine: engine)
-        let refined = try wandRequest(count: 2)
-
-        engine.startSessions = [FakeSearchSession(
-            batches: [[result("AAA-AAA-AAA"), result("AAA-AAA-AAB")]],
-            hint: ResumeHint(position: 500, remaining: 100))]
-        controller.start(try wandRequest(count: 1))
-        try await waitUntilIdle(controller)
-
-        // Adding a requirement refines; the user cancels the resumed scan, so
-        // the refined request — not the original — becomes the base run.
-        engine.filterResult = ["AAA-AAA-AAA"]
-        engine.resumedSessions = [FakeSearchSession(
-            batches: [[result("AAA-AAA-AAC", matched: 2)]], finalState: .cancelled,
-            hint: ResumeHint(position: 600, remaining: 50))]
-        controller.start(refined)
-        try await waitUntilIdle(controller)
-        XCTAssertEqual(controller.state, .cancelled)
-        XCTAssertEqual(controller.results.map(\.seed), ["AAA-AAA-AAA", "AAA-AAA-AAC"])
-        XCTAssertTrue(controller.canRefine(with: refined),
-                      "the unchanged query must stay eligible after a cancel")
-
-        for cycle in 1...3 {
-            engine.filterResult = controller.results.map(\.seed)
-            engine.resumedSessions = [FakeSearchSession(
-                batches: [], finalState: .cancelled,
-                hint: ResumeHint(position: 600, remaining: 50))]
-            controller.start(refined)
-            try await waitUntilIdle(controller)
-
-            XCTAssertEqual(engine.freshCalls, 1, "cycle \(cycle) must not rescan from zero")
-            XCTAssertEqual(engine.resumedCalls.count, cycle + 1)
-            XCTAssertEqual(engine.resumedCalls.last?.resumeFrom, 600)
-            XCTAssertEqual(engine.resumedCalls.last?.scanLen, 50)
-            XCTAssertEqual(controller.results.map(\.seed), ["AAA-AAA-AAA", "AAA-AAA-AAC"],
-                           "cycle \(cycle) must keep the session's results")
-            XCTAssertEqual(controller.refinedKept, 2)
-        }
-
-        // Only the explicit Clear ends the session.
-        controller.clearResults()
-        XCTAssertTrue(controller.results.isEmpty)
-        XCTAssertFalse(controller.canRefine(with: refined))
-    }
-
-    /// A query that is no continuation but still names a target item — here
-    /// through a scope change — filters the full Target Set instead of
-    /// rescanning, leaving the Target and its coverage untouched.
-    func testScopeChangedQuerySharingAnItemFiltersTheTargetSetWithoutScanning() async throws {
-        let engine = FakeEngine()
-        let controller = SearchController(engine: engine)
-
-        engine.startSessions = [FakeSearchSession(
-            batches: [[result("AAA-AAA-AAA"), result("AAA-AAA-AAB")]],
-            hint: ResumeHint(position: 500, remaining: 100))]
-        controller.start(try wandRequest(count: 1))
-        try await waitUntilIdle(controller)
-        XCTAssertEqual(controller.results.map(\.seed), ["AAA-AAA-AAA", "AAA-AAA-AAB"])
-
-        // More requirements, but at a different floor limit: not a
-        // continuation, yet the wand requirements still name a target item.
-        let rescoped = try SearchRequest(requirements: wandRequest(count: 2).requirements,
-                                         maximumDepth: 12)
-        XCTAssertFalse(controller.canRefine(with: rescoped))
-        XCTAssertEqual(controller.decideStart(rescoped), .targetFilter)
-        engine.filterResult = ["AAA-AAA-AAB"]
-        controller.start(rescoped)
-        try await waitUntilIdle(controller)
-
-        XCTAssertEqual(engine.filteredSeeds, [["AAA-AAA-AAA", "AAA-AAA-AAB"]],
-                       "the filter must re-verify the full Target Set")
-        XCTAssertEqual(engine.freshCalls, 1, "a target filter must not rescan")
-        XCTAssertTrue(engine.resumedCalls.isEmpty, "a target filter must not resume any scan")
-        XCTAssertEqual(controller.state, .completed)
-        XCTAssertEqual(controller.results.map(\.seed), ["AAA-AAA-AAB"])
-        XCTAssertEqual(controller.refinedKept, 1)
-        XCTAssertEqual(controller.refinedOf, 2)
-
-        // The Target survived untouched: a continuation of the Target Query
-        // refines the full set again and resumes the original coverage.
-        engine.filterResult = ["AAA-AAA-AAA", "AAA-AAA-AAB"]
-        engine.resumedSessions = [FakeSearchSession(
-            batches: [], hint: ResumeHint(position: 0, remaining: 0))]
-        controller.start(try wandRequest(count: 1))
-        try await waitUntilIdle(controller)
-        XCTAssertEqual(engine.filteredSeeds.last, ["AAA-AAA-AAA", "AAA-AAA-AAB"])
-        XCTAssertEqual(engine.resumedCalls.count, 1)
-        XCTAssertEqual(engine.resumedCalls.first?.resumeFrom, 500)
-        XCTAssertEqual(engine.resumedCalls.first?.scanLen, 100)
-        XCTAssertEqual(controller.results.map(\.seed), ["AAA-AAA-AAA", "AAA-AAA-AAB"],
-                       "loosening back to the Target Query must bring seeds back")
-    }
-
-    /// An unrelated query runs detached: a fresh full scan replaces the
-    /// display while the Target keeps the earlier results for later, and a
-    /// continuation of the detached query continues that thread (the classic
-    /// pre-Target refine) without touching the Target either.
-    func testUnrelatedQueryRunsDetachedAndARelatedSearchBringsResultsBack() async throws {
-        let engine = FakeEngine()
-        let controller = SearchController(engine: engine)
-
-        engine.startSessions = [FakeSearchSession(
-            batches: [[result("AAA-AAA-AAA"), result("AAA-AAA-AAB")]],
-            hint: ResumeHint(position: 500, remaining: 100))]
-        controller.start(try wandRequest(count: 1))
-        try await waitUntilIdle(controller)
-
-        // Rings share nothing with the wand target: a detached fresh scan.
-        XCTAssertEqual(controller.decideStart(try ringRequest()), .detached)
-        engine.startSessions = [FakeSearchSession(
-            batches: [[result("ZZZ-AAA-AAA")]], hint: ResumeHint(position: 7, remaining: 70))]
-        controller.start(try ringRequest())
-        try await waitUntilIdle(controller)
-        XCTAssertEqual(engine.freshCalls, 2)
-        XCTAssertTrue(engine.filteredSeeds.isEmpty)
-        XCTAssertEqual(controller.results.map(\.seed), ["ZZZ-AAA-AAA"])
-        XCTAssertNil(controller.refinedKept, "a fresh detached scan is not a refine")
-        XCTAssertEqual(controller.runKind, .detached)
-        XCTAssertEqual(controller.target?.seeds, ["AAA-AAA-AAA", "AAA-AAA-AAB"],
-                       "the Target must survive a detached scan untouched")
-
-        // Narrowing the detached query continues the detached run: filter its
-        // displayed results and resume its own remainder.
-        XCTAssertEqual(controller.decideStart(try ringRequest(count: 2)), .continueDetached)
-        engine.filterResult = ["ZZZ-AAA-AAA"]
-        engine.resumedSessions = [FakeSearchSession(
-            batches: [[result("ZZZ-AAA-AAB", matched: 2)]], hint: ResumeHint(position: 0, remaining: 0))]
-        controller.start(try ringRequest(count: 2))
-        try await waitUntilIdle(controller)
-        XCTAssertEqual(engine.filteredSeeds, [["ZZZ-AAA-AAA"]])
-        XCTAssertEqual(engine.resumedCalls.count, 1)
-        XCTAssertEqual(engine.resumedCalls.first?.resumeFrom, 7)
-        XCTAssertEqual(engine.resumedCalls.first?.scanLen, 70)
-        XCTAssertEqual(controller.results.map(\.seed), ["ZZZ-AAA-AAA", "ZZZ-AAA-AAB"])
-        XCTAssertEqual(controller.refinedKept, 1)
-        XCTAssertEqual(controller.refinedOf, 1)
-        XCTAssertEqual(controller.runKind, .detached, "a continued detached scan stays detached")
-        XCTAssertEqual(controller.target?.seeds, ["AAA-AAA-AAA", "AAA-AAA-AAB"])
-
-        // Returning to the Target Query refines the full Target Set and
-        // resumes the target's own coverage, not the detached thread's.
-        engine.filterResult = ["AAA-AAA-AAA", "AAA-AAA-AAB"]
-        engine.resumedSessions = [FakeSearchSession(
-            batches: [], hint: ResumeHint(position: 0, remaining: 0))]
-        controller.start(try wandRequest(count: 1))
-        try await waitUntilIdle(controller)
-        XCTAssertEqual(engine.filteredSeeds.last, ["AAA-AAA-AAA", "AAA-AAA-AAB"])
-        XCTAssertEqual(engine.resumedCalls.last?.resumeFrom, 500)
-        XCTAssertEqual(engine.resumedCalls.last?.scanLen, 100)
-        XCTAssertEqual(controller.results.map(\.seed), ["AAA-AAA-AAA", "AAA-AAA-AAB"])
-    }
-
-    func testClearResultsDropsTheBaseRunSoTheNextStartIsFresh() async throws {
-        let engine = FakeEngine()
-        let controller = SearchController(engine: engine)
-        let refined = try wandRequest(count: 2)
-
-        engine.startSessions = [FakeSearchSession(
-            batches: [[result("AAA-AAA-AAA")]], hint: ResumeHint(position: 500, remaining: 100))]
-        controller.start(try wandRequest(count: 1))
-        try await waitUntilIdle(controller)
-        XCTAssertTrue(controller.canRefine(with: refined))
-        XCTAssertTrue(controller.canClearResults)
-
-        controller.clearResults()
-        XCTAssertTrue(controller.results.isEmpty)
-        XCTAssertNil(controller.state)
-        XCTAssertNil(controller.baseRun)
-        XCTAssertNil(controller.refinedKept)
-        XCTAssertNil(controller.exportQuery)
-        XCTAssertNil(controller.selectedSeed)
-        XCTAssertFalse(controller.isImported)
-        XCTAssertFalse(controller.canClearResults, "nothing left to clear")
-        XCTAssertFalse(controller.canRefine(with: refined))
-
-        // The otherwise-eligible narrowed query now has nothing to narrow.
-        engine.startSessions = [FakeSearchSession(
-            batches: [[result("AAA-AAA-AAB")]], hint: ResumeHint(position: 0, remaining: 0))]
-        controller.start(refined)
-        try await waitUntilIdle(controller)
-        XCTAssertTrue(engine.filteredSeeds.isEmpty)
-        XCTAssertTrue(engine.resumedCalls.isEmpty)
-        XCTAssertEqual(engine.freshCalls, 2)
-        XCTAssertEqual(controller.results.map(\.seed), ["AAA-AAA-AAB"])
-        XCTAssertNil(controller.refinedKept)
-    }
-
-    func testClearResultsIsIgnoredWhileASearchIsRunning() async throws {
-        let engine = FakeEngine()
-        let controller = SearchController(engine: engine)
-
-        engine.startSessions = [FakeSearchSession(
-            batches: [[result("AAA-AAA-AAA")]], hint: ResumeHint(position: 500, remaining: 100))]
-        controller.start(try wandRequest(count: 1))
-        try await waitUntilIdle(controller)
-
-        // A refine's filter phase counts as running just like a scan does.
-        engine.filterDelay = .seconds(60)
-        controller.start(try wandRequest(count: 2))
-        XCTAssertTrue(controller.isRunning)
-        XCTAssertFalse(controller.canClearResults)
-        controller.clearResults()
-        XCTAssertEqual(controller.results.map(\.seed), ["AAA-AAA-AAA"],
-                       "clearing mid-run must not touch the results")
-        XCTAssertEqual(controller.baseRun?.resumeFrom, 500)
-        XCTAssertTrue(controller.isRunning)
-
-        controller.cancel()
-        try await waitUntilIdle(controller)
-        XCTAssertEqual(controller.results.map(\.seed), ["AAA-AAA-AAA"])
-        XCTAssertEqual(controller.baseRun?.resumeFrom, 500)
-    }
-
-    /// Refines always re-verify the full Target Set — never the last run's
-    /// survivors — so loosening a requirement brings dropped seeds back, and
-    /// new finds from the resumed scan join the set.
-    func testRefineBasesOnFullTargetSetSoLooseningBringsSeedsBack() async throws {
-        let engine = FakeEngine()
-        let controller = SearchController(engine: engine)
-
-        engine.startSessions = [FakeSearchSession(
-            batches: [[result("AAA-AAA-AAA"), result("AAA-AAA-AAB")]],
-            hint: ResumeHint(position: 500, remaining: 100))]
-        controller.start(try wandRequest(count: 1))
-        try await waitUntilIdle(controller)
-
-        // Narrowing drops AAA-AAA-AAB from the display and finds a new seed,
-        // which joins the Target Set alongside the survivors.
-        engine.filterResult = ["AAA-AAA-AAA"]
-        engine.resumedSessions = [FakeSearchSession(
-            batches: [[result("AAA-AAA-AAC", matched: 2)]],
-            hint: ResumeHint(position: 600, remaining: 50))]
-        controller.start(try wandRequest(count: 2))
-        try await waitUntilIdle(controller)
-        XCTAssertEqual(controller.results.map(\.seed), ["AAA-AAA-AAA", "AAA-AAA-AAC"])
+        XCTAssertEqual(controller.results.map(\.seed), ["AAA-AAA-AAB", "AAA-AAA-AAC"])
         XCTAssertEqual(controller.target?.seeds, ["AAA-AAA-AAA", "AAA-AAA-AAB", "AAA-AAA-AAC"])
-
-        // Loosening back to the Target Query filters the grown full set, so
-        // the dropped seed returns, and the scan resumes the advanced coverage.
+        XCTAssertEqual(engine.freshCalls, 2)
         engine.filterResult = ["AAA-AAA-AAA", "AAA-AAA-AAB", "AAA-AAA-AAC"]
-        engine.resumedSessions = [FakeSearchSession(
-            batches: [], hint: ResumeHint(position: 0, remaining: 0))]
-        controller.start(try wandRequest(count: 1))
+        controller.start(a)
         try await waitUntilIdle(controller)
-        XCTAssertEqual(engine.filteredSeeds.last, ["AAA-AAA-AAA", "AAA-AAA-AAB", "AAA-AAA-AAC"])
-        XCTAssertEqual(engine.resumedCalls.last?.resumeFrom, 600)
-        XCTAssertEqual(engine.resumedCalls.last?.scanLen, 50)
-        XCTAssertEqual(controller.results.map(\.seed),
-                       ["AAA-AAA-AAA", "AAA-AAA-AAB", "AAA-AAA-AAC"])
-        XCTAssertEqual(controller.refinedKept, 3)
-        XCTAssertEqual(controller.refinedOf, 3)
+        XCTAssertEqual(Array(engine.filteredSeeds.suffix(2)), [["AAA-AAA-AAA", "AAA-AAA-AAB"], ["AAA-AAA-AAC"]])
+        XCTAssertEqual(try QueryDocument.encode(engine.filterSources.last!), try QueryDocument.encode(b))
+        XCTAssertEqual(controller.results.count, 3)
+        controller.clearResults()
+        XCTAssertNil(controller.target)
     }
 
-    /// An anchor that found nothing still resumes its coverage for a
-    /// continuing query, but anything else re-anchors: an empty Target Set
-    /// holds nothing worth preserving.
-    func testEmptyTargetSetResumesAContinuationAndReanchorsAnythingElse() async throws {
+    func testOnlyAnUnchangedQueryResumesItsScan() async throws {
         let engine = FakeEngine()
         let controller = SearchController(engine: engine)
-
-        engine.startSessions = [FakeSearchSession(
-            batches: [], hint: ResumeHint(position: 500, remaining: 100))]
-        controller.start(try wandRequest(count: 1))
+        let query = try wandRequest(count: 1)
+        engine.startSessions = [FakeSearchSession(batches: [[result("AAA-AAA-AAA")]], hint: ResumeHint(position: 500, remaining: 100))]
+        controller.start(query, workers: 2)
         try await waitUntilIdle(controller)
-        XCTAssertTrue(controller.results.isEmpty)
-        XCTAssertEqual(controller.target?.seeds, [])
-
-        XCTAssertEqual(controller.decideStart(try wandRequest(count: 2)), .targetRefine)
-        engine.filterResult = []
-        engine.resumedSessions = [FakeSearchSession(
-            batches: [[result("AAA-AAA-AAA", matched: 2)]],
-            hint: ResumeHint(position: 0, remaining: 0))]
-        controller.start(try wandRequest(count: 2))
+        engine.filterResult = ["AAA-AAA-AAA"]
+        controller.start(query, workers: 3)
         try await waitUntilIdle(controller)
-        XCTAssertEqual(engine.freshCalls, 1, "a continuing query must resume, not rescan")
-        XCTAssertEqual(engine.resumedCalls.count, 1)
         XCTAssertEqual(engine.resumedCalls.first?.resumeFrom, 500)
-        XCTAssertEqual(engine.resumedCalls.first?.scanLen, 100)
-        XCTAssertEqual(controller.results.map(\.seed), ["AAA-AAA-AAA"])
-        XCTAssertEqual(controller.target?.seeds, ["AAA-AAA-AAA"],
-                       "the resumed scan's finds join the Target Set")
-        XCTAssertEqual(controller.target?.request.requirements.count, 1,
-                       "the Target Query stays the original anchor query")
-    }
-
-    func testEmptyTargetSetReanchorsOnANonContinuingQuery() async throws {
-        let engine = FakeEngine()
-        let controller = SearchController(engine: engine)
-
-        engine.startSessions = [FakeSearchSession(
-            batches: [], hint: ResumeHint(position: 500, remaining: 100))]
-        controller.start(try wandRequest(count: 1))
-        try await waitUntilIdle(controller)
-        XCTAssertEqual(controller.target?.seeds, [])
-
-        // Shares an item with the empty target, but with nothing to filter
-        // the search re-anchors on this run instead.
-        let rescoped = try SearchRequest(requirements: wandRequest(count: 1).requirements,
-                                         maximumDepth: 12)
-        XCTAssertEqual(controller.decideStart(rescoped), .anchor)
-        engine.startSessions = [FakeSearchSession(
-            batches: [[result("AAA-AAA-AAZ")]], hint: ResumeHint(position: 9, remaining: 0))]
-        controller.start(rescoped)
+        XCTAssertEqual(engine.resumedWorkers, [3])
+        controller.start(try wandRequest(count: 2))
         try await waitUntilIdle(controller)
         XCTAssertEqual(engine.freshCalls, 2)
-        XCTAssertTrue(engine.filteredSeeds.isEmpty)
-        XCTAssertTrue(engine.resumedCalls.isEmpty)
-        XCTAssertEqual(controller.target?.seeds, ["AAA-AAA-AAZ"])
-        XCTAssertEqual(controller.target?.request.maximumDepth, 12,
-                       "the re-anchoring run's conclusion replaces the empty Target")
-
-        // With the coverage exhausted, even a continuing query re-anchors.
-        controller.clearResults()
-        engine.startSessions = [FakeSearchSession(
-            batches: [], hint: ResumeHint(position: 0, remaining: 0))]
-        controller.start(try wandRequest(count: 1))
-        try await waitUntilIdle(controller)
-        XCTAssertEqual(controller.decideStart(try wandRequest(count: 2)), .anchor)
+        XCTAssertEqual(engine.filteredSeeds, [["AAA-AAA-AAA"], ["AAA-AAA-AAA"]])
     }
 
-    /// Import establishes the Target with no coverage: related queries filter
-    /// the imported set, and nothing ever resumes a scan from it.
-    func testImportedResultsBecomeAFilterOnlyTarget() async throws {
+    func testImportAddsToThePoolAndFailedFilteringDoesNotDiscardIt() async throws {
         let engine = FakeEngine()
         let controller = SearchController(engine: engine)
-        controller.loadImported(seeds: ["AAA-AAA-AAA", "AAA-AAA-AAB"],
-                                query: SavedQuery(requirements: try wandRequest(count: 1).requirements, autoApplyTrinket: false))
-
-        XCTAssertEqual(controller.decideStart(try wandRequest(count: 2)), .targetRefine)
-        engine.filterResult = ["AAA-AAA-AAB"]
-        controller.start(try wandRequest(count: 2))
+        let query = try wandRequest(count: 1)
+        engine.startSessions = [FakeSearchSession(batches: [[result("AAA-AAA-AAA")]], hint: ResumeHint(position: 500, remaining: 100))]
+        controller.start(query)
         try await waitUntilIdle(controller)
-        XCTAssertEqual(engine.freshCalls, 0)
-        XCTAssertTrue(engine.resumedCalls.isEmpty, "an import carries no coverage to resume")
-        XCTAssertEqual(engine.filteredSeeds, [["AAA-AAA-AAA", "AAA-AAA-AAB"]])
-        XCTAssertEqual(controller.state, .completed)
+        let saved = SavedQuery(requirements: query.requirements, maximumDepth: query.maximumDepth)
+        controller.loadImported(seeds: ["AAA-AAA-AAB"], query: saved)
+        XCTAssertEqual(controller.target?.seeds, ["AAA-AAA-AAA", "AAA-AAA-AAB"])
+        engine.filterError = SeedFinderEngineError.invalidArgument
+        controller.start(try ringRequest())
+        try await waitUntilIdle(controller)
+        XCTAssertEqual(controller.state, .failed)
+        XCTAssertEqual(controller.target?.seeds, ["AAA-AAA-AAA", "AAA-AAA-AAB"])
         XCTAssertEqual(controller.results.map(\.seed), ["AAA-AAA-AAB"])
-        XCTAssertEqual(controller.refinedKept, 1)
-        XCTAssertEqual(controller.refinedOf, 2)
-
-        // Loosening back re-filters the full imported set.
-        engine.filterResult = ["AAA-AAA-AAA", "AAA-AAA-AAB"]
-        controller.start(try wandRequest(count: 1))
-        try await waitUntilIdle(controller)
-        XCTAssertEqual(controller.results.map(\.seed), ["AAA-AAA-AAA", "AAA-AAA-AAB"])
-        XCTAssertTrue(engine.resumedCalls.isEmpty)
-        XCTAssertEqual(engine.freshCalls, 0)
     }
 
-    /// A run can deliver more seeds than the display holds — the list caps at
-    /// `resultCap` rows (an uncapped table is what the 5,000-row UI hang was
-    /// made of) while the full set stays the Target and the refine base, so a
-    /// follow-up refine still filters every seed.
+    func testCancelledAndFailedScansKeepDeliveredSeeds() async throws {
+        for state in [SearchState.cancelled, .failed] {
+            let engine = FakeEngine()
+            let controller = SearchController(engine: engine)
+            engine.startSessions = [FakeSearchSession(batches: [[result("AAA-AAA-AAA")]], finalState: state, hint: ResumeHint(position: 500, remaining: 100))]
+            controller.start(try wandRequest(count: 1))
+            try await waitUntilIdle(controller)
+            XCTAssertEqual(controller.target?.seeds, ["AAA-AAA-AAA"])
+        }
+    }
+
     func testDisplayCapsAtResultCapWhileTheFullSetStaysTheRefineBase() async throws {
         let engine = FakeEngine()
         let controller = SearchController(engine: engine)
@@ -713,161 +218,40 @@ final class RefineSearchTests: XCTestCase {
                        "a continuation with coverage left scans for more even at the display cap")
     }
 
-    // MARK: - The start decision, as the engine answers it
+    func testClearResultsIsIgnoredWhileASearchIsRunning() async throws {
+        let engine = FakeEngine()
+        let controller = SearchController(engine: engine)
 
-    /// The whole Start Search table of docs/search-semantics.md comes back
-    /// from `seedfinder_decide_start`; the bridge only hands it the session
-    /// state and maps the name it answers with.
-    func testStartDecisionBridgeAnswersEveryOutcome() throws {
-        let target = try wandRequest(count: 1)
-        let continues = try wandRequest(count: 2)
-        let rescoped = try SearchRequest(requirements: wandRequest(count: 2).requirements,
-                                         maximumDepth: 12)
-        let unrelated = try ringRequest()
-        func decide(_ candidate: SearchRequest, target: SearchRequest?,
-                    empty: Bool = false, uncovered: Bool = true,
-                    detachedBase: SearchRequest? = nil) -> StartMode {
-            StartDecision.decide(candidate: candidate, target: target, targetSetEmpty: empty,
-                                 targetHasUncoveredSeeds: uncovered, detachedBase: detachedBase)
-        }
+        engine.startSessions = [FakeSearchSession(
+            batches: [[result("AAA-AAA-AAA")]], hint: ResumeHint(position: 500, remaining: 100))]
+        controller.start(try wandRequest(count: 1))
+        try await waitUntilIdle(controller)
 
-        // Without a Target every query anchors.
-        XCTAssertEqual(decide(continues, target: nil), .anchor)
-        // A continuation refines the Target Set; a merely related one filters it.
-        XCTAssertEqual(decide(continues, target: target), .targetRefine)
-        XCTAssertEqual(decide(target, target: target), .targetRefine)
-        XCTAssertEqual(decide(rescoped, target: target), .targetFilter)
-        // An unrelated query scans detached, and continues that thread only
-        // when the last concluded run was detached and it continues that run.
-        XCTAssertEqual(decide(unrelated, target: target), .detached)
-        XCTAssertEqual(decide(try ringRequest(count: 2), target: target,
-                              detachedBase: unrelated), .continueDetached)
-        XCTAssertEqual(decide(unrelated, target: target,
-                              detachedBase: try ringRequest(count: 2)), .detached)
-        // An empty Target Set holds nothing worth preserving: only a
-        // continuation with coverage left resumes it.
-        XCTAssertEqual(decide(continues, target: target, empty: true), .targetRefine)
-        XCTAssertEqual(decide(continues, target: target, empty: true, uncovered: false), .anchor)
-        XCTAssertEqual(decide(rescoped, target: target, empty: true), .anchor)
+        // A refine's filter phase counts as running just like a scan does.
+        engine.filterDelay = .seconds(60)
+        controller.start(try wandRequest(count: 2))
+        XCTAssertTrue(controller.isRunning)
+        XCTAssertFalse(controller.canClearResults)
+        controller.clearResults()
+        XCTAssertEqual(controller.results.map(\.seed), ["AAA-AAA-AAA"],
+                       "clearing mid-run must not touch the results")
+        XCTAssertEqual(controller.baseRun?.resumeFrom, 500)
+        XCTAssertTrue(controller.isRunning)
+
+        controller.cancel()
+        try await waitUntilIdle(controller)
+        XCTAssertEqual(controller.results.map(\.seed), ["AAA-AAA-AAA"])
+        XCTAssertEqual(controller.baseRun?.resumeFrom, 500)
     }
 
-    // MARK: - The continuation predicate, as the engine answers it
-
-    /// `isRefinement(of:)` is the engine's own predicate reached over the query document, so
-    /// these are conformance assertions for the whole encode → bridge → decode
-    /// path rather than for a rule this module owns.
-    func testEngineDecidesContinuationOverTheEncodedQuery() throws {
-        let base = try SearchRequest(requirements: [wand(key: 1, upgrade: 3)])
-        let added = try SearchRequest(requirements: [wand(key: 9, upgrade: 3), wand(key: 10, upgrade: 0)])
-        XCTAssertTrue(added.isRefinement(of: base))
-        // An unchanged query continues the run, and row identity never reaches
-        // the wire, so a re-added requirement is still the same requirement.
-        XCTAssertTrue(base.isRefinement(of: base))
-        XCTAssertTrue(try SearchRequest(requirements: [wand(key: 7, upgrade: 3)]).isRefinement(of: base))
-        // Removing or editing a base requirement breaks containment.
-        XCTAssertFalse(base.isRefinement(of: added))
-        XCTAssertFalse(try SearchRequest(requirements: [wand(key: 1, upgrade: 2), wand(key: 2, upgrade: 0)])
-            .isRefinement(of: base))
-        // Same count, different requirement: an edit, not a continuation.
-        XCTAssertFalse(try SearchRequest(requirements: [wand(key: 1, upgrade: 2)]).isRefinement(of: base))
-        // Duplicates count as a multiset: the candidate must repeat them too.
-        let doubled = try SearchRequest(requirements: [wand(key: 1, upgrade: 3), wand(key: 2, upgrade: 3)])
-        XCTAssertTrue(try SearchRequest(requirements: [wand(key: 3, upgrade: 3), wand(key: 4, upgrade: 3),
-                                                       wand(key: 5, upgrade: 0)]).isRefinement(of: doubled))
-        XCTAssertFalse(try SearchRequest(requirements: [wand(key: 3, upgrade: 3), wand(key: 5, upgrade: 0)])
-            .isRefinement(of: doubled))
-        XCTAssertTrue(doubled.isRefinement(of: base))
-    }
-
-    /// A widened scope ends the continuation: the base run's coverage says
-    /// nothing about a query it never tested for, while a narrowed one only
-    /// removes seeds the base already delivered.
-    func testAWidenedScopeEndsTheContinuation() throws {
-        let base = try SearchRequest(requirements: [wand(key: 1, upgrade: 3)])
-        let requirements = [try wand(key: 9, upgrade: 3), try wand(key: 10, upgrade: 0)]
-        XCTAssertTrue(try SearchRequest(requirements: requirements).isRefinement(of: base))
-        XCTAssertFalse(try SearchRequest(requirements: requirements, maximumDepth: 12).isRefinement(of: base))
-        XCTAssertFalse(try SearchRequest(requirements: requirements, challenges: 32).isRefinement(of: base))
-
-        // The blacksmith flags and the Wandmaker filter only narrow the match
-        // set, so switching one on strengthens the base instead of ending the
-        // continuation. Switching it back off — or swapping the quest for
-        // another variant — forces a rescan.
-        let smith = try SearchRequest(requirements: [wand(key: 1, upgrade: 3)], requireBlacksmith: true)
-        XCTAssertTrue(try SearchRequest(requirements: requirements, requireBlacksmith: true)
-            .isRefinement(of: base))
-        XCTAssertFalse(try SearchRequest(requirements: requirements).isRefinement(of: smith))
-        let excluded = try SearchRequest(requirements: [wand(key: 1, upgrade: 3)],
-                                         excludeBlacksmithRewards: true)
-        XCTAssertTrue(try SearchRequest(requirements: requirements, excludeBlacksmithRewards: true)
-            .isRefinement(of: base))
-        XCTAssertFalse(try SearchRequest(requirements: requirements).isRefinement(of: excluded))
-        let quested = try SearchRequest(requirements: [wand(key: 1, upgrade: 3)],
-                                        wandmakerQuest: .rotberry)
-        XCTAssertTrue(try SearchRequest(requirements: requirements, wandmakerQuest: .rotberry)
-            .isRefinement(of: base))
-        XCTAssertTrue(try SearchRequest(requirements: requirements, wandmakerQuest: .rotberry)
-            .isRefinement(of: quested))
-        XCTAssertFalse(try SearchRequest(requirements: requirements).isRefinement(of: quested))
-        XCTAssertFalse(try SearchRequest(requirements: requirements, wandmakerQuest: .corpseDust)
-            .isRefinement(of: quested))
-    }
-
-    /// Every requirement predicate must reach the engine intact. Each variant
-    /// strengthens the plain row, so it continues the base — but the base must
-    /// never continue the variant: if a predicate were dropped on the wire the
-    /// two rows would encode identically and that direction would pass too.
-    func testEveryRequirementPredicateReachesTheEngine() throws {
-        let plain = try ItemRequirement(key: 1, item: nil, upgrade: 0, kind: .weapon, upgradeMatch: .any)
-        let base = try SearchRequest(requirements: [plain])
-        let variants: [(String, ItemRequirement)] = [
-            ("named item", try ItemRequirement(key: 2, item: ItemCatalog.weapons[0], upgrade: 0,
-                                               kind: .weapon, upgradeMatch: .any)),
-            ("modifier", try ItemRequirement(key: 3, item: nil, upgrade: 0,
-                                             modifier: ItemCatalog.modifiersFor(.weapon)[0],
-                                             kind: .weapon, upgradeMatch: .any)),
-            ("tier", try ItemRequirement(key: 4, item: nil, upgrade: 0, kind: .weapon,
-                                         tier: 3, tierMatch: .atLeast, upgradeMatch: .any)),
-            ("upgrade", try ItemRequirement(key: 5, item: nil, upgrade: 2, kind: .weapon,
-                                            upgradeMatch: .exactly)),
-            ("source", try ItemRequirement(key: 6, item: nil, upgrade: 0, kind: .weapon,
-                                           upgradeMatch: .any, source: .shop)),
-            ("identity group", try ItemRequirement(key: 7, item: nil, upgrade: 0, kind: .weapon,
-                                                   upgradeMatch: .any, identityGroup: 1)),
-            ("item floor limit", try ItemRequirement(key: 8, item: nil, upgrade: 0, kind: .weapon,
-                                                     upgradeMatch: .any, maximumDepth: 10)),
-            ("uncursed", try ItemRequirement(key: 9, item: nil, upgrade: 0, kind: .weapon,
-                                             upgradeMatch: .any, requireUncursed: true)),
-            ("weapon class", try ItemRequirement(key: 10, item: nil, upgrade: 0, kind: .meleeWeapon,
-                                                 upgradeMatch: .any)),
-        ]
-        for (label, variant) in variants {
-            let narrowed = try SearchRequest(requirements: [variant])
-            XCTAssertTrue(narrowed.isRefinement(of: base),
-                          "\(label): tightening the only row strengthens the query, so it continues")
-            XCTAssertFalse(base.isRefinement(of: narrowed),
-                           "\(label): loosening back must rescan — and proves the predicate reached the engine")
-            XCTAssertTrue(narrowed.isRefinement(of: narrowed), "\(label): must continue itself")
-            XCTAssertTrue(try SearchRequest(requirements: [plain, variant]).isRefinement(of: base),
-                          "\(label): adding a row beside the base row continues")
-        }
-    }
-
-    /// The bridge itself, on raw documents: the verdict comes from the native
-    /// decode, and a document it cannot read is never a continuation —
-    /// resuming coverage on a verdict we failed to obtain is the unsound direction.
-    func testQueryContinuationBridgeAnswersFromRawDocuments() throws {
-        let base = try QueryDocument.encode(wandRequest(count: 1))
-        let narrowed = try QueryDocument.encode(wandRequest(count: 2))
-        XCTAssertTrue(QueryContinuation.continues(narrowed, base: base))
-        XCTAssertTrue(QueryContinuation.continues(base, base: base))
-        XCTAssertFalse(QueryContinuation.continues(base, base: narrowed))
-        XCTAssertFalse(QueryContinuation.continues(Data("{\"requirements\":".utf8), base: base),
-                       "a truncated document decodes to nothing")
-        XCTAssertFalse(QueryContinuation.continues(Data("{\"requirements\":[]}".utf8), base: base),
-                       "an empty query is refused by the codec")
-        XCTAssertFalse(QueryContinuation.continues(Data(), base: base))
-        XCTAssertFalse(QueryContinuation.continues(narrowed, base: Data("SSF0nonsense".utf8)))
+    func testDefaultedWorkerCountAsksTheEngineForEveryCore() async throws {
+        let engine = FakeEngine()
+        let controller = SearchController(engine: engine)
+        engine.startSessions = [FakeSearchSession(
+            batches: [[result("AAA-AAA-AAA")]], hint: ResumeHint(position: 0, remaining: 0))]
+        controller.start(try wandRequest(count: 1))
+        try await waitUntilIdle(controller)
+        XCTAssertEqual(engine.startWorkers, [WorkerPersistence.unset])
     }
 
     func testClearResultsAlsoDiscardsImportedResults() throws {

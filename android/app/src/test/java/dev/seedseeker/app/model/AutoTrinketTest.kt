@@ -36,4 +36,16 @@ class AutoTrinketTest {
         ))
         assertEquals("parchment_scrap", engine.filterRecipes(refined, query, listOf(matches[1])).single().selectedTrinket)
     }
+
+    @Test fun currentTrinketRequirementsOverrideSavedAutomaticRecipes() {
+        val engine = JniNativeSeedFinder(); val base = query()
+        val recipes = listOf(SeedResult("SRU-YSU-QHS", 1, "parchment_scrap"))
+        val trinket = ItemRequirement(key = 2, item = ItemCatalog.findById("parchment_scrap"),
+            kind = ItemKind.TRINKET, upgrade = 0, upgradeMatch = UpgradeMatch.ANY)
+        val unselected = base.copy(requirements = base.requirements + trinket)
+        assertTrue(engine.filterRecipes(unselected, base, recipes).isEmpty())
+        assertTrue(engine.filterRecipes(base.copy(autoApplyTrinket = false), base, recipes).isEmpty())
+        val selected = base.copy(requirements = base.requirements + trinket.copy(selectTrinket = true))
+        assertEquals("parchment_scrap", engine.filterRecipes(selected, base, recipes).single().selectedTrinket)
+    }
 }

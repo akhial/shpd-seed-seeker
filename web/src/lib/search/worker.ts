@@ -30,29 +30,39 @@ async function runSearch(message: Extract<SearchWorkerRequest, { type: "search:s
   try {
     for (const [segmentIndex, segment] of message.segments.entries()) {
       if (stopRequested || activeSession !== sessionId) break;
-      const search = new SearchSession(
-        message.queryJson,
-        segment.startSeed,
-        segment.endSeedExclusive,
-      );
-      try {
-        while (!stopRequested && activeSession === sessionId) {
-          const advance = JSON.parse(search.advance(CHUNK)) as SearchAdvance;
-          scanned[segmentIndex] = advance.tested;
-          pendingMatches.push(...advance.matches);
-          const now = performance.now();
-          if (now - lastPosted >= 100) {
-            flush();
-            lastPosted = now;
+      while (
+        segment.startSeed + scanned[segmentIndex] < segment.endSeedExclusive &&
+        !stopRequested &&
+        activeSession === sessionId
+      ) {
+        const offset = scanned[segmentIndex];
+        const search = new SearchSession(
+          message.queryJson,
+          segment.startSeed + offset,
+          segment.endSeedExclusive,
+        );
+        try {
+          while (!stopRequested && activeSession === sessionId) {
+            const advance = JSON.parse(search.advance(CHUNK)) as SearchAdvance;
+            scanned[segmentIndex] = offset + advance.tested;
+            pendingMatches.push(...advance.matches);
+            const now = performance.now();
+            if (now - lastPosted >= 100) {
+              flush();
+              lastPosted = now;
+            }
+            // "completed" also fires when the session hits its own result cap
+            // before reaching the end of the segment; the per-segment scanned
+            // count keeps the untested tail attributable either way.
+            if (advance.state === "completed") break;
+            await yieldToMessages();
           }
-          // "completed" also fires when the session hits its own result cap
-          // before reaching the end of the segment; the per-segment scanned
-          // count keeps the untested tail attributable either way.
-          if (advance.state === "completed") break;
-          await yieldToMessages();
+        } finally {
+          search.free();
         }
-      } finally {
-        search.free();
+        flush();
+        await yieldToMessages();
+        if (scanned[segmentIndex] === offset) break;
       }
     }
     if (activeSession !== sessionId) return;
@@ -60,6 +70,8 @@ async function runSearch(message: Extract<SearchWorkerRequest, { type: "search:s
     if (stopRequested) post({ type: "search:stopped", sessionId, scanned });
     else post({ type: "search:done", sessionId, scanned });
   } catch (error) {
+    // Preserve discoveries made since the last progress report.
+    flush();
     post({
       type: "search:error",
       sessionId,

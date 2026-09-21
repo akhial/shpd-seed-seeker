@@ -340,17 +340,6 @@ fn invalid_blanket_structures_are_rejected() {
 }
 
 #[test]
-fn continuation_never_loses_an_existing_blanket() {
-    let ordinary = parse_query(WANDS);
-    let narrowed = parse_query(&format!("{WANDS},{BLANKET}"));
-    assert!(narrowed.continues(&ordinary));
-    assert!(narrowed.continues(&narrowed));
-    assert!(!ordinary.continues(&narrowed));
-    let widened = parse_query(&format!("{WANDS},{BLANKET},{{\"kind\":\"wand\"}}"));
-    assert!(!widened.continues(&narrowed));
-}
-
-#[test]
 fn probability_reuses_supply_and_recognizes_redundancy() {
     let base = parse_query(r#"{"item":"wand_frost"}"#);
     let redundant = parse_query(r#"{"item":"wand_frost"},{"kind":"wand","blanket":true}"#);

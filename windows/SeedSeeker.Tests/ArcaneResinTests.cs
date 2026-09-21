@@ -41,8 +41,6 @@ public sealed class ArcaneResinTests
         Assert.All(marks.Matched, index => Assert.Equal(ItemKind.Wand, world.Items[index].Item.Kind));
         var harder = query.Clone(); harder.ArcaneResin = 65535;
         Assert.Equal(0, NativeEngine.ScoutMatches(world.Seed, 0, harder).MatchedRequirements);
-        Assert.True(QueryRefinement.CanRefine(harder, query));
-        Assert.False(QueryRefinement.CanRefine(query, harder));
     }
     [Fact]
     public void AutoBlanketSharesItsWitnessAndPreservesTheEngineEstimate()
@@ -61,7 +59,6 @@ public sealed class ArcaneResinTests
         using var directSearch = new NativeEngine().StartResumed(direct, 18, 0, 1);
         Assert.True(search.Status().Probability > 0);
         Assert.Equal(directSearch.Status().Probability, search.Status().Probability, 12);
-        Assert.True(QueryRefinement.CanRefine(query, query));
         query.Requirements = new(query.Requirements.Where(r => r.Blanket));
         Assert.NotNull(QueryRelationships.Validate(query));
     }

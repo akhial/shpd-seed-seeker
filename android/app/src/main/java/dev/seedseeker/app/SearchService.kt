@@ -126,7 +126,8 @@ class SearchService : Service() {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_search_notification)
             .setContentTitle(if (controller.refinePhase != null) "Refining seeds" else "Searching for seeds")
-            .setContentText("${snapshot.results.size} found · ${snapshot.status?.scannedSeeds ?: 0} checked")
+            .setContentText(controller.refineProgress?.let { "${it.checked} of ${it.total} saved seeds checked" }
+                ?: "${snapshot.results.size} found · ${snapshot.status?.scannedSeeds ?: 0} checked")
             .setContentIntent(open)
             .setOngoing(true)
             .setOnlyAlertOnce(true)

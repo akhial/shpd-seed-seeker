@@ -13,55 +13,15 @@ public struct BaseRun: Sendable {
     }
 }
 
-/// How the current (or last) run relates to the session's Target — see
-/// docs/search-semantics.md. A continued detached scan stays `.detached`.
-public enum RunKind: Sendable {
-    case anchor, targetRefine, targetFilter, detached
-}
-
-/// What pressing Start Search does with a request, per docs/search-semantics.md.
-public enum StartMode: Sendable {
-    /// Fresh full-range scan that establishes the Target on conclusion.
-    case anchor
-    /// Filter the full Target Set, then resume the target's uncovered remainder.
-    case targetRefine
-    /// Filter the full Target Set only; coverage and set stay untouched.
-    case targetFilter
-    /// Continue the previous detached scan (filter its results, resume its remainder).
-    case continueDetached
-    /// Fresh full-range scan that leaves the Target untouched.
-    case detached
-
-    /// The lowercase name `seedfinder_decide_start` answers with, matching the
-    /// terminology of docs/search-semantics.md.
-    init?(engineName: String) {
-        switch engineName {
-        case "anchor": self = .anchor
-        case "target-refine": self = .targetRefine
-        case "target-filter": self = .targetFilter
-        case "continue-detached": self = .continueDetached
-        case "detached": self = .detached
-        default: return nil
-        }
-    }
-}
-
-/// The session's anchor: established by the first concluded search (or an
-/// import) and reset only by Clear. `seeds` is uncapped and a superset of any
-/// related run's display, which is what lets a loosened query bring seeds
-/// back. `resumeFrom`/`remaining` are the coverage the target traversal has
-/// not completed; imports carry none.
+/// Every loaded or discovered seed, with its original recipe and selection source.
 public struct TargetState: Sendable {
     public let request: SearchRequest
-    /// Every unique seed the Target Query's traversal has delivered, in
-    /// discovery order.
+    /// All saved seeds in discovery order.
     public var seeds: [String]
     public var recipes: [String: SeedResult]
-    public var resumeFrom: Int64
-    public var remaining: Int64
-    public init(request: SearchRequest, seeds: [String], resumeFrom: Int64, remaining: Int64, recipes: [String: SeedResult] = [:]) {
+    public var sources: [String: SearchRequest] = [:]
+    public init(request: SearchRequest, seeds: [String], recipes: [String: SeedResult] = [:]) {
         self.request = request; self.seeds = seeds; self.recipes = recipes
-        self.resumeFrom = resumeFrom; self.remaining = remaining
     }
 }
 
@@ -89,13 +49,9 @@ public final class SearchController {
     /// The session's Target, if one has been established — see
     /// docs/search-semantics.md. Only `clearResults()` discards it.
     public private(set) var target: TargetState?
-    /// How the current (or last) run relates to the Target.
-    public private(set) var runKind: RunKind = .anchor
     /// How many previous results survived the last refine; nil after a fresh search.
     public private(set) var refinedKept: Int?
-    /// The size of the set the last refine filtered (the "of Y" in "kept X of
-    /// Y"): the full Target Set for a target refine or filter, the previous
-    /// run's results for a continued detached scan. Nil after a fresh search.
+    /// The size of the full saved pool checked by the last search.
     public private(set) var refinedOf: Int?
     /// Whether the current results were restored from an imported file
     /// rather than produced by a search.
@@ -115,8 +71,7 @@ public final class SearchController {
     private var task: Task<Void, Never>?
     /// Every unique seed of the current run — filter survivors plus scanned
     /// finds — in discovery order and uncapped, unlike the displayed
-    /// `results`. This is what settles into the Target and what a detached
-    /// continuation filters.
+    /// `results`. Every discovery also joins the saved pool.
     private var collected: [String] = []
     private var collectedRecipes: [String: SeedResult] = [:]
 
@@ -148,86 +103,71 @@ public final class SearchController {
         errorCode = 0; message = nil; state = nil; isImported = true; selectedSeed = nil
         // Imported results carry no traversal state, so the previous
         // search's base run no longer describes the listed seeds.
-        baseRun = nil; refinedKept = nil; refinedOf = nil; runKind = .anchor
-        // The imported query and seeds replace the session's Target, with no
-        // coverage: refines of an import are filter-only.
+        baseRun = nil; refinedKept = nil; refinedOf = nil
+        // Imports add to the retained pool; they provide no scan cursor.
         let request = try? SearchRequest(
             requirements: query.requirements, maximumDepth: query.maximumDepth,
             requireBlacksmith: query.requireBlacksmith,
             excludeBlacksmithRewards: query.excludeBlacksmithRewards,
             wandmakerQuest: query.wandmakerQuest,
             challenges: query.challenges, autoApplyTrinket: query.autoApplyTrinket, arcaneResin: query.arcaneResin, arcaneResinFilter: query.arcaneResinFilter, arcaneResinAuto: query.arcaneResinAuto)
-        target = request.map { TargetState(request: $0, seeds: seeds, resumeFrom: 0, remaining: 0, recipes: collectedRecipes) }
+        if let request { remember(results, source: request) }
     }
 
-    /// Starts `request`, dispatching on its relationship to the session's
-    /// Target (docs/search-semantics.md): a continuation of the Target Query
-    /// refines the Target Set and resumes its coverage, a request sharing an
-    /// item filters the full set, and an unrelated request scans the whole
-    /// range without touching the Target — continuing the previous detached
-    /// scan when that is sound. There is no user-facing choice: eligibility
-    /// alone decides, and only `clearResults()` discards anything.
-    ///
-    /// `workers` is the device-local thread count (see `WorkerPersistence`),
-    /// carried alongside the request rather than in it: it reaches every
-    /// native start this run makes — the fresh scan and the resumed remainder
-    /// of a refine alike — without ever touching what the query means.
+    /// Search checks every retained seed and then looks for more matches.
     public func start(_ request: SearchRequest, workers: Int = WorkerPersistence.unset) {
-        switch decideStart(request) {
-        case .targetRefine: refineTarget(request, workers: workers, resumesScan: true)
-        case .targetFilter: refineTarget(request, workers: workers, resumesScan: false)
-        case .continueDetached: continueDetached(request, workers: workers)
-        case .anchor: freshSearch(request, workers: workers, as: .anchor)
-        case .detached: freshSearch(request, workers: workers, as: .detached)
-        }
-    }
-
-    /// The single gate for what Start Search does. The decision itself is the
-    /// engine's (`seedfinder_decide_start`, per docs/search-semantics.md): the
-    /// controller only supplies the session state it reads — the Target Query,
-    /// whether the Target Set is empty and whether its coverage has seeds
-    /// left, and the last concluded run's query when that run was detached.
-    public func decideStart(_ request: SearchRequest) -> StartMode {
-        // A start while a search is running restarts from scratch (the UI
-        // offers Cancel instead); only an idle controller can filter the
-        // Target Set or resume a scan soundly.
-        guard !isRunning else { return target == nil ? .anchor : .detached }
-        return StartDecision.decide(
-            candidate: request, target: target?.request,
-            targetSetEmpty: target?.seeds.isEmpty ?? true,
-            targetHasUncoveredSeeds: (target?.remaining ?? 0) > 0,
-            detachedBase: runKind == .detached ? baseRun?.request : nil)
-    }
-
-    /// Scans the whole seed space from scratch, replacing the displayed
-    /// results. An `.anchor` run establishes the Target when it concludes; a
-    /// `.detached` run leaves the existing Target untouched.
-    private func freshSearch(_ request: SearchRequest, workers: Int, as kind: RunKind) {
-        task?.cancel(); results = []; collected = []; collectedRecipes = [:]; refinedKept = nil; refinedOf = nil; baseRun = nil; resetProgress()
-        isImported = false; importedDropped = 0
-        runKind = kind
-        exportQuery = SavedQuery(
-            requirements: request.requirements, maximumDepth: request.maximumDepth,
-            requireBlacksmith: request.requireBlacksmith,
-            excludeBlacksmithRewards: request.excludeBlacksmithRewards,
-            wandmakerQuest: request.wandmakerQuest,
-            challenges: request.challenges, autoApplyTrinket: request.autoApplyTrinket, arcaneResin: request.arcaneResin, arcaneResinFilter: request.arcaneResinFilter, arcaneResinAuto: request.arcaneResinAuto)
+        guard !isRunning else { return }
+        let pool = target
+        let encoded = try? QueryDocument.encode(request)
+        let previous = baseRun.flatMap { (try? QueryDocument.encode($0.request)) == encoded ? $0 : nil }
+        task?.cancel(); resetProgress()
+        if target == nil { target = TargetState(request: request, seeds: []) }
         task = Task { [weak self] in
             guard let self else { return }
-            await self.run(request, alreadyShown: []) { engine in
-                try await engine.startSearch(request, workers: workers)
+            do {
+                var groups: [(source: SearchRequest, recipes: [SeedResult])] = []
+                for seed in pool?.seeds ?? [] {
+                    let source = pool?.sources[seed] ?? pool?.request ?? request
+                    let recipe = pool?.recipes[seed] ?? SeedResult(seed: seed, matchedRequirements: source.slotCount)
+                    let key = try QueryDocument.encode(source)
+                    if let index = try groups.firstIndex(where: { try QueryDocument.encode($0.source) == key }) {
+                        groups[index].recipes.append(recipe)
+                    } else { groups.append((source, [recipe])) }
+                }
+                var kept: [SeedResult] = []
+                for group in groups {
+                    try Task.checkCancellation()
+                    kept += try await engine.filterRecipes(request, base: group.source, recipes: group.recipes)
+                }
+                try Task.checkCancellation()
+                self.collected = kept.map(\.seed)
+                self.collectedRecipes = Dictionary(uniqueKeysWithValues: kept.map { ($0.seed, $0) })
+                self.results = Array(kept.prefix(Self.resultCap))
+                self.refinedKept = pool == nil ? nil : kept.count; self.refinedOf = pool?.seeds.count
+                self.exportQuery = SavedQuery(
+                    requirements: request.requirements, maximumDepth: request.maximumDepth,
+                    requireBlacksmith: request.requireBlacksmith, excludeBlacksmithRewards: request.excludeBlacksmithRewards,
+                    wandmakerQuest: request.wandmakerQuest, challenges: request.challenges,
+                    autoApplyTrinket: request.autoApplyTrinket, arcaneResin: request.arcaneResin,
+                    arcaneResinFilter: request.arcaneResinFilter, arcaneResinAuto: request.arcaneResinAuto)
+                self.isImported = false; self.importedDropped = 0
+                if let previous, previous.remaining == 0 {
+                    self.state = .completed; self.isRunning = false
+                    return
+                }
+                await self.run(request, alreadyShown: Set(kept.map(\.seed)), workers: workers) { engine in
+                    if let previous {
+                        return try await engine.startResumedSearch(request, resumeFrom: previous.resumeFrom,
+                            scanLen: previous.remaining, workers: workers)
+                    }
+                    return try await engine.startSearch(request, workers: workers)
+                }
+            } catch is CancellationError {
+                self.state = .cancelled; self.isRunning = false
+            } catch {
+                self.state = .failed; self.message = error.localizedDescription; self.isRunning = false
             }
         }
-    }
-
-    /// Whether starting `request` could continue the last finished run rather
-    /// than rescan: nothing running, a base run on record, and the same
-    /// requirements or more under a scope it never widens. `decideStart(_:)` consults
-    /// this for the detached thread only; a continuation of the Target Query
-    /// always refines the Target instead.
-    public func canRefine(with request: SearchRequest) -> Bool {
-        guard !isRunning, let baseRun else { return false }
-        return request.isRefinement(of: baseRun.request)
     }
 
     /// Whether there is anything for `clearResults()` to discard.
@@ -236,131 +176,15 @@ public final class SearchController {
             || exportQuery != nil || target != nil)
     }
 
-    /// Empties the results area along with the Target behind it — the Target
-    /// Query, the Target Set, and the coverage a later start would otherwise
-    /// refine or resume — so the next search anchors a new session from
-    /// scratch. This is the only action that discards the Target. Ignored
-    /// while a search or filter phase is running.
+    /// Discards the saved pool, visible matches, and scan cursor. Ignored while searching.
     public func clearResults() {
         guard !isRunning else { return }
         results = []; collected = []; collectedRecipes = [:]; selectedSeed = nil; exportQuery = nil
         isImported = false; importedDropped = 0
         baseRun = nil; refinedKept = nil; refinedOf = nil
-        target = nil; runKind = .anchor
+        target = nil
         scannedSeeds = 0; totalSeeds = 0; matchProbability = nil; seedsPerSecond = 0; elapsed = 0
         errorCode = 0; message = nil; state = nil
-    }
-
-    /// Refines against the Target: the full Target Set is re-verified against
-    /// `request`, the survivors become the displayed results, and — when
-    /// `resumesScan` — the scan then continues over the target's uncovered
-    /// remainder, deduplicating by seed. The base is always the full Target
-    /// Set rather than the last run's survivors, so loosening back toward the
-    /// Target Query brings previously dropped seeds back. A cancelled or
-    /// failed filter phase leaves the previous results and the Target intact.
-    private func refineTarget(_ request: SearchRequest, workers: Int, resumesScan: Bool) {
-        guard let target else { return }
-        // Re-assert the equal-or-superset invariant here rather than trusting
-        // the decision: the soundness of resuming depends on it.
-        if resumesScan { guard request.isRefinement(of: target.request) else { return } }
-        task?.cancel(); resetProgress()
-        let restoreKind = runKind
-        runKind = resumesScan ? .targetRefine : .targetFilter
-        let baseSeeds = target.seeds
-        task = Task { [weak self] in
-            guard let self else { return }
-            let kept: [SeedResult]
-            do {
-                kept = try await engine.filterRecipes(request, base: target.request, recipes: baseSeeds.map { target.recipes[$0] ?? SeedResult(seed: $0, matchedRequirements: target.request.slotCount) })
-            } catch is CancellationError {
-                // The user backed out before the filter finished; the Target
-                // was never consumed, so it stays refinable as-is.
-                self.state = .cancelled; self.refinedKept = nil; self.refinedOf = nil
-                self.runKind = restoreKind; self.isRunning = false
-                return
-            } catch {
-                // The Target is still intact — keep it so the user can retry.
-                self.state = .failed; self.message = error.localizedDescription
-                self.refinedKept = nil; self.refinedOf = nil
-                self.runKind = restoreKind; self.isRunning = false
-                return
-            }
-            self.collected = kept.map(\.seed)
-            self.collectedRecipes = Dictionary(uniqueKeysWithValues: kept.map { ($0.seed, $0) })
-            self.results = Array(kept.prefix(Self.resultCap))
-            self.refinedKept = kept.count; self.refinedOf = baseSeeds.count
-            // From here on the listed results match the refined request, so
-            // that is what an export must claim. A cancel or failure above
-            // leaves the previous results — and their snapshot — untouched.
-            self.exportQuery = SavedQuery(
-                requirements: request.requirements, maximumDepth: request.maximumDepth,
-                requireBlacksmith: request.requireBlacksmith,
-                excludeBlacksmithRewards: request.excludeBlacksmithRewards,
-                wandmakerQuest: request.wandmakerQuest,
-                challenges: request.challenges, autoApplyTrinket: request.autoApplyTrinket, arcaneResin: request.arcaneResin, arcaneResinFilter: request.arcaneResinFilter, arcaneResinAuto: request.arcaneResinAuto)
-            // A filter never scans; a refine resumes the target's remainder.
-            if resumesScan && target.remaining > 0 {
-                await self.run(request, alreadyShown: Set(kept.map(\.seed))) { engine in
-                    try await engine.startResumedSearch(request, resumeFrom: target.resumeFrom,
-                                                        scanLen: target.remaining, workers: workers)
-                }
-            } else {
-                self.state = .completed
-                self.baseRun = BaseRun(request: request, resumeFrom: target.resumeFrom, remaining: 0)
-                self.isRunning = false
-            }
-        }
-    }
-
-    /// Continues the previous detached scan (the classic pre-Target refine
-    /// behaviour, scoped to the detached thread): its displayed results are
-    /// re-verified against `request` and the scan resumes over the range it
-    /// never covered. The Target is untouched throughout, and `runKind` stays
-    /// `.detached`.
-    private func continueDetached(_ request: SearchRequest, workers: Int) {
-        guard canRefine(with: request), let base = baseRun else { return }
-        task?.cancel(); resetProgress()
-        // The last run's full result set, not the capped display: finds
-        // beyond the display cap belong to the continuation's filter base.
-        let previousSeeds = collected
-        task = Task { [weak self] in
-            guard let self else { return }
-            let kept: [SeedResult]
-            do {
-                kept = try await engine.filterRecipes(request, base: base.request, recipes: previousSeeds.map { self.collectedRecipes[$0] ?? SeedResult(seed: $0, matchedRequirements: base.request.slotCount) })
-            } catch is CancellationError {
-                // The user backed out before the filter finished; the base run
-                // was never consumed, so it stays refinable as-is.
-                self.state = .cancelled; self.refinedKept = nil; self.refinedOf = nil
-                self.isRunning = false
-                return
-            } catch {
-                // The base run is still intact — keep it so the user can retry.
-                self.state = .failed; self.message = error.localizedDescription
-                self.refinedKept = nil; self.refinedOf = nil; self.isRunning = false
-                return
-            }
-            self.collected = kept.map(\.seed)
-            self.collectedRecipes = Dictionary(uniqueKeysWithValues: kept.map { ($0.seed, $0) })
-            self.results = Array(kept.prefix(Self.resultCap))
-            self.refinedKept = kept.count; self.refinedOf = previousSeeds.count
-            self.exportQuery = SavedQuery(
-                requirements: request.requirements, maximumDepth: request.maximumDepth,
-                requireBlacksmith: request.requireBlacksmith,
-                excludeBlacksmithRewards: request.excludeBlacksmithRewards,
-                wandmakerQuest: request.wandmakerQuest,
-                challenges: request.challenges, autoApplyTrinket: request.autoApplyTrinket, arcaneResin: request.arcaneResin, arcaneResinFilter: request.arcaneResinFilter, arcaneResinAuto: request.arcaneResinAuto)
-            if base.remaining > 0 {
-                await self.run(request, alreadyShown: Set(kept.map(\.seed))) { engine in
-                    try await engine.startResumedSearch(request, resumeFrom: base.resumeFrom,
-                                                        scanLen: base.remaining, workers: workers)
-                }
-            } else {
-                self.state = .completed
-                self.baseRun = BaseRun(request: request, resumeFrom: base.resumeFrom, remaining: 0)
-                self.isRunning = false
-            }
-        }
     }
 
     public func cancel() {
@@ -382,19 +206,20 @@ public final class SearchController {
     /// Runs one native session's poll loop, appending results not already in
     /// `alreadyShown`. A run that stops cleanly (completed or cancelled)
     /// records its resume hint as the new base run; a failure clears it.
-    private func run(_ request: SearchRequest, alreadyShown: Set<String>,
+    private func run(_ request: SearchRequest, alreadyShown: Set<String>, workers: Int,
                      startSession: (any SeedFinderEngine) async throws -> any SeedFinderSearchSession) async {
         let searchStart = ContinuousClock.now
         var shown = alreadyShown
+        let goal = shown.count >= Self.resultCap ? shown.count + Self.resultCap : Self.resultCap
         do {
-            let session = try await startSession(engine)
+            var session = try await startSession(engine)
             self.session = session
             var previousCount: Int64 = 0
             var previousTime = ContinuousClock.now
             var finalState: SearchState?
             while !Task.isCancelled {
                 let batch = try await session.poll(1_024)
-                self.append(batch, excluding: &shown)
+                self.append(batch, excluding: &shown, source: request)
                 let status = try await session.status()
                 let now = ContinuousClock.now
                 let totalDuration = searchStart.duration(to: now).components
@@ -409,10 +234,19 @@ public final class SearchController {
                 self.scannedSeeds = status.scannedSeeds; self.totalSeeds = status.totalSeeds
                 self.matchProbability = status.matchProbability > 0 ? status.matchProbability : nil
                 self.errorCode = status.errorCode; self.state = status.state
+                if status.state == .running && shown.count >= goal { await session.cancel() }
                 if status.state != .running {
                     let finalBatch = try await session.poll(1_024)
-                    self.append(finalBatch, excluding: &shown)
-                    finalState = status.state
+                    self.append(finalBatch, excluding: &shown, source: request)
+                    let hint = try await session.resumeHint()
+                    if status.state == .completed && status.scannedSeeds > 0 && hint.remaining > 0 && shown.count < goal {
+                        await session.close()
+                        session = try await engine.startResumedSearch(request, resumeFrom: hint.position, scanLen: hint.remaining, workers: workers)
+                        self.session = session; previousCount = 0
+                        continue
+                    }
+                    finalState = status.state == .cancelled && shown.count >= goal ? .completed : status.state
+                    self.state = finalState
                     break
                 }
                 try await Task.sleep(for: .milliseconds(150))
@@ -422,7 +256,6 @@ public final class SearchController {
                 self.baseRun = hint.map {
                     BaseRun(request: request, resumeFrom: $0.position, remaining: $0.remaining)
                 }
-                self.settleConcludedRun(request: request, hint: hint)
             }
             await session.close()
         } catch is CancellationError {
@@ -435,38 +268,19 @@ public final class SearchController {
         self.session = nil; self.isRunning = false
     }
 
-    /// Folds a concluded (completed or cancelled) run into the Target, per
-    /// docs/search-semantics.md: an anchor run establishes it from its own
-    /// results and coverage, a target refine grows the set with its new finds
-    /// and advances the coverage, and a target filter or detached run leaves
-    /// it exactly as it was. A failed run never reaches here — its coverage
-    /// is unknown.
-    private func settleConcludedRun(request: SearchRequest, hint: ResumeHint?) {
-        switch runKind {
-        case .targetFilter, .detached:
-            return
-        case .anchor:
-            target = TargetState(request: request, seeds: collected,
-                                 resumeFrom: hint?.position ?? 0, remaining: hint?.remaining ?? 0, recipes: collectedRecipes)
-        case .targetRefine:
-            guard var updated = target else {
-                target = TargetState(request: request, seeds: collected,
-                                     resumeFrom: hint?.position ?? 0, remaining: hint?.remaining ?? 0, recipes: collectedRecipes)
-                return
-            }
-            // The filter's survivors were already members; only new finds
-            // from the resumed scan grow the set. The stored set is never
-            // capped, and the Target Query stays the original one.
-            var seen = Set(updated.seeds)
-            let fresh = collected.filter { seen.insert($0).inserted }
-            for seed in fresh { updated.recipes[seed] = collectedRecipes[seed] }
-            updated.seeds += fresh
-            if let hint { updated.resumeFrom = hint.position; updated.remaining = hint.remaining }
-            target = updated
+    private func remember(_ entries: [SeedResult], source: SearchRequest) {
+        var pool = target ?? TargetState(request: source, seeds: [])
+        var known = Set(pool.seeds)
+        for entry in entries where known.insert(entry.seed).inserted {
+            pool.seeds.append(entry.seed)
+            pool.recipes[entry.seed] = entry
+            pool.sources[entry.seed] = source
         }
+        target = pool
     }
 
-    private func append(_ batch: [SeedResult], excluding shown: inout Set<String>) {
+    private func append(_ batch: [SeedResult], excluding shown: inout Set<String>, source: SearchRequest) {
+        remember(batch, source: source)
         guard !batch.isEmpty else { return }
         let fresh = batch.filter { shown.insert($0.seed).inserted }
         guard !fresh.isEmpty else { return }

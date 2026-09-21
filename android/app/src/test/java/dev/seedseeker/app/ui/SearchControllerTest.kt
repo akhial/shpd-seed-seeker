@@ -126,9 +126,9 @@ class SearchControllerTest {
     @Test fun interruptedFilterKeepsOldQueryAndResultsAndRetriesAllSeeds() = runTest {
         val base = request.copy(maximumDepth = 12)
         val seeds = List(1_100) { SeedResult("seed-$it", 1, "mossy_clump") }
-        val target = TargetState(base, seeds, 50, 0)
+        val target = TargetState(base, seeds)
         val store = MemoryStore(SearchSnapshot(results = seeds, query = base.toPresetQuery(), target = target,
-            pending = PendingSearch(request, StartMode.TARGET_FILTER, 2, RefineSpec(50, 0, seeds, base))))
+            pending = PendingSearch(request, 2, RefineSpec(50, 0, seeds, base))))
         val fixture = fixture(store)
         fixture.engine.onFilter = { fixture.controller.interrupt() }
         fixture.controller.runPending()
@@ -140,7 +140,7 @@ class SearchControllerTest {
         fixture.controller.runPending()
         advanceUntilIdle()
         assertEquals(seeds, fixture.controller.snapshot.results)
-        assertEquals(target, fixture.controller.snapshot.target)
+        assertEquals(target.results, fixture.controller.snapshot.target?.results)
         assertEquals(request.toPresetQuery(), fixture.controller.snapshot.query)
         assertNull(store.saved.pending)
         assertEquals(0, fixture.engine.sessions.size)
@@ -159,6 +159,70 @@ class SearchControllerTest {
         assertTrue(fixture.controller.snapshot.error!!.contains("disk full"))
         fixture.scope.cancel()
     }
+
+
+    @Test fun searchingImportedResultsFiltersThenStartsAFreshScan() = runTest {
+        val target = TargetState(request, listOf(a, b))
+        val fixture = fixture(MemoryStore(SearchSnapshot(results = target.results, query = request.toPresetQuery(), target = target)))
+        fixture.engine.filter = { it.filter { result -> result == a } }
+        fixture.engine.completedBatches += listOf(a, c) to ResumeHint(1_000, 0)
+        fixture.controller.start(request, 2)
+        fixture.controller.runPending()
+        advanceUntilIdle()
+        assertEquals(listOf(a, b), fixture.engine.filtered)
+        assertEquals(listOf(a, c), fixture.controller.snapshot.results)
+        assertEquals(1, fixture.engine.sessions.size)
+        assertTrue(fixture.engine.windows.isEmpty())
+        assertEquals(listOf(request), fixture.engine.filterSources)
+        assertEquals(listOf(a, b, c), fixture.controller.snapshot.target?.results)
+        fixture.scope.cancel()
+    }
+
+    @Test fun fullImportedPoolsFinishVerificationAndReportEveryCheckedSeed() = runTest {
+        for (count in listOf(11, 1023, 1024, 1025)) {
+            val seeds = List(count) { SeedResult("loaded-$it", 1) }
+            val pool = TargetState(request, seeds)
+            val fixture = fixture(MemoryStore(SearchSnapshot(results = seeds,
+                query = request.toPresetQuery(), target = pool)))
+            val progress = mutableListOf<RefineProgress?>()
+            fixture.engine.onFilter = { progress += fixture.controller.refineProgress }
+            fixture.engine.filter = { emptyList() }
+            fixture.engine.completedBatches += listOf(c) to ResumeHint(1000, 0)
+            fixture.controller.start(request, 2)
+            fixture.controller.runPending()
+            advanceUntilIdle()
+            assertEquals((0 until count step 24).map { RefineProgress(it, count) }, progress)
+            assertEquals(seeds, fixture.engine.filtered)
+            assertEquals(listOf(c), fixture.controller.snapshot.results)
+            assertEquals(seeds + c, fixture.controller.snapshot.target!!.results)
+            assertEquals(1, fixture.engine.sessions.size)
+            assertFalse(fixture.controller.isSearching)
+            assertNull(fixture.controller.refineProgress)
+            fixture.scope.cancel()
+        }
+    }
+
+    @Test fun refinementResumesAndFillsTheLimitWithUniqueMatchesAcrossNativeSessions() = runTest {
+        val seeds = List(RESULT_CAP - 2) { SeedResult("loaded-$it", 1) }
+        val target = TargetState(request, seeds)
+        val fixture = fixture(MemoryStore(SearchSnapshot(results = seeds, query = request.toPresetQuery(), target = target,
+            lastRun = FinishedRun(request, 50, 950, seeds))))
+        // A native accept cap can include seeds already kept by the filter. It must not
+        // terminate the whole search while the list still has room for unique matches.
+        fixture.engine.completedBatches += listOf(seeds.first(), b) to ResumeHint(100, 900)
+        fixture.engine.completedBatches += listOf(b, c) to ResumeHint(200, 800)
+        fixture.controller.start(request, 2)
+        fixture.controller.runPending()
+        advanceUntilIdle()
+        assertEquals(listOf(ResumeHint(50, 950), ResumeHint(100, 900)), fixture.engine.windows)
+        assertEquals(seeds + listOf(b, c), fixture.controller.snapshot.results)
+        assertEquals(RESULT_CAP, fixture.controller.snapshot.results.size)
+        assertEquals(800L, fixture.controller.snapshot.lastRun?.remaining)
+        assertTrue(fixture.engine.sessions.all { it.closed })
+        fixture.scope.cancel()
+    }
+
+
 
     @Test fun failedForegroundStartPreservesPendingSearchForVisibleRetry() = runTest {
         val fixture = fixture()
@@ -185,6 +249,37 @@ class SearchControllerTest {
         fixture.controller.clear()
         runCurrent()
         assertEquals(SearchSnapshot(), fixture.store.saved)
+        fixture.scope.cancel()
+    }
+
+    @Test fun differentQueriesAndImportsKeepTheWholePoolAndOriginalSources() = runTest {
+        val other = SearchRequest(listOf(ItemRequirement(2, ItemCatalog.rings.first(), 1)))
+        val fixture = fixture()
+        fixture.controller.importResults(request.toPresetQuery(), listOf(a, b), TargetState(request, listOf(a, b)))
+        fixture.engine.filter = { it.filter { seed -> seed == b } }
+        fixture.engine.completedBatches += listOf(c) to ResumeHint(1000, 0)
+        fixture.controller.start(other, 1)
+        fixture.controller.runPending()
+        advanceUntilIdle()
+        assertEquals(listOf(b, c), fixture.controller.snapshot.results)
+        assertEquals(listOf(a, b, c), fixture.controller.snapshot.target!!.results)
+        assertEquals(request, fixture.controller.snapshot.target!!.sources[a.seed])
+        assertEquals(other, fixture.controller.snapshot.target!!.sources[c.seed])
+
+        fixture.engine.filtered.clear()
+        fixture.engine.filterSources.clear()
+        fixture.engine.filter = { it }
+        fixture.engine.completedBatches += emptyList<SeedResult>() to ResumeHint(1000, 0)
+        fixture.controller.start(request, 1)
+        fixture.controller.runPending()
+        advanceUntilIdle()
+        assertEquals(listOf(a, b, c), fixture.engine.filtered)
+        assertEquals(listOf(request, other), fixture.engine.filterSources)
+        assertEquals(listOf(a, b, c), fixture.controller.snapshot.results)
+        fixture.controller.importResults(other.toPresetQuery(), listOf(c), TargetState(other, listOf(c)))
+        assertEquals(listOf(a, b, c), fixture.controller.snapshot.target!!.results)
+        fixture.controller.clear()
+        assertNull(fixture.controller.snapshot.target)
         fixture.scope.cancel()
     }
 
@@ -219,6 +314,10 @@ class SearchControllerTest {
     private inner class FakeEngine : NativeSeedFinder by DemoNativeSeedFinder() {
         val sessions = mutableListOf<FakeSession>()
         val windows = mutableListOf<ResumeHint>()
+        val filterSources = mutableListOf<SearchRequest>()
+        val filtered = mutableListOf<SeedResult>()
+        val completedBatches = ArrayDeque<Pair<List<SeedResult>, ResumeHint>>()
+        var filter: (List<SeedResult>) -> List<SeedResult> = { it }
         var onFilter: () -> Unit = {}
         override fun startSearch(request: SearchRequest, workers: Int): NativeSearchSession = open()
         override fun startResumedSearch(request: SearchRequest, resumeFrom: Long, scanLen: Long, workers: Int): NativeSearchSession {
@@ -227,21 +326,24 @@ class SearchControllerTest {
         }
         override fun filterRecipes(request: SearchRequest, base: SearchRequest, recipes: List<SeedResult>): List<SeedResult> {
             onFilter()
-            return recipes
+            filterSources += base
+            filtered += recipes
+            return filter(recipes)
         }
         private fun open(): NativeSearchSession {
             assertTrue("Previous handle must close before resuming", sessions.all { it.closed })
-            return FakeSession().also { sessions += it }
+            return FakeSession(completedBatches.removeFirstOrNull()).also { sessions += it }
         }
     }
 
-    private inner class FakeSession : NativeSearchSession {
+    private inner class FakeSession(private val completed: Pair<List<SeedResult>, ResumeHint>? = null) : NativeSearchSession {
         var closed = false
         var cancelled = false
         private var emittedInitial = false
         private var drained = 0
         override fun poll(maxResults: Int): SearchBatch {
             check(!closed)
+            if (completed != null) return SearchBatch(completed.first)
             return SearchBatch(when {
                 !emittedInitial -> listOf(a).also { emittedInitial = true }
                 cancelled && drained < 2 -> listOf(listOf(b, c)[drained++])
@@ -249,9 +351,10 @@ class SearchControllerTest {
             })
         }
         override fun status() = SearchStatus(
-            if (cancelled && drained == 2) SearchState.CANCELLED else SearchState.RUNNING, 100, 1_000,
+            if (completed != null) SearchState.COMPLETED else if (cancelled && drained == 2) SearchState.CANCELLED else SearchState.RUNNING, 100, 1_000,
         )
         override fun resumeHint(): ResumeHint {
+            if (completed != null) return completed.second
             check(cancelled && drained == 2) { "Unsafe cursor read before draining" }
             return ResumeHint(100, 900)
         }

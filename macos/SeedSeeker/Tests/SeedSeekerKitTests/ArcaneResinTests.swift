@@ -35,8 +35,6 @@ final class ArcaneResinTests: XCTestCase {
         for index in marks.matched { XCTAssertEqual(world.items[index].item.kind, .wand) }
         var harder = query; harder.arcaneResin = 65535
         XCTAssertEqual(try ScoutMatches.mark(seed: world.seed, challenges: 0, query: harder).matchedRequirements, 0)
-        XCTAssertTrue(harder.isRefinement(of: query))
-        XCTAssertFalse(query.isRefinement(of: harder))
         XCTAssertNotNil(try QueryAnalysis.analyze(QueryDocument.encode(query)).probability)
     }
     func testAutoBlanketSharesItsWitnessAndPreservesTheEngineEstimate() throws {
@@ -53,7 +51,6 @@ final class ArcaneResinTests: XCTestCase {
         let probability = try XCTUnwrap(QueryAnalysis.analyze(QueryDocument.encode(query)).probability)
         let directProbability = try XCTUnwrap(QueryAnalysis.analyze(QueryDocument.encode(direct)).probability)
         XCTAssertEqual(probability, directProbability, accuracy: 1e-12)
-        XCTAssertTrue(query.isRefinement(of: query))
         XCTAssertThrowsError(try SearchRequest(requirements: query.requirements.filter { $0.blanket }, arcaneResinAuto: true))
     }
 

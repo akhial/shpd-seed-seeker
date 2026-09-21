@@ -14,7 +14,7 @@ import org.junit.Test
  * The results-file format, asserted against the engine that owns it. The codec
  * is `crates/seedfinder-core/src/results_export.rs`, reached through
  * `JniBindings.resultsEncode`/`resultsDecode` (the host build of the Rust
- * library JVM tests load — see QueryContinuationTest), so what these cases pin
+ * library JVM tests load — see JniNativeSeedFinderTest), so what these cases pin
  * is the real file format plus this app's mapping between the canonical query
  * document and its own models.
  */

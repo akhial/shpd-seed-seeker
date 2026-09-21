@@ -120,6 +120,7 @@ fun FinderScreen(
     elapsedSeconds: Long,
     isSearching: Boolean,
     refinePhase: RefinePhase?,
+    refineProgress: RefineProgress?,
     error: String?,
     snackbarHostState: SnackbarHostState,
     onAbout: () -> Unit,
@@ -251,6 +252,7 @@ fun FinderScreen(
                     status = status,
                     seedsPerSecond = seedsPerSecond,
                     elapsedSeconds = elapsedSeconds,
+                    refineProgress = refineProgress,
                     isSearching = isSearching,
                     onSearch = {
                         showResults = true
@@ -818,6 +820,7 @@ private fun SearchActionBar(
     status: SearchStatus?,
     seedsPerSecond: Double,
     elapsedSeconds: Long,
+    refineProgress: RefineProgress?,
     isSearching: Boolean,
     onSearch: () -> Unit,
     onCancel: () -> Unit,
@@ -832,13 +835,15 @@ private fun SearchActionBar(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(
-                            "${formatSeedRate(seedsPerSecond)} seeds/s · " +
+                            if (refineProgress != null) "Checking saved seeds · ${formatElapsedTime(elapsedSeconds)}"
+                            else "${formatSeedRate(seedsPerSecond)} seeds/s · " +
                                 "${formatElapsedTime(elapsedSeconds)} · " +
                                 "${compactCount(status?.scannedSeeds ?: 0L)} scanned",
                             style = MaterialTheme.typography.labelLarge,
                         )
                         Text(
-                            searchEstimateText(status, seedsPerSecond),
+                            if (refineProgress != null) "${refineProgress.checked} of ${refineProgress.total} checked"
+                            else searchEstimateText(status, seedsPerSecond),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

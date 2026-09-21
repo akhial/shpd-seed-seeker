@@ -1168,57 +1168,25 @@ public sealed class QuerySettings
     };
 }
 
-/// <summary>
-/// Decides whether a query can continue a finished run instead of rescanning it:
-/// an identical floor limit and challenge set, world conditions (the
-/// blacksmith flags and the Wandmaker quest) at least as strict as the
-/// baseline's, and every baseline requirement still present (counting
-/// duplicates). Extra requirements are allowed but not required — an unchanged
-/// query qualifies too, and continuing it is exactly right: its filter trivially
-/// keeps every seed the run delivered and the scan resumes where it stopped. A
-/// search session therefore survives until the user explicitly clears it.
-/// The continuation rule itself belongs to the engine and is asked of it, since
-/// soundness of the resumed scan depends on the two agreeing exactly.
-/// </summary>
-public static class QueryRefinement
+/// <summary>Every saved seed, its original recipe, and the query that chose it.</summary>
+public sealed record TargetRun(QuerySettings Query, IReadOnlyList<string> Seeds,
+    IReadOnlyDictionary<string, SeedResult>? Recipes = null,
+    IReadOnlyDictionary<string, QuerySettings>? Sources = null)
 {
-    /// <summary>
-    /// True when every requirement of <paramref name="baseline"/> is covered by
-    /// a distinct requirement of <paramref name="candidate"/> at least as strict
-    /// (equal or strengthened) under a scope the candidate never widens.
-    /// Deliberately not strict: an equal query is a continuation, not a rescan.
-    /// The engine decides — this encodes both queries and asks
-    /// <c>seedfinder_query_continues</c>, so refine eligibility here is the very
-    /// predicate the resumed scan relies on and cannot drift from it.
-    /// </summary>
-    public static bool CanRefine(QuerySettings candidate, QuerySettings baseline) =>
-        NativeEngine.QueryContinues(candidate, baseline);
-
+    public static TargetRun Remember(TargetRun? pool, QuerySettings query, IEnumerable<SeedResult> entries)
+    {
+        var seeds = new List<string>(pool?.Seeds ?? []);
+        var known = new HashSet<string>(seeds);
+        var recipes = new Dictionary<string, SeedResult>(pool?.Recipes ?? new Dictionary<string, SeedResult>());
+        var sources = new Dictionary<string, QuerySettings>(pool?.Sources ?? new Dictionary<string, QuerySettings>());
+        foreach (var seed in seeds) sources.TryAdd(seed, pool!.Query);
+        var source = query.Clone();
+        foreach (var entry in entries) if (known.Add(entry.Seed)) {
+            seeds.Add(entry.Seed); recipes[entry.Seed] = entry; sources[entry.Seed] = source;
+        }
+        return new(pool?.Query ?? source, seeds, recipes, sources);
+    }
 }
-
-/// <summary>What pressing Start Search does with a query, per docs/search-semantics.md.</summary>
-public enum StartMode
-{
-    /// <summary>Fresh full-range scan that establishes the Target on conclusion.</summary>
-    Anchor,
-    /// <summary>Filter the Target Set, then resume the target's uncovered remainder.</summary>
-    TargetRefine,
-    /// <summary>Filter the Target Set only; coverage and set stay untouched.</summary>
-    TargetFilter,
-    /// <summary>Continue the previous detached scan (filter its results, resume its remainder).</summary>
-    ContinueDetached,
-    /// <summary>Fresh full-range scan that leaves the Target untouched.</summary>
-    Detached,
-}
-
-/// <summary>
-/// The session's anchor: established by the first concluded search (or an
-/// import) and reset only by Clear Results. <see cref="Seeds"/> is uncapped and
-/// a superset of any related run's display, which is what lets a loosened query
-/// bring seeds back. <see cref="Remaining"/> is zero for imports, whose refines
-/// are filter-only.
-/// </summary>
-public sealed record TargetRun(QuerySettings Query, IReadOnlyList<string> Seeds, long ResumeFrom, long Remaining, IReadOnlyDictionary<string, SeedResult>? Recipes = null);
 
 public sealed class QueryPreset
 {

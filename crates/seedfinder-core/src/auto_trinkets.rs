@@ -13,6 +13,8 @@ use crate::quests::QuestSummary;
 use crate::search::{FloorGate, WorldGenerator};
 use crate::seed::DungeonSeed;
 use crate::trinkets::{initial_offers, trinket_order};
+use std::collections::VecDeque;
+use std::sync::Mutex;
 
 /// Reproducible world conditions for a result, independent of editor changes.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -138,6 +140,8 @@ fn remove_unnecessary_trinkets<G: WorldGenerator>(
 
 /// Verify saved recipes against new item predicates while retaining their
 /// original world conditions, then remove any unnecessary automatic choice.
+/// User-facing refinement should use [`refine_batch`] to honor current trinket
+/// requirements; this lower-level replay also serves generation parity checks.
 #[must_use]
 pub fn filter_batch<G: WorldGenerator>(
     generator: &G,
@@ -160,11 +164,11 @@ pub fn filter_batch<G: WorldGenerator>(
     remove_unnecessary_trinkets(generator, query, plan, results)
 }
 
-/// Refine saved results under a new query. An automatic choice removed for
-/// the base query may be necessary for the new one, so retry the policy's
-/// choice when a saved no-trinket recipe fails changed predicates.
-/// Callers use `SearchQuery::continues` to decide whether
-/// they can also reuse the base query's scanned coverage.
+/// Refine under the original automatic choice, including choices previously
+/// removed as unnecessary. Test that world first; only successful matches get
+/// the usual no-trinket cleanup. Never rerank using the edited query while
+/// automatic selection remains enabled. Explicit trinket requirements or
+/// disabling automatic selection instead use the current query's world.
 #[must_use]
 pub fn refine_batch<G: WorldGenerator>(
     generator: &G,
@@ -173,30 +177,35 @@ pub fn refine_batch<G: WorldGenerator>(
     base: &SearchQuery,
     recipes: &[SeedRecipe],
 ) -> Vec<Option<TrinketSearchMatch>> {
-    let mut results = filter_batch(generator, query, plan, recipes);
-    if !enabled(query) || query == base || plan.is_unsatisfiable() {
-        return results;
+    if plan.is_unsatisfiable() {
+        return recipes.iter().map(|_| None).collect();
     }
-    let retry: Vec<_> = recipes
-        .iter()
-        .enumerate()
-        .filter_map(|(index, recipe)| {
-            (results[index].is_none()
-                && recipe.trinket.is_none()
-                && plan.selected_trinket(recipe.seed).is_some())
-            .then_some((index, recipe.seed))
-        })
-        .collect();
-    if !retry.is_empty() {
-        let seeds: Vec<_> = retry.iter().map(|&(_, seed)| seed).collect();
-        // The baseline just failed, so any match here needs its trinket.
-        // Saved recipes that still match retain their verified world.
-        let recovered = match_batch(generator, query, plan, plan.generation_depth(), &seeds);
-        for ((index, _), result) in retry.into_iter().zip(recovered) {
-            results[index] = result;
-        }
+    let seeds: Vec<_> = recipes.iter().map(|r| r.seed).collect();
+    if !enabled(query) {
+        return search_batch(generator, query, plan, &seeds);
     }
-    results
+    let original = QueryPlan::analyze(base);
+    let reapply = enabled(base);
+    let gate = RecipeGate {
+        plan,
+        choices: recipes
+            .iter()
+            .map(|r| {
+                (
+                    r.seed.value(),
+                    r.trinket.or_else(|| {
+                        if reapply {
+                            original.selected_trinket(r.seed)
+                        } else {
+                            None
+                        }
+                    }),
+                )
+            })
+            .collect(),
+    };
+    let results = match_batch(generator, query, &gate, plan.generation_depth(), &seeds);
+    remove_unnecessary_trinkets(generator, query, plan, results)
 }
 
 fn match_batch<G: WorldGenerator>(
@@ -234,11 +243,40 @@ pub const CANDIDATES: [ItemId; 4] = [
     ItemId::CrackedSpyglass,
 ];
 
-/// The complete deterministic choice rule. Equality means identical choices
-/// for every offer deck, which is needed for safe filter-and-resume searches.
+/// The complete deterministic choice rule for the initial offer deck.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AutoTrinketPolicy {
     preferred: Vec<ItemId>,
+}
+
+// Filtering is split into cancellable batches and native worker slices. Ranking
+// the same query in every slice can cost much more than generating the worlds,
+// especially with automatic resin. Keep a small, process-local cache shared by
+// those workers. Complete query equality prevents stale choices after edits.
+const POLICY_CACHE_CAPACITY: usize = 8;
+static POLICY_CACHE: Mutex<PolicyCache> = Mutex::new(PolicyCache(VecDeque::new()));
+
+struct PolicyCache(VecDeque<(SearchQuery, AutoTrinketPolicy)>);
+
+impl PolicyCache {
+    fn get_or_prepare(
+        &mut self,
+        query: &SearchQuery,
+        prepare: impl FnOnce() -> AutoTrinketPolicy,
+    ) -> AutoTrinketPolicy {
+        let entry = self
+            .0
+            .iter()
+            .position(|(cached, _)| cached == query)
+            .and_then(|index| self.0.remove(index))
+            .unwrap_or_else(|| (query.clone(), prepare()));
+        let policy = entry.1.clone();
+        self.0.push_back(entry);
+        if self.0.len() > POLICY_CACHE_CAPACITY {
+            self.0.pop_front();
+        }
+        policy
+    }
 }
 
 impl AutoTrinketPolicy {
@@ -249,6 +287,18 @@ impl AutoTrinketPolicy {
         if !enabled(query) {
             return None;
         }
+        // Hold the lock during preparation so concurrent native workers do not
+        // all repeat the same expensive cold calculation. Generation never
+        // holds this lock.
+        Some(
+            POLICY_CACHE
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .get_or_prepare(query, || Self::prepare_uncached(query)),
+        )
+    }
+
+    fn prepare_uncached(query: &SearchQuery) -> Self {
         let baseline = equipment_probability(query, Profile::None);
         let forbids_parchment = query.requirements.iter().any(|r| match r.effect {
             EffectRequirement::OneOf(set) => set.effects().any(Effect::is_curse),
@@ -261,13 +311,13 @@ impl AutoTrinketPolicy {
             .collect();
         // Stable sorting gives a fixed tie-break, independent of offer order.
         scores.sort_by(|a, b| finite_score(b.1).total_cmp(&finite_score(a.1)));
-        Some(Self {
+        Self {
             preferred: scores
                 .iter()
                 .filter(|(_, p)| baseline.is_finite() && p.is_finite() && *p > baseline * 1.05)
                 .map(|&(id, _)| id)
                 .collect(),
-        })
+        }
     }
 
     /// Choose a beneficial initial offer, or none, without generating floors.
@@ -307,12 +357,6 @@ pub fn enabled(query: &SearchQuery) -> bool {
             .any(|r| r.kind == ItemKind::Trinket)
 }
 
-/// Queries can share scanned coverage only when their choice rules agree.
-#[must_use]
-pub fn same_selection(candidate: &SearchQuery, base: &SearchQuery) -> bool {
-    candidate == base || AutoTrinketPolicy::prepare(candidate) == AutoTrinketPolicy::prepare(base)
-}
-
 /// Probability of the chosen policy, averaged over all 2,380 offer subsets.
 /// Equipment profiles already include the first brewing opportunity.
 pub(crate) fn probability(query: &SearchQuery, policy: &AutoTrinketPolicy) -> f64 {
@@ -348,7 +392,6 @@ mod tests {
     use crate::challenges::Challenges;
     use crate::json_query;
     use crate::main_world::{CanonicalMainWorldGenerator, generate_main_world_with_trinket};
-    use crate::query::{StartDecision, decide_start};
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     fn query(requirements: &str) -> SearchQuery {
@@ -356,6 +399,49 @@ mod tests {
             r#"{{"auto_apply_trinket":true,"max_depth":19,"requirements":{requirements}}}"#
         ))
         .unwrap()
+    }
+
+    #[test]
+    fn filtering_workers_rank_an_unchanged_query_only_once_across_batches() {
+        let query = query(r#"[{"item":"runic_blade","upgrade":1,"effect":"Grim"}]"#);
+        let cache = Mutex::new(PolicyCache(VecDeque::new()));
+        let preparations = AtomicUsize::new(0);
+        std::thread::scope(|scope| {
+            for _ in 0..8 {
+                scope.spawn(|| {
+                    // The Android controller checks 1,024 saved seeds in 43 batches.
+                    for _ in 0..43 {
+                        let policy = cache.lock().unwrap().get_or_prepare(&query, || {
+                            preparations.fetch_add(1, Ordering::Relaxed);
+                            AutoTrinketPolicy::prepare_uncached(&query)
+                        });
+                        assert_eq!(policy.preferred()[0], ItemId::ParchmentScrap);
+                    }
+                });
+            }
+        });
+        assert_eq!(preparations.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn cached_policies_follow_query_edits_and_have_a_bounded_lifetime() {
+        let mut cache = PolicyCache(VecDeque::new());
+        let base = query(r#"[{"kind":"armor","upgrade":1}]"#);
+        for depth in 1..=24 {
+            let mut edited = base.clone();
+            edited.max_depth = depth;
+            let expected = AutoTrinketPolicy::prepare_uncached(&edited);
+            assert_eq!(cache.get_or_prepare(&edited, || expected.clone()), expected);
+            assert_eq!(
+                cache.get_or_prepare(&edited, || panic!("cached query reranked")),
+                expected
+            );
+            assert!(cache.0.len() <= POLICY_CACHE_CAPACITY);
+        }
+        let mut edited = base;
+        edited.requirements.push(edited.requirements[0]);
+        let expected = AutoTrinketPolicy::prepare_uncached(&edited);
+        assert_eq!(cache.get_or_prepare(&edited, || expected.clone()), expected);
     }
 
     struct CountingGenerator(AtomicUsize);
@@ -480,30 +566,81 @@ mod tests {
         );
     }
 
+    struct RejectChosen {
+        expected: ItemId,
+        calls: AtomicUsize,
+    }
+    impl WorldGenerator for RejectChosen {
+        fn generate(&self, _: DungeonSeed, _: u8) -> GeneratedWorld {
+            panic!("batch expected")
+        }
+        fn generate_batch_gated(
+            &self,
+            seeds: &[DungeonSeed],
+            _: u8,
+            gate: &dyn FloorGate,
+        ) -> Vec<Option<GeneratedWorld>> {
+            self.calls.fetch_add(1, Ordering::Relaxed);
+            for &seed in seeds {
+                assert_eq!(gate.selected_trinket(seed), Some(self.expected));
+            }
+            // A miss in the chosen world is accepted: no baseline rescue.
+            seeds.iter().map(|_| None).collect()
+        }
+    }
+
     #[test]
-    fn changed_world_choices_start_a_new_traversal() {
-        let base = query(r#"[{"item":"runic_blade","upgrade":1,"effect":"Grim"}]"#);
-        assert!(base.continues(&base));
-        assert_eq!(
-            decide_start(&base, Some(&base), false, true, None),
-            StartDecision::TargetRefine
+    fn adding_armor_to_auto_resin_query_keeps_items_but_can_change_world_policy() {
+        let mut base = json_query::decode(
+            r#"{"max_depth":24,"exclude_blacksmith_rewards":true,"arcane_resin":"auto",
+                "requirements":[
+                    {"item":"wand_disintegration"}, {"item":"wand_lightning"}, {"kind":"wand"},
+                    {"item":"ring_energy","identity_group":1,"level_sum":{"group":1,"at_least":5}},
+                    {"kind":"ring","identity_group":1,"level_sum":{"group":1,"at_least":5}},
+                    {"kind":"ring","identity_group":1,"level_sum":{"group":1,"at_least":5}},
+                    {"item":"chalice_of_blood"}, {"item":"horn_of_plenty"}
+                ]}"#,
+        )
+        .unwrap();
+        let armor = json_query::decode(
+            r#"{"requirements":[{"kind":"armor","tier":{"at_most":3},"upgrade":3}]}"#,
+        )
+        .unwrap()
+        .requirements[0];
+        let mut candidate = base.clone();
+        candidate.requirements.push(armor);
+        base.auto_apply_trinket = true;
+        candidate.auto_apply_trinket = true;
+
+        // A changed ranking must not change the choice, even when a null
+        // recipe records a trinket that was unnecessary for the parent.
+        let original = QueryPlan::analyze(&base);
+        let edited = QueryPlan::analyze(&candidate);
+        let seed = (0..128)
+            .map(|v| DungeonSeed::new(v).unwrap())
+            .find(|&seed| {
+                original.selected_trinket(seed).is_some()
+                    && original.selected_trinket(seed) != edited.selected_trinket(seed)
+            })
+            .unwrap();
+        let generator = RejectChosen {
+            expected: original.selected_trinket(seed).unwrap(),
+            calls: AtomicUsize::new(0),
+        };
+        assert!(
+            refine_batch(
+                &generator,
+                &candidate,
+                &edited,
+                &base,
+                &[SeedRecipe {
+                    seed,
+                    trinket: None
+                }]
+            )[0]
+            .is_none()
         );
-        let mut disabled = base.clone();
-        disabled.auto_apply_trinket = false;
-        assert!(!disabled.continues(&base));
-        assert_eq!(
-            decide_start(&disabled, Some(&base), false, true, None),
-            StartDecision::Detached
-        );
-        let cursed = query(r#"[{"item":"runic_blade","upgrade":1,"effect":"Annoying"}]"#);
-        assert_eq!(
-            decide_start(&cursed, Some(&base), false, true, None),
-            StartDecision::Detached
-        );
-        let explicit = query(r#"[{"item":"rat_skull"}]"#);
-        let mut explicit_off = explicit.clone();
-        explicit_off.auto_apply_trinket = false;
-        assert!(explicit.continues(&explicit_off));
+        assert_eq!(generator.calls.load(Ordering::Relaxed), 1);
     }
 
     #[test]
@@ -613,42 +750,5 @@ mod tests {
             Some(ItemId::ParchmentScrap)
         );
         assert_eq!(generator.0.load(Ordering::Relaxed), 8); // Manual choices are preserved.
-    }
-
-    #[test]
-    fn refinement_can_restore_a_trinket_removed_for_the_base_query() {
-        let seed = DungeonSeed::from_code("EYY-RUL-LQG").unwrap();
-        let base = query(r#"[{"item":"runic_blade","upgrade":1,"effect":"Grim"}]"#);
-        let narrowed = query(
-            r#"[{"item":"runic_blade","upgrade":1,"effect":"Grim"},
-            {"item":"whip","effect":"Venomous"}]"#,
-        );
-        assert!(narrowed.continues(&base));
-        let generator = CanonicalMainWorldGenerator;
-        let base_plan = QueryPlan::analyze(&base);
-        let plan = QueryPlan::analyze(&narrowed);
-        let original = search_batch(&generator, &base, &base_plan, &[seed]);
-        let recipe = original[0].as_ref().unwrap().recipe;
-        assert_eq!(recipe.trinket, None);
-        assert!(filter_batch(&generator, &narrowed, &plan, &[recipe])[0].is_none());
-
-        let refined = refine_batch(&generator, &narrowed, &plan, &base, &[recipe]);
-        let refined = refined[0].as_ref().unwrap();
-        assert_eq!(refined.recipe.trinket, Some(ItemId::ParchmentScrap));
-        assert!(narrowed.matches(&refined.world));
-        let replay =
-            generate_main_world_with_trinket(seed, 24, Challenges::NONE, refined.recipe.trinket)
-                .unwrap();
-        assert!(narrowed.matches(&replay));
-
-        // Refining back removes the choice, including when replaying an old
-        // imported result whose trinket was unnecessary for the same query.
-        let widened = refine_batch(&generator, &base, &base_plan, &narrowed, &[refined.recipe]);
-        assert_eq!(widened[0].as_ref().unwrap().recipe, recipe);
-        let imported = refine_batch(&generator, &base, &base_plan, &base, &[refined.recipe]);
-        assert_eq!(
-            imported[0].as_ref().unwrap().world,
-            original[0].as_ref().unwrap().world
-        );
     }
 }

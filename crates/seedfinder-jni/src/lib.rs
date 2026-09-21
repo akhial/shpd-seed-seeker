@@ -6,12 +6,12 @@ use std::num::NonZeroUsize;
 
 use jni::JNIEnv;
 use jni::objects::{JByteArray, JClass, JLongArray};
-use jni::sys::{JNI_FALSE, jboolean, jint, jlong};
+use jni::sys::{jint, jlong};
 use shpd_seedfinder_core::{deep_link, engine_info, json_query, results_export, seed};
 use shpd_seedfinder_session::{
     FilterPacketError, MAX_RESULTS, NativeSession, ScoutCallError, ScoutMatchError,
     ScoutPacketError, SearchError, StartSessionError, available_workers, close_session, json,
-    production_filter_packet, production_scout_packet, queries_continue, registry,
+    production_filter_packet, production_scout_packet, registry,
 };
 
 fn throw_illegal_argument(env: &mut JNIEnv<'_>, message: impl AsRef<str>) {
@@ -369,97 +369,6 @@ pub extern "system" fn Java_dev_seedseeker_app_engine_JniBindings_filterSeeds<'l
             JByteArray::default()
         }
     }
-}
-
-/// Reports whether the query in `candidate` continues the one in
-/// `base` — the soundness precondition for the filter-and-resume refine flow.
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_dev_seedseeker_app_engine_JniBindings_queryContinues<'local>(
-    mut env: JNIEnv<'local>,
-    _class: JClass<'local>,
-    candidate: JByteArray<'local>,
-    base: JByteArray<'local>,
-) -> jboolean {
-    let (candidate, base) = match (
-        env.convert_byte_array(&candidate),
-        env.convert_byte_array(&base),
-    ) {
-        (Ok(candidate), Ok(base)) => (candidate, base),
-        (Err(error), _) | (_, Err(error)) => {
-            throw_illegal_argument(&mut env, format!("invalid request array: {error}"));
-            return JNI_FALSE;
-        }
-    };
-    match queries_continue(&candidate, &base) {
-        Ok(continues) => u8::from(continues),
-        Err(error) => {
-            throw_illegal_argument(&mut env, error.to_string());
-            JNI_FALSE
-        }
-    }
-}
-
-/// Reports what pressing Start Search must do with the query in
-/// `candidate`, per `docs/search-semantics.md`. `target` is the Target Query
-/// (`null` when there is no Target, which always anchors), `targetSetEmpty`
-/// and `targetHasUncoveredSeeds` describe the Target Set and its coverage, and
-/// `detachedBase` is the last concluded run's query when — and only when —
-/// that run was itself detached (`null` otherwise). The returned UTF-8 text is
-/// one of `anchor`, `target-refine`, `target-filter`, `continue-detached` or
-/// `detached`.
-///
-/// The continuation predicate is part of this decision: callers must not call
-/// `queryContinues` separately for it.
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_dev_seedseeker_app_engine_JniBindings_decideStart<'local>(
-    mut env: JNIEnv<'local>,
-    _class: JClass<'local>,
-    candidate: JByteArray<'local>,
-    target: JByteArray<'local>,
-    target_set_empty: jboolean,
-    target_has_uncovered_seeds: jboolean,
-    detached_base: JByteArray<'local>,
-) -> JByteArray<'local> {
-    type Packets = (Vec<u8>, Option<Vec<u8>>, Option<Vec<u8>>);
-    let packets: Result<Packets, jni::errors::Error> = (|| {
-        Ok((
-            env.convert_byte_array(&candidate)?,
-            optional_packet(&env, &target)?,
-            optional_packet(&env, &detached_base)?,
-        ))
-    })();
-    let (candidate, target, detached_base) = match packets {
-        Ok(packets) => packets,
-        Err(error) => {
-            throw_illegal_argument(&mut env, format!("invalid request array: {error}"));
-            return JByteArray::default();
-        }
-    };
-    match json::decide_start_name(
-        &candidate,
-        target.as_deref(),
-        target_set_empty != JNI_FALSE,
-        target_has_uncovered_seeds != JNI_FALSE,
-        detached_base.as_deref(),
-    ) {
-        Ok(decision) => utf8_response(&mut env, decision, "start decision"),
-        Err(error) => {
-            throw_illegal_argument(&mut env, error.to_string());
-            JByteArray::default()
-        }
-    }
-}
-
-/// Reads a nullable `byte[]` argument: Java `null` means the packet is absent,
-/// which the start decision reads as "no Target" / "no detached base".
-fn optional_packet(
-    env: &JNIEnv<'_>,
-    array: &JByteArray<'_>,
-) -> Result<Option<Vec<u8>>, jni::errors::Error> {
-    if array.is_null() {
-        return Ok(None);
-    }
-    env.convert_byte_array(array).map(Some)
 }
 
 /// Reads a UTF-8 string argument, throwing `IllegalArgumentException` and

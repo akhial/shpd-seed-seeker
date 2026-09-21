@@ -1,8 +1,6 @@
-import { readFile } from "node:fs/promises";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
-import init from "../wasm/pkg/seedfinder.js";
 import type { QueryDocument } from "../wasm/types";
-import { SearchCoordinator, clearResults, searchStore } from "./coordinator";
+import { SearchCoordinator, clearResults, loadImportedResults, searchStore } from "./coordinator";
 import {
   canClearResults,
   initialCoordinatorState,
@@ -19,6 +17,8 @@ interface StubMessage {
   type: string;
   seeds?: number[];
   queryJson?: string;
+  baseQueryJson?: string;
+  segments?: { startSeed: number; endSeedExclusive: number }[];
   requestId?: number;
 }
 
@@ -27,8 +27,11 @@ class StubWorker {
    * statically because the filter worker is a module-level singleton: it
    * outlives the test that first created it. */
   static posted: StubMessage[] = [];
+  static listeners: ((event: MessageEvent) => void)[] = [];
   constructor() {}
-  addEventListener(): void {}
+  addEventListener(_name: string, listener: (event: MessageEvent) => void): void {
+    StubWorker.listeners.push(listener);
+  }
   postMessage(message: StubMessage): void {
     StubWorker.posted.push(message);
   }
@@ -37,19 +40,11 @@ class StubWorker {
 
 const postedTypes = () => StubWorker.posted.map((message) => message.type);
 
-// The start decision asks the engine whether a query continues the Target, so
-// the wasm module has to be live before any coordinator test runs. Node has no
-// `fetch` for `file:` URLs, so it is instantiated from bytes; the app uses the
-// browser's URL form and builds its coordinator only after that resolves.
-beforeAll(async () => {
-  await init({
-    module_or_path: await readFile(new URL("../wasm/pkg/seedfinder_bg.wasm", import.meta.url)),
-  });
-});
 beforeAll(() => vi.stubGlobal("Worker", StubWorker));
 afterAll(() => vi.unstubAllGlobals());
 beforeEach(() => {
   StubWorker.posted = [];
+  StubWorker.listeners = [];
 });
 
 const TOTAL = 1_000;
@@ -78,10 +73,8 @@ function seedFinishedRun(
     workerCount: 1,
     completedWorkers: 1,
     target: {
-      queryJson: JSON.stringify(query),
       query,
       matches: [match(11), match(22)],
-      remainder: [{ startSeed: 400, endSeedExclusive: TOTAL }],
     },
   }));
 }
@@ -148,28 +141,53 @@ describe("implicit refine on start", () => {
     expect(postedTypes()).toEqual(["filter", "filter", "filter"]);
   });
 
-  it("runs an unrelated query as a detached scan that keeps the Target", () => {
+  it("filters unrelated loaded seeds before starting a fresh scan", async () => {
     const coordinator = new SearchCoordinator(TOTAL);
     seedFinishedRun(baseQuery);
     coordinator.start(unrelated, 2);
-
-    const state = searchStore.state;
-    expect(state.state).toBe("running");
-    expect(state.runKind).toBe("detached");
-    expect(state.filtering).toBe(false);
-    expect(state.refined).toBeUndefined();
-    expect(state.matches).toEqual([]);
-    expect(state.workerScanned).toEqual({});
-    // A detached scan covers the whole seed space, not just the untouched
-    // tail — and the Target survives it for later related searches.
+    expect(searchStore.state.filtering).toBe(true);
+    expect(searchStore.state.matches.map((item) => item.value)).toEqual([11, 22]);
+    const filter = StubWorker.posted[0];
+    StubWorker.listeners[0]({
+      data: {
+        type: "filter:result",
+        requestId: filter.requestId,
+        resultJson: JSON.stringify([match(11)]),
+      },
+    } as MessageEvent);
+    await vi.waitFor(() => expect(searchStore.state.filtering).toBe(false));
+    expect(searchStore.state.matches.map((item) => item.value)).toEqual([11]);
     expect(
-      state.segments
+      searchStore.state.segments
         .flat()
-        .reduce((sum, range) => sum + (range.endSeedExclusive - range.startSeed), 0),
+        .reduce((sum, range) => sum + range.endSeedExclusive - range.startSeed, 0),
     ).toBe(TOTAL);
-    expect(state.target?.matches.map((item) => item.value)).toEqual([11, 22]);
-    expect(state.target?.query).toEqual(baseQuery);
-    expect(postedTypes()).toEqual(["search:start", "search:start"]);
+    expect(searchStore.state.target?.matches.map((item) => item.value)).toEqual([11, 22]);
+    expect(
+      StubWorker.posted
+        .filter((m) => m.type === "search:start")
+        .every((m) => m.queryJson === JSON.stringify(unrelated)),
+    ).toBe(true);
+  });
+
+  it("starts an imported refinement with its original trinket policy", async () => {
+    const coordinator = new SearchCoordinator(TOTAL);
+    seedFinishedRun(baseQuery);
+    loadImportedResults([match(11), match(22)], baseQuery);
+    coordinator.start(superset, 1);
+    const filter = StubWorker.posted[0];
+    StubWorker.listeners[0]({
+      data: {
+        type: "filter:result",
+        requestId: filter.requestId,
+        resultJson: JSON.stringify([match(11)]),
+      },
+    } as MessageEvent);
+    await vi.waitFor(() => expect(searchStore.state.filtering).toBe(false));
+    const scan = StubWorker.posted.find((m) => m.type === "search:start")!;
+    expect(JSON.parse(scan.queryJson!)).toEqual(superset);
+    expect(searchStore.state.query).toEqual(superset);
+    expect(searchStore.state.total).toBe(TOTAL);
   });
 
   it("fans a large filter phase out across the worker pool in contiguous slices", () => {
@@ -192,19 +210,15 @@ describe("implicit refine on start", () => {
     ]);
   });
 
-  it("filters the full Target Set when the query shares an item without continuing it", () => {
+  it("checks the full pool when requirements are removed", () => {
     const coordinator = new SearchCoordinator(TOTAL);
-    // Target query: ring and weapon. Dropping the weapon requirement is not
-    // a continuation, but it still shares the ring — so the search filters
-    // the original Target Set rather than rescanning or chaining off the
-    // last run's survivors.
+    // Removing requirements still checks every retained seed.
     const targetQuery: QueryDocument = { requirements: [{ kind: "ring" }, { kind: "weapon" }] };
     seedFinishedRun(targetQuery);
     coordinator.start(baseQuery, 2);
 
     const state = searchStore.state;
     expect(state.state).toBe("running");
-    expect(state.runKind).toBe("target-filter");
     expect(state.filtering).toBe(true);
     expect(state.refined).toEqual({ kept: 0, of: 2 });
     expect(StubWorker.posted).toEqual([
@@ -218,7 +232,7 @@ describe("implicit refine on start", () => {
     ]);
   });
 
-  it("starts fresh once the results have been cleared", () => {
+  it("starts fresh once the results have been cleared", async () => {
     const coordinator = new SearchCoordinator(TOTAL);
     seedFinishedRun(baseQuery);
     expect(canClearResults(searchStore.state)).toBe(true);
@@ -234,8 +248,7 @@ describe("implicit refine on start", () => {
 
     // Same query that refined a moment ago; with no base left it rescans.
     coordinator.start(superset, 1);
-    expect(searchStore.state.filtering).toBe(false);
-    expect(searchStore.state.refined).toBeUndefined();
+    await vi.waitFor(() => expect(searchStore.state.filtering).toBe(false));
     expect(searchStore.state.matches).toEqual([]);
     expect(postedTypes()).toEqual(["search:start"]);
   });
@@ -277,7 +290,7 @@ describe("clearing results", () => {
   });
 });
 
-it("starts a detached traversal when automatic choices change", () => {
+it("filters before a fresh traversal when automatic selection is toggled", () => {
   const coordinator = new SearchCoordinator(TOTAL);
   const query: QueryDocument = {
     max_depth: 19,
@@ -286,10 +299,9 @@ it("starts a detached traversal when automatic choices change", () => {
   seedFinishedRun(query);
   const target = searchStore.state.target;
   coordinator.start({ ...query, auto_apply_trinket: true }, 1);
-  expect(searchStore.state.runKind).toBe("detached");
-  expect(searchStore.state.filtering).toBe(false);
+  expect(searchStore.state.filtering).toBe(true);
   expect(searchStore.state.target).toBe(target);
-  expect(postedTypes()).toEqual(["search:start"]);
+  expect(postedTypes()).toEqual(["filter"]);
 });
 
 it("passes saved choices to filter workers when continuing the same policy", () => {
@@ -317,4 +329,37 @@ it("passes saved choices to filter workers when continuing the same policy", () 
     seeds: [11, 22],
     trinkets: ["parchment_scrap", null],
   });
+});
+
+it("checks the entire accumulated pool with each seed's original source", async () => {
+  const coordinator = new SearchCoordinator(TOTAL);
+  seedFinishedRun(baseQuery);
+  loadImportedResults([{ ...match(33), selectedTrinket: null }], unrelated);
+  coordinator.start(superset, 1);
+  const filters = StubWorker.posted.filter((m) => m.type === "filter");
+  expect(filters.map((m) => m.seeds)).toEqual([[11, 22], [33]]);
+  expect(filters.map((m) => JSON.parse(m.baseQueryJson!))).toEqual([baseQuery, unrelated]);
+  for (const filter of filters)
+    StubWorker.listeners[0]({
+      data: {
+        type: "filter:result",
+        requestId: filter.requestId,
+        resultJson: "[]",
+      },
+    } as MessageEvent);
+  await vi.waitFor(() => expect(searchStore.state.filtering).toBe(false));
+  expect(searchStore.state.matches).toEqual([]);
+  expect(searchStore.state.target?.matches.map((m) => m.value)).toEqual([11, 22, 33]);
+  // A fully exhausted scan allows a second Search to finish after rechecking the pool.
+  searchStore.setState((state) => ({
+    ...state,
+    state: "completed",
+    segments: [],
+    workerScanned: {},
+  }));
+  StubWorker.posted = [];
+  coordinator.start(baseQuery, 1);
+  expect(StubWorker.posted.filter((m) => m.type === "filter").flatMap((m) => m.seeds!)).toEqual([
+    11, 22, 33,
+  ]);
 });

@@ -349,10 +349,7 @@ pub fn present(app: &adw::Application) {
             }
             match state.borrow().to_query() {
                 Ok(search_query) => {
-                    // The pane dispatches on the query's relationship to the
-                    // session's Target (docs/search-semantics.md): related
-                    // queries refine or filter the Target Set, unrelated ones
-                    // scan detached without touching it.
+                    // Every search checks the retained pool and then scans for more matches.
                     results.start_search(search_query.clone());
                     if results.is_running() {
                         exported_query.replace(Some(search_query));

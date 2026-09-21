@@ -20,10 +20,8 @@ internal static partial class Native
     [LibraryImport(Library)] internal static partial int seedfinder_level_map_asset(byte[] id, nuint length, out nint packet, out nuint outputLength);
     [LibraryImport(Library)] internal static partial int seedfinder_scout_matches(byte[] request, nuint length, byte[] query, nuint queryLength, out nint packet, out nuint outputLength);
     [LibraryImport(Library)] internal static partial int seedfinder_filter_seeds(byte[] request, nuint length, ulong[] seeds, nuint seedsLength, out nint packet, out nuint outputLength);
-    [LibraryImport(Library)] internal static partial int seedfinder_query_continues(byte[] candidate, nuint candidateLength, byte[] baseline, nuint baselineLength);
     [LibraryImport(Library)] internal static partial int seedfinder_seed_format(byte[] input, nuint length, out nint packet, out nuint outputLength);
     [LibraryImport(Library)] internal static partial int seedfinder_seed_parse(byte[] input, nuint length, out nint packet, out nuint outputLength);
-    [LibraryImport(Library)] internal static partial int seedfinder_decide_start(byte[] candidate, nuint candidateLength, byte[]? target, nuint targetLength, int targetSetEmpty, int targetHasUncoveredSeeds, byte[]? detachedBase, nuint detachedBaseLength, out nint packet, out nuint outputLength);
     [LibraryImport(Library)] internal static partial int seedfinder_share_encode(byte[] queryJson, nuint length, out nint packet, out nuint outputLength);
     [LibraryImport(Library)] internal static partial int seedfinder_share_decode(byte[] text, nuint length, out nint packet, out nuint outputLength);
     [LibraryImport(Library)] internal static partial int seedfinder_results_encode(byte[] request, nuint length, out nint packet, out nuint outputLength);
@@ -134,6 +132,7 @@ public sealed class NativeEngine
         return new NativeSearch(handle);
     }
 
+
     /// <summary>A worker count as the FFI takes it: negatives, like 0, mean every core.</summary>
     private static uint Workers(int workers) => workers <= 0 ? 0u : (uint)workers;
 
@@ -162,27 +161,6 @@ public sealed class NativeEngine
         return ReadRecipes(CopyAndFree(ptr, len));
     }
 
-    /// <summary>
-    /// Whether <paramref name="candidate"/> continues <paramref name="baseline"/>:
-    /// an identical floor limit and challenge set, world conditions
-    /// (the blacksmith flags and the Wandmaker quest) at least as strict as the
-    /// baseline's, and every baseline requirement covered by a distinct
-    /// candidate requirement at least as strict (equal or strengthened).
-    /// The engine owns this predicate — the same
-    /// <c>SearchQuery::continues</c> that decides which seeds a resumed pass may
-    /// skip — so the decision is made on the encoded query documents rather
-    /// than re-derived here, and the two can never drift.
-    /// </summary>
-    public static bool QueryContinues(QuerySettings candidate, QuerySettings baseline)
-    {
-        var left = EncodeQuery(candidate); var right = EncodeQuery(baseline);
-        // A query the engine cannot decode continues nothing, matching the web
-        // frontend: an unsearchable query — one with no requirements, say — has
-        // no result set to inherit, so the only sound answer is a fresh scan.
-        // The UI never asks about one anyway: Start stays disabled until a
-        // requirement exists, and imports reject a query without them.
-        return Native.seedfinder_query_continues(left, (nuint)left.Length, right, (nuint)right.Length) == 1;
-    }
 
     /// <summary>
     /// The query as the engine takes it: the canonical JSON query document
@@ -192,47 +170,6 @@ public sealed class NativeEngine
     /// </summary>
     private static byte[] EncodeQuery(QuerySettings query) => Encoding.UTF8.GetBytes(ResultsExport.EncodeQueryDocument(query));
 
-    /// <summary>
-    /// What pressing Start Search must do with <paramref name="query"/>, per
-    /// docs/search-semantics.md. The Target Set is the anchor: a continuation
-    /// of the Target Query refines it, a query sharing an item filters it, and
-    /// anything else scans the full range without touching it — continuing the
-    /// previous detached scan when that is sound.
-    ///
-    /// The engine decides. <c>seedfinder_decide_start</c> is handed both
-    /// encoded queries, whether the Target Set is empty and whether the target
-    /// still has uncovered seeds, so the continuation predicate that gates a
-    /// resumed scan and the dispatch built on it can never disagree.
-    /// </summary>
-    /// <param name="target">The session's Target, if one has been established.</param>
-    /// <param name="lastDetachedQuery">The query of the previous run when that
-    /// run was a detached scan that concluded (completed or cancelled), null
-    /// otherwise. Only such a run may be continued by a query unrelated to the
-    /// Target; a failed run is never a continuation base.</param>
-    public static StartMode DecideStart(QuerySettings query, TargetRun? target, QuerySettings? lastDetachedQuery = null)
-    {
-        var candidate = EncodeQuery(query);
-        var targetPacket = target is null ? null : EncodeQuery(target.Query);
-        var detachedPacket = lastDetachedQuery is null ? null : EncodeQuery(lastDetachedQuery);
-        var code = Native.seedfinder_decide_start(
-            candidate, (nuint)candidate.Length,
-            targetPacket, (nuint)(targetPacket?.Length ?? 0),
-            target is { Seeds.Count: 0 } ? 1 : 0,
-            target is { Remaining: > 0 } ? 1 : 0,
-            detachedPacket, (nuint)(detachedPacket?.Length ?? 0),
-            out var ptr, out var len);
-        if (code != 0) throw new InvalidOperationException($"Native start decision failed ({code}).");
-        var decision = Encoding.UTF8.GetString(CopyAndFree(ptr, len));
-        return decision switch
-        {
-            "anchor" => StartMode.Anchor,
-            "target-refine" => StartMode.TargetRefine,
-            "target-filter" => StartMode.TargetFilter,
-            "continue-detached" => StartMode.ContinueDetached,
-            "detached" => StartMode.Detached,
-            _ => throw new InvalidDataException($"Unknown start decision \"{decision}\""),
-        };
-    }
 
     /// <summary>The SSQ4 request naming one scouted world; scouting it is deterministic.</summary>
     internal static byte[] EncodeScoutRequest(string seed, int challenges, QuerySettings? query = null, string? trinket = null)

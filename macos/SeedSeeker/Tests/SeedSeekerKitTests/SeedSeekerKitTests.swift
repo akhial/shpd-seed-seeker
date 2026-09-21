@@ -521,33 +521,6 @@ final class SeedSeekerKitTests: XCTestCase {
     /// Sharing an item reaches the app only as the target-filter outcome of
     /// the start decision. Every candidate here changes the floor limit, so it
     /// can never continue the target and sharing alone decides.
-    func testSharedItemsDecideTheTargetFilterOutcome() throws {
-        func request(_ kind: ItemKind, item: CatalogItem? = nil,
-                     maximumDepth: Int = 24) throws -> SearchRequest {
-            try SearchRequest(requirements: [
-                ItemRequirement(key: 1, item: item, upgrade: 0, kind: kind, upgradeMatch: .any)],
-                maximumDepth: maximumDepth)
-        }
-        func decide(_ candidate: SearchRequest, _ target: SearchRequest) -> StartMode {
-            StartDecision.decide(candidate: candidate, target: target, targetSetEmpty: false,
-                                 targetHasUncoveredSeeds: true, detachedBase: nil)
-        }
-        let anyWand = try request(.wand, maximumDepth: 12)
-        let missile = try request(.wand, item: ItemCatalog.wands[0], maximumDepth: 12)
-        // Same kind: a kind-level requirement subsumes every item of its kind.
-        XCTAssertEqual(decide(anyWand, try request(.wand, item: ItemCatalog.wands[0])), .targetFilter)
-        XCTAssertEqual(decide(missile, try request(.wand)), .targetFilter)
-        XCTAssertEqual(decide(missile, try request(.wand, item: ItemCatalog.wands[0])), .targetFilter)
-        // Same kind but two different named items share nothing.
-        XCTAssertEqual(decide(missile, try request(.wand, item: ItemCatalog.wands[1])), .detached)
-        // Different kinds never share.
-        XCTAssertEqual(decide(anyWand, try request(.ring)), .detached)
-        // The engine's rule reads the item family, so a wielded-weapon
-        // requirement still shares with a plain weapon one — the local copy
-        // this replaces treated the narrowed kinds as kinds of their own.
-        XCTAssertEqual(decide(try request(.weapon, maximumDepth: 12), try request(.meleeWeapon)),
-                       .targetFilter)
-    }
 
     func testRealFFIScout() async throws {
         let world = try await ProductionSeedFinderEngine().scoutSeed("AAA-AAA-AAA", challenges: 0)

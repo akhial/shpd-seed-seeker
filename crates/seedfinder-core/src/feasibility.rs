@@ -2565,12 +2565,23 @@ mod tests {
                     "refine {}/{choice}",
                     case.label
                 );
+                // These queries explicitly require Resin. User refinement
+                // follows that current selection (or none), whereas the
+                // low-level filter above deliberately forces saved worlds.
+                assert!(!auto_trinkets::enabled(query));
                 assert_eq!(
-                    refined, filtered,
-                    "named query has no automatic retry/removal"
+                    refined,
+                    multiplicity_production_records(
+                        auto_trinkets::search_batch(
+                            &generator,
+                            query,
+                            &after,
+                            &saved.iter().map(|recipe| recipe.seed).collect::<Vec<_>>()
+                        ),
+                        query
+                    ),
+                    "named query overrides saved choices"
                 );
-                // Forced or explicit Resin outcomes compare only identical
-                // selected recipes. No positive or None-world equivalence assumed.
             }
         }
         assert!(known_positives > 0 && retained_worlds >= known_positives);
@@ -2741,8 +2752,8 @@ mod tests {
 
         // Remove an actual mandatory singleton. This is a weaker fixed-world
         // predicate; no optional-sum capacity or OR membership changes. Automatic
-        // ranking can change with a query, so this test does not infer the separate
-        // SearchQuery::continues/covered-range contract from that implication.
+        // ranking can change with a query, so this implication applies only
+        // to the same generated worlds.
         let mut base = query.clone();
         let removed = base.requirements.remove(0);
         assert!(removed.level_sum.is_none() && removed.alternative_group.is_none());
@@ -2800,10 +2811,11 @@ mod tests {
                     filtered[1], found[1],
                     "known six-wand seed needs no trinket"
                 );
-                assert_eq!(
-                    refined, found,
-                    "refinement restores the necessary automatic choice"
+                assert!(
+                    refined[0].is_none(),
+                    "the parent's choice must not be replaced by the edited query's Spyglass"
                 );
+                assert_eq!(refined[1], found[1]);
             }
             for (saved, result) in recipes
                 .iter()
@@ -2826,7 +2838,8 @@ mod tests {
                     assert!(
                         saved.trinket == Some(id)
                             || (saved.trinket.is_none()
-                                && after.selected_trinket(saved.seed) == Some(id))
+                                && QueryPlan::analyze(&base).selected_trinket(saved.seed)
+                                    == Some(id))
                     );
                 }
                 assert!(query.matches(world));

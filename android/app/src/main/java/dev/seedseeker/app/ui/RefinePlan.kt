@@ -12,6 +12,9 @@ import dev.seedseeker.app.model.SeedResult
  */
 internal const val RESULT_CAP = 1_024
 
+/** Progress through the saved pool; it is separate from newly scanned seeds. */
+data class RefineProgress(val checked: Int, val total: Int)
+
 /** The displayed slice of a run's collected results: discovery order, at most [RESULT_CAP] rows. */
 internal fun displayedResults(collected: List<SeedResult>): List<SeedResult> =
     if (collected.size <= RESULT_CAP) collected else collected.subList(0, RESULT_CAP)
@@ -34,13 +37,12 @@ internal data class RefineSpec(
     val remaining: Long,
     val keepSeeds: List<SeedResult>,
     val base: SearchRequest? = null,
+    /** Imports and changed world conditions need a fresh scan after filtering. */
+    val freshScan: Boolean = false,
+    val sources: Map<String, SearchRequest> = emptyMap(),
 )
 
-/**
- * A finished (completed or cancelled) run that a follow-up query may refine or continue.
- * [results] is the run's full collected set — never the [RESULT_CAP]-row display slice — so a
- * detached continuation's filter base keeps the finds the screen had no room for.
- */
+/** An unchanged query can resume this completed or cancelled traversal. */
 internal data class FinishedRun(
     val request: SearchRequest,
     val resumeFrom: Long,
@@ -48,123 +50,29 @@ internal data class FinishedRun(
     val results: List<SeedResult>,
 )
 
-/**
- * The session's anchor, per docs/search-semantics.md: the first concluded (completed or
- * cancelled) search — or an import — establishes it, and only Clear discards it. [results] is
- * every seed the Target Query's traversal has delivered, uncapped ([RESULT_CAP] limits only the
- * displayed list); refines always filter this full set, never the last run's survivors, which is
- * what lets a loosened query bring seeds back. [remaining] is zero for imports, which carry no
- * coverage.
- */
+/** Every loaded or discovered seed, retained until Clear; sources preserve trinket choices. */
 internal data class TargetState(
     val request: SearchRequest,
     val results: List<SeedResult>,
-    val resumeFrom: Long,
-    val remaining: Long,
+    val sources: Map<String, SearchRequest> = emptyMap(),
 )
 
-/** What pressing Search does with a query, per docs/search-semantics.md. */
-internal enum class StartMode {
-    /** Fresh full-range scan that establishes the Target on conclusion. */
-    ANCHOR,
-
-    /** Filter the Target Set, then resume the target's uncovered remainder. */
-    TARGET_REFINE,
-
-    /** Filter the Target Set only; the set and its coverage stay untouched. */
-    TARGET_FILTER,
-
-    /** Continue the previous detached scan (filter its results, resume its remainder). */
-    CONTINUE_DETACHED,
-
-    /** Fresh full-range scan that leaves the Target untouched. */
-    DETACHED,
+/** Every search checks the entire pool. Only an unchanged query reuses its cursor. */
+internal fun refineFor(request: SearchRequest, target: TargetState?, lastRun: FinishedRun?): RefineSpec? {
+    if (target == null) return null
+    val previous = lastRun?.takeIf { it.request == request }
+    return RefineSpec(previous?.resumeFrom ?: 0, previous?.remaining ?: 0,
+        target.results, target.request, freshScan = previous == null, sources = target.sources)
 }
 
-/** How a concluded run is remembered for the next start decision: a continued detached scan
- * stays detached, so a further continuation keeps threading onto the same scan. */
-internal val StartMode.concludedKind: StartMode
-    get() = if (this == StartMode.CONTINUE_DETACHED) StartMode.DETACHED else this
-
-/** The chosen mode plus the filter-and-resume window it starts from, when it has one. */
-internal data class StartPlan(val mode: StartMode, val refine: RefineSpec? = null)
-
-/**
- * What Search runs, per docs/search-semantics.md: the engine makes the choice — a continuation
- * of the Target Query refines it, a query sharing an item filters it, anything else scans
- * detached or continues the last detached run — and this function supplies the session state the
- * choice reads and turns the answer into the window that mode starts from.
- *
- * [decideStart] is `NativeSeedFinder.decideStart`, i.e. `query::decide_start` over the wire,
- * passed in so this stays a pure function over the session's state. The continuation predicate
- * and the sharing relation are both part of that one call and are never re-derived here.
- */
-internal fun startPlanFor(
-    request: SearchRequest,
-    target: TargetState?,
-    lastRun: FinishedRun?,
-    lastRunKind: StartMode?,
-    decideStart: (SearchRequest, SearchRequest?, Boolean, Boolean, SearchRequest?) -> String,
-): StartPlan {
-    // A run is a continuation base only when it was itself detached.
-    val detachedBase = lastRun?.request?.takeIf { lastRunKind == StartMode.DETACHED }
-    val decision = decideStart(
-        request,
-        target?.request,
-        target == null || target.results.isEmpty(),
-        (target?.remaining ?: 0L) > 0L,
-        detachedBase,
-    )
-    return when (decision) {
-        "anchor" -> StartPlan(StartMode.ANCHOR)
-        "target-refine" -> {
-            val anchor = checkNotNull(target) { "A target refine needs a Target" }
-            StartPlan(
-                StartMode.TARGET_REFINE,
-                RefineSpec(anchor.resumeFrom, anchor.remaining, anchor.results, anchor.request),
-            )
-        }
-        "target-filter" -> {
-            val anchor = checkNotNull(target) { "A target filter needs a Target" }
-            StartPlan(StartMode.TARGET_FILTER, RefineSpec(anchor.resumeFrom, 0, anchor.results, anchor.request))
-        }
-        "continue-detached" -> {
-            val base = checkNotNull(lastRun) { "Continuing a detached scan needs that run" }
-            StartPlan(
-                StartMode.CONTINUE_DETACHED,
-                RefineSpec(base.resumeFrom, base.remaining, base.results, base.request),
-            )
-        }
-        "detached" -> StartPlan(StartMode.DETACHED)
-        else -> error("Unknown start decision '$decision'")
-    }
-}
-
-/**
- * Folds a run that just concluded (completed or cancelled — never failed) into the Target: an
- * anchor run establishes it from its own results and coverage, a target refine grows the set
- * with the resumed scan's new finds and advances the coverage, and a target filter or detached
- * run leaves it exactly as it was. The Target Query itself never changes here — a refine's
- * finds match it by construction.
- */
+/** Discoveries accumulate regardless of which query found them. */
 internal fun settledTarget(
-    target: TargetState?,
-    mode: StartMode,
-    request: SearchRequest,
-    results: List<SeedResult>,
-    resumeFrom: Long,
-    remaining: Long,
-): TargetState? = when (mode) {
-    StartMode.ANCHOR -> TargetState(request, results, resumeFrom, remaining)
-    StartMode.TARGET_REFINE -> {
-        val anchor = checkNotNull(target) { "A target refine needs a Target to refine" }
-        // The refine's survivors were already members; only new finds join the set.
-        val known = anchor.results.mapTo(mutableSetOf()) { it.seed }
-        anchor.copy(
-            results = anchor.results + results.filterNot { it.seed in known },
-            resumeFrom = resumeFrom,
-            remaining = remaining,
-        )
-    }
-    StartMode.TARGET_FILTER, StartMode.CONTINUE_DETACHED, StartMode.DETACHED -> target
+    target: TargetState?, request: SearchRequest, results: List<SeedResult>,
+): TargetState {
+    val known = target?.results.orEmpty().mapTo(mutableSetOf()) { it.seed }
+    val merged = target?.results.orEmpty() + results.filter { known.add(it.seed) }
+    val sources = target?.sources.orEmpty().toMutableMap()
+    target?.results.orEmpty().forEach { sources.getOrPut(it.seed) { target!!.request } }
+    results.forEach { sources.getOrPut(it.seed) { request } }
+    return TargetState(target?.request ?: request, merged, sources = sources)
 }

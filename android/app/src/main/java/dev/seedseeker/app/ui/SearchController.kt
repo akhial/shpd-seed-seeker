@@ -46,6 +46,8 @@ internal class SearchController(
     var seedsPerSecond by mutableStateOf(0.0)
         private set
     var notice by mutableStateOf<String?>(null)
+    var refineProgress by mutableStateOf<RefineProgress?>(null)
+        private set
     val refinePhase: RefinePhase?
         get() = if (isSearching && snapshot.pending?.refine != null) RefinePhase.FILTERING else null
 
@@ -77,16 +79,18 @@ internal class SearchController(
 
     fun start(request: SearchRequest, workers: Int) {
         if (!ready || isSearching) return
-        val plan = startPlanFor(request, snapshot.target, snapshot.lastRun, snapshot.lastKind, engine::decideStart)
+        val refine = refineFor(request, snapshot.target, snapshot.lastRun)
         stopRequested = false
         pauseRequested = false
         snapshot = snapshot.copy(
-            pending = PendingSearch(request, plan.mode, workers, plan.refine),
-            results = if (plan.refine == null) emptyList() else snapshot.results,
-            query = if (plan.refine == null) request.toPresetQuery() else snapshot.query,
+            pending = PendingSearch(request, workers, refine),
+            target = snapshot.target ?: TargetState(request, emptyList()),
+            results = if (refine == null) emptyList() else snapshot.results,
+            query = if (refine == null) request.toPresetQuery() else snapshot.query,
             status = null, error = null, elapsedSeconds = 0,
         )
-        if (plan.mode == StartMode.DETACHED) notice = "Unrelated query — detached search from previous results."
+        notice = null
+        refineProgress = refine?.let { RefineProgress(0, it.keepSeeds.size) }
         requestService()
     }
 
@@ -125,13 +129,14 @@ internal class SearchController(
                 throw cancelled
             } catch (failure: Exception) {
                 snapshot = snapshot.copy(
-                    pending = null, lastRun = null, lastKind = null,
+                    pending = null, lastRun = null,
                     status = snapshot.status?.copy(state = SearchState.FAILED)
                         ?: SearchStatus(SearchState.FAILED, 0, 0, -1),
                     error = failure.message ?: "The native search engine could not start.",
                 )
                 saveSafely()
             } finally {
+                refineProgress = null
                 isSearching = false
             }
         }
@@ -173,7 +178,9 @@ internal class SearchController(
 
     fun importResults(query: PresetQuery, results: List<SeedResult>, target: TargetState?) {
         if (!ready || isSearching) return
-        snapshot = SearchSnapshot(results = results, query = query, target = target)
+        snapshot = SearchSnapshot(results = results, query = query, target = target?.let {
+            settledTarget(snapshot.target, it.request, it.results)
+        } ?: snapshot.target)
         scope.launch { saveSafely() }
     }
 
@@ -185,15 +192,30 @@ internal class SearchController(
         val refine = pending.refine
         if (refine != null) {
             val kept = mutableListOf<SeedResult>()
+            var checked = 0
+            val startedAt = now()
+            val elapsedBefore = snapshot.elapsedSeconds
+            refineProgress = RefineProgress(0, refine.keepSeeds.size)
             for (chunk in refine.keepSeeds.chunked(24)) {
                 if (stopRequested || pauseRequested) break
                 kept += withContext(workerDispatcher) {
-                    engine.filterRecipes(pending.request, refine.base ?: pending.request, chunk)
+                    chunk.groupBy { refine.sources[it.seed] ?: refine.base ?: pending.request }
+                        .flatMap { (source, seeds) -> engine.filterRecipes(pending.request, source, seeds) }
                 }
+                checked += chunk.size
+                refineProgress = RefineProgress(checked, refine.keepSeeds.size)
+                snapshot = snapshot.copy(elapsedSeconds = elapsedBefore + (now() - startedAt) / 1000)
             }
             if (!stopRequested && !pauseRequested) {
-                pending = pending.copy(refine = null, window = ResumeHint(refine.resumeFrom, refine.remaining))
+                pending = pending.copy(
+                    refine = null,
+                    window = if (refine.freshScan) null else ResumeHint(refine.resumeFrom, refine.remaining),
+                    // Fill the visible list; when already full, Search explicitly asks for
+                    // another batch so repeated searches still advance the traversal.
+                    scanLimit = (EngineInfo.maxResults - kept.size).takeIf { it > 0 } ?: EngineInfo.maxResults,
+                )
                 snapshot = snapshot.copy(pending = pending, results = kept.toList(), query = pending.request.toPresetQuery())
+                refineProgress = null
                 notice = "Kept ${kept.size} of ${refine.keepSeeds.size} previous seeds."
                 save()
             }
@@ -201,7 +223,7 @@ internal class SearchController(
 
         while (!stopRequested && !pauseRequested) {
             val window = pending.window
-            if (window != null && (window.remaining == 0L || pending.scanMatches >= EngineInfo.maxResults)) {
+            if (window != null && (window.remaining == 0L || pending.scanMatches >= pending.scanLimit)) {
                 finish(pending, window, SearchState.COMPLETED)
                 return
             }
@@ -222,7 +244,7 @@ internal class SearchController(
                 val opened = checkNotNull(session)
                 val seen = snapshot.results.mapTo(mutableSetOf()) { it.seed }
                 while (true) {
-                    if (stopRequested || pauseRequested || pending.scanMatches >= EngineInfo.maxResults || now() - startedAt >= checkpointMillis) {
+                    if (stopRequested || pauseRequested || pending.scanMatches >= pending.scanLimit || now() - startedAt >= checkpointMillis) {
                         checkpointing = true
                         withContext(workerDispatcher) { opened.cancel() }
                     }
@@ -242,6 +264,7 @@ internal class SearchController(
                     val scanned = (pending.scanned + status.scannedSeeds).coerceAtMost(total)
                     snapshot = snapshot.copy(
                         results = if (added.isEmpty()) snapshot.results else snapshot.results + added,
+                        target = settledTarget(snapshot.target, pending.request, added),
                         status = status.copy(
                             state = if (checkpointing && status.state == SearchState.CANCELLED) SearchState.RUNNING else status.state,
                             scannedSeeds = scanned, totalSeeds = total,
@@ -258,7 +281,11 @@ internal class SearchController(
                         val hint = withContext(workerDispatcher) { opened.resumeHint() }
                         pending = pending.copy(window = hint, scanned = scanned, total = total)
                         snapshot = snapshot.copy(pending = pending)
-                        if (stopRequested || !checkpointing || hint.remaining == 0L || pending.scanMatches >= EngineInfo.maxResults) {
+                        // A native session's cap includes duplicates already kept by the
+                        // filter. Keep scanning its remainder until enough unique seeds
+                        // arrive. A zero-work terminal session is an impossible query.
+                        if (stopRequested || hint.remaining == 0L || pending.scanMatches >= pending.scanLimit ||
+                            (!checkpointing && status.scannedSeeds == 0L)) {
                             finish(pending, hint, if (stopRequested) SearchState.CANCELLED else SearchState.COMPLETED)
                             return
                         }
@@ -289,8 +316,7 @@ internal class SearchController(
             pending = null,
             status = (snapshot.status ?: SearchStatus(state, 0, 0)).copy(state = state),
             lastRun = FinishedRun(pending.request, hint.position, hint.remaining, snapshot.results),
-            lastKind = pending.mode.concludedKind,
-            target = settledTarget(snapshot.target, pending.mode, pending.request, snapshot.results, hint.position, hint.remaining),
+            target = settledTarget(snapshot.target, pending.request, snapshot.results),
             error = null,
         )
         if (snapshot.results.size >= RESULT_CAP) notice = "Result limit reached (1,024 seeds)."

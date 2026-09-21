@@ -174,41 +174,7 @@ class JniNativeSeedFinderTest {
         assertTrue(bindings.scoutMatchQuery.contentEquals(QueryDocument.encode(request)))
     }
 
-    @Test
-    fun queryContinuesHandsBothQueriesToTheEngineAsRequestPackets() {
-        // The verdict itself is the engine's (QueryContinuationTest asserts it against the real
-        // library); this only pins the two packets the adapter sends and which side is which.
-        val bindings = RecordingBindings()
-        val finder = JniNativeSeedFinder(bindings)
-        val base = SearchRequest(listOf(ItemRequirement(1, ItemCatalog.rings.first(), 2)))
-        val candidate = base.copy(
-            requirements = base.requirements + ItemRequirement(2, ItemCatalog.armor.first(), 1),
-        )
 
-        assertTrue(finder.queryContinues(candidate, base))
-        assertTrue(bindings.continuesCandidate.contentEquals(QueryDocument.encode(candidate)))
-        assertTrue(bindings.continuesBase.contentEquals(QueryDocument.encode(base)))
-    }
-
-    @Test
-    fun decideStartPassesTheSessionStateThroughAndReturnsTheEnginesName() {
-        // The decision itself is the engine's (RefinePlanTest asserts it against the real
-        // library); this pins which packet is which and that absent queries travel as null.
-        val bindings = RecordingBindings()
-        val finder = JniNativeSeedFinder(bindings)
-        val candidate = SearchRequest(listOf(ItemRequirement(1, ItemCatalog.wands.first(), 1)))
-        val target = SearchRequest(listOf(ItemRequirement(2, ItemCatalog.rings.first(), 2)))
-
-        assertEquals("target-filter", finder.decideStart(candidate, target, false, true, null))
-        assertTrue(bindings.decideStartCandidate.contentEquals(QueryDocument.encode(candidate)))
-        assertTrue(bindings.decideStartTarget!!.contentEquals(QueryDocument.encode(target)))
-        assertNull(bindings.decideStartDetachedBase)
-        assertArrayEquals(booleanArrayOf(false, true), bindings.decideStartFlags)
-
-        finder.decideStart(candidate, null, true, false, target)
-        assertNull(bindings.decideStartTarget)
-        assertTrue(bindings.decideStartDetachedBase!!.contentEquals(QueryDocument.encode(target)))
-    }
 
     private class RecordingBindings : NativeBindings {
         var request = byteArrayOf()
@@ -223,12 +189,6 @@ class JniNativeSeedFinderTest {
         var filterValues = longArrayOf()
         var scoutMatchRequest = byteArrayOf()
         var scoutMatchQuery = byteArrayOf()
-        var decideStartCandidate = byteArrayOf()
-        var decideStartTarget: ByteArray? = byteArrayOf()
-        var decideStartDetachedBase: ByteArray? = byteArrayOf()
-        var decideStartFlags = booleanArrayOf()
-        var continuesCandidate = byteArrayOf()
-        var continuesBase = byteArrayOf()
         var cancelCalls = 0
         var closeCalls = 0
 
@@ -304,25 +264,7 @@ class JniNativeSeedFinderTest {
                 .encodeToByteArray()
         }
 
-        override fun queryContinues(candidate: ByteArray, base: ByteArray): Boolean {
-            continuesCandidate = candidate.copyOf()
-            continuesBase = base.copyOf()
-            return true
-        }
 
-        override fun decideStart(
-            candidate: ByteArray,
-            target: ByteArray?,
-            targetSetEmpty: Boolean,
-            targetHasUncoveredSeeds: Boolean,
-            detachedBase: ByteArray?,
-        ): ByteArray {
-            decideStartCandidate = candidate.copyOf()
-            decideStartTarget = target?.copyOf()
-            decideStartDetachedBase = detachedBase?.copyOf()
-            decideStartFlags = booleanArrayOf(targetSetEmpty, targetHasUncoveredSeeds)
-            return "target-filter".encodeToByteArray()
-        }
 
         override fun filterSeeds(request: ByteArray, seeds: LongArray): ByteArray {
             filterRequest = request.copyOf()

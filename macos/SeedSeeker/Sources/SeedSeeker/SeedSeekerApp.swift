@@ -88,13 +88,6 @@ private struct ContentView: View {
         if let kept = controller.refinedKept, let of = controller.refinedOf {
             parts.append("Refined: kept \(kept) of \(of) previous seed\(of == 1 ? "" : "s")")
         }
-        // A fresh detached scan is the one moment the display and the kept
-        // Target Set diverge, so say what happened to the earlier results. A
-        // continued detached scan tells its own story through the refined
-        // caption above.
-        if controller.runKind == .detached && controller.refinedKept == nil && controller.target != nil {
-            parts.append("Unrelated query — detached search from previous results.")
-        }
         // Only a concluded run announces the cap: while an accumulating scan
         // runs, a full display is the expected state, not news.
         if controller.reachedResultCap && !controller.isRunning { parts.append("Result limit reached (1,024 seeds).") }
@@ -616,8 +609,7 @@ private struct QueryView: View {
                 QueryEstimateView(document: document)
             }
             // Starting a search that narrows — or just repeats — the last
-            // finished run refines it automatically; the controller decides,
-            // so there is no second button here.
+            // finished run refines it automatically; explicit filtering is also available.
             Button {
                 if controller.isRunning { controller.cancel() }
                 else if let request = builtRequest { controller.start(request, workers: workers) }

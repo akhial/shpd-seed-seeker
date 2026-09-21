@@ -59,8 +59,8 @@ private func copiedPacket(_ pointer: UnsafeMutablePointer<UInt8>?, _ length: Int
 
 /// Runs one out-buffer FFI call and copies its packet out, mapping the return
 /// code to a `SeedFinderEngineError`. The entry points that use this — the
-/// results, share, seed-code, decision and engine-info codecs — only transform
-/// bytes, so like `QueryContinuation` they stay synchronous.
+/// results, share, seed-code and engine-info codecs — only transform
+/// bytes, so like the other document helpers they stay synchronous.
 func enginePacket(
     _ call: (UnsafeMutablePointer<UnsafeMutablePointer<UInt8>?>?, UnsafeMutablePointer<Int>?) -> Int32
 ) throws -> Data {
@@ -71,84 +71,12 @@ func enginePacket(
     return try copiedPacket(pointer, length)
 }
 
-/// The engine's refine soundness predicate, bridged rather than re-derived:
-/// whether the query document in `candidate` continues the one in `base` —
-/// an identical floor limit and challenge set, world conditions (the
-/// blacksmith flags and the Wandmaker filter) at least as strict as the base's,
-/// and every base requirement covered by a distinct candidate requirement at least
-/// as strict — equal or strengthened (a named item, a tightened bound).
-///
-/// Unlike the session calls this is synchronous: the decision gates Start
-/// Search, and the native side only decodes two packets and compares them.
-/// It is deliberately outside `SeedFinderEngine` — the rule is the engine's
-/// regardless of which engine runs the search, so a test double cannot answer
-/// it differently.
-public enum QueryContinuation {
-    /// Anything but a definite yes (a "no", or an undecodable document the FFI
-    /// reports negative) reads as "does not continue", which is the safe
-    /// direction: the search re-anchors and rescans instead of reusing results
-    /// whose coverage it cannot claim.
-    public static func continues(_ candidate: Data, base: Data) -> Bool {
-        candidate.withUnsafeBytes { candidateBytes in
-            base.withUnsafeBytes { baseBytes in
-                seedfinder_query_continues(candidateBytes.bindMemory(to: UInt8.self).baseAddress, candidateBytes.count,
-                                           baseBytes.bindMemory(to: UInt8.self).baseAddress, baseBytes.count) == 1
-            }
-        }
-    }
-}
-
-/// What pressing Start Search does with a query, decided by the engine rather
-/// than re-derived: `seedfinder_decide_start` answers the whole multi-way
-/// choice of `docs/search-semantics.md`, continuation predicate and item
-/// sharing included, so no frontend can drift from the others.
-public enum StartDecision {
-    /// The decision for `candidate` against the session's Target and, when the
-    /// last concluded run was itself detached, that run's query.
-    ///
-    /// A query the engine cannot decode decides nothing, so the answer falls
-    /// back to a full scan that touches nothing: `.anchor` when there is no
-    /// Target to preserve, `.detached` when there is.
-    public static func decide(candidate: SearchRequest, target: SearchRequest?,
-                              targetSetEmpty: Bool, targetHasUncoveredSeeds: Bool,
-                              detachedBase: SearchRequest?) -> StartMode {
-        guard let target else { return .anchor }
-        guard let candidatePacket = try? QueryDocument.encode(candidate),
-              let targetPacket = try? QueryDocument.encode(target) else { return .detached }
-        let basePacket = detachedBase.flatMap { try? QueryDocument.encode($0) }
-        guard let packet = try? enginePacket({ out, length in
-                  candidatePacket.withUnsafeBytes { candidateBytes in
-                      targetPacket.withUnsafeBytes { targetBytes in
-                          withOptionalBytes(basePacket) { basePointer, baseLength in
-                              seedfinder_decide_start(
-                                  candidateBytes.bindMemory(to: UInt8.self).baseAddress,
-                                  candidateBytes.count,
-                                  targetBytes.bindMemory(to: UInt8.self).baseAddress,
-                                  targetBytes.count,
-                                  targetSetEmpty ? 1 : 0, targetHasUncoveredSeeds ? 1 : 0,
-                                  basePointer, baseLength, out, length)
-                          }
-                      }
-                  }
-              }),
-              let name = String(data: packet, encoding: .utf8),
-              let mode = StartMode(engineName: name) else { return .detached }
-        return mode
-    }
-}
-
-/// Passes an absent packet to the FFI as the null pointer it expects.
-private func withOptionalBytes<T>(_ data: Data?, _ body: (UnsafePointer<UInt8>?, Int) -> T) -> T {
-    guard let data else { return body(nil, 0) }
-    return data.withUnsafeBytes { body($0.bindMemory(to: UInt8.self).baseAddress, $0.count) }
-}
-
 /// Which items of a scouted world explain a query's requirements, decided by
 /// the engine rather than re-derived: `seedfinder_scout_matches` runs the same
 /// maximum-partial-assignment the matcher uses, so the marks agree with the
 /// search that produced the seed.
 ///
-/// Like `QueryContinuation` this is synchronous and outside `SeedFinderEngine`:
+/// Like the other document helpers this is synchronous and outside `SeedFinderEngine`:
 /// the selection is the engine's whatever engine ran the search.
 public struct ScoutMatches: Sendable {
     /// Indices into the scouted world's item list, in the order

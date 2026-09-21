@@ -47,8 +47,6 @@ class ArcaneResinTest {
         assertTrue(marks.items.isNotEmpty())
         val harder = query.copy(arcaneResin = 65535)
         assertTrue(engine.filterSeeds(harder, listOf("AAA-AAA-AAA")).isEmpty())
-        assertTrue(engine.queryContinues(harder, query))
-        assertFalse(engine.queryContinues(query, harder))
     }
     @Test fun autoBlanketSharesItsWitnessAndPreservesTheEngineEstimate() {
         val preset = ResultsExport.decodeQuery(JSONObject("""{"arcane_resin":"auto","requirements":[{"item":"wand_lightning","upgrade":2},{"kind":"wand","upgrade":2,"blanket":true}]}"""))
@@ -68,7 +66,6 @@ class ArcaneResinTest {
         assertEquals(probability(direct), estimate, 1e-12)
         val zeroCost = query.copy(requirements = emptyList())
         assertEquals(1, engine.scoutMatches("AAA-AAA-AAA", 0, zeroCost).matchedSlots)
-        assertTrue(engine.queryContinues(query, query))
         assertThrows(IllegalArgumentException::class.java) {
             query.copy(requirements = query.requirements.filter { it.blanket })
         }

@@ -10,17 +10,10 @@ import {
   runSaturated,
   settleRun,
   type CoordinatorState,
-  type RunKind,
   type SearchStatus,
 } from "./coordinator-state";
 import type { SearchWorkerRequest, SearchWorkerResponse } from "./protocol";
-import {
-  decideStart,
-  distributeSegments,
-  isContinuationOf,
-  remainingSegments,
-  segmentsLength,
-} from "./refine";
+import { distributeSegments, remainingSegments, segmentsLength } from "./refine";
 import {
   advanceTraversalStart,
   partitionRotated,
@@ -40,12 +33,7 @@ const STOP_ACK_TIMEOUT_MS = 2_000;
  * overhead outweighs the generation time saved. */
 const MIN_FILTER_CHUNK = 16;
 
-/**
- * Replaces the results list with seeds restored from an imported results
- * file, remembering the query that produced them for later export. Callers
- * must ensure no search is running; stale worker messages are ignored
- * because progress only applies to a running session.
- */
+/** Imports add to the retained pool and display the imported matches. */
 export function loadImportedResults(
   matches: ParsedSeed[],
   query: QueryDocument,
@@ -54,15 +42,7 @@ export function loadImportedResults(
   searchStore.setState((state) => importedResultsState(state, matches, query, dropped));
 }
 
-/**
- * Empties the results list along with the Target behind it — the Target
- * Query, the Target Set, and the scanned coverage a later start would
- * otherwise refine or resume — so the next search anchors a new session
- * from scratch. This is the only action that discards the Target. Ignored
- * while a search is running or stopping, which owns that state. The session
- * counter is preserved so late messages from the previous session stay
- * stale.
- */
+/** Clear is the only action that discards the retained seed pool. */
 export function clearResults(): void {
   if (!canClearResults(searchStore.state)) return;
   searchStore.setState((state) => ({
@@ -83,7 +63,6 @@ export class SearchCoordinator {
     | {
         sessionId: number;
         state: SearchStatus;
-        runKind: RunKind;
         refined?: { kept: number; of: number };
       }
     | undefined;
@@ -106,177 +85,50 @@ export class SearchCoordinator {
     return this.workers.slice(0, target);
   }
 
-  /**
-   * Runs `query`, dispatching on its relationship to the session's Target
-   * (docs/search-semantics.md): a continuation refines the Target Set and
-   * resumes its coverage, a query sharing an item filters the full set, and
-   * an unrelated query scans the whole range without touching the Target —
-   * continuing the previous detached scan when that is sound. None of this
-   * is a user decision; only the Clear button discards anything.
-   */
+  /** Every search rechecks the entire retained pool, then scans for more. */
   start(query: QueryDocument, workerCount = Math.max(1, navigator.hardwareConcurrency ?? 4)): void {
-    const state = searchStore.state;
-    if (state.state === "running" || state.state === "stopping") return;
-    const mode = decideStart(state, query);
-    if (mode === "target-refine" || mode === "target-filter")
-      this.refineTarget(query, mode, workerCount);
-    else if (mode === "continue-detached") this.continueDetached(query, workerCount);
-    else this.startFresh(query, workerCount, mode);
-  }
-
-  /** Scans the whole seed space from a fresh traversal start, replacing the
-   * displayed results. An 'anchor' run establishes the Target when it
-   * concludes; a 'detached' run leaves the existing Target untouched. */
-  private startFresh(
-    query: QueryDocument,
-    workerCount: number,
-    runKind: "anchor" | "detached",
-  ): void {
-    const workers = this.ensureWorkers(workerCount);
-    const sessionId = ++this.sessionId;
-    const startedAt = performance.now();
-    const queryJson = JSON.stringify(query);
-    const segments = partitionRotated(this.totalSeeds, workers.length, this.claimTraversalStart());
-    this.filterRestore = undefined;
-    searchStore.setState((state) => ({
-      ...initialCoordinatorState(this.totalSeeds),
-      sessionId,
-      state: "running",
-      workerCount: workers.length,
-      startedAt,
-      segments,
-      queryJson,
-      // Snapshot the query so an export always describes the query that
-      // actually produced the listed results, even after later edits.
-      query,
-      // The Target survives a detached scan untouched; an anchor run
-      // replaces it (with its own results) only when it concludes.
-      target: state.target,
-      runKind,
-    }));
-    this.startedWorkers = workers.length;
-    workers.forEach((worker, index) => {
-      worker.postMessage({
-        type: "search:start",
-        queryJson,
-        segments: segments[index],
-        sessionId,
-      } satisfies SearchWorkerRequest);
-    });
-  }
-
-  /**
-   * Refines against the Target: the full Target Set is re-verified on a
-   * worker, the survivors become the displayed results, and — in
-   * 'target-refine' mode only — the scan then resumes over the target's
-   * uncovered remainder. The base is always the full Target Set rather than
-   * the last run's survivors, so loosening back toward the Target Query
-   * brings previously dropped seeds back. Nothing in the store is touched
-   * until the re-verification succeeds; a cancelled or failed filter phase
-   * falls back to the previous finished state.
-   */
-  private refineTarget(
-    query: QueryDocument,
-    mode: "target-refine" | "target-filter",
-    workerCount: number,
-  ): void {
     const previous = searchStore.state;
-    const target = previous.target;
-    if (!target) return;
-    // Re-assert the equal-or-superset invariant here rather than trusting
-    // the decision helper: the soundness of resuming depends on it.
-    if (mode === "target-refine" && !isContinuationOf(query, target.query)) return;
+    if (previous.state === "running" || previous.state === "stopping") return;
     const sessionId = ++this.sessionId;
-    const queryJson = JSON.stringify(query);
+    const pool = previous.target;
+    const seeds = pool?.matches ?? [];
+    const sameQuery =
+      previous.queryJson === JSON.stringify(query) &&
+      (previous.state === "completed" || previous.state === "cancelled");
+    const remainder = sameQuery
+      ? remainingSegments(previous.segments, previous.workerScanned)
+      : partitionRotated(this.totalSeeds, 1, this.claimTraversalStart()).flat();
     this.startedWorkers = 0;
-    this.filterRestore = {
-      sessionId,
-      state: previous.state,
-      runKind: previous.runKind,
-      refined: previous.refined,
-    };
+    this.filterRestore = { sessionId, state: previous.state, refined: previous.refined };
     searchStore.setState((state) => ({
       ...state,
       sessionId,
       state: "running",
       filtering: true,
-      refined: { kept: 0, of: target.matches.length },
-      runKind: mode,
+      refined: { kept: 0, of: seeds.length },
       error: undefined,
     }));
-    void this.filterSeeds(queryJson, target.matches, workerCount, JSON.stringify(target.query))
-      .then((kept) => {
-        if (this.filterRestore?.sessionId !== sessionId) return;
-        this.filterRestore = undefined;
-        // A filter never scans; a refine resumes the target's remainder.
-        const remainder = mode === "target-refine" ? target.remainder : [];
-        this.beginResumedScan(
-          query,
-          remainder,
-          kept,
-          target.matches.length,
-          workerCount,
-          sessionId,
-        );
-      })
-      .catch((error: unknown) => {
-        this.restoreAfterFilter(sessionId, error instanceof Error ? error.message : String(error));
-      });
-  }
-
-  /**
-   * Continues the previous detached scan (the pre-Target refine behaviour,
-   * scoped to the detached thread): its displayed matches are re-verified
-   * and the scan resumes over the ranges it never covered. The Target is
-   * untouched throughout.
-   */
-  private continueDetached(query: QueryDocument, workerCount: number): void {
-    const previous = searchStore.state;
-    if (previous.state !== "completed" && previous.state !== "cancelled") return;
-    try {
-      if (!isContinuationOf(query, JSON.parse(previous.queryJson) as QueryDocument)) return;
-    } catch {
-      return;
+    const groups = new Map<string, ParsedSeed[]>();
+    for (const seed of seeds) {
+      const source = JSON.stringify(pool?.sources?.[seed.value] ?? pool?.query ?? query);
+      const entries = groups.get(source) ?? [];
+      entries.push(seed);
+      groups.set(source, entries);
     }
-    const sessionId = ++this.sessionId;
-    const queryJson = JSON.stringify(query);
-    const previousMatches = previous.matches;
-    this.startedWorkers = 0;
-    this.filterRestore = {
-      sessionId,
-      state: previous.state,
-      runKind: previous.runKind,
-      refined: previous.refined,
-    };
-    searchStore.setState((state) => ({
-      ...state,
-      sessionId,
-      state: "running",
-      filtering: true,
-      refined: { kept: 0, of: previousMatches.length },
-      runKind: "detached",
-      error: undefined,
-    }));
-    void this.filterSeeds(queryJson, previousMatches, workerCount, previous.queryJson)
+    void Promise.all(
+      [...groups].map(([source, entries]) =>
+        this.filterSeeds(JSON.stringify(query), entries, workerCount, source),
+      ),
+    )
+      .then((parts) => parts.flat().sort((a, b) => a.value - b.value))
       .then((kept) => {
         if (this.filterRestore?.sessionId !== sessionId) return;
         this.filterRestore = undefined;
-        const remainder = remainingSegments(
-          searchStore.state.segments,
-          searchStore.state.workerScanned,
-        );
-        this.beginResumedScan(
-          query,
-          remainder,
-          kept,
-          previousMatches.length,
-          workerCount,
-          sessionId,
-        );
+        this.beginResumedScan(query, remainder, kept, seeds.length, workerCount, sessionId);
       })
-      .catch((error: unknown) => {
-        this.restoreAfterFilter(sessionId, error instanceof Error ? error.message : String(error));
-      });
+      .catch((error: unknown) =>
+        this.restoreAfterFilter(sessionId, error instanceof Error ? error.message : String(error)),
+      );
   }
 
   /**
@@ -332,7 +184,6 @@ export class SearchCoordinator {
       state: restore.state,
       filtering: false,
       refined: restore.refined,
-      runKind: restore.runKind,
       error,
     }));
   }
@@ -348,10 +199,7 @@ export class SearchCoordinator {
     const queryJson = JSON.stringify(query);
     const startedAt = performance.now();
     const refined = { kept: kept.length, of: previousCount };
-    // Nothing left to scan: a target filter arrives here with an empty
-    // remainder by construction, and a fully covered refine has no range to
-    // resume. A cap-filling survivor set is deliberately NOT a reason to
-    // skip — the scan still grows the collection past the display cap.
+    // An unchanged query can have exhausted its scan range.
     if (segmentsLength(remainder) === 0) {
       searchStore.setState((state) =>
         settleRun({
@@ -455,7 +303,9 @@ export class SearchCoordinator {
     window.setTimeout(() => {
       const state = searchStore.state;
       if (state.sessionId === sessionId && state.state === "stopping") {
-        searchStore.setState((stuck) => settleRun({ ...stuck, state: "cancelled" }));
+        searchStore.setState((stuck) =>
+          settleRun({ ...stuck, state: runSaturated(stuck) ? "completed" : "cancelled" }),
+        );
       }
     }, STOP_ACK_TIMEOUT_MS);
   }

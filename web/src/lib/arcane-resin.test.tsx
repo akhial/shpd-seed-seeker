@@ -15,7 +15,6 @@ import { loadPresets, queryStore, savePresets } from "./store";
 import init, {
   SearchSession,
   analyze_query,
-  decide_start,
   decode_share_text,
   encode_share_link,
   filter_seeds,
@@ -115,7 +114,6 @@ describe("Arcane Resin", () => {
     // This seed's required +2 Lightning needs 3 resin, matching the fixed query.
     const auto = { ...document, arcane_resin: "auto" };
     const json = JSON.stringify(auto);
-    const fixed = JSON.stringify(document);
     const session = new SearchSession(json, 18, 19);
     try {
       const found = JSON.parse(session.advance(1)) as SearchAdvance;
@@ -136,9 +134,6 @@ describe("Arcane Resin", () => {
         impossible: false,
         probability: expect.any(Number),
       });
-      expect(decide_start(json, fixed, false, true)).toBe("target-filter");
-      expect(decide_start(fixed, json, false, true)).toBe("target-filter");
-      expect(decide_start(json, json, false, true)).toBe("target-refine");
     } finally {
       session.free();
     }
@@ -166,8 +161,6 @@ describe("Arcane Resin", () => {
       expect(JSON.parse(filter_seeds(json, new Float64Array([18])))).toEqual(found.matches);
       const harder = JSON.stringify({ ...document, arcane_resin: 100 });
       expect(JSON.parse(filter_seeds(harder, new Float64Array([18])))).toEqual([]);
-      expect(decide_start(harder, json, false, true)).toBe("target-refine");
-      expect(decide_start(json, harder, false, true)).toBe("target-filter");
     } finally {
       session.free();
     }

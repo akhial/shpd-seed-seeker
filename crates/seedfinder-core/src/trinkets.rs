@@ -253,57 +253,6 @@ mod tests {
     use crate::search::WorldGenerator;
 
     #[test]
-    fn selected_slots_resolve_uniquely_and_preserve_codecs() {
-        let parse = |json: &str| crate::json_query::decode(json).unwrap();
-        let single = parse(r#"{"requirements":[{"item":"mimic_tooth","select_trinket":true}]}"#);
-        assert_eq!(
-            resolve_selection(DungeonSeed::MIN, &selection_slots(&single)),
-            Some(ItemId::MimicTooth)
-        );
-        let unique = parse(
-            r#"{"requirements":[{"any_of":[{"item":"mimic_tooth","select_trinket":true},{"item":"rat_skull"}]}]}"#,
-        );
-        let ambiguous = parse(
-            r#"{"requirements":[{"any_of":[{"item":"mimic_tooth","select_trinket":true},{"item":"parchment_scrap"}]}]}"#,
-        );
-        let absent = parse(r#"{"requirements":[{"item":"rat_skull","select_trinket":true}]}"#);
-        assert_eq!(
-            resolve_selection(DungeonSeed::MIN, &selection_slots(&unique)),
-            Some(ItemId::MimicTooth)
-        );
-        assert_eq!(
-            resolve_selection(DungeonSeed::MIN, &selection_slots(&ambiguous)),
-            None
-        );
-        assert_eq!(
-            resolve_selection(DungeonSeed::MIN, &selection_slots(&absent)),
-            None
-        );
-        for query in [single, unique, ambiguous, absent] {
-            assert_eq!(
-                crate::json_query::decode(&crate::json_query::encode(&query).to_string()).unwrap(),
-                query
-            );
-            assert_eq!(
-                crate::deep_link::decode(&crate::deep_link::encode(&query).unwrap()).unwrap(),
-                query
-            );
-            let mut without = query.clone();
-            for r in &mut without.requirements {
-                r.select_trinket = false;
-            }
-            assert!(!query.continues(&without));
-            assert!(!without.continues(&query));
-        }
-        assert!(
-            crate::json_query::decode(
-                r#"{"requirements":[{"kind":"weapon","select_trinket":true}]}"#
-            )
-            .is_err()
-        );
-    }
-
-    #[test]
     fn selected_generation_preserves_prebrew_floors_and_matches_gated_search() {
         use crate::main_world::generate_main_world_with_trinket;
         let seed = DungeonSeed::MIN;

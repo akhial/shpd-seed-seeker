@@ -319,8 +319,6 @@ internal fun SeedFinderApp(
                                 wandmakerQuest = imported.query.wandmakerQuest,
                             ),
                             results = importedResults,
-                            resumeFrom = 0,
-                            remaining = 0,
                         )
                     }.getOrNull(),
                 )
@@ -520,6 +518,7 @@ internal fun SeedFinderApp(
                 elapsedSeconds = searchElapsedSeconds,
                 isSearching = isSearching,
                 refinePhase = refinePhase,
+                refineProgress = controller.refineProgress,
                 error = searchError,
                 snackbarHostState = snackbarHostState,
                 onAbout = {
