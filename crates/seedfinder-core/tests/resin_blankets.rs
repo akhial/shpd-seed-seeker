@@ -38,6 +38,7 @@ fn world(items: Vec<WorldItem>) -> GeneratedWorld {
         seed: DungeonSeed::MIN,
         quests: QuestSummary::default(),
         ring_gems: RingGems::UNSHUFFLED,
+        floor_rooms: Vec::new(),
         feelings: Vec::new(),
     }
 }

@@ -3213,3 +3213,59 @@ input[type="range"]::-moz-range-thumb {
 .d1-resin-remove:hover {
   color: var(--d1-danger);
 }
+
+.d1-farming-floors {
+  min-width: 0;
+  margin: 18px 0 0;
+  padding: 0;
+  border: 0;
+}
+.d1-farming-floors legend {
+  margin-bottom: 9px;
+  padding: 0;
+  color: var(--d1-text-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+.d1-farming-options {
+  display: flex;
+  gap: 6px;
+}
+.d1-farming-floor {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid var(--d1-border);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.d1-farming-floor:hover {
+  background: var(--d1-border);
+}
+.d1-farming-floor[aria-pressed="true"] {
+  border-color: var(--d1-accent);
+  background: color-mix(in srgb, var(--d1-accent) 14%, transparent);
+  color: var(--d1-accent);
+}
+.d1-farming-floor:focus-visible {
+  outline: 2px solid var(--d1-accent);
+  outline-offset: 2px;
+}
+.d1-floor-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.d1-farm-badge {
+  color: var(--d1-green);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}

@@ -856,6 +856,7 @@ mod tests {
     }
     fn matching_world(seed: DungeonSeed) -> GeneratedWorld {
         GeneratedWorld {
+            floor_rooms: Vec::new(),
             feelings: Vec::new(),
             quests: shpd_seedfinder_core::quests::QuestSummary::default(),
             seed,
@@ -874,6 +875,7 @@ mod tests {
     }
     fn query() -> SearchQuery {
         SearchQuery {
+            floor_requirements: Vec::new(),
             auto_apply_trinket: false,
             arcane_resin_filter: shpd_seedfinder_core::query::ArcaneResinFilter::default(),
             arcane_resin_auto: false,
@@ -1051,6 +1053,7 @@ mod tests {
             .unwrap();
         let definition = shpd_seedfinder_core::catalog::item(known.item);
         let satisfiable = SearchQuery {
+            floor_requirements: Vec::new(),
             auto_apply_trinket: false,
             arcane_resin_filter: shpd_seedfinder_core::query::ArcaneResinFilter::default(),
             arcane_resin_auto: false,
@@ -1331,6 +1334,7 @@ mod tests {
         // instantly without scanning, and the hint must return the entire
         // requested arc so a later satisfiable continuation still covers it.
         let impossible = SearchQuery {
+            floor_requirements: Vec::new(),
             auto_apply_trinket: false,
             arcane_resin_filter: shpd_seedfinder_core::query::ArcaneResinFilter::default(),
             arcane_resin_auto: false,
@@ -1460,6 +1464,7 @@ mod tests {
 
     fn kind_query(kind: ItemKind) -> SearchQuery {
         SearchQuery {
+            floor_requirements: Vec::new(),
             auto_apply_trinket: false,
             arcane_resin_filter: shpd_seedfinder_core::query::ArcaneResinFilter::default(),
             arcane_resin_auto: false,
@@ -1500,7 +1505,7 @@ mod tests {
             let packet = production_scout_packet(&request).unwrap();
             assert_eq!(&packet[..4], b"SSC6");
             let world = decode_scout_world(&packet).unwrap();
-            let (expected, actual_selection) = production_scout_world_selected(
+            let (mut expected, actual_selection) = production_scout_world_selected(
                 seed,
                 Challenges::NONE,
                 Some(&decoded_query),
@@ -1508,6 +1513,7 @@ mod tests {
             )
             .unwrap();
             assert_eq!(actual_selection, selected);
+            expected.floor_rooms.clear(); // Native packets omit web room summaries.
             assert_eq!(world, expected);
             let marks = production_scout_matches(&request, query.as_bytes()).unwrap();
             assert_eq!(marks.matched, scout_matches(&world, &decoded_query).matched);
@@ -1532,7 +1538,8 @@ mod tests {
     #[test]
     fn typed_production_scout_matches_the_packet_scout() {
         let seed = DungeonSeed::from_code("AAA-AAA-AAF").unwrap();
-        let world = production_scout_world(seed, Challenges::NONE).unwrap();
+        let mut world = production_scout_world(seed, Challenges::NONE).unwrap();
+        world.floor_rooms.clear(); // Native packets retain their existing format.
         let packet = production_scout_packet(b"SSQ2\x00\x00AAA-AAA-AAF").unwrap();
 
         assert_eq!(world, decode_scout_world(&packet).unwrap());

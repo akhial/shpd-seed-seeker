@@ -465,6 +465,7 @@ struct RequirementPlan {
 /// `false` answer sound and merely forgoes some early exits.
 #[derive(Clone, Debug)]
 pub struct QueryPlan {
+    floor_requirements: [Option<crate::floor_filters::CompiledFloorRequirement>; 25],
     auto_trinket: Option<crate::auto_trinkets::AutoTrinketPolicy>,
     selected_slots: Vec<Vec<Requirement>>,
     /// Mandatory slots whose alternatives all name initial trinket offers.
@@ -782,7 +783,15 @@ impl QueryPlan {
         let required_trinket_slots = required_trinket_slots(&slots);
         let closed_multiplicities = closed_multiplicities(&slots);
 
+        let mut floor_requirements = [None; 25];
+        for floor in &query.floor_requirements {
+            if let Some(slot) = floor_requirements.get_mut(usize::from(floor.depth)) {
+                *slot = Some(floor.compile());
+                generation_depth = generation_depth.max(floor.depth);
+            }
+        }
         let mut plan = Self {
+            floor_requirements,
             auto_trinket: crate::auto_trinkets::AutoTrinketPolicy::prepare(query),
             selected_slots: crate::trinkets::selection_slots(query),
             required_trinket_slots,
@@ -794,7 +803,13 @@ impl QueryPlan {
             needs_vault_treasure,
             unsatisfiable: false,
         };
-        plan.unsatisfiable = !plan.viable_after_floor(0, &[], &QuestSummary::default());
+        plan.unsatisfiable = !plan.viable_after_floor(0, &[], &QuestSummary::default())
+            || query.floor_requirements.iter().any(|floor| {
+                floor.depth == 1
+                    && floor
+                        .feeling
+                        .is_some_and(|feeling| feeling != crate::level_prelude::Feeling::None)
+            });
         plan
     }
 
@@ -958,6 +973,14 @@ impl QueryPlan {
 }
 
 impl FloorGate for QueryPlan {
+    fn floor_requirement(
+        &self,
+        depth: u8,
+    ) -> Option<&crate::floor_filters::CompiledFloorRequirement> {
+        self.floor_requirements
+            .get(usize::from(depth))
+            .and_then(Option::as_ref)
+    }
     fn deferred_vault_plan(&self, target: u8) -> Option<&Self> {
         // Every vault-capable slot remains open at all existing callbacks
         // (completed_depth < target), preserving the original prefix pruning.
@@ -1054,6 +1077,7 @@ mod tests {
 
     fn query(requirements: Vec<Requirement>, max_depth: u8) -> SearchQuery {
         SearchQuery {
+            floor_requirements: Vec::new(),
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
             arcane_resin_auto: false,
@@ -1773,6 +1797,7 @@ mod tests {
         crate::model::GeneratedWorld {
             seed: crate::seed::DungeonSeed::MIN,
             items: items.to_vec(),
+            floor_rooms: Vec::new(),
             feelings: Vec::new(),
             quests: QuestSummary::default(),
             ring_gems: crate::run::RingGems::UNSHUFFLED,
@@ -4602,6 +4627,7 @@ mod closed_multiplicity_grouping_tests {
 
     fn analyze(requirements: Vec<Requirement>, max_depth: u8) -> QueryPlan {
         let query = SearchQuery {
+            floor_requirements: Vec::new(),
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
             arcane_resin_auto: false,

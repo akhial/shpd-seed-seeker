@@ -324,6 +324,15 @@ export function ScoutPanel({
                 <FloorMapHeader
                   depth={depth}
                   feeling={feelingByDepth.get(depth)}
+                  farming={
+                    [7, 17, 22].includes(depth) &&
+                    feelingByDepth.get(depth) === "dark" &&
+                    result.floorRooms?.some(
+                      (floor) =>
+                        floor.depth === depth &&
+                        floor.rooms.some((room) => room === "garden" || room === "secret_garden"),
+                    )
+                  }
                   quest={quest}
                   expanded={mapOpen}
                   onToggle={() => {

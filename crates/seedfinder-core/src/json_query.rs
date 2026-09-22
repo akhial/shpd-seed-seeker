@@ -19,6 +19,8 @@ struct QueryDocument {
     #[serde(default)]
     auto_apply_trinket: bool,
     #[serde(default)]
+    floor_requirements: Vec<crate::floor_filters::FloorRequirement>,
+    #[serde(default)]
     arcane_resin: FileArcaneResin,
     #[serde(default)]
     arcane_resin_filter: FileArcaneResinFilter,
@@ -416,6 +418,7 @@ pub fn decode_unvalidated(contents: &str) -> Result<SearchQuery, String> {
         })
         .transpose()?;
     Ok(SearchQuery {
+        floor_requirements: document.floor_requirements,
         auto_apply_trinket: document.auto_apply_trinket,
         arcane_resin_auto: matches!(document.arcane_resin, FileArcaneResin::Auto(_)),
         arcane_resin: match document.arcane_resin {
@@ -622,6 +625,12 @@ pub fn encode(query: &SearchQuery) -> Value {
         })
         .collect::<Vec<_>>();
     document.insert("requirements".to_owned(), Value::Array(entries));
+    if !query.floor_requirements.is_empty() {
+        document.insert(
+            "floor_requirements".to_owned(),
+            json!(query.floor_requirements),
+        );
+    }
     if query.max_depth != default_max_depth() {
         document.insert("max_depth".to_owned(), json!(query.max_depth));
     }
@@ -941,7 +950,10 @@ mod tests {
 
         // The very same document is not a runnable search.
         let error = decode(contents).unwrap_err();
-        assert!(error.contains("at least one item requirement"), "{error}");
+        assert!(
+            error.contains("at least one item, resin, or floor requirement"),
+            "{error}"
+        );
 
         // Parse-only decoding is still strict about the document shape.
         assert!(decode_unvalidated(r#"{"requirements":[],"maximum_depth":4}"#).is_err());
@@ -1109,6 +1121,7 @@ mod tests {
     #[test]
     fn encoding_omits_defaults_and_round_trips_a_loaded_query() {
         let query = SearchQuery {
+            floor_requirements: Vec::new(),
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
             arcane_resin_auto: false,
@@ -1182,6 +1195,7 @@ mod tests {
     #[test]
     fn encoding_a_minimal_query_emits_requirements_only() {
         let query = SearchQuery {
+            floor_requirements: Vec::new(),
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
             arcane_resin_auto: false,

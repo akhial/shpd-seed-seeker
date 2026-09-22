@@ -50,3 +50,89 @@ are 15 by 16 pixels at y=64, x=16 times the feeling ID.
 Selected-trinket requests (`SSQ3`) return `SSC6`, which preserves the entire
 `SSC5` layout and appends the selected stable ID as a big-endian u16-length
 UTF-8 string (empty means none). All native decoders accept both versions.
+
+## Floor and room search (web)
+
+The web Requirements pane includes **RoW farming floors**, with independent
+7, 17, and 22 toggles. Every selected floor must have the Dark feeling and
+at least one Garden or Secret Garden. No Ring of Wealth is implicitly required;
+combine the floor toggles with an item requirement to constrain its upgrade,
+source, or availability. Selecting a floor raises the global floor limit if
+needed; subsequently lowering the limit produces a validation error. Farming
+floors are marked **RoW farm** in the scout.
+
+The shared engine supports all feelings and 95 room classes, exposed as stable
+IDs in `engine_info.roomTypes`. A query may contain no item requirements when
+it has a floor requirement:
+
+```json
+{
+  "requirements": [],
+  "floor_requirements": [
+    { "depth": 7, "feeling": "dark", "any_rooms": ["garden", "secret_garden"] },
+    { "depth": 17, "feeling": "dark", "rooms": ["garden"] }
+  ]
+}
+```
+
+Depths must be unique, regular floors within the global limit. Omitted feeling
+means any; `"none"` explicitly requires a normal floor. `rooms` requires all
+listed room types; nonempty `any_rooms` requires at least one listed type on
+that same floor. Both predicates apply if supplied together. These are presence
+checks, independent of room count and size. Empty conditions, unknown fields,
+unknown IDs, duplicate depths, and boss floors are rejected.
+
+`GeneratedWorld.floor_rooms` retains one 128-bit presence mask per regular
+floor, alongside feelings. WASM scouts expose `floorRooms: [{depth, rooms}]`.
+Native scout packets keep their existing format and omit room summaries.
+Portable JSON preserves floor requirements in presets and result exports.
+Share links use version 11 when floor requirements are present; older queries
+retain their existing link bytes. Room enum ordering is append-only because
+links and calibration tables use those indices.
+
+The planner compiles depth-indexed masks once per query and extends generation
+to the deepest floor condition. Feeling mismatches stop after preparation;
+room mismatches stop after successful graph construction, before painting,
+mobs, loot, or a deferred vault. Checks also run on the terminal floor and
+when replaying saved trinket recipes. Final matching independently checks the
+retained summaries. Earlier floors retain all normal state transitions.
+AutoTrinket selection remains item-based; floor conditions are evaluated under
+the selected setup. Query edits continue to start fresh traversal coverage
+while rechecking the retained seed pool.
+
+## Probability calibration and performance
+
+`examples/calibrate_floors.rs` measures 8,192 deterministic, dispersed seeds
+for each of the eight existing trinket profiles (65,536 worlds). The 292 KiB
+`probability_tables/floors.bin` contains little-endian u16 counts indexed by
+profile, depth (1..24), feeling, and room type. Each row starts with its sample
+count and ends with the joint count of ordinary and secret gardens.
+
+Estimates condition room presence on feeling and include the measured garden
+intersection, so two gardens do not double-count a farming floor. Other room
+combinations, different floors, and item supply use independence approximations.
+Challenges use canonical measurements, matching the existing item model.
+These estimates never reject seeds; only generation and exact matching do.
+Regenerate with:
+
+```sh
+cargo run --release -p shpd-seedfinder-core --example calibrate_floors -- 8192
+```
+
+`examples/benchmark_floors.rs` compares identical queries with and without the
+new floor gates, retaining existing item pruning on both sides. A local run
+on 4,096 separate dispersed seeds produced identical matches in every case:
+
+| Query | Matches | Speedup from floor gates |
+| --- | ---: | ---: |
+| Darkness on 17 | 292 | 1.11× |
+| Hidden garden on 7 | 213 | 1.13× |
+| Farming floor 7 | 42 | 1.34× |
+| Farming floor 17 | 45 | 1.08× |
+| Farming floor 22 | 53 | 1.09× |
+| RoW by 16 and farming floor 17 | 12 | 1.01× |
+| RoW by 16 only (control) | 1,038 | 1.00× |
+
+Deep-floor gains are limited by the necessary generation of earlier floors.
+The measured farming estimates were about 1 in 106, 96, and 66 for floors 7,
+17, and 22 respectively; these are estimates, not guarantees.

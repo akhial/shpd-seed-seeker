@@ -513,6 +513,7 @@ pub struct SearchQuery {
     pub arcane_resin_auto: bool,
     pub arcane_resin_filter: ArcaneResinFilter,
     pub requirements: Vec<Requirement>,
+    pub floor_requirements: Vec<crate::floor_filters::FloorRequirement>,
     pub max_depth: u8,
     /// Upstream v3.3.8 challenge mask used while generating candidate worlds.
     pub challenges: Challenges,
@@ -552,7 +553,8 @@ impl SearchQuery {
             .requirements
             .iter()
             .all(|requirement| requirement.blanket)
-            && (!self.requirements.is_empty() || !self.needs_resin())
+            && (!self.requirements.is_empty()
+                || (!self.needs_resin() && self.floor_requirements.is_empty()))
         {
             return Err(QueryError::Empty);
         }
@@ -565,6 +567,18 @@ impl SearchQuery {
             .is_some_and(|depth| !(1..=MAX_SEARCH_DEPTH).contains(&depth))
         {
             return Err(QueryError::InvalidDepth);
+        }
+        let mut seen = [false; 25];
+        for floor in &self.floor_requirements {
+            if !(1..=self.max_depth).contains(&floor.depth) || floor.depth % 5 == 0 {
+                return Err(QueryError::InvalidFloorRequirement);
+            }
+            if seen[usize::from(floor.depth)]
+                || (floor.feeling.is_none() && floor.rooms.is_empty() && floor.any_rooms.is_empty())
+            {
+                return Err(QueryError::InvalidFloorRequirement);
+            }
+            seen[usize::from(floor.depth)] = true;
         }
         let mut identity_groups: BTreeMap<u8, Vec<IdentityMember>> = BTreeMap::new();
         let mut level_sums: BTreeMap<u8, u8> = BTreeMap::new();
@@ -695,7 +709,7 @@ impl SearchQuery {
 
     /// How many conditions the scout reports: one per slot, except that all
     /// the slots of one combined-level group collapse into a single
-    /// condition, satisfied together or not at all.
+    /// condition, satisfied together or not at all. Floor requirements count once each.
     #[must_use]
     pub fn scout_condition_count(&self) -> usize {
         let slots = self.slots();
@@ -710,7 +724,10 @@ impl SearchQuery {
                 }
             }
         }
-        slots.len() - sum_slots + groups.len() + usize::from(self.needs_resin())
+        slots.len() - sum_slots
+            + groups.len()
+            + usize::from(self.needs_resin())
+            + self.floor_requirements.len()
     }
 
     /// Matches requirements as an AND query over slots while respecting
@@ -718,6 +735,13 @@ impl SearchQuery {
     /// and mutually exclusive quest/chest reward branches.
     #[must_use]
     pub fn matches(&self, world: &GeneratedWorld) -> bool {
+        if !self
+            .floor_requirements
+            .iter()
+            .all(|floor| floor.matches(world))
+        {
+            return false;
+        }
         // A quest is reported only once its giver's floor is generated, so a
         // world whose prefix stops short of the Wandmaker simply has none and
         // cannot satisfy a variant filter.
@@ -1079,7 +1103,8 @@ impl ScoutMatches {
 /// and combined-level groups counting as one condition, satisfied when the
 /// assigned members' levels reach the total — a lone +0 ring of a wanted
 /// pair that falls short is not highlighted.
-/// World-level conditions (`require_blacksmith`, the Wandmaker filter) are
+/// Floor conditions are counted independently of item witnesses. Other
+/// world-level conditions (`require_blacksmith`, the Wandmaker filter) are
 /// *not* applied — they say nothing about which item explains which slot.
 ///
 /// A full selection is therefore equivalent to
@@ -1100,7 +1125,12 @@ pub fn scout_matches(world: &GeneratedWorld, query: &SearchQuery) -> ScoutMatche
     }
     ScoutMatches {
         matched,
-        matched_requirements: search.best_conditions,
+        matched_requirements: search.best_conditions
+            + query
+                .floor_requirements
+                .iter()
+                .filter(|floor| floor.matches(world))
+                .count(),
         total_requirements,
     }
 }
@@ -1211,6 +1241,7 @@ impl BestSubset<'_> {
 /// Invalid user query.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum QueryError {
+    InvalidFloorRequirement,
     Empty,
     InvalidDepth,
     InvalidUpgrade,
@@ -1271,8 +1302,11 @@ impl fmt::Display for QueryError {
             _ => {}
         }
         let message = match self {
+            Self::InvalidFloorRequirement => {
+                "floor requirements need unique regular floors within the floor limit and a feeling or room filter"
+            }
             Self::Empty => {
-                "at least one item requirement is needed; include an ordinary requirement"
+                "at least one item, resin, or floor requirement is needed; blankets need an ordinary item requirement"
             }
             Self::BlanketWithRelations => {
                 "a blanket requirement cannot request extra copies, combined levels, or trinket selection"
@@ -1367,6 +1401,7 @@ mod tests {
     #[test]
     fn and_query_requires_distinct_item_occurrences() {
         let query = SearchQuery {
+            floor_requirements: Vec::new(),
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
             arcane_resin_auto: false,
@@ -1379,6 +1414,7 @@ mod tests {
             wandmaker_quest: None,
         };
         let one = GeneratedWorld {
+            floor_rooms: Vec::new(),
             feelings: Vec::new(),
             quests: crate::quests::QuestSummary::default(),
             seed: DungeonSeed::MIN,
@@ -1387,6 +1423,7 @@ mod tests {
         };
         assert!(!query.matches(&one));
         let two = GeneratedWorld {
+            floor_rooms: Vec::new(),
             feelings: Vec::new(),
             quests: crate::quests::QuestSummary::default(),
             seed: DungeonSeed::MIN,
@@ -1404,6 +1441,7 @@ mod tests {
         use crate::quests::{QuestSummary, ScheduledQuest, WandmakerQuestType};
 
         let mut query = SearchQuery {
+            floor_requirements: Vec::new(),
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
             arcane_resin_auto: false,
@@ -1416,6 +1454,7 @@ mod tests {
             wandmaker_quest: Some(WandmakerQuestType::Rotberry),
         };
         let world = |wandmaker| GeneratedWorld {
+            floor_rooms: Vec::new(),
             feelings: Vec::new(),
             quests: QuestSummary {
                 wandmaker,
@@ -1466,6 +1505,7 @@ mod tests {
     #[test]
     fn requirement_floor_limit_is_inclusive() {
         let world = GeneratedWorld {
+            floor_rooms: Vec::new(),
             feelings: Vec::new(),
             quests: crate::quests::QuestSummary::default(),
             seed: DungeonSeed::MIN,
@@ -1475,6 +1515,7 @@ mod tests {
         let mut limited = requirement(ItemId::Sword);
         limited.max_depth = Some(2);
         let mut query = SearchQuery {
+            floor_requirements: Vec::new(),
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
             arcane_resin_auto: false,
@@ -1494,6 +1535,7 @@ mod tests {
     #[test]
     fn mutually_exclusive_rewards_cannot_satisfy_and_query() {
         let query = SearchQuery {
+            floor_requirements: Vec::new(),
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
             arcane_resin_auto: false,
@@ -1506,6 +1548,7 @@ mod tests {
             wandmaker_quest: None,
         };
         let world = GeneratedWorld {
+            floor_rooms: Vec::new(),
             feelings: Vec::new(),
             quests: crate::quests::QuestSummary::default(),
             seed: DungeonSeed::MIN,
@@ -1533,6 +1576,7 @@ mod tests {
     #[test]
     fn same_choice_option_and_independent_rewards_can_match() {
         let query = SearchQuery {
+            floor_requirements: Vec::new(),
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
             arcane_resin_auto: false,
@@ -1545,6 +1589,7 @@ mod tests {
             wandmaker_quest: None,
         };
         let world = GeneratedWorld {
+            floor_rooms: Vec::new(),
             feelings: Vec::new(),
             quests: crate::quests::QuestSummary::default(),
             seed: DungeonSeed::MIN,
@@ -1593,6 +1638,7 @@ mod tests {
             },
         );
         let world = GeneratedWorld {
+            floor_rooms: Vec::new(),
             feelings: Vec::new(),
             quests: crate::quests::QuestSummary::default(),
             seed: DungeonSeed::MIN,
@@ -1601,6 +1647,7 @@ mod tests {
         };
 
         let compatible = SearchQuery {
+            floor_requirements: Vec::new(),
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
             arcane_resin_auto: false,
@@ -1615,6 +1662,7 @@ mod tests {
         assert!(compatible.matches(&world));
 
         let incompatible = SearchQuery {
+            floor_requirements: Vec::new(),
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
             arcane_resin_auto: false,
@@ -1988,6 +2036,7 @@ mod tests {
             level_sum: None,
         };
         let mut query = SearchQuery {
+            floor_requirements: Vec::new(),
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
             arcane_resin_auto: false,
@@ -2033,6 +2082,7 @@ mod tests {
             secret: false,
         };
         let world = GeneratedWorld {
+            floor_rooms: Vec::new(),
             feelings: Vec::new(),
             quests: crate::quests::QuestSummary::default(),
             seed: DungeonSeed::MIN,
@@ -2060,6 +2110,7 @@ mod tests {
     #[test]
     fn smith_rewards_can_be_excluded_without_hiding_the_blacksmith() {
         let mut query = SearchQuery {
+            floor_requirements: Vec::new(),
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
             arcane_resin_auto: false,
@@ -2082,6 +2133,7 @@ mod tests {
             secret: false,
         };
         let smith_only = GeneratedWorld {
+            floor_rooms: Vec::new(),
             feelings: Vec::new(),
             quests: crate::quests::QuestSummary::default(),
             seed: DungeonSeed::MIN,
@@ -2097,6 +2149,7 @@ mod tests {
 
         query.require_blacksmith = false;
         let no_blacksmith = GeneratedWorld {
+            floor_rooms: Vec::new(),
             feelings: Vec::new(),
             quests: crate::quests::QuestSummary::default(),
             seed: DungeonSeed::MIN,
@@ -2125,6 +2178,7 @@ mod tests {
             level_sum: None,
         };
         let query = |members: Vec<Requirement>| SearchQuery {
+            floor_requirements: Vec::new(),
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
             arcane_resin_auto: false,
@@ -2590,6 +2644,7 @@ mod tests {
 
     fn scout_query(requirements: Vec<Requirement>) -> SearchQuery {
         SearchQuery {
+            floor_requirements: Vec::new(),
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
             arcane_resin_auto: false,
@@ -2605,6 +2660,7 @@ mod tests {
 
     fn scout_world(items: Vec<WorldItem>) -> GeneratedWorld {
         GeneratedWorld {
+            floor_rooms: Vec::new(),
             feelings: Vec::new(),
             quests: crate::quests::QuestSummary::default(),
             seed: DungeonSeed::MIN,

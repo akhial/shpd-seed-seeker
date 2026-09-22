@@ -320,6 +320,7 @@ impl AppState {
     #[must_use]
     pub fn unvalidated_query(&self) -> SearchQuery {
         SearchQuery {
+            floor_requirements: Vec::new(),
             auto_apply_trinket: self.auto_apply_trinket,
             arcane_resin_filter: self.arcane_resin_filter,
             arcane_resin_auto: self.arcane_resin_auto,
@@ -944,6 +945,7 @@ mod tests {
                 .unwrap();
         assert!(!AppState::from_query(&legacy).auto_apply_trinket);
         let enabled = shpd_seedfinder_core::query::SearchQuery {
+            floor_requirements: Vec::new(),
             auto_apply_trinket: true,
             ..legacy
         };

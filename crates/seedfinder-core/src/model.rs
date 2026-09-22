@@ -186,6 +186,8 @@ pub struct GeneratedWorld {
     pub items: Vec<WorldItem>,
     /// Final feelings in depth order, excluding boss floors.
     pub feelings: Vec<FloorFeeling>,
+    /// Room presence on regular floors. Native scout packets omit this web metadata.
+    pub floor_rooms: Vec<crate::floor_filters::FloorRooms>,
     /// Quest variants rolled while generating the requested prefix.
     pub quests: QuestSummary,
     /// The gem this run gave each ring class, and so the `items.png` cell every

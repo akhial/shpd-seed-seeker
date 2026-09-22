@@ -690,6 +690,7 @@ pub fn decode_scout_world(packet: &[u8]) -> Result<GeneratedWorld, WireError> {
     Ok(GeneratedWorld {
         seed,
         items,
+        floor_rooms: Vec::new(),
         feelings,
         quests,
         ring_gems,
@@ -880,10 +881,17 @@ impl std::error::Error for WireError {}
 
 #[cfg(test)]
 mod tests {
+    // Room summaries are currently web-only metadata; SSC3..SSC7 retain their bytes.
+    fn native_world(seed: crate::seed::DungeonSeed, depth: u8) -> crate::model::GeneratedWorld {
+        use crate::search::WorldGenerator;
+        let mut world = crate::main_world::CanonicalMainWorldGenerator.generate(seed, depth);
+        world.floor_rooms.clear();
+        world
+    }
+
     use crate::catalog::{ArmorEffect, Effect, ITEMS, ItemId, ItemKind, WeaponEffect, item};
     use crate::challenges::Challenges;
     use crate::json_query;
-    use crate::main_world::CanonicalMainWorldGenerator;
     use crate::model::{Accessibility, GeneratedWorld, ItemSource, WorldItem};
     use crate::query::{
         EffectRequirement, EffectSet, LevelSum, Requirement, SearchQuery, TierRequirement,
@@ -895,7 +903,6 @@ mod tests {
     /// Every `SSC3` packet opens with the magic, the length-prefixed seed
     /// code, and the run's twelve-byte gem table. The quest block starts here.
     const SCOUT_HEADER: usize = 4 + 1 + 11 + super::RING_GEM_COUNT;
-    use crate::search::WorldGenerator;
     use crate::seed::DungeonSeed;
 
     use super::{
@@ -941,6 +948,7 @@ mod tests {
     #[test]
     fn query_requests_round_trip_every_query_field() {
         let query = SearchQuery {
+            floor_requirements: Vec::new(),
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
             arcane_resin_auto: false,
@@ -1041,6 +1049,7 @@ mod tests {
     #[test]
     fn query_requests_round_trip_effect_sets_alternatives_and_level_sums() {
         let query = SearchQuery {
+            floor_requirements: Vec::new(),
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
             arcane_resin_auto: false,
@@ -1196,7 +1205,10 @@ mod tests {
         assert!(rejection(b"SSF9\x18\0\0\0\0\0\x01").contains("invalid JSON"));
         assert!(rejection(b"bad!????????").contains("invalid JSON"));
         assert!(rejection(br#"{"requirements":[],"maximum_depth":4}"#).contains("maximum_depth"));
-        assert!(rejection(br#"{"requirements":[]}"#).contains("at least one item requirement"));
+        assert!(
+            rejection(br#"{"requirements":[]}"#)
+                .contains("at least one item, resin, or floor requirement")
+        );
         assert!(
             rejection(br#"{"requirements":[{"kind":"weapon","upgarde":2}]}"#).contains("upgarde")
         );
@@ -1304,6 +1316,7 @@ mod tests {
     fn result_packet_matches_android_big_endian_codec() {
         let worlds = vec![
             GeneratedWorld {
+                floor_rooms: Vec::new(),
                 feelings: Vec::new(),
                 quests: crate::quests::QuestSummary::default(),
                 seed: DungeonSeed::MIN,
@@ -1311,6 +1324,7 @@ mod tests {
                 ring_gems: RingGems::UNSHUFFLED,
             },
             GeneratedWorld {
+                floor_rooms: Vec::new(),
                 feelings: Vec::new(),
                 quests: crate::quests::QuestSummary::default(),
                 seed: DungeonSeed::new(1).unwrap(),
@@ -1373,6 +1387,7 @@ mod tests {
     #[test]
     fn scout_packet_has_a_fixed_android_big_endian_fixture() {
         let world = GeneratedWorld {
+            floor_rooms: Vec::new(),
             feelings: Vec::new(),
             quests: crate::quests::QuestSummary::default(),
             seed: DungeonSeed::MIN,
@@ -1410,6 +1425,7 @@ mod tests {
     #[test]
     fn native_scout_deck_tail_is_ordered_and_validated() {
         let world = GeneratedWorld {
+            floor_rooms: Vec::new(),
             feelings: Vec::new(),
             seed: DungeonSeed::MIN,
             items: Vec::new(),
@@ -1454,7 +1470,7 @@ mod tests {
         use crate::level_prelude::Feeling;
         use crate::model::FloorFeeling;
 
-        let mut world = CanonicalMainWorldGenerator.generate(DungeonSeed::MIN, 24);
+        let mut world = native_world(DungeonSeed::MIN, 24);
         world.feelings = [
             (1, Feeling::None),
             (2, Feeling::Chasm),
@@ -1489,7 +1505,7 @@ mod tests {
 
     #[test]
     fn mapping_packets_preserve_the_world_and_validate_every_entry() {
-        let world = CanonicalMainWorldGenerator.generate(DungeonSeed::MIN, 24);
+        let world = native_world(DungeonSeed::MIN, 24);
         let legacy = super::encode_scout_world_with_selection(&world, None).unwrap();
         let packet = super::encode_scout_world_with_mappings(&world, None).unwrap();
         assert_eq!(&packet[..4], b"SSC7");
@@ -1514,7 +1530,7 @@ mod tests {
 
     #[test]
     fn selected_packets_preserve_feelings_and_validate_the_selection_tail() {
-        let world = CanonicalMainWorldGenerator.generate(DungeonSeed::MIN, 24);
+        let world = native_world(DungeonSeed::MIN, 24);
         let order = crate::trinkets::trinket_order(world.seed);
         let legacy = super::encode_scout_world(&world).unwrap();
         for selected in [None, Some(order[0])] {
@@ -1544,7 +1560,7 @@ mod tests {
         use crate::level_prelude::Feeling;
         use crate::model::FloorFeeling;
 
-        let mut world = CanonicalMainWorldGenerator.generate(DungeonSeed::MIN, 24);
+        let mut world = native_world(DungeonSeed::MIN, 24);
         let packet = super::encode_scout_world(&world).unwrap();
         let offset = packet.len() - 1 - world.feelings.len() * 2;
         assert_eq!(packet[offset], 20);
@@ -1595,6 +1611,7 @@ mod tests {
         };
 
         let world = GeneratedWorld {
+            floor_rooms: Vec::new(),
             feelings: Vec::new(),
             quests: QuestSummary {
                 ghost: Some(ScheduledQuest {
@@ -1640,6 +1657,7 @@ mod tests {
         use crate::quests::{QuestSummary, ScheduledQuest, WandmakerQuestType};
 
         let world = GeneratedWorld {
+            floor_rooms: Vec::new(),
             feelings: Vec::new(),
             quests: QuestSummary {
                 wandmaker: Some(ScheduledQuest {
@@ -1706,6 +1724,7 @@ mod tests {
     #[test]
     fn scout_packet_round_trips_a_plus_four_ring() {
         let world = GeneratedWorld {
+            floor_rooms: Vec::new(),
             feelings: Vec::new(),
             quests: crate::quests::QuestSummary::default(),
             seed: DungeonSeed::from_code("AAA-AAA-AAF").unwrap(),
@@ -1770,6 +1789,7 @@ mod tests {
             })
             .collect();
         let world = GeneratedWorld {
+            floor_rooms: Vec::new(),
             feelings: Vec::new(),
             quests: crate::quests::QuestSummary {
                 ghost: Some(crate::quests::ScheduledQuest {
@@ -1802,7 +1822,7 @@ mod tests {
 
         // Re-pinned from the v4.0.0-BETA-4 oracle (tooling/oracle-4.0): the
         // vault adds fifteen treasure options to the Imp's five prizes.
-        let generated = CanonicalMainWorldGenerator.generate(DungeonSeed::MIN, 24);
+        let generated = native_world(DungeonSeed::MIN, 24);
         assert_eq!(generated.items.len(), 103);
         assert_eq!(
             generated.quests,
@@ -1938,6 +1958,7 @@ mod tests {
     #[test]
     fn every_truncated_scout_fixture_prefix_is_rejected() {
         let world = GeneratedWorld {
+            floor_rooms: Vec::new(),
             feelings: Vec::new(),
             quests: crate::quests::QuestSummary {
                 imp: Some(crate::quests::ScheduledQuest {
@@ -1975,6 +1996,7 @@ mod tests {
     #[test]
     fn scout_decoder_rejects_reserved_values_and_trailing_data() {
         let world = GeneratedWorld {
+            floor_rooms: Vec::new(),
             feelings: Vec::new(),
             quests: crate::quests::QuestSummary::default(),
             seed: DungeonSeed::MIN,
@@ -2080,6 +2102,7 @@ mod tests {
             secret: false,
         };
         let world = GeneratedWorld {
+            floor_rooms: Vec::new(),
             feelings: Vec::new(),
             quests: crate::quests::QuestSummary::default(),
             seed: DungeonSeed::MIN,

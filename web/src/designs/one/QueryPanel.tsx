@@ -1,3 +1,4 @@
+import { FarmingFloors } from "./FarmingFloors";
 import { useEffect, useState } from "react";
 import { useStore } from "@tanstack/react-store";
 import { LEVEL_GEN_CHALLENGES, challenges as challengeOptions } from "../../lib/catalog";
@@ -178,7 +179,10 @@ export function QueryPanel({
     });
   };
 
-  const slotTotal = boardCount(query.requirements) + Number(Boolean(query.arcaneResin));
+  const slotTotal =
+    boardCount(query.requirements) +
+    Number(Boolean(query.arcaneResin)) +
+    (query.floorRequirements?.length ?? 0);
   const challengeCount = query.challenges.length;
   const wandmakerCount = Number(Boolean(query.wandmakerQuest));
   const blacksmithCount = Number(query.requireBlacksmith) + Number(query.excludeBlacksmithRewards);
@@ -439,6 +443,10 @@ export function QueryPanel({
                     <h3>Requirements</h3>
                   </div>
                   {board}
+                  <FarmingFloors
+                    query={query}
+                    onChange={(next) => queryStore.setState(() => next)}
+                  />
                 </>
               )}
             </section>

@@ -105,6 +105,7 @@ fn random_world(rng: &mut Rng) -> GeneratedWorld {
         })
         .collect();
     GeneratedWorld {
+        floor_rooms: Vec::new(),
         feelings: Vec::new(),
         seed: DungeonSeed::MIN,
         items,
@@ -205,6 +206,7 @@ fn random_query(rng: &mut Rng) -> Option<SearchQuery> {
         // a slot whose members agree on a kind can anchor a stack.
         let slots: Vec<Vec<usize>> = {
             let query = SearchQuery {
+                floor_requirements: Vec::new(),
                 auto_apply_trinket: false,
                 arcane_resin_filter: shpd_seedfinder_core::query::ArcaneResinFilter::default(),
                 arcane_resin_auto: false,
@@ -255,6 +257,7 @@ fn random_query(rng: &mut Rng) -> Option<SearchQuery> {
         }
     }
     let query = SearchQuery {
+        floor_requirements: Vec::new(),
         auto_apply_trinket: false,
         arcane_resin_filter: shpd_seedfinder_core::query::ArcaneResinFilter::default(),
         arcane_resin_auto: rng.chance(25),

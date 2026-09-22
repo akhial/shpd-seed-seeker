@@ -308,6 +308,7 @@ fn base(kind: ItemKind) -> Requirement {
 
 fn query(requirements: Vec<Requirement>, max_depth: u8) -> SearchQuery {
     SearchQuery {
+        floor_requirements: Vec::new(),
         auto_apply_trinket: false,
         arcane_resin_filter: shpd_seedfinder_core::query::ArcaneResinFilter::default(),
         arcane_resin_auto: false,

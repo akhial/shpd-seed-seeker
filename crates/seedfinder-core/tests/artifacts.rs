@@ -87,7 +87,7 @@ fn all_spawn_artifacts_match_eight_official_beta4_worlds() {
 
 #[test]
 fn aaa_artifacts_match_beta4_oracle_and_round_trip_native_wire() {
-    let world = CanonicalMainWorldGenerator.generate(DungeonSeed::MIN, 24);
+    let mut world = CanonicalMainWorldGenerator.generate(DungeonSeed::MIN, 24);
     let actual: Vec<_> = world
         .items
         .iter()
@@ -120,6 +120,7 @@ fn aaa_artifacts_match_beta4_oracle_and_round_trip_native_wire() {
         ]
     );
     let packet = shpd_seedfinder_core::wire::encode_scout_world(&world).unwrap();
+    world.floor_rooms.clear(); // Room metadata is exposed on web only.
     assert_eq!(
         shpd_seedfinder_core::wire::decode_scout_world(&packet).unwrap(),
         world

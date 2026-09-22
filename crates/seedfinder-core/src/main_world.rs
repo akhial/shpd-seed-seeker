@@ -7,30 +7,21 @@
 use std::fmt;
 
 use crate::batch::seed_for_depth_batch4;
-use crate::caves_floor::{
-    CanonicalCavesWorldGenerator, CavesFloorError, generate_caves_floor, generate_caves_world,
-};
+use crate::caves_floor::{CanonicalCavesWorldGenerator, CavesFloorError, generate_caves_world};
 use crate::challenges::Challenges;
 use crate::city_boss_shop::generate_city_boss_shop;
-use crate::city_floor::{
-    CanonicalCityWorldGenerator, CityFloorError, generate_city_floor, generate_city_world,
-};
-use crate::halls_floor::{
-    CanonicalHallsWorldGenerator, HallsFloorError, generate_halls_floor, generate_halls_world,
-};
+use crate::city_floor::{CanonicalCityWorldGenerator, CityFloorError, generate_city_world};
+use crate::halls_floor::{CanonicalHallsWorldGenerator, HallsFloorError, generate_halls_world};
 use crate::level_prelude::LimitedDrops;
 use crate::model::{FloorFeeling, GeneratedWorld};
-use crate::prison_floor::{
-    CanonicalPrisonWorldGenerator, PrisonFloorError, generate_prison_floor, generate_prison_world,
-};
+use crate::prison_floor::{CanonicalPrisonWorldGenerator, PrisonFloorError, generate_prison_world};
 use crate::quests::QuestState;
 use crate::rng::{RandomStack, seed_for_depth};
 use crate::run::RunState;
 use crate::search::{FloorGate, WorldGenerator};
 use crate::seed::DungeonSeed;
 use crate::sewer_floor::{
-    CanonicalSewerWorldGenerator, SewerFloorError, generate_sewer_floor, generate_sewer_world,
-    remap_floor_choice_groups,
+    CanonicalSewerWorldGenerator, SewerFloorError, generate_sewer_world, remap_floor_choice_groups,
 };
 use crate::shop::ShopRunState;
 
@@ -113,6 +104,7 @@ impl WorldGenerator for CanonicalMainWorldGenerator {
                 for world in &mut worlds {
                     world.items.retain(|item| item.depth <= 20);
                     world.feelings.retain(|floor| floor.depth <= 20);
+                    world.floor_rooms.retain(|floor| floor.depth <= 20);
                 }
                 worlds
             }
@@ -196,6 +188,7 @@ pub fn generate_main_world(
             let mut world = generate_halls_world(seed, 21).map_err(MainWorldError::Halls)?;
             world.items.retain(|item| item.depth <= 20);
             world.feelings.retain(|floor| floor.depth <= 20);
+            world.floor_rooms.retain(|floor| floor.depth <= 20);
             Ok(world)
         }
         21..=24 => generate_halls_world(seed, maximum_depth).map_err(MainWorldError::Halls),
@@ -453,6 +446,7 @@ fn generate_gated_world_attempt(
     random.record_room_order = acquire_hourglass;
     let mut items = Vec::new();
     let mut feelings = Vec::new();
+    let mut floor_rooms = Vec::new();
     let mut next_choice_group = 0_u16;
     let selected_trinket = gate.selected_trinket(seed);
     let mut alchemy_available = false;
@@ -462,20 +456,28 @@ fn generate_gated_world_attempt(
         let completed = u8::try_from(depth).expect("main-path depths fit u8");
         let (mut floor_items, feeling) = match depth {
             1..=4 => {
-                let floor = generate_sewer_floor(
+                let Some(floor) = crate::sewer_floor::generate_sewer_floor_filtered(
                     &mut run,
                     &mut limited_drops,
                     &mut quests,
                     depth,
                     &mut random,
+                    gate.floor_requirement(completed),
                 )
-                .map_err(MainWorldError::Sewer)?;
+                .map_err(MainWorldError::Sewer)?
+                else {
+                    return Ok(None);
+                };
                 alchemy_available |= floor
                     .painted
                     .level
                     .map
                     .cells
                     .contains(&crate::geometry::terrain::ALCHEMY);
+                floor_rooms.push(crate::floor_filters::FloorRooms {
+                    depth: completed,
+                    rooms: crate::floor_filters::RoomSet::from_rooms(&floor.painted.rooms),
+                });
                 observer(FloorObservation {
                     contents: crate::level_map::contents::FloorSource::Sewer(&floor),
                     level: &floor.painted.level,
@@ -488,15 +490,23 @@ fn generate_gated_world_attempt(
                 (floor.world_items, Some(floor.painted.level.feeling))
             }
             6..=9 => {
-                let floor = generate_prison_floor(
+                let Some(floor) = crate::prison_floor::generate_prison_floor_filtered(
                     &mut run,
                     &mut limited_drops,
                     &mut quests,
                     &mut shop_run,
                     depth,
                     &mut random,
+                    gate.floor_requirement(completed),
                 )
-                .map_err(MainWorldError::Prison)?;
+                .map_err(MainWorldError::Prison)?
+                else {
+                    return Ok(None);
+                };
+                floor_rooms.push(crate::floor_filters::FloorRooms {
+                    depth: completed,
+                    rooms: crate::floor_filters::RoomSet::from_rooms(&floor.painted.rooms),
+                });
                 observer(FloorObservation {
                     contents: crate::level_map::contents::FloorSource::Prison(&floor),
                     level: &floor.painted.level,
@@ -509,15 +519,23 @@ fn generate_gated_world_attempt(
                 (floor.world_items, Some(floor.painted.level.feeling))
             }
             11..=14 => {
-                let floor = generate_caves_floor(
+                let Some(floor) = crate::caves_floor::generate_caves_floor_filtered(
                     &mut run,
                     &mut limited_drops,
                     &mut quests,
                     &mut shop_run,
                     depth,
                     &mut random,
+                    gate.floor_requirement(completed),
                 )
-                .map_err(MainWorldError::Caves)?;
+                .map_err(MainWorldError::Caves)?
+                else {
+                    return Ok(None);
+                };
+                floor_rooms.push(crate::floor_filters::FloorRooms {
+                    depth: completed,
+                    rooms: crate::floor_filters::RoomSet::from_rooms(&floor.painted.rooms),
+                });
                 observer(FloorObservation {
                     contents: crate::level_map::contents::FloorSource::Caves(&floor),
                     level: &floor.painted.level,
@@ -534,16 +552,19 @@ fn generate_gated_world_attempt(
                 if deferred.is_some() {
                     run.generate_vault = false;
                 }
-                let floor = generate_city_floor(
+                let floor = crate::city_floor::generate_city_floor_filtered(
                     &mut run,
                     &mut limited_drops,
                     &mut quests,
                     &mut shop_run,
                     depth,
                     &mut random,
+                    gate.floor_requirement(completed),
                 );
                 run.generate_vault = wanted_vault;
-                let floor = floor.map_err(MainWorldError::City)?;
+                let Some(floor) = floor.map_err(MainWorldError::City)? else {
+                    return Ok(None);
+                };
                 if deferred.is_some()
                     && wanted_vault
                     && quests.imp.depth == Some(completed)
@@ -568,6 +589,10 @@ fn generate_gated_world_attempt(
                     #[cfg(test)]
                     deferred_vault_tests::fault(1)?;
                 }
+                floor_rooms.push(crate::floor_filters::FloorRooms {
+                    depth: completed,
+                    rooms: crate::floor_filters::RoomSet::from_rooms(&floor.painted.rooms),
+                });
                 observer(FloorObservation {
                     contents: crate::level_map::contents::FloorSource::City(&floor),
                     level: &floor.painted.level,
@@ -586,15 +611,23 @@ fn generate_gated_world_attempt(
                 None,
             ),
             _ => {
-                let floor = generate_halls_floor(
+                let Some(floor) = crate::halls_floor::generate_halls_floor_filtered(
                     &mut run,
                     &mut limited_drops,
                     &mut quests,
                     &mut shop_run,
                     depth,
                     &mut random,
+                    gate.floor_requirement(completed),
                 )
-                .map_err(MainWorldError::Halls)?;
+                .map_err(MainWorldError::Halls)?
+                else {
+                    return Ok(None);
+                };
+                floor_rooms.push(crate::floor_filters::FloorRooms {
+                    depth: completed,
+                    rooms: crate::floor_filters::RoomSet::from_rooms(&floor.painted.rooms),
+                });
                 observer(FloorObservation {
                     contents: crate::level_map::contents::FloorSource::Halls(&floor),
                     level: &floor.painted.level,
@@ -674,6 +707,7 @@ fn generate_gated_world_attempt(
     Ok(Some(GeneratedWorld {
         seed,
         items,
+        floor_rooms,
         feelings,
         quests: quests.summary(),
         ring_gems: run.appearances.ring_gems,
@@ -826,6 +860,7 @@ mod tests {
             level_sum: None,
         };
         let query = |requirements: Vec<Requirement>| SearchQuery {
+            floor_requirements: Vec::new(),
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
             arcane_resin_auto: false,
@@ -897,6 +932,7 @@ mod tests {
         use crate::quests::WandmakerQuestType;
 
         let base = SearchQuery {
+            floor_requirements: Vec::new(),
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
             arcane_resin_auto: false,
@@ -971,6 +1007,7 @@ mod tests {
         use crate::catalog::WeaponCategory;
 
         let query = SearchQuery {
+            floor_requirements: Vec::new(),
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
             arcane_resin_auto: false,
@@ -1107,6 +1144,7 @@ mod tests {
         });
         assert!(imp_ring.is_some());
         let query = SearchQuery {
+            floor_requirements: Vec::new(),
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
             arcane_resin_auto: false,

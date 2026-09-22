@@ -215,6 +215,7 @@ fn generate_sewer_world_with_roots(
     let mut random = RandomStack::with_base_seed(0);
     let mut items = Vec::new();
     let mut feelings = Vec::new();
+    let mut floor_rooms = Vec::new();
     let mut next_choice_group = 0_u16;
 
     for (index, &root) in roots.iter().enumerate() {
@@ -229,6 +230,10 @@ fn generate_sewer_world_with_roots(
         )?;
         random.pop();
         next_choice_group = remap_floor_choice_groups(&mut floor.world_items, next_choice_group);
+        floor_rooms.push(crate::floor_filters::FloorRooms {
+            depth: u8::try_from(depth).expect("regular depths fit u8"),
+            rooms: crate::floor_filters::RoomSet::from_rooms(&floor.painted.rooms),
+        });
         feelings.push(FloorFeeling {
             depth: u8::try_from(depth).expect("main-path depths fit u8"),
             feeling: floor.painted.level.feeling,
@@ -238,6 +243,7 @@ fn generate_sewer_world_with_roots(
     Ok(GeneratedWorld {
         seed,
         items,
+        floor_rooms,
         feelings,
         quests: quests.summary(),
         ring_gems: run.appearances.ring_gems,
@@ -318,7 +324,22 @@ pub fn generate_sewer_floor(
     depth: u32,
     random: &mut RandomStack,
 ) -> Result<GeneratedSewerFloor, SewerFloorError> {
-    let mut painted = paint_sewer_floor(run, limited_drops, depth, random)?;
+    generate_sewer_floor_filtered(run, limited_drops, quests, depth, random, None)
+        .map(|floor| floor.expect("unfiltered floor generation cannot reject"))
+}
+
+pub(crate) fn generate_sewer_floor_filtered(
+    run: &mut RunState,
+    limited_drops: &mut LimitedDrops,
+    quests: &mut QuestState,
+    depth: u32,
+    random: &mut RandomStack,
+    filter: Option<&crate::floor_filters::CompiledFloorRequirement>,
+) -> Result<Option<GeneratedSewerFloor>, SewerFloorError> {
+    let Some(mut painted) = paint_sewer_floor_filtered(run, limited_drops, depth, random, filter)?
+    else {
+        return Ok(None);
+    };
     let mut flags = LevelFlags::build_for_generation(&painted.level.map);
     let spatial_rules = SewerSpatialRules {
         bridge_spaces: painted.bridge_spaces.clone(),
@@ -385,13 +406,13 @@ pub fn generate_sewer_floor(
     world_items.extend(regular_items.world_items.iter().cloned());
     crate::trinkets::expand_catalyst_offers(&mut world_items, &run.generator);
 
-    Ok(GeneratedSewerFloor {
+    Ok(Some(GeneratedSewerFloor {
         painted,
         flags,
         mobs,
         regular_items,
         world_items,
-    })
+    }))
 }
 
 /// Runs `Level.create()` from its queue/feeling prefix through
@@ -412,8 +433,27 @@ pub fn paint_sewer_floor(
     depth: u32,
     random: &mut RandomStack,
 ) -> Result<PaintedSewerFloor, SewerPaintError> {
+    paint_sewer_floor_filtered(run, limited_drops, depth, random, None)
+        .map(|floor| floor.expect("unfiltered floor generation cannot reject"))
+}
+
+pub(crate) fn paint_sewer_floor_filtered(
+    run: &mut RunState,
+    limited_drops: &mut LimitedDrops,
+    depth: u32,
+    random: &mut RandomStack,
+    filter: Option<&crate::floor_filters::CompiledFloorRequirement>,
+) -> Result<Option<PaintedSewerFloor>, SewerPaintError> {
     let prepared = crate::regular_level::prepare_regular_floor(run, limited_drops, depth, random)?;
+    if filter.is_some_and(|filter| !filter.matches_feeling(prepared.feeling)) {
+        return Ok(None);
+    }
     let built = build_sewer_room_graph(run, limited_drops, depth, prepared.feeling, random);
+    if filter.is_some_and(|filter| {
+        !filter.matches_rooms(crate::floor_filters::RoomSet::from_rooms(&built.rooms))
+    }) {
+        return Ok(None);
+    }
     reject_unwired_rooms(&built)?;
 
     // `SewerLevel.painter()` evaluates nTraps() after graph construction and
@@ -483,7 +523,7 @@ pub fn paint_sewer_floor(
     run.generator = generator.into_inner();
     let remaining_prizes = prizes.into_inner();
 
-    Ok(PaintedSewerFloor {
+    Ok(Some(PaintedSewerFloor {
         prepared,
         graph_attempts: built.builder_attempts,
         level,
@@ -497,7 +537,7 @@ pub fn paint_sewer_floor(
         secret_events,
         world_items,
         bridge_spaces,
-    })
+    }))
 }
 
 fn reject_unwired_rooms(graph: &BuiltRegularGraph) -> Result<(), SewerPaintError> {
@@ -1424,6 +1464,7 @@ mod tests {
     #[test]
     fn live_streaming_search_finds_a_real_multi_floor_seed() {
         let query = SearchQuery {
+            floor_requirements: Vec::new(),
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
             arcane_resin_auto: false,

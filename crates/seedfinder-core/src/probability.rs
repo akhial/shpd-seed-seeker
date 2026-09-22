@@ -71,6 +71,7 @@ mod artifacts;
 mod blankets;
 mod cache;
 mod coverage;
+mod floors;
 mod resin;
 
 use coverage::Coverages;
@@ -125,6 +126,16 @@ pub fn estimate_match_probability(query: &SearchQuery) -> f64 {
 }
 
 pub(crate) fn equipment_probability(query: &SearchQuery, profile: Profile) -> f64 {
+    if query.floor_requirements.is_empty() {
+        return equipment_probability_without_floors(query, profile);
+    }
+    let floor_probability = floors::probability(query, profile);
+    let mut items = query.clone();
+    items.floor_requirements.clear();
+    floor_probability * equipment_probability_without_floors(&items, profile)
+}
+
+fn equipment_probability_without_floors(query: &SearchQuery, profile: Profile) -> f64 {
     if query.requirements.iter().any(|r| r.blanket) {
         return blankets::probability(query, profile);
     }
@@ -1829,6 +1840,7 @@ mod tests {
 
     fn query(requirements: Vec<Requirement>, max_depth: u8) -> SearchQuery {
         SearchQuery {
+            floor_requirements: Vec::new(),
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
             arcane_resin_auto: false,
