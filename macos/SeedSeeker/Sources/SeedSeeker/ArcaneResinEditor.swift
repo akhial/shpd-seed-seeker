@@ -61,7 +61,7 @@ struct ArcaneResinChip: View {
             ItemSpriteView(item: arcaneResinItem, pointSize: 16)
             Text(arcaneResinItem.name)
                 .font(.system(size: 12, weight: .semibold)).lineLimit(1)
-            tag(amountLabel, color: .shatteredGreen)
+            tag(amountLabel, color: .shatteredYellow)
             if let depth = filter.maximumDepth { tag("F≤\(depth)", color: .shatteredYellow) }
             if filter.uncursed { tag("✓", color: .shatteredMint) }
         }
