@@ -1,0 +1,191 @@
+[
+  {
+    "profile": "none",
+    "samples": 65536,
+    "queries": 756,
+    "categories": {
+      "probe": {
+        "pass": 416,
+        "underpowered": 340,
+        "median_ratio": 0.9964210343610398,
+        "p10_ratio": 0.9169281217477648,
+        "p90_ratio": 1.1014243791308318,
+        "mean_absolute_log_error": 0.0601770757502272
+      }
+    },
+    "timing_ns": {
+      "p50": 38469,
+      "p95": 151319,
+      "max": 560577
+    },
+    "divergences": []
+  },
+  {
+    "profile": "none",
+    "samples": 65536,
+    "queries": 672,
+    "categories": {
+      "probe": {
+        "pass": 342,
+        "underpowered": 330,
+        "median_ratio": 0.9824624206671068,
+        "p10_ratio": 0.8961747089469188,
+        "p90_ratio": 1.0502773908177618,
+        "mean_absolute_log_error": 0.048675301059293984
+      }
+    },
+    "timing_ns": {
+      "p50": 51017,
+      "p95": 137949,
+      "max": 495519
+    },
+    "divergences": []
+  },
+  {
+    "profile": "mimic_tooth",
+    "samples": 65536,
+    "queries": 1428,
+    "categories": {
+      "probe": {
+        "pass": 713,
+        "underpowered": 715,
+        "median_ratio": 0.9888634235336601,
+        "p10_ratio": 0.8937150737770341,
+        "p90_ratio": 1.1474665214121682,
+        "mean_absolute_log_error": 0.08040653094328012
+      }
+    },
+    "timing_ns": {
+      "p50": 530330,
+      "p95": 836334,
+      "max": 11718196
+    },
+    "divergences": []
+  },
+  {
+    "profile": "parchment_scrap",
+    "samples": 65536,
+    "queries": 1428,
+    "categories": {
+      "probe": {
+        "underpowered": 787,
+        "pass": 641,
+        "median_ratio": 0.9709720373533051,
+        "p10_ratio": 0.8902833304928184,
+        "p90_ratio": 1.0775225071515757,
+        "mean_absolute_log_error": 0.0679708684471096
+      }
+    },
+    "timing_ns": {
+      "p50": 545965,
+      "p95": 859829,
+      "max": 11301116
+    },
+    "divergences": []
+  },
+  {
+    "profile": "rat_skull",
+    "samples": 65536,
+    "queries": 1428,
+    "categories": {
+      "probe": {
+        "underpowered": 789,
+        "pass": 639,
+        "median_ratio": 0.9947791531490647,
+        "p10_ratio": 0.9015462288527042,
+        "p90_ratio": 1.1702448379387955,
+        "mean_absolute_log_error": 0.08352208891479287
+      }
+    },
+    "timing_ns": {
+      "p50": 554919,
+      "p95": 907412,
+      "max": 11043285
+    },
+    "divergences": []
+  },
+  {
+    "profile": "exotic_crystals",
+    "samples": 65536,
+    "queries": 1428,
+    "categories": {
+      "probe": {
+        "underpowered": 784,
+        "pass": 644,
+        "median_ratio": 0.9865613716313602,
+        "p10_ratio": 0.8962091503268185,
+        "p90_ratio": 1.1332041637471826,
+        "mean_absolute_log_error": 0.07573255303170476
+      }
+    },
+    "timing_ns": {
+      "p50": 554318,
+      "p95": 892959,
+      "max": 11577703
+    },
+    "divergences": []
+  },
+  {
+    "profile": "mossy_clump",
+    "samples": 65536,
+    "queries": 1428,
+    "categories": {
+      "probe": {
+        "underpowered": 795,
+        "pass": 633,
+        "median_ratio": 1.0122413606326546,
+        "p10_ratio": 0.9068308614333994,
+        "p90_ratio": 1.1982543500834753,
+        "mean_absolute_log_error": 0.08837201252062758
+      }
+    },
+    "timing_ns": {
+      "p50": 552444,
+      "p95": 906549,
+      "max": 11531863
+    },
+    "divergences": []
+  },
+  {
+    "profile": "trap_mechanism",
+    "samples": 65536,
+    "queries": 1428,
+    "categories": {
+      "probe": {
+        "pass": 644,
+        "underpowered": 784,
+        "median_ratio": 0.9686198300461474,
+        "p10_ratio": 0.8801340803579516,
+        "p90_ratio": 1.0728117101994434,
+        "mean_absolute_log_error": 0.06659821337749797
+      }
+    },
+    "timing_ns": {
+      "p50": 545013,
+      "p95": 870886,
+      "max": 12237902
+    },
+    "divergences": []
+  },
+  {
+    "profile": "cracked_spyglass",
+    "samples": 65536,
+    "queries": 1428,
+    "categories": {
+      "probe": {
+        "pass": 709,
+        "underpowered": 719,
+        "median_ratio": 1.008853976709967,
+        "p10_ratio": 0.8996074647076476,
+        "p90_ratio": 1.1177206940469615,
+        "mean_absolute_log_error": 0.07249120293468955
+      }
+    },
+    "timing_ns": {
+      "p50": 543320,
+      "p95": 886169,
+      "max": 11099259
+    },
+    "divergences": []
+  }
+]

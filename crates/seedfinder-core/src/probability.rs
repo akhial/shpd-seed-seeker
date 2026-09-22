@@ -62,10 +62,11 @@
 //! pool is spent on its single best use rather than on whichever of them the
 //! seed left open. Overlapping reward filters are nested; disjoint offers are
 //! approximated independently conditional on the quest appearing. Duplicate
-//! scarcity is measured by weapon tier for the canonical profile and by whole
-//! line otherwise, so a linked group whose members want very different
-//! items — one `+3` alongside two plain ones — is discounted as heavily as one
-//! wanting three alike. Those approximations read low.
+//! wands use baked co-obtainable presence, normalized against the same matcher,
+//! with separate upgrade and quest-reward conditions. Unequal deadlines,
+//! curses, and unsupported combinations still use analytical adjustments.
+//! Other duplicate scarcity is measured by weapon tier for the canonical
+//! profile and by whole line otherwise; uneven filters can read low.
 
 mod artifacts;
 mod blankets;
@@ -563,7 +564,9 @@ fn linked_probability(
 /// scarcity, and counting it twice would make duplicates look far rarer than
 /// they are.
 ///
-/// The table counts how many sets of copies a world offers rather than how
+/// Wands calibrate this reward-aware matcher's answer directly against measured
+/// co-obtainable presence, avoiding a second discount for exclusive rewards.
+/// Other families' tables count how many sets of copies a world offers rather than how
 /// often it offers any, since only the former survives the upgrade and curse
 /// filters a query puts on top. [`thinned_by`] puts the matching's answer on
 /// the same footing, applies the scarcity there, and reads it back.
@@ -575,6 +578,11 @@ fn repeat_correction(ordered: &[Predicate], holding: f64, copies: usize) -> f64 
     // family the repeated identity belongs to rather than whichever filter
     // sorted first.
     let kind = item(repeated).kind;
+    if kind == ItemKind::Wand
+        && let Some(probability) = wand_repeat_probability(ordered, repeated, holding)
+    {
+        return probability;
+    }
     let depth = ordered
         .iter()
         .map(|predicate| predicate.max_depth)
@@ -594,6 +602,68 @@ fn repeat_correction(ordered: &[Predicate], holding: f64, copies: usize) -> f64 
         f64::from(ordered[0].profile.repeat(line, copies - 1, depth))
     };
     thinned_by(holding, copies, scarcity)
+}
+
+fn wand_repeat_probability(ordered: &[Predicate], identity: ItemId, holding: f64) -> Option<f64> {
+    let repeated: Vec<_> = ordered
+        .iter()
+        .filter(|p| p.item == Some(identity))
+        .copied()
+        .collect();
+    let depth = repeated.iter().map(|p| p.max_depth).max()?;
+    let minimum = repeated
+        .iter()
+        .map(|p| p.upgrades.trailing_zeros() as usize)
+        .min()?;
+    if minimum >= 4 {
+        return None;
+    }
+    let all_upgrades = (1 << (HIGHEST_TABLED_UPGRADE + 1)) - 1;
+    let broad = Predicate {
+        max_depth: depth,
+        upgrades: all_upgrades & !((1 << minimum) - 1),
+        require_uncursed: false,
+        source: None,
+        effect: EffectRequirement::Any,
+        ..repeated[0]
+    };
+    let mut band = minimum;
+    let mut baseline = vec![broad; repeated.len()];
+    for (index, anchor) in repeated.iter().enumerate() {
+        let level = anchor.upgrades.trailing_zeros() as usize;
+        if minimum != 0
+            || (anchor.source.is_none() && level == 0)
+            || !repeated
+                .iter()
+                .enumerate()
+                .all(|(i, p)| i == index || (p.upgrades == all_upgrades && p.source.is_none()))
+        {
+            continue;
+        }
+        if let Some(anchor_band) =
+            crate::probability_tables::wand_repeats::anchor_band(anchor.source, level)
+        {
+            band = anchor_band;
+            baseline[index].source = anchor.source;
+            baseline[index].upgrades = all_upgrades & !((1 << level) - 1);
+            break;
+        }
+    }
+    let measured = crate::probability_tables::wand_repeats::probability(
+        ordered[0].profile as usize,
+        identity,
+        band,
+        repeated.len(),
+        usize::from(depth),
+    )?;
+    // Compare observed availability with the same reward-aware matcher that
+    // produced `holding`. A Poisson factorial-moment denominator also charges
+    // for the quest choices this matcher has already enforced. Keep the
+    // query's source, curse and individual deadlines in `holding`; the bake
+    // supplies its broad duplicate correction, not a second reward model.
+    sort_filters(&mut baseline);
+    let baseline = matching_chance(&baseline);
+    (baseline > 0.0).then(|| (holding * measured / baseline).min(1.0))
 }
 
 /// Applies a scarcity measured on sets of `copies` items to a chance of holding

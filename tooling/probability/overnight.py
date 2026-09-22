@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Run independent calibration jobs into an artifact directory, never source files.
 
-Build the six release examples and the release probability_fuzz test first.
+Build the seven release examples and the release probability_fuzz test first.
 Launch detached; manifest.json records commands, seeds, hashes, and exit codes.
 Failed validation is recorded without discarding successful calibration outputs.
 """
@@ -38,7 +38,7 @@ def main():
     output = args.output.resolve()
     if not all(value > 0 for value in [args.item_worlds, args.floor_shards, args.validation_worlds, args.fuzz_queries]):
         parser.error("sample and shard counts must be positive")
-    names = ["calibrate_probability", "calibrate_floors", "calibrate_first_floor", "calibrate_weapon_repeats", "calibrate_source_counts", "probability_sweep"]
+    names = ["calibrate_probability", "calibrate_floors", "calibrate_first_floor", "calibrate_weapon_repeats", "calibrate_source_counts", "calibrate_wand_repeats", "probability_sweep"]
     binaries = {name: root / "target/release/examples" / name for name in names}
     fuzz = [path for path in (root / "target/release/deps").glob("probability_fuzz-*") if path.is_file() and os.access(path, os.X_OK)]
     if not fuzz or not all(path.is_file() for path in binaries.values()):
@@ -55,6 +55,13 @@ def main():
     jobs.append(("weapon-repeats", [str(tools / "calibrate_weapon_repeats"), "500000"], "weapon-repeats.rs", None, {}))
     jobs.append(("feeling-rooms", [str(tools / "calibrate_floors"), "524288", str(output / "feeling-rooms.bin.partial"), "1618033988", "exact"], "feeling-rooms.stdout.log", "feeling-rooms.bin", {}))
     jobs.append(("source-counts", [str(tools / "calibrate_source_counts"), "65536", str(output / "source-counts.bin.partial")], "source-counts.stdout.log", "source-counts.bin", {}))
+    for profile in PROFILES:
+        name = f"wand-repeats-{profile}"
+        command = [str(tools / "calibrate_wand_repeats"), "262144", str(output / f"{name}.json.partial")]
+        if profile != "none":
+            command.append(profile)
+        jobs.append((name, command, f"{name}.stdout.log", f"{name}.json", {}))
+    jobs.append(("wand-table", [sys.executable, str(tools / "pack_wand_repeats.py"), str(output / "wand-repeats.bin.partial"), *[str(output / f"wand-repeats-{p}.json") for p in PROFILES]], "wand-table.stdout.log", "wand-repeats.bin", {}))
     for shard in range(args.floor_shards):
         # Fresh, nonoverlapping blocks after the checked-in training corpus.
         offset = (17_389 + (shard + 1) * FLOOR_SAMPLES * STRIDE) % TOTAL_SEEDS
@@ -80,13 +87,14 @@ def main():
         manifest["binaries"][name] = hashlib.sha256(target.read_bytes()).hexdigest()
     shutil.copy2(Path(__file__).with_name("report.py"), tools / "report.py")
     shutil.copy2(__file__, tools / "overnight.py")
+    shutil.copy2(Path(__file__).with_name("pack_wand_repeats.py"), tools / "pack_wand_repeats.py")
     (output / "source-diff.patch").write_bytes(subprocess.check_output(["git", "diff", "--binary"], cwd=root))
     sources = output / "sources"
     sources.mkdir()
     for source in (root / "crates/seedfinder-core/examples").glob("calibrate_*.rs"):
         shutil.copy2(source, sources / source.name)
     shutil.copy2(root / "crates/seedfinder-core/examples/probability_sweep.rs", sources / "probability_sweep.rs")
-    for relative in ["probability/floors.rs", "probability_tables/floors.rs", "probability_tables/first_floor.rs", "probability_tables/weapon_repeats.rs", "probability_tables/source_counts.rs"]:
+    for relative in ["probability/floors.rs", "probability_tables/floors.rs", "probability_tables/first_floor.rs", "probability_tables/weapon_repeats.rs", "probability_tables/source_counts.rs", "probability_tables/wand_repeats.rs"]:
         target = sources / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(root / "crates/seedfinder-core/src" / relative, target)

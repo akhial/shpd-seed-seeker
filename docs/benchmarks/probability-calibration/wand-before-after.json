@@ -1,0 +1,168 @@
+[
+  {
+    "query": {
+      "max_depth": 21,
+      "requirements": [
+        {
+          "identity_group": 1,
+          "kind": "wand",
+          "max_depth": 5
+        },
+        {
+          "identity_group": 1,
+          "kind": "wand",
+          "max_depth": 22
+        },
+        {
+          "identity_group": 1,
+          "kind": "wand",
+          "upgrade": {
+            "at_least": 2
+          }
+        },
+        {
+          "identity_group": 1,
+          "kind": "wand"
+        }
+      ]
+    },
+    "samples": 262144,
+    "hits": 408,
+    "before": 0.0009420062726493983,
+    "after": 0.001757942054398054
+  },
+  {
+    "query": {
+      "max_depth": 16,
+      "requirements": [
+        {
+          "identity_group": 1,
+          "kind": "wand"
+        },
+        {
+          "identity_group": 1,
+          "kind": "wand",
+          "uncursed": true
+        },
+        {
+          "identity_group": 1,
+          "kind": "wand"
+        }
+      ]
+    },
+    "samples": 262144,
+    "hits": 4328,
+    "before": 0.011045291029867288,
+    "after": 0.016565861428134543
+  },
+  {
+    "query": {
+      "max_depth": 19,
+      "requirements": [
+        {
+          "identity_group": 1,
+          "kind": "wand",
+          "max_depth": 8
+        },
+        {
+          "identity_group": 1,
+          "kind": "wand",
+          "upgrade": {
+            "at_least": 2
+          }
+        },
+        {
+          "identity_group": 1,
+          "kind": "wand"
+        }
+      ]
+    },
+    "samples": 262144,
+    "hits": 17658,
+    "before": 0.04494999058419724,
+    "after": 0.05918855744449425
+  },
+  {
+    "query": {
+      "max_depth": 11,
+      "requirements": [
+        {
+          "identity_group": 1,
+          "kind": "wand",
+          "max_depth": 24
+        },
+        {
+          "identity_group": 1,
+          "kind": "wand"
+        },
+        {
+          "identity_group": 1,
+          "kind": "wand",
+          "max_depth": 23,
+          "source": "chest",
+          "upgrade": {
+            "at_least": 1
+          }
+        }
+      ]
+    },
+    "samples": 262144,
+    "hits": 234,
+    "before": 0.0004067232397427789,
+    "after": 0.0008779699406595842
+  },
+  {
+    "query": {
+      "max_depth": 16,
+      "requirements": [
+        {
+          "identity_group": 1,
+          "kind": "wand",
+          "max_depth": 15
+        },
+        {
+          "identity_group": 1,
+          "kind": "wand",
+          "max_depth": 9,
+          "uncursed": true
+        },
+        {
+          "identity_group": 1,
+          "kind": "wand"
+        }
+      ]
+    },
+    "samples": 262144,
+    "hits": 4080,
+    "before": 0.010236389011080482,
+    "after": 0.015451461583133042
+  },
+  {
+    "query": {
+      "max_depth": 21,
+      "requirements": [
+        {
+          "identity_group": 1,
+          "kind": "wand"
+        },
+        {
+          "identity_group": 1,
+          "kind": "wand"
+        },
+        {
+          "identity_group": 1,
+          "kind": "wand"
+        },
+        {
+          "identity_group": 1,
+          "kind": "wand",
+          "max_depth": 7
+        }
+      ]
+    },
+    "samples": 262144,
+    "hits": 1223,
+    "before": 0.0028658516189601357,
+    "after": 0.004843520101396437
+  }
+]

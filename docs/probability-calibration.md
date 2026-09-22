@@ -35,6 +35,15 @@ slot counts miss, such as two rings lying directly on the floor. Queries with
 one shared source and depth limit use these distributions unless they require
 a repeated identity. Other query shapes retain the analytical arrival model.
 
+Duplicate wands use a separate 147,492-byte WDR2 table: 262,144 training worlds
+for the canonical profile and 65,536 for each of seven trinket profiles. It
+measures obtainable copies by depth, vault eligibility, minimum upgrade, and
+whether one copy must come from the Wandmaker, Imp reward, or vault. It respects
+joint acquisition scenarios. The estimate is normalized against the same
+reward-aware matcher, avoiding a second discount for mutually exclusive offers.
+See [duplicate-wand calibration](probability-wand-calibration.md) for the wider
+audits, before/after results, and remaining approximations.
+
 The overnight floor bake contains 16 disjoint shards of 65,535 worlds for each
 of eight profiles: **1,048,560 worlds/profile, 8,388,480 total**. The merge sums
 integer counts by room identity, rebuilding sparse row indices instead of
@@ -102,14 +111,15 @@ The wider sweep generated 8,000 random item queries, of which 7,102 were valid,
 over a separate 262,144-world grid. All pass the existing factor-two-plus-sampling-
 noise regression guard, now extended to catch sparse or zero-hit overestimates
 when at least 30 hits were predicted. Among the 4,048 queries with at least 12
-observed hits, the median estimate/observed ratio is 0.997, p10 0.931, p90 1.042.
+observed hits, the median estimate/observed ratio is 0.997, p10 0.932, p90 1.045.
 
 The [stricter random-query report](benchmarks/probability-calibration/random-summary.json)
-also applies the curated 35% allowance: 3,982 pass, 3,108 are underpowered, and
-**12 remain outside that band**. These include linked wand duplicates, early-floor
-competition, and some overlapping equipment filters. Its sufficiently observed
-queries have median ratio 0.996, p10 0.932, p90 1.036, and mean absolute log error
-0.0387. These remaining model errors are recorded rather than hidden by widening
+also applies the curated 35% allowance: 3,988 pass, 3,108 are underpowered, and
+**six remain outside that band**. These concern early-floor competition and
+overlapping equipment/quest filters. The six duplicate-wand outliers now pass
+after the [targeted wand calibration](probability-wand-calibration.md). The
+sufficiently observed random queries have median ratio 0.997, p10 0.933,
+p90 1.037, and mean absolute log error 0.0376. These remaining model errors are recorded rather than hidden by widening
 the calibration threshold.
 
 A further [15-query source-count probe](benchmarks/probability-calibration/source-count-summary.json)
@@ -124,10 +134,10 @@ from these and earlier sweeps, alongside three direct first-floor checks.
 | 22 | 70.8 | 70.2 | 3,734 |
 
 On the local x86-64 release build, baseline estimate latency was 1.2 µs median,
-18.1 µs p95, and 2.21 ms maximum across the curated sweep. Selected-trinket
-profiles had p95 below 0.43 ms and maximum below 12.5 ms. The random sweep had
-35.5 µs median, 0.163 ms p95, and 10.5 ms maximum. The separate 200-query speed
-regression measured a 4.5 ms maximum against its unchanged 50 ms release budget.
+15.9 µs p95, and 1.80 ms maximum across the curated sweep. Selected-trinket
+profiles had p95 below 0.38 ms and maximum below 11.1 ms. The random sweep had
+35.8 µs median, 0.175 ms p95, and 10.4 ms maximum. The separate 200-query speed
+regression measured a 4.6 ms maximum against its unchanged 50 ms release budget.
 These are native timings, not browser frame guarantees.
 
 The matcher compacts surplus stock only after each stream has spent its arrival
@@ -135,7 +145,7 @@ budget: a coverage needs no more items than it has eligible requirements. This
 preserves matching while reducing the costly convolution between streams. The
 previous slowest debug estimate fell from 868 ms to 68 ms.
 
-The browser WASM is 10.58 MB (4.08 MB gzip). Baked tables trade a larger initial
+The browser WASM is 10.73 MB (4.10 MB gzip). Baked tables trade a larger initial
 download for direct lookups without runtime simulation or initialization. The
 updated Tailscale preview loads without browser errors and reports farming
 floor 17 as approximately 1 in 80.
@@ -168,6 +178,7 @@ queries. It assesses the current estimator; the new overnight measurements
 are installed only after review and held-out rechecking. The runner also bakes
 weapon repeats (500,000 worlds), exact-feeling room rows (524,288 worlds for each
 of two profiles), and source-count distributions (65,536 worlds for each of
+eight profiles), and duplicate wand availability (262,144 worlds for each of
 eight profiles), and saves random-query counts. `--plan` prints the full job
 list without running it. Jobs continue after an individual failure, preserving both
 successful data and diagnostic logs.
@@ -182,6 +193,8 @@ cargo run --release -p shpd-seedfinder-core --example calibrate_floors -- 524288
 cargo run --release -p shpd-seedfinder-core --example calibrate_weapon_repeats -- 500000 > /tmp/weapon-repeats.rs
 cargo run --release -p shpd-seedfinder-core --example calibrate_first_floor -- 2000000 > /tmp/first-floor.rs
 cargo run --release -p shpd-seedfinder-core --example calibrate_source_counts -- 65536 /tmp/source-counts.bin
+cargo run --release -p shpd-seedfinder-core --example calibrate_wand_repeats -- 262144 /tmp/wand-none.json
+python3 tooling/probability/pack_wand_repeats.py /tmp/wand-repeats.bin /tmp/wand-none.json
 cargo run --release -p shpd-seedfinder-core --example probability_sweep -- 65536 none > /tmp/probability-none.json
 cargo run --release -p shpd-seedfinder-core --example probability_sweep -- 65536 mossy_clump > /tmp/probability-mossy.json
 python3 tooling/probability/report.py --check /tmp/probability-none.json /tmp/probability-mossy.json
