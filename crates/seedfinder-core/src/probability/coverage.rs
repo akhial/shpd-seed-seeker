@@ -195,6 +195,12 @@ mod tests {
                 held >= group.count_ones() as usize
             });
             assert_eq!(coverages.matches(&counts), hall, "{counts:?}");
+            let compact: Vec<_> = counts
+                .iter()
+                .enumerate()
+                .map(|(coverage, count)| (*count).min(coverages.members(coverage).len()))
+                .collect();
+            assert_eq!(coverages.matches(&compact), hall, "compact {counts:?}");
         }
     }
 

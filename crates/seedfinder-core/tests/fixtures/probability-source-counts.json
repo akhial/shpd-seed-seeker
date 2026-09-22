@@ -1,0 +1,289 @@
+{
+  "samples": 65536,
+  "profile": "none",
+  "seed_offset": 3141592653,
+  "seed_stride": 3355211884971,
+  "generation_depth": 22,
+  "cases": [
+    {
+      "query": {
+        "max_depth": 22,
+        "requirements": [
+          {
+            "kind": "wand",
+            "upgrade": 4
+          }
+        ]
+      },
+      "hits": 22035
+    },
+    {
+      "query": {
+        "max_depth": 22,
+        "requirements": [
+          {
+            "kind": "ring",
+            "source": "heap",
+            "upgrade": {
+              "at_least": 1
+            }
+          }
+        ]
+      },
+      "hits": 9034
+    },
+    {
+      "query": {
+        "max_depth": 22,
+        "requirements": [
+          {
+            "kind": "wand",
+            "upgrade": 4
+          },
+          {
+            "kind": "ring",
+            "source": "heap",
+            "upgrade": {
+              "at_least": 1
+            }
+          }
+        ]
+      },
+      "hits": 3045
+    },
+    {
+      "query": {
+        "max_depth": 22,
+        "requirements": [
+          {
+            "effect": "Anti-Magic",
+            "kind": "armor",
+            "uncursed": true
+          }
+        ]
+      },
+      "hits": 8138
+    },
+    {
+      "query": {
+        "max_depth": 22,
+        "requirements": [
+          {
+            "kind": "wand",
+            "upgrade": 4
+          },
+          {
+            "effect": "Anti-Magic",
+            "kind": "armor",
+            "uncursed": true
+          }
+        ]
+      },
+      "hits": 1423
+    },
+    {
+      "query": {
+        "max_depth": 22,
+        "requirements": [
+          {
+            "kind": "ring",
+            "source": "heap",
+            "upgrade": {
+              "at_least": 1
+            }
+          },
+          {
+            "effect": "Anti-Magic",
+            "kind": "armor",
+            "uncursed": true
+          }
+        ]
+      },
+      "hits": 1124
+    },
+    {
+      "query": {
+        "max_depth": 22,
+        "requirements": [
+          {
+            "kind": "wand",
+            "upgrade": 4
+          },
+          {
+            "kind": "ring",
+            "source": "heap",
+            "upgrade": {
+              "at_least": 1
+            }
+          },
+          {
+            "effect": "Anti-Magic",
+            "kind": "armor",
+            "uncursed": true
+          }
+        ]
+      },
+      "hits": 215
+    },
+    {
+      "query": {
+        "max_depth": 22,
+        "requirements": [
+          {
+            "kind": "ring",
+            "source": "heap"
+          }
+        ]
+      },
+      "hits": 30221
+    },
+    {
+      "query": {
+        "max_depth": 22,
+        "requirements": [
+          {
+            "kind": "wand",
+            "upgrade": 4
+          },
+          {
+            "kind": "ring",
+            "source": "heap"
+          }
+        ]
+      },
+      "hits": 10136
+    },
+    {
+      "query": {
+        "max_depth": 22,
+        "requirements": [
+          {
+            "kind": "ring",
+            "source": "heap",
+            "upgrade": {
+              "at_least": 1
+            }
+          },
+          {
+            "kind": "ring",
+            "source": "heap"
+          }
+        ]
+      },
+      "hits": 88
+    },
+    {
+      "query": {
+        "max_depth": 22,
+        "requirements": [
+          {
+            "kind": "wand",
+            "upgrade": 4
+          },
+          {
+            "kind": "ring",
+            "source": "heap",
+            "upgrade": {
+              "at_least": 1
+            }
+          },
+          {
+            "kind": "ring",
+            "source": "heap"
+          }
+        ]
+      },
+      "hits": 31
+    },
+    {
+      "query": {
+        "max_depth": 22,
+        "requirements": [
+          {
+            "effect": "Anti-Magic",
+            "kind": "armor",
+            "uncursed": true
+          },
+          {
+            "kind": "ring",
+            "source": "heap"
+          }
+        ]
+      },
+      "hits": 3721
+    },
+    {
+      "query": {
+        "max_depth": 22,
+        "requirements": [
+          {
+            "kind": "wand",
+            "upgrade": 4
+          },
+          {
+            "effect": "Anti-Magic",
+            "kind": "armor",
+            "uncursed": true
+          },
+          {
+            "kind": "ring",
+            "source": "heap"
+          }
+        ]
+      },
+      "hits": 661
+    },
+    {
+      "query": {
+        "max_depth": 22,
+        "requirements": [
+          {
+            "kind": "ring",
+            "source": "heap",
+            "upgrade": {
+              "at_least": 1
+            }
+          },
+          {
+            "effect": "Anti-Magic",
+            "kind": "armor",
+            "uncursed": true
+          },
+          {
+            "kind": "ring",
+            "source": "heap"
+          }
+        ]
+      },
+      "hits": 11
+    },
+    {
+      "query": {
+        "max_depth": 22,
+        "requirements": [
+          {
+            "kind": "wand",
+            "upgrade": 4
+          },
+          {
+            "kind": "ring",
+            "source": "heap",
+            "upgrade": {
+              "at_least": 1
+            }
+          },
+          {
+            "effect": "Anti-Magic",
+            "kind": "armor",
+            "uncursed": true
+          },
+          {
+            "kind": "ring",
+            "source": "heap"
+          }
+        ]
+      },
+      "hits": 1
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "date": "2026-09-22",
+  "rust_workspace": {
+    "passed": 738,
+    "ignored": 13,
+    "excluded_package": "shpd-seedfinder-gtk",
+    "reason": "GTK system libraries unavailable; follows existing CI workspace scope"
+  },
+  "web": {
+    "tests": 272,
+    "files": 36,
+    "checks": "vp check, vp test --run, WASM build, vp build"
+  },
+  "lint": "cargo clippy --workspace --exclude shpd-seedfinder-gtk --all-targets -- -D warnings",
+  "format": "cargo fmt --all -- --check",
+  "floor_merge_test": "python3 -m unittest discover -s tooling/probability",
+  "release_speed": {
+    "queries_generated": 200,
+    "budget_ms": 50,
+    "slowest_ms": 4.513109
+  },
+  "preview": {
+    "url": "https://devbox.komodo-spectrum.ts.net:8448/",
+    "http_status": 200,
+    "browser_errors": 0,
+    "floor_17_display": "Match probability \u2248 1 in 80"
+  },
+  "random_guard": {
+    "valid_queries": 7102,
+    "samples": 262144,
+    "result": "pass",
+    "measurable_at_least_12_hits": 4048,
+    "median_ratio": 0.997,
+    "p10_ratio": 0.931,
+    "p90_ratio": 1.042,
+    "minimum_ratio": 0.456,
+    "maximum_ratio": 2.403,
+    "mean_absolute_log_error": 0.0421
+  }
+}

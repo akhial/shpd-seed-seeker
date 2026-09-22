@@ -298,6 +298,7 @@ impl SupplyPlan {
                             placed,
                             Vec::new(),
                             steady,
+                            None,
                         );
                         let counts = supply_counts(&stream, placed);
                         for (weight, _) in &mut offers {

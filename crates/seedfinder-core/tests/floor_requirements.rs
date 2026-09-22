@@ -272,7 +272,9 @@ fn measured_probability_accounts_for_each_floor_and_combines_once_with_items_and
     let b = estimate_match_probability(&query(vec![farm(17)]));
     let ab = estimate_match_probability(&query(vec![farm(7), farm(17)]));
     assert!(a > 0.0 && b > 0.0 && ab < a.min(b));
-    assert!((ab - a * b).abs() < 1e-12);
+    // Room decks couple different floors; ordering the filters must not.
+    let ba = estimate_match_probability(&query(vec![farm(17), farm(7)]));
+    assert!((ab - ba).abs() < 1e-12);
     for document in [
         r#"{"requirements":[{"item":"ring_wealth"}]}"#,
         r#"{"requirements":[{"item":"wand_frost"}],"arcane_resin":4}"#,

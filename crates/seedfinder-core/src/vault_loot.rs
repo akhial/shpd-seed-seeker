@@ -28,6 +28,14 @@ use crate::generator::{
 use crate::rng::RandomStack;
 use crate::run::{GeneratorCategory, PotionKind, ScrollKind};
 
+pub(crate) const EXCLUDED_WANDS: [ItemId; 3] = [
+    ItemId::WandRegrowth,
+    ItemId::WandTransfusion,
+    ItemId::WandCorruption,
+];
+pub(crate) const EXCLUDED_RINGS: [ItemId; 3] =
+    [ItemId::RingWealth, ItemId::RingMight, ItemId::RingForce];
+
 /// Equipment family of a vault loot item, as the Java class hierarchy sees
 /// it: wands are not `EquipableItem`s, everything else here is.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -441,10 +449,7 @@ impl VaultEquipmentLoot {
         let (item, _roll) = loop {
             let candidate = random_using_defaults(random, GeneratorCategory::Wand);
             if !(self.generated_classes.contains(&candidate.0)
-                || matches!(
-                    candidate.0,
-                    ItemId::WandRegrowth | ItemId::WandTransfusion | ItemId::WandCorruption
-                ))
+                || EXCLUDED_WANDS.contains(&candidate.0))
             {
                 break candidate;
             }
@@ -461,10 +466,7 @@ impl VaultEquipmentLoot {
         let (item, _roll) = loop {
             let candidate = random_using_defaults(random, GeneratorCategory::Ring);
             if !(self.generated_classes.contains(&candidate.0)
-                || matches!(
-                    candidate.0,
-                    ItemId::RingWealth | ItemId::RingMight | ItemId::RingForce
-                ))
+                || EXCLUDED_RINGS.contains(&candidate.0))
             {
                 break candidate;
             }

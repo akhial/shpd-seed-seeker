@@ -1,0 +1,55 @@
+{
+  "samples": 262144,
+  "seed_offset": 2718281828,
+  "seed_stride": 3355211884971,
+  "cases": [
+    {
+      "query": {
+        "max_depth": 1,
+        "requirements": [
+          {
+            "kind": "weapon",
+            "upgrade": {
+              "at_least": 1
+            }
+          },
+          {
+            "kind": "armor",
+            "upgrade": {
+              "at_least": 1
+            }
+          },
+          {
+            "kind": "armor",
+            "upgrade": {
+              "at_least": 1
+            }
+          }
+        ]
+      },
+      "hits": 174
+    },
+    {
+      "query": {
+        "floor_requirements": [
+          {
+            "depth": 4,
+            "feeling": "dark",
+            "rooms": [
+              "laboratory",
+              "secret_laboratory"
+            ]
+          }
+        ],
+        "requirements": [
+          {
+            "item": "trap_mechanism",
+            "kind": "trinket",
+            "select_trinket": true
+          }
+        ]
+      },
+      "hits": 135
+    }
+  ]
+}

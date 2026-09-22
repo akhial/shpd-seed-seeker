@@ -1,0 +1,363 @@
+{
+  "profile": "none",
+  "samples": 262144,
+  "queries": 7102,
+  "categories": {
+    "random": {
+      "pass": 3982,
+      "underpowered": 3108,
+      "divergent": 12,
+      "median_ratio": 0.99644494180037,
+      "p10_ratio": 0.9321874318685431,
+      "p90_ratio": 1.036101807197402,
+      "mean_absolute_log_error": 0.038742785571042486
+    }
+  },
+  "timing_ns": {
+    "p50": 35473,
+    "p95": 162606,
+    "max": 10480355
+  },
+  "divergences": [
+    {
+      "category": "random",
+      "estimate": 0.0009420062726493983,
+      "estimate_ns": 707711,
+      "hits": 408,
+      "query": {
+        "max_depth": 21,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "max_depth": 5
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "max_depth": 22
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "upgrade": {
+              "at_least": 2
+            }
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          }
+        ]
+      }
+    },
+    {
+      "category": "random",
+      "estimate": 0.04517294509756761,
+      "estimate_ns": 82875,
+      "hits": 16858,
+      "query": {
+        "max_depth": 13,
+        "require_blacksmith": true,
+        "requirements": [
+          {
+            "item": "war_hammer",
+            "kind": "melee_weapon",
+            "uncursed": true
+          },
+          {
+            "item": "leather_armor",
+            "kind": "armor"
+          },
+          {
+            "item": "plate_armor",
+            "kind": "armor",
+            "upgrade": {
+              "at_least": 0
+            }
+          },
+          {
+            "kind": "wand"
+          }
+        ]
+      }
+    },
+    {
+      "category": "random",
+      "estimate": 0.011045291029867288,
+      "estimate_ns": 133913,
+      "hits": 4328,
+      "query": {
+        "max_depth": 16,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "uncursed": true
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          }
+        ]
+      }
+    },
+    {
+      "category": "random",
+      "estimate": 0.04494999058419724,
+      "estimate_ns": 378232,
+      "hits": 17658,
+      "query": {
+        "max_depth": 19,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "max_depth": 8
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "upgrade": {
+              "at_least": 2
+            }
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          }
+        ]
+      }
+    },
+    {
+      "category": "random",
+      "estimate": 0.0004067232397427789,
+      "estimate_ns": 71188,
+      "hits": 234,
+      "query": {
+        "max_depth": 11,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "max_depth": 24
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "max_depth": 23,
+            "source": "chest",
+            "upgrade": {
+              "at_least": 1
+            }
+          }
+        ]
+      }
+    },
+    {
+      "category": "random",
+      "estimate": 0.010236389011080482,
+      "estimate_ns": 204879,
+      "hits": 4080,
+      "query": {
+        "max_depth": 16,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "max_depth": 15
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "max_depth": 9,
+            "uncursed": true
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          }
+        ]
+      }
+    },
+    {
+      "category": "random",
+      "estimate": 0.004701564512903816,
+      "estimate_ns": 93591,
+      "hits": 674,
+      "query": {
+        "max_depth": 22,
+        "requirements": [
+          {
+            "kind": "wand"
+          },
+          {
+            "kind": "weapon",
+            "max_depth": 24,
+            "tier": {
+              "at_most": 3
+            }
+          },
+          {
+            "kind": "ring",
+            "max_depth": 10
+          },
+          {
+            "effect": "Metabolism",
+            "kind": "armor",
+            "source": "chest",
+            "upgrade": 1
+          }
+        ]
+      }
+    },
+    {
+      "category": "random",
+      "estimate": 0.012247865460942066,
+      "estimate_ns": 14422,
+      "hits": 2018,
+      "query": {
+        "max_depth": 2,
+        "requirements": [
+          {
+            "kind": "wand",
+            "uncursed": true
+          },
+          {
+            "kind": "wand"
+          },
+          {
+            "kind": "ring"
+          }
+        ]
+      }
+    },
+    {
+      "category": "random",
+      "estimate": 0.4396737148642503,
+      "estimate_ns": 167703,
+      "hits": 81665,
+      "query": {
+        "max_depth": 16,
+        "requirements": [
+          {
+            "item": "leather_armor",
+            "kind": "armor"
+          },
+          {
+            "item": "leather_armor",
+            "kind": "armor",
+            "uncursed": true,
+            "upgrade": 1
+          },
+          {
+            "kind": "armor",
+            "uncursed": true
+          }
+        ]
+      }
+    },
+    {
+      "category": "random",
+      "estimate": 0.0797471093183582,
+      "estimate_ns": 169837,
+      "hits": 32643,
+      "query": {
+        "max_depth": 23,
+        "requirements": [
+          {
+            "kind": "armor",
+            "max_depth": 2,
+            "uncursed": true
+          },
+          {
+            "item": "wand_living_earth",
+            "kind": "wand"
+          },
+          {
+            "kind": "armor",
+            "uncursed": true,
+            "upgrade": {
+              "at_least": 2
+            }
+          },
+          {
+            "kind": "weapon",
+            "tier": {
+              "at_most": 3
+            },
+            "upgrade": 3
+          }
+        ]
+      }
+    },
+    {
+      "category": "random",
+      "estimate": 0.0028658516189601357,
+      "estimate_ns": 228725,
+      "hits": 1223,
+      "query": {
+        "max_depth": 21,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "max_depth": 7
+          }
+        ]
+      }
+    },
+    {
+      "category": "random",
+      "estimate": 0.1046341175591523,
+      "estimate_ns": 137056,
+      "hits": 39114,
+      "query": {
+        "max_depth": 19,
+        "requirements": [
+          {
+            "kind": "wand",
+            "max_depth": 11
+          },
+          {
+            "item": "plate_armor",
+            "kind": "armor"
+          },
+          {
+            "kind": "weapon",
+            "tier": {
+              "exact": 2
+            },
+            "uncursed": true,
+            "upgrade": 2
+          },
+          {
+            "kind": "weapon",
+            "max_depth": 2,
+            "upgrade": 2
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -18,7 +18,11 @@ use crate::generator::{
 };
 use crate::model::ItemSource;
 
+pub(crate) mod first_floor;
+pub mod floors;
 mod measured;
+pub mod source_counts;
+pub(crate) mod weapon_repeats;
 
 pub use measured::{IDENTITY_REPEATS, SLOT_SPREAD, SUPPLY, TIPPED_SHARES};
 

@@ -1,0 +1,922 @@
+[
+  {
+    "profile": "none",
+    "samples": 262144,
+    "queries": 4859,
+    "categories": {
+      "competition": {
+        "pass": 20,
+        "median_ratio": 0.9777515299301388,
+        "p10_ratio": 0.8768284580382586,
+        "p90_ratio": 1.1208482552447656,
+        "mean_absolute_log_error": 0.06944314852700523
+      },
+      "cross_floor": {
+        "underpowered": 78,
+        "pass": 42,
+        "median_ratio": 1.001849728655507,
+        "p10_ratio": 0.9755429524107235,
+        "p90_ratio": 1.0392147535004677,
+        "mean_absolute_log_error": 0.02167879513567397
+      },
+      "equipment": {
+        "pass": 96,
+        "underpowered": 4,
+        "median_ratio": 1.0,
+        "p10_ratio": 0.9844559376111478,
+        "p90_ratio": 1.0051412764670404,
+        "mean_absolute_log_error": 0.009566273959153694
+      },
+      "farming": {
+        "pass": 4,
+        "underpowered": 3,
+        "median_ratio": 1.0260125575199446,
+        "p10_ratio": 0.9917186007184624,
+        "p90_ratio": 1.0260125575199446,
+        "mean_absolute_log_error": 0.10144711725602122
+      },
+      "feeling": {
+        "pass": 153,
+        "underpowered": 7,
+        "median_ratio": 0.9996796680751102,
+        "p10_ratio": 0.9921879731120935,
+        "p90_ratio": 1.0093020390562435,
+        "mean_absolute_log_error": 0.005276010903104796
+      },
+      "first_floor": {
+        "pass": 55,
+        "underpowered": 51,
+        "median_ratio": 1.0008016595718037,
+        "p10_ratio": 0.8738133004789087,
+        "p90_ratio": 1.0717745994807393,
+        "mean_absolute_log_error": 0.061010518709049104
+      },
+      "identity": {
+        "pass": 55,
+        "median_ratio": 0.9774294304739689,
+        "p10_ratio": 0.9338268309290756,
+        "p90_ratio": 1.001074970703572,
+        "mean_absolute_log_error": 0.029942982175841713
+      },
+      "mixed": {
+        "pass": 27,
+        "underpowered": 3,
+        "median_ratio": 0.9937648422650763,
+        "p10_ratio": 0.9291529808919788,
+        "p90_ratio": 1.1100438285175969,
+        "mean_absolute_log_error": 0.06961468651847073
+      },
+      "mixed_farming": {
+        "pass": 9,
+        "underpowered": 12,
+        "median_ratio": 1.0156657192559413,
+        "p10_ratio": 0.8755771184459058,
+        "p90_ratio": 1.0803283724416428,
+        "mean_absolute_log_error": 0.056621675784517995
+      },
+      "room": {
+        "pass": 1080,
+        "underpowered": 820,
+        "median_ratio": 1.0001244222412995,
+        "p10_ratio": 0.9923419153472886,
+        "p90_ratio": 1.0080695542372178,
+        "mean_absolute_log_error": 0.004613480830827761
+      },
+      "room_combination": {
+        "pass": 1120,
+        "underpowered": 320,
+        "median_ratio": 0.9986983499379419,
+        "p10_ratio": 0.9576110174363278,
+        "p90_ratio": 1.0399137486358603,
+        "mean_absolute_log_error": 0.02971365989150613
+      },
+      "source": {
+        "pass": 347,
+        "underpowered": 453,
+        "median_ratio": 1.0,
+        "p10_ratio": 0.990833889145333,
+        "p90_ratio": 1.014008289314263,
+        "mean_absolute_log_error": 0.013233164849429033
+      },
+      "vault_identity": {
+        "pass": 76,
+        "underpowered": 24,
+        "median_ratio": 0.9999127564330822,
+        "p10_ratio": 0.9922365735494537,
+        "p90_ratio": 1.006232897184013,
+        "mean_absolute_log_error": 0.0050827492635197105
+      }
+    },
+    "timing_ns": {
+      "p50": 1182,
+      "p95": 18108,
+      "max": 2212005
+    },
+    "divergences": []
+  },
+  {
+    "profile": "mimic_tooth",
+    "samples": 262144,
+    "queries": 4859,
+    "categories": {
+      "competition": {
+        "pass": 20,
+        "median_ratio": 0.9430162246488153,
+        "p10_ratio": 0.8176362269885978,
+        "p90_ratio": 1.1227878708784624,
+        "mean_absolute_log_error": 0.11734544002038934
+      },
+      "cross_floor": {
+        "underpowered": 78,
+        "pass": 42,
+        "median_ratio": 1.0118928600378951,
+        "p10_ratio": 0.9283146887073316,
+        "p90_ratio": 1.0814387610714276,
+        "mean_absolute_log_error": 0.051133411872178
+      },
+      "equipment": {
+        "pass": 96,
+        "underpowered": 4,
+        "median_ratio": 1.0009240097441028,
+        "p10_ratio": 0.974474990421735,
+        "p90_ratio": 1.004013823235989,
+        "mean_absolute_log_error": 0.011543865760163996
+      },
+      "farming": {
+        "pass": 3,
+        "underpowered": 4,
+        "median_ratio": 1.0085417554569394,
+        "p10_ratio": 0.9845336670209707,
+        "p90_ratio": 1.0085417554569394,
+        "mean_absolute_log_error": 0.01103785957536877
+      },
+      "feeling": {
+        "pass": 153,
+        "underpowered": 7,
+        "median_ratio": 1.0010864604873804,
+        "p10_ratio": 0.985412997675008,
+        "p90_ratio": 1.0165624163832396,
+        "mean_absolute_log_error": 0.009535704387874593
+      },
+      "first_floor": {
+        "pass": 30,
+        "underpowered": 76,
+        "median_ratio": 1.0111444240819116,
+        "p10_ratio": 0.8416364453697264,
+        "p90_ratio": 1.1368349084904743,
+        "mean_absolute_log_error": 0.08632527845802518
+      },
+      "identity": {
+        "pass": 55,
+        "median_ratio": 0.9743661681477339,
+        "p10_ratio": 0.9428200406600956,
+        "p90_ratio": 0.9984983941801585,
+        "mean_absolute_log_error": 0.028701481768412643
+      },
+      "mixed": {
+        "pass": 22,
+        "underpowered": 8,
+        "median_ratio": 0.9757977357968277,
+        "p10_ratio": 0.8497090091574687,
+        "p90_ratio": 1.079127958249028,
+        "mean_absolute_log_error": 0.07631852988542075
+      },
+      "mixed_farming": {
+        "pass": 6,
+        "underpowered": 15,
+        "median_ratio": 1.0510490387342815,
+        "p10_ratio": 0.8958693613434563,
+        "p90_ratio": 1.0990462884099228,
+        "mean_absolute_log_error": 0.09361944398866136
+      },
+      "room": {
+        "pass": 1080,
+        "underpowered": 820,
+        "median_ratio": 1.0009240097441026,
+        "p10_ratio": 0.9864534236190926,
+        "p90_ratio": 1.0163165426704048,
+        "mean_absolute_log_error": 0.008857895243236899
+      },
+      "room_combination": {
+        "pass": 1023,
+        "underpowered": 417,
+        "median_ratio": 0.9959738670539762,
+        "p10_ratio": 0.9318896155107571,
+        "p90_ratio": 1.0477795477825758,
+        "mean_absolute_log_error": 0.043062363691071436
+      },
+      "source": {
+        "pass": 347,
+        "underpowered": 453,
+        "median_ratio": 1.0009240085024718,
+        "p10_ratio": 0.9735128269255667,
+        "p90_ratio": 1.0157695748020426,
+        "mean_absolute_log_error": 0.01585917597249607
+      },
+      "vault_identity": {
+        "pass": 76,
+        "underpowered": 24,
+        "median_ratio": 1.0000121202098458,
+        "p10_ratio": 0.9839195190831211,
+        "p90_ratio": 1.0152585483737606,
+        "mean_absolute_log_error": 0.00947066149682097
+      }
+    },
+    "timing_ns": {
+      "p50": 86000,
+      "p95": 342047,
+      "max": 10952401
+    },
+    "divergences": []
+  },
+  {
+    "profile": "parchment_scrap",
+    "samples": 262144,
+    "queries": 4859,
+    "categories": {
+      "competition": {
+        "pass": 20,
+        "median_ratio": 0.997349005070897,
+        "p10_ratio": 0.8731358636254225,
+        "p90_ratio": 1.1583005502691577,
+        "mean_absolute_log_error": 0.0823310546470824
+      },
+      "cross_floor": {
+        "underpowered": 78,
+        "pass": 42,
+        "median_ratio": 1.0054270909641705,
+        "p10_ratio": 0.9310611818691875,
+        "p90_ratio": 1.077735203670498,
+        "mean_absolute_log_error": 0.04494075979168635
+      },
+      "equipment": {
+        "pass": 96,
+        "underpowered": 4,
+        "median_ratio": 1.001183956247088,
+        "p10_ratio": 0.980103512335466,
+        "p90_ratio": 1.0083938806353665,
+        "mean_absolute_log_error": 0.012287949676948658
+      },
+      "farming": {
+        "pass": 3,
+        "underpowered": 4,
+        "median_ratio": 1.0059182298270386,
+        "p10_ratio": 0.9890037404240171,
+        "p90_ratio": 1.0059182298270386,
+        "mean_absolute_log_error": 0.017377226466757958
+      },
+      "feeling": {
+        "pass": 153,
+        "underpowered": 7,
+        "median_ratio": 1.0012164590538355,
+        "p10_ratio": 0.9845321815877007,
+        "p90_ratio": 1.0186778063826498,
+        "mean_absolute_log_error": 0.01082626466606389
+      },
+      "first_floor": {
+        "pass": 30,
+        "underpowered": 76,
+        "median_ratio": 0.9907831278766474,
+        "p10_ratio": 0.8916024818683222,
+        "p90_ratio": 1.0924284207745907,
+        "mean_absolute_log_error": 0.05950939780177936
+      },
+      "identity": {
+        "pass": 55,
+        "median_ratio": 0.9778139759337425,
+        "p10_ratio": 0.9398414048653768,
+        "p90_ratio": 1.0039391043252086,
+        "mean_absolute_log_error": 0.029102931847411907
+      },
+      "mixed": {
+        "pass": 22,
+        "underpowered": 8,
+        "median_ratio": 1.0484576003629236,
+        "p10_ratio": 0.9034026578628084,
+        "p90_ratio": 1.1690647506333507,
+        "mean_absolute_log_error": 0.09003044910551898
+      },
+      "mixed_farming": {
+        "pass": 6,
+        "underpowered": 15,
+        "median_ratio": 0.9631543879702925,
+        "p10_ratio": 0.7866030105249153,
+        "p90_ratio": 1.0063902852708724,
+        "mean_absolute_log_error": 0.09238214744660518
+      },
+      "room": {
+        "pass": 1080,
+        "underpowered": 820,
+        "median_ratio": 1.0011839562470877,
+        "p10_ratio": 0.9870191404153963,
+        "p90_ratio": 1.016322742377843,
+        "mean_absolute_log_error": 0.00876722930303284
+      },
+      "room_combination": {
+        "pass": 1018,
+        "underpowered": 422,
+        "median_ratio": 0.9989774333399244,
+        "p10_ratio": 0.9453374871558168,
+        "p90_ratio": 1.0611499146501147,
+        "mean_absolute_log_error": 0.03770659912733864
+      },
+      "source": {
+        "pass": 347,
+        "underpowered": 453,
+        "median_ratio": 1.0011839562470877,
+        "p10_ratio": 0.9877686841717315,
+        "p90_ratio": 1.0176268394192243,
+        "mean_absolute_log_error": 0.015277866969655949
+      },
+      "vault_identity": {
+        "pass": 76,
+        "underpowered": 24,
+        "median_ratio": 1.002257679138026,
+        "p10_ratio": 0.9834408425960945,
+        "p90_ratio": 1.020384688868845,
+        "mean_absolute_log_error": 0.011844918349405648
+      }
+    },
+    "timing_ns": {
+      "p50": 61223,
+      "p95": 348136,
+      "max": 12499100
+    },
+    "divergences": []
+  },
+  {
+    "profile": "rat_skull",
+    "samples": 262144,
+    "queries": 4859,
+    "categories": {
+      "competition": {
+        "pass": 20,
+        "median_ratio": 0.9763217196099259,
+        "p10_ratio": 0.8610102042108088,
+        "p90_ratio": 1.1544700540366828,
+        "mean_absolute_log_error": 0.08622853519833161
+      },
+      "cross_floor": {
+        "underpowered": 78,
+        "pass": 42,
+        "median_ratio": 0.9865162365886689,
+        "p10_ratio": 0.8889793205417666,
+        "p90_ratio": 1.0631712144317074,
+        "mean_absolute_log_error": 0.05667704139937632
+      },
+      "equipment": {
+        "pass": 96,
+        "underpowered": 4,
+        "median_ratio": 0.9942445142730357,
+        "p10_ratio": 0.9720555560537987,
+        "p90_ratio": 0.9981687305910264,
+        "mean_absolute_log_error": 0.014170731799269086
+      },
+      "farming": {
+        "pass": 3,
+        "underpowered": 4,
+        "median_ratio": 0.9950685724945436,
+        "p10_ratio": 0.9389141113292662,
+        "p90_ratio": 0.9950685724945436,
+        "mean_absolute_log_error": 0.025932345425099784
+      },
+      "feeling": {
+        "pass": 153,
+        "underpowered": 7,
+        "median_ratio": 0.9940842763097836,
+        "p10_ratio": 0.9742993172501019,
+        "p90_ratio": 1.012357884330184,
+        "mean_absolute_log_error": 0.012891655254848138
+      },
+      "first_floor": {
+        "pass": 30,
+        "underpowered": 76,
+        "median_ratio": 0.9493915316190468,
+        "p10_ratio": 0.8126219243649038,
+        "p90_ratio": 1.0161664493983344,
+        "mean_absolute_log_error": 0.08838692538870588
+      },
+      "identity": {
+        "pass": 55,
+        "median_ratio": 0.9695232482422571,
+        "p10_ratio": 0.9286129037955364,
+        "p90_ratio": 0.9986463949575303,
+        "mean_absolute_log_error": 0.03603609931209076
+      },
+      "mixed": {
+        "pass": 22,
+        "underpowered": 8,
+        "median_ratio": 0.925024834514102,
+        "p10_ratio": 0.8430596989328496,
+        "p90_ratio": 1.0318537138801962,
+        "mean_absolute_log_error": 0.11049113377506768
+      },
+      "mixed_farming": {
+        "pass": 6,
+        "underpowered": 15,
+        "median_ratio": 1.0014347644601667,
+        "p10_ratio": 0.8105138988065427,
+        "p90_ratio": 1.0318537138801962,
+        "mean_absolute_log_error": 0.07633980656490326
+      },
+      "room": {
+        "pass": 1080,
+        "underpowered": 820,
+        "median_ratio": 0.9942445142730355,
+        "p10_ratio": 0.9799016929841586,
+        "p90_ratio": 1.0096629058849416,
+        "mean_absolute_log_error": 0.010301014195223255
+      },
+      "room_combination": {
+        "pass": 1022,
+        "underpowered": 418,
+        "median_ratio": 0.9879670969077491,
+        "p10_ratio": 0.931586650291357,
+        "p90_ratio": 1.0406601748802553,
+        "mean_absolute_log_error": 0.04043382613392527
+      },
+      "source": {
+        "pass": 347,
+        "underpowered": 453,
+        "median_ratio": 0.9942445142730357,
+        "p10_ratio": 0.9777170554753241,
+        "p90_ratio": 1.0092386440406704,
+        "mean_absolute_log_error": 0.01720165154090846
+      },
+      "vault_identity": {
+        "pass": 76,
+        "underpowered": 24,
+        "median_ratio": 0.9957477266062587,
+        "p10_ratio": 0.9754987270683686,
+        "p90_ratio": 1.0087210217343063,
+        "mean_absolute_log_error": 0.011297997598838205
+      }
+    },
+    "timing_ns": {
+      "p50": 61272,
+      "p95": 376429,
+      "max": 10668640
+    },
+    "divergences": []
+  },
+  {
+    "profile": "exotic_crystals",
+    "samples": 262144,
+    "queries": 4859,
+    "categories": {
+      "competition": {
+        "pass": 20,
+        "median_ratio": 0.9793490241324047,
+        "p10_ratio": 0.8818758543512826,
+        "p90_ratio": 1.1260190033275288,
+        "mean_absolute_log_error": 0.07159337208030288
+      },
+      "cross_floor": {
+        "underpowered": 78,
+        "pass": 42,
+        "median_ratio": 1.0217489593239786,
+        "p10_ratio": 0.9653333726128387,
+        "p90_ratio": 1.0489955982392847,
+        "mean_absolute_log_error": 0.03733964921764501
+      },
+      "equipment": {
+        "pass": 96,
+        "underpowered": 4,
+        "median_ratio": 1.00554134148116,
+        "p10_ratio": 0.9884119057532424,
+        "p90_ratio": 1.0077354596398311,
+        "mean_absolute_log_error": 0.011171702904288601
+      },
+      "farming": {
+        "pass": 3,
+        "underpowered": 4,
+        "median_ratio": 1.0192709230681836,
+        "p10_ratio": 1.0154080244480483,
+        "p90_ratio": 1.0192709230681836,
+        "mean_absolute_log_error": 0.018539676587482807
+      },
+      "feeling": {
+        "pass": 153,
+        "underpowered": 7,
+        "median_ratio": 1.0070357743097054,
+        "p10_ratio": 0.9893962525499576,
+        "p90_ratio": 1.022697658450548,
+        "mean_absolute_log_error": 0.01151484050962333
+      },
+      "first_floor": {
+        "pass": 30,
+        "underpowered": 76,
+        "median_ratio": 1.0281733026282647,
+        "p10_ratio": 0.8689346221598055,
+        "p90_ratio": 1.159745132570693,
+        "mean_absolute_log_error": 0.08295814362248313
+      },
+      "identity": {
+        "pass": 55,
+        "median_ratio": 0.9855381796933628,
+        "p10_ratio": 0.9400838248636653,
+        "p90_ratio": 1.0144570991464443,
+        "mean_absolute_log_error": 0.028466074089472243
+      },
+      "mixed": {
+        "pass": 22,
+        "underpowered": 8,
+        "median_ratio": 0.9706746630894928,
+        "p10_ratio": 0.8748107254863444,
+        "p90_ratio": 1.0525815848173403,
+        "mean_absolute_log_error": 0.07748072547847315
+      },
+      "mixed_farming": {
+        "pass": 6,
+        "underpowered": 15,
+        "median_ratio": 1.015216787320038,
+        "p10_ratio": 0.7118370310452513,
+        "p90_ratio": 1.0300753709254844,
+        "mean_absolute_log_error": 0.10209605668353748
+      },
+      "room": {
+        "pass": 1080,
+        "underpowered": 820,
+        "median_ratio": 1.005574612831487,
+        "p10_ratio": 0.9916735490588761,
+        "p90_ratio": 1.0221786262253787,
+        "mean_absolute_log_error": 0.010620531092872032
+      },
+      "room_combination": {
+        "pass": 1020,
+        "underpowered": 420,
+        "median_ratio": 1.0037522673146304,
+        "p10_ratio": 0.939149873529688,
+        "p90_ratio": 1.0621873070536847,
+        "mean_absolute_log_error": 0.04074772255542725
+      },
+      "source": {
+        "pass": 347,
+        "underpowered": 453,
+        "median_ratio": 1.0055745828570175,
+        "p10_ratio": 0.9889526326923486,
+        "p90_ratio": 1.0205488051763454,
+        "mean_absolute_log_error": 0.01680867259416854
+      },
+      "vault_identity": {
+        "pass": 76,
+        "underpowered": 24,
+        "median_ratio": 1.0065663361486483,
+        "p10_ratio": 0.9894793835078575,
+        "p90_ratio": 1.0219288791329548,
+        "mean_absolute_log_error": 0.01224888548786916
+      }
+    },
+    "timing_ns": {
+      "p50": 61242,
+      "p95": 353274,
+      "max": 10723514
+    },
+    "divergences": []
+  },
+  {
+    "profile": "mossy_clump",
+    "samples": 262144,
+    "queries": 4859,
+    "categories": {
+      "competition": {
+        "pass": 20,
+        "median_ratio": 0.9895394206918753,
+        "p10_ratio": 0.89342171481525,
+        "p90_ratio": 1.0938148320798435,
+        "mean_absolute_log_error": 0.06912579018870343
+      },
+      "cross_floor": {
+        "underpowered": 78,
+        "pass": 42,
+        "median_ratio": 0.9986687771448935,
+        "p10_ratio": 0.9587130017657028,
+        "p90_ratio": 1.0676733883715468,
+        "mean_absolute_log_error": 0.039153547099191804
+      },
+      "equipment": {
+        "pass": 96,
+        "underpowered": 4,
+        "median_ratio": 1.0061158969182558,
+        "p10_ratio": 0.9909517384379221,
+        "p90_ratio": 1.014171512068485,
+        "mean_absolute_log_error": 0.014300124150366864
+      },
+      "farming": {
+        "pass": 3,
+        "underpowered": 4,
+        "median_ratio": 0.9858075929483441,
+        "p10_ratio": 0.9449034259729214,
+        "p90_ratio": 0.9858075929483441,
+        "mean_absolute_log_error": 0.024234696561964458
+      },
+      "feeling": {
+        "pass": 137,
+        "underpowered": 23,
+        "median_ratio": 1.005559414282366,
+        "p10_ratio": 0.9913505799095211,
+        "p90_ratio": 1.024661066382152,
+        "mean_absolute_log_error": 0.010942276545385947
+      },
+      "first_floor": {
+        "pass": 30,
+        "underpowered": 76,
+        "median_ratio": 1.0143978192906913,
+        "p10_ratio": 0.8676664385254912,
+        "p90_ratio": 1.0841095804465173,
+        "mean_absolute_log_error": 0.07335115355508666
+      },
+      "identity": {
+        "pass": 55,
+        "median_ratio": 0.9799773499529487,
+        "p10_ratio": 0.9418913742235664,
+        "p90_ratio": 1.0072144027442191,
+        "mean_absolute_log_error": 0.027812321156182568
+      },
+      "mixed": {
+        "pass": 22,
+        "underpowered": 8,
+        "median_ratio": 0.9499348927782342,
+        "p10_ratio": 0.8777213222356178,
+        "p90_ratio": 0.9943083907530641,
+        "mean_absolute_log_error": 0.06647698177456365
+      },
+      "mixed_farming": {
+        "pass": 6,
+        "underpowered": 15,
+        "median_ratio": 0.964272191299581,
+        "p10_ratio": 0.8452188970039067,
+        "p90_ratio": 1.000407164188728,
+        "mean_absolute_log_error": 0.06851891543248695
+      },
+      "room": {
+        "pass": 1080,
+        "underpowered": 820,
+        "median_ratio": 1.0061158969182555,
+        "p10_ratio": 0.9916308492398948,
+        "p90_ratio": 1.0212048265762639,
+        "mean_absolute_log_error": 0.010638228567738842
+      },
+      "room_combination": {
+        "pass": 800,
+        "underpowered": 640,
+        "median_ratio": 1.003056891975487,
+        "p10_ratio": 0.942677818367324,
+        "p90_ratio": 1.0725247046522655,
+        "mean_absolute_log_error": 0.04399642496486145
+      },
+      "source": {
+        "pass": 347,
+        "underpowered": 453,
+        "median_ratio": 1.0061158969182558,
+        "p10_ratio": 0.996707173790561,
+        "p90_ratio": 1.0204690972397088,
+        "mean_absolute_log_error": 0.017232797425152057
+      },
+      "vault_identity": {
+        "pass": 76,
+        "underpowered": 24,
+        "median_ratio": 1.00467373031354,
+        "p10_ratio": 0.9905977380241847,
+        "p90_ratio": 1.020592199093051,
+        "mean_absolute_log_error": 0.010485870691110987
+      }
+    },
+    "timing_ns": {
+      "p50": 61023,
+      "p95": 364772,
+      "max": 10637352
+    },
+    "divergences": []
+  },
+  {
+    "profile": "trap_mechanism",
+    "samples": 262144,
+    "queries": 4859,
+    "categories": {
+      "competition": {
+        "pass": 20,
+        "median_ratio": 0.9986626027068152,
+        "p10_ratio": 0.8856072058748482,
+        "p90_ratio": 1.0733951798315842,
+        "mean_absolute_log_error": 0.07259193981925646
+      },
+      "cross_floor": {
+        "underpowered": 78,
+        "pass": 42,
+        "median_ratio": 1.0125796997406489,
+        "p10_ratio": 0.9692916729448326,
+        "p90_ratio": 1.074193858494726,
+        "mean_absolute_log_error": 0.042968821813415534
+      },
+      "equipment": {
+        "pass": 96,
+        "underpowered": 4,
+        "median_ratio": 1.0034590011366975,
+        "p10_ratio": 0.9842947739991255,
+        "p90_ratio": 1.0062423105947738,
+        "mean_absolute_log_error": 0.011083226688538573
+      },
+      "farming": {
+        "pass": 3,
+        "underpowered": 4,
+        "median_ratio": 1.0164004307440577,
+        "p10_ratio": 1.0140202457661123,
+        "p90_ratio": 1.0164004307440577,
+        "mean_absolute_log_error": 0.018642507361232716
+      },
+      "feeling": {
+        "pass": 137,
+        "underpowered": 23,
+        "median_ratio": 1.0032714205891369,
+        "p10_ratio": 0.9886922472517138,
+        "p90_ratio": 1.0207784264374475,
+        "mean_absolute_log_error": 0.01042144775892001
+      },
+      "first_floor": {
+        "pass": 30,
+        "underpowered": 76,
+        "median_ratio": 0.9852000426714506,
+        "p10_ratio": 0.904985425128738,
+        "p90_ratio": 1.0813588018504048,
+        "mean_absolute_log_error": 0.0583420964677896
+      },
+      "identity": {
+        "pass": 55,
+        "median_ratio": 0.9781883317021057,
+        "p10_ratio": 0.9383424876701166,
+        "p90_ratio": 1.0066265805111796,
+        "mean_absolute_log_error": 0.028190109048644156
+      },
+      "mixed": {
+        "pass": 22,
+        "underpowered": 8,
+        "median_ratio": 0.9962795042806054,
+        "p10_ratio": 0.8733675435364129,
+        "p90_ratio": 1.1146037093696368,
+        "mean_absolute_log_error": 0.07919646742552994
+      },
+      "mixed_farming": {
+        "pass": 6,
+        "underpowered": 15,
+        "median_ratio": 0.9693202525992352,
+        "p10_ratio": 0.9094137943135012,
+        "p90_ratio": 1.0380535327571108,
+        "mean_absolute_log_error": 0.06697931674038432
+      },
+      "room": {
+        "pass": 1080,
+        "underpowered": 820,
+        "median_ratio": 1.0044937900247632,
+        "p10_ratio": 0.9898293444680591,
+        "p90_ratio": 1.0208080093393919,
+        "mean_absolute_log_error": 0.010032472836096566
+      },
+      "room_combination": {
+        "pass": 798,
+        "underpowered": 642,
+        "median_ratio": 0.999092378088151,
+        "p10_ratio": 0.9293909063035322,
+        "p90_ratio": 1.060803428874896,
+        "mean_absolute_log_error": 0.04518512185014021
+      },
+      "source": {
+        "pass": 347,
+        "underpowered": 453,
+        "median_ratio": 1.004493782547338,
+        "p10_ratio": 0.9825415967245467,
+        "p90_ratio": 1.012566822813861,
+        "mean_absolute_log_error": 0.016456259824591205
+      },
+      "vault_identity": {
+        "pass": 76,
+        "underpowered": 24,
+        "median_ratio": 1.0052024945361944,
+        "p10_ratio": 0.9932586833912759,
+        "p90_ratio": 1.0173975232337666,
+        "mean_absolute_log_error": 0.008794255850816836
+      }
+    },
+    "timing_ns": {
+      "p50": 60512,
+      "p95": 366686,
+      "max": 11329890
+    },
+    "divergences": []
+  },
+  {
+    "profile": "cracked_spyglass",
+    "samples": 262144,
+    "queries": 4859,
+    "categories": {
+      "competition": {
+        "pass": 20,
+        "median_ratio": 0.917054313510725,
+        "p10_ratio": 0.8485752433397188,
+        "p90_ratio": 1.1305636805205461,
+        "mean_absolute_log_error": 0.10498520673598175
+      },
+      "cross_floor": {
+        "underpowered": 78,
+        "pass": 42,
+        "median_ratio": 0.9896184889049855,
+        "p10_ratio": 0.9393990431993594,
+        "p90_ratio": 1.0595915133730147,
+        "mean_absolute_log_error": 0.03965461248174828
+      },
+      "equipment": {
+        "pass": 96,
+        "underpowered": 4,
+        "median_ratio": 0.9953111073123696,
+        "p10_ratio": 0.9692549653532306,
+        "p90_ratio": 0.9976108660040798,
+        "mean_absolute_log_error": 0.01585988762689332
+      },
+      "farming": {
+        "pass": 3,
+        "underpowered": 4,
+        "median_ratio": 1.0043538157837617,
+        "p10_ratio": 0.999337332656159,
+        "p90_ratio": 1.0043538157837617,
+        "mean_absolute_log_error": 0.007189931450406088
+      },
+      "feeling": {
+        "pass": 153,
+        "underpowered": 7,
+        "median_ratio": 0.9961070568856075,
+        "p10_ratio": 0.9814616869246962,
+        "p90_ratio": 1.0153909916121135,
+        "mean_absolute_log_error": 0.011144518538771984
+      },
+      "first_floor": {
+        "pass": 30,
+        "underpowered": 76,
+        "median_ratio": 0.9911392850570301,
+        "p10_ratio": 0.9248752146920071,
+        "p90_ratio": 1.0496040235746187,
+        "mean_absolute_log_error": 0.04995258177865268
+      },
+      "identity": {
+        "pass": 55,
+        "median_ratio": 0.9740937098377609,
+        "p10_ratio": 0.9359573552445486,
+        "p90_ratio": 1.0003820012225286,
+        "mean_absolute_log_error": 0.031079885169853095
+      },
+      "mixed": {
+        "pass": 22,
+        "underpowered": 8,
+        "median_ratio": 0.9881284697846651,
+        "p10_ratio": 0.9169832079768844,
+        "p90_ratio": 1.189584912636971,
+        "mean_absolute_log_error": 0.09505021454233464
+      },
+      "mixed_farming": {
+        "pass": 6,
+        "underpowered": 15,
+        "median_ratio": 1.021969235386809,
+        "p10_ratio": 0.9401183642044756,
+        "p90_ratio": 1.0472165923836378,
+        "mean_absolute_log_error": 0.0878344549944311
+      },
+      "room": {
+        "pass": 1080,
+        "underpowered": 820,
+        "median_ratio": 0.9968153653393869,
+        "p10_ratio": 0.9832831377258245,
+        "p90_ratio": 1.0126869573910633,
+        "mean_absolute_log_error": 0.009243728038739012
+      },
+      "room_combination": {
+        "pass": 1023,
+        "underpowered": 417,
+        "median_ratio": 0.9931479306123098,
+        "p10_ratio": 0.9308488141533613,
+        "p90_ratio": 1.0493026567448476,
+        "mean_absolute_log_error": 0.04015091628360191
+      },
+      "source": {
+        "pass": 347,
+        "underpowered": 453,
+        "median_ratio": 0.996657526126857,
+        "p10_ratio": 0.9660833087472991,
+        "p90_ratio": 1.0077548069833187,
+        "mean_absolute_log_error": 0.017838372403652245
+      },
+      "vault_identity": {
+        "pass": 76,
+        "underpowered": 24,
+        "median_ratio": 0.9982938863263237,
+        "p10_ratio": 0.9797019192439458,
+        "p90_ratio": 1.0186606509825094,
+        "mean_absolute_log_error": 0.013135004742549588
+      }
+    },
+    "timing_ns": {
+      "p50": 62384,
+      "p95": 423471,
+      "max": 10769713
+    },
+    "divergences": []
+  }
+]

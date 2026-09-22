@@ -102,22 +102,29 @@ while rechecking the retained seed pool.
 
 ## Probability calibration and performance
 
-`examples/calibrate_floors.rs` measures 8,192 deterministic, dispersed seeds
-for each of the eight existing trinket profiles (65,536 worlds). The 292 KiB
-`probability_tables/floors.bin` contains little-endian u16 counts indexed by
-profile, depth (1..24), feeling, and room type. Each row starts with its sample
-count and ends with the joint count of ordinary and secret gardens.
+The merged overnight bake measures 1,048,560 deterministic, dispersed seeds
+for each of the eight trinket profiles (8,388,480 worlds). The 3.73 MiB
+`probability_tables/floors.bin` contains packed little-endian counts and offsets,
+read directly without allocation or decompression.
 
-Estimates condition room presence on feeling and include the measured garden
-intersection, so two gardens do not double-count a farming floor. Other room
-combinations, different floors, and item supply use independence approximations.
+The table includes room pairs, repeated rooms across floors, and cross-floor
+feeling pairs. Room scheduling only distinguishes Large, Secrets, and ordinary
+feelings, so ordinary feelings share a room distribution to reduce sampling
+noise. Normal-profile feelings use their exact generator probabilities. Mossy
+Clump and Trap Mechanism use measured feeling distributions and correlations,
+plus separate room rows for each exact feeling. Those rows use another 524,288
+worlds/profile because brewing timing correlates feelings with laboratories,
+adding a 1.61 MiB table with the same direct-read format.
+
+Two-room conjunctions and unions use measured intersections. Wider combinations
+use a tree of pairwise dependencies. Cross-floor estimates account for repeated
+room types (including either-garden) and alternating trinket feelings; other
+cross-floor dependencies and item/floor correlations remain approximate.
 Challenges use canonical measurements, matching the existing item model.
 These estimates never reject seeds; only generation and exact matching do.
-Regenerate with:
 
-```sh
-cargo run --release -p shpd-seedfinder-core --example calibrate_floors -- 8192
-```
+See [probability calibration](probability-calibration.md) for the held-out query
+sweeps, remaining limitations, performance measurements, and regeneration commands.
 
 `examples/benchmark_floors.rs` compares identical queries with and without the
 new floor gates, retaining existing item pruning on both sides. A local run
@@ -134,5 +141,5 @@ on 4,096 separate dispersed seeds produced identical matches in every case:
 | RoW by 16 only (control) | 1,038 | 1.00× |
 
 Deep-floor gains are limited by the necessary generation of earlier floors.
-The measured farming estimates were about 1 in 106, 96, and 66 for floors 7,
-17, and 22 respectively; these are estimates, not guarantees.
+Current farming estimates and their held-out observations are recorded in the
+[calibration report](probability-calibration.md).

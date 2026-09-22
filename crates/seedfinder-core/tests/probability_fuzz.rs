@@ -116,6 +116,10 @@ fn estimates_stay_fast() {
 #[test]
 #[ignore = "generates tens of thousands of worlds; run with --release"]
 fn fuzzed_queries_track_sampled_seeds() {
+    if let Ok(path) = std::env::var("FUZZ_RECHECK") {
+        recheck_observations(&path);
+        return;
+    }
     let sample = from_environment("FUZZ_WORLDS").unwrap_or(FUZZED_WORLDS);
     let queries = from_environment("FUZZ_QUERIES")
         .and_then(|value| usize::try_from(value).ok())
@@ -125,30 +129,102 @@ fn fuzzed_queries_track_sampled_seeds() {
     let mut generator = QueryGenerator::new(seed);
     let mut ratios: Vec<(f64, String, f64, f64)> = Vec::new();
     let mut failures = Vec::new();
+    let mut observations = Vec::new();
     for _ in 0..queries {
         let query = generator.next_query();
         if query.validate().is_err() {
             continue;
         }
-        let name = describe(&query);
         let (hits, estimate) = measure(&query, worlds);
-        if f64::from(hits) < MEANINGFUL_HITS {
-            continue;
-        }
-        let observed = f64::from(hits) / count(worlds.len());
-        ratios.push((estimate / observed, name.clone(), observed, estimate));
-        if !within_tolerance(observed, estimate, f64::from(hits)) {
-            failures.push(format!(
-                "{name}: sampled {observed:.3e}, estimated {estimate:.3e}"
-            ));
-        }
+        observations.push(serde_json::json!({
+            "category": "random", "query": shpd_seedfinder_core::json_query::encode(&query),
+            "hits": hits, "estimate": estimate, "estimate_ns": 0
+        }));
+        record_comparison(
+            &query,
+            worlds.len(),
+            hits,
+            estimate,
+            &mut ratios,
+            &mut failures,
+        );
     }
     report(&mut ratios, worlds.len());
+    if let Ok(path) = std::env::var("FUZZ_REPORT") {
+        std::fs::write(
+            path,
+            serde_json::to_vec(&serde_json::json!({
+                "profile": "none", "samples": sample, "query_seed": seed,
+                "seed_offset": 0, "seed_stride": TOTAL_SEEDS / sample,
+                "cases": observations
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+    }
     assert!(
         ratios.len() > 40,
         "only {} queries produced enough hits",
         ratios.len()
     );
+    assert!(
+        failures.is_empty(),
+        "estimates drifted:\n{}",
+        failures.join("\n")
+    );
+}
+
+fn record_comparison(
+    query: &SearchQuery,
+    samples: usize,
+    hits: u32,
+    estimate: f64,
+    ratios: &mut Vec<(f64, String, f64, f64)>,
+    failures: &mut Vec<String>,
+) {
+    let observed = f64::from(hits) / count(samples);
+    let name = describe(query);
+    let finite = estimate.is_finite() && (0.0..=1.0).contains(&estimate);
+    let accepted = if f64::from(hits) >= MEANINGFUL_HITS {
+        ratios.push((estimate / observed, name.clone(), observed, estimate));
+        within_tolerance(observed, estimate, f64::from(hits))
+    } else if estimate * count(samples) >= 30.0 {
+        // A zero/sparse observation cannot excuse a large predicted rate.
+        // Four-sigma Wilson upper bound, with the same factor-two allowance.
+        let n = count(samples);
+        let center = (observed + 8.0 / n) / (1.0 + 16.0 / n);
+        let half =
+            4.0 * (observed * (1.0 - observed) / n + 4.0 / (n * n)).sqrt() / (1.0 + 16.0 / n);
+        estimate <= TOLERANCE * (center + half)
+    } else {
+        true
+    };
+    if !finite || !accepted {
+        failures.push(format!(
+            "{name}: sampled {observed:.3e} ({hits}/{samples}), estimated {estimate:.3e}"
+        ));
+    }
+}
+
+fn recheck_observations(path: &str) {
+    let data: serde_json::Value = serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+    let samples = usize::try_from(data["samples"].as_u64().unwrap()).unwrap();
+    let mut ratios = Vec::new();
+    let mut failures = Vec::new();
+    for case in data["cases"].as_array().unwrap() {
+        let query = shpd_seedfinder_core::json_query::decode(&case["query"].to_string()).unwrap();
+        let hits = u32::try_from(case["hits"].as_u64().unwrap()).unwrap();
+        record_comparison(
+            &query,
+            samples,
+            hits,
+            estimate_match_probability(&query),
+            &mut ratios,
+            &mut failures,
+        );
+    }
+    report(&mut ratios, samples);
+    assert!(ratios.len() > 40);
     assert!(
         failures.is_empty(),
         "estimates drifted:\n{}",
