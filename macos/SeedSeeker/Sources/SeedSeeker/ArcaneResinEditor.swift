@@ -21,7 +21,7 @@ struct ArcaneResinFields: View {
                 Text("Auto").tag(true)
             }.pickerStyle(.segmented)
             if auto {
-                Text("Find enough resin to upgrade every matched wand to +3.")
+                Text("Upgrade each kept wand to +3. Excluded wands and extra copies reserved for reforging need no resin.")
                     .foregroundStyle(.secondary)
             } else {
                 Stepper(value: $amount, in: 1...65535) {
@@ -30,6 +30,10 @@ struct ArcaneResinFields: View {
                     }
                 }
             }
+            Toggle("Include Mage’s starting wand", isOn: $filter.includeMageWand)
+                .toggleStyle(.checkbox)
+            Text("Add 2 resin from the Magic Missile wand recovered with Wand Preservation when imbuing another wand. The preserved wand is +0, regardless of the staff’s level.")
+                .font(.caption).foregroundStyle(.secondary)
             Toggle("Require uncursed wands", isOn: $filter.uncursed)
                 .toggleStyle(.checkbox)
             Picker("Wand floor limit", selection: $filter.maximumDepth) {
@@ -62,6 +66,7 @@ struct ArcaneResinChip: View {
             Text(arcaneResinItem.name)
                 .font(.system(size: 12, weight: .semibold)).lineLimit(1)
             tag(amountLabel, color: .shatteredYellow)
+            if filter.includeMageWand { tag("Mage +2", color: .shatteredMint) }
             if let depth = filter.maximumDepth { tag("F≤\(depth)", color: .shatteredYellow) }
             if filter.uncursed { tag("✓", color: .shatteredMint) }
         }

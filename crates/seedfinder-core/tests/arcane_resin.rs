@@ -184,6 +184,73 @@ fn resin_planning_options_round_trip_and_validate() {
 }
 
 #[test]
+fn reforge_copies_need_no_upgrades_and_cannot_be_resin_donors() {
+    for upgrade in 0..=4 {
+        for shape in ["named", "linked", "alternative"] {
+            let anchor = format!(r#""upgrade":{{"at_least":{upgrade}}},"max_depth":3"#);
+            let requirements = match shape {
+                "named" => format!(
+                    r#"[{{"item":"wand_lightning",{anchor}}},{{"item":"wand_lightning","max_depth":3}}]"#
+                ),
+                "linked" => format!(
+                    r#"[{{"kind":"wand","identity_group":1,"max_depth":3}},{{"kind":"wand","identity_group":1,{anchor}}}]"#
+                ),
+                _ => format!(
+                    r#"[{{"any_of":[{{"item":"wand_frost","identity_group":1,{anchor}}},{{"item":"wand_lightning","identity_group":1,{anchor}}}]}},{{"kind":"wand","identity_group":1,"max_depth":3}}]"#
+                ),
+            };
+            for excluded in [false, true] {
+                let mut query = auto_query(&requirements);
+                for r in &mut query.requirements {
+                    if r.upgrade != shpd_seedfinder_core::query::UpgradeRequirement::Any {
+                        r.exclude_resin = excluded;
+                    }
+                }
+                query.validate().unwrap();
+                for mage in [false, true] {
+                    query.arcane_resin_filter.include_mage_wand = mage;
+                    for copy_upgrade in [0, 4] {
+                        for donors in 0..=3 {
+                            let mut items = vec![wand(upgrade), wand(copy_upgrade)];
+                            items.extend((0..donors).map(|_| WorldItem {
+                                item: ItemId::WandFireblast,
+                                depth: 4,
+                                ..wand(0)
+                            }));
+                            let candidate = world(items);
+                            // AtLeast lets the upgraded spare become the kept wand.
+                            let kept_upgrade = upgrade.max(copy_upgrade);
+                            let cost = if excluded {
+                                0
+                            } else {
+                                match kept_upgrade {
+                                    0 => 6,
+                                    1 => 5,
+                                    2 => 3,
+                                    _ => 0,
+                                }
+                            };
+                            let expected = donors * 2 + if mage { 2 } else { 0 } >= cost;
+                            assert_eq!(
+                                query.matches(&candidate),
+                                expected,
+                                "{shape}, +{upgrade}, copy +{copy_upgrade}, excluded={excluded}, mage={mage}, donors={donors}"
+                            );
+                            if expected {
+                                let marks = scout_matches(&candidate, &query);
+                                assert_eq!(marks.matched_requirements, marks.total_requirements);
+                                assert!(marks.matched_indices().contains(&0));
+                                assert!(marks.matched_indices().contains(&1));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn auto_upgrades_every_reserved_wand_to_three() {
     let query = auto_query(r#"[{"kind":"wand","max_depth":3},{"kind":"wand","max_depth":3}]"#);
     // Keep donors outside the requested wands' scope so their upgrades

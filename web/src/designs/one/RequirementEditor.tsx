@@ -472,7 +472,8 @@ export function RequirementEditor({
               </Field>
               {autoResin ? (
                 <p className="d1-caption">
-                  Find enough resin to upgrade matched wands to +3, except those marked “No resin”.
+                  Upgrade each kept wand to +3. Excluded wands and extra copies reserved for
+                  reforging need no resin.
                 </p>
               ) : (
                 <Field label="Amount">
@@ -777,7 +778,8 @@ export function RequirementEditor({
               </label>
               <p className="d1-caption">
                 Keep this wand without budgeting resin to upgrade it. Useful for imbuing: resin
-                upgrades do not transfer to the staff. Extra copies still count toward Auto resin.
+                upgrades do not transfer to the staff. Extra copies are reserved for reforging and
+                never need Auto resin.
               </p>
             </section>
           )}

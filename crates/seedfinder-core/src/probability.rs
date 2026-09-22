@@ -446,8 +446,14 @@ fn effective_requirements(query: &SearchQuery, profile: Profile) -> Vec<Requirem
     let mut taken: BTreeMap<u8, usize> = BTreeMap::new();
     let mut alternatives: BTreeMap<u8, Requirement> = BTreeMap::new();
     let mut flattened: Vec<Requirement> = Vec::new();
-    for requirement in &query.requirements {
+    let copies = if query.arcane_resin_auto {
+        crate::query::reforge_copies(query)
+    } else {
+        Vec::new()
+    };
+    for (index, requirement) in query.requirements.iter().enumerate() {
         let mut requirement = *requirement;
+        requirement.exclude_resin |= query.arcane_resin_auto && copies[index];
         if let Some(sum) = requirement.level_sum.take() {
             let (needed, implied) = group_plan.get(&sum.group).copied().unwrap_or((1, 0));
             let already = taken.entry(sum.group).or_insert(0);

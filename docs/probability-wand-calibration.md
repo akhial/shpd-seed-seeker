@@ -21,7 +21,8 @@ uneven groups such as one +4 wand alongside two plain copies. Broad intermediate
 answers use the existing bounded cache; no worlds are sampled at runtime.
 
 Resin planning uses the same calibrated wand supply. Excluding a wand from Auto
-resin removes its upgrade cost while still reserving that copy; the Mage's
+resin removes its upgrade cost while still reserving that copy. Extra stack
+copies reserved for reforging also have no upgrade cost and cannot donate; the Mage's
 starting wand contributes two resin without adding a generated wand. Exact-floor
 probabilities multiply the resulting item-and-resin estimate once per profile.
 `tests/resin_floor_probability.rs` checks this composition, cache isolation,

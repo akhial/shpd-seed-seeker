@@ -118,6 +118,55 @@ fn fixed_auto_cost_keeps_repeat_calibration_and_credit_equivalence() {
 }
 
 #[test]
+fn reforge_stack_budgets_only_the_anchor_and_keeps_calibrated_supply() {
+    for shape in ["named", "linked", "alternative"] {
+        for upgrade in [1, 2, 3] {
+            let requirements = match shape {
+                "named" => format!(
+                    r#"[{{"item":"wand_frost","upgrade":{upgrade}}},{{"item":"wand_frost"}}]"#
+                ),
+                "linked" => format!(
+                    r#"[{{"kind":"wand","identity_group":1}},{{"kind":"wand","identity_group":1,"upgrade":{upgrade}}}]"#
+                ),
+                _ => format!(
+                    r#"[{{"any_of":[{{"item":"wand_frost","upgrade":{upgrade},"identity_group":1}},{{"item":"wand_lightning","upgrade":{upgrade},"identity_group":1}}]}},{{"kind":"wand","identity_group":1}}]"#
+                ),
+            };
+            for blanket in [false, true] {
+                let mut auto = json_query::decode(&format!(
+                    r#"{{"requirements":{requirements},"arcane_resin":"auto"}}"#
+                ))
+                .unwrap();
+                if blanket {
+                    auto.requirements.extend(json_query::decode(r#"{"requirements":[{"kind":"wand"},{"kind":"wand","upgrade":{"at_least":1},"blanket":true}]}"#).unwrap().requirements.into_iter().skip(1));
+                }
+                auto.floor_requirements = floors();
+                auto.arcane_resin_filter.include_mage_wand = true;
+                let mut fixed = auto.clone();
+                fixed.arcane_resin_auto = false;
+                fixed.arcane_resin = match upgrade {
+                    1 => 5,
+                    2 => 3,
+                    _ => 0,
+                };
+                close(probability(&auto), probability(&fixed), &auto);
+                for r in &mut auto.requirements {
+                    if !r.blanket
+                        && r.upgrade != shpd_seedfinder_core::query::UpgradeRequirement::Any
+                    {
+                        r.exclude_resin = true;
+                    }
+                }
+                auto.validate().unwrap();
+                fixed = auto.clone();
+                fixed.arcane_resin_auto = false;
+                close(probability(&auto), probability(&fixed), &auto);
+            }
+        }
+    }
+}
+
+#[test]
 fn credits_and_exclusions_relax_auto_without_exceeding_calibrated_baselines() {
     for document in [
         r#"{"requirements":[{"item":"wand_frost"},{"item":"wand_frost"}]}"#,

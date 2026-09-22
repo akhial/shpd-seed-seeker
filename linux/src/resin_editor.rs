@@ -26,6 +26,9 @@ pub fn summary(filter: ArcaneResinFilter) -> String {
     if let Some(source) = filter.source {
         parts.push(source_label(source).to_owned());
     }
+    if filter.include_mage_wand {
+        parts.push("Mage +2".to_owned());
+    }
     parts.join(" · ")
 }
 
@@ -61,10 +64,15 @@ pub fn present(
         .selected(u32::from(snapshot.arcane_resin_auto))
         .build();
     let explanation = adw::ActionRow::builder()
-        .title("Find enough resin to upgrade every matched wand to +3.")
+        .title("Upgrade each kept wand to +3. Excluded wands and extra copies reserved for reforging need no resin.")
         .visible(snapshot.arcane_resin_auto)
         .build();
     amount.set_visible(!snapshot.arcane_resin_auto);
+    let mage_wand = adw::SwitchRow::builder()
+        .title("Include Mage’s starting wand")
+        .subtitle("Add 2 resin from the Magic Missile wand recovered with Wand Preservation when imbuing another wand. The preserved wand is +0, regardless of the staff’s level.")
+        .active(filter.include_mage_wand)
+        .build();
     let uncursed = adw::SwitchRow::builder()
         .title("Require uncursed wands")
         .active(filter.uncursed)
@@ -102,6 +110,7 @@ pub fn present(
     group.add(&mode);
     group.add(&explanation);
     group.add(&amount);
+    group.add(&mage_wand);
     group.add(&uncursed);
     group.add(&limited);
     group.add(&depth);
@@ -127,7 +136,7 @@ pub fn present(
     let dialog = adw::Dialog::builder()
         .title("Arcane Resin")
         .content_width(440)
-        .content_height(490)
+        .content_height(590)
         .child(&view)
         .build();
     dialog.set_default_widget(Some(&save));
@@ -198,7 +207,7 @@ pub fn present(
                 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
                 let max_depth = limited.is_active().then(|| depth.value().round() as u8);
                 state.arcane_resin_filter = ArcaneResinFilter {
-                    include_mage_wand: filter.include_mage_wand,
+                    include_mage_wand: mage_wand.is_active(),
                     uncursed: uncursed.is_active(),
                     max_depth,
                     source: usize::try_from(source.selected())

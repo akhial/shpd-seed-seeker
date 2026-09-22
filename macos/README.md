@@ -88,8 +88,16 @@ files, and version 9 share links preserve blankets.
 ## Arcane Resin
 
 Choose **Arcane Resin** when adding a Wand requirement. Set a minimum amount or
-choose **Auto** to find enough resin to upgrade every reserved wand to +3.
-Auto counts each reserved wand once. Donor wands are consumed for resin, including
+choose **Auto** to find enough resin to upgrade each kept wand to +3.
+Extra stack copies are reserved for Blacksmith reforging: they need no resin
+upgrades and cannot also be consumed as resin donors.
+In a wand’s editor, **Exclude from Auto resin** keeps that wand reserved without
+budgeting resin upgrades, for example when imbuing it into the staff.
+**Include Mage’s starting wand** adds 2 resin from the Magic Missile wand
+recovered with Wand Preservation. The preserved wand is +0 regardless of the
+staff’s level; incoming resin upgrades do not transfer when imbuing.
+
+Auto counts each kept wand once. Donor wands are consumed for resin, including
 those witnessing blankets, and add no upgrade cost. Wands already at +3 or higher
 need no resin. The requirement chip shows **Auto**.
 Optionally limit donor wands by curse status, floor, or source. Donors must
@@ -99,5 +107,7 @@ separate requirement and can be searched on its own.
 
 The requirement can be edited or removed from the board. Saved drafts, presets,
 share links, result exports, and search refinement retain its mode, amount, and filters.
-Auto uses version 10 share links; existing fixed-amount links remain compatible.
+Auto uses version 10 share links; the Mage credit and per-wand exclusion use
+version 12, including floor requirements. Existing links remain compatible.
+The chip shows **Mage +2** for the starting credit and **No resin** on excluded wands.
 Scout highlights the contributing wands, and the engine supplies the match estimate.

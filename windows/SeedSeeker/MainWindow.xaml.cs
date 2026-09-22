@@ -534,6 +534,7 @@ public sealed partial class MainWindow : Window
         content.Children.Add(new TextBlock { Text = "Arcane Resin", FontSize = 13, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
         content.Children.Add(ChipTagPill(query.ArcaneResinAuto ? "Auto" : $"≥{query.ArcaneResin}", SuccessInk, SuccessFill));
         if (query.ArcaneResinFilter.MaximumDepth is int depth) content.Children.Add(ChipTagPill($"F≤{depth}", CautionInk, CautionFill));
+        if (query.ArcaneResinFilter.IncludeMageWand) content.Children.Add(ChipTagPill("Mage +2", SuccessInk, SuccessFill));
         if (query.ArcaneResinFilter.Uncursed) content.Children.Add(ChipTagPill("\u2713", SuccessInk, SuccessFill));
         return content;
     }
@@ -1041,14 +1042,16 @@ public sealed partial class MainWindow : Window
     {
         var mode = Combo(new[] { "Amount", "Auto" }, query.ArcaneResinAuto ? 1 : 0);
         mode.Header = "Minimum resin";
-        var explanation = new TextBlock { Text = "Find enough resin to upgrade every matched wand to +3.", TextWrapping = TextWrapping.Wrap };
+        var explanation = new TextBlock { Text = "Upgrade each kept wand to +3. Excluded wands and extra copies reserved for reforging need no resin.", TextWrapping = TextWrapping.Wrap };
         var amount = Number("Minimum resin", query.ArcaneResin > 0 ? query.ArcaneResin : 2, 1, 65535);
+        var mageWand = new CheckBox { Content = "Include Mage’s starting wand", IsChecked = query.ArcaneResinFilter.IncludeMageWand };
+        var mageHelp = new TextBlock { Text = "Add 2 resin from the Magic Missile wand recovered with Wand Preservation when imbuing another wand. The preserved wand is +0, regardless of the staff’s level.", TextWrapping = TextWrapping.Wrap };
         var uncursed = new CheckBox { Content = "Require uncursed wands", IsChecked = query.ArcaneResinFilter.Uncursed };
         var depth = Combo(new[] { "Search limit" }.Concat(Enumerable.Range(1, SearchLimits.MaxDepth).Select(x => $"Floor {x}")), query.ArcaneResinFilter.MaximumDepth ?? 0);
         var source = Combo(new[] { "Any source" }.Concat(Enum.GetValues<ScoutItemSource>().Select(Labels.Source)), query.ArcaneResinFilter.Source is { } selected ? (int)selected + 1 : 0);
         var content = new StackPanel { Spacing = 16 };
         content.Children.Add(mode); content.Children.Add(explanation);
-        content.Children.Add(amount); content.Children.Add(uncursed);
+        content.Children.Add(amount); content.Children.Add(mageWand); content.Children.Add(mageHelp); content.Children.Add(uncursed);
         content.Children.Add(new TextBlock { Text = "Wand floor limit" }); content.Children.Add(depth);
         content.Children.Add(new TextBlock { Text = "Wand source" }); content.Children.Add(source);
         var dialog = new ContentDialog { XamlRoot = Content.XamlRoot, Title = "Arcane Resin", PrimaryButtonText = query.NeedsResin ? "Save" : "Add", CloseButtonText = "Cancel", SecondaryButtonText = query.NeedsResin ? "Remove" : "", DefaultButton = ContentDialogButton.Primary, Content = VerticalScrollView(content, 440, 460) };
@@ -1069,7 +1072,7 @@ public sealed partial class MainWindow : Window
         query.ArcaneResin = result == ContentDialogResult.Secondary || query.ArcaneResinAuto ? 0 : (int)amount.Value;
         query.ArcaneResinFilter = result == ContentDialogResult.Secondary ? new() : new(
             uncursed.IsChecked == true, depth.SelectedIndex == 0 ? null : depth.SelectedIndex,
-            source.SelectedIndex == 0 ? null : (ScoutItemSource)(source.SelectedIndex - 1));
+            source.SelectedIndex == 0 ? null : (ScoutItemSource)(source.SelectedIndex - 1), mageWand.IsChecked == true);
         SaveSettings(); RefreshQuery();
     }
 
@@ -1099,6 +1102,8 @@ public sealed partial class MainWindow : Window
         curseSection.Children.Add(new TextBlock { Text = "Curses", Style = (Style)Application.Current.Resources["Caption"] }); curseSection.Children.Add(cursePanel);
         var effectGrid = new StackPanel { Spacing = 4 }; effectGrid.Children.Add(enchantmentLabel); effectGrid.Children.Add(enchantmentPanel); effectGrid.Children.Add(curseSection);
         var selectTrinket = new CheckBox { Content = "Choose matching trinket at +3", IsChecked = r.SelectTrinket };
+        var excludeResin = new CheckBox { Content = "Exclude from Auto resin", IsChecked = r.ExcludeResin };
+        var resinHelp = new TextBlock { Text = "Keep this wand without budgeting resin to upgrade it. Useful for imbuing: resin upgrades do not transfer to the staff. Extra copies are reserved for reforging and never need Auto resin.", TextWrapping = TextWrapping.Wrap };
         var uncursed = new CheckBox { Content = "Require uncursed", IsChecked = r.RequireUncursed };
         var source = Combo(new[] { "Any source" }.Concat(Enum.GetValues<ScoutItemSource>().Select(Labels.Source)), r.Source is null ? 0 : (int)r.Source + 1);
         // How many items of this kind the chip asks for. The relationships
@@ -1163,7 +1168,7 @@ public sealed partial class MainWindow : Window
             Section(SectionTitle("Item"), Row("Category", kind), Row("Item", item), resin, Row("Tier", tierMatch), Row("Exact tier", tier), Row("Minimum tier", tierBound)),
             Section(SectionTitle("Upgrade level"), Row("Predicate", upgradeMatch), Row("Upgrade level", upgrade), Row("Minimum upgrade", upgradeBound)),
             Section(effectTitle, Row("Effect", effectMode), effectGrid),
-            Section(null, selectTrinket, uncursed, Row("Source", source), depthRow, Row("Within first floors", depth)),
+            Section(null, selectTrinket, excludeResin, resinHelp, uncursed, Row("Source", source), depthRow, Row("Within first floors", depth)),
             Section(SectionTitle("Stack"), Row("Total item count", count), copyDepthToggle, copyDepth, totalToggle, total) }) content.Children.Add(section);
         void NormalizeTier()
         {
@@ -1175,6 +1180,7 @@ public sealed partial class MainWindow : Window
         {
             var k = (ItemKind)Math.Max(0, kind.SelectedIndex); var trinket = k == ItemKind.Trinket; var generic = item.SelectedIndex == 0 && k.Family() is ItemKind.Weapon or ItemKind.Armor;
             resin.Visibility = !r.Blanket && k == ItemKind.Wand && accept == "Add" ? Visibility.Visible : Visibility.Collapsed;
+            excludeResin.Visibility = resinHelp.Visibility = k == ItemKind.Wand && !r.Blanket ? Visibility.Visible : Visibility.Collapsed;
             selectTrinket.Visibility = !r.Blanket && trinket ? Visibility.Visible : Visibility.Collapsed;
             var predicate = (TierMatch)Math.Max(0, tierMatch.SelectedIndex); var ranged = predicate is TierMatch.AtLeast or TierMatch.AtMost;
             tierMatch.Visibility = generic ? Visibility.Visible : Visibility.Collapsed;
@@ -1283,6 +1289,7 @@ public sealed partial class MainWindow : Window
         r.UpgradeMatch = (UpgradeMatch)upgradeMatch.SelectedIndex; r.Upgrade = r.UpgradeMatch switch { UpgradeMatch.Any => 0, UpgradeMatch.Exactly => (int)upgrade.Value, UpgradeMatch.AtLeast when r.Kind == ItemKind.Ring => (int)upgrade.Value, UpgradeMatch.AtLeast => selectedMinimumUpgrade, _ => 0 };
         r.RequireUncursed = uncursed.IsChecked == true;
         r.SelectTrinket = !r.Blanket && r.Kind == ItemKind.Trinket && selectTrinket.IsChecked == true;
+        r.ExcludeResin = !r.Blanket && r.Kind == ItemKind.Wand && excludeResin.IsChecked == true;
         // One checked effect is a single name, as before effect sets existed; an empty "Specific" means any.
         r.Effect = effectMode.Visibility != Visibility.Visible ? EffectFilter.Any() : effectMode.SelectedIndex switch
         {

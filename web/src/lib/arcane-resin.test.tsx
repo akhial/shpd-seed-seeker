@@ -39,6 +39,33 @@ const document = {
 };
 
 describe("Arcane Resin", () => {
+  it("reserves stack copies for reforging without budgeting resin for them", () => {
+    for (const linked of [false, true]) {
+      for (const excluded of [false, true]) {
+        const identity = linked ? { kind: "wand", identity_group: 1 } : { item: "wand_frost" };
+        const requirements = [
+          { ...identity, ...(excluded ? { exclude_resin: true } : { upgrade: 3 }) },
+          { ...identity },
+          { ...identity },
+        ];
+        const query = {
+          requirements,
+          arcane_resin: "auto",
+          arcane_resin_filter: { source: "ghost_reward" },
+        };
+        const state = fromQueryJson(JSON.stringify(query));
+        expect(validateQuery(state).valid).toBe(true);
+        expect(fromQueryJson(decode_share_text(encode_share_link(toQueryJson(state))))).toEqual(
+          state,
+        );
+        const baseline = JSON.parse(analyze_query(JSON.stringify({ requirements })));
+        const auto = JSON.parse(analyze_query(toQueryJson(state)));
+        expect(baseline.probability).toBeGreaterThan(0);
+        expect(auto.probability).toBeCloseTo(baseline.probability, 12);
+      }
+    }
+  });
+
   it("analyzes wider Auto wand queries quickly, including AutoTrinket", () => {
     for (const count of [4, 8]) {
       const query = {

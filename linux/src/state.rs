@@ -70,6 +70,7 @@ pub const ALL_KIND_CHOICES: &[KindChoice] = &[
 /// One item requirement as edited in the interface. All predicate fields
 /// mirror [`Requirement`]; `key` is a session-stable row identity.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[allow(clippy::struct_excessive_bools)] // Mirrors independent engine requirement flags.
 pub struct UiRequirement {
     pub key: u64,
     pub kind: ItemKind,
@@ -82,6 +83,7 @@ pub struct UiRequirement {
     pub require_uncursed: bool,
     pub select_trinket: bool,
     pub blanket: bool,
+    pub exclude_resin: bool,
     pub source: Option<ItemSource>,
     pub identity_group: Option<u8>,
     pub max_depth: Option<u8>,
@@ -125,6 +127,7 @@ impl UiRequirement {
             require_uncursed: self.require_uncursed,
             select_trinket: self.select_trinket,
             blanket: self.blanket,
+            exclude_resin: self.exclude_resin,
             source: self.source,
             identity_group: self.identity_group,
             max_depth: self.max_depth,
@@ -204,6 +207,9 @@ impl UiRequirement {
         };
         if let Some(effect) = effect_label(self.effect) {
             let _ = write!(text, " \u{b7} {effect}");
+        }
+        if self.exclude_resin {
+            text.push_str(" · excluded from Auto resin");
         }
         if self.require_uncursed {
             text.push_str(" \u{b7} uncursed");
@@ -340,6 +346,7 @@ impl AppState {
                 require_uncursed: requirement.require_uncursed,
                 select_trinket: requirement.select_trinket,
                 blanket: requirement.blanket,
+                exclude_resin: requirement.exclude_resin,
                 source: requirement.source,
                 identity_group: requirement.identity_group,
                 max_depth: requirement.max_depth,
@@ -955,6 +962,33 @@ mod tests {
         let document = shpd_seedfinder_core::json_query::encode(&query);
         let decoded = shpd_seedfinder_core::json_query::decode(&document.to_string()).unwrap();
         assert_eq!(AppState::from_query(&decoded).to_query().unwrap(), query);
+    }
+
+    #[test]
+    fn excluded_reforge_stack_and_mage_credit_survive_editor_and_share_round_trips() {
+        use shpd_seedfinder_core::{
+            deep_link, json_query, probability::estimate_match_probability,
+        };
+        let query = json_query::decode(r#"{"arcane_resin":"auto","arcane_resin_filter":{"include_mage_wand":true},"requirements":[{"item":"wand_frost","exclude_resin":true},{"item":"wand_frost"},{"item":"wand_frost"}],"floor_requirements":[{"depth":7,"feeling":"dark"}]}"#).unwrap();
+        let state = AppState::from_query(&query);
+        assert_eq!(state.to_query().unwrap(), query);
+        assert!(state.requirements[0].exclude_resin);
+        assert!(state.arcane_resin_filter.include_mage_wand);
+        assert_eq!(state.board().len(), 1);
+        assert_eq!(state.board()[0].stack_count(), 3);
+        assert_eq!(
+            deep_link::decode(&deep_link::encode(&query).unwrap()).unwrap(),
+            query
+        );
+        let mut baseline = query.clone();
+        baseline.arcane_resin_auto = false;
+        let probability = estimate_match_probability(&query);
+        assert!(probability > 0.0);
+        assert!((probability - estimate_match_probability(&baseline)).abs() < 1e-12);
+        assert_eq!(
+            json_query::decode(&json_query::encode(&query).to_string()).unwrap(),
+            query
+        );
     }
 
     #[test]

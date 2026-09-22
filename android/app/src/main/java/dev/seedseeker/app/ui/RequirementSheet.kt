@@ -792,7 +792,7 @@ fun RequirementSheet(
                                 Checkbox(checked = excludeResin, onCheckedChange = null)
                                 Text("Exclude from Auto resin", style = MaterialTheme.typography.bodyMedium)
                             }
-                            Text("Keep this wand without budgeting resin to upgrade it. Useful for imbuing: resin upgrades do not transfer to the staff. Extra copies still count toward Auto resin.",
+                            Text("Keep this wand without budgeting resin to upgrade it. Useful for imbuing: resin upgrades do not transfer to the staff. Extra copies are reserved for reforging and never need Auto resin.",
                                 style = MaterialTheme.typography.bodySmall)
                         }
 

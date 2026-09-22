@@ -9,7 +9,25 @@ import org.junit.Test
 class ArcaneResinTest {
     init { PackagedCatalog.install() }
 
-    @Test fun excludedWandsRemainEditableAndNewCopiesStillNeedResin() {
+    @Test fun reforgeCopiesRemainReservedWithoutAutoUpgradeCosts() {
+        val engine = JniNativeSeedFinder()
+        fun probability(request: SearchRequest) = engine.startResumedSearch(request, 0, 0, 1).use { it.status().matchProbability }
+        for (linked in listOf(false, true)) {
+            for (excluded in listOf(false, true)) {
+                val identity = if (linked) "\"kind\":\"wand\",\"identity_group\":1" else "\"item\":\"wand_frost\""
+                val anchor = if (excluded) "\"exclude_resin\":true" else "\"upgrade\":3"
+                val query = ResultsExport.decodeQuery(JSONObject("""{"arcane_resin":"auto","arcane_resin_filter":{"source":"ghost_reward"},"requirements":[{$identity,$anchor},{$identity},{$identity}]}"""))
+                assertEquals(3, query.requirements.boardItems().single().stackCount)
+                assertEquals(query, DeepLink.decode(DeepLink.encodeLink(query)))
+                val request = SearchRequest(query.requirements, arcaneResinAuto = true, arcaneResinFilter = query.arcaneResinFilter)
+                val baseline = probability(request.copy(arcaneResinAuto = false))
+                assertTrue(baseline > 0.0)
+                assertEquals(baseline, probability(request), 1e-12)
+            }
+        }
+    }
+
+    @Test fun excludedWandsRemainEditableAndCopiesKeepTheirPortableShape() {
         val named = dev.seedseeker.app.catalog.ItemCatalog.findById("wand_lightning")!!
         for (item in listOf(null, named)) {
             val anchor = ItemRequirement(1, item, 0, kind = ItemKind.WAND, upgradeMatch = UpgradeMatch.ANY, excludeResin = true)

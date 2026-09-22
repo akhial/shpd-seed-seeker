@@ -28,6 +28,23 @@ fn credit(query: &SearchQuery) -> u16 {
 }
 
 pub(super) fn probability(query: &SearchQuery, profile: Profile) -> f64 {
+    let auto_ordered = query.arcane_resin_auto.then(|| {
+        filters(
+            query,
+            &effective_requirements(query, profile),
+            None,
+            &[],
+            profile,
+        )
+    });
+    if let Some(amount) = auto_ordered.as_deref().and_then(fixed_auto_cost) {
+        let mut fixed = query.clone();
+        fixed.arcane_resin_auto = false;
+        fixed.arcane_resin = amount;
+        // Keep the ordinary model's linked-identity calibration and donor
+        // shortcuts identical to a manually entered budget.
+        return probability(&fixed, profile);
+    }
     let mut ordinary = query.clone();
     ordinary.arcane_resin = 0;
     ordinary.arcane_resin_auto = false;
@@ -42,13 +59,15 @@ pub(super) fn probability(query: &SearchQuery, profile: Profile) -> f64 {
         return equipment_probability(&ordinary, profile);
     }
     let baseline = equipment_probability(&ordinary, profile);
-    let ordered = filters(
-        query,
-        &effective_requirements(query, profile),
-        None,
-        &[],
-        profile,
-    );
+    let ordered = auto_ordered.unwrap_or_else(|| {
+        filters(
+            query,
+            &effective_requirements(query, profile),
+            None,
+            &[],
+            profile,
+        )
+    });
     with_resin(query, profile, &ordered, &[], baseline)
 }
 

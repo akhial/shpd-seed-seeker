@@ -7,6 +7,65 @@ use crate::model::{ItemSource, WorldItem};
 
 use super::{EffectRequirement, Requirement, SearchQuery, TierRequirement, UpgradeRequirement};
 
+/// Copies hidden by the editors' stack badge are reserved for reforging, not
+/// resin upgrades. Infer them from the portable relationships so older saved
+/// queries receive the same rule without changing their documents or links.
+pub(crate) fn reforge_copies(query: &SearchQuery) -> Vec<bool> {
+    let requirements = &query.requirements;
+    let mut copies = vec![false; requirements.len()];
+    let mut groups: BTreeMap<u8, Vec<usize>> = BTreeMap::new();
+    for (index, r) in requirements.iter().enumerate() {
+        if r.kind == ItemKind::Wand
+            && let Some(group) = r.identity_group
+        {
+            groups.entry(group).or_default().push(index);
+        }
+    }
+    let mut extra_counts = BTreeMap::new();
+    for members in groups.values() {
+        let anchor = members
+            .iter()
+            .copied()
+            .find(|&i| !requirements[i].is_bare())
+            .unwrap_or(members[0]);
+        let mut count = 0;
+        for &index in members {
+            let r = requirements[index];
+            if index != anchor && r.alternative_group.is_none() && r.is_bare() {
+                copies[index] = true;
+                count += 1;
+            }
+        }
+        extra_counts.insert(anchor, count);
+    }
+    // Named stacks fold plain repeats into the nearest preceding chip, up to
+    // the three-copy limit shared by all editors. Constrained copies start a
+    // separate chip, and alternatives never absorb independent named copies.
+    let mut named = BTreeMap::new();
+    for (index, r) in requirements.iter().enumerate() {
+        if copies[index]
+            || r.kind != ItemKind::Wand
+            || r.blanket
+            || r.alternative_group.is_some()
+            || r.level_sum.is_some()
+        {
+            continue;
+        }
+        let Some(item) = r.item else { continue };
+        let plain = Requirement { item: None, ..*r }.is_bare() && r.identity_group.is_none();
+        if plain
+            && let Some(count) = named.get_mut(&item)
+            && *count < 3
+        {
+            copies[index] = true;
+            *count += 1;
+        } else {
+            named.insert(item, 1 + extra_counts.get(&index).copied().unwrap_or(0));
+        }
+    }
+    copies
+}
+
 /// The item filter shared by resin allocation and blanket witness planning.
 pub(crate) fn donor_requirement(query: &SearchQuery) -> Requirement {
     Requirement {
@@ -318,5 +377,45 @@ impl BlanketDonors<'_> {
             }
         }
         !self.require_all && self.visit(slot + 1, required, scenarios)
+    }
+}
+
+#[cfg(test)]
+mod reforge_tests {
+    use super::*;
+
+    #[test]
+    fn copies_follow_visible_stack_boundaries_and_preserve_independent_wands() {
+        for (requirements, expected) in [
+            (
+                r#"[{"item":"wand_frost"},{"item":"wand_frost"},{"item":"wand_frost"},{"item":"wand_frost"}]"#,
+                vec![false, true, true, false],
+            ),
+            (
+                r#"[{"item":"wand_frost","upgrade":2},{"item":"wand_frost","upgrade":2}]"#,
+                vec![false, false],
+            ),
+            (
+                r#"[{"item":"wand_frost"},{"item":"wand_frost","exclude_resin":true},{"item":"wand_frost"}]"#,
+                vec![false, false, true],
+            ),
+            (r#"[{"kind":"wand"},{"kind":"wand"}]"#, vec![false, false]),
+            (
+                r#"[{"kind":"wand","identity_group":1,"max_depth":4},{"kind":"wand","identity_group":1,"upgrade":2},{"kind":"wand","identity_group":1}]"#,
+                vec![true, false, true],
+            ),
+            (
+                r#"[{"any_of":[{"item":"wand_frost"},{"item":"wand_lightning"}]},{"item":"wand_frost"},{"item":"wand_frost"}]"#,
+                vec![false, false, false, true],
+            ),
+            (
+                r#"[{"item":"wand_frost"},{"item":"wand_frost","blanket":true}]"#,
+                vec![false, false],
+            ),
+        ] {
+            let query = crate::json_query::decode(&format!(r#"{{"requirements":{requirements}}}"#))
+                .unwrap();
+            assert_eq!(reforge_copies(&query), expected, "{requirements}");
+        }
     }
 }

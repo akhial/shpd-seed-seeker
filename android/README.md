@@ -207,10 +207,12 @@ files, and version 9 share links preserve blankets.
 ## Arcane Resin
 
 Choose **Arcane Resin** when adding a Wand requirement. Set a minimum amount or
-choose **Auto** to find enough resin to upgrade every reserved wand to +3.
-Auto counts each reserved wand once. In a wand’s editor, **Exclude from Auto resin**
+choose **Auto** to find enough resin to upgrade each kept wand to +3.
+Extra stack copies are reserved for Blacksmith reforging: they need no resin
+upgrades and cannot also be consumed as resin donors.
+Auto counts each kept wand once. In a wand’s editor, **Exclude from Auto resin**
 keeps it reserved without budgeting resin upgrades; the board marks it **No resin**.
-This applies to that wand, while extra copies still count. It is useful for a wand
+Extra copies are excluded automatically. The per-wand option is useful for a wand
 you intend to imbue, because resin upgrades do not transfer to the staff. Donor wands are consumed for resin, including
 those witnessing blankets, and add no upgrade cost. Wands already at +3 or higher
 need no resin. The requirement chip shows **Auto**.

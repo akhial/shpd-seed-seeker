@@ -73,6 +73,10 @@ bits are written.
 | `blanket` | 1, versions 9–12 only | Follows `select_trinket`; requires an item assigned to an ordinary slot or selected as an Arcane Resin donor to also satisfy this predicate. Absent in versions 4–8, which default to false. |
 | `exclude_resin` | 1, version 12 only | Follows `blanket`; omit this ordinary wand’s Auto upgrade cost while keeping it reserved. Invalid on blankets and other item kinds. |
 
+Extra copies represented by existing stack relationships are automatically excluded
+from Auto upgrade costs. They remain reserved for reforging; no additional bits
+are needed, and older stack links receive the same behavior.
+
 ### Floor extension (versions 11–12)
 
 This follows all requirement records. Version 12 retains version 11’s layout.

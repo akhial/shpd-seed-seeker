@@ -61,7 +61,7 @@ fun ArcaneResinSheet(
                         shape = SegmentedButtonDefaults.itemShape(index, 2)) { Text(label) }
                 }
             }
-            if (automatic) Text("Find enough resin to upgrade matched wands to +3, except those marked “No resin”.")
+            if (automatic) Text("Upgrade each kept wand to +3. Excluded wands and extra copies reserved for reforging need no resin.")
             else OutlinedTextField(value = minimum, onValueChange = { minimum = it }, label = { Text("Minimum resin") },
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true,

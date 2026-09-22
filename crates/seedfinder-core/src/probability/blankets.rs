@@ -181,10 +181,9 @@ fn ordinary_variants(query: &SearchQuery) -> Option<Vec<Vec<Requirement>>> {
             .flat_map(|chosen| {
                 slot.iter().map(move |&index| {
                     let mut chosen = chosen.clone();
-                    chosen.push(Requirement {
-                        alternative_group: None,
-                        ..query.requirements[index]
-                    });
+                    // Keep the slot identity until effective_requirements
+                    // classifies reforge copies, then flattens alternatives.
+                    chosen.push(query.requirements[index]);
                     chosen
                 })
             })

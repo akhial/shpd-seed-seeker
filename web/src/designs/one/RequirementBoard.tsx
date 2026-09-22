@@ -673,7 +673,7 @@ export function RequirementBoard({
                 className="d1-chip-tag"
                 title={
                   resin.amount === "auto"
-                    ? "Enough resin to upgrade matched wands to +3, except those marked No resin"
+                    ? "Enough resin to upgrade kept wands to +3, excluding No resin wands and reforge copies"
                     : undefined
                 }
               >
@@ -753,7 +753,7 @@ export function RequirementBoard({
               className="d1-chip-tag"
               title={
                 resin.amount === "auto"
-                  ? "Enough resin to upgrade matched wands to +3, except those marked No resin"
+                  ? "Enough resin to upgrade kept wands to +3, excluding No resin wands and reforge copies"
                   : undefined
               }
             >

@@ -63,6 +63,7 @@ struct Editor {
     effect_checks: RefCell<Vec<EffectCheck>>,
     details_group: adw::PreferencesGroup,
     uncursed: adw::SwitchRow,
+    exclude_resin: adw::SwitchRow,
     select_trinket: adw::SwitchRow,
     source_row: adw::ComboRow,
     floor_switch: adw::SwitchRow,
@@ -267,6 +268,10 @@ fn build(context: AppState, requirement: &UiRequirement, stack: StackShape) -> E
         effect_list,
         effect_checks: RefCell::new(Vec::new()),
         details_group: adw::PreferencesGroup::builder().title("Details").build(),
+        exclude_resin: adw::SwitchRow::builder()
+            .title("Exclude from Auto resin")
+            .subtitle("Keep this wand without budgeting resin to upgrade it. Useful for imbuing: resin upgrades do not transfer to the staff. Extra copies are reserved for reforging and never need Auto resin.")
+            .build(),
         uncursed: adw::SwitchRow::builder().title("Require uncursed").build(),
         select_trinket: adw::SwitchRow::builder()
             .title("Choose matching trinket at +3")
@@ -326,6 +331,7 @@ fn groups(editor: &Rc<Editor>) -> Vec<adw::PreferencesGroup> {
     editor.effect_mode_group.add(&editor.effect_mode);
 
     let details_group = editor.details_group.clone();
+    details_group.add(&editor.exclude_resin);
     details_group.add(&editor.uncursed);
     details_group.add(&editor.source_row);
     details_group.add(&editor.floor_switch);
@@ -459,6 +465,7 @@ fn restore(editor: &Rc<Editor>, requirement: &UiRequirement, stack: StackShape) 
         .category
         .set_selected(u32::try_from(kind_index).unwrap_or(0));
     editor.uncursed.set_active(requirement.require_uncursed);
+    editor.exclude_resin.set_active(requirement.exclude_resin);
     editor.select_trinket.set_active(requirement.select_trinket);
     populate_items(editor, requirement.item);
     populate_effects(editor, requirement.effect);
@@ -551,6 +558,9 @@ fn collect(editor: &Rc<Editor>) -> (UiRequirement, usize, Option<u8>, Option<u8>
         effect: selected_effect(editor),
         require_uncursed: kind != ItemKind::Trinket && editor.uncursed.is_active(),
         blanket: editor.blanket,
+        exclude_resin: !editor.blanket
+            && kind == ItemKind::Wand
+            && editor.exclude_resin.is_active(),
         select_trinket: !editor.blanket
             && kind == ItemKind::Trinket
             && item.is_some()
@@ -977,6 +987,12 @@ fn refresh_visibility(editor: &Rc<Editor>) {
     editor
         .select_trinket
         .set_visible(!editor.blanket && kind == ItemKind::Trinket);
+    editor
+        .exclude_resin
+        .set_visible(!editor.blanket && kind == ItemKind::Wand);
+    if kind != ItemKind::Wand {
+        editor.exclude_resin.set_active(false);
+    }
     if kind != ItemKind::Trinket {
         editor.select_trinket.set_active(false);
     }

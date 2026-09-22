@@ -132,7 +132,7 @@ it("selects Auto, preserves filters, and restores the mode when editing", async 
   await selectItem("arcane_resin");
   await click("Auto");
   expect(host.querySelector('input[aria-label="Minimum resin"]')).toBeNull();
-  expect(host.querySelector(".d1-modal")!.textContent).toContain("matched wands to +3");
+  expect(host.querySelector(".d1-modal")!.textContent).toContain("each kept wand to +3");
   await toggle("Require uncursed wands");
   await toggle("Limit wands to a floor");
   await click("Add Requirement");

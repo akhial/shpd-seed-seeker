@@ -3,6 +3,7 @@
 mod resin;
 pub use resin::ArcaneResinFilter;
 pub(crate) use resin::donor_requirement as resin_donor_requirement;
+pub(crate) use resin::reforge_copies;
 pub(crate) use resin::upgrade_cost as resin_upgrade_cost;
 
 use std::collections::BTreeMap;
@@ -789,8 +790,8 @@ impl SearchQuery {
 }
 
 /// One candidate match for a slot: the world item, the identity the member
-/// matched on, and the member itself.
-type SlotCandidate<'query> = (usize, ItemId, &'query Requirement);
+/// matched on, the member itself, and whether it is kept rather than reforged.
+type SlotCandidate<'query> = (usize, ItemId, &'query Requirement, bool);
 
 /// Size, required total, and upgrade capacity of one combined-level group.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -885,6 +886,11 @@ impl<'query> Assignment<'query> {
     fn prepare(query: &'query SearchQuery, world: &'query GeneratedWorld) -> Self {
         let mut slots: Vec<Slot<'query>> = Vec::new();
         let mut blankets = Vec::new();
+        let reforge_copies = if query.arcane_resin_auto {
+            resin::reforge_copies(query)
+        } else {
+            Vec::new()
+        };
         for slot in query.slots() {
             let slot_first = slot[0];
             let mut candidates = Vec::new();
@@ -902,12 +908,18 @@ impl<'query> Assignment<'query> {
                             || candidate.source != ItemSource::BlacksmithReward)
                         && let Some(identity) = requirement.matching_identity(candidate)
                     {
-                        candidates.push((index, identity, requirement));
+                        candidates.push((
+                            index,
+                            identity,
+                            requirement,
+                            !query.arcane_resin_auto || !reforge_copies[member],
+                        ));
                     }
                 }
             }
             if query.requirements[slot_first].blanket {
-                let mut indices: Vec<_> = candidates.iter().map(|&(index, _, _)| index).collect();
+                let mut indices: Vec<_> =
+                    candidates.iter().map(|&(index, _, _, _)| index).collect();
                 indices.sort_unstable();
                 indices.dedup();
                 blankets.push(indices);
@@ -958,8 +970,10 @@ impl<'query> Assignment<'query> {
             return false;
         }
         for candidate in 0..self.slots[slot].candidates.len() {
-            let (item_index, identity, requirement) = self.slots[slot].candidates[candidate];
-            let Some(undo) = self.assign(item_index, identity, requirement) else {
+            let (item_index, identity, requirement, upgrade_with_resin) =
+                self.slots[slot].candidates[candidate];
+            let Some(undo) = self.assign(item_index, identity, requirement, upgrade_with_resin)
+            else {
                 continue;
             };
             if self.fills_every_slot(slot + 1) {
@@ -991,6 +1005,7 @@ impl<'query> Assignment<'query> {
         item_index: usize,
         identity: ItemId,
         requirement: &Requirement,
+        upgrade_with_resin: bool,
     ) -> Option<Undo> {
         if self.used[item_index] {
             return None;
@@ -1039,7 +1054,7 @@ impl<'query> Assignment<'query> {
             }
             undo.sum = Some((sum.group, self.sums.insert(sum.group, progress)));
         }
-        if requirement.kind == ItemKind::Wand && !requirement.exclude_resin {
+        if upgrade_with_resin && requirement.kind == ItemKind::Wand && !requirement.exclude_resin {
             undo.resin_cost = resin::upgrade_cost(self.items[item_index].upgrade);
             self.resin_cost += undo.resin_cost;
         }
@@ -1242,9 +1257,12 @@ impl BestSubset<'_> {
             return;
         }
         for candidate in 0..self.assignment.slots[slot].candidates.len() {
-            let (item_index, identity, requirement) =
+            let (item_index, identity, requirement, upgrade_with_resin) =
                 self.assignment.slots[slot].candidates[candidate];
-            let Some(undo) = self.assignment.assign(item_index, identity, requirement) else {
+            let Some(undo) =
+                self.assignment
+                    .assign(item_index, identity, requirement, upgrade_with_resin)
+            else {
                 continue;
             };
             self.selected
