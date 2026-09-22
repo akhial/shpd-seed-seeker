@@ -163,22 +163,26 @@ pub fn encode(query: &SearchQuery) -> Result<String, String> {
     }
     if version >= 11 {
         bits.push(query.arcane_resin_auto.into(), 1);
-        bits.push(query.floor_requirements.len() as u32, 5);
-        for floor in &query.floor_requirements {
-            bits.push(u32::from(floor.depth), 5);
-            push_optional(&mut bits, floor.feeling.is_some(), || {
-                (floor.feeling.map_or(0, |feeling| feeling as u32), 3)
-            });
-            for rooms in [&floor.rooms, &floor.any_rooms] {
-                let rooms = crate::floor_filters::RoomSet::from_types(rooms.iter().copied());
-                bits.push(rooms.0.count_ones(), 7);
-                for room in rooms.iter() {
-                    bits.push(room as u32, 7);
-                }
+        encode_floors(&mut bits, &query.floor_requirements);
+    }
+    Ok(base64url_encode(&bits.finish()))
+}
+
+fn encode_floors(bits: &mut BitWriter, floors: &[crate::floor_filters::FloorRequirement]) {
+    bits.push(floors.len() as u32, 5);
+    for floor in floors {
+        bits.push(u32::from(floor.depth), 5);
+        push_optional(bits, floor.feeling.is_some(), || {
+            (floor.feeling.map_or(0, |feeling| feeling as u32), 3)
+        });
+        for rooms in [&floor.rooms, &floor.any_rooms] {
+            let rooms = crate::floor_filters::RoomSet::from_types(rooms.iter().copied());
+            bits.push(rooms.0.count_ones(), 7);
+            for room in rooms.iter() {
+                bits.push(room as u32, 7);
             }
         }
     }
-    Ok(base64url_encode(&bits.finish()))
 }
 
 /// Select the oldest compatible format so existing links retain their bytes.

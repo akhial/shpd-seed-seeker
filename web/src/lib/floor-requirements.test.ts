@@ -86,6 +86,34 @@ it("retains general floor filters and rejects malformed input", () => {
     ).toThrow();
   }
 });
+it("keeps v11 links compatible and composes resin estimates with farming floors", () => {
+  const probability = (query: unknown): number =>
+    JSON.parse(analyze_query(JSON.stringify(query))).probability;
+  for (const [arcane_resin, code] of [
+    [4, "sAAAIACfAAA"],
+    ["auto", "sAAAIBCfAAA"],
+  ] as const) {
+    const legacy = JSON.parse(decode_share_text(code));
+    expect(legacy.floor_requirements).toEqual([{ depth: 7, feeling: "dark" }]);
+    expect(legacy.arcane_resin).toBe(arcane_resin === "auto" ? "auto" : undefined);
+    const document = {
+      arcane_resin,
+      arcane_resin_filter: { include_mage_wand: true },
+      requirements: [{ item: "wand_frost", exclude_resin: true }, { item: "wand_frost" }],
+      floor_requirements: [{ depth: 7, feeling: "dark", any_rooms: ["garden", "secret_garden"] }],
+    };
+    const state = fromQueryJson(JSON.stringify(document));
+    expect(fromQueryJson(decode_share_text(encode_share_link(toQueryJson(state))))).toEqual(state);
+    expect(decodeResultsFile(encodeResultsFile(toQueryDocument(state), [])).query).toEqual(state);
+    const floorProbability = probability({
+      requirements: [],
+      floor_requirements: document.floor_requirements,
+    });
+    const itemProbability = probability({ ...document, floor_requirements: [] });
+    expect(itemProbability).toBeGreaterThan(0);
+    expect(probability(document)).toBeCloseTo(itemProbability * floorProbability, 12);
+  }
+});
 it("scouts room summaries and checks floor-only conditions when filtering saved seeds", () => {
   const world = JSON.parse(scout(JSON.stringify({ seed: "AAA-AAA-AAA" }))) as ScoutResult;
   expect(world.floorRooms?.length).toBe(20);

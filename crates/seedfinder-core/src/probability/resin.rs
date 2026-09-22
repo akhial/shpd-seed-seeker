@@ -4,7 +4,7 @@
 //! Upgrade outcomes are integrated in one pass, including mixed upgrades.
 //! As in the equipment model, supply counts use the measured variance and
 //! quest offers form one mutually exclusive choice, never independent donors.
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use super::{
     Coverages, HIGHEST_TABLED_UPGRADE, Predicate, Profile, STATE_FLOOR, STATE_LIMIT, Stream,
@@ -520,7 +520,7 @@ fn offer(
     }
 }
 
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 struct State {
     /// Sorted opportunity costs in each predicate's fixed range: donor yield
     /// plus Auto upgrade cost for reservations, zero for consumed witnesses,
@@ -677,7 +677,10 @@ impl Model {
         choices
     }
     fn draw(&self, states: States, offers: &[(f64, Offer)]) -> States {
-        let mut next = BTreeMap::new();
+        // Many draws converge on the same reservation and balance. Accumulate
+        // without tree comparisons, then restore key order before pruning so
+        // later draws retain their deterministic summation order.
+        let mut next = HashMap::new();
         let mut missed = (1.0 - offers.iter().map(|(weight, _)| weight).sum::<f64>()).max(0.0);
         for (weight, offer) in offers {
             if (offer.options - 1.0).abs() < f64::EPSILON {
@@ -700,7 +703,7 @@ impl Model {
             }
             *next.entry(state).or_insert(0.0) += mass * missed;
         }
-        prune(next)
+        prune(next.into_iter().collect())
     }
     fn prize(&self, states: States, choices: &[(f64, Vec<Offer>)]) -> States {
         let mut next = BTreeMap::new();

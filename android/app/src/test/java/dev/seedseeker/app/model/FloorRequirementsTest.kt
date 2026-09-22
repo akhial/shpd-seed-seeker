@@ -77,4 +77,22 @@ class FloorRequirementsTest {
         val estimate = engine.startResumedSearch(request, 0, 0, 1).use { it.status().matchProbability }
         assertTrue(estimate > 0.0 && estimate < 1.0)
     }
+
+    @Test fun floorLinksAndCalibratedEstimatesComposeWithResinPlanning() {
+        val engine = JniNativeSeedFinder()
+        fun probability(request: SearchRequest) = engine.startResumedSearch(request, 0, 0, 1).use { it.status().matchProbability }
+        for ((auto, code) in listOf(false to "sAAAIACfAAA", true to "sAAAIBCfAAA")) {
+            val legacy = DeepLink.decode(code)
+            assertEquals(listOf(FloorRequirement(7, FloorFeeling.DARK)), legacy.floorRequirements)
+            assertEquals(auto, legacy.arcaneResinAuto)
+            val query = ResultsExport.decodeQuery(JSONObject("""{"arcane_resin":${if (auto) "\"auto\"" else "4"},"arcane_resin_filter":{"include_mage_wand":true},"requirements":[{"item":"wand_frost","exclude_resin":true},{"item":"wand_frost"}],"floor_requirements":[{"depth":7,"feeling":"dark","any_rooms":["garden","secret_garden"]}]}"""))
+            assertEquals(query, DeepLink.decode(DeepLink.encodeLink(query)))
+            assertEquals(query, ResultsExport.decode(ResultsExport.encode(query, emptyList(), "test")).query)
+            val request = SearchRequest(query.requirements, arcaneResin = query.arcaneResin, arcaneResinAuto = query.arcaneResinAuto, arcaneResinFilter = query.arcaneResinFilter, floorRequirements = query.floorRequirements)
+            val floorOnly = SearchRequest(emptyList(), floorRequirements = query.floorRequirements)
+            val expected = probability(request.copy(floorRequirements = emptyList())) * probability(floorOnly)
+            assertTrue(expected > 0.0)
+            assertEquals(expected, probability(request), 1e-12)
+        }
+    }
 }

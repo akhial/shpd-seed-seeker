@@ -20,6 +20,15 @@ floor constraints remain in the query's matching calculation. This also handles
 uneven groups such as one +4 wand alongside two plain copies. Broad intermediate
 answers use the existing bounded cache; no worlds are sampled at runtime.
 
+Resin planning uses the same calibrated wand supply. Excluding a wand from Auto
+resin removes its upgrade cost while still reserving that copy; the Mage's
+starting wand contributes two resin without adding a generated wand. Exact-floor
+probabilities multiply the resulting item-and-resin estimate once per profile.
+`tests/resin_floor_probability.rs` checks this composition, cache isolation,
+selected and automatic trinkets, and equivalent fixed and Auto budgets at +1,
++2, and +3. These checks preserve the calibration rules; they do not establish
+new accuracy bounds for the joint resin model.
+
 ## Data and coverage
 
 The canonical profile uses 262,144 training worlds. Each of the seven trinket
