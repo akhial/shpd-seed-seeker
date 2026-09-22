@@ -655,6 +655,20 @@ fn resin_generation_horizon(
     let mut depth = 1;
     let mut vault = false;
     if query.needs_resin() {
+        // Auto consumes no donors when every possible reserved wand already
+        // has zero upgrade cost. Check every OR member and bare copy; blanket
+        // predicates never reserve items themselves.
+        if query.arcane_resin_auto
+            && query.requirements.iter().all(|requirement| {
+                requirement.blanket
+                    || requirement.kind != ItemKind::Wand
+                    || matches!(requirement.upgrade,
+                        UpgradeRequirement::Exact(level) | UpgradeRequirement::AtLeast(level)
+                            if level >= 3)
+            })
+        {
+            return (depth, vault);
+        }
         let donor = crate::query::resin_donor_requirement(query);
         let cap = donor
             .max_depth
@@ -1138,6 +1152,76 @@ mod tests {
     }
 
     #[test]
+    fn zero_cost_auto_resin_keeps_only_ordinary_generation_scope() {
+        use crate::search::FloorGate;
+        use UpgradeRequirement::{Any, AtLeast, Exact};
+
+        let scope = |query: &SearchQuery| {
+            query.validate().unwrap();
+            let plan = QueryPlan::analyze(query);
+            (plan.generation_depth(), plan.wants_vault_treasure())
+        };
+        for (upgrade, source, expected) in [
+            (Any, ItemSource::WandmakerReward, (24, true)),
+            (AtLeast(0), ItemSource::WandmakerReward, (24, true)),
+            (Exact(1), ItemSource::WandmakerReward, (24, true)),
+            (Exact(2), ItemSource::WandmakerReward, (24, true)),
+            (AtLeast(2), ItemSource::WandmakerReward, (24, true)),
+            (Exact(3), ItemSource::WandmakerReward, (9, false)),
+            (AtLeast(3), ItemSource::WandmakerReward, (9, false)),
+            (Exact(4), ItemSource::ImpReward, (19, false)),
+            (AtLeast(4), ItemSource::ImpReward, (19, false)),
+        ] {
+            let mut wand = requirement(ItemKind::Wand, upgrade);
+            wand.source = Some(source);
+            let mut query = query(vec![wand], 24);
+            query.arcane_resin_auto = true;
+            assert_eq!(scope(&query), expected, "{upgrade:?} {source:?}");
+            // Auto takes precedence in public in-memory queries too.
+            query.arcane_resin = 6;
+            assert_eq!(scope(&query), expected);
+            query.arcane_resin_auto = false;
+            assert_eq!(scope(&query), (24, true));
+        }
+
+        let mut ring = requirement(ItemKind::Ring, Any);
+        ring.max_depth = Some(4);
+        let mut early = query(vec![ring], 24);
+        early.arcane_resin_auto = true;
+        assert_eq!(scope(&early), (4, false));
+        early.require_blacksmith = true;
+        assert_eq!(scope(&early), (14, false));
+        early.require_blacksmith = false;
+        early.wandmaker_quest = Some(crate::quests::WandmakerQuestType::Rotberry);
+        assert_eq!(scope(&early), (9, false));
+        early.wandmaker_quest = None;
+        early.requirements.clear();
+        assert_eq!(scope(&early), (1, false));
+
+        let mut wand = requirement(ItemKind::Wand, Exact(3));
+        wand.source = Some(ItemSource::WandmakerReward);
+        wand.alternative_group = Some(1);
+        ring.alternative_group = Some(1);
+        let mut alternatives = query(vec![wand, ring], 24);
+        alternatives.arcane_resin_auto = true;
+        assert_eq!(scope(&alternatives), (9, false));
+        // Every alternative must have zero cost; a ring alternative cannot
+        // justify dropping the donors needed by a low-level wand alternative.
+        alternatives.requirements[1].kind = ItemKind::Wand;
+        assert_eq!(scope(&alternatives), (24, true));
+
+        let mut copy = requirement(ItemKind::Wand, Any);
+        copy.identity_group = Some(1);
+        copy.max_depth = Some(4);
+        wand.alternative_group = None;
+        wand.identity_group = Some(1);
+        let mut copies = query(vec![wand, copy], 24);
+        copies.arcane_resin_auto = true;
+        // An identity group shares the item ID, not the anchor's upgrade.
+        assert_eq!(scope(&copies), (24, true));
+    }
+
+    #[test]
     fn resin_horizons_preserve_search_recipes_and_selected_items() {
         use crate::auto_trinkets::{TrinketSearchMatch, search_batch};
         use crate::main_world::CanonicalMainWorldGenerator;
@@ -1147,6 +1231,21 @@ mod tests {
         let seeds = [0, 1, 25_836_346_365, 695_488_469_679, 4_689_753_124_998]
             .map(|value| DungeonSeed::new(value).unwrap());
         let cases = [
+            r#"{"arcane_resin":"auto","requirements":[
+                {"kind":"wand","upgrade":3,"source":"wandmaker_reward"}]}"#,
+            r#"{"arcane_resin":"auto","requirements":[
+                {"kind":"wand","upgrade":{"at_least":3},"source":"wandmaker_reward"}]}"#,
+            r#"{"arcane_resin":"auto","requirements":[{"kind":"ring","max_depth":4}]}"#,
+            r#"{"arcane_resin":"auto","requirements":[]}"#,
+            r#"{"arcane_resin":"auto","requirements":[{"any_of":[
+                {"kind":"wand","upgrade":3,"source":"wandmaker_reward"},
+                {"kind":"ring","max_depth":4}]}]}"#,
+            r#"{"arcane_resin":"auto","requirements":[
+                {"kind":"wand","upgrade":3,"source":"wandmaker_reward"},
+                {"kind":"wand","source":"wandmaker_reward","blanket":true}]}"#,
+            r#"{"arcane_resin":"auto","requirements":[
+                {"kind":"wand","upgrade":3,"source":"wandmaker_reward"},
+                {"kind":"wand","upgrade":2,"blanket":true}]}"#,
             r#"{"arcane_resin":6,"arcane_resin_filter":{"max_depth":4},
                 "requirements":[{"kind":"wand","max_depth":4}]}"#,
             r#"{"arcane_resin":"auto","arcane_resin_filter":{"max_depth":4},
