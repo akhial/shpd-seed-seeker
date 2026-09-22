@@ -198,6 +198,7 @@ pub fn present(
                 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
                 let max_depth = limited.is_active().then(|| depth.value().round() as u8);
                 state.arcane_resin_filter = ArcaneResinFilter {
+                    include_mage_wand: filter.include_mage_wand,
                     uncursed: uncursed.is_active(),
                     max_depth,
                     source: usize::try_from(source.selected())

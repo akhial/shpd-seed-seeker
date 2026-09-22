@@ -1642,6 +1642,7 @@ mod tests {
             require_uncursed: false,
             select_trinket: false,
             blanket: false,
+            exclude_resin: false,
             source: None,
             identity_group: None,
             max_depth: None,
@@ -2017,6 +2018,7 @@ mod tests {
             require_uncursed: false,
             select_trinket: false,
             blanket: false,
+            exclude_resin: false,
             ..requirement(ItemKind::Weapon, UpgradeRequirement::Exact(3))
         };
         let plan = QueryPlan::analyze(&query(vec![cursed], 24));
@@ -2030,6 +2032,7 @@ mod tests {
             require_uncursed: false,
             select_trinket: false,
             blanket: false,
+            exclude_resin: false,
             ..requirement(ItemKind::Armor, UpgradeRequirement::Exact(3))
         };
         assert!(!QueryPlan::analyze(&query(vec![good], 24)).is_unsatisfiable());
@@ -2039,6 +2042,7 @@ mod tests {
             require_uncursed: false,
             select_trinket: false,
             blanket: false,
+            exclude_resin: false,
             ..requirement(ItemKind::Weapon, UpgradeRequirement::Exact(4))
         };
         assert!(QueryPlan::analyze(&query(vec![cursed_plus_four], 24)).is_unsatisfiable());
@@ -2048,6 +2052,7 @@ mod tests {
             require_uncursed: true,
             select_trinket: false,
             blanket: false,
+            exclude_resin: false,
             ..requirement(ItemKind::Weapon, UpgradeRequirement::Exact(5))
         };
         assert!(!QueryPlan::analyze(&query(vec![crystal_plus_five], 24)).is_unsatisfiable());
@@ -2065,6 +2070,7 @@ mod tests {
             require_uncursed: false,
             select_trinket: false,
             blanket: false,
+            exclude_resin: false,
             ..requirement(ItemKind::Weapon, UpgradeRequirement::Exact(3))
         };
         assert!(!QueryPlan::analyze(&query(vec![mixed], 24)).is_unsatisfiable());
@@ -2074,6 +2080,7 @@ mod tests {
             require_uncursed: true,
             select_trinket: false,
             blanket: false,
+            exclude_resin: false,
             ..requirement(ItemKind::Weapon, UpgradeRequirement::Exact(3))
         };
         assert!(!QueryPlan::analyze(&query(vec![any_enchantment], 24)).is_unsatisfiable());
@@ -4922,6 +4929,7 @@ mod closed_multiplicity_grouping_tests {
                 require_uncursed: false,
                 select_trinket: false,
                 blanket: false,
+                exclude_resin: false,
                 source: Some(ItemSource::Heap),
                 identity_group: None,
                 max_depth: Some(4),

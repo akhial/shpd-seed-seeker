@@ -334,6 +334,7 @@ fun requirementDetailLine(requirement: ItemRequirement): String = buildList {
         UpgradeMatch.AT_LEAST -> add("≥+${requirement.upgrade}")
     }
     requirement.effectLabel?.let { add(it) }
+    if (requirement.excludeResin) add("excluded from Auto resin")
     if (requirement.requireUncursed) add("uncursed")
     if (requirement.selectTrinket) add("choose at +3")
     requirement.source?.let { add(it.label) }

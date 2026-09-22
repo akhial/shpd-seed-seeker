@@ -19,6 +19,7 @@ pub(crate) fn donor_requirement(query: &SearchQuery) -> Requirement {
         require_uncursed: query.arcane_resin_filter.uncursed,
         select_trinket: false,
         blanket: false,
+        exclude_resin: false,
         source: query.arcane_resin_filter.source,
         identity_group: None,
         max_depth: query.arcane_resin_filter.max_depth,
@@ -30,6 +31,9 @@ pub(crate) fn donor_requirement(query: &SearchQuery) -> Requirement {
 /// Filters on the surplus wands consumed for Arcane Resin.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ArcaneResinFilter {
+    /// Credit the starting Magic Missile wand recovered with Wand Preservation.
+    /// This is a player-supplied assumption, independent of generated donor filters.
+    pub include_mage_wand: bool,
     pub uncursed: bool,
     pub max_depth: Option<u8>,
     pub source: Option<ItemSource>,
@@ -38,6 +42,7 @@ pub struct ArcaneResinFilter {
 impl Default for ArcaneResinFilter {
     fn default() -> Self {
         Self {
+            include_mage_wand: false,
             uncursed: true,
             max_depth: None,
             source: None,
@@ -48,6 +53,7 @@ impl Default for ArcaneResinFilter {
 pub(super) struct ResinSupply {
     minimum: u16,
     auto: bool,
+    credit: u32,
     candidates: Vec<(usize, u32)>,
 }
 
@@ -71,12 +77,18 @@ impl ResinSupply {
             return Self {
                 minimum: 0,
                 auto: false,
+                credit: 0,
                 candidates: Vec::new(),
             };
         }
         Self {
             minimum: query.arcane_resin,
             auto: query.arcane_resin_auto,
+            credit: if query.arcane_resin_filter.include_mage_wand {
+                2
+            } else {
+                0
+            },
             candidates: items
                 .iter()
                 .enumerate()
@@ -109,22 +121,19 @@ impl ResinSupply {
         &self,
         items: &[WorldItem],
         used: &[bool],
+        auto_cost: u32,
         scenarios: &BTreeMap<u16, u64>,
     ) -> Option<Vec<usize>> {
-        self.select_required(items, used, scenarios, self.minimum(items, used), &[])
+        self.select_required(items, used, scenarios, self.minimum(auto_cost), &[])
     }
 
-    fn minimum(&self, items: &[WorldItem], used: &[bool]) -> u32 {
-        if self.auto {
-            items
-                .iter()
-                .zip(used)
-                .filter(|(candidate, used)| **used && item(candidate.item).kind == ItemKind::Wand)
-                .map(|(candidate, _)| upgrade_cost(candidate.upgrade))
-                .sum()
+    fn minimum(&self, auto_cost: u32) -> u32 {
+        let cost = if self.auto {
+            auto_cost
         } else {
             u32::from(self.minimum)
-        }
+        };
+        cost.saturating_sub(self.credit)
     }
 
     /// Choose donors together with blanket witnesses, backtracking over loot
@@ -134,6 +143,7 @@ impl ResinSupply {
         &self,
         items: &[WorldItem],
         used: &[bool],
+        auto_cost: u32,
         scenarios: &BTreeMap<u16, u64>,
         blankets: &[Vec<usize>],
         require_all: bool,
@@ -142,9 +152,9 @@ impl ResinSupply {
             .iter()
             .all(|indices| indices.iter().any(|&index| used[index]))
         {
-            return self.select(items, used, scenarios);
+            return self.select(items, used, auto_cost, scenarios);
         }
-        let minimum = self.minimum(items, used);
+        let minimum = self.minimum(auto_cost);
         if minimum == 0 {
             return (!require_all).then(Vec::new);
         }

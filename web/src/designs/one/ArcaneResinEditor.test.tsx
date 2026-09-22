@@ -132,7 +132,7 @@ it("selects Auto, preserves filters, and restores the mode when editing", async 
   await selectItem("arcane_resin");
   await click("Auto");
   expect(host.querySelector('input[aria-label="Minimum resin"]')).toBeNull();
-  expect(host.querySelector(".d1-modal")!.textContent).toContain("every matched wand to +3");
+  expect(host.querySelector(".d1-modal")!.textContent).toContain("matched wands to +3");
   await toggle("Require uncursed wands");
   await toggle("Limit wands to a floor");
   await click("Add Requirement");
@@ -154,6 +154,42 @@ it("selects Auto, preserves filters, and restores the mode when editing", async 
   await click("Save Changes");
   expect(queryStore.state.arcaneResin).toBe(2);
   expect(host.querySelector(".d1-resin-chip")!.textContent).toContain("≥2");
+});
+
+it("preserves the Mage credit while switching resin modes", async () => {
+  queryStore.setState(() => fromQueryJson('{"arcane_resin":"auto","requirements":[]}'));
+  await render();
+  await click("Edit Arcane Resin");
+  await toggle("Include Mage’s starting wand");
+  await click("Save Changes");
+  expect(toQueryDocument(queryStore.state).arcane_resin_filter).toEqual({
+    include_mage_wand: true,
+  });
+  expect(host.querySelector(".d1-resin-chip")!.textContent).toContain("Mage +2");
+  await click("Edit Arcane Resin");
+  await click("Amount");
+  await click("Save Changes");
+  expect(queryStore.state.arcaneResin).toBe(2);
+  expect(queryStore.state.arcaneResinFilter?.includeMageWand).toBe(true);
+});
+
+it("excludes a reserved wand from Auto and clears the flag when changing its kind", async () => {
+  await render();
+  await click("Add");
+  await click("Wand");
+  await selectItem("wand_lightning");
+  await toggle("Exclude from Auto resin");
+  await click("Add Requirement");
+  expect(toQueryDocument(queryStore.state).requirements[0]).toMatchObject({ exclude_resin: true });
+  expect(host.textContent).toContain("No resin");
+  const chip = host.querySelector<HTMLButtonElement>(".d1-chip")!;
+  await act(async () =>
+    chip.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })),
+  );
+  await click("Ring");
+  expect(host.querySelector(".d1-modal")!.textContent).not.toContain("Exclude from Auto resin");
+  await click("Save Changes");
+  expect(queryStore.state.requirements[0].excludeResin).toBeUndefined();
 });
 
 it("loads an Auto chip and uses its label while dragging to remove", async () => {

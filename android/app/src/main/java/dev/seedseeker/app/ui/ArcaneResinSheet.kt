@@ -9,6 +9,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import dev.seedseeker.app.model.*
@@ -18,6 +20,7 @@ internal val arcaneResinItem = CatalogItem("arcane_resin", "Arcane Resin", ItemK
 
 internal fun resinFilterDescription(filter: ArcaneResinFilter): String = listOfNotNull(
     if (filter.uncursed) "uncursed wands" else "any wands",
+    if (filter.includeMageWand) "starting Magic Missile +2 resin" else null,
     filter.maximumDepth?.let { "≤ floor $it" }, filter.source?.label,
 ).joinToString(" · ")
 
@@ -31,6 +34,7 @@ fun ArcaneResinSheet(
     onSave: (Int, ArcaneResinFilter, Boolean) -> Unit,
     onRemove: () -> Unit,
 ) {
+    var includeMageWand by remember { mutableStateOf(filter.includeMageWand) }
     var automatic by remember { mutableStateOf(auto) }
     var minimum by remember { mutableStateOf((amount.takeIf { it > 0 } ?: 2).toString()) }
     var uncursed by remember { mutableStateOf(filter.uncursed) }
@@ -57,7 +61,7 @@ fun ArcaneResinSheet(
                         shape = SegmentedButtonDefaults.itemShape(index, 2)) { Text(label) }
                 }
             }
-            if (automatic) Text("Find enough resin to upgrade every matched wand to +3.")
+            if (automatic) Text("Find enough resin to upgrade matched wands to +3, except those marked “No resin”.")
             else OutlinedTextField(value = minimum, onValueChange = { minimum = it }, label = { Text("Minimum resin") },
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true,
@@ -81,9 +85,18 @@ fun ArcaneResinSheet(
                     }
                 }
             }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Include Mage’s starting wand")
+                    Text("Adds 2 resin from Magic Missile. Assumes you recover it with Wand Preservation and dismantle it after imbuing.",
+                        style = MaterialTheme.typography.bodySmall)
+                }
+                Switch(checked = includeMageWand, onCheckedChange = { includeMageWand = it },
+                    modifier = Modifier.semantics { contentDescription = "Include Mage’s starting wand" })
+            }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (auto || amount > 0) OutlinedButton(onClick = onRemove) { Text("Remove") }
-                Button(onClick = { if (automatic || parsed != null) onSave(if (automatic) 0 else parsed!!, ArcaneResinFilter(uncursed, depth, source), automatic) },
+                Button(onClick = { if (automatic || parsed != null) onSave(if (automatic) 0 else parsed!!, ArcaneResinFilter(uncursed, depth, source, includeMageWand), automatic) },
                     enabled = automatic || parsed != null, modifier = Modifier.weight(1f)) { Text(if (auto || amount > 0) "Save" else "Add") }
             }
         }

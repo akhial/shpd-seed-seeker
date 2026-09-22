@@ -70,6 +70,11 @@ describe("Arcane Resin", () => {
         [document.requirements, undefined],
         [[], { uncursed: false, max_depth: 4, source: "chest" }],
         [document.requirements, { max_depth: 9 }],
+        [[{ item: "wand_lightning", exclude_resin: true }], { include_mage_wand: true }],
+        [
+          [{ any_of: [{ item: "wand_frost", exclude_resin: true }, { item: "wand_lightning" }] }],
+          { uncursed: false, source: "wandmaker_reward", include_mage_wand: true },
+        ],
       ]) {
         const state = fromQueryJson(
           JSON.stringify({ ...document, arcane_resin, requirements, arcane_resin_filter }),
@@ -89,6 +94,42 @@ describe("Arcane Resin", () => {
     expect(
       toQueryDocument({ ...defaultQueryState(), arcaneResin: 0 }).arcane_resin,
     ).toBeUndefined();
+  });
+
+  it("credits the starting wand once and keeps excluded wands reserved", () => {
+    const credit = {
+      max_depth: 1,
+      arcane_resin: 2,
+      arcane_resin_filter: { include_mage_wand: true, source: "ghost_reward" },
+      requirements: [],
+    };
+    const result = JSON.parse(
+      scout(JSON.stringify({ seed: "AAA-AAA-AAA", query: credit })),
+    ) as ScoutResult;
+    expect(result.matchedRequirements).toBe(1);
+    expect(result.items.filter((item) => item.matched)).toHaveLength(0);
+    expect(JSON.parse(analyze_query(JSON.stringify(credit))).probability).toBe(1);
+    for (const invalid of [null, 1, "true"]) {
+      const json = JSON.stringify({
+        ...credit,
+        arcane_resin_filter: { include_mage_wand: invalid },
+      });
+      expect(() => fromQueryJson(json)).toThrow();
+      expect(JSON.parse(analyze_query(json)).valid).toBe(false);
+      const exclusion = JSON.stringify({
+        requirements: [{ kind: "wand", exclude_resin: invalid }],
+      });
+      expect(() => fromQueryJson(exclusion)).toThrow();
+      expect(JSON.parse(analyze_query(exclusion)).valid).toBe(false);
+    }
+    for (const requirement of [
+      { kind: "ring", exclude_resin: true },
+      { kind: "wand", blanket: true, exclude_resin: true },
+    ]) {
+      const json = JSON.stringify({ requirements: [{ kind: "wand" }, requirement] });
+      expect(validateQuery(fromQueryJson(json)).valid).toBe(false);
+      expect(JSON.parse(analyze_query(json)).valid).toBe(false);
+    }
   });
 
   it("rejects malformed amounts and allows resin-only searches", () => {

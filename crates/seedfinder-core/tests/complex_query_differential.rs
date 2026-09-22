@@ -148,6 +148,7 @@ fn random_requirement(rng: &mut Rng) -> Requirement {
         require_uncursed: rng.chance(20),
         select_trinket: false,
         blanket: false,
+        exclude_resin: false,
         source: None,
         identity_group: None,
         max_depth: rng
@@ -237,6 +238,7 @@ fn random_query(rng: &mut Rng) -> Option<SearchQuery> {
                     require_uncursed: false,
                     select_trinket: false,
                     blanket: false,
+                    exclude_resin: false,
                     source: None,
                     identity_group: Some(1),
                     max_depth: None,

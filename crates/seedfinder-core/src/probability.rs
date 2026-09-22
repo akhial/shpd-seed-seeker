@@ -1624,6 +1624,7 @@ struct Predicate {
     source: Option<ItemSource>,
     max_depth: u8,
     exclude_blacksmith: bool,
+    exclude_resin: bool,
 }
 
 impl Predicate {
@@ -1661,6 +1662,7 @@ impl Predicate {
             source: requirement.source,
             max_depth: requirement.max_depth.unwrap_or(DEEPEST_FLOOR),
             exclude_blacksmith: false,
+            exclude_resin: requirement.exclude_resin,
         }
     }
 
@@ -1717,6 +1719,7 @@ impl Predicate {
             source,
             max_depth: self.max_depth.min(other.max_depth),
             exclude_blacksmith: self.exclude_blacksmith || other.exclude_blacksmith,
+            exclude_resin: self.exclude_resin,
         })
     }
 
@@ -2306,6 +2309,7 @@ mod tests {
             require_uncursed: false,
             select_trinket: false,
             blanket: false,
+            exclude_resin: false,
             source: None,
             identity_group: None,
             max_depth: None,

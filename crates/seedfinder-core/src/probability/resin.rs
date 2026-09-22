@@ -19,6 +19,14 @@ use crate::{
     query::{SearchQuery, resin_donor_requirement as donor_requirement, resin_upgrade_cost},
 };
 
+fn credit(query: &SearchQuery) -> u16 {
+    if query.arcane_resin_filter.include_mage_wand {
+        2
+    } else {
+        0
+    }
+}
+
 pub(super) fn probability(query: &SearchQuery, profile: Profile) -> f64 {
     let mut ordinary = query.clone();
     ordinary.arcane_resin = 0;
@@ -26,7 +34,10 @@ pub(super) fn probability(query: &SearchQuery, profile: Profile) -> f64 {
     let donor = donor_requirement(query);
     // Every eligible donor yields at least two resin, so this is exactly one
     // extra ordinary wand and should use the same equipment calculation.
-    if !query.arcane_resin_auto && query.arcane_resin <= 2 {
+    if !query.arcane_resin_auto && query.arcane_resin <= credit(query) {
+        return equipment_probability(&ordinary, profile);
+    }
+    if !query.arcane_resin_auto && query.arcane_resin - credit(query) <= 2 {
         ordinary.requirements.push(donor);
         return equipment_probability(&ordinary, profile);
     }
@@ -58,10 +69,14 @@ pub(super) fn with_resin(
         return 0.0;
     }
     if query.arcane_resin_auto
-        && ordered
-            .iter()
-            .all(|p| p.kind != ItemKind::Wand || p.upgrades.trailing_zeros() >= 3)
+        && let Some(amount) = fixed_auto_cost(ordered)
     {
+        let mut fixed = query.clone();
+        fixed.arcane_resin_auto = false;
+        fixed.arcane_resin = amount;
+        return with_resin(&fixed, profile, ordered, witnesses, baseline);
+    }
+    if !query.arcane_resin_auto && query.arcane_resin <= credit(query) {
         return if witnesses.is_empty() { baseline } else { 0.0 };
     }
     let donor = donor_requirement(query);
@@ -73,12 +88,13 @@ pub(super) fn with_resin(
             expected_slots(&donor),
             query
                 .arcane_resin
+                .saturating_sub(credit(query))
                 .div_ceil(2 * (u16::from(HIGHEST_TABLED_UPGRADE) + 1)),
         ) <= STATE_FLOOR
     {
         return 0.0;
     }
-    if !query.arcane_resin_auto && query.arcane_resin <= 2 {
+    if !query.arcane_resin_auto && query.arcane_resin - credit(query) <= 2 {
         if !witnesses.is_empty() {
             return baseline;
         }
@@ -93,6 +109,24 @@ pub(super) fn with_resin(
         * super::cache::resin(ordered, witnesses, donor, query, || {
             conditional_probability(query, profile, ordered, witnesses, donor)
         })
+}
+
+/// Exact upgrades (and any range wholly above +2) have a fixed Auto cost.
+/// Use the same budget and shortcuts as a manually entered amount.
+fn fixed_auto_cost(ordered: &[Predicate]) -> Option<u16> {
+    ordered.iter().try_fold(0_u16, |total, p| {
+        if p.kind != ItemKind::Wand || p.exclude_resin {
+            return Some(total);
+        }
+        let mut costs = (0..=HIGHEST_TABLED_UPGRADE)
+            .filter(|level| p.upgrades & (1 << level) != 0)
+            .map(resin_upgrade_cost);
+        let cost = costs.next()?;
+        if costs.any(|other| other != cost) {
+            return None;
+        }
+        total.checked_add(u16::try_from(cost).ok()?)
+    })
 }
 
 fn conditional_probability(
@@ -140,7 +174,7 @@ fn conditional_probability(
         wands: predicates
             .iter()
             .zip(&donors)
-            .map(|(p, is_donor)| !is_donor && p.kind == ItemKind::Wand)
+            .map(|(p, is_donor)| !is_donor && p.kind == ItemKind::Wand && !p.exclude_resin)
             .collect(),
         donors,
     };
@@ -152,11 +186,12 @@ fn conditional_probability(
     let mut states = BTreeMap::from([(
         State {
             held: vec![EMPTY; allocated.len()].into_boxed_slice(),
-            balance: if model.auto {
-                0
-            } else {
-                -i32::from(query.arcane_resin)
-            },
+            balance: i32::from(credit(query))
+                - if model.auto {
+                    0
+                } else {
+                    i32::from(query.arcane_resin)
+                },
         },
         1.0,
     )]);
@@ -506,6 +541,15 @@ type States = BTreeMap<State, f64>;
 const EMPTY: u8 = u8::MAX;
 
 impl Model {
+    fn reservation_cost(&self, index: usize, event: &Event) -> i32 {
+        event.resin
+            + if self.auto && self.wands[index] {
+                event.cost
+            } else {
+                0
+            }
+    }
+
     fn target(&self, state: &State, event: &Event) -> Option<usize> {
         event
             .covers
@@ -516,7 +560,14 @@ impl Model {
     fn rank(&self, state: &State, event: &Event) -> (usize, i32) {
         match self.target(state, event) {
             Some(index) if self.donors[index] => (index, -event.resin),
-            Some(index) => (index, if self.auto { event.cost } else { event.resin }),
+            Some(index) => (
+                index,
+                if self.auto && self.wands[index] {
+                    event.cost
+                } else {
+                    event.resin
+                },
+            ),
             None => (self.slots.len(), -event.resin),
         }
     }
@@ -528,29 +579,35 @@ impl Model {
             return state.clone();
         }
         let mut next = state.clone();
-        let cost = event.resin + if self.auto { event.cost } else { 0 };
-        let stored_cost = u8::try_from(cost).unwrap();
         next.balance += event.resin;
         if let Some(index) = self.target(state, event) {
             if self.donors[index] {
                 insert_cost(&mut next.held[self.slots[index].clone()], 0);
             } else {
-                insert_cost(&mut next.held[self.slots[index].clone()], stored_cost);
+                let cost = self.reservation_cost(index, event);
+                insert_cost(
+                    &mut next.held[self.slots[index].clone()],
+                    u8::try_from(cost).unwrap(),
+                );
                 next.balance -= cost;
             }
-        } else if let Some((index, previous)) = event
+        } else if let Some((index, previous, cost)) = event
             .covers
             .iter()
             .filter_map(|&index| {
                 let previous = i32::from(state.held[self.slots[index].end - 1]);
-                (previous > cost).then_some((index, previous))
+                let cost = self.reservation_cost(index, event);
+                (previous > cost).then_some((index, previous, cost))
             })
-            .max_by_key(|&(_, previous)| previous)
+            .max_by_key(|&(_, previous, cost)| previous - cost)
         {
             // A later, cheaper matching wand replaces an earlier reservation.
             // Its predecessor becomes a donor. This integrates all upgrade
             // mixtures instead of forcing every reserved wand to one floor.
-            insert_cost(&mut next.held[self.slots[index].clone()], stored_cost);
+            insert_cost(
+                &mut next.held[self.slots[index].clone()],
+                u8::try_from(cost).unwrap(),
+            );
             next.balance += previous - cost;
         }
         let remaining = if self.auto {

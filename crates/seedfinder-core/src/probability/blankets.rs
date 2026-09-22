@@ -147,13 +147,15 @@ impl Branch {
             // Auto consumes no donors when every reservation is already +3.
             // Require at least one +0..+2 reservation in each donor branch.
             if auto
-                && !self
-                    .ordinary
-                    .iter()
-                    .any(|p| p.kind == ItemKind::Wand && p.upgrades & !0b111 == 0)
+                && !self.ordinary.iter().any(|p| {
+                    p.kind == ItemKind::Wand && !p.exclude_resin && p.upgrades & !0b111 == 0
+                })
             {
                 for (index, predicate) in self.ordinary.iter().enumerate() {
-                    if predicate.kind == ItemKind::Wand && predicate.upgrades & 0b111 != 0 {
+                    if predicate.kind == ItemKind::Wand
+                        && !predicate.exclude_resin
+                        && predicate.upgrades & 0b111 != 0
+                    {
                         let mut positive_cost = narrowed.clone();
                         positive_cost.ordinary[index].upgrades &= 0b111;
                         branches.push(positive_cost);
@@ -202,7 +204,10 @@ fn predicate_branch_covers(broad: &[Predicate], narrow: &[Predicate]) -> bool {
         index: usize,
     ) -> bool {
         for (candidate, &predicate) in narrow.iter().enumerate() {
-            if !visited[candidate] && predicate.intersect(broad[index]) == Some(predicate) {
+            if !visited[candidate]
+                && predicate.exclude_resin == broad[index].exclude_resin
+                && predicate.intersect(broad[index]) == Some(predicate)
+            {
                 visited[candidate] = true;
                 if owners[candidate]
                     .is_none_or(|owner| cover(broad, narrow, owners, visited, owner))

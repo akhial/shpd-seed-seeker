@@ -63,6 +63,8 @@ impl Default for FileArcaneResin {
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct FileArcaneResinFilter {
+    #[serde(default)]
+    include_mage_wand: bool,
     #[serde(default = "default_uncursed")]
     uncursed: bool,
     #[serde(default)]
@@ -78,6 +80,7 @@ const fn default_uncursed() -> bool {
 impl Default for FileArcaneResinFilter {
     fn default() -> Self {
         Self {
+            include_mage_wand: false,
             uncursed: true,
             max_depth: None,
             source: None,
@@ -165,6 +168,7 @@ const ANY_ENCHANTMENT: &str = "any_enchantment";
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+#[allow(clippy::struct_excessive_bools)] // Independent flags in the shared JSON schema.
 struct FileRequirement {
     #[serde(default)]
     kind: Option<FileItemKind>,
@@ -182,6 +186,8 @@ struct FileRequirement {
     select_trinket: bool,
     #[serde(default)]
     blanket: bool,
+    #[serde(default)]
+    exclude_resin: bool,
     #[serde(default)]
     source: Option<FileItemSource>,
     #[serde(default)]
@@ -426,6 +432,7 @@ pub fn decode_unvalidated(contents: &str) -> Result<SearchQuery, String> {
             FileArcaneResin::Auto(_) => 0,
         },
         arcane_resin_filter: ArcaneResinFilter {
+            include_mage_wand: document.arcane_resin_filter.include_mage_wand,
             uncursed: document.arcane_resin_filter.uncursed,
             max_depth: document.arcane_resin_filter.max_depth,
             source: document.arcane_resin_filter.source.map(ItemSource::from),
@@ -516,6 +523,7 @@ fn convert_requirement(
         require_uncursed: requirement.uncursed,
         select_trinket: requirement.select_trinket,
         blanket: requirement.blanket,
+        exclude_resin: requirement.exclude_resin,
         source: requirement.source.map(ItemSource::from),
         identity_group: requirement.identity_group,
         max_depth: requirement.max_depth,
@@ -593,6 +601,9 @@ pub fn encode(query: &SearchQuery) -> Value {
     }
     if query.arcane_resin_filter != ArcaneResinFilter::default() {
         let mut filter = Map::new();
+        if query.arcane_resin_filter.include_mage_wand {
+            filter.insert("include_mage_wand".to_owned(), json!(true));
+        }
         if !query.arcane_resin_filter.uncursed {
             filter.insert("uncursed".to_owned(), json!(false));
         }
@@ -712,6 +723,9 @@ fn encode_requirement(requirement: &Requirement) -> Value {
             }
         };
         output.insert("effect".to_owned(), effect);
+    }
+    if requirement.exclude_resin {
+        output.insert("exclude_resin".to_owned(), json!(true));
     }
     if requirement.blanket {
         output.insert("blanket".to_owned(), json!(true));
@@ -1137,6 +1151,7 @@ mod tests {
                     require_uncursed: true,
                     select_trinket: false,
                     blanket: false,
+                    exclude_resin: false,
                     source: Some(ItemSource::LockedChest),
                     identity_group: Some(2),
                     max_depth: Some(9),
@@ -1153,6 +1168,7 @@ mod tests {
                     require_uncursed: false,
                     select_trinket: false,
                     blanket: false,
+                    exclude_resin: false,
                     source: None,
                     identity_group: None,
                     max_depth: None,
@@ -1210,6 +1226,7 @@ mod tests {
                 require_uncursed: false,
                 select_trinket: false,
                 blanket: false,
+                exclude_resin: false,
                 source: None,
                 identity_group: None,
                 max_depth: None,

@@ -546,6 +546,7 @@ private fun ArcaneResinChip(
         ChipTitle("Arcane Resin")
         Spacer(Modifier.width(5.dp))
         ChipTag(text = if (auto) "Auto" else "≥$amount", tone = TagTone.QUALIFIER)
+        if (filter.includeMageWand) ChipTag(text = "Mage +2", tone = TagTone.QUALIFIER)
         filter.maximumDepth?.let {
             Spacer(Modifier.width(5.dp))
             ChipTag(text = "F≤$it", tone = TagTone.QUALIFIER)
@@ -937,6 +938,7 @@ private fun chipTags(requirement: ItemRequirement): List<ChipTagSpec> =
             UpgradeMatch.EXACT -> add(ChipTagSpec("+${requirement.upgrade}", TagTone.UPGRADE))
             UpgradeMatch.AT_LEAST -> add(ChipTagSpec("+${requirement.upgrade}↑", TagTone.UPGRADE))
         }
+        if (requirement.excludeResin) add(ChipTagSpec("No resin", TagTone.QUALIFIER))
         requirement.maximumDepth?.let { add(ChipTagSpec("F≤$it", TagTone.QUALIFIER)) }
     }
 

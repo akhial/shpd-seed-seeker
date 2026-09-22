@@ -8,7 +8,15 @@ use std::{cell::RefCell, collections::HashMap};
 use super::Predicate;
 use crate::query::SearchQuery;
 
-type ResinKey = (Vec<Predicate>, Vec<Predicate>, Predicate, bool, u16, u8);
+type ResinKey = (
+    Vec<Predicate>,
+    Vec<Predicate>,
+    Predicate,
+    bool,
+    u16,
+    u8,
+    bool,
+);
 
 const LIMIT: usize = 4096;
 
@@ -37,6 +45,7 @@ pub(super) fn resin(
             query.arcane_resin
         },
         query.max_depth,
+        query.arcane_resin_filter.include_mage_wand,
     );
     RESIN.with(|cache| {
         if let Some(value) = cache.borrow().get(&key) {

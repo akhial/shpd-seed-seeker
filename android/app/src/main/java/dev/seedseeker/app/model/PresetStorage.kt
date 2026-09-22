@@ -72,6 +72,7 @@ class PresetStorage(private val preferences: SharedPreferences) {
                     put("requireUncursed", requirement.requireUncursed)
                     put("selectTrinket", requirement.selectTrinket)
                     put("blanket", requirement.blanket)
+                    put("excludeResin", requirement.excludeResin)
                     put("alternativeGroup", requirement.alternativeGroup ?: JSONObject.NULL)
                     requirement.levelSum?.let {
                         put("levelSumGroup", it.group)
@@ -124,6 +125,7 @@ class PresetStorage(private val preferences: SharedPreferences) {
                         requireUncursed = encoded.optBoolean("requireUncursed", false),
                         selectTrinket = encoded.optBoolean("selectTrinket", false),
                         blanket = encoded.optBoolean("blanket", false),
+                        excludeResin = encoded.optBoolean("excludeResin", false),
                         alternativeGroup = encoded.optInt("alternativeGroup")
                             .takeIf { !encoded.isNull("alternativeGroup") },
                         levelSum = encoded.optInt("levelSumGroup").takeIf { !encoded.isNull("levelSumGroup") }

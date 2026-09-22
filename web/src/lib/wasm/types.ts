@@ -75,6 +75,8 @@ export interface LevelSum {
 }
 
 export interface RequirementState {
+  /** Reserve this wand without budgeting Auto resin upgrades. */
+  excludeResin?: boolean;
   /** Extra filter on an item assigned to an ordinary requirement. */
   blanket?: boolean;
   selectTrinket?: boolean;
@@ -117,6 +119,7 @@ export interface QueryState {
 export type ArcaneResinAmount = number | "auto";
 
 export interface ArcaneResinFilter {
+  includeMageWand?: boolean;
   uncursed: boolean;
   maxDepth?: number;
   source?: ItemSource;
@@ -126,6 +129,7 @@ export type TierDocument = "any" | { exact: number } | { at_least: number } | { 
 export type UpgradeDocument = number | "any" | { exact: number } | { at_least: number };
 
 export interface RequirementDocument {
+  exclude_resin?: boolean;
   blanket?: boolean;
   select_trinket?: boolean;
   kind?: RequirementKind;
@@ -153,7 +157,12 @@ export type RequirementEntryDocument = RequirementDocument | AnyOfDocument;
 export interface QueryDocument {
   floor_requirements?: FloorRequirement[];
   arcane_resin?: ArcaneResinAmount;
-  arcane_resin_filter?: { uncursed?: boolean; max_depth?: number; source?: ItemSource };
+  arcane_resin_filter?: {
+    uncursed?: boolean;
+    max_depth?: number;
+    source?: ItemSource;
+    include_mage_wand?: boolean;
+  };
   auto_apply_trinket?: boolean;
   requirements: RequirementEntryDocument[];
   max_depth?: number;

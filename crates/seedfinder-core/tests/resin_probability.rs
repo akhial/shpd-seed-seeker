@@ -12,6 +12,50 @@ fn query(amount: u16, requirements: &str) -> SearchQuery {
 }
 
 #[test]
+fn starting_wand_credit_matches_a_reduced_fixed_budget() {
+    for amount in [1, 2, 3, 5, 12] {
+        let mut credited = query(amount, r#"[{"kind":"wand"}]"#);
+        credited.arcane_resin_filter.include_mage_wand = true;
+        let fixed = query(amount.saturating_sub(2), r#"[{"kind":"wand"}]"#);
+        assert!(
+            (estimate_match_probability(&credited) - estimate_match_probability(&fixed)).abs()
+                < 1e-12
+        );
+    }
+}
+
+#[test]
+fn excluded_reservations_have_no_auto_cost_but_still_use_supply() {
+    for mage in [false, true] {
+        for upgrade in [1, 2, 3] {
+            let requirements = format!(
+                r#"[{{"kind":"wand","upgrade":{upgrade},"exclude_resin":true}},{{"kind":"wand","upgrade":{upgrade}}}]"#
+            );
+            let cost = match upgrade {
+                1 => 5,
+                2 => 3,
+                _ => 0,
+            };
+            let mut fixed = query(cost, &requirements);
+            fixed.arcane_resin_filter.include_mage_wand = mage;
+            let mut auto = fixed.clone();
+            auto.arcane_resin_auto = true;
+            auto.arcane_resin = 0;
+            assert!(
+                (estimate_match_probability(&auto) - estimate_match_probability(&fixed)).abs()
+                    < 1e-12,
+                "upgrade={upgrade}, mage={mage}"
+            );
+        }
+    }
+    let mut auto = query(0, r#"[{"kind":"wand","exclude_resin":true}]"#);
+    let baseline = estimate_match_probability(&auto);
+    auto.arcane_resin_auto = true;
+    auto.arcane_resin_filter.source = Some(ItemSource::GhostReward);
+    assert_eq!(estimate_match_probability(&auto), baseline);
+}
+
+#[test]
 fn auto_estimates_account_for_upgrade_costs_and_zero_demand() {
     for (upgrades, amount) in [([1, 1], 10), ([2, 3], 3), ([3, 3], 0)] {
         let requirements = format!(
@@ -85,7 +129,7 @@ fn cached_resin_estimates_keep_query_filters_and_profiles_separate() {
     let mut base = query(0, r#"[{"kind":"wand"},{"kind":"wand"},{"kind":"wand"}]"#);
     base.arcane_resin_auto = true;
     let mut variants = vec![base.clone()];
-    for edit in 0..9 {
+    for edit in 0..11 {
         let mut variant = base.clone();
         match edit {
             0 => variant.max_depth = 9,
@@ -99,6 +143,8 @@ fn cached_resin_estimates_keep_query_filters_and_profiles_separate() {
             5 => variant.auto_apply_trinket = true,
             6 => variant.exclude_blacksmith_rewards = true,
             7 => variant.requirements.push(query(0, r#"[{"kind":"wand"},{"kind":"wand","upgrade":3,"blanket":true}]"#).requirements[1]),
+            9 => variant.arcane_resin_filter.include_mage_wand = true,
+            10 => variant.requirements[0].exclude_resin = true,
             _ => variant.requirements.push(query(0, r#"[{"kind":"wand"},{"kind":"wand","source":"wandmaker_reward","blanket":true}]"#).requirements[1]),
         }
         variants.push(variant);

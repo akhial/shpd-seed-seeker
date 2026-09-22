@@ -48,6 +48,142 @@ fn world(items: Vec<WorldItem>) -> GeneratedWorld {
 }
 
 #[test]
+fn starting_wand_is_one_fixed_credit_not_a_generated_item() {
+    let mut resin = query(2, "[]");
+    resin.arcane_resin_filter.include_mage_wand = true;
+    // Donor filters apply to generated loot, not the explicit starting credit.
+    resin.arcane_resin_filter.source = Some(ItemSource::GhostReward);
+    resin.arcane_resin_filter.max_depth = Some(1);
+    assert!(resin.matches(&world(vec![])));
+    let marks = scout_matches(&world(vec![]), &resin);
+    assert_eq!(marks.matched_requirements, 1);
+    assert!(marks.matched_indices().is_empty());
+    resin.arcane_resin = 3;
+    assert!(!resin.matches(&world(vec![])));
+    resin.arcane_resin = 2;
+    resin.requirements = query(0, r#"[{"item":"wand_magic_missile"}]"#).requirements;
+    assert!(!resin.matches(&world(vec![])));
+}
+
+#[test]
+fn mage_credit_and_exclusions_handle_each_generated_upgrade() {
+    for (upgrade, cost) in [(0, 6), (1, 5), (2, 3), (3, 0), (4, 0)] {
+        for excluded in [false, true] {
+            for mage in [false, true] {
+                let mut resin = auto_query(&format!(
+                    r#"[{{"item":"wand_lightning","upgrade":{{"at_least":{upgrade}}},"exclude_resin":{excluded}}}]"#
+                ));
+                resin.arcane_resin_filter.include_mage_wand = mage;
+                for count in 0..=3 {
+                    let mut items = vec![wand(upgrade)];
+                    items.extend((0..count).map(|_| WorldItem {
+                        item: ItemId::WandFrost,
+                        ..wand(0)
+                    }));
+                    let candidate = world(items);
+                    let needed = if excluded { 0 } else { cost };
+                    let passes = count * 2 + if mage { 2 } else { 0 } >= needed;
+                    assert_eq!(
+                        resin.matches(&candidate),
+                        passes,
+                        "+{upgrade}, excluded={excluded}, mage={mage}, donors={count}"
+                    );
+                    let marks = scout_matches(&candidate, &resin);
+                    assert_eq!(marks.matched_requirements == 2, passes);
+                    if passes && excluded {
+                        assert_eq!(marks.matched_indices(), vec![0]);
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn excluded_wands_stay_reserved_and_cost_follows_the_chosen_alternative() {
+    let resin = auto_query(
+        r#"[{"item":"wand_lightning","exclude_resin":true},{"item":"wand_frost","upgrade":2}]"#,
+    );
+    let candidate = world(vec![
+        wand(3),
+        WorldItem {
+            item: ItemId::WandFrost,
+            ..wand(2)
+        },
+    ]);
+    // The excluded +3 would supply eight resin if it were incorrectly donated.
+    assert!(!resin.matches(&candidate));
+    let fixed = query(2, r#"[{"item":"wand_lightning","exclude_resin":true}]"#);
+    assert!(!fixed.matches(&world(vec![wand(3)])));
+    // Both OR branches match the same item; only the second excludes its cost.
+    let alternative =
+        auto_query(r#"[{"any_of":[{"kind":"wand"},{"kind":"wand","exclude_resin":true}]}]"#);
+    assert!(alternative.matches(&world(vec![wand(0)])));
+    assert_eq!(
+        scout_matches(&world(vec![wand(0)]), &alternative).matched_requirements,
+        2
+    );
+    // Assignment must backtrack: exclude the low wand and keep the +3 at no cost.
+    let duplicates = auto_query(r#"[{"kind":"wand","exclude_resin":true},{"kind":"wand"}]"#);
+    assert!(duplicates.matches(&world(vec![wand(3), wand(0)])));
+}
+
+#[test]
+fn credit_and_excluded_wands_do_not_create_blanket_donors() {
+    let mut resin = query(
+        2,
+        r#"[{"item":"wand_lightning","exclude_resin":true},{"item":"wand_frost","blanket":true}]"#,
+    );
+    resin.arcane_resin_filter.include_mage_wand = true;
+    let candidate = world(vec![
+        wand(0),
+        WorldItem {
+            item: ItemId::WandFrost,
+            ..wand(0)
+        },
+    ]);
+    // Credit already covers the amount, so no generated wand is consumed.
+    assert!(!resin.matches(&candidate));
+    resin.arcane_resin_auto = true;
+    assert!(!resin.matches(&candidate));
+    resin.requirements[1].item = Some(ItemId::WandLightning);
+    assert!(resin.matches(&candidate));
+    assert_eq!(scout_matches(&candidate, &resin).matched_indices(), vec![0]);
+}
+
+#[test]
+fn resin_planning_options_round_trip_and_validate() {
+    for auto in [false, true] {
+        for mage in [false, true] {
+            let mut resin = query(
+                7,
+                r#"[{"item":"wand_lightning","exclude_resin":true},{"any_of":[{"item":"wand_frost"},{"item":"wand_fireblast","exclude_resin":true}]}]"#,
+            );
+            resin.arcane_resin_auto = auto;
+            if auto {
+                resin.arcane_resin = 0;
+            }
+            resin.arcane_resin_filter.include_mage_wand = mage;
+            assert_eq!(
+                json_query::decode(&json_query::encode(&resin).to_string()).unwrap(),
+                resin
+            );
+            assert_eq!(
+                deep_link::decode(&deep_link::encode(&resin).unwrap()).unwrap(),
+                resin
+            );
+        }
+    }
+    for requirements in [
+        r#"[{"kind":"ring","exclude_resin":true}]"#,
+        r#"[{"kind":"wand"},{"kind":"wand","blanket":true,"exclude_resin":true}]"#,
+        r#"[{"kind":"wand","exclude_resin":"true"}]"#,
+    ] {
+        assert!(json_query::decode(&format!(r#"{{"requirements":{requirements}}}"#)).is_err());
+    }
+}
+
+#[test]
 fn auto_upgrades_every_reserved_wand_to_three() {
     let query = auto_query(r#"[{"kind":"wand","max_depth":3},{"kind":"wand","max_depth":3}]"#);
     // Keep donors outside the requested wands' scope so their upgrades
@@ -304,6 +440,7 @@ fn resin_respects_reward_choices_and_overlapping_scenarios() {
 fn resin_filters_apply_only_to_surplus_wands() {
     let mut resin = query(4, r#"[{"item":"wand_lightning","upgrade":2}]"#);
     resin.arcane_resin_filter = ArcaneResinFilter {
+        include_mage_wand: false,
         uncursed: false,
         max_depth: Some(4),
         source: Some(ItemSource::Chest),
@@ -345,6 +482,7 @@ fn resin_filters_round_trip_and_reject_invalid_values() {
             ] {
                 let mut resin = query(6, "[]");
                 resin.arcane_resin_filter = ArcaneResinFilter {
+                    include_mage_wand: false,
                     uncursed,
                     max_depth,
                     source,

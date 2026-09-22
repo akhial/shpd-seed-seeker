@@ -208,7 +208,10 @@ files, and version 9 share links preserve blankets.
 
 Choose **Arcane Resin** when adding a Wand requirement. Set a minimum amount or
 choose **Auto** to find enough resin to upgrade every reserved wand to +3.
-Auto counts each reserved wand once. Donor wands are consumed for resin, including
+Auto counts each reserved wand once. In a wand’s editor, **Exclude from Auto resin**
+keeps it reserved without budgeting resin upgrades; the board marks it **No resin**.
+This applies to that wand, while extra copies still count. It is useful for a wand
+you intend to imbue, because resin upgrades do not transfer to the staff. Donor wands are consumed for resin, including
 those witnessing blankets, and add no upgrade cost. Wands already at +3 or higher
 need no resin. The requirement chip shows **Auto**.
 Optionally limit donor wands by curse status, floor, or source. Donors must
@@ -216,7 +219,17 @@ be uncursed by default. Each surplus wand contributes `2 × (upgrade + 1)` resin
 wands reserved for ordinary requirements cannot also become resin. Resin is one
 separate requirement and can be searched on its own.
 
+**Include Mage’s starting wand** adds a one-time **2 resin** credit in either mode.
+Enable it when planning to recover the starting Magic Missile wand with Wand
+Preservation and dismantle it after imbuing. The recovered wand is always +0:
+imbuing a +1, +2, or +3 wand does not change its resin yield. The credit is a
+player assumption, independent of the generated donors’ source and floor filters;
+it does not add a generated wand or satisfy an item/blanket requirement. Staff
+upgrade planning and talent availability are not inferred by the search.
+
 The requirement can be edited or removed from the board. Saved drafts, presets,
 share links, result exports, and search refinement retain its mode, amount, and filters.
-Auto uses version 10 share links; existing fixed-amount links remain compatible.
+Auto uses version 10 share links; the starting-wand credit and exclusions use
+version 12, including any floor requirements. Version 11 floor-filter links
+retain their encodings.
 Scout highlights the contributing wands, and the engine supplies the match estimate.

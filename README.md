@@ -107,6 +107,15 @@ files are replaced. The output options cannot be combined with `--benchmark`.
   // "auto" finds enough resin to bring every reserved wand to +3:
   // +0 needs 6, +1 needs 5, +2 needs 3, and +3 or higher needs none.
   "arcane_resin"?: 0..65535 | "auto" = 0,
+  "arcane_resin_filter"?: {
+    "uncursed"?: true | false = true,
+    "max_depth"?: 1..24,
+    "source"?: "heap" | "chest" | ...,
+    // Assumes the Mage recovers and dismantles the starting Magic Missile
+    // wand with Wand Preservation: one +0 wand, worth 2 resin, regardless
+    // of staff level. This explicit credit is independent of donor filters.
+    "include_mage_wand"?: true | false = false
+  },
   // The run's Wandmaker (floors 7-9) must ask for this quest item.
   "wandmaker_quest"?: "corpse_dust" | "elemental_embers" | "rotberry",
 
@@ -130,6 +139,9 @@ files are replaced. The output options cannot be combined with `--benchmark`.
       // Supply "item", "kind", or both; when both are present they must agree.
       // "weapon" matches melee and thrown weapons alike; "melee_weapon" and
       // "thrown_weapon" narrow it to one class.
+      // Ordinary wand only: reserve it, but omit its Auto upgrade cost.
+      // Useful for imbuing; resin upgrades never transfer to the staff.
+      "exclude_resin"?: true | false = false,
       "kind"?: "weapon" | "melee_weapon" | "thrown_weapon" | "armor" | "wand" | "ring",
       "item"?:
         // Weapons

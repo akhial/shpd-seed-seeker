@@ -227,6 +227,7 @@ data class ItemRequirement(
     val requireUncursed: Boolean = false,
     val selectTrinket: Boolean = false,
     val blanket: Boolean = false,
+    val excludeResin: Boolean = false,
     /**
      * Session-local id of the "any of these" slot this row belongs to, or
      * null for a slot of its own. Members of one group count as a single
@@ -245,6 +246,7 @@ data class ItemRequirement(
         require(!blanket || (identityGroup == null && levelSum == null && !selectTrinket)) {
             "A blanket cannot request extra copies, combined levels, or trinket selection"
         }
+        require(!excludeResin || (kind == ItemKind.WAND && !blanket)) { "Only an ordinary wand can exclude Auto resin" }
         require(!selectTrinket || kind == ItemKind.TRINKET) { "Only a named trinket can be selected" }
         val tierable = item == null && kind.family in setOf(ItemKind.WEAPON, ItemKind.ARMOR)
         val validTier = when (tierMatch) {
@@ -321,6 +323,7 @@ data class ItemRequirement(
             upgradeMatch == UpgradeMatch.ANY &&
             effect == EffectFilter.Any &&
             !requireUncursed &&
+            !excludeResin &&
             source == null
 
     /** Human-readable effect constraint, or null when any effect is accepted. */
@@ -347,6 +350,7 @@ data class ItemRequirement(
                 append(it)
             }
             if (requireUncursed) append(" • uncursed")
+            if (excludeResin) append(" • excluded from Auto resin")
             source?.let {
                 append(" • ")
                 append(it.label)
@@ -522,6 +526,7 @@ data class ArcaneResinFilter(
     val uncursed: Boolean = true,
     val maximumDepth: Int? = null,
     val source: ScoutItemSource? = null,
+    val includeMageWand: Boolean = false,
 ) {
     init {
         require(maximumDepth == null || maximumDepth in 1..SearchLimits.MAX_DEPTH) {

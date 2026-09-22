@@ -118,6 +118,7 @@ export function RequirementEditor({
   isNew,
   stack,
   resinAmount,
+  resinFilter,
   onSaveResin,
   onSave,
   onCancel,
@@ -127,6 +128,7 @@ export function RequirementEditor({
   /** The chip's stack shape; a cluster member's belongs to the cluster. */
   stack: StackShape;
   resinAmount?: ArcaneResinAmount;
+  resinFilter?: ArcaneResinFilter;
   onSaveResin?: (amount: ArcaneResinAmount, filter: ArcaneResinFilter) => void;
   onSave: (
     requirement: RequirementState,
@@ -144,6 +146,7 @@ export function RequirementEditor({
   const [total, setTotal] = useState(stack.total);
   const [copyDepth, setCopyDepth] = useState(stack.copyDepth);
   const [amount, setAmount] = useState(resinAmount === "auto" ? 2 : (resinAmount ?? 2));
+  const [includeMageWand, setIncludeMageWand] = useState(resinFilter?.includeMageWand ?? false);
   const [autoResin, setAutoResin] = useState(resinAmount === "auto");
   // "Specific…" with nothing ticked yet is a transient editor state, not a
   // filter, so it lives outside the draft; saving it means "any".
@@ -229,6 +232,7 @@ export function RequirementEditor({
             ? { mode: "any", value: 1 }
             : current.upgrade,
       uncursed: nextKind === "trinket" ? false : current.uncursed,
+      excludeResin: nextKind === "wand" ? current.excludeResin : undefined,
       selectTrinket: nextKind === "trinket" ? current.selectTrinket : undefined,
       item:
         nextKind === "trinket" || nextKind === "artifact"
@@ -467,7 +471,9 @@ export function RequirementEditor({
                 />
               </Field>
               {autoResin ? (
-                <p className="d1-caption">Find enough resin to upgrade every matched wand to +3.</p>
+                <p className="d1-caption">
+                  Find enough resin to upgrade matched wands to +3, except those marked “No resin”.
+                </p>
               ) : (
                 <Field label="Amount">
                   <input
@@ -737,6 +743,45 @@ export function RequirementEditor({
             </section>
           )}
 
+          {resin && (
+            <section className="d1-modal-section">
+              <label className="d1-check">
+                <input
+                  type="checkbox"
+                  checked={includeMageWand}
+                  onChange={(event) => setIncludeMageWand(event.currentTarget.checked)}
+                />
+                <span>Include Mage’s starting wand</span>
+              </label>
+              <p className="d1-caption">
+                Adds 2 resin from Magic Missile. Assumes you recover it with Wand Preservation and
+                dismantle it after imbuing.
+              </p>
+            </section>
+          )}
+          {!resin && !draft.blanket && family === "wand" && (
+            <section className="d1-modal-section">
+              <label className="d1-check">
+                <input
+                  type="checkbox"
+                  checked={draft.excludeResin ?? false}
+                  onChange={(event) => {
+                    const excludeResin = event.currentTarget.checked;
+                    reviseDraft((current) => ({
+                      ...current,
+                      excludeResin: excludeResin || undefined,
+                    }));
+                  }}
+                />
+                <span>Exclude from Auto resin</span>
+              </label>
+              <p className="d1-caption">
+                Keep this wand without budgeting resin to upgrade it. Useful for imbuing: resin
+                upgrades do not transfer to the staff. Extra copies still count toward Auto resin.
+              </p>
+            </section>
+          )}
+
           {errors.length > 0 && (
             <ul className="d1-editor-errors" role="alert">
               {errors.map((error) => (
@@ -758,6 +803,7 @@ export function RequirementEditor({
               resin
                 ? onSaveResin?.(autoResin ? "auto" : amount, {
                     uncursed: draft.uncursed,
+                    ...(includeMageWand ? { includeMageWand: true } : {}),
                     maxDepth: draft.maxDepth,
                     source: draft.source,
                   })

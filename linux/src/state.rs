@@ -104,6 +104,7 @@ impl UiRequirement {
             require_uncursed: false,
             select_trinket: false,
             blanket: false,
+            exclude_resin: false,
             source: None,
             identity_group: None,
             max_depth: None,
@@ -1199,6 +1200,7 @@ mod tests {
             require_uncursed: true,
             select_trinket: false,
             blanket: false,
+            exclude_resin: false,
             max_depth: Some(9),
             ..UiRequirement::new(key)
         });
