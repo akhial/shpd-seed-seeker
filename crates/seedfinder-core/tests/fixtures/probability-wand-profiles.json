@@ -1,0 +1,3103 @@
+[
+  {
+    "generation_depth": 24,
+    "profile": "mimic_tooth",
+    "samples": 65536,
+    "seed_offset": 1414213562,
+    "seed_stride": 3355211884971,
+    "cases": [
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "wandmaker_reward"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "mimic_tooth",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 859
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "vault_treasure"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "mimic_tooth",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 658
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "item": "wand_fireblast",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_fireblast",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_fireblast",
+              "kind": "wand"
+            },
+            {
+              "item": "mimic_tooth",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 112
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "item": "wand_regrowth",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_regrowth",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_regrowth",
+              "kind": "wand"
+            },
+            {
+              "item": "mimic_tooth",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 64
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "wandmaker_reward"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "mimic_tooth",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 2604
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "vault_treasure"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "mimic_tooth",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 3312
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "item": "wand_fireblast",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_fireblast",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_fireblast",
+              "kind": "wand"
+            },
+            {
+              "item": "mimic_tooth",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 513
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "item": "wand_regrowth",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_regrowth",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_regrowth",
+              "kind": "wand"
+            },
+            {
+              "item": "mimic_tooth",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 198
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "mimic_tooth",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 41
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "wandmaker_reward",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "mimic_tooth",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 0
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "imp_reward",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "mimic_tooth",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 41
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "vault_treasure",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "mimic_tooth",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 0
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "mimic_tooth",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 259
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "wandmaker_reward",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "mimic_tooth",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 0
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "imp_reward",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "mimic_tooth",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 259
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "vault_treasure",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "mimic_tooth",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 0
+      }
+    ]
+  },
+  {
+    "generation_depth": 24,
+    "profile": "parchment_scrap",
+    "samples": 65536,
+    "seed_offset": 1414213562,
+    "seed_stride": 3355211884971,
+    "cases": [
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "wandmaker_reward"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "parchment_scrap",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 553
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "vault_treasure"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "parchment_scrap",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 498
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "item": "wand_fireblast",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_fireblast",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_fireblast",
+              "kind": "wand"
+            },
+            {
+              "item": "parchment_scrap",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 73
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "item": "wand_regrowth",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_regrowth",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_regrowth",
+              "kind": "wand"
+            },
+            {
+              "item": "parchment_scrap",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 28
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "wandmaker_reward"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "parchment_scrap",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 1932
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "vault_treasure"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "parchment_scrap",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 2520
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "item": "wand_fireblast",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_fireblast",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_fireblast",
+              "kind": "wand"
+            },
+            {
+              "item": "parchment_scrap",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 324
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "item": "wand_regrowth",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_regrowth",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_regrowth",
+              "kind": "wand"
+            },
+            {
+              "item": "parchment_scrap",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 97
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "parchment_scrap",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 27
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "wandmaker_reward",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "parchment_scrap",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 0
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "imp_reward",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "parchment_scrap",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 27
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "vault_treasure",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "parchment_scrap",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 0
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "parchment_scrap",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 182
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "wandmaker_reward",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "parchment_scrap",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 0
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "imp_reward",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "parchment_scrap",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 182
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "vault_treasure",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "parchment_scrap",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 0
+      }
+    ]
+  },
+  {
+    "generation_depth": 24,
+    "profile": "rat_skull",
+    "samples": 65536,
+    "seed_offset": 1414213562,
+    "seed_stride": 3355211884971,
+    "cases": [
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "wandmaker_reward"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "rat_skull",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 554
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "vault_treasure"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "rat_skull",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 484
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "item": "wand_fireblast",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_fireblast",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_fireblast",
+              "kind": "wand"
+            },
+            {
+              "item": "rat_skull",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 75
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "item": "wand_regrowth",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_regrowth",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_regrowth",
+              "kind": "wand"
+            },
+            {
+              "item": "rat_skull",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 33
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "wandmaker_reward"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "rat_skull",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 1863
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "vault_treasure"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "rat_skull",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 2513
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "item": "wand_fireblast",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_fireblast",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_fireblast",
+              "kind": "wand"
+            },
+            {
+              "item": "rat_skull",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 359
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "item": "wand_regrowth",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_regrowth",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_regrowth",
+              "kind": "wand"
+            },
+            {
+              "item": "rat_skull",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 113
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "rat_skull",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 37
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "wandmaker_reward",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "rat_skull",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 0
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "imp_reward",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "rat_skull",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 37
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "vault_treasure",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "rat_skull",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 0
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "rat_skull",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 173
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "wandmaker_reward",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "rat_skull",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 0
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "imp_reward",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "rat_skull",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 173
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "vault_treasure",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "rat_skull",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 0
+      }
+    ]
+  },
+  {
+    "generation_depth": 24,
+    "profile": "exotic_crystals",
+    "samples": 65536,
+    "seed_offset": 1414213562,
+    "seed_stride": 3355211884971,
+    "cases": [
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "wandmaker_reward"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "exotic_crystals",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 546
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "vault_treasure"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "exotic_crystals",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 538
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "item": "wand_fireblast",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_fireblast",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_fireblast",
+              "kind": "wand"
+            },
+            {
+              "item": "exotic_crystals",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 93
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "item": "wand_regrowth",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_regrowth",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_regrowth",
+              "kind": "wand"
+            },
+            {
+              "item": "exotic_crystals",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 31
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "wandmaker_reward"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "exotic_crystals",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 1900
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "vault_treasure"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "exotic_crystals",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 2568
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "item": "wand_fireblast",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_fireblast",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_fireblast",
+              "kind": "wand"
+            },
+            {
+              "item": "exotic_crystals",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 355
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "item": "wand_regrowth",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_regrowth",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_regrowth",
+              "kind": "wand"
+            },
+            {
+              "item": "exotic_crystals",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 111
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "exotic_crystals",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 22
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "wandmaker_reward",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "exotic_crystals",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 0
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "imp_reward",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "exotic_crystals",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 22
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "vault_treasure",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "exotic_crystals",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 0
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "exotic_crystals",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 147
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "wandmaker_reward",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "exotic_crystals",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 0
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "imp_reward",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "exotic_crystals",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 147
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "vault_treasure",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "exotic_crystals",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 0
+      }
+    ]
+  },
+  {
+    "generation_depth": 24,
+    "profile": "mossy_clump",
+    "samples": 65536,
+    "seed_offset": 1414213562,
+    "seed_stride": 3355211884971,
+    "cases": [
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "wandmaker_reward"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "mossy_clump",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 541
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "vault_treasure"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "mossy_clump",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 475
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "item": "wand_fireblast",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_fireblast",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_fireblast",
+              "kind": "wand"
+            },
+            {
+              "item": "mossy_clump",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 67
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "item": "wand_regrowth",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_regrowth",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_regrowth",
+              "kind": "wand"
+            },
+            {
+              "item": "mossy_clump",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 41
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "wandmaker_reward"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "mossy_clump",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 1868
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "vault_treasure"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "mossy_clump",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 2452
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "item": "wand_fireblast",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_fireblast",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_fireblast",
+              "kind": "wand"
+            },
+            {
+              "item": "mossy_clump",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 332
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "item": "wand_regrowth",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_regrowth",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_regrowth",
+              "kind": "wand"
+            },
+            {
+              "item": "mossy_clump",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 105
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "mossy_clump",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 21
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "wandmaker_reward",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "mossy_clump",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 0
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "imp_reward",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "mossy_clump",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 21
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "vault_treasure",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "mossy_clump",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 0
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "mossy_clump",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 152
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "wandmaker_reward",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "mossy_clump",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 0
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "imp_reward",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "mossy_clump",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 152
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "vault_treasure",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "mossy_clump",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 0
+      }
+    ]
+  },
+  {
+    "generation_depth": 24,
+    "profile": "trap_mechanism",
+    "samples": 65536,
+    "seed_offset": 1414213562,
+    "seed_stride": 3355211884971,
+    "cases": [
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "wandmaker_reward"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "trap_mechanism",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 556
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "vault_treasure"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "trap_mechanism",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 508
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "item": "wand_fireblast",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_fireblast",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_fireblast",
+              "kind": "wand"
+            },
+            {
+              "item": "trap_mechanism",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 71
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "item": "wand_regrowth",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_regrowth",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_regrowth",
+              "kind": "wand"
+            },
+            {
+              "item": "trap_mechanism",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 42
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "wandmaker_reward"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "trap_mechanism",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 1950
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "vault_treasure"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "trap_mechanism",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 2574
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "item": "wand_fireblast",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_fireblast",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_fireblast",
+              "kind": "wand"
+            },
+            {
+              "item": "trap_mechanism",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 340
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "item": "wand_regrowth",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_regrowth",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_regrowth",
+              "kind": "wand"
+            },
+            {
+              "item": "trap_mechanism",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 126
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "trap_mechanism",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 25
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "wandmaker_reward",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "trap_mechanism",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 0
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "imp_reward",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "trap_mechanism",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 25
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "vault_treasure",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "trap_mechanism",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 0
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "trap_mechanism",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 155
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "wandmaker_reward",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "trap_mechanism",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 0
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "imp_reward",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "trap_mechanism",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 155
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "vault_treasure",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "trap_mechanism",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 0
+      }
+    ]
+  },
+  {
+    "generation_depth": 24,
+    "profile": "cracked_spyglass",
+    "samples": 65536,
+    "seed_offset": 1414213562,
+    "seed_stride": 3355211884971,
+    "cases": [
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "wandmaker_reward"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "cracked_spyglass",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 764
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "vault_treasure"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "cracked_spyglass",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 636
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "item": "wand_fireblast",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_fireblast",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_fireblast",
+              "kind": "wand"
+            },
+            {
+              "item": "cracked_spyglass",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 125
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "item": "wand_regrowth",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_regrowth",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_regrowth",
+              "kind": "wand"
+            },
+            {
+              "item": "cracked_spyglass",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 44
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "wandmaker_reward"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "cracked_spyglass",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 2400
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "vault_treasure"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "cracked_spyglass",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 3150
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "item": "wand_fireblast",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_fireblast",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_fireblast",
+              "kind": "wand"
+            },
+            {
+              "item": "cracked_spyglass",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 474
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "item": "wand_regrowth",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_regrowth",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_regrowth",
+              "kind": "wand"
+            },
+            {
+              "item": "cracked_spyglass",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 183
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "cracked_spyglass",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 47
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "wandmaker_reward",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "cracked_spyglass",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 0
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "imp_reward",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "cracked_spyglass",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 47
+      },
+      {
+        "query": {
+          "max_depth": 17,
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "vault_treasure",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "cracked_spyglass",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 0
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "cracked_spyglass",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 242
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "wandmaker_reward",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "cracked_spyglass",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 0
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "imp_reward",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "cracked_spyglass",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 242
+      },
+      {
+        "query": {
+          "requirements": [
+            {
+              "identity_group": 1,
+              "kind": "wand",
+              "source": "vault_treasure",
+              "uncursed": true,
+              "upgrade": {
+                "at_least": 4
+              }
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "identity_group": 1,
+              "kind": "wand"
+            },
+            {
+              "item": "cracked_spyglass",
+              "kind": "trinket",
+              "select_trinket": true
+            }
+          ]
+        },
+        "hits": 0
+      }
+    ]
+  }
+]

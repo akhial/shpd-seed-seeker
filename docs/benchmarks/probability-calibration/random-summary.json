@@ -4,57 +4,25 @@
   "queries": 7102,
   "categories": {
     "random": {
-      "pass": 3982,
+      "pass": 3988,
       "underpowered": 3108,
-      "divergent": 12,
-      "median_ratio": 0.99644494180037,
-      "p10_ratio": 0.9321874318685431,
-      "p90_ratio": 1.036101807197402,
-      "mean_absolute_log_error": 0.038742785571042486
+      "divergent": 6,
+      "median_ratio": 0.9966232741200887,
+      "p10_ratio": 0.9333325169363491,
+      "p90_ratio": 1.037497848373831,
+      "mean_absolute_log_error": 0.0376466761807986
     }
   },
   "timing_ns": {
-    "p50": 35473,
-    "p95": 162606,
-    "max": 10480355
+    "p50": 35805,
+    "p95": 175204,
+    "max": 10391581
   },
   "divergences": [
     {
       "category": "random",
-      "estimate": 0.0009420062726493983,
-      "estimate_ns": 707711,
-      "hits": 408,
-      "query": {
-        "max_depth": 21,
-        "requirements": [
-          {
-            "identity_group": 1,
-            "kind": "wand",
-            "max_depth": 5
-          },
-          {
-            "identity_group": 1,
-            "kind": "wand",
-            "max_depth": 22
-          },
-          {
-            "identity_group": 1,
-            "kind": "wand",
-            "upgrade": {
-              "at_least": 2
-            }
-          },
-          {
-            "identity_group": 1,
-            "kind": "wand"
-          }
-        ]
-      }
-    },
-    {
-      "category": "random",
       "estimate": 0.04517294509756761,
-      "estimate_ns": 82875,
+      "estimate_ns": 100202,
       "hits": 16858,
       "query": {
         "max_depth": 13,
@@ -84,114 +52,8 @@
     },
     {
       "category": "random",
-      "estimate": 0.011045291029867288,
-      "estimate_ns": 133913,
-      "hits": 4328,
-      "query": {
-        "max_depth": 16,
-        "requirements": [
-          {
-            "identity_group": 1,
-            "kind": "wand"
-          },
-          {
-            "identity_group": 1,
-            "kind": "wand",
-            "uncursed": true
-          },
-          {
-            "identity_group": 1,
-            "kind": "wand"
-          }
-        ]
-      }
-    },
-    {
-      "category": "random",
-      "estimate": 0.04494999058419724,
-      "estimate_ns": 378232,
-      "hits": 17658,
-      "query": {
-        "max_depth": 19,
-        "requirements": [
-          {
-            "identity_group": 1,
-            "kind": "wand",
-            "max_depth": 8
-          },
-          {
-            "identity_group": 1,
-            "kind": "wand",
-            "upgrade": {
-              "at_least": 2
-            }
-          },
-          {
-            "identity_group": 1,
-            "kind": "wand"
-          }
-        ]
-      }
-    },
-    {
-      "category": "random",
-      "estimate": 0.0004067232397427789,
-      "estimate_ns": 71188,
-      "hits": 234,
-      "query": {
-        "max_depth": 11,
-        "requirements": [
-          {
-            "identity_group": 1,
-            "kind": "wand",
-            "max_depth": 24
-          },
-          {
-            "identity_group": 1,
-            "kind": "wand"
-          },
-          {
-            "identity_group": 1,
-            "kind": "wand",
-            "max_depth": 23,
-            "source": "chest",
-            "upgrade": {
-              "at_least": 1
-            }
-          }
-        ]
-      }
-    },
-    {
-      "category": "random",
-      "estimate": 0.010236389011080482,
-      "estimate_ns": 204879,
-      "hits": 4080,
-      "query": {
-        "max_depth": 16,
-        "requirements": [
-          {
-            "identity_group": 1,
-            "kind": "wand",
-            "max_depth": 15
-          },
-          {
-            "identity_group": 1,
-            "kind": "wand",
-            "max_depth": 9,
-            "uncursed": true
-          },
-          {
-            "identity_group": 1,
-            "kind": "wand"
-          }
-        ]
-      }
-    },
-    {
-      "category": "random",
       "estimate": 0.004701564512903816,
-      "estimate_ns": 93591,
+      "estimate_ns": 10371180,
       "hits": 674,
       "query": {
         "max_depth": 22,
@@ -222,7 +84,7 @@
     {
       "category": "random",
       "estimate": 0.012247865460942066,
-      "estimate_ns": 14422,
+      "estimate_ns": 12548,
       "hits": 2018,
       "query": {
         "max_depth": 2,
@@ -243,7 +105,7 @@
     {
       "category": "random",
       "estimate": 0.4396737148642503,
-      "estimate_ns": 167703,
+      "estimate_ns": 167743,
       "hits": 81665,
       "query": {
         "max_depth": 16,
@@ -268,7 +130,7 @@
     {
       "category": "random",
       "estimate": 0.0797471093183582,
-      "estimate_ns": 169837,
+      "estimate_ns": 160593,
       "hits": 32643,
       "query": {
         "max_depth": 23,
@@ -301,36 +163,8 @@
     },
     {
       "category": "random",
-      "estimate": 0.0028658516189601357,
-      "estimate_ns": 228725,
-      "hits": 1223,
-      "query": {
-        "max_depth": 21,
-        "requirements": [
-          {
-            "identity_group": 1,
-            "kind": "wand"
-          },
-          {
-            "identity_group": 1,
-            "kind": "wand"
-          },
-          {
-            "identity_group": 1,
-            "kind": "wand"
-          },
-          {
-            "identity_group": 1,
-            "kind": "wand",
-            "max_depth": 7
-          }
-        ]
-      }
-    },
-    {
-      "category": "random",
       "estimate": 0.1046341175591523,
-      "estimate_ns": 137056,
+      "estimate_ns": 140833,
       "hits": 39114,
       "query": {
         "max_depth": 19,

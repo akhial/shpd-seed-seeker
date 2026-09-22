@@ -1,7 +1,7 @@
 {
   "date": "2026-09-22",
   "rust_workspace": {
-    "passed": 738,
+    "passed": 740,
     "ignored": 13,
     "excluded_package": "shpd-seedfinder-gtk",
     "reason": "GTK system libraries unavailable; follows existing CI workspace scope"
@@ -17,13 +17,16 @@
   "release_speed": {
     "queries_generated": 200,
     "budget_ms": 50,
-    "slowest_ms": 4.513109
+    "slowest_ms": 4.573682
   },
   "preview": {
     "url": "https://devbox.komodo-spectrum.ts.net:8448/",
     "http_status": 200,
     "browser_errors": 0,
-    "floor_17_display": "Match probability \u2248 1 in 80"
+    "floor_17_display": "Match probability \u2248 1 in 80",
+    "duplicate_wand_display": "Match probability \u2248 1 in 60",
+    "duplicate_wand_probability": 0.016565861428134543,
+    "duplicate_wand_url": "https://devbox.komodo-spectrum.ts.net:8448/#q=QvA4AICIAoCIAICA"
   },
   "random_guard": {
     "valid_queries": 7102,
@@ -31,10 +34,23 @@
     "result": "pass",
     "measurable_at_least_12_hits": 4048,
     "median_ratio": 0.997,
-    "p10_ratio": 0.931,
-    "p90_ratio": 1.042,
-    "minimum_ratio": 0.456,
+    "p10_ratio": 0.932,
+    "p90_ratio": 1.045,
+    "minimum_ratio": 0.519,
     "maximum_ratio": 2.403,
-    "mean_absolute_log_error": 0.0421
+    "mean_absolute_log_error": 0.0411
+  },
+  "wand_calibration": {
+    "worlds": 720896,
+    "profiles": 8,
+    "table_bytes": 147492,
+    "new_query_comparisons": 11424,
+    "sufficiently_sampled_passes": 5381,
+    "underpowered": 6043,
+    "divergences": 0,
+    "original_six_outliers": "resolved",
+    "general_random_outliers_remaining": 6,
+    "regression_fixture_cases": 1597,
+    "standalone_baker_tests": 1
   }
 }
