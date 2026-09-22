@@ -132,7 +132,7 @@ class SearchSettingsUiTest {
         screenshot("large-text-challenges")
     }
 
-    @Test fun finderAndAppSettingsNavigateBackAndPersistTheSameQuery() {
+    @Test fun finderSearchSettingsPersistQueryAndAppSettingsStaySeparate() {
         val preferences = compose.activity.getSharedPreferences("seed_seeker_settings", Context.MODE_PRIVATE)
         preferences.edit().clear().commit()
         PresetStorage(preferences).saveCurrentQuery(query)
@@ -163,11 +163,13 @@ class SearchSettingsUiTest {
         }
         compose.onNodeWithContentDescription("Settings").performClick()
         compose.onNodeWithText("App settings").assertIsDisplayed()
-        compose.onNodeWithText("Search settings").performClick()
+        compose.onNodeWithText("Search settings").assertDoesNotExist()
+        compose.onNodeWithText("Appearance").assertIsDisplayed()
+        screenshot("app-settings")
+        compose.onNodeWithContentDescription("Back").performClick()
+        compose.onNodeWithText("Search settings").performScrollTo().performClick()
         compose.onNodeWithContentDescription("Floor 22").performScrollTo().assertIsOn()
         compose.runOnIdle { compose.activity.onBackPressedDispatcher.onBackPressed() }
-        compose.onNodeWithText("App settings").assertIsDisplayed()
-        compose.onNodeWithContentDescription("Back").performClick()
         compose.onNodeWithText("Seed Seeker").assertIsDisplayed()
     }
 

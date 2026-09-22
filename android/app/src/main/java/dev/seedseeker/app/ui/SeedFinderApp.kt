@@ -152,7 +152,6 @@ internal fun SeedFinderApp(
     var destination by remember { mutableStateOf(Destination.FINDER) }
     var aboutReturnDestination by remember { mutableStateOf(Destination.FINDER) }
     var settingsReturnDestination by remember { mutableStateOf(Destination.FINDER) }
-    var searchSettingsReturnDestination by remember { mutableStateOf(Destination.FINDER) }
     var requirements by remember { mutableStateOf(initialQuery.requirements) }
     var nextRequirementKey by remember {
         mutableLongStateOf((initialQuery.requirements.maxOfOrNull { it.key } ?: 0L) + 1L)
@@ -399,7 +398,7 @@ internal fun SeedFinderApp(
         destination = when (destination) {
             Destination.ABOUT -> aboutReturnDestination
             Destination.SETTINGS -> settingsReturnDestination
-            Destination.SEARCH_SETTINGS -> searchSettingsReturnDestination
+            Destination.SEARCH_SETTINGS -> Destination.FINDER
             else -> Destination.FINDER
         }
     }
@@ -540,7 +539,6 @@ internal fun SeedFinderApp(
                     destination = Destination.SETTINGS
                 },
                 onSearchSettings = {
-                    searchSettingsReturnDestination = Destination.FINDER
                     destination = Destination.SEARCH_SETTINGS
                 },
                 onApplyPreset = { preset ->
@@ -727,10 +725,6 @@ internal fun SeedFinderApp(
                     compactChips = checked
                     preferences.edit().putBoolean(COMPACT_CHIPS_KEY, checked).apply()
                 },
-                onSearchSettings = {
-                    searchSettingsReturnDestination = Destination.SETTINGS
-                    destination = Destination.SEARCH_SETTINGS
-                },
                 onBack = { destination = settingsReturnDestination },
             )
 
@@ -754,7 +748,7 @@ internal fun SeedFinderApp(
                     }
                 },
                 onWorkerCountChange = { workerCount = workerPreference.save(it) },
-                onBack = { destination = searchSettingsReturnDestination },
+                onBack = { destination = Destination.FINDER },
             )
 
             Destination.ABOUT -> AboutScreen(onBack = { destination = aboutReturnDestination })

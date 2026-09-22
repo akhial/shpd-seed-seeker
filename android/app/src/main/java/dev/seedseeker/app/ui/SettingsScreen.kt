@@ -47,7 +47,6 @@ import dev.seedseeker.app.R
 fun SettingsScreen(
     compactChips: Boolean,
     onCompactChipsChange: (Boolean) -> Unit,
-    onSearchSettings: () -> Unit,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -81,9 +80,6 @@ fun SettingsScreen(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                item {
-                    SearchSettingsLink("Floors, quests, challenges and workers", onClick = onSearchSettings)
-                }
                 item {
                     SectionHeading("Appearance")
                 }
