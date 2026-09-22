@@ -59,6 +59,7 @@ private struct ContentView: View {
     @AppStorage("savedPresets") private var savedPresetsJSON = ""
     @AppStorage("challenges") private var challenges = 0
     @State private var requirements: [ItemRequirement] = []
+    @State private var floorRequirements: [FloorRequirement] = []
     @State private var arcaneResin = 0
     @State private var arcaneResinAuto = false
     @State private var arcaneResinFilter = ArcaneResinFilter()
@@ -101,7 +102,7 @@ private struct ContentView: View {
             // at two fifths of the default window and may grow to most of it,
             // rather than being dealt the drawer's usual share.
             NavigationSplitView {
-                QueryView(requirements: $requirements, maximumDepth: $maximumDepth, autoApplyTrinket: $autoApplyTrinket, arcaneResin: $arcaneResin, arcaneResinFilter: $arcaneResinFilter, arcaneResinAuto: $arcaneResinAuto,
+                QueryView(requirements: $requirements, floorRequirements: $floorRequirements, maximumDepth: $maximumDepth, autoApplyTrinket: $autoApplyTrinket, arcaneResin: $arcaneResin, arcaneResinFilter: $arcaneResinFilter, arcaneResinAuto: $arcaneResinAuto,
                           requireBlacksmith: $requireBlacksmith,
                           excludeBlacksmithRewards: $excludeBlacksmithRewards,
                           wandmakerQuest: $wandmakerQuest,
@@ -207,6 +208,7 @@ private struct ContentView: View {
         .onChange(of: autoApplyTrinket) { save() }
         .onChange(of: arcaneResin) { save() }
         .onChange(of: arcaneResinAuto) { save() }
+        .onChange(of: floorRequirements) { save() }
         .onChange(of: arcaneResinFilter) { save() }
         .onChange(of: requireBlacksmith) { save() }
         .onChange(of: excludeBlacksmithRewards) { save() }
@@ -266,7 +268,7 @@ private struct ContentView: View {
         try SearchRequest(requirements: requirements, maximumDepth: maximumDepth,
                           requireBlacksmith: requireBlacksmith,
                           excludeBlacksmithRewards: excludeBlacksmithRewards,
-                          wandmakerQuest: wandmakerQuest, challenges: challenges, autoApplyTrinket: autoApplyTrinket, arcaneResin: arcaneResin, arcaneResinFilter: arcaneResinFilter, arcaneResinAuto: arcaneResinAuto)
+                          wandmakerQuest: wandmakerQuest, challenges: challenges, autoApplyTrinket: autoApplyTrinket, arcaneResin: arcaneResin, arcaneResinFilter: arcaneResinFilter, arcaneResinAuto: arcaneResinAuto, floorRequirements: floorRequirements)
     }
 
     /// Where the scouted seed sits in the search results, or nil when it did
@@ -337,7 +339,7 @@ private struct ContentView: View {
             maximumDepth: maximumDepth, requireBlacksmith: requireBlacksmith,
             excludeBlacksmithRewards: excludeBlacksmithRewards,
             wandmakerQuest: wandmakerQuest,
-            challenges: challenges, autoApplyTrinket: autoApplyTrinket, arcaneResin: arcaneResin, arcaneResinFilter: arcaneResinFilter, arcaneResinAuto: arcaneResinAuto)) ?? ""
+            challenges: challenges, autoApplyTrinket: autoApplyTrinket, arcaneResin: arcaneResin, arcaneResinFilter: arcaneResinFilter, arcaneResinAuto: arcaneResinAuto, floorRequirements: floorRequirements)) ?? ""
     }
 
     private func apply(_ preset: QueryPreset) { apply(preset.query) }
@@ -348,6 +350,7 @@ private struct ContentView: View {
             copy.key = Int64.random(in: 1...Int64.max)
             return copy
         }
+        floorRequirements = saved.floorRequirements
         autoApplyTrinket = saved.autoApplyTrinket
         arcaneResinAuto = saved.arcaneResinAuto; arcaneResin = saved.arcaneResin; arcaneResinFilter = saved.arcaneResinFilter
         maximumDepth = saved.maximumDepth
@@ -392,7 +395,7 @@ private struct ContentView: View {
                 requirements: requirements, maximumDepth: maximumDepth,
                 requireBlacksmith: requireBlacksmith,
                 excludeBlacksmithRewards: excludeBlacksmithRewards,
-                wandmakerQuest: wandmakerQuest, challenges: challenges, autoApplyTrinket: autoApplyTrinket, arcaneResin: arcaneResin, arcaneResinFilter: arcaneResinFilter, arcaneResinAuto: arcaneResinAuto))
+                wandmakerQuest: wandmakerQuest, challenges: challenges, autoApplyTrinket: autoApplyTrinket, arcaneResin: arcaneResin, arcaneResinFilter: arcaneResinFilter, arcaneResinAuto: arcaneResinAuto, floorRequirements: floorRequirements))
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(link, forType: .string)
             // Brief checkmark in the toolbar icon as the "copied" feedback.
@@ -458,7 +461,7 @@ private struct ContentView: View {
         let query = SavedQuery(requirements: requirements, maximumDepth: maximumDepth,
                                requireBlacksmith: requireBlacksmith,
                                excludeBlacksmithRewards: excludeBlacksmithRewards,
-                               wandmakerQuest: wandmakerQuest, challenges: challenges, autoApplyTrinket: autoApplyTrinket, arcaneResin: arcaneResin, arcaneResinFilter: arcaneResinFilter, arcaneResinAuto: arcaneResinAuto)
+                               wandmakerQuest: wandmakerQuest, challenges: challenges, autoApplyTrinket: autoApplyTrinket, arcaneResin: arcaneResin, arcaneResinFilter: arcaneResinFilter, arcaneResinAuto: arcaneResinAuto, floorRequirements: floorRequirements)
         if let index = userPresets.firstIndex(where: { $0.name.localizedCaseInsensitiveCompare(cleanName) == .orderedSame }) {
             userPresets[index].query = query
         } else {
@@ -556,6 +559,7 @@ private struct EditorResult {
 
 private struct QueryView: View {
     @Binding var requirements: [ItemRequirement]
+    @Binding var floorRequirements: [FloorRequirement]
     @Binding var maximumDepth: Int
     @Binding var autoApplyTrinket: Bool
     @Binding var arcaneResin: Int
@@ -589,6 +593,7 @@ private struct QueryView: View {
                     requirementBoard
                     blanketBoard
                     settings
+                    farmingFloors
                 }
                 .padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 16)
             }
@@ -671,7 +676,7 @@ private struct QueryView: View {
     /// Why the query cannot be searched as it stands (a combined-level
     /// group that no longer adds up, say), or nil when it can.
     private var requestError: String? {
-        guard !requirements.isEmpty || (arcaneResinAuto || arcaneResin > 0) else { return nil }
+        guard !requirements.isEmpty || !floorRequirements.isEmpty || (arcaneResinAuto || arcaneResin > 0) else { return nil }
         do { _ = try buildRequest(); return nil } catch {
             return (error as? LocalizedError)?.errorDescription ?? "The query cannot be searched"
         }
@@ -681,7 +686,7 @@ private struct QueryView: View {
         try SearchRequest(requirements: requirements, maximumDepth: maximumDepth,
                           requireBlacksmith: requireBlacksmith,
                           excludeBlacksmithRewards: excludeBlacksmithRewards,
-                          wandmakerQuest: wandmakerQuest, challenges: challenges, autoApplyTrinket: autoApplyTrinket, arcaneResin: arcaneResin, arcaneResinFilter: arcaneResinFilter, arcaneResinAuto: arcaneResinAuto)
+                          wandmakerQuest: wandmakerQuest, challenges: challenges, autoApplyTrinket: autoApplyTrinket, arcaneResin: arcaneResin, arcaneResinFilter: arcaneResinFilter, arcaneResinAuto: arcaneResinAuto, floorRequirements: floorRequirements)
     }
 
     private var presets: some View {
@@ -735,7 +740,7 @@ private struct QueryView: View {
             RequirementBoardView(requirements: $requirements, arcaneResin: $arcaneResin,
                                  arcaneResinFilter: $arcaneResinFilter, arcaneResinAuto: $arcaneResinAuto, onEdit: openEditor,
                                  onEditResin: openResinEditor, onAdd: { addRequirement() })
-            if !requirements.contains(where: { !$0.blanket }) && arcaneResin == 0 && !arcaneResinAuto {
+            if !requirements.contains(where: { !$0.blanket }) && arcaneResin == 0 && !arcaneResinAuto && floorRequirements.isEmpty {
                 Text("No requirements yet. Add one to describe the item you're hunting for.")
                     .font(.callout).foregroundStyle(.secondary)
             }
@@ -763,6 +768,40 @@ private struct QueryView: View {
                         .frame(width: 320).padding()
                 }
             }
+        }
+    }
+
+    private var farmingFloors: some View {
+        DisclosureGroup("Rooms and feelings" + (floorRequirements.isEmpty ? "" : " (\(floorRequirements.count))")) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Ring of Wealth farming floors").font(.subheadline)
+                    Image(systemName: "info.circle")
+                        .help("Dark floor with a garden.")
+                        .accessibilityLabel("Dark floor with a garden.")
+                }
+                HStack {
+                    ForEach(FloorRequirement.farmingFloors, id: \.self) { depth in
+                        Toggle("Floor \(depth)", isOn: Binding(
+                            get: { floorRequirements.contains { $0.depth == depth && $0.isFarming } },
+                            set: { _ in
+                                var query = SavedQuery(maximumDepth: maximumDepth, floorRequirements: floorRequirements)
+                                query.toggleFarmingFloor(depth)
+                                floorRequirements = query.floorRequirements
+                                maximumDepth = query.maximumDepth
+                            }))
+                            .toggleStyle(.button)
+                    }
+                }
+                ForEach(floorRequirements.filter { !$0.isFarming }, id: \.depth) { floor in
+                    HStack {
+                        Text(floor.summary).font(.caption)
+                        Spacer()
+                        Button("Remove") { floorRequirements.removeAll { $0.depth == floor.depth } }
+                            .accessibilityLabel("Remove floor \(floor.depth) requirement")
+                    }
+                }
+            }.padding(.top, 8)
         }
     }
 

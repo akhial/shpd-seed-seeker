@@ -100,6 +100,15 @@ public static class ResultsExport
             : new JsonObject { ["any_of"] = new JsonArray([.. slot.Select(member => (JsonNode)EncodeRequirement(member))]) });
         var output = new JsonObject { ["requirements"] = new JsonArray([.. entries]) };
         if (query.MaximumDepth != 24) output["max_depth"] = query.MaximumDepth;
+        if (query.FloorRequirements.Count > 0)
+            output["floor_requirements"] = new JsonArray([.. query.FloorRequirements.Select(floor =>
+            {
+                var value = new JsonObject { ["depth"] = floor.Depth };
+                if (floor.Feeling is not null) value["feeling"] = floor.Feeling;
+                if (floor.Rooms.Length > 0) value["rooms"] = new JsonArray([.. floor.Rooms.Select(room => (JsonNode)room)]);
+                if (floor.AnyRooms.Length > 0) value["any_rooms"] = new JsonArray([.. floor.AnyRooms.Select(room => (JsonNode)room)]);
+                return (JsonNode)value;
+            })]);
         if (query.ArcaneResinAuto) output["arcane_resin"] = "auto";
         else if (query.ArcaneResin > 0) output["arcane_resin"] = query.ArcaneResin;
         if (query.ArcaneResinFilter != new ArcaneResinFilter())
@@ -200,6 +209,17 @@ public static class ResultsExport
             ArcaneResinFilter = new ArcaneResinFilter(
                 !filter.ContainsKey("uncursed") || BoolField(filter, "uncursed"),
                 IntField(filter, "max_depth"), sourceIndex < 0 ? null : (ScoutItemSource)sourceIndex),
+            FloorRequirements = (value["floor_requirements"] as JsonArray ?? []).Select(entry =>
+            {
+                var floor = entry!.AsObject();
+                return new FloorRequirement
+                {
+                    Depth = floor["depth"]!.GetValue<int>(),
+                    Feeling = floor["feeling"]?.GetValue<string>(),
+                    Rooms = (floor["rooms"] as JsonArray ?? []).Select(room => room!.GetValue<string>()).ToArray(),
+                    AnyRooms = (floor["any_rooms"] as JsonArray ?? []).Select(room => room!.GetValue<string>()).ToArray(),
+                };
+            }).ToList(),
             Requirements = requirements,
             MaximumDepth = IntField(value, "max_depth") ?? 24,
             AutoApplyTrinket = BoolField(value, "auto_apply_trinket"),

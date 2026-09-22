@@ -245,6 +245,7 @@ public enum ModelValidationError: Error, Equatable, LocalizedError {
     case levelSumMismatch(group: Int)
     case levelSumUnattainable(group: Int, needed: Int, maximum: Int)
     case arcaneResin
+    case floorRequirements
     case emptyRequirements, maximumDepth, challenges, blanketStack, mixedBlanketAlternatives
     public var errorDescription: String? {
         switch self {
@@ -267,8 +268,9 @@ public enum ModelValidationError: Error, Equatable, LocalizedError {
             "Combined level group \(groupLetter(group)) must share one total across its items"
         case .levelSumUnattainable(let group, let needed, let maximum):
             "Combined level group \(groupLetter(group)) needs \(needed) levels but its items can reach at most \(maximum)"
+        case .floorRequirements: "Choose distinct regular floors within the floor limit, with a feeling or room requirement"
         case .arcaneResin: "Arcane Resin must be 0..65535, with a wand floor from 1 through 24"
-        case .emptyRequirements: "Blanket requirements need at least one ordinary item; otherwise add an item or Arcane Resin"
+        case .emptyRequirements: "Blanket requirements need at least one ordinary item; otherwise add an item, Arcane Resin, or a farming floor"
         case .blanketStack: "A blanket cannot request extra copies, combined levels, or trinket selection"
         case .mixedBlanketAlternatives: "An either/or group cannot mix ordinary and blanket requirements"
         case .maximumDepth: "Maximum floor must be 1..\(SearchLimits.maxDepth)"
@@ -661,10 +663,11 @@ public struct ArcaneResinFilter: Codable, Hashable, Sendable {
 }
 
 public struct SearchRequest: Codable, Sendable {
+    public var floorRequirements: [FloorRequirement]
     public var arcaneResin: Int
     public var arcaneResinAuto: Bool
     public var arcaneResinFilter: ArcaneResinFilter
-    public var slotCount: Int { requirements.slotCount + (arcaneResinAuto || arcaneResin > 0 ? 1 : 0) }
+    public var slotCount: Int { requirements.slotCount + floorRequirements.count + (arcaneResinAuto || arcaneResin > 0 ? 1 : 0) }
     public var requirements: [ItemRequirement]
     public var autoApplyTrinket: Bool
     public var maximumDepth: Int
@@ -679,11 +682,13 @@ public struct SearchRequest: Codable, Sendable {
                 requireBlacksmith: Bool = false, excludeBlacksmithRewards: Bool = false,
                 wandmakerQuest: WandmakerQuest? = nil,
                 challenges: Int = 0, autoApplyTrinket: Bool = false,
-                arcaneResin: Int = 0, arcaneResinFilter: ArcaneResinFilter = .init(), arcaneResinAuto: Bool = false) throws {
+                arcaneResin: Int = 0, arcaneResinFilter: ArcaneResinFilter = .init(), arcaneResinAuto: Bool = false, floorRequirements: [FloorRequirement] = []) throws {
         guard (0...65535).contains(arcaneResin), arcaneResinFilter.isValid else { throw ModelValidationError.arcaneResin }
-        guard requirements.contains(where: { !$0.blanket }) || (requirements.isEmpty && (arcaneResinAuto || arcaneResin > 0)) else { throw ModelValidationError.emptyRequirements }
+        guard requirements.contains(where: { !$0.blanket }) || (requirements.isEmpty && (arcaneResinAuto || arcaneResin > 0 || !floorRequirements.isEmpty)) else { throw ModelValidationError.emptyRequirements }
         guard (1...SearchLimits.maxDepth).contains(maximumDepth) else { throw ModelValidationError.maximumDepth }
         guard (0...SearchLimits.challengeMask).contains(challenges) else { throw ModelValidationError.challenges }
+        guard floorRequirements.allSatisfy({ $0.isValid && $0.depth <= maximumDepth }),
+              Set(floorRequirements.map(\.depth)).count == floorRequirements.count else { throw ModelValidationError.floorRequirements }
         try requirements.validateGroups()
         self.requirements = requirements; self.maximumDepth = maximumDepth
         self.requireBlacksmith = requireBlacksmith
@@ -691,6 +696,7 @@ public struct SearchRequest: Codable, Sendable {
         self.wandmakerQuest = wandmakerQuest
         self.challenges = challenges
         self.autoApplyTrinket = autoApplyTrinket
+        self.floorRequirements = floorRequirements
         self.arcaneResinAuto = arcaneResinAuto
         self.arcaneResin = arcaneResin; self.arcaneResinFilter = arcaneResinFilter
     }

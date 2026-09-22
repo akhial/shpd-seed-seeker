@@ -1,6 +1,7 @@
 # Automatically choosing one trinket
 
-The **Search scope → AutoTrinket** option in web, Android, Linux, macOS and Windows is on by default for new queries
+The **AutoTrinket** option (**Search settings → Quests and items** on Android;
+**Search scope** on web, Linux, macOS and Windows) is on by default for new queries
 and built-in presets. Saved queries, shared links and imports retain their
 recorded setting, including the legacy off default when the flag is absent.
 It asks the engine to select a helpful trinket from the seed's four initial catalyst offers

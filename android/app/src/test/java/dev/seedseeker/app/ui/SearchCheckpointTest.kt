@@ -25,6 +25,8 @@ class SearchCheckpointTest {
     @get:Rule val temporary = TemporaryFolder()
     init { PackagedCatalog.install() }
     private val request = SearchRequest(listOf(ItemRequirement(1, ItemCatalog.wands.first(), 1)), autoApplyTrinket = true, arcaneResin = 6,
+        floorRequirements = listOf(dev.seedseeker.app.model.FloorRequirement(7, dev.seedseeker.app.model.FloorFeeling.DARK,
+            anyRooms = listOf("garden", "secret_garden"))),
         arcaneResinFilter = dev.seedseeker.app.model.ArcaneResinFilter(false, 12, dev.seedseeker.app.model.ScoutItemSource.WANDMAKER_REWARD))
     private val results = List(1_200) { SeedResult("seed-$it", 1, if (it % 2 == 0) "mossy_clump" else null) }
 

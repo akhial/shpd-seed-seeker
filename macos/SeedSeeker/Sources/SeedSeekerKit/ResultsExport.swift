@@ -120,6 +120,7 @@ public enum ResultsExport {
             slot.count == 1 ? encodeRequirement(slot[0]) : ["any_of": slot.map(encodeRequirement)]
         }
         var output: [String: Any] = ["requirements": entries]
+        if !query.floorRequirements.isEmpty { output["floor_requirements"] = query.floorRequirements.map(\.document) }
         if query.arcaneResinAuto { output["arcane_resin"] = "auto" }
         else if query.arcaneResin > 0 { output["arcane_resin"] = query.arcaneResin }
         if query.arcaneResinFilter != ArcaneResinFilter() {
@@ -226,6 +227,8 @@ public enum ResultsExport {
         let resinFilter = ArcaneResinFilter(uncursed: filter["uncursed"] as? Bool ?? true,
             maximumDepth: intField(filter, "max_depth"),
             source: (filter["source"] as? String).flatMap { sourceNames.firstIndex(of: $0) }.flatMap(ScoutItemSource.init(rawValue:)))
+        let floors = try JSONDecoder().decode([FloorRequirement].self, from:
+            JSONSerialization.data(withJSONObject: value["floor_requirements"] ?? []))
         return SavedQuery(
             requirements: requirements,
             maximumDepth: intField(value, "max_depth") ?? 24,
@@ -233,7 +236,7 @@ public enum ResultsExport {
             excludeBlacksmithRewards: boolField(value, "exclude_blacksmith_rewards"),
             wandmakerQuest: wandmakerQuest,
             challenges: challenges, autoApplyTrinket: boolField(value, "auto_apply_trinket"),
-            arcaneResin: intField(value, "arcane_resin") ?? 0, arcaneResinFilter: resinFilter, arcaneResinAuto: value["arcane_resin"] as? String == "auto")
+            arcaneResin: intField(value, "arcane_resin") ?? 0, arcaneResinFilter: resinFilter, arcaneResinAuto: value["arcane_resin"] as? String == "auto", floorRequirements: floors)
     }
 
     private static func decodeRequirement(_ entry: [String: Any], key: Int64,
@@ -338,7 +341,7 @@ public enum QueryDocument {
             requireBlacksmith: request.requireBlacksmith,
             excludeBlacksmithRewards: request.excludeBlacksmithRewards,
             wandmakerQuest: request.wandmakerQuest,
-            challenges: request.challenges, autoApplyTrinket: request.autoApplyTrinket, arcaneResin: request.arcaneResin, arcaneResinFilter: request.arcaneResinFilter, arcaneResinAuto: request.arcaneResinAuto))
+            challenges: request.challenges, autoApplyTrinket: request.autoApplyTrinket, arcaneResin: request.arcaneResin, arcaneResinFilter: request.arcaneResinFilter, arcaneResinAuto: request.arcaneResinAuto, floorRequirements: request.floorRequirements))
     }
 
     /// UTF-8 JSON bytes of the document, keys sorted so equal queries encode

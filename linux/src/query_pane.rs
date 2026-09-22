@@ -21,8 +21,8 @@ use shpd_seedfinder_session::available_workers;
 
 use crate::relations::{BoardItem, STACK_MAX};
 use crate::state::{
-    AppState, UiRequirement, effect_label, floor_limit_skip_target, kind_icon,
-    wandmaker_quest_label,
+    AppState, FARMING_FLOORS, UiRequirement, effect_label, floor_limit_skip_target,
+    is_farming_requirement, kind_icon, wandmaker_quest_label,
 };
 use crate::{glow, sprites};
 
@@ -56,18 +56,29 @@ pub fn skip_empty_boss_floors(row: &adw::SpinRow) {
 /// names rows by their session key, which survives the list moving under it.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BoardAction {
+    ToggleFarmingFloor(u8),
+    RemoveFloorRequirement(u8),
     /// Open the editor on the row.
     Edit(u64),
     /// Make `source` an either/or alternative of `target`.
-    Join { source: u64, target: u64 },
+    Join {
+        source: u64,
+        target: u64,
+    },
     /// Pull the row out of its cluster.
     Detach(u64),
     /// Delete the row: a cluster member alone, a lone chip with its stack.
     Remove(u64),
     /// Ask the row's board entry for `count` items.
-    Count { key: u64, count: usize },
+    Count {
+        key: u64,
+        count: usize,
+    },
     /// Set or clear the entry's combined level.
-    Total { key: u64, total: Option<u8> },
+    Total {
+        key: u64,
+        total: Option<u8>,
+    },
 }
 
 /// What the window does with one board gesture.
@@ -103,6 +114,9 @@ pub struct QueryPane {
     /// never rebuilds the board out from under the pointer.
     stack_target: Cell<Option<(u64, StackField)>>,
     stack_opened_on: Cell<f64>,
+    farming_buttons: Vec<(u8, gtk::ToggleButton)>,
+    other_floors: gtk::Box,
+    rooms_expander: adw::ExpanderRow,
     depth_row: adw::SpinRow,
     auto_trinket_row: adw::SwitchRow,
     blacksmith_row: adw::SwitchRow,
@@ -281,6 +295,37 @@ impl QueryPane {
             .build();
         performance_group.add(&workers_row);
 
+        let rooms_expander = adw::ExpanderRow::builder()
+            .title("Rooms and feelings")
+            .build();
+        let farming_row = adw::ActionRow::builder()
+            .title("Ring of Wealth farming floors")
+            .subtitle("Dark floor with a garden.")
+            .build();
+        rooms_expander.add_row(&farming_row);
+        let choices = gtk::Box::builder()
+            .spacing(8)
+            .margin_start(12)
+            .margin_end(12)
+            .margin_bottom(12)
+            .build();
+        let farming_buttons = FARMING_FLOORS
+            .into_iter()
+            .map(|depth| {
+                let button = gtk::ToggleButton::with_label(&format!("Floor {depth}"));
+                choices.append(&button);
+                (depth, button)
+            })
+            .collect::<Vec<_>>();
+        rooms_expander.add_row(&choices);
+        let other_floors = gtk::Box::builder()
+            .orientation(gtk::Orientation::Vertical)
+            .spacing(6)
+            .build();
+        rooms_expander.add_row(&other_floors);
+        let rooms_group = adw::PreferencesGroup::new();
+        rooms_group.add(&rooms_expander);
+
         let preferences_page = adw::PreferencesPage::new();
         preferences_page.add(&presets_group);
         preferences_page.add(&requirements_group);
@@ -288,6 +333,7 @@ impl QueryPane {
         preferences_page.add(&scope_group);
         preferences_page.add(&wandmaker_group);
         preferences_page.add(&blacksmith_group);
+        preferences_page.add(&rooms_group);
         preferences_page.add(&performance_group);
 
         let challenges_button = gtk::Button::builder()
@@ -355,6 +401,9 @@ impl QueryPane {
             stack_spin,
             stack_target: Cell::new(None),
             stack_opened_on: Cell::new(1.0),
+            farming_buttons,
+            other_floors,
+            rooms_expander,
             depth_row,
             auto_trinket_row,
             blacksmith_row,
@@ -401,6 +450,15 @@ impl QueryPane {
             }),
         );
 
+        for (depth, button) in &pane.farming_buttons {
+            let pane = Rc::clone(&pane);
+            let depth = *depth;
+            button.connect_toggled(move |_| {
+                if !pane.updating.get() {
+                    pane.emit(BoardAction::ToggleFarmingFloor(depth));
+                }
+            });
+        }
         skip_empty_boss_floors(&pane.depth_row);
         pane.depth_row.connect_value_notify({
             let pane = Rc::clone(&pane);
@@ -506,6 +564,63 @@ impl QueryPane {
                 .wandmaker_quest
                 .map_or(0, |variant| u32::from(variant.wire_id())),
         );
+        for (depth, button) in &self.farming_buttons {
+            button.set_active(
+                state
+                    .floor_requirements
+                    .iter()
+                    .any(|floor| floor.depth == *depth && is_farming_requirement(floor)),
+            );
+        }
+        self.rooms_expander
+            .set_title(&if state.floor_requirements.is_empty() {
+                "Rooms and feelings".to_owned()
+            } else {
+                format!("Rooms and feelings ({})", state.floor_requirements.len())
+            });
+        while let Some(child) = self.other_floors.first_child() {
+            self.other_floors.remove(&child);
+        }
+        for floor in state
+            .floor_requirements
+            .iter()
+            .filter(|floor| !is_farming_requirement(floor))
+        {
+            let mut details = Vec::new();
+            if let Some(feeling) = floor.feeling {
+                details.push(format!("{feeling:?}"));
+            }
+            details.extend(
+                floor
+                    .rooms
+                    .iter()
+                    .map(|room| room.stable_id().replace('_', " ")),
+            );
+            if !floor.any_rooms.is_empty() {
+                details.push(
+                    floor
+                        .any_rooms
+                        .iter()
+                        .map(|room| room.stable_id().replace('_', " "))
+                        .collect::<Vec<_>>()
+                        .join(" / "),
+                );
+            }
+            let row = adw::ActionRow::builder()
+                .title(format!("Floor {}", floor.depth))
+                .subtitle(details.join(" · "))
+                .build();
+            let remove = gtk::Button::builder()
+                .icon_name("edit-delete-symbolic")
+                .valign(gtk::Align::Center)
+                .tooltip_text(format!("Remove floor {} requirement", floor.depth))
+                .build();
+            let pane = Rc::clone(self);
+            let depth = floor.depth;
+            remove.connect_clicked(move |_| pane.emit(BoardAction::RemoveFloorRequirement(depth)));
+            row.add_suffix(&remove);
+            self.other_floors.append(&row);
+        }
         self.rebuild_board(state);
         let enabled = state.challenges.bits().count_ones();
         self.challenges_button.set_visible(enabled > 0);

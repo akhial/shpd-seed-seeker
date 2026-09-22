@@ -113,7 +113,10 @@ pub fn present(app: &adw::Application) {
             query.refresh(&snapshot);
             detail.render(&snapshot);
             start_action.set_enabled(
-                !snapshot.requirements.is_empty() || snapshot.needs_resin() || results.is_running(),
+                !snapshot.requirements.is_empty()
+                    || !snapshot.floor_requirements.is_empty()
+                    || snapshot.needs_resin()
+                    || results.is_running(),
             );
             clear_action.set_enabled(results.can_clear());
         }
@@ -164,6 +167,10 @@ pub fn present(app: &adw::Application) {
                 let mut state = state.borrow_mut();
                 match action {
                     BoardAction::Edit(_) => {}
+                    BoardAction::ToggleFarmingFloor(depth) => state.toggle_farming_floor(depth),
+                    BoardAction::RemoveFloorRequirement(depth) => state
+                        .floor_requirements
+                        .retain(|floor| floor.depth != depth),
                     BoardAction::Join { source, target } => state.join(source, target),
                     BoardAction::Detach(key) => state.detach(key),
                     BoardAction::Remove(key) => state.remove(key),

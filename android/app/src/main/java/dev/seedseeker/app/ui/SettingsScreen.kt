@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Card
@@ -41,21 +40,14 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import dev.seedseeker.app.R
-import dev.seedseeker.app.model.Challenge
 
-/**
- * App settings: how the board draws its chips, and which challenges every
- * search and scout simulates. Challenges are frozen while a run is in
- * flight, since the run already committed to a set; appearance never is.
- */
+/** Appearance and Android preferences; query controls live in Search settings. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
     compactChips: Boolean,
     onCompactChipsChange: (Boolean) -> Unit,
-    challenges: Int,
-    challengesEnabled: Boolean,
-    onChallengeChange: (Challenge, Boolean) -> Unit,
+    onSearchSettings: () -> Unit,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -63,7 +55,7 @@ fun SettingsScreen(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
-                title = { Text("Settings") },
+                title = { Text("App settings") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -89,6 +81,9 @@ fun SettingsScreen(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
+                item {
+                    SearchSettingsLink("Floors, quests, challenges and workers", onClick = onSearchSettings)
+                }
                 item {
                     SectionHeading("Appearance")
                 }
@@ -150,38 +145,7 @@ fun SettingsScreen(
                         }
                     }
                 }
-                item {
-                    SectionHeading("Challenges", modifier = Modifier.padding(top = 14.dp))
-                    Text(
-                        "Searches simulate runs with the selected challenges enabled.",
-                        modifier = Modifier.padding(top = 4.dp, bottom = 4.dp),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                items(Challenge.entries) { challenge ->
-                    SettingCard(
-                        title = challenge.displayName,
-                        supporting = if (challenge.changesLevelGeneration) {
-                            "Changes level generation"
-                        } else {
-                            "No effect on seed content"
-                        },
-                        checked = challenges and challenge.bit != 0,
-                        enabled = challengesEnabled,
-                        onCheckedChange = { onChallengeChange(challenge, it) },
-                    )
-                }
-                if (!challengesEnabled) {
-                    item {
-                        Text(
-                            "Challenges can be changed after the current search or scout stops.",
-                            modifier = Modifier.padding(top = 4.dp),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
+
             }
         }
     }

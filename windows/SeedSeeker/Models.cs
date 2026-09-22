@@ -976,6 +976,12 @@ public static class QueryRelationships
     {
         if (query.ArcaneResin is < 0 or > 65535 || query.ArcaneResinFilter is not { IsValid: true })
             return "Arcane Resin must be 0..65535, with a valid wand floor and source.";
+        if (query.FloorRequirements.Any(floor => !floor.IsValid))
+            return "Choose a regular floor from 1 through 24 with a feeling or room requirement.";
+        if (query.FloorRequirements.Select(floor => floor.Depth).Distinct().Count() != query.FloorRequirements.Count)
+            return "Each floor can have only one requirement.";
+        if (query.FloorRequirements.FirstOrDefault(floor => floor.Depth > query.MaximumDepth) is { } outside)
+            return $"Floor {outside.Depth} exceeds the floor limit of {query.MaximumDepth}.";
         var requirements = query.Requirements;
         if (requirements.Count > 0 && requirements.All(r => r.Blanket))
             return "Add at least one ordinary requirement.";
@@ -1134,8 +1140,29 @@ public sealed record ArcaneResinFilter(bool Uncursed = true, int? MaximumDepth =
     }.OfType<string>());
 }
 
+public sealed record FloorRequirement
+{
+    public static readonly int[] FarmingFloors = [7, 17, 22];
+    public int Depth { get; init; }
+    public string? Feeling { get; init; }
+    public string[] Rooms { get; init; } = [];
+    public string[] AnyRooms { get; init; } = [];
+    [JsonIgnore]
+    public bool IsFarming => FarmingFloors.Contains(Depth) && Feeling == "dark" && Rooms.Length == 0 &&
+        AnyRooms.Length == 2 && AnyRooms.Contains("garden") && AnyRooms.Contains("secret_garden");
+    [JsonIgnore]
+    public bool IsValid => Depth is >= 1 and <= 24 && Depth % 5 != 0 &&
+        (Feeling is null or "none" or "chasm" or "water" or "grass" or "dark" or "large" or "traps" or "secrets") &&
+        (Feeling is not null || Rooms.Length > 0 || AnyRooms.Length > 0);
+    [JsonIgnore]
+    public string Summary => string.Join(" · ", new[] { $"Floor {Depth}", Feeling }
+        .Concat(Rooms).Append(AnyRooms.Length == 0 ? null : string.Join(" / ", AnyRooms))
+        .Where(text => !string.IsNullOrEmpty(text))).Replace('_', ' ');
+}
+
 public sealed class QuerySettings
 {
+    public List<FloorRequirement> FloorRequirements { get; set; } = [];
     public ObservableCollection<ItemRequirement> Requirements { get; set; } = [];
     public int MaximumDepth { get; set; } = SearchLimits.MaxDepth;
     public bool AutoApplyTrinket { get; set; }
@@ -1145,16 +1172,30 @@ public sealed class QuerySettings
     public bool NeedsResin => ArcaneResinAuto || ArcaneResin > 0;
     public ArcaneResinFilter ArcaneResinFilter { get; set; } = new();
     [System.Text.Json.Serialization.JsonIgnore]
-    public bool HasRequirements => Requirements.Count > 0 || NeedsResin;
+    public bool HasRequirements => Requirements.Count > 0 || NeedsResin || FloorRequirements.Count > 0;
     [System.Text.Json.Serialization.JsonIgnore]
-    public int SlotCount => QueryRelationships.SlotCount(Requirements) + (NeedsResin ? 1 : 0);
+    public int SlotCount => QueryRelationships.SlotCount(Requirements) + FloorRequirements.Count + (NeedsResin ? 1 : 0);
     public bool RequireBlacksmith { get; set; }
     public bool ExcludeBlacksmithRewards { get; set; }
     public WandmakerQuest WandmakerQuest { get; set; } = WandmakerQuest.Any;
     public int Challenges { get; set; }
 
+    public void ToggleFarmingFloor(int depth)
+    {
+        if (!FloorRequirement.FarmingFloors.Contains(depth)) throw new ArgumentOutOfRangeException(nameof(depth));
+        var selected = FloorRequirements.Any(floor => floor.Depth == depth && floor.IsFarming);
+        FloorRequirements.RemoveAll(floor => floor.Depth == depth);
+        if (!selected)
+        {
+            FloorRequirements.Add(new() { Depth = depth, Feeling = "dark", AnyRooms = ["garden", "secret_garden"] });
+            MaximumDepth = Math.Max(MaximumDepth, depth);
+        }
+        FloorRequirements.Sort((left, right) => left.Depth.CompareTo(right.Depth));
+    }
+
     public QuerySettings Clone() => new()
     {
+        FloorRequirements = FloorRequirements.Select(floor => floor with { Rooms = [.. floor.Rooms], AnyRooms = [.. floor.AnyRooms] }).ToList(),
         Requirements = new ObservableCollection<ItemRequirement>(Requirements.Select(x => x.Clone())),
         MaximumDepth = MaximumDepth,
         AutoApplyTrinket = AutoApplyTrinket,

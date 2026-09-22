@@ -292,10 +292,41 @@ public sealed partial class MainWindow : Window
     }
     private void RefreshQuery()
     {
-        BuildBoard(); NoRequirements.Visibility = !query.Requirements.Any(r => !r.Blanket) && !query.NeedsResin ? Visibility.Visible : Visibility.Collapsed;
+        BuildFarmingFloors();
+        BuildBoard(); NoRequirements.Visibility = !query.Requirements.Any(r => !r.Blanket) && !query.NeedsResin && query.FloorRequirements.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         FloorLabel.Text = $"first {query.MaximumDepth} floor{(query.MaximumDepth == 1 ? "" : "s")}"; RequireBlacksmith.IsEnabled = query.MaximumDepth < ScoutQuests.Window(QuestGiver.Blacksmith).Last; StartButton.IsEnabled = search is not null || (!busy && query.HasRequirements); CopyLinkButton.IsEnabled = !searchRunning && query.HasRequirements;
         var count = BitOperations.PopCount((uint)query.Challenges); ChallengeSummary.Text = count == 0 ? "None" : $"{count} enabled";
     }
+    private void BuildFarmingFloors()
+    {
+        RoomsExpander.Header = "Rooms and feelings" + (query.FloorRequirements.Count == 0 ? "" : $" ({query.FloorRequirements.Count})");
+        FarmingFloorButtons.Children.Clear(); OtherFloorRequirements.Children.Clear();
+        foreach (var depth in FloorRequirement.FarmingFloors)
+        {
+            var button = new Microsoft.UI.Xaml.Controls.Primitives.ToggleButton
+            {
+                Content = $"Floor {depth}",
+                IsChecked = query.FloorRequirements.Any(floor => floor.Depth == depth && floor.IsFarming),
+            };
+            button.Click += (_, _) =>
+            {
+                query.ToggleFarmingFloor(depth);
+                restoring = true; FloorSlider.Value = FloorLimits.IndexOf(query.MaximumDepth); restoring = false;
+                RefreshQuery(); SaveSettings();
+            };
+            FarmingFloorButtons.Children.Add(button);
+        }
+        foreach (var floor in query.FloorRequirements.Where(floor => !floor.IsFarming))
+        {
+            var row = new StackPanel { Spacing = 4 };
+            row.Children.Add(new TextBlock { Text = floor.Summary, TextWrapping = TextWrapping.Wrap });
+            var remove = new Button { Content = "Remove" };
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(remove, $"Remove floor {floor.Depth} requirement");
+            remove.Click += (_, _) => { query.FloorRequirements.RemoveAll(entry => entry.Depth == floor.Depth); RefreshQuery(); SaveSettings(); };
+            row.Children.Add(remove); OtherFloorRequirements.Children.Add(row);
+        }
+    }
+
     private void FloorSlider_ValueChanged(object sender, Microsoft.UI.Xaml.Controls.Primitives.RangeBaseValueChangedEventArgs e) { if (restoring || FloorLabel is null) return; query.MaximumDepth = FloorLimits.Options[Math.Clamp((int)e.NewValue, 0, FloorLimits.Options.Length - 1)]; RefreshQuery(); SaveSettings(); }
     /// <summary>
     /// Two setting cards to a row while each can be at least this wide; below

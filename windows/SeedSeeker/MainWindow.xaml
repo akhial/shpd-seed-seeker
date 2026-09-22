@@ -173,6 +173,14 @@
                 </Border>
               </Grid>
             </Grid>
+            <Expander x:Name="RoomsExpander" Header="Rooms and feelings" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+              <StackPanel Spacing="8">
+                <TextBlock Text="Ring of Wealth farming floors" TextWrapping="Wrap"
+                           ToolTipService.ToolTip="Dark floor with a garden."/>
+                <local:WrapPanel x:Name="FarmingFloorButtons" Spacing="8" LineSpacing="8"/>
+                <StackPanel x:Name="OtherFloorRequirements" Spacing="8"/>
+              </StackPanel>
+            </Expander>
 
             <TextBlock Text="Challenges" Style="{StaticResource SectionHeader}"/>
             <Button Style="{StaticResource CardButton}" Click="Challenges_Click">

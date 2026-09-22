@@ -45,11 +45,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -67,29 +65,23 @@ import dev.seedseeker.app.catalog.ItemCatalog
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.toClipEntry
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import dev.seedseeker.app.model.FLOOR_LIMIT_OPTIONS
 import dev.seedseeker.app.model.ItemRequirement
 import dev.seedseeker.app.model.QueryPreset
-import dev.seedseeker.app.model.ScoutQuestGiver
 import dev.seedseeker.app.model.SearchState
+import dev.seedseeker.app.model.FloorRequirement
 import dev.seedseeker.app.model.ArcaneResinFilter
 import dev.seedseeker.app.model.SearchStatus
 import dev.seedseeker.app.model.SeedResult
 import dev.seedseeker.app.model.WandmakerQuest
-import dev.seedseeker.app.model.floorLimitIndex
 import dev.seedseeker.app.model.BoardItem
 import dev.seedseeker.app.model.boardCount
 import dev.seedseeker.app.model.boardItems
-import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -98,6 +90,7 @@ fun FinderScreen(
     requirements: List<ItemRequirement>,
     maximumDepth: Int,
     autoApplyTrinket: Boolean,
+    floorRequirements: List<FloorRequirement>,
     arcaneResin: Int,
     arcaneResinAuto: Boolean = false,
     arcaneResinFilter: dev.seedseeker.app.model.ArcaneResinFilter,
@@ -105,10 +98,6 @@ fun FinderScreen(
     excludeBlacksmithRewards: Boolean,
     wandmakerQuest: WandmakerQuest?,
     challenges: Int,
-    /** Search threads to spawn: a device setting, not part of the query. */
-    workerCount: Int,
-    /** Cores this device offers; the selector hides itself when there is one. */
-    workerCeiling: Int,
     presets: List<QueryPreset>,
     /** Draw the board's chips at their smaller size. */
     compactChips: Boolean,
@@ -125,6 +114,7 @@ fun FinderScreen(
     snackbarHostState: SnackbarHostState,
     onAbout: () -> Unit,
     onSettings: () -> Unit,
+    onSearchSettings: () -> Unit,
     onApplyPreset: (QueryPreset) -> Unit,
     onSavePreset: (String) -> Unit,
     onDeletePreset: (QueryPreset) -> Unit,
@@ -134,12 +124,6 @@ fun FinderScreen(
     onEdit: (BoardItem, Int) -> Unit,
     onRequirementsChange: (List<ItemRequirement>) -> Unit,
     onRemove: (BoardItem) -> Unit,
-    onMaximumDepthChange: (Int) -> Unit,
-    onAutoApplyTrinketChange: (Boolean) -> Unit,
-    onRequireBlacksmithChange: (Boolean) -> Unit,
-    onExcludeBlacksmithRewardsChange: (Boolean) -> Unit,
-    onWandmakerQuestChange: (WandmakerQuest?) -> Unit,
-    onWorkerCountChange: (Int) -> Unit,
     /** Why the query cannot run yet, shown in the header; null when it is runnable. */
     validationMessage: String?,
     onSearch: () -> Unit,
@@ -170,7 +154,7 @@ fun FinderScreen(
     // outlives the run by a frame, so the last batch of a finishing search,
     // which may land in the same frame as the run ending, is covered too.
     var runOwnsResults by remember { mutableStateOf(false) }
-    LaunchedEffect(requirements, arcaneResin, arcaneResinAuto, arcaneResinFilter) { showResults = false }
+    LaunchedEffect(requirements, arcaneResin, arcaneResinAuto, arcaneResinFilter, floorRequirements) { showResults = false }
     LaunchedEffect(results) { if (results.isNotEmpty() && !runOwnsResults) showResults = true }
     LaunchedEffect(isSearching) {
         if (isSearching) {
@@ -206,7 +190,7 @@ fun FinderScreen(
                         ) {
                             DropdownMenuItem(
                                 text = { Text("Share search…") },
-                                enabled = requirements.isNotEmpty() || (arcaneResinAuto || arcaneResin > 0),
+                                enabled = requirements.isNotEmpty() || floorRequirements.isNotEmpty() || (arcaneResinAuto || arcaneResin > 0),
                                 onClick = {
                                     showOverflowMenu = false
                                     onShareQuery()
@@ -285,6 +269,7 @@ fun FinderScreen(
                 )
                 if (!showResults) {
                     QueryPage(
+                        floorRequirements = floorRequirements,
                         requirements = requirements,
                         maximumDepth = maximumDepth,
                         autoApplyTrinket = autoApplyTrinket,
@@ -295,8 +280,6 @@ fun FinderScreen(
                         excludeBlacksmithRewards = excludeBlacksmithRewards,
                         wandmakerQuest = wandmakerQuest,
                         challenges = challenges,
-                        workerCount = workerCount,
-                        workerCeiling = workerCeiling,
                         isSearching = isSearching,
                         validationMessage = validationMessage,
                         compactChips = compactChips,
@@ -306,13 +289,7 @@ fun FinderScreen(
                         onEdit = onEdit,
                         onRequirementsChange = onRequirementsChange,
                         onRemove = onRemove,
-                        onMaximumDepthChange = onMaximumDepthChange,
-                        onAutoApplyTrinketChange = onAutoApplyTrinketChange,
-                        onRequireBlacksmithChange = onRequireBlacksmithChange,
-                        onExcludeBlacksmithRewardsChange = onExcludeBlacksmithRewardsChange,
-                        onWandmakerQuestChange = onWandmakerQuestChange,
-                        onWorkerCountChange = onWorkerCountChange,
-                        onSettings = onSettings,
+                        onSearchSettings = onSearchSettings,
                         // Takes every line down to the closed page's header,
                         // which waits at the bottom edge above the search bar
                         // that fills it; a query taller than that scrolls.
@@ -454,12 +431,13 @@ private fun requirementsSummaryText(requirements: List<ItemRequirement>): String
         }
     }
 
-/** The query page: the board and, under it, the run's scope. */
+/** The requirement board and a summary linking to the full search settings. */
 @Composable
 private fun QueryPage(
     requirements: List<ItemRequirement>,
     maximumDepth: Int,
     autoApplyTrinket: Boolean,
+    floorRequirements: List<FloorRequirement>,
     arcaneResin: Int,
     arcaneResinAuto: Boolean = false,
     arcaneResinFilter: dev.seedseeker.app.model.ArcaneResinFilter,
@@ -467,8 +445,6 @@ private fun QueryPage(
     excludeBlacksmithRewards: Boolean,
     wandmakerQuest: WandmakerQuest?,
     challenges: Int,
-    workerCount: Int,
-    workerCeiling: Int,
     isSearching: Boolean,
     validationMessage: String?,
     compactChips: Boolean,
@@ -478,13 +454,7 @@ private fun QueryPage(
     onEdit: (BoardItem, Int) -> Unit,
     onRequirementsChange: (List<ItemRequirement>) -> Unit,
     onRemove: (BoardItem) -> Unit,
-    onMaximumDepthChange: (Int) -> Unit,
-    onAutoApplyTrinketChange: (Boolean) -> Unit,
-    onRequireBlacksmithChange: (Boolean) -> Unit,
-    onExcludeBlacksmithRewardsChange: (Boolean) -> Unit,
-    onWandmakerQuestChange: (WandmakerQuest?) -> Unit,
-    onWorkerCountChange: (Int) -> Unit,
-    onSettings: () -> Unit,
+    onSearchSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -543,7 +513,7 @@ private fun QueryPage(
                 confirmButton = { TextButton(onClick = { showBlanketHelp = false }) { Text("Got it") } },
             )
         }
-        if (validationMessage != null && (requirements.isNotEmpty() || (arcaneResinAuto || arcaneResin > 0))) {
+        if (validationMessage != null && (requirements.isNotEmpty() || floorRequirements.isNotEmpty() || (arcaneResinAuto || arcaneResin > 0))) {
             Text(
                 validationMessage,
                 style = MaterialTheme.typography.bodySmall,
@@ -552,220 +522,15 @@ private fun QueryPage(
             )
         }
         Spacer(Modifier.height(4.dp))
-        ScopeSection(
-            maximumDepth = maximumDepth,
-                        autoApplyTrinket = autoApplyTrinket,
-            requireBlacksmith = requireBlacksmith,
-            excludeBlacksmithRewards = excludeBlacksmithRewards,
-            wandmakerQuest = wandmakerQuest,
-            challenges = challenges,
-            workerCount = workerCount,
-            workerCeiling = workerCeiling,
-            enabled = !isSearching,
-            onMaximumDepthChange = onMaximumDepthChange,
-                        onAutoApplyTrinketChange = onAutoApplyTrinketChange,
-            onRequireBlacksmithChange = onRequireBlacksmithChange,
-            onExcludeBlacksmithRewardsChange = onExcludeBlacksmithRewardsChange,
-            onWandmakerQuestChange = onWandmakerQuestChange,
-            onWorkerCountChange = onWorkerCountChange,
-            onSettings = onSettings,
+        SearchSettingsLink(
+            summary = listOfNotNull(
+                scopeSummaryText(maximumDepth, requireBlacksmith, excludeBlacksmithRewards, wandmakerQuest, challenges),
+                "AutoTrinket off".takeUnless { autoApplyTrinket },
+                floorRequirements.takeIf { it.isNotEmpty() }?.joinToString(", ", prefix = "Required floors: ") { "${it.depth}" },
+            ).joinToString(" · "),
+            onClick = onSearchSettings,
         )
         Spacer(Modifier.height(6.dp))
-    }
-}
-
-/**
- * One "any of these" slot: its members stacked with OR separators. Each member
- * edits, forks and removes like a plain row; the caller collapses the card
- * back to a row once one member is left.
- */
-@Composable
-private fun ScopeSection(
-    maximumDepth: Int,
-    autoApplyTrinket: Boolean,
-    requireBlacksmith: Boolean,
-    excludeBlacksmithRewards: Boolean,
-    wandmakerQuest: WandmakerQuest?,
-    challenges: Int,
-    workerCount: Int,
-    workerCeiling: Int,
-    enabled: Boolean,
-    onMaximumDepthChange: (Int) -> Unit,
-    onAutoApplyTrinketChange: (Boolean) -> Unit,
-    onRequireBlacksmithChange: (Boolean) -> Unit,
-    onExcludeBlacksmithRewardsChange: (Boolean) -> Unit,
-    onWandmakerQuestChange: (WandmakerQuest?) -> Unit,
-    onWorkerCountChange: (Int) -> Unit,
-    onSettings: () -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
-    Column {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { expanded = !expanded }
-                .padding(vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text("Scope", style = MaterialTheme.typography.titleSmall)
-            Spacer(Modifier.width(8.dp))
-            Text(
-                scopeSummaryText(
-                    maximumDepth = maximumDepth,
-                    requireBlacksmith = requireBlacksmith,
-                    excludeBlacksmithRewards = excludeBlacksmithRewards,
-                    wandmakerQuest = wandmakerQuest,
-                    challenges = challenges,
-                ),
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Icon(
-                if (expanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
-                contentDescription = if (expanded) "Collapse scope" else "Expand scope",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        if (expanded) {
-            Column {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        "Max floor",
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Text(
-                        "$maximumDepth",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
-                // Indexes into FLOOR_LIMIT_OPTIONS so empty boss floors (5, 10, 15) are not offered.
-                Slider(
-                    value = floorLimitIndex(maximumDepth).toFloat(),
-                    onValueChange = {
-                        val index = it.roundToInt().coerceIn(0, FLOOR_LIMIT_OPTIONS.lastIndex)
-                        onMaximumDepthChange(FLOOR_LIMIT_OPTIONS[index])
-                    },
-                    valueRange = 0f..FLOOR_LIMIT_OPTIONS.lastIndex.toFloat(),
-                    steps = FLOOR_LIMIT_OPTIONS.size - 2,
-                    enabled = enabled,
-                    modifier = Modifier.semantics { stateDescription = "Floor $maximumDepth" },
-                )
-                Spacer(Modifier.height(12.dp))
-                SwitchRow(label = "AutoTrinket", supporting = "Applies a helpful trinket at +3 at the first brewing opportunity. Keeps it only when the match needs it.",
-                    checked = autoApplyTrinket, onCheckedChange = onAutoApplyTrinketChange, enabled = enabled)
-                WandmakerQuestRow(
-                    quest = wandmakerQuest,
-                    enabled = enabled,
-                    onQuestChange = onWandmakerQuestChange,
-                )
-                SwitchRow(
-                    label = "Blacksmith reachable",
-                    supporting = null,
-                    checked = requireBlacksmith,
-                    onCheckedChange = onRequireBlacksmithChange,
-                    // A run whose floor limit reaches his last floor always meets him.
-                    enabled = enabled && maximumDepth < ScoutQuestGiver.BLACKSMITH.depths.last,
-                )
-                SwitchRow(
-                    label = "Exclude smith rewards",
-                    supporting = "Items may not come from the 2,000-favor Smith trade.",
-                    checked = excludeBlacksmithRewards,
-                    onCheckedChange = onExcludeBlacksmithRewardsChange,
-                    enabled = enabled,
-                )
-                // A device setting sharing the scope panel with the query's own
-                // constraints: it is deliberately absent from the collapsed
-                // summary above, which describes the query alone.
-                WorkersRow(
-                    count = workerCount,
-                    ceiling = workerCeiling,
-                    enabled = enabled,
-                    onCountChange = onWorkerCountChange,
-                )
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable(onClick = onSettings)
-                        .padding(vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        "Challenges: ${Integer.bitCount(challenges)}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Icon(
-                        Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                    )
-                }
-            }
-        }
-    }
-}
-
-/**
- * Which Wandmaker quest a run must roll. It sits above the blacksmith
- * switches because only this giver's item is worth choosing: corpse dust, an
- * elemental ember, or a rotberry seed can be used in the dungeon instead of
- * being handed in.
- */
-@Composable
-private fun WandmakerQuestRow(
-    quest: WandmakerQuest?,
-    enabled: Boolean,
-    onQuestChange: (WandmakerQuest?) -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(enabled = enabled) { expanded = true }
-                .padding(vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                "Wandmaker quest",
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.weight(1f),
-            )
-            Text(
-                quest?.label ?: "Any",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            Icon(
-                Icons.Filled.KeyboardArrowDown,
-                contentDescription = "Choose the Wandmaker quest",
-                tint = MaterialTheme.colorScheme.primary,
-            )
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(
-                text = { Text("Any") },
-                onClick = {
-                    expanded = false
-                    onQuestChange(null)
-                },
-            )
-            WandmakerQuest.entries.forEach { option ->
-                DropdownMenuItem(
-                    text = { Text(option.label) },
-                    onClick = {
-                        expanded = false
-                        onQuestChange(option)
-                    },
-                )
-            }
-        }
     }
 }
 
@@ -866,79 +631,6 @@ private fun SearchActionBar(
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun SwitchRow(
-    label: String,
-    supporting: String?,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-    enabled: Boolean,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(label, style = MaterialTheme.typography.bodyMedium)
-            if (supporting != null) {
-                Text(
-                    supporting,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-        Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
-    }
-}
-
-/**
- * How many threads the next search spawns. The count is a device preference
- * rather than part of the query, so it is stored locally and never travels
- * with a preset, an export or a share link; the engine clamps whatever it is
- * handed, and a single-core device has nothing to choose, so the row is not
- * drawn at all there.
- */
-@Composable
-private fun WorkersRow(
-    count: Int,
-    ceiling: Int,
-    enabled: Boolean,
-    onCountChange: (Int) -> Unit,
-) {
-    if (ceiling <= 1) return
-    val shown = count.coerceIn(1, ceiling)
-    Column {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                "Workers",
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.weight(1f),
-            )
-            Text(
-                "$shown of $ceiling cores",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.primary,
-            )
-        }
-        Slider(
-            value = shown.toFloat(),
-            onValueChange = { onCountChange(it.roundToInt().coerceIn(1, ceiling)) },
-            valueRange = 1f..ceiling.toFloat(),
-            steps = ceiling - 2,
-            enabled = enabled,
-            modifier = Modifier.semantics { stateDescription = "$shown of $ceiling cores" },
-        )
-        Text(
-            "Number of search threads to spawn.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }
 
