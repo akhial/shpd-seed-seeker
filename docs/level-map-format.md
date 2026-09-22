@@ -73,6 +73,8 @@ feature `image`; custom features carry `width` and `height` in cells. Object
 kinds identify engine classes; searchable equipment uses catalog stable IDs.
 Metadata always describes the complete floor, irrespective of secret visibility.
 The scene defines the visible result; clients need not render metadata themselves.
+The Imp Vault's two `VaultBeacon` spells pulse white, fading in over one second
+and out over one second, matching `VaultBeacon.glowing()`.
 
 Shop bags use the fixed preview sequence Scroll Holder (floor 6), Potion
 Bandolier (floor 11), Magical Holster (floor 16), with `deterministic: false`
@@ -86,6 +88,9 @@ The overview follows the canonical no-remains, no-holiday profile.
 
 Water, well hearts/question marks, alchemy bubbles, sacrificial blue fire,
 eternal green fire, city statue flames, blacksmith sparks and gas have repeatable animation loops.
+Rotberry hearts emit green toxic specks every 0.7s over their raised sprite,
+matching `RotHeartSprite.link()`. Rot Lashers retain their single idle frame:
+the Java game's vine animations occur only during attacks and death.
 Fire/newborn fire, frost, shock and chaos elementals carry their original flame,
 magic, spark and rainbow effects. Gardens (including secret gardens) emit rising
 light shafts; hidden secret gardens emit nothing in the concealed scene. The

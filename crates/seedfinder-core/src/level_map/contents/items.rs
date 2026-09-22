@@ -192,7 +192,16 @@ pub(super) fn direct(kind: &str, a: &ItemAppearanceState) -> MapItem {
         "RegionLorePage$Halls" => 502,
         _ => 0,
     };
-    MapItem::new(kind, image, 1)
+    let mut item = MapItem::new(kind, image, 1);
+    // VaultBeacon.glowing(): unconditional white, using ItemSprite.Glowing's
+    // default one-second fade in (and one-second fade out).
+    if kind == "VaultBeacon" {
+        item.glow = Some(crate::level_map::MapGlow {
+            color: [255, 255, 255],
+            period_ms: 1000,
+        });
+    }
+    item
 }
 pub(super) fn paint(value: PaintItem, a: &ItemAppearanceState) -> MapItem {
     match value {
