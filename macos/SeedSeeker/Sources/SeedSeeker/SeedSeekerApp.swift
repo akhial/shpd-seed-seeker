@@ -593,7 +593,6 @@ private struct QueryView: View {
                     requirementBoard
                     blanketBoard
                     settings
-                    farmingFloors
                 }
                 .padding(.horizontal, 16).padding(.top, 10).padding(.bottom, 16)
             }
@@ -772,36 +771,35 @@ private struct QueryView: View {
     }
 
     private var farmingFloors: some View {
-        DisclosureGroup("Rooms and feelings" + (floorRequirements.isEmpty ? "" : " (\(floorRequirements.count))")) {
-            VStack(alignment: .leading, spacing: 8) {
+        SettingsGroup("Rooms and feelings") {
+            HStack {
+                Text("Ring of Wealth farming floors").font(.subheadline)
+                    .fixedSize(horizontal: false, vertical: true)
+                Image(systemName: "info.circle")
+                    .help("Dark floor with a garden.")
+                    .accessibilityLabel("Dark floor with a garden.")
+            }
+            FlowLayout(spacing: 8, lineSpacing: 8) {
+                ForEach(FloorRequirement.farmingFloors, id: \.self) { depth in
+                    Toggle("Floor \(depth)", isOn: Binding(
+                        get: { floorRequirements.contains { $0.depth == depth && $0.isFarming } },
+                        set: { _ in
+                            var query = SavedQuery(maximumDepth: maximumDepth, floorRequirements: floorRequirements)
+                            query.toggleFarmingFloor(depth)
+                            floorRequirements = query.floorRequirements
+                            maximumDepth = query.maximumDepth
+                        }))
+                        .toggleStyle(.button)
+                }
+            }
+            ForEach(floorRequirements.filter { !$0.isFarming }, id: \.depth) { floor in
                 HStack {
-                    Text("Ring of Wealth farming floors").font(.subheadline)
-                    Image(systemName: "info.circle")
-                        .help("Dark floor with a garden.")
-                        .accessibilityLabel("Dark floor with a garden.")
+                    SettingsCaption(floor.summary)
+                    Spacer()
+                    Button("Remove") { floorRequirements.removeAll { $0.depth == floor.depth } }
+                        .accessibilityLabel("Remove floor \(floor.depth) requirement")
                 }
-                HStack {
-                    ForEach(FloorRequirement.farmingFloors, id: \.self) { depth in
-                        Toggle("Floor \(depth)", isOn: Binding(
-                            get: { floorRequirements.contains { $0.depth == depth && $0.isFarming } },
-                            set: { _ in
-                                var query = SavedQuery(maximumDepth: maximumDepth, floorRequirements: floorRequirements)
-                                query.toggleFarmingFloor(depth)
-                                floorRequirements = query.floorRequirements
-                                maximumDepth = query.maximumDepth
-                            }))
-                            .toggleStyle(.button)
-                    }
-                }
-                ForEach(floorRequirements.filter { !$0.isFarming }, id: \.depth) { floor in
-                    HStack {
-                        Text(floor.summary).font(.caption)
-                        Spacer()
-                        Button("Remove") { floorRequirements.removeAll { $0.depth == floor.depth } }
-                            .accessibilityLabel("Remove floor \(floor.depth) requirement")
-                    }
-                }
-            }.padding(.top, 8)
+            }
         }
     }
 
@@ -859,6 +857,7 @@ private struct QueryView: View {
                     Toggle("Exclude Smith rewards", isOn: $excludeBlacksmithRewards)
                     SettingsCaption("Required items cannot come from the 2,000-favor Smith choice, leaving favor available for reforging.")
                 }
+                farmingFloors
             }
         }
     }

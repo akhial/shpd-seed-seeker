@@ -87,7 +87,7 @@
               </Expander.Header>
               <local:WrapPanel x:Name="BlanketBoard" Spacing="6" LineSpacing="8" MinHeight="34" Background="Transparent"/>
             </Expander>
-            <!-- The four setting sections sit two to a row while the sidebar is
+            <!-- The setting sections sit two to a row while the sidebar is
                  wide enough for it, so the wider sidebar buys less scrolling
                  rather than emptier cards; SettingsGrid_SizeChanged moves the
                  cells back into one column when it is not. Each cell is a
@@ -95,7 +95,7 @@
                  of a row share a bottom edge. -->
             <Grid x:Name="SettingsGrid" ColumnSpacing="12" SizeChanged="SettingsGrid_SizeChanged">
               <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
-              <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+              <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
 
               <Grid x:Name="ScopeCell">
                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition/></Grid.RowDefinitions>
@@ -172,15 +172,20 @@
                   </StackPanel>
                 </Border>
               </Grid>
+
+              <Grid x:Name="RoomsCell" Grid.Row="2">
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition/></Grid.RowDefinitions>
+                <TextBlock Text="Rooms and feelings" Style="{StaticResource SectionHeader}"/>
+                <Border Grid.Row="1" Style="{StaticResource SettingsCard}">
+                  <StackPanel Spacing="8">
+                    <TextBlock Text="Ring of Wealth farming floors" TextWrapping="Wrap"
+                               ToolTipService.ToolTip="Dark floor with a garden."/>
+                    <local:WrapPanel x:Name="FarmingFloorButtons" Spacing="8" LineSpacing="8"/>
+                    <StackPanel x:Name="OtherFloorRequirements" Spacing="8"/>
+                  </StackPanel>
+                </Border>
+              </Grid>
             </Grid>
-            <Expander x:Name="RoomsExpander" Header="Rooms and feelings" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
-              <StackPanel Spacing="8">
-                <TextBlock Text="Ring of Wealth farming floors" TextWrapping="Wrap"
-                           ToolTipService.ToolTip="Dark floor with a garden."/>
-                <local:WrapPanel x:Name="FarmingFloorButtons" Spacing="8" LineSpacing="8"/>
-                <StackPanel x:Name="OtherFloorRequirements" Spacing="8"/>
-              </StackPanel>
-            </Expander>
 
             <TextBlock Text="Challenges" Style="{StaticResource SectionHeader}"/>
             <Button Style="{StaticResource CardButton}" Click="Challenges_Click">

@@ -299,7 +299,6 @@ public sealed partial class MainWindow : Window
     }
     private void BuildFarmingFloors()
     {
-        RoomsExpander.Header = "Rooms and feelings" + (query.FloorRequirements.Count == 0 ? "" : $" ({query.FloorRequirements.Count})");
         FarmingFloorButtons.Children.Clear(); OtherFloorRequirements.Children.Clear();
         foreach (var depth in FloorRequirement.FarmingFloors)
         {
@@ -340,7 +339,7 @@ public sealed partial class MainWindow : Window
         var paired = (e.NewSize.Width - SettingsGrid.ColumnSpacing) / 2 >= SettingsPairMinimum;
         if (paired == settingsPaired) return;
         settingsPaired = paired;
-        FrameworkElement[] cells = [ScopeCell, WandmakerCell, BlacksmithCell, PerformanceCell];
+        FrameworkElement[] cells = [ScopeCell, WandmakerCell, BlacksmithCell, PerformanceCell, RoomsCell];
         for (var i = 0; i < cells.Length; i++)
         {
             Grid.SetRow(cells[i], paired ? i / 2 : i);
