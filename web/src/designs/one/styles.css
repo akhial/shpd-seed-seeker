@@ -1200,8 +1200,42 @@ input[type="range"]::-moz-range-thumb {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* The name belongs to the sprite beside it, so it sits closer than the tags do. */
+.d1-chip-wildcard {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 18px;
+  height: 18px;
+  color: var(--d1-upgrade);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+}
+.d1-chip-wildcard-silhouette {
+  position: absolute;
+  inset: 0;
+  filter: grayscale(1);
+  opacity: 0.3;
+}
+.d1-chip-wildcard-mark {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  background: radial-gradient(
+    circle closest-side,
+    rgba(0, 0, 0, 0.4),
+    rgba(0, 0, 0, 0.18) 45%,
+    transparent
+  );
+  text-shadow: 0 1px 2px var(--d1-chip-bg);
+}
+/* The name belongs to the icon beside it, so it sits closer than the tags do. */
 .d1-chip > .d1-sprite,
+.d1-chip > .d1-chip-wildcard,
 .d1-resin-edit > .d1-sprite {
   margin-right: -8px;
 }
@@ -1218,6 +1252,10 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .d1-chip-tag-soft {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 16px;
   color: var(--d1-green);
   background: rgba(110, 201, 143, 0.14);
 }

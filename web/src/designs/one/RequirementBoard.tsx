@@ -8,7 +8,7 @@ import type {
 import { displayItemName, sourceLabel } from "../../lib/catalog";
 import { effectGlows } from "../../lib/glow";
 import type { Glow } from "../../lib/glow";
-import { PlusIcon, XIcon } from "../../lib/icons";
+import { CheckIcon, PlusIcon, XIcon } from "../../lib/icons";
 import {
   STACK_MAX,
   isAnyEnchantment,
@@ -60,6 +60,19 @@ export const chipName = (requirement: RequirementState): string => {
   if (requirement.item) return displayItemName(requirement.item);
   return requirement.kind ? (WILDCARD_SHORT[requirement.kind] ?? requirement.kind) : "Any item";
 };
+
+function ChipSprite({ requirement, glows }: { requirement: RequirementState; glows?: Glow[] }) {
+  return requirement.item ? (
+    <Sprite art={requirementArt(requirement)} size={18} glow={glows} />
+  ) : (
+    <span className="d1-chip-wildcard" aria-hidden="true">
+      <span className="d1-chip-wildcard-silhouette">
+        <Sprite art={requirementArt(requirement)} size={18} />
+      </span>
+      <span className="d1-chip-wildcard-mark">?</span>
+    </span>
+  );
+}
 
 /** A qualifier beside a chip's name; the upgrade is tinted apart from the rest. */
 export interface ChipTag {
@@ -415,7 +428,7 @@ export function RequirementBoard({
           if (hoveredIndex === index) setHovered(null);
         }}
       >
-        <Sprite art={requirementArt(requirement)} size={18} glow={glows} />
+        <ChipSprite requirement={requirement} glows={glows} />
         <span className="d1-chip-name">{chipName(requirement)}</span>
         {chipTags(requirement).map((tag) => (
           <span
@@ -425,10 +438,8 @@ export function RequirementBoard({
             {tag.text}
           </span>
         ))}
-        {/* A single glow wants no badge of its own: the sprite is already
-            pulsing that very colour, and the hover card names it. What is left
-            for a badge is what one pulse cannot say — several effects at once,
-            or "any enchantment", which settles on no colour. */}
+        {/* Named items show a single effect through their sprite's glow.
+            Wildcards keep their green question mark and show an effect badge. */}
         {effect &&
           (glows.length > 1 ? (
             <span
@@ -438,7 +449,15 @@ export function RequirementBoard({
             >
               {glows.length}
             </span>
-          ) : glow ? null : (
+          ) : glow ? (
+            requirement.item ? null : (
+              <span
+                className="d1-chip-effect"
+                style={{ color: glow.color, backgroundColor: glow.color }}
+                title={effect}
+              />
+            )
+          ) : (
             <span
               className={`d1-chip-effect ${isAnyEnchantment(requirement.effect) ? "d1-chip-effect-any" : "d1-chip-effect-curse"}`}
               title={effect}
@@ -446,7 +465,7 @@ export function RequirementBoard({
           ))}
         {requirement.uncursed && (
           <span className="d1-chip-tag d1-chip-tag-soft" title="Uncursed">
-            ✓
+            <CheckIcon size={12} />
           </span>
         )}
         {showBadges && item && renderBadges(item)}
@@ -664,7 +683,7 @@ export function RequirementBoard({
               )}
               {(resin.filter?.uncursed ?? true) && (
                 <span className="d1-chip-tag d1-chip-tag-soft" title="Uncursed wands">
-                  ✓
+                  <CheckIcon size={12} />
                 </span>
               )}
             </button>
@@ -717,10 +736,11 @@ export function RequirementBoard({
           style={{ left: drag.x, top: drag.y }}
           aria-hidden="true"
         >
-          <Sprite
-            art={dragSource ? requirementArt(dragSource) : itemArt(ARCANE_RESIN_SPRITE)}
-            size={18}
-          />
+          {dragSource ? (
+            <ChipSprite requirement={dragSource} />
+          ) : (
+            <Sprite art={itemArt(ARCANE_RESIN_SPRITE)} size={18} />
+          )}
           <span className="d1-chip-name">{dragSource ? chipName(dragSource) : "Arcane Resin"}</span>
           {draggingResin && (
             <span
