@@ -1,10 +1,11 @@
+import { useEffect, useId, useState } from "react";
 import {
   FARMING_FLOORS,
   isFarmingRequirement,
   toggleFarmingFloor,
 } from "../../lib/floor-requirements";
 import type { QueryState } from "../../lib/wasm/types";
-import { XIcon } from "../../lib/icons";
+import { InfoIcon, XIcon } from "../../lib/icons";
 import { FeelingSprite } from "./FeelingSprite";
 
 export function FarmingFloors({
@@ -15,9 +16,45 @@ export function FarmingFloors({
   onChange: (query: QueryState) => void;
 }) {
   const floors = query.floorRequirements ?? [];
+  const [helpOpen, setHelpOpen] = useState(false);
+  const helpId = useId();
+
+  useEffect(() => {
+    if (!helpOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setHelpOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [helpOpen]);
+
   return (
     <fieldset className="d1-farming-floors">
-      <legend>RoW farming floors</legend>
+      <legend>
+        <span>Ring of Wealth farming floors</span>
+        <span
+          className="d1-farming-help"
+          onMouseEnter={() => setHelpOpen(true)}
+          onMouseLeave={(event) => {
+            if (!event.currentTarget.contains(document.activeElement)) setHelpOpen(false);
+          }}
+          onFocus={() => setHelpOpen(true)}
+          onBlur={() => setHelpOpen(false)}
+        >
+          <button
+            type="button"
+            className="d1-farming-help-button"
+            aria-label="About Ring of Wealth farming floors"
+            aria-describedby={helpId}
+            onClick={() => setHelpOpen(true)}
+          >
+            <InfoIcon size={16} />
+          </button>
+          <span id={helpId} role="tooltip" className="d1-farming-help-tooltip" hidden={!helpOpen}>
+            Dark floor with a garden.
+          </span>
+        </span>
+      </legend>
       <div className="d1-farming-options">
         {FARMING_FLOORS.map((depth) => (
           <button

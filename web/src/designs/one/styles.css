@@ -1688,7 +1688,8 @@ input[type="range"]::-moz-range-thumb {
   margin-left: auto;
 }
 
-.d1-blanket-help-button {
+.d1-blanket-help-button,
+.d1-farming-help-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1704,11 +1705,14 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .d1-blanket-help-button:hover,
-.d1-blanket-help-button:focus-visible {
+.d1-blanket-help-button:focus-visible,
+.d1-farming-help-button:hover,
+.d1-farming-help-button:focus-visible {
   color: var(--d1-text);
 }
 
-.d1-blanket-help-tooltip {
+.d1-blanket-help-tooltip,
+.d1-farming-help-tooltip {
   position: absolute;
   z-index: 150;
   top: 100%;
@@ -3216,16 +3220,30 @@ input[type="range"]::-moz-range-thumb {
 
 .d1-farming-floors {
   min-width: 0;
-  margin: 18px 0 0;
+  margin: 0;
   padding: 0;
   border: 0;
 }
 .d1-farming-floors legend {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
   margin-bottom: 9px;
   padding: 0;
   color: var(--d1-text-2);
   font-size: 12px;
   font-weight: 600;
+}
+.d1-farming-help {
+  display: inline-flex;
+  align-items: center;
+}
+.d1-farming-help-tooltip {
+  right: 0;
+  width: max-content;
+  max-width: 100%;
+  padding: 8px 10px;
 }
 .d1-farming-options {
   display: flex;
@@ -3264,6 +3282,12 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .d1-farm-badge {
+  flex-shrink: 0;
+  padding: 0 8px;
+  line-height: 17px;
+  border: 1px solid color-mix(in srgb, var(--d1-green) 30%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--d1-green) 11%, transparent);
   color: var(--d1-green);
   font-size: 11px;
   font-weight: 600;

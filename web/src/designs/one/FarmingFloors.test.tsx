@@ -10,7 +10,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 afterEach(() => queryStore.setState(defaultQueryState));
-it("offers three keyboard-accessible floor toggles without hint text", async () => {
+it("offers three keyboard-accessible floor toggles and help on hover, focus, or tap", async () => {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
@@ -28,10 +28,41 @@ it("offers three keyboard-accessible floor toggles without hint text", async () 
   await act(async () => {
     render();
   });
-  const buttons = [...container.querySelectorAll("button")];
+  const buttons = [...container.querySelectorAll<HTMLButtonElement>(".d1-farming-floor")];
   expect(buttons.map((button) => button.textContent)).toEqual(["Floor 7", "Floor 17", "Floor 22"]);
-  expect(container.querySelector("legend")?.textContent).toBe("RoW farming floors");
-  expect(container.querySelector("p, [role='tooltip']")).toBeNull();
+  expect(container.querySelector("legend > span")?.textContent).toBe(
+    "Ring of Wealth farming floors",
+  );
+  const help = container.querySelector<HTMLButtonElement>(".d1-farming-help-button")!;
+  const tooltip = container.querySelector<HTMLElement>('[role="tooltip"]')!;
+  expect(help.getAttribute("aria-describedby")).toBe(tooltip.id);
+  expect(tooltip.textContent).toBe("Dark floor with a garden.");
+  expect(tooltip.hidden).toBe(true);
+  await act(async () => {
+    help.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }));
+  });
+  expect(tooltip.hidden).toBe(false);
+  await act(async () => {
+    help.dispatchEvent(new MouseEvent("mouseout", { bubbles: true }));
+  });
+  expect(tooltip.hidden).toBe(true);
+  await act(async () => {
+    help.click();
+  });
+  expect(tooltip.hidden).toBe(false);
+  expect(query.floorRequirements ?? []).toEqual([]);
+  await act(async () => {
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+  });
+  expect(tooltip.hidden).toBe(true);
+  await act(async () => {
+    help.focus();
+  });
+  expect(tooltip.hidden).toBe(false);
+  await act(async () => {
+    buttons[1].focus();
+  });
+  expect(tooltip.hidden).toBe(true);
   await act(async () => {
     buttons[1].click();
   });
@@ -48,7 +79,7 @@ it("offers three keyboard-accessible floor toggles without hint text", async () 
   });
   container.remove();
 });
-it("places farming floors inside Requirements, before blanket requirements and scope", () => {
+it("places farming floors in a collapsed Rooms and feelings section below Blacksmith", () => {
   const query = defaultQueryState();
   const html = renderToStaticMarkup(
     <QueryPanel
@@ -65,7 +96,12 @@ it("places farming floors inside Requirements, before blanket requirements and s
   const container = document.createElement("div");
   container.innerHTML = html;
   const farming = container.querySelector(".d1-farming-floors")!;
-  expect(farming.closest("section")?.querySelector("h3")?.textContent).toBe("Requirements");
-  expect(html.indexOf("RoW farming floors")).toBeLessThan(html.indexOf("Blanket Requirements"));
-  expect(html.indexOf("RoW farming floors")).toBeLessThan(html.indexOf("Search scope"));
+  const section = farming.closest("section")!;
+  expect(section.getAttribute("aria-label")).toBe("Rooms and feelings");
+  expect(farming.closest("details")?.querySelector("summary")?.textContent).toBe(
+    "Rooms and feelings",
+  );
+  expect(farming.closest("details")?.open).toBe(false);
+  expect(section.previousElementSibling?.querySelector("summary")?.textContent).toBe("Blacksmith");
+  expect(container.querySelector('[aria-label="Requirements"] .d1-farming-floors')).toBeNull();
 });

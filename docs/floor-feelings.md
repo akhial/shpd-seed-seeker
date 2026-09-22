@@ -53,13 +53,15 @@ UTF-8 string (empty means none). All native decoders accept both versions.
 
 ## Floor and room search (web)
 
-The web Requirements pane includes **RoW farming floors**, with independent
-7, 17, and 22 toggles. Every selected floor must have the Dark feeling and
+The web query pane includes a **Rooms and feelings** dropdown below **Blacksmith**,
+with **Ring of Wealth farming floors** and independent 7, 17, and 22 toggles.
+Every selected floor must have the Dark feeling and
 at least one Garden or Secret Garden. No Ring of Wealth is implicitly required;
 combine the floor toggles with an item requirement to constrain its upgrade,
 source, or availability. Selecting a floor raises the global floor limit if
 needed; subsequently lowering the limit produces a validation error. Farming
-floors are marked **RoW farm** in the scout.
+floors are marked with a **Garden** chip in the scout. The farming header's
+information icon shows “Dark floor with a garden.” on hover or tap.
 
 The shared engine supports all feelings and 95 room classes, exposed as stable
 IDs in `engine_info.roomTypes`. A query may contain no item requirements when
@@ -137,8 +139,8 @@ on 4,096 separate dispersed seeds produced identical matches in every case:
 | Farming floor 7 | 42 | 1.34× |
 | Farming floor 17 | 45 | 1.08× |
 | Farming floor 22 | 53 | 1.09× |
-| RoW by 16 and farming floor 17 | 12 | 1.01× |
-| RoW by 16 only (control) | 1,038 | 1.00× |
+| Ring of Wealth by 16 and farming floor 17 | 12 | 1.01× |
+| Ring of Wealth by 16 only (control) | 1,038 | 1.00× |
 
 Deep-floor gains are limited by the necessary generation of earlier floors.
 Current farming estimates and their held-out observations are recorded in the

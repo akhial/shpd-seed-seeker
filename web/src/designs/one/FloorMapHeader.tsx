@@ -26,7 +26,7 @@ export function FloorMapHeader({
   const label = (
     <>
       <FloorMapLabel depth={depth} feeling={feeling} quest={quest} idPrefix="scout-floor" />
-      {farming && <span className="d1-farm-badge">RoW farm</span>}
+      {farming && <span className="d1-farm-badge">Garden</span>}
     </>
   );
 

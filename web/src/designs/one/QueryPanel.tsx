@@ -179,10 +179,9 @@ export function QueryPanel({
     });
   };
 
+  const floorCount = query.floorRequirements?.length ?? 0;
   const slotTotal =
-    boardCount(query.requirements) +
-    Number(Boolean(query.arcaneResin)) +
-    (query.floorRequirements?.length ?? 0);
+    boardCount(query.requirements) + Number(Boolean(query.arcaneResin)) + floorCount;
   const challengeCount = query.challenges.length;
   const wandmakerCount = Number(Boolean(query.wandmakerQuest));
   const blacksmithCount = Number(query.requireBlacksmith) + Number(query.excludeBlacksmithRewards);
@@ -443,10 +442,6 @@ export function QueryPanel({
                     <h3>Requirements</h3>
                   </div>
                   {board}
-                  <FarmingFloors
-                    query={query}
-                    onChange={(next) => queryStore.setState(() => next)}
-                  />
                 </>
               )}
             </section>
@@ -549,6 +544,18 @@ export function QueryPanel({
                 Required items cannot come from the 2,000-favor Smith choice, leaving favor
                 available for reforging.
               </p>
+            </div>
+          </details>
+        </section>
+
+        <section className="d1-section" aria-label="Rooms and feelings">
+          <details className="d1-details">
+            <summary>
+              <span>Rooms and feelings</span>
+              {floorCount > 0 && <span className="d1-count">{floorCount}</span>}
+            </summary>
+            <div className="d1-details-body">
+              <FarmingFloors query={query} onChange={(next) => queryStore.setState(() => next)} />
             </div>
           </details>
         </section>
