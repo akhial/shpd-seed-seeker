@@ -424,6 +424,47 @@ fn vault_maps_match_saved_java_fixtures_at_every_imp_depth() {
             .fold(1_i32, |h, &v| h.wrapping_mul(31).wrapping_add(v));
         assert_eq!(json!(hash), row["vault"]["map_hash"]);
         assert!(map.traps.iter().any(|t| t.kind == "VaultFlame"));
+        let beacons: Vec<_> = map
+            .contents
+            .heaps
+            .iter()
+            .filter(|heap| heap.items.first().is_some_and(|i| i.kind == "VaultBeacon"))
+            .collect();
+        assert_eq!(
+            beacons.len(),
+            2,
+            "{code}: VaultEntranceRoom drops two beacons"
+        );
+        let white = shpd_seedfinder_core::level_map::MapGlow {
+            color: [255, 255, 255],
+            period_ms: 1000,
+        };
+        for heap in beacons {
+            assert_eq!(heap.items[0].glow, Some(white));
+            for layers in [&map.scene.layers, &map.scene.concealed_layers] {
+                let sprite =
+                    layers.iter().find(|l| l.name == "heaps").unwrap().cells[heap.cell].unwrap();
+                let draws = &map.scene.sprites[sprite].frames[0];
+                assert!(
+                    draws.iter().any(|draw| matches!(draw, MapDraw::Blit {
+                    asset: "items.png", tint: None, glow: Some(glow), ..
+                } if *glow == white)),
+                    "{code}: beacon at {} must pulse",
+                    heap.cell
+                );
+                assert!(
+                    draws.iter().all(|draw| !matches!(
+                        draw,
+                        MapDraw::Blit {
+                            tint: Some(_),
+                            glow: Some(_),
+                            ..
+                        }
+                    )),
+                    "beacon shadows must not glow"
+                );
+            }
+        }
         assert_eq!(
             serde_json::from_str::<Value>(&request.generate_document().unwrap()).unwrap(),
             document(&map)

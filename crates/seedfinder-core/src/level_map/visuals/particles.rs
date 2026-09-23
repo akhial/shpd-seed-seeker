@@ -18,6 +18,7 @@ enum Particle {
     VaultVent,
     CityFlame,
     Toxic,
+    RotHeart,
 }
 impl Particle {
     fn kind(name: &str) -> Option<Self> {
@@ -71,6 +72,9 @@ pub(super) fn emitters(level: &Level, contents: &MapContents) -> Vec<MapEmitter>
         }
     }
     for mob in &contents.mobs {
+        if mob.kind == "RotHeart" && objects::visible(level, mob.cell) {
+            result.push(emitter(mob.cell, Particle::RotHeart));
+        }
         if mob.kind == "Blacksmith" && objects::visible(level, mob.cell) {
             result.extend(forge_sparks(mob.cell));
         }
@@ -190,16 +194,20 @@ fn emitter(cell: usize, kind: Particle) -> MapEmitter {
         Particle::VaultVent => (300, 600, 0, -80, None),
         Particle::CityFlame => (100, 600, 0, -40, None),
         Particle::Toxic => (400, 3000, 0, 0, Some(13)),
+        // RotHeartSprite.link pours Speck.TOXIC every .7s over its sprite.
+        Particle::RotHeart => (700, 3000, 0, 0, Some(13)),
     };
     let loop_ms = if matches!(kind, Particle::Bubble) {
         3300
     } else if matches!(kind, Particle::Toxic) {
         4000
+    } else if matches!(kind, Particle::RotHeart) {
+        3500
     } else {
         3000
     };
     let alpha = match kind {
-        Particle::Toxic => MapCurve {
+        Particle::Toxic | Particle::RotHeart => MapCurve {
             points: vec![[0, 0], [500, 250], [1000, 0]],
             sqrt: true,
         },
@@ -209,7 +217,7 @@ fn emitter(cell: usize, kind: Particle) -> MapEmitter {
         _ => curve(&[[0, 0], [200, 1000], [1000, 1000]]),
     };
     let scale = match kind {
-        Particle::Toxic => curve(&[[0, 1000], [1000, 2000]]),
+        Particle::Toxic | Particle::RotHeart => curve(&[[0, 1000], [1000, 2000]]),
         Particle::Question => MapCurve {
             points: vec![[0, 0], [500, 4500], [1000, 0]],
             sqrt: true,
@@ -223,7 +231,7 @@ fn emitter(cell: usize, kind: Particle) -> MapEmitter {
         let columns = crate::level_map::assets::get("specks.png").unwrap().width / 7;
         MapDraw::Blit {
             opacity: 255,
-            tint: matches!(kind, Particle::Toxic).then_some([80, 255, 96]),
+            tint: matches!(kind, Particle::Toxic | Particle::RotHeart).then_some([80, 255, 96]),
             glow: None,
             asset: "specks.png",
             source: [index % columns * 7, index / columns * 7, 7, 7],
@@ -244,7 +252,7 @@ fn emitter(cell: usize, kind: Particle) -> MapEmitter {
         .map(|i| {
             let n = usize::from(i);
             MapParticle {
-                angle: if matches!(kind, Particle::Toxic) {
+                angle: if matches!(kind, Particle::Toxic | Particle::RotHeart) {
                     (sample(cell, n, 6) * 360.0) as u16
                 } else {
                     0
@@ -252,7 +260,7 @@ fn emitter(cell: usize, kind: Particle) -> MapEmitter {
                 birth_ms: (i * interval + phase) % loop_ms,
                 lifespan_ms: if matches!(kind, Particle::Bubble) {
                     800 + (sample(cell, n, 3) * 700.0) as u16
-                } else if matches!(kind, Particle::Toxic) {
+                } else if matches!(kind, Particle::Toxic | Particle::RotHeart) {
                     1000 + (sample(cell, n, 3) * 2000.0) as u16
                 } else {
                     life
@@ -277,6 +285,10 @@ fn emitter(cell: usize, kind: Particle) -> MapEmitter {
                             + if speck.is_none() { 500 } else { 0 }
                             - if matches!(kind, Particle::Sacrifice) {
                                 4000
+                            } else if matches!(kind, Particle::RotHeart) {
+                                // CharSprite.emitter covers the 16x16 heart,
+                                // raised three pixels in the map scene.
+                                3000
                             } else {
                                 0
                             },
@@ -307,7 +319,7 @@ fn emitter(cell: usize, kind: Particle) -> MapEmitter {
         },
         image,
         velocity: [0, velocity],
-        angular_speed: if matches!(kind, Particle::Toxic) {
+        angular_speed: if matches!(kind, Particle::Toxic | Particle::RotHeart) {
             30
         } else {
             0

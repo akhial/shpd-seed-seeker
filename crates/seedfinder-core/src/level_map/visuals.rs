@@ -440,6 +440,60 @@ mod tests {
     use crate::level::{Feeling, PlacedTrap, TrapSpec};
 
     #[test]
+    fn rotberry_clouds_follow_the_heart() {
+        use crate::level_map::{MapContents, MapMob};
+        let mut level = Level::new(8, Feeling::None);
+        level.set_size(5, 5);
+        level.map.cells[12] = t::EMPTY;
+        let contents = MapContents {
+            mobs: vec![MapMob {
+                cell: 12,
+                kind: "RotHeart".into(),
+                sleeping: false,
+                stealthy: false,
+                approximate: false,
+                items: vec![],
+            }],
+            ..MapContents::default()
+        };
+        let map = scene(DungeonSeed::MIN, &level, &[], MapKind::Regular, &contents);
+        for emitters in [&map.emitters, &map.concealed_emitters] {
+            assert_eq!(emitters.len(), 1);
+            let cloud = &emitters[0];
+            assert_eq!(cloud.cell, 12);
+            assert!(cloud.wall_mask);
+            assert_eq!(cloud.blend, None);
+            assert!(matches!(
+                cloud.image,
+                MapDraw::Blit {
+                    asset: "specks.png",
+                    tint: Some([80, 255, 96]),
+                    ..
+                }
+            ));
+            assert_eq!(cloud.angular_speed, 30);
+            let mut births: Vec<_> = cloud.particles.iter().map(|p| p.birth_ms).collect();
+            births.sort_unstable();
+            assert_eq!(births.len(), 5);
+            births.push(births[0] + cloud.loop_ms);
+            assert!(births.windows(2).all(|pair| pair[1] - pair[0] == 700));
+            assert!(
+                cloud
+                    .particles
+                    .iter()
+                    .all(|p| (1000..3000).contains(&p.lifespan_ms)
+                        && (0..16000).contains(&p.position[0])
+                        && (-3000..13000).contains(&p.position[1]))
+            );
+        }
+        // Concealed/solid cells must not reveal an actor through its cloud.
+        level.map.cells[12] = t::WALL;
+        let hidden = scene(DungeonSeed::MIN, &level, &[], MapKind::Regular, &contents);
+        assert!(hidden.emitters.is_empty());
+        assert!(hidden.concealed_emitters.is_empty());
+    }
+
+    #[test]
     fn spyglass_opacity_covers_raised_items_glows_and_shadows_in_both_scenes() {
         use crate::level_map::{MapContents, MapGlow, MapHeap, MapItem};
         let mut level = Level::new(6, Feeling::None);
