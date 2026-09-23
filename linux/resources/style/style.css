@@ -38,6 +38,14 @@ entry.seed-entry {
 
 /* ---------- Requirement board ---------- */
 
+/* 14/18 of the 24px sprite box, matching the web wildcard mark. */
+.wildcard-mark {
+  color: #83fc64;
+  font-size: 18.6667px;
+  font-weight: 600;
+  text-shadow: 0 1px 2px var(--window-bg-color);
+}
+
 /*
  * Every requirement is a chip: a 30px capsule holding the item's sprite, its
  * name, and the tiny tags that qualify it. Colours come from libadwaita's

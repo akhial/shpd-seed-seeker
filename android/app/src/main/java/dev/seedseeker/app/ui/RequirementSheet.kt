@@ -1146,6 +1146,7 @@ private fun RequirementPreview(draft: Result<ItemRequirement>) {
             val requirement = draft.getOrNull()
             SpriteTile(
                 item = requirement?.item,
+                wildcardKind = requirement?.kind,
                 glows = requirement?.effect?.let(ItemGlows::forFilter).orEmpty(),
                 tileSize = 44,
             )

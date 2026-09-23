@@ -496,6 +496,7 @@ private fun RequirementChip(
     ) {
         SpriteTile(
             item = requirement.item,
+            wildcardKind = requirement.kind,
             glows = ItemGlows.forFilter(requirement.effect),
             tileSize = metrics.tile,
         )

@@ -22,7 +22,7 @@ use shpd_seedfinder_session::available_workers;
 use crate::relations::{BoardItem, STACK_MAX};
 use crate::state::{
     AppState, FARMING_FLOORS, UiRequirement, effect_label, floor_limit_skip_target,
-    is_farming_requirement, kind_icon, wandmaker_quest_label,
+    is_farming_requirement, wandmaker_quest_label,
 };
 use crate::{glow, sprites};
 
@@ -1358,7 +1358,7 @@ fn chip_tags(requirement: &UiRequirement) -> Vec<(String, &'static str)> {
 
 /// The effect badge, for what a pulsing sprite cannot say on its own: several
 /// effects at once, "any enchantment", which settles on no colour, or an
-/// effect on a wildcard chip, which has no sprite of its own to pulse.
+/// effect on a wildcard chip, whose category silhouette stays grayscale.
 fn effect_badge(requirement: &UiRequirement) -> Option<gtk::Widget> {
     let EffectRequirement::OneOf(set) = requirement.effect else {
         return None;
@@ -1426,8 +1426,8 @@ fn effect_badge(requirement: &UiRequirement) -> Option<gtk::Widget> {
     }
     // A single effect — enchantment or curse — already pulses on a real
     // sprite, and the tooltip names it; a badge would only say it twice.
-    // A wildcard chip shows the family's icon, which cannot pulse, so there
-    // the dot is all the colour the effect gets.
+    // A wildcard keeps its grayscale silhouette and green question mark, so
+    // the dot carries the effect's colour.
     if requirement.item.is_some() {
         return None;
     }
@@ -1525,8 +1525,7 @@ fn chip_tooltip(state: &AppState, index: usize, item: &BoardItem) -> String {
 
 /// The chip icon for one requirement: the item's real sprite once a concrete
 /// item is pinned, pulsing the enchantment or curse the requirement asks for,
-/// and otherwise the family's symbolic icon — a wildcard requirement depicts no
-/// particular item.
+/// and otherwise a grayscale category sprite beneath a green question mark.
 fn requirement_prefix(requirement: &UiRequirement) -> gtk::Widget {
     match requirement.item {
         // No seed is in sight here, so rings keep the catalog's own cell for
@@ -1535,10 +1534,7 @@ fn requirement_prefix(requirement: &UiRequirement) -> gtk::Widget {
             sprites::ItemSprite::from_catalog(shpd_seedfinder_core::catalog::item(item_id)),
             glow::effect(requirement.pinned_effect()),
         ),
-        None => {
-            gtk::Image::from_icon_name(kind_icon(requirement.kind, requirement.weapon_category))
-                .upcast()
-        }
+        None => sprites::wildcard_image(requirement.kind, requirement.weapon_category),
     }
 }
 

@@ -562,14 +562,14 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// The real item sprite when one is pinned; the generic Fluent glyph only for
-    /// wildcards, which have no sprite of their own. A requirement names no seed,
+    /// The real item sprite when one is pinned; a grayscale category sprite and
+    /// green question mark for wildcards. A requirement names no seed,
     /// so a ring here keeps its class's catalog cell rather than any run's gem.
     /// </summary>
     private static Grid ChipArt(ItemRequirement requirement)
     {
         var art = new Grid { Width = 18, Height = 18, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, -2, 0) };
-        if (requirement.Item is null) art.Children.Add(new FontIcon { Glyph = requirement.Glyph, Foreground = KindStyle.Tint(requirement.Kind), FontSize = 13, VerticalAlignment = VerticalAlignment.Center });
+        if (requirement.Item is null) art.Children.Add(new WildcardSpriteView(requirement.Kind));
         else art.Children.Add(new SpriteView { SpriteIndex = requirement.SpriteIndex, TypeIconIndex = requirement.TypeIconIndex, SpriteSize = 18, GlowColor = requirement.GlowColor, GlowPeriod = requirement.GlowPeriod });
         return art;
     }

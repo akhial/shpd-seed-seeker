@@ -15,16 +15,24 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.PlatformTextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
@@ -33,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.seedseeker.app.R
 import dev.seedseeker.app.model.CatalogItem
+import dev.seedseeker.app.model.ItemKind
 import dev.seedseeker.app.model.ItemRequirement
 import dev.seedseeker.app.model.SearchState
 import dev.seedseeker.app.model.SearchStatus
@@ -43,6 +52,7 @@ import dev.seedseeker.app.ui.theme.RegionCity
 import dev.seedseeker.app.ui.theme.RegionHalls
 import dev.seedseeker.app.ui.theme.RegionPrison
 import dev.seedseeker.app.ui.theme.RegionSewers
+import dev.seedseeker.app.ui.theme.SpdUpgrade
 import java.util.Locale
 import kotlin.math.floor
 import kotlin.math.log10
@@ -136,6 +146,8 @@ private fun ItemArtwork(
     description: String,
     glows: List<Glow>,
     modifier: Modifier,
+    colorFilter: ColorFilter? = null,
+    alpha: Float = 1f,
 ) {
     val atlas = LocalItemAtlas.current
     val iconAtlas = LocalItemIconAtlas.current
@@ -196,6 +208,8 @@ private fun ItemArtwork(
                 srcSize = srcSize,
                 dstOffset = destination,
                 dstSize = dstSize,
+                colorFilter = colorFilter,
+                alpha = alpha,
                 filterQuality = FilterQuality.None,
             )
             // Reading the clock here keeps the pulse in the draw phase, so a
@@ -263,7 +277,7 @@ private fun ringCompositeShift(gem: IntSize, scale: Float): IntOffset {
 }
 
 /**
- * Sprite inside a soft tonal tile; falls back to a "?" for wildcard
+ * Sprite inside a soft tonal tile; shows the category's wildcard art for "Any"
  * requirements. Used by the requirement editor and its pickers — scout rows show
  * bare sprites on the row background, as the web does.
  */
@@ -273,6 +287,7 @@ fun SpriteTile(
     glows: List<Glow> = emptyList(),
     tileSize: Int = 60,
     modifier: Modifier = Modifier,
+    wildcardKind: ItemKind? = null,
 ) {
     Surface(
         modifier = modifier.size(tileSize.dp),
@@ -281,22 +296,7 @@ fun SpriteTile(
     ) {
         Box(contentAlignment = Alignment.Center) {
             if (item == null) {
-                // Sized to the tile, and stripped of the font's own padding and
-                // line height, so what the box centres is the glyph itself.
-                val glyph = (tileSize * 0.5f).sp
-                Text(
-                    "?",
-                    style = MaterialTheme.typography.headlineMedium.copy(
-                        fontSize = glyph,
-                        lineHeight = glyph,
-                        platformStyle = PlatformTextStyle(includeFontPadding = false),
-                        lineHeightStyle = LineHeightStyle(
-                            alignment = LineHeightStyle.Alignment.Center,
-                            trim = LineHeightStyle.Trim.Both,
-                        ),
-                    ),
-                    color = MaterialTheme.colorScheme.primary,
-                )
+                WildcardSprite(wildcardKind, tileSize * 3 / 4)
             } else {
                 ItemSprite(
                     item = item,
@@ -304,6 +304,57 @@ fun SpriteTile(
                     modifier = Modifier.size((tileSize * 3 / 4).dp),
                 )
             }
+        }
+    }
+}
+
+/** Mirrors the web chip: faint grayscale art, a soft shadow, and an upgrade-green mark. */
+@Composable
+private fun WildcardSprite(kind: ItemKind?, spriteSize: Int) {
+    val spriteIndex = when (kind) {
+        ItemKind.WEAPON, ItemKind.MELEE_WEAPON -> 112
+        ItemKind.THROWN_WEAPON -> 149
+        ItemKind.ARMOR -> 178
+        ItemKind.WAND -> 209
+        ItemKind.RING -> 224
+        ItemKind.TRINKET -> 70
+        ItemKind.ARTIFACT -> 6
+        null -> null
+    }
+    val grayscale = remember { ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) }
+    val shadowColor = MaterialTheme.colorScheme.surfaceContainerLowest
+    val shadow = with(LocalDensity.current) { Shadow(shadowColor, Offset(0f, 1.dp.toPx()), 2.dp.toPx()) }
+    val glyph = (spriteSize * 14f / 18f).sp
+    Box(Modifier.size(spriteSize.dp).clearAndSetSemantics {}, contentAlignment = Alignment.Center) {
+        if (spriteIndex != null) {
+            ItemArtwork(spriteIndex, null, "", emptyList(), Modifier.matchParentSize(), grayscale, 0.3f)
+        }
+        Box(
+            Modifier.matchParentSize().drawBehind {
+                drawCircle(Brush.radialGradient(
+                    0f to Color.Black.copy(alpha = 0.4f),
+                    0.45f to Color.Black.copy(alpha = 0.18f),
+                    1f to Color.Transparent,
+                    radius = size.minDimension / 2,
+                ))
+            },
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                "?",
+                style = MaterialTheme.typography.labelLarge.copy(
+                    fontSize = glyph,
+                    lineHeight = glyph,
+                    fontWeight = FontWeight.SemiBold,
+                    platformStyle = PlatformTextStyle(includeFontPadding = false),
+                    lineHeightStyle = LineHeightStyle(
+                        alignment = LineHeightStyle.Alignment.Center,
+                        trim = LineHeightStyle.Trim.Both,
+                    ),
+                    shadow = shadow,
+                ),
+                color = SpdUpgrade,
+            )
         }
     }
 }

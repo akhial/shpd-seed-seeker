@@ -1072,8 +1072,12 @@ private struct ChipView: View {
             HStack(spacing: 5) {
                 // No seed here: a chip names an item class the search is to
                 // look for, so its ring keeps the catalog's own cell.
-                ItemSpriteView(item: requirement.item,
-                               glow: effectGlow(requirement.effect.glowName), pointSize: 16)
+                if let item = requirement.item {
+                    ItemSpriteView(item: item,
+                                   glow: effectGlow(requirement.effect.glowName), pointSize: 16)
+                } else {
+                    WildcardSpriteView(kind: requirement.kind)
+                }
                 Text(chipName(requirement))
                     .font(.system(size: 12, weight: .semibold))
                     .lineLimit(1).truncationMode(.tail)

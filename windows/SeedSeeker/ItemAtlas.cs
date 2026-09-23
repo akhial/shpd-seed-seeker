@@ -53,7 +53,7 @@ internal sealed class ItemAtlas
     private readonly Layer items;
     private readonly Layer icons;
     private readonly Dictionary<int, (int X, int Y, int Width, int Height)> bounds = new();
-    private readonly Dictionary<(int Index, int TypeIcon, int Size), WriteableBitmap> sprites = new();
+    private readonly Dictionary<(int Index, int TypeIcon, int Size, bool Grayscale), WriteableBitmap> sprites = new();
     private readonly Dictionary<(int Index, int Size, uint Color), WriteableBitmap> masks = new();
 
     private ItemAtlas(Layer items, Layer icons)
@@ -110,13 +110,24 @@ internal sealed class ItemAtlas
     /// this is the run's gem, not the class's catalog cell.</param>
     /// <param name="typeIcon">The ring class's cell in <c>item_icons.png</c>, or
     /// -1 for an item that carries no glyph.</param>
-    public WriteableBitmap? Sprite(int index, int typeIcon, int size)
+    public WriteableBitmap? Sprite(int index, int typeIcon, int size, bool grayscale = false)
     {
         if (!Contains(index) || size <= 0) return null;
-        if (sprites.TryGetValue((index, typeIcon, size), out var cached)) return cached;
+        var key = (index, typeIcon, size, grayscale);
+        if (sprites.TryGetValue(key, out var cached)) return cached;
         if (sprites.Count >= CacheLimit) sprites.Clear();
-        var bitmap = Bitmap(Compose(index, size, null, typeIcon), size);
-        sprites[(index, typeIcon, size)] = bitmap;
+        var pixels = Compose(index, size, null, typeIcon);
+        if (grayscale)
+        {
+            // CSS grayscale(1) luminance; retain the premultiplied alpha.
+            for (var offset = 0; offset < pixels.Length; offset += 4)
+            {
+                var gray = (byte)((722 * pixels[offset] + 7152 * pixels[offset + 1] + 2126 * pixels[offset + 2]) / 10000);
+                pixels[offset] = pixels[offset + 1] = pixels[offset + 2] = gray;
+            }
+        }
+        var bitmap = Bitmap(pixels, size);
+        sprites[key] = bitmap;
         return bitmap;
     }
 
