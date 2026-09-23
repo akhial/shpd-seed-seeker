@@ -80,7 +80,7 @@ export interface RequirementState {
   /** Extra filter on an item assigned to an ordinary requirement. */
   blanket?: boolean;
   selectTrinket?: boolean;
-  /** Exact transmutation (1–13); absent/zero searches the initial four offers. */
+  /** Maximum transmutations (1–13), including initial offers; absent/zero requires an offer. */
   trinketTransmutations?: number;
   kind?: RequirementKind;
   item?: string;

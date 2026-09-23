@@ -295,7 +295,7 @@ pub struct Requirement {
     pub require_uncursed: bool,
     /// Choose this offer (or its unique matching OR alternative) at +3 after brewing.
     pub select_trinket: bool,
-    /// Zero searches initial offers; 1–13 searches that exact transmutation before refill.
+    /// Maximum acceptable transmutations (0–13), always including initial offers.
     pub trinket_transmutations: u8,
     /// Extra predicate on an ordinary assigned item or a selected resin donor.
     /// Blanket slots may reuse that item and never consume another occurrence.
@@ -924,18 +924,13 @@ impl<'query> Assignment<'query> {
                 .all(|&member| query.requirements[member].level_sum.is_some());
             for member in slot {
                 let requirement = &query.requirements[member];
-                let (start, end) = if requirement.trinket_transmutations == 0 {
-                    (0, world.items.len())
-                } else {
-                    let start =
-                        world.items.len() + usize::from(requirement.trinket_transmutations) - 1;
-                    (start, (start + 1).min(items.len()))
-                };
+                let end = (world.items.len() + usize::from(requirement.trinket_transmutations))
+                    .min(items.len());
                 let predicate = Requirement {
                     trinket_transmutations: 0,
                     ..*requirement
                 };
-                for index in start..end {
+                for index in 0..end {
                     let candidate = &items[index];
                     if candidate.depth <= query.max_depth
                         && candidate.depth <= requirement.max_depth.unwrap_or(query.max_depth)

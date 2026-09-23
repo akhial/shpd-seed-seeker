@@ -612,9 +612,7 @@ fn blanket_witnesses(query: &SearchQuery, blanket: Requirement) -> Vec<Requireme
         .filter(|r| !r.blanket)
         .chain(donor.iter())
     {
-        if ordinary.kind != blanket.kind
-            || ordinary.trinket_transmutations != blanket.trinket_transmutations
-        {
+        if ordinary.kind != blanket.kind {
             continue;
         }
         let upgrade = match (ordinary.upgrade, blanket.upgrade) {
@@ -661,6 +659,9 @@ fn blanket_witnesses(query: &SearchQuery, blanket: Requirement) -> Vec<Requireme
             }
             let witness = Requirement {
                 item: Some(item.id),
+                trinket_transmutations: ordinary
+                    .trinket_transmutations
+                    .min(blanket.trinket_transmutations),
                 weapon_category: item.weapon_category(),
                 tier: TierRequirement::Any,
                 upgrade,
@@ -1181,11 +1182,9 @@ impl FloorGate for QueryPlan {
         let order = crate::trinkets::order_from_generator(&run.generator);
         self.required_trinket_slots.iter().all(|slot| {
             slot.iter().any(|r| {
-                if r.trinket_transmutations == 0 {
-                    r.item.is_some_and(|id| order[..4].contains(&id))
-                } else {
-                    r.item == Some(order[3 + usize::from(r.trinket_transmutations)])
-                }
+                r.item.is_some_and(|id| {
+                    order[..4 + usize::from(r.trinket_transmutations)].contains(&id)
+                })
             })
         })
     }
@@ -3235,10 +3234,11 @@ mod tests {
                     .deferred_vault_plan(before.generation_depth())
                     .is_some()
             );
-            assert!(
-                !auto_trinkets::enabled(query),
-                "named Resin disables automatic replay"
+            assert_eq!(
+                auto_trinkets::enabled(query),
+                !query.requirements[5].select_trinket
             );
+            // Preserving the required Resin offer prevents any automatic helper.
             assert_eq!(
                 after.selected_trinket(known),
                 query.requirements[5]
@@ -3396,7 +3396,10 @@ mod tests {
                 // These queries explicitly require Resin. User refinement
                 // follows that current selection (or none), whereas the
                 // low-level filter above deliberately forces saved worlds.
-                assert!(!auto_trinkets::enabled(query));
+                assert_eq!(
+                    auto_trinkets::enabled(query),
+                    !query.requirements[5].select_trinket
+                );
                 assert_eq!(
                     refined,
                     multiplicity_production_records(

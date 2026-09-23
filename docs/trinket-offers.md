@@ -37,15 +37,15 @@ The WASM scout JSON adds `trinketOrder`, an array of exactly 17 entries with
 `id`, `name`, and `spriteIndex`. It follows private-deck draw order, independently
 of the manifest's item sorting. Entries 0–3 are the initial choices. The other
 13 entries are transmutations #1–#13 and only participate in matching when a
-requirement explicitly requests that exact transmutation count. `items` contains four records with
+requirement allows at least that many transmutations. `items` contains four records with
 `category: "trinket"`, the catalyst's placement metadata and the normal `matched`
 flag. The scout views group these beneath a single Magical catalyst entry.
 
-## Exact transmutation requirements (web)
+## Maximum transmutation requirements (web)
 
-The web editor offers **Initial offer** (the default) and **After transmuting**,
-with an exact count from 1 through 13. For example, this finds Rat Skull at the
-second transmutation, not in the initial choices or at an earlier step:
+The web editor offers **Allow transmutations**, with an **At most N** limit
+from 1 through 13. Initial offers always count. For example, this finds Rat Skull
+in the initial offers or after either of the first two transmutations:
 
 ```json
 {"requirements":[{"item":"rat_skull","trinket_transmutations":2}]}
@@ -74,14 +74,28 @@ available on other requirements. Native editors and their scout item streams
 are unchanged. WASM exposes transmutation highlights as `matched` flags in the
 last 13 `trinketOrder` entries; its `items` still contains only four offers.
 
-Exact-count queries use share format **13**, including existing query options;
+Queries with a positive limit use share format **13**, including existing query options;
 queries without counts retain their previous bytes. Search, filtering, Scout,
 presets, result exports and share links use the same query field. Probability
-estimates for ordinary AND trinket slots use exact without-replacement deck
-probabilities (one specified position is 1/17). Queries combining counts with
-trinket alternatives, blankets, source filters, combined levels or selected
-trinkets report an unavailable estimate until a joint ordered-deck estimator
-is implemented; matching still supports these valid queries.
+estimates condition on each initial offer set and count the remaining deck
+without replacement, sharing the catalyst floor across requirements. A single
+target with limit N has probability `(4 + N) / 17`: 5/17 at N=1 and 1 at N=13.
+AND, OR, different limits, repeated identities and blankets retain their joint
+deck probabilities. Mixed equipment alternatives retain the existing conservative
+supply approximation. Source filters and combined levels remain unsupported;
+extremely complex assignments exceeding the bounded estimator work budget
+return an unavailable estimate.
+
+AutoTrinket stays enabled for availability requirements. It ranks helpers by
+the other item requirements and retains one only if the no-trinket replay fails.
+A trinket-only query therefore chooses no helper. A Sundial at transmutation #1
+can coexist with a helpful starting Mimic Tooth. If a requested target is instead
+an initial offer, automatic selection cannot discard it: every requested
+identity offered must be the chosen helper itself. This is conservative for OR
+groups. Estimation uses this same policy for each initial offer set, preserving
+the correlation between helper selection and target location. The helper's
+generation effects model its use throughout the run; the engine does not
+simulate when the player eventually transmutes it.
 
 `TrinketOracle` also calls the shipped `ScrollOfTransmutation.changeItem` for all
 13 steps after each of the four possible initial choices. Its

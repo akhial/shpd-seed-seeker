@@ -22,8 +22,8 @@ fn requirement(id: ItemId, step: u8) -> serde_json::Value {
 }
 
 #[test]
-fn trinket_transmutations_match_each_exact_position_in_scalar_scout_and_gated_search() {
-    // 4 seeds × 17 identities × 14 positions = 952 cases. Reuse each world.
+fn trinket_transmutations_match_each_bounded_prefix_in_scalar_scout_and_gated_search() {
+    // 4 seeds × 17 identities × 14 limits = 952 cases. Reuse each world.
     let generator = CanonicalMainWorldGenerator;
     for value in [0, 1, 812_345_678_901, 3_355_211_884_971] {
         let seed = DungeonSeed::new(value).unwrap();
@@ -34,11 +34,7 @@ fn trinket_transmutations_match_each_exact_position_in_scalar_scout_and_gated_se
         for (position, &id) in order.iter().enumerate() {
             for step in 0..=13 {
                 let query = query(&serde_json::json!([requirement(id, step)]));
-                let expected = if step == 0 {
-                    position < 4
-                } else {
-                    position == usize::from(step) + 3
-                };
+                let expected = position < 4 + usize::from(step);
                 assert_eq!(
                     query.matches(&world),
                     expected,
@@ -49,15 +45,15 @@ fn trinket_transmutations_match_each_exact_position_in_scalar_scout_and_gated_se
                 assert_eq!(marks.matched.len(), world.items.len());
                 assert_eq!(
                     marks.matched_indices().len(),
-                    usize::from(expected && step == 0)
+                    usize::from(expected && position < 4)
                 );
                 assert_eq!(
                     marks.transmuted_trinkets.iter().filter(|&&m| m).count(),
-                    usize::from(expected && step > 0)
+                    usize::from(expected && position >= 4)
                 );
                 let plan = QueryPlan::analyze(&query);
                 assert_eq!(plan.continue_after_run_init(&run), expected);
-                if expected {
+                if expected && [0, 1, 13].contains(&step) {
                     let result =
                         generator.generate_batch_gated(&[seed], plan.generation_depth(), &plan);
                     assert!(result[0].as_ref().is_some_and(|world| query.matches(world)));
@@ -195,11 +191,11 @@ fn trinket_transmutation_probabilities_use_ordered_without_replacement_draws() {
     let first = requirement(ItemId::RatSkull, 1);
     let last = requirement(ItemId::MimicTooth, 13);
     let cases = [
-        (serde_json::json!([first]), 1.0 / 17.0),
-        (serde_json::json!([first, last]), 1.0 / (17.0 * 16.0)),
+        (serde_json::json!([first]), 5.0 / 17.0),
+        (serde_json::json!([first, last]), 5.0 / 17.0),
         (
             serde_json::json!([first, requirement(ItemId::MimicTooth, 0)]),
-            4.0 / (17.0 * 16.0),
+            4.0 * 4.0 / (17.0 * 16.0),
         ),
         (serde_json::json!([first, first]), 0.0),
         (
@@ -216,12 +212,31 @@ fn trinket_transmutation_probabilities_use_ordered_without_replacement_draws() {
         ),
         (
             serde_json::json!([first, requirement(ItemId::MimicTooth, 1)]),
-            0.0,
+            5.0 * 4.0 / (17.0 * 16.0),
         ),
     ];
     for (requirements, expected) in cases {
         assert!((estimate_match_probability(&query(&requirements)) - expected).abs() < 1e-12);
     }
     let complex = query(&serde_json::json!([{"any_of": [first, last]}]));
-    assert!(estimate_match_probability(&complex).is_nan());
+    assert!((estimate_match_probability(&complex) - 1.0).abs() < 1e-12);
+    let first_two =
+        query(&serde_json::json!([{"any_of": [first, requirement(ItemId::MimicTooth, 1)]}]));
+    assert!(
+        (estimate_match_probability(&first_two) - (1.0 - 12.0 * 11.0 / (17.0 * 16.0))).abs()
+            < 1e-12
+    );
+    let blanket = query(
+        &serde_json::json!([first, {"item": "rat_skull", "trinket_transmutations": 3, "blanket": true}]),
+    );
+    assert!((estimate_match_probability(&blanket) - 5.0 / 17.0).abs() < 1e-12);
+    let repeated =
+        query(&serde_json::json!([first, {"any_of": [first, requirement(ItemId::MimicTooth, 2)]}]));
+    assert!((estimate_match_probability(&repeated) - 25.0 / (17.0 * 16.0)).abs() < 1e-12);
+    for count in 0..=13 {
+        let mut q = query(&serde_json::json!([requirement(ItemId::RatSkull, count)]));
+        assert!((estimate_match_probability(&q) - f64::from(4 + count) / 17.0).abs() < 1e-12);
+        q.max_depth = 1;
+        assert!((estimate_match_probability(&q) - f64::from(4 + count) / 51.0).abs() < 1e-12);
+    }
 }

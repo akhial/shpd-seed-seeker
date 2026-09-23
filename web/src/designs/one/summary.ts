@@ -84,7 +84,7 @@ export function requirementDetails(requirement: RequirementState): string[] {
   if (requirement.selectTrinket) parts.push("choose at +3");
   if (requirement.trinketTransmutations)
     parts.push(
-      `after exactly ${requirement.trinketTransmutations} transmutation${requirement.trinketTransmutations === 1 ? "" : "s"}`,
+      `within ${requirement.trinketTransmutations} transmutation${requirement.trinketTransmutations === 1 ? "" : "s"}`,
     );
   if (requirement.upgrade.mode === "exact") parts.push(`exactly +${requirement.upgrade.value}`);
   if (requirement.upgrade.mode === "at_least")

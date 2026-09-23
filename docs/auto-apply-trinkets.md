@@ -24,8 +24,16 @@ For each offer deck, the engine chooses the highest-ranked preferred offer.
 If no preferred trinket is offered, it generates the no-trinket world. Neutral
 trinkets (including Exotic Crystals), candidates without the required estimated
 benefit, Mossy Clump, and Trap Mechanism are never selected automatically.
-Any explicit trinket requirement disables auto-apply, whether selected or merely
-required, and whether standalone or in an OR group.
+An explicit **Choose matching trinket at +3** selection overrides auto-apply.
+Availability requirements, including an at-most-N transmutation limit, keep it
+enabled. Ranking uses the other item requirements; a trinket-only query has no
+beneficial helper. AutoTrinket never discards a requested initial offer: each
+requested identity among the initial four must be the helper itself. This
+conservatively protects all OR alternatives too. Targets later in the deck do
+not block helpful starting offers, so Sundial at transmutation #1 can use
+Mimic Tooth when the other requirements benefit. Probability estimation
+conditions target availability and equipment profiles on the same offer sets.
+See [trinket deck limits](trinket-offers.md#maximum-transmutation-requirements-web).
 
 The choice is an estimate based on the query and offer deck, not advance
 knowledge of a seed's contents. Some baseline matches are lost; the purpose
@@ -42,7 +50,7 @@ first result earlier because the web delivers batches of 256 seeds.
 generator. Shared `search_batch` and `filter_batch` return matching worlds
 with `SeedRecipe` choices, stripping unnecessary automatic choices only after
 rechecking the full query with the same floor and vault pruning. Explicit
-trinket requirements are not stripped. WASM only adapts those operations to cooperative
+manual selections are not stripped. WASM only adapts those operations to cooperative
 sessions and JSON; there is no selection or generation algorithm in the web.
 Native UIs use the same policy and match cleanup through `NativeSession`.
 GTK consumes typed recipes; JNI and C FFI deliver `SSR2` packets with an explicit
@@ -69,7 +77,8 @@ requires a new traversal; matching policies can reuse coverage and filter
 saved recipes. `refine_batch` also retries a previously stripped choice when
 the no-trinket recipe fails a changed query: a trinket unnecessary for the old
 requirements may now be necessary. Unchanged queries keep their saved choices,
-subject to the same unnecessary-trinket check. See [search semantics](search-semantics.md).
+subject to the same unnecessary-trinket check. Adding a required initial offer
+that the original helper would discard clears that helper before refinement. See [search semantics](search-semantics.md).
 
 ## Validation
 
@@ -85,7 +94,7 @@ through a complete floor-24 scout. The early floors remain unchanged.
 
 Web tests exercise the real WASM session, filter and scout paths, query/share
 serialization, exported choices, duplicate import handling, single-core
-settings, and explicit-requirement disabling. Browser checks against the
+settings, and explicit-selection disabling. Browser checks against the
 hosted production build additionally covered toggle persistence, a live
 single-worker search, cancellation, matching result scouting, and export.
 An imported Parchment result still scouted and exported its original recipe

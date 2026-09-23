@@ -85,7 +85,7 @@ export function chipTags(requirement: RequirementState): ChipTag[] {
   const tags: ChipTag[] = [];
   const { tier, upgrade } = requirement;
   if (requirement.trinketTransmutations)
-    tags.push({ text: `Transmute ×${requirement.trinketTransmutations}` });
+    tags.push({ text: `Transmute ≤${requirement.trinketTransmutations}` });
   if (!requirement.item && tier.mode === "exact") tags.push({ text: `T${tier.value}` });
   if (!requirement.item && tier.mode === "at_least") tags.push({ text: `T${tier.value}+` });
   if (!requirement.item && tier.mode === "at_most") tags.push({ text: `T≤${tier.value}` });
@@ -410,7 +410,7 @@ export function RequirementBoard({
         className={classes.join(" ") + dropClass({ kind: "chip", index })}
         data-drop="chip"
         data-chip={index}
-        aria-label={`${requirementTitle(requirement)}${requirement.trinketTransmutations ? `, after exactly ${requirement.trinketTransmutations} transmutations` : ""}`}
+        aria-label={`${requirementTitle(requirement)}${requirement.trinketTransmutations ? `, within ${requirement.trinketTransmutations} transmutation${requirement.trinketTransmutations === 1 ? "" : "s"}` : ""}`}
         onPointerDown={onChipPointerDown(index)}
         onPointerMove={onChipPointerMove}
         onPointerUp={onChipPointerUp}
@@ -827,7 +827,7 @@ function ChipPopover({
   const lines: string[] = [];
   if (requirement.trinketTransmutations)
     lines.push(
-      `after exactly ${requirement.trinketTransmutations} transmutation${requirement.trinketTransmutations === 1 ? "" : "s"}`,
+      `within ${requirement.trinketTransmutations} transmutation${requirement.trinketTransmutations === 1 ? "" : "s"}`,
     );
   if (requirement.upgrade.mode === "exact") lines.push(`exactly +${requirement.upgrade.value}`);
   else if (requirement.upgrade.mode === "at_least")

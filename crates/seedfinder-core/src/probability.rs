@@ -74,6 +74,7 @@ mod cache;
 mod coverage;
 mod floors;
 mod resin;
+pub(crate) mod trinket_deck;
 
 use coverage::Coverages;
 
@@ -207,7 +208,7 @@ fn trinket_probability(query: &SearchQuery) -> f64 {
         .iter()
         .any(|r| r.trinket_transmutations > 0)
     {
-        return transmutation_probability(query);
+        return trinket_deck::probability(query, None);
     }
     if query.requirements.iter().any(|requirement| {
         requirement.kind == ItemKind::Trinket
@@ -286,59 +287,6 @@ fn trinket_probability(query: &SearchQuery) -> f64 {
     total / f64::from(samples)
 }
 
-/// Exact first-deck probability for independent named trinket slots. Complex
-/// alternatives/selection need a joint ordered-deck model, so report unavailable
-/// instead of incorrectly treating transmutations as initial offers.
-fn transmutation_probability(query: &SearchQuery) -> f64 {
-    let mut identities = Vec::new();
-    let mut steps = Vec::new();
-    let mut offers = 0_u8;
-    let mut depth = query.max_depth.min(3);
-    let mut probability = 1.0;
-    for r in query
-        .requirements
-        .iter()
-        .filter(|r| r.kind == ItemKind::Trinket)
-    {
-        if r.alternative_group.is_some()
-            || r.blanket
-            || r.select_trinket
-            || r.source.is_some()
-            || r.level_sum.is_some()
-        {
-            return f64::NAN;
-        }
-        let Some(id) = r.item else {
-            return f64::NAN;
-        };
-        if id == ItemId::TrinketCatalyst
-            || identities.contains(&id)
-            || (r.trinket_transmutations > 0 && steps.contains(&r.trinket_transmutations))
-        {
-            return 0.0;
-        }
-        let numerator = if r.trinket_transmutations == 0 {
-            if offers == 4 {
-                return 0.0;
-            }
-            offers += 1;
-            f64::from(5 - offers)
-        } else {
-            steps.push(r.trinket_transmutations);
-            1.0
-        };
-        probability *= numerator
-            / f64::from(17 - u8::try_from(identities.len()).expect("at most 17 identities"));
-        identities.push(id);
-        depth = depth.min(r.max_depth.unwrap_or(query.max_depth));
-    }
-    let mut equipment = query.clone();
-    equipment
-        .requirements
-        .retain(|r| r.kind != ItemKind::Trinket);
-    probability * f64::from(depth) / 3.0 * equipment_probability(&equipment, Profile::None)
-}
-
 /// Offers that could satisfy this slot at the catalyst's floor.
 fn trinket_mask(query: &SearchQuery, members: &[usize], identities: &[ItemId], depth: u8) -> u32 {
     use crate::model::{Accessibility, WorldItem};
@@ -357,7 +305,10 @@ fn trinket_mask(query: &SearchQuery, members: &[usize], identities: &[ItemId], d
                 secret: false,
             };
             let matches = members.iter().any(|&member| {
-                let requirement = query.requirements[member];
+                let requirement = Requirement {
+                    trinket_transmutations: 0,
+                    ..query.requirements[member]
+                };
                 requirement.kind == ItemKind::Trinket
                     && depth
                         <= query

@@ -15,7 +15,7 @@ import { requirementDetails, requirementTitle } from "./summary";
 import { chipTags } from "./RequirementBoard";
 
 describe("offered trinket pilot", () => {
-  it("round-trips exact transmutations, explains the deck, and keeps selection for initial offers", () => {
+  it("round-trips a transmutation limit and includes initial offers", () => {
     const query = fromQueryJson(
       '{"requirements":[{"any_of":[{"item":"rat_skull","trinket_transmutations":13},{"item":"mimic_tooth"}]}]}',
     );
@@ -23,8 +23,8 @@ describe("offered trinket pilot", () => {
     expect(requirement.trinketTransmutations).toBe(13);
     expect(fromQueryJson(JSON.stringify(toQueryDocument(query)))).toEqual(query);
     expect(validateQuery(query).valid).toBe(true);
-    expect(requirementDetails(requirement)).toContain("after exactly 13 transmutations");
-    expect(chipTags(requirement)).toContainEqual({ text: "Transmute ×13" });
+    expect(requirementDetails(requirement)).toContain("within 13 transmutations");
+    expect(chipTags(requirement)).toContainEqual({ text: "Transmute ≤13" });
     const html = renderToStaticMarkup(
       <RequirementEditor
         requirement={requirement}
@@ -34,9 +34,10 @@ describe("offered trinket pilot", () => {
         onCancel={() => {}}
       />,
     );
-    expect(html).toContain("After transmuting");
-    expect(html).toContain("Exactly 13");
-    expect(html).toContain("All four initial offers leave the deck.");
+    expect(html).toContain("Allow transmutations");
+    expect(html).not.toContain("After transmuting");
+    expect(html).toContain("At most 13");
+    expect(html).toContain("Matches an initial offer or any of the next 13 trinkets.");
     expect(html).not.toContain("Choose matching trinket at +3");
     expect(validateRequirement({ ...requirement, selectTrinket: true })).toContain(
       "Only an initial offer can be chosen at +3.",

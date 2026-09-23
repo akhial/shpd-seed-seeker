@@ -1259,7 +1259,7 @@ mod tests {
             serde_json::from_str(&filter_seeds_impl(&query.to_string(), &[0.0]).unwrap()).unwrap();
         assert_eq!(filtered.as_array().unwrap().len(), 1);
         let mut wrong = query;
-        wrong["requirements"][0]["trinket_transmutations"] = 2.into();
+        wrong["requirements"][0]["trinket_transmutations"] = 0.into();
         let filtered: Value =
             serde_json::from_str(&filter_seeds_impl(&wrong.to_string(), &[0.0]).unwrap()).unwrap();
         assert!(filtered.as_array().unwrap().is_empty());

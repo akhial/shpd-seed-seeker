@@ -441,26 +441,24 @@ export function RequirementEditor({
 
           {family === "trinket" && (
             <section className="d1-modal-section">
-              <Field label="Obtain trinket" stack>
-                <Segmented
-                  value={draft.trinketTransmutations ? "transmute" : "offer"}
-                  options={[
-                    { value: "offer", label: "Initial offer" },
-                    { value: "transmute", label: "After transmuting" },
-                  ]}
-                  onChange={(mode) =>
+              <label className="d1-check">
+                <input
+                  type="checkbox"
+                  checked={!!draft.trinketTransmutations}
+                  onChange={(event) => {
+                    const checked = event.currentTarget.checked;
                     reviseDraft((current) => ({
                       ...current,
-                      trinketTransmutations: mode === "transmute" ? 1 : undefined,
-                      selectTrinket: mode === "transmute" ? undefined : current.selectTrinket,
-                    }))
-                  }
-                  ariaLabel="How to obtain the trinket"
+                      trinketTransmutations: checked ? 1 : undefined,
+                      selectTrinket: checked ? undefined : current.selectTrinket,
+                    }));
+                  }}
                 />
-              </Field>
+                <span>Allow transmutations</span>
+              </label>
               {!!draft.trinketTransmutations && (
                 <>
-                  <Field label="Transmutations">
+                  <Field label="Maximum transmutations">
                     <Stepper
                       value={draft.trinketTransmutations}
                       min={1}
@@ -468,15 +466,15 @@ export function RequirementEditor({
                       onChange={(value) =>
                         reviseDraft((current) => ({ ...current, trinketTransmutations: value }))
                       }
-                      ariaLabel="Exact trinket transmutations"
-                      format={(value) => `Exactly ${value}`}
+                      ariaLabel="Maximum trinket transmutations"
+                      format={(value) => `At most ${value}`}
                     />
                   </Field>
                   <p className="d1-caption">
-                    All four initial offers leave the deck. Transmutation #1 gives the first
-                    remaining trinket, whichever offer you choose. Searches the first 13
-                    transmutations, before the deck refills. Scroll availability and trinket effects
-                    after transmuting are not simulated.
+                    Matches an initial offer or any of the next {draft.trinketTransmutations}{" "}
+                    {draft.trinketTransmutations === 1 ? "trinket" : "trinkets"}. AutoTrinket can
+                    use a helpful starting trinket while your target waits in the deck. Scroll
+                    availability and effects after transmuting are not simulated.
                   </p>
                 </>
               )}

@@ -67,6 +67,42 @@ it("keeps a necessary trinket and replays its recipe in scouting and filtering",
   }
 });
 
+it("keeps a helpful Mimic Tooth while Sundial waits at the first transmutation", () => {
+  const document = {
+    auto_apply_trinket: true,
+    max_depth: 19,
+    requirements: [
+      { item: "dimensional_sundial", trinket_transmutations: 1 },
+      { kind: "melee_weapon", source: "golden_mimic" },
+    ],
+  };
+  const json = JSON.stringify(document);
+  const seed = JSON.parse(parse_seed_code("AAA-AAA-AAN")) as ParsedSeed;
+  const session = new SearchSession(json, seed.value, seed.value + 1);
+  try {
+    const found = JSON.parse(session.advance(1)) as SearchAdvance;
+    expect(found.matches).toEqual([{ ...seed, selectedTrinket: "mimic_tooth" }]);
+    const manifest = JSON.parse(
+      scout(JSON.stringify({ seed: seed.code, query: document })),
+    ) as ScoutResult;
+    expect(manifest.selectedTrinket).toBe("mimic_tooth");
+    expect(manifest.matchedRequirements).toBe(2);
+    expect(manifest.trinketOrder?.[4]).toMatchObject({ id: "dimensional_sundial", matched: true });
+    const values = new Float64Array([seed.value]);
+    expect(JSON.parse(filter_seeds(json, values, '["mimic_tooth"]'))).toEqual(found.matches);
+    expect(JSON.parse(filter_seeds(json, values, "[null]"))).toEqual([]);
+    const onlyTrinket = JSON.stringify({
+      ...document,
+      requirements: document.requirements.slice(0, 1),
+    });
+    expect(JSON.parse(filter_seeds(onlyTrinket, values, '["mimic_tooth"]', json))).toEqual([
+      { ...seed, selectedTrinket: null },
+    ]);
+  } finally {
+    session.free();
+  }
+});
+
 it("removes an unnecessary trinket and restores it when a refined query needs it", () => {
   const json = JSON.stringify(document);
   const seed = JSON.parse(parse_seed_code("EYY-RUL-LQG")) as ParsedSeed;
@@ -106,7 +142,7 @@ it("removes an unnecessary trinket and restores it when a refined query needs it
   }
 });
 
-it("shows AutoTrinket enabled in Search scope on one core and defers to explicit requirements", () => {
+it("shows AutoTrinket enabled in Search scope on one core and defers only to explicit selection", () => {
   vi.stubGlobal("navigator", { hardwareConcurrency: 1 });
   const panel = () =>
     renderToStaticMarkup(
@@ -131,8 +167,20 @@ it("shows AutoTrinket enabled in Search scope on one core and defers to explicit
       '{"auto_apply_trinket":true,"requirements":[{"any_of":[{"item":"rat_skull"},{"item":"mimic_tooth"}]}]}',
     ),
   );
+  expect(panel()).toContain('<input type="checkbox" checked=""/><span>AutoTrinket</span>');
+  queryStore.setState(() =>
+    fromQueryJson(
+      '{"auto_apply_trinket":true,"requirements":[{"item":"dimensional_sundial","trinket_transmutations":1}]}',
+    ),
+  );
+  expect(panel()).toContain('<input type="checkbox" checked=""/><span>AutoTrinket</span>');
+  queryStore.setState(() =>
+    fromQueryJson(
+      '{"auto_apply_trinket":true,"requirements":[{"item":"rat_skull","select_trinket":true}]}',
+    ),
+  );
   const html = panel();
-  expect(html).toContain("Uses your trinket requirements instead.");
+  expect(html).toContain("Uses your explicit trinket selection instead.");
   expect(html).toMatch(/<input type="checkbox" disabled="" checked=""\/><span>AutoTrinket/);
 });
 
