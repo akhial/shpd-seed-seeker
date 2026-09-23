@@ -22,7 +22,7 @@ use shpd_seedfinder_session::production_scout_world_selected;
 
 use crate::level_map_view::{FloorMapView, MapProfile};
 use crate::sprites::ItemSprite;
-use crate::state::{AppState, QuestRow, quest_rows, region, source_label};
+use crate::state::{AppState, quest_rows, region, source_label};
 use crate::{glow, sprites};
 
 #[derive(Clone, Copy)]
@@ -43,7 +43,6 @@ pub struct DetailPane {
     stack: gtk::Stack,
     summary_items: gtk::Label,
     summary_matches: gtk::Label,
-    summary_quests: gtk::Label,
     manifest_box: gtk::Box,
     scroller: gtk::ScrolledWindow,
     dock: gtk::Fixed,
@@ -136,18 +135,6 @@ impl DetailPane {
         summary_area.append(&summary_items);
         summary_area.append(&summary_matches);
 
-        // Every quest of the scouted seed on one line; each floor header
-        // repeats its own quest, so this only has to name the givers.
-        let summary_quests = gtk::Label::builder()
-            .css_classes(["caption", "dim-label"])
-            .ellipsize(gtk::pango::EllipsizeMode::End)
-            .margin_start(12)
-            .margin_end(12)
-            .margin_bottom(3)
-            .xalign(0.0)
-            .visible(false)
-            .build();
-
         let manifest_box = gtk::Box::builder()
             .orientation(gtk::Orientation::Vertical)
             .spacing(24)
@@ -167,7 +154,6 @@ impl DetailPane {
             .build();
         let manifest_area = gtk::Box::new(gtk::Orientation::Vertical, 0);
         manifest_area.append(&summary_area);
-        manifest_area.append(&summary_quests);
         manifest_area.append(&manifest_scroller);
 
         let nav = gtk::Box::builder()
@@ -246,7 +232,6 @@ impl DetailPane {
             stack,
             summary_items,
             summary_matches,
-            summary_quests,
             manifest_box,
             scroller: manifest_scroller,
             dock,
@@ -629,16 +614,16 @@ impl DetailPane {
             self.manifest_box.remove(&child);
         }
         let quests = quest_rows(world.quests);
-        self.summary_quests.set_visible(!quests.is_empty());
-        self.summary_quests.set_label(&quest_summary_line(&quests));
         for (depth, indices) in &by_depth {
-            let mut description = region(*depth).to_owned();
-            if let Some(quest) = quests.iter().find(|quest| quest.depth == *depth) {
-                let _ = write!(description, " · {}", quest.variant);
-            }
             let section = gtk::Box::new(gtk::Orientation::Vertical, 8);
             let heading = gtk::Box::new(gtk::Orientation::Horizontal, 6);
-            heading.append(
+            let labels = adw::WrapBox::builder()
+                .child_spacing(6)
+                .line_spacing(4)
+                .hexpand(true)
+                .build();
+            let identity = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+            identity.append(
                 &gtk::Label::builder()
                     .label(format!("Floor {depth}"))
                     .css_classes(["heading"])
@@ -648,8 +633,33 @@ impl DetailPane {
             if let Some(floor) = world.feelings.iter().find(|floor| floor.depth == *depth)
                 && let Some(icon) = sprites::feeling_image(floor.feeling)
             {
-                heading.append(&icon);
+                identity.append(&icon);
             }
+            labels.append(&identity);
+            labels.append(
+                &gtk::Label::builder()
+                    .label(region(*depth))
+                    .css_classes(["dim-label"])
+                    .build(),
+            );
+            if let Some(quest) = quests.iter().find(|quest| quest.depth == *depth) {
+                labels.append(
+                    &gtk::Label::builder()
+                        .label(format!("· {}", quest.variant))
+                        .css_classes(["dim-label"])
+                        .build(),
+                );
+            }
+            if shpd_seedfinder_core::floor_filters::is_farming_floor(world, *depth) {
+                labels.append(
+                    &gtk::Label::builder()
+                        .label("· Garden")
+                        .css_classes(["success"])
+                        .tooltip_text("Dark floor with a garden.")
+                        .build(),
+                );
+            }
+            heading.append(&labels);
             if floors.contains(depth) {
                 let map_button = gtk::ToggleButton::builder()
                     .child(&heading)
@@ -665,7 +675,7 @@ impl DetailPane {
                 heading.set_hexpand(true);
                 let map_label = gtk::Label::builder()
                     .label("Map")
-                    .hexpand(true)
+                    .valign(gtk::Align::Center)
                     .halign(gtk::Align::End)
                     .css_classes(["caption", "dim-label"])
                     .build();
@@ -719,9 +729,7 @@ impl DetailPane {
             } else {
                 section.append(&heading);
             }
-            let group = adw::PreferencesGroup::builder()
-                .description(description)
-                .build();
+            let group = adw::PreferencesGroup::new();
             if indices.is_empty() {
                 group.add(
                     &gtk::Label::builder()
@@ -831,20 +839,6 @@ fn match_summary(matched: usize, total: usize) -> String {
         "· {matched} of {total} requirement{} matched",
         if total == 1 { "" } else { "s" }
     )
-}
-
-/// The whole quest schedule on one line, e.g. "Sad Ghost: Great Crab ·
-/// Wandmaker: Rotberry". The floors are left to the floor headers, which
-/// already repeat each quest's variant.
-fn quest_summary_line(quests: &[QuestRow]) -> String {
-    let mut line = String::new();
-    for quest in quests {
-        if !line.is_empty() {
-            line.push_str(" · ");
-        }
-        let _ = write!(line, "{}: {}", quest.giver, quest.variant);
-    }
-    line
 }
 
 /// The catalyst keeps the source and accessibility of its generated location.
@@ -1200,31 +1194,11 @@ mod tests {
         window.close();
     }
 
-    use super::{QuestRow, match_summary, quest_summary_line};
+    use super::match_summary;
 
     #[test]
     fn match_summary_counts_slots() {
         assert_eq!(match_summary(0, 1), "· 0 of 1 requirement matched");
         assert_eq!(match_summary(2, 3), "· 2 of 3 requirements matched");
-    }
-
-    #[test]
-    fn quest_summary_names_every_giver_on_one_line() {
-        assert_eq!(quest_summary_line(&[]), "");
-        assert_eq!(
-            quest_summary_line(&[
-                QuestRow {
-                    giver: "Sad Ghost",
-                    variant: "Great Crab",
-                    depth: 4,
-                },
-                QuestRow {
-                    giver: "Blacksmith",
-                    variant: "Crystal Spire",
-                    depth: 13,
-                },
-            ]),
-            "Sad Ghost: Great Crab · Blacksmith: Crystal Spire"
-        );
     }
 }

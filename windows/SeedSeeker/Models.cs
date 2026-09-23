@@ -1393,7 +1393,14 @@ public sealed record RingGems
 /// <param name="Gems">The run's ring gems, which decide what cell each scouted
 /// ring is drawn in.</param>
 public sealed record ScoutWorld(string Seed, IReadOnlyList<ScoutQuest> Quests, IReadOnlyList<ScoutItem> Items,
-    RingGems Gems, IReadOnlyList<CatalogItem>? TrinketOrder = null, IReadOnlyList<ScoutFloorFeeling>? FloorFeelings = null, string? SelectedTrinket = null, ScoutItemMappings? ItemMappings = null);
+    RingGems Gems, IReadOnlyList<CatalogItem>? TrinketOrder = null, IReadOnlyList<ScoutFloorFeeling>? FloorFeelings = null, string? SelectedTrinket = null, ScoutItemMappings? ItemMappings = null,
+    IReadOnlyDictionary<int, IReadOnlySet<string>>? FloorRooms = null)
+{
+    public bool IsFarmingFloor(int depth) => FloorRequirement.FarmingFloors.Contains(depth)
+        && FloorFeelings?.Any(floor => floor.Depth == depth && floor.Feeling == FloorFeeling.Dark) == true
+        && FloorRooms?.TryGetValue(depth, out var rooms) == true
+        && (rooms.Contains("garden") || rooms.Contains("secret_garden"));
+}
 
 public enum FloorFeeling : byte { None, Chasm, Water, Grass, Dark, Large, Traps, Secrets }
 public sealed record ScoutFloorFeeling(int Depth, FloorFeeling Feeling);

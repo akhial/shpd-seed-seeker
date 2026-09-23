@@ -24,6 +24,36 @@ fn farm(depth: u8) -> FloorRequirement {
         any_rooms: vec![RoomType::SpecialGarden, RoomType::SecretGarden],
     }
 }
+
+#[test]
+fn farming_labels_require_a_dark_garden_on_a_farming_depth() {
+    use shpd_seedfinder_core::floor_filters::is_farming_floor;
+    let mut world =
+        CanonicalMainWorldGenerator.generate(DungeonSeed::from_code("AAA-AAA-AAA").unwrap(), 1);
+    for (depth, feeling, rooms, expected) in [
+        (7, Feeling::Dark, vec![RoomType::SpecialGarden], true),
+        (17, Feeling::Dark, vec![RoomType::SecretGarden], true),
+        (
+            22,
+            Feeling::Dark,
+            vec![RoomType::SpecialGarden, RoomType::SecretGarden],
+            true,
+        ),
+        (8, Feeling::Dark, vec![RoomType::SpecialGarden], false),
+        (7, Feeling::Grass, vec![RoomType::SpecialGarden], false),
+        (17, Feeling::Dark, vec![], false),
+        (22, Feeling::Dark, vec![RoomType::QuestRotGarden], false),
+    ] {
+        world.feelings = vec![FloorFeeling { depth, feeling }];
+        world.floor_rooms = vec![FloorRooms {
+            depth,
+            rooms: RoomSet::from_types(rooms),
+        }];
+        assert_eq!(is_farming_floor(&world, depth), expected);
+        world.floor_rooms.clear();
+        assert!(!is_farming_floor(&world, depth));
+    }
+}
 fn query(floors: Vec<FloorRequirement>) -> SearchQuery {
     let mut q = json_query::decode_unvalidated(r#"{"requirements":[]}"#).unwrap();
     q.floor_requirements = floors;

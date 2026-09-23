@@ -233,7 +233,8 @@ On web, Linux, macOS, and Windows, expand **Rooms and feelings** and select
 The floors are independent: selecting several requires all of them. Selecting a
 floor raises the search limit if needed; clearing it leaves that limit in place.
 These filters work on their own or alongside item requirements. They do not
-implicitly require a Ring of Wealth.
+implicitly require a Ring of Wealth. Scout labels qualifying floors **Garden**,
+using each platform’s floor-header styling alongside its quest details.
 
 Drafts, presets, share links, result exports, and search refinement preserve the
 filters. Imported room and feeling filters also remain visible and removable.

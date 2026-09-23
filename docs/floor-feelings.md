@@ -51,6 +51,21 @@ Selected-trinket requests (`SSQ3`) return `SSC6`, which preserves the entire
 `SSC5` layout and appends the selected stable ID as a big-endian u16-length
 UTF-8 string (empty means none). All native decoders accept both versions.
 
+Native apps request `SSQ5` (the same request layout as `SSQ3`/`SSQ4`) and decode
+`SSC8`. It preserves the `SSC7` item mappings and appends room summaries:
+`floorCount:u8`, then for each floor `depth:u8`, `roomCount:u8`, and unique room
+stable IDs as big-endian u16-length UTF-8 strings. There are at most 20 floors,
+in strictly ascending regular-floor order. Older request versions retain their
+responses; older responses decode with no room summaries.
+
+All scout clients label floors 7, 17, and 22 **Garden** when the generated floor
+is Dark and contains a Garden or Secret Garden. This uses the actual scouted
+world, including challenges and applied trinkets, independently of the query.
+macOS, Windows, and Linux use inline floor-header text: region, `· Quest`, and
+`· Garden`. Quest details appear on their floor rather than in a separate summary
+or chip strip. Android uses a Material informational badge in both the list and
+expanded map header. Legacy packets omit the Garden label.
+
 ## Floor and room search (web)
 
 The web query pane includes a **Rooms and feelings** dropdown below **Blacksmith**,

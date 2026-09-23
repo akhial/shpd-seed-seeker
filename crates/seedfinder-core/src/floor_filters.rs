@@ -161,6 +161,22 @@ pub struct FloorRooms {
     pub rooms: RoomSet,
 }
 
+/// Whether the generated floor qualifies for Ring of Wealth farming,
+/// independent of which requirements were selected for the search.
+#[must_use]
+pub fn is_farming_floor(world: &GeneratedWorld, depth: u8) -> bool {
+    [7, 17, 22].contains(&depth)
+        && world
+            .feelings
+            .iter()
+            .any(|floor| floor.depth == depth && floor.feeling == Feeling::Dark)
+        && world.floor_rooms.iter().any(|floor| {
+            floor.depth == depth
+                && (floor.rooms.contains(RoomType::SpecialGarden)
+                    || floor.rooms.contains(RoomType::SecretGarden))
+        })
+}
+
 /// All entries in a query must pass. `rooms` requires every listed class;
 /// `any_rooms` requires at least one listed class on this same floor.
 #[derive(Clone, Debug, Eq, PartialEq)]

@@ -1930,7 +1930,7 @@ public sealed partial class MainWindow : Window
             var groups = depths.Select(depth =>
             {
                 var g = entries[depth];
-                var group = new ScoutGroup { Depth = depth, Floor = $"Floor {depth}", Region = Region(depth), Quest = QuestLabel(world.Quests, depth), Feeling = world.FloorFeelings?.FirstOrDefault(f => f.Depth == depth)?.Feeling ?? FloorFeeling.None,
+                var group = new ScoutGroup { Depth = depth, Floor = $"Floor {depth}", Region = Region(depth), Feeling = world.FloorFeelings?.FirstOrDefault(f => f.Depth == depth)?.Feeling ?? FloorFeeling.None,
                     Header = FloorHeader(world, depth) };
                 var trinkets = g.Where(entry => entry.Item.Item.Kind == ItemKind.Trinket).ToList();
                 foreach (var entry in g)
@@ -1951,9 +1951,6 @@ public sealed partial class MainWindow : Window
             BuildTrinketDock(world);
             renderedScoutQuery = marked;
             UpdateResultNav();
-            QuestStrip.Children.Clear();
-            foreach (var quest in world.Quests) QuestStrip.Children.Add(QuestChip(quest));
-            QuestStrip.Visibility = world.Quests.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
             // Slot counts: an "any of these" group is one requirement however many members it has.
             ScoutStatus.Text = $"{world.Items.Count} items across {groups.Count} floors" + (matches.TotalRequirements == 0 ? "" : $"  ·  {matches.MatchedRequirements} of {matches.TotalRequirements} requirement{(matches.TotalRequirements == 1 ? "" : "s")} matched");
             EmptyScout.Visibility = Visibility.Collapsed; ScoutList.Visibility = Visibility.Visible;
@@ -1978,7 +1975,13 @@ public sealed partial class MainWindow : Window
         title.Children.Add(new FloorFeelingView { Feeling = world.FloorFeelings?.FirstOrDefault(f => f.Depth == depth)?.Feeling ?? FloorFeeling.None, VerticalAlignment = VerticalAlignment.Center });
         title.Children.Add(new TextBlock { Text = Region(depth), FontSize = 12, Opacity = .7, VerticalAlignment = VerticalAlignment.Center });
         var quest = QuestLabel(world.Quests, depth);
-        if (quest.Length > 0) title.Children.Add(new TextBlock { Text = quest, FontSize = 12, Opacity = .7, VerticalAlignment = VerticalAlignment.Center });
+        if (quest.Length > 0) title.Children.Add(new TextBlock { Text = $"· {quest}", FontSize = 12, Opacity = .7, VerticalAlignment = VerticalAlignment.Center });
+        if (world.IsFarmingFloor(depth))
+        {
+            var garden = new TextBlock { Text = "· Garden", FontSize = 12, Foreground = SuccessInk, VerticalAlignment = VerticalAlignment.Center };
+            ToolTipService.SetToolTip(garden, "Dark floor with a garden.");
+            title.Children.Add(garden);
+        }
         return EngineInfo.MapDepths.Contains(depth) ? MapDisclosure(depth, title) : title;
     }
 
@@ -2104,25 +2107,6 @@ public sealed partial class MainWindow : Window
     /// <summary>The variant label of the quest hosted on <paramref name="depth"/>, or "" for quest-less floors.</summary>
     private static string QuestLabel(IReadOnlyList<ScoutQuest> quests, int depth) =>
         quests.FirstOrDefault(quest => quest.Depth == depth) is { } quest ? ScoutQuests.VariantLabel(quest.Variant) : "";
-    /// <summary>A pill summarising one quest, e.g. "Great Crab · Sad Ghost · F4".</summary>
-    private static Border QuestChip(ScoutQuest quest)
-    {
-        var text = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4 };
-        text.Children.Add(new TextBlock { Text = ScoutQuests.VariantLabel(quest.Variant), FontSize = 11, FontWeight = FontWeights.SemiBold });
-        text.Children.Add(new TextBlock
-        {
-            Text = $"· {ScoutQuests.GiverLabel(quest.Giver)} · F{quest.Depth}",
-            FontSize = 11,
-            Foreground = ThemeBrush("TextFillColorSecondaryBrush", Microsoft.UI.Colors.Gray),
-        });
-        return new Border
-        {
-            CornerRadius = new CornerRadius(10),
-            Padding = new Thickness(8, 2, 8, 2),
-            Background = ThemeBrush("LayerFillColorDefaultBrush", Microsoft.UI.Colors.Transparent),
-            Child = text,
-        };
-    }
     private async void SeedInfo_Click(object sender, RoutedEventArgs e)
     {
         if (renderedSeed is string seed && itemMappings is { } mappings)
@@ -2140,8 +2124,6 @@ public sealed class ScoutGroup : List<ScoutRow>
     public string Floor { get; init; } = "";
     public FloorFeeling Feeling { get; init; }
     public string Region { get; init; } = "";
-    /// <summary>The floor's quest variant label, or "" when it hosts no quest.</summary>
-    public string Quest { get; init; } = "";
 }
 
 public sealed class ScoutRow

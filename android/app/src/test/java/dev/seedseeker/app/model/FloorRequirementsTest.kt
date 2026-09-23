@@ -9,6 +9,23 @@ import org.junit.Test
 class FloorRequirementsTest {
     init { PackagedCatalog.install() }
 
+    @Test fun scoutFarmingLabelsUseGeneratedRoomsAndFeelings() {
+        val actual = JniNativeSeedFinder().scoutSeed("DJG-HMA-ULY")
+        assertEquals(20, actual.floorRooms.size)
+        assertTrue(actual.isFarmingFloor(17))
+        for (depth in listOf(7, 17, 22, 8)) {
+            for (rooms in listOf(setOf("garden"), setOf("secret_garden"), setOf("garden", "secret_garden"),
+                setOf("quest_rot_garden"), emptySet())) {
+                for (feeling in listOf(FloorFeeling.DARK, FloorFeeling.GRASS)) {
+                    val world = actual.copy(floorFeelings = mapOf(depth to feeling), floorRooms = mapOf(depth to rooms))
+                    assertEquals(depth != 8 && feeling == FloorFeeling.DARK && rooms.any { it != "quest_rot_garden" },
+                        world.isFarmingFloor(depth))
+                    assertFalse(world.copy(floorRooms = emptyMap()).isFarmingFloor(depth))
+                }
+            }
+        }
+    }
+
     @Test fun farmingFloorsAreIndependentAndOnlyRaiseTheLimitWhenSelected() {
         var query = PresetQuery(emptyList(), maximumDepth = 4)
         for (depth in listOf(22, 7, 17)) query = query.toggleFarmingFloor(depth)

@@ -186,7 +186,7 @@ pub struct GeneratedWorld {
     pub items: Vec<WorldItem>,
     /// Final feelings in depth order, excluding boss floors.
     pub feelings: Vec<FloorFeeling>,
-    /// Room presence on regular floors. Native scout packets omit this web metadata.
+    /// Room presence on regular floors, included in SSC8 and web scout responses.
     pub floor_rooms: Vec<crate::floor_filters::FloorRooms>,
     /// Quest variants rolled while generating the requested prefix.
     pub quests: QuestSummary,

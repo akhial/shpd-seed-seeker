@@ -19,6 +19,26 @@ import org.robolectric.annotation.GraphicsMode
 class FarmingFloorsUiTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
+    @Test
+    @Config(qualifiers = "w320dp-h800dp-xhdpi")
+    fun floorHeaderKeepsGardenAndQuestVisibleOnNarrowScreens() {
+        var farming by mutableStateOf(true)
+        var expanded by mutableStateOf(false)
+        compose.setContent {
+            SeedSeekerTheme {
+                FloorHeading(depth = 7, itemCount = 12, feeling = FloorFeeling.DARK,
+                    questLabel = "Elemental Embers", farming = farming,
+                    mapExpanded = expanded, onMapToggle = { expanded = !expanded })
+            }
+        }
+        compose.onNodeWithText("Garden", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText("Elemental Embers", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText("FLOOR 7").performClick()
+        compose.runOnIdle { assertTrue(expanded); farming = false }
+        compose.onNodeWithText("Garden", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithText("Elemental Embers", useUnmergedTree = true).assertIsDisplayed()
+    }
+
     @Test fun segmentedControlSelectsIndependentFloorsAndExplainsTheRequirement() {
         var query by mutableStateOf(PresetQuery(emptyList(), maximumDepth = 4))
         compose.setContent {

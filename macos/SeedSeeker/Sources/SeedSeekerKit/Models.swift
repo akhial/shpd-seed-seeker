@@ -757,15 +757,22 @@ public struct ScoutWorld: Sendable {
     public let selectedTrinket: String?
     public let feelings: [Int: FloorFeeling]
     public let itemMappings: ScoutItemMappings?
+    /// Absent from legacy scout packets; never inferred from the search query.
+    public let floorRooms: [Int: Set<String>]
     public init(seed: String, quests: [ScoutQuest] = [], items: [ScoutItem],
                 ringGems: RingGems = .catalogDefault, trinketOrder: [CatalogItem] = [],
                 feelings: [Int: FloorFeeling] = [:], selectedTrinket: String? = nil,
-                itemMappings: ScoutItemMappings? = nil) {
+                itemMappings: ScoutItemMappings? = nil, floorRooms: [Int: Set<String>] = [:]) {
         self.seed = seed; self.quests = quests; self.items = items; self.ringGems = ringGems
         self.trinketOrder = trinketOrder
         self.feelings = feelings
         self.selectedTrinket = selectedTrinket
         self.itemMappings = itemMappings
+        self.floorRooms = floorRooms
+    }
+    public func isFarmingFloor(_ depth: Int) -> Bool {
+        FloorRequirement.farmingFloors.contains(depth) && feelings[depth] == .dark &&
+        floorRooms[depth]?.isDisjoint(with: ["garden", "secret_garden"]) == false
     }
 }
 

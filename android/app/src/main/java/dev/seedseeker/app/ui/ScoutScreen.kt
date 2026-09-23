@@ -314,6 +314,7 @@ fun ScoutScreen(
                                     feeling = world.floorFeelings[depth],
                                     itemCount = floorItems.size,
                                     questLabel = questsByDepth[depth]?.variant?.label,
+                                    farming = world.isFarmingFloor(depth),
                                     mapExpanded = openMapDepth == depth,
                                     onMapToggle = if (isMapDepthSupported(depth)) ({ openMapDepth = if (openMapDepth == depth) null else depth }) else null,
                                     modifier = Modifier.background(MaterialTheme.colorScheme.background).onSizeChanged { floorHeaderHeight = it.height }.padding(vertical = 4.dp),

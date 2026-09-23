@@ -135,9 +135,9 @@ again to deselect it. The selected card carries an “Applied +3” badge. Each
 rescout keeps the query and explicit override together so match highlights use
 the same generated world.
 
-Scout requests use SSQ4 (little-endian challenge mask and length-prefixed seed
-and override, followed by canonical query JSON). SSC7 responses extend SSC6
-with all 36 [item mappings](../docs/item-mappings.md). The info button beside
+Scout requests use SSQ5 (little-endian challenge mask and length-prefixed seed
+and override, followed by canonical query JSON). SSC8 responses include floor room summaries after the SSC7 item mappings.
+SSC7 extends SSC6 with all 36 [item mappings](../docs/item-mappings.md). The info button beside
 the scouted seed opens potion, scroll, and ring grids with six columns and two
 full rows per category, in game class order. The seed's actual appearance is
 centered in each tile, with its identity glyph at the top right, using the game's

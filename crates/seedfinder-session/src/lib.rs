@@ -126,7 +126,8 @@ pub fn protected_scout_seed_packet<G: WorldGenerator + ?Sized>(
 }
 
 /// Scouts a production world using the request's challenge mask and selection.
-/// `SSQ3`/`SSQ4` carry a query and override; `SSQ4` also requests item mappings.
+/// `SSQ3` and later carry a query and override; `SSQ4` adds item mappings,
+/// and `SSQ5` adds floor room summaries.
 /// Legacy requests use no trinket.
 ///
 /// # Errors
@@ -142,7 +143,9 @@ pub fn production_scout_packet(request: &[u8]) -> Result<Vec<u8>, ScoutCallError
         decoded.query.as_ref(),
         decoded.trinket_override,
     )?;
-    let packet = if request.starts_with(b"SSQ4") {
+    let packet = if request.starts_with(b"SSQ5") {
+        shpd_seedfinder_core::wire::encode_scout_world_with_rooms(&world, selected)
+    } else if request.starts_with(b"SSQ4") {
         shpd_seedfinder_core::wire::encode_scout_world_with_mappings(&world, selected)
     } else if request.starts_with(b"SSQ3") {
         encode_scout_world_with_selection(&world, selected)
@@ -1513,7 +1516,7 @@ mod tests {
             )
             .unwrap();
             assert_eq!(actual_selection, selected);
-            expected.floor_rooms.clear(); // Native packets omit web room summaries.
+            let expected_rooms = std::mem::take(&mut expected.floor_rooms);
             assert_eq!(world, expected);
             let marks = production_scout_matches(&request, query.as_bytes()).unwrap();
             assert_eq!(marks.matched, scout_matches(&world, &decoded_query).matched);
@@ -1524,6 +1527,18 @@ mod tests {
             let mapping_packet = production_scout_packet(&mapping_request).unwrap();
             assert_eq!(&mapping_packet[..4], b"SSC7");
             assert_eq!(decode_scout_world(&mapping_packet).unwrap(), world);
+            let mut room_request = mapping_request.clone();
+            room_request[..4].copy_from_slice(b"SSQ5");
+            let room_packet = production_scout_packet(&room_request).unwrap();
+            assert_eq!(&room_packet[..4], b"SSC8");
+            expected.floor_rooms = expected_rooms;
+            assert_eq!(decode_scout_world(&room_packet).unwrap(), expected);
+            assert_eq!(
+                production_scout_matches(&room_request, query.as_bytes())
+                    .unwrap()
+                    .matched,
+                marks.matched
+            );
             assert_eq!(
                 production_scout_matches(&mapping_request, query.as_bytes())
                     .unwrap()

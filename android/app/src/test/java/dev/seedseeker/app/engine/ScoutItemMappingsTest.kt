@@ -28,8 +28,30 @@ class ScoutItemMappingsTest {
         assertNotEquals(mappings, JniNativeSeedFinder().scoutSeed("AAA-AAA-AAA").itemMappings)
     }
 
-    @Test fun legacyRequestsKeepTheirResponseAndNewPacketsRejectCorruption() {
+    @Test fun roomSummariesDecodeWithoutChangingLegacyPackets() {
         val request = ScoutRequestCodec.encode("ABC-DEF-GHI", 0)
+        val current = JniBindings.scoutSeed(request)
+        assertEquals("SSC8", current.take(4).toByteArray().toString(Charsets.US_ASCII))
+        assertEquals(20, ScoutResultCodec.decode(current).floorRooms.size)
+        request[3] = '4'.code.toByte()
+        val legacy = JniBindings.scoutSeed(request)
+        assertEquals(emptyMap<Int, Set<String>>(), ScoutResultCodec.decode(legacy).floorRooms)
+        val prefix = legacy.clone().also { it[3] = '8'.code.toByte() }
+        val tail = byteArrayOf(2, 7, 1, 0, 6) + "garden".toByteArray() +
+            byteArrayOf(17, 1, 0, 13) + "secret_garden".toByteArray()
+        assertEquals(mapOf(7 to setOf("garden"), 17 to setOf("secret_garden")),
+            ScoutResultCodec.decode(prefix + tail).floorRooms)
+        for (invalid in listOf(byteArrayOf(21), byteArrayOf(1, 0, 0), byteArrayOf(1, 5, 0),
+            byteArrayOf(1, 25, 0), byteArrayOf(2, 7, 0, 7, 0), byteArrayOf(2, 17, 0, 7, 0),
+            byteArrayOf(1, 7, 1, 0, 0), byteArrayOf(0, 0))) {
+            assertThrows(IllegalStateException::class.java) { ScoutResultCodec.decode(prefix + invalid) }
+        }
+        assertThrows(EOFException::class.java) { ScoutResultCodec.decode(prefix) }
+        assertThrows(EOFException::class.java) { ScoutResultCodec.decode((prefix + tail).dropLast(1).toByteArray()) }
+    }
+
+    @Test fun legacyRequestsKeepTheirResponseAndNewPacketsRejectCorruption() {
+        val request = ScoutRequestCodec.encode("ABC-DEF-GHI", 0).also { it[3] = '4'.code.toByte() }
         val packet = JniBindings.scoutSeed(request)
         assertEquals("SSC7", packet.take(4).toByteArray().toString(Charsets.US_ASCII))
         assertNotNull(ScoutResultCodec.decode(packet).itemMappings)

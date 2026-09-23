@@ -603,7 +603,13 @@ data class ScoutWorld(
     val floorFeelings: Map<Int, FloorFeeling> = emptyMap(),
     /** Absent in legacy scout packets and seedless demo fixtures. */
     val itemMappings: ScoutItemMappings? = null,
-)
+    /** Actual generated rooms; empty for legacy scout packets. */
+    val floorRooms: Map<Int, Set<String>> = emptyMap(),
+) {
+    fun isFarmingFloor(depth: Int): Boolean = depth in FARMING_FLOORS &&
+        floorFeelings[depth] == FloorFeeling.DARK &&
+        floorRooms[depth]?.any { it == "garden" || it == "secret_garden" } == true
+}
 
 /** Names and unidentified artwork come from the engine's canonical run state. */
 data class ScoutItemMapping(val name: String, val appearance: String, val spriteIndex: Int)

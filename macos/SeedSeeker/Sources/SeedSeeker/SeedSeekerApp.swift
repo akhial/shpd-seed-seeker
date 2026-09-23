@@ -2300,6 +2300,10 @@ private struct ScoutFloorHeader: View {
             if let quest = world.quests.first(where: { $0.depth == depth }) {
                 Text("· \(quest.variant.label)").foregroundStyle(.tertiary)
             }
+            if world.isFarmingFloor(depth) {
+                Text("· Garden").foregroundStyle(.green)
+                    .help("Dark floor with a garden.")
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal).padding(.vertical, 6)

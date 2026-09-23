@@ -209,6 +209,7 @@ private fun LevelMapPanel(
                     itemCount = world.items.count { it.depth == depth },
                     feeling = world.floorFeelings[depth],
                     questLabel = world.quests.firstOrNull { it.depth == depth }?.variant?.label,
+                    farming = world.isFarmingFloor(depth),
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                     onCloseMap = close,
                 )

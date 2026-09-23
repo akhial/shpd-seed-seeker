@@ -10,6 +10,7 @@ use std::fmt;
 
 use crate::catalog::{Effect, item, item_by_stable_id};
 use crate::challenges::Challenges;
+use crate::floor_filters::{FloorRooms, RoomSet, RoomType};
 use crate::level_prelude::Feeling;
 use crate::model::{Accessibility, FloorFeeling, GeneratedWorld, ItemSource, WorldItem};
 #[cfg(feature = "json-query")]
@@ -36,6 +37,7 @@ pub struct SelectedScoutRequest {
 /// LE u16-length override (empty = automatic, `none` = deselected, otherwise
 /// stable item ID), then an optional canonical JSON query in remaining bytes.
 /// `SSQ4` has the same layout and opts into the `SSC7` item mappings response.
+/// `SSQ5` additionally requests `SSC8` floor room summaries.
 /// Legacy requests remain supported.
 ///
 /// # Errors
@@ -48,7 +50,8 @@ pub fn decode_selected_scout_request(request: &[u8]) -> Result<SelectedScoutRequ
         std::str::from_utf8(input.take(len)?).map_err(|_| WireError::InvalidUtf8)
     }
     let Some(payload) = request
-        .strip_prefix(b"SSQ4")
+        .strip_prefix(b"SSQ5")
+        .or_else(|| request.strip_prefix(b"SSQ4"))
         .or_else(|| request.strip_prefix(b"SSQ3"))
     else {
         let (seed, challenges) = decode_scout_request(request)?;
@@ -96,6 +99,7 @@ const SCOUT_RESULT_MAGIC_V4: &[u8; 4] = b"SSC4";
 const SCOUT_RESULT_MAGIC_V5: &[u8; 4] = b"SSC5";
 const SCOUT_RESULT_MAGIC_V6: &[u8; 4] = b"SSC6";
 const SCOUT_RESULT_MAGIC_V7: &[u8; 4] = b"SSC7";
+const SCOUT_RESULT_MAGIC_V8: &[u8; 4] = b"SSC8";
 /// Requirement ceiling of a bridge request; far above anything the UIs
 /// produce, and what the retired binary layout's count field could hold.
 #[cfg(feature = "json-query")]
@@ -378,6 +382,39 @@ pub fn encode_scout_world_with_mappings(
     Ok(output)
 }
 
+/// `SSC8` appends floor rooms to `SSC7`: `count:u8`, then ascending regular
+/// `depth:u8`, `room_count:u8`, and unique room stable IDs as big-endian `utf8_u16`.
+/// Only `SSQ5` callers receive this version.
+///
+/// # Errors
+/// Rejects invalid floor summaries or any invalid `SSC7` fields.
+pub fn encode_scout_world_with_rooms(
+    world: &GeneratedWorld,
+    selected: Option<crate::catalog::ItemId>,
+) -> Result<Vec<u8>, WireError> {
+    let mut output = encode_scout_world_with_mappings(world, selected)?;
+    output[..4].copy_from_slice(SCOUT_RESULT_MAGIC_V8);
+    if world.floor_rooms.len() > 20 {
+        return Err(WireError::InvalidFloorRooms);
+    }
+    output.push(u8::try_from(world.floor_rooms.len()).map_err(|_| WireError::InvalidFloorRooms)?);
+    let mut previous = 0;
+    for floor in &world.floor_rooms {
+        validate_feeling_depth(floor.depth, previous)?;
+        previous = floor.depth;
+        let rooms = floor.rooms.iter().collect::<Vec<_>>();
+        if RoomSet::from_types(rooms.iter().copied()) != floor.rooms {
+            return Err(WireError::InvalidFloorRooms);
+        }
+        output.push(floor.depth);
+        output.push(u8::try_from(rooms.len()).map_err(|_| WireError::InvalidFloorRooms)?);
+        for room in rooms {
+            push_utf8_u16(&mut output, room.stable_id())?;
+        }
+    }
+    Ok(output)
+}
+
 fn validate_feeling_depth(depth: u8, previous: u8) -> Result<(), WireError> {
     if !(1..=24).contains(&depth) || depth % 5 == 0 {
         return Err(WireError::InvalidFeelingDepth);
@@ -551,7 +588,7 @@ const fn quest_depth_range(quest: u8) -> std::ops::RangeInclusive<u8> {
     }
 }
 
-/// Decodes an `SSC3` through `SSC7` scouting response. Deck metadata is
+/// Decodes an `SSC3` through `SSC8` scouting response. Deck metadata is
 /// validated against the seed; typed Rust callers obtain that same order
 /// from [`crate::trinkets::trinket_order`]. Older packets have empty feelings.
 ///
@@ -572,6 +609,7 @@ pub fn decode_scout_world(packet: &[u8]) -> Result<GeneratedWorld, WireError> {
         && magic != SCOUT_RESULT_MAGIC_V5
         && magic != SCOUT_RESULT_MAGIC_V6
         && magic != SCOUT_RESULT_MAGIC_V7
+        && magic != SCOUT_RESULT_MAGIC_V8
     {
         return Err(WireError::BadMagic);
     }
@@ -653,12 +691,16 @@ pub fn decode_scout_world(packet: &[u8]) -> Result<GeneratedWorld, WireError> {
     let feelings = if magic == SCOUT_RESULT_MAGIC_V5
         || magic == SCOUT_RESULT_MAGIC_V6
         || magic == SCOUT_RESULT_MAGIC_V7
+        || magic == SCOUT_RESULT_MAGIC_V8
     {
         decode_feelings(&mut input)?
     } else {
         Vec::new()
     };
-    if magic == SCOUT_RESULT_MAGIC_V6 || magic == SCOUT_RESULT_MAGIC_V7 {
+    if magic == SCOUT_RESULT_MAGIC_V6
+        || magic == SCOUT_RESULT_MAGIC_V7
+        || magic == SCOUT_RESULT_MAGIC_V8
+    {
         let selected = input.utf8_u16()?;
         if !selected.is_empty()
             && !crate::trinkets::trinket_order(seed)[..4]
@@ -668,7 +710,7 @@ pub fn decode_scout_world(packet: &[u8]) -> Result<GeneratedWorld, WireError> {
             return Err(WireError::InvalidTrinketOrder);
         }
     }
-    if magic == SCOUT_RESULT_MAGIC_V7 {
+    if magic == SCOUT_RESULT_MAGIC_V7 || magic == SCOUT_RESULT_MAGIC_V8 {
         let mappings = crate::item_mappings::item_mappings(seed);
         for entry in mappings
             .scrolls
@@ -684,14 +726,41 @@ pub fn decode_scout_world(packet: &[u8]) -> Result<GeneratedWorld, WireError> {
             }
         }
     }
+    let mut floor_rooms = Vec::new();
+    if magic == SCOUT_RESULT_MAGIC_V8 {
+        let count = input.u8()?;
+        if count > 20 {
+            return Err(WireError::InvalidFloorRooms);
+        }
+        let mut previous = 0;
+        for _ in 0..count {
+            let depth = input.u8()?;
+            validate_feeling_depth(depth, previous)?;
+            previous = depth;
+            let mut rooms = RoomSet::default();
+            for _ in 0..input.u8()? {
+                let id = input.utf8_u16()?;
+                let room = RoomType::ALL
+                    .iter()
+                    .copied()
+                    .find(|room| room.stable_id() == id)
+                    .ok_or(WireError::InvalidFloorRooms)?;
+                if rooms.contains(room) {
+                    return Err(WireError::InvalidFloorRooms);
+                }
+                rooms.0 |= 1 << room as u8;
+            }
+            floor_rooms.push(FloorRooms { depth, rooms });
+        }
+    }
     if !input.is_empty() {
         return Err(WireError::TrailingData);
     }
     Ok(GeneratedWorld {
         seed,
         items,
-        floor_rooms: Vec::new(),
         feelings,
+        floor_rooms,
         quests,
         ring_gems,
     })
@@ -824,6 +893,7 @@ pub enum WireError {
     InvalidQuestCount,
     InvalidRingGems,
     InvalidItemMappings,
+    InvalidFloorRooms,
     InvalidTrinketOrder,
     InvalidFeelingCount,
     InvalidFeelingDepth,
@@ -866,6 +936,7 @@ impl fmt::Display for WireError {
             Self::UnknownFeeling => "packet names an unknown floor feeling",
             Self::InvalidTrinketOrder => "packet trinket order does not match its seed",
             Self::InvalidItemMappings => "packet item mappings do not match the seed",
+            Self::InvalidFloorRooms => "packet contains invalid floor room summaries",
             Self::InvalidRingGems => "packet ring gems are not a permutation of the twelve gems",
             Self::InvalidQuestOrder => "packet quest entries must have ascending unique IDs",
             Self::InvalidQuestDepth => "packet quest depth leaves its canonical floor range",
@@ -881,12 +952,47 @@ impl std::error::Error for WireError {}
 
 #[cfg(test)]
 mod tests {
-    // Room summaries are currently web-only metadata; SSC3..SSC7 retain their bytes.
+    // Legacy SSC3..SSC7 packets omit room summaries.
     fn native_world(seed: crate::seed::DungeonSeed, depth: u8) -> crate::model::GeneratedWorld {
         use crate::search::WorldGenerator;
         let mut world = crate::main_world::CanonicalMainWorldGenerator.generate(seed, depth);
         world.floor_rooms.clear();
         world
+    }
+
+    #[test]
+    fn room_packets_preserve_generated_worlds_and_reject_malformed_summaries() {
+        use crate::search::WorldGenerator;
+        let seed = crate::seed::DungeonSeed::from_code("DJG-HMA-ULY").unwrap();
+        let world = crate::main_world::CanonicalMainWorldGenerator.generate(seed, 24);
+        let packet = super::encode_scout_world_with_rooms(&world, None).unwrap();
+        assert_eq!(&packet[..4], b"SSC8");
+        assert_eq!(super::decode_scout_world(&packet).unwrap(), world);
+        assert!(crate::floor_filters::is_farming_floor(&world, 17));
+        let mut prefix = super::encode_scout_world_with_mappings(&world, None).unwrap();
+        prefix[..4].copy_from_slice(b"SSC8");
+        for tail in [
+            vec![],
+            vec![21],
+            vec![1, 0, 0],
+            vec![1, 5, 0],
+            vec![1, 25, 0],
+            vec![2, 7, 0, 7, 0],
+            vec![2, 17, 0, 7, 0],
+            vec![1, 7, 1],
+            vec![1, 7, 1, 0, 1, b'?'],
+            vec![0, 0],
+        ] {
+            assert!(super::decode_scout_world(&[prefix.as_slice(), &tail].concat()).is_err());
+        }
+        let mut duplicate = vec![1, 7, 2];
+        for _ in 0..2 {
+            super::push_utf8_u16(&mut duplicate, "garden").unwrap();
+        }
+        assert!(super::decode_scout_world(&[prefix.as_slice(), &duplicate].concat()).is_err());
+        for end in prefix.len()..packet.len() {
+            assert!(super::decode_scout_world(&packet[..end]).is_err());
+        }
     }
 
     use crate::catalog::{ArmorEffect, Effect, ITEMS, ItemId, ItemKind, WeaponEffect, item};

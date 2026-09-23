@@ -3,6 +3,22 @@ import XCTest
 @testable import SeedSeekerKit
 
 final class FloorRequirementsTests: XCTestCase {
+    func testScoutFarmingLabelsUseGeneratedRoomsAndFeelings() async throws {
+        let actual = try await ProductionSeedFinderEngine().scoutSeed("DJG-HMA-ULY", challenges: 0)
+        XCTAssertEqual(actual.floorRooms.count, 20)
+        XCTAssertTrue(actual.isFarmingFloor(17))
+        let cases: [(Int, FloorFeeling, Set<String>, Bool)] = [
+            (7, .dark, ["garden"], true), (17, .dark, ["secret_garden"], true),
+            (22, .dark, ["garden", "secret_garden"], true), (8, .dark, ["garden"], false),
+            (7, .grass, ["garden"], false), (17, .dark, [], false), (22, .dark, ["quest_rot_garden"], false),
+        ]
+        for (depth, feeling, rooms, expected) in cases {
+            let world = ScoutWorld(seed: actual.seed, items: [], feelings: [depth: feeling], floorRooms: [depth: rooms])
+            XCTAssertEqual(world.isFarmingFloor(depth), expected)
+            XCTAssertFalse(ScoutWorld(seed: actual.seed, items: [], feelings: [depth: feeling]).isFarmingFloor(depth))
+        }
+    }
+
     func testIndependentFarmingFloorsRaiseScopeAndValidate() throws {
         var query = SavedQuery(maximumDepth: 4)
         for depth in [22, 7, 17] { query.toggleFarmingFloor(depth) }

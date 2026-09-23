@@ -6,6 +6,27 @@ namespace SeedSeeker.Tests;
 public sealed class FloorRequirementsTests
 {
     [Fact]
+    public void ScoutFarmingLabelsUseGeneratedRoomsAndFeelings()
+    {
+        var actual = new NativeEngine().Scout("DJG-HMA-ULY", 0);
+        Assert.Equal(20, actual.FloorRooms!.Count);
+        Assert.True(actual.IsFarmingFloor(17));
+        (int Depth, FloorFeeling Feeling, string[] Rooms, bool Expected)[] cases = [
+            (7, FloorFeeling.Dark, ["garden"], true), (17, FloorFeeling.Dark, ["secret_garden"], true),
+            (22, FloorFeeling.Dark, ["garden", "secret_garden"], true), (8, FloorFeeling.Dark, ["garden"], false),
+            (7, FloorFeeling.Grass, ["garden"], false), (17, FloorFeeling.Dark, [], false),
+            (22, FloorFeeling.Dark, ["quest_rot_garden"], false),
+        ];
+        foreach (var (depth, feeling, rooms, expected) in cases)
+        {
+            var world = actual with { FloorFeelings = [new(depth, feeling)],
+                FloorRooms = new Dictionary<int, IReadOnlySet<string>> { [depth] = rooms.ToHashSet() } };
+            Assert.Equal(expected, world.IsFarmingFloor(depth));
+            Assert.False((world with { FloorRooms = null }).IsFarmingFloor(depth));
+        }
+    }
+
+    [Fact]
     public void FarmingFloorsAreIndependentAndRaiseTheScope()
     {
         var query = new QuerySettings { MaximumDepth = 4 };
