@@ -105,6 +105,7 @@ impl UiRequirement {
             effect: EffectRequirement::Any,
             require_uncursed: false,
             select_trinket: false,
+            trinket_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             source: None,
@@ -126,6 +127,7 @@ impl UiRequirement {
             effect: self.effect,
             require_uncursed: self.require_uncursed,
             select_trinket: self.select_trinket,
+            trinket_transmutations: 0,
             blanket: self.blanket,
             exclude_resin: self.exclude_resin,
             source: self.source,
@@ -345,6 +347,7 @@ impl AppState {
                 effect: requirement.effect,
                 require_uncursed: requirement.require_uncursed,
                 select_trinket: requirement.select_trinket,
+                trinket_transmutations: 0,
                 blanket: requirement.blanket,
                 exclude_resin: requirement.exclude_resin,
                 source: requirement.source,
@@ -953,6 +956,7 @@ mod tests {
             kind: ItemKind::Trinket,
             item: Some(ItemId::MimicTooth),
             select_trinket: true,
+            trinket_transmutations: 0,
             ..UiRequirement::new(1)
         });
         let query = state.to_query().unwrap();
@@ -1233,6 +1237,7 @@ mod tests {
             upgrade: UpgradeRequirement::Exact(2),
             require_uncursed: true,
             select_trinket: false,
+            trinket_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             max_depth: Some(9),

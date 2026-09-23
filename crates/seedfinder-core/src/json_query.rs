@@ -185,6 +185,8 @@ struct FileRequirement {
     #[serde(default)]
     select_trinket: bool,
     #[serde(default)]
+    trinket_transmutations: u8,
+    #[serde(default)]
     blanket: bool,
     #[serde(default)]
     exclude_resin: bool,
@@ -522,6 +524,7 @@ fn convert_requirement(
         effect,
         require_uncursed: requirement.uncursed,
         select_trinket: requirement.select_trinket,
+        trinket_transmutations: requirement.trinket_transmutations,
         blanket: requirement.blanket,
         exclude_resin: requirement.exclude_resin,
         source: requirement.source.map(ItemSource::from),
@@ -729,6 +732,12 @@ fn encode_requirement(requirement: &Requirement) -> Value {
     }
     if requirement.blanket {
         output.insert("blanket".to_owned(), json!(true));
+    }
+    if requirement.trinket_transmutations > 0 {
+        output.insert(
+            "trinket_transmutations".to_owned(),
+            json!(requirement.trinket_transmutations),
+        );
     }
     if requirement.select_trinket {
         output.insert("select_trinket".to_owned(), json!(true));
@@ -1150,6 +1159,7 @@ mod tests {
                     effect: EffectRequirement::exactly(Effect::Weapon(WeaponEffect::Blazing)),
                     require_uncursed: true,
                     select_trinket: false,
+                    trinket_transmutations: 0,
                     blanket: false,
                     exclude_resin: false,
                     source: Some(ItemSource::LockedChest),
@@ -1167,6 +1177,7 @@ mod tests {
                     effect: EffectRequirement::Any,
                     require_uncursed: false,
                     select_trinket: false,
+                    trinket_transmutations: 0,
                     blanket: false,
                     exclude_resin: false,
                     source: None,
@@ -1225,6 +1236,7 @@ mod tests {
                 effect: EffectRequirement::Any,
                 require_uncursed: false,
                 select_trinket: false,
+                trinket_transmutations: 0,
                 blanket: false,
                 exclude_resin: false,
                 source: None,

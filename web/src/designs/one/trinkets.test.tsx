@@ -11,9 +11,74 @@ import type { ScoutItem } from "../../lib/wasm/types";
 import { CatalystEntry } from "./ScoutPanel";
 import { boardItems, canStack, joinAlternatives } from "./relations";
 import { RequirementEditor, namedItemEditorRequirement } from "./RequirementEditor";
-import { requirementTitle } from "./summary";
+import { requirementDetails, requirementTitle } from "./summary";
+import { chipTags } from "./RequirementBoard";
 
 describe("offered trinket pilot", () => {
+  it("round-trips exact transmutations, explains the deck, and keeps selection for initial offers", () => {
+    const query = fromQueryJson(
+      '{"requirements":[{"any_of":[{"item":"rat_skull","trinket_transmutations":13},{"item":"mimic_tooth"}]}]}',
+    );
+    const requirement = query.requirements[0];
+    expect(requirement.trinketTransmutations).toBe(13);
+    expect(fromQueryJson(JSON.stringify(toQueryDocument(query)))).toEqual(query);
+    expect(validateQuery(query).valid).toBe(true);
+    expect(requirementDetails(requirement)).toContain("after exactly 13 transmutations");
+    expect(chipTags(requirement)).toContainEqual({ text: "Transmute ×13" });
+    const html = renderToStaticMarkup(
+      <RequirementEditor
+        requirement={requirement}
+        isNew={false}
+        stack={{ count: 1, inCluster: true }}
+        onSave={() => {}}
+        onCancel={() => {}}
+      />,
+    );
+    expect(html).toContain("After transmuting");
+    expect(html).toContain("Exactly 13");
+    expect(html).toContain("All four initial offers leave the deck.");
+    expect(html).not.toContain("Choose matching trinket at +3");
+    expect(validateRequirement({ ...requirement, selectTrinket: true })).toContain(
+      "Only an initial offer can be chosen at +3.",
+    );
+    expect(validateRequirement({ ...requirement, kind: "weapon", item: "sword" })).toContain(
+      "Only trinkets can require transmutations.",
+    );
+    for (const count of [-1, 14, 1.5, "1", null]) {
+      expect(() =>
+        fromQueryJson(
+          JSON.stringify({ requirements: [{ item: "rat_skull", trinket_transmutations: count }] }),
+        ),
+      ).toThrow("trinket_transmutations");
+    }
+  });
+
+  it("highlights matched transmutations and names their exact positions", () => {
+    const order = itemsForKind("trinket").map((item, index) => ({
+      id: item.id,
+      name: item.name,
+      spriteIndex: item.sprite,
+      matched: index === 4 || index === 16,
+    }));
+    const offers: ScoutItem[] = order.slice(0, 4).map((item) => ({
+      ...item,
+      category: "trinket",
+      depth: 2,
+      source: "heap",
+      upgrade: 0,
+      cursed: false,
+      secret: false,
+      effect: null,
+      accessibility: { type: "independent" },
+      matched: false,
+    }));
+    const html = renderToStaticMarkup(<CatalystEntry offers={offers} order={order} />);
+    expect(html).toContain(`Transmutation #1: ${order[4].name}, matches requirement`);
+    expect(html).toContain(`Transmutation #13: ${order[16].name}, matches requirement`);
+    expect(html.match(/class="d1-trinket-match"/g)).toHaveLength(2);
+    expect(html).toContain("Transmutation order · 1–13");
+  });
+
   it("persists choosing a trinket through grouped queries and shows only four scout overrides", () => {
     const query = fromQueryJson(
       '{"requirements":[{"any_of":[{"item":"mimic_tooth","select_trinket":true},{"item":"rat_skull"}]}]}',

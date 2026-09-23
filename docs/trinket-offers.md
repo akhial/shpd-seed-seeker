@@ -1,6 +1,6 @@
 # Trinket search and scout
 
-The 17 named trinket item IDs search the **first four catalyst offers**.
+The 17 named trinket item IDs default to searching the **first four catalyst offers**.
 A trinket requirement must name an item; `kind: "trinket"` alone is rejected.
 Every platform requirement editor labels this category "Trinket" and has no source or
 floor Details controls for it. For example:
@@ -36,10 +36,58 @@ not model them.
 The WASM scout JSON adds `trinketOrder`, an array of exactly 17 entries with
 `id`, `name`, and `spriteIndex`. It follows private-deck draw order, independently
 of the manifest's item sorting. Entries 0–3 are the initial choices. The other
-13 entries are diagnostic deck order and never participate in offer matching;
-they do not predict gameplay transmutations. `items` contains four records with
+13 entries are transmutations #1–#13 and only participate in matching when a
+requirement explicitly requests that exact transmutation count. `items` contains four records with
 `category: "trinket"`, the catalyst's placement metadata and the normal `matched`
 flag. The scout views group these beneath a single Magical catalyst entry.
+
+## Exact transmutation requirements (web)
+
+The web editor offers **Initial offer** (the default) and **After transmuting**,
+with an exact count from 1 through 13. For example, this finds Rat Skull at the
+second transmutation, not in the initial choices or at an earlier step:
+
+```json
+{"requirements":[{"item":"rat_skull","trinket_transmutations":2}]}
+```
+
+The pinned game's [catalyst window](https://github.com/00-Evan/shattered-pixel-dungeon/blob/v4.0.0/core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/items/trinkets/TrinketCatalyst.java#L163-L166)
+draws all four offers using the trinket category deck and never returns the
+unchosen three. [Transmutation](https://github.com/00-Evan/shattered-pixel-dungeon/blob/v4.0.0/core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/items/scrolls/ScrollOfTransmutation.java#L308-L318)
+continues drawing from that deck. Before its first refill all identities are
+unique, so the current-item rejection cannot skip a card: transmutation `X`
+is full-deck index `3 + X`, regardless of the initial choice. This setting
+covers only those 13 outcomes; it does not wrap around after deck refill.
+
+An omitted or zero count retains initial-offer semantics. Negative, fractional,
+non-numeric and >13 counts are rejected, as are positive counts on non-trinkets
+or alongside `select_trinket: true`. OR alternatives can use different counts,
+or combine initial offers and transmutations. Multiple AND slots still need
+distinct outcomes. Matching a sequence does not mean the player keeps all its
+trinkets simultaneously.
+
+Virtual outcomes inherit catalyst placement and acquisition constraints, and
+are created only inside the query matcher. This does not search for transmutation
+scrolls, guarantee brewing/transmutation by a floor limit, or simulate the
+trinket's generation effects after transmuting. Initial-offer selection remains
+available on other requirements. Native editors and their scout item streams
+are unchanged. WASM exposes transmutation highlights as `matched` flags in the
+last 13 `trinketOrder` entries; its `items` still contains only four offers.
+
+Exact-count queries use share format **13**, including existing query options;
+queries without counts retain their previous bytes. Search, filtering, Scout,
+presets, result exports and share links use the same query field. Probability
+estimates for ordinary AND trinket slots use exact without-replacement deck
+probabilities (one specified position is 1/17). Queries combining counts with
+trinket alternatives, blankets, source filters, combined levels or selected
+trinkets report an unavailable estimate until a joint ordered-deck estimator
+is implemented; matching still supports these valid queries.
+
+`TrinketOracle` also calls the shipped `ScrollOfTransmutation.changeItem` for all
+13 steps after each of the four possible initial choices. Its
+`trinket_transmutation` rows contain the zero-based initial choice, one-based
+step, class and sprite. For `AAA-AAA-AAA`, all four paths give Chaotic Censer at
+#1, Rat Skull at #11 and Salt Cube at #13, agreeing with the displayed tail.
 
 The engine reads a cloned category deck without consuming the world RNG.
 Requirements default to searching offers without equipping a trinket. In the
@@ -49,8 +97,8 @@ floor after both the catalyst and the first alchemy pot have become available.
 An earlier visited pot can be revisited when the catalyst is found. The pot's
 own floor is generated before brewing and stays unchanged.
 
-For a chosen OR slot, all its alternatives count: exactly one distinct initial
-offer must match. Two or more matches mean **No Trinket**, even when only one
+For a chosen OR slot, all its initial-offer alternatives count: exactly one
+distinct initial offer must match. Transmutation alternatives never select an offer. Two or more matches mean **No Trinket**, even when only one
 alternative carries the selection flag. Ambiguity across multiple chosen slots
 also means No Trinket. The remaining 13 deck entries never affect selection.
 
@@ -88,7 +136,9 @@ and scout overrides are integrated in web, Windows, macOS, Linux, and Android.
 Web, Windows, macOS, Linux, and Android share named trinket search and OR
 semantics. Each scout uses four square initial-choice cards, a flat green
 matched border/fill, single-line names that shrink to fit, and one row of 13
-smaller nearest-neighbor icons below "Remaining deck order." The platform's
+smaller nearest-neighbor icons below "Remaining deck order." The web scout labels
+this row "Transmutation order · 1–13", identifies each position in its tooltip and
+accessible name, and highlights matching transmutations. The platform's
 own controls, typography, and colors provide the surrounding UI.
 
 Native production scout responses use `SSC5`: the existing `SSC3` layout,
@@ -114,7 +164,7 @@ selected stable ID; an empty string means no selection. Scout matches must
 use the same request bytes so item indices refer to the selected world.
 Linux uses `production_scout_world_selected` directly with equivalent semantics.
 
-`TrinketOracle` verifies the order against the pinned BETA-4 desktop JAR:
+`TrinketOracle` verifies the order against the pinned v4.0.0 desktop JAR:
 
 ```sh
 tooling/oracle-4.0/build.sh

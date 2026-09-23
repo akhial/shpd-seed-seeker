@@ -295,6 +295,8 @@ pub struct Requirement {
     pub require_uncursed: bool,
     /// Choose this offer (or its unique matching OR alternative) at +3 after brewing.
     pub select_trinket: bool,
+    /// Zero searches initial offers; 1–13 searches that exact transmutation before refill.
+    pub trinket_transmutations: u8,
     /// Extra predicate on an ordinary assigned item or a selected resin donor.
     /// Blanket slots may reuse that item and never consume another occurrence.
     pub blanket: bool,
@@ -321,6 +323,10 @@ impl Requirement {
     }
 
     fn matching_identity(self, candidate: &WorldItem) -> Option<ItemId> {
+        if self.trinket_transmutations > 0 {
+            // Transmutation requires deck context; Assignment supplies a virtual candidate.
+            return None;
+        }
         let identity = match self.item {
             None => candidate.item,
             Some(wanted) if wanted == candidate.item => candidate.item,
@@ -415,6 +421,13 @@ impl Requirement {
             && (self.identity_group.is_some() || self.level_sum.is_some() || self.select_trinket)
         {
             return Err(QueryError::BlanketWithRelations);
+        }
+        if self.trinket_transmutations > 0
+            && (self.kind != ItemKind::Trinket
+                || self.trinket_transmutations > crate::trinkets::TRANSMUTATION_COUNT
+                || self.select_trinket)
+        {
+            return Err(QueryError::InvalidTrinketTransmutations);
         }
         if self.select_trinket && self.kind != ItemKind::Trinket {
             return Err(QueryError::SelectionRequiresTrinket);
@@ -786,7 +799,7 @@ impl SearchQuery {
             .filter(|slot| !slot.optional)
             .count();
         if assignment.blankets.iter().any(Vec::is_empty)
-            || mandatory > world.items.len()
+            || mandatory > assignment.items.len()
             || assignment
                 .slots
                 .iter()
@@ -866,7 +879,7 @@ struct Slot<'query> {
 /// one slot, and every mandatory slot must be served by a distinct item.
 struct Assignment<'query> {
     resin: resin::ResinSupply,
-    items: &'query [WorldItem],
+    items: std::borrow::Cow<'query, [WorldItem]>,
     /// Resolved slots, most constrained slot first.
     slots: Vec<Slot<'query>>,
     sum_groups: BTreeMap<u8, SumGroup>,
@@ -893,6 +906,7 @@ impl<'query> Assignment<'query> {
     /// Builds per-slot candidate lists under the query's floor limits and the
     /// blacksmith-reward exclusion, sorted most constrained slot first.
     fn prepare(query: &'query SearchQuery, world: &'query GeneratedWorld) -> Self {
+        let items = crate::trinkets::matching_items(query, world);
         let mut slots: Vec<Slot<'query>> = Vec::new();
         let mut blankets = Vec::new();
         let reforge_copies = if query.arcane_resin_auto {
@@ -910,12 +924,24 @@ impl<'query> Assignment<'query> {
                 .all(|&member| query.requirements[member].level_sum.is_some());
             for member in slot {
                 let requirement = &query.requirements[member];
-                for (index, candidate) in world.items.iter().enumerate() {
+                let (start, end) = if requirement.trinket_transmutations == 0 {
+                    (0, world.items.len())
+                } else {
+                    let start =
+                        world.items.len() + usize::from(requirement.trinket_transmutations) - 1;
+                    (start, (start + 1).min(items.len()))
+                };
+                let predicate = Requirement {
+                    trinket_transmutations: 0,
+                    ..*requirement
+                };
+                for index in start..end {
+                    let candidate = &items[index];
                     if candidate.depth <= query.max_depth
                         && candidate.depth <= requirement.max_depth.unwrap_or(query.max_depth)
                         && (!query.exclude_blacksmith_rewards
                             || candidate.source != ItemSource::BlacksmithReward)
-                        && let Some(identity) = requirement.matching_identity(candidate)
+                        && let Some(identity) = predicate.matching_identity(candidate)
                     {
                         candidates.push((
                             index,
@@ -944,11 +970,11 @@ impl<'query> Assignment<'query> {
         slots.sort_by_key(|slot| slot.candidates.len());
         Self {
             resin: resin::ResinSupply::prepare(query, &world.items),
-            items: &world.items,
+            used: vec![false; items.len()],
+            items,
             slots,
             sum_groups,
             blankets,
-            used: vec![false; world.items.len()],
             resin_cost: 0,
             scenarios: BTreeMap::new(),
             identities: BTreeMap::new(),
@@ -965,7 +991,7 @@ impl<'query> Assignment<'query> {
                 && self
                     .resin
                     .select_with_blankets(
-                        self.items,
+                        &self.items,
                         &self.used,
                         self.resin_cost,
                         &self.scenarios,
@@ -1004,7 +1030,7 @@ impl<'query> Assignment<'query> {
 
     fn resin_selection(&self) -> Option<Vec<usize>> {
         self.resin
-            .select(self.items, &self.used, self.resin_cost, &self.scenarios)
+            .select(&self.items, &self.used, self.resin_cost, &self.scenarios)
     }
 
     /// Places one item into one slot when every cross-item constraint still
@@ -1109,6 +1135,8 @@ pub struct ScoutMatches {
     /// order [`crate::wire::encode_scout_world`] emits — set for every item
     /// the selection claimed for a satisfied condition.
     pub matched: Vec<bool>,
+    /// Matches for transmutations 1–13, separate from generated world item indices.
+    pub transmuted_trinkets: [bool; crate::trinkets::TRANSMUTATION_COUNT as usize],
     /// How many conditions the selection satisfies: one per filled plain
     /// slot, plus one per combined-level group whose assigned items reach
     /// its total. A satisfied group flags every contributing item, so more
@@ -1162,11 +1190,17 @@ pub fn scout_matches(world: &GeneratedWorld, query: &SearchQuery) -> ScoutMatche
     };
     search.visit(0);
     let mut matched = vec![false; world.items.len()];
-    for index in &search.best {
-        matched[*index] = true;
+    let mut transmuted_trinkets = [false; crate::trinkets::TRANSMUTATION_COUNT as usize];
+    for &index in &search.best {
+        if index < matched.len() {
+            matched[index] = true;
+        } else {
+            transmuted_trinkets[index - matched.len()] = true;
+        }
     }
     ScoutMatches {
         matched,
+        transmuted_trinkets,
         matched_requirements: search.best_conditions
             + query
                 .floor_requirements
@@ -1231,7 +1265,7 @@ impl BestSubset<'_> {
                     })
                     .collect();
                 if let Some(resin_items) = self.assignment.resin.select_with_blankets(
-                    self.assignment.items,
+                    &self.assignment.items,
                     &self.assignment.used,
                     self.assignment.resin_cost,
                     &self.assignment.scenarios,
@@ -1295,6 +1329,7 @@ pub enum QueryError {
     ItemKindMismatch,
     TrinketRequiresIdentity,
     SelectionRequiresTrinket,
+    InvalidTrinketTransmutations,
     ResinExclusionRequiresWand,
     ArtifactRequiresIdentity,
     InvalidWeaponCategory,
@@ -1371,6 +1406,9 @@ impl fmt::Display for QueryError {
             Self::ResinExclusionRequiresWand => {
                 "only an ordinary wand requirement can exclude Auto resin"
             }
+            Self::InvalidTrinketTransmutations => {
+                "trinket transmutations must be 1–13 on a named trinket without initial-offer selection"
+            }
             Self::SelectionRequiresTrinket => "only a named trinket can be selected",
             Self::TrinketRequiresIdentity => "select a trinket",
             Self::ArtifactRequiresIdentity => "select an artifact",
@@ -1439,6 +1477,7 @@ mod tests {
             effect: EffectRequirement::Any,
             require_uncursed: false,
             select_trinket: false,
+            trinket_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             source: None,
@@ -1739,6 +1778,7 @@ mod tests {
             effect: EffectRequirement::Any,
             require_uncursed: false,
             select_trinket: false,
+            trinket_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             source: None,
@@ -1763,6 +1803,7 @@ mod tests {
             effect: EffectRequirement::Any,
             require_uncursed: false,
             select_trinket: false,
+            trinket_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             source: None,
@@ -1843,6 +1884,7 @@ mod tests {
             effect: EffectRequirement::exactly(Effect::Weapon(WeaponEffect::Displacing)),
             require_uncursed: true,
             select_trinket: false,
+            trinket_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             ..requirement(ItemId::Sword)
@@ -1861,6 +1903,7 @@ mod tests {
             effect: EffectRequirement::Any,
             require_uncursed: false,
             select_trinket: false,
+            trinket_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             source: None,
@@ -1880,6 +1923,7 @@ mod tests {
             effect: EffectRequirement::Any,
             require_uncursed: false,
             select_trinket: false,
+            trinket_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             source: None,
@@ -1917,6 +1961,7 @@ mod tests {
             effect: EffectRequirement::Any,
             require_uncursed: false,
             select_trinket: false,
+            trinket_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             source: None,
@@ -2007,6 +2052,7 @@ mod tests {
             effect: EffectRequirement::Any,
             require_uncursed: false,
             select_trinket: false,
+            trinket_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             source: None,
@@ -2086,6 +2132,7 @@ mod tests {
             effect: EffectRequirement::Any,
             require_uncursed: false,
             select_trinket: false,
+            trinket_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             source,
@@ -2116,6 +2163,7 @@ mod tests {
                     effect: EffectRequirement::Any,
                     require_uncursed: false,
                     select_trinket: false,
+                    trinket_transmutations: 0,
                     blanket: false,
                     exclude_resin: false,
                     source: None,
@@ -2230,6 +2278,7 @@ mod tests {
             effect: EffectRequirement::Any,
             require_uncursed: false,
             select_trinket: false,
+            trinket_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             source: None,
@@ -2345,6 +2394,7 @@ mod tests {
             effect: EffectRequirement::Any,
             require_uncursed: false,
             select_trinket: false,
+            trinket_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             source: None,
@@ -2430,6 +2480,7 @@ mod tests {
                 ),
                 require_uncursed: true,
                 select_trinket: false,
+                trinket_transmutations: 0,
                 blanket: false,
                 exclude_resin: false,
                 ..plain(ItemKind::Weapon)
@@ -2445,6 +2496,7 @@ mod tests {
                 ),
                 require_uncursed: true,
                 select_trinket: false,
+                trinket_transmutations: 0,
                 blanket: false,
                 exclude_resin: false,
                 ..plain(ItemKind::Weapon)
@@ -2743,6 +2795,7 @@ mod tests {
             effect: EffectRequirement::Any,
             require_uncursed: false,
             select_trinket: false,
+            trinket_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             source: None,

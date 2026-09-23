@@ -48,6 +48,9 @@ export const LEVEL_SUM_GROUP_MAX = 4;
 /** The most items a stack may ask for, its anchor included. */
 export const STACK_MAX = 3;
 
+/** First-deck transmutations after all four catalyst offers have been consumed. */
+export const TRINKET_TRANSMUTATION_MAX = 13;
+
 /** The highest upgrade a search may name for an item family. v4.0.0's Imp
  * vault sets the ceilings: its final-room options reach +5 on a weapon or
  * thrown weapon, +4 on armor, wands and rings. */
@@ -315,6 +318,8 @@ function requirementToDocument(requirement: RequirementState): RequirementDocume
   if (requirement.blanket) output.blanket = true;
   if (requirement.excludeResin) output.exclude_resin = true;
   if (requirement.selectTrinket) output.select_trinket = true;
+  if (requirement.trinketTransmutations)
+    output.trinket_transmutations = requirement.trinketTransmutations;
   if (requirement.source) output.source = requirement.source;
   if (requirement.identityGroup) output.identity_group = requirement.identityGroup;
   if (requirement.maxDepth !== undefined) output.max_depth = requirement.maxDepth;
@@ -459,6 +464,17 @@ function requirementFromDocument(
   }
   if (value.exclude_resin) requirement.excludeResin = true;
   if (value.select_trinket) requirement.selectTrinket = true;
+  if (raw.trinket_transmutations !== undefined) {
+    if (
+      typeof raw.trinket_transmutations !== "number" ||
+      !Number.isInteger(raw.trinket_transmutations) ||
+      raw.trinket_transmutations < 0 ||
+      raw.trinket_transmutations > TRINKET_TRANSMUTATION_MAX
+    )
+      throw new Error("trinket_transmutations must be an integer from 0 to 13");
+    if (raw.trinket_transmutations > 0)
+      requirement.trinketTransmutations = raw.trinket_transmutations;
+  }
   if (alternativeGroup !== undefined) requirement.alternativeGroup = alternativeGroup;
   // The unreleased upgrade_sum key is refused rather than reinterpreted.
   if (raw.upgrade_sum !== undefined)
@@ -553,6 +569,17 @@ export interface ValidationResult {
 
 export function validateRequirement(requirement: RequirementState): string[] {
   const errors: string[] = [];
+  const transmutations = requirement.trinketTransmutations ?? 0;
+  if (
+    !Number.isInteger(transmutations) ||
+    transmutations < 0 ||
+    transmutations > TRINKET_TRANSMUTATION_MAX
+  )
+    errors.push("Choose a transmutation count from 1 to 13.");
+  if (transmutations > 0 && requirementFamily(requirement) !== "trinket")
+    errors.push("Only trinkets can require transmutations.");
+  if (transmutations > 0 && requirement.selectTrinket)
+    errors.push("Only an initial offer can be chosen at +3.");
   if (requirement.excludeResin !== undefined && typeof requirement.excludeResin !== "boolean")
     errors.push("Invalid Auto resin exclusion.");
   if (

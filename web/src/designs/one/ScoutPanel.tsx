@@ -580,10 +580,15 @@ export function CatalystEntry({
       </ol>
       {order.length > 4 && (
         <>
-          <p className="d1-caption d1-trinket-tail-label">Remaining deck order</p>
+          <p className="d1-caption d1-trinket-tail-label">Transmutation order · 1–13</p>
           <ol className="d1-trinket-tail" aria-label="Remaining trinket deck order">
-            {order.slice(4).map((trinket) => (
-              <li key={trinket.id} title={trinket.name} aria-label={trinket.name}>
+            {order.slice(4).map((trinket, index) => (
+              <li
+                key={trinket.id}
+                className={trinket.matched ? "d1-trinket-match" : undefined}
+                title={`Transmutation #${index + 1}: ${trinket.name}${trinket.matched ? " — matches requirement" : ""}`}
+                aria-label={`Transmutation #${index + 1}: ${trinket.name}${trinket.matched ? ", matches requirement" : ""}`}
+              >
                 <TrinketSprite cell={trinket.spriteIndex} maximum={24} />
               </li>
             ))}

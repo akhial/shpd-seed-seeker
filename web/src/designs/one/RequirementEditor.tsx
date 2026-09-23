@@ -15,6 +15,7 @@ import {
   EXACT_TIER_MIN,
   FLOOR_LIMIT_OPTIONS,
   STACK_MAX,
+  TRINKET_TRANSMUTATION_MAX,
   canonicalEffect,
   clampUpgrade,
   effectNamesOf,
@@ -234,6 +235,7 @@ export function RequirementEditor({
       uncursed: nextKind === "trinket" ? false : current.uncursed,
       excludeResin: nextKind === "wand" ? current.excludeResin : undefined,
       selectTrinket: nextKind === "trinket" ? current.selectTrinket : undefined,
+      trinketTransmutations: nextKind === "trinket" ? current.trinketTransmutations : undefined,
       item:
         nextKind === "trinket" || nextKind === "artifact"
           ? itemsForKind(nextKind)[0].id
@@ -437,7 +439,51 @@ export function RequirementEditor({
             )}
           </section>
 
-          {family === "trinket" && !draft.blanket && (
+          {family === "trinket" && (
+            <section className="d1-modal-section">
+              <Field label="Obtain trinket" stack>
+                <Segmented
+                  value={draft.trinketTransmutations ? "transmute" : "offer"}
+                  options={[
+                    { value: "offer", label: "Initial offer" },
+                    { value: "transmute", label: "After transmuting" },
+                  ]}
+                  onChange={(mode) =>
+                    reviseDraft((current) => ({
+                      ...current,
+                      trinketTransmutations: mode === "transmute" ? 1 : undefined,
+                      selectTrinket: mode === "transmute" ? undefined : current.selectTrinket,
+                    }))
+                  }
+                  ariaLabel="How to obtain the trinket"
+                />
+              </Field>
+              {!!draft.trinketTransmutations && (
+                <>
+                  <Field label="Transmutations">
+                    <Stepper
+                      value={draft.trinketTransmutations}
+                      min={1}
+                      max={TRINKET_TRANSMUTATION_MAX}
+                      onChange={(value) =>
+                        reviseDraft((current) => ({ ...current, trinketTransmutations: value }))
+                      }
+                      ariaLabel="Exact trinket transmutations"
+                      format={(value) => `Exactly ${value}`}
+                    />
+                  </Field>
+                  <p className="d1-caption">
+                    All four initial offers leave the deck. Transmutation #1 gives the first
+                    remaining trinket, whichever offer you choose. Searches the first 13
+                    transmutations, before the deck refills. Scroll availability and trinket effects
+                    after transmuting are not simulated.
+                  </p>
+                </>
+              )}
+            </section>
+          )}
+
+          {family === "trinket" && !draft.blanket && !draft.trinketTransmutations && (
             <section className="d1-modal-section">
               <label className="d1-check">
                 <input
@@ -452,7 +498,8 @@ export function RequirementEditor({
               </label>
               <p className="d1-caption">
                 Applies from the next floor after the catalyst can first be brewed. In an OR group,
-                exactly one of its trinkets must be offered; multiple matches use No Trinket.
+                exactly one of its initial-offer alternatives must be offered; multiple matches use
+                No Trinket.
               </p>
             </section>
           )}

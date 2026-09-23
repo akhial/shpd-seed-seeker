@@ -202,6 +202,13 @@ fn equipment_probability_without_floors(query: &SearchQuery, profile: Profile) -
 fn trinket_probability(query: &SearchQuery) -> f64 {
     use crate::catalog::ITEMS;
 
+    if query
+        .requirements
+        .iter()
+        .any(|r| r.trinket_transmutations > 0)
+    {
+        return transmutation_probability(query);
+    }
     if query.requirements.iter().any(|requirement| {
         requirement.kind == ItemKind::Trinket
             && (requirement.source.is_some() || requirement.level_sum.is_some())
@@ -277,6 +284,59 @@ fn trinket_probability(query: &SearchQuery) -> f64 {
         }
     }
     total / f64::from(samples)
+}
+
+/// Exact first-deck probability for independent named trinket slots. Complex
+/// alternatives/selection need a joint ordered-deck model, so report unavailable
+/// instead of incorrectly treating transmutations as initial offers.
+fn transmutation_probability(query: &SearchQuery) -> f64 {
+    let mut identities = Vec::new();
+    let mut steps = Vec::new();
+    let mut offers = 0_u8;
+    let mut depth = query.max_depth.min(3);
+    let mut probability = 1.0;
+    for r in query
+        .requirements
+        .iter()
+        .filter(|r| r.kind == ItemKind::Trinket)
+    {
+        if r.alternative_group.is_some()
+            || r.blanket
+            || r.select_trinket
+            || r.source.is_some()
+            || r.level_sum.is_some()
+        {
+            return f64::NAN;
+        }
+        let Some(id) = r.item else {
+            return f64::NAN;
+        };
+        if id == ItemId::TrinketCatalyst
+            || identities.contains(&id)
+            || (r.trinket_transmutations > 0 && steps.contains(&r.trinket_transmutations))
+        {
+            return 0.0;
+        }
+        let numerator = if r.trinket_transmutations == 0 {
+            if offers == 4 {
+                return 0.0;
+            }
+            offers += 1;
+            f64::from(5 - offers)
+        } else {
+            steps.push(r.trinket_transmutations);
+            1.0
+        };
+        probability *= numerator
+            / f64::from(17 - u8::try_from(identities.len()).expect("at most 17 identities"));
+        identities.push(id);
+        depth = depth.min(r.max_depth.unwrap_or(query.max_depth));
+    }
+    let mut equipment = query.clone();
+    equipment
+        .requirements
+        .retain(|r| r.kind != ItemKind::Trinket);
+    probability * f64::from(depth) / 3.0 * equipment_probability(&equipment, Profile::None)
 }
 
 /// Offers that could satisfy this slot at the catalyst's floor.
@@ -2314,6 +2374,7 @@ mod tests {
             effect: EffectRequirement::Any,
             require_uncursed: false,
             select_trinket: false,
+            trinket_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             source: None,
