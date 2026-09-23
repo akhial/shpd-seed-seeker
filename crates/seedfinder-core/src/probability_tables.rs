@@ -18,6 +18,7 @@ use crate::generator::{
 };
 use crate::model::ItemSource;
 
+pub(crate) mod embedded;
 pub(crate) mod first_floor;
 pub mod floors;
 mod measured;

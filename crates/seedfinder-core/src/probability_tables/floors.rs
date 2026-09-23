@@ -5,7 +5,8 @@
 //! counts (all u32), then variable room rows. A room row stores its u32 sample
 //! count, u32 marginals, u8 indices of nonconstant variables, and a packed
 //! lower triangle of u32 intersections. Constant variables need no pairs.
-//! Every number is little endian. No allocation or decompression at runtime.
+//! Every number is little endian. The embedded table is decompressed once on
+//! first use; individual lookups need no allocation or decompression.
 #![allow(clippy::float_cmp)] // Counts are u32 integers represented exactly as f64.
 
 use crate::{

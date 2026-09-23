@@ -53,7 +53,17 @@ u16 FLP3 shards and current u32 FLP4 shards, producing FLP4 without truncation.
 The 3,909,168-byte `floors.bin` stores feeling counts, room presence, within-floor
 room intersections, repeated room presence across floors, and cross-floor
 feeling pairs. Constants need no pair entries. Counts and offsets support
-direct reads without decompression, runtime initialization, or dependencies.
+direct reads after the table is initialized.
+
+The core build losslessly compresses the five binary probability tables with
+DEFLATE (a zlib wrapper plus a four-byte original length). Checked-in `.bin`
+files and calibrator output stay unchanged. Each embedded table is decompressed
+once on first use, bounded to its original length, and cached across estimator
+threads. This trades up to about 6 MiB of heap for smaller native binaries;
+search and generation never decompress in their hot paths. A unit test compares
+every decompressed byte with the calibration files, including floating-point
+bit patterns. Android tracks the binary files as Gradle inputs so recalibrating
+a table also rebuilds JNI.
 
 Ordinary profiles pool feelings with identical room scheduling to reduce noise.
 Mossy Clump and Trap Mechanism instead use separate room distributions for all

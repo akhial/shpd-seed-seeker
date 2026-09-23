@@ -6,7 +6,7 @@
 use super::{Predicate, artifact_identity_count, tally};
 use crate::{
     model::ItemSource,
-    probability_tables::{prize_group, sources},
+    probability_tables::{embedded, prize_group, sources},
     query::EffectRequirement,
 };
 use std::{collections::BTreeMap, sync::OnceLock};
@@ -22,7 +22,7 @@ struct Placement {
 fn worlds() -> &'static [Vec<Placement>] {
     static WORLDS: OnceLock<Vec<Vec<Placement>>> = OnceLock::new();
     WORLDS.get_or_init(|| {
-        let mut bytes = &include_bytes!("../probability_tables/artifact_worlds.bin")[..];
+        let mut bytes = &embedded::ARTIFACT_WORLDS[..];
         let mut worlds = Vec::new();
         while let Some((&count, tail)) = bytes.split_first() {
             let (records, tail) = tail.split_at(usize::from(count) * 11);
