@@ -1,6 +1,49 @@
 import SeedSeekerKit
 import SwiftUI
 
+/// The web's "Any" chip art: category silhouette under a shadowed green mark.
+/// It has no ring identity glyph or effect glow because it names no specific item.
+struct WildcardSpriteView: View {
+    var kind: ItemKind
+    var pointSize: Int = 16
+
+    private var spriteIndex: Int {
+        switch kind {
+        case .weapon, .meleeWeapon: 112
+        case .thrownWeapon: 149
+        case .armor: 178
+        case .wand: 209
+        case .ring: 224
+        case .trinket: 70
+        case .artifact: 6
+        }
+    }
+
+    var body: some View {
+        ZStack {
+            if let image = SpriteAtlas.bundled?.composedSprite(spriteIndex: spriteIndex,
+                                                             pointSize: pointSize, layer: .art) {
+                Image(decorative: image, scale: CGFloat(SpriteAtlas.pixelScale))
+                    .interpolation(.none)
+                    .antialiased(false)
+                    .grayscale(1)
+                    .opacity(0.3)
+            }
+            Circle().fill(RadialGradient(
+                stops: [.init(color: .black.opacity(0.4), location: 0),
+                        .init(color: .black.opacity(0.18), location: 0.45),
+                        .init(color: .clear, location: 1)],
+                center: .center, startRadius: 0, endRadius: CGFloat(pointSize) / 2))
+            Text("?")
+                .font(.system(size: CGFloat(pointSize) * 14 / 18, weight: .semibold))
+                .foregroundStyle(Color.shatteredGreen)
+                .shadow(color: Color(nsColor: .windowBackgroundColor), radius: 2, y: 1)
+        }
+        .frame(width: CGFloat(pointSize), height: CGFloat(pointSize))
+        .accessibilityHidden(true)
+    }
+}
+
 /// An item's real Shattered Pixel Dungeon sprite, pulsing with its
 /// enchantment/curse glow when it carries one.
 ///
@@ -11,11 +54,10 @@ import SwiftUI
 /// reproduction of upstream's `texel*(1-v) + glow*v` shader the web app uses, so
 /// only the silhouette tints and there is no halo outside it.
 ///
-/// Falls back to a question mark when there is no concrete item (a wildcard
-/// requirement) and when the atlas is not bundled, which is the case for a bare
-/// `swift run` outside the `.app`.
+/// Falls back to a question mark when the item is missing or the atlas is not
+/// bundled, which is the case for a bare `swift run` outside the `.app`.
 struct ItemSpriteView: View {
-    /// The concrete item, or nil for a wildcard requirement.
+    /// The concrete item, or nil when it is unavailable.
     var item: CatalogItem?
     /// The ring gems of the run this item belongs to, when it belongs to one:
     /// a ring is drawn in its run's gem cell, so a scouted item must pass its

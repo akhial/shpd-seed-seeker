@@ -36,7 +36,7 @@ public sealed class SpriteView : Grid
     private bool live;
     private XamlRoot? hookedRoot;
     private TypedEventHandler<XamlRoot, XamlRootChangedEventArgs>? rootChanged;
-    private (int Index, int TypeIcon, int Size, uint Glow) rendered = (int.MinValue, int.MinValue, 0, 0);
+    private (int Index, int TypeIcon, int Size, uint Glow, bool Grayscale) rendered = (int.MinValue, int.MinValue, 0, 0, false);
     private int generation;
 
     public SpriteView()
@@ -70,6 +70,16 @@ public sealed class SpriteView : Grid
     /// <summary>Edge of the square sprite box, in DIPs.</summary>
     public static readonly DependencyProperty SpriteSizeProperty = DependencyProperty.Register(
         nameof(SpriteSize), typeof(double), typeof(SpriteView), new PropertyMetadata(24.0, OnVisualChanged));
+
+    /// <summary>Desaturate category artwork used beneath a wildcard mark.</summary>
+    public static readonly DependencyProperty GrayscaleProperty = DependencyProperty.Register(
+        nameof(Grayscale), typeof(bool), typeof(SpriteView), new PropertyMetadata(false, OnVisualChanged));
+
+    public bool Grayscale
+    {
+        get => (bool)GetValue(GrayscaleProperty);
+        set => SetValue(GrayscaleProperty, value);
+    }
 
     /// <summary>Colour the art blends toward at the pulse peak.</summary>
     public static readonly DependencyProperty GlowColorProperty = DependencyProperty.Register(
@@ -148,7 +158,7 @@ public sealed class SpriteView : Grid
         // The high bit distinguishes "no glow" from "glow that happens to be black".
         var tint = period > 0 ? 0x1000000u | (uint)((color.R << 16) | (color.G << 8) | color.B) : 0u;
         var pixels = (int)Math.Max(1, Math.Round(size * EffectiveScale()));
-        var key = (SpriteIndex, TypeIconIndex, pixels, tint);
+        var key = (SpriteIndex, TypeIconIndex, pixels, tint, Grayscale);
         if (!force && key == rendered) return;
         rendered = key;
         StopPulse();
@@ -178,7 +188,7 @@ public sealed class SpriteView : Grid
         // Completes synchronously once the atlas has been decoded.
         var atlas = await ItemAtlas.GetAsync();
         if (atlas is null || token != generation) return;
-        art.Source = atlas.Sprite(SpriteIndex, TypeIconIndex, pixels);
+        art.Source = atlas.Sprite(SpriteIndex, TypeIconIndex, pixels, Grayscale);
         if (period > 0)
         {
             glow.Source = atlas.Mask(SpriteIndex, pixels, GlowColor);

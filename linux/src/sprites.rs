@@ -28,7 +28,7 @@ use std::rc::Rc;
 
 use adw::prelude::*;
 use gtk::{cairo, gdk, gio, glib};
-use shpd_seedfinder_core::catalog::ItemDefinition;
+use shpd_seedfinder_core::catalog::{ItemDefinition, ItemKind, WeaponCategory};
 use shpd_seedfinder_core::level_prelude::Feeling;
 use shpd_seedfinder_core::run::RingGems;
 
@@ -130,6 +130,25 @@ struct Pixels {
 }
 
 impl Pixels {
+    /// CSS grayscale(1) luminance, retaining premultiplied alpha.
+    fn grayscale(&self) -> Self {
+        Self {
+            width: self.width,
+            height: self.height,
+            words: self
+                .words
+                .iter()
+                .map(|&word| {
+                    let gray = (2126 * ((word >> 16) & 255)
+                        + 7152 * ((word >> 8) & 255)
+                        + 722 * (word & 255))
+                        / 10_000;
+                    (word & 0xff00_0000) | (gray << 16) | (gray << 8) | gray
+                })
+                .collect(),
+        }
+    }
+
     fn decode(resource: &str) -> Option<Self> {
         let bytes = gio::resources_lookup_data(resource, gio::ResourceLookupFlags::NONE).ok()?;
         let texture = gdk::Texture::from_bytes(&bytes).ok()?;
@@ -246,9 +265,10 @@ fn sample(destination: i32, destination_extent: i32, source_extent: i32) -> i32 
 /// manifest can list dozens of items and animate them without rescaling.
 struct Atlas {
     items: Pixels,
+    grayscale_items: Pixels,
     icons: Pixels,
     bounds: RefCell<HashMap<u16, Rect>>,
-    art: RefCell<HashMap<(u16, i32), Rc<cairo::ImageSurface>>>,
+    art: RefCell<HashMap<(u16, i32, bool), Rc<cairo::ImageSurface>>>,
     glyphs: RefCell<HashMap<(usize, i32), Rc<cairo::ImageSurface>>>,
 }
 
@@ -261,6 +281,7 @@ impl Atlas {
             "{RESOURCE_BASE_PATH}/third_party/shattered-pixel-dungeon/item_icons.png"
         ))?;
         Some(Rc::new(Self {
+            grayscale_items: items.grayscale(),
             items,
             icons,
             bounds: RefCell::new(HashMap::new()),
@@ -291,7 +312,16 @@ impl Atlas {
 
     /// The cropped sprite art scaled to a `size`-device-pixel box.
     fn art(&self, sprite_index: u16, size: i32) -> Option<Rc<cairo::ImageSurface>> {
-        if let Some(surface) = self.art.borrow().get(&(sprite_index, size)) {
+        self.artwork(sprite_index, size, false)
+    }
+
+    fn artwork(
+        &self,
+        sprite_index: u16,
+        size: i32,
+        grayscale: bool,
+    ) -> Option<Rc<cairo::ImageSurface>> {
+        if let Some(surface) = self.art.borrow().get(&(sprite_index, size, grayscale)) {
             return Some(Rc::clone(surface));
         }
         let cell = Self::cell(sprite_index);
@@ -303,14 +333,18 @@ impl Atlas {
             height: bounds.height,
         };
         let surface = Rc::new(scale_nearest(
-            &self.items,
+            if grayscale {
+                &self.grayscale_items
+            } else {
+                &self.items
+            },
             source,
             scaled_extent(bounds.width, size),
             scaled_extent(bounds.height, size),
         )?);
         self.art
             .borrow_mut()
-            .insert((sprite_index, size), Rc::clone(&surface));
+            .insert((sprite_index, size, grayscale), Rc::clone(&surface));
         Some(surface)
     }
 
@@ -474,6 +508,68 @@ fn glow_value(frame_time: i64, period: f64) -> f64 {
 #[must_use]
 pub fn item_image(sprite: ItemSprite, glow: Option<Glow>) -> gtk::Widget {
     item_image_sized(sprite, glow, SIZE)
+}
+
+/// The web's category silhouette and shadowed green question mark, without a
+/// concrete ring glyph or animated effect tint.
+pub fn wildcard_image(kind: ItemKind, category: Option<WeaponCategory>) -> gtk::Widget {
+    let index = match (kind, category) {
+        (ItemKind::Weapon, Some(WeaponCategory::Thrown)) => 149,
+        (ItemKind::Weapon, _) => 112,
+        (ItemKind::Armor, _) => 178,
+        (ItemKind::Wand, _) => 209,
+        (ItemKind::Ring, _) => 224,
+        (ItemKind::Trinket, _) => 70,
+        (ItemKind::Artifact, _) => 6,
+    };
+    let area = gtk::DrawingArea::builder()
+        .content_width(SIZE)
+        .content_height(SIZE)
+        .build();
+    let atlas = atlas();
+    area.set_draw_func(move |area, context, width, height| {
+        let factor = area.scale_factor().max(1);
+        if let Some(atlas) = &atlas
+            && let Some(art) = atlas.artwork(index, SIZE * factor, true)
+        {
+            let _ = context.save();
+            context.scale(1.0 / f64::from(factor), 1.0 / f64::from(factor));
+            let x = f64::from(width * factor - art.width()) / 2.0;
+            let y = f64::from(height * factor - art.height()) / 2.0;
+            if context
+                .set_source_surface(&*art, x.round(), y.round())
+                .is_ok()
+            {
+                context.source().set_filter(cairo::Filter::Nearest);
+                let _ = context.paint_with_alpha(0.3);
+            }
+            let _ = context.restore();
+        }
+        let shadow = cairo::RadialGradient::new(
+            f64::from(width) / 2.0,
+            f64::from(height) / 2.0,
+            0.0,
+            f64::from(width) / 2.0,
+            f64::from(height) / 2.0,
+            f64::from(SIZE) / 2.0,
+        );
+        shadow.add_color_stop_rgba(0.0, 0.0, 0.0, 0.0, 0.4);
+        shadow.add_color_stop_rgba(0.45, 0.0, 0.0, 0.0, 0.18);
+        shadow.add_color_stop_rgba(1.0, 0.0, 0.0, 0.0, 0.0);
+        if context.set_source(&shadow).is_ok() {
+            let _ = context.paint();
+        }
+    });
+    let overlay = gtk::Overlay::builder()
+        .child(&area)
+        .halign(gtk::Align::Center)
+        .valign(gtk::Align::Center)
+        .accessible_role(gtk::AccessibleRole::Presentation)
+        .build();
+    let mark = gtk::Label::new(Some("?"));
+    mark.add_css_class("wildcard-mark");
+    overlay.add_overlay(&mark);
+    overlay.upcast()
 }
 
 /// The query-wide resin requirement uses the same cropped atlas artwork as item chips.
