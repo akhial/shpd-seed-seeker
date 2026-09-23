@@ -154,9 +154,9 @@ and scout overrides are integrated in web, Windows, macOS, Linux, and Android.
 Web, Windows, macOS, Linux, and Android share named trinket search and OR
 semantics. Each scout uses four square initial-choice cards, a flat green
 matched border/fill, single-line names that shrink to fit, and one row of 13
-smaller nearest-neighbor icons below "Remaining deck order." All scouts label
-this row "Transmutation order · 1–13", identifies each position in its tooltip and
-accessible name, and highlights matching transmutations. The platform's
+smaller nearest-neighbor icons below "Transmutation order · 1–13". All scouts
+identify each position in its tooltip and accessible name, and highlight
+matching transmutations with rounded square borders. The platform's
 own controls, typography, and colors provide the surrounding UI.
 
 Native production scout responses use `SSC5`: the existing `SSC3` layout,
