@@ -167,8 +167,6 @@ pub(super) fn actor(kind: &str) -> Option<ActorSprite> {
         "RedCrystalWisp" => ("crystal_wisp.png", 12, 14, &[26], 1000, 6),
         "RedShaman" => ("shaman.png", 12, 15, &[0, 0, 0, 1, 0, 0, 1, 1], 500, 6),
         "RotHeart" => ("rot_heart.png", 16, 16, &[0], 1000, 3),
-        // RotLasherSprite has a single idle frame; its other frames are
-        // attack/death animations, not an ambient vine animation.
         "RotLasher" => ("rot_lasher.png", 12, 16, &[0], 1000, 6),
         "Scorpio" => (
             "scorpio.png",

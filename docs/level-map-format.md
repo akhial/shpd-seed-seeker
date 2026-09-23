@@ -89,8 +89,7 @@ The overview follows the canonical no-remains, no-holiday profile.
 Water, well hearts/question marks, alchemy bubbles, sacrificial blue fire,
 eternal green fire, city statue flames, blacksmith sparks and gas have repeatable animation loops.
 Rotberry hearts emit green toxic specks every 0.7s over their raised sprite,
-matching `RotHeartSprite.link()`. Rot Lashers retain their single idle frame:
-the Java game's vine animations occur only during attacks and death.
+matching `RotHeartSprite.link()`.
 Fire/newborn fire, frost, shock and chaos elementals carry their original flame,
 magic, spark and rainbow effects. Gardens (including secret gardens) emit rising
 light shafts; hidden secret gardens emit nothing in the concealed scene. The
