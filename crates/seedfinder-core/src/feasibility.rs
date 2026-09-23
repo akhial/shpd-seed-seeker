@@ -40,6 +40,8 @@
 //! consumable or torch, so there is no challenge-dependent availability bound
 //! to apply here. Its RNG knock-on effects are handled by generation itself.
 
+use std::num::NonZeroU16;
+
 use crate::catalog::{ITEMS, ItemId, ItemKind, WeaponCategory};
 use crate::model::{ItemSource, WorldItem};
 use crate::query::{
@@ -457,6 +459,42 @@ struct RequirementPlan {
     open_deadline: Option<u8>,
 }
 
+/// Optimistic fixed Resin supply once all eligible donor sources have closed.
+#[derive(Clone, Copy, Debug)]
+struct ClosedResinSupply {
+    minimum: NonZeroU16,
+    deadline: u8,
+    max_depth: u8,
+    source: Option<ItemSource>,
+    uncursed: bool,
+    exclude_blacksmith: bool,
+}
+
+impl ClosedResinSupply {
+    fn viable(self, completed_depth: u8, items: &[WorldItem]) -> bool {
+        if completed_depth < self.deadline {
+            return true;
+        }
+        // Count every eligible index, ignoring ordinary reservations and
+        // incompatible choices. This can overestimate supply, never omit it.
+        let mut remaining = u32::from(self.minimum.get());
+        for item in items {
+            if crate::catalog::item(item.item).kind == ItemKind::Wand
+                && (!self.uncursed || !item.cursed)
+                && item.depth <= self.max_depth
+                && self.source.is_none_or(|source| item.source == source)
+                && (!self.exclude_blacksmith || item.source != ItemSource::BlacksmithReward)
+            {
+                remaining = remaining.saturating_sub(2 * (u32::from(item.upgrade) + 1));
+                if remaining == 0 {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+}
+
 /// Query-derived generation plan: how deep worlds must be generated and when
 /// a partial world can be abandoned. Built once per search.
 ///
@@ -477,6 +515,7 @@ pub struct QueryPlan {
     /// Equal mandatory ordinary-only slots that need distinct item indices.
     /// Each entry stores the first slot and the number of required instances.
     closed_multiplicities: Vec<(usize, usize)>,
+    closed_resin_supply: Option<ClosedResinSupply>,
     generation_depth: u8,
     /// Latest depth by which a required Blacksmith must have appeared.
     blacksmith_deadline: Option<u8>,
@@ -644,6 +683,66 @@ fn blanket_witnesses(query: &SearchQuery, blanket: Requirement) -> Vec<Requireme
     witnesses
 }
 
+// Donors extend generation only while an eligible wand can still appear. They
+// are not mandatory slots: their yield and shared acquisition choices belong
+// to the final allocator, and Auto can need no donors at all.
+fn resin_generation_horizon(
+    query: &SearchQuery,
+    profile: &impl Fn(&Requirement, ItemSource) -> Option<(u8, u8, EffectPolicy)>,
+    deadline: &impl Fn(&Requirement, ItemSource, u8) -> Option<u8>,
+) -> (u8, bool) {
+    let mut depth = 1;
+    let mut vault = false;
+    if query.needs_resin() {
+        // Auto consumes no donors when every possible reserved wand already
+        // has zero upgrade cost. Check every OR member and bare copy; blanket
+        // predicates never reserve items themselves.
+        if query.arcane_resin_auto
+            && query.requirements.iter().all(|requirement| {
+                requirement.blanket
+                    || requirement.kind != ItemKind::Wand
+                    || matches!(requirement.upgrade,
+                        UpgradeRequirement::Exact(level) | UpgradeRequirement::AtLeast(level)
+                            if level >= 3)
+            })
+        {
+            return (depth, vault);
+        }
+        let donor = crate::query::resin_donor_requirement(query);
+        let cap = donor
+            .max_depth
+            .unwrap_or(query.max_depth)
+            .min(query.max_depth);
+        for source in ALL_SOURCES {
+            if (query.exclude_blacksmith_rewards && source == ItemSource::BlacksmithReward)
+                || !source_feasible(&donor, source, profile)
+            {
+                continue;
+            }
+            let Some(limit) = deadline(&donor, source, cap) else {
+                continue;
+            };
+            let end = if let Some(quest) = quest_for_source(source) {
+                let (start, end) = quest.window();
+                if start > limit {
+                    continue;
+                }
+                vault |= source == ItemSource::VaultTreasure;
+                end.min(limit)
+            } else if source == ItemSource::Shop {
+                let Some(end) = SHOP_DEPTHS.into_iter().rfind(|&depth| depth <= limit) else {
+                    continue;
+                };
+                end
+            } else {
+                limit
+            };
+            depth = depth.max(end);
+        }
+    }
+    (depth, vault)
+}
+
 impl QueryPlan {
     /// Derives the plan for a validated query.
     #[must_use]
@@ -670,10 +769,9 @@ impl QueryPlan {
         deadline: impl Fn(&Requirement, ItemSource, u8) -> Option<u8>,
     ) -> Self {
         let max_depth = query.max_depth;
-        // Surplus wands may appear anywhere in scope, including the vault,
-        // even when every ordinary requirement's sources close earlier.
-        let mut generation_depth = if query.needs_resin() { max_depth } else { 1 };
-        let mut needs_vault_treasure = query.needs_resin() && max_depth >= Quest::Imp.window().0;
+        let (donor_depth, donor_vault) = resin_generation_horizon(query, &profile, &deadline);
+        let mut generation_depth = donor_depth;
+        let mut needs_vault_treasure = donor_vault;
         let mut slots: Vec<Vec<RequirementPlan>> = Vec::new();
         for slot in query.slots() {
             let mut members = Vec::with_capacity(slot.len());
@@ -781,12 +879,30 @@ impl QueryPlan {
 
         let required_trinket_slots = required_trinket_slots(&slots);
         let closed_multiplicities = closed_multiplicities(&slots);
+        // Deferred vault items may be missing even at ordinary callbacks with
+        // no pending depth. Exclude every vault-capable donor envelope. Auto
+        // also stays with the final allocator: its cost depends on reservations.
+        let closed_resin_supply = NonZeroU16::new(query.arcane_resin)
+            .filter(|_| !query.arcane_resin_auto && !donor_vault && donor_depth < generation_depth)
+            .map(|minimum| ClosedResinSupply {
+                minimum,
+                deadline: donor_depth,
+                max_depth: query
+                    .arcane_resin_filter
+                    .max_depth
+                    .unwrap_or(max_depth)
+                    .min(max_depth),
+                source: query.arcane_resin_filter.source,
+                uncursed: query.arcane_resin_filter.uncursed,
+                exclude_blacksmith: query.exclude_blacksmith_rewards,
+            });
 
         let mut plan = Self {
             auto_trinket: crate::auto_trinkets::AutoTrinketPolicy::prepare(query),
             selected_slots: crate::trinkets::selection_slots(query),
             required_trinket_slots,
             closed_multiplicities,
+            closed_resin_supply,
             slots,
             generation_depth,
             blacksmith_deadline,
@@ -848,6 +964,13 @@ impl QueryPlan {
                 None if completed_depth >= deadline => return false,
                 None => {}
             }
+        }
+
+        if self
+            .closed_resin_supply
+            .is_some_and(|supply| !supply.viable(completed_depth, items))
+        {
+            return false;
         }
 
         // Once all sources close, these slots need enough different indices in
@@ -1032,6 +1155,458 @@ mod tests {
     use crate::quests::QuestSummary;
 
     use super::QueryPlan;
+
+    #[test]
+    fn resin_generation_respects_donor_sources_and_caps() {
+        use crate::search::FloorGate;
+
+        let base = r#"{"max_depth":24,"auto_apply_trinket":false,"arcane_resin":6,
+            "requirements":[{"kind":"wand","max_depth":4}]}"#;
+        for (source, cap, depth, vault) in [
+            (None, None, 24, true),
+            (None, Some(4), 4, false),
+            (None, Some(16), 16, false),
+            (None, Some(17), 17, true),
+            (Some(ItemSource::Heap), None, 24, false),
+            (Some(ItemSource::Shop), None, 21, false),
+            (Some(ItemSource::Shop), Some(5), 4, false),
+            (Some(ItemSource::WandmakerReward), None, 9, false),
+            (Some(ItemSource::WandmakerReward), Some(7), 7, false),
+            (Some(ItemSource::ImpReward), None, 19, false),
+            (Some(ItemSource::ImpReward), Some(18), 18, false),
+            (Some(ItemSource::VaultTreasure), None, 19, true),
+            (Some(ItemSource::VaultTreasure), Some(16), 4, false),
+            (Some(ItemSource::GhostReward), None, 4, false),
+        ] {
+            let mut query = crate::json_query::decode(base).unwrap();
+            query.arcane_resin_filter.source = source;
+            query.arcane_resin_filter.max_depth = cap;
+            let plan = QueryPlan::analyze(&query);
+            assert_eq!(
+                (plan.generation_depth(), plan.wants_vault_treasure()),
+                (depth, vault),
+                "source {source:?}, cap {cap:?}"
+            );
+            // Supply is not a mandatory item slot, even if this source cannot
+            // supply any wands. Auto can reach zero cost without any donors.
+            assert!(!plan.is_unsatisfiable());
+        }
+        let mut query = crate::json_query::decode(base).unwrap();
+        query.arcane_resin_filter.max_depth = Some(4);
+        query.require_blacksmith = true;
+        assert_eq!(QueryPlan::analyze(&query).generation_depth(), 14);
+        query.require_blacksmith = false;
+        query.wandmaker_quest = Some(crate::quests::WandmakerQuestType::Rotberry);
+        assert_eq!(QueryPlan::analyze(&query).generation_depth(), 9);
+        query.wandmaker_quest = None;
+        query.max_depth = 3;
+        assert_eq!(QueryPlan::analyze(&query).generation_depth(), 3);
+
+        let mut auto = crate::json_query::decode(
+            r#"{"arcane_resin":"auto","auto_apply_trinket":false,"requirements":[],
+                "arcane_resin_filter":{"source":"ghost_reward"}}"#,
+        )
+        .unwrap();
+        let plan = QueryPlan::analyze(&auto);
+        assert_eq!(plan.generation_depth(), 1);
+        assert!(!plan.is_unsatisfiable());
+        assert!(!plan.wants_vault_treasure());
+        auto.arcane_resin_auto = false;
+        auto.arcane_resin = 6;
+        assert!(!QueryPlan::analyze(&auto).is_unsatisfiable());
+    }
+
+    #[test]
+    fn zero_cost_auto_resin_keeps_only_ordinary_generation_scope() {
+        use crate::search::FloorGate;
+        use UpgradeRequirement::{Any, AtLeast, Exact};
+
+        let scope = |query: &SearchQuery| {
+            query.validate().unwrap();
+            let plan = QueryPlan::analyze(query);
+            (plan.generation_depth(), plan.wants_vault_treasure())
+        };
+        for (upgrade, source, expected) in [
+            (Any, ItemSource::WandmakerReward, (24, true)),
+            (AtLeast(0), ItemSource::WandmakerReward, (24, true)),
+            (Exact(1), ItemSource::WandmakerReward, (24, true)),
+            (Exact(2), ItemSource::WandmakerReward, (24, true)),
+            (AtLeast(2), ItemSource::WandmakerReward, (24, true)),
+            (Exact(3), ItemSource::WandmakerReward, (9, false)),
+            (AtLeast(3), ItemSource::WandmakerReward, (9, false)),
+            (Exact(4), ItemSource::ImpReward, (19, false)),
+            (AtLeast(4), ItemSource::ImpReward, (19, false)),
+        ] {
+            let mut wand = requirement(ItemKind::Wand, upgrade);
+            wand.source = Some(source);
+            let mut query = query(vec![wand], 24);
+            query.arcane_resin_auto = true;
+            assert_eq!(scope(&query), expected, "{upgrade:?} {source:?}");
+            // Auto takes precedence in public in-memory queries too.
+            query.arcane_resin = 6;
+            assert_eq!(scope(&query), expected);
+            query.arcane_resin_auto = false;
+            assert_eq!(scope(&query), (24, true));
+        }
+
+        let mut ring = requirement(ItemKind::Ring, Any);
+        ring.max_depth = Some(4);
+        let mut early = query(vec![ring], 24);
+        early.arcane_resin_auto = true;
+        assert_eq!(scope(&early), (4, false));
+        early.require_blacksmith = true;
+        assert_eq!(scope(&early), (14, false));
+        early.require_blacksmith = false;
+        early.wandmaker_quest = Some(crate::quests::WandmakerQuestType::Rotberry);
+        assert_eq!(scope(&early), (9, false));
+        early.wandmaker_quest = None;
+        early.requirements.clear();
+        assert_eq!(scope(&early), (1, false));
+
+        let mut wand = requirement(ItemKind::Wand, Exact(3));
+        wand.source = Some(ItemSource::WandmakerReward);
+        wand.alternative_group = Some(1);
+        ring.alternative_group = Some(1);
+        let mut alternatives = query(vec![wand, ring], 24);
+        alternatives.arcane_resin_auto = true;
+        assert_eq!(scope(&alternatives), (9, false));
+        // Every alternative must have zero cost; a ring alternative cannot
+        // justify dropping the donors needed by a low-level wand alternative.
+        alternatives.requirements[1].kind = ItemKind::Wand;
+        assert_eq!(scope(&alternatives), (24, true));
+
+        let mut copy = requirement(ItemKind::Wand, Any);
+        copy.identity_group = Some(1);
+        copy.max_depth = Some(4);
+        wand.alternative_group = None;
+        wand.identity_group = Some(1);
+        let mut copies = query(vec![wand, copy], 24);
+        copies.arcane_resin_auto = true;
+        // An identity group shares the item ID, not the anchor's upgrade.
+        assert_eq!(scope(&copies), (24, true));
+    }
+
+    #[test]
+    fn resin_horizons_preserve_search_recipes_and_selected_items() {
+        use crate::auto_trinkets::{TrinketSearchMatch, search_batch};
+        use crate::main_world::CanonicalMainWorldGenerator;
+        use crate::query::scout_matches;
+        use crate::seed::DungeonSeed;
+
+        let seeds = [0, 1, 25_836_346_365, 695_488_469_679, 4_689_753_124_998]
+            .map(|value| DungeonSeed::new(value).unwrap());
+        let cases = [
+            r#"{"arcane_resin":"auto","requirements":[
+                {"kind":"wand","upgrade":3,"source":"wandmaker_reward"}]}"#,
+            r#"{"arcane_resin":"auto","requirements":[
+                {"kind":"wand","upgrade":{"at_least":3},"source":"wandmaker_reward"}]}"#,
+            r#"{"arcane_resin":"auto","requirements":[{"kind":"ring","max_depth":4}]}"#,
+            r#"{"arcane_resin":"auto","requirements":[]}"#,
+            r#"{"arcane_resin":"auto","requirements":[{"any_of":[
+                {"kind":"wand","upgrade":3,"source":"wandmaker_reward"},
+                {"kind":"ring","max_depth":4}]}]}"#,
+            r#"{"arcane_resin":"auto","requirements":[
+                {"kind":"wand","upgrade":3,"source":"wandmaker_reward"},
+                {"kind":"wand","source":"wandmaker_reward","blanket":true}]}"#,
+            r#"{"arcane_resin":"auto","requirements":[
+                {"kind":"wand","upgrade":3,"source":"wandmaker_reward"},
+                {"kind":"wand","upgrade":2,"blanket":true}]}"#,
+            r#"{"arcane_resin":6,"arcane_resin_filter":{"max_depth":4},
+                "requirements":[{"kind":"wand","max_depth":4}]}"#,
+            r#"{"arcane_resin":"auto","arcane_resin_filter":{"max_depth":4},
+                "requirements":[{"kind":"wand","max_depth":4}]}"#,
+            r#"{"arcane_resin":6,"arcane_resin_filter":{"source":"heap"},
+                "requirements":[{"kind":"wand","source":"wandmaker_reward"}]}"#,
+            r#"{"arcane_resin":6,"arcane_resin_filter":{"source":"wandmaker_reward"},
+                "requirements":[{"kind":"wand","max_depth":4}]}"#,
+            r#"{"arcane_resin":6,"arcane_resin_filter":{"source":"vault_treasure","max_depth":18},
+                "requirements":[{"kind":"wand","max_depth":4}]}"#,
+            r#"{"arcane_resin":"auto","arcane_resin_filter":{"source":"ghost_reward"},
+                "requirements":[{"kind":"wand","upgrade":3,"source":"wandmaker_reward"}]}"#,
+            r#"{"arcane_resin":6,"arcane_resin_filter":{"max_depth":4},
+                "requirements":[{"kind":"wand","max_depth":4},
+                    {"kind":"wand","upgrade":2,"blanket":true}]}"#,
+            r#"{"arcane_resin":"auto","arcane_resin_filter":{"max_depth":4},
+                "requirements":[{"any_of":[{"kind":"wand","max_depth":4},{"kind":"ring","max_depth":4}]}]}"#,
+        ];
+        let mut matched = 0;
+        let mut missed = 0;
+        for json in cases {
+            let mut query = crate::json_query::decode(json).unwrap();
+            for auto in [false, true] {
+                query.auto_apply_trinket = auto;
+                let plan = QueryPlan::analyze(&query);
+                // The previous implementation extended every resin query to
+                // its full scope and enabled all in-scope vault generation.
+                let mut previous = plan.clone();
+                previous.generation_depth = query.max_depth;
+                previous.needs_vault_treasure = query.max_depth >= 17;
+                previous.closed_resin_supply = None;
+                let generator = CanonicalMainWorldGenerator::with_challenges(query.challenges);
+                let before = search_batch(&generator, &query, &previous, &seeds);
+                let after = search_batch(&generator, &query, &plan, &seeds);
+                let selected = |result: Option<TrinketSearchMatch>| {
+                    result.map(|result| {
+                        let marks = scout_matches(&result.world, &query);
+                        assert_eq!(marks.matched_requirements, marks.total_requirements);
+                        let items: Vec<_> = marks
+                            .matched_indices()
+                            .into_iter()
+                            .map(|index| result.world.items[index].clone())
+                            .collect();
+                        (result.recipe, items)
+                    })
+                };
+                for (before, after) in before.into_iter().zip(after) {
+                    matched += usize::from(before.is_some());
+                    missed += usize::from(before.is_none());
+                    assert_eq!(selected(before), selected(after), "{json}, auto {auto}");
+                }
+            }
+        }
+        assert!(matched > 0 && missed > 0);
+    }
+
+    #[test]
+    fn closed_resin_waits_for_all_donors_and_counts_quantity() {
+        let query = crate::json_query::decode(
+            r#"{"arcane_resin":6,"arcane_resin_filter":{"max_depth":4},
+                "requirements":[{"kind":"wand","source":"wandmaker_reward"}]}"#,
+        )
+        .unwrap();
+        let plan = QueryPlan::analyze(&query);
+        let mut previous = plan.clone();
+        previous.closed_resin_supply = None;
+        assert_eq!(plan.closed_resin_supply.unwrap().deadline, 4);
+        assert_eq!(plan.generation_depth(), 9);
+        let wand = item(ItemId::WandFrost, 0, 4, ItemSource::Heap);
+        let short = [wand.clone(), wand.clone()];
+        assert!(viable(&plan, 3, &short));
+        for depth in [4, 6, 8] {
+            assert!(viable(&previous, depth, &short));
+            assert!(!viable(&plan, depth, &short));
+        }
+        // Equal values at separate indices are separate donors.
+        assert!(viable(
+            &plan,
+            4,
+            &[wand.clone(), wand.clone(), wand.clone()]
+        ));
+        assert!(viable(
+            &plan,
+            4,
+            &[wand, item(ItemId::WandFrost, 1, 3, ItemSource::Heap)]
+        ));
+        assert!(viable(
+            &plan,
+            4,
+            &[item(ItemId::WandFrost, 2, 4, ItemSource::Heap)]
+        ));
+
+        let mut capped = query.clone();
+        capped.arcane_resin_filter.max_depth = Some(5);
+        let plan = QueryPlan::analyze(&capped);
+        assert!(viable(&plan, 4, &[]));
+        assert!(
+            !viable(&plan, 6, &[]),
+            "skipped boss callback still closes supply"
+        );
+        capped.arcane_resin = u16::MAX;
+        let bound = QueryPlan::analyze(&capped).closed_resin_supply.unwrap();
+        let high = item(ItemId::WandFrost, u8::MAX, 4, ItemSource::Heap);
+        assert!(!bound.viable(6, &vec![high.clone(); 127]));
+        assert!(bound.viable(6, &vec![high; 128]));
+    }
+
+    #[test]
+    fn closed_resin_filters_donors_but_overestimates_acquisition() {
+        let mut query = crate::json_query::decode(
+            r#"{"arcane_resin":6,"arcane_resin_filter":{"max_depth":4,"source":"heap"},
+                "requirements":[{"kind":"wand","max_depth":4}],"require_blacksmith":true}"#,
+        )
+        .unwrap();
+        let donor = item(ItemId::WandFrost, 2, 4, ItemSource::Heap);
+        let bound = QueryPlan::analyze(&query).closed_resin_supply.unwrap();
+        for wrong in [
+            WorldItem {
+                item: ItemId::RingMight,
+                ..donor.clone()
+            },
+            WorldItem {
+                depth: 6,
+                ..donor.clone()
+            },
+            WorldItem {
+                source: ItemSource::Chest,
+                ..donor.clone()
+            },
+            WorldItem {
+                cursed: true,
+                ..donor.clone()
+            },
+        ] {
+            assert!(!bound.viable(4, std::slice::from_ref(&wrong)));
+            assert!(
+                bound.viable(6, &[wrong, donor.clone()]),
+                "input need not be depth-sorted"
+            );
+        }
+        query.arcane_resin_filter.uncursed = false;
+        let bound = QueryPlan::analyze(&query).closed_resin_supply.unwrap();
+        assert!(bound.viable(
+            4,
+            &[WorldItem {
+                cursed: true,
+                ..donor.clone()
+            }]
+        ));
+        query.arcane_resin_filter.source = None;
+        query.exclude_blacksmith_rewards = true;
+        let bound = QueryPlan::analyze(&query).closed_resin_supply.unwrap();
+        assert!(!bound.viable(
+            4,
+            &[WorldItem {
+                source: ItemSource::BlacksmithReward,
+                ..donor.clone()
+            }]
+        ));
+        // Reserved donors and incompatible options deliberately survive the
+        // bound even when the complete acquisition matcher cannot use them.
+        query.require_blacksmith = false;
+        query.validate().unwrap();
+        assert!(bound.viable(4, std::slice::from_ref(&donor)));
+        assert!(!query.matches(&multiplicity_world(std::slice::from_ref(&donor))));
+        let options = [0, 1].map(|option| WorldItem {
+            upgrade: 1,
+            accessibility: Accessibility::Choice { group: 1, option },
+            ..donor.clone()
+        });
+        assert!(bound.viable(4, &options));
+        assert!(!query.matches(&multiplicity_world(&options)));
+        let inaccessible = WorldItem {
+            accessibility: Accessibility::Scenarios { group: 1, mask: 0 },
+            ..donor
+        };
+        assert!(bound.viable(4, &[inaccessible]));
+    }
+
+    #[test]
+    fn closed_resin_excludes_auto_and_deferred_donor_vaults() {
+        use crate::search::FloorGate;
+
+        let base = crate::json_query::decode(
+            r#"{"arcane_resin":6,"arcane_resin_filter":{"max_depth":4},
+                "requirements":[{"kind":"wand","source":"wandmaker_reward"}]}"#,
+        )
+        .unwrap();
+        for (minimum, auto, cap, source, expected) in [
+            (0, false, Some(4), None, None),
+            (0, true, Some(4), None, None),
+            (6, true, Some(4), None, None),
+            (6, false, Some(9), None, None),
+            (6, false, Some(4), None, Some(4)),
+            (6, false, None, Some(ItemSource::GhostReward), Some(1)),
+            (6, false, None, Some(ItemSource::VaultTreasure), None),
+        ] {
+            let mut query = base.clone();
+            query.arcane_resin = minimum;
+            query.arcane_resin_auto = auto;
+            query.arcane_resin_filter.max_depth = cap;
+            query.arcane_resin_filter.source = source;
+            let plan = QueryPlan::analyze(&query);
+            assert_eq!(
+                plan.closed_resin_supply.map(|supply| supply.deadline),
+                expected
+            );
+            assert!(!plan.is_unsatisfiable());
+        }
+        let pending = crate::json_query::decode(
+            r#"{"arcane_resin":6,"arcane_resin_filter":{"max_depth":19,"source":"vault_treasure"},
+                "requirements":[{"kind":"weapon","source":"heap"}]}"#,
+        )
+        .unwrap();
+        let plan = QueryPlan::analyze(&pending);
+        assert!(plan.deferred_vault_plan(24).is_some());
+        assert!(plan.closed_resin_supply.is_none());
+        assert!(
+            viable(&plan, 19, &[]),
+            "ordinary callback can omit pending depth"
+        );
+        assert!(plan.viable_with_pending_vault(19, &[], QuestSummary::default(), Some(18)));
+        let mut ordinary_vault = base;
+        ordinary_vault.requirements[0].source = Some(ItemSource::VaultTreasure);
+        let plan = QueryPlan::analyze(&ordinary_vault);
+        assert!(plan.wants_vault_treasure());
+        assert_eq!(plan.closed_resin_supply.unwrap().deadline, 4);
+    }
+
+    #[test]
+    fn closed_resin_preserves_matches_against_the_previous_gate() {
+        use crate::auto_trinkets::search_batch;
+        use crate::main_world::{CanonicalMainWorldGenerator, generate_main_world_with_trinket};
+        use crate::query::scout_matches;
+        use crate::seed::DungeonSeed;
+
+        let seeds =
+            [0, 1, 25_836_346_365, 4_689_753_124_998].map(|value| DungeonSeed::new(value).unwrap());
+        let cases = [
+            r#"{"arcane_resin":6,"arcane_resin_filter":{"max_depth":4},
+                "requirements":[{"kind":"wand","source":"wandmaker_reward"}]}"#,
+            r#"{"arcane_resin":6,"arcane_resin_filter":{"max_depth":4},
+                "requirements":[{"kind":"weapon","source":"heap"}]}"#,
+            r#"{"arcane_resin":6,"arcane_resin_filter":{"max_depth":19,"source":"vault_treasure"},
+                "requirements":[{"kind":"weapon","source":"heap"}]}"#,
+            r#"{"arcane_resin":2,"arcane_resin_filter":{"max_depth":4},"require_blacksmith":true,
+                "requirements":[{"kind":"wand","max_depth":4},{"kind":"wand","blanket":true},
+                    {"kind":"wand","max_depth":4,"blanket":true}]}"#,
+        ];
+        let mut matched = 0;
+        let mut missed = 0;
+        let mut target = crate::json_query::decode(cases[0]).unwrap();
+        target.auto_apply_trinket = false;
+        let plan = QueryPlan::analyze(&target);
+        let mut previous = plan.clone();
+        previous.closed_resin_supply = None;
+        let prefix =
+            generate_main_world_with_trinket(seeds[0], 4, target.challenges, None).unwrap();
+        assert!(previous.viable_after_floor(4, &prefix.items, &prefix.quests));
+        assert!(!plan.viable_after_floor(4, &prefix.items, &prefix.quests));
+        let positive =
+            generate_main_world_with_trinket(seeds[3], 9, target.challenges, None).unwrap();
+        assert!(target.matches(&positive));
+        for json in cases {
+            let mut query = crate::json_query::decode(json).unwrap();
+            for auto in [false, true] {
+                query.auto_apply_trinket = auto;
+                let plan = QueryPlan::analyze(&query);
+                let mut previous = plan.clone();
+                previous.closed_resin_supply = None;
+                let generator = CanonicalMainWorldGenerator::with_challenges(query.challenges);
+                let before = search_batch(&generator, &query, &previous, &seeds);
+                let after = search_batch(&generator, &query, &plan, &seeds);
+                for (before, after) in before.into_iter().zip(after) {
+                    matched += usize::from(before.is_some());
+                    missed += usize::from(before.is_none());
+                    let selected = |result: crate::auto_trinkets::TrinketSearchMatch| {
+                        let marks = scout_matches(&result.world, &query);
+                        assert_eq!(marks.matched_requirements, marks.total_requirements);
+                        let items: Vec<_> = marks
+                            .matched_indices()
+                            .into_iter()
+                            .map(|index| result.world.items[index].clone())
+                            .collect();
+                        (result.recipe, items, result.world)
+                    };
+                    assert_eq!(
+                        before.map(selected),
+                        after.map(selected),
+                        "{json}, auto {auto}"
+                    );
+                }
+            }
+        }
+        assert!(matched > 0 && missed > 0);
+    }
 
     fn requirement(kind: ItemKind, upgrade: UpgradeRequirement) -> Requirement {
         Requirement {
