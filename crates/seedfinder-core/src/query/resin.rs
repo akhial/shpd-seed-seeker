@@ -143,11 +143,7 @@ impl ResinSupply {
         Self {
             minimum: query.arcane_resin,
             auto: query.arcane_resin_auto,
-            credit: if query.arcane_resin_filter.include_mage_wand {
-                2
-            } else {
-                0
-            },
+            credit: u32::from(query.resin_credit()),
             candidates: items
                 .iter()
                 .enumerate()

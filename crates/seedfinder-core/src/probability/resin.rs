@@ -19,14 +19,6 @@ use crate::{
     query::{SearchQuery, resin_donor_requirement as donor_requirement, resin_upgrade_cost},
 };
 
-fn credit(query: &SearchQuery) -> u16 {
-    if query.arcane_resin_filter.include_mage_wand {
-        2
-    } else {
-        0
-    }
-}
-
 pub(super) fn probability(query: &SearchQuery, profile: Profile) -> f64 {
     let auto_ordered = query.arcane_resin_auto.then(|| {
         filters(
@@ -51,10 +43,10 @@ pub(super) fn probability(query: &SearchQuery, profile: Profile) -> f64 {
     let donor = donor_requirement(query);
     // Every eligible donor yields at least two resin, so this is exactly one
     // extra ordinary wand and should use the same equipment calculation.
-    if !query.arcane_resin_auto && query.arcane_resin <= credit(query) {
+    if !query.arcane_resin_auto && query.arcane_resin <= query.resin_credit() {
         return equipment_probability(&ordinary, profile);
     }
-    if !query.arcane_resin_auto && query.arcane_resin - credit(query) <= 2 {
+    if !query.arcane_resin_auto && query.arcane_resin - query.resin_credit() <= 2 {
         ordinary.requirements.push(donor);
         return equipment_probability(&ordinary, profile);
     }
@@ -95,7 +87,7 @@ pub(super) fn with_resin(
         fixed.arcane_resin = amount;
         return with_resin(&fixed, profile, ordered, witnesses, baseline);
     }
-    if !query.arcane_resin_auto && query.arcane_resin <= credit(query) {
+    if !query.arcane_resin_auto && query.arcane_resin <= query.resin_credit() {
         return if witnesses.is_empty() { baseline } else { 0.0 };
     }
     let donor = donor_requirement(query);
@@ -107,13 +99,13 @@ pub(super) fn with_resin(
             expected_slots(&donor),
             query
                 .arcane_resin
-                .saturating_sub(credit(query))
+                .saturating_sub(query.resin_credit())
                 .div_ceil(2 * (u16::from(HIGHEST_TABLED_UPGRADE) + 1)),
         ) <= STATE_FLOOR
     {
         return 0.0;
     }
-    if !query.arcane_resin_auto && query.arcane_resin - credit(query) <= 2 {
+    if !query.arcane_resin_auto && query.arcane_resin - query.resin_credit() <= 2 {
         if !witnesses.is_empty() {
             return baseline;
         }
@@ -205,7 +197,7 @@ fn conditional_probability(
     let mut states = BTreeMap::from([(
         State {
             held: vec![EMPTY; allocated.len()].into_boxed_slice(),
-            balance: i32::from(credit(query))
+            balance: i32::from(query.resin_credit())
                 - if model.auto {
                     0
                 } else {

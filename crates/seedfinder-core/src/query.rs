@@ -549,6 +549,15 @@ impl SearchQuery {
         self.arcane_resin_auto || self.arcane_resin > 0
     }
 
+    /// Player-supplied resin, independent of generated donor filters.
+    pub(crate) const fn resin_credit(&self) -> u16 {
+        if self.arcane_resin_filter.include_mage_wand {
+            2
+        } else {
+            0
+        }
+    }
+
     /// Validates bounds and every requirement.
     ///
     /// # Errors
