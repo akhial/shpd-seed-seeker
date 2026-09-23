@@ -7,6 +7,12 @@ import UniformTypeIdentifiers
 
 @main
 struct SeedSeekerApp: App {
+    init() {
+        // AppKit uses milliseconds here. Halve its 1.5-second hover delay
+        // for both SwiftUI help tags and the map's NSView tooltip.
+        UserDefaults.standard.register(defaults: ["NSInitialToolTipDelay": 750])
+    }
+
     // Updates are handled by Sparkle: it schedules background checks (asking
     // the user for permission first) and drives the whole download/install
     // flow. Dev runs via `swift run` execute outside a bundle and see no
@@ -583,6 +589,7 @@ private struct QueryView: View {
     @State private var showingSavePreset = false
     @State private var blanketsExpanded = false
     @State private var showingBlanketHelp = false
+    @State private var showingFarmingHelp = false
     @State private var presetName = ""
 
     var body: some View {
@@ -775,9 +782,15 @@ private struct QueryView: View {
             HStack {
                 Text("Ring of Wealth farming floors").font(.subheadline)
                     .fixedSize(horizontal: false, vertical: true)
-                Image(systemName: "info.circle")
-                    .help("Dark floor with a garden.")
-                    .accessibilityLabel("Dark floor with a garden.")
+                Button { showingFarmingHelp.toggle() } label: {
+                    Image(systemName: "info.circle")
+                }
+                .buttonStyle(.plain)
+                .help("Dark floor with a garden.")
+                .accessibilityLabel("About Ring of Wealth farming floors")
+                .popover(isPresented: $showingFarmingHelp) {
+                    Text("Dark floor with a garden.").padding()
+                }
             }
             FlowLayout(spacing: 8, lineSpacing: 8) {
                 ForEach(FloorRequirement.farmingFloors, id: \.self) { depth in
