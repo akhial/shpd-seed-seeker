@@ -6,6 +6,7 @@ use shpd_seedfinder_core::{
     seed::DungeonSeed,
     vault_sentries::VaultSentryPattern,
 };
+use std::collections::BTreeMap;
 
 #[test]
 fn sentry_patterns_and_scan_coverage_match_the_official_engine() {
@@ -38,6 +39,101 @@ fn sentry_patterns_and_scan_coverage_match_the_official_engine() {
                 check_scan(&map, sentry, expected, code);
             } else {
                 check_laser(&map, sentry, expected, code);
+            }
+        }
+        check_warnings(&map, expected, code);
+    }
+}
+
+fn is_warning(emitter: &MapEmitter) -> bool {
+    matches!(
+        emitter.image,
+        MapDraw::Blit {
+            asset: "icons.png",
+            source: [0, 32, 16, 16],
+            ..
+        }
+    )
+}
+
+fn curve_value(curve: &shpd_seedfinder_core::level_map::MapCurve, progress: f64) -> f64 {
+    let points = curve
+        .points
+        .windows(2)
+        .find(|points| f64::from(points[1][0]) >= progress * 1000.0)
+        .unwrap();
+    let [[x0, y0], [x1, y1]] = [points[0], points[1]];
+    (f64::from(y0)
+        + (f64::from(y1) - f64::from(y0)) * (progress * 1000.0 - f64::from(x0))
+            / f64::from(x1 - x0))
+        / 1000.0
+}
+
+fn check_warnings(map: &LevelMap, expected: &[Value], code: &str) {
+    // Crossing lasers have independent 3–7 turn periods: 84 seconds covers
+    // two complete cycles even for the longest pair (6 and 7 turns).
+    for emitters in [&map.scene.emitters, &map.scene.concealed_emitters] {
+        let warnings: Vec<_> = emitters.iter().filter(|e| is_warning(e)).collect();
+        for turn in 0..84 {
+            for offset in [0, 399, 400, 599, 600, 999] {
+                let time = turn * 1000 + offset;
+                let mut ages = BTreeMap::<usize, u32>::new();
+                for (sentry, expected) in map.contents.sentries.iter().zip(expected) {
+                    if !sentry.warning {
+                        continue;
+                    }
+                    let start = if sentry.initial_cooldown == 1 {
+                        sentry.cooldown * 1000 - 1000
+                    } else {
+                        (sentry.initial_cooldown - 2) * 1000
+                    };
+                    if time < start {
+                        continue;
+                    }
+                    let age = (time - start) % (sentry.cooldown * 1000);
+                    if age < 1600 {
+                        for cell in expected["coverage"][0].as_array().unwrap() {
+                            ages.entry(usize::try_from(cell.as_u64().unwrap()).unwrap())
+                                .and_modify(|previous| *previous = (*previous).min(age))
+                                .or_insert(age);
+                        }
+                    }
+                }
+                let mut active = BTreeMap::new();
+                for emitter in &warnings {
+                    let cells = particle_cells(emitter, map.width, 8000);
+                    for (particle, cell) in emitter.particles.iter().zip(cells) {
+                        let start = emitter.start_ms.unwrap() + u32::from(particle.birth_ms);
+                        if time < start {
+                            continue;
+                        }
+                        let age = (time - start) % u32::from(emitter.loop_ms);
+                        if age >= u32::from(particle.lifespan_ms) {
+                            continue;
+                        }
+                        let cell = usize::try_from(cell.as_u64().unwrap()).unwrap();
+                        assert!(
+                            active.insert(cell, age).is_none(),
+                            "{code}: overlapping warning reticles at cell {cell}, {time}ms"
+                        );
+                        let alpha = if age <= 1000 {
+                            (1.0 - f64::from(age) / 1000.0).max(0.6)
+                        } else {
+                            f64::from(1600 - age) / 1000.0
+                        };
+                        let progress = f64::from(age) / f64::from(particle.lifespan_ms);
+                        assert!((curve_value(&emitter.alpha, progress) - alpha).abs() < 0.001);
+                        // Check the scale before a reset can truncate the
+                        // warning; its later fade uses the existing curve.
+                        if age <= 1000 {
+                            assert!(
+                                (curve_value(&emitter.scale, progress) - alpha.powf(0.33)).abs()
+                                    < 0.001
+                            );
+                        }
+                    }
+                }
+                assert_eq!(active, ages, "{code}: warning coverage at {time}ms");
             }
         }
     }
@@ -115,28 +211,11 @@ fn check_laser(map: &LevelMap, sentry: &VaultSentryPattern, expected: &Value, co
                 )
         })
         .collect();
-    let warnings: Vec<_> = map
-        .scene
-        .emitters
-        .iter()
-        .filter(|e| {
-            e.cell == cell
-                && matches!(
-                    &e.image,
-                    MapDraw::Blit {
-                        asset: "icons.png",
-                        source: [0, 32, 16, 16],
-                        ..
-                    }
-                )
-        })
-        .collect();
     if sentry.cooldown == i32::MAX as u32 {
         assert!(
             beams.is_empty(),
             "{code} decorative sentry {cell} must not fire"
         );
-        assert!(warnings.is_empty());
         return;
     }
     assert_eq!(beams.len(), usize::from(sentry.triggers));
@@ -161,20 +240,5 @@ fn check_laser(map: &LevelMap, sentry: &VaultSentryPattern, expected: &Value, co
         );
         assert_eq!(p.lifespan_ms, 500);
         assert!(beam.wall_mask);
-    }
-    if sentry.warning {
-        assert_eq!(warnings.len(), 1);
-        let mut path = path.clone();
-        path.sort_by_key(|v| v.as_u64().unwrap());
-        assert_eq!(particle_cells(warnings[0], map.width, 8000), path);
-        let first = beams[0].start_ms.unwrap();
-        let warning = if first == 0 {
-            sentry.cooldown * 1000 - 1000
-        } else {
-            first - 1000
-        };
-        assert_eq!(warnings[0].start_ms, Some(warning));
-    } else {
-        assert!(warnings.is_empty());
     }
 }

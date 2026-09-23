@@ -5,12 +5,13 @@
     clippy::cast_precision_loss
 )]
 mod geometry;
+mod warnings;
 use self::geometry::Geometry;
 use crate::{
     level::Level,
     level_map::{MapBlend, MapContents, MapCurve, MapDraw, MapEmitter, MapParticle},
 };
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 pub(super) fn emitters(level: &Level, contents: &MapContents) -> Vec<MapEmitter> {
     if contents.sentries.is_empty() {
@@ -18,6 +19,7 @@ pub(super) fn emitters(level: &Level, contents: &MapContents) -> Vec<MapEmitter>
     }
     let geometry = Geometry::new(level, contents);
     let mut out = Vec::new();
+    let mut warnings = BTreeMap::<_, BTreeSet<_>>::new();
     for sentry in &contents.sentries {
         // Opposite treasure-room lasers are scenery only (Integer.MAX_VALUE).
         if sentry.cooldown == i32::MAX as u32
@@ -69,17 +71,17 @@ pub(super) fn emitters(level: &Level, contents: &MapContents) -> Vec<MapEmitter>
                     } else {
                         time - 1000
                     };
-                    out.push(warning(
-                        sentry.cell,
-                        &cells,
-                        level.width(),
-                        warning_time,
-                        period,
-                    ));
+                    for cell in cells {
+                        warnings
+                            .entry(cell)
+                            .or_default()
+                            .insert((warning_time, period));
+                    }
                 }
             }
         }
     }
+    out.extend(warnings::emitters(warnings, level.width()));
     out
 }
 
@@ -146,52 +148,6 @@ fn checked(
             angle: 0,
         });
     }
-    e
-}
-fn warning(
-    from: usize,
-    cells: &BTreeSet<usize>,
-    width: i32,
-    start: u32,
-    period: u16,
-) -> MapEmitter {
-    let mut e = base(from, start, period);
-    e.image = MapDraw::Blit {
-        asset: "icons.png",
-        source: [0, 32, 16, 16],
-        destination: [0, 0, 16, 16],
-        tint: Some([255, 0, 0]),
-        opacity: 255,
-        glow: None,
-    };
-    e.alpha = curve(&[[0, 1000], [250, 600], [625, 600], [1000, 0]]);
-    e.scale = MapCurve {
-        points: (0..=80)
-            .map(|i| {
-                let time = f32::from(i) * 20.0;
-                let alpha = if time <= 1000.0 {
-                    (1.0 - time / 1000.0).max(0.6)
-                } else {
-                    (1600.0 - time) / 1000.0
-                };
-                [i * 25 / 2, (alpha.powf(0.33) * 1000.0).round() as u16]
-            })
-            .collect(),
-        sqrt: false,
-    };
-    e.particles = cells
-        .iter()
-        .map(|&cell| {
-            let [x, y] = position(from, cell, width);
-            MapParticle {
-                birth_ms: 0,
-                lifespan_ms: 1600,
-                position: [x - 500, y - 500],
-                scale: 1000,
-                angle: 0,
-            }
-        })
-        .collect();
     e
 }
 fn ray(from: usize, to: usize, width: i32, start: u32, period: u16) -> MapEmitter {

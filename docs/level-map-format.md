@@ -106,6 +106,8 @@ or allocate additional data during seed search.
 Purple Vault sentries preserve their seeded ray directions, cooldowns, warning
 markers and shot groups. The decorative opposite row in laser treasure rooms
 never fires. Death rays use the original effects atlas and fade/thin over 0.5s.
+Crossing laser warnings share one red reticle per tile: a new warning resets
+the existing marker, including while it is fading, without stacking opacity.
 Blue sentries preserve the room's rotation (including clockwise/counterclockwise
 treasure scans) or inward-facing perimeter pattern. Their blue checked cells
 respect the game's Ballistica, ConeAOE and field-of-view geometry, propagate
