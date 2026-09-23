@@ -16,6 +16,8 @@ use crate::{ScoutMatchError, production_scout_matches};
 /// scout request satisfy the query, as `{"matched": [<item indices>],
 /// "matchedRequirements": <n>, "totalRequirements": <n>}`. The indices
 /// address the item list of the `SSC5` packet the same request scouts to.
+/// `transmutedTrinkets` contains separate zero-based indices into the 13-card
+/// tail. It never changes the generated item indices; older clients ignore it.
 /// The keys are camelCase like every other bridge-built document (the
 /// browser's own scout output and `engine_info`); only the persisted formats
 /// — query documents and results files — are `snake_case`.
@@ -27,6 +29,8 @@ pub fn scout_matches_document(request: &[u8], query: &[u8]) -> Result<String, Sc
     let marks = production_scout_matches(request, query)?;
     Ok(json!({
         "matched": marks.matched_indices(),
+        "transmutedTrinkets": marks.transmuted_trinkets.iter().enumerate()
+            .filter_map(|(index, &matched)| matched.then_some(index)).collect::<Vec<_>>(),
         "matchedRequirements": marks.matched_requirements,
         "totalRequirements": marks.total_requirements,
     })
@@ -49,6 +53,16 @@ mod tests {
     /// document.
     fn query_request(query: &shpd_seedfinder_core::query::SearchQuery) -> Vec<u8> {
         json_query::encode(query).to_string().into_bytes()
+    }
+
+    #[test]
+    fn transmutation_marks_are_separate_from_native_item_indices() {
+        let query = br#"{"requirements":[{"item":"rat_skull","trinket_transmutations":11}]}"#;
+        let envelope: Value =
+            serde_json::from_str(&scout_matches_document(b"AAA-AAA-AAA", query).unwrap()).unwrap();
+        assert_eq!(envelope["matched"], json!([]));
+        assert_eq!(envelope["transmutedTrinkets"], json!([10]));
+        assert_eq!(envelope["matchedRequirements"], 1);
     }
 
     #[test]

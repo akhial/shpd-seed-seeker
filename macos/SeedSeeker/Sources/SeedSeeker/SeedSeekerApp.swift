@@ -1425,6 +1425,7 @@ private func chipName(_ requirement: ItemRequirement) -> String {
 /// ever narrows a wildcard, so a named item never carries one.
 private func chipTags(_ requirement: ItemRequirement) -> [ChipTag] {
     var tags: [ChipTag] = []
+    if requirement.trinketTransmutations > 0 { tags.append(ChipTag(text: "Transmute ≤\(requirement.trinketTransmutations)")) }
     if requirement.item == nil {
         switch requirement.tierMatch {
         case .any: break
@@ -1572,6 +1573,7 @@ private struct RequirementEditor: View {
     @State private var maximumDepth: Int
     @State private var requireUncursed: Bool
     @State private var selectTrinket: Bool
+    @State private var trinketTransmutations: Int
     @State private var excludeResin: Bool
     /// How many items the chip asks for, and what its stack's copies carry.
     @State private var count: Int
@@ -1611,6 +1613,7 @@ private struct RequirementEditor: View {
         _maximumDepth = State(initialValue: requirement.maximumDepth ?? 0)
         _requireUncursed = State(initialValue: requirement.requireUncursed)
         _selectTrinket = State(initialValue: requirement.selectTrinket)
+        _trinketTransmutations = State(initialValue: requirement.trinketTransmutations)
         _excludeResin = State(initialValue: requirement.excludeResin)
         _count = State(initialValue: stack.count)
         _total = State(initialValue: stack.total)
@@ -1636,7 +1639,7 @@ private struct RequirementEditor: View {
                     .disabled(editingResin)
                     .onChange(of: kind) { previous, value in
                         if previous.family != value.family {
-                            itemID = ""; tierMatch = .any; tier = 2; selectTrinket = false; excludeResin = false
+                            itemID = ""; tierMatch = .any; tier = 2; selectTrinket = false; trinketTransmutations = 0; excludeResin = false
                             effectMode = .any; selectedEffects = []
                             if value == .trinket || value == .artifact {
                                 itemID = ItemCatalog.forKind(value).first?.id ?? ""
@@ -1690,7 +1693,18 @@ private struct RequirementEditor: View {
                         if value.isEmpty { total = nil } else { tierMatch = .any }
                         normalizeUpgrade()
                     }
-                    if kind == .trinket && !original.blanket {
+                    if kind == .trinket {
+                        Toggle("Allow transmutations", isOn: Binding(get: { trinketTransmutations > 0 }, set: {
+                            trinketTransmutations = $0 ? 1 : 0
+                            if $0 { selectTrinket = false }
+                        }))
+                        if trinketTransmutations > 0 {
+                            Stepper("At most \(trinketTransmutations) transmutations", value: $trinketTransmutations, in: 1...13)
+                            Text("Includes the initial offers. AutoTrinket can use a helpful starting trinket. Scroll availability and effects after transmuting are not simulated.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    if kind == .trinket && !original.blanket && trinketTransmutations == 0 {
                         Toggle("Choose matching trinket at +3", isOn: $selectTrinket)
                     }
                     if itemID.isEmpty && (kind.family == .weapon || kind.family == .armor) {
@@ -1959,7 +1973,8 @@ private struct RequirementEditor: View {
                 maximumDepth: kind == .trinket || maximumDepth == 0 ? nil : maximumDepth,
                 requireUncursed: kind != .trinket && requireUncursed,
                 alternativeGroup: original.alternativeGroup,
-                selectTrinket: !original.blanket && kind == .trinket && selectTrinket, blanket: original.blanket,
+                selectTrinket: !original.blanket && kind == .trinket && trinketTransmutations == 0 && selectTrinket,
+                trinketTransmutations: kind == .trinket ? trinketTransmutations : 0, blanket: original.blanket,
                 excludeResin: !original.blanket && kind == .wand && excludeResin)
             onFinish(EditorResult(
                 requirement: value,
@@ -2498,7 +2513,8 @@ private struct SeedDetailView: View {
                                     if let catalyst = byDepth[depth]?.first(where: { $0.element.item.kind == .trinket })?.element {
                                         TrinketScoutRow(catalyst: catalyst, order: world.trinketOrder,
                                             selectedTrinket: world.selectedTrinket, loading: model.loading, onSelect: selectTrinket,
-                                            matchedIDs: Set(world.items.enumerated().filter { matches.contains($0.offset) && $0.element.item.kind == .trinket }.map { $0.element.item.id }))
+                                            matchedIDs: Set(world.items.enumerated().filter { matches.contains($0.offset) && $0.element.item.kind == .trinket }.map { $0.element.item.id }),
+                                            transmutedTrinkets: model.matches?.transmutedTrinkets ?? [])
                                     }
                                     ForEach(floorItems, id: \.offset) { entry in
                                         ScoutItemRow(item: entry.element, ringGems: world.ringGems, matches: matches.contains(entry.offset))
@@ -2712,6 +2728,7 @@ private struct TrinketScoutRow: View {
     let loading: Bool
     let onSelect: (String) -> Void
     let matchedIDs: Set<String>
+    let transmutedTrinkets: Set<Int>
     private let catalystArt = CatalogItem(id: "trinket_catalyst", name: "Magical Catalyst",
                                           kind: .trinket, spriteIndex: 70)
 
@@ -2775,13 +2792,18 @@ private struct TrinketScoutRow: View {
             .background(GeometryReader { geometry in
                 Color.clear.preference(key: ScoutOfferFrame.self, value: geometry.frame(in: .named("scout-manifest")))
             })
-            Text("Remaining deck order").font(.caption).foregroundStyle(.secondary)
+            Text("Transmutation order · 1–13").font(.caption).foregroundStyle(.secondary)
             GeometryReader { geometry in
                 let size = max(1, min(24, Int((geometry.size.width - 24) / 13)))
                 HStack(spacing: 2) {
-                    ForEach(Array(order.dropFirst(4))) { item in
-                        ItemSpriteView(item: item, pointSize: size, label: item.name)
-                            .frame(maxWidth: .infinity).help(item.name)
+                    ForEach(Array(order.dropFirst(4).enumerated()), id: \.element.id) { index, item in
+                        let matched = transmutedTrinkets.contains(index)
+                        let label = "Transmutation #\(index + 1): \(item.name)" + (matched ? ", matches requirement" : "")
+                        ItemSpriteView(item: item, pointSize: max(1, size - 4), label: label)
+                            .frame(width: CGFloat(size), height: CGFloat(size))
+                            .background(matched ? Color.shatteredMint.opacity(0.12) : Color.clear, in: RoundedRectangle(cornerRadius: 4))
+                            .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(matched ? Color.shatteredMint : Color.clear, lineWidth: 1))
+                            .frame(maxWidth: .infinity).help(label)
                     }
                 }
             }.frame(height: 24)

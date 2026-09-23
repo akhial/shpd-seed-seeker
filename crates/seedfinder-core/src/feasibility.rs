@@ -3236,7 +3236,7 @@ mod tests {
             );
             assert_eq!(
                 auto_trinkets::enabled(query),
-                !query.requirements[5].select_trinket
+                query.auto_apply_trinket && !query.requirements[5].select_trinket
             );
             // Preserving the required Resin offer prevents any automatic helper.
             assert_eq!(
@@ -3398,7 +3398,7 @@ mod tests {
                 // low-level filter above deliberately forces saved worlds.
                 assert_eq!(
                     auto_trinkets::enabled(query),
-                    !query.requirements[5].select_trinket
+                    query.auto_apply_trinket && !query.requirements[5].select_trinket
                 );
                 assert_eq!(
                     refined,

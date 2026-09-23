@@ -152,6 +152,7 @@ public static class ResultsExport
         if (EncodeEffect(requirement) is JsonNode effect) output["effect"] = effect;
         if (requirement.RequireUncursed) output["uncursed"] = true;
         if (requirement.SelectTrinket) output["select_trinket"] = true;
+        if (requirement.TrinketTransmutations > 0) output["trinket_transmutations"] = requirement.TrinketTransmutations;
         if (requirement.Blanket) output["blanket"] = true;
         if (requirement.ExcludeResin) output["exclude_resin"] = true;
         if (requirement.Source is ScoutItemSource source) output["source"] = SourceNames[(int)source];
@@ -290,6 +291,8 @@ public static class ResultsExport
             MaximumDepth = IntField(entry, "max_depth"),
             RequireUncursed = BoolField(entry, "uncursed"),
             SelectTrinket = BoolField(entry, "select_trinket"),
+            TrinketTransmutations = entry.ContainsKey("trinket_transmutations")
+                ? IntField(entry, "trinket_transmutations") ?? throw new ResultsExportException("Invalid trinket transmutation limit") : 0,
             Blanket = BoolField(entry, "blanket"),
             ExcludeResin = BoolField(entry, "exclude_resin"),
             AlternativeGroup = alternativeGroup,

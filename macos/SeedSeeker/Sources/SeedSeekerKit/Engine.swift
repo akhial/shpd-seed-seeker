@@ -82,6 +82,7 @@ public struct ScoutMatches: Sendable {
     /// Indices into the scouted world's item list, in the order
     /// `scoutSeed(_:challenges:)` returns it.
     public let matched: Set<Int>
+    public let transmutedTrinkets: Set<Int>
     /// How many conditions the marks satisfy, and how many there are. An
     /// alternative group is one slot however many members it has; a
     /// combined-level group counts once, its contributing items are all
@@ -90,8 +91,9 @@ public struct ScoutMatches: Sendable {
     public let matchedRequirements: Int
     public let totalRequirements: Int
 
-    public init(matched: Set<Int>, matchedRequirements: Int, totalRequirements: Int) {
+    public init(matched: Set<Int>, matchedRequirements: Int, totalRequirements: Int, transmutedTrinkets: Set<Int> = []) {
         self.matched = matched
+        self.transmutedTrinkets = transmutedTrinkets
         self.matchedRequirements = matchedRequirements
         self.totalRequirements = totalRequirements
     }
@@ -117,7 +119,7 @@ public struct ScoutMatches: Sendable {
             throw SeedFinderEngineError.invalidResponse
         }
         return ScoutMatches(matched: Set(matched), matchedRequirements: matchedRequirements,
-                            totalRequirements: totalRequirements)
+                            totalRequirements: totalRequirements, transmutedTrinkets: Set(document["transmutedTrinkets"] as? [Int] ?? []))
     }
 
     /// Marks the world `seed` generates under `challenges` against `query`.

@@ -166,6 +166,7 @@ object ResultsExport {
         encodeEffect(requirement.effect, requirement.kind)?.let { put("effect", it) }
         if (requirement.requireUncursed) put("uncursed", true)
         if (requirement.selectTrinket) put("select_trinket", true)
+        if (requirement.trinketTransmutations > 0) put("trinket_transmutations", requirement.trinketTransmutations)
         if (requirement.blanket) put("blanket", true)
         if (requirement.excludeResin) put("exclude_resin", true)
         requirement.source?.let { put("source", it.name.lowercase()) }
@@ -326,6 +327,11 @@ object ResultsExport {
             maximumDepth = if (entry.has("max_depth")) entry.getInt("max_depth") else null,
             requireUncursed = entry.optBoolean("uncursed"),
             selectTrinket = entry.optBoolean("select_trinket"),
+            trinketTransmutations = if (entry.has("trinket_transmutations")) {
+                val count = entry.get("trinket_transmutations")
+                require(count is Number && count.toDouble() == count.toInt().toDouble()) { "Invalid trinket transmutation limit" }
+                count.toInt()
+            } else 0,
             blanket = entry.optBoolean("blanket"),
             excludeResin = if (entry.has("exclude_resin")) {
                 val excluded = entry.get("exclude_resin")

@@ -84,6 +84,7 @@ data class ScoutMatches(
     val items: Set<Int>,
     val matchedSlots: Int,
     val totalSlots: Int,
+    val transmutedTrinkets: Set<Int> = emptySet(),
 )
 
 interface NativeSearchSession : AutoCloseable {
@@ -651,6 +652,9 @@ private object ScoutMatchCodec {
             items = buildSet { for (index in 0 until matched.length()) add(matched.getInt(index)) },
             matchedSlots = envelope.getInt("matchedRequirements"),
             totalSlots = envelope.getInt("totalRequirements"),
+            transmutedTrinkets = envelope.optJSONArray("transmutedTrinkets")?.let { steps ->
+                buildSet { for (index in 0 until steps.length()) add(steps.getInt(index)) }
+            }.orEmpty(),
         )
     }
 }

@@ -44,6 +44,26 @@ class TrinketRequirementsTest {
         }
     }
 
+    @Test fun transmutationLimitSurvivesEveryQueryFormatAndScoutsTheDeck() {
+        val requirement = ItemRequirement(key = 1, item = ItemCatalog.trinkets.first { it.id == "rat_skull" },
+            upgrade = 0, upgradeMatch = UpgradeMatch.ANY, trinketTransmutations = 11)
+        val query = SearchRequest(listOf(requirement), autoApplyTrinket = true)
+        assertEquals(query.toPresetQuery(), ResultsExport.decodeQuery(ResultsExport.encodeQuery(query)))
+        assertEquals(query.toPresetQuery(), DeepLink.decode(DeepLink.encodeLink(query.toPresetQuery())))
+        assertEquals(query.toPresetQuery(), ResultsExport.decode(ResultsExport.encode(query.toPresetQuery(), emptyList(), "test")).query)
+        val storage = PresetStorage(MemoryPreferences())
+        storage.saveCurrentQuery(query.toPresetQuery())
+        assertEquals(query.toPresetQuery(), storage.loadCurrentQuery())
+        val marks = dev.seedseeker.app.engine.JniNativeSeedFinder().scoutMatches("AAA-AAA-AAA", 0, query)
+        assertEquals(1, marks.matchedSlots)
+        assertTrue(marks.items.isEmpty())
+        assertEquals(setOf(10), marks.transmutedTrinkets)
+        for (count in listOf(-1, 14)) assertThrows(IllegalArgumentException::class.java) {
+            requirement.copy(trinketTransmutations = count)
+        }
+        assertThrows(IllegalArgumentException::class.java) { requirement.copy(selectTrinket = true) }
+    }
+
     @Test fun wildcardTrinketIsRejected() {
         assertThrows(IllegalArgumentException::class.java) {
             ItemRequirement(key = 0, item = null, kind = ItemKind.TRINKET, upgrade = 0, upgradeMatch = UpgradeMatch.ANY)

@@ -3,6 +3,25 @@ import XCTest
 @testable import SeedSeekerKit
 
 final class TrinketTests: XCTestCase {
+    func testTransmutationLimitPersistsAndMarksOnlyTheDeck() throws {
+        let requirement = try ItemRequirement(key: 1, item: XCTUnwrap(ItemCatalog.findById("rat_skull")),
+            upgrade: 0, kind: .trinket, upgradeMatch: .any, trinketTransmutations: 11)
+        let saved = SavedQuery(requirements: [requirement])
+        XCTAssertEqual(try DeepLink.decode(DeepLink.encodeLink(for: saved)).requirements[0].trinketTransmutations, requirement.trinketTransmutations)
+        XCTAssertEqual(QueryPersistence.decode(try XCTUnwrap(QueryPersistence.encode(saved))).requirements[0].trinketTransmutations, 11)
+        XCTAssertEqual(try ResultsExport.decodeQuery(ResultsExport.encodeQuery(saved)).requirements[0].trinketTransmutations, 11)
+        XCTAssertEqual(try JSONDecoder().decode(ItemRequirement.self, from: JSONEncoder().encode(requirement)), requirement)
+        let query = try SearchRequest(requirements: [requirement])
+        let marks = try ScoutMatches.mark(seed: "AAA-AAA-AAA", challenges: 0, query: query)
+        XCTAssertEqual(marks.matchedRequirements, 1)
+        XCTAssertTrue(marks.matched.isEmpty)
+        XCTAssertEqual(marks.transmutedTrinkets, [10])
+        XCTAssertThrowsError(try ItemRequirement(key: 1, item: requirement.item, upgrade: 0,
+            kind: .trinket, upgradeMatch: .any, trinketTransmutations: 14))
+        XCTAssertThrowsError(try ItemRequirement(key: 1, item: requirement.item, upgrade: 0,
+            kind: .trinket, upgradeMatch: .any, selectTrinket: true, trinketTransmutations: 1))
+    }
+
     private func packet(_ order: [String]) -> Data {
         var bytes = Array("SSC4".utf8) + [11] + Array("AAA-AAA-AAA".utf8)
         bytes += RingGems.catalogDefault.ordinals.map { UInt8($0) }
@@ -67,6 +86,7 @@ final class TrinketTests: XCTestCase {
         let requirement = try ItemRequirement(key: 1, item: XCTUnwrap(ItemCatalog.findById("mimic_tooth")),
             upgrade: 0, kind: .trinket, upgradeMatch: .any, selectTrinket: true)
         let saved = SavedQuery(requirements: [requirement])
+        XCTAssertTrue(try DeepLink.decode(DeepLink.encodeLink(for: saved)).requirements[0].selectTrinket)
         XCTAssertTrue(QueryPersistence.decode(try XCTUnwrap(QueryPersistence.encode(saved))).requirements[0].selectTrinket)
         let document = ResultsExport.encodeQuery(saved)
         XCTAssertTrue(try ResultsExport.decodeQuery(document).requirements[0].selectTrinket)

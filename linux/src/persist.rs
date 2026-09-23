@@ -261,6 +261,18 @@ mod tests {
     }
 
     #[test]
+    fn trinket_transmutation_limit_survives_persistence() {
+        let state = decode_state(r#"{"auto_apply_trinket":true,"requirements":[{"item":"rat_skull","trinket_transmutations":11}]}"#).unwrap();
+        assert_eq!(state.requirements[0].trinket_transmutations, 11);
+        assert_eq!(state.requirements[0].to_core().trinket_transmutations, 11);
+        assert_eq!(
+            save_document(&state)["requirements"][0]["trinket_transmutations"],
+            11
+        );
+        assert_eq!(state.requirements[0].subtitle(), "Transmute ≤11");
+    }
+
+    #[test]
     fn resin_only_draft_survives_persistence() {
         let document = r#"{"requirements":[],"arcane_resin":3,"arcane_resin_filter":{"uncursed":false,"max_depth":12,"source":"wandmaker_reward"}}"#;
         let state = decode_state(document).unwrap();

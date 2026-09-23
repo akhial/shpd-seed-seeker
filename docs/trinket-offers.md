@@ -41,9 +41,9 @@ requirement allows at least that many transmutations. `items` contains four reco
 `category: "trinket"`, the catalyst's placement metadata and the normal `matched`
 flag. The scout views group these beneath a single Magical catalyst entry.
 
-## Maximum transmutation requirements (web)
+## Maximum transmutation requirements
 
-The web editor offers **Allow transmutations**, with an **At most N** limit
+Every platform’s editor offers **Allow transmutations**, with an **At most N** limit
 from 1 through 13. Initial offers always count. For example, this finds Rat Skull
 in the initial offers or after either of the first two transmutations:
 
@@ -70,9 +70,13 @@ Virtual outcomes inherit catalyst placement and acquisition constraints, and
 are created only inside the query matcher. This does not search for transmutation
 scrolls, guarantee brewing/transmutation by a floor limit, or simulate the
 trinket's generation effects after transmuting. Initial-offer selection remains
-available on other requirements. Native editors and their scout item streams
-are unchanged. WASM exposes transmutation highlights as `matched` flags in the
-last 13 `trinketOrder` entries; its `items` still contains only four offers.
+available on other requirements. Native editors persist the same limit in drafts, presets, exports and share links;
+their generated scout item streams remain unchanged. WASM exposes transmutation highlights as `matched` flags in the
+last 13 `trinketOrder` entries; its `items` still contains only four offers. Native
+Scout match JSON adds `transmutedTrinkets`, a list of zero-based indices into
+that 13-card tail. Android, macOS and Windows read these separately from item
+indices; Linux uses the core marks directly. Every platform labels transmutation
+positions and highlights matches with a rounded square.
 
 Queries with a positive limit use share format **13**, including existing query options;
 queries without counts retain their previous bytes. Search, filtering, Scout,
@@ -150,7 +154,7 @@ and scout overrides are integrated in web, Windows, macOS, Linux, and Android.
 Web, Windows, macOS, Linux, and Android share named trinket search and OR
 semantics. Each scout uses four square initial-choice cards, a flat green
 matched border/fill, single-line names that shrink to fit, and one row of 13
-smaller nearest-neighbor icons below "Remaining deck order." The web scout labels
+smaller nearest-neighbor icons below "Remaining deck order." All scouts label
 this row "Transmutation order · 1–13", identifies each position in its tooltip and
 accessible name, and highlights matching transmutations. The platform's
 own controls, typography, and colors provide the surrounding UI.

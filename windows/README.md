@@ -85,3 +85,11 @@ Auto uses version 10 share links; the Mage credit and per-wand exclusion use
 version 12, including floor requirements. Existing links remain compatible.
 The chip shows **Mage +2** for the starting credit and **No resin** on excluded wands.
 Scout highlights the contributing wands, and the engine supplies the match estimate.
+
+## Trinket transmutation limits
+
+**Allow transmutations** accepts a target in the initial offers or within at most
+1–13 transmutations. The limit survives saved queries, presets, exports and share
+links. Scout labels each deck position and uses a rounded square match border.
+AutoTrinket retains its existing benefit rule, and the shared estimator accounts
+for the complete allowed prefix. See [trinket search](../docs/trinket-offers.md).

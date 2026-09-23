@@ -226,6 +226,7 @@ data class ItemRequirement(
     val maximumDepth: Int? = null,
     val requireUncursed: Boolean = false,
     val selectTrinket: Boolean = false,
+    val trinketTransmutations: Int = 0,
     val blanket: Boolean = false,
     val excludeResin: Boolean = false,
     /**
@@ -248,6 +249,10 @@ data class ItemRequirement(
         }
         require(!excludeResin || (kind == ItemKind.WAND && !blanket)) { "Only an ordinary wand can exclude Auto resin" }
         require(!selectTrinket || kind == ItemKind.TRINKET) { "Only a named trinket can be selected" }
+        require(trinketTransmutations in 0..13 && (trinketTransmutations == 0 ||
+            (kind == ItemKind.TRINKET && item != null && !selectTrinket))) {
+            "Transmutations must be 0–13 on a named trinket without manual selection"
+        }
         val tierable = item == null && kind.family in setOf(ItemKind.WEAPON, ItemKind.ARMOR)
         val validTier = when (tierMatch) {
             TierMatch.ANY -> tier == 0

@@ -39,7 +39,7 @@ public sealed class AutoTrinketTests
     }
 
     [Fact]
-    public void CurrentTrinketRequirementsOverrideSavedAutomaticRecipes()
+    public void RequiredStartingTrinketRetainsABeneficialAutomaticRecipe()
     {
         var engine = new NativeEngine(); var baseline = Query();
         SeedResult[] recipes = [new("SRU-YSU-QHS", 1, "parchment_scrap")];
@@ -48,7 +48,7 @@ public sealed class AutoTrinketTests
               {"item":"runic_blade","upgrade":1,"effect":"Grim"},
               {"item":"parchment_scrap"}]}
             """);
-        Assert.Empty(engine.FilterRecipes(explicitQuery, baseline, recipes));
+        Assert.Equal("parchment_scrap", Assert.Single(engine.FilterRecipes(explicitQuery, baseline, recipes)).SelectedTrinket);
         var disabled = baseline.Clone(); disabled.AutoApplyTrinket = false;
         Assert.Empty(engine.FilterRecipes(disabled, baseline, recipes));
         explicitQuery.Requirements[1].SelectTrinket = true;

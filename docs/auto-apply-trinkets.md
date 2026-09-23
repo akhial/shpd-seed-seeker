@@ -33,7 +33,7 @@ conservatively protects all OR alternatives too. Targets later in the deck do
 not block helpful starting offers, so Sundial at transmutation #1 can use
 Mimic Tooth when the other requirements benefit. Probability estimation
 conditions target availability and equipment profiles on the same offer sets.
-See [trinket deck limits](trinket-offers.md#maximum-transmutation-requirements-web).
+See [trinket deck limits](trinket-offers.md#maximum-transmutation-requirements).
 
 The choice is an estimate based on the query and offer deck, not advance
 knowledge of a seed's contents. Some baseline matches are lost; the purpose

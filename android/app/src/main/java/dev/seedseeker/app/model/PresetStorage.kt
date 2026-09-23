@@ -71,6 +71,7 @@ class PresetStorage(private val preferences: SharedPreferences) {
                     put("maximumDepth", requirement.maximumDepth ?: JSONObject.NULL)
                     put("requireUncursed", requirement.requireUncursed)
                     put("selectTrinket", requirement.selectTrinket)
+                    put("trinketTransmutations", requirement.trinketTransmutations)
                     put("blanket", requirement.blanket)
                     put("excludeResin", requirement.excludeResin)
                     put("alternativeGroup", requirement.alternativeGroup ?: JSONObject.NULL)
@@ -124,6 +125,7 @@ class PresetStorage(private val preferences: SharedPreferences) {
                             ?.let(::normalizeFloorLimit),
                         requireUncursed = encoded.optBoolean("requireUncursed", false),
                         selectTrinket = encoded.optBoolean("selectTrinket", false),
+                        trinketTransmutations = encoded.optInt("trinketTransmutations", 0),
                         blanket = encoded.optBoolean("blanket", false),
                         excludeResin = encoded.optBoolean("excludeResin", false),
                         alternativeGroup = encoded.optInt("alternativeGroup")

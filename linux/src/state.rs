@@ -82,6 +82,7 @@ pub struct UiRequirement {
     pub effect: EffectRequirement,
     pub require_uncursed: bool,
     pub select_trinket: bool,
+    pub trinket_transmutations: u8,
     pub blanket: bool,
     pub exclude_resin: bool,
     pub source: Option<ItemSource>,
@@ -127,7 +128,7 @@ impl UiRequirement {
             effect: self.effect,
             require_uncursed: self.require_uncursed,
             select_trinket: self.select_trinket,
-            trinket_transmutations: 0,
+            trinket_transmutations: self.trinket_transmutations,
             blanket: self.blanket,
             exclude_resin: self.exclude_resin,
             source: self.source,
@@ -196,7 +197,9 @@ impl UiRequirement {
     #[must_use]
     pub fn subtitle(&self) -> String {
         if self.kind == ItemKind::Trinket {
-            return if self.select_trinket {
+            return if self.trinket_transmutations > 0 {
+                format!("Transmute ≤{}", self.trinket_transmutations)
+            } else if self.select_trinket {
                 "choose at +3".to_owned()
             } else {
                 String::new()
@@ -347,7 +350,7 @@ impl AppState {
                 effect: requirement.effect,
                 require_uncursed: requirement.require_uncursed,
                 select_trinket: requirement.select_trinket,
-                trinket_transmutations: 0,
+                trinket_transmutations: requirement.trinket_transmutations,
                 blanket: requirement.blanket,
                 exclude_resin: requirement.exclude_resin,
                 source: requirement.source,
