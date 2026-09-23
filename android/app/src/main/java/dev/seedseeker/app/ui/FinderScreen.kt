@@ -530,7 +530,8 @@ private fun QueryPage(
             ).joinToString(" · "),
             onClick = onSearchSettings,
         )
-        Spacer(Modifier.height(6.dp))
+        // Let the settings card scroll clear of the fixed Results header for easier tapping.
+        Spacer(Modifier.height(64.dp))
     }
 }
 
