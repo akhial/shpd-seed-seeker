@@ -15,6 +15,7 @@ data class PresetQuery(
     val arcaneResin: Int = 0,
     val arcaneResinFilter: ArcaneResinFilter = ArcaneResinFilter(),
     val arcaneResinAuto: Boolean = false,
+    val floorRequirements: List<FloorRequirement> = emptyList(),
 )
 
 data class QueryPreset(

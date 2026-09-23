@@ -110,7 +110,7 @@ public final class SearchController {
             requireBlacksmith: query.requireBlacksmith,
             excludeBlacksmithRewards: query.excludeBlacksmithRewards,
             wandmakerQuest: query.wandmakerQuest,
-            challenges: query.challenges, autoApplyTrinket: query.autoApplyTrinket, arcaneResin: query.arcaneResin, arcaneResinFilter: query.arcaneResinFilter, arcaneResinAuto: query.arcaneResinAuto)
+            challenges: query.challenges, autoApplyTrinket: query.autoApplyTrinket, arcaneResin: query.arcaneResin, arcaneResinFilter: query.arcaneResinFilter, arcaneResinAuto: query.arcaneResinAuto, floorRequirements: query.floorRequirements)
         if let request { remember(results, source: request) }
     }
 
@@ -149,7 +149,7 @@ public final class SearchController {
                     requireBlacksmith: request.requireBlacksmith, excludeBlacksmithRewards: request.excludeBlacksmithRewards,
                     wandmakerQuest: request.wandmakerQuest, challenges: request.challenges,
                     autoApplyTrinket: request.autoApplyTrinket, arcaneResin: request.arcaneResin,
-                    arcaneResinFilter: request.arcaneResinFilter, arcaneResinAuto: request.arcaneResinAuto)
+                    arcaneResinFilter: request.arcaneResinFilter, arcaneResinAuto: request.arcaneResinAuto, floorRequirements: request.floorRequirements)
                 self.isImported = false; self.importedDropped = 0
                 if let previous, previous.remaining == 0 {
                     self.state = .completed; self.isRunning = false

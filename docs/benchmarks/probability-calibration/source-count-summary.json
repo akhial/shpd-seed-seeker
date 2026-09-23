@@ -1,0 +1,21 @@
+{
+  "profile": "none",
+  "samples": 65536,
+  "queries": 15,
+  "categories": {
+    "probe": {
+      "pass": 13,
+      "underpowered": 2,
+      "median_ratio": 1.0050957943152112,
+      "p10_ratio": 0.9866759459158535,
+      "p90_ratio": 1.0632714039655466,
+      "mean_absolute_log_error": 0.031138526986763705
+    }
+  },
+  "timing_ns": {
+    "p50": 30456,
+    "p95": 75664,
+    "max": 120092
+  },
+  "divergences": []
+}

@@ -29,6 +29,14 @@ pub const PRODUCTION_SEARCH_START_STRIDE: u64 = 3_355_211_884_971;
 /// rolled by the floors generated up to this point, which is what lets a
 /// quest filter prune a seed the moment its giver appears.
 pub trait FloorGate: Sync {
+    /// Exact-floor checks used before layout and before painting. No RNG is consumed.
+    fn floor_requirement(
+        &self,
+        _depth: u8,
+    ) -> Option<&crate::floor_filters::CompiledFloorRequirement> {
+        None
+    }
+
     /// Check seed-specific facts fixed by run initialization before generating
     /// a floor. Returning false must prove the query cannot match this seed.
     fn continue_after_run_init(&self, _run: &crate::run::RunState) -> bool {
@@ -860,6 +868,8 @@ mod tests {
         spawn_streaming_search,
     };
 
+    const SEARCH_SEEDS: u64 = 1_024;
+
     struct DivisibleGenerator;
 
     impl WorldGenerator for DivisibleGenerator {
@@ -879,6 +889,7 @@ mod tests {
                 Vec::new()
             };
             GeneratedWorld {
+                floor_rooms: Vec::new(),
                 feelings: Vec::new(),
                 quests: crate::quests::QuestSummary::default(),
                 seed,
@@ -891,6 +902,7 @@ mod tests {
     #[test]
     fn parallel_results_are_sorted_and_bounded() {
         let query = SearchQuery {
+            floor_requirements: Vec::new(),
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
             arcane_resin_auto: false,
@@ -919,7 +931,7 @@ mod tests {
         };
         let options = SearchOptions {
             start_seed: 0,
-            end_seed_exclusive: 10_000,
+            end_seed_exclusive: SEARCH_SEEDS,
             workers: NonZeroUsize::new(4).unwrap(),
             chunk_size: NonZeroUsize::new(31).unwrap(),
             max_results: NonZeroUsize::new(20).unwrap(),
@@ -960,6 +972,7 @@ mod tests {
                     .iter()
                     .copied()
                     .map(|seed| GeneratedWorld {
+                        floor_rooms: Vec::new(),
                         feelings: Vec::new(),
                         quests: crate::quests::QuestSummary::default(),
                         seed,
@@ -983,6 +996,7 @@ mod tests {
         }
 
         let query = SearchQuery {
+            floor_requirements: Vec::new(),
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
             arcane_resin_auto: false,
@@ -1050,6 +1064,7 @@ mod tests {
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .push(seed.value());
                 GeneratedWorld {
+                    floor_rooms: Vec::new(),
                     feelings: Vec::new(),
                     quests: crate::quests::QuestSummary::default(),
                     seed,
@@ -1060,6 +1075,7 @@ mod tests {
         }
 
         let query = SearchQuery {
+            floor_requirements: Vec::new(),
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
             arcane_resin_auto: false,
@@ -1138,6 +1154,7 @@ mod tests {
     #[test]
     fn streaming_status_stays_running_until_terminal_results_are_drained() {
         let query = SearchQuery {
+            floor_requirements: Vec::new(),
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
             arcane_resin_auto: false,
@@ -1184,6 +1201,7 @@ mod tests {
 
     fn wand_query() -> SearchQuery {
         SearchQuery {
+            floor_requirements: Vec::new(),
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
             arcane_resin_auto: false,
@@ -1231,6 +1249,7 @@ mod tests {
                 Vec::new()
             };
             GeneratedWorld {
+                floor_rooms: Vec::new(),
                 feelings: Vec::new(),
                 seed,
                 items,
@@ -1258,6 +1277,7 @@ mod tests {
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .push(seed.value());
                 GeneratedWorld {
+                    floor_rooms: Vec::new(),
                     feelings: Vec::new(),
                     seed,
                     items: Vec::new(),
@@ -1334,6 +1354,7 @@ mod tests {
         // the hint hands the whole requested arc back to the caller, so a
         // later satisfiable continuation can still cover it.
         let impossible = SearchQuery {
+            floor_requirements: Vec::new(),
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
             arcane_resin_auto: false,
@@ -1472,19 +1493,20 @@ mod tests {
     fn cancelled_multiworker_search_reports_a_safe_resume_position() {
         let options = SearchOptions {
             start_seed: 0,
-            end_seed_exclusive: 4_096,
+            end_seed_exclusive: SEARCH_SEEDS,
             workers: NonZeroUsize::new(4).unwrap(),
             chunk_size: NonZeroUsize::new(4).unwrap(),
             max_results: NonZeroUsize::new(1_024).unwrap(),
         };
         let generator = Arc::new(ModuloGenerator(17));
         let handle =
-            spawn_partial_streaming_search(&generator, wand_query(), options, 100, 4_096).unwrap();
+            spawn_partial_streaming_search(&generator, wand_query(), options, 100, SEARCH_SEEDS)
+                .unwrap();
         handle.cancel();
         finish(&handle);
 
         let coverage = handle.resume_coverage();
-        assert_eq!(coverage.remaining, 4_096 - handle.scanned_prefix());
+        assert_eq!(coverage.remaining, SEARCH_SEEDS - handle.scanned_prefix());
         let first_found = handle
             .drain_results(2_048)
             .into_iter()
@@ -1513,7 +1535,7 @@ mod tests {
         union.dedup();
         assert_eq!(
             union,
-            (0..4_096_u64)
+            (0..SEARCH_SEEDS)
                 .filter(|seed| seed % 17 == 0)
                 .collect::<Vec<_>>()
         );
@@ -1532,6 +1554,7 @@ mod tests {
             fn generate(&self, seed: crate::seed::DungeonSeed, _max_depth: u8) -> GeneratedWorld {
                 assert_ne!(seed.value(), 6, "fixture panic at seed six");
                 GeneratedWorld {
+                    floor_rooms: Vec::new(),
                     feelings: Vec::new(),
                     seed,
                     items: vec![WorldItem {
@@ -1582,6 +1605,7 @@ mod tests {
             fn generate(&self, seed: crate::seed::DungeonSeed, _max_depth: u8) -> GeneratedWorld {
                 assert_ne!(seed.value(), 6, "fixture panic at seed six");
                 GeneratedWorld {
+                    floor_rooms: Vec::new(),
                     feelings: Vec::new(),
                     quests: crate::quests::QuestSummary::default(),
                     seed,
@@ -1592,6 +1616,7 @@ mod tests {
         }
 
         let query = SearchQuery {
+            floor_requirements: Vec::new(),
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
             arcane_resin_auto: false,

@@ -33,7 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.seedseeker.app.model.FloorFeeling
 
-/** Shared floor identity and quest badge; metadata wraps together on narrow screens. */
+/** Shared floor identity and informational badges; metadata wraps on narrow screens. */
 @Composable
 internal fun FloorHeading(
     depth: Int,
@@ -41,6 +41,7 @@ internal fun FloorHeading(
     feeling: FloorFeeling? = null,
     modifier: Modifier = Modifier,
     questLabel: String? = null,
+    farming: Boolean = false,
     mapExpanded: Boolean = false,
     onMapToggle: (() -> Unit)? = null,
     onCloseMap: (() -> Unit)? = null,
@@ -71,12 +72,19 @@ internal fun FloorHeading(
                     if (feeling != null && feeling != FloorFeeling.NONE) FloorFeelingSprite(feeling)
                     Text(floorRegion(depth), style = MaterialTheme.typography.labelMedium, color = region)
                 }
-                Row(Modifier.padding(start = 8.dp), verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FlowRow(Modifier.padding(start = 8.dp), itemVerticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     questLabel?.let {
                         Surface(shape = MaterialTheme.shapes.extraSmall, color = region.copy(alpha = 0.12f)) {
                             Text(it, Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
                                 style = MaterialTheme.typography.labelSmall, color = region)
+                        }
+                    }
+                    if (farming) {
+                        Surface(shape = MaterialTheme.shapes.extraSmall, color = MaterialTheme.colorScheme.secondaryContainer) {
+                            Text("Garden", Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                                style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
                         }
                     }
                     Text(if (itemCount == 1) "1 item" else "$itemCount items",

@@ -23,6 +23,7 @@ pub mod deep_link;
 pub mod engine_info;
 pub mod equipment;
 pub mod feasibility;
+pub mod floor_filters;
 pub mod generator;
 pub mod geometry;
 pub mod grid_builder;

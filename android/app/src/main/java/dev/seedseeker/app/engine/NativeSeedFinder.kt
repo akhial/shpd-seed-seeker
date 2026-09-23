@@ -335,9 +335,11 @@ class DemoNativeSeedFinder : NativeSeedFinder {
  * the engine's message), so queries are pre-validated locally for friendlier messages.
  * Result packet `SSR1`: magic[4], count:u16, then
  * repeated seedLength:u8, seed:ASCII. State codes are 0 running, 1 complete, 2 cancelled,
- * 3 failed. A non-zero handle is required. Scout requests use `SSQ4`, a little-endian challenge
+ * 3 failed. A non-zero handle is required. Scout requests use `SSQ5`, a little-endian challenge
  * mask, length-prefixed UTF-8 seed and override (little-endian u16 lengths), and canonical query
  * JSON. An empty override means automatic query selection; "none" disables it. Scout packet
+ * `SSC8` extends SSC7 with floorCount:u8, then ascending regular depth:u8,
+ * roomCount:u8, and unique room IDs (big-endian u16-length UTF-8).
  * `SSC7` extends SSC6 with 12 mappings each for scrolls, potions, and rings:
  * name and appearance (u16-length UTF-8), then a u16 sprite index, all big-endian.
  * `SSC6` extends SSC5 with a selected ID (big-endian u16 UTF-8 length, empty means none).
@@ -609,7 +611,7 @@ object ScoutRequestCodec {
         val seedBytes = seed.toByteArray(StandardCharsets.UTF_8)
         val overrideBytes = (trinket ?: "").toByteArray(StandardCharsets.UTF_8)
         require(overrideBytes.size <= 65535) { "Trinket identifier is too long" }
-        return "SSQ4".toByteArray(StandardCharsets.US_ASCII) + u16(challenges) +
+        return "SSQ5".toByteArray(StandardCharsets.US_ASCII) + u16(challenges) +
             u16(seedBytes.size) + seedBytes + u16(overrideBytes.size) + overrideBytes +
             (query?.let(QueryDocument::encode) ?: byteArrayOf())
     }
@@ -659,7 +661,8 @@ object ScoutResultCodec {
     fun decode(packet: ByteArray): ScoutWorld =
         DataInputStream(ByteArrayInputStream(packet)).use { input ->
             val magic = ByteArray(4).also(input::readFully)
-            val hasItemMappings = magic.contentEquals(byteArrayOf(83, 83, 67, 55))
+            val hasFloorRooms = magic.contentEquals("SSC8".toByteArray(StandardCharsets.US_ASCII))
+            val hasItemMappings = hasFloorRooms || magic.contentEquals(byteArrayOf(83, 83, 67, 55))
             val hasSelectedTrinket = hasItemMappings || magic.contentEquals(byteArrayOf(83, 83, 67, 54))
             val hasFeelings = hasSelectedTrinket || magic.contentEquals(byteArrayOf(83, 83, 67, 53))
             val hasTrinketOrder = hasFeelings || magic.contentEquals(byteArrayOf(83, 83, 67, 52))
@@ -800,10 +803,30 @@ object ScoutResultCodec {
                     }
                 }
             } else null
+            val floorRooms = if (hasFloorRooms) {
+                val count = input.readUnsignedByte()
+                check(count <= 20) { "Too many floor room summaries" }
+                var previousDepth = 0
+                buildMap {
+                    repeat(count) {
+                        val depth = input.readUnsignedByte()
+                        check(depth in 1..24 && depth % 5 != 0 && depth > previousDepth) {
+                            "Room depths must be ascending regular floors 1..24"
+                        }
+                        previousDepth = depth
+                        val rooms = mutableSetOf<String>()
+                        repeat(input.readUnsignedByte()) {
+                            val room = readUtf8(input, input.readUnsignedShort())
+                            check(room.isNotEmpty() && rooms.add(room)) { "Empty or repeated floor room" }
+                        }
+                        put(depth, rooms.toSet())
+                    }
+                }
+            } else emptyMap()
             check(input.available() == 0) { "Trailing bytes in native scout packet" }
             ScoutWorld(seed = seed, items = items, quests = quests, ringGems = ringGems,
                 trinketOrder = trinketOrder, floorFeelings = floorFeelings, selectedTrinket = selectedTrinket,
-                itemMappings = itemMappings)
+                itemMappings = itemMappings, floorRooms = floorRooms)
         }
 
     private fun readUtf8(input: DataInputStream, length: Int): String {

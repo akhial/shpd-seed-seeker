@@ -1,0 +1,124 @@
+{
+  "samples": 262144,
+  "seed_offset": 0,
+  "seed_stride": 20711912,
+  "query_seed": 20260922,
+  "cases": [
+    {
+      "query": {
+        "max_depth": 14,
+        "require_blacksmith": true,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "melee_weapon",
+            "tier": {
+              "exact": 2
+            }
+          },
+          {
+            "identity_group": 1,
+            "kind": "weapon"
+          },
+          {
+            "identity_group": 1,
+            "kind": "weapon"
+          }
+        ]
+      },
+      "hits": 1265
+    },
+    {
+      "query": {
+        "max_depth": 9,
+        "requirements": [
+          {
+            "kind": "armor"
+          },
+          {
+            "item": "throwing_club",
+            "kind": "weapon",
+            "upgrade": 3
+          }
+        ]
+      },
+      "hits": 24
+    },
+    {
+      "query": {
+        "max_depth": 18,
+        "requirements": [
+          {
+            "kind": "ring",
+            "upgrade": {
+              "at_least": 2
+            }
+          },
+          {
+            "kind": "armor",
+            "max_depth": 18,
+            "source": "shop",
+            "tier": {
+              "exact": 5
+            }
+          }
+        ]
+      },
+      "hits": 0
+    },
+    {
+      "query": {
+        "max_depth": 19,
+        "requirements": [
+          {
+            "item": "wand_regrowth",
+            "kind": "wand",
+            "uncursed": true
+          },
+          {
+            "item": "wand_living_earth",
+            "kind": "wand"
+          },
+          {
+            "item": "mail_armor",
+            "kind": "armor",
+            "uncursed": true
+          },
+          {
+            "item": "wand_lightning",
+            "kind": "wand"
+          }
+        ]
+      },
+      "hits": 22418
+    },
+    {
+      "query": {
+        "max_depth": 22,
+        "requirements": [
+          {
+            "kind": "wand",
+            "upgrade": 4
+          },
+          {
+            "kind": "ring",
+            "source": "heap",
+            "upgrade": {
+              "at_least": 1
+            }
+          },
+          {
+            "effect": "Anti-Magic",
+            "kind": "armor",
+            "uncursed": true
+          },
+          {
+            "kind": "ring",
+            "source": "heap"
+          }
+        ]
+      },
+      "hits": 7
+    }
+  ]
+}

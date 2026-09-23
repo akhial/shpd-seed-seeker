@@ -152,12 +152,31 @@ pub fn encode(query: &SearchQuery) -> Result<String, String> {
             bits.push(requirement.blanket.into(), 1);
         }
     }
+    if version >= 11 {
+        bits.push(query.arcane_resin_auto.into(), 1);
+        bits.push(query.floor_requirements.len() as u32, 5);
+        for floor in &query.floor_requirements {
+            bits.push(u32::from(floor.depth), 5);
+            push_optional(&mut bits, floor.feeling.is_some(), || {
+                (floor.feeling.map_or(0, |feeling| feeling as u32), 3)
+            });
+            for rooms in [&floor.rooms, &floor.any_rooms] {
+                let rooms = crate::floor_filters::RoomSet::from_types(rooms.iter().copied());
+                bits.push(rooms.0.count_ones(), 7);
+                for room in rooms.iter() {
+                    bits.push(room as u32, 7);
+                }
+            }
+        }
+    }
     Ok(base64url_encode(&bits.finish()))
 }
 
 /// Select the oldest compatible format so existing links retain their bytes.
 fn encoding_version(query: &SearchQuery) -> u32 {
-    if query.arcane_resin_auto {
+    if !query.floor_requirements.is_empty() {
+        11
+    } else if query.arcane_resin_auto {
         10
     } else if query.requirements.iter().any(|r| r.blanket) {
         9
@@ -205,10 +224,10 @@ pub fn decode(code: &str) -> Result<SearchQuery, String> {
     let bytes = base64url_decode(code.trim())?;
     let mut bits = BitReader::new(&bytes);
     let version = bits.pull(4)?;
-    if !(u32::from(VERSION)..=10).contains(&version) {
+    if !(u32::from(VERSION)..=11).contains(&version) {
         return Err(format!(
             "this link uses format version {version}; this app only understands \
-             versions {VERSION} through 10 — it may have been created by a different release"
+             versions {VERSION} through 11 — it may have been created by a different release"
         ));
     }
     let auto_apply_trinket = version >= 6 && bits.pull(1)? == 1;
@@ -267,13 +286,20 @@ pub fn decode(code: &str) -> Result<SearchQuery, String> {
                 .map_err(|error| format!("requirement {}: {error}", index + 1))
         })
         .collect::<Result<Vec<_>, _>>()?;
+    let arcane_resin_auto = version == 10 || (version >= 11 && bits.pull(1)? == 1);
+    let floor_requirements = if version >= 11 {
+        decode_floor_requirements(&mut bits)?
+    } else {
+        Vec::new()
+    };
     bits.expect_exhausted()?;
     let query = SearchQuery {
         auto_apply_trinket,
-        arcane_resin_auto: version == 10,
         arcane_resin,
+        arcane_resin_auto,
         arcane_resin_filter,
         requirements,
+        floor_requirements,
         max_depth,
         challenges,
         require_blacksmith,
@@ -284,6 +310,51 @@ pub fn decode(code: &str) -> Result<SearchQuery, String> {
         .validate()
         .map_err(|error| format!("invalid query: {error}"))?;
     Ok(query)
+}
+
+fn decode_floor_requirements(
+    bits: &mut BitReader<'_>,
+) -> Result<Vec<crate::floor_filters::FloorRequirement>, String> {
+    use crate::floor_filters::{FloorRequirement, RoomType};
+    use crate::level_prelude::Feeling;
+    let mut floor_requirements = Vec::new();
+    let count = bits.pull(5)?;
+    for _ in 0..count {
+        let depth = bits.pull(5)? as u8;
+        let feeling = if bits.pull(1)? == 1 {
+            Some(
+                [
+                    Feeling::None,
+                    Feeling::Chasm,
+                    Feeling::Water,
+                    Feeling::Grass,
+                    Feeling::Dark,
+                    Feeling::Large,
+                    Feeling::Traps,
+                    Feeling::Secrets,
+                ][bits.pull(3)? as usize],
+            )
+        } else {
+            None
+        };
+        let mut read_rooms = || -> Result<Vec<RoomType>, String> {
+            (0..bits.pull(7)?)
+                .map(|_| {
+                    RoomType::ALL
+                        .get(bits.pull(7)? as usize)
+                        .copied()
+                        .ok_or_else(|| "unknown room type".to_owned())
+                })
+                .collect()
+        };
+        floor_requirements.push(FloorRequirement {
+            depth,
+            feeling,
+            rooms: read_rooms()?,
+            any_rooms: read_rooms()?,
+        });
+    }
+    Ok(floor_requirements)
 }
 
 /// Pulls the share code out of user-facing link text.
@@ -857,6 +928,7 @@ mod tests {
 
     fn minimal(requirements: Vec<Requirement>) -> SearchQuery {
         SearchQuery {
+            floor_requirements: Vec::new(),
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
             arcane_resin_auto: false,
@@ -881,6 +953,7 @@ mod tests {
     #[test]
     fn round_trips_a_fully_loaded_query() {
         let query = SearchQuery {
+            floor_requirements: Vec::new(),
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
             arcane_resin_auto: false,
@@ -1059,8 +1132,8 @@ mod tests {
         assert!(decode("").is_err());
         assert!(decode("!!!").is_err());
         assert!(decode("A").is_err());
-        // Unsupported future version (bits 1011 in the top nibble).
-        assert!(decode("sAAA").unwrap_err().contains("version 11"));
+        // Unsupported future version (bits 1100 in the top nibble).
+        assert!(decode("wAAA").unwrap_err().contains("version 12"));
         let code = encode(&minimal(vec![wildcard(ItemKind::Wand)])).unwrap();
         assert!(decode(&code[..code.len() - 1]).is_err());
         assert!(decode(&format!("{code}AAAA")).is_err());
@@ -1613,7 +1686,7 @@ mod tests {
             let error = decode(code).unwrap_err();
             assert!(error.contains("format version"), "{error}");
             assert!(
-                error.contains("only understands versions 4 through 10"),
+                error.contains("only understands versions 4 through 11"),
                 "{error}"
             );
         }

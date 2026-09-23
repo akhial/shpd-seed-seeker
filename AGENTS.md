@@ -1,5 +1,16 @@
 # Agent guidance
 
+## CI test budget
+
+Cap seed equivalence and randomized matcher differential tests at 1,024 seeds/cases.
+Keep smaller samples small, retain known positive and negative cases, and reuse
+generated worlds across query combinations where possible. Large calibration
+and exhaustive sweeps must stay opt-in (`#[ignore]`, run with `--release`).
+
+The test profile optimizes `shpd-seedfinder-core` while retaining debug assertions
+and overflow checks. Keep that setting: complex query tests can take minutes in
+an unoptimized build even when they generate only one seed.
+
 ## Android Canary builds
 
 When asked to build the Canary app, use the `dev` build variant. From the

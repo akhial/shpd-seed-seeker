@@ -314,6 +314,7 @@ mod tests {
                     accessibility: Accessibility::Independent,
                     secret: false,
                 }],
+                floor_rooms: Vec::new(),
                 feelings: Vec::new(),
                 quests: QuestSummary::default(),
                 ring_gems: RingGems::UNSHUFFLED,

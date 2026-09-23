@@ -126,7 +126,7 @@ public sealed class TrinketTests
             new() { Kind = ItemKind.Trinket, Item = ItemCatalog.Find("mimic_tooth"), SelectTrinket = true },
         ] };
         var bytes = NativeEngine.EncodeScoutRequest("AAA-AAA-AAA", 257, query, "none");
-        Assert.Equal("SSQ4", System.Text.Encoding.UTF8.GetString(bytes, 0, 4));
+        Assert.Equal("SSQ5", System.Text.Encoding.UTF8.GetString(bytes, 0, 4));
         Assert.Equal(new byte[] { 1, 1, 11, 0 }, bytes[4..8]);
         Assert.Equal(new byte[] { 4, 0 }, bytes[19..21]);
         Assert.Equal("none", System.Text.Encoding.UTF8.GetString(bytes, 21, 4));

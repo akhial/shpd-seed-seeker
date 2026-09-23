@@ -28,6 +28,23 @@ public sealed class ItemMappingsTests
         Assert.Equal(mappings.Rings, challenged.Rings);
     }
 
+    [Fact]
+    public void RoomSummariesDecodeWithoutChangingLegacyPackets()
+    {
+        var prefix = Packet("SSC8");
+        var tail = new Writer(); tail.U8(2); tail.U8(7); tail.U8(1); tail.Text("garden");
+        tail.U8(17); tail.U8(1); tail.Text("secret_garden");
+        var world = NativeEngine.DecodeScout([.. prefix, .. tail.Finish()]);
+        Assert.Equal(new[] { "garden" }, world.FloorRooms![7]);
+        Assert.Equal(new[] { "secret_garden" }, world.FloorRooms[17]);
+        Assert.Empty(NativeEngine.DecodeScout(Packet()).FloorRooms!);
+        Assert.False(world.IsFarmingFloor(7));
+        foreach (byte[] invalid in new byte[][] { [], [21], [1, 0, 0], [1, 5, 0], [1, 25, 0],
+            [2, 7, 0, 7, 0], [2, 17, 0, 7, 0], [1, 7, 1], [1, 7, 1, 0, 0], [0, 0] })
+            Assert.Throws<InvalidDataException>(() => NativeEngine.DecodeScout([.. prefix, .. invalid]));
+        Assert.Throws<InvalidDataException>(() => NativeEngine.DecodeScout([.. prefix, .. tail.Finish()[..^1]]));
+    }
+
     private static byte[] Packet(string version = "SSC7", string mutation = "")
     {
         var w = new Writer();

@@ -299,6 +299,7 @@ fn generate_city_world_with_roots(
     let mut random = RandomStack::with_base_seed(0);
     let mut items = Vec::new();
     let mut feelings = Vec::new();
+    let mut floor_rooms = Vec::new();
     let mut next_choice_group = 0_u16;
 
     for (index, &root) in roots[..4].iter().enumerate() {
@@ -313,6 +314,10 @@ fn generate_city_world_with_roots(
         )?;
         random.pop();
         next_choice_group = remap_floor_choice_groups(&mut floor.world_items, next_choice_group);
+        floor_rooms.push(crate::floor_filters::FloorRooms {
+            depth: u8::try_from(depth).expect("regular depths fit u8"),
+            rooms: crate::floor_filters::RoomSet::from_rooms(&floor.painted.rooms),
+        });
         feelings.push(FloorFeeling {
             depth: u8::try_from(depth).expect("main-path depths fit u8"),
             feeling: floor.painted.level.feeling,
@@ -333,6 +338,10 @@ fn generate_city_world_with_roots(
         )?;
         random.pop();
         next_choice_group = remap_floor_choice_groups(&mut floor.world_items, next_choice_group);
+        floor_rooms.push(crate::floor_filters::FloorRooms {
+            depth: u8::try_from(depth).expect("regular depths fit u8"),
+            rooms: crate::floor_filters::RoomSet::from_rooms(&floor.painted.rooms),
+        });
         feelings.push(FloorFeeling {
             depth: u8::try_from(depth).expect("main-path depths fit u8"),
             feeling: floor.painted.level.feeling,
@@ -353,6 +362,10 @@ fn generate_city_world_with_roots(
         )?;
         random.pop();
         next_choice_group = remap_floor_choice_groups(&mut floor.world_items, next_choice_group);
+        floor_rooms.push(crate::floor_filters::FloorRooms {
+            depth: u8::try_from(depth).expect("regular depths fit u8"),
+            rooms: crate::floor_filters::RoomSet::from_rooms(&floor.painted.rooms),
+        });
         feelings.push(FloorFeeling {
             depth: u8::try_from(depth).expect("main-path depths fit u8"),
             feeling: floor.painted.level.feeling,
@@ -373,6 +386,10 @@ fn generate_city_world_with_roots(
         )?;
         random.pop();
         next_choice_group = remap_floor_choice_groups(&mut floor.world_items, next_choice_group);
+        floor_rooms.push(crate::floor_filters::FloorRooms {
+            depth: u8::try_from(depth).expect("regular depths fit u8"),
+            rooms: crate::floor_filters::RoomSet::from_rooms(&floor.painted.rooms),
+        });
         feelings.push(FloorFeeling {
             depth: u8::try_from(depth).expect("main-path depths fit u8"),
             feeling: floor.painted.level.feeling,
@@ -382,6 +399,7 @@ fn generate_city_world_with_roots(
     Ok(GeneratedWorld {
         seed,
         items,
+        floor_rooms,
         feelings,
         quests: quests.summary(),
         ring_gems: run.appearances.ring_gems,
@@ -403,7 +421,24 @@ pub fn generate_city_floor(
     depth: u32,
     random: &mut RandomStack,
 ) -> Result<GeneratedCityFloor, CityFloorError> {
-    let mut painted = paint_city_floor(run, limited_drops, quests, shop_run, depth, random)?;
+    generate_city_floor_filtered(run, limited_drops, quests, shop_run, depth, random, None)
+        .map(|floor| floor.expect("unfiltered floor generation cannot reject"))
+}
+
+pub(crate) fn generate_city_floor_filtered(
+    run: &mut RunState,
+    limited_drops: &mut LimitedDrops,
+    quests: &mut QuestState,
+    shop_run: &mut ShopRunState,
+    depth: u32,
+    random: &mut RandomStack,
+    filter: Option<&crate::floor_filters::CompiledFloorRequirement>,
+) -> Result<Option<GeneratedCityFloor>, CityFloorError> {
+    let Some(mut painted) =
+        paint_city_floor_filtered(run, limited_drops, quests, shop_run, depth, random, filter)?
+    else {
+        return Ok(None);
+    };
     let mut flags = LevelFlags::build_for_generation(&painted.level.map);
     let entrance_cell = painted
         .level
@@ -478,14 +513,14 @@ pub fn generate_city_floor(
     };
     world_items.extend(regular_items.world_items.iter().cloned());
 
-    Ok(GeneratedCityFloor {
+    Ok(Some(GeneratedCityFloor {
         vault: generated_vault,
         painted,
         flags,
         mobs,
         regular_items,
         world_items,
-    })
+    }))
 }
 
 /// Runs the exact City build and painter phases. The caller owns the active
@@ -503,10 +538,26 @@ pub fn paint_city_floor(
     depth: u32,
     random: &mut RandomStack,
 ) -> Result<PaintedCityFloor, CityPaintError> {
+    paint_city_floor_filtered(run, limited_drops, quests, shop_run, depth, random, None)
+        .map(|floor| floor.expect("unfiltered floor generation cannot reject"))
+}
+
+pub(crate) fn paint_city_floor_filtered(
+    run: &mut RunState,
+    limited_drops: &mut LimitedDrops,
+    quests: &mut QuestState,
+    shop_run: &mut ShopRunState,
+    depth: u32,
+    random: &mut RandomStack,
+    filter: Option<&crate::floor_filters::CompiledFloorRequirement>,
+) -> Result<Option<PaintedCityFloor>, CityPaintError> {
     assert!((16..=19).contains(&depth), "City depths are 16..=19");
     let prepared = prepare_regular_floor(run, limited_drops, depth, random)
         .map_err(QuestError::from)
         .map_err(CityPaintError::from)?;
+    if filter.is_some_and(|filter| !filter.matches_feeling(prepared.feeling)) {
+        return Ok(None);
+    }
     let (built, shop_room) = build_city_room_graph(
         run,
         limited_drops,
@@ -516,6 +567,11 @@ pub fn paint_city_floor(
         prepared.feeling,
         random,
     )?;
+    if filter.is_some_and(|filter| {
+        !filter.matches_rooms(crate::floor_filters::RoomSet::from_rooms(&built.rooms))
+    }) {
+        return Ok(None);
+    }
     if let Err(error) = reject_unwired_rooms(&built) {
         quests.imp.finish_build_attempt(false);
         return Err(error);
@@ -585,7 +641,7 @@ pub fn paint_city_floor(
     run.generator = generator.into_inner();
     let remaining_prizes = prizes.into_inner();
     quests.imp.finish_build_attempt(true);
-    Ok(PaintedCityFloor {
+    Ok(Some(PaintedCityFloor {
         prepared,
         graph_attempts: built.builder_attempts,
         level,
@@ -600,7 +656,7 @@ pub fn paint_city_floor(
         quest_events,
         quest_paint_state,
         world_items,
-    })
+    }))
 }
 
 fn build_city_room_graph(

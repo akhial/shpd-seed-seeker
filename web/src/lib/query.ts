@@ -1,3 +1,4 @@
+import { floorRequirementErrors, floorsFromDocument } from "./floor-requirements";
 import {
   effectNamesForCategory,
   enchantmentNamesForCategory,
@@ -331,6 +332,7 @@ export function toQueryDocument(state: QueryState): QueryDocument {
     return members.length === 1 ? members[0] : { any_of: members };
   });
   const output: QueryDocument = { requirements: entries };
+  if (state.floorRequirements?.length) output.floor_requirements = state.floorRequirements;
   if (state.arcaneResin !== undefined && state.arcaneResin !== 0)
     output.arcane_resin = state.arcaneResin;
   const resinFilter = state.arcaneResinFilter;
@@ -516,6 +518,9 @@ export function fromQueryJson(json: string): QueryState {
     ...(arcaneResinFilter ? { arcaneResinFilter } : {}),
     autoApplyTrinket: document.auto_apply_trinket ?? false,
     requirements: requirementsFromDocument(document.requirements),
+    ...(document.floor_requirements !== undefined
+      ? { floorRequirements: floorsFromDocument(document.floor_requirements) }
+      : {}),
     maxDepth: normalizeFloorLimit(document.max_depth ?? MAX_DEPTH),
     requireBlacksmith: document.require_blacksmith ?? false,
     excludeBlacksmithRewards: document.exclude_blacksmith_rewards ?? false,
@@ -620,8 +625,8 @@ export function validateRequirement(requirement: RequirementState): string[] {
 }
 
 export function validateQuery(state: QueryState): ValidationResult {
-  const errors: string[] = [];
-  if (!state.requirements.length && !state.arcaneResin)
+  const errors: string[] = floorRequirementErrors(state.floorRequirements ?? [], state.maxDepth);
+  if (!state.requirements.length && !state.arcaneResin && !state.floorRequirements?.length)
     errors.push("Add at least one requirement.");
   if (state.arcaneResin !== undefined && !validArcaneResin(state.arcaneResin))
     errors.push("Arcane Resin must be Auto or a whole number from 0 through 65535.");

@@ -9,6 +9,7 @@ export function FloorMapHeader({
   depth,
   feeling,
   quest,
+  farming,
   expanded,
   onToggle,
   onPrefetch,
@@ -16,13 +17,17 @@ export function FloorMapHeader({
   depth: number;
   feeling?: FloorFeeling;
   quest?: ScoutQuest;
+  farming?: boolean;
   expanded: boolean;
   onToggle: () => void;
   onPrefetch: () => void;
 }) {
   const available = isMapDepthSupported(depth);
   const label = (
-    <FloorMapLabel depth={depth} feeling={feeling} quest={quest} idPrefix="scout-floor" />
+    <>
+      <FloorMapLabel depth={depth} feeling={feeling} quest={quest} idPrefix="scout-floor" />
+      {farming && <span className="d1-farm-badge">Garden</span>}
+    </>
   );
 
   if (!available) return <header className="d1-floor-head">{label}</header>;

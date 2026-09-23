@@ -120,6 +120,7 @@ struct ScoutOutput {
     seed: SeedOutput,
     quests: Vec<ScoutQuestOutput>,
     feelings: Vec<ScoutFeelingOutput>,
+    floor_rooms: Vec<ScoutRoomsOutput>,
     items: Vec<ScoutItemOutput>,
     /// The gem each ring class is drawn with in this run, in catalog ring
     /// order. A ring item's atlas cell is `RING_SPRITE_BASE` plus its class's
@@ -128,6 +129,12 @@ struct ScoutOutput {
     ring_gems: [u8; 12],
     matched_requirements: usize,
     total_requirements: usize,
+}
+
+#[derive(Serialize)]
+struct ScoutRoomsOutput {
+    depth: u8,
+    rooms: Vec<shpd_seedfinder_core::floor_filters::RoomType>,
 }
 
 #[derive(Serialize)]
@@ -617,6 +624,14 @@ fn scout_impl(request_json: &str) -> Result<String, String> {
             .collect(),
         quests: scout_quest_outputs(world.quests),
         feelings,
+        floor_rooms: world
+            .floor_rooms
+            .iter()
+            .map(|floor| ScoutRoomsOutput {
+                depth: floor.depth,
+                rooms: floor.rooms.iter().collect(),
+            })
+            .collect(),
         items,
         ring_gems: world.ring_gems.ordinals(),
         matched_requirements,

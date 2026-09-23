@@ -224,6 +224,33 @@ files are replaced. The output options cannot be combined with `--benchmark`.
 }
 ```
 
+### Ring of Wealth farming floors
+
+On Android, open **Search settings** from the Finder and use the **7 / 17 / 22**
+segmented control under **Rooms and feelings → Ring of Wealth farming floors**.
+On web, Linux, macOS, and Windows, expand **Rooms and feelings** and select
+**Floor 7**, **Floor 17**, or **Floor 22**. Each selected floor must be dark and contain a garden or secret garden.
+The floors are independent: selecting several requires all of them. Selecting a
+floor raises the search limit if needed; clearing it leaves that limit in place.
+These filters work on their own or alongside item requirements. They do not
+implicitly require a Ring of Wealth. Scout labels qualifying floors **Garden**,
+using each platform’s floor-header styling alongside its quest details.
+
+Drafts, presets, share links, result exports, and search refinement preserve the
+filters. Imported room and feeling filters also remain visible and removable.
+The CLI accepts the same query document, for example:
+
+```json
+{
+  "max_depth": 17,
+  "requirements": [],
+  "floor_requirements": [
+    { "depth": 7, "feeling": "dark", "any_rooms": ["garden", "secret_garden"] },
+    { "depth": 17, "feeling": "dark", "any_rooms": ["garden", "secret_garden"] }
+  ]
+}
+```
+
 ### Blanket requirements
 
 In any app, add the items you need under **Requirements**, then add an
@@ -395,6 +422,11 @@ cargo clippy --workspace --all-targets -- -D warnings
 ```
 
 The workspace includes the GTK app, so the commands above need its system libraries (GTK 4.22 and libadwaita 1.9). Add `--exclude shpd-seedfinder-gtk` on macOS and Windows to exclude the GTK app from the test run.
+
+The test profile optimizes the engine while keeping debug assertions and overflow
+checks enabled. Seed equivalence and randomized matcher differential tests are
+capped at 1,024 seeds/cases; smaller regression samples stay smaller. Large calibration
+sweeps remain ignored by default and should be run explicitly with `--release`.
 
 #### Android
 

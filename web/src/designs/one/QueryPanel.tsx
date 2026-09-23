@@ -1,3 +1,4 @@
+import { FarmingFloors } from "./FarmingFloors";
 import { useEffect, useState } from "react";
 import { useStore } from "@tanstack/react-store";
 import { LEVEL_GEN_CHALLENGES, challenges as challengeOptions } from "../../lib/catalog";
@@ -178,7 +179,9 @@ export function QueryPanel({
     });
   };
 
-  const slotTotal = boardCount(query.requirements) + Number(Boolean(query.arcaneResin));
+  const floorCount = query.floorRequirements?.length ?? 0;
+  const slotTotal =
+    boardCount(query.requirements) + Number(Boolean(query.arcaneResin)) + floorCount;
   const challengeCount = query.challenges.length;
   const wandmakerCount = Number(Boolean(query.wandmakerQuest));
   const blacksmithCount = Number(query.requireBlacksmith) + Number(query.excludeBlacksmithRewards);
@@ -541,6 +544,18 @@ export function QueryPanel({
                 Required items cannot come from the 2,000-favor Smith choice, leaving favor
                 available for reforging.
               </p>
+            </div>
+          </details>
+        </section>
+
+        <section className="d1-section" aria-label="Rooms and feelings">
+          <details className="d1-details">
+            <summary>
+              <span>Rooms and feelings</span>
+              {floorCount > 0 && <span className="d1-count">{floorCount}</span>}
+            </summary>
+            <div className="d1-details-body">
+              <FarmingFloors query={query} onChange={(next) => queryStore.setState(() => next)} />
             </div>
           </details>
         </section>

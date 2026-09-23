@@ -23,6 +23,14 @@ unsafe_code = "deny"
 all = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
 
+# Generation and complex query checks are prohibitively slow without optimization.
+# Keep the test profile's debug assertions and overflow checks, including when
+# the engine is exercised by the session, FFI, and WASM tests.
+[profile.test.package.shpd-seedfinder-core]
+opt-level = 2
+debug-assertions = true
+overflow-checks = true
+
 [profile.release]
 opt-level = 3
 lto = "fat"

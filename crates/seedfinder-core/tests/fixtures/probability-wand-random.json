@@ -1,0 +1,1211 @@
+{
+  "profile": "none",
+  "query_seed": 20260922,
+  "samples": 262144,
+  "seed_offset": 0,
+  "seed_stride": 20711912,
+  "generation_depth": 24,
+  "cases": [
+    {
+      "query": {
+        "max_depth": 20,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "upgrade": {
+              "at_least": 0
+            }
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          }
+        ]
+      },
+      "hits": 238953
+    },
+    {
+      "query": {
+        "max_depth": 3,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          }
+        ]
+      },
+      "hits": 1382
+    },
+    {
+      "query": {
+        "max_depth": 5,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "uncursed": true
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          }
+        ]
+      },
+      "hits": 4
+    },
+    {
+      "query": {
+        "max_depth": 7,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "upgrade": {
+              "at_least": 4
+            }
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          }
+        ]
+      },
+      "hits": 0
+    },
+    {
+      "query": {
+        "max_depth": 2,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "max_depth": 1
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "uncursed": true
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          }
+        ]
+      },
+      "hits": 0
+    },
+    {
+      "query": {
+        "max_depth": 22,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "uncursed": true
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          }
+        ]
+      },
+      "hits": 50225
+    },
+    {
+      "query": {
+        "max_depth": 14,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "uncursed": true
+          }
+        ]
+      },
+      "hits": 97721
+    },
+    {
+      "query": {
+        "max_depth": 22,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "upgrade": {
+              "at_least": 2
+            }
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "max_depth": 22
+          }
+        ]
+      },
+      "hits": 187165
+    },
+    {
+      "query": {
+        "max_depth": 23,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "upgrade": 4
+          }
+        ]
+      },
+      "hits": 27907
+    },
+    {
+      "query": {
+        "max_depth": 21,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "max_depth": 5
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "max_depth": 22
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "upgrade": {
+              "at_least": 2
+            }
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          }
+        ]
+      },
+      "hits": 408
+    },
+    {
+      "query": {
+        "max_depth": 22,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "source": "shop",
+            "upgrade": {
+              "at_least": 4
+            }
+          }
+        ]
+      },
+      "hits": 0
+    },
+    {
+      "query": {
+        "max_depth": 22,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "max_depth": 22,
+            "upgrade": {
+              "at_least": 1
+            }
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          }
+        ]
+      },
+      "hits": 238450
+    },
+    {
+      "query": {
+        "max_depth": 17,
+        "require_blacksmith": true,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "max_depth": 2
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "upgrade": {
+              "at_least": 2
+            }
+          }
+        ]
+      },
+      "hits": 8723
+    },
+    {
+      "query": {
+        "max_depth": 5,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "max_depth": 21
+          }
+        ]
+      },
+      "hits": 2525
+    },
+    {
+      "query": {
+        "max_depth": 15,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "upgrade": {
+              "at_least": 3
+            }
+          }
+        ]
+      },
+      "hits": 2
+    },
+    {
+      "query": {
+        "max_depth": 12,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "max_depth": 5
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          }
+        ]
+      },
+      "hits": 3
+    },
+    {
+      "query": {
+        "max_depth": 17,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "source": "shop"
+          }
+        ]
+      },
+      "hits": 23821
+    },
+    {
+      "query": {
+        "max_depth": 21,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "uncursed": true,
+            "upgrade": {
+              "at_least": 4
+            }
+          }
+        ]
+      },
+      "hits": 2025
+    },
+    {
+      "query": {
+        "max_depth": 3,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "source": "wandmaker_reward",
+            "upgrade": {
+              "at_least": 3
+            }
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          }
+        ]
+      },
+      "hits": 0
+    },
+    {
+      "query": {
+        "max_depth": 21,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "max_depth": 24,
+            "upgrade": {
+              "at_least": 3
+            }
+          }
+        ]
+      },
+      "hits": 112462
+    },
+    {
+      "query": {
+        "max_depth": 16,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "uncursed": true
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          }
+        ]
+      },
+      "hits": 4328
+    },
+    {
+      "query": {
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          }
+        ]
+      },
+      "hits": 250377
+    },
+    {
+      "query": {
+        "max_depth": 2,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "uncursed": true,
+            "upgrade": 4
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "max_depth": 23
+          }
+        ]
+      },
+      "hits": 0
+    },
+    {
+      "query": {
+        "max_depth": 19,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "max_depth": 8
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "upgrade": {
+              "at_least": 2
+            }
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          }
+        ]
+      },
+      "hits": 17658
+    },
+    {
+      "query": {
+        "max_depth": 11,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "max_depth": 24
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "max_depth": 23,
+            "source": "chest",
+            "upgrade": {
+              "at_least": 1
+            }
+          }
+        ]
+      },
+      "hits": 234
+    },
+    {
+      "query": {
+        "max_depth": 8,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "max_depth": 20,
+            "upgrade": 4
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          }
+        ]
+      },
+      "hits": 0
+    },
+    {
+      "query": {
+        "max_depth": 11,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "max_depth": 21,
+            "uncursed": true,
+            "upgrade": {
+              "at_least": 0
+            }
+          }
+        ]
+      },
+      "hits": 71921
+    },
+    {
+      "query": {
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "max_depth": 23,
+            "source": "wandmaker_reward",
+            "upgrade": {
+              "at_least": 0
+            }
+          }
+        ]
+      },
+      "hits": 175839
+    },
+    {
+      "query": {
+        "max_depth": 15,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "uncursed": true
+          }
+        ]
+      },
+      "hits": 97721
+    },
+    {
+      "query": {
+        "max_depth": 16,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "max_depth": 15
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "max_depth": 9,
+            "uncursed": true
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          }
+        ]
+      },
+      "hits": 4080
+    },
+    {
+      "query": {
+        "max_depth": 10,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "max_depth": 1
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          }
+        ]
+      },
+      "hits": 7323
+    },
+    {
+      "query": {
+        "max_depth": 18,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "upgrade": {
+              "at_least": 1
+            }
+          }
+        ]
+      },
+      "hits": 188371
+    },
+    {
+      "query": {
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "uncursed": true
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          }
+        ]
+      },
+      "hits": 2515
+    },
+    {
+      "query": {
+        "max_depth": 15,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "upgrade": {
+              "at_least": 0
+            }
+          }
+        ]
+      },
+      "hits": 99771
+    },
+    {
+      "query": {
+        "max_depth": 13,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "max_depth": 13
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "upgrade": {
+              "at_least": 4
+            }
+          }
+        ]
+      },
+      "hits": 0
+    },
+    {
+      "query": {
+        "max_depth": 17,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "source": "shop"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "max_depth": 24
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          }
+        ]
+      },
+      "hits": 78
+    },
+    {
+      "query": {
+        "max_depth": 16,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "upgrade": {
+              "at_least": 4
+            }
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          }
+        ]
+      },
+      "hits": 0
+    },
+    {
+      "query": {
+        "exclude_blacksmith_rewards": true,
+        "max_depth": 19,
+        "require_blacksmith": true,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "max_depth": 15
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "max_depth": 17,
+            "upgrade": {
+              "at_least": 2
+            }
+          }
+        ]
+      },
+      "hits": 71627
+    },
+    {
+      "query": {
+        "max_depth": 22,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "upgrade": 4
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "max_depth": 15
+          }
+        ]
+      },
+      "hits": 20754
+    },
+    {
+      "query": {
+        "max_depth": 22,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "max_depth": 16,
+            "upgrade": 4
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "max_depth": 11
+          }
+        ]
+      },
+      "hits": 0
+    },
+    {
+      "query": {
+        "exclude_blacksmith_rewards": true,
+        "max_depth": 10,
+        "require_blacksmith": true,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "source": "shop"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          }
+        ]
+      },
+      "hits": 0
+    },
+    {
+      "query": {
+        "max_depth": 5,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "max_depth": 5,
+            "uncursed": true
+          }
+        ]
+      },
+      "hits": 2340
+    },
+    {
+      "query": {
+        "max_depth": 4,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "upgrade": {
+              "at_least": 0
+            }
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          }
+        ]
+      },
+      "hits": 0
+    },
+    {
+      "query": {
+        "max_depth": 15,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "upgrade": {
+              "at_least": 1
+            }
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          }
+        ]
+      },
+      "hits": 86058
+    },
+    {
+      "query": {
+        "max_depth": 8,
+        "require_blacksmith": true,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "upgrade": 4
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "max_depth": 4
+          }
+        ]
+      },
+      "hits": 0
+    },
+    {
+      "query": {
+        "max_depth": 6,
+        "require_blacksmith": true,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "upgrade": {
+              "at_least": 0
+            }
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "max_depth": 19
+          }
+        ]
+      },
+      "hits": 0
+    },
+    {
+      "query": {
+        "max_depth": 7,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "source": "wandmaker_reward"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          }
+        ]
+      },
+      "hits": 1
+    },
+    {
+      "query": {
+        "exclude_blacksmith_rewards": true,
+        "max_depth": 20,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "max_depth": 19
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "source": "chest"
+          }
+        ]
+      },
+      "hits": 77455
+    },
+    {
+      "query": {
+        "max_depth": 3,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "max_depth": 23
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "upgrade": {
+              "at_least": 0
+            }
+          }
+        ]
+      },
+      "hits": 3
+    },
+    {
+      "query": {
+        "max_depth": 11,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "max_depth": 19
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "upgrade": 4
+          }
+        ]
+      },
+      "hits": 0
+    },
+    {
+      "query": {
+        "max_depth": 21,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "max_depth": 7
+          }
+        ]
+      },
+      "hits": 1223
+    },
+    {
+      "query": {
+        "max_depth": 4,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          }
+        ]
+      },
+      "hits": 4
+    },
+    {
+      "query": {
+        "max_depth": 12,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "max_depth": 20
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "upgrade": {
+              "at_least": 4
+            }
+          }
+        ]
+      },
+      "hits": 0
+    },
+    {
+      "query": {
+        "max_depth": 18,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "upgrade": 3
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          }
+        ]
+      },
+      "hits": 60613
+    },
+    {
+      "query": {
+        "max_depth": 5,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "upgrade": {
+              "at_least": 0
+            }
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          }
+        ]
+      },
+      "hits": 4
+    },
+    {
+      "query": {
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "max_depth": 20
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "max_depth": 14,
+            "uncursed": true
+          }
+        ]
+      },
+      "hits": 217346
+    },
+    {
+      "query": {
+        "max_depth": 23,
+        "requirements": [
+          {
+            "identity_group": 1,
+            "kind": "wand"
+          },
+          {
+            "identity_group": 1,
+            "kind": "wand",
+            "upgrade": 1
+          }
+        ]
+      },
+      "hits": 204277
+    }
+  ]
+}

@@ -9,7 +9,7 @@ namespace SeedSeeker;
 /// Lays children out left to right at their natural size, starting a new row
 /// whenever the next child would overflow the available width. WinUI ships no
 /// wrapping panel of its own (<c>ItemsWrapGrid</c> and <c>UniformGridLayout</c>
-/// both force a uniform cell), and the quest chips are all different widths.
+/// both force a uniform cell), while the labels and badges have different widths.
 /// </summary>
 public sealed class WrapPanel : Panel
 {

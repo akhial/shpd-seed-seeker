@@ -351,6 +351,7 @@ fn load_query(path: &Path) -> Result<SearchQuery, String> {
 /// it, are not comparable with current ones.
 fn benchmark_query() -> SearchQuery {
     SearchQuery {
+        floor_requirements: Vec::new(),
         auto_apply_trinket: false,
         arcane_resin_filter: shpd_seedfinder_core::query::ArcaneResinFilter::default(),
         arcane_resin_auto: false,

@@ -21,6 +21,20 @@ final class ItemMappingsTests: XCTestCase {
         XCTAssertEqual(mappings, changed.itemMappings)
     }
 
+    func testRoomSummariesDecodeWithoutChangingLegacyPackets() throws {
+        let prefix = packet(version: "SSC8")
+        let tail = Data([2, 7, 1, 0, 6] + Array("garden".utf8) + [17, 1, 0, 13] + Array("secret_garden".utf8))
+        let world = try ScoutCodec.decode(prefix + tail)
+        XCTAssertEqual(world.floorRooms, [7: ["garden"], 17: ["secret_garden"]])
+        XCTAssertTrue(try ScoutCodec.decode(packet()).floorRooms.isEmpty)
+        XCTAssertFalse(world.isFarmingFloor(7)) // Room data alone does not imply Dark.
+        for tail: [UInt8] in [[], [21], [1, 0, 0], [1, 5, 0], [1, 25, 0],
+                              [2, 7, 0, 7, 0], [2, 17, 0, 7, 0], [1, 7, 1], [1, 7, 1, 0, 0], [0, 0]] {
+            XCTAssertThrowsError(try ScoutCodec.decode(prefix + Data(tail)))
+        }
+        XCTAssertThrowsError(try ScoutCodec.decode((prefix + tail).dropLast()))
+    }
+
     private func packet(version: String = "SSC7", mutation: String = "") -> Data {
         var data = Data()
         func bytes<S: Sequence>(_ value: S) where S.Element == UInt8 { data.append(contentsOf: value) }

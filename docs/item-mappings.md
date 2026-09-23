@@ -12,13 +12,15 @@ these cells through the ring gem table a second time.
 
 Web scouting includes this data as `itemMappings: { scrolls, potions, rings }`.
 
-Android, Windows, and macOS request mappings with `SSQ4`, whose request body is
+Android, Windows, and macOS use `SSQ5` for mappings and floor room summaries.
+Mappings were introduced in `SSQ4`, whose request body is
 identical to `SSQ3`. Linux calls `item_mappings(seed)` in process.
-The response is `SSC7`: the entire `SSC6` body followed by three blocks in scroll,
+The `SSQ4` response is `SSC7`: the entire `SSC6` body followed by three blocks in scroll,
 potion, ring order. Each block contains exactly twelve entries, each encoded as
 `name:utf8_u16, appearance:utf8_u16, sprite_index:u16`. Lengths and sprite indices
 are unsigned and big-endian. The native decoder validates the extension against
-the seed. `SSQ3` still returns `SSC6`, and older requests still return `SSC5`.
+the seed. `SSQ5` returns `SSC8`, appending the [floor room summaries](floor-feelings.md).
+`SSQ3` still returns `SSC6`, and older requests still return `SSC5`.
 
 Clients reading older results should omit the mappings control when metadata is
 absent, rather than displaying an unshuffled or guessed mapping.

@@ -18,6 +18,19 @@ use shpd_seedfinder_core::quests::{
 };
 
 use crate::relations::{self, BoardItem};
+use shpd_seedfinder_core::floor_filters::{FloorRequirement, RoomType};
+use shpd_seedfinder_core::level_prelude::Feeling;
+
+pub const FARMING_FLOORS: [u8; 3] = [7, 17, 22];
+
+pub fn is_farming_requirement(floor: &FloorRequirement) -> bool {
+    FARMING_FLOORS.contains(&floor.depth)
+        && floor.feeling == Some(Feeling::Dark)
+        && floor.rooms.is_empty()
+        && floor.any_rooms.len() == 2
+        && floor.any_rooms.contains(&RoomType::SpecialGarden)
+        && floor.any_rooms.contains(&RoomType::SecretGarden)
+}
 
 /// Where a floor-limit control lands when the user moves it onto an empty
 /// boss floor. A single upward step (spin button, arrow key, scroll)
@@ -227,6 +240,7 @@ pub struct AppState {
     pub arcane_resin_auto: bool,
     pub arcane_resin_filter: shpd_seedfinder_core::query::ArcaneResinFilter,
     pub auto_apply_trinket: bool,
+    pub floor_requirements: Vec<FloorRequirement>,
     pub requirements: Vec<UiRequirement>,
     pub max_depth: u8,
     pub require_blacksmith: bool,
@@ -243,6 +257,7 @@ impl Default for AppState {
             arcane_resin: 0,
             arcane_resin_auto: false,
             arcane_resin_filter: shpd_seedfinder_core::query::ArcaneResinFilter::default(),
+            floor_requirements: Vec::new(),
             requirements: Vec::new(),
             max_depth: 24,
             require_blacksmith: false,
@@ -255,6 +270,25 @@ impl Default for AppState {
 }
 
 impl AppState {
+    pub fn toggle_farming_floor(&mut self, depth: u8) {
+        assert!(FARMING_FLOORS.contains(&depth));
+        let selected = self
+            .floor_requirements
+            .iter()
+            .any(|floor| floor.depth == depth && is_farming_requirement(floor));
+        self.floor_requirements.retain(|floor| floor.depth != depth);
+        if !selected {
+            self.floor_requirements.push(FloorRequirement {
+                depth,
+                feeling: Some(Feeling::Dark),
+                rooms: Vec::new(),
+                any_rooms: vec![RoomType::SpecialGarden, RoomType::SecretGarden],
+            });
+            self.max_depth = self.max_depth.max(depth);
+        }
+        self.floor_requirements.sort_by_key(|floor| floor.depth);
+    }
+
     pub const fn needs_resin(&self) -> bool {
         self.arcane_resin_auto || self.arcane_resin > 0
     }
@@ -283,6 +317,7 @@ impl AppState {
             arcane_resin: query.arcane_resin,
             arcane_resin_auto: query.arcane_resin_auto,
             arcane_resin_filter: query.arcane_resin_filter,
+            floor_requirements: query.floor_requirements.clone(),
             requirements: Vec::with_capacity(query.requirements.len()),
             max_depth: query.max_depth,
             require_blacksmith: query.require_blacksmith,
@@ -320,6 +355,7 @@ impl AppState {
     #[must_use]
     pub fn unvalidated_query(&self) -> SearchQuery {
         SearchQuery {
+            floor_requirements: self.floor_requirements.clone(),
             auto_apply_trinket: self.auto_apply_trinket,
             arcane_resin_filter: self.arcane_resin_filter,
             arcane_resin_auto: self.arcane_resin_auto,
@@ -944,6 +980,7 @@ mod tests {
                 .unwrap();
         assert!(!AppState::from_query(&legacy).auto_apply_trinket);
         let enabled = shpd_seedfinder_core::query::SearchQuery {
+            floor_requirements: Vec::new(),
             auto_apply_trinket: true,
             ..legacy
         };
@@ -1405,6 +1442,63 @@ mod tests {
         // The named +3 armor keeps its own floor; the copy keeps the other.
         assert_eq!(state.requirements[0].max_depth, Some(4));
         assert_eq!(state.requirements[1].max_depth, Some(9));
+        assert!(state.to_query().is_ok());
+    }
+}
+
+#[cfg(test)]
+mod floor_requirement_tests {
+    use super::*;
+    use shpd_seedfinder_core::{deep_link, json_query};
+
+    #[test]
+    fn farming_floors_are_independent_and_round_trip_editor_and_links() {
+        let mut state = AppState {
+            max_depth: 4,
+            ..AppState::default()
+        };
+        for depth in [22, 7, 17] {
+            state.toggle_farming_floor(depth);
+        }
+        assert_eq!(state.max_depth, 22);
+        assert_eq!(
+            state
+                .floor_requirements
+                .iter()
+                .map(|floor| floor.depth)
+                .collect::<Vec<_>>(),
+            FARMING_FLOORS
+        );
+        assert!(state.floor_requirements.iter().all(is_farming_requirement));
+        let query = state.to_query().unwrap();
+        for restored in [
+            json_query::decode(&json_query::encode(&query).to_string()).unwrap(),
+            deep_link::decode(&deep_link::encode(&query).unwrap()).unwrap(),
+        ] {
+            assert_eq!(AppState::from_query(&restored).unvalidated_query(), query);
+        }
+        state.toggle_farming_floor(17);
+        assert_eq!(
+            state
+                .floor_requirements
+                .iter()
+                .map(|floor| floor.depth)
+                .collect::<Vec<_>>(),
+            [7, 22]
+        );
+        assert_eq!(state.max_depth, 22);
+        state.max_depth = 16;
+        assert!(state.to_query().is_err());
+    }
+
+    #[test]
+    fn general_filters_survive_and_toggling_replaces_only_the_selected_floor() {
+        let query = json_query::decode(r#"{"requirements":[],"floor_requirements":[{"depth":7,"feeling":"water","rooms":["garden"]},{"depth":9,"feeling":"secrets","rooms":["secret_library"]}]}"#).unwrap();
+        let mut state = AppState::from_query(&query);
+        assert_eq!(state.unvalidated_query(), query);
+        state.toggle_farming_floor(7);
+        assert!(is_farming_requirement(&state.floor_requirements[0]));
+        assert_eq!(state.floor_requirements[1], query.floor_requirements[1]);
         assert!(state.to_query().is_ok());
     }
 }

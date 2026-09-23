@@ -80,6 +80,12 @@ struct RecipeGate<'a> {
 }
 
 impl FloorGate for RecipeGate<'_> {
+    fn floor_requirement(
+        &self,
+        depth: u8,
+    ) -> Option<&crate::floor_filters::CompiledFloorRequirement> {
+        self.plan.floor_requirement(depth)
+    }
     fn deferred_vault_plan(&self, target: u8) -> Option<&QueryPlan> {
         self.plan.deferred_vault_plan(target)
     }
@@ -299,6 +305,11 @@ impl AutoTrinketPolicy {
     }
 
     fn prepare_uncached(query: &SearchQuery) -> Self {
+        // Preserve item-based selection; floor rules are evaluated in the selected world.
+        // Room sampling noise must not cause an otherwise unnecessary trinket choice.
+        let mut item_query = query.clone();
+        item_query.floor_requirements.clear();
+        let query = &item_query;
         let baseline = equipment_probability(query, Profile::None);
         let forbids_parchment = query.requirements.iter().any(|r| match r.effect {
             EffectRequirement::OneOf(set) => set.effects().any(Effect::is_curse),

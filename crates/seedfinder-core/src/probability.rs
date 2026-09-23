@@ -60,17 +60,19 @@
 //!
 //! Known simplifications: challenges shift item placement but are ignored. A
 //! pool is spent on its single best use rather than on whichever of them the
-//! seed left open; a pool that reaches two unrelated requirements is read as
-//! reaching the easier whenever it reaches the harder, which understates how
-//! often it ends up spent on the lesser. Duplicate scarcity is measured over a
-//! whole line at once, so a linked group whose members want very different
-//! items — one `+3` alongside two plain ones — is discounted as heavily as one
-//! wanting three alike. Those approximations read low.
+//! seed left open. Overlapping reward filters are nested; disjoint offers are
+//! approximated independently conditional on the quest appearing. Duplicate
+//! wands use baked co-obtainable presence, normalized against the same matcher,
+//! with separate upgrade and quest-reward conditions. Unequal deadlines,
+//! curses, and unsupported combinations still use analytical adjustments.
+//! Other duplicate scarcity is measured by weapon tier for the canonical
+//! profile and by whole line otherwise; uneven filters can read low.
 
 mod artifacts;
 mod blankets;
 mod cache;
 mod coverage;
+mod floors;
 mod resin;
 
 use coverage::Coverages;
@@ -88,12 +90,12 @@ use crate::generator::{
     WEAPON_TIER_3_ITEMS, WEAPON_TIER_4_ITEMS, WEAPON_TIER_5_ITEMS,
 };
 use crate::model::ItemSource;
-use crate::probability_tables::trinkets::Profile;
 use crate::probability_tables::{
     DEEPEST_FLOOR, DEPTHS, FLOOR_SETS, HIGHEST_TABLED_UPGRADE, HIGHEST_TIER, IDENTITY_REPEAT_LIMIT,
     LINES_ORDER, Line, PRIZE_GROUPS, PrizeGroup, Supply, TIERS, TIPPED_DARTS, kind_index, line_of,
     missile_tier, missile_tier_items, prize_group, source_index, spread_index, tipped_index,
 };
+use crate::probability_tables::{line_index, trinkets::Profile};
 use crate::query::{EffectRequirement, Requirement, SearchQuery, UpgradeRequirement};
 use crate::quests::WandmakerQuestType;
 
@@ -125,6 +127,16 @@ pub fn estimate_match_probability(query: &SearchQuery) -> f64 {
 }
 
 pub(crate) fn equipment_probability(query: &SearchQuery, profile: Profile) -> f64 {
+    if query.floor_requirements.is_empty() {
+        return equipment_probability_without_floors(query, profile);
+    }
+    let floor_probability = floors::probability(query, profile);
+    let mut items = query.clone();
+    items.floor_requirements.clear();
+    floor_probability * equipment_probability_without_floors(&items, profile)
+}
+
+fn equipment_probability_without_floors(query: &SearchQuery, profile: Profile) -> f64 {
     if query.requirements.iter().any(|r| r.blanket) {
         return blankets::probability(query, profile);
     }
@@ -552,7 +564,9 @@ fn linked_probability(
 /// scarcity, and counting it twice would make duplicates look far rarer than
 /// they are.
 ///
-/// The table counts how many sets of copies a world offers rather than how
+/// Wands calibrate this reward-aware matcher's answer directly against measured
+/// co-obtainable presence, avoiding a second discount for exclusive rewards.
+/// Other families' tables count how many sets of copies a world offers rather than how
 /// often it offers any, since only the former survives the upgrade and curse
 /// filters a query puts on top. [`thinned_by`] puts the matching's answer on
 /// the same footing, applies the scarcity there, and reads it back.
@@ -564,6 +578,11 @@ fn repeat_correction(ordered: &[Predicate], holding: f64, copies: usize) -> f64 
     // family the repeated identity belongs to rather than whichever filter
     // sorted first.
     let kind = item(repeated).kind;
+    if kind == ItemKind::Wand
+        && let Some(probability) = wand_repeat_probability(ordered, repeated, holding)
+    {
+        return probability;
+    }
     let depth = ordered
         .iter()
         .map(|predicate| predicate.max_depth)
@@ -572,11 +591,79 @@ fn repeat_correction(ordered: &[Predicate], holding: f64, copies: usize) -> f64 
     let line = spread_index(kind, line_for(kind, repeated));
     let copies = copies.min(IDENTITY_REPEAT_LIMIT);
     let depth = usize::from(depth).clamp(1, DEPTHS) - 1;
-    thinned_by(
-        holding,
-        copies,
-        f64::from(ordered[0].profile.repeat(line, copies - 1, depth)),
-    )
+    let scarcity = if ordered[0].profile == Profile::None
+        && kind == ItemKind::Weapon
+        && let Some(tier) = item(repeated).tier
+    {
+        crate::probability_tables::weapon_repeats::REPEATS
+            [line_index(line_for(kind, repeated)) * TIERS + usize::from(tier) - 1][copies - 1]
+            [depth]
+    } else {
+        f64::from(ordered[0].profile.repeat(line, copies - 1, depth))
+    };
+    thinned_by(holding, copies, scarcity)
+}
+
+fn wand_repeat_probability(ordered: &[Predicate], identity: ItemId, holding: f64) -> Option<f64> {
+    let repeated: Vec<_> = ordered
+        .iter()
+        .filter(|p| p.item == Some(identity))
+        .copied()
+        .collect();
+    let depth = repeated.iter().map(|p| p.max_depth).max()?;
+    let minimum = repeated
+        .iter()
+        .map(|p| p.upgrades.trailing_zeros() as usize)
+        .min()?;
+    if minimum >= 4 {
+        return None;
+    }
+    let all_upgrades = (1 << (HIGHEST_TABLED_UPGRADE + 1)) - 1;
+    let broad = Predicate {
+        max_depth: depth,
+        upgrades: all_upgrades & !((1 << minimum) - 1),
+        require_uncursed: false,
+        source: None,
+        effect: EffectRequirement::Any,
+        ..repeated[0]
+    };
+    let mut band = minimum;
+    let mut baseline = vec![broad; repeated.len()];
+    for (index, anchor) in repeated.iter().enumerate() {
+        let level = anchor.upgrades.trailing_zeros() as usize;
+        if minimum != 0
+            || (anchor.source.is_none() && level == 0)
+            || !repeated
+                .iter()
+                .enumerate()
+                .all(|(i, p)| i == index || (p.upgrades == all_upgrades && p.source.is_none()))
+        {
+            continue;
+        }
+        if let Some(anchor_band) =
+            crate::probability_tables::wand_repeats::anchor_band(anchor.source, level)
+        {
+            band = anchor_band;
+            baseline[index].source = anchor.source;
+            baseline[index].upgrades = all_upgrades & !((1 << level) - 1);
+            break;
+        }
+    }
+    let measured = crate::probability_tables::wand_repeats::probability(
+        ordered[0].profile as usize,
+        identity,
+        band,
+        repeated.len(),
+        usize::from(depth),
+    )?;
+    // Compare observed availability with the same reward-aware matcher that
+    // produced `holding`. A Poisson factorial-moment denominator also charges
+    // for the quest choices this matcher has already enforced. Keep the
+    // query's source, curse and individual deadlines in `holding`; the bake
+    // supplies its broad duplicate correction, not a second reward model.
+    sort_filters(&mut baseline);
+    let baseline = matching_chance(&baseline);
+    (baseline > 0.0).then(|| (holding * measured / baseline).min(1.0))
 }
 
 /// Applies a scarcity measured on sets of `copies` items to a chance of holding
@@ -663,6 +750,14 @@ fn line_for(kind: ItemKind, item: ItemId) -> Line {
         line_of(item)
     } else {
         Line::Plain
+    }
+}
+
+fn vault_identity_probability(wanted: ItemId, identities: &[ItemId], excluded: &[ItemId]) -> f64 {
+    if !identities.contains(&wanted) || excluded.contains(&wanted) {
+        0.0
+    } else {
+        1.0 / tally(identities.len() - excluded.len())
     }
 }
 
@@ -790,7 +885,7 @@ fn matching_chance_uncached(ordered: &[Predicate]) -> f64 {
         .map(|predicate| usize::from(predicate.max_depth).clamp(1, DEPTHS))
         .max()
         .unwrap_or(DEPTHS);
-    let pools: Vec<Vec<f64>> = PRIZE_GROUPS
+    let pools: Vec<PrizePool> = PRIZE_GROUPS
         .into_iter()
         .filter_map(|group| prize_reach(group, ordered, deepest))
         .collect();
@@ -813,21 +908,21 @@ fn matching_chance_uncached(ordered: &[Predicate]) -> f64 {
 /// pool takes the best it reaches, and only misses out entirely when it
 /// reaches none of them.
 ///
-/// Whether the pool reaches one requirement is read as nested with whether it
-/// reaches another — a pool that can answer the harder of two can answer the
-/// easier. That is exact for the case that matters, several requirements on
-/// one item, where a pool holding the item answers all of them and still only
-/// leaves with one. Where two requirements really are unrelated it understates
-/// how often the pool ends up spent on the lesser of them, which reads low.
+/// Overlapping filters retain nested reaches: offering an item matching the
+/// narrower filter also reaches the broader one. Disjoint offers use an
+/// independent approximation conditional on the quest appearing, so a different
+/// wanted identity can be offered when the preferred one is absent. Either
+/// partition spends the pool only once.
 fn prize_chance(
-    pools: &[Vec<f64>],
+    pools: &[PrizePool],
     group: usize,
     discharged: &[usize],
     open: &mut OpenSupply,
 ) -> f64 {
-    let Some(reach) = pools.get(group) else {
+    let Some(pool) = pools.get(group) else {
         return open.chance(discharged);
     };
+    let reach = &pool.reach;
     if let Some(answer) = open.prizes.get(&(group, discharged.to_vec())) {
         return *answer;
     }
@@ -851,14 +946,18 @@ fn prize_chance(
     }
     spending.sort_by(|left, right| right.1.partial_cmp(&left.1).unwrap_or(Ordering::Equal));
 
-    // Nesting the reaches makes the walk a partition: each requirement claims
-    // only what the better ones it is nested inside left over, and whatever no
+    // Each requirement claims only the offers left by better uses. What no
     // requirement reaches falls through to the next pool.
     let mut claimed = 0.0_f64;
     let mut total = 0.0;
     for (reached, served) in spending {
-        total += (reached - claimed).max(0.0) * served;
-        claimed = claimed.max(reached);
+        let newly_reached = if pool.disjoint {
+            reached * (1.0 - claimed / pool.appeared.max(f64::EPSILON)).max(0.0)
+        } else {
+            (reached - claimed).max(0.0)
+        };
+        total += newly_reached * served;
+        claimed += newly_reached;
     }
     total += (1.0 - claimed) * prize_chance(pools, group + 1, discharged, open);
     open.prizes.insert((group, discharged.to_vec()), total);
@@ -920,9 +1019,69 @@ impl OpenSupply<'_> {
                 (*chance * conditional).min(1.0)
             })
             .product();
+        let answer = first_floor_probability(self.ordered, discharged, answer).min(1.0);
         self.answered.insert(discharged.to_vec(), answer);
         answer
     }
+}
+
+/// Before quests and shop stock, the same small first-floor room budget
+/// supplies every family. Baked co-obtainable subset counts capture that
+/// competition without scanning sampled worlds on the interface thread.
+fn first_floor_probability(ordered: &[Predicate], discharged: &[usize], probability: f64) -> f64 {
+    let mut bare = true;
+    let mut counts = [0usize; 4];
+    let mut common_upgrades = None;
+    let mut same_upgrades = true;
+    for (_, predicate) in ordered
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| !discharged.contains(i))
+    {
+        if predicate.max_depth != 1 || predicate.kind == ItemKind::Artifact {
+            return probability;
+        }
+        counts[kind_index(predicate.kind)] += 1;
+        same_upgrades &= common_upgrades.is_none_or(|upgrades| upgrades == predicate.upgrades);
+        common_upgrades = Some(predicate.upgrades);
+        bare &= predicate.item.is_none()
+            && predicate.weapon_category.is_none()
+            && predicate.tiers == (1 << HIGHEST_TIER) - 1
+            && predicate.effect == EffectRequirement::Any
+            && !predicate.require_uncursed
+            && predicate.source.is_none();
+    }
+    if counts.iter().sum::<usize>() > 4 {
+        return probability;
+    }
+    let key: usize = counts
+        .into_iter()
+        .zip([1, 5, 25, 125])
+        .map(|(count, power)| count * power)
+        .sum();
+    let minimum = common_upgrades.filter(|_| same_upgrades).and_then(|mask| {
+        (0..4).find(|minimum| {
+            mask == (((1 << (HIGHEST_TABLED_UPGRADE + 1)) - 1) & !((1 << minimum) - 1))
+        })
+    });
+    bare &= minimum.is_some();
+    let key = key + minimum.unwrap_or(0) * 625;
+    let table = crate::probability_tables::first_floor::CROSS_FAMILY;
+    let index = table.binary_search_by_key(&key, |row| row.0).or_else(|_| {
+        bare = false;
+        table.binary_search_by_key(&(key % 625), |row| row.0)
+    });
+    let Ok(index) = index else {
+        return probability;
+    };
+    let (_, independent, presence_ratio, moment_ratio) = table[index];
+    if bare {
+        return independent * presence_ratio;
+    }
+    // Broad filters see presence, rare filters thin the factorial moments.
+    // Interpolate between those measured limits using the query's selectivity.
+    let broad = (probability / independent).clamp(0.0, 1.0);
+    probability * (broad * presence_ratio + (1.0 - broad) * moment_ratio)
 }
 
 /// Probability that one family's own supply serves every one of its filters
@@ -940,15 +1099,12 @@ fn open_chance(ordered: &[Predicate]) -> f64 {
     cache::open(ordered, || open_chance_uncached(ordered))
 }
 
-fn open_chance_uncached(ordered: &[Predicate]) -> f64 {
-    let Some(kind) = ordered.first().map(|predicate| predicate.kind) else {
-        return 1.0;
-    };
-    if kind == ItemKind::Artifact && ordered.len() == 1 {
+fn open_artifact_chance(ordered: &[Predicate]) -> f64 {
+    if ordered.len() == 1 {
         let predicate = ordered[0];
         return predicate
             .profile
-            .supply_for(kind)
+            .supply_for(ItemKind::Artifact)
             .filter(|supply| prize_group(supply.source).is_none())
             .flat_map(|supply| {
                 supply
@@ -962,8 +1118,15 @@ fn open_chance_uncached(ordered: &[Predicate]) -> f64 {
             .sum::<f64>()
             .clamp(0.0, 1.0);
     }
+    artifacts::probability(ordered, true)
+}
+
+fn open_chance_uncached(ordered: &[Predicate]) -> f64 {
+    let Some(kind) = ordered.first().map(|predicate| predicate.kind) else {
+        return 1.0;
+    };
     if kind == ItemKind::Artifact {
-        return artifacts::probability(ordered, true);
+        return open_artifact_chance(ordered);
     }
     let shared = Coverages::of(ordered);
     let coverages = shared.len();
@@ -980,24 +1143,25 @@ fn open_chance_uncached(ordered: &[Predicate]) -> f64 {
     limits.dedup();
 
     let steady = repeated_identity(ordered).is_none();
+    let measured_source = ordered[0].source.filter(|source| {
+        steady && limits.len() == 1 && ordered.iter().all(|p| p.source == Some(*source))
+    });
     let mut streams: Vec<Stream> = Vec::new();
-    // A shop's shelf holds one item whichever line it comes from, so its lines
-    // are pooled into a single slot rather than each being offered one of their
-    // own. A shop restocks on every shop floor, so its floors are not
+    // A shop stocks one melee weapon, one missile, and one tipped dart. Keep
+    // those fixed lines separate instead of replacing them with three random
+    // weapon draws. A shop restocks on every shop floor, so its floors are not
     // alternatives the way a quest's are — and a quest's prizes are not here at
     // all, having been lifted out to [`prize_reach`].
-    let mut bundles: BTreeMap<(usize, usize), (u8, Vec<f64>)> = BTreeMap::new();
+    let mut bundles: BTreeMap<(usize, usize, usize), (u8, Vec<f64>)> = BTreeMap::new();
     for (line, (from, until)) in LINES_ORDER
         .into_iter()
         .flat_map(|line| stretches(&limits).map(move |stretch| (line, stretch)))
     {
         let mut placed = 0.0;
         let mut covered = vec![0.0; coverages];
-        for supply in ordered[0]
-            .profile
-            .supply_for(kind)
-            .filter(|supply| supply.line == line)
-        {
+        for supply in ordered[0].profile.supply_for(kind).filter(|supply| {
+            supply.line == line && measured_source.is_none_or(|source| source == supply.source)
+        }) {
             if prize_group(supply.source).is_some() {
                 continue;
             }
@@ -1019,10 +1183,16 @@ fn open_chance_uncached(ordered: &[Predicate]) -> f64 {
                     }
                     continue;
                 }
-                let appearances = available / f64::from(supply.bundle);
+                let fixed_shop_line = supply.source == ItemSource::Shop && kind == ItemKind::Weapon;
+                let size = if fixed_shop_line { 1 } else { supply.bundle };
+                let appearances = available / f64::from(size);
                 let bundle = bundles
-                    .entry((source_index(supply.source), depth))
-                    .or_insert_with(|| (supply.bundle, vec![0.0; coverages]));
+                    .entry((
+                        source_index(supply.source),
+                        depth,
+                        if fixed_shop_line { line_index(line) } else { 0 },
+                    ))
+                    .or_insert_with(|| (size, vec![0.0; coverages]));
                 for (coverage, share) in covered_by.iter().enumerate().skip(1) {
                     bundle.1[coverage] += appearances * share;
                 }
@@ -1036,6 +1206,15 @@ fn open_chance_uncached(ordered: &[Predicate]) -> f64 {
                 placed,
                 covered,
                 steady,
+                measured_source.and_then(|source| {
+                    crate::probability_tables::source_counts::histogram(
+                        ordered[0].profile as usize,
+                        kind,
+                        line,
+                        source,
+                        until,
+                    )
+                }),
             ));
         }
     }
@@ -1063,16 +1242,24 @@ fn open_chance_uncached(ordered: &[Predicate]) -> f64 {
 /// the prize.
 ///
 /// Returns `None` when nothing the pool holds can serve the query.
-fn prize_reach(group: PrizeGroup, ordered: &[Predicate], deepest: usize) -> Option<Vec<f64>> {
+struct PrizePool {
+    reach: Vec<f64>,
+    appeared: f64,
+    disjoint: bool,
+}
+
+fn prize_reach(group: PrizeGroup, ordered: &[Predicate], deepest: usize) -> Option<PrizePool> {
     let mut kinds: Vec<ItemKind> = ordered.iter().map(|predicate| predicate.kind).collect();
     kinds.sort_unstable_by_key(|kind| kind_index(*kind));
     kinds.dedup();
     let mut reach = vec![0.0; ordered.len()];
+    let mut appearances = 0.0;
     for depth in 1..=deepest {
         // Every row of one quest shares its giver's floor distribution, so any
         // of them reports the chance the prize is waiting on this floor.
         let mut appeared = 0.0_f64;
         let mut missing = vec![1.0; ordered.len()];
+        let mut shared_rolls = vec![1.0_f64; ordered.len()];
         for supply in kinds
             .iter()
             .flat_map(|kind| ordered[0].profile.supply_for(*kind))
@@ -1084,14 +1271,30 @@ fn prize_reach(group: PrizeGroup, ordered: &[Predicate], deepest: usize) -> Opti
             }
             appeared = appeared.max(available);
             for (requirement, predicate) in ordered.iter().enumerate() {
-                missing[requirement] *= 1.0 - predicate.slot_probability(&supply, depth);
+                let reached = predicate.slot_probability(&supply, depth);
+                if group == PrizeGroup::Blacksmith && predicate.kind == supply.kind {
+                    // Melee weapons, the missile, and armor share the level
+                    // roll. Weapon lines also share their enchantment. Union
+                    // their identities first, then spend the shared roll once.
+                    let rolled = (predicate.upgrade_probability(&supply)
+                        * predicate.effect_probability(&supply)
+                        * predicate.uncursed_probability(&supply))
+                    .clamp(0.0, 1.0);
+                    shared_rolls[requirement] = rolled;
+                    if rolled > 0.0 {
+                        missing[requirement] *= 1.0 - (reached / rolled).clamp(0.0, 1.0);
+                    }
+                } else {
+                    missing[requirement] *= 1.0 - reached;
+                }
             }
         }
         if appeared <= 0.0 {
             continue;
         }
+        appearances += appeared;
         for (requirement, missed) in missing.into_iter().enumerate() {
-            reach[requirement] += appeared * (1.0 - missed);
+            reach[requirement] += appeared * (1.0 - missed) * shared_rolls[requirement];
         }
     }
     if reach.iter().all(|chance| *chance <= 0.0) {
@@ -1100,7 +1303,27 @@ fn prize_reach(group: PrizeGroup, ordered: &[Predicate], deepest: usize) -> Opti
     for chance in &mut reach {
         *chance = chance.clamp(0.0, 1.0);
     }
-    Some(reach)
+    // Separate identities can each be offered by the same quest. Nesting
+    // their reaches suppresses every fallback to a different wanted item.
+    // Approximate disjoint offers independently, conditional on the quest
+    // appearing. Shared Blacksmith rolls and overlapping filters stay nested.
+    let active: Vec<_> = ordered
+        .iter()
+        .zip(&reach)
+        .filter(|(_, p)| **p > 0.0)
+        .map(|(p, _)| p)
+        .collect();
+    let disjoint = group != PrizeGroup::Blacksmith
+        && active.iter().enumerate().all(|(i, p)| {
+            active[..i]
+                .iter()
+                .all(|other| p.intersect(**other).is_none())
+        });
+    Some(PrizePool {
+        reach,
+        appeared: appearances.min(1.0),
+        disjoint,
+    })
 }
 
 /// The stretches of floors the query's limits carve out, as inclusive ranges.
@@ -1133,6 +1356,8 @@ struct Stream {
     trials: Option<f64>,
     /// Expected slots covering each set of requirements.
     covered: Vec<f64>,
+    placed: f64,
+    histogram: Option<crate::probability_tables::source_counts::Histogram>,
 }
 
 impl Stream {
@@ -1143,6 +1368,7 @@ impl Stream {
         placed: f64,
         covered: Vec<f64>,
         steady: bool,
+        histogram: Option<crate::probability_tables::source_counts::Histogram>,
     ) -> Self {
         let steadiness = f64::from(profile.spread(line, reach - 1)).clamp(0.0, 1.0);
         let chance = 1.0 - steadiness;
@@ -1151,6 +1377,8 @@ impl Stream {
         Self {
             trials: runs.then_some(trials),
             covered,
+            placed,
+            histogram,
         }
     }
 
@@ -1160,7 +1388,72 @@ impl Stream {
     /// drawing on what the earlier ones left. That is what keeps two
     /// requirements from both being handed an item when the line only ever
     /// produced one, and it fades out on its own as the run grows longer.
-    fn fold(&self, states: States, cap: usize) -> States {
+    fn fold(&self, states: States, cap: usize, capacities: &[usize]) -> States {
+        // A different line or depth stretch has its own arrival budget. Build
+        // this stream's distribution before combining it with existing stock;
+        // subtracting the incoming state's items would spend other streams'
+        // trials a second time.
+        let empty = vec![0; self.covered.len()].into_boxed_slice();
+        let distribution = self.distribution(BTreeMap::from([(empty, 1.0)]), cap);
+        // Once the stream has spent its own trials, surplus items with the
+        // same coverage are interchangeable. Keep only as many as could be
+        // assigned to that coverage's requirements before convolving streams.
+        // Applying this earlier would change the stream's remaining trials.
+        let mut compact = BTreeMap::new();
+        for (state, reached) in distribution {
+            let state = state
+                .iter()
+                .zip(capacities)
+                .map(|(count, capacity)| (*count).min(*capacity))
+                .collect::<Vec<_>>()
+                .into_boxed_slice();
+            accumulate(&mut compact, state, reached);
+        }
+        if states.len() == 1
+            && let Some((held, weight)) = states.first_key_value()
+            && held.iter().all(|count| *count == 0)
+        {
+            for chance in compact.values_mut() {
+                *chance *= weight;
+            }
+            return compact;
+        }
+        let mut combined = BTreeMap::new();
+        for (held, reached) in states {
+            for (arrived, share) in &compact {
+                let state = held
+                    .iter()
+                    .zip(arrived.iter())
+                    .zip(capacities)
+                    .map(|((a, b), capacity)| (a + b).min(*capacity))
+                    .collect::<Vec<_>>()
+                    .into_boxed_slice();
+                accumulate(&mut combined, state, reached * share);
+            }
+        }
+        prune(combined)
+    }
+
+    fn distribution(&self, states: States, cap: usize) -> States {
+        if let Some(histogram) = self.histogram {
+            let mut combined = BTreeMap::new();
+            for (count, weight) in histogram.probabilities().filter(|(_, p)| *p > 0.0) {
+                let stream = Self {
+                    trials: Some(tally(count)),
+                    covered: self
+                        .covered
+                        .iter()
+                        .map(|mean| mean / self.placed * tally(count))
+                        .collect(),
+                    placed: tally(count),
+                    histogram: None,
+                };
+                for (state, chance) in stream.distribution(states.clone(), cap) {
+                    accumulate(&mut combined, state, chance * weight);
+                }
+            }
+            return prune(combined);
+        }
         let mut states = states;
         // How much of the run earlier sets have taken: the share of its chances
         // they claimed, and the slots they took that a state cannot record.
@@ -1227,9 +1520,12 @@ fn matching_probability(
     slots: &[Slot],
 ) -> f64 {
     let cap = wanted;
+    let capacities: Vec<_> = (0..coverages.len())
+        .map(|coverage| coverages.members(coverage).len())
+        .collect();
     let mut states = BTreeMap::from([(vec![0; coverages.len()].into_boxed_slice(), 1.0)]);
     for stream in streams {
-        states = stream.fold(states, cap);
+        states = stream.fold(states, cap, &capacities);
     }
     for slot in slots {
         let missed = (1.0 - slot.covers.iter().skip(1).sum::<f64>()).max(0.0);
@@ -1239,7 +1535,7 @@ fn matching_probability(
                 if *landed > 0.0 {
                     accumulate(
                         &mut next,
-                        add_count(state, coverage, 1, cap),
+                        add_count(state, coverage, 1, capacities[coverage]),
                         reached * landed,
                     );
                 }
@@ -1448,13 +1744,35 @@ impl Predicate {
         }) {
             return 0.0;
         }
-        let tiers = &supply.tiers[((depth - 1) / 5).min(FLOOR_SETS - 1)];
+        let mut stock = supply.tiers[((depth - 1) / 5).min(FLOOR_SETS - 1)];
+        if supply.source == ItemSource::Shop
+            && supply.line != Line::Tipped
+            && matches!(self.kind, ItemKind::Weapon | ItemKind::Armor)
+        {
+            stock.fill(0.0);
+            // The Imp shop is on 20, in the same five-floor bucket as shop
+            // 16, but carries tier-five stock. Region averages mix the two.
+            let tier = match depth {
+                6 => 2,
+                11 => 3,
+                16 => 4,
+                20 | 21 => 5,
+                _ => return 0.0,
+            };
+            stock[tier - 1] = 1.0;
+        }
+        let tiers = &stock;
         let identity = self.identity_probability(supply, tiers);
         let modifiers = self.effect_probability(supply) * self.uncursed_probability(supply);
         let options = f64::from(supply.options);
-        if self.kind == ItemKind::Artifact {
-            // Alternative artifact offers have different identities, never
-            // independent chances to roll the same one twice.
+        if self.kind == ItemKind::Artifact
+            || (supply.source == ItemSource::VaultTreasure
+                && matches!(self.kind, ItemKind::Wand | ItemKind::Ring)
+                && (self.item.is_some() || self.upgrades.is_power_of_two()))
+        {
+            // Artifact offers and vault wands/rings have distinct identities.
+            // The vault also holds only one wand/ring at each exact level,
+            // so their matching counts are already presence probabilities.
             return (identity * options * self.upgrade_probability(supply) * modifiers)
                 .clamp(0.0, 1.0);
         }
@@ -1467,10 +1785,94 @@ impl Predicate {
             // Rounded f32 shares can sum to slightly more than one. A
             // negative miss chance raised to a fractional option count (as
             // in selected-trinket profiles) would turn the estimate into NaN.
-            let matched =
-                (self.identity_and_upgrade_probability(supply, tiers) * modifiers).clamp(0.0, 1.0);
+            let matched = if supply.source == ItemSource::VaultTreasure
+                && matches!(self.kind, ItemKind::Weapon | ItemKind::Armor)
+            {
+                self.vault_equipment_probability(supply, tiers)
+            } else if supply.source == ItemSource::Chest
+                && matches!(self.kind, ItemKind::Weapon | ItemKind::Armor)
+            {
+                self.chest_equipment_probability(supply, tiers, depth)
+            } else {
+                self.identity_and_upgrade_probability(supply, tiers) * modifiers
+            }
+            .clamp(0.0, 1.0);
             1.0 - (1.0 - matched).powf(options)
         }
+    }
+
+    /// Chest equipment reaches +3 only through a boosted room prize. Both
+    /// `generated_high_prize` and the secret maze use the next region's tier
+    /// distribution and clear curses before adding a level. Preserve measured
+    /// overall marginals by subtracting that component from the lower levels.
+    fn chest_equipment_probability(
+        self,
+        supply: &Supply,
+        tiers: &[f32; TIERS],
+        depth: usize,
+    ) -> f64 {
+        let high_share = f64::from(supply.upgrades[3]);
+        let modifiers = self.effect_probability(supply) * self.uncursed_probability(supply);
+        if high_share <= 0.0 {
+            return self.identity_and_upgrade_probability(supply, tiers) * modifiers;
+        }
+        let advanced = crate::generator::FLOOR_SET_TIER_PROBABILITIES
+            [((depth - 1) / 5 + 1).min(FLOOR_SETS - 1)]
+        .map(|p| p / 100.0);
+        let mut clean = *supply;
+        clean.cursed = 0.0;
+        let high = high_share
+            * self.identity_probability(supply, &advanced)
+            * self.effect_probability(&clean)
+            * self.uncursed_probability(&clean);
+        let total = self.identity_probability(supply, tiers) * modifiers;
+        let low_share: f64 = supply.upgrades[..3]
+            .iter()
+            .enumerate()
+            .filter(|(level, _)| self.upgrades & (1 << level) != 0)
+            .map(|(_, p)| f64::from(*p))
+            .sum();
+        (total - high).max(0.0) * low_share / (1.0 - high_share).max(f64::EPSILON)
+            + if self.upgrades & (1 << 3) != 0 {
+                high
+            } else {
+                0.0
+            }
+    }
+
+    /// Vault shelves jointly determine tier, level, and enchantment chance.
+    /// The first melee weapon is one level ahead of its shelf; every other
+    /// item has the shelf's level. Averaging enchantments across shelves would
+    /// invent enchanted tier-two armor and overstate low-tier weapons.
+    fn vault_equipment_probability(self, supply: &Supply, tiers: &[f32; TIERS]) -> f64 {
+        let Some(levels) = supply.levels else {
+            return 0.0;
+        };
+        let mut probability = 0.0;
+        for (tier, levels) in levels.iter().enumerate() {
+            let mut selected = [0.0; TIERS];
+            selected[tier] = tiers[tier];
+            let identity = self.identity_probability(supply, &selected);
+            for (upgrade, share) in levels.iter().enumerate() {
+                if self.upgrades & (1 << upgrade) == 0 || *share == 0.0 {
+                    continue;
+                }
+                let loot_tier = if supply.kind == ItemKind::Weapon
+                    && supply.line == Line::Plain
+                    && upgrade == tier + 1
+                {
+                    upgrade.saturating_sub(1)
+                } else {
+                    upgrade
+                };
+                probability += identity
+                    * f64::from(*share)
+                    * self
+                        .effect_probability_with_enchantment(supply, tally(loot_tier.min(3)) / 3.0)
+                    * self.uncursed_probability(supply);
+            }
+        }
+        probability
     }
 
     /// Probability that one alternative of `supply` is an item this filter
@@ -1533,14 +1935,27 @@ impl Predicate {
                 .map_or(0.0, |tier| f64::from(tiers[usize::from(tier) - 1])),
             (ItemKind::Weapon | ItemKind::Armor, None) => self.tier_probability(tiers),
             (ItemKind::Wand, Some(wanted)) => {
-                if WAND_ITEMS.contains(&wanted) {
+                if supply.source == ItemSource::VaultTreasure {
+                    vault_identity_probability(
+                        wanted,
+                        &WAND_ITEMS,
+                        &crate::vault_loot::EXCLUDED_WANDS,
+                    )
+                } else if WAND_ITEMS.contains(&wanted) {
                     1.0 / tally(WAND_ITEMS.len())
                 } else {
                     0.0
                 }
             }
             (ItemKind::Ring, Some(wanted)) => {
-                if RING_ITEMS.iter().any(|ring| ring.item_id() == wanted) {
+                if supply.source == ItemSource::VaultTreasure {
+                    let identities = RING_ITEMS.map(crate::run::RingKind::item_id);
+                    vault_identity_probability(
+                        wanted,
+                        &identities,
+                        &crate::vault_loot::EXCLUDED_RINGS,
+                    )
+                } else if RING_ITEMS.iter().any(|ring| ring.item_id() == wanted) {
                     1.0 / tally(RING_ITEMS.len())
                 } else {
                     0.0
@@ -1580,6 +1995,10 @@ impl Predicate {
     }
 
     fn effect_probability(self, supply: &Supply) -> f64 {
+        self.effect_probability_with_enchantment(supply, f64::from(supply.enchanted))
+    }
+
+    fn effect_probability_with_enchantment(self, supply: &Supply, enchanted: f64) -> f64 {
         let EffectRequirement::OneOf(set) = self.effect else {
             return 1.0;
         };
@@ -1599,7 +2018,7 @@ impl Predicate {
                 if effect.is_curse() {
                     f64::from(supply.cursed) / curse_count(effect)
                 } else {
-                    f64::from(supply.enchanted) * rarity_probability(effect)
+                    enchanted * rarity_probability(effect)
                 }
             })
             .sum()
@@ -1676,7 +2095,10 @@ fn identities(kind: ItemKind) -> Vec<(ItemId, i32)> {
         ItemKind::Weapon => (1..=HIGHEST_TIER)
             .filter_map(|tier| {
                 let items = melee_tier_items(tier);
-                Some((*items.iter().flatten().next()?, alike(items.len())))
+                Some((
+                    *items.iter().flatten().next()?,
+                    alike(items.iter().flatten().count()),
+                ))
             })
             .chain((1..=HIGHEST_TIER).filter_map(|tier| {
                 let items = missile_tier_items(tier);
@@ -1689,15 +2111,28 @@ fn identities(kind: ItemKind) -> Vec<(ItemId, i32)> {
             .chain(TIPPED_DART_IDS.map(|dart| (dart, 1)))
             .collect(),
         ItemKind::Armor => ARMOR_ITEMS.iter().map(|armor| (*armor, 1)).collect(),
-        ItemKind::Wand => WAND_ITEMS
-            .first()
-            .map(|wand| vec![(*wand, alike(WAND_ITEMS.len()))])
-            .unwrap_or_default(),
-        ItemKind::Ring => RING_ITEMS
-            .first()
-            .map(|ring| vec![(ring.item_id(), alike(RING_ITEMS.len()))])
-            .unwrap_or_default(),
+        ItemKind::Wand => {
+            partition_vault_identities(&WAND_ITEMS, &crate::vault_loot::EXCLUDED_WANDS)
+        }
+        ItemKind::Ring => partition_vault_identities(
+            &RING_ITEMS.map(crate::run::RingKind::item_id),
+            &crate::vault_loot::EXCLUDED_RINGS,
+        ),
     }
+}
+
+fn partition_vault_identities(items: &[ItemId], excluded: &[ItemId]) -> Vec<(ItemId, i32)> {
+    [false, true]
+        .into_iter()
+        .filter_map(|banned| {
+            let mut members = items
+                .iter()
+                .copied()
+                .filter(|id| excluded.contains(id) == banned);
+            let first = members.next()?;
+            Some((first, alike(1 + members.count())))
+        })
+        .collect()
 }
 
 /// Identities one representative stands for, as a power.
@@ -1780,7 +2215,28 @@ fn poisson_counts(mean: f64, cap: usize) -> Vec<f64> {
 }
 
 fn binomial_counts(chances: f64, chance: f64, cap: usize) -> Vec<f64> {
+    // The measured arrival budget can be fractional. Interpolate adjacent
+    // integer distributions; extending the binomial recurrence to fractional
+    // n otherwise creates excess mass and negative terms in the tail.
+    let lower = chances.floor();
+    let fraction = chances - lower;
+    let mut counts = integer_binomial_counts(lower, chance, cap);
+    if fraction > 0.0 {
+        let upper = integer_binomial_counts(lower + 1.0, chance, cap);
+        for (count, more) in counts.iter_mut().zip(upper) {
+            *count = (1.0 - fraction) * *count + fraction * more;
+        }
+    }
+    counts
+}
+
+fn integer_binomial_counts(chances: f64, chance: f64, cap: usize) -> Vec<f64> {
     let mut counts = vec![0.0; cap + 1];
+    if chance >= 1.0 {
+        let index = (0..cap).find(|&i| tally(i) >= chances).unwrap_or(cap);
+        counts[index] = 1.0;
+        return counts;
+    }
     let mut term = (1.0 - chance).powf(chances);
     counts[0] = term;
     for (index, count) in counts.iter_mut().enumerate().skip(1) {
@@ -1808,6 +2264,37 @@ mod tests {
 
     use super::{estimate_match_probability, rarity_probability};
 
+    #[test]
+    fn separate_item_streams_keep_their_own_arrival_budget() {
+        let stream = super::Stream {
+            trials: Some(1.0),
+            covered: vec![0.0, 1.0],
+            placed: 1.0,
+            histogram: None,
+        };
+        // One guaranteed item already came from another line/depth stretch.
+        let held = std::collections::BTreeMap::from([(vec![0, 1].into_boxed_slice(), 1.0)]);
+        let combined = stream.fold(held, 2, &[0, 2]);
+        assert!((combined[&vec![0, 2].into_boxed_slice()] - 1.0).abs() < 1e-12);
+    }
+
+    #[test]
+    fn fractional_arrival_budgets_preserve_mass_and_mean() {
+        for trials in [0.0, 0.3, 1.0, 1.5, 3.7] {
+            for chance in [0.0, 0.25, 0.9, 1.0] {
+                let counts = super::binomial_counts(trials, chance, 5);
+                assert!(counts.iter().all(|p| p.is_finite() && *p >= 0.0));
+                assert!((counts.iter().sum::<f64>() - 1.0).abs() < 1e-12);
+                let mean: f64 = counts
+                    .iter()
+                    .enumerate()
+                    .map(|(i, p)| super::tally(i) * p)
+                    .sum();
+                assert!((mean - trials * chance).abs() < 1e-12);
+            }
+        }
+    }
+
     fn requirement(kind: ItemKind) -> Requirement {
         Requirement {
             kind,
@@ -1829,6 +2316,7 @@ mod tests {
 
     fn query(requirements: Vec<Requirement>, max_depth: u8) -> SearchQuery {
         SearchQuery {
+            floor_requirements: Vec::new(),
             auto_apply_trinket: false,
             arcane_resin_filter: crate::query::ArcaneResinFilter::default(),
             arcane_resin_auto: false,
@@ -1866,6 +2354,51 @@ mod tests {
         let predicate = super::Predicate::of(requirement(ItemKind::Wand), None);
         assert!(predicate.upgrade_probability(&supply) > 1.0);
         assert!((predicate.slot_probability(&supply, 3) - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn blacksmith_weapon_lines_share_one_upgrade_and_enchantment_roll() {
+        for (upgrade, expected) in [(1, 0.45), (2, 0.20), (3, 0.05)] {
+            let mut wanted = requirement(ItemKind::Weapon);
+            wanted.source = Some(ItemSource::BlacksmithReward);
+            wanted.upgrade = UpgradeRequirement::Exact(upgrade);
+            let p = estimate_match_probability(&query(vec![wanted], 24));
+            assert!((p - expected).abs() < 0.003, "{upgrade}: {p}");
+            wanted.effect =
+                EffectRequirement::OneOf(EffectSet::enchantments(ItemKind::Weapon).unwrap());
+            let p = estimate_match_probability(&query(vec![wanted], 24));
+            assert!(
+                (p - expected * 0.3).abs() < 0.003,
+                "enchanted {upgrade}: {p}"
+            );
+        }
+    }
+
+    #[test]
+    fn vault_exclusions_and_distinct_identity_draws_are_respected() {
+        for id in crate::vault_loot::EXCLUDED_RINGS
+            .into_iter()
+            .chain(crate::vault_loot::EXCLUDED_WANDS)
+        {
+            let wanted = Requirement {
+                item: Some(id),
+                source: Some(ItemSource::VaultTreasure),
+                ..requirement(crate::catalog::item(id).kind)
+            };
+            assert!(estimate_match_probability(&query(vec![wanted], 24)).abs() < f64::EPSILON);
+        }
+        let wanted = Requirement {
+            item: Some(ItemId::RingHaste),
+            source: Some(ItemSource::VaultTreasure),
+            ..requirement(ItemKind::Ring)
+        };
+        let predicate = super::Predicate::of(wanted, None);
+        let supply = crate::probability_tables::trinkets::Profile::None
+            .supply_for(ItemKind::Ring)
+            .find(|s| s.source == ItemSource::VaultTreasure)
+            .unwrap();
+        let expected = f64::from(supply.options) / 9.0;
+        assert!((predicate.slot_probability(&supply, 19) - expected).abs() < 1e-7);
     }
 
     #[test]

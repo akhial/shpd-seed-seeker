@@ -1,3 +1,4 @@
+import type { RoomType } from "../floor-requirements";
 export type ItemCategory = "weapon" | "armor" | "wand" | "ring" | "trinket" | "artifact";
 
 /** Melee/thrown classification carried by weapon catalog entries. */
@@ -91,7 +92,15 @@ export interface RequirementState {
   levelSum?: LevelSum;
 }
 
+export interface FloorRequirement {
+  depth: number;
+  feeling?: FloorFeeling;
+  rooms?: RoomType[];
+  any_rooms?: RoomType[];
+}
+
 export interface QueryState {
+  floorRequirements?: FloorRequirement[];
   /** Minimum resin, or Auto to upgrade the matched wands to +3. Zero disables it. */
   arcaneResin?: ArcaneResinAmount;
   arcaneResinFilter?: ArcaneResinFilter;
@@ -142,6 +151,7 @@ export type RequirementEntryDocument = RequirementDocument | AnyOfDocument;
  * retired keys such as `fast_mode`; both the engine's codec and `fromQueryJson`
  * accept and ignore them. */
 export interface QueryDocument {
+  floor_requirements?: FloorRequirement[];
   arcane_resin?: ArcaneResinAmount;
   arcane_resin_filter?: { uncursed?: boolean; max_depth?: number; source?: ItemSource };
   auto_apply_trinket?: boolean;
@@ -186,6 +196,7 @@ export interface EngineChallenge {
  * check the app's local copies of them against the engine.
  */
 export interface EngineInfo {
+  roomTypes: RoomType[];
   shpdVersion: string;
   shpdCommit: string;
   totalSeeds: number;
@@ -301,6 +312,7 @@ export interface ScoutResult {
   selectedTrinket?: string | null;
   /** Optional for responses cached before floor feelings were exposed. */
   feelings?: ScoutFeeling[];
+  floorRooms?: { depth: number; rooms: RoomType[] }[];
   /** Full private-deck order; only entries 0..3 are initial catalyst offers. */
   trinketOrder?: TrinketOffer[];
   seed: ParsedSeed;

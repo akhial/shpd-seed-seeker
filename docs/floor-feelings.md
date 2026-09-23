@@ -50,3 +50,113 @@ are 15 by 16 pixels at y=64, x=16 times the feeling ID.
 Selected-trinket requests (`SSQ3`) return `SSC6`, which preserves the entire
 `SSC5` layout and appends the selected stable ID as a big-endian u16-length
 UTF-8 string (empty means none). All native decoders accept both versions.
+
+Native apps request `SSQ5` (the same request layout as `SSQ3`/`SSQ4`) and decode
+`SSC8`. It preserves the `SSC7` item mappings and appends room summaries:
+`floorCount:u8`, then for each floor `depth:u8`, `roomCount:u8`, and unique room
+stable IDs as big-endian u16-length UTF-8 strings. There are at most 20 floors,
+in strictly ascending regular-floor order. Older request versions retain their
+responses; older responses decode with no room summaries.
+
+All scout clients label floors 7, 17, and 22 **Garden** when the generated floor
+is Dark and contains a Garden or Secret Garden. This uses the actual scouted
+world, including challenges and applied trinkets, independently of the query.
+macOS, Windows, and Linux use inline floor-header text: region, `· Quest`, and
+`· Garden`. Quest details appear on their floor rather than in a separate summary
+or chip strip. Android uses a Material informational badge in both the list and
+expanded map header. Legacy packets omit the Garden label.
+
+## Floor and room search (web)
+
+The web query pane includes a **Rooms and feelings** dropdown below **Blacksmith**,
+with **Ring of Wealth farming floors** and independent 7, 17, and 22 toggles.
+Every selected floor must have the Dark feeling and
+at least one Garden or Secret Garden. No Ring of Wealth is implicitly required;
+combine the floor toggles with an item requirement to constrain its upgrade,
+source, or availability. Selecting a floor raises the global floor limit if
+needed; subsequently lowering the limit produces a validation error. Farming
+floors are marked with a **Garden** chip in the scout. The farming header's
+information icon shows “Dark floor with a garden.” on hover or tap.
+
+The shared engine supports all feelings and 95 room classes, exposed as stable
+IDs in `engine_info.roomTypes`. A query may contain no item requirements when
+it has a floor requirement:
+
+```json
+{
+  "requirements": [],
+  "floor_requirements": [
+    { "depth": 7, "feeling": "dark", "any_rooms": ["garden", "secret_garden"] },
+    { "depth": 17, "feeling": "dark", "rooms": ["garden"] }
+  ]
+}
+```
+
+Depths must be unique, regular floors within the global limit. Omitted feeling
+means any; `"none"` explicitly requires a normal floor. `rooms` requires all
+listed room types; nonempty `any_rooms` requires at least one listed type on
+that same floor. Both predicates apply if supplied together. These are presence
+checks, independent of room count and size. Empty conditions, unknown fields,
+unknown IDs, duplicate depths, and boss floors are rejected.
+
+`GeneratedWorld.floor_rooms` retains one 128-bit presence mask per regular
+floor, alongside feelings. WASM scouts expose `floorRooms: [{depth, rooms}]`.
+Native scout packets keep their existing format and omit room summaries.
+Portable JSON preserves floor requirements in presets and result exports.
+Share links use version 11 when floor requirements are present; older queries
+retain their existing link bytes. Room enum ordering is append-only because
+links and calibration tables use those indices.
+
+The planner compiles depth-indexed masks once per query and extends generation
+to the deepest floor condition. Feeling mismatches stop after preparation;
+room mismatches stop after successful graph construction, before painting,
+mobs, loot, or a deferred vault. Checks also run on the terminal floor and
+when replaying saved trinket recipes. Final matching independently checks the
+retained summaries. Earlier floors retain all normal state transitions.
+AutoTrinket selection remains item-based; floor conditions are evaluated under
+the selected setup. Query edits continue to start fresh traversal coverage
+while rechecking the retained seed pool.
+
+## Probability calibration and performance
+
+The merged overnight bake measures 1,048,560 deterministic, dispersed seeds
+for each of the eight trinket profiles (8,388,480 worlds). The 3.73 MiB
+`probability_tables/floors.bin` contains packed little-endian counts and offsets,
+read directly without allocation or decompression.
+
+The table includes room pairs, repeated rooms across floors, and cross-floor
+feeling pairs. Room scheduling only distinguishes Large, Secrets, and ordinary
+feelings, so ordinary feelings share a room distribution to reduce sampling
+noise. Normal-profile feelings use their exact generator probabilities. Mossy
+Clump and Trap Mechanism use measured feeling distributions and correlations,
+plus separate room rows for each exact feeling. Those rows use another 524,288
+worlds/profile because brewing timing correlates feelings with laboratories,
+adding a 1.61 MiB table with the same direct-read format.
+
+Two-room conjunctions and unions use measured intersections. Wider combinations
+use a tree of pairwise dependencies. Cross-floor estimates account for repeated
+room types (including either-garden) and alternating trinket feelings; other
+cross-floor dependencies and item/floor correlations remain approximate.
+Challenges use canonical measurements, matching the existing item model.
+These estimates never reject seeds; only generation and exact matching do.
+
+See [probability calibration](probability-calibration.md) for the held-out query
+sweeps, remaining limitations, performance measurements, and regeneration commands.
+
+`examples/benchmark_floors.rs` compares identical queries with and without the
+new floor gates, retaining existing item pruning on both sides. A local run
+on 4,096 separate dispersed seeds produced identical matches in every case:
+
+| Query | Matches | Speedup from floor gates |
+| --- | ---: | ---: |
+| Darkness on 17 | 292 | 1.11× |
+| Hidden garden on 7 | 213 | 1.13× |
+| Farming floor 7 | 42 | 1.34× |
+| Farming floor 17 | 45 | 1.08× |
+| Farming floor 22 | 53 | 1.09× |
+| Ring of Wealth by 16 and farming floor 17 | 12 | 1.01× |
+| Ring of Wealth by 16 only (control) | 1,038 | 1.00× |
+
+Deep-floor gains are limited by the necessary generation of earlier floors.
+Current farming estimates and their held-out observations are recorded in the
+[calibration report](probability-calibration.md).

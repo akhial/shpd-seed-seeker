@@ -13,7 +13,7 @@ use shpd_seedfinder_core::query::{
 use shpd_seedfinder_core::search::WorldGenerator;
 use shpd_seedfinder_core::seed::DungeonSeed;
 
-const SEEDS: u64 = 3_000;
+const SEEDS: u64 = 1_024;
 
 fn requirement(category: Option<WeaponCategory>, upgrade: UpgradeRequirement) -> Requirement {
     Requirement {
@@ -36,6 +36,7 @@ fn requirement(category: Option<WeaponCategory>, upgrade: UpgradeRequirement) ->
 
 fn query(requirements: Vec<Requirement>) -> SearchQuery {
     SearchQuery {
+        floor_requirements: Vec::new(),
         auto_apply_trinket: false,
         arcane_resin_filter: shpd_seedfinder_core::query::ArcaneResinFilter::default(),
         arcane_resin_auto: false,

@@ -70,8 +70,8 @@ The contract is documented in [`level-map-format.md`](../docs/level-map-format.m
 The info button beside the scouted seed opens all potion colors, scroll runes,
 and ring gems in six-column grids. Sprites use shared journal frames, with each
 identity glyph flush at the top right. Click a sprite for its name and appearance;
-the same description appears in tooltips and VoiceOver. The client requests SSQ4
-and decodes SSC7, retaining SSC3–SSC6 compatibility and omitting the control when
+the same description appears in tooltips and VoiceOver. The client requests SSQ5
+and decodes SSC8, retaining SSC3–SSC7 compatibility and omitting the control when
 legacy packets lack mappings. `build-macos-app.sh` bundles the shared artwork
 metadata with the existing game atlases.
 

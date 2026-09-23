@@ -1200,8 +1200,42 @@ input[type="range"]::-moz-range-thumb {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* The name belongs to the sprite beside it, so it sits closer than the tags do. */
+.d1-chip-wildcard {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 18px;
+  height: 18px;
+  color: var(--d1-upgrade);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+}
+.d1-chip-wildcard-silhouette {
+  position: absolute;
+  inset: 0;
+  filter: grayscale(1);
+  opacity: 0.3;
+}
+.d1-chip-wildcard-mark {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  background: radial-gradient(
+    circle closest-side,
+    rgba(0, 0, 0, 0.4),
+    rgba(0, 0, 0, 0.18) 45%,
+    transparent
+  );
+  text-shadow: 0 1px 2px var(--d1-chip-bg);
+}
+/* The name belongs to the icon beside it, so it sits closer than the tags do. */
 .d1-chip > .d1-sprite,
+.d1-chip > .d1-chip-wildcard,
 .d1-resin-edit > .d1-sprite {
   margin-right: -8px;
 }
@@ -1218,6 +1252,10 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .d1-chip-tag-soft {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 16px;
   color: var(--d1-green);
   background: rgba(110, 201, 143, 0.14);
 }
@@ -1688,7 +1726,8 @@ input[type="range"]::-moz-range-thumb {
   margin-left: auto;
 }
 
-.d1-blanket-help-button {
+.d1-blanket-help-button,
+.d1-farming-help-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1704,11 +1743,14 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .d1-blanket-help-button:hover,
-.d1-blanket-help-button:focus-visible {
+.d1-blanket-help-button:focus-visible,
+.d1-farming-help-button:hover,
+.d1-farming-help-button:focus-visible {
   color: var(--d1-text);
 }
 
-.d1-blanket-help-tooltip {
+.d1-blanket-help-tooltip,
+.d1-farming-help-tooltip {
   position: absolute;
   z-index: 150;
   top: 100%;
@@ -3212,4 +3254,80 @@ input[type="range"]::-moz-range-thumb {
 
 .d1-resin-remove:hover {
   color: var(--d1-danger);
+}
+
+.d1-farming-floors {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.d1-farming-floors legend {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 9px;
+  padding: 0;
+  color: var(--d1-text-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+.d1-farming-help {
+  display: inline-flex;
+  align-items: center;
+}
+.d1-farming-help-tooltip {
+  right: 0;
+  width: max-content;
+  max-width: 100%;
+  padding: 8px 10px;
+}
+.d1-farming-options {
+  display: flex;
+  gap: 6px;
+}
+.d1-farming-floor {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid var(--d1-border);
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.d1-farming-floor:hover {
+  background: var(--d1-border);
+}
+.d1-farming-floor[aria-pressed="true"] {
+  border-color: var(--d1-accent);
+  background: color-mix(in srgb, var(--d1-accent) 14%, transparent);
+  color: var(--d1-accent);
+}
+.d1-farming-floor:focus-visible {
+  outline: 2px solid var(--d1-accent);
+  outline-offset: 2px;
+}
+.d1-floor-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 12px;
+}
+
+.d1-farm-badge {
+  flex-shrink: 0;
+  padding: 0 8px;
+  line-height: 17px;
+  border: 1px solid color-mix(in srgb, var(--d1-green) 30%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--d1-green) 11%, transparent);
+  color: var(--d1-green);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
 }

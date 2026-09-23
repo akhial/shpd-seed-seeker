@@ -77,6 +77,7 @@ object ResultsExport {
     /** The query half of the document; [DeepLink] and the engine transport share it with the Rust codec. */
     internal fun encodeQuery(query: PresetQuery) = JSONObject().apply {
         put("requirements", encodeRequirements(query.requirements))
+        encodeFloors(this, query.floorRequirements)
         encodeResin(this, query.arcaneResin, query.arcaneResinFilter, query.arcaneResinAuto)
         if (query.autoApplyTrinket) put("auto_apply_trinket", true)
         if (query.maximumDepth != 24) put("max_depth", query.maximumDepth)
@@ -220,6 +221,7 @@ object ResultsExport {
             CHALLENGE_NAMES[challengesValue.optString(index)]?.let { challenges = challenges or it.bit }
         }
         return PresetQuery(
+            floorRequirements = decodeFloors(value),
             arcaneResin = decodeResinAmount(value),
             arcaneResinAuto = value.opt("arcane_resin") == "auto",
             arcaneResinFilter = decodeResinFilter(value),
@@ -333,6 +335,7 @@ object ResultsExport {
 
 /** The editor-facing view of a runnable request, which the document mapping is written against. */
 fun SearchRequest.toPresetQuery() = PresetQuery(
+    floorRequirements = floorRequirements,
     autoApplyTrinket = autoApplyTrinket,
     arcaneResin = arcaneResin,
     arcaneResinFilter = arcaneResinFilter,

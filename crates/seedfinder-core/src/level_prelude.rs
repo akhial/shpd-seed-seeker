@@ -123,6 +123,8 @@ impl LimitedDrops {
 
 /// Level feeling that changes geometry or content generation.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[cfg_attr(feature = "json-query", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "json-query", serde(rename_all = "snake_case"))]
 pub enum Feeling {
     #[default]
     None,

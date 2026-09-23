@@ -87,7 +87,7 @@
               </Expander.Header>
               <local:WrapPanel x:Name="BlanketBoard" Spacing="6" LineSpacing="8" MinHeight="34" Background="Transparent"/>
             </Expander>
-            <!-- The four setting sections sit two to a row while the sidebar is
+            <!-- The setting sections sit two to a row while the sidebar is
                  wide enough for it, so the wider sidebar buys less scrolling
                  rather than emptier cards; SettingsGrid_SizeChanged moves the
                  cells back into one column when it is not. Each cell is a
@@ -95,7 +95,7 @@
                  of a row share a bottom edge. -->
             <Grid x:Name="SettingsGrid" ColumnSpacing="12" SizeChanged="SettingsGrid_SizeChanged">
               <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition/></Grid.ColumnDefinitions>
-              <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+              <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
 
               <Grid x:Name="ScopeCell">
                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition/></Grid.RowDefinitions>
@@ -169,6 +169,19 @@
                     </Grid>
                     <Slider x:Name="WorkerSlider" StepFrequency="1" Minimum="1" ValueChanged="WorkerSlider_ValueChanged" HorizontalAlignment="Stretch" Margin="0,2,0,-4"/>
                     <TextBlock Text="Number of search threads to spawn." Style="{StaticResource Caption}"/>
+                  </StackPanel>
+                </Border>
+              </Grid>
+
+              <Grid x:Name="RoomsCell" Grid.Row="2">
+                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition/></Grid.RowDefinitions>
+                <TextBlock Text="Rooms and feelings" Style="{StaticResource SectionHeader}"/>
+                <Border Grid.Row="1" Style="{StaticResource SettingsCard}">
+                  <StackPanel Spacing="8">
+                    <TextBlock Text="Ring of Wealth farming floors" TextWrapping="Wrap"
+                               ToolTipService.ToolTip="Dark floor with a garden."/>
+                    <local:WrapPanel x:Name="FarmingFloorButtons" Spacing="8" LineSpacing="8"/>
+                    <StackPanel x:Name="OtherFloorRequirements" Spacing="8"/>
                   </StackPanel>
                 </Border>
               </Grid>
@@ -306,8 +319,6 @@
               </StackPanel>
             </Grid>
             <TextBlock x:Name="ScoutStatus" Style="{StaticResource Caption}" Margin="0,-2,0,0"/>
-            <!-- One chip per quest of the scouted seed, e.g. "Great Crab · Sad Ghost · F4"; built in code-behind. -->
-            <local:WrapPanel x:Name="QuestStrip" Spacing="8" LineSpacing="4" Visibility="Collapsed"/>
             <!-- Shown while the scouted seed is one of the search results: J/K (or the chevrons) step through them. -->
             <Grid x:Name="ResultNav" Visibility="Collapsed" ColumnSpacing="8" MinHeight="32">
               <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="140"/></Grid.ColumnDefinitions>
