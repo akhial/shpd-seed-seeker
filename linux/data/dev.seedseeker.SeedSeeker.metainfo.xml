@@ -40,9 +40,9 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
-    <release version="0.15.2" date="2026-09-22">
+    <release version="0.16.0" date="2026-09-23">
       <description>
-        <p>Allow Arcane Resin donors to satisfy blanket requirements and fix macOS SDK selection for Swift builds.</p>
+        <p>Add exact floor requirements and farming floor search, improve Arcane Resin planning, and restore missing floor map effects.</p>
       </description>
     </release>
     <release version="0.9.1" date="2026-09-07">

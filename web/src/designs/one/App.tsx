@@ -414,7 +414,7 @@ export default function App() {
             title="View source on GitHub"
           >
             <span className="d1-mono">
-              <span className="d1-gh-name">SHPD Seed Seeker </span>v0.15.2
+              <span className="d1-gh-name">SHPD Seed Seeker </span>v0.16.0
             </span>
             <span className="d1-gh-icon" aria-hidden="true" />
           </a>
