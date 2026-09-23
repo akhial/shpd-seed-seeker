@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package dev.seedseeker.app.model
 
+import dev.seedseeker.app.catalog.PackagedCatalog
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BuiltInPresetsTest {
+    init { PackagedCatalog.install() }
+
     @Test
     fun staffPresetMatchesRequestedRequirements() {
         val requirements = BuiltInPresets.staff21.query.requirements
