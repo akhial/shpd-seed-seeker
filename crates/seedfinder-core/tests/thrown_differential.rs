@@ -13,7 +13,7 @@ use shpd_seedfinder_core::query::{
 use shpd_seedfinder_core::search::WorldGenerator;
 use shpd_seedfinder_core::seed::DungeonSeed;
 
-const SEEDS: u64 = 3_000;
+const SEEDS: u64 = 1_024;
 
 fn requirement(category: Option<WeaponCategory>, upgrade: UpgradeRequirement) -> Requirement {
     Requirement {

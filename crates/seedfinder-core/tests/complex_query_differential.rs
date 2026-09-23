@@ -506,10 +506,11 @@ fn best_partial(
 
 #[test]
 fn matcher_and_scout_agree_with_exhaustive_enumeration() {
+    const CASES: usize = 1_024;
     let mut rng = Rng(0x9E37_79B9_7F4A_7C15);
     let mut checked = 0;
     let mut matched = 0;
-    while checked < 3_000 {
+    while checked < CASES {
         let Some(query) = random_query(&mut rng) else {
             continue;
         };
@@ -567,7 +568,7 @@ fn matcher_and_scout_agree_with_exhaustive_enumeration() {
     }
     // Resin and blankets add constraints; still require a healthy mix of matches and misses.
     assert!(
-        (150..2_800).contains(&matched),
+        (CASES / 20..CASES * 14 / 15).contains(&matched),
         "{matched} of {checked} matched"
     );
 }

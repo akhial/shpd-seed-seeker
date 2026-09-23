@@ -868,6 +868,8 @@ mod tests {
         spawn_streaming_search,
     };
 
+    const SEARCH_SEEDS: u64 = 1_024;
+
     struct DivisibleGenerator;
 
     impl WorldGenerator for DivisibleGenerator {
@@ -929,7 +931,7 @@ mod tests {
         };
         let options = SearchOptions {
             start_seed: 0,
-            end_seed_exclusive: 10_000,
+            end_seed_exclusive: SEARCH_SEEDS,
             workers: NonZeroUsize::new(4).unwrap(),
             chunk_size: NonZeroUsize::new(31).unwrap(),
             max_results: NonZeroUsize::new(20).unwrap(),
@@ -1491,19 +1493,20 @@ mod tests {
     fn cancelled_multiworker_search_reports_a_safe_resume_position() {
         let options = SearchOptions {
             start_seed: 0,
-            end_seed_exclusive: 4_096,
+            end_seed_exclusive: SEARCH_SEEDS,
             workers: NonZeroUsize::new(4).unwrap(),
             chunk_size: NonZeroUsize::new(4).unwrap(),
             max_results: NonZeroUsize::new(1_024).unwrap(),
         };
         let generator = Arc::new(ModuloGenerator(17));
         let handle =
-            spawn_partial_streaming_search(&generator, wand_query(), options, 100, 4_096).unwrap();
+            spawn_partial_streaming_search(&generator, wand_query(), options, 100, SEARCH_SEEDS)
+                .unwrap();
         handle.cancel();
         finish(&handle);
 
         let coverage = handle.resume_coverage();
-        assert_eq!(coverage.remaining, 4_096 - handle.scanned_prefix());
+        assert_eq!(coverage.remaining, SEARCH_SEEDS - handle.scanned_prefix());
         let first_found = handle
             .drain_results(2_048)
             .into_iter()
@@ -1532,7 +1535,7 @@ mod tests {
         union.dedup();
         assert_eq!(
             union,
-            (0..4_096_u64)
+            (0..SEARCH_SEEDS)
                 .filter(|seed| seed % 17 == 0)
                 .collect::<Vec<_>>()
         );

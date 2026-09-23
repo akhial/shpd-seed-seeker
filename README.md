@@ -423,6 +423,11 @@ cargo clippy --workspace --all-targets -- -D warnings
 
 The workspace includes the GTK app, so the commands above need its system libraries (GTK 4.22 and libadwaita 1.9). Add `--exclude shpd-seedfinder-gtk` on macOS and Windows to exclude the GTK app from the test run.
 
+The test profile optimizes the engine while keeping debug assertions and overflow
+checks enabled. Seed equivalence and randomized matcher differential tests are
+capped at 1,024 seeds/cases; smaller regression samples stay smaller. Large calibration
+sweeps remain ignored by default and should be run explicitly with `--release`.
+
 #### Android
 
 ```sh
