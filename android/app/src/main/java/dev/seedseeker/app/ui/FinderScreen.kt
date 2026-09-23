@@ -521,7 +521,7 @@ private fun QueryPage(
                 modifier = Modifier.padding(top = 4.dp),
             )
         }
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(16.dp))
         SearchSettingsLink(
             summary = listOfNotNull(
                 scopeSummaryText(maximumDepth, requireBlacksmith, excludeBlacksmithRewards, wandmakerQuest, challenges),
