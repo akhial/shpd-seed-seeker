@@ -97,6 +97,37 @@ fn floor_only_queries_validate_and_round_trip_all_portable_formats() {
 }
 
 #[test]
+fn v11_floor_links_remain_stable_and_v12_preserves_resin_planning() {
+    for (auto, code) in [(false, "sAAAIACfAAA"), (true, "sAAAIBCfAAA")] {
+        let mut q = json_query::decode(
+            r#"{"requirements":[],"floor_requirements":[{"depth":7,"feeling":"dark"}]}"#,
+        )
+        .unwrap();
+        q.arcane_resin_auto = auto;
+        // Published v11 layout from the floor-filter change must not shift.
+        assert_eq!(deep_link::decode(code).unwrap(), q);
+        assert_eq!(deep_link::encode(&q).unwrap(), code);
+
+        q.floor_requirements = vec![farm(7), farm(17), farm(22)];
+        for mage in [false, true] {
+            for excluded in [false, true] {
+                q.arcane_resin_filter.include_mage_wand = mage;
+                q.arcane_resin = if auto { 0 } else { 7 };
+                q.requirements = json_query::decode(&format!(
+                    r#"{{"requirements":[{{"item":"wand_frost","exclude_resin":{excluded}}},{{"item":"wand_frost","upgrade":2,"source":"wandmaker_reward"}}]}}"#
+                ))
+                .unwrap()
+                .requirements;
+                assert_eq!(
+                    deep_link::decode(&deep_link::encode(&q).unwrap()).unwrap(),
+                    q
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn malformed_filters_fail_before_search_and_impossible_feelings_are_planned_out() {
     for depth in [0, 5, 10, 15, 20, 25] {
         assert!(query(vec![farm(depth)]).validate().is_err());

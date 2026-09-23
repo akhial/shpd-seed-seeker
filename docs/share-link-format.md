@@ -40,17 +40,18 @@ bits are written.
 
 | Field | Bits | Meaning |
 | --- | --- | --- |
-| `version` | 4 | `4` for ordinary queries, `5` when a requirement selects a trinket, `6` when auto-apply is enabled, `7` for an Arcane Resin minimum, `8` for resin donor filters, `9` when a requirement is a blanket, `10` for Auto resin (including blanket bits). Decoders accept 4–10; retired versions 1–3 and future versions are rejected. Existing tables and layouts are frozen. |
-| `auto_apply_trinket` | 1, versions 6–10 only | Immediately follows the version nibble. Boolean query flag; absent in versions 4–5, which default to false. |
+| `version` | 4 | `4` for ordinary queries, `5` when a requirement selects a trinket, `6` when auto-apply is enabled, `7` for an Arcane Resin minimum, `8` for resin donor filters, `9` when a requirement is a blanket, `10` for Auto resin (including blanket bits). `11` for exact-floor requirements, `12` for a starting Mage wand credit or per-wand Auto exclusion. Decoders accept 4–12; retired versions 1–3 and future versions are rejected. Existing tables and layouts are frozen. |
+| `auto_apply_trinket` | 1, versions 6–12 only | Immediately follows the version nibble. Boolean query flag; absent in versions 4–5, which default to false. |
 | `require_blacksmith` | 1 | Query flag. |
 | `exclude_blacksmith_rewards` | 1 | Query flag. |
 | `max_depth` | 1 (+5) | Present only when not the default 24. Value is `max_depth − 1` (floors 1–24). |
 | `challenges` | 1 (+9) | Present only when nonzero. The upstream challenge bitmask: bit 0 `on_diet` … bit 8 `badder_bosses`, in the order of `CHALLENGE_NAMES` in `json_query.rs`. |
 | `wandmaker_quest` | 1 (+2) | Present only when the search filters on a Wandmaker variant. Value is the variant's one-based game value (`WandmakerQuestType` in `quests.rs`) minus one: `0` corpse dust · `1` elemental embers · `2` rotberry. `3` is invalid. |
-| `arcane_resin` | 16, versions 7–10 only | Minimum resin from surplus donor wands; zero disables resin in versions 7–9. Version 10 implies Auto and writes this numeric field as zero. Absent in versions 4–6. |
-| resin `uncursed` | 1, versions 8–10 only | Whether donors must be uncursed; defaults to true in earlier formats. |
-| resin `source` | 1 (+5), versions 8–10 only | Optional donor source using the same frozen source table. |
-| resin `max_depth` | 1 (+5), versions 8–10 only | Optional donor floor limit, stored as `depth − 1`. |
+| `arcane_resin` | 16, versions 7–12 only | Minimum resin from surplus donor wands; zero disables resin in versions 7–9. Version 10 implies Auto and writes this numeric field as zero. Absent in versions 4–6. |
+| resin `uncursed` | 1, versions 8–12 only | Whether donors must be uncursed; defaults to true in earlier formats. |
+| resin `source` | 1 (+5), versions 8–12 only | Optional donor source using the same frozen source table. |
+| resin `max_depth` | 1 (+5), versions 8–12 only | Optional donor floor limit, stored as `depth − 1`. |
+| resin `include_mage_wand` | 1, version 12 only | Credit 2 resin from the preserved starting Magic Missile wand; independent of donor filters. |
 | requirement count | 6 | Number of requirement records that follow (at most 63). |
 
 ### Requirement record
@@ -68,8 +69,26 @@ bits are written.
 | `max_depth` | 1 (+5) | Value is `depth − 1` (floors 1–24). |
 | `alternative_group` | 1 (+6) | Alternative-group label minus one. Records sharing a label form one "any of" slot; labels are renumbered in first-appearance order when encoding. |
 | `level_sum` | 1 (+10) | Combined-level group: two bits of group label minus one (groups 1–4, the editors' A–D), then the eight-bit minimum total in levels (1–255), where a matched item counts its upgrade plus one. |
-| `select_trinket` | 1, versions 5–10 only | Whether this requirement selects its offered trinket. Version 6 includes this bit even when auto-apply is disabled by explicit trinket requirements. |
-| `blanket` | 1, versions 9–10 only | Follows `select_trinket`; requires an item assigned to an ordinary slot or selected as an Arcane Resin donor to also satisfy this predicate. Absent in versions 4–8, which default to false. |
+| `select_trinket` | 1, versions 5–12 only | Whether this requirement selects its offered trinket. Version 6 includes this bit even when auto-apply is disabled by explicit trinket requirements. |
+| `blanket` | 1, versions 9–12 only | Follows `select_trinket`; requires an item assigned to an ordinary slot or selected as an Arcane Resin donor to also satisfy this predicate. Absent in versions 4–8, which default to false. |
+| `exclude_resin` | 1, version 12 only | Follows `blanket`; omit this ordinary wand’s Auto upgrade cost while keeping it reserved. Invalid on blankets and other item kinds. |
+
+Extra copies represented by existing stack relationships are automatically excluded
+from Auto upgrade costs. They remain reserved for reforging; no additional bits
+are needed, and older stack links receive the same behavior.
+
+### Floor extension (versions 11–12)
+
+This follows all requirement records. Version 12 retains version 11’s layout.
+
+| Field | Bits | Meaning |
+| --- | --- | --- |
+| `arcane_resin_auto` | 1 | Explicit Auto mode; Auto writes the numeric resin field as zero. |
+| floor requirement count | 5 | Number of exact-floor requirements. |
+| `depth` | 5 per floor | Actual floor number, 1–24; boss floors are invalid. |
+| `feeling` | 1 (+3) per floor | Optional feeling using the frozen game feeling IDs. |
+| `rooms` | 7 (+7 per room) per floor | Count and IDs of required room types, deduplicated in enum order. |
+| `any_rooms` | 7 (+7 per room) per floor | Count and IDs of alternative room types, in the same encoding. |
 
 ### Code tables
 

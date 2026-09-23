@@ -244,7 +244,7 @@ public enum ModelValidationError: Error, Equatable, LocalizedError {
     case levelSum, levelSumOutsideRings, levelSumInAlternative
     case levelSumMismatch(group: Int)
     case levelSumUnattainable(group: Int, needed: Int, maximum: Int)
-    case arcaneResin
+    case arcaneResin, resinExclusion
     case floorRequirements
     case emptyRequirements, maximumDepth, challenges, blanketStack, mixedBlanketAlternatives
     public var errorDescription: String? {
@@ -269,6 +269,7 @@ public enum ModelValidationError: Error, Equatable, LocalizedError {
         case .levelSumUnattainable(let group, let needed, let maximum):
             "Combined level group \(groupLetter(group)) needs \(needed) levels but its items can reach at most \(maximum)"
         case .floorRequirements: "Choose distinct regular floors within the floor limit, with a feeling or room requirement"
+        case .resinExclusion: "Only an ordinary wand can exclude Auto resin"
         case .arcaneResin: "Arcane Resin must be 0..65535, with a wand floor from 1 through 24"
         case .emptyRequirements: "Blanket requirements need at least one ordinary item; otherwise add an item, Arcane Resin, or a farming floor"
         case .blanketStack: "A blanket cannot request extra copies, combined levels, or trinket selection"
@@ -358,6 +359,7 @@ public struct ItemRequirement: Codable, Hashable, Identifiable, Sendable {
     public var requireUncursed: Bool
     public var selectTrinket: Bool
     public var blanket: Bool
+    public var excludeResin: Bool
     /// Requirements sharing a group are alternatives for one slot: any member
     /// satisfies it. The number is session-local; documents renumber.
     public var alternativeGroup: Int?
@@ -375,7 +377,8 @@ public struct ItemRequirement: Codable, Hashable, Identifiable, Sendable {
                 source: ScoutItemSource? = nil, identityGroup: Int? = nil,
                 maximumDepth: Int? = nil, requireUncursed: Bool = false,
                 alternativeGroup: Int? = nil, levelSum: LevelSum? = nil,
-                selectTrinket: Bool = false, blanket: Bool = false) throws {
+                selectTrinket: Bool = false, blanket: Bool = false, excludeResin: Bool = false) throws {
+        guard !excludeResin || (kind == .wand && !blanket) else { throw ModelValidationError.resinExclusion }
         guard !blanket || (identityGroup == nil && levelSum == nil && !selectTrinket) else {
             throw ModelValidationError.blanketStack
         }
@@ -423,6 +426,7 @@ public struct ItemRequirement: Codable, Hashable, Identifiable, Sendable {
         self.requireUncursed = requireUncursed
         self.selectTrinket = selectTrinket
         self.blanket = blanket
+        self.excludeResin = excludeResin
         self.alternativeGroup = alternativeGroup
         self.levelSum = levelSum
     }
@@ -451,12 +455,12 @@ public struct ItemRequirement: Codable, Hashable, Identifiable, Sendable {
     /// property, and does not count.
     public var isBare: Bool {
         item == nil && kind == kind.family && tierMatch == .any && upgradeMatch == .any
-            && effect == .any && !requireUncursed && source == nil
+            && effect == .any && !requireUncursed && !excludeResin && source == nil
     }
 
     private enum CodingKeys: String, CodingKey {
         case key, item, upgrade, modifier, effect, kind, tier, tierMatch, upgradeMatch, source
-        case identityGroup, maximumDepth, requireUncursed, alternativeGroup, levelSum, selectTrinket, blanket
+        case identityGroup, maximumDepth, requireUncursed, alternativeGroup, levelSum, selectTrinket, blanket, excludeResin
     }
 
     /// How the saved-query JSON spells the effect filter, beside the classic
@@ -494,7 +498,8 @@ public struct ItemRequirement: Codable, Hashable, Identifiable, Sendable {
             alternativeGroup: values.decodeIfPresent(Int.self, forKey: .alternativeGroup),
             levelSum: values.decodeIfPresent(LevelSum.self, forKey: .levelSum),
             selectTrinket: values.decodeIfPresent(Bool.self, forKey: .selectTrinket) ?? false,
-            blanket: values.decodeIfPresent(Bool.self, forKey: .blanket) ?? false
+            blanket: values.decodeIfPresent(Bool.self, forKey: .blanket) ?? false,
+            excludeResin: values.decodeIfPresent(Bool.self, forKey: .excludeResin) ?? false
         )
     }
 
@@ -518,6 +523,7 @@ public struct ItemRequirement: Codable, Hashable, Identifiable, Sendable {
         try values.encode(requireUncursed, forKey: .requireUncursed)
         try values.encode(selectTrinket, forKey: .selectTrinket)
         try values.encode(blanket, forKey: .blanket)
+        try values.encode(excludeResin, forKey: .excludeResin)
         try values.encodeIfPresent(alternativeGroup, forKey: .alternativeGroup)
         try values.encodeIfPresent(levelSum, forKey: .levelSum)
     }
@@ -540,6 +546,7 @@ public struct ItemRequirement: Codable, Hashable, Identifiable, Sendable {
         if let effect = effect.label(for: kind) { text += " • \(effect)" }
         if requireUncursed { text += " • uncursed" }
         if selectTrinket { text += " • choose at +3" }
+        if excludeResin { text += " • excluded from Auto resin" }
         if let source { text += " • \(source.label)" }
         // The board says the relationships — a stack through its ×N badge, a
         // combined level through its Σ badge — so the line names only what the
@@ -582,6 +589,9 @@ extension Array where Element == ItemRequirement {
     /// copies of its category — and every combined-level group agrees on one
     /// total that its members can reach together, counted in levels.
     public func validateGroups() throws {
+        guard allSatisfy({ !$0.excludeResin || ($0.kind == .wand && !$0.blanket) }) else {
+            throw ModelValidationError.resinExclusion
+        }
         for requirement in self where requirement.blanket {
             guard requirement.identityGroup == nil && requirement.levelSum == nil && !requirement.selectTrinket else {
                 throw ModelValidationError.blanketStack
@@ -652,13 +662,23 @@ public struct ArcaneResinFilter: Codable, Hashable, Sendable {
     public var uncursed: Bool
     public var maximumDepth: Int?
     public var source: ScoutItemSource?
-    public init(uncursed: Bool = true, maximumDepth: Int? = nil, source: ScoutItemSource? = nil) {
+    public var includeMageWand: Bool
+    public init(uncursed: Bool = true, maximumDepth: Int? = nil, source: ScoutItemSource? = nil, includeMageWand: Bool = false) {
         self.uncursed = uncursed; self.maximumDepth = maximumDepth; self.source = source
+        self.includeMageWand = includeMageWand
+    }
+    private enum CodingKeys: String, CodingKey { case uncursed, maximumDepth, source, includeMageWand }
+    public init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(uncursed: try values.decodeIfPresent(Bool.self, forKey: .uncursed) ?? true,
+                  maximumDepth: try values.decodeIfPresent(Int.self, forKey: .maximumDepth),
+                  source: try values.decodeIfPresent(ScoutItemSource.self, forKey: .source),
+                  includeMageWand: try values.decodeIfPresent(Bool.self, forKey: .includeMageWand) ?? false)
     }
     public var isValid: Bool { maximumDepth.map { (1...SearchLimits.maxDepth).contains($0) } ?? true }
     public var summary: String {
         ([uncursed ? "uncursed wands" : "any wands"] +
-         [maximumDepth.map { "≤ floor \($0)" }, source?.label].compactMap { $0 }).joined(separator: " · ")
+         [maximumDepth.map { "≤ floor \($0)" }, source?.label, includeMageWand ? "Mage +2" : nil].compactMap { $0 }).joined(separator: " · ")
     }
 }
 

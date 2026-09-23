@@ -4,7 +4,7 @@
 //! `https://shpd-seed-seeker.web.app/#q=QAMtCYAA`. The payload is a versioned
 //! bit stream, so codes shared today must keep decoding in every future
 //! release: the numeric code tables below are frozen by tests and may only
-//! ever grow at the end. Versions 4 through 10 are supported; versions 1
+//! ever grow at the end. Versions 4 through 12 are supported; versions 1
 //! and 2 were retired while the feature had next to no users (the effect
 //! table was also re-frozen in journal order at the same time), and version
 //! 3 — the same layout plus the retired fast-mode bit — went with the flag,
@@ -39,6 +39,9 @@ pub const URI_SCHEME: &str = "seedseeker";
 /// Version 9 adds a blanket bit after each selection bit and retains all resin fields.
 /// Version 10 uses the same fields, with Auto resin implied by the version.
 /// Its numeric resin field is zero; older queries retain their original encodings.
+/// Version 11 appends explicit Auto mode and exact-floor requirements after
+/// the item records. Version 12 adds a starting-wand bit after the resin
+/// filters, plus an exclude-resin bit after each blanket bit.
 /// All carry effect sets as a 32-bit mask,
 /// alternative groups and combined-level groups per requirement. Versions 1
 /// through 3 are rejected as unsupported (3 differed only in carrying the
@@ -142,6 +145,9 @@ pub fn encode(query: &SearchQuery) -> Result<String, String> {
             (u32::from(filter.max_depth.unwrap_or(1)) - 1, 5)
         });
     }
+    if version >= 12 {
+        bits.push(query.arcane_resin_filter.include_mage_wand.into(), 1);
+    }
     bits.push(query.requirements.len() as u32, 6);
     for requirement in &query.requirements {
         encode_requirement(&mut bits, requirement, &mut alternative_labels);
@@ -151,30 +157,41 @@ pub fn encode(query: &SearchQuery) -> Result<String, String> {
         if version >= 9 {
             bits.push(requirement.blanket.into(), 1);
         }
+        if version >= 12 {
+            bits.push(requirement.exclude_resin.into(), 1);
+        }
     }
     if version >= 11 {
         bits.push(query.arcane_resin_auto.into(), 1);
-        bits.push(query.floor_requirements.len() as u32, 5);
-        for floor in &query.floor_requirements {
-            bits.push(u32::from(floor.depth), 5);
-            push_optional(&mut bits, floor.feeling.is_some(), || {
-                (floor.feeling.map_or(0, |feeling| feeling as u32), 3)
-            });
-            for rooms in [&floor.rooms, &floor.any_rooms] {
-                let rooms = crate::floor_filters::RoomSet::from_types(rooms.iter().copied());
-                bits.push(rooms.0.count_ones(), 7);
-                for room in rooms.iter() {
-                    bits.push(room as u32, 7);
-                }
-            }
-        }
+        encode_floors(&mut bits, &query.floor_requirements);
     }
     Ok(base64url_encode(&bits.finish()))
 }
 
+fn encode_floors(bits: &mut BitWriter, floors: &[crate::floor_filters::FloorRequirement]) {
+    bits.push(floors.len() as u32, 5);
+    for floor in floors {
+        bits.push(u32::from(floor.depth), 5);
+        push_optional(bits, floor.feeling.is_some(), || {
+            (floor.feeling.map_or(0, |feeling| feeling as u32), 3)
+        });
+        for rooms in [&floor.rooms, &floor.any_rooms] {
+            let rooms = crate::floor_filters::RoomSet::from_types(rooms.iter().copied());
+            bits.push(rooms.0.count_ones(), 7);
+            for room in rooms.iter() {
+                bits.push(room as u32, 7);
+            }
+        }
+    }
+}
+
 /// Select the oldest compatible format so existing links retain their bytes.
 fn encoding_version(query: &SearchQuery) -> u32 {
-    if !query.floor_requirements.is_empty() {
+    if query.arcane_resin_filter.include_mage_wand
+        || query.requirements.iter().any(|r| r.exclude_resin)
+    {
+        12
+    } else if !query.floor_requirements.is_empty() {
         11
     } else if query.arcane_resin_auto {
         10
@@ -224,10 +241,10 @@ pub fn decode(code: &str) -> Result<SearchQuery, String> {
     let bytes = base64url_decode(code.trim())?;
     let mut bits = BitReader::new(&bytes);
     let version = bits.pull(4)?;
-    if !(u32::from(VERSION)..=11).contains(&version) {
+    if !(u32::from(VERSION)..=12).contains(&version) {
         return Err(format!(
             "this link uses format version {version}; this app only understands \
-             versions {VERSION} through 11 — it may have been created by a different release"
+             versions {VERSION} through 12 — it may have been created by a different release"
         ));
     }
     let auto_apply_trinket = version >= 6 && bits.pull(1)? == 1;
@@ -253,8 +270,9 @@ pub fn decode(code: &str) -> Result<SearchQuery, String> {
     } else {
         0
     };
-    let arcane_resin_filter = if version >= 8 {
+    let mut arcane_resin_filter = if version >= 8 {
         ArcaneResinFilter {
+            include_mage_wand: false,
             uncursed: bits.pull(1)? == 1,
             source: if bits.pull(1)? == 1 {
                 Some(source_from(bits.pull(5)?)?)
@@ -270,6 +288,9 @@ pub fn decode(code: &str) -> Result<SearchQuery, String> {
     } else {
         ArcaneResinFilter::default()
     };
+    if version >= 12 {
+        arcane_resin_filter.include_mage_wand = bits.pull(1)? == 1;
+    }
     let count = bits.pull(6)?;
     let requirements = (0..count)
         .map(|index| {
@@ -280,6 +301,9 @@ pub fn decode(code: &str) -> Result<SearchQuery, String> {
                     }
                     if version >= 9 {
                         requirement.blanket = bits.pull(1)? == 1;
+                    }
+                    if version >= 12 {
+                        requirement.exclude_resin = bits.pull(1)? == 1;
                     }
                     Ok(requirement)
                 })
@@ -548,6 +572,7 @@ fn decode_requirement(bits: &mut BitReader<'_>) -> Result<Requirement, String> {
         require_uncursed,
         select_trinket: false,
         blanket: false,
+        exclude_resin: false,
         source,
         identity_group,
         max_depth,
@@ -918,6 +943,7 @@ mod tests {
             require_uncursed: false,
             select_trinket: false,
             blanket: false,
+            exclude_resin: false,
             source: None,
             identity_group: None,
             max_depth: None,
@@ -969,6 +995,7 @@ mod tests {
                     require_uncursed: true,
                     select_trinket: false,
                     blanket: false,
+                    exclude_resin: false,
                     source: Some(ItemSource::SacrificialFire),
                     identity_group: Some(4),
                     max_depth: Some(21),
@@ -985,6 +1012,7 @@ mod tests {
                     require_uncursed: false,
                     select_trinket: false,
                     blanket: false,
+                    exclude_resin: false,
                     source: None,
                     identity_group: None,
                     max_depth: None,
@@ -1132,8 +1160,8 @@ mod tests {
         assert!(decode("").is_err());
         assert!(decode("!!!").is_err());
         assert!(decode("A").is_err());
-        // Unsupported future version (bits 1100 in the top nibble).
-        assert!(decode("wAAA").unwrap_err().contains("version 12"));
+        // Unsupported future version (bits 1101 in the top nibble).
+        assert!(decode("0AAA").unwrap_err().contains("version 13"));
         let code = encode(&minimal(vec![wildcard(ItemKind::Wand)])).unwrap();
         assert!(decode(&code[..code.len() - 1]).is_err());
         assert!(decode(&format!("{code}AAAA")).is_err());
@@ -1686,7 +1714,7 @@ mod tests {
             let error = decode(code).unwrap_err();
             assert!(error.contains("format version"), "{error}");
             assert!(
-                error.contains("only understands versions 4 through 11"),
+                error.contains("only understands versions 4 through 12"),
                 "{error}"
             );
         }

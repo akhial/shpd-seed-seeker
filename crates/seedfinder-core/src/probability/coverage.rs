@@ -9,11 +9,19 @@ pub(super) struct Coverages {
 
 impl Coverages {
     pub(super) fn of(ordered: &[Predicate]) -> Self {
+        // Resin budgeting is assignment metadata, not an item filter.
+        let ordered: Vec<_> = ordered
+            .iter()
+            .map(|p| Predicate {
+                exclude_resin: false,
+                ..*p
+            })
+            .collect();
         // Intersect distinct filters, not all subsets of requirement indices.
         // A hundred identical requirements have one intersection, while
         // mutually exclusive identities never produce a shared coverage.
         let mut intersections = Vec::new();
-        for &predicate in ordered {
+        for &predicate in &ordered {
             if intersections.contains(&predicate) {
                 continue;
             }

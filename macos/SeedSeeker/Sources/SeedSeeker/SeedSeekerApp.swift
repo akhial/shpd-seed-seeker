@@ -1439,6 +1439,7 @@ private func chipTags(_ requirement: ItemRequirement) -> [ChipTag] {
     case .atLeast: tags.append(ChipTag(text: "+\(requirement.upgrade)↑", upgrade: true))
     }
     if let depth = requirement.maximumDepth { tags.append(ChipTag(text: "F≤\(depth)")) }
+    if requirement.excludeResin { tags.append(ChipTag(text: "No resin")) }
     return tags
 }
 
@@ -1571,6 +1572,7 @@ private struct RequirementEditor: View {
     @State private var maximumDepth: Int
     @State private var requireUncursed: Bool
     @State private var selectTrinket: Bool
+    @State private var excludeResin: Bool
     /// How many items the chip asks for, and what its stack's copies carry.
     @State private var count: Int
     @State private var total: Int?
@@ -1609,6 +1611,7 @@ private struct RequirementEditor: View {
         _maximumDepth = State(initialValue: requirement.maximumDepth ?? 0)
         _requireUncursed = State(initialValue: requirement.requireUncursed)
         _selectTrinket = State(initialValue: requirement.selectTrinket)
+        _excludeResin = State(initialValue: requirement.excludeResin)
         _count = State(initialValue: stack.count)
         _total = State(initialValue: stack.total)
         _copyDepth = State(initialValue: stack.copyDepth)
@@ -1633,7 +1636,7 @@ private struct RequirementEditor: View {
                     .disabled(editingResin)
                     .onChange(of: kind) { previous, value in
                         if previous.family != value.family {
-                            itemID = ""; tierMatch = .any; tier = 2; selectTrinket = false
+                            itemID = ""; tierMatch = .any; tier = 2; selectTrinket = false; excludeResin = false
                             effectMode = .any; selectedEffects = []
                             if value == .trinket || value == .artifact {
                                 itemID = ItemCatalog.forKind(value).first?.id ?? ""
@@ -1840,6 +1843,11 @@ private struct RequirementEditor: View {
                 }
                 if !isResin && kind != .trinket {
                 Section {
+                    if kind == .wand && !original.blanket {
+                        Toggle("Exclude from Auto resin", isOn: $excludeResin).toggleStyle(.checkbox)
+                        Text("Keep this wand without budgeting resin to upgrade it. Useful for imbuing: resin upgrades do not transfer to the staff. Extra copies are reserved for reforging and never need Auto resin.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
                     Toggle("Require uncursed", isOn: $requireUncursed)
                         .toggleStyle(.checkbox)
                         .onChange(of: requireUncursed) { _, value in
@@ -1880,7 +1888,7 @@ private struct RequirementEditor: View {
                     .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
             }.padding(12)
         }
-        .frame(width: 480, height: isResin ? 430 : kind == .trinket ? 300 : kind.modifierLabel == nil ? 580 : 660)
+        .frame(width: 480, height: isResin ? 520 : kind == .trinket ? 300 : kind.modifierLabel == nil ? 580 : 660)
     }
 
     /// A combined level is a property of a concrete stack of two or more —
@@ -1951,7 +1959,8 @@ private struct RequirementEditor: View {
                 maximumDepth: kind == .trinket || maximumDepth == 0 ? nil : maximumDepth,
                 requireUncursed: kind != .trinket && requireUncursed,
                 alternativeGroup: original.alternativeGroup,
-                selectTrinket: !original.blanket && kind == .trinket && selectTrinket, blanket: original.blanket)
+                selectTrinket: !original.blanket && kind == .trinket && selectTrinket, blanket: original.blanket,
+                excludeResin: !original.blanket && kind == .wand && excludeResin)
             onFinish(EditorResult(
                 requirement: value,
                 count: original.blanket || kind == .trinket || kind == .artifact || stack.inCluster ? 1 : count,

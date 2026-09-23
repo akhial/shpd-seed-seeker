@@ -162,6 +162,7 @@ export const isBareRequirement = (requirement: RequirementState): boolean =>
   requirement.upgrade.mode === "any" &&
   requirement.effect === undefined &&
   !requirement.uncursed &&
+  !requirement.excludeResin &&
   requirement.source === undefined;
 
 /** True when the effect filter is the "some non-curse effect" shorthand. */
@@ -312,6 +313,7 @@ function requirementToDocument(requirement: RequirementState): RequirementDocume
   }
   if (requirement.uncursed) output.uncursed = true;
   if (requirement.blanket) output.blanket = true;
+  if (requirement.excludeResin) output.exclude_resin = true;
   if (requirement.selectTrinket) output.select_trinket = true;
   if (requirement.source) output.source = requirement.source;
   if (requirement.identityGroup) output.identity_group = requirement.identityGroup;
@@ -338,10 +340,14 @@ export function toQueryDocument(state: QueryState): QueryDocument {
   const resinFilter = state.arcaneResinFilter;
   if (
     resinFilter &&
-    (!resinFilter.uncursed || resinFilter.maxDepth !== undefined || resinFilter.source)
+    (!resinFilter.uncursed ||
+      resinFilter.maxDepth !== undefined ||
+      resinFilter.source ||
+      resinFilter.includeMageWand)
   ) {
     output.arcane_resin_filter = {
       ...(!resinFilter.uncursed ? { uncursed: false } : {}),
+      ...(resinFilter.includeMageWand ? { include_mage_wand: true } : {}),
       ...(resinFilter.maxDepth !== undefined ? { max_depth: resinFilter.maxDepth } : {}),
       ...(resinFilter.source ? { source: resinFilter.source } : {}),
     };
@@ -448,6 +454,10 @@ function requirementFromDocument(
     throw new Error("blanket must be a boolean");
   }
   if (value.blanket) requirement.blanket = true;
+  if (raw.exclude_resin !== undefined && typeof raw.exclude_resin !== "boolean") {
+    throw new Error("exclude_resin must be a boolean");
+  }
+  if (value.exclude_resin) requirement.excludeResin = true;
   if (value.select_trinket) requirement.selectTrinket = true;
   if (alternativeGroup !== undefined) requirement.alternativeGroup = alternativeGroup;
   // The unreleased upgrade_sum key is refused rather than reinterpreted.
@@ -500,17 +510,24 @@ export function fromQueryJson(json: string): QueryState {
     const filter = document.arcane_resin_filter;
     if (
       !isRecord(filter) ||
-      (filter.uncursed !== undefined && typeof filter.uncursed !== "boolean")
+      (filter.uncursed !== undefined && typeof filter.uncursed !== "boolean") ||
+      (filter.include_mage_wand !== undefined && typeof filter.include_mage_wand !== "boolean")
     )
       throw new Error("Invalid Arcane Resin filters.");
     const parsed = {
       uncursed: filter.uncursed ?? true,
+      ...(filter.include_mage_wand ? { includeMageWand: true } : {}),
       ...(filter.max_depth !== undefined ? { maxDepth: filter.max_depth } : {}),
       ...(filter.source !== undefined ? { source: filter.source } : {}),
     };
     const errors = validateArcaneResinFilter(parsed);
     if (errors.length) throw new Error(errors[0]);
-    if (!parsed.uncursed || parsed.maxDepth !== undefined || parsed.source)
+    if (
+      !parsed.uncursed ||
+      parsed.maxDepth !== undefined ||
+      parsed.source ||
+      parsed.includeMageWand
+    )
       arcaneResinFilter = parsed;
   }
   return {
@@ -536,6 +553,13 @@ export interface ValidationResult {
 
 export function validateRequirement(requirement: RequirementState): string[] {
   const errors: string[] = [];
+  if (requirement.excludeResin !== undefined && typeof requirement.excludeResin !== "boolean")
+    errors.push("Invalid Auto resin exclusion.");
+  if (
+    requirement.excludeResin &&
+    (requirementFamily(requirement) !== "wand" || requirement.blanket)
+  )
+    errors.push("Only an ordinary wand can exclude Auto resin.");
   if (
     requirement.blanket &&
     (requirement.identityGroup || requirement.levelSum || requirement.selectTrinket)
@@ -718,6 +742,8 @@ function validArcaneResin(value: unknown): boolean {
 function validateArcaneResinFilter(filter: ArcaneResinFilter): string[] {
   const errors: string[] = [];
   if (typeof filter.uncursed !== "boolean") errors.push("Invalid Arcane Resin uncursed filter.");
+  if (filter.includeMageWand !== undefined && typeof filter.includeMageWand !== "boolean")
+    errors.push("Invalid starting wand option.");
   if (
     filter.maxDepth !== undefined &&
     (!Number.isInteger(filter.maxDepth) || filter.maxDepth < 1 || filter.maxDepth > MAX_DEPTH)

@@ -125,6 +125,7 @@ public enum ResultsExport {
         else if query.arcaneResin > 0 { output["arcane_resin"] = query.arcaneResin }
         if query.arcaneResinFilter != ArcaneResinFilter() {
             var filter: [String: Any] = [:]
+            if query.arcaneResinFilter.includeMageWand { filter["include_mage_wand"] = true }
             if !query.arcaneResinFilter.uncursed { filter["uncursed"] = false }
             if let depth = query.arcaneResinFilter.maximumDepth { filter["max_depth"] = depth }
             if let source = query.arcaneResinFilter.source { filter["source"] = sourceNames[source.rawValue] }
@@ -164,6 +165,7 @@ public enum ResultsExport {
         if requirement.requireUncursed { output["uncursed"] = true }
         if requirement.selectTrinket { output["select_trinket"] = true }
         if requirement.blanket { output["blanket"] = true }
+        if requirement.excludeResin { output["exclude_resin"] = true }
         if let source = requirement.source { output["source"] = sourceNames[source.rawValue] }
         if let group = requirement.identityGroup { output["identity_group"] = group }
         if let depth = requirement.maximumDepth { output["max_depth"] = depth }
@@ -226,7 +228,8 @@ public enum ResultsExport {
         let filter = value["arcane_resin_filter"] as? [String: Any] ?? [:]
         let resinFilter = ArcaneResinFilter(uncursed: filter["uncursed"] as? Bool ?? true,
             maximumDepth: intField(filter, "max_depth"),
-            source: (filter["source"] as? String).flatMap { sourceNames.firstIndex(of: $0) }.flatMap(ScoutItemSource.init(rawValue:)))
+            source: (filter["source"] as? String).flatMap { sourceNames.firstIndex(of: $0) }.flatMap(ScoutItemSource.init(rawValue:)),
+            includeMageWand: boolField(filter, "include_mage_wand"))
         let floors = try JSONDecoder().decode([FloorRequirement].self, from:
             JSONSerialization.data(withJSONObject: value["floor_requirements"] ?? []))
         return SavedQuery(
@@ -325,7 +328,7 @@ public enum ResultsExport {
             requireUncursed: boolField(entry, "uncursed"),
             alternativeGroup: alternativeGroup,
             levelSum: levelSum, selectTrinket: boolField(entry, "select_trinket"),
-            blanket: boolField(entry, "blanket"))
+            blanket: boolField(entry, "blanket"), excludeResin: boolField(entry, "exclude_resin"))
     }
 }
 

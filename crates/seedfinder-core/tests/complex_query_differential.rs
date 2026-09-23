@@ -148,6 +148,7 @@ fn random_requirement(rng: &mut Rng) -> Requirement {
         require_uncursed: rng.chance(20),
         select_trinket: false,
         blanket: false,
+        exclude_resin: false,
         source: None,
         identity_group: None,
         max_depth: rng
@@ -237,6 +238,7 @@ fn random_query(rng: &mut Rng) -> Option<SearchQuery> {
                     require_uncursed: false,
                     select_trinket: false,
                     blanket: false,
+                    exclude_resin: false,
                     source: None,
                     identity_group: Some(1),
                     max_depth: None,
@@ -302,18 +304,90 @@ fn candidates(query: &SearchQuery, world: &GeneratedWorld) -> Vec<Vec<(usize, us
         .collect()
 }
 
-fn required_resin(query: &SearchQuery, world: &GeneratedWorld, used: &[bool]) -> u16 {
-    if query.arcane_resin_auto {
-        world
-            .items
+/// Reconstruct visible stacks independently of the engine's resin allocator.
+/// Each entry names the kept requirement owning that copy. Explicit identity
+/// groups form stacks first; plain named repeats fill the preceding stack up
+/// to three items. Constrained or alternative requirements start their own.
+fn stack_owners(query: &SearchQuery) -> Vec<usize> {
+    let requirements = &query.requirements;
+    let mut owners: Vec<_> = (0..requirements.len()).collect();
+    for (index, requirement) in requirements.iter().enumerate() {
+        if requirement.kind != ItemKind::Wand
+            || requirement.alternative_group.is_some()
+            || !requirement.is_bare()
+        {
+            continue;
+        }
+        if let Some(group) = requirement.identity_group {
+            let members: Vec<_> = requirements
+                .iter()
+                .enumerate()
+                .filter(|(_, r)| r.identity_group == Some(group))
+                .collect();
+            owners[index] = members
+                .iter()
+                .find(|(_, r)| !r.is_bare())
+                .unwrap_or(&members[0])
+                .0;
+        }
+    }
+    let named = |index: usize| {
+        let r = requirements[index];
+        r.kind == ItemKind::Wand
+            && r.item.is_some()
+            && !r.blanket
+            && r.alternative_group.is_none()
+            && r.level_sum.is_none()
+    };
+    for (index, requirement) in requirements.iter().enumerate() {
+        if !named(index)
+            || requirement.identity_group.is_some()
+            || !(Requirement {
+                item: None,
+                ..*requirement
+            })
+            .is_bare()
+        {
+            continue;
+        }
+        if let Some(previous) = (0..index).rev().find(|&previous| {
+            named(previous)
+                && owners[previous] == previous
+                && requirements[previous].item == requirement.item
+        }) && owners.iter().filter(|&&owner| owner == previous).count() < 3
+        {
+            owners[index] = previous;
+        }
+    }
+    owners
+}
+
+fn required_resin(
+    query: &SearchQuery,
+    world: &GeneratedWorld,
+    chosen: &[Option<(usize, usize)>],
+) -> u16 {
+    let amount = if query.arcane_resin_auto {
+        let owners = stack_owners(query);
+        chosen
             .iter()
-            .zip(used)
-            .filter(|(candidate, used)| **used && item(candidate.item).kind == ItemKind::Wand)
-            .map(|(candidate, _)| ((u16::from(candidate.upgrade) + 1)..=3).sum::<u16>())
-            .sum()
+            .flatten()
+            .filter(|&&(member, _)| {
+                let requirement = query.requirements[member];
+                requirement.kind == ItemKind::Wand
+                    && !requirement.exclude_resin
+                    && owners[member] == member
+            })
+            .map(|&(_, index)| ((u16::from(world.items[index].upgrade) + 1)..=3).sum::<u16>())
+            .sum::<u16>()
     } else {
         query.arcane_resin
-    }
+    };
+    amount.saturating_sub(if query.arcane_resin_filter.include_mage_wand {
+        2
+    } else {
+        0
+    })
 }
 
 /// Whether a full or partial assignment respects every cross-item rule, and
@@ -385,7 +459,14 @@ fn score(
         .map(|&(_, index)| index)
         .collect();
     let blankets = blanket_score(query, world, &witnesses, 0);
-    let with_resin = resin_score(query, world, &used, &scenarios, &witnesses);
+    let with_resin = resin_score(
+        query,
+        world,
+        &used,
+        &scenarios,
+        &witnesses,
+        required_resin(query, world, chosen),
+    );
     Some(plain + groups + blankets.max(with_resin))
 }
 
@@ -417,11 +498,11 @@ fn resin_score(
     used: &[bool],
     scenarios: &BTreeMap<u16, u64>,
     witnesses: &[usize],
+    minimum: u16,
 ) -> usize {
     if !query.needs_resin() {
         return 0;
     }
-    let minimum = required_resin(query, world, used);
     (0..(1_u64 << world.items.len()))
         .filter_map(|subset| {
             // Exhaustively try every surplus subset, independently of the
@@ -505,6 +586,110 @@ fn best_partial(
 }
 
 #[test]
+fn resin_oracle_covers_reforge_copies_exclusions_and_credit() {
+    let items: Vec<_> = [4, 1, 0, 2]
+        .into_iter()
+        .map(|upgrade| WorldItem {
+            item: ItemId::WandFrost,
+            upgrade,
+            effect: None,
+            cursed: false,
+            depth: 3,
+            source: ItemSource::Heap,
+            accessibility: Accessibility::Independent,
+            secret: false,
+        })
+        .collect();
+    let linked = r#"{"arcane_resin":"auto","requirements":[
+        {"item":"wand_frost","upgrade":{"at_least":3},"identity_group":1},
+        {"kind":"wand","identity_group":1},{"kind":"wand","identity_group":1},
+        {"kind":"wand","blanket":true}]}"#;
+    for (json, range, expected_match, expected_score) in [
+        // The CI failure reduced to a +4 anchor and one +1 reforge copy.
+        // Missing a copy must still fail the full match, but costs no resin.
+        (linked, 0..2, false, 4),
+        (linked, 0..3, true, 5),
+        (
+            r#"{"arcane_resin":"auto","requirements":[
+            {"item":"wand_frost","upgrade":{"at_least":3}},
+            {"item":"wand_frost"},{"item":"wand_frost"}]}"#,
+            0..3,
+            true,
+            4,
+        ),
+        // A fourth named wand starts another stack and needs its own upgrades.
+        (
+            r#"{"arcane_resin":"auto","requirements":[
+            {"item":"wand_frost","upgrade":{"at_least":3}},
+            {"item":"wand_frost"},{"item":"wand_frost"},{"item":"wand_frost"}]}"#,
+            0..4,
+            false,
+            4,
+        ),
+        // Both alternatives reserve the same item; only one incurs Auto cost.
+        (
+            r#"{"arcane_resin":"auto","requirements":[{"any_of":[
+            {"kind":"wand"},{"kind":"wand","exclude_resin":true}]}]}"#,
+            1..2,
+            true,
+            2,
+        ),
+        (
+            r#"{"arcane_resin":2,"arcane_resin_filter":{"include_mage_wand":true},
+            "requirements":[{"kind":"wand"}]}"#,
+            0..1,
+            true,
+            2,
+        ),
+        (
+            r#"{"arcane_resin":3,"arcane_resin_filter":{"include_mage_wand":true},
+            "requirements":[{"kind":"wand"}]}"#,
+            0..1,
+            false,
+            1,
+        ),
+    ] {
+        let query = shpd_seedfinder_core::json_query::decode(json).unwrap();
+        let world = GeneratedWorld {
+            seed: DungeonSeed::MIN,
+            items: items[range].to_vec(),
+            feelings: Vec::new(),
+            floor_rooms: Vec::new(),
+            quests: QuestSummary::default(),
+            ring_gems: RingGems::UNSHUFFLED,
+        };
+        let candidates = candidates(&query, &world);
+        let slots = query.ordinary_slots();
+        for full_only in [false, true] {
+            let score = best_partial(
+                &query,
+                &world,
+                &candidates,
+                &slots,
+                0,
+                &mut Vec::new(),
+                full_only,
+            );
+            if full_only {
+                assert_eq!(
+                    score == Some(query.scout_condition_count()),
+                    expected_match,
+                    "{json}"
+                );
+            } else {
+                assert_eq!(score, Some(expected_score), "{json}");
+            }
+        }
+        assert_eq!(query.matches(&world), expected_match, "{json}");
+        assert_eq!(
+            scout_matches(&world, &query).matched_requirements,
+            expected_score,
+            "{json}"
+        );
+    }
+}
+
+#[test]
 fn matcher_and_scout_agree_with_exhaustive_enumeration() {
     const CASES: usize = 1_024;
     let mut rng = Rng(0x9E37_79B9_7F4A_7C15);
@@ -553,11 +738,13 @@ fn matcher_and_scout_agree_with_exhaustive_enumeration() {
         );
         // A satisfied level-sum group flags every contributing item, so the
         // flags can outnumber the conditions but never undercut them.
-        // Auto can satisfy its condition without donors when its cost is zero.
+        // Zero-cost Auto or Mage credit can satisfy resin without donor items.
         assert!(
             marks.matched_indices().len()
                 + query.blanket_slots().len()
-                + usize::from(query.arcane_resin_auto)
+                + usize::from(
+                    query.arcane_resin_auto || query.arcane_resin_filter.include_mage_wand
+                )
                 >= marks.matched_requirements
         );
         if expected {

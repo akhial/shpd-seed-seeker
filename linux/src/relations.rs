@@ -89,6 +89,7 @@ fn is_plain_item_copy(copy: &UiRequirement, item: ItemId) -> bool {
         && matches!(copy.upgrade, UpgradeRequirement::Any)
         && matches!(copy.effect, EffectRequirement::Any)
         && !copy.require_uncursed
+        && !copy.exclude_resin
         && copy.source.is_none()
         && copy.identity_group.is_none()
         && copy.alternative_group.is_none()

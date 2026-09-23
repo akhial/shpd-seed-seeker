@@ -95,6 +95,7 @@ object ResultsExport {
         if (auto) value.put("arcane_resin", "auto")
         else if (amount > 0) value.put("arcane_resin", amount)
         if (filter != ArcaneResinFilter()) value.put("arcane_resin_filter", JSONObject().apply {
+            if (filter.includeMageWand) put("include_mage_wand", true)
             if (!filter.uncursed) put("uncursed", false)
             filter.maximumDepth?.let { put("max_depth", it) }
             filter.source?.let { put("source", it.name.lowercase()) }
@@ -123,7 +124,9 @@ object ResultsExport {
         val source = if (filter.has("source")) requireNotNull(ScoutItemSource.entries.firstOrNull {
             it.name.lowercase() == filter.getString("source")
         }) { "Invalid Arcane Resin source." } else null
-        return ArcaneResinFilter(uncursed, (depth as? Number)?.toInt(), source)
+        val mageWand = if (filter.has("include_mage_wand")) filter.get("include_mage_wand") else false
+        require(mageWand is Boolean) { "Invalid starting wand option." }
+        return ArcaneResinFilter(uncursed, (depth as? Number)?.toInt(), source, mageWand)
     }
 
     /** The same document for a runnable request; what every query-taking engine call sends. */
@@ -164,6 +167,7 @@ object ResultsExport {
         if (requirement.requireUncursed) put("uncursed", true)
         if (requirement.selectTrinket) put("select_trinket", true)
         if (requirement.blanket) put("blanket", true)
+        if (requirement.excludeResin) put("exclude_resin", true)
         requirement.source?.let { put("source", it.name.lowercase()) }
         requirement.identityGroup?.let { put("identity_group", it) }
         requirement.maximumDepth?.let { put("max_depth", it) }
@@ -323,6 +327,11 @@ object ResultsExport {
             requireUncursed = entry.optBoolean("uncursed"),
             selectTrinket = entry.optBoolean("select_trinket"),
             blanket = entry.optBoolean("blanket"),
+            excludeResin = if (entry.has("exclude_resin")) {
+                val excluded = entry.get("exclude_resin")
+                require(excluded is Boolean) { "Invalid Auto resin exclusion." }
+                excluded
+            } else false,
             levelSum = entry.optJSONObject("level_sum")?.let {
                 LevelSum(group = it.getInt("group"), atLeast = it.getInt("at_least"))
             },

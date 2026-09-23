@@ -61,6 +61,19 @@ describe("either/or clusters", () => {
 });
 
 describe("stacks", () => {
+  it("keeps resin exclusions on anchors and does not hide excluded copies", () => {
+    for (const itemName of [undefined, "wand_lightning"]) {
+      const anchor = req({ kind: "wand", item: itemName, excludeResin: true });
+      const base = [anchor];
+      const grown = setStackCount(base, item(base, 0), 3);
+      expect(grown.map((r) => Boolean(r.excludeResin))).toEqual([true, false, false]);
+      expect(stackCount(boardItems(grown)[0])).toBe(3);
+      expect(validateQuery(asState(grown)).valid).toBe(true);
+    }
+    const ordinary = req({ kind: "wand", item: "wand_lightning" });
+    expect(boardItems([ordinary, { ...ordinary, excludeResin: true }])).toHaveLength(2);
+  });
+
   it("a concrete stack encodes as plain repeats, no identity group", () => {
     const base = [
       req({ item: "ring_might", kind: "ring", upgrade: { mode: "exact", value: 2 } }),

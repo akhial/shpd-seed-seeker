@@ -9,10 +9,41 @@ import org.junit.Test
 class ArcaneResinTest {
     init { PackagedCatalog.install() }
 
+    @Test fun reforgeCopiesRemainReservedWithoutAutoUpgradeCosts() {
+        val engine = JniNativeSeedFinder()
+        fun probability(request: SearchRequest) = engine.startResumedSearch(request, 0, 0, 1).use { it.status().matchProbability }
+        for (linked in listOf(false, true)) {
+            for (excluded in listOf(false, true)) {
+                val identity = if (linked) "\"kind\":\"wand\",\"identity_group\":1" else "\"item\":\"wand_frost\""
+                val anchor = if (excluded) "\"exclude_resin\":true" else "\"upgrade\":3"
+                val query = ResultsExport.decodeQuery(JSONObject("""{"arcane_resin":"auto","arcane_resin_filter":{"source":"ghost_reward"},"requirements":[{$identity,$anchor},{$identity},{$identity}]}"""))
+                assertEquals(3, query.requirements.boardItems().single().stackCount)
+                assertEquals(query, DeepLink.decode(DeepLink.encodeLink(query)))
+                val request = SearchRequest(query.requirements, arcaneResinAuto = true, arcaneResinFilter = query.arcaneResinFilter)
+                val baseline = probability(request.copy(arcaneResinAuto = false))
+                assertTrue(baseline > 0.0)
+                assertEquals(baseline, probability(request), 1e-12)
+            }
+        }
+    }
+
+    @Test fun excludedWandsRemainEditableAndCopiesKeepTheirPortableShape() {
+        val named = dev.seedseeker.app.catalog.ItemCatalog.findById("wand_lightning")!!
+        for (item in listOf(null, named)) {
+            val anchor = ItemRequirement(1, item, 0, kind = ItemKind.WAND, upgradeMatch = UpgradeMatch.ANY, excludeResin = true)
+            val requirements = listOf(anchor)
+            val grown = requirements.setStackCount(requirements.boardItems().single(), count = 3)
+            assertEquals(listOf(true, false, false), grown.map { it.excludeResin })
+            assertEquals(3, grown.boardItems().single().stackCount)
+        }
+        val ordinary = ItemRequirement(1, named, 0, upgradeMatch = UpgradeMatch.ANY)
+        assertEquals(2, listOf(ordinary, ordinary.copy(key = 2, excludeResin = true)).boardItems().size)
+    }
+
     @Test fun resinOnlyQueriesSurviveEveryPortableAndLocalFormat() {
         val storage = PresetStorage(MemoryPreferences())
         for (amount in listOf(0, 1, 3, 65535)) {
-            for (filter in listOf(ArcaneResinFilter(), ArcaneResinFilter(false, 12, ScoutItemSource.WANDMAKER_REWARD))) {
+            for (filter in listOf(ArcaneResinFilter(), ArcaneResinFilter(false, 12, ScoutItemSource.WANDMAKER_REWARD), ArcaneResinFilter(includeMageWand = true))) {
                 val query = SearchRequest(emptyList(), arcaneResin = amount, arcaneResinAuto = amount == 0, arcaneResinFilter = filter).toPresetQuery()
                 assertEquals(query, ResultsExport.decodeQuery(ResultsExport.encodeQuery(query)))
                 assertEquals(query, DeepLink.decode(DeepLink.encodeLink(query)))
@@ -21,6 +52,33 @@ class ArcaneResinTest {
                 assertEquals(query, storage.loadCurrentQuery())
                 storage.save(listOf(QueryPreset(id = "resin", name = "Resin", query = query)))
                 assertEquals(query, storage.load().single().query)
+            }
+        }
+    }
+
+    @Test fun excludedWandsAndMageCreditSurviveSavingSharingAndRefinement() {
+        val query = ResultsExport.decodeQuery(JSONObject("""{"arcane_resin":"auto","arcane_resin_filter":{"include_mage_wand":true},"requirements":[{"item":"wand_lightning","exclude_resin":true}]}"""))
+        assertTrue(query.requirements.single().excludeResin)
+        assertTrue(query.arcaneResinFilter.includeMageWand)
+        assertEquals(query, DeepLink.decode(DeepLink.encodeLink(query)))
+        assertEquals(query, ResultsExport.decode(ResultsExport.encode(query, listOf("AAA-AAA-AAS"), "test")).query)
+        val storage = PresetStorage(MemoryPreferences())
+        storage.saveCurrentQuery(query)
+        assertEquals(query, storage.loadCurrentQuery())
+        storage.save(listOf(QueryPreset(id = "mage", name = "Mage", query = query)))
+        assertEquals(query, storage.load().single().query)
+        val engine = JniNativeSeedFinder()
+        val request = SearchRequest(query.requirements, arcaneResinAuto = true, arcaneResinFilter = query.arcaneResinFilter)
+        assertEquals(listOf("AAA-AAA-AAS"), engine.filterSeeds(request, listOf("AAA-AAA-AAS")))
+        assertEquals(2, engine.scoutMatches("AAA-AAA-AAS", 0, request).matchedSlots)
+        val creditOnly = SearchRequest(emptyList(), maximumDepth = 1, arcaneResin = 2, arcaneResinFilter = query.arcaneResinFilter)
+        assertEquals(listOf("AAA-AAA-AAA"), engine.filterSeeds(creditOnly, listOf("AAA-AAA-AAA")))
+        for (value in listOf("null", "1", "\"true\"")) {
+            assertThrows(IllegalArgumentException::class.java) {
+                ResultsExport.decodeQuery(JSONObject("""{"arcane_resin":2,"arcane_resin_filter":{"include_mage_wand":$value},"requirements":[]}"""))
+            }
+            assertThrows(IllegalArgumentException::class.java) {
+                ResultsExport.decodeQuery(JSONObject("""{"requirements":[{"kind":"wand","exclude_resin":$value}]}"""))
             }
         }
     }

@@ -713,6 +713,9 @@ impl QueryPane {
         if let Some(depth) = state.arcane_resin_filter.max_depth {
             chip.append(&chip_tag(&format!("F≤{depth}"), "chip-tag-plain"));
         }
+        if state.arcane_resin_filter.include_mage_wand {
+            chip.append(&chip_tag("Mage +2", "chip-tag-soft"));
+        }
         if state.arcane_resin_filter.uncursed {
             chip.append(&chip_tag("\u{2713}", "chip-tag-soft"));
         }
@@ -797,6 +800,9 @@ impl QueryPane {
         }
         if let Some(badge) = effect_badge(requirement) {
             chip.append(&badge);
+        }
+        if requirement.exclude_resin {
+            chip.append(&chip_tag("No resin", "chip-tag-plain"));
         }
         if requirement.require_uncursed {
             chip.append(

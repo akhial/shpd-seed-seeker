@@ -53,6 +53,7 @@ private fun isPlainItemCopy(copy: ItemRequirement, item: CatalogItem): Boolean =
         copy.upgradeMatch == UpgradeMatch.ANY &&
         copy.effect == EffectFilter.Any &&
         !copy.requireUncursed &&
+        !copy.excludeResin &&
         copy.source == null &&
         copy.identityGroup == null &&
         copy.alternativeGroup == null &&

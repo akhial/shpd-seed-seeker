@@ -104,9 +104,18 @@ files are replaced. The output options cannot be combined with `--benchmark`.
   // by other requirements cannot also provide resin. Each yields
   // 2 * (upgrade + 1): +0 gives 2, +1 gives 4, +2 gives 6, etc.
   // A resin-only query may use an empty requirements array.
-  // "auto" finds enough resin to bring every reserved wand to +3:
+  // "auto" upgrades kept wands to +3, excluding reforge copies and exclude_resin wands:
   // +0 needs 6, +1 needs 5, +2 needs 3, and +3 or higher needs none.
   "arcane_resin"?: 0..65535 | "auto" = 0,
+  "arcane_resin_filter"?: {
+    "uncursed"?: true | false = true,
+    "max_depth"?: 1..24,
+    "source"?: "heap" | "chest" | ...,
+    // Assumes the Mage recovers and dismantles the starting Magic Missile
+    // wand with Wand Preservation: one +0 wand, worth 2 resin, regardless
+    // of staff level. This explicit credit is independent of donor filters.
+    "include_mage_wand"?: true | false = false
+  },
   // The run's Wandmaker (floors 7-9) must ask for this quest item.
   "wandmaker_quest"?: "corpse_dust" | "elemental_embers" | "rotberry",
 
@@ -130,6 +139,9 @@ files are replaced. The output options cannot be combined with `--benchmark`.
       // Supply "item", "kind", or both; when both are present they must agree.
       // "weapon" matches melee and thrown weapons alike; "melee_weapon" and
       // "thrown_weapon" narrow it to one class.
+      // Ordinary wand only: reserve it, but omit its Auto upgrade cost.
+      // Useful for imbuing; resin upgrades never transfer to the staff.
+      "exclude_resin"?: true | false = false,
       "kind"?: "weapon" | "melee_weapon" | "thrown_weapon" | "armor" | "wand" | "ring",
       "item"?:
         // Weapons
@@ -286,7 +298,7 @@ blanket share links use format 9 and require an app that supports it.
 The probability estimate intersects blanket filters with ordinary item and
 resin donor filters and considers their possible witnesses. Donor witnesses
 contribute resin once, can satisfy several blankets, and add no Auto upgrade
-cost. Auto donor witnesses require a reserved wand below +3. Overlap between
+cost. Auto donor witnesses require a kept, non-excluded wand below +3. Overlap between
 those ways is approximated conditional on the ordinary query, so a blanket
 never raises the estimate above the ordinary query's rate. Existing
 approximations for alternatives, combined levels, and item supply still apply. Queries with more

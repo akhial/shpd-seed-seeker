@@ -3,6 +3,7 @@
 mod resin;
 pub use resin::ArcaneResinFilter;
 pub(crate) use resin::donor_requirement as resin_donor_requirement;
+pub(crate) use resin::reforge_copies;
 pub(crate) use resin::upgrade_cost as resin_upgrade_cost;
 
 use std::collections::BTreeMap;
@@ -279,6 +280,7 @@ pub struct LevelSum {
 
 /// One required item. `None` fields are wildcards.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[allow(clippy::struct_excessive_bools)] // Independent query and allocation options.
 pub struct Requirement {
     pub kind: ItemKind,
     /// Optional melee/thrown narrowing; only meaningful for weapon
@@ -296,6 +298,8 @@ pub struct Requirement {
     /// Extra predicate on an ordinary assigned item or a selected resin donor.
     /// Blanket slots may reuse that item and never consume another occurrence.
     pub blanket: bool,
+    /// Reserve this wand without budgeting Auto resin upgrades for it.
+    pub exclude_resin: bool,
     pub source: Option<ItemSource>,
     /// Requirements in the same non-zero group must resolve to the same item ID.
     pub identity_group: Option<u8>,
@@ -392,6 +396,7 @@ impl Requirement {
             && matches!(self.upgrade, UpgradeRequirement::Any)
             && matches!(self.effect, EffectRequirement::Any)
             && !self.require_uncursed
+            && !self.exclude_resin
             && self.source.is_none()
     }
 
@@ -403,6 +408,9 @@ impl Requirement {
     /// another family, an upgrade outside the UI's family-specific range, or
     /// an inconsistent group label.
     pub fn validate(self) -> Result<(), QueryError> {
+        if self.exclude_resin && (self.kind != ItemKind::Wand || self.blanket) {
+            return Err(QueryError::ResinExclusionRequiresWand);
+        }
         if self.blanket
             && (self.identity_group.is_some() || self.level_sum.is_some() || self.select_trinket)
         {
@@ -539,6 +547,15 @@ impl SearchQuery {
     #[must_use]
     pub const fn needs_resin(&self) -> bool {
         self.arcane_resin_auto || self.arcane_resin > 0
+    }
+
+    /// Player-supplied resin, independent of generated donor filters.
+    pub(crate) const fn resin_credit(&self) -> u16 {
+        if self.arcane_resin_filter.include_mage_wand {
+            2
+        } else {
+            0
+        }
     }
 
     /// Validates bounds and every requirement.
@@ -782,8 +799,8 @@ impl SearchQuery {
 }
 
 /// One candidate match for a slot: the world item, the identity the member
-/// matched on, and the member itself.
-type SlotCandidate<'query> = (usize, ItemId, &'query Requirement);
+/// matched on, the member itself, and whether it is kept rather than reforged.
+type SlotCandidate<'query> = (usize, ItemId, &'query Requirement, bool);
 
 /// Size, required total, and upgrade capacity of one combined-level group.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -856,6 +873,7 @@ struct Assignment<'query> {
     /// Eligible item indices for each blanket condition.
     blankets: Vec<Vec<usize>>,
     used: Vec<bool>,
+    resin_cost: u32,
     scenarios: BTreeMap<u16, u64>,
     identities: BTreeMap<u8, ItemId>,
     sums: BTreeMap<u8, SumProgress>,
@@ -865,6 +883,7 @@ struct Assignment<'query> {
 #[derive(Clone, Copy)]
 struct Undo {
     item_index: usize,
+    resin_cost: u32,
     identity: Option<(u8, Option<ItemId>)>,
     scenario: Option<(u16, Option<u64>)>,
     sum: Option<(u8, Option<SumProgress>)>,
@@ -876,6 +895,11 @@ impl<'query> Assignment<'query> {
     fn prepare(query: &'query SearchQuery, world: &'query GeneratedWorld) -> Self {
         let mut slots: Vec<Slot<'query>> = Vec::new();
         let mut blankets = Vec::new();
+        let reforge_copies = if query.arcane_resin_auto {
+            resin::reforge_copies(query)
+        } else {
+            Vec::new()
+        };
         for slot in query.slots() {
             let slot_first = slot[0];
             let mut candidates = Vec::new();
@@ -893,12 +917,18 @@ impl<'query> Assignment<'query> {
                             || candidate.source != ItemSource::BlacksmithReward)
                         && let Some(identity) = requirement.matching_identity(candidate)
                     {
-                        candidates.push((index, identity, requirement));
+                        candidates.push((
+                            index,
+                            identity,
+                            requirement,
+                            !query.arcane_resin_auto || !reforge_copies[member],
+                        ));
                     }
                 }
             }
             if query.requirements[slot_first].blanket {
-                let mut indices: Vec<_> = candidates.iter().map(|&(index, _, _)| index).collect();
+                let mut indices: Vec<_> =
+                    candidates.iter().map(|&(index, _, _, _)| index).collect();
                 indices.sort_unstable();
                 indices.dedup();
                 blankets.push(indices);
@@ -919,6 +949,7 @@ impl<'query> Assignment<'query> {
             sum_groups,
             blankets,
             used: vec![false; world.items.len()],
+            resin_cost: 0,
             scenarios: BTreeMap::new(),
             identities: BTreeMap::new(),
             sums: BTreeMap::new(),
@@ -936,6 +967,7 @@ impl<'query> Assignment<'query> {
                     .select_with_blankets(
                         self.items,
                         &self.used,
+                        self.resin_cost,
                         &self.scenarios,
                         &self.blankets,
                         true,
@@ -947,8 +979,10 @@ impl<'query> Assignment<'query> {
             return false;
         }
         for candidate in 0..self.slots[slot].candidates.len() {
-            let (item_index, identity, requirement) = self.slots[slot].candidates[candidate];
-            let Some(undo) = self.assign(item_index, identity, requirement) else {
+            let (item_index, identity, requirement, upgrade_with_resin) =
+                self.slots[slot].candidates[candidate];
+            let Some(undo) = self.assign(item_index, identity, requirement, upgrade_with_resin)
+            else {
                 continue;
             };
             if self.fills_every_slot(slot + 1) {
@@ -969,7 +1003,8 @@ impl<'query> Assignment<'query> {
     }
 
     fn resin_selection(&self) -> Option<Vec<usize>> {
-        self.resin.select(self.items, &self.used, &self.scenarios)
+        self.resin
+            .select(self.items, &self.used, self.resin_cost, &self.scenarios)
     }
 
     /// Places one item into one slot when every cross-item constraint still
@@ -979,12 +1014,14 @@ impl<'query> Assignment<'query> {
         item_index: usize,
         identity: ItemId,
         requirement: &Requirement,
+        upgrade_with_resin: bool,
     ) -> Option<Undo> {
         if self.used[item_index] {
             return None;
         }
         let mut undo = Undo {
             item_index,
+            resin_cost: 0,
             identity: None,
             scenario: None,
             sum: None,
@@ -1026,12 +1063,17 @@ impl<'query> Assignment<'query> {
             }
             undo.sum = Some((sum.group, self.sums.insert(sum.group, progress)));
         }
+        if upgrade_with_resin && requirement.kind == ItemKind::Wand && !requirement.exclude_resin {
+            undo.resin_cost = resin::upgrade_cost(self.items[item_index].upgrade);
+            self.resin_cost += undo.resin_cost;
+        }
         self.used[item_index] = true;
         Some(undo)
     }
 
     fn unassign(&mut self, undo: Undo) {
         self.used[undo.item_index] = false;
+        self.resin_cost -= undo.resin_cost;
         rewind(&mut self.sums, undo.sum);
         rewind(&mut self.scenarios, undo.scenario);
         rewind(&mut self.identities, undo.identity);
@@ -1191,6 +1233,7 @@ impl BestSubset<'_> {
                 if let Some(resin_items) = self.assignment.resin.select_with_blankets(
                     self.assignment.items,
                     &self.assignment.used,
+                    self.assignment.resin_cost,
                     &self.assignment.scenarios,
                     &blankets,
                     false,
@@ -1223,9 +1266,12 @@ impl BestSubset<'_> {
             return;
         }
         for candidate in 0..self.assignment.slots[slot].candidates.len() {
-            let (item_index, identity, requirement) =
+            let (item_index, identity, requirement, upgrade_with_resin) =
                 self.assignment.slots[slot].candidates[candidate];
-            let Some(undo) = self.assignment.assign(item_index, identity, requirement) else {
+            let Some(undo) =
+                self.assignment
+                    .assign(item_index, identity, requirement, upgrade_with_resin)
+            else {
                 continue;
             };
             self.selected
@@ -1249,6 +1295,7 @@ pub enum QueryError {
     ItemKindMismatch,
     TrinketRequiresIdentity,
     SelectionRequiresTrinket,
+    ResinExclusionRequiresWand,
     ArtifactRequiresIdentity,
     InvalidWeaponCategory,
     EffectKindMismatch,
@@ -1321,6 +1368,9 @@ impl fmt::Display for QueryError {
             Self::InvalidTier => {
                 "tier filters require a wildcard weapon or armor and a non-redundant tier"
             }
+            Self::ResinExclusionRequiresWand => {
+                "only an ordinary wand requirement can exclude Auto resin"
+            }
             Self::SelectionRequiresTrinket => "only a named trinket can be selected",
             Self::TrinketRequiresIdentity => "select a trinket",
             Self::ArtifactRequiresIdentity => "select an artifact",
@@ -1390,6 +1440,7 @@ mod tests {
             require_uncursed: false,
             select_trinket: false,
             blanket: false,
+            exclude_resin: false,
             source: None,
             identity_group: None,
             max_depth: None,
@@ -1689,6 +1740,7 @@ mod tests {
             require_uncursed: false,
             select_trinket: false,
             blanket: false,
+            exclude_resin: false,
             source: None,
             identity_group: None,
             max_depth: None,
@@ -1712,6 +1764,7 @@ mod tests {
             require_uncursed: false,
             select_trinket: false,
             blanket: false,
+            exclude_resin: false,
             source: None,
             identity_group: None,
             max_depth: None,
@@ -1791,6 +1844,7 @@ mod tests {
             require_uncursed: true,
             select_trinket: false,
             blanket: false,
+            exclude_resin: false,
             ..requirement(ItemId::Sword)
         };
         assert_eq!(invalid.validate(), Err(QueryError::UncursedWithCurse));
@@ -1808,6 +1862,7 @@ mod tests {
             require_uncursed: false,
             select_trinket: false,
             blanket: false,
+            exclude_resin: false,
             source: None,
             identity_group: None,
             max_depth: None,
@@ -1826,6 +1881,7 @@ mod tests {
             require_uncursed: false,
             select_trinket: false,
             blanket: false,
+            exclude_resin: false,
             source: None,
             identity_group: None,
             max_depth: None,
@@ -1862,6 +1918,7 @@ mod tests {
             require_uncursed: false,
             select_trinket: false,
             blanket: false,
+            exclude_resin: false,
             source: None,
             identity_group: None,
             max_depth: None,
@@ -1951,6 +2008,7 @@ mod tests {
             require_uncursed: false,
             select_trinket: false,
             blanket: false,
+            exclude_resin: false,
             source: None,
             identity_group: None,
             max_depth: None,
@@ -2029,6 +2087,7 @@ mod tests {
             require_uncursed: false,
             select_trinket: false,
             blanket: false,
+            exclude_resin: false,
             source,
             identity_group: Some(1),
             max_depth: None,
@@ -2058,6 +2117,7 @@ mod tests {
                     require_uncursed: false,
                     select_trinket: false,
                     blanket: false,
+                    exclude_resin: false,
                     source: None,
                     identity_group: None,
                     max_depth: None,
@@ -2171,6 +2231,7 @@ mod tests {
             require_uncursed: false,
             select_trinket: false,
             blanket: false,
+            exclude_resin: false,
             source: None,
             identity_group: Some(1),
             max_depth: None,
@@ -2285,6 +2346,7 @@ mod tests {
             require_uncursed: false,
             select_trinket: false,
             blanket: false,
+            exclude_resin: false,
             source: None,
             identity_group: None,
             max_depth: None,
@@ -2369,6 +2431,7 @@ mod tests {
                 require_uncursed: true,
                 select_trinket: false,
                 blanket: false,
+                exclude_resin: false,
                 ..plain(ItemKind::Weapon)
             }
             .validate(),
@@ -2383,6 +2446,7 @@ mod tests {
                 require_uncursed: true,
                 select_trinket: false,
                 blanket: false,
+                exclude_resin: false,
                 ..plain(ItemKind::Weapon)
             }
             .validate(),
@@ -2680,6 +2744,7 @@ mod tests {
             require_uncursed: false,
             select_trinket: false,
             blanket: false,
+            exclude_resin: false,
             source: None,
             identity_group: None,
             max_depth: None,

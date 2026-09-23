@@ -114,6 +114,7 @@ public static class ResultsExport
         if (query.ArcaneResinFilter != new ArcaneResinFilter())
         {
             var filter = new JsonObject();
+            if (query.ArcaneResinFilter.IncludeMageWand) filter["include_mage_wand"] = true;
             if (!query.ArcaneResinFilter.Uncursed) filter["uncursed"] = false;
             if (query.ArcaneResinFilter.MaximumDepth is int depth) filter["max_depth"] = depth;
             if (query.ArcaneResinFilter.Source is ScoutItemSource source) filter["source"] = SourceNames[(int)source];
@@ -152,6 +153,7 @@ public static class ResultsExport
         if (requirement.RequireUncursed) output["uncursed"] = true;
         if (requirement.SelectTrinket) output["select_trinket"] = true;
         if (requirement.Blanket) output["blanket"] = true;
+        if (requirement.ExcludeResin) output["exclude_resin"] = true;
         if (requirement.Source is ScoutItemSource source) output["source"] = SourceNames[(int)source];
         if (requirement.IdentityGroup is int group) output["identity_group"] = group;
         if (requirement.MaximumDepth is int depth) output["max_depth"] = depth;
@@ -208,7 +210,8 @@ public static class ResultsExport
             ArcaneResinAuto = TolerantString(value, "arcane_resin") == "auto",
             ArcaneResinFilter = new ArcaneResinFilter(
                 !filter.ContainsKey("uncursed") || BoolField(filter, "uncursed"),
-                IntField(filter, "max_depth"), sourceIndex < 0 ? null : (ScoutItemSource)sourceIndex),
+                IntField(filter, "max_depth"), sourceIndex < 0 ? null : (ScoutItemSource)sourceIndex,
+                BoolField(filter, "include_mage_wand")),
             FloorRequirements = (value["floor_requirements"] as JsonArray ?? []).Select(entry =>
             {
                 var floor = entry!.AsObject();
@@ -288,6 +291,7 @@ public static class ResultsExport
             RequireUncursed = BoolField(entry, "uncursed"),
             SelectTrinket = BoolField(entry, "select_trinket"),
             Blanket = BoolField(entry, "blanket"),
+            ExcludeResin = BoolField(entry, "exclude_resin"),
             AlternativeGroup = alternativeGroup,
             LevelSum = levelSum,
         };

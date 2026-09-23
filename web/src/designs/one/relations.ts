@@ -55,6 +55,7 @@ const isPlainItemCopy = (copy: RequirementState, item: string): boolean =>
   copy.upgrade.mode === "any" &&
   copy.effect === undefined &&
   !copy.uncursed &&
+  !copy.excludeResin &&
   copy.source === undefined &&
   copy.identityGroup === undefined &&
   copy.alternativeGroup === undefined &&

@@ -292,6 +292,7 @@ public sealed partial class ItemRequirement
     public bool RequireUncursed { get; set; }
     public bool SelectTrinket { get; set; }
     public bool Blanket { get; set; }
+    public bool ExcludeResin { get; set; }
     /// <summary>
     /// Requirements sharing a number form one "any of these" slot, satisfied
     /// by any single member. Null for a requirement that stands alone.
@@ -316,6 +317,7 @@ public sealed partial class ItemRequirement
             if (Kind == ItemKind.Trinket) return SelectTrinket ? "choose at +3" : "";
             var parts = new List<string> { UpgradeMatch switch { UpgradeMatch.Exactly => $"+{Upgrade} exactly", UpgradeMatch.AtLeast => $"+{Upgrade} or higher", _ => "Any upgrade" } };
             if (Effect.Describe() is string effect) parts.Add(effect); if (RequireUncursed) parts.Add("uncursed"); if (Source is not null) parts.Add(Labels.Source(Source.Value));
+            if (ExcludeResin) parts.Add("excluded from Auto resin");
             if (IdentityGroup is not null) parts.Add("same-kind stack");
             if (LevelSum is { } sum) parts.Add($"levels \u2265 {sum.AtLeast} together");
             if (MaximumDepth is int d) parts.Add($"by floor {d}");
@@ -340,6 +342,7 @@ public sealed partial class ItemRequirement
             if (UpgradeMatch == UpgradeMatch.Exactly) tags.Add(new($"+{Upgrade}", true));
             if (UpgradeMatch == UpgradeMatch.AtLeast) tags.Add(new($"+{Upgrade}\u2191", true));
             if (MaximumDepth is int depth) tags.Add(new($"F\u2264{depth}"));
+            if (ExcludeResin) tags.Add(new("No resin"));
             return tags;
         }
     }
@@ -364,7 +367,7 @@ public sealed partial class ItemRequirement
     /// </summary>
     [JsonIgnore] public bool IsBare =>
         Item is null && Kind == Kind.Family() && TierMatch == TierMatch.Any && UpgradeMatch == UpgradeMatch.Any
-        && Effect.IsAny && !RequireUncursed && Source is null;
+        && Effect.IsAny && !RequireUncursed && !ExcludeResin && Source is null;
     public ItemRequirement Clone()
     {
         var copy = (ItemRequirement)MemberwiseClone();
@@ -500,7 +503,7 @@ public static class QueryRelationships
     /// </summary>
     private static bool IsPlainItemCopy(ItemRequirement copy, CatalogItem item) =>
         !copy.Blanket && !copy.Kind.RequiresNamedItem() && copy.Item?.Id == item.Id && copy.TierMatch == TierMatch.Any && copy.UpgradeMatch == UpgradeMatch.Any
-        && copy.Effect.IsAny && !copy.RequireUncursed && copy.Source is null
+        && copy.Effect.IsAny && !copy.RequireUncursed && !copy.ExcludeResin && copy.Source is null
         && copy.IdentityGroup is null && copy.AlternativeGroup is null && copy.LevelSum is null;
 
     /// <summary>
@@ -983,6 +986,8 @@ public static class QueryRelationships
         if (query.FloorRequirements.FirstOrDefault(floor => floor.Depth > query.MaximumDepth) is { } outside)
             return $"Floor {outside.Depth} exceeds the floor limit of {query.MaximumDepth}.";
         var requirements = query.Requirements;
+        if (requirements.Any(r => r.ExcludeResin && (r.Kind != ItemKind.Wand || r.Blanket)))
+            return "Only an ordinary wand can exclude Auto resin.";
         if (requirements.Count > 0 && requirements.All(r => r.Blanket))
             return "Add at least one ordinary requirement.";
         if (requirements.Where(r => r.AlternativeGroup is not null).GroupBy(r => r.AlternativeGroup)
@@ -1129,7 +1134,7 @@ public static class WandmakerQuests
     };
 }
 
-public sealed record ArcaneResinFilter(bool Uncursed = true, int? MaximumDepth = null, ScoutItemSource? Source = null)
+public sealed record ArcaneResinFilter(bool Uncursed = true, int? MaximumDepth = null, ScoutItemSource? Source = null, bool IncludeMageWand = false)
 {
     public bool IsValid => (MaximumDepth is null or >= 1 and <= SearchLimits.MaxDepth) &&
         (Source is null || Enum.IsDefined(Source.Value));
@@ -1137,6 +1142,7 @@ public sealed record ArcaneResinFilter(bool Uncursed = true, int? MaximumDepth =
         Uncursed ? "uncursed wands" : "any wands",
         MaximumDepth is int depth ? $"≤ floor {depth}" : null,
         Source is ScoutItemSource source ? Labels.Source(source) : null,
+        IncludeMageWand ? "Mage +2" : null,
     }.OfType<string>());
 }
 

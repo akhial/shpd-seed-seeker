@@ -374,6 +374,7 @@ fn base(kind: ItemKind) -> Requirement {
         require_uncursed: false,
         select_trinket: false,
         blanket: false,
+        exclude_resin: false,
         source: None,
         identity_group: None,
         max_depth: None,
@@ -535,6 +536,7 @@ fn modifier_queries() -> Vec<(String, SearchQuery)> {
                 require_uncursed: true,
                 select_trinket: false,
                 blanket: false,
+                exclude_resin: false,
                 ..base(ItemKind::Ring)
             }],
             24,
@@ -612,6 +614,7 @@ fn locked_level_queries() -> Vec<(String, SearchQuery)> {
                     require_uncursed: true,
                     select_trinket: false,
                     blanket: false,
+                    exclude_resin: false,
                     ..base(ItemKind::Weapon)
                 }],
                 24,

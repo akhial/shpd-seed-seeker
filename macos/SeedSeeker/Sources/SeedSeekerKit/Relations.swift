@@ -61,6 +61,7 @@ private func isPlainItemCopy(_ copy: ItemRequirement, of item: CatalogItem) -> B
         && copy.upgradeMatch == .any
         && copy.effect == .any
         && !copy.requireUncursed
+        && !copy.excludeResin
         && copy.source == nil
         && copy.identityGroup == nil
         && copy.alternativeGroup == nil

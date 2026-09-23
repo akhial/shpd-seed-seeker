@@ -103,9 +103,10 @@ unknown IDs, duplicate depths, and boss floors are rejected.
 floor, alongside feelings. WASM scouts expose `floorRooms: [{depth, rooms}]`.
 Native scout packets keep their existing format and omit room summaries.
 Portable JSON preserves floor requirements in presets and result exports.
-Share links use version 11 when floor requirements are present; older queries
-retain their existing link bytes. Room enum ordering is append-only because
-links and calibration tables use those indices.
+Share links use version 11 when floor requirements are present, or version 12
+when combined with a starting Mage wand credit or per-wand Auto resin exclusion.
+Older queries retain their existing link bytes. Room enum ordering is append-only
+because links and calibration tables use those indices.
 
 The planner compiles depth-indexed masks once per query and extends generation
 to the deepest floor condition. Feeling mismatches stop after preparation;

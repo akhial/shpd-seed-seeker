@@ -83,4 +83,31 @@ class ArcaneResinSheetTest {
         compose.runOnIdle { assertEquals(Triple(3, filter, false), saved) }
     }
 
+    @Test fun startingWandCanBeEnabledInBothResinModes() {
+        var saved: Triple<Int, ArcaneResinFilter, Boolean>? = null
+        compose.setContent { SeedSeekerTheme {
+            ArcaneResinSheet(2, ArcaneResinFilter(), onDismiss = {},
+                onSave = { amount, filter, auto -> saved = Triple(amount, filter, auto) }, onRemove = {})
+        } }
+        compose.onNodeWithContentDescription("Include Mage’s starting wand")
+            .performScrollTo().assertIsOff().performClick().assertIsOn()
+        compose.onNodeWithText("Save").performScrollTo().performClick()
+        compose.runOnIdle { assertEquals(Triple(2, ArcaneResinFilter(includeMageWand = true), false), saved) }
+        compose.onNodeWithText("Auto").performScrollTo().performClick()
+        compose.onNodeWithText("Save").performScrollTo().performClick()
+        compose.runOnIdle { assertEquals(Triple(0, ArcaneResinFilter(includeMageWand = true), true), saved) }
+        compose.captureResinScreenshot("sheet-mage", requireNotNull(ShadowDialog.getLatestDialog().window))
+    }
+
+    @Test fun wandExclusionSavesWithoutChangingOtherFilters() {
+        val wand = dev.seedseeker.app.model.ItemRequirement(1, null, 2, kind = dev.seedseeker.app.model.ItemKind.WAND)
+        var saved: dev.seedseeker.app.model.ItemRequirement? = null
+        compose.setContent { SeedSeekerTheme {
+            RequirementSheet(editing = wand, onDismiss = {}, onSave = { requirement, _, _, _ -> saved = requirement })
+        } }
+        compose.onNodeWithText("Exclude from Auto resin").performScrollTo().performClick()
+        compose.onNodeWithText("Save").performClick()
+        compose.runOnIdle { assertEquals(wand.copy(excludeResin = true), saved) }
+    }
+
 }

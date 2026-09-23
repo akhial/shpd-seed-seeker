@@ -366,6 +366,7 @@ fn benchmark_query() -> SearchQuery {
             require_uncursed: false,
             select_trinket: false,
             blanket: false,
+            exclude_resin: false,
             source: None,
             identity_group: None,
             max_depth: None,

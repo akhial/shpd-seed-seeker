@@ -159,6 +159,7 @@ fun RequirementSheet(
     var sourceMenuExpanded by remember(identity) { mutableStateOf(false) }
     var maximumDepth by remember(identity) { mutableStateOf(editing?.maximumDepth) }
     var selectTrinket by remember(identity) { mutableStateOf(editing?.selectTrinket ?: false) }
+    var excludeResin by remember(identity) { mutableStateOf(editing?.excludeResin ?: false) }
     var requireUncursed by remember(identity) { mutableStateOf(editing?.requireUncursed ?: false) }
     // The stack this chip anchors: how many items of its kind to find, and the
     // combined level they must reach together (null when it just wants copies).
@@ -215,6 +216,7 @@ fun RequirementSheet(
             requireUncursed = kind != ItemKind.TRINKET && requireUncursed,
             selectTrinket = !blanket && kind == ItemKind.TRINKET && selectTrinket,
             blanket = blanket,
+            excludeResin = !blanket && kind == ItemKind.WAND && excludeResin,
             alternativeGroup = editing?.alternativeGroup,
             levelSum = if (blanket || !kind.supportsStacks) null else editing?.levelSum,
         )
@@ -777,6 +779,21 @@ fun RequirementSheet(
                                     stateDescription = maximumDepth?.let { "Floor $it" } ?: "No limit"
                                 },
                             )
+                        }
+
+                        if (!blanket && kind == ItemKind.WAND) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().toggleable(
+                                    value = excludeResin, role = Role.Checkbox,
+                                    onValueChange = { excludeResin = it },
+                                ),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Checkbox(checked = excludeResin, onCheckedChange = null)
+                                Text("Exclude from Auto resin", style = MaterialTheme.typography.bodyMedium)
+                            }
+                            Text("Keep this wand without budgeting resin to upgrade it. Useful for imbuing: resin upgrades do not transfer to the staff. Extra copies are reserved for reforging and never need Auto resin.",
+                                style = MaterialTheme.typography.bodySmall)
                         }
 
                         if (!blanket && !inAlternativeGroup && kind.supportsStacks) {

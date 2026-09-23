@@ -463,6 +463,7 @@ export function RequirementBoard({
               title={effect}
             />
           ))}
+        {requirement.excludeResin && <span className="d1-chip-tag">No resin</span>}
         {requirement.uncursed && (
           <span className="d1-chip-tag d1-chip-tag-soft" title="Uncursed">
             <CheckIcon size={12} />
@@ -672,12 +673,17 @@ export function RequirementBoard({
                 className="d1-chip-tag"
                 title={
                   resin.amount === "auto"
-                    ? "Enough resin to upgrade all matched wands to +3"
+                    ? "Enough resin to upgrade kept wands to +3, excluding No resin wands and reforge copies"
                     : undefined
                 }
               >
                 {resin.amount === "auto" ? "Auto" : `≥${resin.amount}`}
               </span>
+              {resin.filter?.includeMageWand && (
+                <span className="d1-chip-tag" title="Starting Magic Missile contributes 2 resin">
+                  Mage +2
+                </span>
+              )}
               {resin.filter?.maxDepth !== undefined && (
                 <span className="d1-chip-tag">F≤{resin.filter.maxDepth}</span>
               )}
@@ -747,7 +753,7 @@ export function RequirementBoard({
               className="d1-chip-tag"
               title={
                 resin.amount === "auto"
-                  ? "Enough resin to upgrade all matched wands to +3"
+                  ? "Enough resin to upgrade kept wands to +3, excluding No resin wands and reforge copies"
                   : undefined
               }
             >
@@ -824,6 +830,7 @@ function ChipPopover({
   const effect = effectLabel(requirement);
   if (effect) lines.push(effect);
   if (requirement.uncursed) lines.push("uncursed");
+  if (requirement.excludeResin) lines.push("excluded from Auto resin");
   if (requirement.source) lines.push(sourceLabel(requirement.source));
   if (requirement.maxDepth !== undefined) lines.push(`floors 1–${requirement.maxDepth}`);
   const relations: { glyph: string; text: string }[] = [];

@@ -666,6 +666,7 @@ export function QueryPanel({
           isNew={editor.index === null && !editor.resin}
           stack={editor.stack}
           resinAmount={query.arcaneResin}
+          resinFilter={query.arcaneResinFilter}
           onSaveResin={(amount, filter) => {
             queryStore.setState((state) => {
               const item = boardItems(state.requirements).find((item) =>
@@ -675,7 +676,10 @@ export function QueryPanel({
                 ...state,
                 arcaneResin: amount,
                 arcaneResinFilter:
-                  !filter.uncursed || filter.maxDepth !== undefined || filter.source
+                  !filter.uncursed ||
+                  filter.maxDepth !== undefined ||
+                  filter.source ||
+                  filter.includeMageWand
                     ? filter
                     : undefined,
                 requirements:
