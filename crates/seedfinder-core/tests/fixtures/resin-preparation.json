@@ -1,0 +1,626 @@
+[
+  {
+    "name": "reported",
+    "query": {
+      "arcane_resin": "auto",
+      "arcane_resin_filter": {
+        "uncursed": false
+      },
+      "auto_apply_trinket": true,
+      "exclude_blacksmith_rewards": true,
+      "requirements": [
+        {
+          "item": "wand_disintegration",
+          "kind": "wand"
+        },
+        {
+          "item": "wand_lightning",
+          "kind": "wand"
+        },
+        {
+          "kind": "wand"
+        },
+        {
+          "item": "ring_energy",
+          "kind": "ring",
+          "upgrade": 4
+        },
+        {
+          "item": "ring_energy",
+          "kind": "ring"
+        },
+        {
+          "item": "ring_energy",
+          "kind": "ring"
+        },
+        {
+          "item": "chalice_of_blood",
+          "kind": "artifact"
+        },
+        {
+          "item": "horn_of_plenty",
+          "kind": "artifact"
+        },
+        {
+          "blanket": true,
+          "kind": "wand",
+          "max_depth": 4,
+          "upgrade": {
+            "at_least": 1
+          }
+        },
+        {
+          "item": "mail_armor",
+          "kind": "armor",
+          "max_depth": 9,
+          "upgrade": 3
+        },
+        {
+          "item": "plate_armor",
+          "kind": "armor",
+          "upgrade": 3
+        }
+      ]
+    },
+    "probability": 1.1466947560817001e-08,
+    "preferred": [
+      "mimic_tooth",
+      "cracked_spyglass",
+      "parchment_scrap"
+    ]
+  },
+  {
+    "name": "fixed_12",
+    "query": {
+      "arcane_resin": 12,
+      "arcane_resin_filter": {
+        "uncursed": false
+      },
+      "auto_apply_trinket": true,
+      "exclude_blacksmith_rewards": true,
+      "requirements": [
+        {
+          "item": "wand_disintegration",
+          "kind": "wand"
+        },
+        {
+          "item": "wand_lightning",
+          "kind": "wand"
+        },
+        {
+          "kind": "wand"
+        },
+        {
+          "item": "ring_energy",
+          "kind": "ring",
+          "upgrade": 4
+        },
+        {
+          "item": "ring_energy",
+          "kind": "ring"
+        },
+        {
+          "item": "ring_energy",
+          "kind": "ring"
+        },
+        {
+          "item": "chalice_of_blood",
+          "kind": "artifact"
+        },
+        {
+          "item": "horn_of_plenty",
+          "kind": "artifact"
+        },
+        {
+          "blanket": true,
+          "kind": "wand",
+          "max_depth": 4,
+          "upgrade": {
+            "at_least": 1
+          }
+        },
+        {
+          "item": "mail_armor",
+          "kind": "armor",
+          "max_depth": 9,
+          "upgrade": 3
+        },
+        {
+          "item": "plate_armor",
+          "kind": "armor",
+          "upgrade": 3
+        }
+      ]
+    },
+    "probability": 1.5967567730815198e-08,
+    "preferred": [
+      "mimic_tooth",
+      "cracked_spyglass",
+      "parchment_scrap"
+    ]
+  },
+  {
+    "name": "early_donors",
+    "query": {
+      "arcane_resin": "auto",
+      "arcane_resin_filter": {
+        "max_depth": 9,
+        "uncursed": false
+      },
+      "auto_apply_trinket": true,
+      "exclude_blacksmith_rewards": true,
+      "requirements": [
+        {
+          "item": "wand_disintegration",
+          "kind": "wand"
+        },
+        {
+          "item": "wand_lightning",
+          "kind": "wand"
+        },
+        {
+          "kind": "wand"
+        },
+        {
+          "item": "ring_energy",
+          "kind": "ring",
+          "upgrade": 4
+        },
+        {
+          "item": "ring_energy",
+          "kind": "ring"
+        },
+        {
+          "item": "ring_energy",
+          "kind": "ring"
+        },
+        {
+          "item": "chalice_of_blood",
+          "kind": "artifact"
+        },
+        {
+          "item": "horn_of_plenty",
+          "kind": "artifact"
+        },
+        {
+          "blanket": true,
+          "kind": "wand",
+          "max_depth": 4,
+          "upgrade": {
+            "at_least": 1
+          }
+        },
+        {
+          "item": "mail_armor",
+          "kind": "armor",
+          "max_depth": 9,
+          "upgrade": 3
+        },
+        {
+          "item": "plate_armor",
+          "kind": "armor",
+          "upgrade": 3
+        }
+      ]
+    },
+    "probability": 1.7589174113818021e-09,
+    "preferred": [
+      "mimic_tooth",
+      "cracked_spyglass",
+      "parchment_scrap"
+    ]
+  },
+  {
+    "name": "excluded_wand",
+    "query": {
+      "arcane_resin": "auto",
+      "arcane_resin_filter": {
+        "uncursed": false
+      },
+      "auto_apply_trinket": true,
+      "exclude_blacksmith_rewards": true,
+      "requirements": [
+        {
+          "exclude_resin": true,
+          "item": "wand_disintegration",
+          "kind": "wand"
+        },
+        {
+          "item": "wand_lightning",
+          "kind": "wand"
+        },
+        {
+          "kind": "wand"
+        },
+        {
+          "item": "ring_energy",
+          "kind": "ring",
+          "upgrade": 4
+        },
+        {
+          "item": "ring_energy",
+          "kind": "ring"
+        },
+        {
+          "item": "ring_energy",
+          "kind": "ring"
+        },
+        {
+          "item": "chalice_of_blood",
+          "kind": "artifact"
+        },
+        {
+          "item": "horn_of_plenty",
+          "kind": "artifact"
+        },
+        {
+          "blanket": true,
+          "kind": "wand",
+          "max_depth": 4,
+          "upgrade": {
+            "at_least": 1
+          }
+        },
+        {
+          "item": "mail_armor",
+          "kind": "armor",
+          "max_depth": 9,
+          "upgrade": 3
+        },
+        {
+          "item": "plate_armor",
+          "kind": "armor",
+          "upgrade": 3
+        }
+      ]
+    },
+    "probability": 2.068965022305058e-08,
+    "preferred": [
+      "mimic_tooth",
+      "cracked_spyglass",
+      "parchment_scrap"
+    ]
+  },
+  {
+    "name": "disjoint_blankets",
+    "query": {
+      "arcane_resin": "auto",
+      "arcane_resin_filter": {
+        "uncursed": false
+      },
+      "auto_apply_trinket": true,
+      "exclude_blacksmith_rewards": true,
+      "requirements": [
+        {
+          "item": "wand_disintegration",
+          "kind": "wand"
+        },
+        {
+          "item": "wand_lightning",
+          "kind": "wand"
+        },
+        {
+          "kind": "wand"
+        },
+        {
+          "item": "ring_energy",
+          "kind": "ring",
+          "upgrade": 4
+        },
+        {
+          "item": "ring_energy",
+          "kind": "ring"
+        },
+        {
+          "item": "ring_energy",
+          "kind": "ring"
+        },
+        {
+          "item": "chalice_of_blood",
+          "kind": "artifact"
+        },
+        {
+          "item": "horn_of_plenty",
+          "kind": "artifact"
+        },
+        {
+          "blanket": true,
+          "kind": "wand",
+          "max_depth": 4,
+          "upgrade": {
+            "at_least": 1
+          }
+        },
+        {
+          "item": "mail_armor",
+          "kind": "armor",
+          "max_depth": 9,
+          "upgrade": 3
+        },
+        {
+          "item": "plate_armor",
+          "kind": "armor",
+          "upgrade": 3
+        },
+        {
+          "blanket": true,
+          "item": "wand_corrosion",
+          "kind": "wand"
+        }
+      ]
+    },
+    "probability": 1.1059908424680626e-08,
+    "preferred": [
+      "mimic_tooth",
+      "cracked_spyglass",
+      "parchment_scrap"
+    ]
+  },
+  {
+    "name": "six_wands",
+    "query": {
+      "arcane_resin": "auto",
+      "arcane_resin_filter": {
+        "uncursed": false
+      },
+      "auto_apply_trinket": true,
+      "exclude_blacksmith_rewards": true,
+      "requirements": [
+        {
+          "item": "wand_disintegration",
+          "kind": "wand"
+        },
+        {
+          "item": "wand_lightning",
+          "kind": "wand"
+        },
+        {
+          "kind": "wand"
+        },
+        {
+          "item": "ring_energy",
+          "kind": "ring",
+          "upgrade": 4
+        },
+        {
+          "item": "ring_energy",
+          "kind": "ring"
+        },
+        {
+          "item": "ring_energy",
+          "kind": "ring"
+        },
+        {
+          "item": "chalice_of_blood",
+          "kind": "artifact"
+        },
+        {
+          "item": "horn_of_plenty",
+          "kind": "artifact"
+        },
+        {
+          "blanket": true,
+          "kind": "wand",
+          "max_depth": 4,
+          "upgrade": {
+            "at_least": 1
+          }
+        },
+        {
+          "item": "mail_armor",
+          "kind": "armor",
+          "max_depth": 9,
+          "upgrade": 3
+        },
+        {
+          "item": "plate_armor",
+          "kind": "armor",
+          "upgrade": 3
+        },
+        {
+          "kind": "wand"
+        },
+        {
+          "kind": "wand"
+        },
+        {
+          "kind": "wand"
+        }
+      ]
+    },
+    "probability": 1.5339156339434825e-13,
+    "preferred": [
+      "mimic_tooth",
+      "cracked_spyglass",
+      "parchment_scrap"
+    ]
+  },
+  {
+    "name": "mimic_tooth_auto_2_wands",
+    "query": {
+      "arcane_resin": "auto",
+      "max_depth": 9,
+      "requirements": [
+        {
+          "kind": "wand"
+        },
+        {
+          "kind": "wand"
+        },
+        {
+          "blanket": true,
+          "kind": "wand",
+          "max_depth": 4,
+          "upgrade": {
+            "at_least": 1
+          }
+        },
+        {
+          "item": "mimic_tooth",
+          "kind": "trinket",
+          "select_trinket": true
+        }
+      ]
+    },
+    "probability": 0.01598630885810512,
+    "preferred": null
+  },
+  {
+    "name": "auto_12_8_wands",
+    "query": {
+      "arcane_resin": 12,
+      "auto_apply_trinket": true,
+      "requirements": [
+        {
+          "kind": "wand"
+        },
+        {
+          "kind": "wand"
+        },
+        {
+          "kind": "wand"
+        },
+        {
+          "kind": "wand"
+        },
+        {
+          "kind": "wand"
+        },
+        {
+          "kind": "wand"
+        },
+        {
+          "kind": "wand"
+        },
+        {
+          "kind": "wand"
+        },
+        {
+          "blanket": true,
+          "kind": "wand",
+          "max_depth": 4,
+          "upgrade": {
+            "at_least": 1
+          }
+        }
+      ]
+    },
+    "probability": 0.01442898272299526,
+    "preferred": [
+      "mimic_tooth",
+      "cracked_spyglass"
+    ]
+  },
+  {
+    "name": "allocation_0",
+    "query": {
+      "arcane_resin": "auto",
+      "requirements": [
+        {
+          "kind": "wand",
+          "upgrade": 3
+        },
+        {
+          "blanket": true,
+          "item": "wand_corrosion",
+          "kind": "wand"
+        }
+      ]
+    },
+    "probability": 0.0955210244665157,
+    "preferred": null
+  },
+  {
+    "name": "allocation_1",
+    "query": {
+      "arcane_resin": 4,
+      "arcane_resin_filter": {
+        "source": "wandmaker_reward"
+      },
+      "requirements": [
+        {
+          "item": "wand_lightning",
+          "kind": "wand",
+          "source": "heap",
+          "upgrade": 1
+        },
+        {
+          "blanket": true,
+          "item": "wand_corrosion",
+          "kind": "wand",
+          "source": "wandmaker_reward",
+          "upgrade": 1
+        },
+        {
+          "blanket": true,
+          "kind": "wand",
+          "max_depth": 9,
+          "source": "wandmaker_reward"
+        }
+      ]
+    },
+    "probability": 0.0019790523056034894,
+    "preferred": null
+  },
+  {
+    "name": "allocation_2",
+    "query": {
+      "arcane_resin": "auto",
+      "requirements": [
+        {
+          "any_of": [
+            {
+              "item": "wand_frost",
+              "kind": "wand"
+            },
+            {
+              "item": "wand_corrosion",
+              "kind": "wand"
+            }
+          ]
+        },
+        {
+          "identity_group": 1,
+          "kind": "wand"
+        },
+        {
+          "identity_group": 1,
+          "kind": "wand"
+        },
+        {
+          "blanket": true,
+          "kind": "wand",
+          "max_depth": 4
+        }
+      ]
+    },
+    "probability": 0.425724082432203,
+    "preferred": null
+  },
+  {
+    "name": "allocation_3",
+    "query": {
+      "arcane_resin": "auto",
+      "requirements": [
+        {
+          "exclude_resin": true,
+          "kind": "wand",
+          "upgrade": 1
+        },
+        {
+          "kind": "wand",
+          "upgrade": 2
+        },
+        {
+          "kind": "ring"
+        },
+        {
+          "kind": "armor",
+          "max_depth": 4
+        }
+      ]
+    },
+    "probability": 0.7934026016717577,
+    "preferred": null
+  }
+]
