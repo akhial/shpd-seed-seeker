@@ -758,6 +758,18 @@ fn resin_generation_horizon(
 }
 
 impl QueryPlan {
+    /// Checks structural impossibility without ranking automatic trinkets or
+    /// loading probability tables. Suitable for validation before a search.
+    #[must_use]
+    pub fn check_impossibility(query: &SearchQuery) -> Option<String> {
+        Self::analyze_structure(
+            query,
+            requirement_source_profile,
+            source_generation_deadline,
+        )
+        .unsatisfiable_reason
+    }
+
     /// Derives the plan for a validated query.
     #[must_use]
     pub fn analyze(query: &SearchQuery) -> Self {
@@ -776,8 +788,18 @@ impl QueryPlan {
         Self::analyze_with_policies(query, profile, |_, _, limit| Some(limit))
     }
 
-    #[allow(clippy::too_many_lines)] // Keep source horizons and their cached constraints together.
     fn analyze_with_policies(
+        query: &SearchQuery,
+        profile: impl Fn(&Requirement, ItemSource) -> Option<(u8, u8, EffectPolicy)>,
+        deadline: impl Fn(&Requirement, ItemSource, u8) -> Option<u8>,
+    ) -> Self {
+        let mut plan = Self::analyze_structure(query, profile, deadline);
+        plan.auto_trinket = crate::auto_trinkets::AutoTrinketPolicy::prepare(query);
+        plan
+    }
+
+    #[allow(clippy::too_many_lines)] // Keep source horizons and their cached constraints together.
+    fn analyze_structure(
         query: &SearchQuery,
         profile: impl Fn(&Requirement, ItemSource) -> Option<(u8, u8, EffectPolicy)>,
         deadline: impl Fn(&Requirement, ItemSource, u8) -> Option<u8>,
@@ -925,7 +947,7 @@ impl QueryPlan {
 
         let mut plan = Self {
             floor_requirements,
-            auto_trinket: crate::auto_trinkets::AutoTrinketPolicy::prepare(query),
+            auto_trinket: None,
             selected_slots: crate::trinkets::selection_slots(query),
             required_trinket_slots,
             closed_multiplicities,

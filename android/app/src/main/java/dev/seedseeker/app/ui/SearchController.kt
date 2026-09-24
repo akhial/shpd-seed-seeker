@@ -82,8 +82,8 @@ internal class SearchController(
 
     fun start(request: SearchRequest, workers: Int) {
         if (!ready || isSearching) return
-        // JNI planning can rank multiple trinket profiles and inflate tables. Let the
-        // screen update immediately, and keep all of that work off the main thread.
+        // Keep native validation off the main thread and let the screen update
+        // immediately. Probability scoring belongs to background search setup.
         isSearching = true
         isPreparing = true
         stopRequested = false

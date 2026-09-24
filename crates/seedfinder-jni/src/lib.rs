@@ -402,10 +402,10 @@ pub extern "system" fn Java_dev_seedseeker_app_engine_JniBindings_queryImpossibi
     };
     match json_query::decode(&document) {
         Ok(query) => {
-            let plan = shpd_seedfinder_core::feasibility::QueryPlan::analyze(&query);
+            let reason = shpd_seedfinder_core::feasibility::QueryPlan::check_impossibility(&query);
             utf8_response(
                 &mut env,
-                plan.unsatisfiable_reason().unwrap_or_default(),
+                reason.as_deref().unwrap_or_default(),
                 "impossibility reason",
             )
         }

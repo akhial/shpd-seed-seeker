@@ -35,6 +35,7 @@ import kotlin.math.min
 internal const val TOTAL_SEEDS = 5_429_503_678_976L
 
 interface NativeSeedFinder {
+    /** Structural validation only: must not prepare AutoTrinket or estimate probabilities. */
     fun impossibilityReason(request: SearchRequest): String? = null
     /**
      * Starts a fresh traversal. [workers] is how many search threads the engine spawns, clamped

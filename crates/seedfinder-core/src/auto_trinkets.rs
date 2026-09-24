@@ -457,6 +457,29 @@ mod tests {
     }
 
     #[test]
+    fn feasibility_checks_do_not_wait_for_automatic_trinket_scoring() {
+        let query = crate::deep_link::decode_text(
+            "https://shpd-seed-seeker.web.app/#q=q6gAAAuW4ABLYAAlwAAXPGABc8AZhc8AZh-sAA_cAANuQKAdkLACCIIx",
+        ).unwrap();
+        // Model another worker preparing a costly resin/blanket policy. A UI
+        // feasibility probe must not acquire this lock or rank any profiles.
+        let scoring = POLICY_CACHE.lock().unwrap();
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let check = std::thread::spawn(move || {
+            sender.send(QueryPlan::check_impossibility(&query)).unwrap();
+        });
+        let result = receiver.recv_timeout(std::time::Duration::from_secs(5));
+        // Release before joining even on failure, so a regression reports an
+        // assertion instead of deadlocking the rest of the suite.
+        drop(scoring);
+        check.join().unwrap();
+        assert_eq!(
+            result.expect("feasibility waited for probability scoring"),
+            None
+        );
+    }
+
+    #[test]
     fn filtering_workers_rank_an_unchanged_query_only_once_across_batches() {
         let query = query(r#"[{"item":"runic_blade","upgrade":1,"effect":"Grim"}]"#);
         let cache = Mutex::new(PolicyCache(VecDeque::new()));

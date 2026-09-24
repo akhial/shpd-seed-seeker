@@ -17,6 +17,23 @@ class JniNativeSeedFinderTest {
     init { PackagedCatalog.install() }
 
     @Test
+    fun nativeFeasibilityChecksComplexAutoResinAndImpossibleTransmutationQueries() {
+        // Exercise the real entry point used when preparing a search,
+        // including the query that previously triggered expensive scoring.
+        val document = JniBindings.shareDecode(
+            "https://shpd-seed-seeker.web.app/#q=q6gAAAuW4ABLYAAlwAAXPGABc8AZhc8AZh-sAA_cAANuQKAdkLACCIIx".toByteArray(),
+        )
+        assertEquals("", JniBindings.queryImpossibilityReason(document).toString(Charsets.UTF_8))
+        val impossible = """{"auto_apply_trinket":true,"requirements":[
+            {"item":"rat_skull"},{"item":"rat_skull","trinket_transmutations":13}
+        ]}""".toByteArray()
+        assertEquals(
+            "Rat Skull is required more than once, but each trinket appears only once in the deck.",
+            JniBindings.queryImpossibilityReason(impossible).toString(Charsets.UTF_8),
+        )
+    }
+
+    @Test
     fun sessionBridgesPacketsStatusCancellationAndIdempotentClose() {
         val bindings = RecordingBindings()
         val finder = JniNativeSeedFinder(bindings)

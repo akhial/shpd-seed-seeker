@@ -83,15 +83,8 @@ pub extern "C" fn seedfinder_query_impossibility_reason(
         let Ok(query) = json_query::decode(document) else {
             return INVALID;
         };
-        let plan = shpd_seedfinder_core::feasibility::QueryPlan::analyze(&query);
-        return_packet(
-            plan.unsatisfiable_reason()
-                .unwrap_or_default()
-                .as_bytes()
-                .to_vec(),
-            out_packet,
-            out_len,
-        )
+        let reason = shpd_seedfinder_core::feasibility::QueryPlan::check_impossibility(&query);
+        return_packet(reason.unwrap_or_default().into_bytes(), out_packet, out_len)
     }))
     .unwrap_or(INTERNAL)
 }
