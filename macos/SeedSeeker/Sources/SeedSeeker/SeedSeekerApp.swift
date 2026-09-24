@@ -585,6 +585,14 @@ private struct QueryView: View {
     @State private var showingBlanketHelp = false
     @State private var presetName = ""
 
+    @State private var analyzedDocument: Data?
+    @State private var analysis: QueryAnalysis?
+    private var impossible: Bool {
+        guard let request = builtRequest, let document = try? QueryDocument.encode(request),
+              document == analyzedDocument else { return false }
+        return analysis?.impossible == true
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             ScrollView {
@@ -610,25 +618,31 @@ private struct QueryView: View {
                     .padding(.horizontal).padding(.top, 8)
             }
             if let request = builtRequest, let document = try? QueryDocument.encode(request) {
-                QueryEstimateView(document: document)
+                QueryEstimateView(document: document) { document, result in
+                    analyzedDocument = document; analysis = result
+                }
             }
             // Starting a search that narrows — or just repeats — the last
             // finished run refines it automatically; explicit filtering is also available.
             Button {
                 if controller.isRunning { controller.cancel() }
-                else if let request = builtRequest { controller.start(request, workers: workers) }
+                else if let request = builtRequest, let document = try? QueryDocument.encode(request),
+                        (try? QueryAnalysis.impossibilityReason(document)) == nil {
+                    controller.start(request, workers: workers)
+                }
             } label: {
                 Label(controller.isRunning ? "Cancel Search" : "Start Search",
                       systemImage: controller.isRunning ? "stop.fill" : "play.fill")
                     .frame(maxWidth: .infinity).padding(.vertical, 5)
             }.buttonStyle(.borderedProminent).tint(controller.isRunning ? .red : .accentColor)
-                .disabled(builtRequest == nil && !controller.isRunning).keyboardShortcut(.return, modifiers: .command)
+                .disabled((builtRequest == nil || impossible) && !controller.isRunning).keyboardShortcut(.return, modifiers: .command)
                 .padding()
         }
         .navigationTitle("Query")
         .sheet(item: $editor) { session in
             RequirementEditor(requirement: session.requirement, isNew: session.isNew,
                               stack: session.stack, isResin: session.isResin,
+                              otherRequirements: requirements.enumerated().filter { $0.offset != session.index }.map(\.element),
                               resinAmount: arcaneResin, resinAuto: arcaneResinAuto, resinFilter: arcaneResinFilter,
                               onSaveResin: { amount, filter, auto in
                 arcaneResinAuto = auto; arcaneResin = amount; arcaneResinFilter = filter; editor = nil
@@ -1558,6 +1572,7 @@ private struct RequirementEditor: View {
     let onFinish: (EditorResult?) -> Void
     let editingResin: Bool
     let onSaveResin: (Int, ArcaneResinFilter, Bool) -> Void
+    let otherRequirements: [ItemRequirement]
     @State private var resinAmount: Int
     @State private var resinAuto: Bool
     @State private var resinFilter: ArcaneResinFilter
@@ -1582,10 +1597,12 @@ private struct RequirementEditor: View {
     @State private var validationMessage: String?
 
     init(requirement: ItemRequirement, isNew: Bool, stack: StackShape,
-         isResin: Bool, resinAmount: Int, resinAuto: Bool, resinFilter: ArcaneResinFilter,
+         isResin: Bool, otherRequirements: [ItemRequirement] = [],
+         resinAmount: Int, resinAuto: Bool, resinFilter: ArcaneResinFilter,
          onSaveResin: @escaping (Int, ArcaneResinFilter, Bool) -> Void,
          onFinish: @escaping (EditorResult?) -> Void) {
         editingResin = isResin
+        self.otherRequirements = otherRequirements
         self.onSaveResin = onSaveResin
         _resinAuto = State(initialValue: resinAuto)
         _resinAmount = State(initialValue: resinAmount > 0 ? resinAmount : 2)
@@ -1953,6 +1970,11 @@ private struct RequirementEditor: View {
     }
     private func save() {
         let item = itemID.isEmpty ? nil : ItemCatalog.findById(itemID)
+        if !original.blanket && kind == .trinket &&
+            otherRequirements.contains(where: { !$0.blanket && $0.item?.id == itemID }) {
+            validationMessage = "This trinket is already required. Each trinket appears only once in the deck."
+            return
+        }
         let effect: EffectFilter = switch effectMode {
         case .any: .any
         case .anyEnchantment: .anyEnchantment
@@ -2110,10 +2132,7 @@ private struct ResultsStatusView: View {
                 Text("Impossible query").font(.caption.bold())
                     .padding(.horizontal, 10).padding(.vertical, 4)
                     .foregroundStyle(.orange).background(.quaternary, in: Capsule())
-                Text("No seed can satisfy these requirements within the current floor limit. " +
-                     "Quest-reward-only items need their quest floors in range: +3 wands floor 9, " +
-                     "and, from the Imp's vault, +3/+4 rings, +4 wands and armor " +
-                     "and +4/+5 weapons floor 19.")
+                Text(controller.impossibleReason ?? "No seed can satisfy this combination of requirements.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         } else if let state = controller.state {

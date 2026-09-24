@@ -2,6 +2,15 @@ import XCTest
 @testable import SeedSeekerKit
 
 final class QueryAnalysisTests: XCTestCase {
+    func testTrinketImpossibilityReasonUsesTheSharedEngine() throws {
+        let document = Data(#"{"requirements":[{"item":"rat_skull"},{"item":"rat_skull","trinket_transmutations":13}]}"#.utf8)
+        let analysis = try QueryAnalysis.analyze(document)
+        XCTAssertTrue(analysis.impossible)
+        XCTAssertEqual(analysis.reason, "Rat Skull is required more than once, but each trinket appears only once in the deck.")
+        XCTAssertEqual(analysis.reason, try QueryAnalysis.impossibilityReason(document))
+        XCTAssertNil(try QueryAnalysis.impossibilityReason(Data(#"{"requirements":[{"item":"rat_skull"}]}"#.utf8)))
+    }
+
     func testEstimateMatchesSearchProbabilityIncludingAutoTrinket() async throws {
         let item = try XCTUnwrap(ItemCatalog.findById("runic_blade"))
         let requirement = try ItemRequirement(key: 1, item: item, upgrade: 3, kind: .weapon)

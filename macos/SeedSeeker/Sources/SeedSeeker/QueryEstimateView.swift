@@ -3,12 +3,16 @@ import SwiftUI
 
 struct QueryEstimateView: View {
     let document: Data
+    var onAnalysis: (Data, QueryAnalysis?) -> Void = { _, _ in }
     @State private var analyzedDocument: Data?
     @State private var analysis: QueryAnalysis?
 
     var body: some View {
         let current = analyzedDocument == document ? analysis : nil
-        Text(current?.label ?? "Estimating…")
+        VStack(alignment: .leading, spacing: 4) {
+            Text(current?.label ?? "Estimating…")
+            if let reason = current?.reason { Text(reason) }
+        }
             .font(.caption).monospacedDigit()
             .foregroundStyle(current?.impossible == true ? Color.orange : Color.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -22,6 +26,7 @@ struct QueryEstimateView: View {
                 guard !Task.isCancelled else { return }
                 analysis = result
                 analyzedDocument = document
+                onAnalysis(document, result)
             }
     }
 }

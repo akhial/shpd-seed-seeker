@@ -79,6 +79,10 @@ internal class SearchController(
 
     fun start(request: SearchRequest, workers: Int) {
         if (!ready || isSearching) return
+        engine.impossibilityReason(request)?.let { reason ->
+            notice = "Impossible query. $reason"
+            return
+        }
         val refine = refineFor(request, snapshot.target, snapshot.lastRun)
         stopRequested = false
         pauseRequested = false

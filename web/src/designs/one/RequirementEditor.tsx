@@ -120,6 +120,7 @@ export function RequirementEditor({
   stack,
   resinAmount,
   resinFilter,
+  otherRequirements = [],
   onSaveResin,
   onSave,
   onCancel,
@@ -130,6 +131,7 @@ export function RequirementEditor({
   stack: StackShape;
   resinAmount?: ArcaneResinAmount;
   resinFilter?: ArcaneResinFilter;
+  otherRequirements?: RequirementState[];
   onSaveResin?: (amount: ArcaneResinAmount, filter: ArcaneResinFilter) => void;
   onSave: (
     requirement: RequirementState,
@@ -167,6 +169,13 @@ export function RequirementEditor({
   const enchantments = family === "weapon" ? weaponEnchantments : armorGlyphs;
   const curses = family === "weapon" ? weaponCurses : armorCurses;
   const errors = validateRequirement(draft);
+  if (
+    !draft.blanket &&
+    family === "trinket" &&
+    draft.item &&
+    otherRequirements.some((r) => !r.blanket && r.item === draft.item)
+  )
+    errors.push("This trinket is already required. Each trinket appears only once in the deck.");
   if (resin && !autoResin && (!Number.isInteger(amount) || amount < 1 || amount > 65535))
     errors.push("Enter an amount from 1 to 65535.");
   // A combined level is a property of a concrete stack of two or more —

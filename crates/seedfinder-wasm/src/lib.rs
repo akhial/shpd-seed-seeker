@@ -300,11 +300,11 @@ pub fn analyze_query(query_json: &str) -> String {
     let probability = (!impossible)
         .then(|| estimate_match_probability(&query))
         .filter(|value| value.is_finite());
-    let notes = if impossible {
-        vec!["No seed can satisfy this combination of requirements.".to_owned()]
-    } else {
-        Vec::new()
-    };
+    let notes = plan
+        .unsatisfiable_reason()
+        .map(str::to_owned)
+        .into_iter()
+        .collect();
     to_json(&AnalysisOutput::Valid {
         valid: true,
         probability,

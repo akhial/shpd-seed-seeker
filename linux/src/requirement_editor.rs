@@ -621,6 +621,19 @@ fn check(
     total: Option<u8>,
     copy_depth: Option<u8>,
 ) -> Result<(), String> {
+    if !result.blanket
+        && result.kind == ItemKind::Trinket
+        && editor
+            .context
+            .requirements
+            .iter()
+            .any(|r| r.key != result.key && !r.blanket && r.item == result.item)
+    {
+        return Err(
+            "This trinket is already required. Each trinket appears only once in the deck."
+                .to_owned(),
+        );
+    }
     if enchantable(selected_kind(editor))
         && editor.effect_mode.selected() == EFFECT_SPECIFIC
         && checked_effects(editor).is_empty()

@@ -123,7 +123,7 @@ export default function App() {
   // requirements unchanged or only added), which needs no decision from the
   // user. An unchanged query therefore resumes a cancelled run rather than
   // wiping it. The results panel reports it as a refine when it happens.
-  const toggleSearch = useCallback(() => {
+  const toggleSearch = useCallback(async () => {
     const controller = coordinator.current;
     if (!controller) return;
     if (searchStore.state.state === "running" || searchStore.state.state === "stopping") {
@@ -132,6 +132,13 @@ export default function App() {
     }
     const state = queryStore.state;
     if (!validateQuery(state).valid) return;
+    // Keyboard starts and clicks during the debounce must check the current
+    // document, not the last displayed estimate.
+    const document = toQueryJson(state);
+    const current = await analyzeQuery(document).catch(() => undefined);
+    if (document !== toQueryJson(queryStore.state)) return;
+    setAnalysis(current);
+    if (!current?.valid || current.impossible) return;
     controller.start(toQueryDocument(state), workerCountStore.state);
     setActiveTab("results");
   }, []);
@@ -141,7 +148,7 @@ export default function App() {
     const onKey = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
         event.preventDefault();
-        toggleSearch();
+        void toggleSearch();
       }
     };
     window.addEventListener("keydown", onKey);

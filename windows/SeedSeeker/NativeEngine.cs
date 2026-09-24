@@ -24,6 +24,7 @@ internal static partial class Native
     [LibraryImport(Library)] internal static partial int seedfinder_seed_parse(byte[] input, nuint length, out nint packet, out nuint outputLength);
     [LibraryImport(Library)] internal static partial int seedfinder_share_encode(byte[] queryJson, nuint length, out nint packet, out nuint outputLength);
     [LibraryImport(Library)] internal static partial int seedfinder_share_decode(byte[] text, nuint length, out nint packet, out nuint outputLength);
+    [LibraryImport(Library)] internal static partial int seedfinder_query_impossibility_reason(byte[] text, nuint length, out nint packet, out nuint outputLength);
     [LibraryImport(Library)] internal static partial int seedfinder_results_encode(byte[] request, nuint length, out nint packet, out nuint outputLength);
     [LibraryImport(Library)] internal static partial int seedfinder_results_decode(byte[] contents, nuint length, out nint packet, out nuint outputLength);
     [LibraryImport(Library)] internal static partial int seedfinder_engine_info(out nint packet, out nuint outputLength);
@@ -106,6 +107,15 @@ public static class SeedCode
 
 public sealed class NativeEngine
 {
+    public static string? ImpossibilityReason(QuerySettings query)
+    {
+        var packet = EncodeQuery(query);
+        var code = Native.seedfinder_query_impossibility_reason(packet, (nuint)packet.Length, out var ptr, out var len);
+        if (code != 0) throw new InvalidOperationException($"Native query analysis failed ({code}).");
+        var reason = Encoding.UTF8.GetString(CopyAndFree(ptr, len));
+        return reason.Length == 0 ? null : reason;
+    }
+
     /// <summary>
     /// Logical processors available to search workers, never less than one:
     /// the ceiling for the worker selector. The engine's own count

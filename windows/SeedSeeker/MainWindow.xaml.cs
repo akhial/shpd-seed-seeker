@@ -1289,6 +1289,17 @@ public sealed partial class MainWindow : Window
         copyDepth.ValueChanged += (_, _) => copyDepth.Header = $"Copies within first {FloorOf(copyDepth)} floor{(FloorOf(copyDepth) == 1 ? "" : "s")}";
         Populate(); NormalizeTier(); SyncStack();
         var dialog = new ContentDialog { XamlRoot = Content.XamlRoot, Title = title, PrimaryButtonText = accept, CloseButtonText = "Cancel", DefaultButton = ContentDialogButton.Primary, Content = VerticalScrollView(content, 510, 460) };
+        var duplicateError = new TextBlock { Text = "This trinket is already required. Each trinket appears only once in the deck.", TextWrapping = TextWrapping.Wrap, Visibility = Visibility.Collapsed };
+        content.Children.Add(duplicateError);
+        dialog.PrimaryButtonClick += (_, args) =>
+        {
+            var selected = (ItemKind)kind.SelectedIndex == ItemKind.Trinket
+                ? itemChoices.ElementAtOrDefault(Math.Max(0, item.SelectedIndex)) : null;
+            var duplicate = !r.Blanket && selected is not null && query.Requirements.Any(other =>
+                other.Key != r.Key && !other.Blanket && other.Item?.Id == selected.Id);
+            duplicateError.Visibility = duplicate ? Visibility.Visible : Visibility.Collapsed;
+            args.Cancel = duplicate;
+        };
         var resinRequested = false;
         resin.Click += (_, _) => { resinRequested = true; dialog.Hide(); };
         var result = await dialog.ShowAsync();
@@ -1568,6 +1579,11 @@ public sealed partial class MainWindow : Window
         // relationship rules are checked here first, with a message that
         // names the offending group.
         if (QueryRelationships.Validate(query) is string problem) { await ShowTransferMessage(problem); return; }
+        if (NativeEngine.ImpossibilityReason(query) is string reason)
+        {
+            SearchStatus.Text = $"Impossible query. {reason}";
+            return;
+        }
         await SearchPool();
     }
 
@@ -1843,7 +1859,7 @@ public sealed partial class MainWindow : Window
             // the proof it is. A failed run's count is unknown.
             var searched = status.Scanned > 0 ? $" · {status.Scanned:N0} seeds searched" : "";
             SearchStatus.Text = status.IsImpossibleQuery && results.Count == 0
-                ? "Impossible query. No seed can satisfy this combination of requirements."
+                ? $"Impossible query. {NativeEngine.ImpossibilityReason(ranQuery)}"
                 : status.State == SearchState.Running ? $"Seed match probability: {probability} · TTS @ {rate:N0} seeds/s: {tts}\nTime elapsed: {FormatDuration(seconds)} · Seeds searched: {status.Scanned:N0}" : status.State switch { SearchState.Completed => $"Completed{searched}", SearchState.Cancelled => $"Cancelled{searched}", _ => $"Failed (error {status.ErrorCode})" };
             // The engine reports a terminal state only once every queued match
             // has been drained, so breaking here never leaves seeds behind —

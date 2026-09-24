@@ -61,6 +61,41 @@ pub extern "C" fn seedfinder_analyze_query(
     .unwrap_or(INTERNAL)
 }
 
+/// Returns the impossibility reason as UTF-8, or an empty packet if feasible.
+#[unsafe(no_mangle)]
+pub extern "C" fn seedfinder_query_impossibility_reason(
+    request: *const u8,
+    request_len: usize,
+    out_packet: *mut *mut u8,
+    out_len: *mut usize,
+) -> i32 {
+    clear_outputs(out_packet, out_len);
+    catch_unwind(AssertUnwindSafe(|| {
+        if out_packet.is_null() || out_len.is_null() {
+            return INVALID;
+        }
+        let Some(bytes) = request_slice(request, request_len) else {
+            return INVALID;
+        };
+        let Ok(document) = std::str::from_utf8(bytes) else {
+            return INVALID;
+        };
+        let Ok(query) = json_query::decode(document) else {
+            return INVALID;
+        };
+        let plan = shpd_seedfinder_core::feasibility::QueryPlan::analyze(&query);
+        return_packet(
+            plan.unsatisfiable_reason()
+                .unwrap_or_default()
+                .as_bytes()
+                .to_vec(),
+            out_packet,
+            out_len,
+        )
+    }))
+    .unwrap_or(INTERNAL)
+}
+
 fn request_slice<'a>(request: *const u8, len: usize) -> Option<&'a [u8]> {
     if request.is_null() {
         return None;
@@ -614,6 +649,27 @@ mod tests {
 
     #[test]
     fn analysis_handles_possible_impossible_and_invalid_queries() {
+        let repeated = r#"{"requirements":[{"item":"rat_skull"},{"item":"rat_skull","trinket_transmutations":13}]}"#;
+        assert_eq!(
+            call_text_entry(seedfinder_query_impossibility_reason, repeated).unwrap(),
+            "Rat Skull is required more than once, but each trinket appears only once in the deck."
+        );
+        assert_eq!(
+            call_text_entry(
+                seedfinder_query_impossibility_reason,
+                r#"{"requirements":[{"item":"rat_skull"}]}"#
+            )
+            .unwrap(),
+            ""
+        );
+        assert_eq!(
+            call_text_entry(seedfinder_query_impossibility_reason, "invalid"),
+            Err(INVALID)
+        );
+        assert_eq!(
+            seedfinder_query_impossibility_reason(ptr::null(), 0, ptr::null_mut(), ptr::null_mut()),
+            INVALID
+        );
         let request = query_packet();
         let mut probability = -1.0;
         assert_eq!(

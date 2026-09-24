@@ -43,6 +43,14 @@ flag. The scout views group these beneath a single Magical catalyst entry.
 
 ## Maximum transmutation requirements
 
+Search feasibility checks each shared deck prefix: at most four distinct initial
+offers, five trinkets within one transmutation, six within two, and so on. OR
+groups consume one slot, and blankets reuse an assigned item. Requirements that
+cannot be assigned distinct trinket identities are also impossible. These checks
+block searches before scanning and provide the specific reason for the warning.
+Editors prevent adding or editing an ordinary requirement to repeat a trinket
+already on the board; blankets can still refer to that trinket.
+
 Every platform’s editor offers **Allow transmutations**, with an **At most N** limit
 from 1 through 13. Initial offers always count. For example, this finds Rat Skull
 in the initial offers or after either of the first two transmutations:

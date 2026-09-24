@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 use adw::prelude::*;
 use gtk::glib;
 use shpd_seedfinder_core::auto_trinkets::{SeedRecipe, TrinketSearchMatch};
-use shpd_seedfinder_core::feasibility::{QueryPlan, Quest};
+use shpd_seedfinder_core::feasibility::QueryPlan;
 use shpd_seedfinder_core::query::SearchQuery;
 use shpd_seedfinder_core::search::SearchError;
 use shpd_seedfinder_session::{
@@ -412,6 +412,10 @@ impl ResultsPane {
         if self.is_running() {
             return;
         }
+        if let Some(reason) = QueryPlan::analyze(&query).unsatisfiable_reason() {
+            self.show_message("action-unavailable-symbolic", "Impossible Query", reason);
+            return;
+        }
         let seeds = self.target.borrow().as_ref().map(|pool| pool.seeds.clone());
         if let Some(seeds) = seeds {
             let window = self
@@ -779,7 +783,7 @@ impl ResultsPane {
         } else {
             String::new()
         };
-        let unsatisfiable = QueryPlan::analyze(&active.query).is_unsatisfiable();
+        let plan = QueryPlan::analyze(&active.query);
         self.remember_scan(active, search_state);
         *active_slot = None;
         drop(active_slot);
@@ -789,7 +793,7 @@ impl ResultsPane {
             tested,
             matches,
             refined,
-            unsatisfiable,
+            plan.unsatisfiable_reason(),
             &diagnostic,
         );
         glib::ControlFlow::Break
@@ -801,7 +805,7 @@ impl ResultsPane {
         tested: u64,
         matches: u64,
         refined: Option<(u64, u64)>,
-        unsatisfiable: bool,
+        impossible_reason: Option<&str>,
         diagnostic: &str,
     ) {
         self.title.set_subtitle(&match matches {
@@ -819,17 +823,11 @@ impl ResultsPane {
                 self.toasts
                     .add_toast(adw::Toast::new("The search failed unexpectedly"));
             }
-            STATE_COMPLETED if matches == 0 && unsatisfiable => {
+            STATE_COMPLETED if matches == 0 && impossible_reason.is_some() => {
                 self.show_message(
                     "action-unavailable-symbolic",
                     "Impossible Query",
-                    &format!(
-                        "No seed can satisfy these requirements within the current floor \
-                         limit. Quest-reward-only items need their quest floors in range: \
-                         +3 wands floor {}, +3/+4 rings floor {}.",
-                        Quest::Wandmaker.window().1,
-                        Quest::Imp.window().1,
-                    ),
+                    impossible_reason.expect("impossible query"),
                 );
             }
             STATE_COMPLETED if matches == 0 => {
