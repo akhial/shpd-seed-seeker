@@ -1,8 +1,8 @@
 //! WDR2: u32 sample counts for eight profiles, then u32 presence counts by
 //! profile, vault eligibility, upgrade/reward condition, copies, and depth prefix.
+use super::embedded::WAND_REPEATS as DATA;
 use crate::{catalog::ItemId, model::ItemSource, vault_loot::EXCLUDED_WANDS};
 
-const DATA: &[u8] = include_bytes!("wand_repeats.bin");
 pub const PROFILES: usize = 8;
 pub const BANDS: usize = 4 + 4 * 5;
 pub const ROWS: usize = 2 * BANDS * 4 * 24;

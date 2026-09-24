@@ -1,6 +1,7 @@
 //! Baked counts of co-obtainable scattered items by source and depth prefix.
 //! SCF1: magic, u32 samples/profile, u32 offsets, then variable rows containing
 //! u8 length and that many little-endian f32 probabilities for counts 0, 1, ….
+use super::embedded::SOURCE_COUNTS as DATA;
 use super::{DEPTHS, Line, kind_index, line_index, source_index};
 use crate::{catalog::ItemKind, model::ItemSource};
 
@@ -10,7 +11,6 @@ pub const PROFILES: usize = 8;
 pub const ROWS: usize = PROFILES * GROUPS * SOURCES * DEPTHS;
 pub const HEADER: usize = 8 + ROWS * 4;
 pub const MAGIC: &[u8; 4] = b"SCF1";
-const DATA: &[u8] = include_bytes!("source_counts.bin");
 
 #[must_use]
 pub const fn group(kind: ItemKind, line: Line) -> usize {

@@ -185,14 +185,23 @@ jobs:
           if-no-files-found: error
 
   android:
-    name: Android APK
+    name: Android APK (${{ matrix.abi }})
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - abi: arm64-v8a
+            target: aarch64-linux-android
+          - abi: x86_64
+            target: x86_64-linux-android
 
     # Signing activates once the repository secrets exist; without them the
     # release ships the unsigned APK.
     env:
       HAVE_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE != '' }}
+      ANDROID_ABIS: ${{ matrix.abi }}
 
     steps:
       - uses: actions/checkout@v6
@@ -206,12 +215,12 @@ jobs:
       - name: Install Rust targets
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-linux-android,x86_64-linux-android
+          targets: ${{ matrix.target }}
 
       - name: Cache Rust build
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: release-android
+          shared-key: release-android-${{ matrix.abi }}
 
       # Must match ndkVersion in android/app/build.gradle.kts. The runner
       # image exports ANDROID_NDK_HOME pointing at its bundled NDK, so it has
@@ -228,7 +237,9 @@ jobs:
       # Tests and lint run in CI; releases only assemble.
       - name: Assemble release APK
         working-directory: android
-        run: ./gradlew :app:assembleRelease --stacktrace
+        run: |
+          ./gradlew :app:assembleRelease --stacktrace
+          python3 ../scripts/check-android-apk.py app/build/outputs/apk/release/app-release-unsigned.apk "$ANDROID_ABIS"
 
       # Must match the apksigner example in the README's Android section.
       - name: Sign APK
@@ -244,22 +255,22 @@ jobs:
           "$ANDROID_HOME/build-tools/36.1.0/apksigner" sign \
             --ks "$KEYSTORE" --ks-pass env:ANDROID_KEYSTORE_PASSWORD \
             --ks-key-alias "$ANDROID_KEY_ALIAS" \
-            --out "seed-seeker-${{ github.ref_name }}-android.apk" \
+            --out "seed-seeker-${{ github.ref_name }}-android-${{ matrix.abi }}.apk" \
             android/app/build/outputs/apk/release/app-release-unsigned.apk
           "$ANDROID_HOME/build-tools/36.1.0/apksigner" verify --print-certs \
-            "seed-seeker-${{ github.ref_name }}-android.apk"
+            "seed-seeker-${{ github.ref_name }}-android-${{ matrix.abi }}.apk"
           rm "$KEYSTORE"
 
       - name: Stage unsigned APK
         if: env.HAVE_KEYSTORE != 'true'
         run: |
           cp android/app/build/outputs/apk/release/app-release-unsigned.apk \
-            "seed-seeker-${{ github.ref_name }}-android-unsigned.apk"
+            "seed-seeker-${{ github.ref_name }}-android-${{ matrix.abi }}-unsigned.apk"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: android-apk
+          name: android-apk-${{ matrix.abi }}
           path: seed-seeker-*-android*.apk
           if-no-files-found: error
 

@@ -4,6 +4,15 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+// A release CI job builds one architecture; local builds include both unless
+// ANDROID_ABIS is set. Use the same list for Rust and transitive native libraries.
+val androidAbis = providers.environmentVariable("ANDROID_ABIS")
+    .orElse("arm64-v8a x86_64")
+    .get().trim().split(Regex("\\s+"))
+require(androidAbis.isNotEmpty() && androidAbis.all { it in setOf("arm64-v8a", "x86_64") }) {
+    "ANDROID_ABIS must contain arm64-v8a and/or x86_64"
+}
+
 android {
     namespace = "dev.seedseeker.app"
     compileSdk = 36
@@ -21,7 +30,7 @@ android {
             // The Rust build produces exactly these ABIs. Without an explicit filter,
             // transitive AndroidX native libraries make the APK appear installable on
             // 32-bit devices where libshpd_seedfinder.so is unavailable.
-            abiFilters += setOf("arm64-v8a", "x86_64")
+            abiFilters += androidAbis
         }
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -105,7 +114,7 @@ val buildRustJni by tasks.registering(Exec::class) {
     )
     inputs.files(
         fileTree(rootProject.projectDir.parentFile.resolve("crates")) {
-            include("**/*.rs", "**/Cargo.toml")
+            include("**/*.rs", "**/Cargo.toml", "**/*.bin", "**/*.png")
         },
         rootProject.projectDir.parentFile.resolve("Cargo.toml"),
         rootProject.projectDir.parentFile.resolve("Cargo.lock"),
@@ -139,7 +148,7 @@ val buildHostJni by tasks.registering(Exec::class) {
     )
     inputs.files(
         fileTree(rootProject.projectDir.parentFile.resolve("crates")) {
-            include("**/*.rs", "**/Cargo.toml")
+            include("**/*.rs", "**/Cargo.toml", "**/*.bin", "**/*.png")
         },
         rootProject.projectDir.parentFile.resolve("Cargo.toml"),
         rootProject.projectDir.parentFile.resolve("Cargo.lock"),

@@ -13,8 +13,12 @@ name = "shpd_seedfinder_core"
 json-query = ["dep:serde", "dep:serde_json"]
 
 [dependencies]
+miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 serde = { version = "1", features = ["derive"], optional = true }
 serde_json = { version = "1", optional = true }
+
+[build-dependencies]
+miniz_oxide = { version = "0.8.9", default-features = false, features = ["with-alloc"] }
 
 # Self-reference so `cargo test -p shpd-seedfinder-core` always compiles the
 # json-query modules (and their tests) even when no other workspace member
@@ -24,4 +28,3 @@ shpd-seedfinder-core = { path = ".", features = ["json-query"] }
 
 [lints]
 workspace = true
-

@@ -123,7 +123,8 @@ while rechecking the retained seed pool.
 The merged overnight bake measures 1,048,560 deterministic, dispersed seeds
 for each of the eight trinket profiles (8,388,480 worlds). The 3.73 MiB
 `probability_tables/floors.bin` contains packed little-endian counts and offsets,
-read directly without allocation or decompression.
+read directly after a one-time, lazy decompression of its embedded copy. The
+checked-in calibration file stays unchanged; see [table storage](probability-calibration.md).
 
 The table includes room pairs, repeated rooms across floors, and cross-floor
 feeling pairs. Room scheduling only distinguishes Large, Secrets, and ordinary

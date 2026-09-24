@@ -4,8 +4,8 @@ set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 OUTPUT=${1:-"$ROOT/android/app/build/generated/jniLibs"}
-# Space-separated ABI list. Releases ship both; pull-request CI sets a single
-# ABI to halve the native build.
+# Space-separated ABI list. Release jobs publish one APK per ABI; pull-request
+# CI builds arm64 only. Local builds default to both architectures.
 ABIS=${ANDROID_ABIS:-"arm64-v8a x86_64"}
 
 if [ -n "${ANDROID_NDK_HOME:-}" ]; then

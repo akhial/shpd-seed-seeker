@@ -2,7 +2,7 @@
 
 Seed Seeker is an independent, unofficial seed-search interface for Shattered Pixel Dungeon. It uses an original Jetpack Compose UI and does not include or reuse the game's UI components.
 
-The debug build deliberately uses `DemoNativeSeedFinder` as its search engine, so UI states can be exercised with deterministic sample seeds. Interactive scouting uses the real engine in all build types, including trinket effects and match highlights. Release and dev builds select `JniNativeSeedFinder`, whose compact wire contract is documented in `NativeSeedFinder.kt`. All build types package `libshpd_seedfinder.so` for `arm64-v8a` and `x86_64` (built through `scripts/build-android-native.sh`): wire codecs such as the share-link format always run the canonical Rust implementation through `dev.seedseeker.app.engine.JniBindings`, even in debug APKs.
+The debug build deliberately uses `DemoNativeSeedFinder` as its search engine, so UI states can be exercised with deterministic sample seeds. Interactive scouting uses the real engine in all build types, including trinket effects and match highlights. Release and dev builds select `JniNativeSeedFinder`, whose compact wire contract is documented in `NativeSeedFinder.kt`. All build types package `libshpd_seedfinder.so` for the selected ABIs (built through `scripts/build-android-native.sh`): wire codecs such as the share-link format always run the canonical Rust implementation through `dev.seedseeker.app.engine.JniBindings`, even in debug APKs.
 
 Build with:
 
@@ -18,7 +18,13 @@ Canary** so it can be installed alongside the production app. Its yellow icon
 distinguishes it from production's blue icon. It is signed with the standard
 local Android debug key and has the version-name suffix `-dev`.
 
-The APK is written to `app/build/outputs/apk/dev/app-dev.apk`. Keep the same
+Release CI publishes separate `android-arm64-v8a.apk` and `android-x86_64.apk`
+downloads. Local builds include both ABIs by default; set `ANDROID_ABIS=arm64-v8a`
+or `ANDROID_ABIS=x86_64` to select one. This filters both the Rust engine and
+transitive AndroidX native libraries. Native libraries remain uncompressed in
+the APK so Android can load them without extracting another copy at install time.
+
+The Canary APK is written to `app/build/outputs/apk/dev/app-dev.apk`. Keep the same
 local debug keystore (`~/.android/debug.keystore`) when building updates for an
 existing Canary installation. Canary has its own app data, separate from
 production and the debug demo.

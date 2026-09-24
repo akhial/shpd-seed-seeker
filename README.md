@@ -56,7 +56,8 @@ Binaries are published on the [GitHub Releases page](https://github.com/akhial/s
 | `seed-seeker-<tag>-macos-arm64.dmg` | Native macOS app (Apple Silicon, macOS 14+) |
 | `seed-seeker-<tag>-windows-<arch>.zip` | Native Windows app (x64, ARM64) |
 | `seed-seeker-<tag>-windows-x64-avx2.zip` | Windows app built for AVX2 x86-64 machines |
-| `seed-seeker-<tag>-android.apk` | Android app (arm64-v8a and x86_64) |
+| `seed-seeker-<tag>-android-arm64-v8a.apk` | Android app for ARM64 phones and tablets |
+| `seed-seeker-<tag>-android-x86_64.apk` | Android app for x86-64 devices and emulators |
 
 - The Windows app requires the [Windows App SDK 1.8 runtime](https://learn.microsoft.com/en-us/windows/apps/windows-app-sdk/downloads).
 
@@ -345,6 +346,10 @@ server:
 ```sh
 JAVA_HOME=/path/to/java-21 ./android/gradlew -p android :app:assembleRelease
 ```
+
+Local builds include both supported architectures. Set `ANDROID_ABIS=arm64-v8a`
+or `ANDROID_ABIS=x86_64` to build a smaller APK for one architecture, as release
+CI does. Most supported phones and tablets use the `arm64-v8a` release download.
 
 #### Signing
 

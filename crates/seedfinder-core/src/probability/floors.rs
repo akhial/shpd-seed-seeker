@@ -5,13 +5,16 @@
 use crate::floor_filters::{FloorRequirement, RoomSet, RoomType};
 use crate::level_prelude::Feeling;
 use crate::probability_tables::{
+    embedded,
     floors::{self as table, RoomRow, Tables},
     trinkets::Profile,
 };
 use crate::query::SearchQuery;
 
-const TABLE: Tables = Tables(include_bytes!("../probability_tables/floors.bin"));
-const EXACT_ROOMS: Tables = Tables(include_bytes!("../probability_tables/feeling_rooms.bin"));
+use std::sync::LazyLock;
+
+static TABLE: LazyLock<Tables> = LazyLock::new(|| Tables(&embedded::FLOORS));
+static EXACT_ROOMS: LazyLock<Tables> = LazyLock::new(|| Tables(&embedded::FEELING_ROOMS));
 const FEELINGS: [Feeling; 8] = [
     Feeling::None,
     Feeling::Chasm,

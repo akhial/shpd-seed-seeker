@@ -1038,6 +1038,7 @@ dependencies = [
 name = "shpd-seedfinder-core"
 version = "0.16.1"
 dependencies = [
+ "miniz_oxide",
  "serde",
  "serde_json",
  "shpd-seedfinder-core",
