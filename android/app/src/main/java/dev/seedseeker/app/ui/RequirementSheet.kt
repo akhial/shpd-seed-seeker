@@ -412,6 +412,7 @@ fun RequirementSheet(
                                 Text("Allow transmutations", Modifier.weight(1f))
                                 Switch(checked = trinketTransmutations > 0, onCheckedChange = null)
                             }
+                            Spacer(Modifier.height(12.dp))
                             if (trinketTransmutations > 0) {
                                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                     Text("Maximum transmutations", Modifier.weight(1f))
