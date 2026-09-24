@@ -359,8 +359,9 @@ impl SupplyPlan {
                             *weight /= total.max(1.0);
                         }
                         let offers = collapse(offers);
+                        let mut choices = draw_choices(&offers);
                         for _ in 0..count {
-                            states = model.draw(states, &offers);
+                            states = model.draw(states, &offers, &mut choices);
                         }
                     }
                     if kind != ItemKind::Weapon {
@@ -435,6 +436,54 @@ struct Event {
 struct Offer {
     outcomes: Vec<(Event, f64)>,
     options: f64,
+}
+
+/// Offer preference depends only on which reservation groups still need an
+/// item. Resin balance and the costs of already held items affect `take`, but
+/// cannot change `rank`. Reuse the event probabilities across those states
+/// and across draws from the same supply, retaining their original order.
+struct Choices<'a> {
+    offers: &'a [Offer],
+    missing: Vec<bool>,
+    cached: HashMap<Vec<bool>, Vec<(Option<&'a Event>, f64)>>,
+}
+
+impl<'a> Choices<'a> {
+    fn new(offers: &'a [Offer]) -> Self {
+        Self {
+            offers,
+            missing: Vec::new(),
+            cached: HashMap::new(),
+        }
+    }
+
+    fn probabilities(&mut self, model: &Model, state: &State) -> &[(Option<&'a Event>, f64)] {
+        self.missing.clear();
+        self.missing.extend(
+            model
+                .slots
+                .iter()
+                .map(|range| state.held[range.end - 1] == EMPTY),
+        );
+        if !self.cached.contains_key(&self.missing) {
+            // Keep storage bounded even for unusually large reservation sets.
+            if self.cached.len() >= STATE_LIMIT {
+                self.cached.clear();
+            }
+            self.cached.insert(
+                self.missing.clone(),
+                model.choice_events(&self.missing, self.offers),
+            );
+        }
+        &self.cached[&self.missing]
+    }
+}
+
+fn draw_choices(offers: &[(f64, Offer)]) -> Vec<Choices<'_>> {
+    offers
+        .iter()
+        .map(|(_, offer)| Choices::new(std::slice::from_ref(offer)))
+        .collect()
 }
 
 fn collapse(offers: Vec<(f64, Offer)>) -> Vec<(f64, Offer)> {
@@ -568,8 +617,8 @@ impl Model {
             .copied()
             .find(|&index| state.held[self.slots[index].end - 1] == EMPTY)
     }
-    fn rank(&self, state: &State, event: &Event) -> (usize, i32) {
-        match self.target(state, event) {
+    fn rank(&self, missing: &[bool], event: &Event) -> (usize, i32) {
+        match event.covers.iter().copied().find(|&index| missing[index]) {
             Some(index) if self.donors[index] => (index, -event.resin),
             Some(index) => (
                 index,
@@ -643,24 +692,28 @@ impl Model {
         }
         next
     }
-    fn choices(&self, state: &State, offers: &[Offer]) -> Vec<(State, f64)> {
+    fn choice_events<'a>(
+        &self,
+        missing: &[bool],
+        offers: &'a [Offer],
+    ) -> Vec<(Option<&'a Event>, f64)> {
         if let [offer] = offers
             && (offer.options - 1.0).abs() < f64::EPSILON
         {
             let mut outcomes: Vec<_> = offer
                 .outcomes
                 .iter()
-                .map(|(event, chance)| (self.take(state, event), *chance))
+                .map(|(event, chance)| (Some(event), *chance))
                 .collect();
             let mass: f64 = offer.outcomes.iter().map(|(_, chance)| chance).sum();
-            outcomes.push((state.clone(), (1.0 - mass).max(0.0)));
+            outcomes.push((None, (1.0 - mass).max(0.0)));
             return outcomes;
         }
         let mut events: Vec<_> = offers
             .iter()
             .flat_map(|offer| offer.outcomes.iter().map(|(event, _)| event))
             .collect();
-        events.sort_by_key(|event| (self.rank(state, event), *event));
+        events.sort_by_key(|event| (self.rank(missing, event), *event));
         events.dedup();
         let mut cumulative = vec![0.0; offers.len()];
         let mut missing = 1.0;
@@ -680,48 +733,60 @@ impl Model {
                 .map(|(offer, &mass)| (1.0 - mass).clamp(0.0, 1.0).powf(offer.options))
                 .product();
             if missing > next_missing {
-                choices.push((self.take(state, event), missing - next_missing));
+                choices.push((Some(event), missing - next_missing));
             }
             missing = next_missing;
         }
-        choices.push((state.clone(), missing));
+        choices.push((None, missing));
         choices
     }
-    fn draw(&self, states: States, offers: &[(f64, Offer)]) -> States {
-        // Many draws converge on the same reservation and balance. Accumulate
-        // without tree comparisons, then restore key order before pruning so
-        // later draws retain their deterministic summation order.
-        let mut next = HashMap::new();
+    fn draw_outcomes(
+        &self,
+        state: &State,
+        offers: &[(f64, Offer)],
+        choices: &mut [Choices<'_>],
+        mut emit: impl FnMut(State, f64, f64),
+    ) {
         let mut missed = (1.0 - offers.iter().map(|(weight, _)| weight).sum::<f64>()).max(0.0);
-        for (weight, offer) in offers {
+        for ((weight, offer), choice) in offers.iter().zip(choices.iter_mut()) {
             if (offer.options - 1.0).abs() < f64::EPSILON {
                 let mass: f64 = offer.outcomes.iter().map(|(_, chance)| chance).sum();
                 missed += weight * (1.0 - mass).max(0.0);
-            }
-        }
-        for (state, mass) in states {
-            for (weight, offer) in offers {
-                if (offer.options - 1.0).abs() < f64::EPSILON {
-                    for (event, chance) in &offer.outcomes {
-                        *next.entry(self.take(&state, event)).or_insert(0.0) +=
-                            mass * weight * chance;
-                    }
-                } else {
-                    for (outcome, chance) in self.choices(&state, std::slice::from_ref(offer)) {
-                        *next.entry(outcome).or_insert(0.0) += mass * weight * chance;
-                    }
+                for (event, chance) in &offer.outcomes {
+                    emit(self.take(state, event), *weight, *chance);
+                }
+            } else {
+                for &(event, chance) in choice.probabilities(self, state) {
+                    let outcome =
+                        event.map_or_else(|| state.clone(), |event| self.take(state, event));
+                    emit(outcome, *weight, chance);
                 }
             }
-            *next.entry(state).or_insert(0.0) += mass * missed;
+        }
+        emit(state.clone(), missed, 1.0);
+    }
+    fn draw(&self, states: States, offers: &[(f64, Offer)], choices: &mut [Choices<'_>]) -> States {
+        // Restore key order before pruning to retain deterministic summation.
+        let mut next = HashMap::new();
+        for (state, mass) in states {
+            self.draw_outcomes(&state, offers, choices, |outcome, weight, chance| {
+                *next.entry(outcome).or_insert(0.0) += mass * weight * chance;
+            });
         }
         prune(next.into_iter().collect())
     }
     fn prize(&self, states: States, choices: &[(f64, Vec<Offer>)]) -> States {
         let mut next = BTreeMap::new();
+        let mut prepared: Vec<_> = choices
+            .iter()
+            .map(|(_, offers)| Choices::new(offers))
+            .collect();
         let missed = (1.0 - choices.iter().map(|(weight, _)| weight).sum::<f64>()).max(0.0);
         for (state, mass) in states {
-            for (weight, offers) in choices {
-                for (outcome, chance) in self.choices(&state, offers) {
+            for ((weight, _), choice) in choices.iter().zip(&mut prepared) {
+                for &(event, chance) in choice.probabilities(self, &state) {
+                    let outcome =
+                        event.map_or_else(|| state.clone(), |event| self.take(&state, event));
                     *next.entry(outcome).or_insert(0.0) += mass * weight * chance;
                 }
             }
@@ -731,17 +796,119 @@ impl Model {
     }
     fn stream(&self, mut states: States, offers: &[(f64, Offer)], counts: &[f64]) -> States {
         let mut mixed = BTreeMap::new();
+        let mut choices = draw_choices(offers);
+        let mut graph = DrawGraph::default();
+        let mut active = graph.import(states);
         for (count, &chance) in counts.iter().enumerate() {
             if count > 0 {
-                states = self.draw(states, offers);
+                active = graph.draw(self, &active, offers, &mut choices);
             }
             if chance > 0.0 {
-                for (state, mass) in &states {
-                    *mixed.entry(state.clone()).or_insert(0.0) += mass * chance;
+                for &(id, mass) in &active {
+                    *mixed.entry(graph.states[id].clone()).or_insert(0.0) += mass * chance;
                 }
+            }
+            // Retain at most this much history between draws. One draw can
+            // still produce the same temporary outputs as the uncached model.
+            if graph.states.len() > STATE_LIMIT * 2 {
+                states = active
+                    .iter()
+                    .map(|&(id, mass)| (graph.states[id].clone(), mass))
+                    .collect();
+                graph = DrawGraph::default();
+                active = graph.import(states);
             }
         }
         prune(mixed)
+    }
+}
+
+/// A supply stream repeats an identical draw for every possible item count.
+/// Intern its states and reuse transitions so later draws only accumulate
+/// probability mass. Edges retain the original offer/event order and separate
+/// factors; state order and pruning also match `Model::draw` exactly.
+#[derive(Default)]
+struct DrawGraph {
+    states: Vec<State>,
+    ids: HashMap<State, usize>,
+    transitions: Vec<Option<Vec<(usize, f64, f64)>>>,
+    edges: usize,
+}
+
+impl DrawGraph {
+    fn intern(&mut self, state: State) -> usize {
+        if let Some(&id) = self.ids.get(&state) {
+            return id;
+        }
+        let id = self.states.len();
+        self.ids.insert(state.clone(), id);
+        self.states.push(state);
+        self.transitions.push(None);
+        id
+    }
+
+    fn import(&mut self, states: States) -> Vec<(usize, f64)> {
+        states
+            .into_iter()
+            .map(|(state, mass)| (self.intern(state), mass))
+            .collect()
+    }
+
+    fn prepare(
+        &mut self,
+        id: usize,
+        model: &Model,
+        offers: &[(f64, Offer)],
+        choices: &mut [Choices<'_>],
+    ) -> bool {
+        if self.transitions[id].is_some() {
+            return true;
+        }
+        let state = self.states[id].clone();
+        let mut transitions = Vec::new();
+        model.draw_outcomes(&state, offers, choices, |outcome, weight, chance| {
+            transitions.push((self.intern(outcome), weight, chance));
+        });
+        // A large query can have many outcomes per draw. Beyond the cache
+        // budget, use this row once without retaining it for subsequent draws.
+        let retain = self.edges + transitions.len() <= STATE_LIMIT * 32;
+        if retain {
+            self.edges += transitions.len();
+        }
+        self.transitions[id] = Some(transitions);
+        retain
+    }
+
+    fn draw(
+        &mut self,
+        model: &Model,
+        active: &[(usize, f64)],
+        offers: &[(f64, Offer)],
+        choices: &mut [Choices<'_>],
+    ) -> Vec<(usize, f64)> {
+        let mut next = vec![0.0; self.states.len()];
+        for &(id, mass) in active {
+            let retained = self.prepare(id, model, offers, choices);
+            next.resize(self.states.len(), 0.0);
+            for &(target, weight, chance) in self.transitions[id].as_ref().unwrap() {
+                next[target] += mass * weight * chance;
+            }
+            if !retained {
+                self.transitions[id] = None;
+            }
+        }
+        let mut kept: Vec<_> = next
+            .into_iter()
+            .enumerate()
+            .filter(|(_, mass)| *mass > STATE_FLOOR)
+            .collect();
+        if kept.len() > STATE_LIMIT {
+            let mut masses: Vec<_> = kept.iter().map(|&(_, mass)| mass).collect();
+            masses.select_nth_unstable_by(STATE_LIMIT, |a, b| b.total_cmp(a));
+            kept.retain(|(_, mass)| *mass > masses[STATE_LIMIT]);
+        }
+        kept.sort_unstable_by(|&(left, _), &(right, _)| self.states[left].cmp(&self.states[right]));
+        kept
     }
 }
 
