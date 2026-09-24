@@ -52,6 +52,7 @@ tooling/java-finder/run.sh --seeds 10000 --warmup 0 --print-matches > matches.tx
 | `--no-vault` | skip the Imp's Vault |
 | `--skip-boss-floors` | step over the state-neutral boss depths 5, 10, 15 and 25 |
 | `--print-matches` | print each matching seed code before the `BENCH` line |
+| `--four-trinket-garden` | benchmark the four initial offers Dimensional Sundial, Rat Skull, Parchment Scrap, and Petrified Seed with grass at depth 4 and a dark garden or secret garden at depth 7 |
 
 Each run ends with a `BENCH` line containing the tested seed count, matches,
 elapsed seconds and seeds per second.
@@ -103,6 +104,16 @@ request-to-response wall time, so protocol overhead is included in its metric.
 
 The adapter supports single-item queries and the benchmark's +2 Runic Blade
 and +2 Ring of Might query. Other compound queries are rejected.
+
+`--four-trinket-garden` is a separate benchmark mode for the query in
+`tooling/benchmarks/four_trinkets.py`. It reads the first four catalyst offers
+and generates to depth 7 only when they contain all four requested trinkets.
+It checks for GRASS on depth 4, then DARK and a special or secret garden on
+depth 7. The
+mode runs with no selected trinket because explicit offer requirements disable
+automatic selection in Seed Seeker. Reproduction on Linux uses
+`tooling/benchmarks/run-four-trinkets-linux.sh`, which builds the native
+benchmark with AVX2 and query-specific PGO before running both sides.
 
 ## Headless technique
 

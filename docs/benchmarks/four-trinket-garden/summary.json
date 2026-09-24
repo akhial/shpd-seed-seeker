@@ -1,0 +1,19 @@
+{
+  "java": {
+    "seeds": 69365760,
+    "matches": 21,
+    "seconds": 600.004073128337,
+    "seeds_per_second": 115608.8151840981,
+    "matches_per_minute": 2.099985744147597
+  },
+  "native": {
+    "seeds": 1761816576,
+    "matches": 584,
+    "seconds": 600.0033907503821,
+    "seeds_per_second": 2936344.365982032,
+    "matches_per_minute": 58.3996699688279
+  },
+  "native_over_java_matches_per_minute": 27.809555437021714,
+  "equivalence_tests": "skipped",
+  "known_positive_count": 3
+}

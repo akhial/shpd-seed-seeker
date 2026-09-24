@@ -179,6 +179,7 @@ public final class JarSeedFinder {
 		Dungeon.initSeed();
 		GamesInProgress.selectedClass = HeroClass.WARRIOR;
 		Dungeon.init();
+		if (options.fourTrinketGarden) return searchFourTrinketGarden(seed);
 		resetLeftoverQuestState();
 
 		options.witnesses.clear();
@@ -255,6 +256,47 @@ public final class JarSeedFinder {
 			if (!offered) throw new IllegalArgumentException("trinket was not initially offered: " + options.trinket);
 		}
 		return found;
+	}
+
+	/** The four named initial offers, grass on depth 4, and a dark garden on depth 7. A failed
+	 * offer deck needs no floor generation, just as the native query plan does. */
+	private static boolean searchFourTrinketGarden(long seed) throws Exception {
+		int offers = 0;
+		for (int i = 0; i < 4; i++) {
+			offers |= switch (Generator.random(Generator.Category.TRINKET).getClass().getSimpleName()) {
+				case "DimensionalSundial" -> 1;
+				case "RatSkull" -> 2;
+				case "ParchmentScrap" -> 4;
+				case "PetrifiedSeed" -> 8;
+				default -> 0;
+			};
+		}
+		if (offers != 15) return false;
+
+		// Restore the private offer deck before generating the matching world.
+		SPDSettings.customSeed(DungeonSeed.convertToCode(seed));
+		Dungeon.initSeed();
+		GamesInProgress.selectedClass = HeroClass.WARRIOR;
+		Dungeon.init();
+		resetLeftoverQuestState();
+		for (int depth = 1; depth <= 7; depth++) {
+			if (isSkippableBossDepth(depth)) {
+				Dungeon.depth++;
+				continue;
+			}
+			Level level = Dungeon.newLevel();
+			if (depth == 4 && level.feeling != Level.Feeling.GRASS) return false;
+			if (depth == 7) {
+				if (level.feeling != Level.Feeling.DARK) return false;
+				for (Object room : (Collection<?>)getField(level, "rooms")) {
+					if (room instanceof com.shatteredpixel.shatteredpixeldungeon.levels.rooms.special.GardenRoom
+							|| room instanceof com.shatteredpixel.shatteredpixeldungeon.levels.rooms.secret.SecretGardenRoom) return true;
+				}
+				return false;
+			}
+			Dungeon.depth++;
+		}
+		return false;
 	}
 
 	/** Boss depths whose generation is run-state neutral; depth 20 is not. */
@@ -413,7 +455,7 @@ public final class JarSeedFinder {
 	private static void printUsage() {
 		System.out.println("Usage: java-finder [--item CLASS] [--upgrade N] [--floors N] "
 				+ "[--seeds N] [--start N] [--warmup N] [--challenges N] [--no-vault]"
-				+ " [--skip-boss-floors] [--print-matches] [--effect NAME] [--stream]");
+				+ " [--skip-boss-floors] [--print-matches] [--effect NAME] [--stream] [--four-trinket-garden]");
 		System.out.println("  --item CLASS       Comma-separated required item classes (default: RunicBlade)");
 		System.out.println("  --stream           JSON-lines batch search and recipe verification protocol");
 		System.out.println("  --effect NAME      Allowed effects for the first item, comma-separated (default: any)");
@@ -436,6 +478,7 @@ public final class JarSeedFinder {
 		java.util.Set<String> foundItems = new java.util.HashSet<>();
 		java.util.Set<String> independentItems = new java.util.HashSet<>();
 		boolean stream;
+		boolean fourTrinketGarden;
 		boolean fullScan;
 		String trinket;
 		String source;
@@ -465,6 +508,8 @@ public final class JarSeedFinder {
 					result.effect = requireValue(args, ++i, arg);
 				} else if ("--stream".equals(arg)) {
 					result.stream = true;
+				} else if ("--four-trinket-garden".equals(arg)) {
+					result.fourTrinketGarden = true;
 				} else if ("--upgrade".equals(arg)) {
 					result.upgrade = Integer.parseInt(requireValue(args, ++i, arg));
 				} else if ("--floors".equals(arg)) {
