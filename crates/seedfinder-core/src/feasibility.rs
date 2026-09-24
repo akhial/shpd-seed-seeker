@@ -506,10 +506,10 @@ pub struct QueryPlan {
     floor_requirements: [Option<crate::floor_filters::CompiledFloorRequirement>; 25],
     auto_trinket: Option<crate::auto_trinkets::AutoTrinketPolicy>,
     selected_slots: Vec<Vec<Requirement>>,
-    /// Mandatory slots whose alternatives all name initial trinket offers.
+    /// Mandatory slots whose alternatives all name trinket deck outcomes.
     /// Other predicates remain for the final matcher; absence alone is enough
     /// to prove that no floor can satisfy one of these slots.
-    required_trinket_slots: Vec<Vec<ItemId>>,
+    required_trinket_slots: Vec<Vec<Requirement>>,
     /// One entry per query slot: a plain requirement alone, or every member
     /// of an alternative group, any one of which satisfies the slot.
     slots: Vec<Vec<RequirementPlan>>,
@@ -529,7 +529,7 @@ pub struct QueryPlan {
     unsatisfiable: bool,
 }
 
-fn required_trinket_slots(slots: &[Vec<RequirementPlan>]) -> Vec<Vec<ItemId>> {
+fn required_trinket_slots(slots: &[Vec<RequirementPlan>]) -> Vec<Vec<Requirement>> {
     slots
         .iter()
         .filter(|slot| {
@@ -540,11 +540,7 @@ fn required_trinket_slots(slots: &[Vec<RequirementPlan>]) -> Vec<Vec<ItemId>> {
                     && requirement.level_sum.is_none()
             })
         })
-        .map(|slot| {
-            slot.iter()
-                .map(|plan| plan.requirement.item.expect("named trinket"))
-                .collect()
-        })
+        .map(|slot| slot.iter().map(|plan| plan.requirement).collect())
         .collect()
 }
 
@@ -561,7 +557,8 @@ fn closed_multiplicities(slots: &[Vec<RequirementPlan>]) -> Vec<(usize, usize)> 
         (plan.quests == 0
             && plan.open_deadline.is_some()
             && plan.requirement.level_sum.is_none()
-            && !plan.requirement.blanket)
+            && !plan.requirement.blanket
+            && plan.requirement.trinket_transmutations == 0)
             .then_some((index, plan))
     });
 
@@ -662,6 +659,9 @@ fn blanket_witnesses(query: &SearchQuery, blanket: Requirement) -> Vec<Requireme
             }
             let witness = Requirement {
                 item: Some(item.id),
+                trinket_transmutations: ordinary
+                    .trinket_transmutations
+                    .min(blanket.trinket_transmutations),
                 weapon_category: item.weapon_category(),
                 tier: TierRequirement::Any,
                 upgrade,
@@ -1031,10 +1031,22 @@ impl QueryPlan {
         let mut quest_only = [0_u16; 16];
         for slot in &self.slots {
             let open = slot.iter().any(|plan| {
+                // Deck identity was checked at run init. Here any catalyst offer
+                // is an optimistic witness for its placement; the final matcher
+                // checks distinct transmutations and full acquisition constraints.
+                let predicate = if plan.requirement.trinket_transmutations > 0 {
+                    Requirement {
+                        item: None,
+                        trinket_transmutations: 0,
+                        ..plan.requirement
+                    }
+                } else {
+                    plan.requirement
+                };
                 let satisfied_by_open_item = items.iter().any(|item| {
                     item.depth <= plan.max_depth
                         && quest_for_source(item.source).is_none()
-                        && plan.requirement.matches(item)
+                        && predicate.matches(item)
                 });
                 satisfied_by_open_item
                     || plan
@@ -1154,12 +1166,27 @@ impl FloorGate for QueryPlan {
         if self.required_trinket_slots.is_empty() {
             return true;
         }
-        // The catalyst only expands into these initial identities. Peeking
-        // clones its private deck, leaving all generation streams untouched.
-        let offers = crate::trinkets::initial_offers_from_generator(&run.generator);
-        self.required_trinket_slots
+        // Preserve the cheap four-card prefix for ordinary offer searches.
+        if self
+            .required_trinket_slots
             .iter()
-            .all(|slot| slot.iter().any(|id| offers.contains(id)))
+            .flatten()
+            .all(|r| r.trinket_transmutations == 0)
+        {
+            let offers = crate::trinkets::initial_offers_from_generator(&run.generator);
+            return self.required_trinket_slots.iter().all(|slot| {
+                slot.iter()
+                    .any(|r| r.item.is_some_and(|id| offers.contains(&id)))
+            });
+        }
+        let order = crate::trinkets::order_from_generator(&run.generator);
+        self.required_trinket_slots.iter().all(|slot| {
+            slot.iter().any(|r| {
+                r.item.is_some_and(|id| {
+                    order[..4 + usize::from(r.trinket_transmutations)].contains(&id)
+                })
+            })
+        })
     }
 
     fn selected_trinket(&self, seed: crate::seed::DungeonSeed) -> Option<crate::catalog::ItemId> {
@@ -1819,6 +1846,7 @@ mod tests {
             effect: EffectRequirement::Any,
             require_uncursed: false,
             select_trinket: false,
+            trinket_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             source: None,
@@ -2195,6 +2223,7 @@ mod tests {
             effect: EffectRequirement::exactly(Effect::Weapon(WeaponEffect::Sacrificial)),
             require_uncursed: false,
             select_trinket: false,
+            trinket_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             ..requirement(ItemKind::Weapon, UpgradeRequirement::Exact(3))
@@ -2209,6 +2238,7 @@ mod tests {
             effect: EffectRequirement::exactly(Effect::Armor(ArmorEffect::Thorns)),
             require_uncursed: false,
             select_trinket: false,
+            trinket_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             ..requirement(ItemKind::Armor, UpgradeRequirement::Exact(3))
@@ -2219,6 +2249,7 @@ mod tests {
             effect: EffectRequirement::exactly(Effect::Weapon(WeaponEffect::Pressurized)),
             require_uncursed: false,
             select_trinket: false,
+            trinket_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             ..requirement(ItemKind::Weapon, UpgradeRequirement::Exact(4))
@@ -2229,6 +2260,7 @@ mod tests {
             effect: EffectRequirement::exactly(Effect::Weapon(WeaponEffect::Crystal)),
             require_uncursed: true,
             select_trinket: false,
+            trinket_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             ..requirement(ItemKind::Weapon, UpgradeRequirement::Exact(5))
@@ -2247,6 +2279,7 @@ mod tests {
             ),
             require_uncursed: false,
             select_trinket: false,
+            trinket_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             ..requirement(ItemKind::Weapon, UpgradeRequirement::Exact(3))
@@ -2257,6 +2290,7 @@ mod tests {
             effect: EffectRequirement::OneOf(EffectSet::enchantments(ItemKind::Weapon).unwrap()),
             require_uncursed: true,
             select_trinket: false,
+            trinket_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             ..requirement(ItemKind::Weapon, UpgradeRequirement::Exact(3))
@@ -3200,10 +3234,11 @@ mod tests {
                     .deferred_vault_plan(before.generation_depth())
                     .is_some()
             );
-            assert!(
-                !auto_trinkets::enabled(query),
-                "named Resin disables automatic replay"
+            assert_eq!(
+                auto_trinkets::enabled(query),
+                query.auto_apply_trinket && !query.requirements[5].select_trinket
             );
+            // Preserving the required Resin offer prevents any automatic helper.
             assert_eq!(
                 after.selected_trinket(known),
                 query.requirements[5]
@@ -3361,7 +3396,10 @@ mod tests {
                 // These queries explicitly require Resin. User refinement
                 // follows that current selection (or none), whereas the
                 // low-level filter above deliberately forces saved worlds.
-                assert!(!auto_trinkets::enabled(query));
+                assert_eq!(
+                    auto_trinkets::enabled(query),
+                    query.auto_apply_trinket && !query.requirements[5].select_trinket
+                );
                 assert_eq!(
                     refined,
                     multiplicity_production_records(
@@ -5106,6 +5144,7 @@ mod closed_multiplicity_grouping_tests {
                 effect: EffectRequirement::Any,
                 require_uncursed: false,
                 select_trinket: false,
+                trinket_transmutations: 0,
                 blanket: false,
                 exclude_resin: false,
                 source: Some(ItemSource::Heap),

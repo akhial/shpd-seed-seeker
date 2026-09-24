@@ -3166,7 +3166,14 @@ input[type="range"]::-moz-range-thumb {
 }
 .d1-trinket-tail li {
   min-width: 0;
-  height: 24px;
+  width: min(100%, 24px);
+  aspect-ratio: 1;
+  justify-self: center;
+  border: 1px solid transparent;
+  border-radius: 4px;
+}
+.d1-trinket-tail li.d1-trinket-match {
+  border-color: #59cb89;
 }
 .d1-trinket-tail .d1-trinket-art {
   width: 100%;

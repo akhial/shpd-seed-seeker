@@ -57,17 +57,22 @@ public sealed class TrinketDeckView : StackPanel
         }
         Children.Add(choices);
         if (order.Count <= 4) return;
-        Children.Add(new TextBlock { Text = "Remaining deck order", Style = (Style)Application.Current.Resources["Caption"] });
+        Children.Add(new TextBlock { Text = "Transmutation order · 1–13", Style = (Style)Application.Current.Resources["Caption"] });
         var tail = new Grid { ColumnSpacing = 2 };
         foreach (var (item, index) in order.Skip(4).Select((item, index) => (item, index)))
         {
             tail.ColumnDefinitions.Add(new ColumnDefinition());
-            var cell = new Grid { Height = 24 };
-            var sprite = new SpriteView { SpriteIndex = item.SpriteIndex, SpriteSize = 24,
+            var matched = matches.Contains(item.Id);
+            var cell = new Border { Width = 24, Height = 24, CornerRadius = new CornerRadius(4),
+                HorizontalAlignment = HorizontalAlignment.Center, BorderThickness = new Thickness(1),
+                BorderBrush = matched ? Resource("SystemFillColorSuccessBrush") : null,
+                Background = matched ? Resource("SystemFillColorSuccessBackgroundBrush") : null };
+            var sprite = new SpriteView { SpriteIndex = item.SpriteIndex, SpriteSize = 20,
                 HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-            cell.Children.Add(sprite);
-            ToolTipService.SetToolTip(cell, item.Name); AutomationProperties.SetName(cell, item.Name);
-            cell.SizeChanged += (_, _) => sprite.SpriteSize = Math.Max(1, Math.Floor(Math.Min(24, cell.ActualWidth)));
+            cell.Child = sprite;
+            var label = $"Transmutation #{index + 1}: {item.Name}" + (matched ? ", matches requirement" : "");
+            ToolTipService.SetToolTip(cell, label); AutomationProperties.SetName(cell, label);
+            tail.SizeChanged += (_, _) => { cell.Width = cell.Height = Math.Max(1, Math.Min(24, (tail.ActualWidth - 24) / 13)); sprite.SpriteSize = Math.Max(1, cell.Width - 4); };
             Grid.SetColumn(cell, index); tail.Children.Add(cell);
         }
         Children.Add(tail);

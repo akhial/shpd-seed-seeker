@@ -716,6 +716,36 @@ fn animate(area: &gtk::DrawingArea, period: f64) {
     });
 }
 
+fn draw_trinket_match(context: &cairo::Context, width: i32, height: i32) {
+    // Center a rounded square inside each flexible deck column.
+    let edge = f64::from(width.min(height).min(24)) - 1.0;
+    let x = (f64::from(width) - edge) / 2.0;
+    let y = (f64::from(height) - edge) / 2.0;
+    let radius = 4.0_f64.min(edge / 2.0);
+    let _ = context.save();
+    for (cx, cy, start) in [
+        (x + edge - radius, y + radius, -90.0_f64),
+        (x + edge - radius, y + edge - radius, 0.0),
+        (x + radius, y + edge - radius, 90.0),
+        (x + radius, y + radius, 180.0),
+    ] {
+        context.arc(
+            cx,
+            cy,
+            radius,
+            start.to_radians(),
+            (start + 90.0).to_radians(),
+        );
+    }
+    context.close_path();
+    context.set_source_rgba(0.35, 0.8, 0.54, 0.14);
+    let _ = context.fill_preserve();
+    context.set_source_rgb(0.35, 0.8, 0.54);
+    context.set_line_width(1.0);
+    let _ = context.stroke();
+    let _ = context.restore();
+}
+
 /// A responsive trinket tile. The aspect frame gives all four choices identical
 /// square geometry; drawing the name lets it shrink without imposing a minimum
 /// width on the pane. Artwork uses the same nearest-neighbour atlas as items.
@@ -745,6 +775,9 @@ pub fn trinket_tile(
         }
     }
     area.set_draw_func(move |area, context, width, height| {
+        if !primary && matched {
+            draw_trinket_match(context, width, height);
+        }
         let art_height = if primary { height * 3 / 4 } else { height };
         let size = (width - 8)
             .min(art_height - 8)

@@ -74,6 +74,7 @@ mod cache;
 mod coverage;
 mod floors;
 mod resin;
+pub(crate) mod trinket_deck;
 
 use coverage::Coverages;
 
@@ -202,6 +203,13 @@ fn equipment_probability_without_floors(query: &SearchQuery, profile: Profile) -
 fn trinket_probability(query: &SearchQuery) -> f64 {
     use crate::catalog::ITEMS;
 
+    if query
+        .requirements
+        .iter()
+        .any(|r| r.trinket_transmutations > 0)
+    {
+        return trinket_deck::probability(query, None);
+    }
     if query.requirements.iter().any(|requirement| {
         requirement.kind == ItemKind::Trinket
             && (requirement.source.is_some() || requirement.level_sum.is_some())
@@ -297,7 +305,10 @@ fn trinket_mask(query: &SearchQuery, members: &[usize], identities: &[ItemId], d
                 secret: false,
             };
             let matches = members.iter().any(|&member| {
-                let requirement = query.requirements[member];
+                let requirement = Requirement {
+                    trinket_transmutations: 0,
+                    ..query.requirements[member]
+                };
                 requirement.kind == ItemKind::Trinket
                     && depth
                         <= query
@@ -2314,6 +2325,7 @@ mod tests {
             effect: EffectRequirement::Any,
             require_uncursed: false,
             select_trinket: false,
+            trinket_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             source: None,

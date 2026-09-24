@@ -1069,6 +1069,7 @@ mod tests {
                     effect: EffectRequirement::exactly(Effect::Armor(ArmorEffect::Thorns)),
                     require_uncursed: true,
                     select_trinket: false,
+                    trinket_transmutations: 0,
                     blanket: false,
                     exclude_resin: false,
                     source: Some(ItemSource::Chest),
@@ -1086,6 +1087,7 @@ mod tests {
                     effect: EffectRequirement::Any,
                     require_uncursed: false,
                     select_trinket: false,
+                    trinket_transmutations: 0,
                     blanket: false,
                     exclude_resin: false,
                     source: None,
@@ -1103,6 +1105,7 @@ mod tests {
                     effect: EffectRequirement::Any,
                     require_uncursed: false,
                     select_trinket: false,
+                    trinket_transmutations: 0,
                     blanket: false,
                     exclude_resin: false,
                     source: None,
@@ -1156,6 +1159,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::too_many_lines)] // Full query field fixture.
     fn query_requests_round_trip_effect_sets_alternatives_and_level_sums() {
         let query = SearchQuery {
             floor_requirements: Vec::new(),
@@ -1180,6 +1184,7 @@ mod tests {
                     ),
                     require_uncursed: false,
                     select_trinket: false,
+                    trinket_transmutations: 0,
                     blanket: false,
                     exclude_resin: false,
                     source: None,
@@ -1199,6 +1204,7 @@ mod tests {
                     ),
                     require_uncursed: true,
                     select_trinket: false,
+                    trinket_transmutations: 0,
                     blanket: false,
                     exclude_resin: false,
                     source: None,
@@ -1216,6 +1222,7 @@ mod tests {
                     effect: EffectRequirement::Any,
                     require_uncursed: false,
                     select_trinket: false,
+                    trinket_transmutations: 0,
                     blanket: false,
                     exclude_resin: false,
                     source: None,
@@ -1236,6 +1243,7 @@ mod tests {
                     effect: EffectRequirement::Any,
                     require_uncursed: false,
                     select_trinket: false,
+                    trinket_transmutations: 0,
                     blanket: false,
                     exclude_resin: false,
                     source: None,

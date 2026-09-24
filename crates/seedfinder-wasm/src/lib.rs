@@ -562,6 +562,7 @@ fn parse_seed_code_impl(input: &str) -> Result<String, String> {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct TrinketOutput {
+    matched: bool,
     id: &'static str,
     name: &'static str,
     sprite_index: u16,
@@ -600,6 +601,7 @@ fn scout_impl(request_json: &str) -> Result<String, String> {
     let marks = query.as_ref().map(|query| scout_matches(&world, query));
     let matched_requirements = marks.as_ref().map_or(0, |marks| marks.matched_requirements);
     let total_requirements = marks.as_ref().map_or(0, |marks| marks.total_requirements);
+    let transmuted = marks.as_ref().map(|marks| marks.transmuted_trinkets);
     let matched = marks.map_or_else(|| vec![false; world.items.len()], |marks| marks.matched);
     let items = world
         .items
@@ -613,9 +615,13 @@ fn scout_impl(request_json: &str) -> Result<String, String> {
         seed: seed.into(),
         trinket_order: shpd_seedfinder_core::trinkets::trinket_order(seed)
             .into_iter()
-            .map(|id| {
+            .enumerate()
+            .map(|(index, id)| {
                 let entry = item(id);
                 TrinketOutput {
+                    matched: index
+                        .checked_sub(4)
+                        .is_some_and(|step| transmuted.is_some_and(|marks| marks[step])),
                     id: entry.stable_id,
                     name: entry.name,
                     sprite_index: entry.sprite_index,
@@ -1218,6 +1224,45 @@ mod tests {
             assert_eq!(entry["name"], definition.name);
             assert_eq!(entry["sprite"], definition.sprite_index);
         }
+    }
+
+    #[test]
+    fn trinket_transmutations_filter_and_highlight_the_remaining_deck() {
+        // Official v4.0.0 oracle: Censer is first, Salt Cube is thirteenth.
+        let query = json!({"max_depth": 3, "requirements": [
+            {"item": "chaotic_censer", "trinket_transmutations": 1},
+            {"item": "salt_cube", "trinket_transmutations": 13}
+        ]});
+        let output: Value = serde_json::from_str(
+            &scout_impl(
+                &json!({
+                    "seed": "AAA-AAA-AAA", "query": query
+                })
+                .to_string(),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(output["matchedRequirements"], 2);
+        assert_eq!(output["trinketOrder"][4]["matched"], true);
+        assert_eq!(output["trinketOrder"][16]["matched"], true);
+        let offers: Vec<_> = output["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|entry| entry["category"] == "trinket")
+            .collect();
+        assert_eq!(offers.len(), 4);
+        assert!(offers.iter().all(|entry| entry["matched"] == false));
+        assert_eq!(output["selectedTrinket"], Value::Null);
+        let filtered: Value =
+            serde_json::from_str(&filter_seeds_impl(&query.to_string(), &[0.0]).unwrap()).unwrap();
+        assert_eq!(filtered.as_array().unwrap().len(), 1);
+        let mut wrong = query;
+        wrong["requirements"][0]["trinket_transmutations"] = 0.into();
+        let filtered: Value =
+            serde_json::from_str(&filter_seeds_impl(&wrong.to_string(), &[0.0]).unwrap()).unwrap();
+        assert!(filtered.as_array().unwrap().is_empty());
     }
 
     #[test]

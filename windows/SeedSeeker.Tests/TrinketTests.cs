@@ -5,6 +5,26 @@ namespace SeedSeeker.Tests;
 public sealed class TrinketTests
 {
     [Fact]
+    public void TransmutationLimitSurvivesFormatsAndHighlightsOnlyTheDeck()
+    {
+        var query = new QuerySettings { AutoApplyTrinket = true, Requirements = [
+            new() { Kind = ItemKind.Trinket, Item = ItemCatalog.Find("rat_skull"), UpgradeMatch = UpgradeMatch.Any, TrinketTransmutations = 11 }
+        ] };
+        var document = ResultsExport.EncodeQueryDocument(query);
+        var decoded = ResultsExport.DecodeQueryDocument(document);
+        Assert.Equal(11, decoded.Requirements[0].TrinketTransmutations);
+        Assert.Equal(11, query.Clone().Requirements[0].TrinketTransmutations);
+        var shared = NativeEngine.TryEncodeShareLink(document);
+        Assert.NotNull(shared);
+        Assert.Equal(11, ResultsExport.DecodeQueryDocument(NativeEngine.TryDecodeShareText(shared)!).Requirements[0].TrinketTransmutations);
+        var marks = NativeEngine.ScoutMatches("AAA-AAA-AAA", 0, query);
+        Assert.Equal(1, marks.MatchedRequirements);
+        Assert.Empty(marks.Matched);
+        Assert.Equal(new[] { 10 }, marks.TransmutedTrinkets);
+        Assert.Contains(query.Requirements[0].Tags, tag => tag.Text == "Transmute ≤11");
+    }
+
+    [Fact]
     public void CatalogContainsSeventeenNamedTrinkets()
     {
         var items = ItemCatalog.For(ItemKind.Trinket).ToList();

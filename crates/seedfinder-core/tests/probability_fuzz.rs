@@ -373,6 +373,7 @@ fn base(kind: ItemKind) -> Requirement {
         effect: EffectRequirement::Any,
         require_uncursed: false,
         select_trinket: false,
+        trinket_transmutations: 0,
         blanket: false,
         exclude_resin: false,
         source: None,
@@ -613,6 +614,7 @@ fn locked_level_queries() -> Vec<(String, SearchQuery)> {
                     upgrade: UpgradeRequirement::Exact(3),
                     require_uncursed: true,
                     select_trinket: false,
+                    trinket_transmutations: 0,
                     blanket: false,
                     exclude_resin: false,
                     ..base(ItemKind::Weapon)

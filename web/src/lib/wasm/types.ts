@@ -80,6 +80,8 @@ export interface RequirementState {
   /** Extra filter on an item assigned to an ordinary requirement. */
   blanket?: boolean;
   selectTrinket?: boolean;
+  /** Maximum transmutations (1–13), including initial offers; absent/zero requires an offer. */
+  trinketTransmutations?: number;
   kind?: RequirementKind;
   item?: string;
   tier: TierFilter;
@@ -132,6 +134,7 @@ export interface RequirementDocument {
   exclude_resin?: boolean;
   blanket?: boolean;
   select_trinket?: boolean;
+  trinket_transmutations?: number;
   kind?: RequirementKind;
   item?: string;
   tier?: TierDocument;
@@ -295,6 +298,7 @@ export interface ScoutQuest {
 }
 
 export interface TrinketOffer {
+  matched?: boolean;
   id: string;
   name: string;
   spriteIndex: number;

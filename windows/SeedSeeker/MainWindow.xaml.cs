@@ -1102,6 +1102,11 @@ public sealed partial class MainWindow : Window
         curseSection.Children.Add(new TextBlock { Text = "Curses", Style = (Style)Application.Current.Resources["Caption"] }); curseSection.Children.Add(cursePanel);
         var effectGrid = new StackPanel { Spacing = 4 }; effectGrid.Children.Add(enchantmentLabel); effectGrid.Children.Add(enchantmentPanel); effectGrid.Children.Add(curseSection);
         var selectTrinket = new CheckBox { Content = "Choose matching trinket at +3", IsChecked = r.SelectTrinket };
+        var allowTransmutations = new CheckBox { Content = "Allow transmutations", IsChecked = r.TrinketTransmutations > 0 };
+        var transmutations = Number("Maximum transmutations", Math.Clamp(r.TrinketTransmutations, 1, 13), 1, 13);
+        transmutations.SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline;
+        var transmutationLimit = Row("At most", transmutations);
+        var transmutationHelp = new TextBlock { Text = "Includes the initial offers. AutoTrinket can use a helpful starting trinket. Scroll availability and effects after transmuting are not simulated.", TextWrapping = TextWrapping.Wrap };
         var excludeResin = new CheckBox { Content = "Exclude from Auto resin", IsChecked = r.ExcludeResin };
         var resinHelp = new TextBlock { Text = "Keep this wand without budgeting resin to upgrade it. Useful for imbuing: resin upgrades do not transfer to the staff. Extra copies are reserved for reforging and never need Auto resin.", TextWrapping = TextWrapping.Wrap };
         var uncursed = new CheckBox { Content = "Require uncursed", IsChecked = r.RequireUncursed };
@@ -1168,8 +1173,10 @@ public sealed partial class MainWindow : Window
             Section(SectionTitle("Item"), Row("Category", kind), Row("Item", item), resin, Row("Tier", tierMatch), Row("Exact tier", tier), Row("Minimum tier", tierBound)),
             Section(SectionTitle("Upgrade level"), Row("Predicate", upgradeMatch), Row("Upgrade level", upgrade), Row("Minimum upgrade", upgradeBound)),
             Section(effectTitle, Row("Effect", effectMode), effectGrid),
-            Section(null, selectTrinket, excludeResin, resinHelp, uncursed, Row("Source", source), depthRow, Row("Within first floors", depth)),
+            Section(null, allowTransmutations, transmutationLimit, transmutationHelp, selectTrinket, excludeResin, resinHelp, uncursed, Row("Source", source), depthRow, Row("Within first floors", depth)),
             Section(SectionTitle("Stack"), Row("Total item count", count), copyDepthToggle, copyDepth, totalToggle, total) }) content.Children.Add(section);
+        allowTransmutations.Checked += (_, _) => { selectTrinket.IsChecked = false; SyncVisibility(); };
+        allowTransmutations.Unchecked += (_, _) => SyncVisibility();
         void NormalizeTier()
         {
             var predicate = (TierMatch)Math.Max(0, tierMatch.SelectedIndex);
@@ -1181,7 +1188,9 @@ public sealed partial class MainWindow : Window
             var k = (ItemKind)Math.Max(0, kind.SelectedIndex); var trinket = k == ItemKind.Trinket; var generic = item.SelectedIndex == 0 && k.Family() is ItemKind.Weapon or ItemKind.Armor;
             resin.Visibility = !r.Blanket && k == ItemKind.Wand && accept == "Add" ? Visibility.Visible : Visibility.Collapsed;
             excludeResin.Visibility = resinHelp.Visibility = k == ItemKind.Wand && !r.Blanket ? Visibility.Visible : Visibility.Collapsed;
-            selectTrinket.Visibility = !r.Blanket && trinket ? Visibility.Visible : Visibility.Collapsed;
+            allowTransmutations.Visibility = trinket ? Visibility.Visible : Visibility.Collapsed;
+            transmutationLimit.Visibility = transmutationHelp.Visibility = trinket && allowTransmutations.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+            selectTrinket.Visibility = !r.Blanket && trinket && allowTransmutations.IsChecked != true ? Visibility.Visible : Visibility.Collapsed;
             var predicate = (TierMatch)Math.Max(0, tierMatch.SelectedIndex); var ranged = predicate is TierMatch.AtLeast or TierMatch.AtMost;
             tierMatch.Visibility = generic ? Visibility.Visible : Visibility.Collapsed;
             tier.Visibility = generic && predicate == TierMatch.Exactly ? Visibility.Visible : Visibility.Collapsed;
@@ -1288,7 +1297,8 @@ public sealed partial class MainWindow : Window
         r.Kind = (ItemKind)kind.SelectedIndex; r.Item = r.Kind.RequiresNamedItem() ? itemChoices[Math.Max(0, item.SelectedIndex)] : item.SelectedIndex > 0 ? itemChoices[item.SelectedIndex - 1] : null; r.TierMatch = r.Item is null && r.Kind.Family() is ItemKind.Weapon or ItemKind.Armor ? (TierMatch)tierMatch.SelectedIndex : TierMatch.Any; r.Tier = r.TierMatch == TierMatch.Any ? 0 : selectedTier;
         r.UpgradeMatch = (UpgradeMatch)upgradeMatch.SelectedIndex; r.Upgrade = r.UpgradeMatch switch { UpgradeMatch.Any => 0, UpgradeMatch.Exactly => (int)upgrade.Value, UpgradeMatch.AtLeast when r.Kind == ItemKind.Ring => (int)upgrade.Value, UpgradeMatch.AtLeast => selectedMinimumUpgrade, _ => 0 };
         r.RequireUncursed = uncursed.IsChecked == true;
-        r.SelectTrinket = !r.Blanket && r.Kind == ItemKind.Trinket && selectTrinket.IsChecked == true;
+        r.TrinketTransmutations = r.Kind == ItemKind.Trinket && allowTransmutations.IsChecked == true ? Math.Clamp((int)transmutations.Value, 1, 13) : 0;
+        r.SelectTrinket = !r.Blanket && r.Kind == ItemKind.Trinket && r.TrinketTransmutations == 0 && selectTrinket.IsChecked == true;
         r.ExcludeResin = !r.Blanket && r.Kind == ItemKind.Wand && excludeResin.IsChecked == true;
         // One checked effect is a single name, as before effect sets existed; an empty "Specific" means any.
         r.Effect = effectMode.Visibility != Visibility.Visible ? EffectFilter.Any() : effectMode.SelectedIndex switch
@@ -1947,7 +1957,8 @@ public sealed partial class MainWindow : Window
                             ScoutChoices.Dimmed(entry.Item, matches.Matched.Contains(entry.Index), matchedChoices)));
                     else if (entry.Index == trinkets[0].Index)
                         group.Add(ScoutRow.Catalyst(entry.Item, world.TrinketOrder ?? trinkets.Select(x => x.Item.Item).ToList(),
-                            trinkets.Where(x => matches.Matched.Contains(x.Index)).Select(x => x.Item.Item.Id).ToHashSet(),
+                            trinkets.Where(x => matches.Matched.Contains(x.Index)).Select(x => x.Item.Item.Id)
+                                .Concat((world.TrinketOrder ?? []).Skip(4).Where((_, index) => matches.TransmutedTrinkets.Contains(index)).Select(item => item.Id)).ToHashSet(),
                             world.SelectedTrinket, selected => { _ = ScoutSeed(seed, selected); }));
                 }
                 if (group.Count == 0) group.Add(new ScoutRow { Depth = depth, ItemName = "No notable items on this floor.", RowOpacity = .65 });

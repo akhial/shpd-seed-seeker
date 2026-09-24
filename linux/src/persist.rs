@@ -240,6 +240,7 @@ mod tests {
             effect: EffectRequirement::exactly(Effect::Weapon(WeaponEffect::Blazing)),
             require_uncursed: true,
             select_trinket: false,
+            trinket_transmutations: 0,
             source: Some(ItemSource::SacrificialFire),
             identity_group: Some(3),
             max_depth: Some(21),
@@ -257,6 +258,18 @@ mod tests {
         state.wandmaker_quest = Some(WandmakerQuestType::Rotberry);
         state.challenges = Challenges::DARKNESS;
         state
+    }
+
+    #[test]
+    fn trinket_transmutation_limit_survives_persistence() {
+        let state = decode_state(r#"{"auto_apply_trinket":true,"requirements":[{"item":"rat_skull","trinket_transmutations":11}]}"#).unwrap();
+        assert_eq!(state.requirements[0].trinket_transmutations, 11);
+        assert_eq!(state.requirements[0].to_core().trinket_transmutations, 11);
+        assert_eq!(
+            save_document(&state)["requirements"][0]["trinket_transmutations"],
+            11
+        );
+        assert_eq!(state.requirements[0].subtitle(), "Transmute ≤11");
     }
 
     #[test]
@@ -332,6 +345,7 @@ mod tests {
             effect: EffectRequirement::OneOf(EffectSet::enchantments(ItemKind::Weapon).unwrap()),
             require_uncursed: true,
             select_trinket: false,
+            trinket_transmutations: 0,
             ..UiRequirement::new(key)
         });
         // Two Rings of Might adding up to +4.

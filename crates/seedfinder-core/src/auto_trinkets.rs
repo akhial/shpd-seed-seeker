@@ -173,7 +173,7 @@ pub fn filter_batch<G: WorldGenerator>(
 /// Refine under the original automatic choice, including choices previously
 /// removed as unnecessary. Test that world first; only successful matches get
 /// the usual no-trinket cleanup. Never rerank using the edited query while
-/// automatic selection remains enabled. Explicit trinket requirements or
+/// automatic selection remains enabled and preserves required offers. Explicit +3 selection or
 /// disabling automatic selection instead use the current query's world.
 #[must_use]
 pub fn refine_batch<G: WorldGenerator>(
@@ -199,13 +199,17 @@ pub fn refine_batch<G: WorldGenerator>(
             .map(|r| {
                 (
                     r.seed.value(),
-                    r.trinket.or_else(|| {
-                        if reapply {
-                            original.selected_trinket(r.seed)
-                        } else {
-                            None
-                        }
-                    }),
+                    r.trinket
+                        .or_else(|| {
+                            if reapply {
+                                original.selected_trinket(r.seed)
+                            } else {
+                                None
+                            }
+                        })
+                        .filter(|id| {
+                            preserves_required_offers(query, *id, &initial_offers(r.seed))
+                        }),
                 )
             })
             .collect(),
@@ -228,7 +232,13 @@ fn match_batch<G: WorldGenerator>(
         .into_iter()
         .map(|world| {
             world
-                .filter(|world| query.matches(world))
+                .filter(|world| {
+                    let safe = !enabled(query)
+                        || gate.selected_trinket(world.seed).is_none_or(|chosen| {
+                            preserves_required_offers(query, chosen, &initial_offers(world.seed))
+                        });
+                    safe && query.matches(world)
+                })
                 .map(|world| TrinketSearchMatch {
                     recipe: SeedRecipe {
                         seed: world.seed,
@@ -238,6 +248,15 @@ fn match_batch<G: WorldGenerator>(
                 })
         })
         .collect()
+}
+
+fn preserves_required_offers(query: &SearchQuery, chosen: ItemId, offers: &[ItemId]) -> bool {
+    query
+        .requirements
+        .iter()
+        .filter(|r| r.kind == ItemKind::Trinket)
+        .filter_map(|r| r.item)
+        .all(|id| id == chosen || !offers.contains(&id))
 }
 
 /// Generation effects with a directional equipment benefit. Feeling changes
@@ -253,6 +272,8 @@ pub const CANDIDATES: [ItemId; 4] = [
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct AutoTrinketPolicy {
     preferred: Vec<ItemId>,
+    /// Preserve requested initial offers: discarded offers cannot be transmuted back before refill.
+    requested: Vec<ItemId>,
 }
 
 // Filtering is split into cancellable batches and native worker slices. Ranking
@@ -286,8 +307,8 @@ impl PolicyCache {
 }
 
 impl AutoTrinketPolicy {
-    /// Prepare once per query. Any trinket requirement, even inside an OR
-    /// group, disables automatic selection in favor of the explicit rules.
+    /// Prepare once per query. Explicit +3 selection overrides the automatic rule.
+    /// Availability requirements instead restrict which starting offers are safe.
     #[must_use]
     pub fn prepare(query: &SearchQuery) -> Option<Self> {
         if !enabled(query) {
@@ -309,6 +330,19 @@ impl AutoTrinketPolicy {
         // Room sampling noise must not cause an otherwise unnecessary trinket choice.
         let mut item_query = query.clone();
         item_query.floor_requirements.clear();
+        let mut requested: Vec<_> = query
+            .requirements
+            .iter()
+            .filter(|r| r.kind == ItemKind::Trinket)
+            .filter_map(|r| r.item)
+            .collect();
+        requested.sort_unstable();
+        requested.dedup();
+        // Deck availability is independent of equipment supply. Pure trinket
+        // slots need no equipment; mixed OR slots retain their equipment alternatives.
+        item_query
+            .requirements
+            .retain(|r| r.kind != ItemKind::Trinket);
         let query = &item_query;
         let baseline = equipment_probability(query, Profile::None);
         let forbids_parchment = query.requirements.iter().any(|r| match r.effect {
@@ -323,6 +357,7 @@ impl AutoTrinketPolicy {
         // Stable sorting gives a fixed tie-break, independent of offer order.
         scores.sort_by(|a, b| finite_score(b.1).total_cmp(&finite_score(a.1)));
         Self {
+            requested,
             preferred: scores
                 .iter()
                 .filter(|(_, p)| baseline.is_finite() && p.is_finite() && *p > baseline * 1.05)
@@ -344,7 +379,13 @@ impl AutoTrinketPolicy {
         self.preferred
             .iter()
             .copied()
-            .find(|id| offers.contains(id))
+            .find(|id| offers.contains(id) && self.preserves_offers(*id, offers))
+    }
+
+    fn preserves_offers(&self, chosen: ItemId, offers: &[ItemId]) -> bool {
+        self.requested
+            .iter()
+            .all(|id| *id == chosen || !offers.contains(id))
     }
 
     /// Preferred generation effects, in descending estimated match probability.
@@ -361,16 +402,19 @@ fn finite_score(score: f64) -> f64 {
 /// Whether the requested setting applies to this query.
 #[must_use]
 pub fn enabled(query: &SearchQuery) -> bool {
-    query.auto_apply_trinket
-        && !query
-            .requirements
-            .iter()
-            .any(|r| r.kind == ItemKind::Trinket)
+    query.auto_apply_trinket && !query.requirements.iter().any(|r| r.select_trinket)
 }
 
 /// Probability of the chosen policy, averaged over all 2,380 offer subsets.
 /// Equipment profiles already include the first brewing opportunity.
 pub(crate) fn probability(query: &SearchQuery, policy: &AutoTrinketPolicy) -> f64 {
+    if query
+        .requirements
+        .iter()
+        .any(|r| r.kind == ItemKind::Trinket)
+    {
+        return crate::probability::trinket_deck::probability(query, Some(policy));
+    }
     let baseline = equipment_probability(query, Profile::None);
     let scores = CANDIDATES.map(|id| equipment_probability(query, Profile::of(id)));
     let identities = trinket_order(DungeonSeed::MIN);
@@ -567,7 +611,12 @@ mod tests {
         );
         assert!(AutoTrinketPolicy::prepare(&explicit).is_none());
         let unselected = query(r#"[{"item":"rat_skull"}]"#);
-        assert!(AutoTrinketPolicy::prepare(&unselected).is_none());
+        assert!(
+            AutoTrinketPolicy::prepare(&unselected)
+                .unwrap()
+                .preferred()
+                .is_empty()
+        );
         let mut baseline = grim.clone();
         baseline.auto_apply_trinket = false;
         assert!(AutoTrinketPolicy::prepare(&baseline).is_none());
@@ -575,6 +624,78 @@ mod tests {
             crate::probability::estimate_match_probability(&grim)
                 > crate::probability::estimate_match_probability(&baseline)
         );
+    }
+
+    #[test]
+    fn transmutation_budget_keeps_benefit_rule_and_preserves_required_offers() {
+        let mut query = query(r#"[{"item":"dimensional_sundial","trinket_transmutations":1}]"#);
+        let policy = AutoTrinketPolicy::prepare(&query).unwrap();
+        assert!(
+            policy.preferred().is_empty(),
+            "a trinket-only query needs no helper"
+        );
+        query.requirements.extend(
+            self::query(r#"[{"kind":"melee_weapon","source":"golden_mimic"}]"#).requirements,
+        );
+        let policy = AutoTrinketPolicy::prepare(&query).unwrap();
+        assert_eq!(policy.preferred()[0], ItemId::MimicTooth);
+        assert_eq!(
+            policy.selected_trinket(DungeonSeed::MIN),
+            None,
+            "choosing Mimic Tooth would discard the initial Sundial"
+        );
+        let seed = DungeonSeed::from_code("AAA-AAA-AAN").unwrap();
+        let order = trinket_order(seed);
+        assert_eq!(order[4], ItemId::DimensionalSundial);
+        assert!(order[..4].contains(&ItemId::MimicTooth));
+        let plan = QueryPlan::analyze(&query);
+        assert_eq!(plan.selected_trinket(seed), Some(ItemId::MimicTooth));
+        let result = search_batch(&CanonicalMainWorldGenerator, &query, &plan, &[seed])[0]
+            .clone()
+            .unwrap();
+        assert_eq!(result.recipe.trinket, Some(ItemId::MimicTooth));
+        assert!(query.matches(&result.world));
+        assert!(
+            filter_batch(
+                &CanonicalMainWorldGenerator,
+                &query,
+                &plan,
+                &[result.recipe]
+            )[0]
+            .is_some()
+        );
+        let mut only_trinket = query.clone();
+        only_trinket.requirements.truncate(1);
+        let refined = refine_batch(
+            &CanonicalMainWorldGenerator,
+            &only_trinket,
+            &QueryPlan::analyze(&only_trinket),
+            &query,
+            &[result.recipe],
+        );
+        assert_eq!(refined[0].as_ref().unwrap().recipe.trinket, None);
+    }
+
+    #[test]
+    fn transmutation_probability_conditions_helpful_profiles_on_the_deck() {
+        let mut query = query(
+            r#"[{"item":"ring_might","upgrade":2},{"item":"dimensional_sundial","trinket_transmutations":1}]"#,
+        );
+        let policy = AutoTrinketPolicy {
+            preferred: vec![ItemId::MimicTooth],
+            requested: vec![ItemId::DimensionalSundial],
+        };
+        let mut equipment = query.clone();
+        equipment.requirements.truncate(1);
+        let baseline = equipment_probability(&equipment, Profile::None);
+        let mimic = equipment_probability(&equipment, Profile::of(ItemId::MimicTooth));
+        // Four initial Sundial positions use baseline. At tail #1, Mimic Tooth
+        // is among the initial four with probability 4/16.
+        let expected = (19.0 * baseline + mimic) / 68.0;
+        assert!((probability(&query, &policy) - expected).abs() < 1e-12);
+        query.requirements[1].trinket_transmutations = 13;
+        let expected = (55.0 * baseline + 13.0 * mimic) / 68.0;
+        assert!((probability(&query, &policy) - expected).abs() < 1e-12);
     }
 
     struct RejectChosen {

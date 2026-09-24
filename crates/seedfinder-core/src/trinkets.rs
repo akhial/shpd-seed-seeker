@@ -1,4 +1,4 @@
-//! Initial catalyst offer identities. Reading this deck never mutates the world RNG.
+//! Catalyst offers and the first transmutation deck. Reading never mutates the world RNG.
 use crate::catalog::ItemId;
 use crate::generator::{GeneratedItem, TrinketKind, random_category};
 use crate::model::WorldItem;
@@ -54,9 +54,10 @@ pub fn resolve_selection(
     }
     let offers = initial_offers(seed);
     let mut matches = offers.iter().copied().filter(|id| {
-        slots
-            .iter()
-            .any(|slot| slot.iter().any(|r| r.item == Some(*id)))
+        slots.iter().any(|slot| {
+            slot.iter()
+                .any(|r| r.trinket_transmutations == 0 && r.item == Some(*id))
+        })
     });
     let selected = matches.next()?;
     if matches.next().is_some() {
@@ -154,9 +155,11 @@ impl TrinketEffects {
 }
 
 pub const INITIAL_OFFER_COUNT: usize = 4;
+/// The remaining unique cards before the first deck refill.
+pub const TRANSMUTATION_COUNT: u8 = 13;
 
-/// Complete private-deck draw order. Only the first four are initial offers;
-/// the tail is diagnostic order, not a promise about gameplay transmutations.
+/// Complete first private-deck draw order. Brewing consumes all four offers;
+/// the remaining 13 are successive transmutations, regardless of the chosen offer.
 ///
 /// # Panics
 /// Panics only if a validated dungeon seed or the pinned trinket deck violates
@@ -166,6 +169,40 @@ pub fn trinket_order(seed: DungeonSeed) -> [ItemId; 17] {
     order_from_generator(
         &RunState::new(i64::try_from(seed.value()).expect("seed fits i64")).generator,
     )
+}
+
+/// Add virtual transmutation outcomes only when matching a query that needs them.
+/// They inherit the catalyst's acquisition constraints, not a claim that enough
+/// scrolls exist by that floor. Generated worlds and native scout indices stay intact.
+pub(crate) fn matching_items<'a>(
+    query: &crate::query::SearchQuery,
+    world: &'a crate::model::GeneratedWorld,
+) -> std::borrow::Cow<'a, [WorldItem]> {
+    use std::borrow::Cow;
+    if !query
+        .requirements
+        .iter()
+        .any(|r| r.trinket_transmutations > 0)
+    {
+        return Cow::Borrowed(&world.items);
+    }
+    let Some(catalyst) = world
+        .items
+        .iter()
+        .find(|entry| crate::catalog::item(entry.item).kind == crate::catalog::ItemKind::Trinket)
+    else {
+        return Cow::Borrowed(&world.items);
+    };
+    let mut items = world.items.clone();
+    items.extend(
+        trinket_order(world.seed)[INITIAL_OFFER_COUNT..]
+            .iter()
+            .map(|&item| WorldItem {
+                item,
+                ..catalyst.clone()
+            }),
+    );
+    Cow::Owned(items)
 }
 
 pub(crate) fn order_from_generator(generator: &GeneratorState) -> [ItemId; 17] {

@@ -131,7 +131,13 @@ four square choices beneath the catalyst on its actual floor, highlights matchin
 choices with a flat green fill, and keeps the remaining thirteen icons
 in one row. Sprite drawing uses nearest-neighbor filtering.
 
-The requirement editor can choose matching trinkets at +3. The engine applies
+**Allow transmutations** adds an **At most N** limit from 1–13, including the
+initial offers. Scout labels the remaining deck positions and uses rounded
+square match borders. Drafts, presets, exports and share links retain the limit;
+probability estimates and AutoTrinket use the shared engine policy. AutoTrinket
+still retains a helper only when the other requirements need it.
+
+With transmutations disabled, the requirement editor can choose matching trinkets at +3. The engine applies
 that selection after the first brewing opportunity, with ambiguous offered OR
 alternatives leaving no trinket selected. Presets, exports, and share links keep
 this choice. Probability estimates use the selected generation effects.

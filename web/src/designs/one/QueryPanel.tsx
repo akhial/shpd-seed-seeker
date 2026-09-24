@@ -9,7 +9,6 @@ import {
   FLOOR_LIMIT_OPTIONS,
   emptyRequirement,
   fromQueryJson,
-  requirementFamily,
   toQueryJson,
 } from "../../lib/query";
 import type { ValidationResult } from "../../lib/query";
@@ -464,14 +463,14 @@ export function QueryPanel({
             <input
               type="checkbox"
               checked={query.autoApplyTrinket}
-              disabled={query.requirements.some((r) => requirementFamily(r) === "trinket")}
+              disabled={query.requirements.some((r) => r.selectTrinket)}
               onChange={(event) => patchQuery({ autoApplyTrinket: event.target.checked })}
             />
             <span>AutoTrinket</span>
           </label>
           <p className="d1-caption">
-            {query.requirements.some((r) => requirementFamily(r) === "trinket")
-              ? "Uses your trinket requirements instead."
+            {query.requirements.some((r) => r.selectTrinket)
+              ? "Uses your explicit trinket selection instead."
               : "Applies a helpful trinket at +3 at the first brewing opportunity. Keeps it only when the match needs it."}
           </p>
         </section>

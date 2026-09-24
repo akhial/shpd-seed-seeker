@@ -159,6 +159,7 @@ fun RequirementSheet(
     var sourceMenuExpanded by remember(identity) { mutableStateOf(false) }
     var maximumDepth by remember(identity) { mutableStateOf(editing?.maximumDepth) }
     var selectTrinket by remember(identity) { mutableStateOf(editing?.selectTrinket ?: false) }
+    var trinketTransmutations by remember(identity) { mutableStateOf(editing?.trinketTransmutations ?: 0) }
     var excludeResin by remember(identity) { mutableStateOf(editing?.excludeResin ?: false) }
     var requireUncursed by remember(identity) { mutableStateOf(editing?.requireUncursed ?: false) }
     // The stack this chip anchors: how many items of its kind to find, and the
@@ -214,7 +215,8 @@ fun RequirementSheet(
             identityGroup = if (blanket || !kind.supportsStacks) null else editing?.identityGroup,
             maximumDepth = if (kind == ItemKind.TRINKET) null else maximumDepth,
             requireUncursed = kind != ItemKind.TRINKET && requireUncursed,
-            selectTrinket = !blanket && kind == ItemKind.TRINKET && selectTrinket,
+            selectTrinket = !blanket && kind == ItemKind.TRINKET && trinketTransmutations == 0 && selectTrinket,
+            trinketTransmutations = if (kind == ItemKind.TRINKET) trinketTransmutations else 0,
             blanket = blanket,
             excludeResin = !blanket && kind == ItemKind.WAND && excludeResin,
             alternativeGroup = editing?.alternativeGroup,
@@ -397,7 +399,24 @@ fun RequirementSheet(
                             .verticalScroll(rememberScrollState())
                             .padding(horizontal = 20.dp),
                     ) {
-                        if (kind == ItemKind.TRINKET && !blanket) {
+                        if (kind == ItemKind.TRINKET) {
+                            Row(Modifier.fillMaxWidth().toggleable(
+                                value = trinketTransmutations > 0, role = Role.Switch,
+                                onValueChange = { trinketTransmutations = if (it) 1 else 0; if (it) selectTrinket = false },
+                            ), verticalAlignment = Alignment.CenterVertically) {
+                                Text("Allow transmutations", Modifier.weight(1f))
+                                Switch(checked = trinketTransmutations > 0, onCheckedChange = null)
+                            }
+                            if (trinketTransmutations > 0) {
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    Text("Maximum transmutations", Modifier.weight(1f))
+                                    Stepper(trinketTransmutations, 1..13, { "At most $it" }, { trinketTransmutations = it })
+                                }
+                                Text("Includes the initial offers. AutoTrinket can use a helpful starting trinket. Scroll availability and effects after transmuting are not simulated.",
+                                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                        if (kind == ItemKind.TRINKET && !blanket && trinketTransmutations == 0) {
                             Row(
                                 Modifier.fillMaxWidth().toggleable(
                                     value = selectTrinket,

@@ -3,6 +3,8 @@ package dev.seedseeker.app.ui
 
 import android.graphics.BitmapFactory
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
@@ -813,11 +815,18 @@ private fun TrinketCatalystCard(
                 }
             }
             if (deck.size > 4) {
-                Text("Remaining deck order", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Transmutation order · 1–13", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                    deck.drop(4).forEach { trinket ->
-                        BoxWithConstraints(Modifier.weight(1f).height(24.dp), contentAlignment = Alignment.Center) {
-                            ItemSprite(trinket, modifier = Modifier.size(minOf(maxWidth, 24.dp)))
+                    deck.drop(4).forEachIndexed { index, trinket ->
+                        val matched = matches?.transmutedTrinkets?.contains(index) == true
+                        BoxWithConstraints(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                            Surface(modifier = Modifier.size(minOf(maxWidth, 24.dp)).semantics {
+                                contentDescription = "Transmutation #${index + 1}: ${trinket.name}" + if (matched) ", matches requirement" else ""
+                            }, shape = RoundedCornerShape(4.dp),
+                                color = if (matched) SpdGreen.copy(alpha = 0.14f) else Color.Transparent,
+                                border = if (matched) androidx.compose.foundation.BorderStroke(1.dp, SpdGreen) else null) {
+                                ItemSprite(trinket, modifier = Modifier.fillMaxSize().padding(2.dp))
+                            }
                         }
                     }
                 }

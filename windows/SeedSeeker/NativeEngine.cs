@@ -325,7 +325,9 @@ public sealed class NativeEngine
         foreach (var index in document["matched"] as JsonArray ?? [])
             if (index is JsonValue value && value.TryGetValue(out int number)) matched.Add(number);
         return new(matched, (int?)document["matchedRequirements"] ?? matched.Count,
-            (int?)document["totalRequirements"] ?? slots);
+            (int?)document["totalRequirements"] ?? slots) {
+                TransmutedTrinkets = (document["transmutedTrinkets"] as JsonArray ?? []).Select(value => (int)value!).ToHashSet()
+            };
     }
 
     /// <summary>The full web share link for a canonical JSON query document, or null when the engine rejects the query.</summary>

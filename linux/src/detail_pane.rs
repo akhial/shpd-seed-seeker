@@ -747,6 +747,7 @@ impl DetailPane {
                             world,
                             &world.items[*index],
                             &marks.matched,
+                            &marks.transmuted_trinkets,
                             self.selected_trinket.get(),
                             {
                                 let pane = Rc::downgrade(self);
@@ -846,6 +847,7 @@ fn trinket_choices(
     world: &GeneratedWorld,
     location: &WorldItem,
     matched: &[bool],
+    transmuted: &[bool; 13],
     selected: Option<ItemId>,
     on_select: impl Fn(ItemId) + 'static,
 ) -> (gtk::Box, gtk::Box) {
@@ -899,7 +901,7 @@ fn trinket_choices(
     content.append(&choices);
     content.append(
         &gtk::Label::builder()
-            .label("Remaining deck order")
+            .label("Transmutation order · 1–13")
             .css_classes(["caption", "dim-label"])
             .xalign(0.0)
             .margin_start(12)
@@ -914,8 +916,21 @@ fn trinket_choices(
         .margin_end(12)
         .margin_bottom(12)
         .build();
-    for id in &order[4..] {
-        remaining.append(&sprites::trinket_tile(item(*id), false, false));
+    for (index, id) in order[4..].iter().enumerate() {
+        let tile = sprites::trinket_tile(item(*id), transmuted[index], false);
+        let label = format!(
+            "Transmutation #{}: {}{}",
+            index + 1,
+            item(*id).name,
+            if transmuted[index] {
+                ", matches requirement"
+            } else {
+                ""
+            }
+        );
+        tile.set_tooltip_text(Some(&label));
+        tile.update_property(&[gtk::accessible::Property::Label(&label)]);
+        remaining.append(&tile);
     }
     content.append(&remaining);
     (content, choices)

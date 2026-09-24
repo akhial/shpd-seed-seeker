@@ -65,6 +65,8 @@ struct Editor {
     uncursed: adw::SwitchRow,
     exclude_resin: adw::SwitchRow,
     select_trinket: adw::SwitchRow,
+    allow_transmutations: adw::SwitchRow,
+    trinket_transmutations: adw::SpinRow,
     source_row: adw::ComboRow,
     floor_switch: adw::SwitchRow,
     floor_value: adw::SpinRow,
@@ -273,6 +275,9 @@ fn build(context: AppState, requirement: &UiRequirement, stack: StackShape) -> E
             .subtitle("Keep this wand without budgeting resin to upgrade it. Useful for imbuing: resin upgrades do not transfer to the staff. Extra copies are reserved for reforging and never need Auto resin.")
             .build(),
         uncursed: adw::SwitchRow::builder().title("Require uncursed").build(),
+        allow_transmutations: adw::SwitchRow::builder().title("Allow transmutations")
+            .subtitle("Includes the initial offers. AutoTrinket can use a helpful starting trinket. Scroll availability and effects after transmuting are not simulated.").build(),
+        trinket_transmutations: spin_row("At most … transmutations", 1.0, 1.0, 13.0),
         select_trinket: adw::SwitchRow::builder()
             .title("Choose matching trinket at +3")
             .subtitle("Starts after the first brewing opportunity. Multiple offered matches use no trinket.")
@@ -312,6 +317,8 @@ fn groups(editor: &Rc<Editor>) -> Vec<adw::PreferencesGroup> {
     let item_group = adw::PreferencesGroup::builder().title("Item").build();
     item_group.add(&editor.category);
     item_group.add(&editor.item_row);
+    item_group.add(&editor.allow_transmutations);
+    item_group.add(&editor.trinket_transmutations);
     item_group.add(&editor.select_trinket);
     item_group.add(&editor.tier_row);
     item_group.add(&editor.exact_tier);
@@ -437,6 +444,9 @@ fn connect(editor: &Rc<Editor>) {
     editor
         .floor_switch
         .connect_active_notify(hook(Rc::clone(editor), refresh_visibility));
+    editor
+        .allow_transmutations
+        .connect_active_notify(hook(Rc::clone(editor), refresh_visibility));
     skip_empty_boss_floors(&editor.floor_value);
     skip_empty_boss_floors(&editor.copy_floor_value);
 }
@@ -467,6 +477,12 @@ fn restore(editor: &Rc<Editor>, requirement: &UiRequirement, stack: StackShape) 
     editor.uncursed.set_active(requirement.require_uncursed);
     editor.exclude_resin.set_active(requirement.exclude_resin);
     editor.select_trinket.set_active(requirement.select_trinket);
+    editor
+        .allow_transmutations
+        .set_active(requirement.trinket_transmutations > 0);
+    editor
+        .trinket_transmutations
+        .set_value(f64::from(requirement.trinket_transmutations.max(1)));
     populate_items(editor, requirement.item);
     populate_effects(editor, requirement.effect);
     normalize_upgrades(editor);
@@ -548,6 +564,8 @@ fn collect(editor: &Rc<Editor>) -> (UiRequirement, usize, Option<u8>, Option<u8>
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let max_depth = (kind != ItemKind::Trinket && editor.floor_switch.is_active())
         .then(|| normalize_floor_limit(editor.floor_value.value().round() as u8));
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    // The spinner is bounded to 1–13.
     let requirement = UiRequirement {
         key: editor.key,
         kind,
@@ -564,7 +582,19 @@ fn collect(editor: &Rc<Editor>) -> (UiRequirement, usize, Option<u8>, Option<u8>
         select_trinket: !editor.blanket
             && kind == ItemKind::Trinket
             && item.is_some()
+            && !editor.allow_transmutations.is_active()
             && editor.select_trinket.is_active(),
+        trinket_transmutations: if kind == ItemKind::Trinket
+            && editor.allow_transmutations.is_active()
+        {
+            editor
+                .trinket_transmutations
+                .value()
+                .round()
+                .clamp(1.0, 13.0) as u8
+        } else {
+            0
+        },
         source,
         // The stack's own encoding carries these; the board rebuilds them
         // from the count and total this returns.
@@ -984,9 +1014,18 @@ fn set_minimum_upgrade(editor: &Rc<Editor>, upgrade: u8) {
 
 fn refresh_visibility(editor: &Rc<Editor>) {
     let kind = selected_kind(editor);
+    editor.select_trinket.set_visible(
+        !editor.blanket && kind == ItemKind::Trinket && !editor.allow_transmutations.is_active(),
+    );
     editor
-        .select_trinket
-        .set_visible(!editor.blanket && kind == ItemKind::Trinket);
+        .allow_transmutations
+        .set_visible(kind == ItemKind::Trinket);
+    editor
+        .trinket_transmutations
+        .set_visible(kind == ItemKind::Trinket && editor.allow_transmutations.is_active());
+    if editor.allow_transmutations.is_active() {
+        editor.select_trinket.set_active(false);
+    }
     editor
         .exclude_resin
         .set_visible(!editor.blanket && kind == ItemKind::Wand);
@@ -994,6 +1033,7 @@ fn refresh_visibility(editor: &Rc<Editor>) {
         editor.exclude_resin.set_active(false);
     }
     if kind != ItemKind::Trinket {
+        editor.allow_transmutations.set_active(false);
         editor.select_trinket.set_active(false);
     }
     let wildcard_equipment = selected_item(editor).is_none() && enchantable(kind);

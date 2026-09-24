@@ -365,6 +365,7 @@ fn benchmark_query() -> SearchQuery {
             effect: EffectRequirement::Any,
             require_uncursed: false,
             select_trinket: false,
+            trinket_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             source: None,
