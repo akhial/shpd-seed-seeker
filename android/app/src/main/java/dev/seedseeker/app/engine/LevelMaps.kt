@@ -6,7 +6,6 @@ import android.graphics.BitmapFactory
 import android.graphics.Rect
 import android.graphics.RectF
 import android.util.LruCache
-import dev.seedseeker.app.model.Challenge
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -30,7 +29,7 @@ internal data class LevelMapRequest(
         put("seed", seed)
         put("depth", depth)
         put("branch", branch)
-        put("challenges", JSONArray(Challenge.entries.filter { challenges and it.bit != 0 }.map { it.name.lowercase() }))
+        put("challenges", JSONArray(EngineInfo.challengeNames.filterKeys { challenges and it != 0 }.values))
         put("trinket", trinket ?: "none")
     }.toString()
 }

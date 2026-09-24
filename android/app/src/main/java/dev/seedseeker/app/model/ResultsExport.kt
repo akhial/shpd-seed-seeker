@@ -2,6 +2,7 @@
 package dev.seedseeker.app.model
 
 import dev.seedseeker.app.catalog.ItemCatalog
+import dev.seedseeker.app.engine.EngineInfo
 import dev.seedseeker.app.engine.JniBindings
 import org.json.JSONArray
 import org.json.JSONObject
@@ -35,18 +36,9 @@ object ResultsExport {
         val trinkets: List<String?> = emptyList(),
     )
 
-    /** Stable document names for the nine challenges, in mask order. */
-    private val CHALLENGE_NAMES = linkedMapOf(
-        "on_diet" to Challenge.NO_FOOD,
-        "faith_is_my_armor" to Challenge.NO_ARMOR,
-        "pharmacophobia" to Challenge.NO_HEALING,
-        "barren_land" to Challenge.NO_HERBALISM,
-        "swarm_intelligence" to Challenge.SWARM_INTELLIGENCE,
-        "into_darkness" to Challenge.DARKNESS,
-        "forbidden_runes" to Challenge.NO_SCROLLS,
-        "hostile_champions" to Challenge.CHAMPION_ENEMIES,
-        "badder_bosses" to Challenge.STRONGER_BOSSES,
-    )
+    private val challengeMasks by lazy {
+        EngineInfo.challengeNames.entries.associate { (mask, name) -> name to mask }
+    }
 
     /** @throws IllegalArgumentException with the codec's message. */
     fun encode(query: PresetQuery, seeds: List<String>, appVersion: String, trinkets: List<String?>? = null): String {
@@ -84,9 +76,7 @@ object ResultsExport {
         if (query.requireBlacksmith) put("require_blacksmith", true)
         if (query.excludeBlacksmithRewards) put("exclude_blacksmith_rewards", true)
         query.wandmakerQuest?.let { put("wandmaker_quest", it.documentName) }
-        val challenges = CHALLENGE_NAMES.entries
-            .filter { (_, challenge) -> query.challenges and challenge.bit != 0 }
-            .map { (name, _) -> name }
+        val challenges = EngineInfo.challengeNames.filterKeys { query.challenges and it != 0 }.values
         if (challenges.isNotEmpty()) put("challenges", JSONArray(challenges))
     }
 
@@ -223,7 +213,7 @@ object ResultsExport {
         val challengesValue = value.optJSONArray("challenges") ?: JSONArray()
         var challenges = 0
         for (index in 0 until challengesValue.length()) {
-            CHALLENGE_NAMES[challengesValue.optString(index)]?.let { challenges = challenges or it.bit }
+            challengeMasks[challengesValue.optString(index)]?.let { challenges = challenges or it }
         }
         return PresetQuery(
             floorRequirements = decodeFloors(value),
