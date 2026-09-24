@@ -154,14 +154,14 @@ private fun LevelMapPanel(
                 }
             })
     }
-    val toolbar: @Composable (Boolean) -> Unit = { spread ->
+    val toolbar: @Composable () -> Unit = {
         Row(
             Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = if (spread) Arrangement.SpaceBetween else Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+            horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            if (!parent?.second?.map?.branches.isNullOrEmpty()) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (!parent?.second?.map?.branches.isNullOrEmpty()) {
                     FilterChip(selected = branch == 0, onClick = { branch = 0 }, label = { Text("Main") })
                     parent?.second?.map?.branches?.forEach { area ->
                         FilterChip(selected = branch == area.branch, onClick = { branch = area.branch },
@@ -197,7 +197,7 @@ private fun LevelMapPanel(
     if (!full) Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow,
         modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)) {
         Column {
-            toolbar(false)
+            toolbar()
             stage(Modifier.fillMaxWidth().height(280.dp), false)
         }
     }
@@ -228,7 +228,7 @@ private fun LevelMapPanel(
                     )
                     if (!hasSublevels) secretToggle()
                 }
-                if (hasSublevels) toolbar(true)
+                if (hasSublevels) toolbar()
                 Box(Modifier.fillMaxWidth().weight(1f)) {
                     stage(Modifier.fillMaxSize(), true)
                     Surface(
