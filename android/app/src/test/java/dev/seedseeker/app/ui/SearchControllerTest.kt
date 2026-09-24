@@ -35,6 +35,19 @@ class SearchControllerTest {
     private val b = SeedResult("BBB-BBB-BBB", 1)
     private val c = SeedResult("CCC-CCC-CCC", 1)
 
+    @Test fun impossibleQueriesKeepSavedResultsAndDoNotStartWorkers() = runTest {
+        val fixture = fixture()
+        fixture.engine.impossibleReason = "Requires 5 initial trinket offers, but each seed offers only 4."
+        val before = fixture.controller.snapshot
+        fixture.controller.start(request, 2)
+        runCurrent()
+        assertEquals(before, fixture.controller.snapshot)
+        assertEquals(0, fixture.serviceStarts)
+        assertTrue(fixture.engine.sessions.isEmpty())
+        assertEquals("Impossible query. ${fixture.engine.impossibleReason}", fixture.controller.notice)
+        fixture.scope.cancel()
+    }
+
     @Test fun checkpointDrainsBeforeSavingAndReattachingNeverDuplicatesTheRunner() = runTest {
         val fixture = fixture()
         fixture.controller.start(request, 2)
@@ -312,6 +325,8 @@ class SearchControllerTest {
     }
 
     private inner class FakeEngine : NativeSeedFinder by DemoNativeSeedFinder() {
+        var impossibleReason: String? = null
+        override fun impossibilityReason(request: SearchRequest) = impossibleReason
         val sessions = mutableListOf<FakeSession>()
         val windows = mutableListOf<ResumeHint>()
         val filterSources = mutableListOf<SearchRequest>()

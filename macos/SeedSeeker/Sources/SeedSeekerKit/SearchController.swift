@@ -86,6 +86,7 @@ public final class SearchController {
     public var isImpossibleQuery: Bool {
         state == .completed && scannedSeeds == 0 && results.isEmpty
     }
+    public private(set) var impossibleReason: String?
 
     /// Replaces the results with seeds restored from an imported results
     /// file and remembers the query that produced them for later export. The
@@ -121,6 +122,7 @@ public final class SearchController {
         let encoded = try? QueryDocument.encode(request)
         let previous = baseRun.flatMap { (try? QueryDocument.encode($0.request)) == encoded ? $0 : nil }
         task?.cancel(); resetProgress()
+        impossibleReason = encoded.flatMap { try? QueryAnalysis.impossibilityReason($0) }
         if target == nil { target = TargetState(request: request, seeds: []) }
         task = Task { [weak self] in
             guard let self else { return }

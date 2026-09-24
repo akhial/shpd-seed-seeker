@@ -5,6 +5,19 @@ import Foundation
 public struct QueryAnalysis: Sendable {
     public let impossible: Bool
     public let probability: Double?
+    public var reason: String? = nil
+
+    public static func impossibilityReason(_ document: Data) throws -> String? {
+        var pointer: UnsafeMutablePointer<UInt8>?
+        var length = 0
+        let code = document.withUnsafeBytes { bytes in
+            seedfinder_query_impossibility_reason(bytes.bindMemory(to: UInt8.self).baseAddress,
+                                                 bytes.count, &pointer, &length)
+        }
+        guard code == 0, let pointer else { throw SeedFinderEngineError.invalidArgument }
+        defer { seedfinder_buffer_free(pointer, length) }
+        return length == 0 ? nil : String(decoding: UnsafeBufferPointer(start: pointer, count: length), as: UTF8.self)
+    }
 
     public static func analyze(_ document: Data) throws -> QueryAnalysis {
         var probability = 0.0
@@ -16,7 +29,8 @@ public struct QueryAnalysis: Sendable {
             throw code == -1 ? SeedFinderEngineError.invalidArgument : SeedFinderEngineError.internalFailure
         }
         return QueryAnalysis(impossible: code == 1,
-                             probability: probability.isFinite && probability > 0 ? probability : nil)
+                             probability: probability.isFinite && probability > 0 ? probability : nil,
+                             reason: code == 1 ? try impossibilityReason(document) : nil)
     }
 
     public var label: String {

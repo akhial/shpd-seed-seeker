@@ -50,6 +50,8 @@ use crate::query::{
 use crate::quests::{QuestSummary, WandmakerQuestType};
 use crate::search::FloorGate;
 
+mod reasons;
+
 /// The four one-per-run reward quests, each offering a mutually exclusive
 /// choice, so each can satisfy at most one requirement.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -526,7 +528,7 @@ pub struct QueryPlan {
     /// Whether some requirement could be satisfied by vault treasure, so the
     /// Imp's sub-level must be generated for a seed to be judged.
     needs_vault_treasure: bool,
-    unsatisfiable: bool,
+    unsatisfiable_reason: Option<String>,
 }
 
 fn required_trinket_slots(slots: &[Vec<RequirementPlan>]) -> Vec<Vec<Requirement>> {
@@ -933,15 +935,9 @@ impl QueryPlan {
             blacksmith_deadline,
             wandmaker_deadline,
             needs_vault_treasure,
-            unsatisfiable: false,
+            unsatisfiable_reason: None,
         };
-        plan.unsatisfiable = !plan.viable_after_floor(0, &[], &QuestSummary::default())
-            || query.floor_requirements.iter().any(|floor| {
-                floor.depth == 1
-                    && floor
-                        .feeling
-                        .is_some_and(|feeling| feeling != crate::level_prelude::Feeling::None)
-            });
+        plan.unsatisfiable_reason = plan.impossibility_reason(query, &profile, &deadline);
         plan
     }
 
@@ -949,7 +945,13 @@ impl QueryPlan {
     /// depth limit above the Imp's window's start).
     #[must_use]
     pub const fn is_unsatisfiable(&self) -> bool {
-        self.unsatisfiable
+        self.unsatisfiable_reason.is_some()
+    }
+
+    /// A concise explanation of the structural constraint that rejects this query.
+    #[must_use]
+    pub fn unsatisfiable_reason(&self) -> Option<&str> {
+        self.unsatisfiable_reason.as_deref()
     }
 
     /// Deepest floor that generation must reach: past it, no source can first
@@ -983,6 +985,9 @@ impl QueryPlan {
         quests: QuestSummary,
         pending_depth: Option<u8>,
     ) -> bool {
+        if self.is_unsatisfiable() {
+            return false;
+        }
         if let Some((wanted, deadline)) = self.wandmaker_deadline {
             match quests.wandmaker {
                 // The variant is rolled once per run and never revised, so a
@@ -1163,6 +1168,9 @@ impl FloorGate for QueryPlan {
     }
 
     fn continue_after_run_init(&self, run: &crate::run::RunState) -> bool {
+        if self.is_unsatisfiable() {
+            return false;
+        }
         if self.required_trinket_slots.is_empty() {
             return true;
         }

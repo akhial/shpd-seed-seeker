@@ -35,6 +35,7 @@ import kotlin.math.min
 internal const val TOTAL_SEEDS = 5_429_503_678_976L
 
 interface NativeSeedFinder {
+    fun impossibilityReason(request: SearchRequest): String? = null
     /**
      * Starts a fresh traversal. [workers] is how many search threads the engine spawns, clamped
      * by the engine to the host's parallelism; 0 or less asks for every available core. It is a
@@ -359,6 +360,9 @@ class DemoNativeSeedFinder : NativeSeedFinder {
 class JniNativeSeedFinder(
     private val bindings: NativeBindings = JniBindingsAdapter,
 ) : NativeSeedFinder {
+    override fun impossibilityReason(request: SearchRequest): String? =
+        bindings.queryImpossibilityReason(QueryDocument.encode(request)).toString(Charsets.UTF_8).ifEmpty { null }
+
     override fun scoutSeed(seed: String, challenges: Int): ScoutWorld =
         scoutSelectedSeed(seed, challenges, null, null)
 
@@ -475,6 +479,7 @@ class JniNativeSeedFinder(
 }
 
 interface NativeBindings {
+    fun queryImpossibilityReason(request: ByteArray): ByteArray = byteArrayOf()
     fun startSearch(request: ByteArray, workers: Int): Long
     fun startResumedSearch(request: ByteArray, resumeFrom: Long, scanLen: Long, workers: Int): Long
     fun availableWorkers(): Int
@@ -491,6 +496,7 @@ interface NativeBindings {
 
 /** Exact class and static method names are retained by ProGuard for Rust's exported JNI symbols. */
 object JniBindings {
+    @JvmStatic external fun queryImpossibilityReason(request: ByteArray): ByteArray
     init {
         System.loadLibrary("shpd_seedfinder")
     }
@@ -542,6 +548,7 @@ object JniBindings {
 }
 
 private object JniBindingsAdapter : NativeBindings {
+    override fun queryImpossibilityReason(request: ByteArray) = JniBindings.queryImpossibilityReason(request)
     override fun startSearch(request: ByteArray, workers: Int) =
         JniBindings.startSearch(request, workers)
     override fun startResumedSearch(

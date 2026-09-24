@@ -625,12 +625,7 @@ export function QueryPanel({
             {impossible && (
               <div className="d1-impossible">
                 <strong className="d1-impossible-title">Impossible query</strong>
-                <p>
-                  No seed can satisfy these requirements within the current floor limit.
-                  Quest-reward-only items need their quest floors in range: +3 wands the Wandmaker's
-                  quest on floors 7–9 or the Imp's vault on 17–19; +3/+4 rings, +4 armor and +4/+5
-                  weapons the Imp's vault on floors 17–19.
-                </p>
+                <p>{analysis?.valid ? analysis.notes[0] : undefined}</p>
               </div>
             )}
             {!validation.valid ? (
@@ -662,6 +657,7 @@ export function QueryPanel({
         <RequirementEditor
           key={editor.index ?? "new"}
           requirement={editor.requirement}
+          otherRequirements={query.requirements.filter((_, index) => index !== editor.index)}
           isNew={editor.index === null && !editor.resin}
           stack={editor.stack}
           resinAmount={query.arcaneResin}

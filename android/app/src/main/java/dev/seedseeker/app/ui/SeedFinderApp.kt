@@ -764,6 +764,7 @@ internal fun SeedFinderApp(
             RequirementSheet(
                 onAddResin = if (editingIndex == null && !addingBlanket) ({ showRequirementSheet = false; showResinSheet = true }) else null,
                 editing = editingIndex?.let(requirements::get),
+                otherRequirements = requirements.filterIndexed { index, _ -> index != editingIndex },
                 blanket = editingIndex?.let { requirements[it].blanket } ?: addingBlanket,
                 initialKind = if (addingBlanket) requirements.firstOrNull { !it.blanket }?.kind ?: ItemKind.WEAPON else ItemKind.WEAPON,
                 editingCount = editingCount,

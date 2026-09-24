@@ -388,6 +388,34 @@ fn utf8_argument(env: &mut JNIEnv<'_>, array: &JByteArray<'_>, what: &str) -> Op
     Some(text)
 }
 
+/// Returns an exact reason, or empty UTF-8 when the query is feasible.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_seedseeker_app_engine_JniBindings_queryImpossibilityReason<
+    'local,
+>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    request: JByteArray<'local>,
+) -> JByteArray<'local> {
+    let Some(document) = utf8_argument(&mut env, &request, "query document") else {
+        return JByteArray::default();
+    };
+    match json_query::decode(&document) {
+        Ok(query) => {
+            let plan = shpd_seedfinder_core::feasibility::QueryPlan::analyze(&query);
+            utf8_response(
+                &mut env,
+                plan.unsatisfiable_reason().unwrap_or_default(),
+                "impossibility reason",
+            )
+        }
+        Err(error) => {
+            throw_illegal_argument(&mut env, error);
+            JByteArray::default()
+        }
+    }
+}
+
 fn utf8_response<'local>(env: &mut JNIEnv<'local>, text: &str, what: &str) -> JByteArray<'local> {
     match env.byte_array_from_slice(text.as_bytes()) {
         Ok(array) => array,

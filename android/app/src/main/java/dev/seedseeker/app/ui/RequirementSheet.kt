@@ -107,6 +107,7 @@ private enum class EffectMode(val label: String) {
 @Composable
 fun RequirementSheet(
     editing: ItemRequirement?,
+    otherRequirements: List<ItemRequirement> = emptyList(),
     onAddResin: (() -> Unit)? = null,
     editingCount: Int = 1,
     editingTotal: Int? = null,
@@ -198,6 +199,10 @@ fun RequirementSheet(
     }
 
     val draft: Result<ItemRequirement> = runCatching {
+        require(blanket || kind != ItemKind.TRINKET || selectedItem == null ||
+            otherRequirements.none { !it.blanket && it.item?.id == selectedItem?.id }) {
+            "This trinket is already required. Each trinket appears only once in the deck."
+        }
         ItemRequirement(
             key = editing?.key ?: 0L,
             item = selectedItem,
