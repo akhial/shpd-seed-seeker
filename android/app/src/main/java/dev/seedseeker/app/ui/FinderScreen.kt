@@ -108,6 +108,7 @@ fun FinderScreen(
     seedsPerSecond: Double,
     elapsedSeconds: Long,
     isSearching: Boolean,
+    isPreparing: Boolean = false,
     refinePhase: RefinePhase?,
     refineProgress: RefineProgress?,
     error: String?,
@@ -238,6 +239,7 @@ fun FinderScreen(
                     elapsedSeconds = elapsedSeconds,
                     refineProgress = refineProgress,
                     isSearching = isSearching,
+                    isPreparing = isPreparing,
                     onSearch = {
                         showResults = true
                         onSearch()
@@ -588,6 +590,7 @@ private fun SearchActionBar(
     elapsedSeconds: Long,
     refineProgress: RefineProgress?,
     isSearching: Boolean,
+    isPreparing: Boolean = false,
     onSearch: () -> Unit,
     onCancel: () -> Unit,
 ) {
@@ -601,7 +604,8 @@ private fun SearchActionBar(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(
-                            if (refineProgress != null) "Checking saved seeds · ${formatElapsedTime(elapsedSeconds)}"
+                            if (isPreparing) "Preparing search…"
+                            else if (refineProgress != null) "Checking saved seeds · ${formatElapsedTime(elapsedSeconds)}"
                             else "${formatSeedRate(seedsPerSecond)} seeds/s · " +
                                 "${formatElapsedTime(elapsedSeconds)} · " +
                                 "${compactCount(status?.scannedSeeds ?: 0L)} scanned",

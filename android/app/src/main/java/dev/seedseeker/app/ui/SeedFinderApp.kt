@@ -526,6 +526,7 @@ internal fun SeedFinderApp(
                 seedsPerSecond = searchSeedsPerSecond,
                 elapsedSeconds = searchElapsedSeconds,
                 isSearching = isSearching,
+                isPreparing = controller.isPreparing,
                 refinePhase = refinePhase,
                 refineProgress = controller.refineProgress,
                 error = searchError,

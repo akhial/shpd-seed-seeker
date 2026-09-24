@@ -6,7 +6,7 @@
 use crate::catalog::{Effect, ItemId, ItemKind};
 use crate::feasibility::QueryPlan;
 use crate::model::{GeneratedWorld, WorldItem};
-use crate::probability::equipment_probability;
+use crate::probability::cached_equipment_probability as equipment_probability;
 use crate::probability_tables::trinkets::Profile;
 use crate::query::{EffectRequirement, SearchQuery};
 use crate::quests::QuestSummary;

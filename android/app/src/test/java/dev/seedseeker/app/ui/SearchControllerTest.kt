@@ -15,6 +15,7 @@ import dev.seedseeker.app.model.SearchStatus
 import dev.seedseeker.app.model.SeedResult
 import dev.seedseeker.app.model.toPresetQuery
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -26,6 +27,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
 import org.junit.Test
+import kotlin.coroutines.CoroutineContext
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SearchControllerTest {
@@ -34,6 +36,61 @@ class SearchControllerTest {
     private val a = SeedResult("AAA-AAA-AAA", 1, "mossy_clump")
     private val b = SeedResult("BBB-BBB-BBB", 1)
     private val c = SeedResult("CCC-CCC-CCC", 1)
+
+    @Test fun queryPreparationYieldsToTheUiAndRejectsDuplicateStarts() = runTest {
+        val worker = QueuedWorker()
+        val fixture = fixture(workerDispatcher = worker)
+        var checks = 0
+        fixture.engine.onPrepare = { assertTrue(worker.executing); checks++ }
+        fixture.controller.start(request, 2)
+        fixture.controller.start(request, 3)
+        runCurrent()
+        assertTrue(fixture.controller.isSearching)
+        assertTrue(fixture.controller.isPreparing)
+        assertEquals(0, checks)
+        assertEquals(0, fixture.serviceStarts)
+        worker.runNext()
+        runCurrent()
+        assertEquals(1, checks)
+        assertEquals(1, fixture.serviceStarts)
+        assertEquals(2, fixture.controller.snapshot.pending?.workers)
+        assertFalse(fixture.controller.isPreparing)
+        fixture.scope.cancel()
+    }
+
+    @Test fun cancellingDuringPreparationCannotStartALateSearch() = runTest {
+        val worker = QueuedWorker()
+        val fixture = fixture(workerDispatcher = worker)
+        val before = fixture.controller.snapshot
+        fixture.controller.start(request, 2)
+        runCurrent()
+        fixture.controller.stop()
+        runCurrent()
+        worker.runNext()
+        runCurrent()
+        assertEquals(before, fixture.controller.snapshot)
+        assertNull(fixture.store.saved.pending)
+        assertEquals(0, fixture.serviceStarts)
+        assertFalse(fixture.controller.isSearching)
+        assertFalse(fixture.controller.isPreparing)
+        assertTrue(fixture.engine.sessions.isEmpty())
+        fixture.scope.cancel()
+    }
+
+    @Test fun queryPreparationFailureIsReportedWithoutLosingSavedResults() = runTest {
+        val pool = TargetState(request, listOf(a))
+        val fixture = fixture(MemoryStore(SearchSnapshot(results = pool.results, target = pool)))
+        fixture.engine.onPrepare = { error("query preparation failed") }
+        fixture.controller.start(request, 2)
+        runCurrent()
+        assertEquals(listOf(a), fixture.controller.snapshot.results)
+        assertEquals(pool, fixture.controller.snapshot.target)
+        assertEquals("query preparation failed", fixture.controller.snapshot.error)
+        assertFalse(fixture.controller.isSearching)
+        assertFalse(fixture.controller.isPreparing)
+        assertEquals(0, fixture.serviceStarts)
+        fixture.scope.cancel()
+    }
 
     @Test fun impossibleQueriesKeepSavedResultsAndDoNotStartWorkers() = runTest {
         val fixture = fixture()
@@ -296,7 +353,7 @@ class SearchControllerTest {
         fixture.scope.cancel()
     }
 
-    private fun TestScope.fixture(store: MemoryStore = MemoryStore()): Fixture {
+    private fun TestScope.fixture(store: MemoryStore = MemoryStore(), workerDispatcher: CoroutineDispatcher? = null): Fixture {
         val dispatcher = StandardTestDispatcher(testScheduler)
         val scope = CoroutineScope(SupervisorJob() + dispatcher)
         val fixture = Fixture(store, scope, FakeEngine())
@@ -304,7 +361,7 @@ class SearchControllerTest {
             startService = {
                 fixture.serviceStarts++
                 if (fixture.failService) error("foreground launch denied")
-            }, workerDispatcher = dispatcher, ioDispatcher = dispatcher, now = { testScheduler.currentTime })
+            }, workerDispatcher = workerDispatcher ?: dispatcher, ioDispatcher = dispatcher, now = { testScheduler.currentTime })
         runCurrent()
         return fixture
     }
@@ -326,7 +383,11 @@ class SearchControllerTest {
 
     private inner class FakeEngine : NativeSeedFinder by DemoNativeSeedFinder() {
         var impossibleReason: String? = null
-        override fun impossibilityReason(request: SearchRequest) = impossibleReason
+        var onPrepare: () -> Unit = {}
+        override fun impossibilityReason(request: SearchRequest): String? {
+            onPrepare()
+            return impossibleReason
+        }
         val sessions = mutableListOf<FakeSession>()
         val windows = mutableListOf<ResumeHint>()
         val filterSources = mutableListOf<SearchRequest>()
@@ -375,5 +436,16 @@ class SearchControllerTest {
         }
         override fun cancel() { cancelled = true }
         override fun close() { closed = true }
+    }
+
+    private class QueuedWorker : CoroutineDispatcher() {
+        private val tasks = ArrayDeque<Runnable>()
+        var executing = false
+            private set
+        override fun dispatch(context: CoroutineContext, block: Runnable) { tasks += block }
+        fun runNext() {
+            executing = true
+            try { tasks.removeFirst().run() } finally { executing = false }
+        }
     }
 }
