@@ -22,7 +22,7 @@ written in Rust — with native apps for Android, Linux, macOS, and Windows.
   <i>Matches/minute on AMD EPYC-Genoa (8) @ 2.25 GHz. The four-trinket row uses seeds/second.</i>
 </p>
 
-- ⚡️ **4.7–10× faster** than Java seed finders
+- ⚡️ **4.7–25.4× faster** than Java seed finders on the benchmark queries
 - 🔍 **Rich queries**: multiple requirements across melee and thrown weapons, armor, wands, and rings
 - 🔗 **Share links**: short links to share your search
 - 🔮 **Seed scouting**: paste a seed, get every item with floor, upgrade, enchantment, cursed state and source; view potion colors, scroll runes, and ring gems in compact sprite grids
