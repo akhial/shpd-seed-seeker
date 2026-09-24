@@ -316,8 +316,6 @@ First two rows: **matching seeds per minute**, through floor 19. +2 Grim/Vampiri
 | +5 Crossbow | 779.3 | 3,633.9 | 3,639.5 | 4.7× |
 | [Four trinkets; grass floor 4; dark garden floor 7 (seeds/s)](docs/four-trinket-java-benchmark.md) | 115,608.8 | — | **2,936,344.4** | 25.4× |
 
-Four-trinket run: AVX2, eight workers, ten warmed minutes; explicit offers disable AutoTrinket. Equivalence tests skipped.
-
 AutoTrinket improved match throughput by **50.4%**.
 
 - **Machine:** AMD EPYC-Genoa (8) @ 2.25 GHz.
