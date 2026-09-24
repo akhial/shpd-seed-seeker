@@ -416,6 +416,38 @@ pub extern "system" fn Java_dev_seedseeker_app_engine_JniBindings_queryImpossibi
     }
 }
 
+/// Warms the policies refinement uses without generating or checking seeds.
+/// Structural rejection remains separate from this potentially costly work.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_seedseeker_app_engine_JniBindings_prepareRefinement<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    request: JByteArray<'local>,
+    base: JByteArray<'local>,
+) {
+    let Some(document) = utf8_argument(&mut env, &request, "query document") else {
+        return;
+    };
+    let Some(original) = utf8_argument(&mut env, &base, "base query document") else {
+        return;
+    };
+    let (query, base) = match json_query::decode(&document)
+        .and_then(|query| json_query::decode(&original).map(|base| (query, base)))
+    {
+        Ok(queries) => queries,
+        Err(error) => {
+            throw_illegal_argument(&mut env, error);
+            return;
+        }
+    };
+    let _ = shpd_seedfinder_core::auto_trinkets::AutoTrinketPolicy::prepare(&query);
+    // refine_batch replays the original policy only while automatic selection
+    // is enabled for the current query. Explicit selections need no reranking.
+    if shpd_seedfinder_core::auto_trinkets::enabled(&query) {
+        let _ = shpd_seedfinder_core::auto_trinkets::AutoTrinketPolicy::prepare(&base);
+    }
+}
+
 fn utf8_response<'local>(env: &mut JNIEnv<'local>, text: &str, what: &str) -> JByteArray<'local> {
     match env.byte_array_from_slice(text.as_bytes()) {
         Ok(array) => array,

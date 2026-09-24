@@ -109,7 +109,7 @@ internal class SearchController(
                     query = if (refine == null) request.toPresetQuery() else snapshot.query,
                     status = null, error = null, elapsedSeconds = 0,
                 )
-                refineProgress = refine?.let { RefineProgress(0, it.keepSeeds.size) }
+                refineProgress = null
                 requestService()
             } catch (cancelled: CancellationException) {
                 throw cancelled
@@ -117,13 +117,14 @@ internal class SearchController(
                 snapshot = snapshot.copy(error = failure.message ?: "The native query could not be prepared.")
                 isSearching = false
             } finally {
-                isPreparing = false
+                if (!isSearching) isPreparing = false
             }
         }
     }
 
     private fun requestService() {
         isSearching = true
+        isPreparing = true
         try {
             startService()
         } catch (failure: Exception) {
@@ -147,9 +148,11 @@ internal class SearchController(
             preparation?.join()
             if (snapshot.pending == null) {
                 isSearching = false
+                isPreparing = false
                 return@launch
             }
             isSearching = true
+            isPreparing = true
             seedsPerSecond = 0.0
             try {
                 drive()
@@ -221,6 +224,16 @@ internal class SearchController(
         var pending = checkNotNull(snapshot.pending)
         val refine = pending.refine
         if (refine != null) {
+            // Validation deliberately skips scoring. Warm the current policy and
+            // every original recipe policy before presenting verification progress,
+            // including when restoring a saved refinement after process death.
+            refineProgress = null
+            val sources = refine.keepSeeds.map { refine.sources[it.seed] ?: refine.base ?: pending.request }.distinct()
+            for (source in sources) {
+                if (stopRequested || pauseRequested) break
+                withContext(workerDispatcher) { engine.prepareRefinement(pending.request, source) }
+            }
+            isPreparing = false
             val kept = mutableListOf<SeedResult>()
             var checked = 0
             val startedAt = now()

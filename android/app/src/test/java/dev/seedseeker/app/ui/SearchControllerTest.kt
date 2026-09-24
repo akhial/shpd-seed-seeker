@@ -54,7 +54,88 @@ class SearchControllerTest {
         assertEquals(1, checks)
         assertEquals(1, fixture.serviceStarts)
         assertEquals(2, fixture.controller.snapshot.pending?.workers)
+        assertTrue(fixture.controller.isPreparing) // Service/search setup has not finished yet.
+        fixture.scope.cancel()
+    }
+
+    @Test fun savedPoolShowsPreparationBeforeCheckingTheFirstBatch() = runTest {
+        val seeds = List(1024) { SeedResult("saved-$it", 1) }
+        val target = TargetState(request, seeds)
+        val worker = QueuedWorker()
+        val fixture = fixture(MemoryStore(SearchSnapshot(results = seeds, target = target)), worker)
+        fixture.engine.onPrepareRefinement = { assertTrue(worker.executing) }
+        fixture.engine.onFilter = { assertFalse(fixture.controller.isPreparing) }
+        fixture.controller.start(request, 2)
+        fixture.controller.runPending()
+        runCurrent()
+        worker.runNext() // Structural validation.
+        runCurrent()
+        assertTrue(fixture.controller.isPreparing)
+        assertNull(fixture.controller.refineProgress)
+        assertTrue(fixture.engine.filtered.isEmpty())
+        worker.runNext() // Native policy scoring, before any seed verification.
+        runCurrent()
+        assertEquals(listOf(request), fixture.engine.preparedSources)
         assertFalse(fixture.controller.isPreparing)
+        assertEquals(RefineProgress(0, 1024), fixture.controller.refineProgress)
+        assertTrue(fixture.engine.filtered.isEmpty())
+        worker.runNext() // First verification batch.
+        runCurrent()
+        assertEquals(RefineProgress(24, 1024), fixture.controller.refineProgress)
+        fixture.controller.stop()
+        runCurrent()
+        worker.runNext() // Drain the already queued batch.
+        advanceUntilIdle()
+        assertFalse(fixture.controller.isPreparing)
+        fixture.scope.cancel()
+    }
+
+    @Test fun restoredRefinementPreparesOriginalPoliciesAndCanStopBeforeCheckingSeeds() = runTest {
+        val other = SearchRequest(listOf(ItemRequirement(2, ItemCatalog.rings.first(), 1)))
+        val seeds = listOf(a, b, c)
+        val target = TargetState(request, seeds, sources = mapOf(b.seed to other))
+        val saved = SearchSnapshot(results = seeds, target = target,
+            pending = PendingSearch(request, 2, refineFor(request, target, null)))
+        val worker = QueuedWorker()
+        val fixture = fixture(MemoryStore(saved), worker)
+        fixture.engine.onPrepareRefinement = { assertTrue(worker.executing) }
+        fixture.controller.onVisible()
+        fixture.controller.runPending()
+        runCurrent()
+        assertTrue(fixture.controller.isPreparing)
+        assertNull(fixture.controller.refineProgress)
+        worker.runNext() // Current/source policy.
+        runCurrent()
+        assertTrue(fixture.controller.isPreparing)
+        assertNull(fixture.controller.refineProgress)
+        fixture.controller.stop()
+        runCurrent()
+        worker.runNext() // Original policy already queued when Stop was pressed.
+        advanceUntilIdle()
+        assertEquals(listOf(request, other), fixture.engine.preparedSources)
+        assertTrue(fixture.engine.filtered.isEmpty())
+        assertTrue(fixture.engine.sessions.isEmpty())
+        assertEquals(seeds, fixture.controller.snapshot.results)
+        assertNull(fixture.store.saved.pending)
+        assertFalse(fixture.controller.isSearching)
+        assertFalse(fixture.controller.isPreparing)
+        fixture.scope.cancel()
+    }
+
+    @Test fun refinementPreparationFailureKeepsThePoolAndClearsThePreparationState() = runTest {
+        val target = TargetState(request, listOf(a, b))
+        val fixture = fixture(MemoryStore(SearchSnapshot(results = target.results, target = target)))
+        fixture.engine.onPrepareRefinement = { error("policy preparation failed") }
+        fixture.controller.start(request, 2)
+        fixture.controller.runPending()
+        advanceUntilIdle()
+        assertEquals(target.results, fixture.controller.snapshot.results)
+        assertEquals(target, fixture.controller.snapshot.target)
+        assertEquals("policy preparation failed", fixture.controller.snapshot.error)
+        assertTrue(fixture.engine.filtered.isEmpty())
+        assertTrue(fixture.engine.sessions.isEmpty())
+        assertFalse(fixture.controller.isPreparing)
+        assertFalse(fixture.controller.isSearching)
         fixture.scope.cancel()
     }
 
@@ -391,10 +472,16 @@ class SearchControllerTest {
         val sessions = mutableListOf<FakeSession>()
         val windows = mutableListOf<ResumeHint>()
         val filterSources = mutableListOf<SearchRequest>()
+        val preparedSources = mutableListOf<SearchRequest>()
         val filtered = mutableListOf<SeedResult>()
         val completedBatches = ArrayDeque<Pair<List<SeedResult>, ResumeHint>>()
         var filter: (List<SeedResult>) -> List<SeedResult> = { it }
         var onFilter: () -> Unit = {}
+        var onPrepareRefinement: () -> Unit = {}
+        override fun prepareRefinement(request: SearchRequest, base: SearchRequest) {
+            onPrepareRefinement()
+            preparedSources += base
+        }
         override fun startSearch(request: SearchRequest, workers: Int): NativeSearchSession = open()
         override fun startResumedSearch(request: SearchRequest, resumeFrom: Long, scanLen: Long, workers: Int): NativeSearchSession {
             windows += ResumeHint(resumeFrom, scanLen)

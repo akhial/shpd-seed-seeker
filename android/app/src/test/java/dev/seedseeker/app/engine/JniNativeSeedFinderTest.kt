@@ -17,6 +17,13 @@ class JniNativeSeedFinderTest {
     init { PackagedCatalog.install() }
 
     @Test
+    fun nativeRefinementPreparationAcceptsCurrentAndOriginalQueriesWithoutStartingASession() {
+        val request = SearchRequest(listOf(ItemRequirement(1, ItemCatalog.wands.first(), 1)))
+        val original = SearchRequest(listOf(ItemRequirement(2, ItemCatalog.rings.first(), 1)))
+        JniNativeSeedFinder().prepareRefinement(request, original)
+    }
+
+    @Test
     fun nativeFeasibilityChecksComplexAutoResinAndImpossibleTransmutationQueries() {
         // Exercise the real entry point used when preparing a search,
         // including the query that previously triggered expensive scoring.
