@@ -1105,7 +1105,6 @@ public sealed partial class MainWindow : Window
         var allowTransmutations = new CheckBox { Content = "Allow transmutations", IsChecked = r.TrinketTransmutations > 0 };
         var transmutations = Number("Maximum transmutations", Math.Clamp(r.TrinketTransmutations, 1, 13), 1, 13);
         transmutations.SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline;
-        var transmutationLimit = Row("At most", transmutations);
         var transmutationHelp = new TextBlock { Text = "Includes the initial offers. AutoTrinket can use a helpful starting trinket. Scroll availability and effects after transmuting are not simulated.", TextWrapping = TextWrapping.Wrap };
         var excludeResin = new CheckBox { Content = "Exclude from Auto resin", IsChecked = r.ExcludeResin };
         var resinHelp = new TextBlock { Text = "Keep this wand without budgeting resin to upgrade it. Useful for imbuing: resin upgrades do not transfer to the staff. Extra copies are reserved for reforging and never need Auto resin.", TextWrapping = TextWrapping.Wrap };
@@ -1167,6 +1166,7 @@ public sealed partial class MainWindow : Window
             Sync();
             return section;
         }
+        var transmutationLimit = Row("At most", transmutations);
         var effectTitle = SectionTitle("Enchantment");
         var content = new StackPanel { Spacing = 16, Padding = new Thickness(2, 4, 2, 4) };
         foreach (var section in new UIElement[] {

@@ -15,17 +15,17 @@ fi
 
 # dmgbuild (pure-python) lays out the Finder window deterministically —
 # window geometry, icon positions, retina background, volume icon — which
-# plain hdiutil cannot do. Installed into a cached venv so neither dev
+# plain hdiutil cannot do. Installed into a dedicated venv so neither dev
 # machines nor CI need it preinstalled. It copies the app with ditto, so
 # code signatures and notarization metadata survive.
 if command -v dmgbuild >/dev/null; then
     DMGBUILD=dmgbuild
 else
     VENV="$ROOT/target/dmgbuild-venv"
-    if [ ! -x "$VENV/bin/dmgbuild" ]; then
-        python3 -m venv "$VENV"
-        "$VENV/bin/pip" install --quiet dmgbuild
-    fi
+    # Restored build caches can contain packages without their bin scripts,
+    # and venvs may reference a Python installation from a previous runner.
+    python3 -m venv --clear "$VENV"
+    "$VENV/bin/python" -m pip install --quiet dmgbuild
     DMGBUILD="$VENV/bin/dmgbuild"
 fi
 

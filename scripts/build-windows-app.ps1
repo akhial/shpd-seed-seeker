@@ -13,3 +13,5 @@ $root = Split-Path -Parent $PSScriptRoot
 $env:DOTNET_CLI_HOME = Join-Path $root '.dotnet-home'
 $env:NUGET_PACKAGES = Join-Path $root '.nuget-packages'
 dotnet build "$root\windows\SeedSeeker\SeedSeeker.csproj" -c $Configuration -p:Platform=$Platform -p:EngineIsa=$EngineIsa
+# A nested pwsh invocation must return the native build's failure to CI.
+exit $LASTEXITCODE
