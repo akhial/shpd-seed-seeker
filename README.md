@@ -15,14 +15,14 @@ written in Rust — with native apps for Android, Linux, macOS, and Windows.
 **[Try it in your browser →](https://shpd-seed-seeker.web.app/)**
 
 <p align="center">
-  <img alt="Seeds searched per second on AMD EPYC-Genoa with 8 workers. +2 Runic Blade and +2 Ring of Might: Seed Seeker 2,425, Java 445. +5 Crossbow: Seed Seeker 2,521, Java 535. Four trinkets with grass on floor 4 and a dark garden on floor 7: Seed Seeker AVX2 2,936,344, Java 115,609. Separate bar scales." src="assets/benchmark.svg">
+  <img alt="Matching seeds per minute on an Apple M4 Pro, 12 workers. +2 Runic Blade (Grim, Corrupting, Vampiric or Crystal) and +2 Ring of Might: Seed Seeker (AutoTrinket on) 79.9, Java 10.6. +5 Crossbow: Seed Seeker (AutoTrinket on) 8,429.7, Java 1,772.0. Both queries through floor 19; separate bar scales. Four trinkets with grass on floor 4 and a dark garden on floor 7: seeds per second on AMD EPYC-Genoa, Seed Seeker AVX2 2,936,344, Java 115,609." src="assets/benchmark.svg">
 </p>
 
 <p align="center">
-  <i>Seeds/second on AMD EPYC-Genoa (8) @ 2.25 GHz.</i>
+  <i>Matches/minute on AMD EPYC-Genoa (8) @ 2.25 GHz. The four-trinket row uses seeds/second.</i>
 </p>
 
-- ⚡️ **4.7–25.4× faster** than Java seed finders on the benchmark queries
+- ⚡️ **4.7–10× faster** than Java seed finders
 - 🔍 **Rich queries**: multiple requirements across melee and thrown weapons, armor, wands, and rings
 - 🔗 **Share links**: short links to share your search
 - 🔮 **Seed scouting**: paste a seed, get every item with floor, upgrade, enchantment, cursed state and source; view potion colors, scroll runes, and ring gems in compact sprite grids
@@ -308,20 +308,14 @@ an optional member needed to witness a blanket.
 
 ## Benchmarks<a id="benchmarks"></a>
 
-**Seed throughput (seeds/second)** on eight workers. The first two queries run
-through floor 19; the four-trinket query requires grass on floor 4 and a dark
-garden or secret garden on floor 7.
+**Matching seeds per minute**, through floor 19. +2 Grim/Vampiric/Corrupting/Crystal Runic Blade and +2 Ring of Might.
 
-| Query | Java baseline | Seed Seeker | Seed Seeker / Java |
-| --- | ---: | ---: | ---: |
-| [+2 Runic Blade and +2 Ring of Might](https://shpd-seed-seeker.web.app/#q=QyAhKCsAAeAAAuoKAA) | 444.6 | 2,425.1 | 5.5× |
-| +5 Crossbow | 535.4 | 2,521.0 | 4.7× |
-| [Four specified initial trinkets](docs/four-trinket-java-benchmark.md) | 115,608.8 | 2,936,344.4 | **25.4×** |
+| Query | Java baseline | AutoTrinket off | AutoTrinket on | AutoTrinket on / Java |
+| --- | ---: | ---: | ---: | ---: |
+| [+2 Runic Blade and +2 Ring of Might](https://shpd-seed-seeker.web.app/#q=QyAhKCsAAeAAAuoKAA) | 3.8 | 25.1 | **37.7** | 10× |
+| +5 Crossbow | 779.3 | 3,633.9 | 3,639.5 | 4.7× |
 
-AutoTrinket was enabled for the first two Seed Seeker measurements. Without it,
-those queries measured 2,424.8 and 2,517.0 seeds/second. The four explicit
-trinket requirements disable automatic selection. The first two measurements
-were taken on September 13, 2026; the four-trinket measurement on September 24.
+AutoTrinket improved match throughput by **50.4%**.
 
 - **Machine:** AMD EPYC-Genoa (8) @ 2.25 GHz.
 
@@ -329,6 +323,25 @@ Reproduce:
 
 ```sh
 tooling/benchmarks/run-linux.sh --minutes 10 --workers 8 --output /tmp/seed-seeker-benchmark
+```
+
+### Four trinkets
+
+The [four-trinket query](docs/four-trinket-java-benchmark.md) requires
+Dimensional Sundial, Rat Skull, Parchment Scrap, and Petrified Seed among the
+initial offers, GRASS on floor 4, and a DARK garden or secret garden on floor 7.
+Its **seed throughput** was:
+
+| Engine | Seeds/second | Timed seeds | Matches |
+| --- | ---: | ---: | ---: |
+| Java baseline | 115,608.8 | 69,365,760 | 21 |
+| Seed Seeker AVX2 | **2,936,344.4** | 1,761,816,576 | 584 |
+
+Seed Seeker searched **25.4×** as many seeds per second. Each engine ran eight
+workers for ten warmed minutes. Explicit trinket requirements disable automatic
+selection; equivalence tests were skipped for this run.
+
+```sh
 tooling/benchmarks/run-four-trinkets-linux.sh --minutes 10 --workers 8 --output /tmp/four-trinkets-benchmark
 ```
 
