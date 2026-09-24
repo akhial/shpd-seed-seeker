@@ -308,12 +308,15 @@ an optional member needed to witness a blanket.
 
 ## Benchmarks<a id="benchmarks"></a>
 
-**Matching seeds per minute**, through floor 19. +2 Grim/Vampiric/Corrupting/Crystal Runic Blade and +2 Ring of Might.
+First two rows: **matching seeds per minute**, through floor 19. +2 Grim/Vampiric/Corrupting/Crystal Runic Blade and +2 Ring of Might.
 
 | Query | Java baseline | AutoTrinket off | AutoTrinket on | AutoTrinket on / Java |
 | --- | ---: | ---: | ---: | ---: |
 | [+2 Runic Blade and +2 Ring of Might](https://shpd-seed-seeker.web.app/#q=QyAhKCsAAeAAAuoKAA) | 3.8 | 25.1 | **37.7** | 10× |
 | +5 Crossbow | 779.3 | 3,633.9 | 3,639.5 | 4.7× |
+| [Four trinkets; grass floor 4; dark garden floor 7 (seeds/s)](docs/four-trinket-java-benchmark.md) | 115,608.8 | — | **2,936,344.4** | 25.4× |
+
+Four-trinket run: AVX2, eight workers, ten warmed minutes; explicit offers disable AutoTrinket. Equivalence tests skipped.
 
 AutoTrinket improved match throughput by **50.4%**.
 
@@ -323,26 +326,6 @@ Reproduce:
 
 ```sh
 tooling/benchmarks/run-linux.sh --minutes 10 --workers 8 --output /tmp/seed-seeker-benchmark
-```
-
-### Four trinkets
-
-The [four-trinket query](docs/four-trinket-java-benchmark.md) requires
-Dimensional Sundial, Rat Skull, Parchment Scrap, and Petrified Seed among the
-initial offers, GRASS on floor 4, and a DARK garden or secret garden on floor 7.
-Its **seed throughput** was:
-
-| Engine | Seeds/second | Timed seeds | Matches |
-| --- | ---: | ---: | ---: |
-| Java baseline | 115,608.8 | 69,365,760 | 21 |
-| Seed Seeker AVX2 | **2,936,344.4** | 1,761,816,576 | 584 |
-
-Seed Seeker searched **25.4×** as many seeds per second. Each engine ran eight
-workers for ten warmed minutes. Explicit trinket requirements disable automatic
-selection; equivalence tests were skipped for this run.
-
-```sh
-tooling/benchmarks/run-four-trinkets-linux.sh --minutes 10 --workers 8 --output /tmp/four-trinkets-benchmark
 ```
 
 ## Development<a id="development"></a>
