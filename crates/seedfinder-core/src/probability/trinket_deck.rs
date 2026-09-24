@@ -3,7 +3,10 @@
 //! into intervals ending at the query's deadlines. Cards within an interval
 //! are interchangeable. Equipment retains the existing supply approximation.
 
-use super::{Profile, complete_with_trinkets, equipment_probability, trinket_mask};
+use super::{
+    Profile, cached_equipment_probability as equipment_probability, complete_with_trinkets,
+    trinket_mask,
+};
 use crate::auto_trinkets::AutoTrinketPolicy;
 use crate::catalog::{ItemId, ItemKind};
 use crate::query::SearchQuery;

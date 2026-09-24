@@ -112,6 +112,8 @@ class SearchServiceTest {
 
     @Test fun foregroundPromotionFailureStopsServiceAndPreservesRecovery() {
         app.searchController.start(SearchRequest(listOf(ItemRequirement(1, ItemCatalog.wands.first(), 1))), 2)
+        // Foreground launch follows the asynchronous query check.
+        app.scheduler.runCurrent()
         val running = Robolectric.buildService(SearchService::class.java).create().also { service = it }.get()
         shadowOf(running).setThrowInStartForeground(SecurityException("foreground denied"))
         assertEquals(Service.START_NOT_STICKY, running.onStartCommand(Intent(), 0, 1))
@@ -135,6 +137,8 @@ class SearchServiceTest {
 
     private fun start(): SearchService {
         app.searchController.start(SearchRequest(listOf(ItemRequirement(1, ItemCatalog.wands.first(), 1))), 2)
+        // Foreground launch follows the asynchronous query check.
+        app.scheduler.runCurrent()
         val running = Robolectric.buildService(SearchService::class.java).create().also { service = it }.get()
         assertEquals(Service.START_STICKY, running.onStartCommand(Intent(), 0, 1))
         app.scheduler.runCurrent()

@@ -15,6 +15,7 @@ import dev.seedseeker.app.model.SearchStatus
 import dev.seedseeker.app.model.SeedResult
 import dev.seedseeker.app.model.toPresetQuery
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -26,6 +27,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
 import org.junit.Test
+import kotlin.coroutines.CoroutineContext
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SearchControllerTest {
@@ -34,6 +36,142 @@ class SearchControllerTest {
     private val a = SeedResult("AAA-AAA-AAA", 1, "mossy_clump")
     private val b = SeedResult("BBB-BBB-BBB", 1)
     private val c = SeedResult("CCC-CCC-CCC", 1)
+
+    @Test fun queryPreparationYieldsToTheUiAndRejectsDuplicateStarts() = runTest {
+        val worker = QueuedWorker()
+        val fixture = fixture(workerDispatcher = worker)
+        var checks = 0
+        fixture.engine.onPrepare = { assertTrue(worker.executing); checks++ }
+        fixture.controller.start(request, 2)
+        fixture.controller.start(request, 3)
+        runCurrent()
+        assertTrue(fixture.controller.isSearching)
+        assertTrue(fixture.controller.isPreparing)
+        assertEquals(0, checks)
+        assertEquals(0, fixture.serviceStarts)
+        worker.runNext()
+        runCurrent()
+        assertEquals(1, checks)
+        assertEquals(1, fixture.serviceStarts)
+        assertEquals(2, fixture.controller.snapshot.pending?.workers)
+        assertTrue(fixture.controller.isPreparing) // Service/search setup has not finished yet.
+        fixture.scope.cancel()
+    }
+
+    @Test fun savedPoolShowsPreparationBeforeCheckingTheFirstBatch() = runTest {
+        val seeds = List(1024) { SeedResult("saved-$it", 1) }
+        val target = TargetState(request, seeds)
+        val worker = QueuedWorker()
+        val fixture = fixture(MemoryStore(SearchSnapshot(results = seeds, target = target)), worker)
+        fixture.engine.onPrepareRefinement = { assertTrue(worker.executing) }
+        fixture.engine.onFilter = { assertFalse(fixture.controller.isPreparing) }
+        fixture.controller.start(request, 2)
+        fixture.controller.runPending()
+        runCurrent()
+        worker.runNext() // Structural validation.
+        runCurrent()
+        assertTrue(fixture.controller.isPreparing)
+        assertNull(fixture.controller.refineProgress)
+        assertTrue(fixture.engine.filtered.isEmpty())
+        worker.runNext() // Native policy scoring, before any seed verification.
+        runCurrent()
+        assertEquals(listOf(request), fixture.engine.preparedSources)
+        assertFalse(fixture.controller.isPreparing)
+        assertEquals(RefineProgress(0, 1024), fixture.controller.refineProgress)
+        assertTrue(fixture.engine.filtered.isEmpty())
+        worker.runNext() // First verification batch.
+        runCurrent()
+        assertEquals(RefineProgress(24, 1024), fixture.controller.refineProgress)
+        fixture.controller.stop()
+        runCurrent()
+        worker.runNext() // Drain the already queued batch.
+        advanceUntilIdle()
+        assertFalse(fixture.controller.isPreparing)
+        fixture.scope.cancel()
+    }
+
+    @Test fun restoredRefinementPreparesOriginalPoliciesAndCanStopBeforeCheckingSeeds() = runTest {
+        val other = SearchRequest(listOf(ItemRequirement(2, ItemCatalog.rings.first(), 1)))
+        val seeds = listOf(a, b, c)
+        val target = TargetState(request, seeds, sources = mapOf(b.seed to other))
+        val saved = SearchSnapshot(results = seeds, target = target,
+            pending = PendingSearch(request, 2, refineFor(request, target, null)))
+        val worker = QueuedWorker()
+        val fixture = fixture(MemoryStore(saved), worker)
+        fixture.engine.onPrepareRefinement = { assertTrue(worker.executing) }
+        fixture.controller.onVisible()
+        fixture.controller.runPending()
+        runCurrent()
+        assertTrue(fixture.controller.isPreparing)
+        assertNull(fixture.controller.refineProgress)
+        worker.runNext() // Current/source policy.
+        runCurrent()
+        assertTrue(fixture.controller.isPreparing)
+        assertNull(fixture.controller.refineProgress)
+        fixture.controller.stop()
+        runCurrent()
+        worker.runNext() // Original policy already queued when Stop was pressed.
+        advanceUntilIdle()
+        assertEquals(listOf(request, other), fixture.engine.preparedSources)
+        assertTrue(fixture.engine.filtered.isEmpty())
+        assertTrue(fixture.engine.sessions.isEmpty())
+        assertEquals(seeds, fixture.controller.snapshot.results)
+        assertNull(fixture.store.saved.pending)
+        assertFalse(fixture.controller.isSearching)
+        assertFalse(fixture.controller.isPreparing)
+        fixture.scope.cancel()
+    }
+
+    @Test fun refinementPreparationFailureKeepsThePoolAndClearsThePreparationState() = runTest {
+        val target = TargetState(request, listOf(a, b))
+        val fixture = fixture(MemoryStore(SearchSnapshot(results = target.results, target = target)))
+        fixture.engine.onPrepareRefinement = { error("policy preparation failed") }
+        fixture.controller.start(request, 2)
+        fixture.controller.runPending()
+        advanceUntilIdle()
+        assertEquals(target.results, fixture.controller.snapshot.results)
+        assertEquals(target, fixture.controller.snapshot.target)
+        assertEquals("policy preparation failed", fixture.controller.snapshot.error)
+        assertTrue(fixture.engine.filtered.isEmpty())
+        assertTrue(fixture.engine.sessions.isEmpty())
+        assertFalse(fixture.controller.isPreparing)
+        assertFalse(fixture.controller.isSearching)
+        fixture.scope.cancel()
+    }
+
+    @Test fun cancellingDuringPreparationCannotStartALateSearch() = runTest {
+        val worker = QueuedWorker()
+        val fixture = fixture(workerDispatcher = worker)
+        val before = fixture.controller.snapshot
+        fixture.controller.start(request, 2)
+        runCurrent()
+        fixture.controller.stop()
+        runCurrent()
+        worker.runNext()
+        runCurrent()
+        assertEquals(before, fixture.controller.snapshot)
+        assertNull(fixture.store.saved.pending)
+        assertEquals(0, fixture.serviceStarts)
+        assertFalse(fixture.controller.isSearching)
+        assertFalse(fixture.controller.isPreparing)
+        assertTrue(fixture.engine.sessions.isEmpty())
+        fixture.scope.cancel()
+    }
+
+    @Test fun queryPreparationFailureIsReportedWithoutLosingSavedResults() = runTest {
+        val pool = TargetState(request, listOf(a))
+        val fixture = fixture(MemoryStore(SearchSnapshot(results = pool.results, target = pool)))
+        fixture.engine.onPrepare = { error("query preparation failed") }
+        fixture.controller.start(request, 2)
+        runCurrent()
+        assertEquals(listOf(a), fixture.controller.snapshot.results)
+        assertEquals(pool, fixture.controller.snapshot.target)
+        assertEquals("query preparation failed", fixture.controller.snapshot.error)
+        assertFalse(fixture.controller.isSearching)
+        assertFalse(fixture.controller.isPreparing)
+        assertEquals(0, fixture.serviceStarts)
+        fixture.scope.cancel()
+    }
 
     @Test fun impossibleQueriesKeepSavedResultsAndDoNotStartWorkers() = runTest {
         val fixture = fixture()
@@ -296,7 +434,7 @@ class SearchControllerTest {
         fixture.scope.cancel()
     }
 
-    private fun TestScope.fixture(store: MemoryStore = MemoryStore()): Fixture {
+    private fun TestScope.fixture(store: MemoryStore = MemoryStore(), workerDispatcher: CoroutineDispatcher? = null): Fixture {
         val dispatcher = StandardTestDispatcher(testScheduler)
         val scope = CoroutineScope(SupervisorJob() + dispatcher)
         val fixture = Fixture(store, scope, FakeEngine())
@@ -304,7 +442,7 @@ class SearchControllerTest {
             startService = {
                 fixture.serviceStarts++
                 if (fixture.failService) error("foreground launch denied")
-            }, workerDispatcher = dispatcher, ioDispatcher = dispatcher, now = { testScheduler.currentTime })
+            }, workerDispatcher = workerDispatcher ?: dispatcher, ioDispatcher = dispatcher, now = { testScheduler.currentTime })
         runCurrent()
         return fixture
     }
@@ -326,14 +464,24 @@ class SearchControllerTest {
 
     private inner class FakeEngine : NativeSeedFinder by DemoNativeSeedFinder() {
         var impossibleReason: String? = null
-        override fun impossibilityReason(request: SearchRequest) = impossibleReason
+        var onPrepare: () -> Unit = {}
+        override fun impossibilityReason(request: SearchRequest): String? {
+            onPrepare()
+            return impossibleReason
+        }
         val sessions = mutableListOf<FakeSession>()
         val windows = mutableListOf<ResumeHint>()
         val filterSources = mutableListOf<SearchRequest>()
+        val preparedSources = mutableListOf<SearchRequest>()
         val filtered = mutableListOf<SeedResult>()
         val completedBatches = ArrayDeque<Pair<List<SeedResult>, ResumeHint>>()
         var filter: (List<SeedResult>) -> List<SeedResult> = { it }
         var onFilter: () -> Unit = {}
+        var onPrepareRefinement: () -> Unit = {}
+        override fun prepareRefinement(request: SearchRequest, base: SearchRequest) {
+            onPrepareRefinement()
+            preparedSources += base
+        }
         override fun startSearch(request: SearchRequest, workers: Int): NativeSearchSession = open()
         override fun startResumedSearch(request: SearchRequest, resumeFrom: Long, scanLen: Long, workers: Int): NativeSearchSession {
             windows += ResumeHint(resumeFrom, scanLen)
@@ -375,5 +523,16 @@ class SearchControllerTest {
         }
         override fun cancel() { cancelled = true }
         override fun close() { closed = true }
+    }
+
+    private class QueuedWorker : CoroutineDispatcher() {
+        private val tasks = ArrayDeque<Runnable>()
+        var executing = false
+            private set
+        override fun dispatch(context: CoroutineContext, block: Runnable) { tasks += block }
+        fun runNext() {
+            executing = true
+            try { tasks.removeFirst().run() } finally { executing = false }
+        }
     }
 }

@@ -43,6 +43,8 @@ internal class SearchController(
         private set
     var isSearching by mutableStateOf(false)
         private set
+    var isPreparing by mutableStateOf(false)
+        private set
     var seedsPerSecond by mutableStateOf(0.0)
         private set
     var notice by mutableStateOf<String?>(null)
@@ -52,6 +54,7 @@ internal class SearchController(
         get() = if (isSearching && snapshot.pending?.refine != null) RefinePhase.FILTERING else null
 
     private var job: Job? = null
+    private var preparation: Job? = null
     private var stopRequested = false
     private var pauseRequested = false
     private val writes = Mutex()
@@ -79,27 +82,49 @@ internal class SearchController(
 
     fun start(request: SearchRequest, workers: Int) {
         if (!ready || isSearching) return
-        engine.impossibilityReason(request)?.let { reason ->
-            notice = "Impossible query. $reason"
-            return
-        }
-        val refine = refineFor(request, snapshot.target, snapshot.lastRun)
+        // Keep native validation off the main thread and let the screen update
+        // immediately. Probability scoring belongs to background search setup.
+        isSearching = true
+        isPreparing = true
         stopRequested = false
         pauseRequested = false
-        snapshot = snapshot.copy(
-            pending = PendingSearch(request, workers, refine),
-            target = snapshot.target ?: TargetState(request, emptyList()),
-            results = if (refine == null) emptyList() else snapshot.results,
-            query = if (refine == null) request.toPresetQuery() else snapshot.query,
-            status = null, error = null, elapsedSeconds = 0,
-        )
         notice = null
-        refineProgress = refine?.let { RefineProgress(0, it.keepSeeds.size) }
-        requestService()
+        preparation = scope.launch {
+            try {
+                val reason = withContext(workerDispatcher) { engine.impossibilityReason(request) }
+                if (stopRequested || pauseRequested) {
+                    isSearching = false
+                    return@launch
+                }
+                if (reason != null) {
+                    notice = "Impossible query. $reason"
+                    isSearching = false
+                    return@launch
+                }
+                val refine = refineFor(request, snapshot.target, snapshot.lastRun)
+                snapshot = snapshot.copy(
+                    pending = PendingSearch(request, workers, refine),
+                    target = snapshot.target ?: TargetState(request, emptyList()),
+                    results = if (refine == null) emptyList() else snapshot.results,
+                    query = if (refine == null) request.toPresetQuery() else snapshot.query,
+                    status = null, error = null, elapsedSeconds = 0,
+                )
+                refineProgress = null
+                requestService()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                snapshot = snapshot.copy(error = failure.message ?: "The native query could not be prepared.")
+                isSearching = false
+            } finally {
+                if (!isSearching) isPreparing = false
+            }
+        }
     }
 
     private fun requestService() {
         isSearching = true
+        isPreparing = true
         try {
             startService()
         } catch (failure: Exception) {
@@ -120,11 +145,14 @@ internal class SearchController(
         if (job?.isActive == true) return
         job = scope.launch {
             loading.join()
+            preparation?.join()
             if (snapshot.pending == null) {
                 isSearching = false
+                isPreparing = false
                 return@launch
             }
             isSearching = true
+            isPreparing = true
             seedsPerSecond = 0.0
             try {
                 drive()
@@ -141,6 +169,7 @@ internal class SearchController(
                 saveSafely()
             } finally {
                 refineProgress = null
+                isPreparing = false
                 isSearching = false
             }
         }
@@ -155,7 +184,7 @@ internal class SearchController(
             saveSafely(durable.copy(pending = null, status = durable.status?.copy(state = SearchState.CANCELLED)))
             if (job?.isActive != true) {
                 snapshot = snapshot.copy(pending = null, status = snapshot.status?.copy(state = SearchState.CANCELLED))
-                isSearching = false
+                if (preparation?.isActive != true) isSearching = false
                 saveSafely()
             }
         }
@@ -195,6 +224,16 @@ internal class SearchController(
         var pending = checkNotNull(snapshot.pending)
         val refine = pending.refine
         if (refine != null) {
+            // Validation deliberately skips scoring. Warm the current policy and
+            // every original recipe policy before presenting verification progress,
+            // including when restoring a saved refinement after process death.
+            refineProgress = null
+            val sources = refine.keepSeeds.map { refine.sources[it.seed] ?: refine.base ?: pending.request }.distinct()
+            for (source in sources) {
+                if (stopRequested || pauseRequested) break
+                withContext(workerDispatcher) { engine.prepareRefinement(pending.request, source) }
+            }
+            isPreparing = false
             val kept = mutableListOf<SeedResult>()
             var checked = 0
             val startedAt = now()
@@ -240,11 +279,13 @@ internal class SearchController(
             try {
                 // Assign inside the dispatcher block: coroutine cancellation during dispatch
                 // back to main must not orphan a just-created JNI handle.
+                isPreparing = true
                 withContext(workerDispatcher) {
                     session = pending.window?.let {
                         engine.startResumedSearch(pending.request, it.position, it.remaining, pending.workers)
                     } ?: engine.startSearch(pending.request, pending.workers)
                 }
+                isPreparing = false
                 val opened = checkNotNull(session)
                 val seen = snapshot.results.mapTo(mutableSetOf()) { it.seed }
                 while (true) {

@@ -114,6 +114,10 @@ use crate::quests::WandmakerQuestType;
 /// the group.
 #[must_use]
 pub fn estimate_match_probability(query: &SearchQuery) -> f64 {
+    cache::query(query, None, || estimate_uncached(query))
+}
+
+fn estimate_uncached(query: &SearchQuery) -> f64 {
     if let Some(policy) = crate::auto_trinkets::AutoTrinketPolicy::prepare(query) {
         return crate::auto_trinkets::probability(query, &policy);
     }
@@ -124,7 +128,15 @@ pub fn estimate_match_probability(query: &SearchQuery) -> f64 {
     {
         return trinket_probability(query);
     }
-    equipment_probability(query, Profile::None)
+    cached_equipment_probability(query, Profile::None)
+}
+
+// Only cache complete profile calculations. Recursive supply/resin/blanket
+// subproblems retain their existing thread-local caches.
+pub(crate) fn cached_equipment_probability(query: &SearchQuery, profile: Profile) -> f64 {
+    cache::query(query, Some(profile), || {
+        equipment_probability(query, profile)
+    })
 }
 
 pub(crate) fn equipment_probability(query: &SearchQuery, profile: Profile) -> f64 {

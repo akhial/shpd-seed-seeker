@@ -6,7 +6,7 @@
 use crate::catalog::{Effect, ItemId, ItemKind};
 use crate::feasibility::QueryPlan;
 use crate::model::{GeneratedWorld, WorldItem};
-use crate::probability::equipment_probability;
+use crate::probability::cached_equipment_probability as equipment_probability;
 use crate::probability_tables::trinkets::Profile;
 use crate::query::{EffectRequirement, SearchQuery};
 use crate::quests::QuestSummary;
@@ -454,6 +454,29 @@ mod tests {
             r#"{{"auto_apply_trinket":true,"max_depth":19,"requirements":{requirements}}}"#
         ))
         .unwrap()
+    }
+
+    #[test]
+    fn feasibility_checks_do_not_wait_for_automatic_trinket_scoring() {
+        let query = crate::deep_link::decode_text(
+            "https://shpd-seed-seeker.web.app/#q=q6gAAAuW4ABLYAAlwAAXPGABc8AZhc8AZh-sAA_cAANuQKAdkLACCIIx",
+        ).unwrap();
+        // Model another worker preparing a costly resin/blanket policy. A UI
+        // feasibility probe must not acquire this lock or rank any profiles.
+        let scoring = POLICY_CACHE.lock().unwrap();
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let check = std::thread::spawn(move || {
+            sender.send(QueryPlan::check_impossibility(&query)).unwrap();
+        });
+        let result = receiver.recv_timeout(std::time::Duration::from_secs(5));
+        // Release before joining even on failure, so a regression reports an
+        // assertion instead of deadlocking the rest of the suite.
+        drop(scoring);
+        check.join().unwrap();
+        assert_eq!(
+            result.expect("feasibility waited for probability scoring"),
+            None
+        );
     }
 
     #[test]

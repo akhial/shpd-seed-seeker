@@ -402,10 +402,10 @@ pub extern "system" fn Java_dev_seedseeker_app_engine_JniBindings_queryImpossibi
     };
     match json_query::decode(&document) {
         Ok(query) => {
-            let plan = shpd_seedfinder_core::feasibility::QueryPlan::analyze(&query);
+            let reason = shpd_seedfinder_core::feasibility::QueryPlan::check_impossibility(&query);
             utf8_response(
                 &mut env,
-                plan.unsatisfiable_reason().unwrap_or_default(),
+                reason.as_deref().unwrap_or_default(),
                 "impossibility reason",
             )
         }
@@ -413,6 +413,38 @@ pub extern "system" fn Java_dev_seedseeker_app_engine_JniBindings_queryImpossibi
             throw_illegal_argument(&mut env, error);
             JByteArray::default()
         }
+    }
+}
+
+/// Warms the policies refinement uses without generating or checking seeds.
+/// Structural rejection remains separate from this potentially costly work.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_dev_seedseeker_app_engine_JniBindings_prepareRefinement<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    request: JByteArray<'local>,
+    base: JByteArray<'local>,
+) {
+    let Some(document) = utf8_argument(&mut env, &request, "query document") else {
+        return;
+    };
+    let Some(original) = utf8_argument(&mut env, &base, "base query document") else {
+        return;
+    };
+    let (query, base) = match json_query::decode(&document)
+        .and_then(|query| json_query::decode(&original).map(|base| (query, base)))
+    {
+        Ok(queries) => queries,
+        Err(error) => {
+            throw_illegal_argument(&mut env, error);
+            return;
+        }
+    };
+    let _ = shpd_seedfinder_core::auto_trinkets::AutoTrinketPolicy::prepare(&query);
+    // refine_batch replays the original policy only while automatic selection
+    // is enabled for the current query. Explicit selections need no reranking.
+    if shpd_seedfinder_core::auto_trinkets::enabled(&query) {
+        let _ = shpd_seedfinder_core::auto_trinkets::AutoTrinketPolicy::prepare(&base);
     }
 }
 

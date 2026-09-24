@@ -47,9 +47,11 @@ fn every_trinket_prefix_has_a_shared_capacity_and_an_exact_reason() {
             )
         };
         assert_eq!(plan.unsatisfiable_reason(), Some(expected.as_str()));
+        assert_eq!(QueryPlan::check_impossibility(&impossible), Some(expected));
         assert!(!plan.continue_after_run_init(&shpd_seedfinder_core::run::RunState::new(0)));
         rows.pop();
         assert!(!QueryPlan::analyze(&query(&rows)).is_unsatisfiable());
+        assert_eq!(QueryPlan::check_impossibility(&query(&rows)), None);
     }
     assert!(!QueryPlan::analyze(&query(&requirements(17, 13))).is_unsatisfiable());
 }
@@ -147,6 +149,10 @@ fn existing_impossibility_reasons_do_not_borrow_unrelated_floor_prose() {
         let query = json_query::decode(&document.to_string()).unwrap();
         assert_eq!(
             QueryPlan::analyze(&query).unsatisfiable_reason(),
+            Some(expected)
+        );
+        assert_eq!(
+            QueryPlan::check_impossibility(&query).as_deref(),
             Some(expected)
         );
     }
