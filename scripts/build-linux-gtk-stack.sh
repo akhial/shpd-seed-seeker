@@ -14,12 +14,16 @@ gtk_version=4.22.4
 gtk_sha256=51bd9f60c7d23a665a556c7364c21fb2e4e282566b3e7e092455e8f910330893
 libadwaita_version=1.9.2
 libadwaita_sha256=6920f813a76c4856591ca56ee842e94efbbe736e8ca2f445c9e9fc3b4e7076f0
+glib_version=2.84.0
+glib_sha256=f8823600cb85425e2815cfad82ea20fdaa538482ab74e7293d58b3f64a5aff6a
+pango_version=1.56.4
+pango_sha256=17065e2fcc5f5a5bdbffc884c956bfc7c451a96e8c4fb2f8ad837c6413cb5a01
 
 prefix=${APPIMAGE_GTK_PREFIX:-"$repo_root/target/appimage-gtk"}
 source_cache=${APPIMAGE_SOURCE_CACHE:-"$repo_root/target/appimage-sources"}
 build_root=${APPIMAGE_GTK_BUILD_ROOT:-"$repo_root/target/appimage-gtk-build"}
 marker="$prefix/.seed-seeker-gtk-stack"
-expected_marker="gtk=$gtk_version libadwaita=$libadwaita_version"
+expected_marker="gtk=$gtk_version libadwaita=$libadwaita_version glib=$glib_version pango=$pango_version"
 
 for command in curl git meson ninja pkg-config sha256sum tar; do
     if ! command -v "$command" >/dev/null; then
@@ -52,6 +56,8 @@ download_source() {
 mkdir -p "$source_cache"
 gtk_archive="$source_cache/gtk-$gtk_version.tar.xz"
 libadwaita_archive="$source_cache/libadwaita-$libadwaita_version.tar.xz"
+glib_archive="$source_cache/glib-$glib_version.tar.xz"
+pango_archive="$source_cache/pango-$pango_version.tar.xz"
 
 download_source \
     "https://download.gnome.org/sources/gtk/4.22/gtk-$gtk_version.tar.xz" \
@@ -61,16 +67,27 @@ download_source \
     "https://download.gnome.org/sources/libadwaita/1.9/libadwaita-$libadwaita_version.tar.xz" \
     "$libadwaita_sha256" \
     "$libadwaita_archive"
+download_source \
+    "https://download.gnome.org/sources/glib/2.84/glib-$glib_version.tar.xz" \
+    "$glib_sha256" \
+    "$glib_archive"
+download_source \
+    "https://download.gnome.org/sources/pango/1.56/pango-$pango_version.tar.xz" \
+    "$pango_sha256" \
+    "$pango_archive"
 
 rm -rf "$prefix" "$build_root"
 mkdir -p "$prefix" "$build_root/gtk-source" "$build_root/libadwaita-source"
 tar -xJf "$gtk_archive" -C "$build_root/gtk-source" --strip-components=1
 tar -xJf "$libadwaita_archive" -C "$build_root/libadwaita-source" --strip-components=1
 
-# GTK's release tarball points its Pango fallback at the moving main branch.
-# Use the first stable Pango series satisfying GTK 4.22's requirement instead.
-sed -i 's/^revision = main$/revision = 1.56.4/' \
-    "$build_root/gtk-source/subprojects/pango.wrap"
+# Prepopulate the GNOME fallbacks from verified release archives so a GNOME
+# GitLab outage cannot break Meson setup. Keep GTK's GLib version and use the
+# first stable Pango series satisfying GTK 4.22 instead of its moving main branch.
+# Leave the wrap files in place: Meson still needs their dependency providers.
+mkdir -p "$build_root/gtk-source/subprojects/glib" "$build_root/gtk-source/subprojects/pango"
+tar -xJf "$glib_archive" -C "$build_root/gtk-source/subprojects/glib" --strip-components=1
+tar -xJf "$pango_archive" -C "$build_root/gtk-source/subprojects/pango" --strip-components=1
 
 meson setup "$build_root/gtk-build" "$build_root/gtk-source" \
     --prefix "$prefix" \

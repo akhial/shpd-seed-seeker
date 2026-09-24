@@ -40,9 +40,9 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
-    <release version="0.17.0" date="2026-09-24">
+    <release version="0.17.1" date="2026-09-24">
       <description>
-        <p>Find trinkets within a transmutation limit, explain impossible trinket queries, and ship smaller Android APKs.</p>
+        <p>Keep Android searches responsive and reuse resin probability transitions during search preparation.</p>
       </description>
     </release>
     <release version="0.9.1" date="2026-09-07">
