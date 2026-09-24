@@ -81,7 +81,7 @@ class LevelMapTest {
     @Test fun requestUsesCompletedChallengesAndExplicitNoTrinket() {
         val request = JSONObject(LevelMapRequest("AAA-AAA-AAA", 15, 8 or 256, null, 1).json())
         assertEquals("none", request.getString("trinket"))
-        assertEquals(listOf("no_herbalism", "stronger_bosses"), request.getJSONArray("challenges").let { values ->
+        assertEquals(listOf("barren_land", "badder_bosses"), request.getJSONArray("challenges").let { values ->
             List(values.length()) { values.getString(it) }
         })
         assertEquals(1, request.getInt("branch"))

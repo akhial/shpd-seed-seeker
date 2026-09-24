@@ -130,13 +130,9 @@ class EngineConstantsTest {
             val entry = challenges.getJSONObject(index)
             Triple(entry.getString("name"), entry.getInt("mask"), entry.getBoolean("changesLevelGeneration"))
         }
-        // The stable document names, in declaration (mask) order; ResultsExport
-        // keeps the same mapping privately for the results codec.
-        val names = listOf(
-            "on_diet", "faith_is_my_armor", "pharmacophobia", "barren_land", "swarm_intelligence",
-            "into_darkness", "forbidden_runes", "hostile_champions", "badder_bosses",
-        )
-        val local = Challenge.entries.zip(names) { challenge, name -> Triple(name, challenge.bit, challenge.changesLevelGeneration) }
+        val local = Challenge.entries.map { challenge ->
+            Triple(EngineInfo.challengeNames.getValue(challenge.bit), challenge.bit, challenge.changesLevelGeneration)
+        }
         assertEquals(engine, local)
         local.forEachIndexed { index, (_, mask, _) -> assertEquals(1 shl index, mask) }
         assertEquals(engine.fold(0) { mask, (_, bit, _) -> mask or bit }, Challenge.ALL_MASK)

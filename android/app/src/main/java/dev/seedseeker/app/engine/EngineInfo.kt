@@ -29,6 +29,15 @@ object EngineInfo {
     /** Maximum newly found matches per search, shared with the native session cap. */
     val maxResults: Int by lazy { document.getInt("maxResults") }
 
+    /** Stable document names keyed by the engine's challenge mask bits. */
+    val challengeNames: Map<Int, String> by lazy {
+        val challenges = document.getJSONArray("challenges")
+        (0 until challenges.length()).associate { index ->
+            val challenge = challenges.getJSONObject(index)
+            challenge.getInt("mask") to challenge.getString("name")
+        }
+    }
+
     private val limits: JSONObject by lazy { document.getJSONObject("limits") }
 
     /** Largest results file the engine's importer accepts, in bytes. */
