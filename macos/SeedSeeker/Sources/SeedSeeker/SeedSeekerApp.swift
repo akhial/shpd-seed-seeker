@@ -1131,6 +1131,8 @@ private struct ChipView: View {
                 ForEach(chipTags(requirement), id: \.self) { tag in
                     Text(tag.text)
                         .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
                         .foregroundStyle(tag.upgrade ? Color.shatteredGreen : Color.shatteredYellow)
                         .padding(.horizontal, 4)
                         .background((tag.upgrade ? Color.shatteredGreen : Color.shatteredYellow).opacity(0.13),
