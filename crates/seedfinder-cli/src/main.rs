@@ -3,10 +3,13 @@ static GLOBAL_ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 mod json_output;
 
+use std::collections::hash_map::RandomState;
 use std::env;
 use std::fs;
+use std::hash::BuildHasher as _;
 use std::io::{self, IsTerminal as _, Write as _};
 use std::num::NonZeroUsize;
+use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::Arc;
@@ -21,7 +24,7 @@ use shpd_seedfinder_core::query::{
     EffectRequirement, Requirement, SearchQuery, TierRequirement, UpgradeRequirement,
 };
 use shpd_seedfinder_core::search::{SearchOptions, SearchProgress, search_parallel};
-use shpd_seedfinder_core::seed::TOTAL_SEEDS;
+use shpd_seedfinder_core::seed::{DungeonSeed, TOTAL_SEEDS};
 
 const DEFAULT_BENCHMARK_SEEDS: u64 = 10_000;
 const SEARCH_CHUNK_SIZE: usize = 4;
@@ -32,6 +35,7 @@ struct BenchmarkOptions {
     seeds: u64,
     workers: Option<NonZeroUsize>,
     items: Option<PathBuf>,
+    random_start: bool,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -42,6 +46,7 @@ enum Command {
         workers: Option<NonZeroUsize>,
         output: Option<PathBuf>,
         json: bool,
+        random_start: bool,
     },
     Help,
     Version,
@@ -177,7 +182,15 @@ fn main() -> ExitCode {
             workers,
             output,
             json,
-        } => match search_command(&items, workers, output.as_deref(), json, &progress) {
+            random_start,
+        } => match search_command(
+            &items,
+            workers,
+            output.as_deref(),
+            json,
+            random_start,
+            &progress,
+        ) {
             Ok(statistics) => {
                 eprintln!("{}", statistics.report(stderr_supports_color()));
                 ExitCode::SUCCESS
@@ -216,6 +229,7 @@ fn parse_args(arguments: impl IntoIterator<Item = String>) -> Result<Command, St
     let mut items = None;
     let mut output = None;
     let mut json = false;
+    let mut random_start = false;
     let mut index = 0;
     while index < arguments.len() {
         match arguments[index].as_str() {
@@ -266,12 +280,8 @@ fn parse_args(arguments: impl IntoIterator<Item = String>) -> Result<Command, St
                     })?;
                 output = Some(PathBuf::from(value));
             }
-            "--json" => {
-                if json {
-                    return Err("--json may only be specified once".to_owned());
-                }
-                json = true;
-            }
+            "--json" => parse_flag(&mut json, "--json")?,
+            "--random-start" => parse_flag(&mut random_start, "--random-start")?,
             "--help" | "-h" | "--version" | "-V" => {
                 return Err("help and version cannot be combined with other options".to_owned());
             }
@@ -291,6 +301,7 @@ fn parse_args(arguments: impl IntoIterator<Item = String>) -> Result<Command, St
             seeds,
             workers,
             items,
+            random_start,
         }));
     }
     if let Some(items) = items {
@@ -299,9 +310,18 @@ fn parse_args(arguments: impl IntoIterator<Item = String>) -> Result<Command, St
             workers,
             output,
             json,
+            random_start,
         });
     }
-    Err("--workers requires --benchmark or --items".to_owned())
+    Err("--workers and --random-start require --benchmark or --items".to_owned())
+}
+
+fn parse_flag(flag: &mut bool, name: &str) -> Result<(), String> {
+    if *flag {
+        return Err(format!("{name} may only be specified once"));
+    }
+    *flag = true;
+    Ok(())
 }
 
 fn parse_seed_count(value: &str) -> Result<u64, String> {
@@ -324,13 +344,15 @@ fn help() -> &'static str {
     concat!(
         "Seed Seeker command-line tools\n\n",
         "Usage:\n",
-        "  seed-seeker --items FILE [--workers WORKERS] [--output FILE [--json]]\n",
-        "  seed-seeker [--items FILE] --benchmark [SEEDS] [--workers WORKERS]\n\n",
+        "  seed-seeker --items FILE [--random-start] [--workers WORKERS] [--output FILE [--json]]\n",
+        "  seed-seeker [--items FILE] --benchmark [SEEDS] [--random-start] [--workers WORKERS]\n\n",
         "Options:\n",
         "  -b, --benchmark [SEEDS]  Benchmark a seed search\n",
         "                            [default: 10000]\n",
         "  -i, --items FILE          Read search requirements from a JSON file\n",
         "      --workers WORKERS     Number of search workers [default: available CPUs]\n",
+        "      --random-start        Start at a random seed [default: AAA-AAA-AAA]\n",
+        "                            Advance by 1, wrapping after ZZZ-ZZZ-ZZZ\n",
         "  -o, --output FILE         Write matching seeds to a file (replaces existing)\n",
         "      --json                Export app-importable JSON; requires --output FILE\n",
         "                            Keeps the file valid; stops at 1024 matches\n",
@@ -353,20 +375,37 @@ fn benchmark_command(
     let workers = benchmark
         .workers
         .unwrap_or_else(SearchOptions::available_parallelism);
-    let options = SearchOptions {
-        start_seed: 0,
-        end_seed_exclusive: benchmark.seeds,
-        workers,
-        chunk_size: NonZeroUsize::new(SEARCH_CHUNK_SIZE).expect("chunk size is non-zero"),
-        max_results: NonZeroUsize::MAX,
+    let start_seed = search_start(benchmark.random_start);
+    let generator = CanonicalMainWorldGenerator::with_challenges(query.challenges);
+    let mut matches = 0;
+    let mut elapsed = std::time::Duration::ZERO;
+    for range in search_ranges(start_seed, benchmark.seeds, TOTAL_SEEDS)
+        .take_while(|_| !progress.is_cancelled())
+    {
+        let outcome = search_parallel(
+            &generator,
+            &query,
+            SearchOptions {
+                start_seed: range.start,
+                end_seed_exclusive: range.end,
+                workers,
+                chunk_size: NonZeroUsize::new(SEARCH_CHUNK_SIZE).expect("chunk size is non-zero"),
+                max_results: NonZeroUsize::MAX,
+            },
+            progress,
+        )
+        .map_err(|error| format!("{error:?}"))?;
+        matches += outcome.worlds.len();
+        elapsed += outcome.elapsed;
+    }
+    // SearchProgress is cumulative across the ranges on either side of a wrap.
+    let tested = progress.tested();
+    #[allow(clippy::cast_precision_loss)] // Display-only throughput.
+    let throughput = if elapsed.is_zero() {
+        0.0
+    } else {
+        tested as f64 / elapsed.as_secs_f64()
     };
-    let outcome = search_parallel(
-        &CanonicalMainWorldGenerator::with_challenges(query.challenges),
-        &query,
-        options,
-        progress,
-    )
-    .map_err(|error| format!("{error:?}"))?;
 
     Ok(format!(
         concat!(
@@ -379,10 +418,10 @@ fn benchmark_command(
         ),
         shpd_version = SHPD_VERSION,
         workers = workers,
-        tested = outcome.tested,
-        matches = outcome.worlds.len(),
-        elapsed = outcome.elapsed.as_secs_f64(),
-        throughput = outcome.seeds_per_second(),
+        tested = tested,
+        matches = matches,
+        elapsed = elapsed.as_secs_f64(),
+        throughput = throughput,
     ))
 }
 
@@ -391,6 +430,7 @@ fn search_command(
     workers: Option<NonZeroUsize>,
     output: Option<&Path>,
     json: bool,
+    random_start: bool,
     progress: &SearchProgress,
 ) -> Result<SearchStatistics, String> {
     let query = load_query(items)?;
@@ -400,11 +440,16 @@ fn search_command(
         }
     }
     let workers = workers.unwrap_or_else(SearchOptions::available_parallelism);
+    let start_seed = search_start(random_start);
     if json {
         return json_output::search(
+            &Arc::new(CanonicalMainWorldGenerator::with_challenges(
+                query.challenges,
+            )),
             &query,
             workers,
             output.ok_or("--json requires --output FILE")?,
+            start_seed,
             progress,
         );
     }
@@ -429,18 +474,16 @@ fn search_command(
         });
     }
     print_search_preamble(&query);
-    let mut start_seed = 0;
     let mut matches = 0;
-    while start_seed < TOTAL_SEEDS && !progress.is_cancelled() {
-        let end_seed_exclusive = start_seed
-            .saturating_add(SEARCH_WINDOW_SEEDS)
-            .min(TOTAL_SEEDS);
+    for range in search_ranges(start_seed, TOTAL_SEEDS, SEARCH_WINDOW_SEEDS)
+        .take_while(|_| !progress.is_cancelled())
+    {
         let outcome = search_parallel(
             &CanonicalMainWorldGenerator::with_challenges(query.challenges),
             &query,
             SearchOptions {
-                start_seed,
-                end_seed_exclusive,
+                start_seed: range.start,
+                end_seed_exclusive: range.end,
                 workers,
                 chunk_size: NonZeroUsize::new(SEARCH_CHUNK_SIZE).expect("chunk size is non-zero"),
                 max_results: NonZeroUsize::MAX,
@@ -456,13 +499,47 @@ fn search_command(
         output
             .flush()
             .map_err(|error| format!("could not flush matching seeds: {error}"))?;
-        start_seed = end_seed_exclusive;
     }
     Ok(SearchStatistics {
         elapsed: started.elapsed(),
         // The same progress object spans every window; its count is cumulative.
         seeds: progress.tested(),
         matches,
+    })
+}
+
+fn search_start(random_start: bool) -> DungeonSeed {
+    if !random_start {
+        return DungeonSeed::MIN;
+    }
+    // Match the native apps' initial traversal start. Each CLI invocation is
+    // a fresh search, so it does not need the apps' between-search stride.
+    let value = RandomState::new().hash_one(0_u8) % TOTAL_SEEDS;
+    let seed = DungeonSeed::new(value).expect("random start is inside the seed space");
+    eprintln!("seed-seeker: starting at {seed} (offset 1)");
+    seed
+}
+
+/// Splits a consecutive traversal into bounded numeric ranges, wrapping once
+/// at the end of the seed space. `count` is the number of seeds to visit, not
+/// an absolute end seed, so a full search also covers the seeds before its start.
+fn search_ranges(
+    start_seed: DungeonSeed,
+    mut count: u64,
+    window_seeds: u64,
+) -> impl Iterator<Item = Range<u64>> {
+    debug_assert!(count <= TOTAL_SEEDS);
+    debug_assert!(window_seeds > 0);
+    let mut start = start_seed.value();
+    std::iter::from_fn(move || {
+        if count == 0 {
+            return None;
+        }
+        let len = count.min(window_seeds).min(TOTAL_SEEDS - start);
+        let range = start..start + len;
+        count -= len;
+        start = range.end % TOTAL_SEEDS;
+        Some(range)
     })
 }
 
@@ -522,15 +599,18 @@ mod tests {
     use std::time::Duration;
 
     use shpd_seedfinder_core::search::SearchProgress;
-    use shpd_seedfinder_core::seed::TOTAL_SEEDS;
+    use shpd_seedfinder_core::seed::{DungeonSeed, TOTAL_SEEDS};
 
-    use super::{BenchmarkOptions, Command, SearchStatistics, help, parse_args};
+    use super::{
+        BenchmarkOptions, Command, SearchStatistics, help, parse_args, search_ranges, search_start,
+    };
 
     fn benchmark(seeds: u64, workers: Option<usize>) -> Command {
         Command::Benchmark(BenchmarkOptions {
             seeds,
             workers: workers.and_then(NonZeroUsize::new),
             items: None,
+            random_start: false,
         })
     }
 
@@ -586,6 +666,7 @@ mod tests {
                 workers: NonZeroUsize::new(3),
                 output: None,
                 json: false,
+                random_start: false,
             })
         );
         assert_eq!(
@@ -595,6 +676,7 @@ mod tests {
                 workers: None,
                 output: None,
                 json: false,
+                random_start: false,
             })
         );
     }
@@ -612,6 +694,7 @@ mod tests {
                 seeds: 1_000,
                 workers: None,
                 items: Some(PathBuf::from("requirements.json")),
+                random_start: false,
             }))
         );
     }
@@ -635,6 +718,7 @@ mod tests {
                     workers: None,
                     output: Some(PathBuf::from("results.json")),
                     json: true,
+                    random_start: false,
                 })
             );
         }
@@ -645,6 +729,7 @@ mod tests {
                 workers: None,
                 output: Some(PathBuf::from("seeds.txt")),
                 json: false,
+                random_start: false,
             })
         );
     }
@@ -707,6 +792,7 @@ mod tests {
             NonZeroUsize::new(1),
             Some(&output),
             true,
+            false,
             &SearchProgress::default(),
         )
         .unwrap();
@@ -731,6 +817,7 @@ mod tests {
             &items,
             NonZeroUsize::new(1),
             Some(&output),
+            true,
             true,
             &SearchProgress::default(),
         )
@@ -757,6 +844,7 @@ mod tests {
                     NonZeroUsize::new(1),
                     Some(&items),
                     json,
+                    true,
                     &SearchProgress::default(),
                 )
                 .is_err()
@@ -798,6 +886,9 @@ mod tests {
         assert!(help().contains("--output FILE"));
         assert!(help().contains("--json"));
         assert!(help().contains("Ctrl+C"));
+        assert!(help().contains("--random-start"));
+        assert!(help().contains("default: AAA-AAA-AAA"));
+        assert!(help().contains("Advance by 1"));
     }
 
     #[test]
@@ -826,6 +917,36 @@ mod tests {
     }
 
     #[test]
+    fn benchmark_reports_requested_count_and_honors_cancellation() {
+        for random_start in [false, true] {
+            for cancelled in [false, true] {
+                let progress = SearchProgress::default();
+                if cancelled {
+                    progress.cancel();
+                }
+                let report = super::benchmark_command(
+                    &BenchmarkOptions {
+                        seeds: 8,
+                        workers: Some(NonZeroUsize::MIN),
+                        items: None,
+                        random_start,
+                    },
+                    &progress,
+                )
+                .unwrap();
+                let expected = if cancelled { 0 } else { 8 };
+                assert_eq!(progress.tested(), expected);
+                assert!(
+                    report
+                        .lines()
+                        .any(|line| line == format!("Seeds tested: {expected}")),
+                    "{report}"
+                );
+            }
+        }
+    }
+
+    #[test]
     fn cancellation_before_text_search_skips_all_windows() {
         let directory = tempfile::tempdir().unwrap();
         let items = directory.path().join("requirements.json");
@@ -839,6 +960,7 @@ mod tests {
             Some(NonZeroUsize::MIN),
             Some(&output),
             false,
+            false,
             &progress,
         )
         .unwrap();
@@ -846,5 +968,138 @@ mod tests {
         assert_eq!(statistics.seeds, 0);
         assert_eq!(statistics.matches, 0);
         assert!(std::fs::read(output).unwrap().is_empty());
+    }
+
+    #[test]
+    fn accepts_random_start_for_searches_exports_and_benchmarks_in_either_order() {
+        for arguments in [
+            vec!["--random-start", "--items", "requirements.json"],
+            vec!["-i", "requirements.json", "--random-start"],
+        ] {
+            assert_eq!(
+                parse_args(arguments.into_iter().map(str::to_owned)),
+                Ok(Command::Search {
+                    items: PathBuf::from("requirements.json"),
+                    workers: None,
+                    output: None,
+                    json: false,
+                    random_start: true,
+                })
+            );
+        }
+        for (arguments, json) in [
+            (
+                vec!["--random-start", "-i", "query.json", "-o", "results.txt"],
+                false,
+            ),
+            (
+                vec![
+                    "-i",
+                    "query.json",
+                    "--json",
+                    "-o",
+                    "results.json",
+                    "--random-start",
+                ],
+                true,
+            ),
+        ] {
+            assert!(matches!(
+                parse_args(arguments.into_iter().map(str::to_owned)),
+                Ok(Command::Search { random_start: true, json: actual, .. }) if actual == json
+            ));
+        }
+        for arguments in [
+            vec!["--random-start", "-b", "16", "--workers", "2"],
+            vec!["--benchmark", "16", "--workers", "2", "--random-start"],
+        ] {
+            assert_eq!(
+                parse_args(arguments.into_iter().map(str::to_owned)),
+                Ok(Command::Benchmark(BenchmarkOptions {
+                    seeds: 16,
+                    workers: NonZeroUsize::new(2),
+                    items: None,
+                    random_start: true,
+                }))
+            );
+        }
+    }
+
+    #[test]
+    fn rejects_duplicate_or_standalone_random_start() {
+        for arguments in [
+            vec!["--random-start"],
+            vec!["--random-start", "--workers", "2"],
+            vec!["--random-start", "--random-start", "-b", "16"],
+            vec!["-i", "query.json", "--random-start", "--random-start"],
+            vec!["--random-start", "--help"],
+        ] {
+            assert!(
+                parse_args(arguments.iter().map(|value| (*value).to_owned())).is_err(),
+                "{arguments:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn default_start_is_zero_and_random_starts_vary_between_searches() {
+        assert_eq!(search_start(false), DungeonSeed::MIN);
+        let starts = (0..16)
+            .map(|_| search_start(true))
+            .collect::<std::collections::HashSet<_>>();
+        assert!(
+            starts.len() > 1,
+            "random searches must not always use the same start"
+        );
+    }
+
+    #[test]
+    fn consecutive_search_windows_wrap_and_stop_after_the_requested_count() {
+        assert_eq!(
+            search_ranges(DungeonSeed::MIN, 10, 4)
+                .flatten()
+                .collect::<Vec<_>>(),
+            (0..10).collect::<Vec<_>>()
+        );
+        let start = DungeonSeed::new(TOTAL_SEEDS - 2).unwrap();
+        assert_eq!(
+            search_ranges(start, 8, 3).collect::<Vec<_>>(),
+            vec![TOTAL_SEEDS - 2..TOTAL_SEEDS, 0..3, 3..6]
+        );
+        assert_eq!(
+            search_ranges(start, 2, TOTAL_SEEDS).collect::<Vec<_>>(),
+            vec![TOTAL_SEEDS - 2..TOTAL_SEEDS]
+        );
+        assert_eq!(
+            search_ranges(start, 3, TOTAL_SEEDS)
+                .flatten()
+                .collect::<Vec<_>>(),
+            vec![TOTAL_SEEDS - 2, TOTAL_SEEDS - 1, 0]
+        );
+    }
+
+    #[test]
+    fn full_search_covers_the_seed_space_once_including_seeds_before_the_start() {
+        // Inspect interval bounds without generating or enumerating trillions of seeds.
+        for start in [
+            DungeonSeed::MIN,
+            DungeonSeed::new(7).unwrap(),
+            DungeonSeed::MAX,
+        ] {
+            let ranges = search_ranges(start, TOTAL_SEEDS, TOTAL_SEEDS).collect::<Vec<_>>();
+            assert_eq!(ranges.first().unwrap().start, start.value());
+            assert_eq!(
+                ranges
+                    .iter()
+                    .map(|range| range.end - range.start)
+                    .sum::<u64>(),
+                TOTAL_SEEDS
+            );
+            let mut sorted = ranges;
+            sorted.sort_unstable_by_key(|range| range.start);
+            assert_eq!(sorted.first().unwrap().start, 0);
+            assert_eq!(sorted.last().unwrap().end, TOTAL_SEEDS);
+            assert!(sorted.windows(2).all(|pair| pair[0].end == pair[1].start));
+        }
     }
 }

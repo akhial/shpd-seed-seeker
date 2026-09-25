@@ -30,11 +30,13 @@ fn wait_until(mut condition: impl FnMut() -> bool) {
 
 #[test]
 fn shutdown_signals_flush_results_and_report_session_statistics() {
-    for (signal, json) in [
-        ("-INT", false),
-        ("-TERM", false),
-        ("-HUP", false),
-        ("-INT", true),
+    for (signal, json, random_start) in [
+        ("-INT", false, false),
+        ("-TERM", false, false),
+        ("-HUP", false, false),
+        ("-INT", true, false),
+        ("-INT", false, true),
+        ("-INT", true, true),
     ] {
         let directory = tempfile::tempdir().unwrap();
         let items = directory.path().join("requirements.json");
@@ -54,6 +56,9 @@ fn shutdown_signals_flush_results_and_report_session_statistics() {
             .stderr(Stdio::piped());
         if json {
             command.arg("--json");
+        }
+        if random_start {
+            command.arg("--random-start");
         }
         let mut process = SearchProcess(Some(command.spawn().unwrap()));
 
