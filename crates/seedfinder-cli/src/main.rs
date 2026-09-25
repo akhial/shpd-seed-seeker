@@ -517,7 +517,7 @@ fn search_start(random_start: bool) -> DungeonSeed {
     let value = RandomState::new().hash_one(0_u8) % TOTAL_SEEDS;
     let seed = DungeonSeed::new(value).expect("random start is inside the seed space");
     let (yellow, reset) = if stderr_supports_color() {
-        ("\x1b[38;2;255;255;68m", "\x1b[0m")
+        ("\x1b[1;38;2;255;255;68m", "\x1b[0m")
     } else {
         ("", "")
     };
