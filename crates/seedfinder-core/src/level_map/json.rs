@@ -46,7 +46,7 @@ pub struct LevelMapRequest {
 pub fn decode_request(input: &str) -> Result<LevelMapRequest, String> {
     let request: Request = serde_json::from_str(input)
         .map_err(|error| format!("invalid level map request: {error}"))?;
-    let seed = DungeonSeed::from_code(&request.seed).map_err(|error| error.to_string())?;
+    let seed = DungeonSeed::from_scout_input(&request.seed).map_err(|error| error.to_string())?;
     validate_location(request.depth, request.branch).map_err(|error| error.to_string())?;
     let mut challenges = Challenges::NONE;
     for name in request.challenges {

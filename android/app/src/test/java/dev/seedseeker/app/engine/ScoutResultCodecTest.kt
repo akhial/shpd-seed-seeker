@@ -23,6 +23,18 @@ import org.junit.Test
 class ScoutResultCodecTest {
     init { dev.seedseeker.app.catalog.PackagedCatalog.install() }
     @Test
+    fun dailyDatesRoundTripThroughTheRealScoutWithoutBecomingSearchCodes() {
+        val date = "2026-09-25"
+        assertTrue(SeedCode.isScoutable(date))
+        assertFalse(SeedCode.isCanonical(date))
+        assertFalse(SeedCode.isScoutable("2026-02-29"))
+        val world = JniNativeSeedFinder().scoutSeed(date)
+        assertEquals(date, world.seed)
+        assertTrue(world.items.isNotEmpty())
+        assertEquals("ODAL", world.itemMappings?.scrolls?.first()?.appearance)
+    }
+
+    @Test
     fun artifactsKeepTheirNativeIndicesAndVaultUpgrade() {
         val artifact = dev.seedseeker.app.catalog.ItemCatalog.artifacts.first()
         val world = ScoutResultCodec.decode(scoutPacket(

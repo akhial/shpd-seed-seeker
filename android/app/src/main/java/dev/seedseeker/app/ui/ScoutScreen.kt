@@ -2,6 +2,15 @@
 package dev.seedseeker.app.ui
 
 import android.graphics.BitmapFactory
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import dev.seedseeker.app.model.DailyRunDate
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Color
@@ -182,7 +191,7 @@ fun ScoutScreen(
             else -> 0f
         }
     } }
-    val seedIsReady = SeedCode.isCanonical(seedInput)
+    val seedIsReady = SeedCode.isScoutable(seedInput)
     // Position within the search results, when the scouted seed came from one.
     val resultIndex = ScoutResultNavigation.position(resultSeeds, scoutedSeed)
     val stepToResult: (Int) -> Unit = { delta ->
@@ -250,7 +259,7 @@ fun ScoutScreen(
                     }.onSizeChanged { headerScroll.updateMeasurements(input = it.height.toFloat()) },
                 ) {
                     Column(Modifier.padding(bottom = 12.dp)) {
-                        SeedInputCard(seedInput, seedIsReady, isScouting, error, onSeedChange, onScout)
+                        SeedInputCard(seedInput, seedIsReady, isScouting, error, onSeedChange, onScout, onScoutSeed)
                     }
                 }
                 result?.let { world ->
@@ -355,7 +364,7 @@ fun ScoutScreen(
 
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun SeedInputCard(
     seedInput: String,
@@ -364,7 +373,26 @@ private fun SeedInputCard(
     error: String?,
     onSeedChange: (String) -> Unit,
     onScout: () -> Unit,
+    onScoutSeed: (String) -> Unit,
 ) {
+    val daily = seedInput.length == 10 && SeedCode.isScoutable(seedInput)
+    var showDatePicker by remember { mutableStateOf(false) }
+    if (showDatePicker) {
+        val picker = rememberDatePickerState(
+            initialSelectedDateMillis = DailyRunDate.parse(seedInput) ?: System.currentTimeMillis(),
+            yearRange = 1970..9999,
+        )
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(enabled = picker.selectedDateMillis != null, onClick = {
+                    picker.selectedDateMillis?.let { onSeedChange(DailyRunDate.format(it)) }
+                    showDatePicker = false
+                }) { Text("Use date") }
+            },
+            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Cancel") } },
+        ) { DatePicker(state = picker, title = { Text("Daily run date (UTC)", Modifier.padding(24.dp)) }) }
+    }
     var fieldValue by remember {
         mutableStateOf(
             TextFieldValue(seedInput, selection = TextRange(seedInput.length)),
@@ -382,7 +410,26 @@ private fun SeedInputCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
     ) {
         Column(Modifier.padding(18.dp)) {
-            OutlinedTextField(
+            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+                listOf("Seed code", "Daily run").forEachIndexed { index, label ->
+                    SegmentedButton(
+                        selected = daily == (index == 1), enabled = !isScouting,
+                        onClick = { if (daily != (index == 1)) onSeedChange(if (index == 1) DailyRunDate.today() else "") },
+                        shape = SegmentedButtonDefaults.itemShape(index, 2),
+                    ) { Text(label) }
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            if (daily) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedButton(onClick = { showDatePicker = true }, enabled = !isScouting, modifier = Modifier.weight(1f)) {
+                        Text("$seedInput · UTC")
+                    }
+                    TextButton(onClick = { onScoutSeed(DailyRunDate.today()) }, enabled = !isScouting) { Text("Today") }
+                }
+                Text("Choose any date. Daily runs change at midnight UTC. Uses the supported game version.",
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else OutlinedTextField(
                 value = fieldValue,
                 onValueChange = {
                     val formattedValue = formatSeedFieldValue(it)
@@ -422,7 +469,7 @@ private fun SeedInputCard(
                     Spacer(Modifier.width(10.dp))
                     Text("Generating world…")
                 } else {
-                    Text("Scout seed")
+                    Text(if (daily) "Scout daily run" else "Scout seed")
                 }
             }
             error?.let {

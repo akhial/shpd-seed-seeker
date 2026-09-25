@@ -2243,7 +2243,7 @@ private struct ResultsStatusView: View {
     private let engine = ProductionSeedFinderEngine()
     func scout(_ seed: String? = nil, challenges: Int, query: SearchRequest?, trinket: String? = nil) {
         if let seed { input = SeedCode.formatInput(seed) }
-        guard SeedCode.isCanonical(input) else { error = "Seed must use XXX-XXX-XXX format"; return }
+        guard SeedCode.isScoutable(input) else { error = "Choose a daily date or enter a XXX-XXX-XXX seed"; return }
         let requested = input; requestedSeed = requested; loading = true; error = nil
         // Only the latest request may publish: unsequenced completions would
         // let an older manifest land under a newer position indicator.
@@ -2479,7 +2479,7 @@ private struct SeedDetailView: View {
                 manifest(world)
             } else {
                 ContentUnavailableView("No seed scouted", systemImage: "map",
-                    description: Text("Enter a canonical seed, or select a search result, to inspect its item manifest."))
+                    description: Text("Enter a seed, choose a daily run, or select a search result."))
             }
         }
         .background {
@@ -2498,11 +2498,29 @@ private struct SeedDetailView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
+            Picker("Run type", selection: Binding(
+                get: { model.input.count == 10 && SeedCode.isScoutable(model.input) },
+                set: { model.input = $0 ? DailyRunDate.code() : "" }
+            )) {
+                Text("Seed code").tag(false)
+                Text("Daily run").tag(true)
+            }.pickerStyle(.segmented).disabled(model.loading)
             HStack {
-                TextField("AAA-AAA-AAA", text: $model.input).font(.system(size: 20, design: .monospaced)).focused($focused)
+                if model.input.count == 10 && SeedCode.isScoutable(model.input) {
+                    DatePicker("Daily date (UTC)", selection: Binding(
+                        get: { DailyRunDate.date(model.input) ?? Date() },
+                        set: { model.input = DailyRunDate.code($0) }
+                    ), in: DailyRunDate.date("1970-01-01")!...DailyRunDate.date("9999-12-31")!, displayedComponents: .date)
+                        .environment(\.calendar, DailyRunDate.calendar)
+                        .environment(\.timeZone, DailyRunDate.calendar.timeZone)
+                        .disabled(model.loading)
+                    Button("Today") { onScoutSeed(DailyRunDate.code()) }.disabled(model.loading)
+                } else {
+                    TextField("AAA-AAA-AAA", text: $model.input).font(.system(size: 20, design: .monospaced)).focused($focused)
                     .onChange(of: model.input) { _, value in let formatted = SeedCode.formatInput(value); if formatted != value { model.input = formatted } }
-                    .onSubmit { onScoutSeed(model.input) }
-                Button("Scout") { onScoutSeed(model.input) }.disabled(!SeedCode.isCanonical(model.input))
+                    .onSubmit { if !model.loading { onScoutSeed(model.input) } }
+                }
+                Button("Scout") { onScoutSeed(model.input) }.disabled(model.loading || !SeedCode.isScoutable(model.input))
                 if model.world?.itemMappings != nil {
                     Button { showSeedInfo = true } label: { Image(systemName: "info.circle") }
                         .buttonStyle(.borderless).accessibilityLabel("Seed information")
@@ -2510,6 +2528,10 @@ private struct SeedDetailView: View {
                 }
                 if let seed = model.world?.seed { Button("Copy") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(seed, forType: .string) } }
                 if model.loading { ProgressView().controlSize(.small) }
+            }
+            if model.input.count == 10 && SeedCode.isScoutable(model.input) {
+                Text("Daily runs change at midnight UTC. All dates use the supported game version.")
+                    .font(.caption).foregroundStyle(.secondary)
             }
             if let error = model.error { Text(error).foregroundStyle(.red).font(.caption) }
             if resultPosition != nil || model.world?.trinketOrder.isEmpty == false {

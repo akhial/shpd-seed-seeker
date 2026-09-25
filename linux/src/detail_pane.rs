@@ -8,6 +8,7 @@ use std::fmt::Write as _;
 use std::rc::Rc;
 
 use adw::prelude::*;
+use gtk::glib;
 use shpd_seedfinder_core::auto_trinkets::SeedRecipe;
 use shpd_seedfinder_core::catalog::{Effect, ItemId, ItemKind, item};
 use shpd_seedfinder_core::challenges::Challenges;
@@ -102,6 +103,39 @@ impl DetailPane {
         entry_area.append(&scout_button);
         entry_area.append(&info_button);
         entry_area.append(&copy_button);
+        let daily_area = gtk::Box::builder()
+            .spacing(6)
+            .margin_start(12)
+            .margin_end(12)
+            .margin_bottom(6)
+            .build();
+        let calendar = gtk::Calendar::new();
+        let today = glib::DateTime::now_utc().expect("UTC clock available");
+        calendar.set_date(&today);
+        let daily_popover = gtk::Popover::new();
+        let daily_content = gtk::Box::new(gtk::Orientation::Vertical, 6);
+        daily_content.append(&calendar);
+        let use_date = gtk::Button::with_label("Use date");
+        daily_content.append(&use_date);
+        daily_popover.set_child(Some(&daily_content));
+        let daily_picker = gtk::MenuButton::builder()
+            .label("Choose a daily run")
+            .popover(&daily_popover)
+            .hexpand(true)
+            .tooltip_text("Choose a daily run date (UTC), then Scout")
+            .build();
+        let daily_today = gtk::Button::with_label("Today");
+        daily_today.set_tooltip_text(Some("Scout today's daily run (UTC)"));
+        daily_area.append(&daily_picker);
+        daily_area.append(&daily_today);
+        let daily_note = gtk::Label::builder()
+            .label("Daily runs change at midnight UTC. All dates use the supported game version.")
+            .wrap(true)
+            .css_classes(["caption", "dim-label"])
+            .margin_start(12)
+            .margin_end(12)
+            .margin_bottom(8)
+            .build();
         let entry_clamp = adw::Clamp::builder()
             .child(&entry_area)
             .maximum_size(500)
@@ -213,6 +247,8 @@ impl DetailPane {
         let toolbar_view = adw::ToolbarView::new();
         toolbar_view.add_top_bar(&header_bar);
         toolbar_view.add_top_bar(&entry_clamp);
+        toolbar_view.add_top_bar(&daily_area);
+        toolbar_view.add_top_bar(&daily_note);
         toolbar_view.add_top_bar(&nav);
         toolbar_view.set_content(Some(&stack));
 
@@ -252,6 +288,39 @@ impl DetailPane {
             on_scout: RefCell::new(None),
         });
 
+        use_date.connect_clicked({
+            let pane = Rc::clone(&pane);
+            move |_| {
+                let date = calendar.date();
+                let text = format!(
+                    "{:04}-{:02}-{:02}",
+                    date.year(),
+                    date.month(),
+                    date.day_of_month()
+                );
+                if DungeonSeed::from_daily_date(&text).is_ok() {
+                    pane.entry.set_text(&text);
+                    daily_popover.popdown();
+                } else {
+                    pane.toasts
+                        .add_toast(adw::Toast::new("Choose a date between 1970 and 9999"));
+                }
+            }
+        });
+        daily_today.connect_clicked({
+            let pane = Rc::clone(&pane);
+            move |_| {
+                if let Ok(today) = glib::DateTime::now_utc() {
+                    pane.entry.set_text(&format!(
+                        "{:04}-{:02}-{:02}",
+                        today.year(),
+                        today.month(),
+                        today.day_of_month()
+                    ));
+                    pane.request_scout();
+                }
+            }
+        });
         for (button, delta) in [(previous, -1), (next, 1)] {
             let weak = Rc::downgrade(&pane);
             button.connect_clicked(move |_| {
@@ -283,7 +352,7 @@ impl DetailPane {
                     entry.set_position(-1);
                 }
                 pane.scout_button
-                    .set_sensitive(DungeonSeed::from_code(&formatted).is_ok());
+                    .set_sensitive(DungeonSeed::from_scout_input(&formatted).is_ok());
                 pane.updating.set(false);
             }
         });
@@ -370,7 +439,7 @@ impl DetailPane {
 
     /// The canonical code of the currently scouted seed, if any.
     pub fn entered_seed(&self) -> Option<String> {
-        DungeonSeed::from_code(self.entry.text().as_str())
+        DungeonSeed::from_scout_input(self.entry.text().as_str())
             .ok()
             .map(DungeonSeed::to_code)
     }
@@ -414,7 +483,7 @@ impl DetailPane {
             self.updating.set(false);
         }
         let text = self.entry.text();
-        let Ok(seed) = DungeonSeed::from_code(text.trim()) else {
+        let Ok(seed) = DungeonSeed::from_scout_input(text.trim()) else {
             self.toasts
                 .add_toast(adw::Toast::new("Seed codes use the AAA-AAA-AAA format"));
             return;

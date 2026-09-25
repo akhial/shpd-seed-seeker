@@ -2,6 +2,7 @@
 static GLOBAL_ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 mod json_output;
+mod scout;
 
 use std::collections::hash_map::RandomState;
 use std::env;
@@ -47,6 +48,11 @@ enum Command {
         output: Option<PathBuf>,
         json: bool,
         random_start: bool,
+    },
+    Scout {
+        seed: shpd_seedfinder_core::seed::DungeonSeed,
+        items: Option<PathBuf>,
+        output: Option<PathBuf>,
     },
     Help,
     Version,
@@ -200,6 +206,17 @@ fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
+        Command::Scout {
+            seed,
+            items,
+            output,
+        } => match scout::run(seed, items.as_deref(), output.as_deref()) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => {
+                eprintln!("seed-seeker: scout failed: {error}");
+                ExitCode::FAILURE
+            }
+        },
         Command::Help => {
             print!("{}", help());
             ExitCode::SUCCESS
@@ -214,6 +231,7 @@ fn main() -> ExitCode {
     }
 }
 
+#[allow(clippy::too_many_lines)] // Linear option dispatch keeps argument conflicts together.
 fn parse_args(arguments: impl IntoIterator<Item = String>) -> Result<Command, String> {
     let arguments = arguments.into_iter().collect::<Vec<_>>();
     if arguments.len() <= 1 {
@@ -224,6 +242,7 @@ fn parse_args(arguments: impl IntoIterator<Item = String>) -> Result<Command, St
         }
     }
 
+    let mut scout_seed = None;
     let mut benchmark_seeds = None;
     let mut workers = None;
     let mut items = None;
@@ -233,6 +252,18 @@ fn parse_args(arguments: impl IntoIterator<Item = String>) -> Result<Command, St
     let mut index = 0;
     while index < arguments.len() {
         match arguments[index].as_str() {
+            "--daily" | "--scout" => {
+                if scout_seed.is_some() {
+                    return Err("specify only one of --daily or --scout".to_owned());
+                }
+                let daily = arguments[index] == "--daily";
+                let value = arguments.get(index + 1).filter(|arg| !arg.starts_with('-'));
+                if value.is_some() {
+                    index += 1;
+                }
+                let seed = scout::parse_seed(value.map(String::as_str), daily)?;
+                scout_seed = Some(seed);
+            }
             "--benchmark" | "-b" => {
                 if benchmark_seeds.is_some() {
                     return Err("benchmark may only be specified once".to_owned());
@@ -290,6 +321,19 @@ fn parse_args(arguments: impl IntoIterator<Item = String>) -> Result<Command, St
         index += 1;
     }
 
+    if let Some(seed) = scout_seed {
+        if benchmark_seeds.is_some() || workers.is_some() || json {
+            return Err(
+                "--daily and --scout cannot be combined with --benchmark, --workers or --json"
+                    .to_owned(),
+            );
+        }
+        return Ok(Command::Scout {
+            seed,
+            items,
+            output,
+        });
+    }
     if json && output.is_none() {
         return Err("--json requires --output FILE".to_owned());
     }
@@ -345,8 +389,13 @@ fn help() -> &'static str {
         "Seed Seeker command-line tools\n\n",
         "Usage:\n",
         "  seed-seeker --items FILE [--random-start] [--workers WORKERS] [--output FILE [--json]]\n",
-        "  seed-seeker [--items FILE] --benchmark [SEEDS] [--random-start] [--workers WORKERS]\n\n",
+        "  seed-seeker [--items FILE] --benchmark [SEEDS] [--random-start] [--workers WORKERS]\n",
+        "  seed-seeker --daily [YYYY-MM-DD] [--items FILE] [--output FILE]\n",
+        "  seed-seeker --scout CODE [--items FILE] [--output FILE]\n\n",
         "Options:\n",
+        "      --daily [YYYY-MM-DD]  Scout a daily run [default: today in UTC]\n",
+        "      --scout CODE          Scout a nine-letter seed code\n",
+        "                            Daily dates use the supported game version\n",
         "  -b, --benchmark [SEEDS]  Benchmark a seed search\n",
         "                            [default: 10000]\n",
         "  -i, --items FILE          Read search requirements from a JSON file\n",
@@ -881,6 +930,37 @@ mod tests {
             );
         }
         assert!(parse_args(["--workers".to_owned(), "4".to_owned()]).is_err());
+    }
+
+    #[test]
+    fn daily_and_seed_scout_arguments_validate_dates_and_conflicts() {
+        use shpd_seedfinder_core::seed::DungeonSeed;
+        assert_eq!(
+            parse_args(["--daily", "2026-09-25"].map(str::to_owned)),
+            Ok(Command::Scout {
+                seed: DungeonSeed::from_daily_date("2026-09-25").unwrap(),
+                items: None,
+                output: None,
+            })
+        );
+        assert!(
+            matches!(parse_args(["--daily".to_owned()]), Ok(Command::Scout { seed, .. }) if seed.is_daily())
+        );
+        assert!(
+            matches!(parse_args(["--scout", "ABC-DEF-GHI"].map(str::to_owned)), Ok(Command::Scout { seed, .. }) if !seed.is_daily())
+        );
+        for args in [
+            vec!["--daily", "2026-02-29"],
+            vec!["--daily", "2026-9-25"],
+            vec!["--daily", "--scout", "ABC-DEF-GHI"],
+            vec!["--daily", "--benchmark"],
+            vec!["--daily", "--workers", "2"],
+            vec!["--daily", "--json"],
+            vec!["--daily", "--daily"],
+            vec!["--scout"],
+        ] {
+            assert!(parse_args(args.into_iter().map(str::to_owned)).is_err());
+        }
     }
 
     #[test]

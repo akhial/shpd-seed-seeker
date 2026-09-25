@@ -25,6 +25,7 @@ written in Rust — with native apps for Android, Linux, macOS, and Windows.
 - ⚡️ **4.7–25.4× faster** than Java seed finders on the benchmark queries
 - 🔍 **Rich queries**: multiple requirements across melee and thrown weapons, armor, wands, and rings
 - 🔗 **Share links**: short links to share your search
+- 📅 **Daily scouting**: scout today’s UTC daily run, or choose a past or future date
 - 📱 **Native apps** Material 3, GTK 4 and libadwaita, SwiftUI, WinUI 3
 
 ## Table of contents
@@ -105,6 +106,26 @@ white values, and Shattered green in terminals. Set `NO_COLOR=1` to
 disable colors; redirected stderr and `TERM=dumb` remain plain text.
 Seeds searched stays an integer below 100,000; larger counts use K, M, or B
 with up to three decimal places (for example, `151 K` or `2.675 B`).
+
+Scout today's daily run, a chosen date, or a normal seed:
+
+```sh
+seed-seeker --daily
+seed-seeker --daily 2026-09-25
+seed-seeker --scout ABC-DEF-GHI
+seed-seeker --daily 2026-09-25 --items requirements.json --output daily.txt
+```
+
+Scouting prints an item manifest grouped by floor. `--items` applies the query's
+challenges and automatic trinket selection; `--output` saves the text report.
+`--json` is reserved for search-result exports.
+
+In the apps, open **Scout**, choose **Daily run** (or the daily date picker),
+then **Today** or a date and **Scout**. Days change at midnight **UTC**, regardless
+of your device's time zone. Dates from 1970 through 9999 are accepted, using the
+supported Shattered Pixel Dungeon version for all dates. Historical versions
+are not reconstructed, and future game updates may change those runs.
+See [daily-run scouting](docs/daily-runs.md) for engine and API details.
 
 ## Search queries<a id="search-queries"></a>
 

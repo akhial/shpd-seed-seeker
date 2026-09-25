@@ -129,9 +129,14 @@ public final class ParityOracle {
 		setStaticField(Bones.class, "item", null);
 		setStaticField(Bones.class, "heroClass", null);
 
-		Dungeon.daily = false;
+		Dungeon.daily = options.dailyDate != null;
 		Dungeon.dailyReplay = false;
-		SPDSettings.customSeed(options.seedCode);
+		if (options.dailyDate != null) {
+            SPDSettings.lastDaily(java.time.LocalDate.parse(options.dailyDate)
+                    .atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli());
+        } else {
+            SPDSettings.customSeed(options.seedCode);
+        }
 		SPDSettings.challenges(options.challenges);
 		Dungeon.initSeed();
 		GamesInProgress.selectedClass = HeroClass.WARRIOR;
@@ -254,7 +259,7 @@ public final class ParityOracle {
 		runtime.put("java_vm", System.getProperty("java.vm.name"));
 		record.put("runtime", runtime);
 		record.put("seed_input", options.seedInput);
-		record.put("seed_code", DungeonSeed.convertToCode(Dungeon.seed));
+		record.put("seed_code", Dungeon.daily ? Dungeon.customSeedText : DungeonSeed.convertToCode(Dungeon.seed));
 		record.put("seed", Dungeon.seed);
 		record.put("requested_depths", new ArrayList<Integer>(options.depths));
 		record.put("vault_requested", options.vault);
@@ -991,7 +996,7 @@ public final class ParityOracle {
 	}
 
 	private static void printUsage() {
-		System.out.println("Usage: parity-oracle --seed XXX-XXX-XXX [--floors LIST] [--format ndjson|json]");
+		System.out.println("Usage: parity-oracle (--seed XXX-XXX-XXX | --daily YYYY-MM-DD) [--floors LIST] [--format ndjson|json]");
 		System.out.println("  --floors 1,3-5     Generate through the highest depth and emit the selected depths");
 		System.out.println("  --challenges N     Challenge bit mask (default: 0)");
 		System.out.println("  --run-checkpoints  Emit a Generator-state hash after every generated floor");
@@ -1088,6 +1093,7 @@ public final class ParityOracle {
 
 	private static final class Options {
 		String seedInput;
+        String dailyDate;
 		String seedCode;
 		TreeSet<Integer> depths = new TreeSet<Integer>();
 		boolean mapContents;
@@ -1118,7 +1124,9 @@ public final class ParityOracle {
                     result.acquireHourglass = true;
                 } else if ("--vault".equals(arg)) {
 					result.vault = true;
-				} else if ("--seed".equals(arg)) {
+				} else if ("--daily".equals(arg)) {
+                    result.dailyDate = requireValue(args, ++i, arg);
+                } else if ("--seed".equals(arg)) {
 					result.seedInput = requireValue(args, ++i, arg);
 				} else if ("--floors".equals(arg) || "--depths".equals(arg)) {
 					parseDepths(requireValue(args, ++i, arg), result.depths);
@@ -1137,14 +1145,20 @@ public final class ParityOracle {
 			if (result.seedInput == null && !positional.isEmpty()) result.seedInput = positional.remove(0);
 			if (result.depths.isEmpty() && !positional.isEmpty()) parseDepths(positional.remove(0), result.depths);
 			if (!positional.isEmpty()) throw new IllegalArgumentException("too many positional arguments");
-			if (result.seedInput == null) throw new IllegalArgumentException("--seed is required");
+			if (result.dailyDate != null && result.seedInput != null) throw new IllegalArgumentException("use --seed or --daily");
+            if (result.dailyDate != null) result.seedInput = result.dailyDate;
+            if (result.seedInput == null) throw new IllegalArgumentException("--seed or --daily is required");
 			if (result.depths.isEmpty()) result.depths.add(1);
 			if (!"ndjson".equals(result.format) && !"json".equals(result.format)) {
 				throw new IllegalArgumentException("format must be ndjson or json");
 			}
 
-			long seed = DungeonSeed.convertFromCode(result.seedInput);
-			result.seedCode = DungeonSeed.convertToCode(seed);
+			if (result.dailyDate == null) {
+                long seed = DungeonSeed.convertFromCode(result.seedInput);
+                result.seedCode = DungeonSeed.convertToCode(seed);
+            } else {
+                java.time.LocalDate.parse(result.dailyDate);
+            }
 			return result;
 		}
 

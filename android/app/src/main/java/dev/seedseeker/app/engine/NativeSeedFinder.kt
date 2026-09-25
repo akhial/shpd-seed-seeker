@@ -153,7 +153,7 @@ class DemoNativeSeedFinder : NativeSeedFinder {
         JniNativeSeedFinder().scoutSelectedMatches(seed, challenges, request, query, trinket)
 
     override fun scoutSeed(seed: String, challenges: Int): ScoutWorld {
-        require(SeedCode.isCanonical(seed)) { "Seed must use XXX-XXX-XXX format" }
+        require(SeedCode.isScoutable(seed)) { "Choose a daily date or enter a XXX-XXX-XXX seed" }
         require(challenges in 0..Challenge.ALL_MASK) { "Challenge mask must be 0..${Challenge.ALL_MASK}" }
         // These items are fabricated rather than generated, so no run stands
         // behind them to roll ring gems: this world states the catalog's own
@@ -373,7 +373,7 @@ class JniNativeSeedFinder(
         scoutSelectedSeed(seed, challenges, null, null)
 
     override fun scoutSelectedSeed(seed: String, challenges: Int, query: SearchRequest?, trinket: String?): ScoutWorld {
-        require(SeedCode.isCanonical(seed)) { "Seed must use XXX-XXX-XXX format" }
+        require(SeedCode.isScoutable(seed)) { "Choose a daily date or enter a XXX-XXX-XXX seed" }
         require(challenges in 0..Challenge.ALL_MASK) { "Challenge mask must be 0..${Challenge.ALL_MASK}" }
         val world = ScoutResultCodec.decode(
             bindings.scoutSeed(ScoutRequestCodec.encode(seed, challenges, query, trinket)),
@@ -593,7 +593,10 @@ object SeedCode {
     fun formatInput(input: String): String =
         String(JniBindings.formatSeedCode(input.toByteArray()), StandardCharsets.UTF_8)
 
-    fun isCanonical(seed: String): Boolean = parse(seed)?.code == seed
+    fun isCanonical(seed: String): Boolean = seed.length == 11 && isScoutable(seed)
+
+    /** A canonical code or a UTC daily date, validated by the engine. */
+    fun isScoutable(seed: String): Boolean = parse(seed)?.code == seed
 
     /** Numeric value of a canonical seed, as the game reads it. */
     fun value(seed: String): Long {
@@ -622,7 +625,7 @@ object QueryDocument {
 
 object ScoutRequestCodec {
     fun encode(seed: String, challenges: Int, query: SearchRequest? = null, trinket: String? = null): ByteArray {
-        require(SeedCode.isCanonical(seed)) { "Seed must use XXX-XXX-XXX format" }
+        require(SeedCode.isScoutable(seed)) { "Choose a daily date or enter a XXX-XXX-XXX seed" }
         require(challenges in 0..Challenge.ALL_MASK) { "Challenge mask must be 0..${Challenge.ALL_MASK}" }
         fun u16(value: Int) = byteArrayOf(value.toByte(), (value ushr 8).toByte())
         val seedBytes = seed.toByteArray(StandardCharsets.UTF_8)
@@ -689,7 +692,7 @@ object ScoutResultCodec {
             check(hasTrinketOrder || magic.contentEquals(MAGIC)) { "Unexpected native scout packet" }
 
             val seed = readAscii(input, input.readUnsignedByte())
-            check(SeedCode.isCanonical(seed)) { "Malformed seed from native scout" }
+            check(SeedCode.isScoutable(seed)) { "Malformed seed from native scout" }
             // The twelve gem ordinals this run gave the ring classes. A shuffle
             // hands every class a distinct gem, so the model's own permutation
             // rule decides whether these bytes are a run's table; a corrupt one

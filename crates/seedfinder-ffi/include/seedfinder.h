@@ -105,8 +105,9 @@ int32_t seedfinder_engine_info(uint8_t **out_packet, size_t *out_len);
 // dropped, the first nine ASCII letters kept, and only those uppercased — and
 // returns the UTF-8 text. Parse takes UTF-8 seed-code text and returns the
 // UTF-8 JSON {"code": "XXX-XXX-XXX", "value": <number>}: the canonical code
-// for display and the numeric value seedfinder_filter_seeds takes. Text that
-// is not a seed code is rejected. Both return packets are freed with
+// for display and its numeric value. Valid UTC daily dates are also accepted
+// and preserved by both functions; only nine-letter codes are searchable.
+// Invalid input is rejected. Both return packets are freed with
 // seedfinder_buffer_free.
 int32_t seedfinder_seed_format(const uint8_t *input, size_t input_len, uint8_t **out_packet, size_t *out_len);
 int32_t seedfinder_seed_parse(const uint8_t *input, size_t input_len, uint8_t **out_packet, size_t *out_len);

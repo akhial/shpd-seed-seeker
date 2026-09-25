@@ -324,6 +324,15 @@
                 <Button Content="Copy" Click="CopySeed_Click" VerticalAlignment="Stretch"/>
               </StackPanel>
             </Grid>
+            <Grid ColumnSpacing="8">
+              <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+              <CalendarDatePicker x:Name="DailyDate" PlaceholderText="Choose a daily run" DateChanged="DailyDate_Changed"
+                                  HorizontalAlignment="Stretch" AutomationProperties.Name="Daily run date (UTC)"/>
+              <Button Grid.Column="1" x:Name="DailyToday" Content="Today" Click="DailyToday_Click"
+                      AutomationProperties.Name="Scout today's daily run"/>
+            </Grid>
+            <TextBlock Text="Daily runs change at midnight UTC. All dates use the supported game version."
+                       Style="{StaticResource Caption}" TextWrapping="Wrap"/>
             <TextBlock x:Name="ScoutStatus" Style="{StaticResource Caption}" Margin="0,-2,0,0"/>
             <!-- Shown while the scouted seed is one of the search results: J/K (or the chevrons) step through them. -->
             <Grid x:Name="ResultNav" Visibility="Collapsed" ColumnSpacing="8" MinHeight="32">
