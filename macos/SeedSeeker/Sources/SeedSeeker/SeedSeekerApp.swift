@@ -230,16 +230,17 @@ private struct ContentView: View {
     /// The results' file actions, in the window toolbar: import, export,
     /// clear, and a link to the query that made them.
     @ToolbarContentBuilder private var toolbarItems: some ToolbarContent {
-        ToolbarItemGroup {
-            Button {
-                showingImporter = true
+        ToolbarActionBubble {
+            Menu {
+                Button("From File…", systemImage: "doc") { showingImporter = true }
+                Button("From Clipboard", systemImage: "doc.on.clipboard") { importClipboard() }
             } label: {
-                Label("Import…", systemImage: "square.and.arrow.down")
+                Label("Import", systemImage: "square.and.arrow.down")
             }
             // Toolbar labels default to icon-only, which left the
             // glyphs looking uncentred inside their glass capsules.
-            .labelStyle(ToolbarActionLabelStyle())
-            .help("Import results and their query from a file")
+            .labelStyle(ToolbarActionLabelStyle(trailingEllipsis: false))
+            .help("Import results and their query from a file or clipboard")
             .disabled(controller.isRunning)
             Button {
                 beginExport()
@@ -250,6 +251,8 @@ private struct ContentView: View {
             .help("Export the results and the query that produced them to a file")
             .disabled(controller.isRunning || controller.results.isEmpty
                 || controller.exportQuery == nil)
+        }
+        ToolbarActionBubble {
             Button {
                 controller.clearResults()
             } label: {
@@ -419,28 +422,44 @@ private struct ContentView: View {
     }
 
     private func importResults(from url: URL) {
+        importResults {
+            let accessing = url.startAccessingSecurityScopedResource()
+            defer { if accessing { url.stopAccessingSecurityScopedResource() } }
+            let data = try Data(contentsOf: url)
+            guard let text = String(data: data, encoding: .utf8) else {
+                throw ResultsExportError("This is not a Seed Seeker results file (not UTF-8 text).")
+            }
+            return text
+        }
+    }
+
+    private func importClipboard() {
+        guard !controller.isRunning else { return }
+        guard let text = NSPasteboard.general.string(forType: .string),
+              !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            transferError = "The clipboard has no text. Copy results JSON and try again."
+            return
+        }
+        importResults { text }
+    }
+
+    private func importResults(readText: @escaping @Sendable () throws -> String) {
         guard !controller.isRunning else {
             transferError = "Stop the search before importing results."
             return
         }
         Task {
-            // Read and parse the untrusted file off the main actor.
+            // Read and parse the untrusted JSON off the main actor.
             let outcome: Result<ResultsExport.Imported, any Error> = await Task.detached {
                 do {
-                    let accessing = url.startAccessingSecurityScopedResource()
-                    defer { if accessing { url.stopAccessingSecurityScopedResource() } }
-                    let data = try Data(contentsOf: url)
-                    guard let text = String(data: data, encoding: .utf8) else {
-                        throw ResultsExportError("This is not a Seed Seeker results file (not UTF-8 text).")
-                    }
-                    return .success(try ResultsExport.decode(text))
+                    return .success(try ResultsExport.decode(readText()))
                 } catch {
                     return .failure(error)
                 }
             }.value
             switch outcome {
             case .success(let imported):
-                // A search may have started while the file was being read.
+                // A search may have started while the import was being read or decoded.
                 guard !controller.isRunning else {
                     transferError = "Stop the search before importing results."
                     return
@@ -450,13 +469,13 @@ private struct ContentView: View {
                                        query: imported.query, trinkets: imported.trinkets)
                 let engineVersion = EngineInfo.shared.shpdVersion
                 if let fileVersion = imported.shpdVersion, fileVersion != engineVersion {
-                    transferError = "Imported \(controller.results.count) seeds. Note: this file was " +
+                    transferError = "Imported \(controller.results.count) seeds. Note: this JSON was " +
                         "made for Shattered Pixel Dungeon v\(fileVersion); this app targets " +
                         "v\(engineVersion), so the seeds may generate differently."
                 }
             case .failure(let error):
                 transferError = (error as? LocalizedError)?.errorDescription
-                    ?? "The results file could not be imported."
+                    ?? "The results could not be imported."
             }
         }
     }
@@ -2056,6 +2075,30 @@ private struct ToolbarActionLabelStyle: LabelStyle {
         }
         .padding(.leading, trailingEllipsis ? 6 : 6 - Self.ellipsisAllowance)
         .padding(.trailing, 6)
+    }
+}
+
+/// Each action group owns one native glass surface, including its menu control.
+private struct ToolbarActionBubble<Content: View>: ToolbarContent {
+    let content: Content
+
+    init(@ViewBuilder content: () -> Content) { self.content = content() }
+
+    @ToolbarContentBuilder var body: some ToolbarContent {
+        if #available(macOS 26.0, *) {
+            ToolbarItem(placement: .primaryAction) {
+                HStack(spacing: 8) { content }
+                    .buttonStyle(.plain)
+                    .menuStyle(.borderlessButton)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 8)
+                    .glassEffect(.regular, in: .capsule)
+            }
+            .sharedBackgroundVisibility(.hidden)
+        } else {
+            ToolbarItemGroup { content }
+        }
     }
 }
 

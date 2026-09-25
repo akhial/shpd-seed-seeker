@@ -50,6 +50,11 @@ loaded and discovered seeds stay in the pool until **Clear results**. Imports
 add to it. Query changes and non-matches never discard seeds, so any later
 search can bring hidden matches back.
 
+In the Finder's **More options** menu, **Import results…** opens a JSON file and
+**Import from clipboard** reads copied JSON in the same results-export format.
+Both restore the saved query and add its seeds to the pool, using the same
+validation, deduplication, and import limits. Stop any running search before importing.
+
 An unchanged query resumes its previous scan; an edited query starts a fresh
 traversal after checking the full pool. Each saved seed retains its source
 query and original recipe, allowing a previously unnecessary automatic

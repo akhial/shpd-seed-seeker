@@ -37,6 +37,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
 import dev.seedseeker.app.BuildConfig
@@ -120,6 +121,7 @@ internal fun SeedFinderApp(
     sharedLink: SharedLink? = null,
 ) {
     val context = LocalContext.current
+    val clipboard = LocalClipboard.current
     val atlas = remember(context) {
         runCatching {
             context.assets.open(ATLAS_PATH).use(BitmapFactory::decodeStream)
@@ -270,22 +272,15 @@ internal fun SeedFinderApp(
             }
         }
     }
-    val importLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument(),
-    ) { uri ->
-        if (uri == null) return@rememberLauncherForActivityResult
+    fun importResults(source: String, readText: suspend () -> String) {
         scope.launch {
-            val outcome = withContext(Dispatchers.IO) {
-                runCatching {
-                    val text = context.contentResolver.openInputStream(uri)?.use { stream ->
-                        readForImport(stream)
-                    } ?: error("Could not read the selected file.")
-                    ResultsExport.decode(text)
-                }
+            val outcome = runCatching {
+                val text = readText()
+                withContext(Dispatchers.IO) { ResultsExport.decode(text) }
             }
             outcome.onSuccess { imported ->
-                // A search may have started while the picker was open or the
-                // file was being read.
+                // A search may have started while the import was being read
+                // or decoded (or while the file picker was open).
                 if (controller.isSearching || !controller.ready) {
                     transferError = "Stop the search before importing results."
                     return@onSuccess
@@ -329,7 +324,7 @@ internal fun SeedFinderApp(
                     }.getOrNull(),
                 )
                 importNotice = buildString {
-                    append("Imported ${kept.size} seed${if (kept.size == 1) "" else "s"} from file")
+                    append("Imported ${kept.size} seed${if (kept.size == 1) "" else "s"} from $source")
                     if (dropped > 0) {
                         append(" · $dropped duplicate or over-limit entr${if (dropped == 1) "y" else "ies"} dropped")
                     }
@@ -342,7 +337,19 @@ internal fun SeedFinderApp(
                     }
                 }
             }.onFailure { failure ->
-                transferError = failure.message ?: "The results file could not be imported."
+                if (failure is CancellationException) throw failure
+                transferError = failure.message ?: "The results could not be imported from $source."
+            }
+        }
+    }
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        importResults("file") {
+            withContext(Dispatchers.IO) {
+                context.contentResolver.openInputStream(uri)?.use(::readForImport)
+                    ?: error("Could not read the selected file.")
             }
         }
     }
@@ -650,6 +657,16 @@ internal fun SeedFinderApp(
                         arrayOf("application/json", "text/plain", "application/octet-stream"),
                     )
                 },
+                onImportClipboard = {
+                    importResults("clipboard") {
+                        val clip = clipboard.getClipEntry()?.clipData
+                        val text = clip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.text
+                        require(!text.isNullOrBlank()) {
+                            "The clipboard has no text. Copy results JSON and try again."
+                        }
+                        text.toString()
+                    }
+                },
                 onShareQuery = {
                     runCatching {
                         DeepLink.encodeLink(
@@ -795,7 +812,7 @@ internal fun SeedFinderApp(
         transferError?.let { message ->
             AlertDialog(
                 onDismissRequest = { transferError = null },
-                title = { Text("Results file") },
+                title = { Text("Results transfer") },
                 text = { Text(message) },
                 confirmButton = {
                     TextButton(onClick = { transferError = null }) { Text("OK") }

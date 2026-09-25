@@ -2,7 +2,14 @@ import { useEffect, useRef, useState } from "react";
 import { useStore } from "@tanstack/react-store";
 import { getItem } from "../../lib/catalog";
 import { compactNumber, formatDuration, probabilityLabel } from "../../lib/format";
-import { CheckIcon, CopyIcon, DownloadIcon, TrashIcon, UploadIcon } from "../../lib/icons";
+import {
+  CheckIcon,
+  ClipboardIcon,
+  CopyIcon,
+  DownloadIcon,
+  TrashIcon,
+  UploadIcon,
+} from "../../lib/icons";
 import {
   RESULTS_FILE_NAME,
   decodeResultsFile,
@@ -140,13 +147,13 @@ export function ResultsPanel({
     setFileError(undefined);
   };
 
-  const importResults = async (file: File) => {
+  const importResults = async (readText: () => Promise<string>) => {
     try {
       // The engine's codec owns the size limit, the envelope rules, the query
       // validation and dedupe-and-cap, and reports its own message on failure.
-      const decoded = decodeResultsFile(await file.text());
+      const decoded = decodeResultsFile(await readText());
       // A search may have started while the picker or the read were pending.
-      if (searchStore.state.state === "running") {
+      if (["running", "stopping"].includes(searchStore.state.state)) {
         throw new Error("A search is running — stop it before importing results.");
       }
       queryStore.setState(() => decoded.query);
@@ -163,13 +170,34 @@ export function ResultsPanel({
         decoded.shpdVersion !== undefined &&
           shpdVersion !== undefined &&
           decoded.shpdVersion !== shpdVersion
-          ? `This file was made for Shattered Pixel Dungeon v${decoded.shpdVersion}; this app targets v${shpdVersion}. The seeds may generate differently.`
+          ? `This JSON was made for Shattered Pixel Dungeon v${decoded.shpdVersion}; this app targets v${shpdVersion}. The seeds may generate differently.`
           : undefined,
       );
     } catch (error) {
       setFileError(error instanceof Error ? error.message : String(error));
     }
   };
+
+  const importClipboard = () =>
+    importResults(async () => {
+      if (!navigator.clipboard?.readText) {
+        throw new Error(
+          "Clipboard access is unavailable. Open this page over HTTPS or import a JSON file.",
+        );
+      }
+      let text: string;
+      try {
+        text = await navigator.clipboard.readText();
+      } catch {
+        throw new Error(
+          "Could not read the clipboard. Allow clipboard access in your browser or import a JSON file.",
+        );
+      }
+      if (!text.trim()) {
+        throw new Error("The clipboard has no text. Copy results JSON and try again.");
+      }
+      return text;
+    });
 
   return (
     <>
@@ -196,6 +224,17 @@ export function ResultsPanel({
           >
             <DownloadIcon size={13} />
             <span className="d1-io-label">Import</span>
+          </button>
+          <button
+            type="button"
+            className="d1-io-btn"
+            title="Import results from clipboard"
+            aria-label="Import results from clipboard"
+            disabled={running}
+            onClick={() => void importClipboard()}
+          >
+            <ClipboardIcon size={13} />
+            <span className="d1-io-label">Paste</span>
           </button>
           <button
             type="button"
@@ -227,7 +266,7 @@ export function ResultsPanel({
             onChange={(event) => {
               const file = event.target.files?.[0];
               event.target.value = "";
-              if (file) void importResults(file);
+              if (file) void importResults(() => file.text());
             }}
           />
         </span>
@@ -306,7 +345,7 @@ export function ResultsPanel({
             </span>
             <span className="d1-caption">
               {search.state === "imported"
-                ? `${foundCount.toLocaleString()} seed${foundCount === 1 ? "" : "s"} loaded from file${
+                ? `${foundCount.toLocaleString()} seed${foundCount === 1 ? "" : "s"} loaded${
                     search.importedDropped
                       ? ` · ${search.importedDropped.toLocaleString()} entr${search.importedDropped === 1 ? "y" : "ies"} dropped (duplicates or beyond the 1,024-seed limit)`
                       : ""
