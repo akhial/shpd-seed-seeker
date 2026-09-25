@@ -10,7 +10,7 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use adw::prelude::*;
-use gtk::glib;
+use gtk::{gio, glib};
 use shpd_seedfinder_core::auto_trinkets::{SeedRecipe, TrinketSearchMatch};
 use shpd_seedfinder_core::feasibility::QueryPlan;
 use shpd_seedfinder_core::query::SearchQuery;
@@ -173,10 +173,13 @@ impl ResultsPane {
             .tooltip_text("Export Results…")
             .action_name("win.export-results")
             .build();
-        let import_button = gtk::Button::builder()
+        let import_menu = gio::Menu::new();
+        import_menu.append(Some("From File…"), Some("win.import-results"));
+        import_menu.append(Some("From Clipboard"), Some("win.import-clipboard"));
+        let import_button = gtk::MenuButton::builder()
             .icon_name("results-import-symbolic")
-            .tooltip_text("Import Results…")
-            .action_name("win.import-results")
+            .tooltip_text("Import Results")
+            .menu_model(&import_menu)
             .build();
         let clear_button = gtk::Button::builder()
             .icon_name("clear-results-symbolic")

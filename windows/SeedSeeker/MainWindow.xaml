@@ -235,7 +235,13 @@
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
               <!-- Download/Upload glyphs, so the arrow directions match the
                    other platforms: into the app for import, out of it for export. -->
-              <Button x:Name="ImportResultsButton" Style="{StaticResource SubtleLabelButton}" Click="ImportResults_Click" ToolTipService.ToolTip="Import results from a file">
+              <Button x:Name="ImportResultsButton" Style="{StaticResource SubtleLabelButton}" ToolTipService.ToolTip="Import results from a file or clipboard">
+                <Button.Flyout>
+                  <MenuFlyout>
+                    <MenuFlyoutItem Text="From file…" Click="ImportResults_Click"/>
+                    <MenuFlyoutItem Text="From clipboard" Click="ImportClipboard_Click"/>
+                  </MenuFlyout>
+                </Button.Flyout>
                 <StackPanel Orientation="Horizontal" Spacing="6">
                   <FontIcon Glyph="&#xE896;" FontSize="14" VerticalAlignment="Center"/>
                   <TextBlock Text="Import" VerticalAlignment="Center"/>
