@@ -40,9 +40,9 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
-    <release version="0.17.1" date="2026-09-24">
+    <release version="0.18.0" date="2026-09-25">
       <description>
-        <p>Keep Android searches responsive and reuse resin probability transitions during search preparation.</p>
+        <p>Scout daily runs, import results from the clipboard, and improve CLI search and web map rendering.</p>
       </description>
     </release>
     <release version="0.9.1" date="2026-09-07">
