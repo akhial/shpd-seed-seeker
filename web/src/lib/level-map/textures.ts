@@ -1,7 +1,8 @@
+import { makeMapCanvas, mapContext, type MapCanvas } from "./canvas";
 import type { MapBundle, MapDraw } from "./types";
 
 const tinted = new WeakMap<MapBundle, Map<string, CanvasImageSource>>();
-type GlowingTexture = { image: HTMLCanvasElement; amount: number };
+type GlowingTexture = { image: MapCanvas; amount: number };
 const glowing = new WeakMap<MapBundle, Map<string, GlowingTexture>>();
 
 /** Mix RGB inside a small sprite buffer, preserving even translucent source pixels. */
@@ -19,14 +20,14 @@ export function glowTexture(
   let entry = cache.get(key);
   const [, , width, height] = draw.source;
   if (!entry) {
-    const canvas = document.createElement("canvas");
+    const canvas = makeMapCanvas();
     canvas.width = width;
     canvas.height = height;
     entry = { image: canvas, amount: -1 };
     cache.set(key, entry);
   }
   if (entry.amount !== amount) {
-    const context = entry.image.getContext("2d")!;
+    const context = mapContext(entry.image);
     context.globalAlpha = 1;
     context.globalCompositeOperation = "copy";
     context.drawImage(drawTexture(bundle, draw), ...draw.source, 0, 0, width, height);
@@ -42,7 +43,7 @@ export function glowTexture(
 export function drawTexture(
   bundle: MapBundle,
   draw: Extract<MapDraw, { kind: "blit" }>,
-  makeCanvas = () => document.createElement("canvas"),
+  makeCanvas = makeMapCanvas,
 ): CanvasImageSource {
   const original = bundle.textures.get(draw.asset)!;
   if (!draw.tint) return original;
@@ -58,7 +59,7 @@ export function drawTexture(
     const asset = bundle.map.assets.find((asset) => asset.id === draw.asset)!;
     canvas.width = asset.width;
     canvas.height = asset.height;
-    const context = canvas.getContext("2d")!;
+    const context = mapContext(canvas);
     context.fillStyle = `rgb(${draw.tint.join(",")})`;
     context.fillRect(0, 0, canvas.width, canvas.height);
     context.globalCompositeOperation = "multiply";

@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
 import { LevelMapView } from "./LevelMapView";
 import { mapRequestJson, requestLevelMap } from "../../lib/level-map/client";
+import { createMapFrameRenderer } from "../../lib/level-map/frame-renderer";
 import type { LevelMapRequest, MapBundle } from "../../lib/level-map/types";
 
 vi.mock("../../lib/level-map/client", () => ({
@@ -17,11 +18,8 @@ vi.mock("../../lib/level-map/client", () => ({
     }),
   requestLevelMap: vi.fn(),
 }));
-vi.mock("../../lib/level-map/render", () => ({
-  createLevelMapRenderer: () => ({ animated: false, draw: vi.fn() }),
-}));
-vi.mock("../../lib/level-map/particles", () => ({
-  createMapParticleRenderer: () => ({ animated: false, draw: vi.fn() }),
+vi.mock("../../lib/level-map/frame-renderer", () => ({
+  createMapFrameRenderer: vi.fn(),
 }));
 
 let host: HTMLDivElement;
@@ -103,10 +101,16 @@ async function zoomAndPan(target = viewport()) {
 }
 
 beforeEach(() => {
+  vi.mocked(createMapFrameRenderer).mockImplementation(() => ({
+    draw: vi.fn().mockResolvedValue(false),
+    dispose: vi.fn(),
+  }));
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
-  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
-    clearRect() {},
-  } as unknown as CanvasRenderingContext2D);
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(
+    function (this: HTMLCanvasElement) {
+      return { canvas: this, clearRect() {} } as unknown as CanvasRenderingContext2D;
+    },
+  );
   vi.stubGlobal(
     "ResizeObserver",
     class {
@@ -127,6 +131,69 @@ beforeEach(() => {
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
+});
+
+it("renders at display rate, bounds in-flight work, pauses hidden maps and cancels on replacement", async () => {
+  let nextFrame = 0;
+  const frames = new Map<number, FrameRequestCallback>();
+  vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+    frames.set(++nextFrame, callback);
+    return nextFrame;
+  });
+  vi.stubGlobal("cancelAnimationFrame", (id: number) => frames.delete(id));
+  const motion = Object.assign(new EventTarget(), { matches: false });
+  vi.spyOn(window, "matchMedia").mockReturnValue(motion as MediaQueryList);
+  let hidden = false;
+  vi.spyOn(document, "hidden", "get").mockImplementation(() => hidden);
+  const completions: ((animated: boolean) => void)[] = [];
+  const draw = vi.fn(() => new Promise<boolean>((resolve) => completions.push(resolve)));
+  const dispose = vi.fn();
+  vi.mocked(createMapFrameRenderer).mockReturnValue({ draw, dispose });
+  const tick = async (time: number) => {
+    const callbacks = [...frames.values()];
+    frames.clear();
+    await act(async () => callbacks.forEach((callback) => callback(time)));
+  };
+  const complete = async () => {
+    await act(async () => completions.shift()!(true));
+  };
+  await render();
+  await finish();
+  await tick(1000);
+  expect(draw).toHaveBeenCalledTimes(1);
+  await tick(1100);
+  expect(draw).toHaveBeenCalledTimes(1); // A slow worker does not queue more frames.
+  await complete();
+  await tick(1100);
+  await complete();
+  await tick(1100 + 1000 / 120);
+  expect(draw).toHaveBeenCalledTimes(3); // No cap, even on a 120 Hz display.
+  await complete();
+  await tick(1100 + 2000 / 120);
+  expect(draw).toHaveBeenCalledTimes(4);
+  await complete();
+  hidden = true;
+  document.dispatchEvent(new Event("visibilitychange"));
+  await tick(1200);
+  expect(draw).toHaveBeenCalledTimes(4);
+  hidden = false;
+  document.dispatchEvent(new Event("visibilitychange"));
+  await tick(1300);
+  // A setting change while a frame is in flight must still produce its resting frame.
+  motion.matches = true;
+  motion.dispatchEvent(new Event("change"));
+  await complete();
+  await tick(1400);
+  expect(draw).toHaveBeenLastCalledWith(0, true, expect.any(Number));
+  await complete();
+  expect(frames.size).toBe(0);
+  motion.matches = false;
+  motion.dispatchEvent(new Event("change"));
+  await tick(1500);
+  await render("mimic_tooth");
+  expect(dispose).toHaveBeenCalledOnce();
+  await complete();
+  expect(frames.size).toBe(0); // Completion from a discarded map cannot restart it.
 });
 afterEach(async () => {
   await act(async () => root.unmount());

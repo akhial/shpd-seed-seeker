@@ -1,3 +1,4 @@
+import { makeMapCanvas, mapContext, type MapCanvas } from "./canvas";
 import { drawTexture } from "./textures";
 import type { MapBundle, MapDraw, Rectangle } from "./types";
 
@@ -17,7 +18,7 @@ export interface CachedSprite {
   height: number;
 }
 
-export const makeFrameCanvas = () => document.createElement("canvas");
+export const makeFrameCanvas = makeMapCanvas;
 const sharedCaches = new WeakMap<MapBundle, CachedSprite[]>();
 
 /** Share immutable frame images across secret toggles and reopenings of a cached map.
@@ -46,10 +47,10 @@ function bounds(draws: MapDraw[]): Rectangle {
 
 /** Single blits use the original texture. Only composite frames need new pixels;
  * identical commands (including phase-shifted water frames) share one atlas slot. */
-function buildSpriteCache(bundle: MapBundle, makeCanvas: () => HTMLCanvasElement) {
+function buildSpriteCache(bundle: MapBundle, makeCanvas: () => MapCanvas) {
   const { map } = bundle;
   type Page = {
-    canvas: HTMLCanvasElement;
+    canvas: MapCanvas;
     width: number;
     height: number;
     x: number;
@@ -150,7 +151,7 @@ function buildSpriteCache(bundle: MapBundle, makeCanvas: () => HTMLCanvasElement
   for (const page of pages) {
     page.canvas.width = page.width;
     page.canvas.height = page.height;
-    const target = page.canvas.getContext("2d")!;
+    const target = mapContext(page.canvas);
     target.imageSmoothingEnabled = false;
     for (const { additive, commands, source, destination } of page.draws) {
       target.globalCompositeOperation = additive ? "lighter" : "source-over";
