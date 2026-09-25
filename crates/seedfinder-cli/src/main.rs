@@ -516,7 +516,12 @@ fn search_start(random_start: bool) -> DungeonSeed {
     // a fresh search, so it does not need the apps' between-search stride.
     let value = RandomState::new().hash_one(0_u8) % TOTAL_SEEDS;
     let seed = DungeonSeed::new(value).expect("random start is inside the seed space");
-    eprintln!("seed-seeker: starting at {seed} (offset 1)");
+    let (yellow, reset) = if stderr_supports_color() {
+        ("\x1b[38;2;255;255;68m", "\x1b[0m")
+    } else {
+        ("", "")
+    };
+    eprintln!("Starting at {yellow}{seed}{reset}");
     seed
 }
 
