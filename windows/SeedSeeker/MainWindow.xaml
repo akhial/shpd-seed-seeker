@@ -310,19 +310,34 @@
         <Grid Grid.Column="2">
           <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition/></Grid.RowDefinitions>
           <StackPanel Padding="24,18,24,14" Spacing="10" BorderThickness="0,0,0,1" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
-            <TextBlock Text="Seed Detail" Style="{StaticResource SubtitleTextBlockStyle}" Margin="0,0,0,4"/>
             <Grid ColumnSpacing="8">
-              <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-              <TextBox x:Name="SeedInput" PlaceholderText="AAA-AAA-AAA" FontFamily="Cascadia Mono, Consolas" FontSize="17"
-                       TextChanged="SeedInput_TextChanged" KeyDown="SeedInput_KeyDown"/>
-              <Button Grid.Column="1" x:Name="ScoutButton" Content="Scout" Click="Scout_Click" VerticalAlignment="Stretch"/>
-              <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4">
+              <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+              <TextBlock Text="Seed Detail" Style="{StaticResource SubtitleTextBlockStyle}" VerticalAlignment="Center"/>
+              <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4">
                 <Button x:Name="SeedInfoButton" Click="SeedInfo_Click" Visibility="Collapsed"
                         AutomationProperties.Name="Seed information" ToolTipService.ToolTip="Seed information">
                   <FontIcon Glyph="&#xE946;" FontSize="16"/>
                 </Button>
                 <Button Content="Copy" Click="CopySeed_Click" VerticalAlignment="Stretch"/>
               </StackPanel>
+            </Grid>
+            <Grid ColumnSpacing="6" MinHeight="40">
+              <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+              <TextBox x:Name="SeedInput" PlaceholderText="Seed or YYYY-MM-DD" AutomationProperties.Name="Seed code or daily date" MinHeight="40" FontFamily="Cascadia Mono, Consolas" FontSize="17"
+                       TextChanged="SeedInput_TextChanged" KeyDown="SeedInput_KeyDown"/>
+              <Button Grid.Column="1" x:Name="DailyDate" Width="40" Padding="0" VerticalAlignment="Stretch"
+                      AutomationProperties.Name="Choose daily run date" ToolTipService.ToolTip="Choose date">
+                <FontIcon Glyph="&#xE787;" FontSize="18"/>
+                <Button.Flyout>
+                  <Flyout x:Name="DailyDateFlyout" Opening="DailyDate_Opening">
+                    <CalendarView x:Name="DailyCalendar" SelectionMode="Single" CalendarIdentifier="GregorianCalendar"
+                                  SelectedDatesChanged="DailyDate_Changed" AutomationProperties.Name="Daily run date (UTC)"/>
+                  </Flyout>
+                </Button.Flyout>
+              </Button>
+              <Button Grid.Column="2" x:Name="DailyToday" Content="Today" Padding="8,4" FontSize="13" Click="DailyToday_Click" VerticalAlignment="Stretch"
+                      AutomationProperties.Name="Scout today's daily run"/>
+              <Button Grid.Column="3" x:Name="ScoutButton" Content="Scout" Padding="8,4" FontSize="13" Click="Scout_Click" VerticalAlignment="Stretch"/>
             </Grid>
             <TextBlock x:Name="ScoutStatus" Style="{StaticResource Caption}" Margin="0,-2,0,0"/>
             <!-- Shown while the scouted seed is one of the search results: J/K (or the chevrons) step through them. -->

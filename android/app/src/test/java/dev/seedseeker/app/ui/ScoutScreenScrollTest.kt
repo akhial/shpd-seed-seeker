@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -31,6 +33,7 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.text.TextLayoutResult
@@ -90,6 +93,7 @@ class ScoutScreenScrollTest {
     private fun show(
         matches: ScoutMatches? = ScoutMatches(setOf(4), 5, 5),
         fontScale: Float = 1f,
+        initialSeed: String = world.seed,
         onStep: (String) -> Unit = {},
         onSelect: (String) -> Unit = {},
     ) {
@@ -98,6 +102,7 @@ class ScoutScreenScrollTest {
         val iconAtlas = compose.activity.assets.open("third_party/shattered-pixel-dungeon/item_icons.png")
             .use(BitmapFactory::decodeStream)!!.asImageBitmap()
         compose.setContent {
+            val input = remember { mutableStateOf(initialSeed) }
             SeedSeekerTheme {
                 CompositionLocalProvider(
                     LocalItemAtlas provides atlas,
@@ -105,9 +110,9 @@ class ScoutScreenScrollTest {
                     LocalDensity provides Density(compose.density.density, fontScale),
                 ) {
                     ScoutScreen(
-                        seedInput = world.seed, result = world, isScouting = false, error = null,
+                        seedInput = input.value, result = world, isScouting = false, error = null,
                         matches = matches, resultSeeds = listOf(world.seed, "ABC-DEF-GHI"), scoutedSeed = world.seed,
-                        onScoutSeed = onStep, onSeedChange = {}, onScout = {}, onSelectTrinket = onSelect,
+                        onScoutSeed = onStep, onSeedChange = { input.value = it }, onScout = { onStep(input.value) }, onSelectTrinket = onSelect,
                         onSettings = {}, onAbout = {}, bottomBar = { Box(Modifier.fillMaxWidth().height(80.dp)) },
                     )
                 }
@@ -147,6 +152,48 @@ class ScoutScreenScrollTest {
         }
     }
 
+    @Test fun partialEightLetterSeedStaysEditable() {
+        show(initialSeed = "ABC-DEF-GH")
+        compose.onNodeWithText("Scout seed").assertIsDisplayed()
+        compose.onNodeWithText("Scout daily run").assertDoesNotExist()
+    }
+
+    @Test fun seedAndDateEntryKeepTheSameFieldAndFormHeight() {
+        show(initialSeed = "")
+        screenshot("input-empty")
+        val field = bounds("scout-run-field")
+        val form = bounds("scout-input")
+        for (input in listOf("2", "202609", "20260925", "", "ABCDEFGH", "ABCDEFGHI")) {
+            compose.onNodeWithTag("scout-run-field").performTextReplacement(input)
+            compose.waitForIdle()
+            assertEquals(field, bounds("scout-run-field"))
+            assertEquals(form, bounds("scout-input"))
+            val calendar = bounds("scout-date-picker")
+            val today = bounds("scout-today")
+            assertTrue(field.right <= calendar.left)
+            assertTrue(calendar.right <= today.left)
+            assertEquals(field.bottom, calendar.bottom, 1f)
+            assertEquals(field.bottom, today.bottom, 1f)
+            compose.onNodeWithContentDescription("Choose daily run date").assertIsDisplayed()
+            compose.onNodeWithText("Today").assertIsDisplayed()
+        }
+    }
+
+    @Test fun dailyPickerAndTodayUseTheExistingScoutActions() {
+        var scouted: String? = null
+        show(initialSeed = "2026-09-25", onStep = { scouted = it })
+        compose.onNodeWithContentDescription("Choose daily run date").assertIsDisplayed().performClick()
+        compose.onNodeWithText("Daily run date (UTC)").assertIsDisplayed()
+        compose.onNodeWithText("Use date").performClick()
+        compose.onNodeWithText("Scout daily run").performClick()
+        compose.runOnIdle { assertEquals("2026-09-25", scouted) }
+        screenshot("daily-run")
+        compose.onNodeWithText("Today").performClick()
+        compose.runOnIdle { assertEquals(dev.seedseeker.app.model.DailyRunDate.today(), scouted) }
+        compose.onNodeWithTag("scout-run-field").performTextReplacement("ABCDEFGHI")
+        compose.onNodeWithText("Scout seed").assertIsDisplayed()
+    }
+
     @Test fun seedInformationRemainsAccessibleAfterCollapsingAndScrollsThroughEveryCategory() {
         show()
         compose.onNodeWithContentDescription("Seed information").assertIsDisplayed()
@@ -183,7 +230,8 @@ class ScoutScreenScrollTest {
         val expanded = bounds("scout-summary")
         assertTrue(bounds("scout-navigation").top >= expanded.bottom)
         screenshot("expanded")
-        drag(155f)
+        // Keep the intermediate collapse assertion independent of form controls.
+        drag(bounds("scout-input").height / compose.density.density - 30f)
         val middle = bounds("scout-summary")
         assertTrue(middle.top < expanded.top)
         assertTrue(middle.height < expanded.height)
@@ -226,7 +274,7 @@ class ScoutScreenScrollTest {
 
     @Test fun draggingTheSummaryAlsoScrollsAndPartialMatchesKeepTheirAccessibleCount() {
         show(matches = ScoutMatches(emptySet(), 2, 5))
-        drag(170f, fromHeader = true)
+        drag(bounds("scout-input").height / compose.density.density, fromHeader = true)
         drag(100f, fromHeader = true)
         val badge = bounds("scout-requirements")
         assertEquals(badge.width, badge.height, 1f)
@@ -237,6 +285,9 @@ class ScoutScreenScrollTest {
     @Test @Config(qualifiers = "w320dp-h740dp-xhdpi")
     fun narrowPhoneKeepsCompactSeedBadgeAndCopySeparate() {
         show()
+        screenshot("input-320dp")
+        assertTrue(bounds("scout-run-field").right <= bounds("scout-date-picker").left)
+        assertTrue(bounds("scout-date-picker").right <= bounds("scout-today").left)
         drag(330f)
         val seed = bounds("scout-seed")
         val badge = bounds("scout-requirements")

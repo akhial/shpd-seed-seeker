@@ -214,7 +214,7 @@ pub fn engine_info() -> String {
     engine_info_document().to_string()
 }
 
-/// Formats partial interactive seed input as uppercase groups of three. The
+/// Detects and groups partial seed codes or daily dates as you type. The
 /// masker is `seed::format_input`, shared with every other frontend.
 #[wasm_bindgen]
 #[must_use]
@@ -222,11 +222,11 @@ pub fn format_seed_code(input: &str) -> String {
     seed::format_input(input)
 }
 
-/// Parses a seed using the core game's seed-code semantics and returns JSON.
+/// Parses a seed code or UTC daily date with the shared core and returns JSON.
 ///
 /// # Errors
 ///
-/// Returns a JavaScript error when the input is not a valid seed code.
+/// Returns a JavaScript error when the input is not a valid code or daily date.
 #[wasm_bindgen]
 pub fn parse_seed_code(input: &str) -> Result<String, JsError> {
     parse_seed_code_impl(input).map_err(|error| JsError::new(&error))
@@ -572,7 +572,7 @@ fn scout_impl(request_json: &str) -> Result<String, String> {
     let request: ScoutRequest = serde_json::from_str(request_json)
         .map_err(|error| format!("invalid scout request JSON: {error}"))?;
     let formatted_seed = format_seed_code(&request.seed);
-    let seed = DungeonSeed::from_code(&formatted_seed).map_err(|error| error.to_string())?;
+    let seed = DungeonSeed::from_scout_input(&formatted_seed).map_err(|error| error.to_string())?;
     let challenges = request
         .challenges
         .into_iter()
@@ -1002,7 +1002,8 @@ mod tests {
         assert_eq!(format_seed_code("a"), "A");
         assert_eq!(format_seed_code("abcD"), "ABC-D");
         assert_eq!(format_seed_code("abc-def-ghi"), "ABC-DEF-GHI");
-        assert_eq!(format_seed_code(" 1a!b@c#d$e%f^g&h*i extra"), "ABC-DEF-GHI");
+        assert_eq!(format_seed_code(" a1!b@c#d$e%f^g&h*i extra"), "ABC-DEF-GHI");
+        assert_eq!(format_seed_code("20260925"), "2026-09-25");
         assert_eq!(format_seed_code("åa😀b"), "AB");
     }
 

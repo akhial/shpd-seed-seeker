@@ -3338,3 +3338,69 @@ input[type="range"]::-moz-range-thumb {
   font-weight: 600;
   white-space: nowrap;
 }
+
+/* One text field keeps seed and date entry at the same seed-input height. */
+.d1-run-input {
+  flex: 0 0 auto;
+}
+.d1-run-input .d1-scout-input-row {
+  align-items: center;
+  gap: 6px;
+}
+.d1-run-input .d1-btn {
+  flex-shrink: 0;
+  height: 40px;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+.d1-run-input .d1-date-button {
+  width: 36px;
+  padding: 0;
+}
+.d1-run-input .d1-seed-field {
+  height: 40px;
+  min-height: 40px;
+}
+.d1-run-input .d1-seed-field::placeholder {
+  font-size: 14px;
+  letter-spacing: normal;
+  text-transform: none;
+}
+.d1-run-shortcuts {
+  position: relative;
+  display: flex;
+  flex-shrink: 0;
+  gap: 6px;
+}
+.d1-native-date {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.d1-date-fallback {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 10;
+  color-scheme: dark;
+  letter-spacing: normal;
+}
+
+@media (max-width: 380px) {
+  .d1-run-input .d1-scout-input-row,
+  .d1-run-shortcuts {
+    gap: 4px;
+  }
+  .d1-run-input .d1-seed-field {
+    padding-inline: 8px;
+    font-size: 16px;
+    letter-spacing: 0.04em;
+  }
+  .d1-run-input .d1-seed-field::placeholder {
+    font-size: 12px;
+  }
+}

@@ -468,8 +468,8 @@ pub extern "C" fn seedfinder_seed_format(
 
 /// Parses UTF-8 seed-code text with the game's own rules and returns the UTF-8
 /// JSON `{"code": "XXX-XXX-XXX", "value": <number>}`: the canonical code for
-/// display and the numeric value `seedfinder_filter_seeds` takes. Input that
-/// is not a seed code is rejected like every other invalid input.
+/// display and its numeric value. Also accepts UTC daily dates, retaining the
+/// YYYY-MM-DD identity and raw daily seed. Only nine-letter codes are searchable.
 #[unsafe(no_mangle)]
 pub extern "C" fn seedfinder_seed_parse(
     input: *const u8,

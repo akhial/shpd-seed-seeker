@@ -457,7 +457,7 @@ internal fun SeedFinderApp(
         scoutInput = formatted
         scoutError = null
         destination = Destination.SCOUT
-        if (SeedCode.isCanonical(formatted)) {
+        if (SeedCode.isScoutable(formatted)) {
             val saved = results.find { it.seed == formatted }
             val query = if (saved != null) searchedQuery?.let {
                 SearchRequest(it.requirements, it.maximumDepth, it.challenges, it.requireBlacksmith,
@@ -722,7 +722,7 @@ internal fun SeedFinderApp(
                     }
                 },
                 onScout = {
-                    if (SeedCode.isCanonical(scoutInput)) {
+                    if (SeedCode.isScoutable(scoutInput)) {
                         scoutSeed(scoutInput)
                     }
                 },

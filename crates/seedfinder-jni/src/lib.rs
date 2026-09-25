@@ -505,11 +505,8 @@ pub extern "system" fn Java_dev_seedseeker_app_engine_JniBindings_engineInfo<'lo
     )
 }
 
-/// Masks partial, as-you-type UTF-8 seed input into uppercase groups of three
-/// (both UTF-8 bytes): non-letters are dropped, the first nine ASCII letters
-/// are kept, and only those are uppercased — never a locale-dependent
-/// uppercase of the whole string. The masker is `seed::format_input`, shared
-/// with every other frontend.
+/// Detects and groups partial UTF-8 seed codes or daily dates as you type.
+/// The formatter is `seed::format_input`, shared with every other frontend.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_dev_seedseeker_app_engine_JniBindings_formatSeedCode<'local>(
     mut env: JNIEnv<'local>,
@@ -524,8 +521,8 @@ pub extern "system" fn Java_dev_seedseeker_app_engine_JniBindings_formatSeedCode
 
 /// Parses UTF-8 seed-code text with the game's own rules, returning the UTF-8
 /// JSON `{"code": "XXX-XXX-XXX", "value": <number>}`: the canonical code for
-/// display and the numeric value `filterSeeds` takes. Text that is not a seed
-/// code throws with the codec's own message.
+/// display and its numeric value. UTC daily dates are also accepted; only
+/// nine-letter codes are searchable. Invalid input throws the codec's message.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_dev_seedseeker_app_engine_JniBindings_parseSeedCode<'local>(
     mut env: JNIEnv<'local>,

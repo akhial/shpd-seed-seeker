@@ -31,6 +31,7 @@ v4.0.0 fixtures were checked with Eclipse Adoptium JDK 25.0.4.1 on macOS arm64.
 ```sh
 tooling/oracle-4.0/build.sh
 tooling/oracle-4.0/run.sh --seed AAA-AAA-AAA --floors 1 --format ndjson
+tooling/oracle-4.0/run.sh --daily 2026-09-25 --floors 1 --format json
 tooling/oracle-4.0/run.sh SEE-EEE-EED 1,3-5 --format json
 tooling/oracle-4.0/run.sh AAA-AAA-AAA 6-9 --run-checkpoints
 tooling/oracle-4.0/run.sh AAA-AAA-AAA 25 --boss-skip-checkpoints

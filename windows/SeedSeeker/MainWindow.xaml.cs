@@ -61,6 +61,7 @@ public sealed partial class MainWindow : Window
     private (int Depth, double Offset)? scoutAnchor;
     private readonly TranslateTransform trinketDockTransform = new();
     private bool scoutLoading;
+    private bool updatingDailyCalendar;
     private LevelMapSession? mapSession;
     private Expander? openMap;
     private int? openMapDepth;
@@ -120,6 +121,8 @@ public sealed partial class MainWindow : Window
         // Decode the item atlases up front so the first sprite render is warm.
         _ = ItemAtlas.GetAsync();
         ResultsList.ItemsSource = results; ScoutButton.IsEnabled = false;
+        DailyCalendar.MinDate = new DateTimeOffset(new DateTime(1970, 1, 1));
+        DailyCalendar.MaxDate = new DateTimeOffset(new DateTime(9999, 12, 31));
         TrinketDock.RenderTransform = trinketDockTransform;
         ScoutList.Loaded += (_, _) =>
         {
@@ -1908,9 +1911,51 @@ public sealed partial class MainWindow : Window
     private void ResultsList_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e) { if (ResultsList.SelectedItem is SeedResult row) Copy(row.Seed); }
     private void CopyResult_Click(object sender, RoutedEventArgs e) { if ((sender as FrameworkElement)?.DataContext is SeedResult row) Copy(row.Seed); }
     private void ScoutResult_Click(object sender, RoutedEventArgs e) { if ((sender as FrameworkElement)?.DataContext is SeedResult row) { SeedInput.Text = row.Seed; _ = ScoutSeed(row.Seed); } }
-    private void SeedInput_TextChanged(object sender, TextChangedEventArgs e) { var formatted = SeedCode.Format(SeedInput.Text); if (formatted != SeedInput.Text) { SeedInput.Text = formatted; SeedInput.SelectionStart = formatted.Length; } ScoutButton.IsEnabled = SeedCode.IsCanonical(formatted); }
-    private void SeedInput_KeyDown(object sender, KeyRoutedEventArgs e) { if (e.Key == VirtualKey.Enter && SeedCode.IsCanonical(SeedInput.Text)) { _ = ScoutSeed(SeedInput.Text); e.Handled = true; } }
+    private void SeedInput_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        var formatted = SeedCode.Format(SeedInput.Text);
+        if (formatted != SeedInput.Text) { SeedInput.Text = formatted; SeedInput.SelectionStart = formatted.Length; }
+        ScoutButton.IsEnabled = !scoutLoading && SeedCode.IsScoutable(formatted);
+    }
+    private void SeedInput_KeyDown(object sender, KeyRoutedEventArgs e) { if (e.Key == VirtualKey.Enter && SeedCode.IsScoutable(SeedInput.Text)) { _ = ScoutSeed(SeedInput.Text); e.Handled = true; } }
     private async void Scout_Click(object sender, RoutedEventArgs e) => await ScoutSeed(SeedInput.Text);
+
+    private void DailyDate_Opening(object sender, object e)
+    {
+        // Synchronize when opened so typing never feeds changes back through the calendar.
+        updatingDailyCalendar = true;
+        try
+        {
+            DailyCalendar.SelectedDates.Clear();
+            if (SeedCode.IsScoutable(SeedInput.Text) && DateTime.TryParseExact(SeedInput.Text, "yyyy-MM-dd",
+                System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var day))
+            {
+                var date = new DateTimeOffset(day);
+                DailyCalendar.SetDisplayDate(date);
+                DailyCalendar.SelectedDates.Add(date);
+            }
+            else DailyCalendar.SetDisplayDate(DateTimeOffset.UtcNow);
+        }
+        finally { updatingDailyCalendar = false; }
+    }
+
+    private void DailyDate_Changed(CalendarView sender, CalendarViewSelectedDatesChangedEventArgs args)
+    {
+        if (!updatingDailyCalendar && args.AddedDates.Count > 0)
+        {
+            var date = args.AddedDates[0].ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+            if (date == SeedInput.Text) return;
+            SeedInput.Text = date;
+            DailyDateFlyout.Hide();
+        }
+    }
+
+    private async void DailyToday_Click(object sender, RoutedEventArgs e)
+    {
+        SeedInput.Text = DateTime.UtcNow.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        await ScoutSeed(SeedInput.Text);
+    }
+
     private List<string> ResultSeeds() => results.Select(result => result.Seed).ToList();
     /// <summary>Steps the scouted seed through the search results; returns false (inert) when the scouted seed is not one of them or the step cannot move.</summary>
     private bool NavigateResult(int delta)
@@ -1957,7 +2002,7 @@ public sealed partial class MainWindow : Window
     {
         var generation = ++scoutGeneration;
         scoutAnchor = trinket is not null && seed == renderedSeed ? CaptureScoutAnchor() : null;
-        scoutLoading = true; SetTrinketDockEnabled(false);
+        scoutLoading = true; DailyDate.IsEnabled = false; DailyToday.IsEnabled = false; SetTrinketDockEnabled(false);
         scoutedSeed = seed; UpdateResultNav();
         ScoutButton.IsEnabled = false; ScoutList.IsEnabled = false; ScoutStatus.Text = "Scouting…";
         try
@@ -2017,7 +2062,7 @@ public sealed partial class MainWindow : Window
             // Keep the indicator describing the manifest that is still shown.
             scoutAnchor = null; scoutedSeed = renderedSeed; UpdateResultNav();
         }
-        finally { if (generation == scoutGeneration) { ScoutButton.IsEnabled = SeedCode.IsCanonical(SeedInput.Text); ScoutList.IsEnabled = true; scoutLoading = false; SetTrinketDockEnabled(true); } }
+        finally { if (generation == scoutGeneration) { ScoutButton.IsEnabled = SeedCode.IsScoutable(SeedInput.Text); ScoutList.IsEnabled = true; scoutLoading = false; DailyDate.IsEnabled = true; DailyToday.IsEnabled = true; SetTrinketDockEnabled(true); } }
     }
 
     private UIElement FloorHeader(ScoutWorld world, int depth)
@@ -2165,7 +2210,7 @@ public sealed partial class MainWindow : Window
             await SeedInfoDialog.ShowAsync(((FrameworkElement)Content).XamlRoot, seed, mappings);
     }
 
-    private void CopySeed_Click(object sender, RoutedEventArgs e) { if (SeedCode.IsCanonical(SeedInput.Text)) Copy(SeedInput.Text); }
+    private void CopySeed_Click(object sender, RoutedEventArgs e) { if (SeedCode.IsScoutable(SeedInput.Text)) Copy(SeedInput.Text); }
     private static void Copy(string text) { var data = new DataPackage(); data.SetText(text); Clipboard.SetContent(data); }
 }
 

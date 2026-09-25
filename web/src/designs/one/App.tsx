@@ -187,11 +187,11 @@ export default function App() {
     const input = formatSeedCode(seed);
     setScoutInput(input);
     setActiveTab("scout");
-    if (input.length !== 11) {
+    if (input.length !== 11 && !/^\d{4}-\d{2}-\d{2}$/.test(input)) {
       setScout((current) => ({
         ...current,
         loading: false,
-        error: "Seed must use XXX-XXX-XXX format",
+        error: "Enter a seed code or a daily date (YYYY-MM-DD)",
       }));
       setScoutedSeed(renderedSeed.current);
       return;

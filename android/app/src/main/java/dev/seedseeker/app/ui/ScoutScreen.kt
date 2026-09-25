@@ -2,6 +2,11 @@
 package dev.seedseeker.app.ui
 
 import android.graphics.BitmapFactory
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.rememberDatePickerState
+import androidx.compose.material3.TextButton
+import dev.seedseeker.app.model.DailyRunDate
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Color
@@ -31,6 +36,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -47,6 +53,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -182,7 +189,7 @@ fun ScoutScreen(
             else -> 0f
         }
     } }
-    val seedIsReady = SeedCode.isCanonical(seedInput)
+    val seedIsReady = SeedCode.isScoutable(seedInput)
     // Position within the search results, when the scouted seed came from one.
     val resultIndex = ScoutResultNavigation.position(resultSeeds, scoutedSeed)
     val stepToResult: (Int) -> Unit = { delta ->
@@ -250,7 +257,7 @@ fun ScoutScreen(
                     }.onSizeChanged { headerScroll.updateMeasurements(input = it.height.toFloat()) },
                 ) {
                     Column(Modifier.padding(bottom = 12.dp)) {
-                        SeedInputCard(seedInput, seedIsReady, isScouting, error, onSeedChange, onScout)
+                        SeedInputCard(seedInput, seedIsReady, isScouting, error, onSeedChange, onScout, onScoutSeed)
                     }
                 }
                 result?.let { world ->
@@ -355,7 +362,7 @@ fun ScoutScreen(
 
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun SeedInputCard(
     seedInput: String,
@@ -364,7 +371,26 @@ private fun SeedInputCard(
     error: String?,
     onSeedChange: (String) -> Unit,
     onScout: () -> Unit,
+    onScoutSeed: (String) -> Unit,
 ) {
+    val daily = seedInput.firstOrNull()?.let { it in '0'..'9' } == true
+    var showDatePicker by remember { mutableStateOf(false) }
+    if (showDatePicker) {
+        val picker = rememberDatePickerState(
+            initialSelectedDateMillis = DailyRunDate.parse(seedInput) ?: System.currentTimeMillis(),
+            yearRange = 1970..9999,
+        )
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(enabled = picker.selectedDateMillis != null, onClick = {
+                    picker.selectedDateMillis?.let { onSeedChange(DailyRunDate.format(it)) }
+                    showDatePicker = false
+                }) { Text("Use date") }
+            },
+            dismissButton = { TextButton(onClick = { showDatePicker = false }) { Text("Cancel") } },
+        ) { DatePicker(state = picker, title = { Text("Daily run date (UTC)", Modifier.padding(24.dp)) }) }
+    }
     var fieldValue by remember {
         mutableStateOf(
             TextFieldValue(seedInput, selection = TextRange(seedInput.length)),
@@ -381,33 +407,48 @@ private fun SeedInputCard(
         shape = MaterialTheme.shapes.extraLarge,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
     ) {
-        Column(Modifier.padding(18.dp)) {
-            OutlinedTextField(
-                value = fieldValue,
-                onValueChange = {
-                    val formattedValue = formatSeedFieldValue(it)
-                    fieldValue = formattedValue
-                    onSeedChange(formattedValue.text)
-                },
-                enabled = !isScouting,
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("Seed") },
-                placeholder = { Text("ABC-DEF-GHI") },
-                singleLine = true,
-                shape = MaterialTheme.shapes.medium,
-                textStyle = MaterialTheme.typography.titleLarge.copy(
-                    fontFamily = FontFamily.Monospace,
-                    letterSpacing = 1.2.sp,
-                ),
-                keyboardOptions = KeyboardOptions(
-                    capitalization = KeyboardCapitalization.Characters,
-                    keyboardType = KeyboardType.Ascii,
-                    imeAction = ImeAction.Search,
-                ),
-                keyboardActions = KeyboardActions(
-                    onSearch = { if (seedIsReady && !isScouting) onScout() },
-                ),
-            )
+        Column(Modifier.padding(start = 18.dp, top = 10.dp, end = 18.dp, bottom = 18.dp)) {
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val compact = maxWidth < 300.dp
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.Bottom) {
+                    OutlinedTextField(
+                        value = fieldValue,
+                        onValueChange = {
+                            val formattedValue = formatSeedFieldValue(it)
+                            fieldValue = formattedValue
+                            onSeedChange(formattedValue.text)
+                        },
+                        enabled = !isScouting,
+                        modifier = Modifier.weight(1f).heightIn(min = 64.dp).testTag("scout-run-field"),
+                        label = { Text("Seed / date", maxLines = 1) },
+                        placeholder = { Text("Seed / YYYY-MM-DD", maxLines = 1) },
+                        singleLine = true,
+                        shape = MaterialTheme.shapes.medium,
+                        textStyle = MaterialTheme.typography.titleLarge.copy(
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = if (compact) 16.sp else 20.sp,
+                            letterSpacing = 0.6.sp,
+                        ),
+                        keyboardOptions = KeyboardOptions(
+                            capitalization = KeyboardCapitalization.Characters,
+                            keyboardType = if (daily) KeyboardType.Number else KeyboardType.Ascii,
+                            imeAction = ImeAction.Search,
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onSearch = { if (seedIsReady && !isScouting) onScout() },
+                        ),
+                    )
+                    IconButton(
+                        onClick = { showDatePicker = true }, enabled = !isScouting,
+                        modifier = Modifier.width(48.dp).height(56.dp).testTag("scout-date-picker"),
+                    ) { Icon(Icons.Outlined.DateRange, contentDescription = "Choose daily run date") }
+                    TextButton(
+                        onClick = { onScoutSeed(DailyRunDate.today()) }, enabled = !isScouting,
+                        modifier = Modifier.widthIn(min = 48.dp).height(56.dp).testTag("scout-today"),
+                        contentPadding = PaddingValues(horizontal = 4.dp),
+                    ) { Text("Today", maxLines = 1) }
+                }
+            }
             Spacer(Modifier.height(12.dp))
             Button(
                 onClick = onScout,
@@ -422,7 +463,7 @@ private fun SeedInputCard(
                     Spacer(Modifier.width(10.dp))
                     Text("Generating world…")
                 } else {
-                    Text("Scout seed")
+                    Text(if (daily) "Scout daily run" else "Scout seed")
                 }
             }
             error?.let {
@@ -468,7 +509,7 @@ private fun ResultNavigationBar(
     }
 }
 
-/** Keeps the logical cursor position when canonical grouping inserts or removes hyphens. */
+/** Keeps the logical cursor position when seed or date grouping inserts or removes hyphens. */
 internal fun formatSeedFieldValue(input: TextFieldValue): TextFieldValue {
     val formatted = SeedCode.formatInput(input.text)
     if (formatted == input.text) return input

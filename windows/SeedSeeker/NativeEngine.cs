@@ -69,8 +69,7 @@ internal ref struct Reader
 public static class SeedCode
 {
     /// <summary>
-    /// Partial, as-you-type input masked into uppercase groups of three:
-    /// non-letters dropped, the first nine ASCII letters kept.
+    /// Groups partial input as a seed code or daily date, detected from its first letter or digit.
     /// </summary>
     public static string Format(string value)
     {
@@ -98,7 +97,10 @@ public static class SeedCode
     /// Whether the text is already written the way the engine spells it: the
     /// canonical <c>XXX-XXX-XXX</c> form the field shows and files carry.
     /// </summary>
-    public static bool IsCanonical(string value) => TryParse(value)?.Code == value;
+    public static bool IsCanonical(string value) => value.Length == 11 && IsScoutable(value);
+
+    /// <summary>A canonical code or UTC daily date validated by the engine.</summary>
+    public static bool IsScoutable(string value) => TryParse(value)?.Code == value;
 
     /// <summary>The numeric seed a code names.</summary>
     public static ulong Value(string value) => TryParse(value)?.Value
@@ -184,7 +186,7 @@ public sealed class NativeEngine
     /// <summary>The SSQ5 request naming one scouted world; scouting it is deterministic.</summary>
     internal static byte[] EncodeScoutRequest(string seed, int challenges, QuerySettings? query = null, string? trinket = null)
     {
-        if (!SeedCode.IsCanonical(seed)) throw new ArgumentException("Seed must use XXX-XXX-XXX format");
+        if (!SeedCode.IsScoutable(seed)) throw new ArgumentException("Choose a daily date or enter a XXX-XXX-XXX seed");
         var w = new Writer(); w.Bytes("SSQ5"u8.ToArray()); w.U16Le(challenges);
         var seedBytes = Encoding.UTF8.GetBytes(seed); w.U16Le(seedBytes.Length); w.Bytes(seedBytes);
         var overrideBytes = Encoding.UTF8.GetBytes(trinket ?? ""); w.U16Le(overrideBytes.Length); w.Bytes(overrideBytes);

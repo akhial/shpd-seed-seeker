@@ -60,7 +60,7 @@ public enum SeedCode {
         public let value: Int64
     }
 
-    /// Masks partial, as-you-type input into uppercase groups of three.
+    /// Detects and groups partial seed codes or daily dates as you type.
     public static func formatInput(_ input: String) -> String {
         guard let packet = try? enginePacket({ out, length in
                   Data(input.utf8).withUnsafeBytes { bytes in
@@ -89,7 +89,10 @@ public enum SeedCode {
 
     /// Whether `seed` is already written the way the engine spells it: the
     /// canonical `XXX-XXX-XXX` form the app displays and files carry.
-    public static func isCanonical(_ seed: String) -> Bool { parse(seed)?.code == seed }
+    public static func isCanonical(_ seed: String) -> Bool { seed.count == 11 && isScoutable(seed) }
+
+    /// A canonical code or a UTC daily date, validated by the engine.
+    public static func isScoutable(_ seed: String) -> Bool { parse(seed)?.code == seed }
 }
 
 public enum ResultCodec {
@@ -111,7 +114,7 @@ public enum ResultCodec {
 
 public enum ScoutCodec {
     public static func encodeRequest(seed: String, challenges: Int, query: SearchRequest? = nil, trinket: String? = nil) throws -> Data {
-        guard SeedCode.isCanonical(seed) else { throw WireCodecError.invalidValue("Seed must use XXX-XXX-XXX format") }
+        guard SeedCode.isScoutable(seed) else { throw WireCodecError.invalidValue("Choose a daily date or enter a XXX-XXX-XXX seed") }
         guard (0...SearchLimits.challengeMask).contains(challenges) else { throw WireCodecError.invalidValue("Challenge mask must be 0..\(SearchLimits.challengeMask)") }
         var output = Writer()
         let override = trinket ?? ""
@@ -133,7 +136,7 @@ public enum ScoutCodec {
         let magic = try input.bytes(4)
         guard ["SSC3", "SSC4", "SSC5", "SSC6", "SSC7", "SSC8"].contains(where: { magic == Data($0.utf8) }) else { throw WireCodecError.badMagic }
         let seed = try input.ascii(Int(input.u8()))
-        guard SeedCode.isCanonical(seed) else { throw WireCodecError.invalidValue("Malformed seed from native scout") }
+        guard SeedCode.isScoutable(seed) else { throw WireCodecError.invalidValue("Malformed seed from native scout") }
         // Twelve gem ordinals, one per ring class in the order the catalog
         // lists rings, sitting between the seed and the quests: like them it is
         // a property of this one run rather than of anything an item carries.

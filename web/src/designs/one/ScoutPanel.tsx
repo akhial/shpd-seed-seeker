@@ -1,3 +1,4 @@
+import { DailyRunInput } from "./DailyRunInput";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Ref } from "react";
 import { useStore } from "@tanstack/react-store";
@@ -9,7 +10,6 @@ import { regionForDepth } from "../../lib/region";
 import type { ResultPosition } from "../../lib/scout-nav";
 import { itemArt } from "../../lib/sprites";
 import { queryStore } from "../../lib/store";
-import { formatSeedCode } from "../../lib/wasm";
 import type { ChallengeName, ScoutItem, ScoutResult, TrinketOffer } from "../../lib/wasm/types";
 import { Sprite } from "./parts";
 import { FloorMapHeader } from "./FloorMapHeader";
@@ -155,29 +155,7 @@ export function ScoutPanel({
         </span>
       </div>
 
-      <div className="d1-scout-input-row">
-        <input
-          className="d1-seed-field d1-mono"
-          value={input}
-          placeholder="AAA-AAA-AAA"
-          autoComplete="off"
-          autoCapitalize="characters"
-          spellCheck={false}
-          aria-label="Seed code"
-          onChange={(event) => onInput(formatSeedCode(event.currentTarget.value))}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && input.length === 11) onScout(input);
-          }}
-        />
-        <button
-          type="button"
-          className="d1-btn d1-btn-primary"
-          disabled={input.length !== 11 || loading}
-          onClick={() => onScout(input)}
-        >
-          {loading ? "Scouting…" : "Scout"}
-        </button>
-      </div>
+      <DailyRunInput input={input} onInput={onInput} onScout={onScout} loading={loading} />
       {error && (
         <p className="d1-inline-error d1-scout-error" role="alert">
           {error}
@@ -193,7 +171,7 @@ export function ScoutPanel({
             <Sprite art={itemArt(224)} size={32} />
           </div>
           <h4>No seed scouted</h4>
-          <p>Enter a seed, or select a search result, to scout its contents.</p>
+          <p>Enter a seed, choose a daily run, or select a search result.</p>
         </div>
       )}
 
@@ -203,7 +181,10 @@ export function ScoutPanel({
         <div className={loading ? "d1-manifest d1-manifest-loading" : "d1-manifest"}>
           <div className="d1-manifest-head" ref={summaryRef}>
             <div className="d1-manifest-seed">
-              <span className="d1-mono d1-manifest-code">{result.seed.code}</span>
+              <span className="d1-mono d1-manifest-code">
+                {result.seed.code.length === 10 ? "Daily · " : ""}
+                {result.seed.code}
+              </span>
               <button
                 type="button"
                 className="d1-result-copy"

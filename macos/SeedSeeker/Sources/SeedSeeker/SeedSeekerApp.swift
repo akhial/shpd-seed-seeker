@@ -2245,7 +2245,7 @@ private struct ResultsStatusView: View {
     private let engine = ProductionSeedFinderEngine()
     func scout(_ seed: String? = nil, challenges: Int, query: SearchRequest?, trinket: String? = nil) {
         if let seed { input = SeedCode.formatInput(seed) }
-        guard SeedCode.isCanonical(input) else { error = "Seed must use XXX-XXX-XXX format"; return }
+        guard SeedCode.isScoutable(input) else { error = "Choose a daily date or enter a XXX-XXX-XXX seed"; return }
         let requested = input; requestedSeed = requested; loading = true; error = nil
         // Only the latest request may publish: unsequenced completions would
         // let an older manifest land under a newer position indicator.
@@ -2460,6 +2460,7 @@ private struct SeedDetailView: View {
     @State private var visibleMapDepths: Set<Int> = [1]
     @State private var openedMap: ScoutMapDisclosure?
     @State private var showSeedInfo = false
+    @State private var showDailyPicker = false
 
     private func selectTrinket(_ id: String) {
         guard let world = model.world, !model.loading else { return }
@@ -2481,7 +2482,7 @@ private struct SeedDetailView: View {
                 manifest(world)
             } else {
                 ContentUnavailableView("No seed scouted", systemImage: "map",
-                    description: Text("Enter a canonical seed, or select a search result, to inspect its item manifest."))
+                    description: Text("Enter a seed, choose a daily run, or select a search result."))
             }
         }
         .background {
@@ -2495,24 +2496,65 @@ private struct SeedDetailView: View {
         }
         .onChange(of: model.world?.seed) { _, _ in showSeedInfo = false }
         .navigationTitle("Seed Detail")
+        .toolbar {
+            if let world = model.world {
+                ToolbarActionBubble {
+                    if world.itemMappings != nil {
+                        Button { showSeedInfo = true } label: {
+                            Label("Info", systemImage: "info.circle")
+                        }
+                        .labelStyle(ToolbarActionLabelStyle(trailingEllipsis: false))
+                        .accessibilityLabel("Seed information")
+                        .help("Seed information")
+                    }
+                    Button {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(world.seed, forType: .string)
+                    } label: {
+                        Label("Copy", systemImage: "doc.on.doc")
+                    }
+                    .labelStyle(ToolbarActionLabelStyle(trailingEllipsis: false))
+                    .accessibilityLabel("Copy seed")
+                    .help("Copy the scouted seed or daily date")
+                }
+            }
+        }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
-                TextField("AAA-AAA-AAA", text: $model.input).font(.system(size: 20, design: .monospaced)).focused($focused)
+                TextField("Seed or YYYY-MM-DD", text: $model.input)
+                    .font(.system(size: 20, design: .monospaced)).focused($focused)
+                    .accessibilityLabel("Seed code or daily date")
+                    .frame(minHeight: 30)
+                    .disabled(model.loading)
                     .onChange(of: model.input) { _, value in let formatted = SeedCode.formatInput(value); if formatted != value { model.input = formatted } }
-                    .onSubmit { onScoutSeed(model.input) }
-                Button("Scout") { onScoutSeed(model.input) }.disabled(!SeedCode.isCanonical(model.input))
-                if model.world?.itemMappings != nil {
-                    Button { showSeedInfo = true } label: { Image(systemName: "info.circle") }
-                        .buttonStyle(.borderless).accessibilityLabel("Seed information")
-                        .help("Seed information")
+                    .onSubmit { if !model.loading && SeedCode.isScoutable(model.input) { onScoutSeed(model.input) } }
+                Button { showDailyPicker = true } label: {
+                    Image(systemName: "calendar").frame(width: 18, height: 22)
                 }
-                if let seed = model.world?.seed { Button("Copy") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(seed, forType: .string) } }
+                    .accessibilityLabel("Choose daily run date").help("Choose date")
+                    .disabled(model.loading)
+                    .popover(isPresented: $showDailyPicker) {
+                        DatePicker("Daily date (UTC)", selection: Binding(
+                            get: { DailyRunDate.date(model.input) ?? Date() },
+                            set: { model.input = DailyRunDate.code($0); showDailyPicker = false }
+                        ), in: DailyRunDate.date("1970-01-01")!...DailyRunDate.date("9999-12-31")!, displayedComponents: .date)
+                            .datePickerStyle(.graphical)
+                            .environment(\.calendar, DailyRunDate.calendar)
+                            .environment(\.timeZone, DailyRunDate.calendar.timeZone)
+                            .padding()
+                    }
+                Button { onScoutSeed(DailyRunDate.code()) } label: {
+                    Text("Today").frame(height: 22)
+                }.disabled(model.loading)
+                Button { onScoutSeed(model.input) } label: {
+                    Text("Scout").frame(height: 22)
+                }.disabled(model.loading || !SeedCode.isScoutable(model.input))
                 if model.loading { ProgressView().controlSize(.small) }
-            }
+            }.buttonStyle(.bordered)
             if let error = model.error { Text(error).foregroundStyle(.red).font(.caption) }
             if resultPosition != nil || model.world?.trinketOrder.isEmpty == false {
                 HStack(spacing: 6) {

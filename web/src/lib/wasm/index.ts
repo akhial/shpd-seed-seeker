@@ -25,8 +25,8 @@ export async function getEngineInfo(): Promise<EngineInfo> {
 }
 
 /**
- * Masks partial interactive seed input into uppercase groups of three, using
- * the engine's own masker so every frontend accepts the same keystrokes.
+ * Detects seed codes or daily dates from the first letter or digit, using
+ * the engine's shared formatter to group letters or digits while typing.
  *
  * Synchronous: it runs on every keystroke of a
  * controlled input. Callers must have awaited `initEngine()`.

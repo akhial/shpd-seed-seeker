@@ -66,8 +66,8 @@ pub fn decode_selected_scout_request(request: &[u8]) -> Result<SelectedScoutRequ
     let mask = input.take(2)?;
     let challenges = Challenges::new(u16::from_le_bytes([mask[0], mask[1]]))
         .map_err(|_| WireError::InvalidChallenges)?;
-    let seed =
-        DungeonSeed::from_code(text_le(&mut input)?).map_err(|_| WireError::InvalidSeedCode)?;
+    let seed = DungeonSeed::from_scout_input(text_le(&mut input)?)
+        .map_err(|_| WireError::InvalidSeedCode)?;
     let trinket_override = match text_le(&mut input)? {
         "" => None,
         "none" => Some(None),
@@ -211,7 +211,7 @@ pub fn decode_scout_request(request: &[u8]) -> Result<(DungeonSeed, Challenges),
             (request, Challenges::NONE)
         };
     let code = std::str::from_utf8(seed_code).map_err(|_| WireError::InvalidUtf8)?;
-    let seed = DungeonSeed::from_code(code).map_err(|_| WireError::InvalidSeedCode)?;
+    let seed = DungeonSeed::from_scout_input(code).map_err(|_| WireError::InvalidSeedCode)?;
     Ok((seed, challenges))
 }
 
@@ -613,7 +613,8 @@ pub fn decode_scout_world(packet: &[u8]) -> Result<GeneratedWorld, WireError> {
     {
         return Err(WireError::BadMagic);
     }
-    let seed = DungeonSeed::from_code(input.utf8_u8()?).map_err(|_| WireError::InvalidSeedCode)?;
+    let seed =
+        DungeonSeed::from_scout_input(input.utf8_u8()?).map_err(|_| WireError::InvalidSeedCode)?;
     let ring_gems = input
         .take(RING_GEM_COUNT)?
         .try_into()
