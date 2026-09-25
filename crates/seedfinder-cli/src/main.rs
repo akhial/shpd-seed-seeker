@@ -322,9 +322,9 @@ fn parse_args(arguments: impl IntoIterator<Item = String>) -> Result<Command, St
     }
 
     if let Some(seed) = scout_seed {
-        if benchmark_seeds.is_some() || workers.is_some() || json {
+        if benchmark_seeds.is_some() || workers.is_some() || json || random_start {
             return Err(
-                "--daily and --scout cannot be combined with --benchmark, --workers or --json"
+                "--daily and --scout cannot be combined with --benchmark, --workers, --json or --random-start"
                     .to_owned(),
             );
         }
@@ -955,6 +955,8 @@ mod tests {
             vec!["--daily", "--benchmark"],
             vec!["--daily", "--workers", "2"],
             vec!["--daily", "--json"],
+            vec!["--daily", "--random-start"],
+            vec!["--random-start", "--scout", "ABC-DEF-GHI"],
             vec!["--daily", "--daily"],
             vec!["--scout"],
         ] {
