@@ -72,6 +72,8 @@ impl DetailPane {
             .css_classes(["seed-entry"])
             .input_hints(gtk::InputHints::UPPERCASE_CHARS)
             .max_length(11)
+            .width_chars(11)
+            .height_request(40)
             .hexpand(true)
             .build();
         let scout_button = gtk::Button::builder()
@@ -99,16 +101,6 @@ impl DetailPane {
             .margin_start(12)
             .margin_end(12)
             .build();
-        entry_area.append(&entry);
-        entry_area.append(&scout_button);
-        entry_area.append(&info_button);
-        entry_area.append(&copy_button);
-        let daily_area = gtk::Box::builder()
-            .spacing(6)
-            .margin_start(12)
-            .margin_end(12)
-            .margin_bottom(6)
-            .build();
         let calendar = gtk::Calendar::new();
         let today = glib::DateTime::now_utc().expect("UTC clock available");
         calendar.set_date(&today);
@@ -119,15 +111,17 @@ impl DetailPane {
         daily_content.append(&use_date);
         daily_popover.set_child(Some(&daily_content));
         let daily_picker = gtk::MenuButton::builder()
-            .label("Choose date")
+            .icon_name("x-office-calendar-symbolic")
             .popover(&daily_popover)
-            .hexpand(true)
             .tooltip_text("Choose a daily run date (UTC), then Scout")
             .build();
+        daily_picker.update_property(&[gtk::accessible::Property::Label("Choose daily run date")]);
         let daily_today = gtk::Button::with_label("Today");
         daily_today.set_tooltip_text(Some("Scout today's daily run (UTC)"));
-        daily_area.append(&daily_picker);
-        daily_area.append(&daily_today);
+        entry_area.append(&entry);
+        entry_area.append(&daily_picker);
+        entry_area.append(&daily_today);
+        entry_area.append(&scout_button);
         let entry_clamp = adw::Clamp::builder()
             .child(&entry_area)
             .maximum_size(500)
@@ -236,10 +230,11 @@ impl DetailPane {
 
         let title = adw::WindowTitle::new("Seed", "");
         let header_bar = adw::HeaderBar::builder().title_widget(&title).build();
+        header_bar.pack_end(&copy_button);
+        header_bar.pack_end(&info_button);
         let toolbar_view = adw::ToolbarView::new();
         toolbar_view.add_top_bar(&header_bar);
         toolbar_view.add_top_bar(&entry_clamp);
-        toolbar_view.add_top_bar(&daily_area);
         toolbar_view.add_top_bar(&nav);
         toolbar_view.set_content(Some(&stack));
 

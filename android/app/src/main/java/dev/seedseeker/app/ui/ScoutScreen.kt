@@ -36,6 +36,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -52,6 +53,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.DateRange
 import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -406,37 +408,48 @@ private fun SeedInputCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
     ) {
         Column(Modifier.padding(18.dp)) {
-            OutlinedTextField(
-                value = fieldValue,
-                onValueChange = {
-                    val formattedValue = formatSeedFieldValue(it)
-                    fieldValue = formattedValue
-                    onSeedChange(formattedValue.text)
-                },
-                enabled = !isScouting,
-                modifier = Modifier.fillMaxWidth().testTag("scout-run-field"),
-                label = { Text("Seed or daily date") },
-                placeholder = { Text("Seed or YYYY-MM-DD") },
-                singleLine = true,
-                shape = MaterialTheme.shapes.medium,
-                textStyle = MaterialTheme.typography.titleLarge.copy(
-                    fontFamily = FontFamily.Monospace,
-                    letterSpacing = 1.2.sp,
-                ),
-                keyboardOptions = KeyboardOptions(
-                    capitalization = KeyboardCapitalization.Characters,
-                    keyboardType = if (daily) KeyboardType.Number else KeyboardType.Ascii,
-                    imeAction = ImeAction.Search,
-                ),
-                keyboardActions = KeyboardActions(
-                    onSearch = { if (seedIsReady && !isScouting) onScout() },
-                ),
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                TextButton(onClick = { showDatePicker = true }, enabled = !isScouting) { Text("Choose date") }
-                TextButton(onClick = { onScoutSeed(DailyRunDate.today()) }, enabled = !isScouting) { Text("Today") }
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val compact = maxWidth < 300.dp
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.Bottom) {
+                    OutlinedTextField(
+                        value = fieldValue,
+                        onValueChange = {
+                            val formattedValue = formatSeedFieldValue(it)
+                            fieldValue = formattedValue
+                            onSeedChange(formattedValue.text)
+                        },
+                        enabled = !isScouting,
+                        modifier = Modifier.weight(1f).heightIn(min = 64.dp).testTag("scout-run-field"),
+                        label = { Text("Seed / date", maxLines = 1) },
+                        placeholder = { Text("Seed / YYYY-MM-DD", maxLines = 1) },
+                        singleLine = true,
+                        shape = MaterialTheme.shapes.medium,
+                        textStyle = MaterialTheme.typography.titleLarge.copy(
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = if (compact) 16.sp else 20.sp,
+                            letterSpacing = 0.6.sp,
+                        ),
+                        keyboardOptions = KeyboardOptions(
+                            capitalization = KeyboardCapitalization.Characters,
+                            keyboardType = if (daily) KeyboardType.Number else KeyboardType.Ascii,
+                            imeAction = ImeAction.Search,
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onSearch = { if (seedIsReady && !isScouting) onScout() },
+                        ),
+                    )
+                    IconButton(
+                        onClick = { showDatePicker = true }, enabled = !isScouting,
+                        modifier = Modifier.width(48.dp).height(56.dp).testTag("scout-date-picker"),
+                    ) { Icon(Icons.Outlined.DateRange, contentDescription = "Choose daily run date") }
+                    TextButton(
+                        onClick = { onScoutSeed(DailyRunDate.today()) }, enabled = !isScouting,
+                        modifier = Modifier.widthIn(min = 48.dp).height(56.dp).testTag("scout-today"),
+                        contentPadding = PaddingValues(horizontal = 4.dp),
+                    ) { Text("Today", maxLines = 1) }
+                }
             }
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(12.dp))
             Button(
                 onClick = onScout,
                 enabled = seedIsReady && !isScouting,

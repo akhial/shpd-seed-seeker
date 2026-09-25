@@ -61,6 +61,7 @@ public sealed partial class MainWindow : Window
     private (int Depth, double Offset)? scoutAnchor;
     private readonly TranslateTransform trinketDockTransform = new();
     private bool scoutLoading;
+    private bool updatingDailyCalendar;
     private LevelMapSession? mapSession;
     private Expander? openMap;
     private int? openMapDepth;
@@ -120,8 +121,8 @@ public sealed partial class MainWindow : Window
         // Decode the item atlases up front so the first sprite render is warm.
         _ = ItemAtlas.GetAsync();
         ResultsList.ItemsSource = results; ScoutButton.IsEnabled = false;
-        DailyDate.MinDate = new DateTimeOffset(new DateTime(1970, 1, 1));
-        DailyDate.MaxDate = new DateTimeOffset(new DateTime(9999, 12, 31));
+        DailyCalendar.MinDate = new DateTimeOffset(new DateTime(1970, 1, 1));
+        DailyCalendar.MaxDate = new DateTimeOffset(new DateTime(9999, 12, 31));
         TrinketDock.RenderTransform = trinketDockTransform;
         ScoutList.Loaded += (_, _) =>
         {
@@ -1915,21 +1916,38 @@ public sealed partial class MainWindow : Window
         var formatted = SeedCode.Format(SeedInput.Text);
         if (formatted != SeedInput.Text) { SeedInput.Text = formatted; SeedInput.SelectionStart = formatted.Length; }
         ScoutButton.IsEnabled = !scoutLoading && SeedCode.IsScoutable(formatted);
-        // Keep the picker consistent when a search result or pasted date fills the field.
-        if (DailyDate is not null)
-        {
-            DateTimeOffset? date = SeedCode.IsScoutable(formatted) && DateTime.TryParseExact(formatted, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
-                System.Globalization.DateTimeStyles.None, out var day) ? new DateTimeOffset(day) : null;
-            if (DailyDate.Date?.Date != date?.Date) DailyDate.Date = date;
-        }
     }
     private void SeedInput_KeyDown(object sender, KeyRoutedEventArgs e) { if (e.Key == VirtualKey.Enter && SeedCode.IsScoutable(SeedInput.Text)) { _ = ScoutSeed(SeedInput.Text); e.Handled = true; } }
     private async void Scout_Click(object sender, RoutedEventArgs e) => await ScoutSeed(SeedInput.Text);
 
-    private void DailyDate_Changed(CalendarDatePicker sender, CalendarDatePickerDateChangedEventArgs args)
+    private void DailyDate_Opening(object sender, object e)
     {
-        if (args.NewDate is { } date)
-            SeedInput.Text = date.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        // Synchronize when opened so typing never feeds changes back through the calendar.
+        updatingDailyCalendar = true;
+        try
+        {
+            DailyCalendar.SelectedDates.Clear();
+            if (SeedCode.IsScoutable(SeedInput.Text) && DateTime.TryParseExact(SeedInput.Text, "yyyy-MM-dd",
+                System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var day))
+            {
+                var date = new DateTimeOffset(day);
+                DailyCalendar.SetDisplayDate(date);
+                DailyCalendar.SelectedDates.Add(date);
+            }
+            else DailyCalendar.SetDisplayDate(DateTimeOffset.UtcNow);
+        }
+        finally { updatingDailyCalendar = false; }
+    }
+
+    private void DailyDate_Changed(CalendarView sender, CalendarViewSelectedDatesChangedEventArgs args)
+    {
+        if (!updatingDailyCalendar && args.AddedDates.Count > 0)
+        {
+            var date = args.AddedDates[0].ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+            if (date == SeedInput.Text) return;
+            SeedInput.Text = date;
+            DailyDateFlyout.Hide();
+        }
     }
 
     private async void DailyToday_Click(object sender, RoutedEventArgs e)

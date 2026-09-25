@@ -2494,6 +2494,16 @@ private struct SeedDetailView: View {
         }
         .onChange(of: model.world?.seed) { _, _ in showSeedInfo = false }
         .navigationTitle("Seed Detail")
+        .toolbar {
+            ToolbarItemGroup(placement: .primaryAction) {
+                if model.world?.itemMappings != nil {
+                    Button { showSeedInfo = true } label: { Image(systemName: "info.circle") }
+                        .buttonStyle(.borderless).accessibilityLabel("Seed information")
+                        .help("Seed information")
+                }
+                if let seed = model.world?.seed { Button("Copy") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(seed, forType: .string) } }
+            }
+        }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
@@ -2507,17 +2517,8 @@ private struct SeedDetailView: View {
                     .disabled(model.loading)
                     .onChange(of: model.input) { _, value in let formatted = SeedCode.formatInput(value); if formatted != value { model.input = formatted } }
                     .onSubmit { if !model.loading && SeedCode.isScoutable(model.input) { onScoutSeed(model.input) } }
-                Button("Scout") { onScoutSeed(model.input) }.disabled(model.loading || !SeedCode.isScoutable(model.input))
-                if model.world?.itemMappings != nil {
-                    Button { showSeedInfo = true } label: { Image(systemName: "info.circle") }
-                        .buttonStyle(.borderless).accessibilityLabel("Seed information")
-                        .help("Seed information")
-                }
-                if let seed = model.world?.seed { Button("Copy") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(seed, forType: .string) } }
-                if model.loading { ProgressView().controlSize(.small) }
-            }
-            HStack {
-                Button("Choose date") { showDailyPicker = true }
+                Button { showDailyPicker = true } label: { Image(systemName: "calendar") }
+                    .accessibilityLabel("Choose daily run date").help("Choose date")
                     .disabled(model.loading)
                     .popover(isPresented: $showDailyPicker) {
                         DatePicker("Daily date (UTC)", selection: Binding(
@@ -2530,7 +2531,9 @@ private struct SeedDetailView: View {
                             .padding()
                     }
                 Button("Today") { onScoutSeed(DailyRunDate.code()) }.disabled(model.loading)
-            }.controlSize(.small)
+                Button("Scout") { onScoutSeed(model.input) }.disabled(model.loading || !SeedCode.isScoutable(model.input))
+                if model.loading { ProgressView().controlSize(.small) }
+            }
             if let error = model.error { Text(error).foregroundStyle(.red).font(.caption) }
             if resultPosition != nil || model.world?.trinketOrder.isEmpty == false {
                 HStack(spacing: 6) {

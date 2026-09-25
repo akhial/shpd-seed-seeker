@@ -167,7 +167,13 @@ class ScoutScreenScrollTest {
             compose.waitForIdle()
             assertEquals(field, bounds("scout-run-field"))
             assertEquals(form, bounds("scout-input"))
-            compose.onNodeWithText("Choose date").assertIsDisplayed()
+            val calendar = bounds("scout-date-picker")
+            val today = bounds("scout-today")
+            assertTrue(field.right <= calendar.left)
+            assertTrue(calendar.right <= today.left)
+            assertEquals(field.bottom, calendar.bottom, 1f)
+            assertEquals(field.bottom, today.bottom, 1f)
+            compose.onNodeWithContentDescription("Choose daily run date").assertIsDisplayed()
             compose.onNodeWithText("Today").assertIsDisplayed()
         }
     }
@@ -175,7 +181,7 @@ class ScoutScreenScrollTest {
     @Test fun dailyPickerAndTodayUseTheExistingScoutActions() {
         var scouted: String? = null
         show(initialSeed = "2026-09-25", onStep = { scouted = it })
-        compose.onNodeWithText("Choose date").assertIsDisplayed().performClick()
+        compose.onNodeWithContentDescription("Choose daily run date").assertIsDisplayed().performClick()
         compose.onNodeWithText("Daily run date (UTC)").assertIsDisplayed()
         compose.onNodeWithText("Use date").performClick()
         compose.onNodeWithText("Scout daily run").performClick()
@@ -278,6 +284,9 @@ class ScoutScreenScrollTest {
     @Test @Config(qualifiers = "w320dp-h740dp-xhdpi")
     fun narrowPhoneKeepsCompactSeedBadgeAndCopySeparate() {
         show()
+        screenshot("input-320dp")
+        assertTrue(bounds("scout-run-field").right <= bounds("scout-date-picker").left)
+        assertTrue(bounds("scout-date-picker").right <= bounds("scout-today").left)
         drag(330f)
         val seed = bounds("scout-seed")
         val badge = bounds("scout-requirements")
