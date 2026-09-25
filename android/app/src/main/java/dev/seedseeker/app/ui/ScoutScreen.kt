@@ -407,7 +407,7 @@ private fun SeedInputCard(
         shape = MaterialTheme.shapes.extraLarge,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
     ) {
-        Column(Modifier.padding(18.dp)) {
+        Column(Modifier.padding(start = 18.dp, top = 10.dp, end = 18.dp, bottom = 18.dp)) {
             BoxWithConstraints(Modifier.fillMaxWidth()) {
                 val compact = maxWidth < 300.dp
                 Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.Bottom) {

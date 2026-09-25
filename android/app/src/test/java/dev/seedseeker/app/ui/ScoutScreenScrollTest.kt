@@ -159,7 +159,8 @@ class ScoutScreenScrollTest {
     }
 
     @Test fun seedAndDateEntryKeepTheSameFieldAndFormHeight() {
-        show()
+        show(initialSeed = "")
+        screenshot("input-empty")
         val field = bounds("scout-run-field")
         val form = bounds("scout-input")
         for (input in listOf("2", "202609", "20260925", "", "ABCDEFGH", "ABCDEFGHI")) {
