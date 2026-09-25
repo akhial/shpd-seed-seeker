@@ -31,7 +31,9 @@ function Harness({ initial = "", loading = false }) {
   return <DailyRunInput {...{ input, onInput, onScout, loading }} />;
 }
 async function click(label: string) {
-  const button = [...host.querySelectorAll("button")].find((b) => b.textContent === label)!;
+  const button = [...host.querySelectorAll("button")].find(
+    (b) => (b.getAttribute("aria-label") ?? b.textContent) === label,
+  )!;
   expect(button).toBeDefined();
   await act(async () => button.click());
 }
@@ -72,11 +74,11 @@ it("automatically formats seeds and partial dates in the same persistent text fi
     expect(field().type).toBe("text");
     expect(field().className).toBe("d1-seed-field d1-mono");
   }
-  expect([...host.querySelectorAll("button")].map((button) => button.textContent)).toEqual([
-    "Scout",
-    "Choose date",
-    "Today",
-  ]);
+  expect(
+    [...host.querySelectorAll("button")].map(
+      (button) => button.getAttribute("aria-label") ?? button.textContent,
+    ),
+  ).toEqual(["Choose daily run date", "Today", "Scout"]);
 });
 it("scouts Today directly and recomputes its date at UTC rollover", async () => {
   vi.useFakeTimers();
@@ -95,7 +97,7 @@ it.each(["2024-02-29", "2030-01-01"])("scouts a picked past or future date: %s",
   await act(async () => root.render(<Harness initial="ABC-DEF-GHI" />));
   const picker = host.querySelector<HTMLInputElement>('input[type="date"]')!;
   Object.defineProperty(picker, "showPicker", { value: undefined });
-  await click("Choose date");
+  await click("Choose daily run date");
   expect(picker.getAttribute("aria-hidden")).toBe("false");
   await enter(date, picker);
   expect(field().value).toBe(date);
@@ -109,7 +111,7 @@ it("opens the native date selector when available", async () => {
   Object.defineProperty(host.querySelector('input[type="date"]'), "showPicker", {
     value: showPicker,
   });
-  await click("Choose date");
+  await click("Choose daily run date");
   expect(showPicker).toHaveBeenCalledOnce();
 });
 it.each(["2026-09-2", "2026-02-30", "1969-12-31", "ABC-DEF-GH"])(

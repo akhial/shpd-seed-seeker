@@ -36,6 +36,16 @@ function Icon({ size = 16, children, ...props }: IconProps & { children: ReactNo
   );
 }
 
+/** Calendar — choose a daily run date. */
+export function CalendarIcon(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="3" y="5" width="18" height="16" rx="2" />
+      <path d="M16 3v4M8 3v4M3 11h18" />
+    </Icon>
+  );
+}
+
 /** Lucide `command` — the macOS ⌘ key. */
 export function CommandIcon(props: IconProps) {
   return (

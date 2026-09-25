@@ -3344,8 +3344,18 @@ input[type="range"]::-moz-range-thumb {
   flex: 0 0 auto;
 }
 .d1-run-input .d1-scout-input-row {
-  border-bottom: none;
-  padding-bottom: 8px;
+  align-items: center;
+  gap: 6px;
+}
+.d1-run-input .d1-btn {
+  flex-shrink: 0;
+  height: 40px;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+.d1-run-input .d1-date-button {
+  width: 36px;
+  padding: 0;
 }
 .d1-run-input .d1-seed-field {
   height: 40px;
@@ -3359,18 +3369,13 @@ input[type="range"]::-moz-range-thumb {
 .d1-run-shortcuts {
   position: relative;
   display: flex;
-  gap: 8px;
-  padding: 0 14px 12px;
-  border-bottom: 1px solid var(--d1-border);
-}
-.d1-run-shortcuts .d1-btn {
-  font-size: 12px;
-  min-height: 30px;
+  flex-shrink: 0;
+  gap: 6px;
 }
 .d1-native-date {
   position: absolute;
   top: 0;
-  left: 14px;
+  left: 0;
   width: 1px;
   height: 1px;
   opacity: 0;
@@ -3378,9 +3383,24 @@ input[type="range"]::-moz-range-thumb {
 }
 .d1-date-fallback {
   position: absolute;
-  top: 100%;
-  left: 14px;
+  top: calc(100% + 6px);
+  right: 0;
   z-index: 10;
   color-scheme: dark;
   letter-spacing: normal;
+}
+
+@media (max-width: 380px) {
+  .d1-run-input .d1-scout-input-row,
+  .d1-run-shortcuts {
+    gap: 4px;
+  }
+  .d1-run-input .d1-seed-field {
+    padding-inline: 8px;
+    font-size: 16px;
+    letter-spacing: 0.04em;
+  }
+  .d1-run-input .d1-seed-field::placeholder {
+    font-size: 12px;
+  }
 }

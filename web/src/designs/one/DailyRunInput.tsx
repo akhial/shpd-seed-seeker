@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { CalendarIcon } from "../../lib/icons";
 import { formatSeedCode, parseSeedCodeSync } from "../../lib/wasm";
 
 export const todayUTC = () => new Date().toISOString().slice(0, 10);
@@ -38,7 +39,7 @@ export function DailyRunInput({
         <input
           className="d1-seed-field d1-mono"
           value={input}
-          placeholder="Seed or YYYY-MM-DD"
+          placeholder="Seed / YYYY-MM-DD"
           autoComplete="off"
           autoCapitalize="characters"
           spellCheck={false}
@@ -48,62 +49,63 @@ export function DailyRunInput({
           disabled={loading}
           onChange={(event) => onInput(formatSeedCode(event.currentTarget.value))}
         />
+        <div className="d1-run-shortcuts">
+          <button
+            type="button"
+            className="d1-btn d1-date-button"
+            disabled={loading}
+            aria-label="Choose daily run date"
+            title="Choose date"
+            onClick={() => {
+              try {
+                if (!picker.current?.showPicker) throw new Error("Native picker unavailable");
+                picker.current.showPicker();
+              } catch {
+                setFallbackPicker((shown) => !shown);
+              }
+            }}
+          >
+            <CalendarIcon size={18} />
+          </button>
+          <input
+            ref={picker}
+            type="date"
+            className={fallbackPicker ? "d1-seed-field d1-date-fallback" : "d1-native-date"}
+            value={ready && daily ? input : ""}
+            min="1970-01-01"
+            max="9999-12-31"
+            aria-label="Daily run date (UTC)"
+            aria-hidden={!fallbackPicker}
+            tabIndex={fallbackPicker ? 0 : -1}
+            disabled={loading}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") setFallbackPicker(false);
+            }}
+            onChange={(event) => {
+              if (event.currentTarget.value && event.currentTarget.validity.valid) {
+                onInput(event.currentTarget.value);
+                setFallbackPicker(false);
+              }
+            }}
+          />
+          <button
+            type="button"
+            className="d1-btn"
+            disabled={loading}
+            onClick={() => {
+              const date = todayUTC();
+              setFallbackPicker(false);
+              onInput(date);
+              onScout(date);
+            }}
+          >
+            Today
+          </button>
+        </div>
         <button type="submit" className="d1-btn d1-btn-primary" disabled={!ready || loading}>
           {loading ? "Scouting…" : "Scout"}
         </button>
       </form>
-      <div className="d1-run-shortcuts">
-        <button
-          type="button"
-          className="d1-btn"
-          disabled={loading}
-          aria-label="Choose daily run date"
-          onClick={() => {
-            try {
-              if (!picker.current?.showPicker) throw new Error("Native picker unavailable");
-              picker.current.showPicker();
-            } catch {
-              setFallbackPicker((shown) => !shown);
-            }
-          }}
-        >
-          Choose date
-        </button>
-        <input
-          ref={picker}
-          type="date"
-          className={fallbackPicker ? "d1-seed-field d1-date-fallback" : "d1-native-date"}
-          value={ready && daily ? input : ""}
-          min="1970-01-01"
-          max="9999-12-31"
-          aria-label="Daily run date (UTC)"
-          aria-hidden={!fallbackPicker}
-          tabIndex={fallbackPicker ? 0 : -1}
-          disabled={loading}
-          onKeyDown={(event) => {
-            if (event.key === "Escape") setFallbackPicker(false);
-          }}
-          onChange={(event) => {
-            if (event.currentTarget.value && event.currentTarget.validity.valid) {
-              onInput(event.currentTarget.value);
-              setFallbackPicker(false);
-            }
-          }}
-        />
-        <button
-          type="button"
-          className="d1-btn"
-          disabled={loading}
-          onClick={() => {
-            const date = todayUTC();
-            setFallbackPicker(false);
-            onInput(date);
-            onScout(date);
-          }}
-        >
-          Today
-        </button>
-      </div>
     </div>
   );
 }
