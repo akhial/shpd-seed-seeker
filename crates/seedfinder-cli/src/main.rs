@@ -4,9 +4,8 @@ static GLOBAL_ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
 mod json_output;
 
 use std::env;
-use std::fmt;
 use std::fs;
-use std::io::{self, Write as _};
+use std::io::{self, IsTerminal as _, Write as _};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -55,30 +54,73 @@ struct SearchStatistics {
     matches: usize,
 }
 
-impl fmt::Display for SearchStatistics {
+impl SearchStatistics {
     #[allow(clippy::cast_precision_loss)] // A display-only rate does not need integer precision.
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn report(&self, color: bool) -> String {
         let elapsed = self.elapsed.as_secs_f64();
         let seeds_per_second = if self.elapsed.is_zero() {
             0.0
         } else {
             self.seeds as f64 / elapsed
         };
-        write!(
-            formatter,
+        // SHPD v4.0.0 Window: TITLE_COLOR (#FFFF44), WHITE (#FFFFFF),
+        // and SHPX_COLOR (#33BB33).
+        let (title, value, shattered, reset) = if color {
+            (
+                "\x1b[1;38;2;255;255;68m",
+                "\x1b[38;2;255;255;255m",
+                "\x1b[38;2;51;187;51m",
+                "\x1b[0m",
+            )
+        } else {
+            ("", "", "", "")
+        };
+        format!(
             concat!(
-                "Search session statistics\n",
-                "Time spent: {elapsed:.3} s\n",
-                "Average seeds/second: {seeds_per_second:.2}\n",
-                "Seeds searched: {seeds}\n",
-                "Matches found: {matches}",
+                "\n{title}Search session statistics{reset}\n",
+                "Time spent: {value}{elapsed:.3} s{reset}\n",
+                "Average seeds/second: {value}{seeds_per_second:.2}{reset}\n",
+                "Seeds searched: {value}{seeds}{reset}\n",
+                "Matches found: {shattered}{matches}{reset}",
             ),
+            title = title,
+            value = value,
+            shattered = shattered,
+            reset = reset,
             elapsed = elapsed,
             seeds_per_second = seeds_per_second,
-            seeds = self.seeds,
+            seeds = format_seed_count(self.seeds),
             matches = self.matches,
         )
     }
+}
+
+fn format_seed_count(seeds: u64) -> String {
+    if seeds < 100_000 {
+        return seeds.to_string();
+    }
+    let (divisor, suffix) = if seeds >= 1_000_000_000 {
+        (1_000_000_000, "B")
+    } else if seeds >= 1_000_000 {
+        (1_000_000, "M")
+    } else {
+        (1_000, "K")
+    };
+    let whole = seeds / divisor;
+    // Keep up to three decimals without rounding the searched count up.
+    let fraction = (seeds % divisor) * 1_000 / divisor;
+    if fraction == 0 {
+        format!("{whole} {suffix}")
+    } else {
+        let fraction = format!("{fraction:03}");
+        format!("{whole}.{} {suffix}", fraction.trim_end_matches('0'))
+    }
+}
+
+fn stderr_supports_color() -> bool {
+    io::stderr().is_terminal()
+        && env::var_os("NO_COLOR").is_none_or(|value| value.is_empty())
+        && !env::var("TERM").is_ok_and(|term| term == "dumb")
 }
 
 fn main() -> ExitCode {
@@ -101,6 +143,9 @@ fn main() -> ExitCode {
     match command {
         Command::Benchmark(options) => match benchmark_command(&options, &progress) {
             Ok(report) => {
+                if progress.is_cancelled() {
+                    println!();
+                }
                 println!("{report}");
                 ExitCode::SUCCESS
             }
@@ -116,7 +161,7 @@ fn main() -> ExitCode {
             json,
         } => match search_command(&items, workers, output.as_deref(), json, &progress) {
             Ok(statistics) => {
-                eprintln!("{statistics}");
+                eprintln!("{}", statistics.report(stderr_supports_color()));
                 ExitCode::SUCCESS
             }
             Err(error) => {
@@ -744,9 +789,9 @@ mod tests {
             matches: 3,
         };
         assert_eq!(
-            statistics.to_string(),
+            statistics.report(false),
             concat!(
-                "Search session statistics\n",
+                "\nSearch session statistics\n",
                 "Time spent: 2.000 s\n",
                 "Average seeds/second: 62.50\n",
                 "Seeds searched: 125\n",
@@ -758,7 +803,7 @@ mod tests {
             seeds: 0,
             matches: 0,
         };
-        assert!(empty.to_string().contains("Average seeds/second: 0.00"));
+        assert!(empty.report(false).contains("Average seeds/second: 0.00"));
     }
 
     #[test]

@@ -99,6 +99,11 @@ matches, and prints time spent, average seeds/second, seeds searched, and
 matches found to stderr. The same summary is printed when a search completes,
 including when a JSON export reaches its result limit. Benchmarks also stop
 gracefully and print their report for the seeds searched so far.
+The summary starts on a fresh line after Ctrl+C and uses SHPD's title yellow,
+white values, and Shattered green in terminals. Set `NO_COLOR=1` to
+disable colors; redirected stderr and `TERM=dumb` remain plain text.
+Seeds searched stays an integer below 100,000; larger counts use K, M, or B
+with up to three decimal places (for example, `151 K` or `2.675 B`).
 
 ## Search queries<a id="search-queries"></a>
 
