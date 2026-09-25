@@ -290,13 +290,13 @@ body {
   margin-left: -2px;
 }
 
-/* Three labelled controls plus the seed count overrun the head once the pane
+/* Four labelled controls plus the seed count overrun the head once the pane
    is narrow — on a phone, but also in the tightest three-column desktop
    layout, where this column bottoms out at its 320px minimum. Both cases key
    off the pane's own width, not the viewport's, so the row degrades to bare
    glyphs exactly when it has to; each button still names itself through its
    title and aria-label. */
-@container (max-width: 400px) {
+@container (max-width: 480px) {
   .d1-io-label {
     display: none;
   }

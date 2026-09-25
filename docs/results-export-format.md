@@ -242,6 +242,14 @@ field and keep the old ones passing.
 
 ## Import semantics
 
+All apps also accept this exact JSON document from the clipboard. On macOS,
+Windows, and Linux, choose **Import → From Clipboard**; Android exposes
+**More options → Import from clipboard**, and the web results toolbar has a
+**Paste** button. The web app requires HTTPS (or localhost) and browser clipboard
+permission. Empty or non-text clipboards and invalid documents show an error
+without changing the current query or results. Clipboard and file imports share
+the same decoder, size limit, and application path.
+
 Importing a results file **replaces** the current results list and the query
 editor state on every platform (after full validation, so a bad file never
 half-applies), and records the imported query as the export snapshot so

@@ -1740,16 +1740,34 @@ public sealed partial class MainWindow : Window
         WinRT.Interop.InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(this));
         var file = await picker.PickSingleFileAsync();
         if (file is null) return;
-        try
+        await ImportResultsAsync(async () =>
         {
             var properties = await file.GetBasicPropertiesAsync();
             if (properties.Size > (ulong)EngineInfo.ResultsFileMaxBytes)
-            {
-                await ShowTransferMessage("This file is too large to be a Seed Seeker results file (2 MiB limit).");
-                return;
-            }
-            var text = await FileIO.ReadTextAsync(file);
-            // Parse the untrusted file off the UI thread.
+                throw new ResultsExportException("This file is too large to be a Seed Seeker results file (2 MiB limit).");
+            return await FileIO.ReadTextAsync(file);
+        }, "file");
+    }
+
+    private async void ImportClipboard_Click(object sender, RoutedEventArgs e)
+    {
+        if (busy || search is not null) return;
+        await ImportResultsAsync(async () =>
+        {
+            var content = Clipboard.GetContent();
+            var text = content.Contains(StandardDataFormats.Text) ? await content.GetTextAsync() : null;
+            if (string.IsNullOrWhiteSpace(text))
+                throw new ResultsExportException("The clipboard has no text. Copy results JSON and try again.");
+            return text;
+        }, "clipboard");
+    }
+
+    private async Task ImportResultsAsync(Func<Task<string>> readText, string source)
+    {
+        try
+        {
+            var text = await readText();
+            // Parse the untrusted JSON off the UI thread.
             var imported = await Task.Run(() => ResultsExport.Decode(text));
             // A search or refine may have started while the picker or reads
             // were pending.
@@ -1769,7 +1787,7 @@ public sealed partial class MainWindow : Window
             // The engine already deduplicated and capped the imported seeds.
             Collect(imported.Seeds.Select((seed, index) => new SeedResult(seed, index + 1, imported.Trinkets?.ElementAtOrDefault(index))));
             var dropped = imported.Dropped;
-            var status = $"Imported {results.Count} seed{(results.Count == 1 ? "" : "s")} from file.";
+            var status = $"Imported {results.Count} seed{(results.Count == 1 ? "" : "s")} from {source}.";
             if (dropped > 0)
                 status += $"\n{dropped} duplicate or over-limit entr{(dropped == 1 ? "y" : "ies")} dropped.";
             if (imported.FileShpdVersion is string fileVersion && fileVersion != EngineInfo.ShpdVersion)

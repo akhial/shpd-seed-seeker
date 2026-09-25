@@ -567,12 +567,64 @@ pub fn present(app: &adw::Application) {
     });
     window.add_action(&export_action);
 
-    let import_action = gio::SimpleAction::new("import-results", None);
-    import_action.connect_activate({
+    // File and clipboard imports apply exactly the same validated document.
+    let import_text: Rc<dyn Fn(&str)> = Rc::new({
         let state = Rc::clone(&state);
         let results = Rc::clone(&results);
         let refresh_all = Rc::clone(&refresh_all);
         let exported_query = Rc::clone(&exported_query);
+        let toasts = toasts.clone();
+        move |text| {
+            // A search may have started while the clipboard or file read was pending.
+            if results.is_running() {
+                toasts.add_toast(adw::Toast::new("Stop the search before importing results"));
+                return;
+            }
+            match results_export::decode(text) {
+                Ok(imported) => {
+                    let (kept, dropped) =
+                        results_export::dedupe_and_cap(&imported.seeds, MAX_RESULTS);
+                    *state.borrow_mut() = AppState::from_query(&imported.query);
+                    let codes: Vec<String> = kept.iter().map(|seed| seed.to_code()).collect();
+                    // The import becomes the session's Target: the
+                    // imported query plus seeds, with no coverage.
+                    results.load_imported(&codes, &imported.query, &imported.recipes);
+                    exported_query.replace(Some(imported.query));
+                    refresh_all();
+                    let mut message = format!(
+                        "Imported {} seed{}",
+                        codes.len(),
+                        if codes.len() == 1 { "" } else { "s" },
+                    );
+                    if dropped > 0 {
+                        let _ = std::fmt::Write::write_fmt(
+                            &mut message,
+                            format_args!(" · {dropped} duplicate or over-limit entries dropped"),
+                        );
+                    }
+                    toasts.add_toast(adw::Toast::new(&message));
+                    if let Some(file_version) = imported.shpd_version
+                        && file_version != shpd_seedfinder_core::SHPD_VERSION
+                    {
+                        toasts.add_toast(adw::Toast::new(&format!(
+                            "Note: this JSON targets Shattered Pixel Dungeon \
+                         v{file_version}; this app targets v{} — seeds may \
+                         generate differently",
+                            shpd_seedfinder_core::SHPD_VERSION,
+                        )));
+                    }
+                }
+                Err(message) => {
+                    toasts.add_toast(adw::Toast::new(&format!("Import failed: {message}")));
+                }
+            }
+        }
+    });
+
+    let import_action = gio::SimpleAction::new("import-results", None);
+    import_action.connect_activate({
+        let import_text = Rc::clone(&import_text);
+        let results = Rc::clone(&results);
         let toasts = toasts.clone();
         let window = window.clone();
         move |_, _| {
@@ -581,73 +633,47 @@ pub fn present(app: &adw::Application) {
                 return;
             }
             let dialog = gtk::FileDialog::builder().title("Import Results").build();
-            let state = Rc::clone(&state);
-            let results = Rc::clone(&results);
-            let refresh_all = Rc::clone(&refresh_all);
-            let exported_query = Rc::clone(&exported_query);
+            let import_text = Rc::clone(&import_text);
             let toasts = toasts.clone();
             dialog.open(Some(&window), gio::Cancellable::NONE, move |chosen| {
                 let Ok(file) = chosen else { return };
-                file.load_contents_async(gio::Cancellable::NONE, move |loaded| {
-                    let contents = match loaded {
-                        Ok((bytes, _)) => bytes,
-                        Err(error) => {
-                            toasts.add_toast(adw::Toast::new(&format!("Import failed: {error}")));
-                            return;
-                        }
-                    };
-                    // A search may have started while the dialog was open.
-                    if results.is_running() {
-                        toasts
-                            .add_toast(adw::Toast::new("Stop the search before importing results"));
-                        return;
-                    }
-                    match results_export::decode(&String::from_utf8_lossy(&contents)) {
-                        Ok(imported) => {
-                            let (kept, dropped) =
-                                results_export::dedupe_and_cap(&imported.seeds, MAX_RESULTS);
-                            *state.borrow_mut() = AppState::from_query(&imported.query);
-                            let codes: Vec<String> =
-                                kept.iter().map(|seed| seed.to_code()).collect();
-                            // The import becomes the session's Target: the
-                            // imported query plus seeds, with no coverage.
-                            results.load_imported(&codes, &imported.query, &imported.recipes);
-                            exported_query.replace(Some(imported.query));
-                            refresh_all();
-                            let mut message = format!(
-                                "Imported {} seed{}",
-                                codes.len(),
-                                if codes.len() == 1 { "" } else { "s" },
-                            );
-                            if dropped > 0 {
-                                let _ = std::fmt::Write::write_fmt(
-                                    &mut message,
-                                    format_args!(
-                                        " · {dropped} duplicate or over-limit entries dropped"
-                                    ),
-                                );
-                            }
-                            toasts.add_toast(adw::Toast::new(&message));
-                            if let Some(file_version) = imported.shpd_version
-                                && file_version != shpd_seedfinder_core::SHPD_VERSION
-                            {
-                                toasts.add_toast(adw::Toast::new(&format!(
-                                    "Note: this file targets Shattered Pixel Dungeon \
-                                     v{file_version}; this app targets v{} — seeds may \
-                                     generate differently",
-                                    shpd_seedfinder_core::SHPD_VERSION,
-                                )));
-                            }
-                        }
-                        Err(message) => {
-                            toasts.add_toast(adw::Toast::new(&format!("Import failed: {message}")));
-                        }
+                file.load_contents_async(gio::Cancellable::NONE, move |loaded| match loaded {
+                    Ok((bytes, _)) => import_text(&String::from_utf8_lossy(&bytes)),
+                    Err(error) => {
+                        toasts.add_toast(adw::Toast::new(&format!("Import failed: {error}")));
                     }
                 });
             });
         }
     });
     window.add_action(&import_action);
+
+    let clipboard_action = gio::SimpleAction::new("import-clipboard", None);
+    clipboard_action.connect_activate({
+        let results = Rc::clone(&results);
+        let toasts = toasts.clone();
+        let window = window.clone();
+        move |_, _| {
+            if results.is_running() {
+                toasts.add_toast(adw::Toast::new("Stop the search before importing results"));
+                return;
+            }
+            let import_text = Rc::clone(&import_text);
+            let toasts = toasts.clone();
+            window
+                .clipboard()
+                .read_text_async(gio::Cancellable::NONE, move |read| match read {
+                    Ok(Some(text)) if !text.trim().is_empty() => import_text(&text),
+                    Ok(_) => toasts.add_toast(adw::Toast::new(
+                        "The clipboard has no text. Copy results JSON and try again.",
+                    )),
+                    Err(error) => toasts.add_toast(adw::Toast::new(&format!(
+                        "Could not read the clipboard: {error}"
+                    ))),
+                });
+        }
+    });
+    window.add_action(&clipboard_action);
 
     let focus_seed_action = gio::SimpleAction::new("focus-seed", None);
     focus_seed_action.connect_activate({
@@ -683,6 +709,7 @@ fn build_menu() -> gio::Menu {
     menu.append_section(None, &query_section);
     let results_section = gio::Menu::new();
     results_section.append(Some("_Import Results…"), Some("win.import-results"));
+    results_section.append(Some("Import from _Clipboard"), Some("win.import-clipboard"));
     results_section.append(Some("_Export Results…"), Some("win.export-results"));
     menu.append_section(None, &results_section);
     let app_section = gio::Menu::new();
