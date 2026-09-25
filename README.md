@@ -25,7 +25,6 @@ written in Rust — with native apps for Android, Linux, macOS, and Windows.
 - ⚡️ **4.7–25.4× faster** than Java seed finders on the benchmark queries
 - 🔍 **Rich queries**: multiple requirements across melee and thrown weapons, armor, wands, and rings
 - 🔗 **Share links**: short links to share your search
-- 🔮 **Seed scouting**: paste a seed, get every item with floor, upgrade, enchantment, cursed state and source; view potion colors, scroll runes, and ring gems in compact sprite grids
 - 📱 **Native apps** Material 3, GTK 4 and libadwaita, SwiftUI, WinUI 3
 
 ## Table of contents
@@ -77,21 +76,19 @@ cargo run --release -p shpd-seedfinder-cli -- --items requirements.json
 cargo run --release -p shpd-seedfinder-cli -- -i requirements.json -b 1000 --workers 4
 ```
 
+Searches and benchmarks start at `AAA-AAA-AAA` by default. Add `--random-start` to choose a random starting seed
+
+```sh
+seed-seeker --items requirements.json --random-start
+```
+
 Searches print one matching seed per line to stdout. Use `--output FILE` (or
 `-o FILE`) to write those lines to a file, or add `--json` to export the query
-and matches in the [shared results format](docs/results-export-format.md),
-importable by the macOS, Android, Windows, Linux, and web apps:
+and matches in the [shared results format](docs/results-export-format.md).
 
 ```sh
 seed-seeker --items requirements.json --json --output results.json
 ```
-
-`--json` requires an output file; stdout and `--output -` are not supported.
-The file starts as a valid empty export and is updated as matches arrive,
-including their trinket choices. Each update atomically replaces the file with
-a complete JSON document, so it stays importable while searching and after
-Ctrl+C. JSON searches stop at the apps' 1,024-result limit. Existing output
-files are replaced. The output options cannot be combined with `--benchmark`.
 
 ## Search queries<a id="search-queries"></a>
 
@@ -210,17 +207,6 @@ Pass `-EngineIsa avx2` to build the engine for x86-64-v3.
 PGO_TARGET=x86_64-pc-windows-msvc bash scripts/record-pgo-profile.sh
 ```
 
-### Engine level maps
-
-The engine exposes on-demand, trinket-aware regular-floor, Blacksmith mine and Imp vault maps as portable sprite
-scenes with animation frames and embedded game textures. See the
-[level-map contract](docs/level-map-format.md) for Rust, C, JNI and wasm APIs.
-The web, Android, macOS, Windows and Linux Scout panes expose inline maps and
-expanded views with floor and branch navigation, secret visibility, zoom/pan and
-trinket switching. Native clients use their platform drawing APIs for the same
-version 3 contents, glows and continuous effects; generation remains on demand
-and separate from seed search.
-
 ### Testing
 
 #### Rust
@@ -231,11 +217,6 @@ cargo clippy --workspace --all-targets -- -D warnings
 ```
 
 The workspace includes the GTK app, so the commands above need its system libraries (GTK 4.22 and libadwaita 1.9). Add `--exclude shpd-seedfinder-gtk` on macOS and Windows to exclude the GTK app from the test run.
-
-The test profile optimizes the engine while keeping debug assertions and overflow
-checks enabled. Seed equivalence and randomized matcher differential tests are
-capped at 1,024 seeds/cases; smaller regression samples stay smaller. Large calibration
-sweeps remain ignored by default and should be run explicitly with `--release`.
 
 #### Android
 
