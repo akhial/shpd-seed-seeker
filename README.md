@@ -77,6 +77,19 @@ cargo run --release -p shpd-seedfinder-cli -- --items requirements.json
 cargo run --release -p shpd-seedfinder-cli -- -i requirements.json -b 1000 --workers 4
 ```
 
+Searches and benchmarks start at `AAA-AAA-AAA` by default and advance by one
+seed at a time. Add `--random-start` to choose a random starting seed, matching
+the client apps. The chosen start is printed to stderr. Traversal still advances
+by one and wraps from `ZZZ-ZZZ-ZZZ` to `AAA-AAA-AAA`, covering every seed once
+in a full search. Benchmarks test the requested number of consecutive seeds,
+including when they wrap.
+
+```sh
+seed-seeker --items requirements.json --random-start
+seed-seeker --items requirements.json --random-start --json --output results.json
+seed-seeker --benchmark 1000 --random-start --workers 4
+```
+
 Searches print one matching seed per line to stdout. Use `--output FILE` (or
 `-o FILE`) to write those lines to a file, or add `--json` to export the query
 and matches in the [shared results format](docs/results-export-format.md),

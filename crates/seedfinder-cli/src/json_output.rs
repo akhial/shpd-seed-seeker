@@ -9,20 +9,22 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use shpd_seedfinder_core::feasibility::QueryPlan;
-use shpd_seedfinder_core::main_world::CanonicalMainWorldGenerator;
 use shpd_seedfinder_core::query::SearchQuery;
 use shpd_seedfinder_core::results_export::{self, MAX_FILE_BYTES, MAX_RESULTS};
 use shpd_seedfinder_core::search::{
-    SearchOptions, StreamingSearchHandle, StreamingSearchState, spawn_streaming_search,
+    SearchOptions, StreamingSearchHandle, StreamingSearchState, WorldGenerator,
+    spawn_rotated_streaming_search,
 };
 use shpd_seedfinder_core::seed::{DungeonSeed, TOTAL_SEEDS};
 
 const POLL_INTERVAL: Duration = Duration::from_millis(100);
 
-pub(super) fn search(
+pub(super) fn search<G: WorldGenerator + Send + 'static>(
+    generator: &Arc<G>,
     query: &SearchQuery,
     workers: NonZeroUsize,
     path: &Path,
+    start_seed: DungeonSeed,
 ) -> Result<(), String> {
     let mut output = JsonOutput::new(path, query)?;
     if QueryPlan::analyze(query).is_unsatisfiable() {
@@ -32,10 +34,8 @@ pub(super) fn search(
         );
         return Ok(());
     }
-    let handle = spawn_streaming_search(
-        &Arc::new(CanonicalMainWorldGenerator::with_challenges(
-            query.challenges,
-        )),
+    let handle = spawn_rotated_streaming_search(
+        generator,
         query.clone(),
         SearchOptions {
             start_seed: 0,
@@ -45,6 +45,7 @@ pub(super) fn search(
                 .expect("chunk size is non-zero"),
             max_results: NonZeroUsize::new(MAX_RESULTS).expect("result limit is non-zero"),
         },
+        start_seed.value(),
     )
     .map_err(|error| format!("{error:?}"))?;
     stream_results(&handle, &mut output)
@@ -158,7 +159,7 @@ mod tests {
     use shpd_seedfinder_core::model::{Accessibility, GeneratedWorld, ItemSource, WorldItem};
     use shpd_seedfinder_core::quests::QuestSummary;
     use shpd_seedfinder_core::run::RingGems;
-    use shpd_seedfinder_core::search::WorldGenerator;
+    use shpd_seedfinder_core::search::spawn_streaming_search;
 
     use super::*;
 
@@ -275,20 +276,14 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("results.json");
         let query = json_query::decode(r#"{"requirements":[{"item":"ring_wealth"}]}"#).unwrap();
-        let mut output = JsonOutput::new(&path, &query).unwrap();
-        let handle = spawn_streaming_search(
+        search(
             &Arc::new(MatchingGenerator),
-            query.clone(),
-            SearchOptions {
-                start_seed: 0,
-                end_seed_exclusive: TOTAL_SEEDS,
-                workers: NonZeroUsize::new(4).unwrap(),
-                chunk_size: NonZeroUsize::new(17).unwrap(),
-                max_results: NonZeroUsize::new(MAX_RESULTS).unwrap(),
-            },
+            &query,
+            NonZeroUsize::new(4).unwrap(),
+            &path,
+            DungeonSeed::MIN,
         )
         .unwrap();
-        stream_results(&handle, &mut output).unwrap();
         let contents = fs::read_to_string(&path).unwrap();
         let imported = results_export::decode(&contents).unwrap();
         assert_eq!(imported.seeds.len(), MAX_RESULTS);
@@ -296,6 +291,28 @@ mod tests {
             results_export::dedupe_and_cap(&imported.seeds, MAX_RESULTS).1,
             0
         );
+    }
+
+    #[test]
+    fn json_search_starts_at_the_selected_seed_and_wraps_without_duplicates() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("results.json");
+        let query = json_query::decode(r#"{"requirements":[{"item":"ring_wealth"}]}"#).unwrap();
+        search(
+            &Arc::new(MatchingGenerator),
+            &query,
+            NonZeroUsize::MIN,
+            &path,
+            DungeonSeed::new(TOTAL_SEEDS - 2).unwrap(),
+        )
+        .unwrap();
+        let imported = results_export::decode(&fs::read_to_string(&path).unwrap()).unwrap();
+        let expected = (TOTAL_SEEDS - 2..TOTAL_SEEDS)
+            .chain(0..u64::try_from(MAX_RESULTS - 2).unwrap())
+            .map(|value| DungeonSeed::new(value).unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(imported.seeds, expected);
+        assert_eq!(imported.query, query);
     }
 
     struct MatchingGenerator;
