@@ -444,7 +444,12 @@ fn search_command(
     }
     let workers = workers.unwrap_or_else(SearchOptions::available_parallelism);
     if is_interactive_terminal() {
-        eprintln!("Seed Seeker v{}", env!("CARGO_PKG_VERSION"));
+        let (bold, reset) = if stderr_supports_color() {
+            ("\x1b[1m", "\x1b[0m")
+        } else {
+            ("", "")
+        };
+        eprintln!("{bold}Seed Seeker v{}{reset}", env!("CARGO_PKG_VERSION"));
     }
     let start_seed = search_start(random_start);
     if json {
