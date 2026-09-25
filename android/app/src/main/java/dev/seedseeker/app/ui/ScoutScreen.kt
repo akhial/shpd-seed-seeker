@@ -427,8 +427,6 @@ private fun SeedInputCard(
                     }
                     TextButton(onClick = { onScoutSeed(DailyRunDate.today()) }, enabled = !isScouting) { Text("Today") }
                 }
-                Text("Choose any date. Daily runs change at midnight UTC. Uses the supported game version.",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else OutlinedTextField(
                 value = fieldValue,
                 onValueChange = {

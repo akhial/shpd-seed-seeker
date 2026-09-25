@@ -2529,10 +2529,6 @@ private struct SeedDetailView: View {
                 if let seed = model.world?.seed { Button("Copy") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(seed, forType: .string) } }
                 if model.loading { ProgressView().controlSize(.small) }
             }
-            if model.input.count == 10 && SeedCode.isScoutable(model.input) {
-                Text("Daily runs change at midnight UTC. All dates use the supported game version.")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
             if let error = model.error { Text(error).foregroundStyle(.red).font(.caption) }
             if resultPosition != nil || model.world?.trinketOrder.isEmpty == false {
                 HStack(spacing: 6) {

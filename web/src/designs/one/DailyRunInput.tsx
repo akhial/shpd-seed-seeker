@@ -100,13 +100,6 @@ export function DailyRunInput({
           {loading ? "Scouting…" : "Scout"}
         </button>
       </form>
-      {daily && (
-        <p className="d1-daily-note">
-          Choose any date · Daily runs change at midnight UTC.
-          <br />
-          Uses the supported game version, including past and future dates.
-        </p>
-      )}
     </div>
   );
 }

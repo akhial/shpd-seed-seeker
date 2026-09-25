@@ -331,8 +331,6 @@
               <Button Grid.Column="1" x:Name="DailyToday" Content="Today" Click="DailyToday_Click"
                       AutomationProperties.Name="Scout today's daily run"/>
             </Grid>
-            <TextBlock Text="Daily runs change at midnight UTC. All dates use the supported game version."
-                       Style="{StaticResource Caption}" TextWrapping="Wrap"/>
             <TextBlock x:Name="ScoutStatus" Style="{StaticResource Caption}" Margin="0,-2,0,0"/>
             <!-- Shown while the scouted seed is one of the search results: J/K (or the chevrons) step through them. -->
             <Grid x:Name="ResultNav" Visibility="Collapsed" ColumnSpacing="8" MinHeight="32">

@@ -50,9 +50,6 @@ pub fn run(seed: DungeonSeed, items: Option<&Path>, output: Option<&Path>) -> Re
         },
         shpd_seedfinder_core::SHPD_VERSION
     );
-    if seed.is_daily() {
-        text.push_str("Daily dates use this game version, including past and future dates.\n");
-    }
     writeln!(
         text,
         "Trinket: {}",

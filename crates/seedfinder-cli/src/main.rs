@@ -395,7 +395,6 @@ fn help() -> &'static str {
         "Options:\n",
         "      --daily [YYYY-MM-DD]  Scout a daily run [default: today in UTC]\n",
         "      --scout CODE          Scout a nine-letter seed code\n",
-        "                            Daily dates use the supported game version\n",
         "  -b, --benchmark [SEEDS]  Benchmark a seed search\n",
         "                            [default: 10000]\n",
         "  -i, --items FILE          Read search requirements from a JSON file\n",

@@ -128,14 +128,6 @@ impl DetailPane {
         daily_today.set_tooltip_text(Some("Scout today's daily run (UTC)"));
         daily_area.append(&daily_picker);
         daily_area.append(&daily_today);
-        let daily_note = gtk::Label::builder()
-            .label("Daily runs change at midnight UTC. All dates use the supported game version.")
-            .wrap(true)
-            .css_classes(["caption", "dim-label"])
-            .margin_start(12)
-            .margin_end(12)
-            .margin_bottom(8)
-            .build();
         let entry_clamp = adw::Clamp::builder()
             .child(&entry_area)
             .maximum_size(500)
@@ -248,7 +240,6 @@ impl DetailPane {
         toolbar_view.add_top_bar(&header_bar);
         toolbar_view.add_top_bar(&entry_clamp);
         toolbar_view.add_top_bar(&daily_area);
-        toolbar_view.add_top_bar(&daily_note);
         toolbar_view.add_top_bar(&nav);
         toolbar_view.set_content(Some(&stack));
 

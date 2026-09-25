@@ -3356,12 +3356,6 @@ input[type="range"]::-moz-range-thumb {
   color: var(--d1-amber);
   border-color: var(--d1-amber);
 }
-.d1-daily-note {
-  margin: 8px 16px 14px;
-  font-size: 11px;
-  line-height: 1.6;
-  opacity: 0.65;
-}
 .d1-run-input input[type="date"] {
   min-width: 0;
   font-size: 13px;
