@@ -6,8 +6,7 @@ import { FloorMapLabel } from "./FloorMapHeader";
 import { TrinketShortcuts } from "./TrinketShortcuts";
 import { ExpandIcon, XIcon } from "../../lib/icons";
 import { mapRequestJson, requestLevelMap } from "../../lib/level-map/client";
-import { createMapParticleRenderer } from "../../lib/level-map/particles";
-import { createLevelMapRenderer } from "../../lib/level-map/render";
+import { createMapFrameRenderer } from "../../lib/level-map/frame-renderer";
 import type { LevelMapRequest, MapBundle } from "../../lib/level-map/types";
 import {
   constrainMapTransform,
@@ -448,53 +447,54 @@ function MapCanvas({
   }, [applyTransform, geometry]);
   useEffect(() => {
     const context = canvasRef.current?.getContext("2d");
-    if (!context) return;
+    const particleContext = particleRef.current?.getContext("2d");
+    if (!context || !particleContext) return;
     if (!ready || !bundle) {
       context.clearRect(0, 0, widthPx, heightPx);
-      const particles = particleRef.current!;
-      particles.getContext("2d")?.clearRect(0, 0, particles.width, particles.height);
+      particleContext.clearRect(0, 0, particleContext.canvas.width, particleContext.canvas.height);
       return;
     }
-    const renderer = createLevelMapRenderer(context, bundle, secrets);
-    const particleCanvas = particleRef.current!;
-    const particles = createMapParticleRenderer(
-      particleCanvas.getContext("2d")!,
-      canvasRef.current!,
-      bundle,
-      secrets,
-    );
+    const renderer = createMapFrameRenderer(context, particleContext, bundle, secrets);
     const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const animated = renderer.animated || particles.animated;
     let frame = 0,
       last = -Infinity;
+    let stopped = false;
+    let drawing = false;
+    let redraw = true;
     const start = performance.now();
+    const visible = () => visibleRef.current && !document.hidden;
+    const schedule = () => {
+      if (!stopped && !frame && !drawing && visible()) frame = requestAnimationFrame(tick);
+    };
     const tick = (time: number) => {
-      const elapsed = motion.matches ? 0 : time - start;
+      frame = 0;
+      if (stopped || drawing || !visible()) return;
       const advanceSprites = time - last >= 50 || motion.matches;
-      renderer.draw(elapsed, advanceSprites);
       if (advanceSprites) last = time;
-      const density = densityRef.current;
-      const width = Math.round(widthPx * density),
-        height = Math.round(heightPx * density);
-      if (particleCanvas.width !== width || particleCanvas.height !== height) {
-        particleCanvas.width = width;
-        particleCanvas.height = height;
-      }
-      particles.draw(elapsed);
-      if (active && animated && !motion.matches && visibleRef.current && !document.hidden)
-        frame = requestAnimationFrame(tick);
+      redraw = false;
+      drawing = true;
+      void renderer
+        .draw(motion.matches ? 0 : time - start, advanceSprites, densityRef.current)
+        .then((animated) => {
+          drawing = false;
+          if (redraw || (active && animated && !motion.matches)) schedule();
+        });
     };
     const resume = () => {
       cancelAnimationFrame(frame);
-      if (visibleRef.current && !document.hidden) frame = requestAnimationFrame(tick);
+      frame = 0;
+      redraw = true;
+      schedule();
     };
     resumeRef.current = resume;
-    tick(start);
+    resume();
     document.addEventListener("visibilitychange", resume);
     motion.addEventListener("change", resume);
     return () => {
       resumeRef.current = () => {};
+      stopped = true;
       cancelAnimationFrame(frame);
+      renderer.dispose();
       document.removeEventListener("visibilitychange", resume);
       motion.removeEventListener("change", resume);
     };

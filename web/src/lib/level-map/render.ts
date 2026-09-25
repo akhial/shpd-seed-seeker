@@ -1,3 +1,4 @@
+import type { MapCanvas, MapContext } from "./canvas";
 import { drawTexture, glowTexture } from "./textures";
 import { mapSpriteCache, makeFrameCanvas } from "./frame-cache";
 import type { MapBundle, MapDraw, MapSprite } from "./types";
@@ -8,7 +9,7 @@ export function spriteFrame(sprite: MapSprite, elapsed: number) {
   ];
 }
 export function drawLevelMap(
-  context: CanvasRenderingContext2D,
+  context: MapContext,
   bundle: MapBundle,
   elapsed: number,
   revealSecrets: boolean,
@@ -43,7 +44,7 @@ export function glowAmount(periodMs: number, elapsed: number): number {
 }
 
 export function drawCommand(
-  context: CanvasRenderingContext2D,
+  context: MapContext,
   bundle: MapBundle,
   draw: MapDraw,
   ox: number,
@@ -78,31 +79,13 @@ export function drawCommand(
 /** Rasterize each sprite state once, then repair only changed animation bounds.
  * Replaying intersecting sprites in scene order preserves transparency and occlusion. */
 export function createLevelMapRenderer(
-  context: CanvasRenderingContext2D,
+  context: MapContext,
   bundle: MapBundle,
   revealSecrets: boolean,
-  makeCanvas: () => HTMLCanvasElement = makeFrameCanvas,
+  makeCanvas: () => MapCanvas = makeFrameCanvas,
 ) {
   const { map } = bundle;
   const cache = mapSpriteCache(bundle, makeCanvas);
-  const coveredCells = (x: number, y: number, width: number, height: number) => {
-    const cells: number[] = [];
-    const size = map.scene.tileSize;
-    for (
-      let row = Math.max(0, Math.floor(y / size));
-      row < Math.min(map.height, Math.ceil((y + height) / size));
-      row++
-    ) {
-      for (
-        let column = Math.max(0, Math.floor(x / size));
-        column < Math.min(map.width, Math.ceil((x + width) / size));
-        column++
-      ) {
-        cells.push(row * map.width + column);
-      }
-    }
-    return cells;
-  };
   const entries = (revealSecrets ? map.scene.layers : map.scene.concealedLayers).flatMap((layer) =>
     layer.cells.flatMap((index, cell) => {
       if (index === null) return [];
@@ -120,7 +103,6 @@ export function createLevelMapRenderer(
           blend: layer.blend,
           x,
           y,
-          cells: coveredCells(x, y, cached.width, cached.height),
           frame: -1,
           glowing: sprite.frames.some((frame) =>
             frame.some((draw) => draw.kind === "blit" && draw.glow),
@@ -146,22 +128,35 @@ export function createLevelMapRenderer(
       });
       previousElapsed = elapsed;
       if (!initial && changed.length === 0) return;
-      const dirtyCells = new Set(changed.flatMap((entry) => entry.cells));
+      // A single rectangular clip uses the browser's fast scissor path. A path
+      // containing hundreds of animated water tiles can make every subsequent
+      // draw pay for a complex mask, particularly on mobile Chrome.
+      const left = initial ? 0 : Math.min(...changed.map((entry) => entry.x));
+      const top = initial ? 0 : Math.min(...changed.map((entry) => entry.y));
+      const right = initial
+        ? map.width * map.scene.tileSize
+        : Math.max(...changed.map((entry) => entry.x + entry.cached.width));
+      const bottom = initial
+        ? map.height * map.scene.tileSize
+        : Math.max(...changed.map((entry) => entry.y + entry.cached.height));
       context.save();
       if (!initial) {
         context.beginPath();
-        for (const entry of changed) {
-          context.rect(entry.x, entry.y, entry.cached.width, entry.cached.height);
-        }
+        context.rect(left, top, right - left, bottom - top);
         context.clip();
       }
       context.globalAlpha = 1;
       context.globalCompositeOperation = "source-over";
       context.fillStyle = "#000";
-      context.fillRect(0, 0, map.width * map.scene.tileSize, map.height * map.scene.tileSize);
+      context.fillRect(left, top, right - left, bottom - top);
       context.imageSmoothingEnabled = false;
       for (const entry of entries) {
-        if (initial || entry.cells.some((cell) => dirtyCells.has(cell))) {
+        if (
+          entry.x < right &&
+          entry.y < bottom &&
+          entry.x + entry.cached.width > left &&
+          entry.y + entry.cached.height > top
+        ) {
           const frame = entry.frames[entry.frame];
           if (frame) {
             context.globalCompositeOperation = entry.blend === "add" ? "lighter" : "source-over";

@@ -1,3 +1,4 @@
+import { makeMapCanvas, mapContext, type MapCanvas, type MapContext } from "./canvas";
 import { drawTexture } from "./textures";
 import { drawCommand } from "./render";
 import type { MapBundle, MapCurve, MapEmitter, Rectangle } from "./types";
@@ -108,8 +109,8 @@ function emitterBounds(emitter: MapEmitter, width: number, size: number): Rectan
 /** Separate display-rate surface. Only particle bounds are copied from scenery,
  * providing the destination pixels required by the game's additive blending. */
 export function createMapParticleRenderer(
-  context: CanvasRenderingContext2D,
-  scenery: HTMLCanvasElement,
+  context: MapContext,
+  scenery: MapCanvas,
   bundle: MapBundle,
   revealSecrets: boolean,
 ) {
@@ -143,10 +144,10 @@ export function createMapParticleRenderer(
     });
   const layers = revealSecrets ? map.scene.layers : map.scene.concealedLayers;
   const makeMask = (names: string[]) => {
-    const mask = document.createElement("canvas");
+    const mask = makeMapCanvas();
     mask.width = width;
     mask.height = height;
-    const target = mask.getContext("2d")!;
+    const target = mapContext(mask);
     target.imageSmoothingEnabled = false;
     for (const layer of layers.filter((layer) => names.includes(layer.name))) {
       layer.cells.forEach((sprite, cell) => {
@@ -229,7 +230,7 @@ export function createMapParticleRenderer(
           context.restore();
         }
       };
-      const eraseMask = (mask: HTMLCanvasElement) => {
+      const eraseMask = (mask: MapCanvas) => {
         context.globalAlpha = 1;
         context.globalCompositeOperation = "destination-out";
         for (const [x, y, w, h] of regions)
