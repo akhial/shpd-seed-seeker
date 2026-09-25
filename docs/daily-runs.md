@@ -22,8 +22,10 @@ versions. Future dates likewise assume this game version.
   date or a normal seed code. `new` and `from_code` retain the original
   searchable seed range.
 - The existing seed parsing bridges return `{ "code": "2026-09-25", "value":
-  7219798078976 }` for a date. The interactive formatter preserves complete,
-  valid dates supplied by pickers and links. Native `isCanonical` checks still
+  7219798078976 }` for a date. The interactive formatter detects
+  dates from a leading digit and seed codes from a leading letter, inserting
+  their respective hyphens as you type. Partial and invalid dates remain
+  editable; scouting requires a complete valid date. Native `isCanonical` checks still
   refer to nine-letter codes; `isScoutable` additionally accepts daily dates.
 - Native scout request seed fields (`SSQ2` through `SSQ5`, and legacy text)
   and WASM's `scout({seed, ...})` accept dates. Scout response identities keep

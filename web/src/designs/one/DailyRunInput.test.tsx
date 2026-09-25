@@ -35,39 +35,98 @@ async function click(label: string) {
   expect(button).toBeDefined();
   await act(async () => button.click());
 }
-it("switches modes and recomputes Today at UTC rollover", async () => {
-  vi.useFakeTimers();
-  vi.setSystemTime(new Date("2026-09-24T23:59:59Z"));
-  await act(async () => root.render(<Harness />));
-  await click("Daily run");
-  expect(host.querySelector<HTMLInputElement>('input[type="date"]')?.value).toBe("2026-09-24");
-  vi.setSystemTime(new Date("2026-09-25T00:00:00Z"));
-  await click("Today");
-  expect(onScout).toHaveBeenLastCalledWith("2026-09-25");
-  expect(todayUTC()).toBe("2026-09-25");
-  await click("Seed code");
-  expect(host.querySelector('input[aria-label="Seed code"]')).not.toBeNull();
-  expect(host.querySelector('input[type="date"]')).toBeNull();
-});
-it.each(["2024-02-29", "2030-01-01"])("scouts a selected past or future date: %s", async (date) => {
-  await act(async () => root.render(<Harness initial={date} />));
+const field = () =>
+  host.querySelector<HTMLInputElement>('input[aria-label="Seed code or daily date"]')!;
+async function enter(value: string, input = field()) {
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+}
+async function submit() {
   await act(async () =>
     host
       .querySelector("form")!
       .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })),
   );
+}
+it("automatically formats seeds and partial dates in the same persistent text field", async () => {
+  await act(async () => root.render(<Harness />));
+  const original = field();
+  for (const [typed, expected] of [
+    ["a", "A"],
+    ["abcdefgh", "ABC-DEF-GH"],
+    ["abcdefghi", "ABC-DEF-GHI"],
+    ["", ""],
+    ["2", "2"],
+    ["20260", "2026-0"],
+    ["202609", "2026-09"],
+    ["20260925", "2026-09-25"],
+    ["2026-09-2", "2026-09-2"],
+    ["abc", "ABC"],
+  ]) {
+    await enter(typed!);
+    expect(field()).toBe(original);
+    expect(field().value).toBe(expected);
+    expect(field().type).toBe("text");
+    expect(field().className).toBe("d1-seed-field d1-mono");
+  }
+  expect([...host.querySelectorAll("button")].map((button) => button.textContent)).toEqual([
+    "Scout",
+    "Choose date",
+    "Today",
+  ]);
+});
+it("scouts Today directly and recomputes its date at UTC rollover", async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-09-24T23:59:59Z"));
+  await act(async () => root.render(<Harness />));
+  await click("Today");
+  expect(field().value).toBe("2026-09-24");
+  expect(onScout).toHaveBeenLastCalledWith("2026-09-24");
+  vi.setSystemTime(new Date("2026-09-25T00:00:00Z"));
+  await click("Today");
+  expect(field().value).toBe("2026-09-25");
+  expect(onScout).toHaveBeenLastCalledWith("2026-09-25");
+  expect(todayUTC()).toBe("2026-09-25");
+});
+it.each(["2024-02-29", "2030-01-01"])("scouts a picked past or future date: %s", async (date) => {
+  await act(async () => root.render(<Harness initial="ABC-DEF-GHI" />));
+  const picker = host.querySelector<HTMLInputElement>('input[type="date"]')!;
+  Object.defineProperty(picker, "showPicker", { value: undefined });
+  await click("Choose date");
+  expect(picker.getAttribute("aria-hidden")).toBe("false");
+  await enter(date, picker);
+  expect(field().value).toBe(date);
+  expect(picker.getAttribute("aria-hidden")).toBe("true");
+  await submit();
   expect(onScout).toHaveBeenCalledWith(date);
 });
+it("opens the native date selector when available", async () => {
+  await act(async () => root.render(<Harness />));
+  const showPicker = vi.fn();
+  Object.defineProperty(host.querySelector('input[type="date"]'), "showPicker", {
+    value: showPicker,
+  });
+  await click("Choose date");
+  expect(showPicker).toHaveBeenCalledOnce();
+});
+it.each(["2026-09-2", "2026-02-30", "1969-12-31", "ABC-DEF-GH"])(
+  "keeps invalid or partial input editable without scouting: %s",
+  async (input) => {
+    await act(async () => root.render(<Harness initial={input} />));
+    expect(field().value).toBe(input);
+    expect(host.querySelector<HTMLButtonElement>('button[type="submit"]')!.disabled).toBe(true);
+    await submit();
+    expect(onScout).not.toHaveBeenCalled();
+  },
+);
 it("disables run changes while scouting", async () => {
   await act(async () => root.render(<Harness initial="2030-01-01" loading />));
   expect(
     [...host.querySelectorAll("button, input")].every((el) => (el as HTMLInputElement).disabled),
   ).toBe(true);
-});
-it("keeps an eight-letter partial seed in seed-code mode", async () => {
-  await act(async () => root.render(<Harness initial="ABC-DEF-GH" />));
-  expect(host.querySelector('input[aria-label="Seed code"]')).not.toBeNull();
-  expect(host.querySelector('input[type="date"]')).toBeNull();
 });
 it("keeps the full daily identity through the real WASM scout, maps and trinket changes", () => {
   const seed = "2026-09-25";

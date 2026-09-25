@@ -120,8 +120,9 @@ Scouting prints an item manifest grouped by floor. `--items` applies the query's
 challenges and automatic trinket selection; `--output` saves the text report.
 `--json` is reserved for search-result exports.
 
-In the apps, open **Scout**, choose **Daily run** (or the daily date picker),
-then **Today** or a date and **Scout**. Days change at midnight **UTC**, regardless
+In the apps, open **Scout** and enter a seed code or `YYYY-MM-DD`; the field
+detects the format as you type. **Choose date** opens the date picker, and
+**Today** scouts the current daily run immediately. Days change at midnight **UTC**, regardless
 of your device's time zone. Dates from 1970 through 9999 are accepted, using the
 supported Shattered Pixel Dungeon version for all dates. Historical versions
 are not reconstructed, and future game updates may change those runs.

@@ -60,7 +60,7 @@ public enum SeedCode {
         public let value: Int64
     }
 
-    /// Masks partial, as-you-type input into uppercase groups of three.
+    /// Detects and groups partial seed codes or daily dates as you type.
     public static func formatInput(_ input: String) -> String {
         guard let packet = try? enginePacket({ out, length in
                   Data(input.utf8).withUnsafeBytes { bytes in

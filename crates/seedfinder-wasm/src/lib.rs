@@ -214,7 +214,7 @@ pub fn engine_info() -> String {
     engine_info_document().to_string()
 }
 
-/// Formats partial interactive seed input as uppercase groups of three. The
+/// Detects and groups partial seed codes or daily dates as you type. The
 /// masker is `seed::format_input`, shared with every other frontend.
 #[wasm_bindgen]
 #[must_use]
@@ -1002,7 +1002,8 @@ mod tests {
         assert_eq!(format_seed_code("a"), "A");
         assert_eq!(format_seed_code("abcD"), "ABC-D");
         assert_eq!(format_seed_code("abc-def-ghi"), "ABC-DEF-GHI");
-        assert_eq!(format_seed_code(" 1a!b@c#d$e%f^g&h*i extra"), "ABC-DEF-GHI");
+        assert_eq!(format_seed_code(" a1!b@c#d$e%f^g&h*i extra"), "ABC-DEF-GHI");
+        assert_eq!(format_seed_code("20260925"), "2026-09-25");
         assert_eq!(format_seed_code("åa😀b"), "AB");
     }
 

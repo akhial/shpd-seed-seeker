@@ -33,6 +33,7 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.text.TextLayoutResult
@@ -151,16 +152,30 @@ class ScoutScreenScrollTest {
         }
     }
 
-    @Test fun partialEightLetterSeedStaysInSeedMode() {
+    @Test fun partialEightLetterSeedStaysEditable() {
         show(initialSeed = "ABC-DEF-GH")
         compose.onNodeWithText("Scout seed").assertIsDisplayed()
         compose.onNodeWithText("Scout daily run").assertDoesNotExist()
     }
 
+    @Test fun seedAndDateEntryKeepTheSameFieldAndFormHeight() {
+        show()
+        val field = bounds("scout-run-field")
+        val form = bounds("scout-input")
+        for (input in listOf("2", "202609", "20260925", "", "ABCDEFGH", "ABCDEFGHI")) {
+            compose.onNodeWithTag("scout-run-field").performTextReplacement(input)
+            compose.waitForIdle()
+            assertEquals(field, bounds("scout-run-field"))
+            assertEquals(form, bounds("scout-input"))
+            compose.onNodeWithText("Choose date").assertIsDisplayed()
+            compose.onNodeWithText("Today").assertIsDisplayed()
+        }
+    }
+
     @Test fun dailyPickerAndTodayUseTheExistingScoutActions() {
         var scouted: String? = null
         show(initialSeed = "2026-09-25", onStep = { scouted = it })
-        compose.onNodeWithText("2026-09-25 · UTC").assertIsDisplayed().performClick()
+        compose.onNodeWithText("Choose date").assertIsDisplayed().performClick()
         compose.onNodeWithText("Daily run date (UTC)").assertIsDisplayed()
         compose.onNodeWithText("Use date").performClick()
         compose.onNodeWithText("Scout daily run").performClick()
@@ -168,7 +183,7 @@ class ScoutScreenScrollTest {
         screenshot("daily-run")
         compose.onNodeWithText("Today").performClick()
         compose.runOnIdle { assertEquals(dev.seedseeker.app.model.DailyRunDate.today(), scouted) }
-        compose.onNodeWithText("Seed code").performClick()
+        compose.onNodeWithTag("scout-run-field").performTextReplacement("ABCDEFGHI")
         compose.onNodeWithText("Scout seed").assertIsDisplayed()
     }
 

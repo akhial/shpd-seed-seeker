@@ -24,6 +24,19 @@ class SeedInputFormattingTest {
     }
 
     @Test
+    fun typingAndDeletingDatesKeepsCursorAfterTheLastDigit() {
+        var value = TextFieldValue()
+        "20260925".forEach { digit ->
+            val typed = value.text + digit
+            value = formatSeedFieldValue(TextFieldValue(typed, selection = TextRange(typed.length)))
+            assertEquals(TextRange(value.text.length), value.selection)
+        }
+        assertEquals("2026-09-25", value.text)
+        val partial = formatSeedFieldValue(TextFieldValue("2026-09-", selection = TextRange(8)))
+        assertEquals(TextFieldValue("2026-09", selection = TextRange(7)), partial)
+    }
+
+    @Test
     fun formattingRemapsSelectionsByLogicalLetterPosition() {
         assertEquals(
             TextFieldValue("ABC-D", selection = TextRange(5)),

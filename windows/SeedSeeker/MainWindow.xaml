@@ -313,7 +313,7 @@
             <TextBlock Text="Seed Detail" Style="{StaticResource SubtitleTextBlockStyle}" Margin="0,0,0,4"/>
             <Grid ColumnSpacing="8">
               <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-              <TextBox x:Name="SeedInput" PlaceholderText="AAA-AAA-AAA" FontFamily="Cascadia Mono, Consolas" FontSize="17"
+              <TextBox x:Name="SeedInput" PlaceholderText="Seed or YYYY-MM-DD" AutomationProperties.Name="Seed code or daily date" MinHeight="40" FontFamily="Cascadia Mono, Consolas" FontSize="17"
                        TextChanged="SeedInput_TextChanged" KeyDown="SeedInput_KeyDown"/>
               <Button Grid.Column="1" x:Name="ScoutButton" Content="Scout" Click="Scout_Click" VerticalAlignment="Stretch"/>
               <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4">

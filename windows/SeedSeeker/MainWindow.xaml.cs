@@ -1918,7 +1918,7 @@ public sealed partial class MainWindow : Window
         // Keep the picker consistent when a search result or pasted date fills the field.
         if (DailyDate is not null)
         {
-            DateTimeOffset? date = DateTime.TryParseExact(formatted, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
+            DateTimeOffset? date = SeedCode.IsScoutable(formatted) && DateTime.TryParseExact(formatted, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
                 System.Globalization.DateTimeStyles.None, out var day) ? new DateTimeOffset(day) : null;
             if (DailyDate.Date?.Date != date?.Date) DailyDate.Date = date;
         }

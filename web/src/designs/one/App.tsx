@@ -191,7 +191,7 @@ export default function App() {
       setScout((current) => ({
         ...current,
         loading: false,
-        error: "Seed must use XXX-XXX-XXX format",
+        error: "Enter a seed code or a daily date (YYYY-MM-DD)",
       }));
       setScoutedSeed(renderedSeed.current);
       return;

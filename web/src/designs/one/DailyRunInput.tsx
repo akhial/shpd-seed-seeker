@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { formatSeedCode } from "../../lib/wasm";
+import { useEffect, useRef, useState } from "react";
+import { formatSeedCode, parseSeedCodeSync } from "../../lib/wasm";
 
 export const todayUTC = () => new Date().toISOString().slice(0, 10);
 
@@ -14,42 +14,20 @@ export function DailyRunInput({
   onScout: (value: string) => void;
   loading: boolean;
 }) {
-  const [daily, setDaily] = useState(/^\d{4}-\d{2}-\d{2}$/.test(input));
+  const picker = useRef<HTMLInputElement>(null);
+  const [fallbackPicker, setFallbackPicker] = useState(false);
   useEffect(() => {
-    if (/^\d{4}-\d{2}-\d{2}$/.test(input)) setDaily(true);
-    else if (/[A-Z]/i.test(input)) setDaily(false);
-  }, [input]);
-  const validDate =
-    /^\d{4}-\d{2}-\d{2}$/.test(input) && input >= "1970-01-01" && input <= "9999-12-31";
-  const ready = daily ? validDate : input.length === 11;
+    if (fallbackPicker) picker.current?.focus();
+  }, [fallbackPicker]);
+  let ready = false;
+  try {
+    ready = parseSeedCodeSync(input).code === input;
+  } catch {
+    /* Partial input stays editable. */
+  }
+  const daily = /^\d/.test(input);
   return (
     <div className="d1-run-input">
-      <div className="d1-run-modes" role="group" aria-label="Run type">
-        <button
-          type="button"
-          className="d1-btn"
-          aria-pressed={!daily}
-          disabled={loading}
-          onClick={() => {
-            setDaily(false);
-            if (daily) onInput("");
-          }}
-        >
-          Seed code
-        </button>
-        <button
-          type="button"
-          className="d1-btn"
-          aria-pressed={daily}
-          disabled={loading}
-          onClick={() => {
-            setDaily(true);
-            if (!daily) onInput(todayUTC());
-          }}
-        >
-          Daily run
-        </button>
-      </div>
       <form
         className="d1-scout-input-row"
         onSubmit={(event) => {
@@ -57,49 +35,75 @@ export function DailyRunInput({
           if (ready && !loading) onScout(input);
         }}
       >
-        {daily ? (
-          <>
-            <input
-              type="date"
-              className="d1-seed-field"
-              value={input}
-              min="1970-01-01"
-              max="9999-12-31"
-              aria-label="Daily run date (UTC)"
-              required
-              disabled={loading}
-              onChange={(event) => onInput(event.currentTarget.value)}
-            />
-            <button
-              type="button"
-              className="d1-btn"
-              disabled={loading}
-              onClick={() => {
-                const date = todayUTC();
-                onInput(date);
-                onScout(date);
-              }}
-            >
-              Today
-            </button>
-          </>
-        ) : (
-          <input
-            className="d1-seed-field d1-mono"
-            value={input}
-            placeholder="AAA-AAA-AAA"
-            autoComplete="off"
-            autoCapitalize="characters"
-            spellCheck={false}
-            aria-label="Seed code"
-            disabled={loading}
-            onChange={(event) => onInput(formatSeedCode(event.currentTarget.value))}
-          />
-        )}
+        <input
+          className="d1-seed-field d1-mono"
+          value={input}
+          placeholder="Seed or YYYY-MM-DD"
+          autoComplete="off"
+          autoCapitalize="characters"
+          spellCheck={false}
+          aria-label="Seed code or daily date"
+          title="Seed code or daily date (YYYY-MM-DD, UTC)"
+          inputMode={daily ? "numeric" : "text"}
+          disabled={loading}
+          onChange={(event) => onInput(formatSeedCode(event.currentTarget.value))}
+        />
         <button type="submit" className="d1-btn d1-btn-primary" disabled={!ready || loading}>
           {loading ? "Scouting…" : "Scout"}
         </button>
       </form>
+      <div className="d1-run-shortcuts">
+        <button
+          type="button"
+          className="d1-btn"
+          disabled={loading}
+          aria-label="Choose daily run date"
+          onClick={() => {
+            try {
+              if (!picker.current?.showPicker) throw new Error("Native picker unavailable");
+              picker.current.showPicker();
+            } catch {
+              setFallbackPicker((shown) => !shown);
+            }
+          }}
+        >
+          Choose date
+        </button>
+        <input
+          ref={picker}
+          type="date"
+          className={fallbackPicker ? "d1-seed-field d1-date-fallback" : "d1-native-date"}
+          value={ready && daily ? input : ""}
+          min="1970-01-01"
+          max="9999-12-31"
+          aria-label="Daily run date (UTC)"
+          aria-hidden={!fallbackPicker}
+          tabIndex={fallbackPicker ? 0 : -1}
+          disabled={loading}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") setFallbackPicker(false);
+          }}
+          onChange={(event) => {
+            if (event.currentTarget.value && event.currentTarget.validity.valid) {
+              onInput(event.currentTarget.value);
+              setFallbackPicker(false);
+            }
+          }}
+        />
+        <button
+          type="button"
+          className="d1-btn"
+          disabled={loading}
+          onClick={() => {
+            const date = todayUTC();
+            setFallbackPicker(false);
+            onInput(date);
+            onScout(date);
+          }}
+        >
+          Today
+        </button>
+      </div>
     </div>
   );
 }

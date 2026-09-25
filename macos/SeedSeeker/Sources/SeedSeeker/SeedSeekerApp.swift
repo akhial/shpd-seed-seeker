@@ -2458,6 +2458,7 @@ private struct SeedDetailView: View {
     @State private var visibleMapDepths: Set<Int> = [1]
     @State private var openedMap: ScoutMapDisclosure?
     @State private var showSeedInfo = false
+    @State private var showDailyPicker = false
 
     private func selectTrinket(_ id: String) {
         guard let world = model.world, !model.loading else { return }
@@ -2498,28 +2499,14 @@ private struct SeedDetailView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Picker("Run type", selection: Binding(
-                get: { model.input.count == 10 && SeedCode.isScoutable(model.input) },
-                set: { model.input = $0 ? DailyRunDate.code() : "" }
-            )) {
-                Text("Seed code").tag(false)
-                Text("Daily run").tag(true)
-            }.pickerStyle(.segmented).disabled(model.loading)
             HStack {
-                if model.input.count == 10 && SeedCode.isScoutable(model.input) {
-                    DatePicker("Daily date (UTC)", selection: Binding(
-                        get: { DailyRunDate.date(model.input) ?? Date() },
-                        set: { model.input = DailyRunDate.code($0) }
-                    ), in: DailyRunDate.date("1970-01-01")!...DailyRunDate.date("9999-12-31")!, displayedComponents: .date)
-                        .environment(\.calendar, DailyRunDate.calendar)
-                        .environment(\.timeZone, DailyRunDate.calendar.timeZone)
-                        .disabled(model.loading)
-                    Button("Today") { onScoutSeed(DailyRunDate.code()) }.disabled(model.loading)
-                } else {
-                    TextField("AAA-AAA-AAA", text: $model.input).font(.system(size: 20, design: .monospaced)).focused($focused)
+                TextField("Seed or YYYY-MM-DD", text: $model.input)
+                    .font(.system(size: 20, design: .monospaced)).focused($focused)
+                    .accessibilityLabel("Seed code or daily date")
+                    .frame(minHeight: 30)
+                    .disabled(model.loading)
                     .onChange(of: model.input) { _, value in let formatted = SeedCode.formatInput(value); if formatted != value { model.input = formatted } }
-                    .onSubmit { if !model.loading { onScoutSeed(model.input) } }
-                }
+                    .onSubmit { if !model.loading && SeedCode.isScoutable(model.input) { onScoutSeed(model.input) } }
                 Button("Scout") { onScoutSeed(model.input) }.disabled(model.loading || !SeedCode.isScoutable(model.input))
                 if model.world?.itemMappings != nil {
                     Button { showSeedInfo = true } label: { Image(systemName: "info.circle") }
@@ -2529,6 +2516,21 @@ private struct SeedDetailView: View {
                 if let seed = model.world?.seed { Button("Copy") { NSPasteboard.general.clearContents(); NSPasteboard.general.setString(seed, forType: .string) } }
                 if model.loading { ProgressView().controlSize(.small) }
             }
+            HStack {
+                Button("Choose date") { showDailyPicker = true }
+                    .disabled(model.loading)
+                    .popover(isPresented: $showDailyPicker) {
+                        DatePicker("Daily date (UTC)", selection: Binding(
+                            get: { DailyRunDate.date(model.input) ?? Date() },
+                            set: { model.input = DailyRunDate.code($0); showDailyPicker = false }
+                        ), in: DailyRunDate.date("1970-01-01")!...DailyRunDate.date("9999-12-31")!, displayedComponents: .date)
+                            .datePickerStyle(.graphical)
+                            .environment(\.calendar, DailyRunDate.calendar)
+                            .environment(\.timeZone, DailyRunDate.calendar.timeZone)
+                            .padding()
+                    }
+                Button("Today") { onScoutSeed(DailyRunDate.code()) }.disabled(model.loading)
+            }.controlSize(.small)
             if let error = model.error { Text(error).foregroundStyle(.red).font(.caption) }
             if resultPosition != nil || model.world?.trinketOrder.isEmpty == false {
                 HStack(spacing: 6) {

@@ -69,8 +69,7 @@ internal ref struct Reader
 public static class SeedCode
 {
     /// <summary>
-    /// Partial, as-you-type input masked into uppercase groups of three:
-    /// non-letters dropped, the first nine ASCII letters kept.
+    /// Groups partial input as a seed code or daily date, detected from its first letter or digit.
     /// </summary>
     public static string Format(string value)
     {

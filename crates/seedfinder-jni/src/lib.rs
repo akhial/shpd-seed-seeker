@@ -505,11 +505,8 @@ pub extern "system" fn Java_dev_seedseeker_app_engine_JniBindings_engineInfo<'lo
     )
 }
 
-/// Masks partial, as-you-type UTF-8 seed input into uppercase groups of three
-/// (both UTF-8 bytes): non-letters are dropped, the first nine ASCII letters
-/// are kept, and only those are uppercased — never a locale-dependent
-/// uppercase of the whole string. The masker is `seed::format_input`, shared
-/// with every other frontend.
+/// Detects and groups partial UTF-8 seed codes or daily dates as you type.
+/// The formatter is `seed::format_input`, shared with every other frontend.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_dev_seedseeker_app_engine_JniBindings_formatSeedCode<'local>(
     mut env: JNIEnv<'local>,

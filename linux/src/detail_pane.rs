@@ -68,7 +68,7 @@ impl DetailPane {
     #[allow(clippy::too_many_lines)] // Widget assembly is declarative and linear.
     pub fn new(toasts: &adw::ToastOverlay) -> Rc<Self> {
         let entry = gtk::Entry::builder()
-            .placeholder_text("AAA-AAA-AAA")
+            .placeholder_text("Seed or YYYY-MM-DD")
             .css_classes(["seed-entry"])
             .input_hints(gtk::InputHints::UPPERCASE_CHARS)
             .max_length(11)
@@ -119,7 +119,7 @@ impl DetailPane {
         daily_content.append(&use_date);
         daily_popover.set_child(Some(&daily_content));
         let daily_picker = gtk::MenuButton::builder()
-            .label("Choose a daily run")
+            .label("Choose date")
             .popover(&daily_popover)
             .hexpand(true)
             .tooltip_text("Choose a daily run date (UTC), then Scout")

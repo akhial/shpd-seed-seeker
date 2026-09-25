@@ -219,19 +219,30 @@ pub fn format_text(input: &str) -> String {
     DungeonSeed::from_code(input).map_or_else(|_| input.to_owned(), DungeonSeed::to_code)
 }
 
-/// Preserves complete UTC daily dates; masks other partial seed input into
-/// uppercase groups of three.
+/// Formats interactive scouting input, detecting its kind from the first
+/// ASCII letter or digit. Digits produce a partial `YYYY-MM-DD` date;
+/// letters produce an uppercase, nine-letter seed code.
 ///
-/// Every byte that is not an ASCII letter is dropped, the first nine of the
+/// For codes, every byte that is not an ASCII letter is dropped, the first nine of the
 /// survivors are kept, and only then are they uppercased — so non-ASCII input
 /// contributes nothing, whatever case mapping its own alphabet would use. The
 /// result is a prefix of a canonical `XXX-XXX-XXX` code, which
 /// [`DungeonSeed::from_code`] accepts once nine letters have arrived.
 #[must_use]
 pub fn format_input(input: &str) -> String {
-    // Date pickers and scout links supply complete dates; keep their identity.
-    if DungeonSeed::from_daily_date(input).is_ok() {
-        return input.to_owned();
+    if input
+        .bytes()
+        .find(u8::is_ascii_alphanumeric)
+        .is_some_and(|byte| byte.is_ascii_digit())
+    {
+        let mut output = String::with_capacity(10);
+        for (index, byte) in input.bytes().filter(u8::is_ascii_digit).take(8).enumerate() {
+            if index == 4 || index == 6 {
+                output.push('-');
+            }
+            output.push(char::from(byte));
+        }
+        return output;
     }
     let mut output = String::with_capacity(11);
     for (index, byte) in input
@@ -458,7 +469,7 @@ mod tests {
         assert_eq!(format_input("a"), "A");
         assert_eq!(format_input("abcD"), "ABC-D");
         assert_eq!(format_input("abc-def-ghi"), "ABC-DEF-GHI");
-        assert_eq!(format_input(" 1a!b@c#d$e%f^g&h*i extra"), "ABC-DEF-GHI");
+        assert_eq!(format_input(" a1!b@c#d$e%f^g&h*i extra"), "ABC-DEF-GHI");
         // Every masked prefix of nine letters is a parseable canonical code.
         assert_eq!(
             DungeonSeed::from_code(&format_input("aaa aaa aab")).unwrap(),
@@ -472,6 +483,29 @@ mod tests {
         assert_eq!(format_input("åa😀b"), "AB");
         assert_eq!(format_input("\u{131}ab"), "AB");
         assert_eq!(format_input("\u{131}"), "");
+    }
+
+    #[test]
+    fn interactive_dates_are_detected_from_the_first_input_and_keep_partial_edits() {
+        for (input, expected) in [
+            ("2", "2"),
+            ("2026", "2026"),
+            ("20260", "2026-0"),
+            ("202609", "2026-09"),
+            ("2026092", "2026-09-2"),
+            ("20260925", "2026-09-25"),
+            (" 2026/09/25 ", "2026-09-25"),
+            ("2026-09-", "2026-09"),
+            ("2026-09-2", "2026-09-2"),
+            ("2026-02-30", "2026-02-30"),
+            ("19690101", "1969-01-01"),
+            ("2a", "2"),
+            ("a2", "A"),
+        ] {
+            assert_eq!(format_input(input), expected, "{input}");
+        }
+        // Formatting never makes an invalid calendar date scoutable.
+        assert!(DungeonSeed::from_scout_input(&format_input("20260230")).is_err());
     }
 
     #[test]
