@@ -134,6 +134,7 @@ fun FinderScreen(
     importNotice: String?,
     onExportResults: () -> Unit,
     onImportResults: () -> Unit,
+    onImportClipboard: () -> Unit,
     onClearResults: () -> Unit,
     onShareQuery: () -> Unit,
     onScoutSeed: (String) -> Unit,
@@ -203,6 +204,14 @@ fun FinderScreen(
                                 onClick = {
                                     showOverflowMenu = false
                                     onImportResults()
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Import from clipboard") },
+                                enabled = !isSearching,
+                                onClick = {
+                                    showOverflowMenu = false
+                                    onImportClipboard()
                                 },
                             )
                             DropdownMenuItem(
