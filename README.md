@@ -93,6 +93,10 @@ a complete JSON document, so it stays importable while searching and after
 Ctrl+C. JSON searches stop at the apps' 1,024-result limit. Existing output
 files are replaced. The output options cannot be combined with `--benchmark`.
 
+Interactive searches print `Searching for N requirements...` once at startup.
+This preamble is suppressed when stdout or stderr is piped or redirected, or
+when `TERM=dumb`.
+
 Press Ctrl+C to stop a search gracefully. On Unix, SIGTERM and SIGHUP also
 request a graceful shutdown. The CLI waits for its workers, saves completed
 matches, and prints time spent, average seeds/second, seeds searched, and

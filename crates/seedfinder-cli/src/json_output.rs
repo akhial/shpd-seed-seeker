@@ -41,6 +41,7 @@ pub(super) fn search(
             matches: 0,
         });
     }
+    super::print_search_preamble(query);
     let handle = spawn_streaming_search(
         &Arc::new(CanonicalMainWorldGenerator::with_challenges(
             query.challenges,

@@ -125,6 +125,17 @@ fn stderr_supports_color() -> bool {
         && !env::var("TERM").is_ok_and(|term| term == "dumb")
 }
 
+fn print_search_preamble(query: &SearchQuery) {
+    if io::stdout().is_terminal()
+        && io::stderr().is_terminal()
+        && !env::var("TERM").is_ok_and(|term| term == "dumb")
+    {
+        let requirements =
+            query.slot_count() + query.floor_requirements.len() + usize::from(query.needs_resin());
+        eprintln!("Searching for {requirements} requirements...");
+    }
+}
+
 fn main() -> ExitCode {
     let command = match parse_args(env::args().skip(1)) {
         Ok(command) => command,
@@ -412,6 +423,7 @@ fn search_command(
             matches: 0,
         });
     }
+    print_search_preamble(&query);
     let mut start_seed = 0;
     let mut matches = 0;
     while start_seed < TOTAL_SEEDS && !progress.is_cancelled() {
