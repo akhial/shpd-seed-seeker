@@ -132,7 +132,12 @@ fn print_search_preamble(query: &SearchQuery) {
     {
         let requirements =
             query.slot_count() + query.floor_requirements.len() + usize::from(query.needs_resin());
-        eprintln!("Searching for {requirements} requirements...");
+        let (shattered, reset) = if stderr_supports_color() {
+            ("\x1b[38;2;51;187;51m", "\x1b[0m")
+        } else {
+            ("", "")
+        };
+        eprintln!("{shattered}Searching for {requirements} requirements...{reset}");
     }
 }
 
