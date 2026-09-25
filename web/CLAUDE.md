@@ -28,6 +28,8 @@ release. Add a tool name to select part of the graph. For example, run
 
 ## Seed Seeker web app
 
+See [README.md](README.md#source-layout) for the source layout and file placement conventions.
+
 This directory is the Vite+ project root. Run every toolchain command from `web/`, and use `vp`
 rather than `pnpm`, `npm`, `vite`, or `vitest` directly. The package manager is pnpm, pinned through
 `devEngines.packageManager`; `vp` downloads the pinned version itself, so nothing has to be
@@ -52,7 +54,7 @@ assets from the repository root:
 ./scripts/build-web-wasm.sh
 ```
 
-That script writes `src/lib/wasm/pkg/`, `src/generated/`, and `public/third_party/`, all of which
+That script writes `src/engine/pkg/`, `src/generated/`, and `public/third_party/`, all of which
 are gitignored and required to type-check and build. Re-run it whenever the Rust engine changes.
 
 ### Conventions

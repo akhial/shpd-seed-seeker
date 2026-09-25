@@ -16,7 +16,7 @@ On first launch the app registers the `seedseeker://` link scheme for the curren
 
 ## Item artwork
 
-Scouted items and requirements render the real Shattered Pixel Dungeon sprites, pulsing with the game's enchantment and curse glow colours. The atlas geometry and the glow table mirror `web/src/lib/sprites.ts` and `web/src/lib/glow.ts`; the Fluent palette itself is unchanged, and the only new colours are the per-enchantment glows, which are item data from the game rather than app chrome.
+Scouted items and requirements render the real Shattered Pixel Dungeon sprites, pulsing with the game's enchantment and curse glow colours. The atlas geometry and the glow table mirror `web/src/shared/sprites/sprites.ts` and `web/src/shared/sprites/glow.ts`; the Fluent palette itself is unchanged, and the only new colours are the per-enchantment glows, which are item data from the game rather than app chrome.
 
 Requirements with several selected effects show their count inside a stationary ring, with the effect colours evenly spaced and smoothly blended around its circumference.
 

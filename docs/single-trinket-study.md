@@ -39,7 +39,7 @@ Startup cost also matters for trivial searches. Ethereal Chains improves bulk en
 
 **The first result in the web UI is a different metric**
 
-The current [web worker](../web/src/lib/search/worker.ts) advances 256 seeds before it can post results; the WASM session also generates batches of 256. For easy queries, both policies usually find a match somewhere in that first batch. More matches per second then improves the number of results returned, but scarcely advances the first visible result.
+The current [web worker](../web/src/features/search/worker.ts) advances 256 seeds before it can post results; the WASM session also generates batches of 256. For easy queries, both policies usually find a match somewhere in that first batch. More matches per second then improves the number of results returned, but scarcely advances the first visible result.
 
 The analysis therefore also groups eight consecutive native timing blocks into 256-seed delivery batches. `total batch time / nonempty batches` estimates the time to a nonempty batch at that granularity. This is a native model of the web's delivery behavior, not a browser measurement; it excludes worker startup, the 100 ms posting rule, scheduling across workers and rendering. If first-result latency is the main product goal, smaller initial batches and promptly posting the first match would help expose the engine improvement. No such UI change is included in this study.
 

@@ -3,7 +3,7 @@
 //! Enchantment, glyph, and curse glow colours.
 //!
 //! Mirrored 1:1 from Shattered Pixel Dungeon's `ItemSprite.Glowing`
-//! definitions, and kept identical to the web frontend's `web/src/lib/glow.ts`
+//! definitions, and kept identical to the web frontend's `web/src/shared/sprites/glow.ts`
 //! so every frontend pulses items exactly as the game renders them. `period` is
 //! the seconds the glow takes to fade fully in; it fades back out over the same
 //! span, so one complete pulse cycle lasts `2 × period`.

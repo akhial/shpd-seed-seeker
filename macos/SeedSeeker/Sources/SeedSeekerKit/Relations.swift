@@ -2,7 +2,7 @@ import Foundation
 
 /**
  Pure edits behind the requirement board, ported from the web design's
- `web/src/designs/one/relations.ts` so every platform writes the same
+ `web/src/features/query/requirements/relations.ts` so every platform writes the same
  documents. Every edit returns a new requirement list in the canonical
  encoding, so share links, presets and results files round-trip; the board
  renders the *collapsed* view that ``Swift/Array/boardItems()`` derives from

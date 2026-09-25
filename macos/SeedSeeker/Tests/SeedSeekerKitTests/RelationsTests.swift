@@ -3,7 +3,7 @@ import XCTest
 @testable import SeedSeekerKit
 
 /// The requirement board's pure edits, ported case for case from the web
-/// design's `web/src/designs/one/relations.test.ts` so both front-ends are
+/// design's `web/src/features/query/requirements/relations.test.ts` so both front-ends are
 /// held to the same document encoding. Every case that ends in a list the
 /// engine would see also asserts that the query builds, since the whole point
 /// of the canonical encoding is that a board edit can never write a query the

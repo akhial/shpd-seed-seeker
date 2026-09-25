@@ -6,7 +6,7 @@ import Foundation
 /// takes to fade fully in — it fades back out over the same span, so a complete
 /// pulse cycle lasts `2 × period`. Wand curses have no glow; other curses glow black.
 ///
-/// This is the Swift twin of `web/src/lib/glow.ts`; keep the two in step.
+/// This is the Swift twin of `web/src/shared/sprites/glow.ts`; keep the two in step.
 public struct ItemGlow: Equatable, Hashable, Sendable {
     /// Hex colour (`#rrggbb`) the sprite blends toward at the pulse peak.
     public let hex: String

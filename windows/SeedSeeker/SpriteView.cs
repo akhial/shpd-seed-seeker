@@ -16,7 +16,7 @@ namespace SeedSeeker;
 /// The glow is a solid colour layer masked to the sprite's opaque pixels whose
 /// opacity animates linearly 0 → 0.6 → 0 over <c>2 × GlowPeriod</c> seconds. That
 /// reproduces upstream's shader (<c>rgb = texel.rgb*(1-v) + glow*v</c>) with <c>v</c>
-/// peaking at 0.6, matching <c>web/src/designs/one/styles.css</c>; alpha is
+/// peaking at 0.6, matching <c>web/src/app/styles.css</c>; alpha is
 /// untouched, so only the art tints — no bloom, no halo. When the system has
 /// animations turned off the layer is held at 0.3, the web's reduced-motion value.
 /// </summary>

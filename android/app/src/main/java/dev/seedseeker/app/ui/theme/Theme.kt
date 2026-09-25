@@ -17,7 +17,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 // Brand palette mirrored from the web front-end's design tokens (see
-// `web/src/designs/one/styles.css` `:root`), which use Shattered Pixel Dungeon's
+// `web/src/app/styles.css` `:root`), which use Shattered Pixel Dungeon's
 // official colours: dark slate-blue surfaces, the game's yellow for seeds and
 // headings, its accent green for primary actions, teal for enchantments and a
 // muted red for curses.
@@ -37,7 +37,7 @@ val SpdCurse = Color(0xFFF2958A)
 /** Secret-room badge tint, a violet light enough to read on a dark fill. */
 val SpdSecret = Color(0xFFB388FF)
 
-// Region accents, mirrored from `web/src/lib/region.ts`.
+// Region accents, mirrored from `web/src/shared/game/region.ts`.
 val RegionSewers = Color(0xFF7FE2B8)
 val RegionPrison = Color(0xFF8FB7E8)
 val RegionCaves = Color(0xFFD8A26B)

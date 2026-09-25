@@ -41,7 +41,7 @@ pgo/*.profraw
 # Web app dependencies and generated browser assets.
 /web/node_modules/
 /web/dist/
-/web/src/lib/wasm/pkg/
+/web/src/engine/pkg/
 /web/src/generated/
 /web/public/third_party/
 /web/public/licenses/

@@ -28,7 +28,7 @@ data class Glow(val color: Color, val period: Float)
 /**
  * Enchantment / glyph glow colours and pulse periods, mirrored 1:1 from
  * Shattered Pixel Dungeon's `ItemSprite.Glowing` definitions — and kept in step
- * with the web front-end's `web/src/lib/glow.ts`, which is keyed by the same
+ * with the web front-end's `web/src/shared/sprites/glow.ts`, which is keyed by the same
  * wire names the scout emits. Curses are absent from the table because weapon and armor
  * curse effects glow black in the game; the catalog names them.
  */
