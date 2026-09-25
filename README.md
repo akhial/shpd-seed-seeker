@@ -93,6 +93,13 @@ a complete JSON document, so it stays importable while searching and after
 Ctrl+C. JSON searches stop at the apps' 1,024-result limit. Existing output
 files are replaced. The output options cannot be combined with `--benchmark`.
 
+Press Ctrl+C to stop a search gracefully. On Unix, SIGTERM and SIGHUP also
+request a graceful shutdown. The CLI waits for its workers, saves completed
+matches, and prints time spent, average seeds/second, seeds searched, and
+matches found to stderr. The same summary is printed when a search completes,
+including when a JSON export reaches its result limit. Benchmarks also stop
+gracefully and print their report for the seeds searched so far.
+
 ## Search queries<a id="search-queries"></a>
 
 See the [search query format](docs/search-query-format.md) for the JSON

@@ -4,11 +4,14 @@ static GLOBAL_ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
 mod json_output;
 
 use std::env;
+use std::fmt;
 use std::fs;
 use std::io::{self, Write as _};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use shpd_seedfinder_core::SHPD_VERSION;
 use shpd_seedfinder_core::catalog::{ItemId, ItemKind};
@@ -45,9 +48,58 @@ enum Command {
     Version,
 }
 
+#[derive(Debug)]
+struct SearchStatistics {
+    elapsed: Duration,
+    seeds: u64,
+    matches: usize,
+}
+
+impl fmt::Display for SearchStatistics {
+    #[allow(clippy::cast_precision_loss)] // A display-only rate does not need integer precision.
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let elapsed = self.elapsed.as_secs_f64();
+        let seeds_per_second = if self.elapsed.is_zero() {
+            0.0
+        } else {
+            self.seeds as f64 / elapsed
+        };
+        write!(
+            formatter,
+            concat!(
+                "Search session statistics\n",
+                "Time spent: {elapsed:.3} s\n",
+                "Average seeds/second: {seeds_per_second:.2}\n",
+                "Seeds searched: {seeds}\n",
+                "Matches found: {matches}",
+            ),
+            elapsed = elapsed,
+            seeds_per_second = seeds_per_second,
+            seeds = self.seeds,
+            matches = self.matches,
+        )
+    }
+}
+
 fn main() -> ExitCode {
-    match parse_args(env::args().skip(1)) {
-        Ok(Command::Benchmark(options)) => match benchmark_command(&options) {
+    let command = match parse_args(env::args().skip(1)) {
+        Ok(command) => command,
+        Err(error) => {
+            eprintln!("seed-seeker: {error}\n\n{}", help());
+            return ExitCode::from(2);
+        }
+    };
+    let progress = Arc::new(SearchProgress::default());
+    if matches!(command, Command::Search { .. } | Command::Benchmark(_)) {
+        let shutdown = Arc::clone(&progress);
+        if let Err(error) = ctrlc::set_handler(move || shutdown.cancel()) {
+            eprintln!("seed-seeker: could not install shutdown handler: {error}");
+            return ExitCode::FAILURE;
+        }
+    }
+
+    match command {
+        Command::Benchmark(options) => match benchmark_command(&options, &progress) {
             Ok(report) => {
                 println!("{report}");
                 ExitCode::SUCCESS
@@ -57,32 +109,31 @@ fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
-        Ok(Command::Search {
+        Command::Search {
             items,
             workers,
             output,
             json,
-        }) => match search_command(&items, workers, output.as_deref(), json) {
-            Ok(()) => ExitCode::SUCCESS,
+        } => match search_command(&items, workers, output.as_deref(), json, &progress) {
+            Ok(statistics) => {
+                eprintln!("{statistics}");
+                ExitCode::SUCCESS
+            }
             Err(error) => {
                 eprintln!("seed-seeker: search failed: {error}");
                 ExitCode::FAILURE
             }
         },
-        Ok(Command::Help) => {
+        Command::Help => {
             print!("{}", help());
             ExitCode::SUCCESS
         }
-        Ok(Command::Version) => {
+        Command::Version => {
             println!(
                 "seed-seeker {} (Shattered Pixel Dungeon {SHPD_VERSION})",
                 env!("CARGO_PKG_VERSION")
             );
             ExitCode::SUCCESS
-        }
-        Err(error) => {
-            eprintln!("seed-seeker: {error}\n\n{}", help());
-            ExitCode::from(2)
         }
     }
 }
@@ -222,10 +273,14 @@ fn help() -> &'static str {
         "                            Keeps the file valid; stops at 1024 matches\n",
         "  -h, --help                Print help\n",
         "  -V, --version             Print version\n",
+        "\nCtrl+C stops gracefully and prints session statistics.\n",
     )
 }
 
-fn benchmark_command(benchmark: &BenchmarkOptions) -> Result<String, String> {
+fn benchmark_command(
+    benchmark: &BenchmarkOptions,
+    progress: &SearchProgress,
+) -> Result<String, String> {
     let query = benchmark
         .items
         .as_deref()
@@ -246,7 +301,7 @@ fn benchmark_command(benchmark: &BenchmarkOptions) -> Result<String, String> {
         &CanonicalMainWorldGenerator::with_challenges(query.challenges),
         &query,
         options,
-        &SearchProgress::default(),
+        progress,
     )
     .map_err(|error| format!("{error:?}"))?;
 
@@ -273,7 +328,8 @@ fn search_command(
     workers: Option<NonZeroUsize>,
     output: Option<&Path>,
     json: bool,
-) -> Result<(), String> {
+    progress: &SearchProgress,
+) -> Result<SearchStatistics, String> {
     let query = load_query(items)?;
     if let Some(path) = output {
         if fs::canonicalize(path).ok() == fs::canonicalize(items).ok() {
@@ -286,8 +342,10 @@ fn search_command(
             &query,
             workers,
             output.ok_or("--json requires --output FILE")?,
+            progress,
         );
     }
+    let started = Instant::now();
     let stdout = io::stdout();
     let mut output: Box<dyn io::Write> = match output {
         Some(path) => Box::new(io::BufWriter::new(
@@ -301,10 +359,15 @@ fn search_command(
             "seed-seeker: no seed can satisfy this query within depth {}; nothing to search",
             query.max_depth
         );
-        return Ok(());
+        return Ok(SearchStatistics {
+            elapsed: started.elapsed(),
+            seeds: 0,
+            matches: 0,
+        });
     }
     let mut start_seed = 0;
-    while start_seed < TOTAL_SEEDS {
+    let mut matches = 0;
+    while start_seed < TOTAL_SEEDS && !progress.is_cancelled() {
         let end_seed_exclusive = start_seed
             .saturating_add(SEARCH_WINDOW_SEEDS)
             .min(TOTAL_SEEDS);
@@ -318,9 +381,10 @@ fn search_command(
                 chunk_size: NonZeroUsize::new(SEARCH_CHUNK_SIZE).expect("chunk size is non-zero"),
                 max_results: NonZeroUsize::MAX,
             },
-            &SearchProgress::default(),
+            progress,
         )
         .map_err(|error| format!("{error:?}"))?;
+        matches += outcome.worlds.len();
         for world in outcome.worlds {
             writeln!(output, "{}", world.seed)
                 .map_err(|error| format!("could not write matching seed: {error}"))?;
@@ -330,7 +394,12 @@ fn search_command(
             .map_err(|error| format!("could not flush matching seeds: {error}"))?;
         start_seed = end_seed_exclusive;
     }
-    Ok(())
+    Ok(SearchStatistics {
+        elapsed: started.elapsed(),
+        // The same progress object spans every window; its count is cumulative.
+        seeds: progress.tested(),
+        matches,
+    })
 }
 
 fn load_query(path: &Path) -> Result<SearchQuery, String> {
@@ -386,10 +455,12 @@ fn benchmark_query() -> SearchQuery {
 mod tests {
     use std::num::NonZeroUsize;
     use std::path::PathBuf;
+    use std::time::Duration;
 
+    use shpd_seedfinder_core::search::SearchProgress;
     use shpd_seedfinder_core::seed::TOTAL_SEEDS;
 
-    use super::{BenchmarkOptions, Command, help, parse_args};
+    use super::{BenchmarkOptions, Command, SearchStatistics, help, parse_args};
 
     fn benchmark(seeds: u64, workers: Option<usize>) -> Command {
         Command::Benchmark(BenchmarkOptions {
@@ -567,7 +638,14 @@ mod tests {
             query.arcane_resin_filter.source,
             Some(shpd_seedfinder_core::model::ItemSource::Chest)
         );
-        super::search_command(&items, NonZeroUsize::new(1), Some(&output), true).unwrap();
+        super::search_command(
+            &items,
+            NonZeroUsize::new(1),
+            Some(&output),
+            true,
+            &SearchProgress::default(),
+        )
+        .unwrap();
         let imported =
             shpd_seedfinder_core::results_export::decode(&std::fs::read_to_string(output).unwrap())
                 .unwrap();
@@ -585,7 +663,16 @@ mod tests {
             r#"{"max_depth":1,"requirements":[{"item":"ring_wealth","upgrade":4}]}"#,
         )
         .unwrap();
-        super::search_command(&items, NonZeroUsize::new(1), Some(&output), true).unwrap();
+        let statistics = super::search_command(
+            &items,
+            NonZeroUsize::new(1),
+            Some(&output),
+            true,
+            &SearchProgress::default(),
+        )
+        .unwrap();
+        assert_eq!(statistics.seeds, 0);
+        assert_eq!(statistics.matches, 0);
         let imported =
             shpd_seedfinder_core::results_export::decode(&std::fs::read_to_string(output).unwrap())
                 .unwrap();
@@ -601,7 +688,14 @@ mod tests {
         std::fs::write(&items, contents).unwrap();
         for json in [false, true] {
             assert!(
-                super::search_command(&items, NonZeroUsize::new(1), Some(&items), json).is_err()
+                super::search_command(
+                    &items,
+                    NonZeroUsize::new(1),
+                    Some(&items),
+                    json,
+                    &SearchProgress::default(),
+                )
+                .is_err()
             );
             assert_eq!(std::fs::read_to_string(&items).unwrap(), contents);
         }
@@ -639,5 +733,54 @@ mod tests {
         assert!(help().contains("--workers WORKERS"));
         assert!(help().contains("--output FILE"));
         assert!(help().contains("--json"));
+        assert!(help().contains("Ctrl+C"));
+    }
+
+    #[test]
+    fn session_statistics_report_average_rate_and_handle_zero_elapsed_time() {
+        let statistics = SearchStatistics {
+            elapsed: Duration::from_secs(2),
+            seeds: 125,
+            matches: 3,
+        };
+        assert_eq!(
+            statistics.to_string(),
+            concat!(
+                "Search session statistics\n",
+                "Time spent: 2.000 s\n",
+                "Average seeds/second: 62.50\n",
+                "Seeds searched: 125\n",
+                "Matches found: 3",
+            )
+        );
+        let empty = SearchStatistics {
+            elapsed: Duration::ZERO,
+            seeds: 0,
+            matches: 0,
+        };
+        assert!(empty.to_string().contains("Average seeds/second: 0.00"));
+    }
+
+    #[test]
+    fn cancellation_before_text_search_skips_all_windows() {
+        let directory = tempfile::tempdir().unwrap();
+        let items = directory.path().join("requirements.json");
+        let output = directory.path().join("seeds.txt");
+        std::fs::write(&items, r#"{"requirements":[{"kind":"ring"}]}"#).unwrap();
+        let progress = SearchProgress::default();
+        progress.cancel();
+
+        let statistics = super::search_command(
+            &items,
+            Some(NonZeroUsize::MIN),
+            Some(&output),
+            false,
+            &progress,
+        )
+        .unwrap();
+
+        assert_eq!(statistics.seeds, 0);
+        assert_eq!(statistics.matches, 0);
+        assert!(std::fs::read(output).unwrap().is_empty());
     }
 }

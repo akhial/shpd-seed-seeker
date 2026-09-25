@@ -6,16 +6,19 @@ use std::io::{self, Write as _};
 use std::num::NonZeroUsize;
 use std::path::Path;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use shpd_seedfinder_core::feasibility::QueryPlan;
 use shpd_seedfinder_core::main_world::CanonicalMainWorldGenerator;
 use shpd_seedfinder_core::query::SearchQuery;
 use shpd_seedfinder_core::results_export::{self, MAX_FILE_BYTES, MAX_RESULTS};
 use shpd_seedfinder_core::search::{
-    SearchOptions, StreamingSearchHandle, StreamingSearchState, spawn_streaming_search,
+    SearchOptions, SearchProgress, StreamingSearchHandle, StreamingSearchState,
+    spawn_streaming_search,
 };
 use shpd_seedfinder_core::seed::{DungeonSeed, TOTAL_SEEDS};
+
+use super::SearchStatistics;
 
 const POLL_INTERVAL: Duration = Duration::from_millis(100);
 
@@ -23,14 +26,20 @@ pub(super) fn search(
     query: &SearchQuery,
     workers: NonZeroUsize,
     path: &Path,
-) -> Result<(), String> {
+    shutdown: &SearchProgress,
+) -> Result<SearchStatistics, String> {
+    let started = Instant::now();
     let mut output = JsonOutput::new(path, query)?;
     if QueryPlan::analyze(query).is_unsatisfiable() {
         eprintln!(
             "seed-seeker: no seed can satisfy this query within depth {}; nothing to search",
             query.max_depth
         );
-        return Ok(());
+        return Ok(SearchStatistics {
+            elapsed: started.elapsed(),
+            seeds: 0,
+            matches: 0,
+        });
     }
     let handle = spawn_streaming_search(
         &Arc::new(CanonicalMainWorldGenerator::with_challenges(
@@ -47,30 +56,44 @@ pub(super) fn search(
         },
     )
     .map_err(|error| format!("{error:?}"))?;
-    stream_results(&handle, &mut output)
+    stream_results(&handle, &mut output, shutdown)?;
+    Ok(SearchStatistics {
+        elapsed: started.elapsed(),
+        seeds: handle.tested(),
+        matches: output.seeds.len(),
+    })
 }
 
 fn stream_results(
     handle: &StreamingSearchHandle,
     output: &mut JsonOutput<'_>,
+    shutdown: &SearchProgress,
 ) -> Result<(), String> {
     loop {
-        let worlds = handle.drain_results(MAX_RESULTS - output.seeds.len());
-        if !worlds.is_empty() {
+        if shutdown.is_cancelled() {
+            handle.cancel();
+        }
+        // Drain even after reaching the export cap so the handle can reach a
+        // terminal state and its final tested count includes every worker.
+        let worlds = handle.drain_results(MAX_RESULTS);
+        if !worlds.is_empty() && output.seeds.len() < MAX_RESULTS {
             output.append(worlds.into_iter().map(|world| world.seed))?;
         }
         if output.seeds.len() == MAX_RESULTS {
-            eprintln!("seed-seeker: exported {MAX_RESULTS} matches; reached the app result limit");
-            return Ok(());
+            handle.cancel();
         }
         match handle.state() {
             StreamingSearchState::Running => std::thread::sleep(POLL_INTERVAL),
-            StreamingSearchState::Completed | StreamingSearchState::Cancelled => return Ok(()),
+            StreamingSearchState::Completed | StreamingSearchState::Cancelled => break,
             StreamingSearchState::Failed => {
                 return Err(format!("search worker failed: {:?}", handle.failure()));
             }
         }
     }
+    if output.seeds.len() == MAX_RESULTS {
+        eprintln!("seed-seeker: exported {MAX_RESULTS} matches; reached the app result limit");
+    }
+    Ok(())
 }
 
 struct JsonOutput<'a> {
@@ -288,7 +311,8 @@ mod tests {
             },
         )
         .unwrap();
-        stream_results(&handle, &mut output).unwrap();
+        stream_results(&handle, &mut output, &SearchProgress::default()).unwrap();
+        assert!(handle.is_finished());
         let contents = fs::read_to_string(&path).unwrap();
         let imported = results_export::decode(&contents).unwrap();
         assert_eq!(imported.seeds.len(), MAX_RESULTS);
@@ -357,8 +381,9 @@ mod tests {
         )
         .unwrap();
 
+        let shutdown = SearchProgress::default();
         std::thread::scope(|scope| {
-            let writer = scope.spawn(|| stream_results(&handle, &mut output));
+            let writer = scope.spawn(|| stream_results(&handle, &mut output, &shutdown));
             let deadline = Instant::now() + Duration::from_secs(5);
             loop {
                 let imported = results_export::decode(&fs::read_to_string(&path).unwrap()).unwrap();
@@ -377,6 +402,9 @@ mod tests {
             resume.send(()).unwrap();
             writer.join().unwrap().unwrap();
         });
+        assert!(handle.is_finished());
+        assert_eq!(handle.tested(), 1);
+        assert_eq!(handle.accepted(), 1);
         assert_eq!(
             results_export::decode(&fs::read_to_string(&path).unwrap())
                 .unwrap()

@@ -11,6 +11,7 @@ name = "seed-seeker"
 path = "src/main.rs"
 
 [dependencies]
+ctrlc = { version = "3.5", features = ["termination"] }
 mimalloc = "0.1.52"
 shpd-seedfinder-core = { path = "../seedfinder-core", features = ["json-query"] }
 tempfile = "3"
