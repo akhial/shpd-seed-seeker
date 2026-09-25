@@ -6,16 +6,18 @@ use std::io::{self, Write as _};
 use std::num::NonZeroUsize;
 use std::path::Path;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use shpd_seedfinder_core::feasibility::QueryPlan;
 use shpd_seedfinder_core::query::SearchQuery;
 use shpd_seedfinder_core::results_export::{self, MAX_FILE_BYTES, MAX_RESULTS};
 use shpd_seedfinder_core::search::{
-    SearchOptions, StreamingSearchHandle, StreamingSearchState, WorldGenerator,
+    SearchOptions, SearchProgress, StreamingSearchHandle, StreamingSearchState, WorldGenerator,
     spawn_rotated_streaming_search,
 };
 use shpd_seedfinder_core::seed::{DungeonSeed, TOTAL_SEEDS};
+
+use super::SearchStatistics;
 
 const POLL_INTERVAL: Duration = Duration::from_millis(100);
 
@@ -25,15 +27,22 @@ pub(super) fn search<G: WorldGenerator + Send + 'static>(
     workers: NonZeroUsize,
     path: &Path,
     start_seed: DungeonSeed,
-) -> Result<(), String> {
+    shutdown: &SearchProgress,
+) -> Result<SearchStatistics, String> {
+    let started = Instant::now();
     let mut output = JsonOutput::new(path, query)?;
     if QueryPlan::analyze(query).is_unsatisfiable() {
         eprintln!(
             "seed-seeker: no seed can satisfy this query within depth {}; nothing to search",
             query.max_depth
         );
-        return Ok(());
+        return Ok(SearchStatistics {
+            elapsed: started.elapsed(),
+            seeds: 0,
+            matches: 0,
+        });
     }
+    super::print_search_preamble(query);
     let handle = spawn_rotated_streaming_search(
         generator,
         query.clone(),
@@ -48,30 +57,44 @@ pub(super) fn search<G: WorldGenerator + Send + 'static>(
         start_seed.value(),
     )
     .map_err(|error| format!("{error:?}"))?;
-    stream_results(&handle, &mut output)
+    stream_results(&handle, &mut output, shutdown)?;
+    Ok(SearchStatistics {
+        elapsed: started.elapsed(),
+        seeds: handle.tested(),
+        matches: output.seeds.len(),
+    })
 }
 
 fn stream_results(
     handle: &StreamingSearchHandle,
     output: &mut JsonOutput<'_>,
+    shutdown: &SearchProgress,
 ) -> Result<(), String> {
     loop {
-        let worlds = handle.drain_results(MAX_RESULTS - output.seeds.len());
-        if !worlds.is_empty() {
+        if shutdown.is_cancelled() {
+            handle.cancel();
+        }
+        // Drain even after reaching the export cap so the handle can reach a
+        // terminal state and its final tested count includes every worker.
+        let worlds = handle.drain_results(MAX_RESULTS);
+        if !worlds.is_empty() && output.seeds.len() < MAX_RESULTS {
             output.append(worlds.into_iter().map(|world| world.seed))?;
         }
         if output.seeds.len() == MAX_RESULTS {
-            eprintln!("seed-seeker: exported {MAX_RESULTS} matches; reached the app result limit");
-            return Ok(());
+            handle.cancel();
         }
         match handle.state() {
             StreamingSearchState::Running => std::thread::sleep(POLL_INTERVAL),
-            StreamingSearchState::Completed | StreamingSearchState::Cancelled => return Ok(()),
+            StreamingSearchState::Completed | StreamingSearchState::Cancelled => break,
             StreamingSearchState::Failed => {
                 return Err(format!("search worker failed: {:?}", handle.failure()));
             }
         }
     }
+    if output.seeds.len() == MAX_RESULTS {
+        eprintln!("seed-seeker: exported {MAX_RESULTS} matches; reached the app result limit");
+    }
+    Ok(())
 }
 
 struct JsonOutput<'a> {
@@ -276,14 +299,17 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("results.json");
         let query = json_query::decode(r#"{"requirements":[{"item":"ring_wealth"}]}"#).unwrap();
-        search(
+        let statistics = search(
             &Arc::new(MatchingGenerator),
             &query,
             NonZeroUsize::new(4).unwrap(),
             &path,
             DungeonSeed::MIN,
+            &SearchProgress::default(),
         )
         .unwrap();
+        assert_eq!(statistics.matches, MAX_RESULTS);
+        assert!(statistics.seeds >= u64::try_from(MAX_RESULTS).unwrap());
         let contents = fs::read_to_string(&path).unwrap();
         let imported = results_export::decode(&contents).unwrap();
         assert_eq!(imported.seeds.len(), MAX_RESULTS);
@@ -298,14 +324,17 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("results.json");
         let query = json_query::decode(r#"{"requirements":[{"item":"ring_wealth"}]}"#).unwrap();
-        search(
+        let statistics = search(
             &Arc::new(MatchingGenerator),
             &query,
             NonZeroUsize::MIN,
             &path,
             DungeonSeed::new(TOTAL_SEEDS - 2).unwrap(),
+            &SearchProgress::default(),
         )
         .unwrap();
+        assert_eq!(statistics.matches, MAX_RESULTS);
+        assert_eq!(statistics.seeds, u64::try_from(MAX_RESULTS).unwrap());
         let imported = results_export::decode(&fs::read_to_string(&path).unwrap()).unwrap();
         let expected = (TOTAL_SEEDS - 2..TOTAL_SEEDS)
             .chain(0..u64::try_from(MAX_RESULTS - 2).unwrap())
@@ -374,8 +403,9 @@ mod tests {
         )
         .unwrap();
 
+        let shutdown = SearchProgress::default();
         std::thread::scope(|scope| {
-            let writer = scope.spawn(|| stream_results(&handle, &mut output));
+            let writer = scope.spawn(|| stream_results(&handle, &mut output, &shutdown));
             let deadline = Instant::now() + Duration::from_secs(5);
             loop {
                 let imported = results_export::decode(&fs::read_to_string(&path).unwrap()).unwrap();
@@ -394,6 +424,9 @@ mod tests {
             resume.send(()).unwrap();
             writer.join().unwrap().unwrap();
         });
+        assert!(handle.is_finished());
+        assert_eq!(handle.tested(), 1);
+        assert_eq!(handle.accepted(), 1);
         assert_eq!(
             results_export::decode(&fs::read_to_string(&path).unwrap())
                 .unwrap()

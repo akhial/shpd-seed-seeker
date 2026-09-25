@@ -90,6 +90,22 @@ and matches in the [shared results format](docs/results-export-format.md).
 seed-seeker --items requirements.json --json --output results.json
 ```
 
+Interactive searches print `Searching for N requirements...` once at startup.
+This preamble is suppressed when stdout or stderr is piped or redirected, or
+when `TERM=dumb`.
+
+Press Ctrl+C to stop a search gracefully. On Unix, SIGTERM and SIGHUP also
+request a graceful shutdown. The CLI waits for its workers, saves completed
+matches, and prints time spent, average seeds/second, seeds searched, and
+matches found to stderr. The same summary is printed when a search completes,
+including when a JSON export reaches its result limit. Benchmarks also stop
+gracefully and print their report for the seeds searched so far.
+The summary starts on a fresh line after Ctrl+C and uses SHPD's title yellow,
+white values, and Shattered green in terminals. Set `NO_COLOR=1` to
+disable colors; redirected stderr and `TERM=dumb` remain plain text.
+Seeds searched stays an integer below 100,000; larger counts use K, M, or B
+with up to three decimal places (for example, `151 K` or `2.675 B`).
+
 ## Search queries<a id="search-queries"></a>
 
 See the [search query format](docs/search-query-format.md) for the JSON
