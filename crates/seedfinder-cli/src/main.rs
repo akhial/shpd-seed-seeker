@@ -130,11 +130,14 @@ fn stderr_supports_color() -> bool {
         && !env::var("TERM").is_ok_and(|term| term == "dumb")
 }
 
-fn print_search_preamble(query: &SearchQuery) {
-    if io::stdout().is_terminal()
+fn is_interactive_terminal() -> bool {
+    io::stdout().is_terminal()
         && io::stderr().is_terminal()
         && !env::var("TERM").is_ok_and(|term| term == "dumb")
-    {
+}
+
+fn print_search_preamble(query: &SearchQuery) {
+    if is_interactive_terminal() {
         let requirements =
             query.slot_count() + query.floor_requirements.len() + usize::from(query.needs_resin());
         let (shattered, reset) = if stderr_supports_color() {
@@ -440,6 +443,14 @@ fn search_command(
         }
     }
     let workers = workers.unwrap_or_else(SearchOptions::available_parallelism);
+    if is_interactive_terminal() {
+        let (bold, reset) = if stderr_supports_color() {
+            ("\x1b[1m", "\x1b[0m")
+        } else {
+            ("", "")
+        };
+        eprintln!("{bold}Seed Seeker v{}{reset}", env!("CARGO_PKG_VERSION"));
+    }
     let start_seed = search_start(random_start);
     if json {
         return json_output::search(
