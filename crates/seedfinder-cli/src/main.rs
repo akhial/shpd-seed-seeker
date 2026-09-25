@@ -142,6 +142,7 @@ fn print_search_preamble(query: &SearchQuery) {
         } else {
             ("", "")
         };
+        eprintln!("Seed Seeker v{}", env!("CARGO_PKG_VERSION"));
         eprintln!("{shattered}Searching for {requirements} requirements...{reset}");
     }
 }
