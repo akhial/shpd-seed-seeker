@@ -65,25 +65,27 @@ impl SearchStatistics {
         };
         // SHPD v4.0.0 Window: TITLE_COLOR (#FFFF44), WHITE (#FFFFFF),
         // and SHPX_COLOR (#33BB33).
-        let (title, value, shattered, reset) = if color {
+        let (title, label, value, shattered, reset) = if color {
             (
                 "\x1b[1;38;2;255;255;68m",
+                "\x1b[1m",
                 "\x1b[38;2;255;255;255m",
                 "\x1b[38;2;51;187;51m",
                 "\x1b[0m",
             )
         } else {
-            ("", "", "", "")
+            ("", "", "", "", "")
         };
         format!(
             concat!(
                 "\n{title}Search session statistics{reset}\n",
-                "Time spent: {value}{elapsed:.3} s{reset}\n",
-                "Average seeds/second: {value}{seeds_per_second:.2}{reset}\n",
-                "Seeds searched: {value}{seeds}{reset}\n",
-                "Matches found: {shattered}{matches}{reset}",
+                "{label}Time spent:{reset} {value}{elapsed:.3} s{reset}\n",
+                "{label}Average seeds/second:{reset} {value}{seeds_per_second:.2}{reset}\n",
+                "{label}Seeds searched:{reset} {value}{seeds}{reset}\n",
+                "{label}Matches found:{reset} {shattered}{matches}{reset}",
             ),
             title = title,
+            label = label,
             value = value,
             shattered = shattered,
             reset = reset,
