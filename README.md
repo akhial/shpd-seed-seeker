@@ -90,8 +90,8 @@ and matches in the [shared results format](docs/results-export-format.md).
 seed-seeker --items requirements.json --json --output results.json
 ```
 
-Interactive searches print `Seed Seeker v<version>` above
-`Searching for N requirements...` once at startup, using the CLI's release version.
+Interactive searches print `Seed Seeker v<version>` once at startup, before the
+optional starting seed and `Searching for N requirements...`, using the CLI's release version.
 This preamble is suppressed when stdout or stderr is piped or redirected, or
 when `TERM=dumb`.
 
