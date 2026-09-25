@@ -26,7 +26,12 @@ written in Rust — with native apps for Android, Linux, macOS, and Windows.
 - 🔍 **Rich queries**: multiple requirements across melee and thrown weapons, armor, wands, and rings
 - 🔗 **Share links**: short links to share your search
 - 📅 **Daily scouting**: scout today’s UTC daily run, or choose a past or future date
+- 🗺️ **Interactive maps**: explore fullscreen floors and the Imp Vault, reveal secrets, and find the Rat King
 - 📱 **Native apps** Material 3, GTK 4 and libadwaita, SwiftUI, WinUI 3
+
+https://github.com/user-attachments/assets/b5baa6be-b305-4d9b-bbdb-bfd1009c187e
+
+https://github.com/user-attachments/assets/7a4dd801-44dc-4ef1-82ce-a7911c46ecad
 
 ## Table of contents
 
