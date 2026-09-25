@@ -11,7 +11,7 @@ namespace SeedSeeker;
 /// The upstream Shattered Pixel Dungeon item atlases, decoded once into pixel
 /// buffers and composed into nearest-neighbour scaled bitmaps.
 ///
-/// The geometry mirrors <c>web/src/lib/sprites.ts</c>: <c>items.png</c> is a
+/// The geometry mirrors <c>web/src/shared/sprites/sprites.ts</c>: <c>items.png</c> is a
 /// 16-column grid of 16×16 cells indexed row-major by sprite index, and the art is
 /// anchored to each cell's top-left, so drawing the full cell leaves small items
 /// (rings, darts, seeds) hugging the corner. Each cell's art is therefore cropped

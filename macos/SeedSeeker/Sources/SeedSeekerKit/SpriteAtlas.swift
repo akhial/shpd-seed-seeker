@@ -22,7 +22,7 @@ public struct SpriteBounds: Equatable, Hashable, Sendable {
 }
 
 /// Geometry of Shattered Pixel Dungeon's item atlases, mirroring
-/// `web/src/lib/sprites.ts` and the Android client's `Components.kt` so all
+/// `web/src/shared/sprites/sprites.ts` and the Android client's `Components.kt` so all
 /// three front-ends stay pixel-identical.
 public enum SpriteSheet {
     /// `items.png` is a 16-column grid of 16×16 cells, indexed row-major by

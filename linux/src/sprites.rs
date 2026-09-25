@@ -2,7 +2,7 @@
 
 //! Real item artwork from the bundled Shattered Pixel Dungeon atlases.
 //!
-//! The atlas geometry mirrors the web frontend's `web/src/lib/sprites.ts` and
+//! The atlas geometry mirrors the web frontend's `web/src/shared/sprites/sprites.ts` and
 //! the Android client's `Components.kt`, so all three render pixel-identical
 //! items:
 //!

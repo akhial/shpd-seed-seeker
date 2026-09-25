@@ -12,7 +12,7 @@ public sealed record SpriteGlow(Color Color, double Period);
 /// <summary>
 /// Enchantment / glyph glow colours and pulse periods, mirrored 1:1 from
 /// Shattered Pixel Dungeon's <c>ItemSprite.Glowing</c> definitions (and from
-/// <c>web/src/lib/glow.ts</c>, which is the reference implementation) so the item
+/// <c>web/src/shared/sprites/glow.ts</c>, which is the reference implementation) so the item
 /// sprites pulse exactly as the game renders them. Curses always glow black.
 /// These are item data straight from the game, not app chrome: the Fluent palette
 /// is untouched.

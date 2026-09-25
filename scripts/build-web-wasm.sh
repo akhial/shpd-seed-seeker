@@ -4,7 +4,7 @@ set -euo pipefail
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$repo_root"
 
-wasm_package="$repo_root/web/src/lib/wasm/pkg"
+wasm_package="$repo_root/web/src/engine/pkg"
 runtime_source="$repo_root/android/app/src/main/assets/third_party/shattered-pixel-dungeon"
 runtime_destination="$repo_root/web/public/third_party/shattered-pixel-dungeon"
 
