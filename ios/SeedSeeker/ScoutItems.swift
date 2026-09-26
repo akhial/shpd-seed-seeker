@@ -95,7 +95,7 @@ struct ScoutItemCard: View {
 
 private enum ScoutItemColors {
     static let curse = Color(red: 242 / 255, green: 149 / 255, blue: 138 / 255)
-    static let curseEffect = Color(red: 217 / 255, green: 108 / 255, blue: 95 / 255)
+    static let curseEffect = AppTheme.curse
     static let secret = Color(red: 201 / 255, green: 166 / 255, blue: 245 / 255)
 }
 
@@ -112,37 +112,14 @@ struct ScoutChoiceBadge: View {
     }
 }
 
-struct ScoutTrinketShortcuts: View {
-    let world: ScoutWorld
-    let enabled: Bool
-    let onSelect: (String) -> Void
-    var body: some View {
-        HStack(spacing: 4) {
-            ForEach(Array(world.trinketOrder.prefix(4))) { item in
-                let applied = world.selectedTrinket == item.id
-                Button { onSelect(applied ? "none" : item.id) } label: {
-                    ItemSpriteView(item: item, pointSize: 22)
-                        .frame(width: 34, height: 34)
-                        .background(applied ? AppTheme.accent.opacity(0.14) : AppTheme.surface,
-                                    in: RoundedRectangle(cornerRadius: 9))
-                        .overlay(RoundedRectangle(cornerRadius: 9)
-                            .strokeBorder(applied ? AppTheme.accent : .secondary.opacity(0.25), lineWidth: applied ? 2 : 1))
-                }
-                .buttonStyle(.plain)
-                .disabled(!enabled)
-                .accessibilityLabel(item.name)
-                .accessibilityValue(applied ? "Applied +3" : "Not applied")
-            }
-        }
-    }
-}
-
 struct ScoutTrinketCard: View {
     let world: ScoutWorld
     let choices: [(offset: Int, element: ScoutItem)]
     let matches: ScoutMatches?
     let enabled: Bool
     let onSelect: (String) -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var lens
 
     private let catalyst = CatalogItem(id: "trinket_catalyst", name: "Magical catalyst", kind: .trinket, spriteIndex: 70)
     private var offered: [CatalogItem] {
@@ -167,29 +144,35 @@ struct ScoutTrinketCard: View {
                     ScoutChoiceBadge(accessibility: placement.accessibility)
                 }
             }
-            HStack(spacing: 6) {
-                ForEach(offered) { trinket in
-                    let applied = world.selectedTrinket == trinket.id
-                    let matched = choices.contains { $0.element.item.id == trinket.id && matches?.matched.contains($0.offset) == true }
-                    Button { onSelect(applied ? "none" : trinket.id) } label: {
-                        VStack(spacing: 3) {
-                            if applied { Text("Applied +3").font(.system(size: 10, weight: .bold)).foregroundStyle(AppTheme.upgrade) }
-                            ItemSpriteView(item: trinket, pointSize: applied ? 32 : 40)
-                            Text(trinket.name).font(.system(size: 11)).lineLimit(1).minimumScaleFactor(0.25)
-                                .foregroundStyle(.primary)
+            GlassEffectContainer(spacing: 6) {
+                HStack(spacing: 6) {
+                    ForEach(offered) { trinket in
+                        let applied = world.selectedTrinket == trinket.id
+                        let matched = choices.contains { $0.element.item.id == trinket.id && matches?.matched.contains($0.offset) == true }
+                        Button { onSelect(applied ? "none" : trinket.id) } label: {
+                            VStack(spacing: 3) {
+                                if applied { Text("Applied +3").font(.system(size: 10, weight: .bold)).foregroundStyle(AppTheme.upgrade) }
+                                ItemSpriteView(item: trinket, pointSize: applied ? 32 : 40)
+                                Text(trinket.name).font(.system(size: 11)).lineLimit(1).minimumScaleFactor(0.25)
+                                    .foregroundStyle(.primary)
+                            }
+                            .padding(5)
+                            .frame(maxWidth: .infinity, minHeight: 80, maxHeight: 80)
+                            .overlay {
+                                RoundedRectangle(cornerRadius: 16)
+                                    .strokeBorder(AppTheme.softGreen.opacity(matched ? 0.7 : 0), lineWidth: 1.5)
+                            }
+                            .glassChoice(trinket.id, selected: applied, in: lens, shape: .rect(cornerRadius: 16))
                         }
-                        .padding(5)
-                        .frame(maxWidth: .infinity, minHeight: 80, maxHeight: 80)
-                        .background(matched ? AppTheme.accent.opacity(0.14) : AppTheme.raised,
-                                    in: RoundedRectangle(cornerRadius: 12))
-                        .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(
-                            applied ? AppTheme.accent : .clear, lineWidth: 2))
+                        .buttonStyle(.plain).disabled(!enabled)
+                        .accessibilityLabel(trinket.name + (matched ? ", matches requirement" : ""))
+                        .accessibilityValue(applied ? "Applied +3" : "Not applied")
+                        .accessibilityAddTraits(applied ? [.isSelected] : [])
                     }
-                    .buttonStyle(.plain).disabled(!enabled)
-                    .accessibilityLabel(trinket.name + (matched ? ", matches requirement" : ""))
-                    .accessibilityValue(applied ? "Applied +3" : "Not applied")
                 }
             }
+            .animation(AppTheme.glassSpring(reduceMotion), value: world.selectedTrinket)
+            .sensoryFeedback(.selection, trigger: world.selectedTrinket)
             if world.trinketOrder.count > 4 {
                 Text("Transmutation order · 1–13").font(.caption2).foregroundStyle(.secondary)
                 HStack(spacing: 2) {

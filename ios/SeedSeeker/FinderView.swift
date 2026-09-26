@@ -5,8 +5,10 @@ import UIKit
 
 struct FinderView: View {
     @Bindable var model: AppModel
+    let sheetZoom: Namespace.ID
     @State private var boardInteraction = RequirementBoardInteraction()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Namespace private var searchGlass
 
     private var controller: SearchController { model.controller }
@@ -56,23 +58,29 @@ struct FinderView: View {
     var body: some View {
         VStack(spacing: 0) {
             pageHeader("Requirements (\(requirementCount))", open: !model.showResults,
-                       actionLabel: "Show requirements", summary: requirementsSummary) { model.showResults = false }
-            if !model.showResults { queryPage }
+                       actionLabel: "Show requirements", summary: requirementsSummary) { showResults(false) }
+            if !model.showResults { queryPage.transition(.opacity) }
             Divider()
             pageHeader(resultTitle, open: model.showResults,
-                       actionLabel: "Show results") { model.showResults = true }
-            if model.showResults { resultsPage }
+                       actionLabel: "Show results") { showResults(true) }
+            if model.showResults { resultsPage.transition(.opacity) }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(AppTheme.background)
         .safeAreaInset(edge: .bottom, spacing: 0) { searchBar }
         .overlay { RequirementsLiftOverlay(interaction: boardInteraction) }
+        .sensoryFeedback(.impact(weight: .medium), trigger: controller.isRunning) { _, running in running }
+        .sensoryFeedback(.success, trigger: controller.state) { _, state in state == .completed }
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button("Presets") { model.sheet = .presets }.disabled(controller.isRunning)
             }
-            ToolbarItemGroup(placement: .topBarTrailing) {
+            .matchedTransitionSource(id: "presets", in: sheetZoom)
+            ToolbarItem(placement: .topBarTrailing) {
                 Button("Settings", systemImage: "gearshape") { model.sheet = .settings }
+            }
+            .matchedTransitionSource(id: "settings-finder", in: sheetZoom)
+            ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button("Share search…", systemImage: "square.and.arrow.up", action: model.share)
                         .disabled(model.query.slotCount == 0)
@@ -89,7 +97,12 @@ struct FinderView: View {
                     Button("About and licenses", systemImage: "info.circle") { model.sheet = .about }
                 } label: { Label("More options", systemImage: "ellipsis") }
             }
+            .matchedTransitionSource(id: "more-finder", in: sheetZoom)
         }
+    }
+
+    private func showResults(_ show: Bool) {
+        withAnimation(reduceMotion ? nil : .snappy(duration: 0.32)) { model.showResults = show }
     }
 
     private func pageHeader(_ title: String, open: Bool, actionLabel: String,
@@ -98,16 +111,20 @@ struct FinderView: View {
         Button(action: action) {
             HStack(spacing: 8) {
                 Text(title).font(.subheadline.weight(.semibold))
+                    .contentTransition(.numericText())
                     .layoutPriority(1)
                 if !open, let summary, !summary.isEmpty {
                     Text(summary).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
                 Spacer(minLength: 8)
-                if !open { Image(systemName: "chevron.down").font(.caption.weight(.semibold)) }
+                Image(systemName: "chevron.down").font(.caption.weight(.semibold))
+                    .opacity(open ? 0 : 1)
+                    .rotationEffect(.degrees(open ? -180 : 0))
             }
             .foregroundStyle(open ? Color.primary : Color.secondary)
             .padding(.horizontal, 20).padding(.vertical, 14)
             .contentShape(Rectangle())
+            .animation(reduceMotion ? nil : .snappy, value: title)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(open ? title : "\(actionLabel), \(title)")
@@ -145,7 +162,9 @@ struct FinderView: View {
                     .frame(minHeight: 46)
                     .contentShape(RoundedRectangle(cornerRadius: 23))
                     .glassEffect(.regular.tint(.white.opacity(0.02)).interactive(), in: .rect(cornerRadius: 23))
-                }.buttonStyle(.plain)
+                }
+                .buttonStyle(.plain)
+                .matchedTransitionSource(id: "search-settings", in: sheetZoom)
             }
             .frame(maxWidth: 680, alignment: .leading)
             .padding(.horizontal, 16).padding(.bottom, 28)
@@ -178,68 +197,88 @@ struct FinderView: View {
                     Text(message).font(.footnote).foregroundStyle(.red)
                 }
                 if controller.results.isEmpty {
-                    Text(emptyMessage).font(.subheadline).foregroundStyle(.secondary).padding(.vertical, 12)
+                    emptyResults
                 }
                 ForEach(controller.results, id: \.seed) { result in
-                    HStack(spacing: 8) {
-                        Button { model.scoutResult(result.seed) } label: {
-                            HStack(spacing: 8) {
-                                Text(result.seed).font(.system(.headline, design: .monospaced)).tracking(1)
-                                    .foregroundStyle(AppTheme.seed)
-                                if let id = result.selectedTrinket, let item = ItemCatalog.findById(id) {
-                                    ItemSpriteView(item: item, pointSize: 20).opacity(0.65)
-                                }
-                                Spacer(minLength: 0)
-                            }.frame(minHeight: 52).contentShape(Rectangle())
-                        }.buttonStyle(.plain)
-                        Button("Copy") { UIPasteboard.general.string = result.seed }
-                            .font(.subheadline.weight(.semibold)).padding(.horizontal, 4)
-                            .accessibilityLabel("Copy \(result.seed)")
-                        Button { model.scoutResult(result.seed) } label: {
-                            Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                        }.accessibilityLabel("Scout seed")
-                    }
-                    .padding(.leading, 14).padding(.trailing, 12)
-                    .background(AppTheme.raised, in: RoundedRectangle(cornerRadius: 16))
+                    resultRow(result)
                 }
             }.frame(maxWidth: 680, alignment: .leading)
                 .padding(.horizontal, 16).padding(.bottom, 12).frame(maxWidth: .infinity, alignment: .center)
         }
     }
 
+    private var emptyResults: some View {
+        VStack(spacing: 12) {
+            Image(systemName: controller.isImpossibleQuery ? "exclamationmark.magnifyingglass" : "sparkle.magnifyingglass")
+                .font(.system(size: 34, weight: .medium))
+                .foregroundStyle(controller.isRunning ? AppTheme.accent : .secondary)
+                .symbolEffect(.breathe, options: .repeating, isActive: controller.isRunning && !reduceMotion)
+            Text(emptyMessage).font(.subheadline).foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 36)
+    }
+
+    /// The whole row scouts its seed; only the glass copy control stays apart.
+    /// The last scouted seed keeps a faint outline, so returning finds your place.
+    private func resultRow(_ result: SeedResult) -> some View {
+        let scouted = controller.selectedSeed == result.seed
+        return HStack(spacing: 10) {
+            Button { model.scoutResult(result.seed) } label: {
+                HStack(spacing: 10) {
+                    Text(result.seed).font(.system(.headline, design: .monospaced)).tracking(1)
+                        .foregroundStyle(AppTheme.seed)
+                    if let id = result.selectedTrinket, let item = ItemCatalog.findById(id) {
+                        ItemSpriteView(item: item, pointSize: 20).opacity(0.7)
+                    }
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.tertiary)
+                }
+                .frame(minHeight: 58).contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(result.seed)
+            .accessibilityHint("Scout seed")
+            GlassCopyButton(text: result.seed, label: "Copy \(result.seed)", size: 40)
+        }
+        .padding(.leading, 16).padding(.trailing, 9)
+        .background(AppTheme.raised, in: RoundedRectangle(cornerRadius: 18))
+        .overlay {
+            RoundedRectangle(cornerRadius: 18)
+                .strokeBorder(AppTheme.accent.opacity(scouted ? 0.45 : 0), lineWidth: 1)
+        }
+    }
+
+    /// Search grows into the live progress lens and the stop control buds off
+    /// its trailing edge. A lifted chip turns the same glass into the drop target.
     private var searchBar: some View {
-        GlassEffectContainer(spacing: 18) {
+        GlassEffectContainer(spacing: 14) {
             HStack(spacing: 10) {
                 if boardInteraction.isDragging {
                     RequirementsRemoveTarget(interaction: boardInteraction)
                         .glassEffectID("action", in: searchGlass)
                         .glassEffectTransition(.matchedGeometry)
                 } else if controller.isRunning {
-                    HStack(spacing: 10) {
-                        ProgressView().controlSize(.small).tint(AppTheme.accent)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(progressText).font(.caption.weight(.semibold))
-                            Text(estimateText).font(.caption2).foregroundStyle(.secondary)
-                        }
-                        .monospacedDigit()
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                    .padding(.horizontal, 16).padding(.vertical, 13)
-                    .glassEffect(.regular, in: .rect(cornerRadius: 25))
-                    .glassEffectID("progress", in: searchGlass)
-                    .glassEffectTransition(.matchedGeometry)
+                    progressLens
+                        .glassEffectID("action", in: searchGlass)
+                        .glassEffectTransition(.matchedGeometry)
                     Button { model.backgroundSearch.stop() } label: {
-                        Text("Cancel")
-                            .font(.subheadline.weight(.semibold))
+                        Image(systemName: "stop.fill")
+                            .font(.system(size: 18, weight: .semibold))
                             .foregroundStyle(.red)
-                            .padding(.horizontal, 20).frame(minHeight: 54)
-                            .glassEffect(.regular.tint(.red.opacity(0.10)).interactive(), in: .capsule)
-                            .glassEffectID("action", in: searchGlass)
+                            .frame(width: 54, height: 54)
+                            .contentShape(.circle)
+                            .glassEffect(.regular.tint(.red.opacity(0.08)).interactive(), in: .circle)
+                            .glassEffectID("stop", in: searchGlass)
+                            .glassEffectTransition(.matchedGeometry)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Cancel")
                 } else {
-                    Button(action: model.search) {
+                    Button {
+                        withAnimation(reduceMotion ? nil : .snappy(duration: 0.32)) { model.search() }
+                    } label: {
                         Label("Search", systemImage: "magnifyingglass")
                             .font(.headline)
                             .foregroundStyle(.primary)
@@ -248,6 +287,7 @@ struct FinderView: View {
                             .contentShape(Capsule())
                             .glassEffect(.regular.tint(AppTheme.accent.opacity(0.28)).interactive(), in: .capsule)
                             .glassEffectID("action", in: searchGlass)
+                            .glassEffectTransition(.matchedGeometry)
                     }
                     .buttonStyle(.plain)
                     .disabled(model.request == nil)
@@ -255,11 +295,53 @@ struct FinderView: View {
                 }
             }
             .frame(maxWidth: 680)
-            .animation(reduceMotion ? nil : .spring(response: 0.44, dampingFraction: 0.82), value: controller.isRunning)
+            .animation(reduceMotion ? nil : .spring(response: 0.46, dampingFraction: 0.8), value: controller.isRunning)
             .animation(reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.76), value: boardInteraction.isDragging)
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 16)
+    }
+
+    /// Each find lands in the count with a small pulse while light sweeps
+    /// through the glass for as long as the engine is working.
+    private var progressLens: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                if controller.isPreparing {
+                    ProgressView().controlSize(.small).tint(AppTheme.seed)
+                } else {
+                    Text(compactCount(Int64(controller.foundCount)))
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(AppTheme.seed)
+                        .contentTransition(.numericText(value: Double(controller.foundCount)))
+                        .lineLimit(1).minimumScaleFactor(0.6)
+                }
+            }
+            .padding(.horizontal, 6)
+            .frame(minWidth: 36, minHeight: 36)
+            .background(AppTheme.seed.opacity(0.13), in: .capsule)
+            .keyframeAnimator(initialValue: 1.0, trigger: reduceMotion ? 0 : controller.foundCount) { view, scale in
+                view.scaleEffect(scale)
+            } keyframes: { _ in
+                SpringKeyframe(1.2, duration: 0.12, spring: .snappy)
+                SpringKeyframe(1, duration: 0.35, spring: .bouncy)
+            }
+            .accessibilityLabel("\(controller.foundCount) found")
+            VStack(alignment: .leading, spacing: 3) {
+                Text(progressText).font(.caption.weight(.semibold))
+                Text(estimateText).font(.caption2).foregroundStyle(.secondary)
+            }
+            .monospacedDigit()
+            .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1).minimumScaleFactor(0.8)
+            .fixedSize(horizontal: false, vertical: dynamicTypeSize.isAccessibilitySize)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.leading, 9).padding(.trailing, 16).padding(.vertical, 8)
+        .frame(minHeight: 54)
+        .background { GlassSheen(shape: Capsule()) }
+        .glassEffect(.regular.tint(AppTheme.accent.opacity(0.1)), in: .capsule)
+        .animation(reduceMotion ? nil : .snappy, value: controller.foundCount)
+        .accessibilityElement(children: .combine)
     }
 
     private var estimateText: String {

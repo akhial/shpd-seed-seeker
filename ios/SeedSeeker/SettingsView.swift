@@ -8,6 +8,7 @@ struct SearchSettingsView: View {
     var enabled = true
     var challengesEnabled = true
     @AppStorage(WorkerPersistence.defaultsKey) private var savedWorkers = WorkerPersistence.unset
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let workerCeiling = EngineInfo.availableWorkers
     private var workerCount: Int {
@@ -159,22 +160,31 @@ struct SearchSettingsView: View {
         }
     }
 
+    /// Several floors can be chosen, so each lights its own glass; the
+    /// checkmark grows in rather than pushing the number aside.
     @ViewBuilder
     private func farmingFloorButton(_ depth: Int) -> some View {
         let selected = query.floorRequirements.contains { $0.depth == depth && $0.isFarming }
         Button {
-            query.toggleFarmingFloor(depth)
+            withAnimation(AppTheme.glassSpring(reduceMotion)) { query.toggleFarmingFloor(depth) }
         } label: {
-            HStack(spacing: 6) {
-                if selected { Image(systemName: "checkmark") }
-                Text("\(depth)").monospacedDigit()
-            }
-            .font(.headline)
-            .frame(maxWidth: .infinity, minHeight: 44)
+            Text("\(depth)").monospacedDigit()
+                .font(.headline)
+                .foregroundStyle(selected ? AppTheme.upgrade : Color.primary)
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .overlay(alignment: .trailing) {
+                    Image(systemName: "checkmark")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(AppTheme.upgrade)
+                        .scaleEffect(selected ? 1 : 0.3)
+                        .opacity(selected ? 1 : 0)
+                        .padding(.trailing, 14)
+                }
+                .contentShape(.capsule)
         }
         .buttonStyle(.plain)
-        .tint(selected ? .accentColor : .secondary)
-        .glassEffect(selected ? .regular.tint(.accentColor.opacity(0.2)).interactive() : .regular.interactive())
+        .glassEffect(.regular.tint(selected ? AppTheme.accent.opacity(0.3) : nil).interactive(), in: .capsule)
+        .sensoryFeedback(.selection, trigger: selected)
         .accessibilityLabel("Floor \(depth)")
         .accessibilityAddTraits(selected ? [.isSelected] : [])
     }

@@ -67,8 +67,9 @@ struct RequirementsResinEditor: View {
                                 .font(.subheadline.weight(.semibold))
                             TextField("Minimum resin", text: $minimum)
                                 .keyboardType(.numberPad)
-                                .padding(14)
-                                .background(.quaternary.opacity(0.4), in: .rect(cornerRadius: 16))
+                                .font(.body.monospacedDigit())
+                                .padding(.horizontal, 16).padding(.vertical, 14)
+                                .glassEffect(.regular, in: .rect(cornerRadius: 18))
                                 .accessibilityLabel("Minimum resin")
                             if parsedMinimum == nil {
                                 Text("Enter a whole number.")
@@ -133,7 +134,7 @@ struct RequirementsResinEditor: View {
                             .frame(minHeight: 52)
                             .padding(.horizontal, 23)
                             .foregroundStyle(.primary)
-                            .glassEffect(.regular.tint(Color.accentColor.opacity(0.3)).interactive(), in: .capsule)
+                            .glassEffect(.regular.tint(AppTheme.accent.opacity(0.3)).interactive(), in: .capsule)
                         }
                         .buttonStyle(.plain)
                         .disabled(!automatic && parsedMinimum == nil)

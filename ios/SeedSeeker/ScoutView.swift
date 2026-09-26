@@ -18,6 +18,9 @@ struct ScoutView: View {
     @State private var scrollOffset: CGFloat = 0
     @State private var headerDragOrigin: CGFloat?
     @FocusState private var inputFocused: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var sheetZoom
+    @Namespace private var inputGlass
 
     private var resultIndex: Int? {
         results.firstIndex { $0.seed == model.requestedSeed }
@@ -106,65 +109,112 @@ struct ScoutView: View {
         .onChange(of: model.error) { _, error in
             if error != nil { headerProgress = 0 }
         }
-        .sheet(isPresented: $choosingDate) { datePicker }
+        .sheet(isPresented: $choosingDate) {
+            datePicker.navigationTransition(.zoom(sourceID: "date", in: sheetZoom))
+        }
         .sheet(isPresented: $showingInfo) {
             if let world = model.world, let mappings = world.itemMappings {
                 ScoutSeedInfoView(seed: world.seed, mappings: mappings)
+                    .navigationTransition(.zoom(sourceID: "info", in: sheetZoom))
             }
         }
     }
 
+    /// The field, Today and Scout are one cluster of glass. The field
+    /// brightens while it has focus; Scout is the tinted, primary shape.
     private var seedInput: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .bottom, spacing: 8) {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("Seed / date").font(.caption).foregroundStyle(.secondary)
-                    TextField("Seed / YYYY-MM-DD", text: Binding(
-                        get: { model.input }, set: model.editInput))
-                        .font(.system(.title3, design: .monospaced))
-                        .textInputAutocapitalization(.characters)
-                        .autocorrectionDisabled()
-                        .keyboardType(.asciiCapable)
-                        .submitLabel(.search)
-                        .focused($inputFocused)
-                        .onSubmit(scoutInput)
+        let scoutable = SeedCode.isScoutable(model.input)
+        // Once its world is showing, the seed has nothing new to reveal.
+        let fresh = scoutable && model.world?.seed != model.input
+        return GlassEffectContainer(spacing: 10) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(spacing: 10) {
+                    HStack(spacing: 6) {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Seed / date").font(.caption).foregroundStyle(.secondary)
+                            TextField("Seed / YYYY-MM-DD", text: Binding(
+                                get: { model.input }, set: model.editInput))
+                                .font(.system(.title3, design: .monospaced))
+                                .textInputAutocapitalization(.characters)
+                                .autocorrectionDisabled()
+                                .keyboardType(.asciiCapable)
+                                .submitLabel(.search)
+                                .focused($inputFocused)
+                                .onSubmit(scoutInput)
+                                .disabled(model.loading)
+                                .accessibilityIdentifier("scout-run-field")
+                        }
+                        Button {
+                            inputFocused = false
+                            selectedDate = DailyRunDate.date(model.input) ?? Date()
+                            choosingDate = true
+                        } label: {
+                            Image(systemName: "calendar")
+                                .font(.body.weight(.medium))
+                                .foregroundStyle(AppTheme.accent)
+                                .frame(width: 44, height: 44)
+                                .contentShape(.rect)
+                        }
+                        .buttonStyle(.plain)
+                        .matchedTransitionSource(id: "date", in: sheetZoom)
+                        .accessibilityLabel("Choose daily run date")
+                        .accessibilityIdentifier("scout-date-picker")
                         .disabled(model.loading)
-                        .accessibilityIdentifier("scout-run-field")
-                }
-                .padding(12)
-                .background(AppTheme.background.opacity(0.65), in: RoundedRectangle(cornerRadius: 14))
-                .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(.secondary.opacity(0.35)))
+                    }
+                    .padding(.leading, 18).padding(.trailing, 6).padding(.vertical, 10)
+                    .contentShape(.rect(cornerRadius: 24))
+                    .onTapGesture { inputFocused = true }
+                    .glassEffect(.regular.tint(inputFocused ? AppTheme.accent.opacity(0.1) : nil),
+                                 in: .rect(cornerRadius: 24))
+                    .glassEffectID("field", in: inputGlass)
 
-                Button {
-                    inputFocused = false
-                    selectedDate = DailyRunDate.date(model.input) ?? Date()
-                    choosingDate = true
-                } label: { Image(systemName: "calendar").frame(width: 36, height: 44) }
+                    Button { inputFocused = false; onSelectResult(DailyRunDate.code()) } label: {
+                        Text("Today")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(AppTheme.accent)
+                            .padding(.horizontal, 16)
+                            .frame(maxHeight: .infinity)
+                            .contentShape(.rect(cornerRadius: 24))
+                            .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 24))
+                            .glassEffectID("today", in: inputGlass)
+                    }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Choose daily run date")
-                    .accessibilityIdentifier("scout-date-picker")
-                    .disabled(model.loading)
-                Button("Today") { inputFocused = false; onSelectResult(DailyRunDate.code()) }
-                    .font(.subheadline.weight(.medium))
-                    .frame(height: 44)
                     .disabled(model.loading)
                     .accessibilityIdentifier("scout-today")
-            }
-            Button(action: scoutInput) {
-                HStack(spacing: 10) {
-                    if model.loading { ProgressView().tint(AppTheme.background) }
-                    Text(model.loading ? "Generating world…" :
-                         (model.input.first?.isNumber == true ? "Scout daily run" : "Scout seed"))
-                        .fontWeight(.semibold)
                 }
-                .frame(maxWidth: .infinity, minHeight: 36)
+                .fixedSize(horizontal: false, vertical: true)
+
+                Button(action: scoutInput) {
+                    HStack(spacing: 10) {
+                        if model.loading { ProgressView().tint(AppTheme.upgrade) }
+                        Text(model.loading ? "Generating world…" :
+                             (model.input.first?.isNumber == true ? "Scout daily run" : "Scout seed"))
+                            .contentTransition(.interpolate)
+                        if !model.loading {
+                            Image(systemName: "arrow.right")
+                                .font(.subheadline.weight(.bold))
+                                .offset(x: scoutable ? 0 : -4)
+                                .opacity(scoutable ? 1 : 0)
+                        }
+                    }
+                    .font(.headline)
+                    .foregroundStyle(scoutable || model.loading ? Color.primary : Color.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 52)
+                    .contentShape(.capsule)
+                    .glassEffect(.regular.tint(fresh || model.loading ? AppTheme.accent.opacity(0.3) : nil).interactive(),
+                                 in: .capsule)
+                    .glassEffectID("scout", in: inputGlass)
+                }
+                .buttonStyle(.plain)
+                .disabled(model.loading || !scoutable)
+                if let error = model.error { Text(error).font(.caption).foregroundStyle(.red) }
             }
-            .buttonStyle(.glassProminent)
-            .disabled(model.loading || !SeedCode.isScoutable(model.input))
-            if let error = model.error { Text(error).font(.caption).foregroundStyle(.red) }
+            .animation(AppTheme.glassSpring(reduceMotion), value: scoutable)
+            .animation(AppTheme.glassSpring(reduceMotion), value: fresh)
+            .animation(AppTheme.glassSpring(reduceMotion), value: model.loading)
+            .animation(AppTheme.glassSpring(reduceMotion), value: inputFocused)
         }
-        .padding(16)
-        .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 24))
+        .padding(.top, 4)
         .accessibilityIdentifier("scout-input")
     }
 
@@ -204,11 +254,18 @@ struct ScoutView: View {
                         .accessibilityLabel(matchText(matches))
                 }
                 if world.itemMappings != nil {
-                    Button { showingInfo = true } label: { Image(systemName: "info.circle").frame(width: 28, height: 36) }
-                        .accessibilityLabel("Seed information")
+                    Button { showingInfo = true } label: {
+                        Image(systemName: "info")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Color.primary.opacity(0.8))
+                            .frame(width: 36, height: 36)
+                            .glassEffect(.regular.interactive(), in: .circle)
+                    }
+                    .buttonStyle(.plain)
+                    .matchedTransitionSource(id: "info", in: sheetZoom)
+                    .accessibilityLabel("Seed information")
                 }
-                Button("Copy") { UIPasteboard.general.string = world.seed }
-                    .font(.subheadline.weight(.medium))
+                GlassCopyButton(text: world.seed, label: "Copy", size: 36)
             }
             HStack(spacing: 8) {
                 ScoutBadge(text: "\(world.items.count) items")
@@ -232,22 +289,37 @@ struct ScoutView: View {
     }
 
     private func navigation(_ world: ScoutWorld) -> some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 8) {
             if let index = resultIndex {
-                Button { step(-1) } label: { Image(systemName: "chevron.left").frame(width: 30, height: 36) }
-                    .disabled(index == 0).accessibilityLabel("Previous result")
-                Text("\(index + 1) of \(results.count)").font(.caption)
-                Button { step(1) } label: { Image(systemName: "chevron.right").frame(width: 30, height: 36) }
-                    .disabled(index == results.count - 1).accessibilityLabel("Next result")
+                HStack(spacing: 0) {
+                    Button { step(-1) } label: {
+                        Image(systemName: "chevron.left").frame(width: 38, height: 38).contentShape(.rect)
+                    }
+                    .disabled(index == 0).opacity(index == 0 ? 0.3 : 1)
+                    .accessibilityLabel("Previous result")
+                    Text("\(index + 1) of \(results.count)")
+                        .font(.caption.weight(.semibold)).monospacedDigit()
+                        .contentTransition(.numericText(value: Double(index)))
+                        .frame(minWidth: 52)
+                    Button { step(1) } label: {
+                        Image(systemName: "chevron.right").frame(width: 38, height: 38).contentShape(.rect)
+                    }
+                    .disabled(index == results.count - 1).opacity(index == results.count - 1 ? 0.3 : 1)
+                    .accessibilityLabel("Next result")
+                }
+                .font(.subheadline.weight(.semibold))
+                .buttonStyle(.plain)
+                .glassEffect(.regular.interactive(), in: .capsule)
+                .animation(reduceMotion ? nil : .snappy, value: index)
             } else { Text("Trinkets").font(.caption) }
             Spacer(minLength: 4)
             if headerProgress > 0.5 || resultIndex == nil {
-                ScoutTrinketShortcuts(world: world, enabled: !model.loading, onSelect: model.selectTrinket)
+                TrinketGlassShortcuts(world: world, enabled: !model.loading, size: 36, onSelect: model.selectTrinket)
             } else {
                 Text("swipe to browse").font(.caption2).foregroundStyle(.secondary)
             }
         }
-        .frame(height: 40)
+        .frame(height: 44)
         .accessibilityIdentifier("scout-navigation")
     }
 
@@ -262,7 +334,7 @@ struct ScoutView: View {
 
     private func floorHeading(_ world: ScoutWorld, depth: Int) -> some View {
         let toggle: (() -> Void)? = EngineInfo.shared.levelMapDepths.contains(depth) ? {
-            withAnimation(.snappy(duration: 0.2)) {
+            withAnimation(reduceMotion ? nil : .snappy(duration: 0.3)) {
                 openMapDepth = openMapDepth == depth ? nil : depth
             }
         } : nil
@@ -281,6 +353,8 @@ struct ScoutView: View {
                              floors: floors.filter { EngineInfo.shared.levelMapDepths.contains($0) },
                              challenges: model.renderedChallenges,
                              changingTrinket: model.loading, onSelectTrinket: model.selectTrinket)
+                    .transition(.asymmetric(insertion: .scale(scale: 0.96, anchor: .top).combined(with: .opacity),
+                                            removal: .opacity))
             }
             if items.isEmpty {
                 Text("No notable items on this floor.").font(.caption).foregroundStyle(.secondary)
@@ -399,11 +473,15 @@ struct ScoutFloorHeading: View {
             let count = world.items.filter { $0.depth == depth }.count
             Text(count == 1 ? "1 item" : "\(count) items").font(.caption2).foregroundStyle(.secondary).fixedSize()
             if let onCloseMap {
-                Button(action: onCloseMap) { Image(systemName: "xmark").frame(width: 32, height: 32) }
-                    .accessibilityLabel("Close map")
+                Button("Close map", systemImage: "xmark", action: onCloseMap)
+                    .labelStyle(.iconOnly)
+                    .font(.subheadline.weight(.semibold))
+                    .buttonStyle(.glass)
+                    .buttonBorderShape(.circle)
             } else if onMapToggle != nil {
-                Image(systemName: mapExpanded ? "chevron.down" : "chevron.right")
+                Image(systemName: "chevron.right")
                     .font(.caption).foregroundStyle(.secondary)
+                    .rotationEffect(.degrees(mapExpanded ? 90 : 0))
             }
         }
         .padding(.vertical, 6)

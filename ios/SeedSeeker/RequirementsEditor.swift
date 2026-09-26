@@ -31,6 +31,7 @@ struct RequirementsEditor: View {
     @State private var stackTotal: Int?
     @State private var copyDepth: Int?
     @Namespace private var editorGlass
+    @Namespace private var selectorGlass
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(editing: ItemRequirement?, otherRequirements: [ItemRequirement], blanket: Bool,
@@ -147,7 +148,10 @@ struct RequirementsEditor: View {
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 12)
+            // The category lens slides; the catalog underneath simply swaps.
+            .transaction(value: kind) { $0.animation = nil }
         }
+        .sensoryFeedback(.selection, trigger: selectedItem?.id)
         .safeAreaBar(edge: .top, spacing: 0) { itemSelectors }
         .scrollEdgeEffectStyle(.soft, for: .vertical)
     }
@@ -158,7 +162,9 @@ struct RequirementsEditor: View {
                 GlassEffectContainer(spacing: 8) {
                     HStack(spacing: 8) {
                         ForEach([ItemKind.weapon, .armor, .wand, .ring, .trinket, .artifact], id: \.rawValue) { entry in
-                            choice(entry.label, selected: kind.family == entry) { changeKind(entry) }
+                            choice(entry.label, id: "kind-\(entry.rawValue)", lens: "family", selected: kind.family == entry) {
+                                changeKind(entry)
+                            }
                         }
                     }
                 }
@@ -167,24 +173,27 @@ struct RequirementsEditor: View {
             }
             .scrollClipDisabled()
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 7) {
-                    if !namedOnly {
-                        choice("Any \(kind.label.lowercased())", selected: selectedItem == nil) {
-                            selectedItem = nil
-                            normalizeBounds()
+                GlassEffectContainer(spacing: 7) {
+                    HStack(spacing: 7) {
+                        if !namedOnly {
+                            choice("Any \(kind.label.lowercased())", id: "any", lens: "any", selected: selectedItem == nil) {
+                                selectedItem = nil
+                                normalizeBounds()
+                            }
                         }
-                    }
-                    if kind == .wand, let onAddResin {
-                        choice("Arcane Resin", selected: false, action: onAddResin)
-                    }
-                    if kind.family == .weapon {
-                        ForEach([ItemKind.weapon, .meleeWeapon, .thrownWeapon], id: \.rawValue) { entry in
-                            choice(entry == .weapon ? "All" : entry == .meleeWeapon ? "Melee" : "Thrown", selected: kind == entry) {
-                                if kind != entry {
-                                    kind = entry
-                                    if selectedItem.map(entry.accepts) != true { selectedItem = Self.items(for: entry).first }
-                                    tierMatch = .any
-                                    normalizeBounds()
+                        if kind == .wand, let onAddResin {
+                            choice("Arcane Resin", id: "resin", lens: "resin", selected: false, action: onAddResin)
+                        }
+                        if kind.family == .weapon {
+                            ForEach([ItemKind.weapon, .meleeWeapon, .thrownWeapon], id: \.rawValue) { entry in
+                                choice(entry == .weapon ? "All" : entry == .meleeWeapon ? "Melee" : "Thrown",
+                                       id: "subkind-\(entry.rawValue)", lens: "weapon-kind", selected: kind == entry) {
+                                    if kind != entry {
+                                        kind = entry
+                                        if selectedItem.map(entry.accepts) != true { selectedItem = Self.items(for: entry).first }
+                                        tierMatch = .any
+                                        normalizeBounds()
+                                    }
                                 }
                             }
                         }
@@ -201,7 +210,7 @@ struct RequirementsEditor: View {
     private func itemCard(_ item: CatalogItem) -> some View {
         let selected = selectedItem?.id == item.id
         return Button {
-            withAnimation(reduceMotion ? nil : .snappy(duration: 0.25)) {
+            withAnimation(AppTheme.glassSpring(reduceMotion)) {
                 selectedItem = item
                 tierMatch = .any
                 normalizeBounds()
@@ -209,6 +218,8 @@ struct RequirementsEditor: View {
         } label: {
             VStack(spacing: 9) {
                 ItemSpriteView(item: item, pointSize: 43).frame(height: 48)
+                    .scaleEffect(selected && !reduceMotion ? 1.14 : 1)
+                    .offset(y: selected && !reduceMotion ? -2 : 0)
                 Text(item.name)
                     .font(.caption.weight(.medium))
                     .lineLimit(3)
@@ -217,17 +228,20 @@ struct RequirementsEditor: View {
             }
             .frame(maxWidth: .infinity, minHeight: 113)
             .padding(9)
-            .background(selected ? Color.accentColor.opacity(0.1) : Color(uiColor: .secondarySystemGroupedBackground),
+            // The chosen item lifts out of the catalog into tinted glass.
+            .background(selected ? .clear : Color(uiColor: .secondarySystemGroupedBackground),
                         in: .rect(cornerRadius: 25))
+            .glassEffect(selected ? .regular.tint(AppTheme.accent.opacity(0.2)).interactive() : .identity,
+                         in: .rect(cornerRadius: 25))
             .overlay {
                 RoundedRectangle(cornerRadius: 25)
-                    .strokeBorder(selected ? Color.accentColor.opacity(0.7) : Color.white.opacity(0.035), lineWidth: selected ? 1.5 : 1)
+                    .strokeBorder(selected ? AppTheme.accent.opacity(0.55) : Color.white.opacity(0.035), lineWidth: 1)
             }
             .overlay(alignment: .topTrailing) {
                 if selected {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(Color.accentColor)
+                        .foregroundStyle(AppTheme.accent)
                         .padding(8)
                         .transition(.scale.combined(with: .opacity))
                 }
@@ -355,22 +369,50 @@ struct RequirementsEditor: View {
                 Rectangle().fill(Color(uiColor: .separator)).frame(height: 0.5)
             }
             .padding(.vertical, 6)
-            LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)], alignment: .leading, spacing: 7) {
-                ForEach(names, id: \.self) { name in
-                    Button {
-                        if selectedEffects.contains(name) { selectedEffects.remove(name) } else { selectedEffects.insert(name) }
-                    } label: {
-                        HStack(spacing: 7) {
-                            Image(systemName: selectedEffects.contains(name) ? "checkmark.circle.fill" : "circle")
-                                .foregroundStyle(selectedEffects.contains(name) ? Color.accentColor : .secondary)
-                            Text(name).font(.subheadline).foregroundStyle(.primary)
-                        }.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 5)
+            GlassEffectContainer(spacing: 8) {
+                RequirementsFlowLayout(spacing: 8) {
+                    ForEach(names, id: \.self) { name in
+                        effectChip(name, color: enchantmentGlows[name].map(AppTheme.glowDisplayColor) ?? AppTheme.curse)
                     }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(selectedEffects.contains(name) ? [.isSelected] : [])
                 }
             }
         }
+        .sensoryFeedback(.selection, trigger: selectedEffects)
+    }
+
+    /// Each enchantment is glass tinted with the colour the item will glow in
+    /// the game, so the chosen set reads like the pulsing sprite it describes.
+    /// Its marker keeps one size, so choosing never reflows the chips.
+    private func effectChip(_ name: String, color: Color) -> some View {
+        let selected = selectedEffects.contains(name)
+        return Button {
+            withAnimation(AppTheme.glassSpring(reduceMotion)) {
+                if selected { selectedEffects.remove(name) } else { selectedEffects.insert(name) }
+            }
+        } label: {
+            HStack(spacing: 7) {
+                ZStack {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 15, weight: .semibold))
+                        .symbolRenderingMode(.palette)
+                        .foregroundStyle(Color.black.opacity(0.75), color)
+                        .scaleEffect(selected ? 1 : 0.4)
+                        .opacity(selected ? 1 : 0)
+                    Circle().fill(color).frame(width: 8, height: 8)
+                        .opacity(selected ? 0 : 0.9)
+                }
+                .frame(width: 16, height: 16)
+                Text(name).font(.subheadline.weight(.medium))
+                    .foregroundStyle(selected ? Color.primary : Color.primary.opacity(0.8))
+            }
+            .padding(.leading, 11).padding(.trailing, 14)
+            .frame(minHeight: 40)
+            .contentShape(.capsule)
+            .glassEffect(.regular.tint(selected ? color.opacity(0.34) : nil).interactive(), in: .capsule)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(name)
+        .accessibilityAddTraits(selected ? [.isSelected] : [])
     }
 
     private var placementControls: some View {
@@ -486,7 +528,9 @@ struct RequirementsEditor: View {
                     Text(draft.title).font(.subheadline.weight(.semibold))
                     Text(draft.description.replacingOccurrences(of: " • ", with: " · "))
                         .font(.caption).foregroundStyle(.secondary)
+                        .contentTransition(.numericText())
                 }
+                .animation(reduceMotion ? nil : .snappy, value: draft.description)
                 .frame(maxWidth: .infinity, alignment: .leading)
             } else {
                 Text(duplicateTrinket ? "This trinket is already required. Each trinket appears only once in the deck." : "This requirement cannot be saved.")
@@ -508,7 +552,7 @@ struct RequirementsEditor: View {
             .foregroundStyle(.primary)
             .frame(minHeight: 52)
             .padding(.horizontal, 23)
-            .glassEffect(.regular.tint(Color.accentColor.opacity(0.3)).interactive(), in: .capsule)
+            .glassEffect(.regular.tint(AppTheme.accent.opacity(0.3)).interactive(), in: .capsule)
         }
         .buttonStyle(.plain)
         .glassEffectID("primary", in: editorGlass)
@@ -518,13 +562,21 @@ struct RequirementsEditor: View {
         withAnimation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.82)) { details = false }
     }
 
-    private func choice(_ text: String, selected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(text).font(.subheadline.weight(selected ? .semibold : .regular))
+    /// Each row's selection is one lens of tinted glass that slides to the
+    /// chosen capsule instead of re-tinting it in place.
+    private func choice(_ text: String, id: String, lens: String, selected: Bool,
+                        action: @escaping () -> Void) -> some View {
+        Button {
+            withAnimation(AppTheme.glassSpring(reduceMotion)) { action() }
+        } label: {
+            Text(text).font(.subheadline.weight(.medium))
                 .fixedSize().padding(.horizontal, 16).frame(minHeight: 44)
-                .foregroundStyle(.primary)
-                .glassEffect(.regular.tint(selected ? Color.accentColor.opacity(0.2) : .clear).interactive(), in: .capsule)
-        }.buttonStyle(.plain).accessibilityAddTraits(selected ? [.isSelected] : [])
+                .foregroundStyle(selected ? Color.primary : Color.primary.opacity(0.8))
+                .contentShape(.capsule)
+                .glassChoice(id, selected: selected, lens: lens, in: selectorGlass)
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? [.isSelected] : [])
     }
 
     private func heading(_ value: String) -> some View { Text(value).font(.subheadline.weight(.semibold)) }

@@ -195,12 +195,13 @@ struct SeedSeekerRootView: View {
     @Bindable var model: AppModel
     @Environment(\.scenePhase) private var scenePhase
     @State private var pastedResults: String?
+    @Namespace private var sheetZoom
 
     var body: some View {
         TabView(selection: $model.tab) {
             Tab("Finder", systemImage: "magnifyingglass", value: AppTab.finder) {
                 NavigationStack {
-                    FinderView(model: model)
+                    FinderView(model: model, sheetZoom: sheetZoom)
                         .navigationTitle("Seed Seeker")
                         .navigationBarTitleDisplayMode(.inline)
                 }
@@ -210,33 +211,48 @@ struct SeedSeekerRootView: View {
                     ScoutView(model: model.scout, query: model.query,
                               results: model.controller.results, onSelectResult: model.scoutResult)
                         .toolbar {
-                            ToolbarItemGroup(placement: .topBarTrailing) {
+                            ToolbarItem(placement: .topBarTrailing) {
                                 Button("Settings", systemImage: "gearshape") { model.sheet = .settings }
+                            }
+                            .matchedTransitionSource(id: "settings-scout", in: sheetZoom)
+                            ToolbarItem(placement: .topBarTrailing) {
                                 Button("About and licenses", systemImage: "info.circle") { model.sheet = .about }
                             }
+                            .matchedTransitionSource(id: "about-scout", in: sheetZoom)
                         }
                 }
             }
         }
+        // A search keeps running while its seeds are scouted. Its status rides
+        // above the tab bar there and folds inline when the bar minimizes.
+        .tabViewBottomAccessory(isEnabled: model.controller.isRunning && model.tab == .scout) {
+            SearchStatusAccessory(model: model)
+        }
+        // The Finder's action floats above the bar, so only the Scout's long
+        // floor list lets the bar shrink away.
+        .tabBarMinimizeBehavior(model.tab == .scout ? .onScrollDown : .never)
         .sheet(item: $model.sheet, onDismiss: {
             // Present any import error after the paste sheet has dismissed.
             guard let text = pastedResults else { return }
             pastedResults = nil
             model.importClipboard(text)
         }) { destination in
-            switch destination {
-            case .settings: AppSettingsView()
-            case .searchSettings:
-                SearchSettingsView(query: $model.query, enabled: !model.controller.isRunning,
-                                   challengesEnabled: !model.scout.loading)
-            case .about: AboutView()
-            case .presets: PresetsView(query: $model.query, presets: $model.presets)
-            case .clipboardImport:
-                ClipboardImportView { text in
-                    pastedResults = text
-                    model.sheet = nil
+            Group {
+                switch destination {
+                case .settings: AppSettingsView()
+                case .searchSettings:
+                    SearchSettingsView(query: $model.query, enabled: !model.controller.isRunning,
+                                       challengesEnabled: !model.scout.loading)
+                case .about: AboutView()
+                case .presets: PresetsView(query: $model.query, presets: $model.presets)
+                case .clipboardImport:
+                    ClipboardImportView { text in
+                        pastedResults = text
+                        model.sheet = nil
+                    }
                 }
             }
+            .navigationTransition(.zoom(sourceID: zoomSource(destination), in: sheetZoom))
         }
         .sheet(item: $model.sharedLink) { payload in ShareSheet(items: [payload.text]) }
         .fileImporter(isPresented: $model.showingImporter, allowedContentTypes: [.json, .plainText]) { result in
@@ -258,6 +274,70 @@ struct SeedSeekerRootView: View {
             if phase == .background { model.backgroundSearch.didEnterBackground() }
             if phase == .active { model.backgroundSearch.didBecomeActive() }
         }
+    }
+
+    /// Each sheet grows out of the glass control that opened it. Menu
+    /// commands grow from the menu's own button.
+    private func zoomSource(_ sheet: AppSheet) -> String {
+        switch sheet {
+        case .settings: "settings-\(model.tab)"
+        case .about: model.tab == .scout ? "about-scout" : "more-finder"
+        case .clipboardImport: "more-finder"
+        case .searchSettings: "search-settings"
+        case .presets: "presets"
+        }
+    }
+}
+
+/// While a search runs behind the Scout, its progress stays one tap away.
+/// Inline beside a minimized tab bar it keeps only the count.
+private struct SearchStatusAccessory: View {
+    let model: AppModel
+    @Environment(\.tabViewBottomAccessoryPlacement) private var placement
+
+    private var controller: SearchController { model.controller }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Button {
+                model.showResults = true
+                model.tab = .finder
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "sparkle.magnifyingglass")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(AppTheme.accent)
+                        .symbolEffect(.breathe, options: .repeating)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("\(controller.foundCount) found")
+                            .font(.subheadline.weight(.semibold))
+                            .contentTransition(.numericText(value: Double(controller.foundCount)))
+                        if placement != .inline {
+                            Text("\(NumberFormat.seedRate(controller.seedsPerSecond)) seeds/s · \(NumberFormat.duration(controller.elapsed))")
+                                .font(.caption2).foregroundStyle(.secondary)
+                        }
+                    }
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    Spacer(minLength: 0)
+                }
+                .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Searching, \(controller.foundCount) found")
+            .accessibilityHint("Shows the results")
+            Button { model.backgroundSearch.stop() } label: {
+                Image(systemName: "stop.fill")
+                    .font(.subheadline)
+                    .foregroundStyle(.red)
+                    .frame(width: 32, height: 32)
+                    .contentShape(.circle)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Cancel search")
+        }
+        .padding(.horizontal, 16)
+        .animation(.snappy, value: controller.foundCount)
     }
 }
 

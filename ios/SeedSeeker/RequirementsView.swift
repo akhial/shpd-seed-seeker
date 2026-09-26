@@ -22,6 +22,10 @@ struct RequirementsView: View {
     @State private var liftGeneration = UUID()
     @State private var suppressEditingUntil = Date.distantPast
     @State private var stackKey: RequirementsStackPresentation?
+    @State private var resinSource = "resin"
+    @State private var landedKey: Int64?
+    @AppStorage("learnedGrouping") private var learnedGrouping = false
+    @Namespace private var sheetZoom
 
     private var requirements: [ItemRequirement] { query.requirements }
     private var lift: RequirementLift? {
@@ -33,6 +37,13 @@ struct RequirementsView: View {
         GlassEffectContainer(spacing: 10) {
           VStack(alignment: .leading, spacing: 18) {
             board(blanket: false)
+            if let boardHint {
+                Label(boardHint.text, systemImage: boardHint.symbol)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .padding(.top, -8)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
             VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 10) {
                 Button {
@@ -93,19 +104,25 @@ struct RequirementsView: View {
                     editor = nil
                     Task { @MainActor in
                         try? await Task.sleep(for: .milliseconds(350))
+                        resinSource = presentation.source
                         resinPresented = true
                     }
                 },
                 onEditGroupQuantity: groupQuantityAction(for: presentation),
                 onSave: { requirement, count, total, copyDepth in
                     let index = presentation.key.flatMap { key in requirements.firstIndex { $0.key == key } }
+                    let before = Set(requirements.map(\.key))
                     withAnimation(boardSpring) {
                         query.requirements = requirements.applyEdit(index: index, requirement: requirement,
                                                                    count: count, total: total, copyDepth: copyDepth)
                     }
+                    if presentation.key == nil {
+                        land(requirements.first { !before.contains($0.key) }?.key)
+                    }
                 },
                 onRemove: presentation.key.map { key in { remove(key: key) } }
             )
+            .navigationTransition(.zoom(sourceID: presentation.source, in: sheetZoom))
         }
         .sheet(isPresented: $resinPresented) {
             RequirementsResinEditor(initialAmount: query.arcaneResin, initialAuto: query.arcaneResinAuto,
@@ -116,6 +133,7 @@ struct RequirementsView: View {
                                         query.arcaneResinAuto = auto
                                         query.arcaneResinFilter = filter
                                     }, onRemove: removeResin)
+                .navigationTransition(.zoom(sourceID: resinSource, in: sheetZoom))
         }
         .sheet(item: $stackKey) { presentation in
             if let index = requirements.firstIndex(where: { $0.key == presentation.id }),
@@ -126,6 +144,7 @@ struct RequirementsView: View {
                           let refreshed = updated.boardItem(holding: updatedIndex) else { return }
                     query.requirements = updated.setCopyDepth(refreshed, depth)
                 }
+                .navigationTransition(.zoom(sourceID: presentation.source, in: sheetZoom))
             }
         }
         .alert("Blanket Requirements", isPresented: $blanketHelp) {
@@ -133,6 +152,18 @@ struct RequirementsView: View {
         } message: {
             Text("Each blanket must match at least one item fulfilling your ordinary requirements or contributing Arcane Resin. It does not ask for an additional item. All filters in one blanket apply to the same item; separate blankets can match the same or different chosen items.\n\nFor example, require Lightning, Disintegration, and Frost at +2 or higher, then add an Any wand blanket at exactly +3 from the Wandmaker.")
         }
+    }
+
+    /// Grouping is a gesture, so it is taught once, only when there are two
+    /// chips to group, and never again after the first either/or group.
+    private var boardHint: (text: String, symbol: String)? {
+        let ordinary = requirements.filter { !$0.blanket }
+        if ordinary.isEmpty && !query.arcaneResinAuto && query.arcaneResin == 0 {
+            return ("Add the items a seed must contain.", "sparkles")
+        }
+        guard !learnedGrouping, ordinary.boardCount >= 2,
+              !requirements.contains(where: { $0.alternativeGroup != nil }) else { return nil }
+        return ("Hold a chip and drop it on another for either/or.", "hand.draw")
     }
 
     private var boardSpring: Animation? {
@@ -149,7 +180,7 @@ struct RequirementsView: View {
                 resinChip
             }
             Button {
-                editor = RequirementsEditorPresentation(blanket: blanket)
+                editor = RequirementsEditorPresentation(blanket: blanket, source: blanket ? "add-blanket" : "add")
             } label: {
                 Label("Add", systemImage: "plus")
                     .font(.subheadline.weight(.semibold))
@@ -160,6 +191,7 @@ struct RequirementsView: View {
                     .glassEffectID(blanket ? "add-blanket" : "add", in: glass)
             }
             .buttonStyle(.plain)
+            .matchedTransitionSource(id: blanket ? "add-blanket" : "add", in: sheetZoom)
             .background(frameReader(id: blanket ? "add-blanket" : "add"))
             .accessibilityLabel("Add requirement")
             .opacity(interaction.isDragging ? 0.4 : 1)
@@ -183,7 +215,8 @@ struct RequirementsView: View {
                         chip(requirement, item: item)
                         if requirement.key == requirements[item.anchor].key && item.stackCount > 1 && requirements.canStack(item) {
                             Button {
-                                stackKey = RequirementsStackPresentation(id: requirements[item.anchor].key)
+                                stackKey = RequirementsStackPresentation(id: requirements[item.anchor].key,
+                                                                         source: "stack-\(cluster)")
                             } label: {
                                 Text("×\(item.stackCount)")
                                     .font(.caption.monospaced().weight(.semibold))
@@ -192,6 +225,7 @@ struct RequirementsView: View {
                                     .glassEffect(.regular.interactive(), in: .capsule)
                             }
                             .buttonStyle(.plain)
+                            .matchedTransitionSource(id: "stack-\(cluster)", in: sheetZoom)
                             .background(frameReader(id: "stack-\(cluster)"))
                             .accessibilityLabel("How many")
                         }
@@ -210,6 +244,7 @@ struct RequirementsView: View {
     private var resinChip: some View {
         Button {
             guard lift == nil, Date.now >= suppressEditingUntil else { return }
+            resinSource = "resin"
             resinPresented = true
         } label: {
             resinContent
@@ -217,6 +252,7 @@ struct RequirementsView: View {
                 .glassEffectID("resin", in: glass)
         }
         .buttonStyle(.plain)
+        .matchedTransitionSource(id: "resin", in: sheetZoom)
         .contentShape(.interaction, Capsule())
         .background(frameReader(id: "resin"))
         .opacity(lift?.id == "resin" ? 0.18 : 1)
@@ -251,7 +287,7 @@ struct RequirementsView: View {
             guard lift == nil, Date.now >= suppressEditingUntil else { return }
             editor = RequirementsEditorPresentation(key: requirement.key, blanket: requirement.blanket,
                                                    count: item.stackCount, total: item.total,
-                                                   copyDepth: requirements.copyDepth(of: item))
+                                                   copyDepth: requirements.copyDepth(of: item), source: id)
         } label: {
             chipContent(requirement, item: item)
                 .glassEffect(.regular.tint(chipTint(requirement, hovered: hovered)).interactive(), in: .capsule)
@@ -259,10 +295,11 @@ struct RequirementsView: View {
                 .glassEffectUnion(id: id, namespace: glass)
         }
         .buttonStyle(.plain)
+        .matchedTransitionSource(id: id, in: sheetZoom)
         .contentShape(.interaction, Capsule())
         .background(frameReader(id: id))
         .opacity(lift?.id == id ? 0.18 : 1)
-        .scaleEffect(reduceMotion ? 1 : (lift?.id == id ? 0.94 : (hovered ? 1.045 : 1)))
+        .scaleEffect(reduceMotion ? 1 : (lift?.id == id ? 0.94 : (hovered ? 1.045 : (landedKey == requirement.key ? 1.06 : 1))))
         .offset(y: !reduceMotion && hovered ? -3 : 0)
         .animation(boardSpring, value: hovered)
         .simultaneousGesture(liftGesture(id: id))
@@ -284,6 +321,7 @@ struct RequirementsView: View {
 
     private func chipTint(_ requirement: ItemRequirement, hovered: Bool) -> Color {
         if hovered { return AppTheme.seed.opacity(0.24) }
+        if landedKey == requirement.key { return AppTheme.accent.opacity(0.4) }
         return requirement.alternativeGroup != nil ? AppTheme.seed.opacity(0.04) : .white.opacity(0.015)
     }
 
@@ -409,6 +447,7 @@ struct RequirementsView: View {
                 if let sourceIndex = requirements.firstIndex(where: { $0.key == key }),
                    let targetIndex = requirements.firstIndex(where: { $0.key == target }) {
                     query.requirements = requirements.joinAlternatives(source: sourceIndex, target: targetIndex)
+                    learnedGrouping = true
                 }
                 resetLift()
             }
@@ -493,8 +532,21 @@ struct RequirementsView: View {
                 guard let currentIndex = requirements.firstIndex(where: { $0.key == key }),
                       let currentItem = requirements.boardItem(holding: currentIndex),
                       requirements.canStack(currentItem) else { return }
-                stackKey = RequirementsStackPresentation(id: key)
+                stackKey = RequirementsStackPresentation(id: key, source: "chip-\(key)")
             }
+        }
+    }
+
+    /// A new chip lands lit: its glass takes on the accent as the editor
+    /// folds away, then cools to the board's own tint.
+    private func land(_ key: Int64?) {
+        guard let key else { return }
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(reduceMotion ? 0 : 280))
+            withAnimation(boardSpring) { landedKey = key }
+            try? await Task.sleep(for: .milliseconds(900))
+            guard landedKey == key else { return }
+            withAnimation(reduceMotion ? nil : .easeOut(duration: 0.8)) { landedKey = nil }
         }
     }
 
@@ -549,9 +601,14 @@ private struct RequirementsEditorPresentation: Identifiable {
     var count = 1
     var total: Int?
     var copyDepth: Int?
+    /// The chip or Add button the editor grows from.
+    var source: String
 }
 
-private struct RequirementsStackPresentation: Identifiable { let id: Int64 }
+private struct RequirementsStackPresentation: Identifiable {
+    let id: Int64
+    let source: String
+}
 
 struct RequirementsSprite: View {
     let requirement: ItemRequirement

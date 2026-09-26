@@ -16,6 +16,7 @@ struct LevelMapView: View {
     let changingTrinket: Bool
     let onSelectTrinket: (String) -> Void
     @State private var expandedMap: ExpandedMapSelection?
+    @Namespace private var mapZoom
 
     var body: some View {
         LevelMapPanel(world: world, depth: depth, challenges: challenges,
@@ -25,10 +26,13 @@ struct LevelMapView: View {
                                                              changingTrinket: changingTrinket,
                                                              branch: branch, secrets: secrets)
                       })
+        // The inline map grows into the full-screen map and shrinks back.
+        .matchedTransitionSource(id: "map", in: mapZoom)
         .fullScreenCover(item: $expandedMap) { selection in
             ExpandedLevelMapView(selection: selection, initialDepth: depth,
                                  challenges: challenges,
                                  onSelectTrinket: onSelectTrinket)
+                .navigationTransition(.zoom(sourceID: "map", in: mapZoom))
         }
         .onChange(of: world.selectedTrinket) { _, _ in expandedMap?.world = world }
         .onChange(of: changingTrinket) { _, changing in
@@ -77,7 +81,13 @@ private struct ExpandedLevelMapView: View {
                       changingTrinket: selection.changingTrinket, onSelectTrinket: onSelectTrinket,
                       onClose: { dismiss() }, navigate: navigate,
                       initialBranch: selection.branch, initialSecrets: selection.secrets)
-            .background(AppTheme.background)
+            // Only the unsafe edges show through: the status bar keeps the
+            // header's colour and the home indicator sits on the dungeon's black.
+            .background {
+                VStack(spacing: 0) { AppTheme.background; Color.black }.ignoresSafeArea()
+            }
+            // A full-screen cover starts a new presentation, outside the app's tint.
+            .tint(AppTheme.accent)
     }
 
     private func navigate(_ delta: Int) {
@@ -112,6 +122,7 @@ struct LevelMapPanel: View {
     @State private var parentBranches: [LevelMapDocument.Branch] = []
     @State private var error: String?
     @State private var retry = 0
+    @Namespace private var branchLens
 
     init(world: ScoutWorld, depth: Int, challenges: Int, animated: Bool,
          mapHeight: CGFloat? = nil, onExpand: ((Int, Bool) -> Void)? = nil,
@@ -217,63 +228,60 @@ struct LevelMapPanel: View {
     }
 
     private var trinketShortcuts: some View {
-        HStack(spacing: 6) {
-            ForEach(Array(world.trinketOrder.prefix(4))) { item in
-                let selected = world.selectedTrinket == item.id
-                Button { onSelectTrinket(selected ? "none" : item.id) } label: {
-                    ItemSpriteView(item: item, pointSize: 22)
-                        .frame(width: 38, height: 38)
-                        .background(selected ? Color.accentColor.opacity(0.14) : .clear,
-                                    in: RoundedRectangle(cornerRadius: 10))
-                        .overlay(RoundedRectangle(cornerRadius: 10)
-                            .strokeBorder(selected ? Color.accentColor : Color.secondary.opacity(0.25),
-                                          lineWidth: selected ? 2 : 1))
-                }
-                .buttonStyle(.plain)
-                .disabled(changingTrinket)
-                .accessibilityLabel(item.name)
-                .accessibilityValue(selected ? "Applied +3" : "Not applied")
-            }
-        }
+        TrinketGlassShortcuts(world: world, enabled: !changingTrinket, size: 38, onSelect: onSelectTrinket)
     }
 
+    /// Secrets are an eye that opens, not a checkbox: the symbol morphs and
+    /// the glass takes on the accent while hidden rooms are revealed.
     private var secretToggle: some View {
-        Button { secrets.toggle() } label: {
-            Label("Secrets", systemImage: secrets ? "checkmark" : "xmark")
+        let available = (map?.document.secretCount ?? 0) > 0
+        return Button {
+            withAnimation(reduceMotion ? nil : .snappy) { secrets.toggle() }
+        } label: {
+            Label("Secrets", systemImage: secrets ? "eye" : "eye.slash")
+                .contentTransition(.symbolEffect(.replace))
                 .font(.subheadline.weight(.medium))
-                .padding(.horizontal, 12).padding(.vertical, 9)
+                .foregroundStyle(secrets ? AppTheme.upgrade : Color.primary.opacity(available ? 0.85 : 0.4))
+                .padding(.horizontal, 14).padding(.vertical, 9)
+                .contentShape(.capsule)
         }
         .buttonStyle(.plain)
-        .glassEffect(.regular.tint(secrets ? Color.accentColor.opacity(0.2) : .clear).interactive(), in: .capsule)
-        .disabled((map?.document.secretCount ?? 0) == 0)
+        .glassEffect(.regular.tint(secrets ? AppTheme.accent.opacity(0.24) : nil).interactive(), in: .capsule)
+        .disabled(!available)
+        .sensoryFeedback(.selection, trigger: secrets)
         .accessibilityAddTraits(secrets ? [.isSelected] : [])
     }
 
     private var toolbar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                if !branches.isEmpty {
-                    branchButton("Main", branch: 0)
-                    ForEach(branches) { area in
-                        branchButton(area.kind == "imp_vault" ? "Vault" : "Mine", branch: area.branch)
-                            .accessibilityLabel(area.label)
+            GlassEffectContainer(spacing: 8) {
+                HStack(spacing: 8) {
+                    if !branches.isEmpty {
+                        branchButton("Main", branch: 0)
+                        ForEach(branches) { area in
+                            branchButton(area.kind == "imp_vault" ? "Vault" : "Mine", branch: area.branch)
+                                .accessibilityLabel(area.label)
+                        }
                     }
+                    Spacer(minLength: 8)
+                    secretToggle
                 }
-                Spacer(minLength: 8)
-                secretToggle
+                .padding(.horizontal, 10).padding(.vertical, 8)
             }
-            .padding(.horizontal, 10).padding(.vertical, 8)
         }
         .defaultScrollAnchor(.trailing, for: .alignment)
     }
 
     private func branchButton(_ label: String, branch value: Int) -> some View {
-        Button { branchSelection = (profile, value) } label: {
+        Button {
+            withAnimation(AppTheme.glassSpring(reduceMotion)) { branchSelection = (profile, value) }
+        } label: {
             Text(label).font(.subheadline.weight(.medium))
                 .padding(.horizontal, 14).padding(.vertical, 9)
+                .contentShape(.capsule)
+                .glassChoice("branch-\(value)", selected: branch == value, lens: "branch", in: branchLens)
         }
         .buttonStyle(.plain)
-        .glassEffect(.regular.tint(branch == value ? Color.accentColor.opacity(0.2) : .clear).interactive(), in: .capsule)
         .accessibilityAddTraits(branch == value ? [.isSelected] : [])
     }
 
@@ -301,23 +309,40 @@ struct LevelMapPanel: View {
         .clipped()
         .overlay(alignment: .topTrailing) {
             if let onExpand {
-                Button("Expand map") { onExpand(branch, secrets) }
-                    .buttonStyle(.glass).padding(8)
+                Button("Expand map", systemImage: "arrow.up.left.and.arrow.down.right") { onExpand(branch, secrets) }
+                    .labelStyle(.iconOnly)
+                    .font(.subheadline.weight(.semibold))
+                    .buttonStyle(.glass(.clear))
+                    .buttonBorderShape(.circle)
+                    .controlSize(.large)
+                    .padding(10)
             }
         }
         .overlay(alignment: .bottom) {
             if expanded {
+                // Clear glass lets the dungeon refract through the stepper.
                 HStack(spacing: 0) {
                     Button { navigate(-1) } label: {
-                        Image(systemName: "chevron.left").frame(width: 52, height: 48)
-                    }.disabled(floorIndex == 0).accessibilityLabel("Previous floor")
-                    Divider().frame(height: 24)
+                        Image(systemName: "chevron.left").frame(width: 52, height: 48).contentShape(.rect)
+                    }
+                    .disabled(floorIndex == 0).opacity(floorIndex == 0 ? 0.3 : 1)
+                    .accessibilityLabel("Previous floor")
+                    Text("Floor \(depth)")
+                        .font(.subheadline.weight(.semibold)).monospacedDigit()
+                        .contentTransition(.numericText(value: Double(depth)))
+                        .frame(minWidth: 70)
+                        .accessibilityHidden(true)
                     Button { navigate(1) } label: {
-                        Image(systemName: "chevron.right").frame(width: 52, height: 48)
-                    }.disabled(floorIndex >= floors.count - 1).accessibilityLabel("Next floor")
+                        Image(systemName: "chevron.right").frame(width: 52, height: 48).contentShape(.rect)
+                    }
+                    .disabled(floorIndex >= floors.count - 1).opacity(floorIndex >= floors.count - 1 ? 0.3 : 1)
+                    .accessibilityLabel("Next floor")
                 }
                 .font(.headline).buttonStyle(.plain)
-                .glassEffect(.regular.interactive(), in: .capsule)
+                .foregroundStyle(.white)
+                .glassEffect(.clear.interactive(), in: .capsule)
+                .animation(reduceMotion ? nil : .snappy, value: depth)
+                .sensoryFeedback(.selection, trigger: depth)
                 .padding(12)
             }
         }
