@@ -116,7 +116,7 @@ object ItemGlows {
 private const val GLOW_PEAK_ALPHA = 0.6f
 
 /** Frozen blend used when the system asks for reduced motion. */
-private const val GLOW_STATIC_ALPHA = 0.3f
+internal const val GLOW_STATIC_ALPHA = 0.3f
 
 /** The colour a sprite is tinted with right now, and how far toward it. */
 data class GlowBlend(val color: Color, val alpha: Float)

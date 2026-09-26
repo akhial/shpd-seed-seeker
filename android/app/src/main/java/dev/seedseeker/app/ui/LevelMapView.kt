@@ -19,15 +19,15 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
-import android.widget.ImageView
+import dev.seedseeker.app.ui.theme.SpdUpgrade
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.lightColorScheme
 import android.graphics.Paint
 import android.graphics.RectF
+import android.graphics.ColorMatrixColorFilter
 import android.graphics.Bitmap
-import android.graphics.drawable.BitmapDrawable
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import androidx.compose.foundation.background
@@ -272,10 +272,11 @@ private fun LevelMapPanel(
 private fun MapCanvas(bundle: LevelMapBundle?, request: LevelMapRequest, secrets: Boolean, label: String, expanded: Boolean, animated: Boolean, navigate: (Int) -> Unit) {
     val colors = MaterialTheme.colorScheme
     val icons = LocalItemIconAtlas.current?.asAndroidBitmap()
+    val pulse = LocalGlowPulse.current
     AndroidView(
         modifier = Modifier.fillMaxSize(),
         factory = { context -> NativeLevelMapView(context) },
-        update = { it.setTooltipTheme(colors, icons); it.bind(bundle, request, secrets, expanded, animated, navigate); it.contentDescription = label },
+        update = { it.setTooltipTheme(colors, icons, pulse); it.bind(bundle, request, secrets, expanded, animated, navigate); it.contentDescription = label },
         onRelease = { it.release() },
     )
 }
@@ -284,11 +285,12 @@ private fun MapCanvas(bundle: LevelMapBundle?, request: LevelMapRequest, secrets
 internal class NativeLevelMapView(context: Context) : FrameLayout(context) {
     private var tooltipColors: ColorScheme = lightColorScheme()
     private var tooltipIcons: Bitmap? = null
-    fun setTooltipTheme(colors: ColorScheme, icons: Bitmap?) {
-        if (tooltipColors != colors || tooltipIcons !== icons) hideItem()
-        tooltipColors = colors; tooltipIcons = icons
+    private var tooltipPulse: GlowPulse? = null
+    fun setTooltipTheme(colors: ColorScheme, icons: Bitmap?, pulse: GlowPulse? = null) {
+        if (tooltipColors != colors || tooltipIcons !== icons || tooltipPulse !== pulse) hideItem()
+        tooltipColors = colors; tooltipIcons = icons; tooltipPulse = pulse
     }
-    private fun itemArtwork(atlas: Bitmap, image: Int, icon: List<Int>?): Bitmap {
+    private fun itemArtwork(atlas: Bitmap, image: Int): Bitmap {
         val sx = image % 16 * 16; val sy = image / 16 * 16
         var left = 16; var top = 16; var right = -1; var bottom = -1
         for (y in 0 until 16) for (x in 0 until 16) {
@@ -304,11 +306,42 @@ internal class NativeLevelMapView(context: Context) : FrameLayout(context) {
         val w = (right - left + 1) * scale; val h = (bottom - top + 1) * scale
         canvas.drawBitmap(atlas, Rect(sx + left, sy + top, sx + right + 1, sy + bottom + 1),
             RectF((pixels - w) / 2, (pixels - h) / 2, (pixels + w) / 2, (pixels + h) / 2), paint)
-        if (icon != null) tooltipIcons?.let { sheet ->
-            canvas.drawBitmap(sheet, Rect(icon[0], icon[1], icon[0] + icon[2], icon[1] + icon[3]),
-                RectF(pixels - icon[2] * scale, 0f, pixels.toFloat(), icon[3] * scale), paint)
-        }
         return result
+    }
+    private inner class TooltipSprite(atlas: Bitmap, private val item: dev.seedseeker.app.engine.MapTooltipItem) : View(context) {
+        private val artwork = itemArtwork(atlas, item.image)
+        private val leftInset = (0 until artwork.width).firstOrNull { x ->
+            (0 until artwork.height).any { y -> artwork.getPixel(x, y) ushr 24 > 8 }
+        } ?: 0
+        private val paint = Paint().apply { isFilterBitmap = false }
+        private val destination = RectF()
+        private val source = Rect()
+        private val matrix = FloatArray(20)
+        override fun onDraw(canvas: Canvas) {
+            super.onDraw(canvas)
+            canvas.save()
+            canvas.translate(-leftInset.toFloat(), 0f)
+            paint.colorFilter = item.glow?.let { glow ->
+                val strength = tooltipPulse?.alphaFor(glow.periodMs / 1000f) ?: GLOW_STATIC_ALPHA
+                for (axis in 0..2) {
+                    matrix[axis * 6] = 1 - strength
+                    matrix[axis * 5 + 4] = glow.color[axis] * strength
+                }
+                matrix[18] = 1f
+                ColorMatrixColorFilter(matrix)
+            }
+            destination.set(0f, 0f, width.toFloat(), height.toFloat())
+            canvas.drawBitmap(artwork, null, destination, paint)
+            paint.colorFilter = null
+            item.icon?.let { icon -> tooltipIcons?.let { sheet ->
+                val scale = width / 16f
+                source.set(icon[0], icon[1], icon[0] + icon[2], icon[1] + icon[3])
+                destination.set(width - icon[2] * scale, 0f, width.toFloat(), icon[3] * scale)
+                canvas.drawBitmap(sheet, source, destination, paint)
+            } }
+            canvas.restore()
+            if (item.glow != null && animate && isShown && isAttachedToWindow) postInvalidateOnAnimation()
+        }
     }
     private var inspectedCell: Int? = null
     private var itemCard: ScrollView? = null
@@ -348,8 +381,7 @@ internal class NativeLevelMapView(context: Context) : FrameLayout(context) {
                 val sx = item.image % 16 * 16
                 val sy = item.image / 16 * 16
                 if (sx + 16 <= atlas.width && sy + 16 <= atlas.height) {
-                    heading.addView(ImageView(context).apply {
-                        setImageDrawable(BitmapDrawable(resources, itemArtwork(atlas, item.image, item.icon)).apply { isFilterBitmap = false })
+                    heading.addView(TooltipSprite(atlas, item).apply {
                         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
                     }, LinearLayout.LayoutParams(dp(32), dp(32)).apply { marginEnd = dp(10) })
                 }
@@ -358,7 +390,19 @@ internal class NativeLevelMapView(context: Context) : FrameLayout(context) {
                 text = item.name + if (item.quantity > 1) "  ×${item.quantity}" else ""
                 textSize = 16f; setTextColor(tooltipColors.onSurface.toArgb()); setTypeface(typeface, Typeface.BOLD)
             }, LinearLayout.LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+            item.upgrade?.let { upgrade ->
+                heading.addView(TextView(context).apply {
+                    text = "+$upgrade"; textSize = 11f; typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+                    setTextColor(SpdUpgrade.toArgb()); setPadding(dp(4), dp(2), dp(4), dp(2))
+                    contentDescription = "Upgrade +$upgrade"
+                    background = GradientDrawable().apply { setColor(SpdUpgrade.copy(alpha = 0.12f).toArgb()); cornerRadius = dp(4).toFloat() }
+                }, LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply { marginStart = dp(6) })
+            }
             body.addView(heading)
+            item.enchantment?.let { text(it, 12f, tooltipColors.primary.toArgb()) }
+            if (item.cursed || item.curse != null) {
+                text(if (item.cursed) "Cursed" + (item.curse?.let { " · $it" } ?: "") else "${item.curse} curse", 12f, tooltipColors.error.toArgb())
+            }
             if (!item.deterministic) text("Varies with play", 11f, tooltipColors.onSurfaceVariant.toArgb())
             if (item.description.isNotEmpty()) text(item.description, 12f, tooltipColors.onSurfaceVariant.toArgb())
         }

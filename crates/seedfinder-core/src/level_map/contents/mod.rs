@@ -30,6 +30,9 @@ pub struct MapItem {
     pub deterministic: bool,
     #[cfg_attr(feature = "json-query", serde(skip_serializing_if = "Option::is_none"))]
     pub glow: Option<super::MapGlow>,
+    /// Generation-time properties for inspection; the scene/contents wire format stays stable.
+    #[cfg_attr(feature = "json-query", serde(skip))]
+    pub roll: Option<crate::equipment::EquipmentRoll>,
 }
 impl MapItem {
     pub(crate) fn new(kind: impl Into<String>, image: u16, quantity: i32) -> Self {
@@ -39,6 +42,7 @@ impl MapItem {
             quantity,
             deterministic: true,
             glow: None,
+            roll: None,
         }
     }
     fn unknown(kind: &str, image: u16) -> Self {

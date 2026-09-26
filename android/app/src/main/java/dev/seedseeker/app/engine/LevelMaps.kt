@@ -94,7 +94,11 @@ internal data class MapEmitter(
 internal data class MapBranch(val branch: Int, val kind: String) {
     val label get() = if (kind == "imp_vault") "Imp Vault" else "Blacksmith Mine"
 }
-internal data class MapTooltipItem(val name: String, val description: String, val image: Int, val quantity: Int, val deterministic: Boolean, val icon: List<Int>? = null)
+internal data class MapTooltipItem(
+    val name: String, val description: String, val image: Int, val quantity: Int, val deterministic: Boolean,
+    val icon: List<Int>? = null, val upgrade: Int? = null, val cursed: Boolean = false,
+    val enchantment: String? = null, val curse: String? = null, val glow: MapGlow? = null,
+)
 internal data class MapItemTooltip(val cell: Int, val label: String, val hidden: Boolean, val items: List<MapTooltipItem>, val bounds: List<Int>? = null)
 internal data class LevelMapDocument(
     val seed: String, val depth: Int, val branch: Int, val kind: String,
@@ -152,7 +156,13 @@ internal object LevelMapCodec {
             root.optJSONArray("itemTooltips")?.objects { tip ->
                 MapItemTooltip(tip.getInt("cell"), tip.optString("label"), tip.optBoolean("hidden"),
                     tip.getJSONArray("items").objects { item ->
-                        MapTooltipItem(item.getString("name"), item.optString("description"), item.getInt("image"), item.getInt("quantity"), item.optBoolean("deterministic", true), item.optJSONArray("icon")?.let { a -> List(4) { a.getInt(it) } })
+                        MapTooltipItem(item.getString("name"), item.optString("description"), item.getInt("image"), item.getInt("quantity"), item.optBoolean("deterministic", true),
+                            icon = item.optJSONArray("icon")?.let { a -> List(4) { a.getInt(it) } },
+                            upgrade = if (item.isNull("upgrade")) null else item.getInt("upgrade"),
+                            cursed = item.optBoolean("cursed"),
+                            enchantment = if (item.isNull("enchantment")) null else item.getString("enchantment"),
+                            curse = if (item.isNull("curse")) null else item.getString("curse"),
+                            glow = item.optJSONObject("glow")?.let { MapGlow(it.getJSONArray("color").ints(), it.getInt("periodMs")) })
                     }, tip.optJSONArray("bounds")?.let { a -> List(4) { a.getInt(it) } })
             } ?: emptyList(),
         )

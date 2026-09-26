@@ -78,6 +78,11 @@ public struct LevelMapDocument: Decodable, Sendable {
         public let quantity: Int
         public let deterministic: Bool
         public let icon: [Int]?
+        public let upgrade: Int?
+        public let cursed: Bool?
+        public let enchantment: String?
+        public let curse: String?
+        public let glow: Glow?
     }
     public func itemAt(x: Double, y: Double, secrets: Bool) -> ItemTooltip? {
         guard x >= 0, y >= 0, x < Double(pixelWidth), y < Double(pixelHeight) else { return nil }

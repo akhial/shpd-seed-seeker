@@ -332,7 +332,9 @@ impl FloorMapView {
                         item.name
                     };
                     let heading = gtk::Box::new(gtk::Orientation::Horizontal, 10);
-                    heading.append(&sprites::map_item_image(item.image, item.icon, 32));
+                    heading.append(&sprites::map_item_image(
+                        item.image, item.icon, item.glow, 32,
+                    ));
                     heading.append(
                         &gtk::Label::builder()
                             .label(&title)
@@ -343,7 +345,42 @@ impl FloorMapView {
                             .css_classes(["map-item-title"])
                             .build(),
                     );
+                    if let Some(upgrade) = item.upgrade {
+                        heading.append(
+                            &gtk::Label::builder()
+                                .label(format!("+{upgrade}"))
+                                .valign(gtk::Align::Center)
+                                .css_classes(["chip-tag", "chip-tag-up"])
+                                .build(),
+                        );
+                    }
                     body.append(&heading);
+                    let modifiers = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+                    if let Some(effect) = item.enchantment {
+                        modifiers.append(
+                            &gtk::Label::builder()
+                                .label(effect)
+                                .css_classes(["tag", "accent"])
+                                .build(),
+                        );
+                    }
+                    if item.cursed || item.curse.is_some() {
+                        let label = match (item.cursed, item.curse) {
+                            (true, Some(curse)) => format!("Cursed · {curse}"),
+                            (true, None) => "Cursed".into(),
+                            (false, Some(curse)) => format!("{curse} curse"),
+                            (false, None) => unreachable!(),
+                        };
+                        modifiers.append(
+                            &gtk::Label::builder()
+                                .label(label)
+                                .css_classes(["tag", "error"])
+                                .build(),
+                        );
+                    }
+                    if modifiers.first_child().is_some() {
+                        body.append(&modifiers);
+                    }
                     if !item.deterministic {
                         body.append(
                             &gtk::Label::builder()

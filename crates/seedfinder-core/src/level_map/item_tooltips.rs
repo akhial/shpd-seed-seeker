@@ -25,6 +25,15 @@ pub struct MapTooltipItem {
     pub icon: Option<[u16; 4]>,
     pub quantity: i32,
     pub deterministic: bool,
+    /// Identified in-game level. None for items without generated equipment properties.
+    pub upgrade: Option<u8>,
+    pub cursed: bool,
+    /// Weapon enchantment or armor glyph, using the game's display name.
+    pub enchantment: Option<&'static str>,
+    /// Named weapon/armor curse, separate from the item's cursed flag.
+    pub curse: Option<&'static str>,
+    /// The same color and half-cycle duration used by the map sprite.
+    pub glow: Option<super::MapGlow>,
 }
 
 fn words(kind: &str) -> String {
@@ -74,6 +83,23 @@ impl MapTooltipItem {
                 .map(|index| ITEM_ICONS[index].1),
             quantity: item.quantity,
             deterministic: item.deterministic,
+            upgrade: item.roll.map(|roll| {
+                crate::catalog::item_by_stable_id(&item.kind).map_or(roll.upgrade, |definition| {
+                    crate::model::displayed_upgrade(definition.id, roll.upgrade)
+                })
+            }),
+            cursed: item.roll.is_some_and(|roll| roll.cursed),
+            enchantment: item
+                .roll
+                .and_then(|roll| roll.effect)
+                .filter(|effect| !effect.is_curse())
+                .map(crate::catalog::Effect::wire_name),
+            curse: item
+                .roll
+                .and_then(|roll| roll.effect)
+                .filter(|effect| effect.is_curse())
+                .map(crate::catalog::Effect::wire_name),
+            glow: item.glow,
         }
     }
 }
@@ -273,5 +299,73 @@ mod tests {
             60,
             "12 rings and 24 each of potions and scrolls"
         );
+    }
+    #[test]
+    fn inspection_reports_identified_levels_effects_curses_and_shared_glows() {
+        use crate::catalog::{ArmorEffect, Effect, ItemId, WeaponEffect, item};
+        use crate::equipment::EquipmentRoll;
+        for (id, effect, cursed, enchantment, curse, period) in [
+            (
+                ItemId::Shortsword,
+                Some(Effect::Weapon(WeaponEffect::Shocking)),
+                true,
+                Some("Shocking"),
+                None,
+                Some(500),
+            ),
+            (
+                ItemId::LeatherArmor,
+                Some(Effect::Armor(ArmorEffect::Potential)),
+                false,
+                Some("Potential"),
+                None,
+                Some(600),
+            ),
+            (
+                ItemId::Shortsword,
+                Some(Effect::Weapon(WeaponEffect::Wayward)),
+                true,
+                None,
+                Some("Wayward"),
+                Some(1000),
+            ),
+            (ItemId::RingMight, None, true, None, None, Some(1000)),
+            (ItemId::WandFireblast, None, true, None, None, None),
+        ] {
+            let definition = item(id);
+            let mut source = MapItem::new(definition.stable_id, definition.sprite_index, 1);
+            source.roll = Some(EquipmentRoll {
+                upgrade: 2,
+                effect,
+                cursed,
+            });
+            source.glow = super::super::MapGlow::for_item(definition.kind, effect, cursed);
+            let tip = MapTooltipItem::from_item(&source);
+            assert_eq!(tip.upgrade, Some(2));
+            assert_eq!(tip.cursed, cursed);
+            assert_eq!(tip.enchantment, enchantment);
+            assert_eq!(tip.curse, curse);
+            assert_eq!(tip.glow, source.glow);
+            assert_eq!(tip.glow.map(|glow| glow.period_ms), period);
+        }
+        for (id, expected) in [(ItemId::SandalsOfNature, 7), (ItemId::EtherealChains, 6)] {
+            let definition = item(id);
+            let mut source = MapItem::new(definition.stable_id, definition.sprite_index, 1);
+            source.roll = Some(EquipmentRoll {
+                upgrade: 5,
+                effect: None,
+                cursed: false,
+            });
+            assert_eq!(MapTooltipItem::from_item(&source).upgrade, Some(expected));
+        }
+        let unknown = MapTooltipItem::from_item(&MapItem {
+            deterministic: false,
+            ..MapItem::new("RuntimeVaultConsumable", 0, 1)
+        });
+        assert_eq!(unknown.upgrade, None);
+        assert!(!unknown.cursed);
+        assert_eq!(unknown.enchantment, None);
+        assert_eq!(unknown.curse, None);
+        assert_eq!(unknown.glow, None);
     }
 }

@@ -146,10 +146,34 @@ internal sealed class LevelMapView : Grid
             var heading = new Grid { ColumnSpacing = 10 };
             heading.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
             heading.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
-            heading.Children.Add(new SpriteView { SpriteIndex = item.Image, IconSource = item.Icon, SpriteSize = 32, VerticalAlignment = VerticalAlignment.Center });
+            var sprite = new SpriteView { SpriteIndex = item.Image, IconSource = item.Icon, AlignArtworkLeft = true, SpriteSize = 32, VerticalAlignment = VerticalAlignment.Center };
+            if (item.Glow is { Color.Length: 3 } glow) {
+                sprite.GlowColor = Windows.UI.Color.FromArgb(255, (byte)glow.Color[0], (byte)glow.Color[1], (byte)glow.Color[2]);
+                sprite.GlowPeriod = glow.PeriodMs / 1000;
+            }
+            heading.Children.Add(sprite);
             var name = new TextBlock { Text = item.Name + (item.Quantity > 1 ? $"  ×{item.Quantity}" : ""),
                 FontSize = 16, FontWeight = Microsoft.UI.Text.FontWeights.Bold, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
-            Grid.SetColumn(name, 1); heading.Children.Add(name); body.Children.Add(heading);
+            Grid.SetColumn(name, 1); heading.Children.Add(name);
+            if (item.Upgrade is int upgrade) {
+                heading.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+                var chip = new Border { Padding = new Thickness(4, 0, 4, 0), CornerRadius = new CornerRadius(4),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Background = (Brush)Application.Current.Resources["SystemFillColorSuccessBackgroundBrush"],
+                    Child = new TextBlock { Text = $"+{upgrade}", FontSize = 11, FontFamily = new FontFamily("Consolas"),
+                        FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                        Foreground = (Brush)Application.Current.Resources["SystemFillColorSuccessBrush"] } };
+                AutomationProperties.SetName(chip, $"Upgrade +{upgrade}");
+                Grid.SetColumn(chip, 2); heading.Children.Add(chip);
+            }
+            body.Children.Add(heading);
+            var modifiers = new WrapPanel { Spacing = 6, LineSpacing = 4 };
+            if (item.Enchantment is string effect) modifiers.Children.Add(new TextBlock { Text = effect, FontSize = 12,
+                Foreground = (Brush)Application.Current.Resources["AccentTextFillColorPrimaryBrush"] });
+            if (item.Cursed || item.Curse is not null) modifiers.Children.Add(new TextBlock {
+                Text = item.Cursed ? "Cursed" + (item.Curse is null ? "" : $" · {item.Curse}") : $"{item.Curse} curse", FontSize = 12,
+                Foreground = (Brush)Application.Current.Resources["SystemFillColorCriticalBrush"] });
+            if (modifiers.Children.Count > 0) body.Children.Add(modifiers);
             if (!item.Deterministic) body.Children.Add(new TextBlock { Text = "Varies with play", FontSize = 11, Opacity = .7 });
             if (item.Description.Length > 0) body.Children.Add(new TextBlock { Text = item.Description, FontSize = 12, Opacity = .85, TextWrapping = TextWrapping.Wrap });
         }

@@ -401,3 +401,17 @@
 .d1-map-item-tooltip > .d1-map-item-context {
   margin-bottom: 12px;
 }
+
+.d1-map-item-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+.d1-map-item-modifiers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}

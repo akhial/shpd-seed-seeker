@@ -440,11 +440,24 @@ private struct MapItemCard: View {
             ForEach(Array(tip.items.enumerated()), id: \.offset) { index, item in
                 if index > 0 { Divider() }
                 HStack(spacing: 10) {
-                    if let image = SpriteAtlas.bundled?.inspectionSprite(spriteIndex: item.image, icon: item.icon, pointSize: 32) {
-                        Image(decorative: image, scale: CGFloat(SpriteAtlas.pixelScale)).interpolation(.none)
-                    }
+                    MapItemSpriteView(item: item)
                     Text(item.name).font(.system(size: 15, weight: .bold))
+                    if let upgrade = item.upgrade {
+                        Text("+\(upgrade)").font(.system(size: 11, weight: .semibold, design: .monospaced))
+                            .foregroundStyle(Color.shatteredGreen).padding(.horizontal, 4).padding(.vertical, 2)
+                            .background(Color.shatteredGreen.opacity(0.12), in: RoundedRectangle(cornerRadius: 4))
+                            .accessibilityLabel("Upgrade +\(upgrade)")
+                    }
                     if item.quantity > 1 { Spacer(); Text("×\(item.quantity)").foregroundStyle(.secondary) }
+                }
+                if item.enchantment != nil || item.curse != nil || item.cursed == true {
+                    HStack(spacing: 8) {
+                        if let effect = item.enchantment { Text(effect).foregroundStyle(Color.accentColor) }
+                        if item.cursed == true || item.curse != nil {
+                            Text(item.cursed == true ? "Cursed" + (item.curse.map { " · \($0)" } ?? "") : "\(item.curse ?? "") curse")
+                                .foregroundStyle(.red)
+                        }
+                    }.font(.caption)
                 }
                 if !item.deterministic { Text("Varies with play").font(.caption).foregroundStyle(.secondary) }
                 if !item.description.isEmpty { Text(item.description).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }

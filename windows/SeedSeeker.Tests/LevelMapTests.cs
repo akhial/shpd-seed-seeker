@@ -30,6 +30,21 @@ public sealed class LevelMapTests
     }
 
     [Fact]
+    public void ItemInspectionDecodesGeneratedUpgradesEnchantmentsAndCurses()
+    {
+        var map = NativeEngine.LevelMap(LevelMapDocument.Request("AAA-AAA-AAA", 7, 0, new QuerySettings(), "none"));
+        var items = map.ItemTooltips.SelectMany(tip => tip.Items).ToArray();
+        var enchanted = items.First(item => item.Name == "Assassin's blade");
+        Assert.Equal(1, enchanted.Upgrade); Assert.Equal("Vorpal", enchanted.Enchantment);
+        Assert.False(enchanted.Cursed); Assert.Null(enchanted.Curse);
+        Assert.Equal(new[] { 170, 102, 102 }, enchanted.Glow!.Color); Assert.Equal(1000, enchanted.Glow.PeriodMs);
+        var cursed = items.First(item => item.Curse == "Wondrous");
+        Assert.Equal(1, cursed.Upgrade); Assert.True(cursed.Cursed); Assert.Null(cursed.Enchantment);
+        Assert.Equal(new[] { 0, 0, 0 }, cursed.Glow!.Color);
+        Assert.Contains(items, item => item.Upgrade is null && item.Glow is null);
+    }
+
+    [Fact]
     public void GardenShaftsScaleWidthAndHeightIndependently()
     {
         var map = NativeEngine.LevelMap(LevelMapDocument.Request("AAA-AAA-AAA", 4, 0, new QuerySettings(), "none"));

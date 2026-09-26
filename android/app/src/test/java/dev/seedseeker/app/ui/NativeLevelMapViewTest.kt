@@ -47,6 +47,24 @@ class NativeLevelMapViewTest {
         view.release()
     }
 
+    @Test fun inspectionDecodesGeneratedUpgradesEnchantmentsAndCurses() = runBlocking {
+        val bundle = LevelMaps.load(LevelMapRequest("AAA-AAA-AAA", 7, 0, null))
+        val items = bundle.map.itemTooltips.flatMap { it.items }
+        val enchanted = items.first { it.name == "Assassin's blade" }
+        assertEquals(1, enchanted.upgrade)
+        assertEquals("Vorpal", enchanted.enchantment)
+        assertFalse(enchanted.cursed)
+        assertNull(enchanted.curse)
+        assertArrayEquals(intArrayOf(170, 102, 102), enchanted.glow!!.color)
+        assertEquals(1000, enchanted.glow.periodMs)
+        val cursed = items.first { it.curse == "Wondrous" }
+        assertEquals(1, cursed.upgrade)
+        assertTrue(cursed.cursed)
+        assertNull(cursed.enchantment)
+        assertArrayEquals(intArrayOf(0, 0, 0), cursed.glow!!.color)
+        assertTrue(items.any { it.upgrade == null && it.glow == null })
+    }
+
     @Test fun viewportSurvivesLoadingRetryAndTrinketsButFitsNewLocations() = runBlocking {
         val request = LevelMapRequest("AAA-AAA-AAA", 12, 0, null)
         val original = LevelMaps.load(request)

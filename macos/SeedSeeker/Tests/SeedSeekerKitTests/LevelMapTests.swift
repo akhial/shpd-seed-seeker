@@ -8,6 +8,19 @@ final class LevelMapTests: XCTestCase, @unchecked Sendable {
         LevelMapRequest(seed: "AAA-AAA-AAA", depth: depth, branch: branch, challenges: challenges, selectedTrinket: trinket)
     }
 
+    func testItemInspectionDecodesGeneratedUpgradesEnchantmentsAndCurses() async throws {
+        let bundle = try await LevelMapClient.shared.load(request(7))
+        let items = try XCTUnwrap(bundle.document.itemTooltips).flatMap(\.items)
+        let enchanted = try XCTUnwrap(items.first { $0.name == "Assassin's blade" })
+        XCTAssertEqual(enchanted.upgrade, 1); XCTAssertEqual(enchanted.enchantment, "Vorpal")
+        XCTAssertEqual(enchanted.cursed, false); XCTAssertNil(enchanted.curse)
+        XCTAssertEqual(enchanted.glow?.color, [170, 102, 102]); XCTAssertEqual(enchanted.glow?.periodMs, 1000)
+        let cursed = try XCTUnwrap(items.first { $0.curse == "Wondrous" })
+        XCTAssertEqual(cursed.upgrade, 1); XCTAssertEqual(cursed.cursed, true); XCTAssertNil(cursed.enchantment)
+        XCTAssertEqual(cursed.glow?.color, [0, 0, 0])
+        XCTAssertTrue(items.contains { $0.upgrade == nil && $0.glow == nil })
+    }
+
     func testRequestUsesEngineChallengeNamesAndExplicitNone() throws {
         let document = try XCTUnwrap(JSONSerialization.jsonObject(with: request(challenges: 104).encoded()) as? [String: Any])
         XCTAssertEqual(document["trinket"] as? String, "none")

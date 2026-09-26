@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import { spriteBoxCss, itemIconCss } from "../../shared/sprites/sprites";
+import { spriteBoxCss, itemIconCss, spriteGlowCss } from "../../shared/sprites/sprites";
 import type { MapItemTooltip as ItemTooltip } from "./types";
 
 export function MapItemTooltip({
@@ -55,13 +55,60 @@ export function MapItemTooltip({
         return (
           <article key={index} className="d1-map-item-entry">
             <div className="d1-map-item-heading">
-              <span className="d1-map-item-icon" aria-hidden="true" style={sprite.outer}>
-                <span style={sprite.inner} />
-                {item.icon && <span style={itemIconCss(item.icon, 32)} />}
+              <span
+                className="d1-map-item-icon"
+                aria-hidden="true"
+                style={{ ...sprite.outer, justifyContent: "flex-start" }}
+              >
+                <span style={sprite.inner}>
+                  {item.glow && (
+                    <span
+                      className="d1-sprite-glow"
+                      style={spriteGlowCss(item.image, 32, [
+                        {
+                          color: `rgb(${item.glow.color.join(" ")})`,
+                          period: item.glow.periodMs / 1000,
+                        },
+                      ])}
+                    />
+                  )}
+                </span>
+                {item.icon && (
+                  <span
+                    style={{
+                      ...itemIconCss(item.icon, 32),
+                      right: (32 - Number.parseFloat(String(sprite.inner.width))) / 2,
+                    }}
+                  />
+                )}
               </span>
-              <strong>{item.name}</strong>
+              <div className="d1-map-item-title">
+                <strong>{item.name}</strong>
+                {item.upgrade != null && (
+                  <span
+                    className="d1-chip-tag d1-chip-tag-up"
+                    aria-label={`Upgrade +${item.upgrade}`}
+                  >
+                    +{item.upgrade}
+                  </span>
+                )}
+              </div>
               {item.quantity > 1 && <span className="d1-map-item-quantity">×{item.quantity}</span>}
             </div>
+            {(item.enchantment || item.curse || item.cursed) && (
+              <div className="d1-map-item-modifiers">
+                {item.enchantment && (
+                  <span className="d1-chip-tag d1-chip-tag-soft">{item.enchantment}</span>
+                )}
+                {(item.curse || item.cursed) && (
+                  <span className="d1-chip-tag d1-badge-curse">
+                    {item.cursed
+                      ? `Cursed${item.curse ? ` · ${item.curse}` : ""}`
+                      : `${item.curse} curse`}
+                  </span>
+                )}
+              </div>
+            )}
             {!item.deterministic && <span className="d1-map-item-context">Varies with play</span>}
             {item.description && <p>{item.description}</p>}
           </article>

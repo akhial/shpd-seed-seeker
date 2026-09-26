@@ -70,6 +70,11 @@ export interface MapItemTooltip {
     icon?: [number, number, number, number] | null;
     quantity: number;
     deterministic: boolean;
+    upgrade?: number | null;
+    cursed?: boolean;
+    enchantment?: string | null;
+    curse?: string | null;
+    glow?: MapGlow | null;
   }[];
 }
 export interface LevelMapDocument {

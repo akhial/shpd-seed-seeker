@@ -65,7 +65,8 @@ public sealed class LevelMapDocument
     }
 }
 
-public sealed record MapTooltipItem(string Name, string Description, int Image, int Quantity, bool Deterministic, int[]? Icon = null);
+public sealed record MapTooltipItem(string Name, string Description, int Image, int Quantity, bool Deterministic,
+    int[]? Icon = null, int? Upgrade = null, bool Cursed = false, string? Enchantment = null, string? Curse = null, MapGlow? Glow = null);
 public sealed record MapItemTooltip(int Cell, string Label, bool Hidden, MapTooltipItem[] Items, int[]? Bounds = null);
 public sealed record MapBranch(int Depth, int Branch, string Kind, int Entrance);
 public sealed record MapAsset(string Id, int Width, int Height, string Sha256);
