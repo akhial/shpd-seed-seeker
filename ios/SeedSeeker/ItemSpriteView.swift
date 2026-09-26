@@ -1,0 +1,247 @@
+import SeedSeekerKit
+import SwiftUI
+
+/// The web's "Any" chip art: category silhouette under a shadowed green mark.
+/// It has no ring identity glyph or effect glow because it names no specific item.
+struct WildcardSpriteView: View {
+    var kind: ItemKind
+    var pointSize: Int = 16
+
+    private var spriteIndex: Int {
+        switch kind {
+        case .weapon, .meleeWeapon: 112
+        case .thrownWeapon: 149
+        case .armor: 178
+        case .wand: 209
+        case .ring: 224
+        case .trinket: 70
+        case .artifact: 6
+        }
+    }
+
+    var body: some View {
+        ZStack {
+            if let image = SpriteAtlas.bundled?.composedSprite(spriteIndex: spriteIndex,
+                                                             pointSize: pointSize, layer: .art) {
+                Image(decorative: image, scale: CGFloat(SpriteAtlas.pixelScale))
+                    .interpolation(.none)
+                    .antialiased(false)
+                    .grayscale(1)
+                    .opacity(0.3)
+            }
+            Circle().fill(RadialGradient(
+                stops: [.init(color: .black.opacity(0.4), location: 0),
+                        .init(color: .black.opacity(0.18), location: 0.45),
+                        .init(color: .clear, location: 1)],
+                center: .center, startRadius: 0, endRadius: CGFloat(pointSize) / 2))
+            Text("?")
+                .font(.system(size: CGFloat(pointSize) * 14 / 18, weight: .semibold))
+                .foregroundStyle(AppTheme.accent)
+                .shadow(color: Color(uiColor: .systemBackground), radius: 2, y: 1)
+        }
+        .frame(width: CGFloat(pointSize), height: CGFloat(pointSize))
+        .accessibilityHidden(true)
+    }
+}
+
+/// An item's real Shattered Pixel Dungeon sprite, pulsing with its
+/// enchantment/curse glow when it carries one.
+///
+/// `SpriteAtlas` crops the art to its alpha bounding box, centres it and draws a
+/// ring's type glyph, all nearest-neighbour at 2× so it stays crisp on Retina.
+/// The glow is a solid colour layer masked to the sprite's opaque pixels whose
+/// opacity fades linearly 0 → 0.6 → 0 over `2 × period` seconds — the same
+/// reproduction of upstream's `texel*(1-v) + glow*v` shader the web app uses, so
+/// only the silhouette tints and there is no halo outside it.
+///
+/// Falls back to a question mark when the item is missing or the atlas is not
+/// bundled, which is the case for a bare `swift run` outside the `.app`.
+struct ItemSpriteView: View {
+    /// The concrete item, or nil when it is unavailable.
+    var item: CatalogItem?
+    /// The ring gems of the run this item belongs to, when it belongs to one:
+    /// a ring is drawn in its run's gem cell, so a scouted item must pass its
+    /// world's table. Nil keeps the catalog's own cell, which is what a
+    /// seedless surface — the requirement board — has to draw.
+    var ringGems: RingGems?
+    /// Enchantment or curse glow to pulse with, if any.
+    var glow: ItemGlow?
+    /// Alternative effects a requirement accepts. Each gets a complete pulse
+    /// in turn; an empty array keeps the single-glow API used by Scout.
+    var glows: [ItemGlow] = []
+    /// Box edge in points. Multiples of 8 keep the pixel scale integral.
+    var pointSize: Int = 32
+    /// Accessibility label; the sprite is decorative when nil.
+    var label: String?
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        ZStack {
+            artwork
+            if glows.count > 1 {
+                SequencedSpriteGlowLayer(glows: glows, reduceMotion: reduceMotion) { artwork }
+                    .id(glows)
+            } else if let glow = glows.first ?? glow {
+                SpriteGlowLayer(glow: glow, reduceMotion: reduceMotion) { artwork }
+                    // Restart the pulse from zero whenever the effect changes,
+                    // since list rows are reused as the manifest re-renders.
+                    .id(glow)
+            }
+            // Stacked above the glow: the glyph is the only thing distinguishing
+            // one ring from another, so it must stay solid rather than pulse
+            // with a curse. The web draws it as a sibling after the glow too.
+            typeIcon
+        }
+        .frame(width: CGFloat(pointSize), height: CGFloat(pointSize))
+        .accessibilityHidden(label == nil)
+        .accessibilityLabel(label ?? "")
+    }
+
+    /// The item art alone — also the glow's mask, hence excluding the glyph.
+    @ViewBuilder private var artwork: some View {
+        if let image = sprite(.art) {
+            pixels(image)
+        } else {
+            Image(systemName: "questionmark")
+                .font(.system(size: CGFloat(pointSize) * 0.6, weight: .semibold))
+                .foregroundStyle(AppTheme.accent)
+        }
+    }
+
+    /// A ring's type glyph, in the same box so it lands where it does in
+    /// ``SpriteLayer/whole``. Empty for every other item.
+    @ViewBuilder private var typeIcon: some View {
+        if let image = sprite(.typeIcon) { pixels(image) }
+    }
+
+    private func pixels(_ image: CGImage) -> some View {
+        Image(decorative: image, scale: CGFloat(SpriteAtlas.pixelScale))
+            .interpolation(.none)
+            .antialiased(false)
+    }
+
+    private func sprite(_ layer: SpriteLayer) -> CGImage? {
+        guard let item else { return nil }
+        return SpriteAtlas.bundled?.composedSprite(spriteIndex: item.spriteIndex(in: ringGems),
+                                                   typeIcon: item.typeIconIndex,
+                                                   pointSize: pointSize, layer: layer)
+    }
+}
+
+/// Match the web's alternating-effect sprite: equal turns, with the full
+/// round lasting the sum of all the effects' cycles. The colour changes at
+/// zero opacity, so there is no visible jump between differently tinted art.
+private struct SequencedSpriteGlowLayer<Mask: View>: View {
+    let glows: [ItemGlow]
+    let reduceMotion: Bool
+    @ViewBuilder let mask: Mask
+    @State private var startedAt = Date.now
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion)) { context in
+            let turnDuration = glows.reduce(0) { $0 + $1.cycleDuration } / Double(glows.count)
+            let elapsed = reduceMotion ? 0 : max(0, context.date.timeIntervalSince(startedAt))
+            let turn = elapsed / turnDuration
+            let index = Int(turn) % glows.count
+            let phase = turn - floor(turn)
+            let opacity = reduceMotion ? ItemGlow.reducedMotionOpacity
+                : ItemGlow.peakOpacity * (1 - abs(2 * phase - 1))
+            let (red, green, blue) = glows[index].components
+            Color(.sRGB, red: red, green: green, blue: blue)
+                .mask { mask }
+                .opacity(opacity)
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+/// The pulsing glow overlay: `mask`'s opaque pixels tinted with the glow colour,
+/// its opacity animating linearly between 0 and ``ItemGlow/peakOpacity``. Held
+/// at a static blend instead when the system asks for reduced motion, matching
+/// the web app under `prefers-reduced-motion`.
+private struct SpriteGlowLayer<Mask: View>: View {
+    let glow: ItemGlow
+    let reduceMotion: Bool
+    @ViewBuilder let mask: Mask
+    @State private var atPeak = false
+
+    var body: some View {
+        let (red, green, blue) = glow.components
+        return Color(.sRGB, red: red, green: green, blue: blue, opacity: 1)
+            .mask { mask }
+            .opacity(reduceMotion ? ItemGlow.reducedMotionOpacity
+                                  : (atPeak ? ItemGlow.peakOpacity : 0))
+            .allowsHitTesting(false)
+            .onAppear {
+                guard !reduceMotion else { return }
+                // One `period` in, one back out: a full cycle is 2 × period.
+                withAnimation(.linear(duration: glow.period).repeatForever(autoreverses: true)) {
+                    atPeak = true
+                }
+            }
+    }
+}
+
+/// A bare, non-glowing sprite image for places that only accept an `Image`, such
+/// as the item picker. Renders nothing when the atlas is absent.
+///
+/// The picker sets its label hard against the icon, and a ring's type glyph runs
+/// to the very edge of its box, so ring sprites are drawn with a trailing margin
+/// baked in. It has to be in the bitmap rather than applied as padding: the
+/// popup button honours the icon's own width but drops its outer padding when it
+/// draws the selected row, so padding moves the open menu's rows and leaves the
+/// collapsed control untouched. Everything else keeps its square box, and the
+/// scout list — which asks for no margin — is unaffected either way.
+///
+/// The picker names item *classes*, not the contents of any one run, so a ring
+/// keeps the catalog's cell here — there is no seed to ask for a gem.
+struct ItemSpriteIcon: View {
+    var item: CatalogItem
+    var pointSize: Int = 16
+    /// Points of transparency added to the right of a ring's glyph.
+    var typeIconMargin: Int = 2
+
+    var body: some View {
+        if let image = SpriteAtlas.bundled?.composedSprite(spriteIndex: item.spriteIndex,
+                                                           typeIcon: item.typeIconIndex,
+                                                           pointSize: pointSize,
+                                                           typeIconMargin: typeIconMargin) {
+            Image(decorative: image, scale: CGFloat(SpriteAtlas.pixelScale))
+                .interpolation(.none)
+                .antialiased(false)
+        }
+    }
+}
+
+/// The map supplies a seeded sprite cell and identity glyph for rings, potions,
+/// and scrolls (including exotics). Only the artwork receives the effect pulse.
+struct MapItemSpriteView: View {
+    let item: LevelMapDocument.TooltipItem
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        ZStack {
+            pixels(.art)
+            if let glow = item.glow, glow.color.count == 3 {
+                let color = String(format: "#%02x%02x%02x", Int(glow.color[0]), Int(glow.color[1]), Int(glow.color[2]))
+                SpriteGlowLayer(glow: ItemGlow(hex: color, period: glow.periodMs / 1000), reduceMotion: reduceMotion) {
+                    pixels(.art)
+                }.id(glow)
+            }
+            pixels(.typeIcon)
+        }
+        .offset(x: -CGFloat(16 - (SpriteAtlas.bundled?.bounds(forSprite: item.image).width ?? 16)))
+        .frame(width: 32, height: 32)
+        .accessibilityHidden(true)
+    }
+
+    @ViewBuilder private func pixels(_ layer: SpriteLayer) -> some View {
+        if let image = SpriteAtlas.bundled?.inspectionSprite(spriteIndex: item.image, icon: item.icon,
+                                                            pointSize: 32, layer: layer) {
+            Image(decorative: image, scale: CGFloat(SpriteAtlas.pixelScale))
+                .interpolation(.none)
+                .antialiased(false)
+        }
+    }
+}

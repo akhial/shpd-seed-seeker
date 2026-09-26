@@ -10,7 +10,7 @@
 </p>
 
 An extremely fast seed finder for [Shattered Pixel Dungeon](https://shatteredpixel.com/),
-written in Rust — with native apps for Android, Linux, macOS, and Windows.
+written in Rust — with native apps for Android, iOS, Linux, macOS, and Windows.
 
 **[Try it in your browser →](https://shpd-seed-seeker.web.app/)**
 
@@ -53,12 +53,15 @@ Run searches directly at
 
 Binaries are published on the [GitHub Releases page](https://github.com/akhial/shpd-seed-seeker/releases).
 
+**iPhone and iPad:** [install the IPA with SideStore or AltStore Classic](ios/README.md#installation).
+
 | Asset | Platforms |
 | --- | --- |
 | `seed-seeker-cli-<tag>-<target>.tar.gz` / `.zip` | CLI for Linux (x86_64, arm64), macOS (Apple Silicon, Intel), and Windows (x86_64, arm64) |
 | `seed-seeker-cli-<tag>-<target>-avx2.tar.gz` / `.zip` | CLI built for AVX2 x86-64 machines |
 | `seed-seeker-<tag>-<arch>.AppImage` | Native Linux app (x86_64, arm64) |
 | `seed-seeker-<tag>-macos-arm64.dmg` | Native macOS app (Apple Silicon, macOS 14+) |
+| `seed-seeker-<tag>-ios-arm64.ipa` | Native iPhone and iPad app (iOS/iPadOS 27+, [installation instructions](ios/README.md#installation)) |
 | `seed-seeker-<tag>-windows-<arch>.zip` | Native Windows app (x64, ARM64) |
 | `seed-seeker-<tag>-windows-x64-avx2.zip` | Windows app built for AVX2 x86-64 machines |
 | `seed-seeker-<tag>-android-arm64-v8a.apk` | Android app for ARM64 phones and tablets |
@@ -201,6 +204,18 @@ CI does. Most supported phones and tablets use the `arm64-v8a` release download.
 "$ANDROID_HOME/platform-tools/adb" shell monkey \
   -p dev.seedseeker.unofficial -c android.intent.category.LAUNCHER 1
 ```
+
+### iOS
+
+The SwiftUI app targets iOS 27 and uses Liquid Glass with the Android app's
+Finder and Scout workflows. Build for the iPhone 18 Pro simulator:
+
+```sh
+bash scripts/build-ios-app.sh simulator
+```
+
+Open `ios/SeedSeeker.xcodeproj` to run in Xcode. See [ios/README.md](ios/README.md)
+for installation, IPA packaging, device signing, background search, and tests.
 
 ### macOS
 

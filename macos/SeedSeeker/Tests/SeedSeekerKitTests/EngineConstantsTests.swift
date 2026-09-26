@@ -67,7 +67,7 @@ final class EngineConstantsTests: XCTestCase {
         XCTAssertEqual(SearchController.resultCap, info["maxResults"] as? Int)
         // The import byte cap and the seed count have no local copies: the
         // codec applies the cap itself and the session reports the count.
-        XCTAssertGreaterThan(limit("resultsFileMaxBytes"), 0)
+        XCTAssertEqual(EngineInfo.shared.resultsFileMaxBytes, limit("resultsFileMaxBytes"))
         XCTAssertEqual(info["totalSeeds"] as? Int64, 5_429_503_678_976)
         XCTAssertEqual(EngineInfo.shared.shpdVersion, info["shpdVersion"] as? String)
     }

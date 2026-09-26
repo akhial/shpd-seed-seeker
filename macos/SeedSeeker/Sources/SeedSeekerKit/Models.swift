@@ -750,7 +750,7 @@ public struct ResumeHint: Sendable {
     }
 }
 
-public struct SeedResult: Hashable, Identifiable, Sendable {
+public struct SeedResult: Codable, Hashable, Identifiable, Sendable {
     public let seed: String
     public let matchedRequirements: Int
     public let selectedTrinket: String?
@@ -922,7 +922,7 @@ public enum ScoutAccessibility: Hashable, Sendable {
     case scenarios(group: Int, mask: UInt64)
 }
 
-public enum SearchState: Int, Sendable { case running, completed, cancelled, failed }
+public enum SearchState: Int, Codable, Sendable { case running, completed, cancelled, failed }
 
 public struct SearchStatus: Sendable {
     public let state: SearchState

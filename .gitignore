@@ -21,6 +21,11 @@
 /macos/SeedSeeker/.swiftpm/
 /macos/SeedSeeker/Sources/CSeedFinder/engine_revision.h
 
+# Per-user Xcode state. iOS products and generated headers live in /target/ios.
+/ios/build/
+/ios/**/xcuserdata/
+/ios/**/*.xcuserstate
+
 # Windows/.NET build products and local restore caches.
 /windows/SeedSeeker/bin/
 /windows/SeedSeeker/obj/

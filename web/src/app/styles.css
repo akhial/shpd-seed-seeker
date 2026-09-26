@@ -2870,6 +2870,13 @@ input[type="range"]::-moz-range-thumb {
   width: min(440px, 100%);
 }
 
+.d1-dl-note {
+  margin: 0;
+  color: var(--d1-text-2);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .d1-dl-list {
   list-style: none;
   margin: 0;
