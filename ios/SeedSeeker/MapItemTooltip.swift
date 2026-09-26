@@ -62,10 +62,15 @@ private struct MapItemOverlay: View {
         GlassEffectContainer {
             ZStack(alignment: .topLeading) {
                 if let card = presentation.card {
-                    ScrollView {
+                    VStack(spacing: 0) {
                         MapItemCard(tip: card.tip, onClose: onClose)
+                            .header
+                            .frame(maxHeight: min(52, card.frame.height), alignment: .top)
+                        ScrollView {
+                            MapItemCard(tip: card.tip).details
+                        }
+                        .scrollBounceBehavior(.basedOnSize)
                     }
-                    .scrollBounceBehavior(.basedOnSize)
                     .frame(width: card.frame.width, height: card.frame.height)
                     .clipShape(.rect(cornerRadius: 20))
                     .glassEffect(.regular.tint(AppTheme.surface.opacity(0.35)), in: .rect(cornerRadius: 20))
@@ -85,21 +90,31 @@ struct MapItemCard: View {
     var onClose: () -> Void = {}
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                if !tip.label.isEmpty {
-                    Text(tip.label)
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 0)
-                Button("Close", systemImage: "xmark", action: onClose)
-                    .labelStyle(.iconOnly)
-                    .font(.caption.weight(.semibold))
-                    .buttonStyle(.glass)
-                    .buttonBorderShape(.circle)
+        VStack(spacing: 0) {
+            header
+            details
+        }
+    }
+
+    var header: some View {
+        HStack {
+            if !tip.label.isEmpty {
+                Text(tip.label)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
             }
-            .padding(.bottom, 4)
+            Spacer(minLength: 0)
+            Button("Close", systemImage: "xmark", action: onClose)
+                .labelStyle(.iconOnly)
+                .font(.caption.weight(.semibold))
+                .buttonStyle(.glass)
+                .buttonBorderShape(.circle)
+        }
+        .padding(.horizontal, 14).padding(.top, 10).padding(.bottom, 8)
+    }
+
+    var details: some View {
+        VStack(alignment: .leading, spacing: 10) {
             ForEach(Array(tip.items.enumerated()), id: \.offset) { index, item in
                 if index > 0 { Divider() }
                 MapItemHeading(item: item)
@@ -121,7 +136,7 @@ struct MapItemCard: View {
                 }
             }
         }
-        .padding(14)
+        .padding(.horizontal, 14).padding(.bottom, 14)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

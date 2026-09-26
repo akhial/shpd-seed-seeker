@@ -351,6 +351,7 @@ private struct NativeLevelMap: UIViewRepresentable {
     private(set) var request: LevelMapRequest?
     private(set) var inspectedCell: Int?
     private var itemOverlay: MapItemOverlayHost?
+    private let ancestorScrollGestures = NSHashTable<UIPanGestureRecognizer>.weakObjects()
     private var renderer: MapRenderer?
     private var clock = LevelMapClock(now: 0)
     private var secrets = false
@@ -418,9 +419,9 @@ private struct NativeLevelMap: UIViewRepresentable {
         // map sprite. The engine's item name is also the action's label.
         for tip in renderer?.map.itemTooltips ?? [] where secrets || !tip.hidden {
             actions.append(UIAccessibilityCustomAction(name: tip.items.map(\.name).joined(separator: ", ")) { [weak self] _ in
-                guard let self else { return false }
-                self.presentInspection(tip, at: CGPoint(x: self.bounds.midX, y: self.bounds.midY))
-                return true
+                guard let self, let anchor = self.accessibilityInspectionAnchor else { return false }
+                self.presentInspection(tip, at: anchor)
+                return self.inspectedCell == tip.cell
             })
         }
         accessibilityCustomActions = actions.isEmpty ? nil : actions
@@ -430,8 +431,32 @@ private struct NativeLevelMap: UIViewRepresentable {
 
     override func didMoveToWindow() {
         super.didMoveToWindow()
+        observeAncestorScrolling()
         if window == nil { dismissInspection(animated: false) }
         updateAnimation()
+    }
+    override func didMoveToSuperview() {
+        super.didMoveToSuperview()
+        observeAncestorScrolling()
+    }
+
+    private func observeAncestorScrolling() {
+        for gesture in ancestorScrollGestures.allObjects {
+            gesture.removeTarget(self, action: #selector(ancestorDidScroll(_:)))
+        }
+        ancestorScrollGestures.removeAllObjects()
+        var ancestor = superview
+        while let view = ancestor {
+            if let scroll = view as? UIScrollView {
+                scroll.panGestureRecognizer.addTarget(self, action: #selector(ancestorDidScroll(_:)))
+                ancestorScrollGestures.add(scroll.panGestureRecognizer)
+            }
+            ancestor = view.superview
+        }
+    }
+
+    @objc private func ancestorDidScroll(_ gesture: UIPanGestureRecognizer) {
+        if gesture.state == .began || gesture.state == .changed { dismissInspection(animated: false) }
     }
     override func layoutSubviews() {
         super.layoutSubviews()
@@ -471,14 +496,18 @@ private struct NativeLevelMap: UIViewRepresentable {
     }
 
     private func presentInspection(_ tip: LevelMapDocument.ItemTooltip, at point: CGPoint) {
-        let width = max(1, min(330, bounds.width - 16))
+        let visible = inspectionVisibleBounds(around: point)
+        guard !visible.isNull, visible.width > 0, visible.height > 0 else { return }
+        let margin = min(8, visible.width / 8, visible.height / 8)
+        let available = visible.insetBy(dx: margin, dy: margin)
+        let width = min(330, available.width)
         let measuring = UIHostingController(rootView: MapItemCard(tip: tip).frame(width: width))
         let measured = measuring.sizeThatFits(in: CGSize(width: width, height: .greatestFiniteMagnitude))
-        let height = max(1, min(measured.height, bounds.height - 16))
-        let x = max(8, min(point.x + 16, bounds.width - width - 8))
+        let height = min(measured.height, available.height)
+        let x = max(available.minX, min(point.x + 16, available.maxX - width))
         let below = point.y + 16
-        let y = max(8, min(below + height < bounds.height - 8 ? below : point.y - height - 16,
-                           bounds.height - height - 8))
+        let y = max(available.minY, min(below + height < available.maxY ? below : point.y - height - 16,
+                                       available.maxY - height))
         if itemOverlay == nil {
             let overlay = MapItemOverlayHost(frame: bounds) { [weak self] in self?.dismissInspection() }
             addSubview(overlay)
@@ -492,6 +521,76 @@ private struct NativeLevelMap: UIViewRepresentable {
         if UIAccessibility.isVoiceOverRunning {
             UIAccessibility.post(notification: .layoutChanged, argument: itemOverlay)
         }
+    }
+
+    /// A map can be partly above the Scout's scroll viewport. Its own bounds
+    /// still describe the full map, so using them would tuck the card's Close
+    /// control behind the pinned floor heading or another clipping ancestor.
+    private var clippedInspectionBounds: CGRect {
+        var visible = bounds
+        var ancestor = superview
+        while let view = ancestor {
+            if view.clipsToBounds {
+                let area = (view as? UIScrollView).map { $0.bounds.inset(by: $0.adjustedContentInset) } ?? view.bounds
+                visible = visible.intersection(convert(area, from: view))
+            }
+            ancestor = view.superview
+        }
+        if let window {
+            visible = visible.intersection(convert(window.bounds.inset(by: window.safeAreaInsets), from: window))
+        }
+        return visible
+    }
+
+    private func inspectionPointIsUncovered(_ point: CGPoint) -> Bool {
+        guard let window else { return true }
+        guard let hit = window.hitTest(convert(point, to: window), with: nil) else { return false }
+        return hit === self || hit.isDescendant(of: self)
+    }
+
+    /// VoiceOver chooses an item by name, so its placement anchor must come
+    /// from the visible map rather than the possibly clipped map center.
+    private var accessibilityInspectionAnchor: CGPoint? {
+        let visible = clippedInspectionBounds
+        guard !visible.isNull, !visible.isEmpty else { return nil }
+        let center = CGPoint(x: visible.midX, y: visible.midY)
+        if inspectionPointIsUncovered(center) { return center }
+        var y = visible.minY + 1
+        while y < visible.maxY {
+            let candidate = CGPoint(x: visible.midX, y: y)
+            if inspectionPointIsUncovered(candidate) {
+                let band = inspectionVisibleBounds(around: candidate)
+                return CGPoint(x: band.midX, y: band.midY)
+            }
+            y += 4
+        }
+        return nil
+    }
+
+    func inspectionVisibleBounds(around point: CGPoint) -> CGRect {
+        let visible = clippedInspectionBounds
+        guard !visible.isNull, visible.contains(point) else { return .null }
+        guard window != nil else { return visible }
+
+        // Pinned SwiftUI section headers are siblings, not clipping ancestors.
+        // Hit testing the column of the tapped sprite finds the unobscured band
+        // without depending on SwiftUI's private hosting view hierarchy.
+        func uncovered(_ y: CGFloat) -> Bool {
+            inspectionPointIsUncovered(CGPoint(x: point.x, y: y))
+        }
+        guard uncovered(point.y) else { return .null }
+        var top = point.y, bottom = point.y
+        while top > visible.minY {
+            let next = max(visible.minY, top - 4)
+            guard uncovered(next) else { break }
+            top = next
+        }
+        while bottom < visible.maxY {
+            let next = min(visible.maxY - 0.5, bottom + 4)
+            guard next > bottom, uncovered(next) else { break }
+            bottom = next
+        }
+        return CGRect(x: visible.minX, y: top, width: visible.width, height: bottom - top)
     }
 
     @objc private func tap(_ gesture: UITapGestureRecognizer) {

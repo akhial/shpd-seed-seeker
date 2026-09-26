@@ -96,4 +96,79 @@ import XCTest
         update(viewport, with: bundle, request: request)
         XCTAssertNil(viewport.inspectedCell)
     }
+
+    func testInspectionStaysInsidePartiallyClippedMap() async throws {
+        let bundle = try await LevelMapClient.shared.load(request)
+        let map = bundle.document
+        let tip = try XCTUnwrap(map.itemTooltips?.first { !$0.hidden })
+        let point = spritePoint(tip, map: map)
+        let viewport = MapViewport(frame: CGRect(x: 0, y: 40 - point.y,
+                                                width: CGFloat(map.pixelWidth), height: CGFloat(map.pixelHeight)))
+        let clip = UIView(frame: CGRect(x: 0, y: 0, width: map.pixelWidth, height: 160))
+        clip.clipsToBounds = true
+        clip.addSubview(viewport)
+        update(viewport, with: bundle)
+
+        for height: CGFloat in [160, 72] {
+            clip.frame.size.height = height
+            viewport.inspectItem(at: point)
+            let overlay = try XCTUnwrap(viewport.subviews.first as? MapItemOverlayHost)
+            let card = try XCTUnwrap(overlay.presentation.card)
+            let visible = viewport.bounds.intersection(viewport.convert(clip.bounds, from: clip))
+            XCTAssertTrue(visible.contains(card.frame), "The full card, including Close, must stay inside the visible map")
+            XCTAssertGreaterThanOrEqual(card.frame.height, 48, "The compact card still leaves room for its fixed Close control")
+            XCTAssertGreaterThan(card.frame.minY, visible.minY)
+            viewport.dismissInspection(animated: false)
+        }
+    }
+
+    func testVoiceOverInspectionAvoidsPinnedHeaderWhenMapCenterIsClipped() async throws {
+        let bundle = try await LevelMapClient.shared.load(request)
+        let map = bundle.document
+        let tip = try XCTUnwrap(map.itemTooltips?.first { !$0.hidden })
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let originalKeyWindow = scene.windows.first { $0.isKeyWindow }
+        let window = UIWindow(windowScene: scene)
+        window.frame = scene.coordinateSpace.bounds
+        let controller = UIViewController()
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+        window.layoutIfNeeded()
+        defer {
+            window.isHidden = true
+            window.rootViewController = nil
+            originalKeyWindow?.makeKey()
+        }
+
+        let clip = UIView(frame: CGRect(x: 16, y: max(80, window.safeAreaInsets.top + 20),
+                                        width: window.bounds.width - 32, height: 200))
+        clip.clipsToBounds = true
+        controller.view.addSubview(clip)
+        let viewport = MapViewport(frame: CGRect(x: 0, y: 220 - CGFloat(map.pixelHeight),
+                                                width: clip.bounds.width, height: CGFloat(map.pixelHeight)))
+        clip.addSubview(viewport)
+        let pinnedHeader = UIView(frame: CGRect(x: 0, y: 0, width: clip.bounds.width, height: 120))
+        pinnedHeader.backgroundColor = .black
+        clip.addSubview(pinnedHeader)
+        update(viewport, with: bundle)
+        window.layoutIfNeeded()
+
+        let clippedCenter = CGPoint(x: viewport.bounds.midX, y: viewport.bounds.midY)
+        XCTAssertTrue(viewport.inspectionVisibleBounds(around: clippedCenter).isNull)
+        let coveredPoint = viewport.convert(CGPoint(x: clip.bounds.midX, y: 100), from: clip)
+        XCTAssertTrue(viewport.inspectionVisibleBounds(around: coveredPoint).isNull,
+                      "Pointer placement remains strict when a sibling covers the point")
+
+        let name = tip.items.map(\.name).joined(separator: ", ")
+        let action = try XCTUnwrap(viewport.accessibilityCustomActions?.first { $0.name == name })
+        let handler = try XCTUnwrap(action.actionHandler)
+        XCTAssertTrue(handler(action), "VoiceOver must find an uncovered anchor instead of the clipped map center")
+        XCTAssertEqual(viewport.inspectedCell, tip.cell)
+        let overlay = try XCTUnwrap(viewport.subviews.first as? MapItemOverlayHost)
+        let card = try XCTUnwrap(overlay.presentation.card)
+        let visibleFrame = clip.convert(card.frame, from: viewport)
+        XCTAssertTrue(clip.bounds.contains(visibleFrame))
+        XCTAssertGreaterThan(visibleFrame.minY, pinnedHeader.frame.maxY)
+        viewport.dismissInspection(animated: false)
+    }
 }
