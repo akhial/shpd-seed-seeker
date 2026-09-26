@@ -305,7 +305,7 @@ impl FloorMapView {
                 let top =
                     (i32::try_from(tip.cell).expect("map cell fits i32") / map.width) * 16 + by;
                 let body = gtk::Box::new(gtk::Orientation::Vertical, 12);
-                // Scope the shape and semantic colors to this native tooltip window.
+                // Scope the semantic colors to this native tooltip window.
                 body.connect_realize(|body| {
                     if let Some(root) = body.root().and_downcast::<gtk::Window>() {
                         root.add_css_class("map-item-tooltip");

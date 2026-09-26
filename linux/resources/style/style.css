@@ -229,9 +229,8 @@ button.mapping-tile {
   box-shadow: none;
 }
 
-/* Item inspection follows the active Adwaita palette, with square corners. */
+/* Item inspection follows the active Adwaita palette and tooltip shape. */
 tooltip.map-item-tooltip {
-  border-radius: 0;
   background-color: var(--popover-bg-color);
   color: var(--popover-fg-color);
   border: 1px solid var(--border-color);

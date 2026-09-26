@@ -67,7 +67,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -273,10 +275,11 @@ private fun MapCanvas(bundle: LevelMapBundle?, request: LevelMapRequest, secrets
     val colors = MaterialTheme.colorScheme
     val icons = LocalItemIconAtlas.current?.asAndroidBitmap()
     val pulse = LocalGlowPulse.current
+    val cornerRadius = MaterialTheme.shapes.medium.topStart.toPx(Size.Zero, LocalDensity.current)
     AndroidView(
         modifier = Modifier.fillMaxSize(),
         factory = { context -> NativeLevelMapView(context) },
-        update = { it.setTooltipTheme(colors, icons, pulse); it.bind(bundle, request, secrets, expanded, animated, navigate); it.contentDescription = label },
+        update = { it.setTooltipTheme(colors, icons, pulse, cornerRadius); it.bind(bundle, request, secrets, expanded, animated, navigate); it.contentDescription = label },
         onRelease = { it.release() },
     )
 }
@@ -286,9 +289,10 @@ internal class NativeLevelMapView(context: Context) : FrameLayout(context) {
     private var tooltipColors: ColorScheme = lightColorScheme()
     private var tooltipIcons: Bitmap? = null
     private var tooltipPulse: GlowPulse? = null
-    fun setTooltipTheme(colors: ColorScheme, icons: Bitmap?, pulse: GlowPulse? = null) {
-        if (tooltipColors != colors || tooltipIcons !== icons || tooltipPulse !== pulse) hideItem()
-        tooltipColors = colors; tooltipIcons = icons; tooltipPulse = pulse
+    private var tooltipCornerRadius = 16f * resources.displayMetrics.density
+    fun setTooltipTheme(colors: ColorScheme, icons: Bitmap?, pulse: GlowPulse?, cornerRadius: Float) {
+        if (tooltipColors != colors || tooltipIcons !== icons || tooltipPulse !== pulse || tooltipCornerRadius != cornerRadius) hideItem()
+        tooltipColors = colors; tooltipIcons = icons; tooltipPulse = pulse; tooltipCornerRadius = cornerRadius
     }
     private fun itemArtwork(atlas: Bitmap, image: Int): Bitmap {
         val sx = image % 16 * 16; val sy = image / 16 * 16
@@ -409,8 +413,9 @@ internal class NativeLevelMapView(context: Context) : FrameLayout(context) {
         val card = ScrollView(context).apply {
             addView(body)
             elevation = dp(8).toFloat()
+            clipToOutline = true
             background = GradientDrawable().apply {
-                setColor(tooltipColors.surfaceContainer.toArgb()); cornerRadius = 0f; setStroke(dp(1).coerceAtLeast(1), tooltipColors.outlineVariant.toArgb())
+                setColor(tooltipColors.surfaceContainer.toArgb()); cornerRadius = tooltipCornerRadius; setStroke(dp(1).coerceAtLeast(1), tooltipColors.outlineVariant.toArgb())
             }
             androidx.core.view.ViewCompat.setAccessibilityPaneTitle(this, tip.items.first().name)
         }

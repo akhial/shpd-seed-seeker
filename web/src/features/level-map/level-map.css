@@ -349,7 +349,7 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   border: 1px solid var(--d1-border-strong);
-  border-radius: 0;
+  border-radius: 11px;
   background: var(--d1-panel);
   color: var(--d1-text);
   box-shadow:

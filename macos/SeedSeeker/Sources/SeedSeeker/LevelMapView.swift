@@ -489,7 +489,7 @@ private struct MapItemOverlay: View {
                 ZStack(alignment: .topLeading) {
                     if let card = presentation.card {
                         content(card)
-                            .glassEffect(.regular.tint(Color(nsColor: .windowBackgroundColor).opacity(0.35)), in: Rectangle())
+                            .glassEffect(.regular.tint(Color(nsColor: .windowBackgroundColor).opacity(0.35)), in: .rect(cornerRadius: 16))
                             .glassEffectID(card.tip.cell, in: glassNamespace)
                             .glassEffectTransition(.materialize)
                             .offset(x: card.frame.minX, y: card.frame.minY)
@@ -500,8 +500,8 @@ private struct MapItemOverlay: View {
             ZStack(alignment: .topLeading) {
                 if let card = presentation.card {
                     content(card)
-                        .background(.regularMaterial, in: Rectangle())
-                        .overlay(Rectangle().strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1))
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+                        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1))
                         .offset(x: card.frame.minX, y: card.frame.minY)
                 }
             }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)

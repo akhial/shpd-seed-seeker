@@ -178,7 +178,7 @@ internal sealed class LevelMapView : Grid
         var cardWidth = Math.Max(1, Math.Min(310, stage.ActualWidth - 16));
         itemCard = new Border {
             Width = cardWidth, MaxHeight = Math.Max(1, Math.Min(320, stage.ActualHeight - 16)), Padding = new Thickness(14),
-            CornerRadius = new CornerRadius(0), BorderThickness = new Thickness(1),
+            CornerRadius = (CornerRadius)Application.Current.Resources["OverlayCornerRadius"], BorderThickness = new Thickness(1),
             Background = (Brush)Application.Current.Resources["SolidBackgroundFillColorBaseBrush"],
             BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
             HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top,
