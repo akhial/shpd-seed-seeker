@@ -14,7 +14,7 @@
 				"CLANG_ENABLE_MODULES" = "YES";
 				"CLANG_ENABLE_OBJC_ARC" = "YES";
 				"CODE_SIGN_STYLE" = "Automatic";
-				"CURRENT_PROJECT_VERSION" = "31";
+				"CURRENT_PROJECT_VERSION" = "33";
 				"DEVELOPMENT_LANGUAGE" = "en";
 				"ENABLE_USER_SCRIPT_SANDBOXING" = "NO";
 				"GCC_C_LANGUAGE_STANDARD" = "gnu17";
@@ -25,7 +25,7 @@
 					"$(SRCROOT)/../target/ios/generated/$(RUST_TARGET)",
 				);
 				"IPHONEOS_DEPLOYMENT_TARGET" = "27.0";
-				"MARKETING_VERSION" = "0.18.0";
+				"MARKETING_VERSION" = "0.20.0";
 				"SDKROOT" = "iphoneos";
 				"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
 				"SUPPORTS_MACCATALYST" = "NO";
@@ -51,7 +51,7 @@
 				"CLANG_ENABLE_MODULES" = "YES";
 				"CLANG_ENABLE_OBJC_ARC" = "YES";
 				"CODE_SIGN_STYLE" = "Automatic";
-				"CURRENT_PROJECT_VERSION" = "31";
+				"CURRENT_PROJECT_VERSION" = "33";
 				"DEVELOPMENT_LANGUAGE" = "en";
 				"ENABLE_USER_SCRIPT_SANDBOXING" = "NO";
 				"GCC_C_LANGUAGE_STANDARD" = "gnu17";
@@ -62,7 +62,7 @@
 					"$(SRCROOT)/../target/ios/generated/$(RUST_TARGET)",
 				);
 				"IPHONEOS_DEPLOYMENT_TARGET" = "27.0";
-				"MARKETING_VERSION" = "0.18.0";
+				"MARKETING_VERSION" = "0.20.0";
 				"SDKROOT" = "iphoneos";
 				"SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
 				"SUPPORTS_MACCATALYST" = "NO";
