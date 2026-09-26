@@ -28,6 +28,8 @@ struct RequirementsEditor: View {
     @State private var stackCount: Int
     @State private var stackTotal: Int?
     @State private var copyDepth: Int?
+    @Namespace private var editorGlass
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(editing: ItemRequirement?, otherRequirements: [ItemRequirement], blanket: Bool,
          editingCount: Int = 1, editingTotal: Int? = nil, editingCopyDepth: Int? = nil,
@@ -105,12 +107,11 @@ struct RequirementsEditor: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 0) {
-                Text(kind == .trinket ? "Trinket" : details ? "2/2 · Details" : "1/2 · Item")
-                    .font(.caption).foregroundStyle(.secondary).padding(.bottom, 8)
+            Group {
                 if details { detailsPage } else { itemPage }
-                footer
             }
+            .safeAreaBar(edge: .bottom, spacing: 0) { footer }
+            .scrollEdgeEffectStyle(.soft, for: .vertical)
             .background(Color(uiColor: .systemGroupedBackground))
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
@@ -132,14 +133,33 @@ struct RequirementsEditor: View {
     }
 
     private var itemPage: some View {
-        VStack(spacing: 10) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 6) {
-                    ForEach([ItemKind.weapon, .armor, .wand, .ring, .trinket, .artifact], id: \.rawValue) { entry in
-                        choice(entry.label, selected: kind.family == entry) { changeKind(entry) }
-                    }
-                }.padding(.horizontal, 16)
+        ScrollView {
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 10)], spacing: 10) {
+                ForEach(Self.items(for: kind)) { item in
+                    itemCard(item)
+                }
             }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 12)
+        }
+        .safeAreaBar(edge: .top, spacing: 0) { itemSelectors }
+        .scrollEdgeEffectStyle(.soft, for: .vertical)
+    }
+
+    private var itemSelectors: some View {
+        VStack(spacing: 0) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                GlassEffectContainer(spacing: 8) {
+                    HStack(spacing: 8) {
+                        ForEach([ItemKind.weapon, .armor, .wand, .ring, .trinket, .artifact], id: \.rawValue) { entry in
+                            choice(entry.label, selected: kind.family == entry) { changeKind(entry) }
+                        }
+                    }
+                }
+                .padding(.horizontal, 18)
+                .padding(.vertical, 10)
+            }
+            .scrollClipDisabled()
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 7) {
                     if !namedOnly {
@@ -163,36 +183,52 @@ struct RequirementsEditor: View {
                             }
                         }
                     }
-                }.padding(.horizontal, 16)
+                }
+                .padding(.horizontal, 18)
+                .padding(.top, 4)
+                .padding(.bottom, 12)
             }
-            ScrollView {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 8)], spacing: 8) {
-                    ForEach(Self.items(for: kind)) { item in
-                        Button {
-                            selectedItem = item
-                            tierMatch = .any
-                            normalizeBounds()
-                        } label: {
-                            VStack(spacing: 6) {
-                                ItemSpriteView(item: item, pointSize: 42).frame(height: 44)
-                                Text(item.name).font(.caption).fontWeight(.medium)
-                                    .lineLimit(2).multilineTextAlignment(.center).frame(minHeight: 28)
-                                if let tier = item.tier {
-                                    Text("Tier \(tier)").font(.caption2).foregroundStyle(.secondary)
-                                }
-                            }
-                            .frame(maxWidth: .infinity, minHeight: 107)
-                            .padding(7)
-                            .background(selectedItem?.id == item.id ? Color.accentColor.opacity(0.18) : Color(uiColor: .secondarySystemGroupedBackground),
-                                        in: RoundedRectangle(cornerRadius: 18))
-                            .overlay(RoundedRectangle(cornerRadius: 18).strokeBorder(selectedItem?.id == item.id ? Color.accentColor : .clear, lineWidth: 1.5))
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityAddTraits(selectedItem?.id == item.id ? [.isSelected] : [])
-                    }
-                }.padding(.horizontal, 16).padding(.vertical, 4)
+            .scrollClipDisabled()
+        }
+    }
+
+    private func itemCard(_ item: CatalogItem) -> some View {
+        let selected = selectedItem?.id == item.id
+        return Button {
+            withAnimation(reduceMotion ? nil : .snappy(duration: 0.25)) {
+                selectedItem = item
+                tierMatch = .any
+                normalizeBounds()
+            }
+        } label: {
+            VStack(spacing: 9) {
+                ItemSpriteView(item: item, pointSize: 43).frame(height: 48)
+                Text(item.name)
+                    .font(.caption.weight(.medium))
+                    .lineLimit(3)
+                    .multilineTextAlignment(.center)
+                    .frame(minHeight: 32)
+            }
+            .frame(maxWidth: .infinity, minHeight: 113)
+            .padding(9)
+            .background(selected ? Color.accentColor.opacity(0.1) : Color(uiColor: .secondarySystemGroupedBackground),
+                        in: .rect(cornerRadius: 25))
+            .overlay {
+                RoundedRectangle(cornerRadius: 25)
+                    .strokeBorder(selected ? Color.accentColor.opacity(0.7) : Color.white.opacity(0.035), lineWidth: selected ? 1.5 : 1)
+            }
+            .overlay(alignment: .topTrailing) {
+                if selected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
+                        .padding(8)
+                        .transition(.scale.combined(with: .opacity))
+                }
             }
         }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? [.isSelected] : [])
     }
 
     private var detailsPage: some View {
@@ -239,13 +275,10 @@ struct RequirementsEditor: View {
     private var tierControls: some View {
         VStack(alignment: .leading, spacing: 10) {
             heading("Tier")
-            Picker("Tier", selection: $tierMatch) {
-                ForEach(TierMatch.allCases, id: \.rawValue) { match in Text(match.label).tag(match) }
-            }.pickerStyle(.segmented)
+            RequirementSegmentedControl(title: "Tier", options: TierMatch.allCases.map { ($0, $0.label) }, selection: $tierMatch)
             if tierMatch == .exactly {
                 valueRow("Exact tier", "Tier \(tier)")
-                Slider(value: Binding(get: { Double(tier) }, set: { tier = Int($0.rounded()) }), in: 2...5, step: 1)
-                    .accessibilityLabel("Exact tier")
+                RequirementGraduatedSlider(title: "Exact tier", value: Binding(get: { Double(tier) }, set: { tier = Int($0.rounded()) }), bounds: 2...5)
             } else if tierMatch != .any {
                 Picker(tierMatch == .atLeast ? "Minimum tier" : "Maximum tier", selection: $tier) {
                     ForEach(Array(SearchLimits.boundedTiers), id: \.self) { value in Text("Tier \(value)").tag(value) }
@@ -257,17 +290,15 @@ struct RequirementsEditor: View {
     private var upgradeControls: some View {
         VStack(alignment: .leading, spacing: 10) {
             heading("Upgrade")
-            Picker("Upgrade", selection: $upgradeMatch) {
-                ForEach(UpgradeMatch.allCases, id: \.rawValue) { match in Text(match.label).tag(match) }
-            }.pickerStyle(.segmented)
+            RequirementSegmentedControl(title: "Upgrade", options: UpgradeMatch.allCases.map { ($0, $0.label) }, selection: $upgradeMatch)
             if upgradeMatch == .exactly {
                 valueRow("Level", "+\(upgrade)")
-                Slider(value: Binding(get: { Double(upgrade) }, set: { upgrade = Int($0.rounded()) }),
-                       in: 1...Double(max(2, ceiling)), step: 1).accessibilityLabel("Level")
+                RequirementGraduatedSlider(title: "Level", value: Binding(get: { Double(upgrade) }, set: { upgrade = Int($0.rounded()) }),
+                                           bounds: 1...Double(max(2, ceiling)))
             } else if upgradeMatch == .atLeast {
                 valueRow("At least", "+\(upgrade) or higher")
-                Slider(value: Binding(get: { Double(upgrade) }, set: { upgrade = Int($0.rounded()) }),
-                       in: 1...Double(max(2, ceiling - 1)), step: 1).accessibilityLabel("Minimum upgrade")
+                RequirementGraduatedSlider(title: "Minimum upgrade", value: Binding(get: { Double(upgrade) }, set: { upgrade = Int($0.rounded()) }),
+                                           bounds: 1...Double(max(2, ceiling - 1)))
             }
         }
     }
@@ -275,11 +306,9 @@ struct RequirementsEditor: View {
     private func effectControls(label: String) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             heading(label)
-            Picker(label, selection: $effectMode) {
-                Text("Any").tag(0)
-                Text("Any \(label.lowercased())").tag(1)
-                Text("Specific…").tag(2)
-            }.pickerStyle(.segmented)
+            RequirementSegmentedControl(title: label,
+                                        options: [(0, "Any"), (1, "Any \(label.lowercased())"), (2, "Specific…")],
+                                        selection: $effectMode)
             if effectMode == 2 {
                 effectGrid(heading: kind.family == .weapon ? "ENCHANTMENTS" : "GLYPHS", names: kind.enchantmentNames)
                 if !requireUncursed { effectGrid(heading: "CURSES", names: ItemCatalog.cursesFor(kind)) }
@@ -317,10 +346,7 @@ struct RequirementsEditor: View {
                 requireUncursed = value
                 if value { selectedEffects.subtract(ItemCatalog.cursesFor(kind)) }
             }))
-            Picker("Source", selection: $source) {
-                Text("Any source").tag(Optional<ScoutItemSource>.none)
-                ForEach(ScoutItemSource.allCases, id: \.rawValue) { option in Text(option.label).tag(Optional(option)) }
-            }.pickerStyle(.menu)
+            RequirementSourceSelector(source: $source)
             RequirementsFloorPicker(title: "Floor limit", depth: $maximumDepth)
         }
     }
@@ -340,60 +366,110 @@ struct RequirementsEditor: View {
                 explanation("Each item counts its upgrade plus one, and spare items may go unused.")
                 if let total = stackTotal {
                     valueRow("Levels together", "≥ \(total) of \(levelCapacity)")
-                    Slider(value: Binding(get: { Double(stackTotal ?? 1) }, set: { stackTotal = Int($0.rounded()) }),
-                           in: 1...Double(max(2, levelCapacity)), step: 1)
-                        .accessibilityLabel("Combined level at least \(total)")
+                    RequirementGraduatedSlider(title: "Combined level at least \(total)",
+                                               value: Binding(get: { Double(stackTotal ?? 1) }, set: { stackTotal = Int($0.rounded()) }),
+                                               bounds: 1...Double(max(2, levelCapacity)))
                 }
             }
         }
     }
 
     private var footer: some View {
-        VStack(spacing: 12) {
-            if details {
-                HStack(spacing: 12) {
-                    if let draft {
-                        RequirementsSprite(requirement: draft, size: 40)
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(draft.title).font(.subheadline.weight(.semibold))
-                            Text(draft.description.replacingOccurrences(of: " • ", with: " · "))
-                                .font(.caption).foregroundStyle(.secondary)
-                        }.frame(maxWidth: .infinity, alignment: .leading)
-                    } else {
-                        Text(duplicateTrinket ? "This trinket is already required. Each trinket appears only once in the deck." : "This requirement cannot be saved.")
-                            .font(.caption).foregroundStyle(.red).frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                }
-                .padding(12)
-                .background(.quaternary, in: RoundedRectangle(cornerRadius: 18))
-            }
-            HStack(spacing: 12) {
+        GlassEffectContainer(spacing: 18) {
+            VStack(spacing: 12) {
                 if details {
-                    if let onRemove {
-                        Button(role: .destructive) { onRemove(); dismiss() } label: { Image(systemName: "trash").frame(minHeight: 30) }
-                            .buttonStyle(.glass)
+                    requirementPreview
+                        .glassEffectID("preview", in: editorGlass)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    HStack(spacing: 10) {
+                        Button { showItemPage() } label: {
+                            Label("Back", systemImage: "chevron.left")
+                                .font(.subheadline.weight(.medium))
+                                .frame(minWidth: 66, minHeight: 48)
+                                .padding(.horizontal, 12)
+                                .glassEffect(.regular.interactive(), in: .capsule)
+                        }
+                        .buttonStyle(.plain)
+                        .glassEffectID("back", in: editorGlass)
+                        if let onRemove {
+                            Button(role: .destructive) { onRemove(); dismiss() } label: {
+                                Image(systemName: "trash")
+                                    .font(.system(size: 19, weight: .medium))
+                                    .foregroundStyle(.red)
+                                    .frame(width: 48, height: 48)
+                                    .glassEffect(.regular.tint(.red.opacity(0.07)).interactive(), in: .circle)
+                            }
+                            .buttonStyle(.plain)
+                            .tint(.red)
                             .accessibilityLabel(inAlternative ? "Remove alternative" : "Remove requirement")
+                            .glassEffectID("remove", in: editorGlass)
+                        }
+                        Spacer(minLength: 12)
+                        primaryAction(editing == nil ? "Add" : "Save", symbol: "checkmark", action: save)
+                            .disabled(draft == nil)
+                            .opacity(draft == nil ? 0.45 : 1)
                     }
-                    Button("Back") { details = false }.buttonStyle(.glass).controlSize(.large)
-                    Button(editing == nil ? "Add" : "Save", action: save)
-                        .buttonStyle(.glassProminent).controlSize(.large).frame(maxWidth: .infinity)
-                        .disabled(draft == nil)
                 } else {
-                    Button { details = true } label: { Text("Next").frame(maxWidth: .infinity) }
-                        .buttonStyle(.glassProminent).controlSize(.large)
+                    HStack {
+                        Spacer()
+                        primaryAction("Next", symbol: "arrow.right") {
+                            withAnimation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.82)) { details = true }
+                        }
+                    }
                 }
             }
         }
-        .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 16)
-        .background(.ultraThinMaterial)
+        .padding(.horizontal, 20)
+        .padding(.top, 12)
+        .padding(.bottom, 10)
+    }
+
+    private var requirementPreview: some View {
+        HStack(spacing: 12) {
+            if let draft {
+                RequirementsSprite(requirement: draft, size: 36)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(draft.title).font(.subheadline.weight(.semibold))
+                    Text(draft.description.replacingOccurrences(of: " • ", with: " · "))
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                Text(duplicateTrinket ? "This trinket is already required. Each trinket appears only once in the deck." : "This requirement cannot be saved.")
+                    .font(.caption).foregroundStyle(.red).frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .padding(.horizontal, 17)
+        .padding(.vertical, 14)
+        .glassEffect(.regular, in: .rect(cornerRadius: 26))
+    }
+
+    private func primaryAction(_ title: String, symbol: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 9) {
+                Text(title)
+                Image(systemName: symbol).font(.subheadline.weight(.semibold))
+            }
+            .font(.headline)
+            .foregroundStyle(.primary)
+            .frame(minHeight: 52)
+            .padding(.horizontal, 23)
+            .glassEffect(.regular.tint(Color.accentColor.opacity(0.3)).interactive(), in: .capsule)
+        }
+        .buttonStyle(.plain)
+        .glassEffectID("primary", in: editorGlass)
+    }
+
+    private func showItemPage() {
+        withAnimation(reduceMotion ? nil : .spring(response: 0.4, dampingFraction: 0.82)) { details = false }
     }
 
     private func choice(_ text: String, selected: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(text).font(.subheadline.weight(selected ? .semibold : .regular))
-                .fixedSize().padding(.horizontal, 13).padding(.vertical, 10)
-                .foregroundStyle(selected ? Color.accentColor : .primary)
-                .glassEffect(.regular.tint(selected ? Color.accentColor.opacity(0.17) : .clear).interactive(), in: .capsule)
+                .fixedSize().padding(.horizontal, 16).frame(minHeight: 44)
+                .foregroundStyle(.primary)
+                .glassEffect(.regular.tint(selected ? Color.accentColor.opacity(0.2) : .clear).interactive(), in: .capsule)
         }.buttonStyle(.plain).accessibilityAddTraits(selected ? [.isSelected] : [])
     }
 
@@ -470,8 +546,8 @@ struct RequirementsFloorPicker: View {
                 Text(depth.map { allowsNone ? "≤ floor \($0)" : "\($0) floor\($0 == 1 ? "" : "s")" } ?? "Search limit")
                     .font(.subheadline).foregroundStyle(.tint)
             }
-            Slider(value: selection, in: 0...Double(FloorLimits.options.count - (allowsNone ? 0 : 1)), step: 1)
-                .accessibilityLabel(title)
+            RequirementGraduatedSlider(title: title, value: selection,
+                                       bounds: 0...Double(FloorLimits.options.count - (allowsNone ? 0 : 1)))
                 .accessibilityValue(depth.map { "Floor \($0)" } ?? "No limit")
         }
     }

@@ -29,7 +29,8 @@ struct SearchSettingsView: View {
                         Slider(value: Binding(
                             get: { Double(FloorLimits.index(of: query.maximumDepth)) },
                             set: { query.maximumDepth = FloorLimits.options[Int($0.rounded())] }
-                        ), in: 0...Double(FloorLimits.options.count - 1), step: 1)
+                        ), in: 0...Double(FloorLimits.options.count - 1), step: 1,
+                               label: { Text("Max floor") }, tick: { SliderTick($0) })
                             .accessibilityLabel("Max floor")
                             .accessibilityValue("Floor \(query.maximumDepth)")
                     }
@@ -112,7 +113,8 @@ struct SearchSettingsView: View {
                             Slider(value: Binding(
                                 get: { Double(workerCount) },
                                 set: { savedWorkers = WorkerPersistence.clamp(Int($0.rounded()), ceiling: workerCeiling) }
-                            ), in: 1...Double(workerCeiling), step: 1)
+                            ), in: 1...Double(workerCeiling), step: 1,
+                                   label: { Text("Workers") }, tick: { SliderTick($0) })
                                 .accessibilityLabel("Workers")
                                 .accessibilityValue("\(workerCount) of \(workerCeiling) cores")
                             Text("More workers search faster and use more battery.")

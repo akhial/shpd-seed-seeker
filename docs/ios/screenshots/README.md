@@ -5,7 +5,7 @@ uses the real Rust engine; the status bar is normalized for these screenshots.
 
 | Requirement board | Requirement editor |
 | --- | --- |
-| <img src="01-requirement-board.png" alt="Compact requirements with alternatives, trinkets, resin, and a blanket requirement" width="300"> | <img src="02-requirement-editor.png" alt="Wand requirement editor with upgrade, curse, source, and floor controls" width="300"> |
+| <img src="01-requirement-board.png" alt="Single-line requirement chips, OR groups, and floating glass actions" width="300"> | <img src="02-requirement-editor.png" alt="Wand requirement editor with upgrade, curse, source, and floor controls" width="300"> |
 
 | Search settings | Arcane Resin |
 | --- | --- |
@@ -18,3 +18,7 @@ uses the real Rust engine; the status bar is normalized for these screenshots.
 | Seed information | Interactive map |
 | --- | --- |
 | <img src="06-seed-information.png" alt="Potion, scroll, and ring appearances for a seed" width="300"> | <img src="07-interactive-map.png" alt="Dungeon floor map with secrets and floor navigation" width="300"> |
+
+| Item selection |
+| --- |
+| <img src="09-item-picker.png" alt="Item selection with glass category controls, soft scroll edges, and a floating Next action" width="300"> |

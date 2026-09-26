@@ -5,6 +5,9 @@ import UIKit
 
 struct FinderView: View {
     @Bindable var model: AppModel
+    @State private var boardInteraction = RequirementBoardInteraction()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var searchGlass
 
     private var controller: SearchController { model.controller }
     private var requirementCount: Int {
@@ -63,6 +66,7 @@ struct FinderView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(AppTheme.background)
         .safeAreaInset(edge: .bottom, spacing: 0) { searchBar }
+        .overlay { RequirementsLiftOverlay(interaction: boardInteraction) }
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button("Presets") { model.sheet = .presets }.disabled(controller.isRunning)
@@ -112,29 +116,56 @@ struct FinderView: View {
     private var queryPage: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                RequirementsView(query: $model.query)
+                RequirementsView(query: $model.query, interaction: boardInteraction)
                     .disabled(controller.isRunning)
                 if let message = model.validationMessage, model.query.slotCount > 0 {
                     Text(message).font(.footnote).foregroundStyle(.red)
                 }
                 Button { model.sheet = .searchSettings } label: {
-                    HStack(spacing: 12) {
-                        Image(systemName: "slider.horizontal.3").font(.title3).foregroundStyle(AppTheme.teal)
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text("Search settings").font(.subheadline.weight(.semibold)).foregroundStyle(.primary)
-                            Text(scopeSummary).font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.leading)
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 9) {
+                            searchSettingsIcon
+                            Text("Search settings").font(.subheadline.weight(.medium)).foregroundStyle(.primary)
+                            Text(scopeSummary).font(.caption).foregroundStyle(.secondary)
+                            searchSettingsChevron
                         }
-                        Spacer(minLength: 0)
-                        Image(systemName: "chevron.right").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: true, vertical: false)
+                        HStack(spacing: 9) {
+                            searchSettingsIcon
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("Search settings").font(.subheadline.weight(.medium)).foregroundStyle(.primary)
+                                Text(scopeSummary).font(.caption).foregroundStyle(.secondary)
+                                    .multilineTextAlignment(.leading)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            searchSettingsChevron
+                        }
                     }
-                    .padding(16)
-                    .background(AppTheme.surface, in: RoundedRectangle(cornerRadius: 20))
+                    .padding(.horizontal, 14).padding(.vertical, 10)
+                    .frame(minHeight: 46)
+                    .contentShape(RoundedRectangle(cornerRadius: 23))
+                    .glassEffect(.regular.tint(.white.opacity(0.02)).interactive(), in: .rect(cornerRadius: 23))
                 }.buttonStyle(.plain)
             }
             .frame(maxWidth: 680, alignment: .leading)
             .padding(.horizontal, 16).padding(.bottom, 28)
             .frame(maxWidth: .infinity)
         }
+        .scrollDisabled(boardInteraction.isDragging)
+        .scrollClipDisabled()
+        .scrollEdgeEffectStyle(.soft, for: .vertical)
+    }
+
+    private var searchSettingsIcon: some View {
+        Image(systemName: "slider.horizontal.3")
+            .font(.system(size: 18, weight: .medium))
+            .foregroundStyle(.secondary)
+    }
+
+    private var searchSettingsChevron: some View {
+        Image(systemName: "chevron.right")
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(.tertiary)
     }
 
     private var resultsPage: some View {
@@ -177,29 +208,58 @@ struct FinderView: View {
     }
 
     private var searchBar: some View {
-        GlassEffectContainer {
-            HStack(spacing: 12) {
-                if controller.isRunning {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(progressText)
-                            .font(.caption.weight(.semibold))
-                        Text(estimateText).font(.caption2).foregroundStyle(.secondary)
-                    }.frame(maxWidth: .infinity, alignment: .leading)
-                    Button("Cancel") { model.backgroundSearch.stop() }
-                        .buttonStyle(.glass).controlSize(.large)
+        GlassEffectContainer(spacing: 18) {
+            HStack(spacing: 10) {
+                if boardInteraction.isDragging {
+                    RequirementsRemoveTarget(interaction: boardInteraction)
+                        .glassEffectID("action", in: searchGlass)
+                        .glassEffectTransition(.matchedGeometry)
+                } else if controller.isRunning {
+                    HStack(spacing: 10) {
+                        ProgressView().controlSize(.small).tint(AppTheme.accent)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(progressText).font(.caption.weight(.semibold))
+                            Text(estimateText).font(.caption2).foregroundStyle(.secondary)
+                        }
+                        .monospacedDigit()
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .padding(.horizontal, 16).padding(.vertical, 13)
+                    .glassEffect(.regular, in: .rect(cornerRadius: 25))
+                    .glassEffectID("progress", in: searchGlass)
+                    .glassEffectTransition(.matchedGeometry)
+                    Button { model.backgroundSearch.stop() } label: {
+                        Text("Cancel")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.red)
+                            .padding(.horizontal, 20).frame(minHeight: 54)
+                            .glassEffect(.regular.tint(.red.opacity(0.10)).interactive(), in: .capsule)
+                            .glassEffectID("action", in: searchGlass)
+                    }
+                    .buttonStyle(.plain)
                 } else {
                     Button(action: model.search) {
                         Label("Search", systemImage: "magnifyingglass")
-                            .font(.headline).frame(maxWidth: .infinity).padding(.vertical, 5)
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+                            .frame(minWidth: 112, minHeight: 54)
+                            .padding(.horizontal, 24)
+                            .contentShape(Capsule())
+                            .glassEffect(.regular.tint(AppTheme.accent.opacity(0.28)).interactive(), in: .capsule)
+                            .glassEffectID("action", in: searchGlass)
                     }
-                    .buttonStyle(.glassProminent).controlSize(.large)
+                    .buttonStyle(.plain)
                     .disabled(model.request == nil)
+                    .opacity(model.request == nil ? 0.45 : 1)
                 }
             }
-            .padding(12)
-            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 28))
+            .frame(maxWidth: 680)
+            .animation(reduceMotion ? nil : .spring(response: 0.44, dampingFraction: 0.82), value: controller.isRunning)
+            .animation(reduceMotion ? nil : .spring(response: 0.38, dampingFraction: 0.76), value: boardInteraction.isDragging)
         }
-        .padding(.horizontal, 16).padding(.top, 8).padding(.bottom, 8)
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 16)
     }
 
     private var estimateText: String {

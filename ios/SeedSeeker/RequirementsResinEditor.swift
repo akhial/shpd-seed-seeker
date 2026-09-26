@@ -47,94 +47,112 @@ struct RequirementsResinEditor: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                HStack(spacing: 12) {
-                    ItemSpriteView(item: CatalogItem(id: "arcane_resin", name: "Arcane Resin",
-                                                    kind: .wand, spriteIndex: 317), pointSize: 40)
-                    Text("Arcane Resin")
-                        .font(.title2.bold())
-                    Spacer(minLength: 0)
-                    Button("Close") { dismiss() }
-                        .buttonStyle(.glass)
-                }
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    HStack(spacing: 14) {
+                        ItemSpriteView(item: CatalogItem(id: "arcane_resin", name: "Arcane Resin",
+                                                        kind: .wand, spriteIndex: 317), pointSize: 44)
+                        RequirementSegmentedControl(title: "Minimum resin",
+                                                    options: [(false, "Amount"), (true, "Auto")], selection: $automatic)
+                    }
 
-                Picker("Minimum resin", selection: $automatic) {
-                    Text("Amount").tag(false)
-                    Text("Auto").tag(true)
-                }
-                .pickerStyle(.segmented)
-
-                if automatic {
-                    Text("Upgrade each kept wand to +3. Excluded wands and extra copies reserved for reforging need no resin.")
-                        .foregroundStyle(.secondary)
-                } else {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Minimum resin")
+                    if automatic {
+                        Text("Upgrade each kept wand to +3. Excluded wands and extra copies reserved for reforging need no resin.")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
-                        TextField("Minimum resin", text: $minimum)
-                            .keyboardType(.numberPad)
-                            .textFieldStyle(.roundedBorder)
-                            .accessibilityLabel("Minimum resin")
-                        if parsedMinimum == nil {
-                            Text("Enter a whole number.")
+                    } else {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Minimum resin")
+                                .font(.subheadline.weight(.semibold))
+                            TextField("Minimum resin", text: $minimum)
+                                .keyboardType(.numberPad)
+                                .padding(14)
+                                .background(.quaternary.opacity(0.4), in: .rect(cornerRadius: 16))
+                                .accessibilityLabel("Minimum resin")
+                            if parsedMinimum == nil {
+                                Text("Enter a whole number.")
+                                    .font(.caption)
+                                    .foregroundStyle(.red)
+                            }
+                        }
+                    }
+
+                    Toggle("Require uncursed wands", isOn: $filter.uncursed)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(floorDescription).font(.subheadline.weight(.semibold))
+                        RequirementGraduatedSlider(title: floorDescription, value: floorSelection,
+                                                   bounds: 0...Double(FloorLimits.options.count))
+                    }
+
+                    RequirementSourceSelector(title: "Wand source", source: $filter.source)
+
+                    Toggle(isOn: $filter.includeMageWand) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Include Mage’s starting wand")
+                            Text("Adds 2 resin from Magic Missile. Assumes you recover it with Wand Preservation and dismantle it after imbuing.")
                                 .font(.caption)
-                                .foregroundStyle(.red)
+                                .foregroundStyle(.secondary)
                         }
                     }
+                    .accessibilityLabel("Include Mage’s starting wand")
                 }
-
-                Toggle("Require uncursed wands", isOn: $filter.uncursed)
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(floorDescription)
-                    Slider(value: floorSelection, in: 0...Double(FloorLimits.options.count), step: 1)
-                        .accessibilityLabel(floorDescription)
-                }
-
-                Picker("Wand source", selection: $filter.source) {
-                    Text("Any source").tag(ScoutItemSource?.none)
-                    ForEach(ScoutItemSource.allCases, id: \.self) { source in
-                        Text(source.label).tag(ScoutItemSource?.some(source))
-                    }
-                }
-                .pickerStyle(.menu)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                Toggle(isOn: $filter.includeMageWand) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Include Mage’s starting wand")
-                        Text("Adds 2 resin from Magic Missile. Assumes you recover it with Wand Preservation and dismantle it after imbuing.")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .accessibilityLabel("Include Mage’s starting wand")
-
-                HStack(spacing: 12) {
-                    if hasRequirement {
-                        Button("Remove", role: .destructive) {
-                            onRemove()
-                            dismiss()
-                        }
-                        .buttonStyle(.glass)
-                    }
-                    Button {
-                        guard automatic || parsedMinimum != nil else { return }
-                        onSave(automatic ? 0 : parsedMinimum!, automatic, filter)
-                        dismiss()
-                    } label: {
-                        Text(hasRequirement ? "Save" : "Add")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.glassProminent)
-                    .disabled(!automatic && parsedMinimum == nil)
-                }
+                .padding(20)
             }
-            .padding(20)
+            .background(Color(uiColor: .systemGroupedBackground))
+            .safeAreaBar(edge: .bottom, spacing: 0) {
+                GlassEffectContainer(spacing: 18) {
+                    HStack(spacing: 12) {
+                        if hasRequirement {
+                            Button(role: .destructive) {
+                                onRemove()
+                                dismiss()
+                            } label: {
+                                Image(systemName: "trash")
+                                    .font(.system(size: 19, weight: .medium))
+                                    .foregroundStyle(.red)
+                                    .frame(width: 48, height: 48)
+                                    .glassEffect(.regular.tint(.red.opacity(0.07)).interactive(), in: .circle)
+                            }
+                            .buttonStyle(.plain)
+                            .tint(.red)
+                            .accessibilityLabel("Remove")
+                        }
+                        Spacer(minLength: 12)
+                        Button {
+                            guard automatic || parsedMinimum != nil else { return }
+                            onSave(automatic ? 0 : parsedMinimum!, automatic, filter)
+                            dismiss()
+                        } label: {
+                            HStack(spacing: 9) {
+                                Text(hasRequirement ? "Save" : "Add")
+                                Image(systemName: "checkmark").font(.subheadline.weight(.semibold))
+                            }
+                            .font(.headline)
+                            .frame(minHeight: 52)
+                            .padding(.horizontal, 23)
+                            .foregroundStyle(.primary)
+                            .glassEffect(.regular.tint(Color.accentColor.opacity(0.3)).interactive(), in: .capsule)
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(!automatic && parsedMinimum == nil)
+                        .opacity(!automatic && parsedMinimum == nil ? 0.45 : 1)
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
+                .padding(.bottom, 10)
+            }
+            .scrollEdgeEffectStyle(.soft, for: .vertical)
+            .navigationTitle("Arcane Resin")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } }
+            }
         }
-        .presentationDragIndicator(.hidden)
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
         .interactiveDismissDisabled()
     }
 }
