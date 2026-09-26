@@ -122,6 +122,7 @@ struct LevelMapPanel: View {
     @State private var parentBranches: [LevelMapDocument.Branch] = []
     @State private var error: String?
     @State private var retry = 0
+    @State private var toolbarWidth: CGFloat = 0
     @Namespace private var branchLens
 
     init(world: ScoutWorld, depth: Int, challenges: Int, animated: Bool,
@@ -186,10 +187,12 @@ struct LevelMapPanel: View {
                     }
                 }
                 .padding(.horizontal, 16).padding(.vertical, 6)
-                if !branches.isEmpty { toolbar }
+                .zIndex(1)
+                if !branches.isEmpty { toolbar.zIndex(1) }
             } else {
-                toolbar
+                toolbar.zIndex(1)
             }
+            // Controls draw above the map so pressed glass can stretch over it.
             stage
                 .frame(height: mapHeight)
                 .frame(maxHeight: expanded ? .infinity : nil)
@@ -256,6 +259,8 @@ struct LevelMapPanel: View {
         ScrollView(.horizontal, showsIndicators: false) {
             GlassEffectContainer(spacing: 8) {
                 HStack(spacing: 8) {
+                    secretToggle
+                    Spacer(minLength: 8)
                     if !branches.isEmpty {
                         branchButton("Main", branch: 0)
                         ForEach(branches) { area in
@@ -263,12 +268,13 @@ struct LevelMapPanel: View {
                                 .accessibilityLabel(area.label)
                         }
                     }
-                    Spacer(minLength: 8)
-                    secretToggle
                 }
                 .padding(.horizontal, 10).padding(.vertical, 8)
+                .frame(minWidth: toolbarWidth)
             }
         }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { toolbarWidth = $0 }
+        .scrollClipDisabled()
         .defaultScrollAnchor(.trailing, for: .alignment)
     }
 

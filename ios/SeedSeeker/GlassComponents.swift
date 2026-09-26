@@ -134,14 +134,24 @@ struct GlassSheen<S: Shape>: View {
 
     var body: some View {
         GeometryReader { geometry in
-            let band = max(60, geometry.size.width * 0.4)
+            let band = max(80, geometry.size.width * 0.55)
+            // Overscan the height so the tilted band's ends stay outside the
+            // clip; only its soft gradient edges should ever be visible.
+            let height = geometry.size.height + band * 2
+            // An eased falloff with a low peak, so the light reads as a glint
+            // rather than a visible stripe.
             LinearGradient(stops: [.init(color: .clear, location: 0),
-                                   .init(color: .white.opacity(0.13), location: 0.5),
+                                   .init(color: .white.opacity(0.012), location: 0.2),
+                                   .init(color: .white.opacity(0.04), location: 0.36),
+                                   .init(color: .white.opacity(0.065), location: 0.5),
+                                   .init(color: .white.opacity(0.04), location: 0.64),
+                                   .init(color: .white.opacity(0.012), location: 0.8),
                                    .init(color: .clear, location: 1)],
                            startPoint: .leading, endPoint: .trailing)
-                .frame(width: band)
+                .frame(width: band, height: height)
                 .rotationEffect(.degrees(12))
-                .offset(x: sweep ? geometry.size.width + band : -band * 1.5)
+                .position(x: sweep ? geometry.size.width + band : -band,
+                          y: geometry.size.height / 2)
         }
         .clipShape(shape)
         .blendMode(.plusLighter)

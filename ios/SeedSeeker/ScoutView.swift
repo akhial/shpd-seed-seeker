@@ -22,6 +22,9 @@ struct ScoutView: View {
     @Namespace private var sheetZoom
     @Namespace private var inputGlass
 
+    /// Past halfway the header swaps its detail for compact controls. The
+    /// swap animates on this flag, not on the scroll-driven progress.
+    private var headerCollapsed: Bool { headerProgress > 0.5 }
     private var resultIndex: Int? {
         results.firstIndex { $0.seed == model.requestedSeed }
     }
@@ -44,7 +47,7 @@ struct ScoutView: View {
                     .padding(.bottom, 12)
                     .offset(y: -(inputHeight + 12) * headerProgress)
                     .frame(height: (inputHeight + 12) * (1 - headerProgress), alignment: .top)
-                    .clipped()
+                    .clipShape(CollapseClip(clipsTop: headerProgress > 0))
                 if let world = model.world {
                     summary(world)
                     if resultIndex != nil || !world.trinketOrder.isEmpty {
@@ -244,13 +247,15 @@ struct ScoutView: View {
                     .lineLimit(1).minimumScaleFactor(0.75)
                     .textSelection(.enabled)
                     .accessibilityIdentifier("scout-seed")
+                    .transaction { $0.animation = nil }
                 Spacer(minLength: 0)
-                if headerProgress > 0.5, let matches = model.matches {
+                if headerCollapsed, let matches = model.matches {
                     Image(systemName: matches.matchedRequirements == matches.totalRequirements ? "checkmark" : "info.circle")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(matches.matchedRequirements == matches.totalRequirements ? AppTheme.accent : AppTheme.seed)
                         .frame(width: 28, height: 28)
                         .background(.secondary.opacity(0.12), in: Circle())
+                        .transition(.scale(scale: 0.4).combined(with: .opacity))
                         .accessibilityLabel(matchText(matches))
                 }
                 if world.itemMappings != nil {
@@ -267,6 +272,7 @@ struct ScoutView: View {
                 }
                 GlassCopyButton(text: world.seed, label: "Copy", size: 36)
             }
+            .animation(AppTheme.glassSpring(reduceMotion), value: headerCollapsed)
             HStack(spacing: 8) {
                 ScoutBadge(text: "\(world.items.count) items")
                 ScoutBadge(text: "\(Set(world.items.map(\.depth)).count) floors")
@@ -313,13 +319,16 @@ struct ScoutView: View {
                 .animation(reduceMotion ? nil : .snappy, value: index)
             } else { Text("Trinkets").font(.caption) }
             Spacer(minLength: 4)
-            if headerProgress > 0.5 || resultIndex == nil {
+            if headerCollapsed || resultIndex == nil {
                 TrinketGlassShortcuts(world: world, enabled: !model.loading, size: 36, onSelect: model.selectTrinket)
+                    .transition(.scale(scale: 0.7, anchor: .trailing).combined(with: .opacity))
             } else {
                 Text("swipe to browse").font(.caption2).foregroundStyle(.secondary)
+                    .transition(.opacity)
             }
         }
         .frame(height: 44)
+        .animation(AppTheme.glassSpring(reduceMotion), value: headerCollapsed)
         .accessibilityIdentifier("scout-navigation")
     }
 
@@ -486,5 +495,19 @@ struct ScoutFloorHeading: View {
         }
         .padding(.vertical, 6)
         .contentShape(Rectangle())
+    }
+}
+
+/// Hides the part of the seed input scrolled above the header. Only the top
+/// edge ever needs cutting, so the other sides leave room for interactive
+/// glass to stretch when pressed.
+private struct CollapseClip: Shape {
+    var clipsTop: Bool
+
+    func path(in rect: CGRect) -> Path {
+        let slack: CGFloat = 32
+        return Path(CGRect(x: rect.minX - slack, y: clipsTop ? rect.minY : rect.minY - slack,
+                           width: rect.width + slack * 2,
+                           height: rect.height + (clipsTop ? slack : slack * 2)))
     }
 }
