@@ -215,22 +215,21 @@ fun ScoutScreen(
     val mapFloors = remember(floors) { floors.keys.filter(::isMapDepthSupported) }
     val matchedChoices = remember(result, matches) { matchedScoutChoices(result?.items.orEmpty(), matches?.items.orEmpty()) }
     var openMapDepth by remember(result?.seed, mapChallenges) { mutableStateOf<Int?>(null) }
-    val offerFloorIndex = floors.values.indexOfFirst { rows -> rows.any { it.value.item.kind == ItemKind.TRINKET } }
-    val offerDepth = floors.keys.elementAtOrNull(offerFloorIndex)
-    // The artifact deck, when shown, sits above the first floor and shifts every floor down a row.
-    val deckRows = if (result?.artifactDecks?.isNotEmpty() == true) 1 else 0
-    val offerBodyIndex = if (offerFloorIndex >= 0) deckRows + 1 + 2 * offerFloorIndex else -1
-    val offerBodyKey = offerDepth?.let { "floor-body-$it" }
+    val hasArtifactDeck = result?.artifactDecks?.isNotEmpty() == true
+    val rows = remember(floors, hasArtifactDeck, openMapDepth) { scoutListRows(floors, hasArtifactDeck, openMapDepth) }
+    val questsByDepth = remember(result?.quests) { result?.quests.orEmpty().associateBy(ScoutQuest::depth) }
+    val offers = remember(result?.trinketOrder) { result?.trinketOrder?.take(4).orEmpty() }
+    val offerRowIndex = remember(rows) { rows.indexOfFirst { it is ScoutListRow.Trinkets } }
+    val offerRowKey = rows.getOrNull(offerRowIndex)?.key
     var offerTop by remember(result?.seed) { mutableStateOf(0f) }
     var offerHeight by remember(result?.seed) { mutableStateOf(0f) }
-    var offerMapHeight by remember(result?.seed) { mutableStateOf(0f) }
     var floorHeaderHeight by remember { mutableStateOf(0) }
-    val reveal by remember(offerBodyIndex, offerBodyKey, offerTop, offerHeight, floorHeaderHeight, openMapDepth, offerDepth, offerMapHeight) { derivedStateOf {
-        val row = listState.layoutInfo.visibleItemsInfo.find { it.key == offerBodyKey }
+    val reveal by remember(listState, offerRowIndex, offerRowKey, result?.seed) { derivedStateOf {
+        val row = listState.layoutInfo.visibleItemsInfo.find { it.key == offerRowKey }
         when {
-            offerBodyIndex < 0 || offerHeight <= 0 -> 0f
-            row != null -> ((floorHeaderHeight - row.offset - offerTop - if (openMapDepth == offerDepth) offerMapHeight else 0f) / offerHeight).coerceIn(0f, 1f)
-            listState.firstVisibleItemIndex > offerBodyIndex -> 1f
+            offerRowIndex < 0 -> 0f
+            row != null && offerHeight > 0 -> ((floorHeaderHeight - row.offset - offerTop) / offerHeight).coerceIn(0f, 1f)
+            listState.firstVisibleItemIndex > offerRowIndex -> 1f
             else -> 0f
         }
     } }
@@ -342,7 +341,7 @@ fun ScoutScreen(
                     ScoutSummaryCard(
                         world = world,
                         matches = matches,
-                        progress = headerScroll.progress,
+                        collapseProgress = { headerScroll.progress },
                         onCollapseDistanceChanged = { headerScroll.updateMeasurements(summary = it) },
                     )
                 }
@@ -350,8 +349,8 @@ fun ScoutScreen(
                     ResultNavigationBar(
                         index = resultIndex, total = resultSeeds.size,
                         onStep = stepToResult,
-                        offers = result?.trinketOrder?.take(4).orEmpty(), selectedTrinket = result?.selectedTrinket,
-                        reveal = reveal, enabled = !isScouting, onSelect = onSelectTrinket,
+                        offers = offers, selectedTrinket = result?.selectedTrinket,
+                        reveal = { reveal }, enabled = !isScouting, onSelect = onSelectTrinket,
                         modifier = Modifier.testTag("scout-navigation").padding(top = 6.dp),
                     )
                 }
@@ -367,15 +366,16 @@ fun ScoutScreen(
                 }
 
                 result?.let { world ->
-                    if (world.artifactDecks.isNotEmpty()) item(key = "artifact-deck") { ArtifactDeckRow(world, matches) }
-                    val questsByDepth = world.quests.associateBy(ScoutQuest::depth)
-                    floors
-                        .forEach { (depth, floorItems) ->
-                            stickyHeader(key = "floor-$depth") {
+                    rows.forEach { row ->
+                        // Distinct content types let Compose reuse cards without trying to
+                        // recycle a map, floor heading or trinket grid into an item card.
+                        if (row is ScoutListRow.Heading) {
+                            stickyHeader(key = row.key, contentType = row::class) {
+                                val depth = row.depth
                                 FloorHeading(
                                     depth = depth,
                                     feeling = world.floorFeelings[depth],
-                                    itemCount = floorItems.size,
+                                    itemCount = row.itemCount,
                                     questLabel = questsByDepth[depth]?.variant?.label,
                                     farming = world.isFarmingFloor(depth),
                                     mapExpanded = openMapDepth == depth,
@@ -383,31 +383,29 @@ fun ScoutScreen(
                                     modifier = Modifier.background(MaterialTheme.colorScheme.background).onSizeChanged { floorHeaderHeight = it.height }.padding(vertical = 4.dp),
                                 )
                             }
-                            item(key = "floor-body-$depth") {
-                                Column {
-                                    if (openMapDepth == depth && isMapDepthSupported(depth)) {
-                                        Box(Modifier.onSizeChanged { if (depth == offerDepth) offerMapHeight = it.height.toFloat() }) {
-                                            LevelMapView(world, depth, mapFloors, mapChallenges, isScouting, onSelectTrinket)
-                                        }
-                                    }
-                                    if (floorItems.isEmpty()) {
-                                        Text("No notable items on this floor.", Modifier.padding(vertical = 8.dp),
-                                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    }
-                                    val trinkets = floorItems.filter { it.value.item.kind == ItemKind.TRINKET }
-                                    if (trinkets.isNotEmpty()) {
-                                        TrinketCatalystCard(trinkets, world.trinketOrder, matches, world.selectedTrinket, !isScouting, onSelectTrinket,
-                                            onOffersLayout = { top, height -> offerTop = top; offerHeight = height })
-                                    }
-                                    floorItems.filter { it.value.item.kind != ItemKind.TRINKET }.forEach { indexedItem ->
+                        } else {
+                            item(key = row.key, contentType = row::class) {
+                                when (row) {
+                                    ScoutListRow.ArtifactDeck -> ArtifactDeckRow(world, matches)
+                                    is ScoutListRow.Map -> LevelMapView(world, row.depth, mapFloors, mapChallenges, isScouting, onSelectTrinket)
+                                    is ScoutListRow.Empty -> Text("No notable items on this floor.", Modifier.padding(vertical = 8.dp),
+                                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    is ScoutListRow.Trinkets -> TrinketCatalystCard(
+                                        row.choices, world.trinketOrder, matches, world.selectedTrinket, !isScouting, onSelectTrinket,
+                                        onOffersLayout = { top, height -> offerTop = top; offerHeight = height },
+                                    )
+                                    is ScoutListRow.Item -> {
+                                        val indexedItem = row.indexedItem
                                         ScoutItemCard(scoutItem = indexedItem.value, ringGems = world.ringGems,
                                             matches = matches?.items?.contains(indexedItem.index) == true,
                                             dimmed = isAlternateScoutChoice(indexedItem.value.accessibility, indexedItem.index in matches?.items.orEmpty(), matchedChoices),
                                             modifier = Modifier.padding(bottom = 8.dp))
                                     }
+                                    is ScoutListRow.Heading -> Unit // Emitted as a sticky header above.
                                 }
                             }
                         }
+                    }
                 }
             }
         }
@@ -596,9 +594,11 @@ private fun SeedInputCard(
 @Composable
 private fun ResultNavigationBar(
     index: Int?, total: Int, onStep: (Int) -> Unit,
-    offers: List<CatalogItem>, selectedTrinket: String?, reveal: Float,
+    offers: List<CatalogItem>, selectedTrinket: String?, reveal: () -> Float,
     enabled: Boolean, onSelect: (String) -> Unit, modifier: Modifier = Modifier,
 ) {
+    // Scroll frames only update layers; compose the shortcuts when visibility crosses zero.
+    val showShortcuts by remember(reveal) { derivedStateOf { reveal() > 0f } }
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         if (index != null) {
             FilledTonalIconButton(
@@ -629,11 +629,11 @@ private fun ResultNavigationBar(
             }
         } else Text("Trinkets", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
         Box(Modifier.weight(1f).height(44.dp).clipToBounds(), contentAlignment = Alignment.CenterEnd) {
-            if (index != null) Text("‹ swipe to browse ›", modifier = Modifier.graphicsLayer { alpha = 1f - reveal },
+            if (index != null) Text("‹ swipe to browse ›", modifier = Modifier.graphicsLayer { alpha = 1f - reveal() },
                 style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            if (reveal > 0) TrinketShortcuts(
+            if (showShortcuts) TrinketShortcuts(
                 offers = offers, selectedTrinket = selectedTrinket, enabled = enabled, onSelect = onSelect,
-                modifier = Modifier.graphicsLayer { alpha = reveal; translationY = (1f - reveal) * size.height },
+                modifier = Modifier.graphicsLayer { val progress = reveal(); alpha = progress; translationY = (1f - progress) * size.height },
             )
         }
     }
