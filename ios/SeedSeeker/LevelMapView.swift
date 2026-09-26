@@ -259,8 +259,7 @@ struct LevelMapPanel: View {
         ScrollView(.horizontal, showsIndicators: false) {
             GlassEffectContainer(spacing: 8) {
                 HStack(spacing: 8) {
-                    secretToggle
-                    Spacer(minLength: 8)
+                    Spacer(minLength: 0)
                     if !branches.isEmpty {
                         branchButton("Main", branch: 0)
                         ForEach(branches) { area in
@@ -268,6 +267,7 @@ struct LevelMapPanel: View {
                                 .accessibilityLabel(area.label)
                         }
                     }
+                    secretToggle
                 }
                 .padding(.horizontal, 10).padding(.vertical, 8)
                 .frame(minWidth: toolbarWidth)
