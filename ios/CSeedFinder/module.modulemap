@@ -1,0 +1,4 @@
+module CSeedFinder {
+    header "../../macos/SeedSeeker/Sources/CSeedFinder/include/CSeedFinder.h"
+    export *
+}

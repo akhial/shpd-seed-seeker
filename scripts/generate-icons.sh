@@ -56,6 +56,12 @@ done
 mkdir -p "$ROOT/macos/SeedSeeker/Resources"
 iconutil -c icns "$ICONSET" -o "$ROOT/macos/SeedSeeker/Resources/AppIcon.icns"
 
+# --- iOS universal app icon and About preview -------------------------------
+IOS_ASSETS="$ROOT/ios/Assets.xcassets"
+mkdir -p "$IOS_ASSETS/AppIcon.appiconset" "$IOS_ASSETS/AppIconPreview.imageset"
+render "$SRC/seed-seeker-square.svg" 1024 "$IOS_ASSETS/AppIcon.appiconset/AppIcon.png"
+cp "$IOS_ASSETS/AppIcon.appiconset/AppIcon.png" "$IOS_ASSETS/AppIconPreview.imageset/AppIcon.png"
+
 # --- Windows SeedSeeker.ico -------------------------------------------------
 WINPNGS=()
 for size in 16 32 48 64 128 256; do

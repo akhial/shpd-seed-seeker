@@ -10,7 +10,7 @@
 </p>
 
 An extremely fast seed finder for [Shattered Pixel Dungeon](https://shatteredpixel.com/),
-written in Rust — with native apps for Android, Linux, macOS, and Windows.
+written in Rust — with native apps for Android, iOS, Linux, macOS, and Windows.
 
 **[Try it in your browser →](https://shpd-seed-seeker.web.app/)**
 
@@ -201,6 +201,18 @@ CI does. Most supported phones and tablets use the `arm64-v8a` release download.
 "$ANDROID_HOME/platform-tools/adb" shell monkey \
   -p dev.seedseeker.unofficial -c android.intent.category.LAUNCHER 1
 ```
+
+### iOS
+
+The SwiftUI app targets iOS 27 and uses Liquid Glass with the Android app's
+Finder and Scout workflows. Build for the iPhone 18 Pro simulator:
+
+```sh
+bash scripts/build-ios-app.sh simulator
+```
+
+Open `ios/SeedSeeker.xcodeproj` to run in Xcode. See [ios/README.md](ios/README.md)
+for device signing, background search, and tests.
 
 ### macOS
 

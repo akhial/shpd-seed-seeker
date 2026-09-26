@@ -4,7 +4,7 @@ import Observation
 /// Everything a later refine needs from a finished search: the request that
 /// ran, plus where a follow-up scan must pick up (`remaining` seeds starting
 /// at `resumeFrom`) to complete its seed-space coverage.
-public struct BaseRun: Sendable {
+public struct BaseRun: Codable, Sendable {
     public let request: SearchRequest
     public let resumeFrom: Int64
     public let remaining: Int64
@@ -14,7 +14,7 @@ public struct BaseRun: Sendable {
 }
 
 /// Every loaded or discovered seed, with its original recipe and selection source.
-public struct TargetState: Sendable {
+public struct TargetState: Codable, Sendable {
     public let request: SearchRequest
     /// All saved seeds in discovery order.
     public var seeds: [String]
@@ -23,6 +23,11 @@ public struct TargetState: Sendable {
     public init(request: SearchRequest, seeds: [String], recipes: [String: SeedResult] = [:]) {
         self.request = request; self.seeds = seeds; self.recipes = recipes
     }
+}
+
+public struct RefineProgress: Sendable {
+    public let checked: Int
+    public let total: Int
 }
 
 @MainActor @Observable
@@ -44,6 +49,8 @@ public final class SearchController {
     public private(set) var errorCode: Int64 = 0
     public private(set) var message: String?
     public private(set) var isRunning = false
+    public private(set) var isPreparing = false
+    public private(set) var refineProgress: RefineProgress?
     /// The last finished (completed or cancelled) run, ready to be refined.
     public private(set) var baseRun: BaseRun?
     /// The session's Target, if one has been established — see
@@ -75,12 +82,45 @@ public final class SearchController {
     private var collected: [String] = []
     private var collectedRecipes: [String: SeedResult] = [:]
 
-    public init(engine: any SeedFinderEngine = ProductionSeedFinderEngine()) { self.engine = engine }
+    private let checkpointURL: URL?
+    private let checkpointInterval: Duration
+    private var pendingSearch: PendingSearchCheckpoint?
+    private var stopRequested = false
+    private var interruptionRequested = false
+    private var resumeWhenSettled = false
+    private var resumedScanned: Int64 = 0
+    private var resumedElapsed: TimeInterval = 0
+    private var resumedGoal: Int?
+
+    /// Supplying a private application-support URL enables atomic recovery of
+    /// results, recipes and fully drained traversal checkpoints. The host app
+    /// calls `interrupt()` before suspension and `resumeInterrupted()` when visible.
+    public init(engine: any SeedFinderEngine = ProductionSeedFinderEngine(),
+                checkpointURL: URL? = nil, checkpointInterval: Duration = .seconds(15)) {
+        self.engine = engine
+        self.checkpointURL = checkpointURL
+        self.checkpointInterval = checkpointInterval
+        restoreCheckpoint()
+    }
+
     public var timeToSeed: TimeInterval? {
         guard let matchProbability, seedsPerSecond > 0 else { return nil }
         return 1 / matchProbability / seedsPerSecond
     }
     public var reachedResultCap: Bool { results.count >= Self.resultCap }
+    public var foundCount: Int { collected.count }
+    public var hasPendingSearch: Bool { pendingSearch != nil }
+    /// The interrupted search's board can differ from the saved editor draft
+    /// and from the previous result query while refinement is still pending.
+    public var pendingQuery: SavedQuery? {
+        guard let request = pendingSearch?.request else { return nil }
+        return SavedQuery(requirements: request.requirements, maximumDepth: request.maximumDepth,
+            requireBlacksmith: request.requireBlacksmith, excludeBlacksmithRewards: request.excludeBlacksmithRewards,
+            wandmakerQuest: request.wandmakerQuest, challenges: request.challenges,
+            autoApplyTrinket: request.autoApplyTrinket, arcaneResin: request.arcaneResin,
+            arcaneResinFilter: request.arcaneResinFilter, arcaneResinAuto: request.arcaneResinAuto,
+            floorRequirements: request.floorRequirements)
+    }
     /// The engine completes an unsatisfiable plan before scanning any seed,
     /// which would otherwise be indistinguishable from a malfunction.
     public var isImpossibleQuery: Bool {
@@ -95,6 +135,7 @@ public final class SearchController {
     /// and `dropped` is what that step removed. Callers must ensure no search
     /// is running.
     public func loadImported(seeds: [String], dropped: Int = 0, query: SavedQuery, trinkets: [String?] = []) {
+        guard !isRunning else { return }
         results = seeds.enumerated().map { index, seed in SeedResult(seed: seed, matchedRequirements: query.slotCount, selectedTrinket: index < trinkets.count ? trinkets[index] : nil) }
         collectedRecipes = Dictionary(uniqueKeysWithValues: results.map { ($0.seed, $0) })
         collected = seeds
@@ -102,6 +143,7 @@ public final class SearchController {
         exportQuery = query
         scannedSeeds = 0; totalSeeds = 0; matchProbability = nil; seedsPerSecond = 0; elapsed = 0
         errorCode = 0; message = nil; state = nil; isImported = true; selectedSeed = nil
+        impossibleReason = nil
         // Imported results carry no traversal state, so the previous
         // search's base run no longer describes the listed seeds.
         baseRun = nil; refinedKept = nil; refinedOf = nil
@@ -113,6 +155,8 @@ public final class SearchController {
             wandmakerQuest: query.wandmakerQuest,
             challenges: query.challenges, autoApplyTrinket: query.autoApplyTrinket, arcaneResin: query.arcaneResin, arcaneResinFilter: query.arcaneResinFilter, arcaneResinAuto: query.arcaneResinAuto, floorRequirements: query.floorRequirements)
         if let request { remember(results, source: request) }
+        pendingSearch = nil
+        saveCheckpoint()
     }
 
     /// Search checks every retained seed and then looks for more matches.
@@ -122,11 +166,20 @@ public final class SearchController {
         let encoded = try? QueryDocument.encode(request)
         let previous = baseRun.flatMap { (try? QueryDocument.encode($0.request)) == encoded ? $0 : nil }
         task?.cancel(); resetProgress()
-        impossibleReason = encoded.flatMap { try? QueryAnalysis.impossibilityReason($0) }
+        stopRequested = false; interruptionRequested = false; resumeWhenSettled = false
+        resumedScanned = 0; resumedElapsed = 0; resumedGoal = nil
+        pendingSearch = PendingSearchCheckpoint(request: request, workers: workers)
+        impossibleReason = nil
         if target == nil { target = TargetState(request: request, seeds: []) }
+        saveCheckpoint()
         task = Task { [weak self] in
             guard let self else { return }
+            defer { self.finishedTask() }
             do {
+                self.impossibleReason = await Task.detached {
+                    encoded.flatMap { try? QueryAnalysis.impossibilityReason($0) }
+                }.value
+                try Task.checkCancellation()
                 var groups: [(source: SearchRequest, recipes: [SeedResult])] = []
                 for seed in pool?.seeds ?? [] {
                     let source = pool?.sources[seed] ?? pool?.request ?? request
@@ -137,11 +190,23 @@ public final class SearchController {
                     } else { groups.append((source, [recipe])) }
                 }
                 var kept: [SeedResult] = []
+                var checked = 0
+                self.isPreparing = false
+                if let pool, !pool.seeds.isEmpty {
+                    self.refineProgress = RefineProgress(checked: 0, total: pool.seeds.count)
+                }
                 for group in groups {
-                    try Task.checkCancellation()
-                    kept += try await engine.filterRecipes(request, base: group.source, recipes: group.recipes)
+                    let chunkSize = checkpointURL == nil ? max(1, group.recipes.count) : 24
+                    for offset in stride(from: 0, to: group.recipes.count, by: chunkSize) {
+                        try Task.checkCancellation()
+                        let chunk = Array(group.recipes[offset..<min(offset + chunkSize, group.recipes.count)])
+                        kept += try await engine.filterRecipes(request, base: group.source, recipes: chunk)
+                        checked += chunk.count
+                        self.refineProgress = RefineProgress(checked: checked, total: pool?.seeds.count ?? checked)
+                    }
                 }
                 try Task.checkCancellation()
+                self.refineProgress = nil
                 self.collected = kept.map(\.seed)
                 self.collectedRecipes = Dictionary(uniqueKeysWithValues: kept.map { ($0.seed, $0) })
                 self.results = Array(kept.prefix(Self.resultCap))
@@ -187,10 +252,29 @@ public final class SearchController {
         target = nil
         scannedSeeds = 0; totalSeeds = 0; matchProbability = nil; seedsPerSecond = 0; elapsed = 0
         errorCode = 0; message = nil; state = nil
+        impossibleReason = nil
+        pendingSearch = nil
+        saveCheckpoint()
+    }
+
+    /// Opening another query clears its displayed matches without discarding
+    /// the saved pool or the coverage of the preceding search.
+    public func clearDisplayedResults() {
+        guard !isRunning else { return }
+        results = []; collected = []; collectedRecipes = [:]; selectedSeed = nil; exportQuery = nil
+        isImported = false; importedDropped = 0; refinedKept = nil; refinedOf = nil
+        scannedSeeds = 0; totalSeeds = 0; matchProbability = nil; seedsPerSecond = 0; elapsed = 0
+        errorCode = 0; message = nil; state = nil; pendingSearch = nil
+        impossibleReason = nil
+        saveCheckpoint()
     }
 
     public func cancel() {
         guard isRunning else { return }
+        stopRequested = true; interruptionRequested = false; resumeWhenSettled = false
+        // Commit Stop before draining so a killed process cannot restart it.
+        pendingSearch = nil
+        saveCheckpoint()
         if let session {
             Task { await session.cancel() }
         } else {
@@ -200,9 +284,40 @@ public final class SearchController {
         }
     }
 
+    /// Cooperatively closes native workers before iOS suspension. Only a
+    /// settled session's resume hint is safe: an active hint can skip chunks.
+    public func interrupt() {
+        guard isRunning else { return }
+        interruptionRequested = true; resumeWhenSettled = false
+        if let session { Task { await session.cancel() } }
+        else { task?.cancel() }
+    }
+
+    /// Restarts an interrupted search when the host becomes visible. Returning
+    /// while workers are draining never opens a second native session.
+    public func resumeInterrupted() {
+        guard let pendingSearch else { return }
+        if isRunning {
+            if interruptionRequested { resumeWhenSettled = true }
+        } else {
+            let previousScanned = scannedSeeds, previousElapsed = elapsed, previousTotal = totalSeeds
+            start(pendingSearch.request, workers: pendingSearch.workers)
+            resumedScanned = previousScanned; resumedElapsed = previousElapsed
+            resumedGoal = pendingSearch.resultGoal
+            self.pendingSearch?.resultGoal = pendingSearch.resultGoal
+            scannedSeeds = previousScanned; elapsed = previousElapsed; totalSeeds = previousTotal
+            saveCheckpoint()
+        }
+    }
+
+    public func waitUntilSettled() async {
+        await task?.value
+    }
+
     private func resetProgress() {
         scannedSeeds = 0; totalSeeds = 0; matchProbability = nil; seedsPerSecond = 0; elapsed = 0
         errorCode = 0; message = nil; state = .running; isRunning = true
+        isPreparing = true; refineProgress = nil
     }
 
     /// Runs one native session's poll loop, appending results not already in
@@ -212,62 +327,143 @@ public final class SearchController {
                      startSession: (any SeedFinderEngine) async throws -> any SeedFinderSearchSession) async {
         let searchStart = ContinuousClock.now
         var shown = alreadyShown
-        let goal = shown.count >= Self.resultCap ? shown.count + Self.resultCap : Self.resultCap
+        let goal = resumedGoal ?? (shown.count >= Self.resultCap ? shown.count + Self.resultCap : Self.resultCap)
+        pendingSearch?.resultGoal = goal
+        var scannedBefore = resumedScanned
+        var originalTotal = totalSeeds
+        saveCheckpoint()
         do {
+            isPreparing = true
             var session = try await startSession(engine)
             self.session = session
+            try Task.checkCancellation()
+            isPreparing = false
             var previousCount: Int64 = 0
             var previousTime = ContinuousClock.now
-            var finalState: SearchState?
+            var checkpointStarted = ContinuousClock.now
+            var checkpointing = false
             while !Task.isCancelled {
                 let batch = try await session.poll(1_024)
                 self.append(batch, excluding: &shown, source: request)
                 let status = try await session.status()
                 let now = ContinuousClock.now
                 let totalDuration = searchStart.duration(to: now).components
-                self.elapsed = Double(totalDuration.seconds) + Double(totalDuration.attoseconds) / 1e18
-                let seconds = Double(previousTime.duration(to: now).components.attoseconds) / 1e18
-                    + Double(previousTime.duration(to: now).components.seconds)
+                self.elapsed = resumedElapsed + Double(totalDuration.seconds) + Double(totalDuration.attoseconds) / 1e18
+                let interval = previousTime.duration(to: now).components
+                let seconds = Double(interval.seconds) + Double(interval.attoseconds) / 1e18
                 if seconds > 0 {
                     let instantRate = Double(max(0, status.scannedSeeds - previousCount)) / seconds
                     self.seedsPerSecond = self.seedsPerSecond == 0 ? instantRate : self.seedsPerSecond * 0.7 + instantRate * 0.3
                 }
                 previousCount = status.scannedSeeds; previousTime = now
-                self.scannedSeeds = status.scannedSeeds; self.totalSeeds = status.totalSeeds
+                if originalTotal == 0 { originalTotal = status.totalSeeds }
+                self.scannedSeeds = min(originalTotal, scannedBefore + status.scannedSeeds)
+                self.totalSeeds = originalTotal
                 self.matchProbability = status.matchProbability > 0 ? status.matchProbability : nil
                 self.errorCode = status.errorCode; self.state = status.state
-                if status.state == .running && shown.count >= goal { await session.cancel() }
-                if status.state != .running {
-                    let finalBatch = try await session.poll(1_024)
-                    self.append(finalBatch, excluding: &shown, source: request)
+                if status.state == .running {
+                    if stopRequested || interruptionRequested || shown.count >= goal {
+                        await session.cancel()
+                    } else if checkpointURL != nil && checkpointStarted.duration(to: now) >= checkpointInterval {
+                        checkpointing = true
+                        await session.cancel()
+                    }
+                } else {
+                    // Cancellation joins workers, but any number of batches can
+                    // still be queued. Drain every one before persisting coverage.
+                    while true {
+                        let finalBatch = try await session.poll(1_024)
+                        if finalBatch.isEmpty { break }
+                        self.append(finalBatch, excluding: &shown, source: request)
+                    }
+                    if status.state == .failed {
+                        self.baseRun = nil
+                        self.message = status.errorCode == 2_001
+                            ? "A native world-generation worker stopped unexpectedly."
+                            : "The native search stopped with error \(status.errorCode)."
+                        break
+                    }
                     let hint = try await session.resumeHint()
-                    if status.state == .completed && status.scannedSeeds > 0 && hint.remaining > 0 && shown.count < goal {
+                    self.baseRun = BaseRun(request: request, resumeFrom: hint.position, remaining: hint.remaining)
+                    let shouldContinue = !stopRequested && !interruptionRequested
+                        && hint.remaining > 0 && shown.count < goal
+                        && (checkpointing || (status.state == .completed && status.scannedSeeds > 0))
+                    if shouldContinue {
+                        self.state = .running
+                        saveCheckpoint()
                         await session.close()
-                        session = try await engine.startResumedSearch(request, resumeFrom: hint.position, scanLen: hint.remaining, workers: workers)
-                        self.session = session; previousCount = 0
+                        scannedBefore = self.scannedSeeds
+                        session = try await engine.startResumedSearch(request, resumeFrom: hint.position,
+                            scanLen: hint.remaining, workers: workers)
+                        self.session = session
+                        previousCount = 0; previousTime = .now; checkpointStarted = .now; checkpointing = false
                         continue
                     }
-                    finalState = status.state == .cancelled && shown.count >= goal ? .completed : status.state
-                    self.state = finalState
+                    self.state = stopRequested ? .cancelled
+                        : hint.remaining == 0 || shown.count >= goal ? .completed : status.state
                     break
                 }
                 try await Task.sleep(for: .milliseconds(150))
             }
-            if finalState == .completed || finalState == .cancelled {
-                let hint = try? await session.resumeHint()
-                self.baseRun = hint.map {
-                    BaseRun(request: request, resumeFrom: $0.position, remaining: $0.remaining)
-                }
-            }
             await session.close()
         } catch is CancellationError {
             await self.session?.cancel(); await self.session?.close()
-            self.state = .cancelled; self.baseRun = nil
+            self.state = .cancelled
+            // Keep the preceding safe cursor; no hint is read from an active
+            // native session, so abrupt cancellation may only repeat work.
         } catch {
             await self.session?.close(); self.state = .failed; self.message = error.localizedDescription
             self.baseRun = nil
         }
         self.session = nil; self.isRunning = false
+    }
+
+    private func finishedTask() {
+        isRunning = false
+        isPreparing = false; refineProgress = nil
+        if !interruptionRequested || stopRequested || state == .failed || state == .completed {
+            pendingSearch = nil
+        } else if pendingSearch != nil {
+            message = "Search interrupted. It will continue when you reopen the app."
+        }
+        saveCheckpoint()
+        if resumeWhenSettled, pendingSearch != nil {
+            // The preceding task must return before a new task replaces it.
+            Task { [weak self] in self?.resumeInterrupted() }
+        }
+    }
+
+    private func saveCheckpoint() {
+        guard let checkpointURL else { return }
+        let snapshot = SearchCheckpoint(results: results,
+            collected: collected.compactMap { collectedRecipes[$0] }, query: exportQuery,
+            target: target, baseRun: baseRun, pending: pendingSearch, state: state,
+            scanned: scannedSeeds, total: totalSeeds, elapsed: elapsed,
+            probability: matchProbability, isImported: isImported, importedDropped: importedDropped,
+            errorCode: errorCode, message: message)
+        do { try snapshot.save(to: checkpointURL) }
+        catch { message = "Could not save search progress: \(error.localizedDescription)" }
+    }
+
+    private func restoreCheckpoint() {
+        guard let checkpointURL else { return }
+        do {
+            guard let saved = try SearchCheckpoint.load(from: checkpointURL) else { return }
+            results = Array(saved.results.prefix(Self.resultCap)); exportQuery = saved.query
+            collected = saved.collected.map(\.seed)
+            collectedRecipes = Dictionary(saved.collected.map { ($0.seed, $0) }, uniquingKeysWith: { first, _ in first })
+            target = saved.target; baseRun = saved.baseRun; pendingSearch = saved.pending
+            state = saved.state == .running && saved.pending == nil ? .cancelled : saved.state
+            scannedSeeds = saved.scanned; totalSeeds = saved.total; elapsed = saved.elapsed
+            matchProbability = saved.probability; isImported = saved.isImported
+            importedDropped = saved.importedDropped; errorCode = saved.errorCode; message = saved.message
+            if saved.engine != SearchCheckpoint.engineIdentifier {
+                baseRun = nil; pendingSearch = nil; state = nil
+                message = "The engine changed. Saved results were restored; start a search to recheck them."
+            }
+        } catch {
+            message = "The saved search could not be restored: \(error.localizedDescription)"
+        }
     }
 
     private func remember(_ entries: [SeedResult], source: SearchRequest) {
