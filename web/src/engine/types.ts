@@ -82,6 +82,7 @@ export interface RequirementState {
   selectTrinket?: boolean;
   /** Maximum transmutations (1–13), including initial offers; absent/zero requires an offer. */
   trinketTransmutations?: number;
+  artifactTransmutations?: number;
   kind?: RequirementKind;
   item?: string;
   tier: TierFilter;
@@ -135,6 +136,7 @@ export interface RequirementDocument {
   blanket?: boolean;
   select_trinket?: boolean;
   trinket_transmutations?: number;
+  artifact_transmutations?: number;
   kind?: RequirementKind;
   item?: string;
   tier?: TierDocument;
@@ -328,6 +330,7 @@ export interface ScoutResult {
   floorRooms?: { depth: number; rooms: RoomType[] }[];
   /** Full private-deck order; only entries 0..3 are initial catalyst offers. */
   trinketOrder?: TrinketOffer[];
+  artifactDecks?: { depth: number; order: TrinketOffer[] }[];
   seed: ParsedSeed;
   items: ScoutItem[];
   /**

@@ -82,9 +82,9 @@ export function requirementTitle(requirement: RequirementState): string {
 export function requirementDetails(requirement: RequirementState): string[] {
   const parts: string[] = [];
   if (requirement.selectTrinket) parts.push("choose at +3");
-  if (requirement.trinketTransmutations)
+  if (requirement.trinketTransmutations || requirement.artifactTransmutations)
     parts.push(
-      `within ${requirement.trinketTransmutations} transmutation${requirement.trinketTransmutations === 1 ? "" : "s"}`,
+      `within ${requirement.trinketTransmutations || requirement.artifactTransmutations} transmutation${(requirement.trinketTransmutations || requirement.artifactTransmutations) === 1 ? "" : "s"}`,
     );
   if (requirement.upgrade.mode === "exact") parts.push(`exactly +${requirement.upgrade.value}`);
   if (requirement.upgrade.mode === "at_least")

@@ -7,6 +7,7 @@ import init, { analyze_query, filter_seeds, scout } from "../../engine/pkg/seedf
 import type { ScoutResult } from "../../engine/types";
 import { RequirementEditor, namedItemEditorRequirement } from "./requirements/RequirementEditor";
 import { ScoutPanel } from "../scout/ScoutPanel";
+import { availableArtifactIds } from "../scout/choices";
 import { boardItems, canStack, joinAlternatives } from "./requirements/relations";
 
 beforeAll(async () => {
@@ -16,6 +17,98 @@ beforeAll(async () => {
 });
 
 describe("artifact search and scout", () => {
+  it("dims fixed artifacts unless matching requirements reserve their other rewards", () => {
+    const natural = [
+      "unstable_spellbook",
+      "sandals_of_nature",
+      "alchemists_toolkit",
+      "skeleton_key",
+    ];
+    const base = JSON.parse(scout(JSON.stringify({ seed: "AAA-AAA-AAA" }))) as ScoutResult;
+    expect(availableArtifactIds(base.items)).toEqual(new Set(natural));
+    const result = JSON.parse(
+      scout(
+        JSON.stringify({
+          seed: "AAA-AAA-AAA",
+          query: {
+            auto_apply_trinket: false,
+            requirements: [
+              { item: "ring_haste", source: "imp_reward" },
+              { item: "wand_prismatic_light", source: "crystal_chest" },
+            ],
+          },
+        }),
+      ),
+    ) as ScoutResult;
+    expect(result.matchedRequirements).toBe(2);
+    expect(availableArtifactIds(result.items)).toEqual(
+      new Set(["unstable_spellbook", "skeleton_key"]),
+    );
+    const own = JSON.parse(
+      scout(
+        JSON.stringify({
+          seed: "AAA-AAA-AAA",
+          query: {
+            auto_apply_trinket: false,
+            requirements: [{ item: "sandals_of_nature", source: "imp_reward" }],
+          },
+        }),
+      ),
+    ) as ScoutResult;
+    expect(own.matchedRequirements).toBe(1);
+    expect(availableArtifactIds(own.items)).toEqual(new Set(natural));
+  });
+
+  it("preserves artifact limits and highlights the remaining deck with its donor", () => {
+    const document = {
+      requirements: [{ item: "ethereal_chains", artifact_transmutations: 4 }],
+      max_depth: 19,
+    };
+    const state = fromQueryJson(JSON.stringify(document));
+    expect(state.requirements[0].artifactTransmutations).toBe(4);
+    expect(toQueryDocument(state).requirements).toMatchObject(document.requirements);
+    const result = JSON.parse(
+      scout(JSON.stringify({ seed: "AAA-AAA-AAA", query: document })),
+    ) as ScoutResult;
+    expect(result.matchedRequirements).toBe(1);
+    expect(result.artifactDecks?.find((deck) => deck.depth === 19)?.order[3]).toMatchObject({
+      id: "ethereal_chains",
+      matched: true,
+    });
+    expect(result.items.filter((entry) => entry.matched)).toHaveLength(1);
+    const html = renderToStaticMarkup(
+      <ScoutPanel
+        input="AAA-AAA-AAA"
+        onInput={() => {}}
+        onScout={() => {}}
+        loading={false}
+        result={result}
+      />,
+    );
+    expect(html).toContain("Ethereal Chains, matches requirement");
+    expect(result.artifactDecks?.find((deck) => deck.depth === 0)?.order).toHaveLength(11);
+    expect(html).toContain("Starting artifact deck order");
+    const editor = renderToStaticMarkup(
+      <RequirementEditor
+        requirement={state.requirements[0]}
+        isNew={false}
+        stack={{ count: 1, inCluster: false }}
+        onSave={() => {}}
+        onCancel={() => {}}
+      />,
+    );
+    expect(editor).toContain("Allow transmutations");
+    expect(editor).toContain("At most 4");
+    for (const count of [-1, 11, 1.5, "1"])
+      expect(() =>
+        fromQueryJson(
+          JSON.stringify({
+            requirements: [{ item: "ethereal_chains", artifact_transmutations: count }],
+          }),
+        ),
+      ).toThrow();
+  });
+
   it("shows the game's rounded levels for every generated artifact", () => {
     for (const item of itemsForKind("artifact")) {
       const expected =

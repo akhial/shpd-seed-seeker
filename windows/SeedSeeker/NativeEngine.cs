@@ -187,7 +187,7 @@ public sealed class NativeEngine
     internal static byte[] EncodeScoutRequest(string seed, int challenges, QuerySettings? query = null, string? trinket = null)
     {
         if (!SeedCode.IsScoutable(seed)) throw new ArgumentException("Choose a daily date or enter a XXX-XXX-XXX seed");
-        var w = new Writer(); w.Bytes("SSQ5"u8.ToArray()); w.U16Le(challenges);
+        var w = new Writer(); w.Bytes("SSQ6"u8.ToArray()); w.U16Le(challenges);
         var seedBytes = Encoding.UTF8.GetBytes(seed); w.U16Le(seedBytes.Length); w.Bytes(seedBytes);
         var overrideBytes = Encoding.UTF8.GetBytes(trinket ?? ""); w.U16Le(overrideBytes.Length); w.Bytes(overrideBytes);
         if (query is { HasRequirements: true }) w.Bytes(EncodeQuery(query));
@@ -221,7 +221,7 @@ public sealed class NativeEngine
     public static ScoutWorld DecodeScout(byte[] bytes)
     {
         var r = new Reader(bytes); var version = r.Text(4);
-        if (version is not ("SSC3" or "SSC4" or "SSC5" or "SSC6" or "SSC7" or "SSC8")) throw new InvalidDataException("Unexpected scout packet");
+        if (version is not ("SSC3" or "SSC4" or "SSC5" or "SSC6" or "SSC7" or "SSC8" or "SSC9")) throw new InvalidDataException("Unexpected scout packet");
         var returnedSeed = r.Text(r.U8()); var gems = new RingGems(r.Bytes(RingGems.Count));
         var quests = r.Quests(); var items = new List<ScoutItem>(); var count = r.U16();
         for (var i = 0; i < count; i++)
@@ -233,7 +233,7 @@ public sealed class NativeEngine
             items.Add(new(item, depth, upgrade, effect.Length == 0 ? null : effect, (flags & 1) != 0, source, tag, group, value, Secret: (flags & 2) != 0));
         }
         var order = new List<CatalogItem>();
-        if (version is "SSC4" or "SSC5" or "SSC6" or "SSC7" or "SSC8")
+        if (version is "SSC4" or "SSC5" or "SSC6" or "SSC7" or "SSC8" or "SSC9")
         {
             var orderCount = r.U8();
             if (orderCount != 17) throw new InvalidDataException("Unexpected trinket deck size");
@@ -246,7 +246,7 @@ public sealed class NativeEngine
             }
         }
         var feelings = new List<ScoutFloorFeeling>();
-        if (version is "SSC5" or "SSC6" or "SSC7" or "SSC8")
+        if (version is "SSC5" or "SSC6" or "SSC7" or "SSC8" or "SSC9")
         {
             var feelingCount = r.U8();
             if (feelingCount > 20) throw new InvalidDataException("Unexpected floor feeling count");
@@ -260,19 +260,19 @@ public sealed class NativeEngine
                 previousDepth = depth;
             }
         }
-        var selectedTrinket = version is "SSC6" or "SSC7" or "SSC8" ? r.Text() : "";
+        var selectedTrinket = version is "SSC6" or "SSC7" or "SSC8" or "SSC9" ? r.Text() : "";
         if (selectedTrinket.Length == 0) selectedTrinket = null;
         if (selectedTrinket is not null && !order.Take(4).Any(item => item.Id == selectedTrinket))
             throw new InvalidDataException("Selected trinket is not initially offered");
         ScoutItemMappings? mappings = null;
-        if (version is "SSC7" or "SSC8")
+        if (version is "SSC7" or "SSC8" or "SSC9")
         {
             mappings = new(ReadMappings(ref r, 304), ReadMappings(ref r, 352), ReadMappings(ref r, 224));
             if (!mappings.Rings.Select(entry => entry.SpriteIndex - 224).SequenceEqual(gems.Ordinals.Select(x => (int)x)))
                 throw new InvalidDataException("Scout ring mappings disagree with run gems");
         }
         var floorRooms = new Dictionary<int, IReadOnlySet<string>>();
-        if (version == "SSC8")
+        if (version is "SSC8" or "SSC9")
         {
             var floorCount = r.U8();
             if (floorCount > 20) throw new InvalidDataException("Too many floor room summaries");
@@ -293,8 +293,29 @@ public sealed class NativeEngine
                 floorRooms.Add(depth, rooms);
             }
         }
+        var artifactDecks = new Dictionary<int, IReadOnlyList<CatalogItem>>();
+        if (version == "SSC9") {
+            var deckCount = r.U8();
+            if (deckCount > 25) throw new InvalidDataException("Too many artifact decks");
+            var previous = -1;
+            for (var i = 0; i < deckCount; i++) {
+                var depth = r.U8();
+                if (depth <= previous || depth > 24) throw new InvalidDataException("Invalid artifact floor");
+                previous = depth;
+                var size = r.U8();
+                if (size > 11) throw new InvalidDataException("Too many artifacts");
+                var deck = new List<CatalogItem>();
+                for (var j = 0; j < size; j++) {
+                    var id = r.Text();
+                    var artifact = ItemCatalog.All.FirstOrDefault(item => item.Id == id && item.Kind == ItemKind.Artifact);
+                    if (artifact is null || deck.Contains(artifact)) throw new InvalidDataException("Invalid artifact");
+                    deck.Add(artifact);
+                }
+                artifactDecks.Add(depth, deck);
+            }
+        }
         if (r.Remaining != 0) throw new InvalidDataException("Trailing native data");
-        return new(returnedSeed, quests, items, gems, order, feelings, selectedTrinket, mappings, floorRooms);
+        return new(returnedSeed, quests, items, gems, order, feelings, selectedTrinket, mappings, floorRooms, artifactDecks);
     }
 
     private static IReadOnlyList<ScoutItemMapping> ReadMappings(ref Reader reader, int spriteBase)
@@ -338,7 +359,8 @@ public sealed class NativeEngine
             if (index is JsonValue value && value.TryGetValue(out int number)) matched.Add(number);
         return new(matched, (int?)document["matchedRequirements"] ?? matched.Count,
             (int?)document["totalRequirements"] ?? slots) {
-                TransmutedTrinkets = (document["transmutedTrinkets"] as JsonArray ?? []).Select(value => (int)value!).ToHashSet()
+                TransmutedTrinkets = (document["transmutedTrinkets"] as JsonArray ?? []).Select(value => (int)value!).ToHashSet(),
+                TransmutedArtifacts = (document["transmutedArtifacts"] as JsonArray ?? []).Select(value => ((int)value!["depth"]!, (int)value!["index"]!)).ToHashSet()
             };
     }
 

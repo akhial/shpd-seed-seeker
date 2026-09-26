@@ -50,7 +50,8 @@ pub fn decode_selected_scout_request(request: &[u8]) -> Result<SelectedScoutRequ
         std::str::from_utf8(input.take(len)?).map_err(|_| WireError::InvalidUtf8)
     }
     let Some(payload) = request
-        .strip_prefix(b"SSQ5")
+        .strip_prefix(b"SSQ6")
+        .or_else(|| request.strip_prefix(b"SSQ5"))
         .or_else(|| request.strip_prefix(b"SSQ4"))
         .or_else(|| request.strip_prefix(b"SSQ3"))
     else {
@@ -99,6 +100,7 @@ const SCOUT_RESULT_MAGIC_V4: &[u8; 4] = b"SSC4";
 const SCOUT_RESULT_MAGIC_V5: &[u8; 4] = b"SSC5";
 const SCOUT_RESULT_MAGIC_V6: &[u8; 4] = b"SSC6";
 const SCOUT_RESULT_MAGIC_V7: &[u8; 4] = b"SSC7";
+const SCOUT_RESULT_MAGIC_V9: &[u8; 4] = b"SSC9";
 const SCOUT_RESULT_MAGIC_V8: &[u8; 4] = b"SSC8";
 /// Requirement ceiling of a bridge request; far above anything the UIs
 /// produce, and what the retired binary layout's count field could hold.
@@ -415,6 +417,31 @@ pub fn encode_scout_world_with_rooms(
     Ok(output)
 }
 
+/// `SSC9` appends starting (depth 0) and remaining artifact decks to `SSC8`; requested with `SSQ6`.
+/// Each floor has a depth byte, count byte, and stable IDs as big-endian `utf8_u16`.
+///
+/// # Errors
+/// Rejects invalid scout metadata.
+pub fn encode_scout_world_with_artifacts(
+    world: &GeneratedWorld,
+    selected: Option<crate::catalog::ItemId>,
+) -> Result<Vec<u8>, WireError> {
+    let mut output = encode_scout_world_with_rooms(world, selected)?;
+    output[..4].copy_from_slice(SCOUT_RESULT_MAGIC_V9);
+    output
+        .push(u8::try_from(world.artifact_decks.len()).map_err(|_| WireError::InvalidFloorRooms)?);
+    for deck in &world.artifact_decks {
+        output.extend_from_slice(&[
+            deck.depth,
+            u8::try_from(deck.order.len()).map_err(|_| WireError::InvalidFloorRooms)?,
+        ]);
+        for &id in &deck.order {
+            push_utf8_u16(&mut output, item(id).stable_id)?;
+        }
+    }
+    Ok(output)
+}
+
 fn validate_feeling_depth(depth: u8, previous: u8) -> Result<(), WireError> {
     if !(1..=24).contains(&depth) || depth % 5 == 0 {
         return Err(WireError::InvalidFeelingDepth);
@@ -609,6 +636,7 @@ pub fn decode_scout_world(packet: &[u8]) -> Result<GeneratedWorld, WireError> {
         && magic != SCOUT_RESULT_MAGIC_V5
         && magic != SCOUT_RESULT_MAGIC_V6
         && magic != SCOUT_RESULT_MAGIC_V7
+        && magic != SCOUT_RESULT_MAGIC_V9
         && magic != SCOUT_RESULT_MAGIC_V8
     {
         return Err(WireError::BadMagic);
@@ -692,6 +720,7 @@ pub fn decode_scout_world(packet: &[u8]) -> Result<GeneratedWorld, WireError> {
     let feelings = if magic == SCOUT_RESULT_MAGIC_V5
         || magic == SCOUT_RESULT_MAGIC_V6
         || magic == SCOUT_RESULT_MAGIC_V7
+        || magic == SCOUT_RESULT_MAGIC_V9
         || magic == SCOUT_RESULT_MAGIC_V8
     {
         decode_feelings(&mut input)?
@@ -700,6 +729,7 @@ pub fn decode_scout_world(packet: &[u8]) -> Result<GeneratedWorld, WireError> {
     };
     if magic == SCOUT_RESULT_MAGIC_V6
         || magic == SCOUT_RESULT_MAGIC_V7
+        || magic == SCOUT_RESULT_MAGIC_V9
         || magic == SCOUT_RESULT_MAGIC_V8
     {
         let selected = input.utf8_u16()?;
@@ -711,7 +741,10 @@ pub fn decode_scout_world(packet: &[u8]) -> Result<GeneratedWorld, WireError> {
             return Err(WireError::InvalidTrinketOrder);
         }
     }
-    if magic == SCOUT_RESULT_MAGIC_V7 || magic == SCOUT_RESULT_MAGIC_V8 {
+    if magic == SCOUT_RESULT_MAGIC_V7
+        || magic == SCOUT_RESULT_MAGIC_V9
+        || magic == SCOUT_RESULT_MAGIC_V8
+    {
         let mappings = crate::item_mappings::item_mappings(seed);
         for entry in mappings
             .scrolls
@@ -728,7 +761,7 @@ pub fn decode_scout_world(packet: &[u8]) -> Result<GeneratedWorld, WireError> {
         }
     }
     let mut floor_rooms = Vec::new();
-    if magic == SCOUT_RESULT_MAGIC_V8 {
+    if magic == SCOUT_RESULT_MAGIC_V8 || magic == SCOUT_RESULT_MAGIC_V9 {
         let count = input.u8()?;
         if count > 20 {
             return Err(WireError::InvalidFloorRooms);
@@ -754,6 +787,34 @@ pub fn decode_scout_world(packet: &[u8]) -> Result<GeneratedWorld, WireError> {
             floor_rooms.push(FloorRooms { depth, rooms });
         }
     }
+    let mut artifact_decks = Vec::new();
+    if magic == SCOUT_RESULT_MAGIC_V9 {
+        let count = input.u8()?;
+        if count > 25 {
+            return Err(WireError::InvalidFloorRooms);
+        }
+        let mut previous = None;
+        for _ in 0..count {
+            let depth = input.u8()?;
+            if previous.is_some_and(|previous| depth <= previous) || depth > 24 {
+                return Err(WireError::InvalidFloorRooms);
+            }
+            previous = Some(depth);
+            let count = input.u8()?;
+            if count > 11 {
+                return Err(WireError::InvalidFloorRooms);
+            }
+            let mut order = Vec::new();
+            for _ in 0..count {
+                let entry = item_by_stable_id(input.utf8_u16()?).ok_or(WireError::UnknownItem)?;
+                if entry.kind != crate::catalog::ItemKind::Artifact || order.contains(&entry.id) {
+                    return Err(WireError::InvalidFloorRooms);
+                }
+                order.push(entry.id);
+            }
+            artifact_decks.push(crate::artifacts::ArtifactDeck { depth, order });
+        }
+    }
     if !input.is_empty() {
         return Err(WireError::TrailingData);
     }
@@ -762,6 +823,7 @@ pub fn decode_scout_world(packet: &[u8]) -> Result<GeneratedWorld, WireError> {
         items,
         feelings,
         floor_rooms,
+        artifact_decks,
         quests,
         ring_gems,
     })
@@ -958,6 +1020,7 @@ mod tests {
         use crate::search::WorldGenerator;
         let mut world = crate::main_world::CanonicalMainWorldGenerator.generate(seed, depth);
         world.floor_rooms.clear();
+        world.artifact_decks.clear();
         world
     }
 
@@ -965,7 +1028,8 @@ mod tests {
     fn room_packets_preserve_generated_worlds_and_reject_malformed_summaries() {
         use crate::search::WorldGenerator;
         let seed = crate::seed::DungeonSeed::from_code("DJG-HMA-ULY").unwrap();
-        let world = crate::main_world::CanonicalMainWorldGenerator.generate(seed, 24);
+        let mut world = crate::main_world::CanonicalMainWorldGenerator.generate(seed, 24);
+        world.artifact_decks.clear(); // SSC8 predates artifact metadata.
         let packet = super::encode_scout_world_with_rooms(&world, None).unwrap();
         assert_eq!(&packet[..4], b"SSC8");
         assert_eq!(super::decode_scout_world(&packet).unwrap(), world);
@@ -1071,6 +1135,7 @@ mod tests {
                     require_uncursed: true,
                     select_trinket: false,
                     trinket_transmutations: 0,
+                    artifact_transmutations: 0,
                     blanket: false,
                     exclude_resin: false,
                     source: Some(ItemSource::Chest),
@@ -1089,6 +1154,7 @@ mod tests {
                     require_uncursed: false,
                     select_trinket: false,
                     trinket_transmutations: 0,
+                    artifact_transmutations: 0,
                     blanket: false,
                     exclude_resin: false,
                     source: None,
@@ -1107,6 +1173,7 @@ mod tests {
                     require_uncursed: false,
                     select_trinket: false,
                     trinket_transmutations: 0,
+                    artifact_transmutations: 0,
                     blanket: false,
                     exclude_resin: false,
                     source: None,
@@ -1186,6 +1253,7 @@ mod tests {
                     require_uncursed: false,
                     select_trinket: false,
                     trinket_transmutations: 0,
+                    artifact_transmutations: 0,
                     blanket: false,
                     exclude_resin: false,
                     source: None,
@@ -1206,6 +1274,7 @@ mod tests {
                     require_uncursed: true,
                     select_trinket: false,
                     trinket_transmutations: 0,
+                    artifact_transmutations: 0,
                     blanket: false,
                     exclude_resin: false,
                     source: None,
@@ -1224,6 +1293,7 @@ mod tests {
                     require_uncursed: false,
                     select_trinket: false,
                     trinket_transmutations: 0,
+                    artifact_transmutations: 0,
                     blanket: false,
                     exclude_resin: false,
                     source: None,
@@ -1245,6 +1315,7 @@ mod tests {
                     require_uncursed: false,
                     select_trinket: false,
                     trinket_transmutations: 0,
+                    artifact_transmutations: 0,
                     blanket: false,
                     exclude_resin: false,
                     source: None,
@@ -1439,6 +1510,7 @@ mod tests {
         let worlds = vec![
             GeneratedWorld {
                 floor_rooms: Vec::new(),
+                artifact_decks: Vec::new(),
                 feelings: Vec::new(),
                 quests: crate::quests::QuestSummary::default(),
                 seed: DungeonSeed::MIN,
@@ -1447,6 +1519,7 @@ mod tests {
             },
             GeneratedWorld {
                 floor_rooms: Vec::new(),
+                artifact_decks: Vec::new(),
                 feelings: Vec::new(),
                 quests: crate::quests::QuestSummary::default(),
                 seed: DungeonSeed::new(1).unwrap(),
@@ -1510,6 +1583,7 @@ mod tests {
     fn scout_packet_has_a_fixed_android_big_endian_fixture() {
         let world = GeneratedWorld {
             floor_rooms: Vec::new(),
+            artifact_decks: Vec::new(),
             feelings: Vec::new(),
             quests: crate::quests::QuestSummary::default(),
             seed: DungeonSeed::MIN,
@@ -1548,6 +1622,7 @@ mod tests {
     fn native_scout_deck_tail_is_ordered_and_validated() {
         let world = GeneratedWorld {
             floor_rooms: Vec::new(),
+            artifact_decks: Vec::new(),
             feelings: Vec::new(),
             seed: DungeonSeed::MIN,
             items: Vec::new(),
@@ -1734,6 +1809,7 @@ mod tests {
 
         let world = GeneratedWorld {
             floor_rooms: Vec::new(),
+            artifact_decks: Vec::new(),
             feelings: Vec::new(),
             quests: QuestSummary {
                 ghost: Some(ScheduledQuest {
@@ -1780,6 +1856,7 @@ mod tests {
 
         let world = GeneratedWorld {
             floor_rooms: Vec::new(),
+            artifact_decks: Vec::new(),
             feelings: Vec::new(),
             quests: QuestSummary {
                 wandmaker: Some(ScheduledQuest {
@@ -1847,6 +1924,7 @@ mod tests {
     fn scout_packet_round_trips_a_plus_four_ring() {
         let world = GeneratedWorld {
             floor_rooms: Vec::new(),
+            artifact_decks: Vec::new(),
             feelings: Vec::new(),
             quests: crate::quests::QuestSummary::default(),
             seed: DungeonSeed::from_code("AAA-AAA-AAF").unwrap(),
@@ -1912,6 +1990,7 @@ mod tests {
             .collect();
         let world = GeneratedWorld {
             floor_rooms: Vec::new(),
+            artifact_decks: Vec::new(),
             feelings: Vec::new(),
             quests: crate::quests::QuestSummary {
                 ghost: Some(crate::quests::ScheduledQuest {
@@ -2081,6 +2160,7 @@ mod tests {
     fn every_truncated_scout_fixture_prefix_is_rejected() {
         let world = GeneratedWorld {
             floor_rooms: Vec::new(),
+            artifact_decks: Vec::new(),
             feelings: Vec::new(),
             quests: crate::quests::QuestSummary {
                 imp: Some(crate::quests::ScheduledQuest {
@@ -2119,6 +2199,7 @@ mod tests {
     fn scout_decoder_rejects_reserved_values_and_trailing_data() {
         let world = GeneratedWorld {
             floor_rooms: Vec::new(),
+            artifact_decks: Vec::new(),
             feelings: Vec::new(),
             quests: crate::quests::QuestSummary::default(),
             seed: DungeonSeed::MIN,
@@ -2225,6 +2306,7 @@ mod tests {
         };
         let world = GeneratedWorld {
             floor_rooms: Vec::new(),
+            artifact_decks: Vec::new(),
             feelings: Vec::new(),
             quests: crate::quests::QuestSummary::default(),
             seed: DungeonSeed::MIN,

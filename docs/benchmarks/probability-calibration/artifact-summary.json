@@ -1,0 +1,191 @@
+[
+  {
+    "profile": "none",
+    "samples": 65536,
+    "queries": 79,
+    "categories": {
+      "probe": {
+        "pass": 77,
+        "underpowered": 2,
+        "median_ratio": 0.9961253918495299,
+        "p10_ratio": 0.9531807684232627,
+        "p90_ratio": 1.006118501559231,
+        "mean_absolute_log_error": 0.0135368135937541
+      }
+    },
+    "timing_ns": {
+      "p50": 167125,
+      "p95": 2425334,
+      "max": 5307584
+    },
+    "divergences": []
+  },
+  {
+    "profile": "auto",
+    "samples": 65536,
+    "queries": 79,
+    "categories": {
+      "probe": {
+        "pass": 77,
+        "underpowered": 2,
+        "median_ratio": 0.9973463190436328,
+        "p10_ratio": 0.9734293253530373,
+        "p90_ratio": 1.0063611552491698,
+        "mean_absolute_log_error": 0.01072211916247889
+      }
+    },
+    "timing_ns": {
+      "p50": 1062583,
+      "p95": 11239750,
+      "max": 27632208
+    },
+    "divergences": []
+  },
+  {
+    "profile": "mimic_tooth",
+    "samples": 65536,
+    "queries": 79,
+    "categories": {
+      "probe": {
+        "pass": 77,
+        "underpowered": 2,
+        "median_ratio": 1.0066992540561284,
+        "p10_ratio": 0.990635598696479,
+        "p90_ratio": 1.107563589004885,
+        "mean_absolute_log_error": 0.025153166414078734
+      }
+    },
+    "timing_ns": {
+      "p50": 372459,
+      "p95": 2633417,
+      "max": 6427041
+    },
+    "divergences": []
+  },
+  {
+    "profile": "parchment_scrap",
+    "samples": 65536,
+    "queries": 79,
+    "categories": {
+      "probe": {
+        "pass": 77,
+        "underpowered": 2,
+        "median_ratio": 0.9942855165013781,
+        "p10_ratio": 0.9358592105763055,
+        "p90_ratio": 1.010855294758053,
+        "mean_absolute_log_error": 0.021538462637857383
+      }
+    },
+    "timing_ns": {
+      "p50": 359916,
+      "p95": 2722500,
+      "max": 5619000
+    },
+    "divergences": []
+  },
+  {
+    "profile": "rat_skull",
+    "samples": 65536,
+    "queries": 79,
+    "categories": {
+      "probe": {
+        "pass": 77,
+        "underpowered": 2,
+        "median_ratio": 1.0007754683066792,
+        "p10_ratio": 0.9788503197044965,
+        "p90_ratio": 1.034178098116755,
+        "mean_absolute_log_error": 0.01782585926485615
+      }
+    },
+    "timing_ns": {
+      "p50": 395541,
+      "p95": 6481041,
+      "max": 16380250
+    },
+    "divergences": []
+  },
+  {
+    "profile": "exotic_crystals",
+    "samples": 65536,
+    "queries": 79,
+    "categories": {
+      "probe": {
+        "pass": 77,
+        "underpowered": 2,
+        "median_ratio": 1.0012282786998106,
+        "p10_ratio": 0.9821076192273265,
+        "p90_ratio": 1.0437738244337793,
+        "mean_absolute_log_error": 0.019107609984243094
+      }
+    },
+    "timing_ns": {
+      "p50": 388458,
+      "p95": 5179542,
+      "max": 56973667
+    },
+    "divergences": []
+  },
+  {
+    "profile": "mossy_clump",
+    "samples": 65536,
+    "queries": 79,
+    "categories": {
+      "probe": {
+        "pass": 77,
+        "underpowered": 2,
+        "median_ratio": 1.009180930601313,
+        "p10_ratio": 0.9739701954415778,
+        "p90_ratio": 1.0667199760108232,
+        "mean_absolute_log_error": 0.03325989972881101
+      }
+    },
+    "timing_ns": {
+      "p50": 385000,
+      "p95": 3077459,
+      "max": 15057791
+    },
+    "divergences": []
+  },
+  {
+    "profile": "trap_mechanism",
+    "samples": 65536,
+    "queries": 79,
+    "categories": {
+      "probe": {
+        "pass": 77,
+        "underpowered": 2,
+        "median_ratio": 1.0048061616479114,
+        "p10_ratio": 0.9018078661336782,
+        "p90_ratio": 1.0302940502970144,
+        "mean_absolute_log_error": 0.02943049037165104
+      }
+    },
+    "timing_ns": {
+      "p50": 402209,
+      "p95": 3117250,
+      "max": 16069792
+    },
+    "divergences": []
+  },
+  {
+    "profile": "cracked_spyglass",
+    "samples": 65536,
+    "queries": 79,
+    "categories": {
+      "probe": {
+        "pass": 77,
+        "underpowered": 2,
+        "median_ratio": 0.9988497977522838,
+        "p10_ratio": 0.9549229623689788,
+        "p90_ratio": 1.0246393774592335,
+        "mean_absolute_log_error": 0.02541683381792776
+      }
+    },
+    "timing_ns": {
+      "p50": 420584,
+      "p95": 5950417,
+      "max": 64099208
+    },
+    "divergences": []
+  }
+]

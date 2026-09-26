@@ -99,6 +99,9 @@ pub fn run(seed: DungeonSeed, items: Option<&Path>, output: Option<&Path>) -> Re
             text.push('\n');
         }
     }
+    let deck = shpd_seedfinder_core::artifacts::deck_at(&world, 0);
+    let entries = deck.iter().map(|&id| item(id).name).collect::<Vec<_>>();
+    writeln!(text, "\n  {}", entries.join(" · ")).unwrap();
     if let Some(output) = output {
         std::fs::write(output, text).map_err(|error| error.to_string())
     } else {

@@ -306,6 +306,13 @@ public struct ScoutChoiceStatus: Sendable {
         guard !matched, case let .choice(group, option) = accessibility, let chosen = selected[group] else { return false }
         return chosen != option
     }
+    /// Scout items contain fixed dungeon loot, never runtime drops or transmutation outcomes.
+    public static func availableArtifactIDs(items: [ScoutItem], matched: Set<Int>) -> Set<String> {
+        let choices = ScoutChoiceStatus(items: items, matched: matched)
+        return Set(items.enumerated().filter { index, item in
+            item.item.kind == .artifact && !choices.isDimmed(item.accessibility, matched: matched.contains(index))
+        }.map { $0.element.item.id })
+    }
     public static func letter(_ group: Int) -> String {
         String(UnicodeScalar(65 + max(0, group) % 26)!)
     }

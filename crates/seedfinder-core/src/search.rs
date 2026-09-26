@@ -890,6 +890,7 @@ mod tests {
             };
             GeneratedWorld {
                 floor_rooms: Vec::new(),
+                artifact_decks: Vec::new(),
                 feelings: Vec::new(),
                 quests: crate::quests::QuestSummary::default(),
                 seed,
@@ -917,6 +918,7 @@ mod tests {
                 require_uncursed: false,
                 select_trinket: false,
                 trinket_transmutations: 0,
+                artifact_transmutations: 0,
                 blanket: false,
                 exclude_resin: false,
                 source: None,
@@ -975,6 +977,7 @@ mod tests {
                     .copied()
                     .map(|seed| GeneratedWorld {
                         floor_rooms: Vec::new(),
+                        artifact_decks: Vec::new(),
                         feelings: Vec::new(),
                         quests: crate::quests::QuestSummary::default(),
                         seed,
@@ -1013,6 +1016,7 @@ mod tests {
                 require_uncursed: false,
                 select_trinket: false,
                 trinket_transmutations: 0,
+                artifact_transmutations: 0,
                 blanket: false,
                 exclude_resin: false,
                 source: None,
@@ -1069,6 +1073,7 @@ mod tests {
                     .push(seed.value());
                 GeneratedWorld {
                     floor_rooms: Vec::new(),
+                    artifact_decks: Vec::new(),
                     feelings: Vec::new(),
                     quests: crate::quests::QuestSummary::default(),
                     seed,
@@ -1094,6 +1099,7 @@ mod tests {
                 require_uncursed: false,
                 select_trinket: false,
                 trinket_transmutations: 0,
+                artifact_transmutations: 0,
                 blanket: false,
                 exclude_resin: false,
                 source: None,
@@ -1175,6 +1181,7 @@ mod tests {
                 require_uncursed: false,
                 select_trinket: false,
                 trinket_transmutations: 0,
+                artifact_transmutations: 0,
                 blanket: false,
                 exclude_resin: false,
                 source: None,
@@ -1224,6 +1231,7 @@ mod tests {
                 require_uncursed: false,
                 select_trinket: false,
                 trinket_transmutations: 0,
+                artifact_transmutations: 0,
                 blanket: false,
                 exclude_resin: false,
                 source: None,
@@ -1260,6 +1268,7 @@ mod tests {
             };
             GeneratedWorld {
                 floor_rooms: Vec::new(),
+                artifact_decks: Vec::new(),
                 feelings: Vec::new(),
                 seed,
                 items,
@@ -1288,6 +1297,7 @@ mod tests {
                     .push(seed.value());
                 GeneratedWorld {
                     floor_rooms: Vec::new(),
+                    artifact_decks: Vec::new(),
                     feelings: Vec::new(),
                     seed,
                     items: Vec::new(),
@@ -1379,6 +1389,7 @@ mod tests {
                 require_uncursed: false,
                 select_trinket: false,
                 trinket_transmutations: 0,
+                artifact_transmutations: 0,
                 blanket: false,
                 exclude_resin: false,
                 source: None,
@@ -1567,6 +1578,7 @@ mod tests {
                 assert_ne!(seed.value(), 6, "fixture panic at seed six");
                 GeneratedWorld {
                     floor_rooms: Vec::new(),
+                    artifact_decks: Vec::new(),
                     feelings: Vec::new(),
                     seed,
                     items: vec![WorldItem {
@@ -1618,6 +1630,7 @@ mod tests {
                 assert_ne!(seed.value(), 6, "fixture panic at seed six");
                 GeneratedWorld {
                     floor_rooms: Vec::new(),
+                    artifact_decks: Vec::new(),
                     feelings: Vec::new(),
                     quests: crate::quests::QuestSummary::default(),
                     seed,
@@ -1643,6 +1656,7 @@ mod tests {
                 require_uncursed: false,
                 select_trinket: false,
                 trinket_transmutations: 0,
+                artifact_transmutations: 0,
                 blanket: false,
                 exclude_resin: false,
                 source: None,

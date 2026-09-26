@@ -83,6 +83,7 @@ public struct ScoutMatches: Sendable {
     /// `scoutSeed(_:challenges:)` returns it.
     public let matched: Set<Int>
     public let transmutedTrinkets: Set<Int>
+    public let transmutedArtifacts: [Int: Set<Int>]
     /// How many conditions the marks satisfy, and how many there are. An
     /// alternative group is one slot however many members it has; a
     /// combined-level group counts once, its contributing items are all
@@ -91,9 +92,10 @@ public struct ScoutMatches: Sendable {
     public let matchedRequirements: Int
     public let totalRequirements: Int
 
-    public init(matched: Set<Int>, matchedRequirements: Int, totalRequirements: Int, transmutedTrinkets: Set<Int> = []) {
+    public init(matched: Set<Int>, matchedRequirements: Int, totalRequirements: Int, transmutedTrinkets: Set<Int> = [], transmutedArtifacts: [Int: Set<Int>] = [:]) {
         self.matched = matched
         self.transmutedTrinkets = transmutedTrinkets
+        self.transmutedArtifacts = transmutedArtifacts
         self.matchedRequirements = matchedRequirements
         self.totalRequirements = totalRequirements
     }
@@ -118,8 +120,12 @@ public struct ScoutMatches: Sendable {
               let totalRequirements = document["totalRequirements"] as? Int else {
             throw SeedFinderEngineError.invalidResponse
         }
+        var artifacts: [Int: Set<Int>] = [:]
+        for entry in document["transmutedArtifacts"] as? [[String: Int]] ?? [] {
+            if let depth = entry["depth"], let index = entry["index"] { artifacts[depth, default: []].insert(index) }
+        }
         return ScoutMatches(matched: Set(matched), matchedRequirements: matchedRequirements,
-                            totalRequirements: totalRequirements, transmutedTrinkets: Set(document["transmutedTrinkets"] as? [Int] ?? []))
+                            totalRequirements: totalRequirements, transmutedTrinkets: Set(document["transmutedTrinkets"] as? [Int] ?? []), transmutedArtifacts: artifacts)
     }
 
     /// Marks the world `seed` generates under `challenges` against `query`.

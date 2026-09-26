@@ -106,6 +106,7 @@ fn random_world(rng: &mut Rng) -> GeneratedWorld {
         .collect();
     GeneratedWorld {
         floor_rooms: Vec::new(),
+        artifact_decks: Vec::new(),
         feelings: Vec::new(),
         seed: DungeonSeed::MIN,
         items,
@@ -148,6 +149,7 @@ fn random_requirement(rng: &mut Rng) -> Requirement {
         require_uncursed: rng.chance(20),
         select_trinket: false,
         trinket_transmutations: 0,
+        artifact_transmutations: 0,
         blanket: false,
         exclude_resin: false,
         source: None,
@@ -239,6 +241,7 @@ fn random_query(rng: &mut Rng) -> Option<SearchQuery> {
                     require_uncursed: false,
                     select_trinket: false,
                     trinket_transmutations: 0,
+                    artifact_transmutations: 0,
                     blanket: false,
                     exclude_resin: false,
                     source: None,
@@ -657,6 +660,7 @@ fn resin_oracle_covers_reforge_copies_exclusions_and_credit() {
             items: items[range].to_vec(),
             feelings: Vec::new(),
             floor_rooms: Vec::new(),
+            artifact_decks: Vec::new(),
             quests: QuestSummary::default(),
             ring_gems: RingGems::UNSHUFFLED,
         };

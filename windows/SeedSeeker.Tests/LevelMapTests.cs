@@ -45,6 +45,23 @@ public sealed class LevelMapTests
     }
 
     [Fact]
+    public void FixedArtifactsRespectMatchedExclusiveRewards()
+    {
+        var world = new NativeEngine().Scout("AAA-AAA-AAA", 0);
+        var natural = new HashSet<string> { "unstable_spellbook", "sandals_of_nature", "alchemists_toolkit", "skeleton_key" };
+        Assert.True(natural.SetEquals(ScoutChoices.AvailableArtifacts(world.Items, new HashSet<int>())));
+        var query = new QuerySettings { AutoApplyTrinket = false, Requirements = [
+            new() { Kind = ItemKind.Ring, Item = ItemCatalog.Find("ring_haste"), UpgradeMatch = UpgradeMatch.Any, Source = ScoutItemSource.ImpReward },
+            new() { Kind = ItemKind.Wand, Item = ItemCatalog.Find("wand_prismatic_light"), UpgradeMatch = UpgradeMatch.Any, Source = ScoutItemSource.CrystalChest },
+        ] };
+        var marks = NativeEngine.ScoutMatches(world.Seed, 0, query);
+        Assert.Equal(2, marks.MatchedRequirements);
+        Assert.True(new HashSet<string> { "unstable_spellbook", "skeleton_key" }.SetEquals(ScoutChoices.AvailableArtifacts(world.Items, marks.Matched)));
+        query.Requirements = [new() { Kind = ItemKind.Artifact, Item = ItemCatalog.Find("sandals_of_nature"), UpgradeMatch = UpgradeMatch.Any, Source = ScoutItemSource.ImpReward }];
+        Assert.True(natural.SetEquals(ScoutChoices.AvailableArtifacts(world.Items, NativeEngine.ScoutMatches(world.Seed, 0, query).Matched)));
+    }
+
+    [Fact]
     public void GardenShaftsScaleWidthAndHeightIndependently()
     {
         var map = NativeEngine.LevelMap(LevelMapDocument.Request("AAA-AAA-AAA", 4, 0, new QuerySettings(), "none"));

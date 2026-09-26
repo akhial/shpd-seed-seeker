@@ -18,6 +18,7 @@ import { SeedInfo } from "./seed-info/SeedInfo";
 import { TrinketName, TrinketSprite } from "./trinkets/TrinketArt";
 import { TrinketShortcuts } from "./trinkets/TrinketShortcuts";
 import { useTrinketDock } from "./trinkets/useTrinketDock";
+import { availableArtifactIds, isAlternateScoutChoice, matchedScoutChoices } from "./choices";
 import "./floor-map-inline.css";
 
 const groupLetter = (group: number) => "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[group % 26];
@@ -126,12 +127,7 @@ export function ScoutPanel({
     (result?.feelings ?? []).map(({ depth, feeling }) => [depth, feeling]),
   );
   const questByDepth = new Map((result?.quests ?? []).map((quest) => [quest.depth, quest]));
-  const matchedChoices = new Map<number, number>();
-  for (const item of result?.items ?? []) {
-    if (item.matched && item.accessibility.type === "choice") {
-      matchedChoices.set(item.accessibility.group, item.accessibility.option);
-    }
-  }
+  const matchedChoices = matchedScoutChoices(result?.items ?? []);
 
   const copySeed = () => {
     if (!result) return;
@@ -291,6 +287,13 @@ export function ScoutPanel({
             )}
           </div>
 
+          {!!result.artifactDecks?.length && (
+            <ArtifactDeckOrder
+              decks={result.artifactDecks}
+              naturalArtifacts={availableArtifactIds(result.items, matchedChoices)}
+            />
+          )}
+
           {floors.map(([depth, items]) => {
             const region = regionForDepth(depth);
             const quest = questByDepth.get(depth);
@@ -398,11 +401,7 @@ export function ScoutPanel({
                     .filter((item) => item.category !== "trinket")
                     .map((item, index) => {
                       const note = accessibilityNote(item);
-                      const dimmed =
-                        !item.matched &&
-                        item.accessibility.type === "choice" &&
-                        matchedChoices.has(item.accessibility.group) &&
-                        matchedChoices.get(item.accessibility.group) !== item.accessibility.option;
+                      const dimmed = isAlternateScoutChoice(item, matchedChoices);
                       return (
                         <li
                           className={
@@ -577,5 +576,46 @@ export function CatalystEntry({
         </>
       )}
     </li>
+  );
+}
+
+export function ArtifactDeckOrder({
+  decks,
+  naturalArtifacts,
+}: {
+  decks: NonNullable<ScoutResult["artifactDecks"]>;
+  naturalArtifacts: ReadonlySet<string>;
+}) {
+  const order = decks.find((deck) => deck.depth === 0)?.order ?? [];
+  if (!order.length) return null;
+  return (
+    <div className="d1-artifact-deck">
+      <ol
+        className="d1-trinket-tail d1-artifact-tail"
+        aria-label="Starting artifact deck order"
+        style={{
+          gridTemplateColumns: `repeat(${order.length}, minmax(0, 1fr))`,
+          maxWidth: order.length * 40 + (order.length - 1) * 2,
+        }}
+      >
+        {order.map((entry) => (
+          <li
+            key={entry.id}
+            className={
+              [
+                entry.matched && "d1-trinket-match",
+                naturalArtifacts.has(entry.id) && "d1-artifact-natural",
+              ]
+                .filter(Boolean)
+                .join(" ") || undefined
+            }
+            title={`${entry.name}${naturalArtifacts.has(entry.id) ? " — available in dungeon" : ""}${entry.matched ? " — matches requirement" : ""}`}
+            aria-label={`${entry.name}${naturalArtifacts.has(entry.id) ? ", available in dungeon" : ""}${entry.matched ? ", matches requirement" : ""}`}
+          >
+            <TrinketSprite cell={entry.spriteIndex} maximum={32} />
+          </li>
+        ))}
+      </ol>
+    </div>
   );
 }

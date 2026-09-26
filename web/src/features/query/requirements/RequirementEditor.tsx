@@ -245,6 +245,7 @@ export function RequirementEditor({
       excludeResin: nextKind === "wand" ? current.excludeResin : undefined,
       selectTrinket: nextKind === "trinket" ? current.selectTrinket : undefined,
       trinketTransmutations: nextKind === "trinket" ? current.trinketTransmutations : undefined,
+      artifactTransmutations: nextKind === "artifact" ? current.artifactTransmutations : undefined,
       item:
         nextKind === "trinket" || nextKind === "artifact"
           ? itemsForKind(nextKind)[0].id
@@ -484,6 +485,47 @@ export function RequirementEditor({
                     {draft.trinketTransmutations === 1 ? "trinket" : "trinkets"}. AutoTrinket can
                     use a helpful starting trinket while your target waits in the deck. Scroll
                     availability and effects after transmuting are not simulated.
+                  </p>
+                </>
+              )}
+            </section>
+          )}
+
+          {family === "artifact" && (
+            <section className="d1-modal-section">
+              <label className="d1-check">
+                <input
+                  type="checkbox"
+                  checked={!!draft.artifactTransmutations}
+                  onChange={(event) => {
+                    const checked = event.currentTarget.checked;
+                    reviseDraft((current) => ({
+                      ...current,
+                      artifactTransmutations: checked ? 1 : undefined,
+                      selectTrinket: checked ? undefined : current.selectTrinket,
+                    }));
+                  }}
+                />
+                <span>Allow transmutations</span>
+              </label>
+              {!!draft.artifactTransmutations && (
+                <>
+                  <Field label="Maximum transmutations">
+                    <Stepper
+                      value={draft.artifactTransmutations}
+                      min={1}
+                      max={10}
+                      onChange={(value) =>
+                        reviseDraft((current) => ({ ...current, artifactTransmutations: value }))
+                      }
+                      ariaLabel="Maximum artifact transmutations"
+                      format={(value) => `At most ${value}`}
+                    />
+                  </Field>
+                  <p className="d1-caption">
+                    Includes natural finds, or transforms an obtainable artifact using the remaining
+                    deck at the floor limit. Source and curse filters apply to the starting
+                    artifact. Scroll availability and later generation changes are not simulated.
                   </p>
                 </>
               )}

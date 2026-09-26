@@ -78,6 +78,7 @@ pub(crate) fn donor_requirement(query: &SearchQuery) -> Requirement {
         require_uncursed: query.arcane_resin_filter.uncursed,
         select_trinket: false,
         trinket_transmutations: 0,
+        artifact_transmutations: 0,
         blanket: false,
         exclude_resin: false,
         source: query.arcane_resin_filter.source,

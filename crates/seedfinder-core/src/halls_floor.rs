@@ -302,6 +302,7 @@ fn generate_halls_world_with_roots(
     let mut items = Vec::new();
     let mut feelings = Vec::new();
     let mut floor_rooms = Vec::new();
+    let mut artifact_decks = vec![crate::artifacts::ArtifactDeck::capture(0, &run.generator)];
     let mut next_choice_group = 0_u16;
 
     for (index, &root) in roots[..4].iter().enumerate() {
@@ -324,6 +325,10 @@ fn generate_halls_world_with_roots(
             depth: u8::try_from(depth).expect("main-path depths fit u8"),
             feeling: floor.painted.level.feeling,
         });
+        artifact_decks.push(crate::artifacts::ArtifactDeck::capture(
+            u8::try_from(depth).expect("main-path depths fit u8"),
+            &run.generator,
+        ));
         items.extend(floor.world_items);
     }
 
@@ -348,6 +353,10 @@ fn generate_halls_world_with_roots(
             depth: u8::try_from(depth).expect("main-path depths fit u8"),
             feeling: floor.painted.level.feeling,
         });
+        artifact_decks.push(crate::artifacts::ArtifactDeck::capture(
+            u8::try_from(depth).expect("main-path depths fit u8"),
+            &run.generator,
+        ));
         items.extend(floor.world_items);
     }
 
@@ -372,6 +381,10 @@ fn generate_halls_world_with_roots(
             depth: u8::try_from(depth).expect("main-path depths fit u8"),
             feeling: floor.painted.level.feeling,
         });
+        artifact_decks.push(crate::artifacts::ArtifactDeck::capture(
+            u8::try_from(depth).expect("main-path depths fit u8"),
+            &run.generator,
+        ));
         items.extend(floor.world_items);
     }
 
@@ -396,6 +409,10 @@ fn generate_halls_world_with_roots(
             depth: u8::try_from(depth).expect("main-path depths fit u8"),
             feeling: floor.painted.level.feeling,
         });
+        artifact_decks.push(crate::artifacts::ArtifactDeck::capture(
+            u8::try_from(depth).expect("main-path depths fit u8"),
+            &run.generator,
+        ));
         items.extend(floor.world_items);
     }
 
@@ -403,6 +420,7 @@ fn generate_halls_world_with_roots(
     let mut boss_shop = generate_city_boss_shop(&mut run, &mut shop_run, &mut random)?;
     random.pop();
     next_choice_group = remap_floor_choice_groups(&mut boss_shop.world_items, next_choice_group);
+    artifact_decks.push(crate::artifacts::ArtifactDeck::capture(20, &run.generator));
     items.extend(boss_shop.world_items);
 
     for (index, &root) in roots[17..].iter().enumerate() {
@@ -426,12 +444,17 @@ fn generate_halls_world_with_roots(
             depth: u8::try_from(depth).expect("main-path depths fit u8"),
             feeling: floor.painted.level.feeling,
         });
+        artifact_decks.push(crate::artifacts::ArtifactDeck::capture(
+            u8::try_from(depth).expect("main-path depths fit u8"),
+            &run.generator,
+        ));
         items.extend(floor.world_items);
     }
     Ok(GeneratedWorld {
         seed,
         items,
         floor_rooms,
+        artifact_decks,
         feelings,
         quests: quests.summary(),
         ring_gems: run.appearances.ring_gems,

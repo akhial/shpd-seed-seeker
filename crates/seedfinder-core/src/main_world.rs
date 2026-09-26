@@ -105,6 +105,7 @@ impl WorldGenerator for CanonicalMainWorldGenerator {
                     world.items.retain(|item| item.depth <= 20);
                     world.feelings.retain(|floor| floor.depth <= 20);
                     world.floor_rooms.retain(|floor| floor.depth <= 20);
+                    world.artifact_decks.retain(|floor| floor.depth <= 20);
                 }
                 worlds
             }
@@ -189,6 +190,7 @@ pub fn generate_main_world(
             world.items.retain(|item| item.depth <= 20);
             world.feelings.retain(|floor| floor.depth <= 20);
             world.floor_rooms.retain(|floor| floor.depth <= 20);
+            world.artifact_decks.retain(|floor| floor.depth <= 20);
             Ok(world)
         }
         21..=24 => generate_halls_world(seed, maximum_depth).map_err(MainWorldError::Halls),
@@ -447,6 +449,7 @@ fn generate_gated_world_attempt(
     let mut items = Vec::new();
     let mut feelings = Vec::new();
     let mut floor_rooms = Vec::new();
+    let mut artifact_decks = vec![crate::artifacts::ArtifactDeck::capture(0, &run.generator)];
     let mut next_choice_group = 0_u16;
     let selected_trinket = gate.selected_trinket(seed);
     let mut alchemy_available = false;
@@ -677,6 +680,10 @@ fn generate_gated_world_attempt(
             random.trinket = crate::trinkets::TrinketEffects::new(selected_trinket, dungeon_seed);
         }
         next_choice_group = remap_floor_choice_groups(&mut floor_items, next_choice_group);
+        artifact_decks.push(crate::artifacts::ArtifactDeck::capture(
+            completed,
+            &run.generator,
+        ));
         items.extend(floor_items);
         if completed < target && !gate.continue_after_floor(completed, &items, &quests.summary()) {
             return Ok(None);
@@ -708,6 +715,7 @@ fn generate_gated_world_attempt(
         seed,
         items,
         floor_rooms,
+        artifact_decks,
         feelings,
         quests: quests.summary(),
         ring_gems: run.appearances.ring_gems,
@@ -853,6 +861,7 @@ mod tests {
             require_uncursed: false,
             select_trinket: false,
             trinket_transmutations: 0,
+            artifact_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             source: None,
@@ -949,6 +958,7 @@ mod tests {
                 require_uncursed: false,
                 select_trinket: false,
                 trinket_transmutations: 0,
+                artifact_transmutations: 0,
                 blanket: false,
                 exclude_resin: false,
                 source: None,
@@ -1026,6 +1036,7 @@ mod tests {
                 require_uncursed: false,
                 select_trinket: false,
                 trinket_transmutations: 0,
+                artifact_transmutations: 0,
                 blanket: false,
                 exclude_resin: false,
                 source: None,
@@ -1165,6 +1176,7 @@ mod tests {
                 require_uncursed: false,
                 select_trinket: false,
                 trinket_transmutations: 0,
+                artifact_transmutations: 0,
                 blanket: false,
                 exclude_resin: false,
                 source: None,

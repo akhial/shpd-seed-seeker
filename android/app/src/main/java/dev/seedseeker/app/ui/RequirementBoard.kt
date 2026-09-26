@@ -941,6 +941,7 @@ private fun chipTags(requirement: ItemRequirement): List<ChipTagSpec> =
         }
         if (requirement.excludeResin) add(ChipTagSpec("No resin", TagTone.QUALIFIER))
         if (requirement.trinketTransmutations > 0) add(ChipTagSpec("Transmute ≤${requirement.trinketTransmutations}", TagTone.QUALIFIER))
+        if (requirement.artifactTransmutations > 0) add(ChipTagSpec("Transmute ≤${requirement.artifactTransmutations}", TagTone.QUALIFIER))
         requirement.maximumDepth?.let { add(ChipTagSpec("F≤$it", TagTone.QUALIFIER)) }
     }
 

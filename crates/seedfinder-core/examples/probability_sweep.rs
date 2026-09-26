@@ -3,10 +3,12 @@
 //! Replace `none` with a selected trinket ID to audit that profile, including
 //! the chance of its initial offer. `--recheck audit.json` re-estimates saved
 //! observations without regenerating worlds. Progress goes to stderr.
+//! Use `auto` to replay the actual query-aware `AutoTrinket` choice per seed.
 //! An optional fourth positional argument supplies a JSON array of queries
 //! for a focused diagnostic, generated only through their deepest limit.
 use serde_json::{Value, json};
 use shpd_seedfinder_core::{
+    auto_trinkets::{AutoTrinketPolicy, CANDIDATES},
     catalog::{ItemId, item_by_stable_id},
     challenges::Challenges,
     floor_filters::{CompiledFloorRequirement, RoomType},
@@ -263,6 +265,7 @@ fn item_cases(cases: &mut Vec<Case>) {
     }
 }
 
+#[allow(clippy::too_many_lines)] // Streaming audit setup, shared generation, and report serialization.
 fn main() {
     let args: Vec<_> = std::env::args().skip(1).collect();
     if args.first().is_some_and(|arg| arg == "--recheck") {
@@ -272,13 +275,16 @@ fn main() {
     let samples: usize = args.first().map_or(32768, |s| s.parse().unwrap());
     assert!(samples > 0);
     let profile = args.get(1).map_or("none", String::as_str);
-    let selected: Option<ItemId> =
-        (profile != "none").then(|| item_by_stable_id(profile).expect("trinket ID").id);
+    let selected: Option<ItemId> = (!matches!(profile, "none" | "auto"))
+        .then(|| item_by_stable_id(profile).expect("trinket ID").id);
     let seed_offset = args
         .get(2)
         .map_or(918_273_645, |s| s.parse::<u64>().unwrap())
         % TOTAL_SEEDS;
     let mut cases = load_cases(args.get(3).map(String::as_str));
+    for case in &mut cases {
+        case.query.auto_apply_trinket = profile == "auto";
+    }
     if let Some(id) = selected {
         for case in &mut cases {
             let mut document = json_query::encode(&case.query);
@@ -287,6 +293,19 @@ fn main() {
         }
     }
     let started = Instant::now();
+    // Measure before preparing policies, which intentionally reuse these scores.
+    let estimates: Vec<_> = cases
+        .iter()
+        .map(|case| {
+            let time = Instant::now();
+            let estimate = estimate_match_probability(&case.query);
+            (estimate, time.elapsed().as_nanos())
+        })
+        .collect();
+    let policies: Vec<_> = cases
+        .iter()
+        .map(|case| AutoTrinketPolicy::prepare(&case.query))
+        .collect();
     let generation_depth = cases.iter().map(|case| case.query.max_depth).max().unwrap();
     let cursor = AtomicUsize::new(0);
     let counts = std::thread::scope(|scope| {
@@ -306,24 +325,46 @@ fn main() {
                         }) {
                             continue;
                         }
-                        let world = generate_main_world_with_trinket(
-                            seed,
-                            generation_depth,
-                            Challenges::NONE,
-                            selected,
-                        )
-                        .unwrap();
-                        for (case, count) in cases.iter().zip(&mut hits) {
-                            if !case.floors.iter().all(|(depth, filter)| {
-                                let index = usize::from(*depth - 1 - (*depth / 5));
-                                filter.matches_feeling(world.feelings[index].feeling)
-                                    && filter.matches_rooms(world.floor_rooms[index].rooms)
-                            }) {
+                        let choices: Vec<_> = policies
+                            .iter()
+                            .map(|policy| {
+                                policy
+                                    .as_ref()
+                                    .map_or(selected, |policy| policy.selected_trinket(seed))
+                            })
+                            .collect();
+                        for choice in std::iter::once(selected).chain(CANDIDATES.map(Some)) {
+                            if !choices.contains(&choice) {
                                 continue;
                             }
-                            *count += u32::from(
-                                case.query.requirements.is_empty() || case.query.matches(&world),
-                            );
+                            // All queries choosing this profile share a single world.
+                            let world = generate_main_world_with_trinket(
+                                seed,
+                                generation_depth,
+                                Challenges::NONE,
+                                choice,
+                            )
+                            .unwrap();
+                            for ((case, count), wanted) in cases.iter().zip(&mut hits).zip(&choices)
+                            {
+                                if *wanted != choice {
+                                    continue;
+                                }
+                                if !case.floors.iter().all(|(depth, filter)| {
+                                    let index = usize::from(*depth - 1 - (*depth / 5));
+                                    filter.matches_feeling(world.feelings[index].feeling)
+                                        && filter.matches_rooms(world.floor_rooms[index].rooms)
+                                }) {
+                                    continue;
+                                }
+                                *count += u32::from(
+                                    case.query.requirements.is_empty()
+                                        || case.query.matches(&world),
+                                );
+                            }
+                            if profile != "auto" {
+                                break;
+                            }
                         }
                         if index > 0 && index % 8192 == 0 {
                             eprintln!(
@@ -346,10 +387,7 @@ fn main() {
     });
     let mut rows = Vec::new();
     let mut slowest = 0u128;
-    for (case, hits) in cases.into_iter().zip(counts) {
-        let time = Instant::now();
-        let estimate = estimate_match_probability(&case.query);
-        let elapsed = time.elapsed().as_nanos();
+    for ((case, hits), (estimate, elapsed)) in cases.into_iter().zip(counts).zip(estimates) {
         slowest = slowest.max(elapsed);
         rows.push(json!({"category":case.category,"query":json_query::encode(&case.query),"hits":hits,"estimate":estimate,"estimate_ns":elapsed}));
     }

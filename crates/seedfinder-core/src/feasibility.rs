@@ -560,7 +560,8 @@ fn closed_multiplicities(slots: &[Vec<RequirementPlan>]) -> Vec<(usize, usize)> 
             && plan.open_deadline.is_some()
             && plan.requirement.level_sum.is_none()
             && !plan.requirement.blanket
-            && plan.requirement.trinket_transmutations == 0)
+            && plan.requirement.trinket_transmutations == 0
+            && plan.requirement.artifact_transmutations == 0)
             .then_some((index, plan))
     });
 
@@ -945,6 +946,16 @@ impl QueryPlan {
                     exclude_blacksmith: query.exclude_blacksmith_rewards,
                 });
 
+        for requirement in &query.requirements {
+            if requirement.artifact_transmutations > 0 {
+                generation_depth = generation_depth.max(
+                    requirement
+                        .max_depth
+                        .unwrap_or(query.max_depth)
+                        .min(query.max_depth),
+                );
+            }
+        }
         let mut plan = Self {
             floor_requirements,
             auto_trinket: None,
@@ -1000,6 +1011,7 @@ impl QueryPlan {
 
     /// A missing independent vault keeps only its own feasible requirements
     /// alive. Its items still share the Imp's one-choice resource.
+    #[allow(clippy::too_many_lines)] // Keep the ordered conservative pruning stages together.
     pub(crate) fn viable_with_pending_vault(
         &self,
         completed_depth: u8,
@@ -1061,10 +1073,13 @@ impl QueryPlan {
                 // Deck identity was checked at run init. Here any catalyst offer
                 // is an optimistic witness for its placement; the final matcher
                 // checks distinct transmutations and full acquisition constraints.
-                let predicate = if plan.requirement.trinket_transmutations > 0 {
+                let predicate = if plan.requirement.trinket_transmutations > 0
+                    || plan.requirement.artifact_transmutations > 0
+                {
                     Requirement {
                         item: None,
                         trinket_transmutations: 0,
+                        artifact_transmutations: 0,
                         ..plan.requirement
                     }
                 } else {
@@ -1140,7 +1155,18 @@ impl QueryPlan {
         let mut resolved = false;
         for item in items {
             if quest_for_source(item.source) == Some(quest) {
-                if item.depth <= plan.max_depth && plan.requirement.matches(item) {
+                if item.depth <= plan.max_depth
+                    && (Requirement {
+                        item: if plan.requirement.artifact_transmutations > 0 {
+                            None
+                        } else {
+                            plan.requirement.item
+                        },
+                        artifact_transmutations: 0,
+                        ..plan.requirement
+                    })
+                    .matches(item)
+                {
                     return true;
                 }
                 resolved = true;
@@ -1877,6 +1903,7 @@ mod tests {
             require_uncursed: false,
             select_trinket: false,
             trinket_transmutations: 0,
+            artifact_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             source: None,
@@ -2254,6 +2281,7 @@ mod tests {
             require_uncursed: false,
             select_trinket: false,
             trinket_transmutations: 0,
+            artifact_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             ..requirement(ItemKind::Weapon, UpgradeRequirement::Exact(3))
@@ -2269,6 +2297,7 @@ mod tests {
             require_uncursed: false,
             select_trinket: false,
             trinket_transmutations: 0,
+            artifact_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             ..requirement(ItemKind::Armor, UpgradeRequirement::Exact(3))
@@ -2280,6 +2309,7 @@ mod tests {
             require_uncursed: false,
             select_trinket: false,
             trinket_transmutations: 0,
+            artifact_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             ..requirement(ItemKind::Weapon, UpgradeRequirement::Exact(4))
@@ -2291,6 +2321,7 @@ mod tests {
             require_uncursed: true,
             select_trinket: false,
             trinket_transmutations: 0,
+            artifact_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             ..requirement(ItemKind::Weapon, UpgradeRequirement::Exact(5))
@@ -2310,6 +2341,7 @@ mod tests {
             require_uncursed: false,
             select_trinket: false,
             trinket_transmutations: 0,
+            artifact_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             ..requirement(ItemKind::Weapon, UpgradeRequirement::Exact(3))
@@ -2321,6 +2353,7 @@ mod tests {
             require_uncursed: true,
             select_trinket: false,
             trinket_transmutations: 0,
+            artifact_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             ..requirement(ItemKind::Weapon, UpgradeRequirement::Exact(3))
@@ -2622,6 +2655,7 @@ mod tests {
             seed: crate::seed::DungeonSeed::MIN,
             items: items.to_vec(),
             floor_rooms: Vec::new(),
+            artifact_decks: Vec::new(),
             feelings: Vec::new(),
             quests: QuestSummary::default(),
             ring_gems: crate::run::RingGems::UNSHUFFLED,
@@ -5175,6 +5209,7 @@ mod closed_multiplicity_grouping_tests {
                 require_uncursed: false,
                 select_trinket: false,
                 trinket_transmutations: 0,
+                artifact_transmutations: 0,
                 blanket: false,
                 exclude_resin: false,
                 source: Some(ItemSource::Heap),

@@ -1,0 +1,937 @@
+[
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 0
+      }
+    ],
+    "max_depth": 1,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 1
+      }
+    ],
+    "max_depth": 1,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 2
+      }
+    ],
+    "max_depth": 1,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 4
+      }
+    ],
+    "max_depth": 1,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 10
+      }
+    ],
+    "max_depth": 1,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 0
+      }
+    ],
+    "max_depth": 4,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 1
+      }
+    ],
+    "max_depth": 4,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 2
+      }
+    ],
+    "max_depth": 4,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 4
+      }
+    ],
+    "max_depth": 4,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 10
+      }
+    ],
+    "max_depth": 4,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 0
+      }
+    ],
+    "max_depth": 9,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 1
+      }
+    ],
+    "max_depth": 9,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 2
+      }
+    ],
+    "max_depth": 9,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 4
+      }
+    ],
+    "max_depth": 9,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 10
+      }
+    ],
+    "max_depth": 9,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 0
+      }
+    ],
+    "max_depth": 14,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 1
+      }
+    ],
+    "max_depth": 14,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 2
+      }
+    ],
+    "max_depth": 14,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 4
+      }
+    ],
+    "max_depth": 14,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 10
+      }
+    ],
+    "max_depth": 14,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 0
+      }
+    ],
+    "max_depth": 19,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 1
+      }
+    ],
+    "max_depth": 19,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 2
+      }
+    ],
+    "max_depth": 19,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 4
+      }
+    ],
+    "max_depth": 19,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 10
+      }
+    ],
+    "max_depth": 19,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 0
+      }
+    ],
+    "max_depth": 24,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 1
+      }
+    ],
+    "max_depth": 24,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 2
+      }
+    ],
+    "max_depth": 24,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 4
+      }
+    ],
+    "max_depth": 24,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 10
+      }
+    ],
+    "max_depth": 24,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 2,
+        "source": "chest"
+      }
+    ],
+    "max_depth": 9,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 2,
+        "source": "crystal_chest"
+      }
+    ],
+    "max_depth": 9,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 2,
+        "source": "skeleton"
+      }
+    ],
+    "max_depth": 9,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 2,
+        "source": "mimic"
+      }
+    ],
+    "max_depth": 9,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 2,
+        "source": "imp_reward"
+      }
+    ],
+    "max_depth": 9,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 2,
+        "source": "shop"
+      }
+    ],
+    "max_depth": 9,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 2,
+        "uncursed": true
+      }
+    ],
+    "max_depth": 9,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 2,
+        "source": "chest"
+      }
+    ],
+    "max_depth": 19,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 2,
+        "source": "crystal_chest"
+      }
+    ],
+    "max_depth": 19,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 2,
+        "source": "skeleton"
+      }
+    ],
+    "max_depth": 19,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 2,
+        "source": "mimic"
+      }
+    ],
+    "max_depth": 19,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 2,
+        "source": "imp_reward"
+      }
+    ],
+    "max_depth": 19,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 2,
+        "source": "shop"
+      }
+    ],
+    "max_depth": 19,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 2,
+        "uncursed": true
+      }
+    ],
+    "max_depth": 19,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 2,
+        "source": "chest"
+      }
+    ],
+    "max_depth": 24,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 2,
+        "source": "crystal_chest"
+      }
+    ],
+    "max_depth": 24,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 2,
+        "source": "skeleton"
+      }
+    ],
+    "max_depth": 24,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 2,
+        "source": "mimic"
+      }
+    ],
+    "max_depth": 24,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 2,
+        "source": "imp_reward"
+      }
+    ],
+    "max_depth": 24,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 2,
+        "source": "shop"
+      }
+    ],
+    "max_depth": 24,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 2,
+        "uncursed": true
+      }
+    ],
+    "max_depth": 24,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 1
+      },
+      {
+        "item": "ring_energy",
+        "upgrade": 4
+      }
+    ],
+    "max_depth": 24,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 1
+      },
+      {
+        "item": "ring_energy",
+        "upgrade": 2
+      }
+    ],
+    "max_depth": 24,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 1
+      },
+      {
+        "item": "wand_fireblast",
+        "upgrade": 2
+      }
+    ],
+    "max_depth": 24,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 1
+      },
+      {
+        "item": "ethereal_chains",
+        "artifact_transmutations": 1
+      }
+    ],
+    "max_depth": 24,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 1
+      },
+      {
+        "item": "ethereal_chains"
+      }
+    ],
+    "max_depth": 24,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 2
+      },
+      {
+        "item": "ring_energy",
+        "upgrade": 4
+      }
+    ],
+    "max_depth": 24,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 2
+      },
+      {
+        "item": "ring_energy",
+        "upgrade": 2
+      }
+    ],
+    "max_depth": 24,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 2
+      },
+      {
+        "item": "wand_fireblast",
+        "upgrade": 2
+      }
+    ],
+    "max_depth": 24,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 2
+      },
+      {
+        "item": "ethereal_chains",
+        "artifact_transmutations": 2
+      }
+    ],
+    "max_depth": 24,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 2
+      },
+      {
+        "item": "ethereal_chains"
+      }
+    ],
+    "max_depth": 24,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 4
+      },
+      {
+        "item": "ring_energy",
+        "upgrade": 4
+      }
+    ],
+    "max_depth": 24,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 4
+      },
+      {
+        "item": "ring_energy",
+        "upgrade": 2
+      }
+    ],
+    "max_depth": 24,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 4
+      },
+      {
+        "item": "wand_fireblast",
+        "upgrade": 2
+      }
+    ],
+    "max_depth": 24,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 4
+      },
+      {
+        "item": "ethereal_chains",
+        "artifact_transmutations": 4
+      }
+    ],
+    "max_depth": 24,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 4
+      },
+      {
+        "item": "ethereal_chains"
+      }
+    ],
+    "max_depth": 24,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 10
+      },
+      {
+        "item": "ring_energy",
+        "upgrade": 4
+      }
+    ],
+    "max_depth": 24,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 10
+      },
+      {
+        "item": "ring_energy",
+        "upgrade": 2
+      }
+    ],
+    "max_depth": 24,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 10
+      },
+      {
+        "item": "wand_fireblast",
+        "upgrade": 2
+      }
+    ],
+    "max_depth": 24,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 10
+      },
+      {
+        "item": "ethereal_chains",
+        "artifact_transmutations": 10
+      }
+    ],
+    "max_depth": 24,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 10
+      },
+      {
+        "item": "ethereal_chains"
+      }
+    ],
+    "max_depth": 24,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 2
+      },
+      {
+        "item": "ethereal_chains",
+        "artifact_transmutations": 4,
+        "uncursed": true
+      }
+    ],
+    "max_depth": 24,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 2
+      },
+      {
+        "item": "ethereal_chains",
+        "artifact_transmutations": 4,
+        "source": "imp_reward"
+      }
+    ],
+    "max_depth": 24,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 2
+      },
+      {
+        "item": "ethereal_chains",
+        "artifact_transmutations": 1
+      },
+      {
+        "item": "dried_rose",
+        "artifact_transmutations": 10
+      }
+    ],
+    "max_depth": 24,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 2,
+        "max_depth": 9
+      },
+      {
+        "item": "ethereal_chains",
+        "artifact_transmutations": 4,
+        "max_depth": 19
+      }
+    ],
+    "max_depth": 24,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "any_of": [
+          {
+            "item": "skeleton_key",
+            "artifact_transmutations": 2
+          },
+          {
+            "item": "ethereal_chains",
+            "artifact_transmutations": 4
+          }
+        ]
+      }
+    ],
+    "max_depth": 24,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 2
+      },
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 2,
+        "blanket": true
+      }
+    ],
+    "max_depth": 24,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 2
+      },
+      {
+        "item": "ring_energy",
+        "upgrade": 4,
+        "source": "imp_reward"
+      }
+    ],
+    "max_depth": 24,
+    "auto_apply_trinket": false
+  },
+  {
+    "requirements": [
+      {
+        "item": "skeleton_key",
+        "artifact_transmutations": 2,
+        "source": "imp_reward"
+      },
+      {
+        "item": "ring_energy",
+        "upgrade": 4,
+        "source": "imp_reward"
+      }
+    ],
+    "max_depth": 24,
+    "auto_apply_trinket": false
+  }
+]

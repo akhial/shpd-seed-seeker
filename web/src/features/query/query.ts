@@ -320,6 +320,8 @@ function requirementToDocument(requirement: RequirementState): RequirementDocume
   if (requirement.selectTrinket) output.select_trinket = true;
   if (requirement.trinketTransmutations)
     output.trinket_transmutations = requirement.trinketTransmutations;
+  if (requirement.artifactTransmutations)
+    output.artifact_transmutations = requirement.artifactTransmutations;
   if (requirement.source) output.source = requirement.source;
   if (requirement.identityGroup) output.identity_group = requirement.identityGroup;
   if (requirement.maxDepth !== undefined) output.max_depth = requirement.maxDepth;
@@ -475,6 +477,17 @@ function requirementFromDocument(
     if (raw.trinket_transmutations > 0)
       requirement.trinketTransmutations = raw.trinket_transmutations;
   }
+  if (raw.artifact_transmutations !== undefined) {
+    if (
+      typeof raw.artifact_transmutations !== "number" ||
+      !Number.isInteger(raw.artifact_transmutations) ||
+      raw.artifact_transmutations < 0 ||
+      raw.artifact_transmutations > 10
+    )
+      throw new Error("artifact_transmutations must be an integer from 0 to 10");
+    if (raw.artifact_transmutations > 0)
+      requirement.artifactTransmutations = raw.artifact_transmutations;
+  }
   if (alternativeGroup !== undefined) requirement.alternativeGroup = alternativeGroup;
   // The unreleased upgrade_sum key is refused rather than reinterpreted.
   if (raw.upgrade_sum !== undefined)
@@ -569,6 +582,15 @@ export interface ValidationResult {
 
 export function validateRequirement(requirement: RequirementState): string[] {
   const errors: string[] = [];
+  const artifactTransmutations = requirement.artifactTransmutations ?? 0;
+  if (
+    !Number.isInteger(artifactTransmutations) ||
+    artifactTransmutations < 0 ||
+    artifactTransmutations > 10
+  )
+    errors.push("Choose an artifact transmutation count from 0 to 10.");
+  if (artifactTransmutations > 0 && requirementFamily(requirement) !== "artifact")
+    errors.push("Only artifacts can use artifact transmutations.");
   const transmutations = requirement.trinketTransmutations ?? 0;
   if (
     !Number.isInteger(transmutations) ||

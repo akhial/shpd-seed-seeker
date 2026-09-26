@@ -668,6 +668,10 @@ impl DetailPane {
         while let Some(child) = self.manifest_box.first_child() {
             self.manifest_box.remove(&child);
         }
+        if !world.artifact_decks.is_empty() {
+            self.manifest_box
+                .append(&artifact_deck_view(world, &marks, &matched_choices));
+        }
         let quests = quest_rows(world.quests);
         for (depth, indices) in &by_depth {
             let section = gtk::Box::new(gtk::Orientation::Vertical, 8);
@@ -1082,8 +1086,101 @@ fn tag(label: &str, color: &str) -> gtk::Label {
         .build()
 }
 
+// World items are fixed dungeon loot, never runtime drops or transmutation outcomes.
+fn available_artifacts(
+    world: &shpd_seedfinder_core::model::GeneratedWorld,
+    marks: &shpd_seedfinder_core::query::ScoutMatches,
+    choices: &BTreeMap<u16, u8>,
+) -> Vec<ItemId> {
+    world
+        .items
+        .iter()
+        .zip(&marks.matched)
+        .filter(|(entry, matched)| {
+            item(entry.item).kind == ItemKind::Artifact
+                && !choice_is_dimmed(entry.accessibility, **matched, choices)
+        })
+        .map(|(entry, _)| entry.item)
+        .collect()
+}
+
+fn artifact_deck_view(
+    world: &shpd_seedfinder_core::model::GeneratedWorld,
+    marks: &shpd_seedfinder_core::query::ScoutMatches,
+    choices: &BTreeMap<u16, u8>,
+) -> gtk::Box {
+    let order = shpd_seedfinder_core::artifacts::deck_at(world, 0);
+    let natural_artifacts = available_artifacts(world, marks, choices);
+    let deck = gtk::Box::builder()
+        .orientation(gtk::Orientation::Horizontal)
+        .homogeneous(true)
+        .spacing(2)
+        .margin_top(4)
+        .build();
+    for &id in order {
+        let matched = marks.transmuted_artifacts.iter().any(|&(depth, position)| {
+            shpd_seedfinder_core::artifacts::deck_at(world, depth).get(position) == Some(&id)
+        });
+        let tile = sprites::trinket_tile(item(id), matched, false);
+        if natural_artifacts.contains(&id) {
+            tile.set_opacity(0.3);
+            let label = format!(
+                "{}, available in dungeon{}",
+                item(id).name,
+                if matched { ", matches requirement" } else { "" }
+            );
+            tile.set_tooltip_text(Some(&label));
+            tile.update_property(&[gtk::accessible::Property::Label(&label)]);
+        }
+        deck.append(&tile);
+    }
+    deck
+}
+
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn fixed_artifacts_respect_matched_exclusive_rewards() {
+        use shpd_seedfinder_core::{
+            catalog::ItemId, json_query, main_world::CanonicalMainWorldGenerator,
+            query::scout_matches, search::WorldGenerator, seed::DungeonSeed,
+        };
+        let world = CanonicalMainWorldGenerator.generate(DungeonSeed::MIN, 24);
+        let query = json_query::decode(r#"{"auto_apply_trinket":false,"requirements":[{"item":"ring_haste","source":"imp_reward"},{"item":"wand_prismatic_light","source":"crystal_chest"}]}"#).unwrap();
+        let marks = scout_matches(&world, &query);
+        assert_eq!(marks.matched_requirements, 2);
+        let choices = world
+            .items
+            .iter()
+            .zip(&marks.matched)
+            .filter_map(|(entry, matched)| {
+                if *matched
+                    && let super::Accessibility::Choice { group, option } = entry.accessibility
+                {
+                    Some((group, option))
+                } else {
+                    None
+                }
+            })
+            .collect();
+        assert_eq!(
+            super::available_artifacts(&world, &marks, &choices),
+            vec![ItemId::UnstableSpellbook, ItemId::SkeletonKey]
+        );
+        let unmatched = json_query::decode(r#"{"auto_apply_trinket":false,"requirements":[{"item":"skeleton_key","max_depth":1}]}"#).unwrap();
+        let marks = scout_matches(&world, &unmatched);
+        assert_eq!(marks.matched_requirements, 0);
+        assert_eq!(
+            super::available_artifacts(&world, &marks, &super::BTreeMap::new()),
+            vec![
+                ItemId::UnstableSpellbook,
+                ItemId::SandalsOfNature,
+                ItemId::AlchemistsToolkit,
+                ItemId::SkeletonKey
+            ]
+        );
+    }
+
     #[test]
     fn only_conflicting_choices_dim_after_a_match() {
         use super::{Accessibility, BTreeMap, choice_is_dimmed, choice_letter};

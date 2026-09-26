@@ -161,6 +161,7 @@ fun RequirementSheet(
     var maximumDepth by remember(identity) { mutableStateOf(editing?.maximumDepth) }
     var selectTrinket by remember(identity) { mutableStateOf(editing?.selectTrinket ?: false) }
     var trinketTransmutations by remember(identity) { mutableStateOf(editing?.trinketTransmutations ?: 0) }
+    var artifactTransmutations by remember(identity) { mutableStateOf(editing?.artifactTransmutations ?: 0) }
     var excludeResin by remember(identity) { mutableStateOf(editing?.excludeResin ?: false) }
     var requireUncursed by remember(identity) { mutableStateOf(editing?.requireUncursed ?: false) }
     // The stack this chip anchors: how many items of its kind to find, and the
@@ -222,6 +223,7 @@ fun RequirementSheet(
             requireUncursed = kind != ItemKind.TRINKET && requireUncursed,
             selectTrinket = !blanket && kind == ItemKind.TRINKET && trinketTransmutations == 0 && selectTrinket,
             trinketTransmutations = if (kind == ItemKind.TRINKET) trinketTransmutations else 0,
+            artifactTransmutations = if (kind == ItemKind.ARTIFACT) artifactTransmutations else 0,
             blanket = blanket,
             excludeResin = !blanket && kind == ItemKind.WAND && excludeResin,
             alternativeGroup = editing?.alternativeGroup,
@@ -419,6 +421,24 @@ fun RequirementSheet(
                                     Stepper(trinketTransmutations, 1..13, { "At most $it" }, { trinketTransmutations = it })
                                 }
                                 Text("Includes the initial offers. AutoTrinket can use a helpful starting trinket. Scroll availability and effects after transmuting are not simulated.",
+                                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                        }
+                        if (kind == ItemKind.ARTIFACT) {
+                            Row(Modifier.fillMaxWidth().toggleable(
+                                value = artifactTransmutations > 0, role = Role.Switch,
+                                onValueChange = { artifactTransmutations = if (it) 1 else 0; if (it) selectTrinket = false },
+                            ), verticalAlignment = Alignment.CenterVertically) {
+                                Text("Allow transmutations", Modifier.weight(1f))
+                                Switch(checked = artifactTransmutations > 0, onCheckedChange = null)
+                            }
+                            Spacer(Modifier.height(12.dp))
+                            if (artifactTransmutations > 0) {
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    Text("Maximum transmutations", Modifier.weight(1f))
+                                    Stepper(artifactTransmutations, 1..10, { "At most $it" }, { artifactTransmutations = it })
+                                }
+                                Text("Includes natural finds or transforms an obtainable artifact using the remaining deck at the floor limit. Source and curse filters apply to the starting artifact. Scroll availability and later generation changes are not simulated.",
                                     style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
@@ -1037,7 +1057,7 @@ private fun normalizedUpgrade(value: Int, match: UpgradeMatch, ceiling: Int): In
 
 /** A compact −/+ stepper for the small bounded counts the board deals in. */
 @Composable
-private fun Stepper(
+internal fun Stepper(
     value: Int,
     range: IntRange,
     label: (Int) -> String,

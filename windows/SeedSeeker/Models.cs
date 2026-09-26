@@ -292,6 +292,7 @@ public sealed partial class ItemRequirement
     public bool RequireUncursed { get; set; }
     public bool SelectTrinket { get; set; }
     public int TrinketTransmutations { get; set; }
+    public int ArtifactTransmutations { get; set; }
     public bool Blanket { get; set; }
     public bool ExcludeResin { get; set; }
     /// <summary>
@@ -317,6 +318,7 @@ public sealed partial class ItemRequirement
         {
             if (Kind == ItemKind.Trinket) return TrinketTransmutations > 0 ? $"Transmute ≤{TrinketTransmutations}" : SelectTrinket ? "choose at +3" : "";
             var parts = new List<string> { UpgradeMatch switch { UpgradeMatch.Exactly => $"+{Upgrade} exactly", UpgradeMatch.AtLeast => $"+{Upgrade} or higher", _ => "Any upgrade" } };
+            if (ArtifactTransmutations > 0) parts.Add($"Transmute ≤{ArtifactTransmutations}");
             if (Effect.Describe() is string effect) parts.Add(effect); if (RequireUncursed) parts.Add("uncursed"); if (Source is not null) parts.Add(Labels.Source(Source.Value));
             if (ExcludeResin) parts.Add("excluded from Auto resin");
             if (IdentityGroup is not null) parts.Add("same-kind stack");
@@ -337,6 +339,7 @@ public sealed partial class ItemRequirement
         {
             var tags = new List<ChipTag>();
             if (TrinketTransmutations > 0) tags.Add(new($"Transmute ≤{TrinketTransmutations}"));
+            if (ArtifactTransmutations > 0) tags.Add(new($"Transmute ≤{ArtifactTransmutations}"));
             if (Kind == ItemKind.Trinket && SelectTrinket) tags.Add(new("choose at +3"));
             if (Item is null && TierMatch == TierMatch.Exactly) tags.Add(new($"T{Tier}"));
             if (Item is null && TierMatch == TierMatch.AtLeast) tags.Add(new($"T{Tier}+"));
@@ -999,6 +1002,8 @@ public static class QueryRelationships
             return "A blanket cannot request extra copies, combined levels, or trinket selection.";
         foreach (var requirement in requirements)
         {
+            if (requirement.ArtifactTransmutations is < 0 or > 10 || (requirement.ArtifactTransmutations > 0 && (requirement.Kind != ItemKind.Artifact || requirement.Item is null)))
+                return "Artifact transmutations must be 0–10 on a named artifact.";
             if (requirement.TrinketTransmutations is < 0 or > 13 ||
                 (requirement.TrinketTransmutations > 0 && (requirement.Kind != ItemKind.Trinket || requirement.Item is null || requirement.SelectTrinket)))
                 return "Transmutations must be 0–13 on a named trinket without manual selection.";
@@ -1405,7 +1410,7 @@ public sealed record RingGems
 /// ring is drawn in.</param>
 public sealed record ScoutWorld(string Seed, IReadOnlyList<ScoutQuest> Quests, IReadOnlyList<ScoutItem> Items,
     RingGems Gems, IReadOnlyList<CatalogItem>? TrinketOrder = null, IReadOnlyList<ScoutFloorFeeling>? FloorFeelings = null, string? SelectedTrinket = null, ScoutItemMappings? ItemMappings = null,
-    IReadOnlyDictionary<int, IReadOnlySet<string>>? FloorRooms = null)
+    IReadOnlyDictionary<int, IReadOnlySet<string>>? FloorRooms = null, IReadOnlyDictionary<int, IReadOnlyList<CatalogItem>>? ArtifactDecks = null)
 {
     public bool IsFarmingFloor(int depth) => FloorRequirement.FarmingFloors.Contains(depth)
         && FloorFeelings?.Any(floor => floor.Depth == depth && floor.Feeling == FloorFeeling.Dark) == true
@@ -1430,6 +1435,7 @@ public sealed record SearchStatus(SearchState State, long Scanned, long Total, l
 public sealed record ScoutMatches(IReadOnlySet<int> Matched, int MatchedRequirements, int TotalRequirements)
 {
     public IReadOnlySet<int> TransmutedTrinkets { get; init; } = new HashSet<int>();
+    public IReadOnlySet<(int Depth, int Index)> TransmutedArtifacts { get; init; } = new HashSet<(int, int)>();
 }
 
 public static class ItemCatalog

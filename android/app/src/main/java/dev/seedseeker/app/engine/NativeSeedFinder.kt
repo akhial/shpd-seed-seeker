@@ -89,6 +89,7 @@ data class ScoutMatches(
     val matchedSlots: Int,
     val totalSlots: Int,
     val transmutedTrinkets: Set<Int> = emptySet(),
+    val transmutedArtifacts: Set<Pair<Int, Int>> = emptySet(),
 )
 
 interface NativeSearchSession : AutoCloseable {
@@ -631,7 +632,7 @@ object ScoutRequestCodec {
         val seedBytes = seed.toByteArray(StandardCharsets.UTF_8)
         val overrideBytes = (trinket ?: "").toByteArray(StandardCharsets.UTF_8)
         require(overrideBytes.size <= 65535) { "Trinket identifier is too long" }
-        return "SSQ5".toByteArray(StandardCharsets.US_ASCII) + u16(challenges) +
+        return "SSQ6".toByteArray(StandardCharsets.US_ASCII) + u16(challenges) +
             u16(seedBytes.size) + seedBytes + u16(overrideBytes.size) + overrideBytes +
             (query?.let(QueryDocument::encode) ?: byteArrayOf())
     }
@@ -671,6 +672,9 @@ private object ScoutMatchCodec {
             items = buildSet { for (index in 0 until matched.length()) add(matched.getInt(index)) },
             matchedSlots = envelope.getInt("matchedRequirements"),
             totalSlots = envelope.getInt("totalRequirements"),
+            transmutedArtifacts = envelope.optJSONArray("transmutedArtifacts")?.let { entries ->
+                (0 until entries.length()).map { entries.getJSONObject(it).let { entry -> entry.getInt("depth") to entry.getInt("index") } }.toSet()
+            } ?: emptySet(),
             transmutedTrinkets = envelope.optJSONArray("transmutedTrinkets")?.let { steps ->
                 buildSet { for (index in 0 until steps.length()) add(steps.getInt(index)) }
             }.orEmpty(),
@@ -684,7 +688,8 @@ object ScoutResultCodec {
     fun decode(packet: ByteArray): ScoutWorld =
         DataInputStream(ByteArrayInputStream(packet)).use { input ->
             val magic = ByteArray(4).also(input::readFully)
-            val hasFloorRooms = magic.contentEquals("SSC8".toByteArray(StandardCharsets.US_ASCII))
+            val hasArtifactDecks = magic.contentEquals("SSC9".toByteArray(StandardCharsets.US_ASCII))
+            val hasFloorRooms = hasArtifactDecks || magic.contentEquals("SSC8".toByteArray(StandardCharsets.US_ASCII))
             val hasItemMappings = hasFloorRooms || magic.contentEquals(byteArrayOf(83, 83, 67, 55))
             val hasSelectedTrinket = hasItemMappings || magic.contentEquals(byteArrayOf(83, 83, 67, 54))
             val hasFeelings = hasSelectedTrinket || magic.contentEquals(byteArrayOf(83, 83, 67, 53))
@@ -846,10 +851,30 @@ object ScoutResultCodec {
                     }
                 }
             } else emptyMap()
+            val artifactDecks = if (hasArtifactDecks) {
+                val count = input.readUnsignedByte()
+                check(count <= 25) { "Too many artifact decks" }
+                var previous = -1
+                buildMap {
+                    repeat(count) {
+                        val depth = input.readUnsignedByte()
+                        check(depth in 0..24 && depth > previous) { "Invalid artifact deck floor" }
+                        previous = depth
+                        val size = input.readUnsignedByte()
+                        check(size <= 11) { "Too many artifacts" }
+                        val order = List(size) {
+                            val id = readUtf8(input, input.readUnsignedShort())
+                            checkNotNull(ItemCatalog.findById(id)?.takeIf { it.kind == dev.seedseeker.app.model.ItemKind.ARTIFACT }) { "Unknown artifact" }
+                        }
+                        check(order.map { it.id }.distinct().size == size) { "Repeated artifact" }
+                        put(depth, order)
+                    }
+                }
+            } else emptyMap()
             check(input.available() == 0) { "Trailing bytes in native scout packet" }
             ScoutWorld(seed = seed, items = items, quests = quests, ringGems = ringGems,
                 trinketOrder = trinketOrder, floorFeelings = floorFeelings, selectedTrinket = selectedTrinket,
-                itemMappings = itemMappings, floorRooms = floorRooms)
+                itemMappings = itemMappings, floorRooms = floorRooms, artifactDecks = artifactDecks)
         }
 
     private fun readUtf8(input: DataInputStream, length: Int): String {

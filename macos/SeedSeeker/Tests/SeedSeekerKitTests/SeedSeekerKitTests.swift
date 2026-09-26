@@ -312,9 +312,9 @@ final class SeedSeekerKitTests: XCTestCase {
 
     func testScoutRequestGoldenZeroAndNonzeroChallenges() throws {
         XCTAssertEqual(Array(try ScoutCodec.encodeRequest(seed: "AAA-AAA-AAA", challenges: 0)),
-                       Array("SSQ5".utf8) + [0, 0, 11, 0] + Array("AAA-AAA-AAA".utf8) + [0, 0])
+                       Array("SSQ6".utf8) + [0, 0, 11, 0] + Array("AAA-AAA-AAA".utf8) + [0, 0])
         XCTAssertEqual(Array(try ScoutCodec.encodeRequest(seed: "AAA-AAA-AAF", challenges: 320)),
-                       Array("SSQ5".utf8) + [64, 1, 11, 0] + Array("AAA-AAA-AAF".utf8) + [0, 0])
+                       Array("SSQ6".utf8) + [64, 1, 11, 0] + Array("AAA-AAA-AAF".utf8) + [0, 0])
         XCTAssertThrowsError(try ScoutCodec.encodeRequest(seed: "bad", challenges: 0))
         XCTAssertThrowsError(try ScoutCodec.encodeRequest(seed: "AAA-AAA-AAA", challenges: 512))
     }

@@ -1157,7 +1157,7 @@ fn select_seeded_identity_index(
     Ok(index)
 }
 
-fn select_artifact_identity_index(
+pub(crate) fn select_artifact_identity_index(
     random: &mut RandomStack,
     generator: &mut GeneratorState,
 ) -> Result<Option<usize>, GeneratorError> {

@@ -39,6 +39,7 @@ fn world(items: Vec<WorldItem>) -> GeneratedWorld {
         quests: QuestSummary::default(),
         ring_gems: RingGems::UNSHUFFLED,
         floor_rooms: Vec::new(),
+        artifact_decks: Vec::new(),
         feelings: Vec::new(),
     }
 }

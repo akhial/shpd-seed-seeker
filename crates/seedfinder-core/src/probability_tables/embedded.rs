@@ -23,6 +23,7 @@ table!(FEELING_ROOMS, "feeling_rooms.bin");
 table!(SOURCE_COUNTS, "source_counts.bin");
 table!(WAND_REPEATS, "wand_repeats.bin");
 table!(ARTIFACT_WORLDS, "artifact_worlds.bin");
+table!(ARTIFACT_DECKS, "artifact_decks.bin");
 
 #[cfg(test)]
 mod tests {
@@ -38,6 +39,7 @@ mod tests {
             (&SOURCE_COUNTS, &include_bytes!("source_counts.bin")[..]),
             (&WAND_REPEATS, &include_bytes!("wand_repeats.bin")[..]),
             (&ARTIFACT_WORLDS, &include_bytes!("artifact_worlds.bin")[..]),
+            (&ARTIFACT_DECKS, &include_bytes!("artifact_decks.bin")[..]),
         ] {
             assert_eq!(&***actual, expected);
         }

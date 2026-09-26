@@ -55,7 +55,7 @@ The reference below uses `?` for optional fields, `|` for alternatives,
       // Ordinary wand only: reserve it, but omit its Auto upgrade cost.
       // Useful for imbuing; resin upgrades never transfer to the staff.
       "exclude_resin"?: true | false = false,
-      "kind"?: "weapon" | "melee_weapon" | "thrown_weapon" | "armor" | "wand" | "ring",
+      "kind"?: "weapon" | "melee_weapon" | "thrown_weapon" | "armor" | "wand" | "ring" | "trinket" | "artifact",
       "item"?:
         // Weapons
         "worn_shortsword" | "cudgel" | "gloves" | "rapier" | "dagger" |
@@ -81,6 +81,12 @@ The reference below uses `?` for optional fields, `|` for alternatives,
         "ring_accuracy" | "ring_arcana" | "ring_elements" | "ring_energy" |
         "ring_evasion" | "ring_force" | "ring_furor" | "ring_haste" | "ring_might" |
         "ring_sharpshooting" | "ring_tenacity" | "ring_wealth",
+
+      // Named artifact: accept a natural find or the first N remaining deck draws
+      // after generating this requirement's floor limit. Requires a donor artifact.
+      "artifact_transmutations"?: 0..10 = 0,
+      // Named trinket: accept an initial offer or the first N later deck draws.
+      "trinket_transmutations"?: 0..13 = 0,
 
       // Tier filters apply only to wildcard weapon/armor requirements.
       "tier"?:
@@ -218,3 +224,5 @@ approximations for alternatives, combined levels, and item supply still apply. Q
 than 128 intermediate witness combinations show an unavailable estimate.
 The estimate is also unavailable when the combined-level approximation drops
 an optional member needed to witness a blanket.
+
+See [artifact search](artifact-search.md) for artifact IDs, deck semantics, and limitations.

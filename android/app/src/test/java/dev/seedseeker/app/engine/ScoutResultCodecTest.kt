@@ -105,7 +105,7 @@ class ScoutResultCodecTest {
             ),
         ))
         val packet = ScoutRequestCodec.encode("AAA-AAA-AAA", 257, request, "none")
-        assertArrayEquals(byteArrayOf(83, 83, 81, 53, 1, 1, 11, 0), packet.copyOfRange(0, 8))
+        assertArrayEquals(byteArrayOf(83, 83, 81, 54, 1, 1, 11, 0), packet.copyOfRange(0, 8))
         assertArrayEquals(byteArrayOf(4, 0, 110, 111, 110, 101), packet.copyOfRange(19, 25))
         assertArrayEquals(QueryDocument.encode(request), packet.copyOfRange(25, packet.size))
     }
@@ -459,7 +459,7 @@ class ScoutResultCodecTest {
 
         val bindings = ScoutBindings(scoutPacket(gems = SHUFFLED_GEMS))
         val world = JniNativeSeedFinder(bindings).scoutSeed("AAA-AAA-AAA")
-        val request = byteArrayOf('S'.code.toByte(), 'S'.code.toByte(), 'Q'.code.toByte(), '5'.code.toByte(), 0, 0, 11, 0) +
+        val request = byteArrayOf('S'.code.toByte(), 'S'.code.toByte(), 'Q'.code.toByte(), '6'.code.toByte(), 0, 0, 11, 0) +
             "AAA-AAA-AAA".toByteArray(StandardCharsets.UTF_8) + byteArrayOf(0, 0)
         assertArrayEquals(request, bindings.scoutRequest)
         // The items and the gems are two halves of one run, and one engine call
@@ -477,7 +477,7 @@ class ScoutResultCodecTest {
     @Test
     fun scoutRequestEncodesChallengeMaskLittleEndian() {
         assertArrayEquals(
-            byteArrayOf('S'.code.toByte(), 'S'.code.toByte(), 'Q'.code.toByte(), '5'.code.toByte(), 1, 1, 11, 0) +
+            byteArrayOf('S'.code.toByte(), 'S'.code.toByte(), 'Q'.code.toByte(), '6'.code.toByte(), 1, 1, 11, 0) +
                 "AAA-AAA-AAA".toByteArray(StandardCharsets.UTF_8) + byteArrayOf(0, 0),
             ScoutRequestCodec.encode("AAA-AAA-AAA", 257),
         )

@@ -18,6 +18,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.seedseeker.app.R
 import dev.seedseeker.app.engine.isMapDepthSupported
+import dev.seedseeker.app.model.ItemKind
 import dev.seedseeker.app.model.ScoutAccessibility
 import dev.seedseeker.app.model.ScoutItem
 import dev.seedseeker.app.model.ScoutWorld
@@ -38,6 +39,15 @@ internal fun matchedScoutChoices(items: List<ScoutItem>, matched: Set<Int>): Map
 
 internal fun isAlternateScoutChoice(access: ScoutAccessibility, matched: Boolean, choices: Map<Int, Int>): Boolean =
     !matched && access is ScoutAccessibility.Choice && choices[access.group]?.let { it != access.option } == true
+
+/** Scout items contain fixed dungeon loot, not runtime drops or transmutation outcomes. */
+internal fun availableScoutArtifacts(items: List<ScoutItem>, matched: Set<Int>): Set<String> {
+    val choices = matchedScoutChoices(items, matched)
+    return items.mapIndexedNotNull { index, item ->
+        item.item.id.takeIf { item.item.kind == ItemKind.ARTIFACT &&
+            !isAlternateScoutChoice(item.accessibility, index in matched, choices) }
+    }.toSet()
+}
 
 internal fun scoutGroupLetter(group: Int): Char = ('A'.code + group % 26).toChar()
 

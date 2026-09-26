@@ -120,7 +120,8 @@ fn aaa_artifacts_match_beta4_oracle_and_round_trip_native_wire() {
         ]
     );
     let packet = shpd_seedfinder_core::wire::encode_scout_world(&world).unwrap();
-    world.floor_rooms.clear(); // Room metadata is exposed on web only.
+    world.floor_rooms.clear(); // Legacy packet omits room and artifact deck metadata.
+    world.artifact_decks.clear();
     assert_eq!(
         shpd_seedfinder_core::wire::decode_scout_world(&packet).unwrap(),
         world

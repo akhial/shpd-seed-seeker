@@ -374,6 +374,7 @@ fn base(kind: ItemKind) -> Requirement {
         require_uncursed: false,
         select_trinket: false,
         trinket_transmutations: 0,
+        artifact_transmutations: 0,
         blanket: false,
         exclude_resin: false,
         source: None,
@@ -615,6 +616,7 @@ fn locked_level_queries() -> Vec<(String, SearchQuery)> {
                     require_uncursed: true,
                     select_trinket: false,
                     trinket_transmutations: 0,
+                    artifact_transmutations: 0,
                     blanket: false,
                     exclude_resin: false,
                     ..base(ItemKind::Weapon)

@@ -640,6 +640,7 @@ fn benchmark_query() -> SearchQuery {
             require_uncursed: false,
             select_trinket: false,
             trinket_transmutations: 0,
+            artifact_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             source: None,

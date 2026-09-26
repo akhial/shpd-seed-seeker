@@ -20,8 +20,9 @@ uncursed filters. Artifact editors use any upgrade and do not offer an upgrade
 selector; scout results still show the generated upgrade. The generator's existing unique artifact deck is unchanged.
 Only artifacts generated at deterministic locations participate: heaps,
 containers, skeletons, shops, pre-generated mimic contents and the Imp reward.
-Runtime drops, transmutations, purchases affecting later RNG, and other player
-actions that could change the deck are not simulated.
+Runtime drops, purchases affecting later RNG, and other player actions that could
+change the deck are not simulated, except for the explicit transmutation search
+described below.
 
 Ordinary artifacts are +0. The Imp quest's Dwarven vault artifact receives
 `transferUpgrade(5)`. Scout badges match the game's rounded displayed level:
@@ -59,3 +60,67 @@ BETA-4 JAR and cover
 floor limits, gated/scalar search, vault exclusivity, codecs, and the web scout.
 The parity oracle emits `search_upgrade` alongside `true_level` so transferred
 artifact levels can be compared without losing the underlying Java level.
+
+## Artifact transmutations
+
+Enable **Allow transmutations** on a named artifact and choose a maximum of
+1–10. Natural finds still match. JSON uses `artifact_transmutations` (default 0):
+
+```json
+{"requirements":[{"item":"ethereal_chains","artifact_transmutations":4,"max_depth":19}]}
+```
+
+The search uses the remaining artifact deck **after generating the requirement's
+floor limit**, bounded by the overall query limit. It needs an obtainable starting
+artifact by that floor. Source, curse, and accessibility constraints apply to that
+starting artifact; the target must be in the allowed prefix of the remaining deck.
+Upgrades transfer through each intermediate artifact using the game's displayed
+level conversion, assuming an upgraded starting artifact has been identified.
+One starting artifact cannot satisfy two kept-item requirements, and unique target
+identities cannot be duplicated. Multiple targets at the same floor share the deck.
+
+Snapshots describe the unmodified generated run. The matcher does not combine
+transmutations at different floor limits, or retain an artifact generated after an
+earlier transmutation, because those would require replaying later generation.
+Scroll availability and effects on later generation are not simulated. Exhausting
+the deck produces a ring, which is not an artifact match.
+
+Transmutation probability uses a separate joint donor/deck model measured over
+8,192 worlds for each of the eight generation profiles. It averages identity
+assignments without replacement, preserves obtainable donor combinations and
+floor boundaries, and reserves the Imp prize across artifacts and equipment.
+AutoTrinket uses the same calibrated scores to select and estimate its policy.
+No worlds are generated while estimating. See [calibration and timing results](probability-artifact-calibration.md).
+Imported queries with upgrade-filtered artifact transmutations remain unavailable:
+rounding through intermediate identities is not calibrated. The normal artifact
+editors use any upgrade. Extremely complex joint filters also have a bounded work
+budget and report unavailable instead of blocking the editor.
+
+Scout shows one compact, always-visible artifact icon row on web, Android,
+macOS, Windows, and Linux. It has no title, numbers, expand/collapse control,
+deck floor picker, or hint paragraph. Vertical padding is minimal and icons
+shrink to fit one line. It always shows all 11 artifacts in the full starting
+deck, captured before any floors are generated. Transmutation targets are
+highlighted by identity, and their obtainable starting artifacts are highlighted
+in floor results. Search still uses the remaining deck at each requirement's
+floor limit. The CLI displays the same starting order without a title or numbers.
+Artifacts available from fixed dungeon loot are shown at 30% opacity, including
+shops, pre-generated mimic contents, and exclusive rewards. An exclusive reward
+stays bright when a different option in that group supplies a search requirement.
+This uses the scouted run's actual items and match witnesses, not random combat
+drops, transmutation outcomes, or just the difference between two decks.
+Reading a deck never advances the generated run's RNG.
+
+Share-link version 14 adds the four-bit artifact limit after version 13's trinket
+limit; older links retain their exact encoding. Native clients request `SSQ6` and
+receive `SSC9`: the `SSC8` body followed by a one-byte snapshot count, then each
+snapshot's one-byte floor (0 for the full starting deck), one-byte identity count, and stable artifact IDs encoded
+as big-endian u16-length-prefixed UTF-8 strings. Older scout requests retain
+legacy packet layouts. Match JSON adds `transmutedArtifacts` entries with `depth`
+and zero-based `index`; WASM exposes all floor decks as `artifactDecks`.
+
+The official v4.0.0 oracle in `tooling/oracle-4.0/ArtifactOracle` drains the saved
+artifact deck after a floor prefix and optionally runs actual scroll transmutations.
+Pinned remaining-deck fixtures supplement the existing generated-artifact parity
+checks. The implementation follows the upstream
+[artifact transmutation code](https://github.com/00-Evan/shattered-pixel-dungeon/blob/v4.0.0/core/src/main/java/com/shatteredpixel/shatteredpixeldungeon/items/scrolls/ScrollOfTransmutation.java).

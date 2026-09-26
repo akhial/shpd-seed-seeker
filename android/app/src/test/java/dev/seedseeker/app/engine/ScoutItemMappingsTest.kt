@@ -31,7 +31,7 @@ class ScoutItemMappingsTest {
     @Test fun roomSummariesDecodeWithoutChangingLegacyPackets() {
         val request = ScoutRequestCodec.encode("ABC-DEF-GHI", 0)
         val current = JniBindings.scoutSeed(request)
-        assertEquals("SSC8", current.take(4).toByteArray().toString(Charsets.US_ASCII))
+        assertEquals("SSC9", current.take(4).toByteArray().toString(Charsets.US_ASCII))
         assertEquals(20, ScoutResultCodec.decode(current).floorRooms.size)
         request[3] = '4'.code.toByte()
         val legacy = JniBindings.scoutSeed(request)
