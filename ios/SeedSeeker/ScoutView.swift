@@ -59,6 +59,8 @@ struct ScoutView: View {
             ScrollView {
                 LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
                     if let world = model.world {
+                        ScoutArtifactDeckView(world: world, matches: model.matches)
+                            .padding(.vertical, 4)
                         ForEach(floors, id: \.self) { depth in
                             Section {
                                 floorContent(world, depth: depth)

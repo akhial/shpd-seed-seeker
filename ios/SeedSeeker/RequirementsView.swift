@@ -476,6 +476,7 @@ struct RequirementsView: View {
         }
         if requirement.excludeResin { values.append(("No resin", false)) }
         if requirement.trinketTransmutations > 0 { values.append(("Transmute ≤\(requirement.trinketTransmutations)", false)) }
+        if requirement.artifactTransmutations > 0 { values.append(("Transmute ≤\(requirement.artifactTransmutations)", false)) }
         if let floor = requirement.maximumDepth { values.append(("F≤\(floor)", false)) }
         return values
     }

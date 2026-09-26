@@ -213,3 +213,35 @@ struct ItemSpriteIcon: View {
         }
     }
 }
+
+/// The map supplies a seeded sprite cell and identity glyph for rings, potions,
+/// and scrolls (including exotics). Only the artwork receives the effect pulse.
+struct MapItemSpriteView: View {
+    let item: LevelMapDocument.TooltipItem
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        ZStack {
+            pixels(.art)
+            if let glow = item.glow, glow.color.count == 3 {
+                let color = String(format: "#%02x%02x%02x", Int(glow.color[0]), Int(glow.color[1]), Int(glow.color[2]))
+                SpriteGlowLayer(glow: ItemGlow(hex: color, period: glow.periodMs / 1000), reduceMotion: reduceMotion) {
+                    pixels(.art)
+                }.id(glow)
+            }
+            pixels(.typeIcon)
+        }
+        .offset(x: -CGFloat(16 - (SpriteAtlas.bundled?.bounds(forSprite: item.image).width ?? 16)))
+        .frame(width: 32, height: 32)
+        .accessibilityHidden(true)
+    }
+
+    @ViewBuilder private func pixels(_ layer: SpriteLayer) -> some View {
+        if let image = SpriteAtlas.bundled?.inspectionSprite(spriteIndex: item.image, icon: item.icon,
+                                                            pointSize: 32, layer: layer) {
+            Image(decorative: image, scale: CGFloat(SpriteAtlas.pixelScale))
+                .interpolation(.none)
+                .antialiased(false)
+        }
+    }
+}

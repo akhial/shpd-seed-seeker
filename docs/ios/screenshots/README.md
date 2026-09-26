@@ -13,12 +13,19 @@ uses the real Rust engine; the status bar is normalized for these screenshots.
 
 | Search results | Scout and trinkets |
 | --- | --- |
-| <img src="04-search-results.png" alt="Live seed search results with progress and trinket indicators" width="300"> | <img src="05-scout-and-trinkets.png" alt="Two-line Scout items, green upgrades, and region-colored floor and quest headers" width="300"> |
+| <img src="04-search-results.png" alt="Live seed search results with progress and trinket indicators" width="300"> | <img src="05-scout-and-trinkets.png" alt="Scout with its compact artifact deck, trinket selection, and two-line item cards" width="300"> |
 
 | Seed information | Interactive map |
 | --- | --- |
-| <img src="06-seed-information.png" alt="Potion, scroll, and ring appearances for a seed" width="300"> | <img src="07-interactive-map.png" alt="Dungeon floor map with secrets and floor navigation" width="300"> |
+| <img src="06-seed-information.png" alt="Potion, scroll, and ring appearances for a seed" width="300"> | <img src="07-interactive-map.png" alt="Liquid Glass map inspection with original description, upgrade, curse, and container context" width="300"> |
 
 | Item selection |
 | --- |
 | <img src="09-item-picker.png" alt="Item selection with glass category controls, soft scroll edges, and a floating Next action" width="300"> |
+
+## Web downloads
+
+The web top bar places iOS beside Android. Its iOS panel provides the IPA download
+and links to the sideloading instructions.
+
+![Web top bar with iOS beside Android](10-web-downloads.png)

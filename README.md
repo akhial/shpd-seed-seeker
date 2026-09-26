@@ -61,7 +61,7 @@ Binaries are published on the [GitHub Releases page](https://github.com/akhial/s
 | `seed-seeker-cli-<tag>-<target>-avx2.tar.gz` / `.zip` | CLI built for AVX2 x86-64 machines |
 | `seed-seeker-<tag>-<arch>.AppImage` | Native Linux app (x86_64, arm64) |
 | `seed-seeker-<tag>-macos-arm64.dmg` | Native macOS app (Apple Silicon, macOS 14+) |
-| `seed-seeker-<tag>-ios-arm64.ipa` | Native iPhone and iPad app (iOS/iPadOS 27+, requires sideloading) |
+| `seed-seeker-<tag>-ios-arm64.ipa` | Native iPhone and iPad app (iOS/iPadOS 27+, [installation instructions](ios/README.md#installation)) |
 | `seed-seeker-<tag>-windows-<arch>.zip` | Native Windows app (x64, ARM64) |
 | `seed-seeker-<tag>-windows-x64-avx2.zip` | Windows app built for AVX2 x86-64 machines |
 | `seed-seeker-<tag>-android-arm64-v8a.apk` | Android app for ARM64 phones and tablets |

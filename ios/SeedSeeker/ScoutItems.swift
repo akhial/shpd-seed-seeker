@@ -2,6 +2,42 @@
 import SeedSeekerKit
 import SwiftUI
 
+/// The full starting deck stays visible without an extra disclosure, floor
+/// selector or numbering. Its tiles shrink together to keep all 11 in one row.
+struct ScoutArtifactDeckView: View {
+    let world: ScoutWorld
+    let matches: ScoutMatches?
+
+    var body: some View {
+        let entries = world.startingArtifactDeck(matches: matches)
+        if !entries.isEmpty {
+            GeometryReader { geometry in
+                let size = max(1, min(36, Int((geometry.size.width - CGFloat(entries.count - 1) * 2) / CGFloat(entries.count))))
+                HStack(spacing: 2) {
+                    ForEach(entries) { entry in
+                        ItemSpriteView(item: entry.item, pointSize: max(1, size - 4))
+                            .padding(2)
+                            .frame(width: CGFloat(size), height: CGFloat(size))
+                            .background(entry.matched ? AppTheme.accent.opacity(0.14) : .clear,
+                                        in: RoundedRectangle(cornerRadius: 6))
+                            .overlay(RoundedRectangle(cornerRadius: 6)
+                                .strokeBorder(entry.matched ? AppTheme.accent : .clear))
+                            .opacity(entry.availableInDungeon ? 0.3 : 1)
+                            .accessibilityElement(children: .ignore)
+                            .accessibilityLabel(entry.accessibilityLabel)
+                            .accessibilityIdentifier("scout-artifact-\(entry.id)")
+                            .frame(maxWidth: .infinity)
+                    }
+                }
+                .frame(maxHeight: .infinity)
+            }
+            .frame(height: 36)
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("scout-artifact-deck")
+        }
+    }
+}
+
 struct ScoutItemCard: View {
     let item: ScoutItem
     let ringGems: RingGems

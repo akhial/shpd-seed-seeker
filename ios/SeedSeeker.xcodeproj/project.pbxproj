@@ -240,6 +240,11 @@
 			"path" = "../macos/SeedSeeker/Tests/SeedSeekerKitTests";
 			"sourceTree" = "<group>";
 		};
+		"A97F203AF8454BB48671091C" = {
+			"isa" = "PBXFileSystemSynchronizedRootGroup";
+			"path" = "SeedSeekerTests";
+			"sourceTree" = "<group>";
+		};
 		"559BB6F18341E257681C26B0" = {
 			"isa" = "PBXFileReference";
 			"lastKnownFileType" = "sourcecode.c.c";
@@ -302,6 +307,7 @@
 				"6805EC6AFDAFDBE18E2FF355",
 				"1F71A50775D41D23FD1C1E59",
 				"87AA925F24AC656A8AAB80A9",
+				"A97F203AF8454BB48671091C",
 				"559BB6F18341E257681C26B0",
 				"A0E7E82ECDB67B68F10F7006",
 				"20E338624CEE29D0EFFEAD85",
@@ -520,6 +526,7 @@
 			);
 			"fileSystemSynchronizedGroups" = (
 				"87AA925F24AC656A8AAB80A9",
+				"A97F203AF8454BB48671091C",
 			);
 			"name" = "SeedSeekerKitTests";
 			"productName" = "SeedSeekerKitTests";

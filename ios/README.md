@@ -8,6 +8,14 @@ there is no second implementation of the wire formats or query models.
 See the [iPhone screenshot gallery](../docs/ios/screenshots/README.md) for the
 Finder, requirement editors, search results, and Scout workflows.
 
+Artifact requirements support natural finds or up to ten transmutations, using
+the remaining deck at the requirement's floor limit. Scout shows the compact
+starting artifact deck, highlights matching targets, and dims artifacts available
+in the dungeon. See [artifact search](../docs/artifact-search.md) for the rules.
+Tap an item on an inline or expanded map to inspect its original game description,
+seeded appearance, upgrades, effects, and container. Map inspection also supports
+pointer hover and VoiceOver actions.
+
 ## Installation
 
 Download `seed-seeker-<tag>-ios-arm64.ipa` from
@@ -162,8 +170,8 @@ app and packages and validates its IPA on every pull request and push to `main`.
 The `iOS` job uses Xcode 27 and needs no signing secrets. Its `ios-ipa` artifact
 contains `SeedSeeker.ipa` and is retained for seven days.
 
-The iOS test target runs the shared Apple engine/model tests inside the app so
-catalog and sprite resources resolve from the real bundle:
+The iOS test target runs the shared Apple engine/model tests and iOS map interaction
+tests inside the app so catalog and sprite resources resolve from the real bundle:
 
 ```sh
 xcodebuild -project ios/SeedSeeker.xcodeproj -scheme SeedSeeker \
@@ -178,6 +186,8 @@ Debug. Shared randomized test samples retain the repository's CI test budget.
 
 - `SeedSeeker/`: iOS SwiftUI interface and platform integrations. Xcode uses a
   synchronized source group, so new Swift files are included automatically.
+- `SeedSeekerTests/`: iOS viewport and map inspection regressions, run alongside
+  the shared `SeedSeekerKitTests` sources.
 - `../macos/SeedSeeker/Sources/SeedSeekerKit/`: shared models, persistence, codecs,
   engine bridge, search controller, and map scene decoder; built as a static
   framework within the iOS project.

@@ -25,6 +25,7 @@ struct RequirementsEditor: View {
     @State private var requireUncursed: Bool
     @State private var selectTrinket: Bool
     @State private var trinketTransmutations: Int
+    @State private var artifactTransmutations: Int
     @State private var excludeResin: Bool
     @State private var stackCount: Int
     @State private var stackTotal: Int?
@@ -60,6 +61,7 @@ struct RequirementsEditor: View {
         _requireUncursed = State(initialValue: editing?.requireUncursed ?? false)
         _selectTrinket = State(initialValue: editing?.selectTrinket ?? false)
         _trinketTransmutations = State(initialValue: editing?.trinketTransmutations ?? 0)
+        _artifactTransmutations = State(initialValue: editing?.artifactTransmutations ?? 0)
         _excludeResin = State(initialValue: editing?.excludeResin ?? false)
         _stackCount = State(initialValue: min(SearchLimits.stackMax, max(1, editingCount)))
         _stackTotal = State(initialValue: editingTotal)
@@ -104,6 +106,7 @@ struct RequirementsEditor: View {
             alternativeGroup: editing?.alternativeGroup,
             selectTrinket: !blanket && kind == .trinket && trinketTransmutations == 0 && selectTrinket,
             trinketTransmutations: kind == .trinket ? trinketTransmutations : 0,
+            artifactTransmutations: kind == .artifact ? artifactTransmutations : 0,
             blanket: blanket, excludeResin: !blanket && kind == .wand && excludeResin
         )
     }
@@ -238,6 +241,7 @@ struct RequirementsEditor: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 if kind == .trinket { trinketControls }
+                if kind == .artifact { artifactControls }
                 if selectedItem == nil && (kind.family == .weapon || kind.family == .armor) { tierControls }
                 if !namedOnly { upgradeControls }
                 if let label = kind.modifierLabel { effectControls(label: label) }
@@ -272,6 +276,23 @@ struct RequirementsEditor: View {
             } else if !blanket {
                 Toggle("Choose matching trinket at +3", isOn: $selectTrinket)
                 explanation("Applies after the first brewing opportunity. If several alternatives are offered, no trinket is chosen.")
+            }
+        }
+    }
+
+    private var artifactControls: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Toggle("Allow transmutations", isOn: Binding(get: { artifactTransmutations > 0 }, set: {
+                artifactTransmutations = $0 ? 1 : 0
+            }))
+            if artifactTransmutations > 0 {
+                Stepper(value: $artifactTransmutations, in: 1...10) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Maximum transmutations")
+                        Text("At most \(artifactTransmutations)").foregroundStyle(.tint)
+                    }
+                }
+                explanation("Includes natural finds or transforms an obtainable artifact using the remaining deck at the floor limit. Source and curse filters apply to the starting artifact. Scroll availability and later generation changes are not simulated.")
             }
         }
     }
@@ -527,6 +548,9 @@ struct RequirementsEditor: View {
         tier = 2
         effectMode = 0
         selectedEffects = []
+        selectTrinket = false
+        trinketTransmutations = 0
+        artifactTransmutations = 0
         if namedOnly {
             stackCount = 1
             stackTotal = nil

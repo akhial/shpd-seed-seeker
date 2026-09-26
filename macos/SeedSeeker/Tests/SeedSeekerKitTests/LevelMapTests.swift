@@ -35,6 +35,8 @@ final class LevelMapTests: XCTestCase, @unchecked Sendable {
         let marks = try ScoutMatches.mark(seed: world.seed, challenges: 0, query: query)
         XCTAssertEqual(marks.matchedRequirements, 2)
         XCTAssertEqual(ScoutChoiceStatus.availableArtifactIDs(items: world.items, matched: marks.matched), ["unstable_spellbook", "skeleton_key"])
+        XCTAssertEqual(Set(world.startingArtifactDeck(matches: marks).filter(\.availableInDungeon).map(\.id)),
+                       ["unstable_spellbook", "skeleton_key"])
         let own = try SearchRequest(requirements: [ItemRequirement(key: 3,
             item: XCTUnwrap(ItemCatalog.findById("sandals_of_nature")), upgrade: 0, kind: .artifact,
             upgradeMatch: .any, source: .impReward)], autoApplyTrinket: false)

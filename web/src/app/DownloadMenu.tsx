@@ -24,6 +24,7 @@ interface DownloadOption {
 interface PlatformDef {
   key: string;
   label: string;
+  installationURL?: string;
   // Returns an architecture label if the asset is one of this platform's app
   // builds, or null otherwise. The CLI archives are filtered out beforehand.
   match(name: string): string | null;
@@ -68,6 +69,12 @@ const PLATFORMS: PlatformDef[] = [
     key: "android",
     label: "Android",
     match: (name) => (/-android(?:-unsigned)?\.apk$/.test(name) ? "Universal APK" : null),
+  },
+  {
+    key: "ios",
+    label: "iOS",
+    installationURL: `https://github.com/${REPO}/blob/main/ios/README.md#installation`,
+    match: (name) => (name.endsWith("-ios-arm64.ipa") ? "IPA · iPhone and iPad" : null),
   },
 ];
 
@@ -123,6 +130,12 @@ export function DownloadMenu() {
       const release = await loadRelease();
       setBusy(null);
       const options = release ? optionsFor(platform, release) : [];
+      if (platform.installationURL) {
+        // Sideloading needs instructions even with a single asset, and they
+        // remain reachable before the first IPA release or if GitHub is down.
+        setModal({ platform, options });
+        return;
+      }
       if (options.length === 0) {
         // No release yet, network/API failure, or no matching asset — fall
         // back to the releases page so the download is still reachable.
@@ -189,6 +202,12 @@ export function DownloadMenu() {
             </header>
 
             <div className="d1-modal-body">
+              {modal.platform.installationURL && (
+                <p className="d1-dl-note">
+                  Requires iOS 27 or iPadOS 27 or later. Install the unsigned IPA with SideStore or
+                  AltStore Classic.
+                </p>
+              )}
               <ul className="d1-dl-list">
                 {modal.options.map((option) => (
                   <li key={option.url}>
@@ -204,6 +223,27 @@ export function DownloadMenu() {
                     </a>
                   </li>
                 ))}
+                {modal.options.length === 0 && (
+                  <li>
+                    <a className="d1-dl-option" href={RELEASES_URL} target="_blank" rel="noopener">
+                      <span className="d1-dl-arch">View latest downloads</span>
+                      <span className="d1-dl-file">GitHub Releases</span>
+                    </a>
+                  </li>
+                )}
+                {modal.platform.installationURL && (
+                  <li>
+                    <a
+                      className="d1-dl-option"
+                      href={modal.platform.installationURL}
+                      target="_blank"
+                      rel="noopener"
+                    >
+                      <span className="d1-dl-arch">Installation instructions</span>
+                      <span className="d1-dl-file">SideStore · AltStore Classic · Updates</span>
+                    </a>
+                  </li>
+                )}
               </ul>
             </div>
 

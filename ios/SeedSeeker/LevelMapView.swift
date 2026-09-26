@@ -349,6 +349,8 @@ private struct NativeLevelMap: UIViewRepresentable {
 /// allows the Scout to scroll; the expanded map uses horizontal swipes for floors.
 @MainActor final class MapViewport: UIView, UIGestureRecognizerDelegate {
     private(set) var request: LevelMapRequest?
+    private(set) var inspectedCell: Int?
+    private var itemOverlay: MapItemOverlayHost?
     private var renderer: MapRenderer?
     private var clock = LevelMapClock(now: 0)
     private var secrets = false
@@ -378,7 +380,14 @@ private struct NativeLevelMap: UIViewRepresentable {
         addGestureRecognizer(panGesture)
         let doubleTap = UITapGestureRecognizer(target: self, action: #selector(doubleTap(_:)))
         doubleTap.numberOfTapsRequired = 2
+        doubleTap.delegate = self
         addGestureRecognizer(doubleTap)
+        let tap = UITapGestureRecognizer(target: self, action: #selector(tap(_:)))
+        tap.delegate = self
+        tap.require(toFail: doubleTap)
+        addGestureRecognizer(tap)
+        let hover = UIHoverGestureRecognizer(target: self, action: #selector(hover(_:)))
+        addGestureRecognizer(hover)
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
@@ -386,6 +395,7 @@ private struct NativeLevelMap: UIViewRepresentable {
                 animated: Bool, reduceMotion: Bool, expanded: Bool,
                 label: String, navigate: @escaping (Int) -> Void) {
         let changed = self.request != request
+        if changed || bundle == nil || self.secrets != secrets { dismissInspection(animated: false) }
         if self.request?.hasSameLocation(as: request) != true { zoom = 1; pan = .zero }
         self.request = request
         if let bundle {
@@ -400,16 +410,100 @@ private struct NativeLevelMap: UIViewRepresentable {
         self.expanded = expanded
         self.navigate = navigate
         accessibilityLabel = label
-        accessibilityCustomActions = expanded ? [
+        var actions = expanded ? [
             UIAccessibilityCustomAction(name: "Previous floor", target: self, selector: #selector(previousFloor)),
             UIAccessibilityCustomAction(name: "Next floor", target: self, selector: #selector(nextFloor)),
-        ] : nil
+        ] : []
+        // VoiceOver can inspect the same visible items without locating a tiny
+        // map sprite. The engine's item name is also the action's label.
+        for tip in renderer?.map.itemTooltips ?? [] where secrets || !tip.hidden {
+            actions.append(UIAccessibilityCustomAction(name: tip.items.map(\.name).joined(separator: ", ")) { [weak self] _ in
+                guard let self else { return false }
+                self.presentInspection(tip, at: CGPoint(x: self.bounds.midX, y: self.bounds.midY))
+                return true
+            })
+        }
+        accessibilityCustomActions = actions.isEmpty ? nil : actions
         updateAnimation()
         setNeedsDisplay()
     }
 
-    override func didMoveToWindow() { super.didMoveToWindow(); updateAnimation() }
-    override func layoutSubviews() { super.layoutSubviews(); constrain(); setNeedsDisplay() }
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if window == nil { dismissInspection(animated: false) }
+        updateAnimation()
+    }
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        if let itemOverlay, itemOverlay.frame != bounds {
+            dismissInspection(animated: false)
+            itemOverlay.frame = bounds
+        }
+        constrain()
+        setNeedsDisplay()
+    }
+
+    func dismissInspection(animated: Bool = true) {
+        inspectedCell = nil
+        itemOverlay?.presentation.show(nil, animated: animated && !reduceMotion)
+        // Keep the empty container mounted while the glass dematerializes.
+        // Its hit test immediately resumes passing map gestures through.
+        isAccessibilityElement = true
+    }
+
+    func inspectItem(at point: CGPoint, toggleSelection: Bool = false) {
+        guard let renderer else { dismissInspection(); return }
+        if !toggleSelection,
+           let frame = itemOverlay?.presentation.card?.frame,
+           frame.insetBy(dx: -12, dy: -12).contains(point) { return }
+        constrain()
+        let scale = fitScale * zoom
+        let tip = renderer.map.itemAt(
+            x: (point.x - bounds.midX - pan.x) / scale + CGFloat(renderer.map.pixelWidth) / 2,
+            y: (point.y - bounds.midY - pan.y) / scale + CGFloat(renderer.map.pixelHeight) / 2,
+            secrets: secrets)
+        guard let tip else { dismissInspection(); return }
+        if tip.cell == inspectedCell {
+            if toggleSelection { dismissInspection() }
+            return
+        }
+        presentInspection(tip, at: point)
+    }
+
+    private func presentInspection(_ tip: LevelMapDocument.ItemTooltip, at point: CGPoint) {
+        let width = max(1, min(330, bounds.width - 16))
+        let measuring = UIHostingController(rootView: MapItemCard(tip: tip).frame(width: width))
+        let measured = measuring.sizeThatFits(in: CGSize(width: width, height: .greatestFiniteMagnitude))
+        let height = max(1, min(measured.height, bounds.height - 16))
+        let x = max(8, min(point.x + 16, bounds.width - width - 8))
+        let below = point.y + 16
+        let y = max(8, min(below + height < bounds.height - 8 ? below : point.y - height - 16,
+                           bounds.height - height - 8))
+        if itemOverlay == nil {
+            let overlay = MapItemOverlayHost(frame: bounds) { [weak self] in self?.dismissInspection() }
+            addSubview(overlay)
+            itemOverlay = overlay
+            overlay.layoutIfNeeded()
+        }
+        inspectedCell = tip.cell
+        isAccessibilityElement = false
+        itemOverlay?.presentation.show(.init(tip: tip, frame: CGRect(x: x, y: y, width: width, height: height)),
+                                       animated: !reduceMotion)
+        if UIAccessibility.isVoiceOverRunning {
+            UIAccessibility.post(notification: .layoutChanged, argument: itemOverlay)
+        }
+    }
+
+    @objc private func tap(_ gesture: UITapGestureRecognizer) {
+        inspectItem(at: gesture.location(in: self), toggleSelection: true)
+    }
+    @objc private func hover(_ gesture: UIHoverGestureRecognizer) {
+        switch gesture.state {
+        case .began, .changed: inspectItem(at: gesture.location(in: self))
+        case .ended, .cancelled: dismissInspection()
+        default: break
+        }
+    }
 
     private func updateAnimation() {
         guard window != nil, animated, !reduceMotion, renderer != nil else { stopAnimation(); return }
@@ -437,6 +531,7 @@ private struct NativeLevelMap: UIViewRepresentable {
         pan.y = min(y, max(-y, pan.y))
     }
     private func zoom(to value: CGFloat, at anchor: CGPoint = .zero) {
+        dismissInspection(animated: false)
         let next = min(8, max(1, value)), ratio = next / zoom
         pan = CGPoint(x: anchor.x - (anchor.x - pan.x) * ratio,
                       y: anchor.y - (anchor.y - pan.y) * ratio)
@@ -455,6 +550,7 @@ private struct NativeLevelMap: UIViewRepresentable {
         zoom(to: zoom > 1 ? 1 : 2.5, at: CGPoint(x: point.x - bounds.midX, y: point.y - bounds.midY))
     }
     @objc private func drag(_ gesture: UIPanGestureRecognizer) {
+        dismissInspection(animated: false)
         if gesture.state == .began { hadMultipleTouches = gesture.numberOfTouches > 1 }
         if gesture.numberOfTouches > 1 { hadMultipleTouches = true }
         let translation = gesture.translation(in: self)
@@ -479,10 +575,22 @@ private struct NativeLevelMap: UIViewRepresentable {
                            shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
         gestureRecognizer.view === self && otherGestureRecognizer.view === self
     }
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        // A tooltip may scroll independently; touching its content must not pan,
+        // zoom, or dismiss the map underneath it.
+        itemOverlay?.presentation.card?.frame.contains(touch.location(in: self)) != true
+    }
+    override func accessibilityPerformEscape() -> Bool {
+        guard inspectedCell != nil else { return false }
+        dismissInspection()
+        UIAccessibility.post(notification: .layoutChanged, argument: self)
+        return true
+    }
     override func accessibilityIncrement() { zoom(to: zoom * 1.5) }
     override func accessibilityDecrement() { zoom(to: zoom / 1.5) }
     override func accessibilityScroll(_ direction: UIAccessibilityScrollDirection) -> Bool {
         guard expanded else { return false }
+        dismissInspection(animated: false)
         switch direction {
         case .left: navigate(1)
         case .right: navigate(-1)
@@ -490,8 +598,8 @@ private struct NativeLevelMap: UIViewRepresentable {
         }
         return true
     }
-    @objc private func previousFloor() -> Bool { navigate(-1); return true }
-    @objc private func nextFloor() -> Bool { navigate(1); return true }
+    @objc private func previousFloor() -> Bool { dismissInspection(animated: false); navigate(-1); return true }
+    @objc private func nextFloor() -> Bool { dismissInspection(animated: false); navigate(1); return true }
 
     override func draw(_ rect: CGRect) {
         guard let context = UIGraphicsGetCurrentContext() else { return }
