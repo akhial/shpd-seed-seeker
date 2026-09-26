@@ -701,7 +701,6 @@ internal fun SeedFinderApp(
                 seedInput = scoutInput,
                 result = scoutResult,
                 mapChallenges = completedScoutRun?.challenges ?: 0,
-                maximumDepth = completedScoutRun?.query?.maximumDepth ?: 24,
                 isScouting = isScouting,
                 error = scoutError,
                 matches = scoutMatches,

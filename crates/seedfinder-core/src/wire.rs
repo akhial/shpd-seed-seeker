@@ -417,7 +417,7 @@ pub fn encode_scout_world_with_rooms(
     Ok(output)
 }
 
-/// `SSC9` appends remaining artifact decks to `SSC8`; requested with `SSQ6`.
+/// `SSC9` appends starting (depth 0) and remaining artifact decks to `SSC8`; requested with `SSQ6`.
 /// Each floor has a depth byte, count byte, and stable IDs as big-endian `utf8_u16`.
 ///
 /// # Errors
@@ -790,16 +790,16 @@ pub fn decode_scout_world(packet: &[u8]) -> Result<GeneratedWorld, WireError> {
     let mut artifact_decks = Vec::new();
     if magic == SCOUT_RESULT_MAGIC_V9 {
         let count = input.u8()?;
-        if count > 24 {
+        if count > 25 {
             return Err(WireError::InvalidFloorRooms);
         }
-        let mut previous = 0;
+        let mut previous = None;
         for _ in 0..count {
             let depth = input.u8()?;
-            if depth <= previous || depth > 24 {
+            if previous.is_some_and(|previous| depth <= previous) || depth > 24 {
                 return Err(WireError::InvalidFloorRooms);
             }
-            previous = depth;
+            previous = Some(depth);
             let count = input.u8()?;
             if count > 11 {
                 return Err(WireError::InvalidFloorRooms);

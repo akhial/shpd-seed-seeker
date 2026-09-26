@@ -1,4 +1,5 @@
-//! Remaining artifact decks at floor boundaries. Reading never consumes world RNG.
+//! Starting and remaining artifact decks. Depth 0 is the full starting deck.
+//! Reading never consumes world RNG.
 use crate::{
     catalog::{ItemId, ItemKind, item},
     generator::{ARTIFACT_ITEMS, select_artifact_identity_index},

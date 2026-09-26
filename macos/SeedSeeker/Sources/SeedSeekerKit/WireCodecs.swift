@@ -261,11 +261,11 @@ public enum ScoutCodec {
         var artifactDecks: [Int: [CatalogItem]] = [:]
         if magic == Data("SSC9".utf8) {
             let count = Int(try input.u8())
-            guard count <= 24 else { throw WireCodecError.invalidValue("Too many artifact decks") }
-            var previous = 0
+            guard count <= 25 else { throw WireCodecError.invalidValue("Too many artifact decks") }
+            var previous = -1
             for _ in 0..<count {
                 let depth = Int(try input.u8())
-                guard (1...24).contains(depth), depth > previous else { throw WireCodecError.invalidValue("Invalid artifact deck floor") }
+                guard (0...24).contains(depth), depth > previous else { throw WireCodecError.invalidValue("Invalid artifact deck floor") }
                 previous = depth
                 let size = Int(try input.u8())
                 guard size <= 11 else { throw WireCodecError.invalidValue("Too many artifacts") }

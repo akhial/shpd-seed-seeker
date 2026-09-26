@@ -182,7 +182,6 @@ export default function App() {
     loading: boolean;
     error?: string;
     result?: ScoutResult;
-    maximumDepth?: number;
     challenges: readonly ChallengeName[];
   }>({ loading: false, challenges: [] });
   const scoutRequest = useRef(0);
@@ -230,7 +229,7 @@ export default function App() {
           query,
         });
         if (requestId === scoutRequest.current) {
-          setScout({ loading: false, result, challenges, maximumDepth: query?.max_depth ?? 24 });
+          setScout({ loading: false, result, challenges });
           setScoutInput(result.seed.code);
           renderedSeed.current = result.seed.code;
           setScoutedSeed(result.seed.code);
@@ -493,7 +492,6 @@ export default function App() {
             error={scout.error}
             result={scout.result}
             renderedChallenges={scout.challenges}
-            maximumDepth={scout.maximumDepth}
             onTrinketChange={(trinket) => {
               if (scout.result) runScout(scout.result.seed.code, trinket);
             }}

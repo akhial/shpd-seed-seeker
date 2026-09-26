@@ -449,7 +449,7 @@ fn generate_gated_world_attempt(
     let mut items = Vec::new();
     let mut feelings = Vec::new();
     let mut floor_rooms = Vec::new();
-    let mut artifact_decks = Vec::new();
+    let mut artifact_decks = vec![crate::artifacts::ArtifactDeck::capture(0, &run.generator)];
     let mut next_choice_group = 0_u16;
     let selected_trinket = gate.selected_trinket(seed);
     let mut alchemy_available = false;

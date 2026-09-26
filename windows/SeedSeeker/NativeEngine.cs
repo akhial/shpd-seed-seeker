@@ -296,8 +296,8 @@ public sealed class NativeEngine
         var artifactDecks = new Dictionary<int, IReadOnlyList<CatalogItem>>();
         if (version == "SSC9") {
             var deckCount = r.U8();
-            if (deckCount > 24) throw new InvalidDataException("Too many artifact decks");
-            var previous = 0;
+            if (deckCount > 25) throw new InvalidDataException("Too many artifact decks");
+            var previous = -1;
             for (var i = 0; i < deckCount; i++) {
                 var depth = r.U8();
                 if (depth <= previous || depth > 24) throw new InvalidDataException("Invalid artifact floor");

@@ -67,6 +67,8 @@ final class TrinketTests: XCTestCase {
 
     func testNativeScoutTrinketsAndMatchIndicesAgree() async throws {
         let world = try await ProductionSeedFinderEngine().scoutSeed("AAA-AAA-AAA", challenges: 0)
+        XCTAssertEqual(world.artifactDecks[0]?.count, 11)
+        XCTAssertEqual(world.artifactDecks[0]?[5].id, "ethereal_chains")
         XCTAssertEqual(world.artifactDecks[9]?.count, 11)
         XCTAssertEqual(world.artifactDecks[19]?[3].id, "ethereal_chains")
         XCTAssertEqual(world.trinketOrder.count, 17)

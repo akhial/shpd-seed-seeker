@@ -53,7 +53,7 @@ fn fixture() -> GeneratedWorld {
 }
 
 #[test]
-fn remaining_decks_match_official_v4_oracle() {
+fn starting_and_remaining_decks_match_official_v4_oracle() {
     // ArtifactOracle, official JAR pinned by tooling/oracle-4.0/build.sh.
     let mut worlds = std::collections::BTreeMap::new();
     for line in include_str!("fixtures/v4-artifact-decks.txt").lines() {
@@ -62,6 +62,11 @@ fn remaining_decks_match_official_v4_oracle() {
             CanonicalMainWorldGenerator.generate(DungeonSeed::from_code(parts[0]).unwrap(), 24)
         });
         let depth = parts[1].parse().unwrap();
+        if depth == 0 {
+            let early = CanonicalMainWorldGenerator.generate(world.seed, 1);
+            assert_eq!(deck_at(world, 0).len(), 11);
+            assert_eq!(deck_at(world, 0), deck_at(&early, 0));
+        }
         let actual = deck_at(world, depth)
             .iter()
             .map(|identity| format!("{identity:?}"))

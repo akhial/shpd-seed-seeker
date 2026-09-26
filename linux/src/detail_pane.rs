@@ -669,11 +669,7 @@ impl DetailPane {
             self.manifest_box.remove(&child);
         }
         if !world.artifact_decks.is_empty() {
-            self.manifest_box.append(&artifact_deck_view(
-                world,
-                &marks,
-                manifest_query(state).max_depth,
-            ));
+            self.manifest_box.append(&artifact_deck_view(world, &marks));
         }
         let quests = quest_rows(world.quests);
         for (depth, indices) in &by_depth {
@@ -1092,15 +1088,8 @@ fn tag(label: &str, color: &str) -> gtk::Label {
 fn artifact_deck_view(
     world: &shpd_seedfinder_core::model::GeneratedWorld,
     marks: &shpd_seedfinder_core::query::ScoutMatches,
-    maximum_depth: u8,
 ) -> gtk::Expander {
-    let depth = marks
-        .transmuted_artifacts
-        .iter()
-        .map(|&(depth, _)| depth)
-        .min()
-        .unwrap_or(maximum_depth);
-    let order = shpd_seedfinder_core::artifacts::deck_at(world, depth);
+    let order = shpd_seedfinder_core::artifacts::deck_at(world, 0);
     let deck = gtk::Box::builder()
         .orientation(gtk::Orientation::Horizontal)
         .homogeneous(true)
@@ -1111,7 +1100,9 @@ fn artifact_deck_view(
         deck.append(&gtk::Label::new(Some("Deck exhausted.")));
     }
     for (index, &id) in order.iter().enumerate() {
-        let matched = marks.transmuted_artifacts.contains(&(depth, index));
+        let matched = marks.transmuted_artifacts.iter().any(|&(depth, position)| {
+            shpd_seedfinder_core::artifacts::deck_at(world, depth).get(position) == Some(&id)
+        });
         let tile = gtk::Box::new(gtk::Orientation::Vertical, 4);
         tile.append(&sprites::trinket_tile(item(id), matched, false));
         tile.append(
@@ -1121,7 +1112,7 @@ fn artifact_deck_view(
                 .build(),
         );
         let label = format!(
-            "Transmutation #{}: {}{}",
+            "Starting draw #{}: {}{}",
             index + 1,
             item(id).name,
             if matched { ", matches requirement" } else { "" }

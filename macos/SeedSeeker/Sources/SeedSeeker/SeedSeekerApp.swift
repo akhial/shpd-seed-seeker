@@ -2653,7 +2653,7 @@ private struct SeedDetailView: View {
                     // Lazy sections with variable-height floor groups can loop
                     // in SwiftUI's placement cache while scrolling on macOS.
                     VStack(alignment: .leading, spacing: 0) {
-                        if !world.artifactDecks.isEmpty { ArtifactScoutDeck(world: world, matches: marks, maximumDepth: model.renderedQuery?.maximumDepth ?? 24).padding() }
+                        if !world.artifactDecks.isEmpty { ArtifactScoutDeck(world: world, matches: marks).padding() }
                         ForEach(depths, id: \.self) { depth in
                             let floorItems = (byDepth[depth] ?? []).filter { $0.element.item.kind != .trinket }
                             VStack(alignment: .leading, spacing: 0) {
@@ -3095,11 +3095,13 @@ private func floorLimitBinding(_ value: Binding<Int>) -> Binding<Double> {
 private struct ArtifactScoutDeck: View {
     let world: ScoutWorld
     let matches: ScoutMatches?
-    let maximumDepth: Int
     @State private var expanded = true
     var body: some View {
-        let depth = matches?.transmutedArtifacts.keys.min() ?? maximumDepth
-        let order = world.artifactDecks[world.artifactDecks.keys.filter { $0 <= depth }.max() ?? 0] ?? []
+        let order = world.artifactDecks[0] ?? []
+        let targets = Set((matches?.transmutedArtifacts ?? [:]).flatMap { depth, indices in
+            let remaining = world.artifactDecks[world.artifactDecks.keys.filter { $0 <= depth }.max() ?? 0] ?? []
+            return indices.compactMap { remaining.indices.contains($0) ? remaining[$0].id : nil }
+        })
         DisclosureGroup("Artifact transmutation order", isExpanded: $expanded) {
             if order.isEmpty {
                 Text("Deck exhausted.").font(.caption).foregroundStyle(.secondary)
@@ -3108,8 +3110,8 @@ private struct ArtifactScoutDeck: View {
                     let size = max(1, min(36, Int((geometry.size.width - CGFloat(order.count - 1) * 2) / CGFloat(order.count))))
                     HStack(spacing: 2) {
                         ForEach(Array(order.enumerated()), id: \.element.id) { index, artifact in
-                            let matched = matches?.transmutedArtifacts[depth]?.contains(index) == true
-                            let label = "Transmutation #\(index + 1): \(artifact.name)" + (matched ? ", matches requirement" : "")
+                            let matched = targets.contains(artifact.id)
+                            let label = "Starting draw #\(index + 1): \(artifact.name)" + (matched ? ", matches requirement" : "")
                             VStack(spacing: 4) {
                                 ItemSpriteView(item: artifact, pointSize: max(1, size - 4), label: label)
                                 Text("\(index + 1)").font(.caption2).lineLimit(1).minimumScaleFactor(0.5)

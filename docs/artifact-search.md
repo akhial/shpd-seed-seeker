@@ -98,16 +98,17 @@ budget and report unavailable instead of blocking the editor.
 
 Scout shows **Artifact transmutation order** as one compact, static row on
 web, Android, macOS, Windows, and Linux. There is no deck floor picker or hint
-paragraph. Icons shrink to fit one line. The deck uses a matched transmutation
-requirement's floor when present, otherwise the scouted search's floor limit
-(24 without a query). Positions start at 1; matching outcomes and their starting
-artifacts are highlighted. Boss floors inherit the last generated deck. The CLI displays the deck at the query's overall floor limit (24 without a
-query). Reading a deck never advances the generated run's RNG.
+paragraph. Icons shrink to fit one line. It always shows all 11 artifacts in the
+full starting deck, captured before any floors are generated. Positions start at
+1; transmutation targets are highlighted by identity, and their obtainable
+starting artifacts are highlighted in floor results. Search still uses the
+remaining deck at each requirement's floor limit. The CLI displays the same
+starting order. Reading a deck never advances the generated run's RNG.
 
 Share-link version 14 adds the four-bit artifact limit after version 13's trinket
 limit; older links retain their exact encoding. Native clients request `SSQ6` and
 receive `SSC9`: the `SSC8` body followed by a one-byte snapshot count, then each
-snapshot's one-byte floor, one-byte identity count, and stable artifact IDs encoded
+snapshot's one-byte floor (0 for the full starting deck), one-byte identity count, and stable artifact IDs encoded
 as big-endian u16-length-prefixed UTF-8 strings. Older scout requests retain
 legacy packet layouts. Match JSON adds `transmutedArtifacts` entries with `depth`
 and zero-based `index`; WASM exposes all floor decks as `artifactDecks`.

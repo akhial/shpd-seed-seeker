@@ -997,7 +997,7 @@ public final class ParityOracle {
 
 	private static void printUsage() {
 		System.out.println("Usage: parity-oracle (--seed XXX-XXX-XXX | --daily YYYY-MM-DD) [--floors LIST] [--format ndjson|json]");
-		System.out.println("  --floors 1,3-5     Generate through the highest depth and emit the selected depths");
+		System.out.println("  --floors 1,3-5     Generate through the highest depth and emit the selected depths (0: run init only)");
 		System.out.println("  --challenges N     Challenge bit mask (default: 0)");
 		System.out.println("  --run-checkpoints  Emit a Generator-state hash after every generated floor");
 		System.out.println("  --boss-skip-checkpoints  Compare all persistent state around boss floors");
@@ -1184,8 +1184,8 @@ public final class ParityOracle {
 		}
 
 		private static void addDepth(int depth, Set<Integer> output) {
-			if (depth < 1 || depth > MAX_DEPTH) {
-				throw new IllegalArgumentException("floors must be in [1, " + MAX_DEPTH + "]");
+			if (depth < 0 || depth > MAX_DEPTH) {
+				throw new IllegalArgumentException("floors must be in [0, " + MAX_DEPTH + "]");
 			}
 			output.add(depth);
 		}

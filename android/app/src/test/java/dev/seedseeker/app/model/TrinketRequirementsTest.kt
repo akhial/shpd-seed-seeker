@@ -79,6 +79,8 @@ class TrinketRequirementsTest {
         assertEquals(1, marks.items.size)
         assertEquals(setOf(19 to 3), marks.transmutedArtifacts)
         val world = dev.seedseeker.app.engine.JniNativeSeedFinder().scoutSeed("AAA-AAA-AAA")
+        assertEquals(11, world.artifactDecks.getValue(0).size)
+        assertEquals("ethereal_chains", world.artifactDecks.getValue(0)[5].id)
         assertEquals(11, world.artifactDecks.getValue(9).size)
         assertEquals("ethereal_chains", world.artifactDecks.getValue(19)[3].id)
         for (count in listOf(-1, 11)) assertThrows(IllegalArgumentException::class.java) {

@@ -45,7 +45,6 @@ export function ScoutPanel({
   error,
   result,
   renderedChallenges = [],
-  maximumDepth = 24,
   nav,
   onNavigate,
   onTrinketChange,
@@ -58,7 +57,6 @@ export function ScoutPanel({
   result?: ScoutResult;
   /** Challenges used to produce the rendered scout, independent of current query edits. */
   renderedChallenges?: readonly ChallengeName[];
-  maximumDepth?: number;
   /** Position of the scouted seed within the search results, when it is one. */
   nav?: ResultPosition;
   onNavigate?: (delta: number) => void;
@@ -293,9 +291,7 @@ export function ScoutPanel({
             )}
           </div>
 
-          {!!result.artifactDecks?.length && (
-            <ArtifactDeckOrder decks={result.artifactDecks} maximumDepth={maximumDepth} />
-          )}
+          {!!result.artifactDecks?.length && <ArtifactDeckOrder decks={result.artifactDecks} />}
 
           {floors.map(([depth, items]) => {
             const region = regionForDepth(depth);
@@ -586,23 +582,15 @@ export function CatalystEntry({
   );
 }
 
-export function ArtifactDeckOrder({
-  decks,
-  maximumDepth,
-}: {
-  decks: NonNullable<ScoutResult["artifactDecks"]>;
-  maximumDepth: number;
-}) {
-  const depth =
-    decks.find((deck) => deck.order.some((entry) => entry.matched))?.depth ?? maximumDepth;
-  const order = decks.filter((deck) => deck.depth <= depth).at(-1)?.order ?? [];
+export function ArtifactDeckOrder({ decks }: { decks: NonNullable<ScoutResult["artifactDecks"]> }) {
+  const order = decks.find((deck) => deck.depth === 0)?.order ?? [];
   return (
     <details className="d1-artifact-deck" open>
       <summary>Artifact transmutation order</summary>
       {order.length ? (
         <ol
           className="d1-trinket-tail d1-artifact-tail"
-          aria-label="Remaining artifact deck order"
+          aria-label="Starting artifact deck order"
           style={{
             gridTemplateColumns: `repeat(${order.length}, minmax(0, 1fr))`,
             maxWidth: order.length * 40 + (order.length - 1) * 2,
@@ -612,8 +600,8 @@ export function ArtifactDeckOrder({
             <li
               key={entry.id}
               className={entry.matched ? "d1-trinket-match" : undefined}
-              title={`Transmutation #${index + 1}: ${entry.name}${entry.matched ? " — matches requirement" : ""}`}
-              aria-label={`Transmutation #${index + 1}: ${entry.name}${entry.matched ? ", matches requirement" : ""}`}
+              title={`Starting draw #${index + 1}: ${entry.name}${entry.matched ? " — matches requirement" : ""}`}
+              aria-label={`Starting draw #${index + 1}: ${entry.name}${entry.matched ? ", matches requirement" : ""}`}
             >
               <TrinketSprite cell={entry.spriteIndex} maximum={32} />
               <span className="d1-caption">{index + 1}</span>

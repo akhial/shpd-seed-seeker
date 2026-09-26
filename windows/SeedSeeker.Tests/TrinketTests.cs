@@ -41,6 +41,8 @@ public sealed class TrinketTests
         Assert.Single(marks.Matched);
         Assert.Contains((19, 3), marks.TransmutedArtifacts);
         var world = new NativeEngine().Scout("AAA-AAA-AAA", 0);
+        Assert.Equal(11, world.ArtifactDecks[0].Count);
+        Assert.Equal("ethereal_chains", world.ArtifactDecks[0][5].Id);
         Assert.Equal(11, world.ArtifactDecks[9].Count);
         Assert.Equal("ethereal_chains", world.ArtifactDecks[19][3].Id);
     }

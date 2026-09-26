@@ -7,7 +7,7 @@ import com.shatteredpixel.shatteredpixeldungeon.items.scrolls.ScrollOfTransmutat
 import com.watabou.utils.Bundle;
 
 /** Remaining deck and actual transmutations after a canonical floor prefix.
- * Usage: ArtifactOracle AAA-AAA-AAA 9
+ * Usage: ArtifactOracle AAA-AAA-AAA 9 (0 for the full starting deck)
  */
 public final class ArtifactOracle {
     public static void main(String[] args) throws Exception {

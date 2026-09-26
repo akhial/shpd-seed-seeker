@@ -853,12 +853,12 @@ object ScoutResultCodec {
             } else emptyMap()
             val artifactDecks = if (hasArtifactDecks) {
                 val count = input.readUnsignedByte()
-                check(count <= 24) { "Too many artifact decks" }
-                var previous = 0
+                check(count <= 25) { "Too many artifact decks" }
+                var previous = -1
                 buildMap {
                     repeat(count) {
                         val depth = input.readUnsignedByte()
-                        check(depth in 1..24 && depth > previous) { "Invalid artifact deck floor" }
+                        check(depth in 0..24 && depth > previous) { "Invalid artifact deck floor" }
                         previous = depth
                         val size = input.readUnsignedByte()
                         check(size <= 11) { "Too many artifacts" }
