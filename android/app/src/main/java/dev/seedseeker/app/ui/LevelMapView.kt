@@ -65,6 +65,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalButton
@@ -318,7 +319,7 @@ private fun LevelMapPanel(
                                 label = "map-floor",
                             ) { shown ->
                                 Row(Modifier.padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                                    ShapeBackdrop(SeekerShapes.forDepth(shown), floorRegionColor(shown), Modifier.size(14.dp))
+                                    Box(Modifier.size(width = 3.dp, height = 14.dp).background(floorRegionColor(shown), RoundedCornerShape(2.dp)))
                                     Spacer(Modifier.width(8.dp))
                                     Text("Floor $shown", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
                                 }

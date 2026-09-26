@@ -96,7 +96,13 @@ class ScoutScreenScrollTest {
         initialSeed: String = world.seed,
         onStep: (String) -> Unit = {},
         onSelect: (String) -> Unit = {},
+        artifactDeck: List<CatalogItem> = emptyList(),
+        offerDepth: Int = 1,
     ) {
+        val shown = world.copy(
+            artifactDecks = if (artifactDeck.isEmpty()) emptyMap() else mapOf(1 to artifactDeck),
+            items = world.items.map { if (it.item in offers) it.copy(depth = offerDepth) else it },
+        )
         val atlas = compose.activity.assets.open("third_party/shattered-pixel-dungeon/items.png")
             .use(BitmapFactory::decodeStream)!!.asImageBitmap()
         val iconAtlas = compose.activity.assets.open("third_party/shattered-pixel-dungeon/item_icons.png")
@@ -110,7 +116,7 @@ class ScoutScreenScrollTest {
                     LocalDensity provides Density(compose.density.density, fontScale),
                 ) {
                     ScoutScreen(
-                        seedInput = input.value, result = world, isScouting = false, error = null,
+                        seedInput = input.value, result = shown, isScouting = false, error = null,
                         matches = matches, resultSeeds = listOf(world.seed, "ABC-DEF-GHI"), scoutedSeed = world.seed,
                         onScoutSeed = onStep, onSeedChange = { input.value = it }, onScout = { onStep(input.value) }, onSelectTrinket = onSelect,
                         onSettings = {}, onAbout = {}, bottomBar = { Box(Modifier.fillMaxWidth().height(80.dp)) },
@@ -285,6 +291,26 @@ class ScoutScreenScrollTest {
         compose.onRoot().performTouchInput { swipeLeft() }
         compose.runOnIdle { assertEquals("ABC-DEF-GHI", steppedTo) }
         screenshot("trinket-controls")
+    }
+
+    /** The artifact deck adds a row above the floors; the shortcuts must still track the trinket offers. */
+    @Test fun trinketShortcutsAppearOnceTheOffersScrollAwayEvenWithAnArtifactDeck() {
+        val deck = listOf("chalice_of_blood", "horn_of_plenty", "master_thieves_armband")
+            .mapNotNull { ItemCatalog.findById(it) }
+        // As on a real seed: the offers lie a few floors down, below the deck.
+        show(artifactDeck = deck, offerDepth = 3)
+        val shortcut = hasContentDescription("Mimic Tooth") and hasAnyAncestor(hasTestTag("scout-navigation"))
+        compose.onNode(shortcut).assertDoesNotExist()
+        drag(500f)
+        // Creep up until the offer tiles have slid under the pinned floor header:
+        // from then on, the shortcuts must stand in for them.
+        repeat(20) {
+            val header = compose.onNodeWithText("FLOOR 3").fetchSemanticsNode().boundsInRoot
+            val offer = compose.onNodeWithText("Cracked Spyglass").fetchSemanticsNode().boundsInRoot
+            if (offer.bottom > header.bottom) drag(30f)
+        }
+        compose.onNodeWithText("FLOOR 3").assertIsDisplayed()
+        compose.onNode(shortcut).assertIsDisplayed()
     }
 
     @Test fun draggingTheSummaryAlsoScrollsAndPartialMatchesKeepTheirAccessibleCount() {

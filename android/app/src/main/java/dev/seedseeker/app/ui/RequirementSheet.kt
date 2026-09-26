@@ -1245,8 +1245,8 @@ private fun EffectGrid(
 private fun Color.luminanceLow(): Boolean = (red * 0.299f + green * 0.587f + blue * 0.114f) < 0.18f
 
 /**
- * One pickable item. Picking it grows a slowly turning seal behind its
- * sprite, springs the tile and tints it in the primary colours.
+ * One pickable item. Picking it grows a seal behind its sprite, springs the
+ * tile and tints it in the primary colours.
  */
 @Composable
 private fun ItemTile(item: CatalogItem, selected: Boolean, onClick: () -> Unit) {
@@ -1288,7 +1288,6 @@ private fun ItemTile(item: CatalogItem, selected: Boolean, onClick: () -> Unit) 
                             scaleX = seal
                             scaleY = seal
                         },
-                        spinMillis = 8_000,
                     )
                 }
                 ItemSprite(item, modifier = Modifier.size(42.dp).graphicsLayer {

@@ -82,12 +82,6 @@ internal fun ItemMappingGrid(
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.tertiary)
-                    Spacer(Modifier.width(8.dp))
-                    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.14f)) {
-                        Text("${entries.size}", Modifier.padding(horizontal = 8.dp),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.tertiary)
-                    }
                 }
                 BoxWithConstraints(Modifier.fillMaxWidth()) {
                     val pixel = maxWidth / (6 * slotSize + 5 * slotGap)
@@ -100,7 +94,7 @@ internal fun ItemMappingGrid(
                                     val label = mappingLabel(entry)
                                     val isSelected = selectedLabel == label
                                     val interaction = remember { MutableInteractionSource() }
-                                    // The chosen tile swells onto a spinning seal; the rest wait on soft pads.
+                                    // The chosen tile swells onto a seal; the rest wait on soft pads.
                                     val lift by animateFloatAsState(
                                         if (isSelected) 1f else 0f,
                                         spring(dampingRatio = 0.45f, stiffness = 420f),

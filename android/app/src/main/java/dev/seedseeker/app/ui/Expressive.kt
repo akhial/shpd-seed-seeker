@@ -85,8 +85,6 @@ fun rememberMotionEnabled(): Boolean {
 object SeekerShapes {
     val Seed: RoundedPolygon get() = MaterialShapes.Cookie9Sided
     val Match: RoundedPolygon get() = MaterialShapes.SoftBurst
-    val Celebrate: RoundedPolygon get() = MaterialShapes.Sunny
-    val Pill: RoundedPolygon get() = MaterialShapes.Pill
 
     /** A calm cycle for idle "waiting for you" illustrations. */
     val Idle: List<RoundedPolygon>
@@ -109,15 +107,6 @@ object SeekerShapes {
             MaterialShapes.Cookie4Sided,
             MaterialShapes.Oval,
         )
-
-    /** Sewers are soft, prisons boxy, caves faceted, the city ornate, the halls spiked. */
-    fun forDepth(depth: Int): RoundedPolygon = when {
-        depth < 6 -> MaterialShapes.Puffy
-        depth < 11 -> MaterialShapes.Cookie4Sided
-        depth < 16 -> MaterialShapes.Gem
-        depth < 21 -> MaterialShapes.Cookie12Sided
-        else -> MaterialShapes.SoftBoom
-    }
 
     /** Small sparkle silhouettes a celebration throws. */
     val Sparkles: List<RoundedPolygon>
@@ -193,8 +182,8 @@ fun ShapeBackdrop(
 
 /**
  * A backdrop that never stops changing shape: it holds each of [shapes],
- * then springs into the next while slowly turning. Frozen on the first shape
- * when motion is off.
+ * then springs into the next, turning as it goes when [turning] (for busy
+ * states). Frozen on the first shape when motion is off.
  */
 @Composable
 fun MorphingBackdrop(
@@ -202,6 +191,7 @@ fun MorphingBackdrop(
     color: Color,
     modifier: Modifier = Modifier,
     stepMillis: Int = 1400,
+    turning: Boolean = false,
     content: @Composable BoxScope.() -> Unit = {},
 ) {
     val motion = LocalMotionEnabled.current
@@ -222,7 +212,7 @@ fun MorphingBackdrop(
             // Hold, then an overshooting spring-like ease into the next shape.
             val progress = springEase(((local - 0.45f) / 0.55f).coerceIn(0f, 1f))
             val path = morphPath(morphs[index], progress.coerceIn(0f, 1f), size)
-            rotate(t * 72f) { drawPath(path, color) }
+            rotate(if (turning) t * 72f else 0f) { drawPath(path, color) }
         },
         contentAlignment = androidx.compose.ui.Alignment.Center,
         content = content,

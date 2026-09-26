@@ -57,6 +57,7 @@ import dev.seedseeker.app.model.FloorFeeling
 import kotlin.math.roundToInt
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.Orientation
@@ -211,20 +212,21 @@ fun ScoutScreen(
         if (error != null || result == null) headerScroll.expand()
     }
     val floors = remember(result) { scoutFloors(result) }
-    // Floors spring in the first time a world shows them, and never again.
-    val entrances = LocalEntranceMemory.current
     val mapFloors = remember(floors) { floors.keys.filter(::isMapDepthSupported) }
     val matchedChoices = remember(result, matches) { matchedScoutChoices(result?.items.orEmpty(), matches?.items.orEmpty()) }
     var openMapDepth by remember(result?.seed, mapChallenges) { mutableStateOf<Int?>(null) }
     val offerFloorIndex = floors.values.indexOfFirst { rows -> rows.any { it.value.item.kind == ItemKind.TRINKET } }
     val offerDepth = floors.keys.elementAtOrNull(offerFloorIndex)
-    val offerBodyIndex = if (offerFloorIndex >= 0) 1 + 2 * offerFloorIndex else -1
+    // The artifact deck, when shown, sits above the first floor and shifts every floor down a row.
+    val deckRows = if (result?.artifactDecks?.isNotEmpty() == true) 1 else 0
+    val offerBodyIndex = if (offerFloorIndex >= 0) deckRows + 1 + 2 * offerFloorIndex else -1
+    val offerBodyKey = offerDepth?.let { "floor-body-$it" }
     var offerTop by remember(result?.seed) { mutableStateOf(0f) }
     var offerHeight by remember(result?.seed) { mutableStateOf(0f) }
     var offerMapHeight by remember(result?.seed) { mutableStateOf(0f) }
     var floorHeaderHeight by remember { mutableStateOf(0) }
-    val reveal by remember(offerBodyIndex, offerTop, offerHeight, floorHeaderHeight, openMapDepth, offerDepth, offerMapHeight) { derivedStateOf {
-        val row = listState.layoutInfo.visibleItemsInfo.find { it.index == offerBodyIndex }
+    val reveal by remember(offerBodyIndex, offerBodyKey, offerTop, offerHeight, floorHeaderHeight, openMapDepth, offerDepth, offerMapHeight) { derivedStateOf {
+        val row = listState.layoutInfo.visibleItemsInfo.find { it.key == offerBodyKey }
         when {
             offerBodyIndex < 0 || offerHeight <= 0 -> 0f
             row != null -> ((floorHeaderHeight - row.offset - offerTop - if (openMapDepth == offerDepth) offerMapHeight else 0f) / offerHeight).coerceIn(0f, 1f)
@@ -264,25 +266,7 @@ fun ScoutScreen(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
-                title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        ShapeBackdrop(
-                            MaterialShapes.Gem,
-                            MaterialTheme.colorScheme.secondaryContainer,
-                            Modifier.size(38.dp),
-                            spinMillis = if (isScouting) 1800 else null,
-                        ) {
-                            Icon(
-                                Icons.Filled.Place,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                                modifier = Modifier.size(20.dp),
-                            )
-                        }
-                        Spacer(Modifier.width(10.dp))
-                        Text("Scout", fontWeight = FontWeight.ExtraBold)
-                    }
-                },
+                title = { Text("Scout", fontWeight = FontWeight.ExtraBold) },
                 actions = {
                     IconButton(onClick = onSettings, shapes = IconButtonDefaults.shapes()) {
                         Icon(Icons.Filled.Settings, contentDescription = "Settings")
@@ -400,8 +384,7 @@ fun ScoutScreen(
                                 )
                             }
                             item(key = "floor-body-$depth") {
-                                val fresh = remember { entrances.firstTime("floor:${world.seed}:$depth") }
-                                Column(Modifier.springEntrance(enabled = fresh, delayMillis = if (fresh) (depth.coerceAtMost(6)) * 45 else 0)) {
+                                Column {
                                     if (openMapDepth == depth && isMapDepthSupported(depth)) {
                                         Box(Modifier.onSizeChanged { if (depth == offerDepth) offerMapHeight = it.height.toFloat() }) {
                                             LevelMapView(world, depth, mapFloors, mapChallenges, isScouting, onSelectTrinket)
@@ -714,7 +697,8 @@ internal fun ScoutItemCard(
 
     Card(
         modifier = modifier.fillMaxWidth().alpha(if (dimmed) 0.45f else 1f)
-            .then(if (matches) Modifier.matchGlow(MaterialTheme.shapes.large) else Modifier),
+            // A quiet green edge marks a match; the chip says the rest.
+            .then(if (matches) Modifier.border(1.dp, SpdGreen.copy(alpha = 0.45f), MaterialTheme.shapes.large) else Modifier),
         shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(
             containerColor = if (matches) {
@@ -941,44 +925,6 @@ private fun ScoutItemMatchChip() {
     }
 }
 
-/**
- * An animated ring around a matched row: the game's upgrade green and gold
- * chase each other around its edge, so a match "glows" without the row
- * changing size.
- */
-private fun Modifier.matchGlow(shape: androidx.compose.ui.graphics.Shape): Modifier = composed {
-    val motion = LocalMotionEnabled.current
-    val angle = if (motion) {
-        rememberInfiniteTransition(label = "match-glow").animateFloat(
-            initialValue = 0f,
-            targetValue = 360f,
-            animationSpec = infiniteRepeatable(tween(3200, easing = LinearEasing)),
-            label = "match-angle",
-        )
-    } else null
-    // Outline and gradient are built once per size; each frame only turns the gradient.
-    this.drawWithCache {
-        val path = androidx.compose.ui.graphics.Path().apply { addOutline(shape.createOutline(size, layoutDirection, this@drawWithCache)) }
-        val stroke = Stroke(width = 2.dp.toPx())
-        val shader = android.graphics.SweepGradient(
-            size.width / 2f, size.height / 2f,
-            intArrayOf(
-                SpdGreen.toArgb(), SpdUpgrade.copy(alpha = 0.1f).toArgb(), SpdYellow.toArgb(),
-                SpdUpgrade.copy(alpha = 0.1f).toArgb(), SpdGreen.toArgb(),
-            ),
-            null,
-        )
-        val brush = ShaderBrush(shader)
-        val turn = android.graphics.Matrix()
-        onDrawWithContent {
-            drawContent()
-            turn.setRotate(angle?.value ?: 0f, size.width / 2f, size.height / 2f)
-            shader.setLocalMatrix(turn)
-            drawPath(path, brush, style = stroke)
-        }
-    }
-}
-
 /** The catalyst keeps its placement; its deck retains the engine's order. */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -1024,10 +970,10 @@ private fun TrinketCatalystCard(
                     val applied = selectedTrinket == trinket.id
                     val matched = choices.any { it.value.item.id == trinket.id && matches?.items?.contains(it.index) == true }
                     val interaction = remember { MutableInteractionSource() }
-                    // Applying a trinket morphs its tile's corners round and gives
-                    // it a slowly turning sunburst behind the sprite.
+                    // Applying a trinket softens its tile's corners, just enough
+                    // to read as chosen without cropping the labels inside.
                     val corner by animateDpAsState(
-                        if (applied) 28.dp else 12.dp,
+                        if (applied) 20.dp else 12.dp,
                         MaterialTheme.motionScheme.defaultSpatialSpec(),
                         label = "trinket-corner",
                     )
@@ -1048,18 +994,7 @@ private fun TrinketCatalystCard(
                             Column(Modifier.fillMaxSize().padding(2.dp), horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.SpaceEvenly) {
                                 if (applied) Text("Applied +3", style = MaterialTheme.typography.labelSmall, color = SpdGreen, fontWeight = FontWeight.Bold)
-                                ShapeBackdrop(
-                                    if (matched) SeekerShapes.Match else SeekerShapes.Celebrate,
-                                    when {
-                                        applied -> SpdGreen.copy(alpha = 0.22f)
-                                        matched -> SpdGreen.copy(alpha = 0.16f)
-                                        else -> Color.Transparent
-                                    },
-                                    Modifier.size(if (applied) iconSize * 0.95f else iconSize),
-                                    spinMillis = if (applied) 9_000 else null,
-                                ) {
-                                    ItemSprite(trinket, modifier = Modifier.size(if (applied) iconSize * 0.8f else iconSize))
-                                }
+                                ItemSprite(trinket, modifier = Modifier.size(if (applied) iconSize * 0.8f else iconSize))
                                 FittedTrinketName(trinket.name)
                             }
                         }
@@ -1154,7 +1089,8 @@ private fun ScoutPlaceholder(scouting: Boolean, onDaily: () -> Unit) {
                 shapes = if (scouting) SeekerShapes.Busy else SeekerShapes.Idle,
                 color = if (scouting) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer,
                 modifier = Modifier.size(96.dp),
-                stepMillis = if (scouting) 600 else 1600,
+                stepMillis = if (scouting) 600 else 2400,
+                turning = scouting,
             ) {
                 Icon(
                     Icons.Filled.Place,

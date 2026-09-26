@@ -302,6 +302,11 @@ fun RequirementBoard(
             if (held != null || draggingResin) {
                 val lift = remember { Animatable(0f) }
                 LaunchedEffect(Unit) { lift.animateTo(1f, spring(dampingRatio = 0.5f, stiffness = 500f)) }
+                val overBin by animateFloatAsState(
+                    if (target == DropTarget.Remove) 0.86f else 1f,
+                    spring(dampingRatio = 0.5f, stiffness = 500f),
+                    label = "ghost-over-bin",
+                )
                 Box(
                     Modifier
                         .offset {
@@ -309,15 +314,17 @@ fun RequirementBoard(
                             IntOffset(corner.x.roundToInt(), corner.y.roundToInt())
                         }
                         .graphicsLayer {
-                            val scale = 1f + 0.08f * lift.value
+                            // Held over the bin, the chip shrinks as if about to be swallowed.
+                            val scale = (1f + 0.06f * lift.value) * overBin
                             scaleX = scale
                             scaleY = scale
-                            rotationZ = -3f * lift.value
+                            rotationZ = -2f * lift.value
                             // Float just above the finger so the chip underneath stays in view.
                             translationY = -14.dp.toPx() * lift.value
-                            shadowElevation = 14.dp.toPx() * lift.value
+                            shadowElevation = 12.dp.toPx() * lift.value
                             shape = CircleShape
-                            alpha = if (target == DropTarget.Remove) 0.7f else 0.94f
+                            // Stays opaque: a translucent layer renders offscreen at its
+                            // unscaled size, which would crop the enlarged capsule's ends.
                         }
                         .clearAndSetSemantics {},
                 ) {
@@ -328,7 +335,7 @@ fun RequirementBoard(
                             total = null,
                             enabled = false,
                             dimmed = false,
-                            highlighted = target != null,
+                            highlighted = false,
                             onPlaced = {},
                             onClick = {},
                             onDragStart = {},

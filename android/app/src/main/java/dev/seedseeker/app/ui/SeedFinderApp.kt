@@ -927,11 +927,11 @@ internal fun SeedFinderApp(
             val uriHandler = LocalUriHandler.current
             AlertDialog(
                 onDismissRequest = { availableUpdate = null },
-                // News worth a little fanfare: a turning sunburst that throws sparkles as it lands.
+                // News worth a little fanfare: a sunburst that throws sparkles as it lands.
                 icon = {
                     DialogSeal(
                         MaterialShapes.Sunny, MaterialTheme.colorScheme.tertiaryContainer, Icons.Filled.Star,
-                        MaterialTheme.colorScheme.onTertiaryContainer, spin = true, celebrate = true,
+                        MaterialTheme.colorScheme.onTertiaryContainer, celebrate = true,
                     )
                 },
                 title = { Text("Update available") },
@@ -1049,14 +1049,13 @@ private fun SeedSeekerNavBar(
     }
 }
 
-/** A dialog's headline icon, set on an expressive shape; optionally turning and bursting as it appears. */
+/** A dialog's headline icon, set on an expressive shape; optionally bursting as it appears. */
 @Composable
 private fun DialogSeal(
     polygon: androidx.graphics.shapes.RoundedPolygon,
     container: androidx.compose.ui.graphics.Color,
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     tint: androidx.compose.ui.graphics.Color,
-    spin: Boolean = false,
     celebrate: Boolean = false,
 ) {
     var landed by remember { mutableStateOf(false) }
@@ -1069,7 +1068,6 @@ private fun DialogSeal(
             .springEntrance(rise = 0f)
             // A short reach keeps the burst inside the dialog's padding.
             .then(if (celebrate) Modifier.celebrate(if (landed) 1 else 0, CelebrationColors, count = 14, reach = 26f) else Modifier),
-        spinMillis = if (spin) 14_000 else null,
     ) {
         Icon(icon, contentDescription = null, tint = tint)
     }

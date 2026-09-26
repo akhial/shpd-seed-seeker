@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.draw.rotate
 import androidx.compose.material.icons.Icons
@@ -69,9 +70,7 @@ internal fun FloorHeading(
                 itemVerticalAlignment = Alignment.CenterVertically,
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // Each region wears its own silhouette: soft sewers, boxy prisons,
-                    // faceted caves, an ornate city and the spiked halls.
-                    ShapeBackdrop(SeekerShapes.forDepth(depth), region, Modifier.size(16.dp))
+                    Box(Modifier.size(width = 3.dp, height = 14.dp).background(region, RoundedCornerShape(2.dp)))
                     Text("FLOOR $depth", style = MaterialTheme.typography.labelLarge,
                         letterSpacing = 1.1.sp, color = MaterialTheme.colorScheme.onSurface)
                     if (feeling != null && feeling != FloorFeeling.NONE) FloorFeelingSprite(feeling)

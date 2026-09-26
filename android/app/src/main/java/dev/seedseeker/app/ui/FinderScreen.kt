@@ -127,15 +127,8 @@ import dev.seedseeker.app.model.SeedResult
 import dev.seedseeker.app.model.WandmakerQuest
 import dev.seedseeker.app.model.boardCount
 import dev.seedseeker.app.model.boardItems
-import dev.seedseeker.app.ui.theme.RegionCaves
-import dev.seedseeker.app.ui.theme.RegionCity
-import dev.seedseeker.app.ui.theme.RegionHalls
-import dev.seedseeker.app.ui.theme.RegionPrison
-import dev.seedseeker.app.ui.theme.RegionSewers
-import dev.seedseeker.app.ui.theme.SpdYellow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlin.math.abs
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -245,15 +238,7 @@ fun FinderScreen(
             TopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        ShapeBackdrop(
-                            polygon = SeekerShapes.Seed,
-                            color = MaterialTheme.colorScheme.primaryContainer,
-                            modifier = Modifier.size(38.dp),
-                            // The seal turns while the engine works.
-                            spinMillis = if (isSearching) 2600 else null,
-                        ) {
-                            BrandMark(Modifier.size(24.dp).clip(CircleShape))
-                        }
+                        BrandMark(Modifier.size(32.dp))
                         Spacer(Modifier.width(10.dp))
                         Text("Seed Seeker", fontWeight = FontWeight.ExtraBold, maxLines = 1, softWrap = false)
                     }
@@ -666,7 +651,6 @@ private fun ResultsHeader(
                     milestoneOf(resultCount) * 2 + if (status?.state == SearchState.COMPLETED && resultCount > 0) 1 else 0,
                     CelebrationColors, count = 12, reach = 38f,
                 ),
-            spinMillis = if (isSearching) 4000 else null,
         ) {
             Text(
                 compactCount(resultCount.toLong()),
@@ -970,6 +954,7 @@ private fun ResultsEmptyState(isSearching: Boolean, impossible: Boolean, complet
                     color = MaterialTheme.colorScheme.primaryContainer,
                     modifier = Modifier.size(104.dp),
                     stepMillis = 650,
+                    turning = true,
                 ) {
                     Icon(
                         Icons.Filled.Search,
@@ -982,6 +967,7 @@ private fun ResultsEmptyState(isSearching: Boolean, impossible: Boolean, complet
                     shapes = SeekerShapes.Idle,
                     color = MaterialTheme.colorScheme.surfaceContainerHigh,
                     modifier = Modifier.size(104.dp),
+                    stepMillis = 2400,
                 ) {
                     Icon(
                         Icons.Filled.Search,
@@ -1010,23 +996,6 @@ private fun ResultsEmptyState(isSearching: Boolean, impossible: Boolean, complet
     }
 }
 
-/**
- * A seed's sigil: a shape and colour drawn from the seed itself, so the same
- * seed always wears the same mark and neighbours in the list look different.
- */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-internal fun seedSigil(seed: String): Pair<RoundedPolygon, Color> {
-    val hash = abs(seed.hashCode())
-    val shapes = listOf(
-        MaterialShapes.Cookie9Sided, MaterialShapes.Clover4Leaf, MaterialShapes.Gem,
-        MaterialShapes.Puffy, MaterialShapes.Flower, MaterialShapes.Cookie6Sided,
-        MaterialShapes.Sunny, MaterialShapes.Pentagon, MaterialShapes.Cookie12Sided,
-        MaterialShapes.PuffyDiamond,
-    )
-    val colors = listOf(RegionSewers, RegionPrison, RegionCaves, RegionCity, RegionHalls, SpdYellow)
-    return shapes[hash % shapes.size] to colors[(hash / shapes.size) % colors.size]
-}
-
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ResultRow(result: SeedResult, rank: Int, onScout: () -> Unit, modifier: Modifier = Modifier) {
@@ -1040,7 +1009,6 @@ private fun ResultRow(result: SeedResult, rank: Int, onScout: () -> Unit, modifi
         }
     }
     val interaction = remember { MutableInteractionSource() }
-    val (sigil, sigilColor) = remember(result.seed) { seedSigil(result.seed) }
     Surface(
         onClick = onScout,
         shape = MaterialTheme.shapes.extraLarge,
@@ -1052,16 +1020,15 @@ private fun ResultRow(result: SeedResult, rank: Int, onScout: () -> Unit, modifi
             modifier = Modifier.padding(start = 10.dp, top = 6.dp, end = 4.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            ShapeBackdrop(sigil, sigilColor.copy(alpha = 0.22f), Modifier.size(40.dp)) {
-                Text(
-                    "$rank",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = sigilColor,
-                    maxLines = 1,
-                )
-            }
-            Spacer(Modifier.width(12.dp))
+            Text(
+                "$rank",
+                modifier = Modifier.widthIn(min = 28.dp),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+            )
+            Spacer(Modifier.width(8.dp))
             Row(
                 Modifier.weight(1f),
                 verticalAlignment = Alignment.CenterVertically,
@@ -1184,7 +1151,6 @@ private fun SearchActionBar(
                             SeekerShapes.Seed,
                             if (canSearch) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.16f) else Color.Transparent,
                             Modifier.size(34.dp),
-                            spinMillis = null,
                         ) {
                             Icon(Icons.Filled.Search, contentDescription = null, modifier = Modifier.size(20.dp))
                         }
@@ -1347,7 +1313,7 @@ private fun PresetsDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = {
-            ShapeBackdrop(MaterialShapes.Sunny, MaterialTheme.colorScheme.tertiaryContainer, Modifier.size(52.dp), spinMillis = 20_000) {
+            ShapeBackdrop(MaterialShapes.Sunny, MaterialTheme.colorScheme.tertiaryContainer, Modifier.size(52.dp)) {
                 Icon(Icons.Filled.Star, contentDescription = null, tint = MaterialTheme.colorScheme.onTertiaryContainer)
             }
         },

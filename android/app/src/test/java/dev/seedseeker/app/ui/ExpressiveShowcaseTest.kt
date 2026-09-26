@@ -75,7 +75,8 @@ class ExpressiveShowcaseTest {
         ItemRequirement(key = 5, item = find("wand_frost"), upgrade = 2, alternativeGroup = 1),
     )
 
-    private fun host(content: @Composable () -> Unit) {
+    private fun host(settle: Boolean = true, content: @Composable () -> Unit) {
+        if (!settle) compose.mainClock.autoAdvance = false
         val atlas = compose.activity.assets.open("third_party/shattered-pixel-dungeon/items.png")
             .use(BitmapFactory::decodeStream)!!.asImageBitmap()
         val iconAtlas = compose.activity.assets.open("third_party/shattered-pixel-dungeon/item_icons.png")
@@ -87,7 +88,16 @@ class ExpressiveShowcaseTest {
                 }
             }
         }
-        compose.waitForIdle()
+        if (settle) compose.waitForIdle() else pump()
+    }
+
+    /** The newest dialog window, pumping frames until one has opened. */
+    private fun dialogWindow(): android.view.Window {
+        repeat(10) {
+            org.robolectric.shadows.ShadowDialog.getLatestDialog()?.window?.let { return it }
+            pump(30)
+        }
+        return requireNotNull(org.robolectric.shadows.ShadowDialog.getLatestDialog()?.window) { "no dialog opened" }
     }
 
     private fun shot(name: String, window: android.view.Window = compose.activity.window, settle: Boolean = true) {
@@ -184,25 +194,20 @@ class ExpressiveShowcaseTest {
         host { Finder() }
         compose.mainClock.autoAdvance = false
         compose.onNodeWithText("Presets").performClick()
-        pump()
-        shot("presets", org.robolectric.shadows.ShadowDialog.getLatestDialog().window!!, settle = false)
+        shot("presets", dialogWindow(), settle = false)
     }
 
     @Test fun requirementSheet() {
-        host { RequirementSheet(editing = null, onDismiss = {}, onSave = { _, _, _, _ -> }) }
-        compose.mainClock.autoAdvance = false
-        pump()
-        shot("sheet-item", org.robolectric.shadows.ShadowDialog.getLatestDialog().window!!, settle = false)
+        host(settle = false) { RequirementSheet(editing = null, onDismiss = {}, onSave = { _, _, _, _ -> }) }
+        shot("sheet-item", dialogWindow(), settle = false)
         compose.onNodeWithText("Next").performClick()
         pump()
-        shot("sheet-details", org.robolectric.shadows.ShadowDialog.getLatestDialog().window!!, settle = false)
+        shot("sheet-details", dialogWindow(), settle = false)
     }
 
     @Test fun resinSheet() {
-        host { ArcaneResinSheet(amount = 6, filter = ArcaneResinFilter(), onDismiss = {}, onSave = { _, _, _ -> }, onRemove = {}) }
-        compose.mainClock.autoAdvance = false
-        pump()
-        shot("sheet-resin", org.robolectric.shadows.ShadowDialog.getLatestDialog().window!!, settle = false)
+        host(settle = false) { ArcaneResinSheet(amount = 6, filter = ArcaneResinFilter(), onDismiss = {}, onSave = { _, _, _ -> }, onRemove = {}) }
+        shot("sheet-resin", dialogWindow(), settle = false)
     }
 
     private fun item(catalog: CatalogItem, depth: Int, upgrade: Int = 0, effect: String? = null, cursed: Boolean = false) = ScoutItem(
@@ -258,8 +263,7 @@ class ExpressiveShowcaseTest {
         host { Scout(world) }
         compose.mainClock.autoAdvance = false
         compose.onNodeWithContentDescription("Seed information").performClick()
-        pump()
-        shot("seed-info", org.robolectric.shadows.ShadowDialog.getLatestDialog().window!!, settle = false)
+        shot("seed-info", dialogWindow(), settle = false)
     }
 
     @Test fun settings() {

@@ -215,9 +215,9 @@ private fun AboutSection(
 }
 
 /**
- * The brand, centre stage: the launcher mark on a slowly turning sunburst.
- * Tap it and it spins a full turn, swells and throws sparkles — the one
- * purely joyful control in the app.
+ * The brand, centre stage: the launcher mark on a sunburst. Tap it and it
+ * spins a full turn, swells and throws sparkles — the one purely joyful
+ * control in the app.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -241,7 +241,6 @@ private fun AboutHero() {
                 .popOnChange(taps, peak = 1.12f)
                 .clip(CircleShape)
                 .clickable(onClickLabel = "Spin the seal") { taps++ },
-            spinMillis = 24_000,
         ) {
             BrandMark(Modifier.size(92.dp).graphicsLayer { rotationZ = spin })
         }

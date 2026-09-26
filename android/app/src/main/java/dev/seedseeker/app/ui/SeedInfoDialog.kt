@@ -42,12 +42,11 @@ import dev.seedseeker.app.model.ScoutItemMappings
 @Composable
 internal fun SeedInfoDialog(seed: String, mappings: ScoutItemMappings, onDismiss: () -> Unit) {
     var selected by remember(seed) { mutableStateOf<String?>(null) }
-    val (sigil, sigilColor) = remember(seed) { seedSigil(seed) }
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = {
-            ShapeBackdrop(sigil, sigilColor.copy(alpha = 0.25f), Modifier.size(52.dp)) {
-                Icon(Icons.Filled.Info, contentDescription = null, tint = sigilColor)
+            ShapeBackdrop(SeekerShapes.Seed, MaterialTheme.colorScheme.tertiaryContainer, Modifier.size(52.dp)) {
+                Icon(Icons.Filled.Info, contentDescription = null, tint = MaterialTheme.colorScheme.onTertiaryContainer)
             }
         },
         title = {

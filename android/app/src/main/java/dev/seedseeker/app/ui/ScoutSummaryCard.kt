@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -88,20 +89,7 @@ internal fun ScoutSummaryCard(
         shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
     ) {
-        val (sigil, sigilColor) = remember(world.seed) { seedSigil(world.seed) }
-        val sigilTurn = remember(world.seed) { (world.seed.hashCode() % 360).toFloat() }
         Layout(
-            // The seed's sigil, big and faint, pressed into the card like a watermark.
-            modifier = Modifier.drawBehind {
-                val side = 150.dp.toPx()
-                drawPolygon(
-                    sigil,
-                    Offset(size.width - side * 0.62f, size.height / 2f - side / 2f),
-                    side,
-                    sigilColor.copy(alpha = 0.09f),
-                    sigilTurn,
-                )
-            },
             content = {
                 Text(
                     world.seed,
@@ -244,10 +232,17 @@ private fun RequirementBadge(matches: ScoutMatches, progress: Float) {
                 color = content,
                 maxLines = 1,
             )
-            Box(Modifier.size(20.dp).graphicsLayer {
+            Box(Modifier.defaultMinSize(20.dp, 20.dp).graphicsLayer {
                 alpha = ((progress - 0.45f) / 0.55f).coerceIn(0f, 1f)
             }, contentAlignment = Alignment.Center) {
-                Icon(if (complete) Icons.Filled.Check else Icons.Filled.Info, contentDescription = null, tint = content)
+                // Collapsed, the badge keeps its count rather than a second info glyph
+                // beside the seed-information button.
+                if (complete) {
+                    Icon(Icons.Filled.Check, contentDescription = null, tint = content)
+                } else {
+                    Text("${matches.matchedSlots}/${matches.totalSlots}", style = MaterialTheme.typography.labelSmall,
+                        color = content, maxLines = 1, softWrap = false)
+                }
             }
         },
     ) { measurables, constraints ->

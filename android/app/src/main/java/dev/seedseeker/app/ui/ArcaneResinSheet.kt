@@ -56,12 +56,11 @@ fun ArcaneResinSheet(
             .navigationBarsPadding().padding(start = 20.dp, top = 12.dp, end = 20.dp, bottom = 20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // The resin glistens on a slowly turning violet sunburst.
+                // The resin sits on a violet sunburst.
                 ShapeBackdrop(
                     MaterialShapes.Sunny,
                     SpdSecret.copy(alpha = 0.22f),
                     Modifier.size(52.dp),
-                    spinMillis = 16_000,
                 ) {
                     ItemSprite(arcaneResinItem, modifier = Modifier.size(36.dp).popOnChange(automatic))
                 }
