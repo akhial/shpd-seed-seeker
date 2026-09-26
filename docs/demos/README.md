@@ -13,5 +13,10 @@
   control, floor picker, or hint paragraph. Recorded on the emulator and played
   at 2× speed, with the final result held for three seconds.
 
-The macOS demo was skipped at the requester's direction because the desktop was
-locked. The native app builds and its Swift tests pass.
+- [macOS](artifact-transmutations-macos.mp4): adjust the native artifact
+  transmutation limit, search for Ethereal Chains with up to four transmutations,
+  and inspect `AAA-AAA-AAA` with its target highlighted and four fixed drops
+  dimmed. Then re-scout with the competing Imp and crystal-chest rewards:
+  Sandals of Nature and Alchemist's Toolkit stay bright, while Spellbook and
+  Skeleton Key remain dim. Recorded from the current native SwiftUI build;
+  playback is 2× speed, with a cut between the two query setups.
