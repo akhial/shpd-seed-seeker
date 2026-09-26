@@ -8,7 +8,64 @@ there is no second implementation of the wire formats or query models.
 See the [iPhone screenshot gallery](../docs/ios/screenshots/README.md) for the
 Finder, requirement editors, search results, and Scout workflows.
 
-## Requirements
+## Installation
+
+Download `seed-seeker-<tag>-ios-arm64.ipa` from
+[GitHub Releases](https://github.com/akhial/shpd-seed-seeker/releases).
+It requires **iOS 27 or iPadOS 27 or later**. The IPA contains an unsigned device
+app: SideStore or AltStore Classic signs it with your own Apple Account before
+installing it. Opening the download directly in Files does not install the app.
+
+The app has been verified in the iOS 27 simulator. Installation through these
+tools on a physical device has not yet been verified; check their current
+compatibility and setup instructions for your OS version.
+
+### Set up a sideloading tool
+
+Choose one:
+
+- **SideStore:** follow its [prerequisites](https://docs.sidestore.io/docs/installation/prerequisites)
+  and [installation guide](https://docs.sidestore.io/docs/installation/install).
+  Initial setup needs a computer. Afterward, installation and refresh use Wi-Fi
+  with LocalDevVPN connected on your device.
+- **AltStore Classic:** follow the [macOS](https://faq.altstore.io/altstore-classic/how-to-install-altstore-macos)
+  or [Windows](https://faq.altstore.io/altstore-classic/how-to-install-altstore-windows)
+  setup guide. Keep [AltServer](https://faq.altstore.io/altstore-classic/altserver)
+  running on your computer, with the device on the same Wi-Fi network or
+  connected by USB when installing or refreshing apps.
+
+Both setup guides cover signing in with your Apple Account, trusting its
+developer profile, and enabling Developer Mode in iOS Settings.
+
+### Install Seed Seeker
+
+1. Save the release IPA to Files on your iPhone or iPad.
+2. Open SideStore or AltStore Classic and go to **My Apps**.
+3. Tap **+**, select the downloaded IPA, and wait for signing and installation
+   to finish.
+4. Open **Seed Seeker** from the Home Screen or App Library.
+
+### Refresh and update
+
+With a free Apple Account, sideloaded apps expire after **7 days**. Refresh
+both Seed Seeker and your sideloading tool before their timers expire. In
+SideStore, tap the remaining-days counter in **My Apps** while connected to
+Wi-Fi and LocalDevVPN. In AltStore Classic, use **Refresh All** while AltServer
+is reachable. Background refresh can help, but check the expiry timers yourself.
+See [SideStore's refresh steps](https://docs.sidestore.io/docs/installation/install)
+and [AltStore's refresh guide](https://faq.altstore.io/altstore-classic/your-altstore).
+
+To update Seed Seeker, download the newer release IPA and import it through
+**My Apps → +** again. Keep the existing app installed and use the same
+sideloading tool and Apple Account to preserve its local data. Refreshing renews
+the signature; it does not download a new Seed Seeker release. Deleting the app
+removes its local data.
+
+Free accounts normally allow three active sideloaded apps, including the
+sideloading tool. See [SideStore's account limits](https://docs.sidestore.io/docs/faq#what-limitations-does-sidestore-have)
+for details.
+
+## Build requirements
 
 - Xcode 27 with the iOS 27 SDK
 - An Apple Silicon Mac
@@ -51,12 +108,41 @@ Use `-derivedDataPath target/ios/device-build` to build a device app alongside
 simulator tests without sharing Xcode's build database. The script also accepts
 `-configuration Debug`; the Rust engine retains release optimizations.
 
+### Package an IPA
+
+From the repository root:
+
+```sh
+bash scripts/build-ios-app.sh device CODE_SIGNING_ALLOWED=NO
+bash scripts/package-ios-ipa.sh
+```
+
+The packaging script reads `dist/ios/device/Seed Seeker.app` and writes
+`dist/ios/SeedSeeker.ipa`. It rejects simulator and signed bundles. Pass an
+output path as its first argument to choose a different filename:
+
+```sh
+bash scripts/package-ios-ipa.sh dist/ios/seed-seeker-dev-ios-arm64.ipa
+```
+
+The [release workflow](../.github/workflows/release.yml) builds this device IPA
+and publishes `seed-seeker-<tag>-ios-arm64.ipa` alongside the other downloads
+when a `v*` tag is pushed. A manual workflow run builds downloadable Actions
+artifacts without publishing a GitHub release. CI needs no Apple signing
+certificate, provisioning profile, or signing secrets; users sign the IPA
+with their own accounts when installing it. The IPA is included in the release's
+`SHA256SUMS.txt` alongside the other assets.
+
+### Device behavior
+
 The bundle identifier is `dev.seedseeker.ios`. A device must run iOS 27 or later.
 The app registers `seedseeker://` query links and JSON result documents. Background
 search uses iOS continued-processing tasks; availability and execution remain
 subject to the system's scheduling decisions.
 
-When continued processing is unavailable (including Simulator), the app saves
+Background processing support can also depend on the sideloading tool's handling
+of the app's background-task registration. When continued processing is
+unavailable (including Simulator), the app saves
 a drained native search checkpoint before suspension and resumes on return.
 An explicit Cancel remains cancelled. Drafts, presets, retained seed recipes,
 and completed results also survive relaunches. The compact-chip and worker

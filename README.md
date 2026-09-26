@@ -53,12 +53,15 @@ Run searches directly at
 
 Binaries are published on the [GitHub Releases page](https://github.com/akhial/shpd-seed-seeker/releases).
 
+**iPhone and iPad:** [install the IPA with SideStore or AltStore Classic](ios/README.md#installation).
+
 | Asset | Platforms |
 | --- | --- |
 | `seed-seeker-cli-<tag>-<target>.tar.gz` / `.zip` | CLI for Linux (x86_64, arm64), macOS (Apple Silicon, Intel), and Windows (x86_64, arm64) |
 | `seed-seeker-cli-<tag>-<target>-avx2.tar.gz` / `.zip` | CLI built for AVX2 x86-64 machines |
 | `seed-seeker-<tag>-<arch>.AppImage` | Native Linux app (x86_64, arm64) |
 | `seed-seeker-<tag>-macos-arm64.dmg` | Native macOS app (Apple Silicon, macOS 14+) |
+| `seed-seeker-<tag>-ios-arm64.ipa` | Native iPhone and iPad app (iOS/iPadOS 27+, requires sideloading) |
 | `seed-seeker-<tag>-windows-<arch>.zip` | Native Windows app (x64, ARM64) |
 | `seed-seeker-<tag>-windows-x64-avx2.zip` | Windows app built for AVX2 x86-64 machines |
 | `seed-seeker-<tag>-android-arm64-v8a.apk` | Android app for ARM64 phones and tablets |
@@ -212,7 +215,7 @@ bash scripts/build-ios-app.sh simulator
 ```
 
 Open `ios/SeedSeeker.xcodeproj` to run in Xcode. See [ios/README.md](ios/README.md)
-for device signing, background search, and tests.
+for installation, IPA packaging, device signing, background search, and tests.
 
 ### macOS
 
