@@ -58,7 +58,20 @@ export interface MapContents {
   }[];
   traps: { cell: number; kind: string; hidden: boolean; active: boolean }[];
 }
+export interface MapItemTooltip {
+  cell: number;
+  label: string;
+  hidden: boolean;
+  items: {
+    name: string;
+    description: string;
+    image: number;
+    quantity: number;
+    deterministic: boolean;
+  }[];
+}
 export interface LevelMapDocument {
+  itemTooltips?: MapItemTooltip[];
   format: "seed-seeker-level-map";
   schemaVersion: 2 | 3;
   seed: string;

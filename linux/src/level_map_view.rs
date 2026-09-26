@@ -94,6 +94,7 @@ pub struct FloorMapView {
     zoom: Cell<f64>,
     pan: Cell<(f64, f64)>,
     pointer: Cell<Option<(f64, f64)>>,
+    dragging: Cell<bool>,
     start: Cell<Instant>,
     elapsed: Cell<u64>,
     dialog: RefCell<Option<adw::Dialog>>,
@@ -213,6 +214,7 @@ impl FloorMapView {
             zoom: Cell::new(1.0),
             pan: Cell::new((0.0, 0.0)),
             pointer: Cell::new(None),
+            dragging: Cell::new(false),
             start: Cell::new(Instant::now()),
             elapsed: Cell::new(0),
             dialog: RefCell::new(None),
@@ -248,6 +250,109 @@ impl FloorMapView {
                     view.retry.set_visible(true);
                     view.stack.set_visible_child_name("status");
                 }
+            }
+        });
+        view.area.set_has_tooltip(true);
+        view.area.connect_query_tooltip({
+            let weak = Rc::downgrade(&view);
+            move |_, x, y, keyboard, tooltip| {
+                let Some(view) = weak.upgrade() else {
+                    return false;
+                };
+                if view.dragging.get() {
+                    return false;
+                }
+                let map = view.map.borrow();
+                let Some(map) = map.as_ref() else {
+                    return false;
+                };
+                let w = f64::from(view.area.width());
+                let h = f64::from(view.area.height());
+                let scale = (w / f64::from(map.width * 16)).min(h / f64::from(map.height * 16))
+                    * view.zoom.get();
+                if scale <= 0.0 {
+                    return false;
+                }
+                let (pan_x, pan_y) =
+                    view.constrain_pan(view.area.width(), view.area.height(), scale, map);
+                let (x, y) = if keyboard {
+                    view.pointer
+                        .get()
+                        .map_or((w / 2.0, h / 2.0), |(x, y)| (x + w / 2.0, y + h / 2.0))
+                } else {
+                    (f64::from(x), f64::from(y))
+                };
+                let col = ((x - w / 2.0 - pan_x) / scale / 16.0 + f64::from(map.width) / 2.0)
+                    .floor() as i32;
+                let row = ((y - h / 2.0 - pan_y) / scale / 16.0 + f64::from(map.height) / 2.0)
+                    .floor() as i32;
+                if col < 0 || row < 0 || col >= map.width || row >= map.height {
+                    return false;
+                }
+                let cell = (row * map.width + col) as usize;
+                let Some(tip) = map
+                    .item_tooltips()
+                    .into_iter()
+                    .find(|tip| tip.cell == cell && (view.secrets.get() || !tip.hidden))
+                else {
+                    return false;
+                };
+                let body = gtk::Box::new(gtk::Orientation::Vertical, 8);
+                if !tip.label.is_empty() {
+                    body.append(
+                        &gtk::Label::builder()
+                            .label(&tip.label)
+                            .xalign(0.0)
+                            .css_classes(["dim-label", "caption"])
+                            .build(),
+                    );
+                }
+                for item in tip.items {
+                    let title = if item.quantity > 1 {
+                        format!("{}  ×{}", item.name, item.quantity)
+                    } else {
+                        item.name
+                    };
+                    let heading = gtk::Box::new(gtk::Orientation::Horizontal, 10);
+                    heading.append(&sprites::map_item_image(item.image, 32));
+                    heading.append(
+                        &gtk::Label::builder()
+                            .label(&title)
+                            .xalign(0.0)
+                            .wrap(true)
+                            .max_width_chars(42)
+                            .css_classes(["heading"])
+                            .build(),
+                    );
+                    body.append(&heading);
+                    if !item.deterministic {
+                        body.append(
+                            &gtk::Label::builder()
+                                .label("Varies with play")
+                                .xalign(0.0)
+                                .css_classes(["dim-label", "caption"])
+                                .build(),
+                        );
+                    }
+                    if !item.description.is_empty() {
+                        body.append(
+                            &gtk::Label::builder()
+                                .label(item.description)
+                                .xalign(0.0)
+                                .wrap(true)
+                                .max_width_chars(42)
+                                .build(),
+                        );
+                    }
+                }
+                tooltip.set_custom(Some(&body));
+                tooltip.set_tip_area(&gdk::Rectangle::new(
+                    (w / 2.0 + pan_x + f64::from(col * 16 - map.width * 8) * scale).floor() as i32,
+                    (h / 2.0 + pan_y + f64::from(row * 16 - map.height * 8) * scale).floor() as i32,
+                    (16.0 * scale).ceil() as i32,
+                    (16.0 * scale).ceil() as i32,
+                ));
+                true
             }
         });
         view.area.add_tick_callback({
@@ -308,6 +413,7 @@ impl FloorMapView {
             let weak = Rc::downgrade(&view);
             move |button| {
                 if let Some(view) = weak.upgrade() {
+                    view.hide_item();
                     view.secrets.set(button.is_active());
                     button.set_tooltip_text(Some(if button.is_active() {
                         "Hide secrets"
@@ -335,6 +441,8 @@ impl FloorMapView {
             let origin = Rc::clone(&drag_origin);
             move |_, _, _| {
                 if let Some(view) = weak.upgrade() {
+                    view.hide_item();
+                    view.dragging.set(true);
                     origin.set(view.pan.get());
                     view.area.grab_focus();
                 }
@@ -347,6 +455,14 @@ impl FloorMapView {
                     let (ox, oy) = drag_origin.get();
                     view.pan.set((ox + x, oy + y));
                     view.area.queue_draw();
+                }
+            }
+        });
+        drag.connect_drag_end({
+            let weak = Rc::downgrade(&view);
+            move |_, _, _| {
+                if let Some(view) = weak.upgrade() {
+                    view.dragging.set(false);
                 }
             }
         });
@@ -482,7 +598,13 @@ impl FloorMapView {
         self.zoom_at(factor, (0.0, 0.0));
     }
 
+    fn hide_item(&self) {
+        self.area.set_has_tooltip(false);
+        self.area.set_has_tooltip(true);
+    }
+
     fn zoom_at(&self, factor: f64, anchor: (f64, f64)) {
+        self.hide_item();
         let previous = self.zoom.get();
         self.zoom.set(if factor == 0.0 {
             1.0
@@ -579,6 +701,7 @@ impl FloorMapView {
 
     #[allow(clippy::too_many_lines)] // One request's asynchronous state and native controls.
     fn request(self: &Rc<Self>) {
+        self.hide_item();
         let generation = self.generation.get() + 1;
         self.generation.set(generation);
         self.map.replace(None);

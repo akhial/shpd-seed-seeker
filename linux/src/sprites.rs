@@ -596,6 +596,29 @@ pub fn arcane_resin_image() -> gtk::Widget {
     area.upcast()
 }
 
+/// A map item's seeded appearance, without a catalog-derived identity glyph.
+pub fn map_item_image(index: u16, size: i32) -> gtk::Widget {
+    let area = gtk::DrawingArea::builder()
+        .content_width(size)
+        .content_height(size)
+        .valign(gtk::Align::Center)
+        .halign(gtk::Align::Center)
+        .accessible_role(gtk::AccessibleRole::Presentation)
+        .build();
+    if let Some(atlas) = atlas() {
+        area.set_draw_func(move |area, context, width, height| {
+            let factor = area.scale_factor().max(1);
+            context.scale(1.0 / f64::from(factor), 1.0 / f64::from(factor));
+            if let Some(art) = atlas.art(index, size * factor) {
+                let x = f64::from(width * factor - art.width()) / 2.0;
+                let y = f64::from(height * factor - art.height()) / 2.0;
+                let _ = blit(context, &art, x.round(), y.round());
+            }
+        });
+    }
+    area.upcast()
+}
+
 pub fn item_image_sized(sprite: ItemSprite, glow: Option<Glow>, size: i32) -> gtk::Widget {
     let definition = sprite.definition;
     let Some(atlas) = atlas() else {

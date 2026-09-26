@@ -62,6 +62,26 @@ public struct LevelMapDocument: Decodable, Sendable {
     public let branches: [Branch]
     public let assets: [Asset]
     public let scene: Scene
+    public let itemTooltips: [ItemTooltip]?
+
+    public struct ItemTooltip: Decodable, Sendable {
+        public let cell: Int
+        public let label: String
+        public let hidden: Bool
+        public let items: [TooltipItem]
+    }
+    public struct TooltipItem: Decodable, Sendable {
+        public let name: String
+        public let description: String
+        public let image: Int
+        public let quantity: Int
+        public let deterministic: Bool
+    }
+    public func itemAt(x: Double, y: Double, secrets: Bool) -> ItemTooltip? {
+        guard x >= 0, y >= 0, x < Double(pixelWidth), y < Double(pixelHeight) else { return nil }
+        let cell = Int(y / Double(scene.tileSize)) * width + Int(x / Double(scene.tileSize))
+        return itemTooltips?.first { $0.cell == cell && (secrets || !$0.hidden) }
+    }
 
     public var secretCount: Int { secretRooms.count + secretDoors.count + secretTraps.count }
     public var pixelWidth: Int { width * scene.tileSize }

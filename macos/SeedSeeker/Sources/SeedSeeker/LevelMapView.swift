@@ -265,9 +265,52 @@ private struct NativeLevelMap: NSViewRepresentable {
 /// without drawing a focus border over the map.
 @MainActor final class MapViewport: NSView {
     private(set) var request: LevelMapRequest?
+    private var itemCard: NSScrollView?
+    private(set) var inspectedCell: Int?
+    private var tracking: NSTrackingArea?
+    private var dragStart: CGPoint?
+    private var didDrag = false
+    private func hideItem() { itemCard?.removeFromSuperview(); itemCard = nil; inspectedCell = nil }
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let tracking { removeTrackingArea(tracking) }
+        let area = NSTrackingArea(rect: .zero, options: [.activeInKeyWindow, .inVisibleRect, .mouseMoved, .mouseEnteredAndExited], owner: self)
+        addTrackingArea(area); tracking = area
+    }
+    func inspectItem(at point: CGPoint) {
+        guard let renderer else { hideItem(); return }
+        if let itemCard, itemCard.frame.insetBy(dx: -18, dy: -18).contains(point) { return }
+        constrain()
+        let scale = fitScale * zoom
+        let tip = renderer.map.itemAt(x: (point.x - bounds.midX - pan.x) / scale + CGFloat(renderer.map.pixelWidth) / 2,
+                                      y: (point.y - bounds.midY - pan.y) / scale + CGFloat(renderer.map.pixelHeight) / 2, secrets: secrets)
+        guard tip?.cell != inspectedCell else { return }
+        hideItem()
+        guard let tip else { return }
+        inspectedCell = tip.cell
+        let width = max(1, min(310, bounds.width - 16))
+        let content = NSHostingView(rootView: MapItemCard(tip: tip).frame(width: width))
+        let height = content.fittingSize.height
+        content.frame = NSRect(x: 0, y: 0, width: width, height: height)
+        let card = NSScrollView()
+        card.documentView = content; card.hasVerticalScroller = true
+        card.drawsBackground = false; card.wantsLayer = true
+        card.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
+        card.layer?.cornerRadius = 10; card.layer?.borderWidth = 1
+        card.layer?.borderColor = NSColor.separatorColor.cgColor
+        let visibleHeight = max(1, min(height, min(320, bounds.height - 16)))
+        let x = max(8, min(point.x + 16, bounds.width - width - 8))
+        let y = max(8, min(point.y + 16 + visibleHeight < bounds.height ? point.y + 16 : point.y - visibleHeight - 16, bounds.height - visibleHeight - 8))
+        card.frame = NSRect(x: x, y: y, width: width, height: visibleHeight)
+        addSubview(card); itemCard = card
+    }
+    override func mouseMoved(with event: NSEvent) { inspectItem(at: convert(event.locationInWindow, from: nil)) }
+    override func mouseExited(with event: NSEvent) { hideItem() }
+    override func setFrameSize(_ newSize: NSSize) { if frame.size != newSize { hideItem() }; super.setFrameSize(newSize) }
+    override func viewDidMoveToWindow() { super.viewDidMoveToWindow(); if window == nil { hideItem() } }
     private var renderer: MapRenderer?
     var hasMap: Bool { renderer != nil }
-    var secrets = false
+    var secrets = false { didSet { if oldValue != secrets { hideItem() } } }
     var elapsed: Double = 0
     var clock = LevelMapClock(now: 0)
     private(set) var zoom: CGFloat = 1
@@ -278,15 +321,15 @@ private struct NativeLevelMap: NSViewRepresentable {
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         focusRingType = .none
-        toolTip = "Scroll or pinch to zoom. Drag to pan. Press 0 to fit the map."
         setAccessibilityElement(true)
         setAccessibilityRole(.image)
-        setAccessibilityHelp("Scroll or pinch to zoom. Drag or use arrow keys to pan. Press zero to fit the map.")
+        setAccessibilityHelp("Scroll or pinch to zoom. Drag or use arrow keys to pan. Press zero to fit the map. Press I to inspect items, Escape to dismiss.")
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     func update(bundle: LevelMapBundle?, request: LevelMapRequest, time: Double) {
         let sceneChanged = self.request != request
+        if sceneChanged || bundle == nil { hideItem() }
         if self.request?.hasSameLocation(as: request) != true {
             zoom = 1; pan = .zero
         }
@@ -313,6 +356,7 @@ private struct NativeLevelMap: NSViewRepresentable {
         pan.x = min(x, max(-x, pan.x)); pan.y = min(y, max(-y, pan.y))
     }
     private func zoom(to value: CGFloat, at anchor: CGPoint = .zero) {
+        hideItem()
         let next = min(8, max(1, value)), ratio = next / zoom
         pan = CGPoint(x: anchor.x - (anchor.x - pan.x) * ratio,
                       y: anchor.y - (anchor.y - pan.y) * ratio)
@@ -326,14 +370,40 @@ private struct NativeLevelMap: NSViewRepresentable {
         zoom(to: zoom * exp(-event.scrollingDeltaY * (event.hasPreciseScrollingDeltas ? 0.008 : 0.08)), at: anchor(event))
     }
     override func magnify(with event: NSEvent) { zoom(to: zoom * (1 + event.magnification), at: anchor(event)) }
-    override func mouseDown(with event: NSEvent) { window?.makeFirstResponder(self) }
+    override func mouseDown(with event: NSEvent) {
+        hideItem(); window?.makeFirstResponder(self)
+        dragStart = convert(event.locationInWindow, from: nil); didDrag = false
+    }
+    override func mouseUp(with event: NSEvent) {
+        if !didDrag { inspectItem(at: convert(event.locationInWindow, from: nil)) }
+        dragStart = nil
+    }
     override func mouseDragged(with event: NSEvent) {
+        if let dragStart {
+            let point = convert(event.locationInWindow, from: nil)
+            didDrag = didDrag || hypot(point.x - dragStart.x, point.y - dragStart.y) > 4
+        }
+        hideItem()
         pan.x += event.deltaX; pan.y += event.deltaY; constrain(); needsDisplay = true
     }
     override func keyDown(with event: NSEvent) {
         guard event.modifierFlags.intersection([.command, .control, .option]).isEmpty else {
             super.keyDown(with: event); return
         }
+        if event.keyCode == 53 && itemCard != nil { hideItem(); return }
+        if event.charactersIgnoringModifiers?.lowercased() == "i", let map = renderer?.map {
+            let tips = (map.itemTooltips ?? []).filter { secrets || !$0.hidden }
+            if !tips.isEmpty {
+                let index = inspectedCell.flatMap { cell in tips.firstIndex { $0.cell == cell } }.map { ($0 + 1) % tips.count } ?? 0
+                let tip = tips[index]
+                zoom = 1; pan = .zero; hideItem(); needsDisplay = true
+                let scale = fitScale
+                inspectItem(at: CGPoint(x: bounds.midX + (CGFloat(tip.cell % map.width) + 0.5) * 16 * scale - CGFloat(map.pixelWidth) * scale / 2,
+                                        y: bounds.midY + (CGFloat(tip.cell / map.width) + 0.5) * 16 * scale - CGFloat(map.pixelHeight) * scale / 2))
+            }
+            return
+        }
+        hideItem()
         switch event.charactersIgnoringModifiers {
         case "+", "=": zoom(to: zoom * 1.5)
         case "-": zoom(to: zoom / 1.5)
@@ -359,6 +429,27 @@ private struct NativeLevelMap: NSViewRepresentable {
         context.interpolationQuality = .none
         renderer.draw(in: context, elapsed: elapsed, secrets: secrets)
         context.restoreGState()
+    }
+}
+
+private struct MapItemCard: View {
+    let tip: LevelMapDocument.ItemTooltip
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if !tip.label.isEmpty { Text(tip.label).font(.caption).foregroundStyle(.secondary) }
+            ForEach(Array(tip.items.enumerated()), id: \.offset) { index, item in
+                if index > 0 { Divider() }
+                HStack(spacing: 10) {
+                    if let image = SpriteAtlas.bundled?.composedSprite(spriteIndex: item.image, pointSize: 32, layer: .art) {
+                        Image(decorative: image, scale: CGFloat(SpriteAtlas.pixelScale)).interpolation(.none)
+                    }
+                    Text(item.name).font(.headline)
+                    if item.quantity > 1 { Spacer(); Text("×\(item.quantity)").foregroundStyle(.secondary) }
+                }
+                if !item.deterministic { Text("Varies with play").font(.caption).foregroundStyle(.secondary) }
+                if !item.description.isEmpty { Text(item.description).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
+            }
+        }.padding(14).frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

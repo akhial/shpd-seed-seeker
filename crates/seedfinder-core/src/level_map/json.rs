@@ -142,5 +142,6 @@ pub fn document(map: &LevelMap) -> Value {
         "assets": assets::ASSETS.iter().filter(|asset| map.scene.sprites.iter().flat_map(|sprite| &sprite.frames).flatten().chain(map.scene.emitters.iter().chain(&map.scene.concealed_emitters).map(|e| &e.image)).any(|draw| matches!(draw, super::MapDraw::Blit {asset: id,..} if *id == asset.id))).collect::<Vec<_>>(),
         "scene": map.scene,
         "contents": map.contents,
+        "itemTooltips": map.item_tooltips(),
     })
 }

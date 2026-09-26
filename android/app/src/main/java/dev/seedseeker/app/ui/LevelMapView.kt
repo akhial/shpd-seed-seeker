@@ -14,6 +14,16 @@ import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.View
+import android.view.KeyEvent
+import android.widget.FrameLayout
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.TextView
+import android.widget.ImageView
+import android.graphics.Bitmap
+import android.graphics.drawable.BitmapDrawable
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -263,7 +273,86 @@ private fun MapCanvas(bundle: LevelMapBundle?, request: LevelMapRequest, secrets
 }
 
 /** Android gestures, accessibility scrolling and animation lifetime stay native. */
-internal class NativeLevelMapView(context: Context) : View(context) {
+internal class NativeLevelMapView(context: Context) : FrameLayout(context) {
+    private var inspectedCell: Int? = null
+    private var itemCard: ScrollView? = null
+    private fun hideItem() { itemCard?.let(::removeView); itemCard = null; inspectedCell = null }
+    internal fun inspectItem(x: Float, y: Float) {
+        val margin = 18 * resources.displayMetrics.density
+        itemCard?.let { if (x >= it.left - margin && x <= it.right + margin && y >= it.top - margin && y <= it.bottom + margin) return }
+        val map = bundle?.map ?: return
+        val scale = fit() * zoom
+        if (scale <= 0) return
+        val tip = map.itemAt((x - width / 2f - panX) / scale + map.width * map.tileSize / 2f,
+            (y - height / 2f - panY) / scale + map.height * map.tileSize / 2f, secrets)
+        if (tip?.cell == inspectedCell) return
+        hideItem()
+        if (tip == null) return
+        inspectedCell = tip.cell
+        val density = resources.displayMetrics.density
+        fun dp(value: Int) = (value * density).toInt()
+        val body = LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(14), dp(12), dp(14), dp(12))
+        }
+        fun text(value: String, size: Float, color: Int, bold: Boolean = false) {
+            body.addView(TextView(context).apply {
+                this.text = value; textSize = size; setTextColor(color)
+                if (bold) setTypeface(typeface, Typeface.BOLD)
+                setPadding(0, dp(4), 0, dp(4))
+            })
+        }
+        if (tip.label.isNotEmpty()) text(tip.label, 11f, 0xFFC5A97B.toInt(), true)
+        for (item in tip.items) {
+            val heading = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }
+            bundle?.textures?.get("items.png")?.let { atlas ->
+                val sx = item.image % 16 * 16
+                val sy = item.image / 16 * 16
+                if (sx + 16 <= atlas.width && sy + 16 <= atlas.height) {
+                    heading.addView(ImageView(context).apply {
+                        setImageDrawable(BitmapDrawable(resources, Bitmap.createBitmap(atlas, sx, sy, 16, 16)).apply { isFilterBitmap = false })
+                        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
+                    }, LinearLayout.LayoutParams(dp(32), dp(32)).apply { marginEnd = dp(10) })
+                }
+            }
+            heading.addView(TextView(context).apply {
+                text = item.name + if (item.quantity > 1) "  ×${item.quantity}" else ""
+                textSize = 14f; setTextColor(AndroidColor.WHITE); setTypeface(typeface, Typeface.BOLD)
+            }, LinearLayout.LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
+            body.addView(heading)
+            if (!item.deterministic) text("Varies with play", 11f, 0xFFC5A97B.toInt())
+            if (item.description.isNotEmpty()) text(item.description, 12f, 0xFFBDC0C6.toInt())
+        }
+        val cardWidth = minOf(dp(310), width - dp(16)).coerceAtLeast(1)
+        val card = ScrollView(context).apply {
+            addView(body)
+            elevation = dp(8).toFloat()
+            background = GradientDrawable().apply {
+                setColor(0xFF181B20.toInt()); cornerRadius = dp(10).toFloat(); setStroke(dp(1), 0xFF655339.toInt())
+            }
+            androidx.core.view.ViewCompat.setAccessibilityPaneTitle(this, tip.items.first().name)
+        }
+        card.measure(MeasureSpec.makeMeasureSpec(cardWidth, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(minOf(dp(320), height - dp(16)).coerceAtLeast(1), MeasureSpec.AT_MOST))
+        val cardHeight = card.measuredHeight
+        val left = (x + dp(16)).toInt().coerceIn(dp(8), maxOf(dp(8), width - cardWidth - dp(8)))
+        val top = (if (y + dp(16) + cardHeight < height) y + dp(16) else y - cardHeight - dp(16)).toInt().coerceIn(dp(8), maxOf(dp(8), height - cardHeight - dp(8)))
+        addView(card, LayoutParams(cardWidth, cardHeight).apply { leftMargin = left; topMargin = top })
+        itemCard = card
+    }
+    override fun onHoverEvent(event: MotionEvent): Boolean {
+        when (event.actionMasked) {
+            MotionEvent.ACTION_HOVER_ENTER, MotionEvent.ACTION_HOVER_MOVE -> inspectItem(event.x, event.y)
+            MotionEvent.ACTION_HOVER_EXIT -> {
+                val card = itemCard
+                if (card == null || event.x < card.left || event.x > card.right || event.y < card.top || event.y > card.bottom) hideItem()
+            }
+        }
+        return true
+    }
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_ESCAPE && itemCard != null) { hideItem(); return true }
+        return super.onKeyDown(keyCode, event)
+    }
     private var renderer: LevelMapRenderer? = null
     private var bundle: LevelMapBundle? = null
     private var secrets = false
@@ -292,6 +381,7 @@ internal class NativeLevelMapView(context: Context) : View(context) {
     })
     private val gestures = GestureDetector(context, object : GestureDetector.SimpleOnGestureListener() {
         override fun onDown(e: MotionEvent) = true
+        override fun onSingleTapConfirmed(e: MotionEvent): Boolean { if (!multiTouch) inspectItem(e.x, e.y); return true }
         override fun onDoubleTap(e: MotionEvent): Boolean {
             zoomAt(if (zoom > 1f) 1f else 2.5f, e.x - width / 2f, e.y - height / 2f)
             return true
@@ -307,7 +397,7 @@ internal class NativeLevelMapView(context: Context) : View(context) {
     private var downY = 0f
     private var multiTouch = false
 
-    init { isFocusable = true; importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES }
+    init { setWillNotDraw(false); isFocusable = true; importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_YES }
 
     fun bind(next: LevelMapBundle?, request: LevelMapRequest, reveal: Boolean, full: Boolean, animated: Boolean, onNavigate: (Int) -> Unit) {
         expanded = full
@@ -317,6 +407,7 @@ internal class NativeLevelMapView(context: Context) : View(context) {
         this.request = request
         invalidate()
         if (next === bundle && secrets == reveal) return
+        hideItem()
         val newMap = next !== bundle
         renderer?.close()
         renderer = next?.let { LevelMapRenderer(it, reveal) }
@@ -326,9 +417,10 @@ internal class NativeLevelMapView(context: Context) : View(context) {
         constrain()
         invalidate()
     }
-    fun release() { renderer?.close(); renderer = null; bundle = null }
-    fun reset() { zoom = 1f; panX = 0f; panY = 0f; invalidate() }
+    fun release() { hideItem(); renderer?.close(); renderer = null; bundle = null }
+    fun reset() { hideItem(); zoom = 1f; panX = 0f; panY = 0f; invalidate() }
     private fun zoomAt(next: Float, x: Float, y: Float) {
+        hideItem()
         val clamped = next.coerceIn(1f, 8f)
         val ratio = clamped / zoom
         panX = x - (x - panX) * ratio
@@ -347,7 +439,7 @@ internal class NativeLevelMapView(context: Context) : View(context) {
         val limitY = ((scene.height * fit() * zoom - height) / 2).coerceAtLeast(0f)
         panX = panX.coerceIn(-limitX, limitX); panY = panY.coerceIn(-limitY, limitY)
     }
-    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) { constrain() }
+    override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) { hideItem(); constrain() }
     override fun onDraw(canvas: Canvas) {
         // Compose's AndroidView does not clip drawing to its layout bounds.
         // Keep drawColor and zoomed particles inside the map, below the toolbar.
@@ -371,6 +463,7 @@ internal class NativeLevelMapView(context: Context) : View(context) {
         updateMotion(); invalidate()
     }
     override fun onDetachedFromWindow() {
+        hideItem()
         context.contentResolver.unregisterContentObserver(durationObserver)
         super.onDetachedFromWindow()
     }
@@ -380,6 +473,7 @@ internal class NativeLevelMapView(context: Context) : View(context) {
     override fun onTouchEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {
             MotionEvent.ACTION_DOWN -> {
+                hideItem()
                 downX = event.x; downY = event.y; multiTouch = false
                 parent?.requestDisallowInterceptTouchEvent(expanded || zoom > 1f)
             }

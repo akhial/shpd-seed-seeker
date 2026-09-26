@@ -284,3 +284,108 @@ it("keeps inline and expanded floors and viewports independent, including trinke
   expect(viewport()).not.toBe(inline);
   expect(viewport().classList.contains("d1-map-zoomed")).toBe(false);
 });
+
+async function finishWithItems() {
+  const data = bundle();
+  data.map.itemTooltips = [
+    {
+      cell: 528,
+      label: "Chest",
+      hidden: false,
+      items: [
+        {
+          name: "Potion of healing",
+          description:
+            "This elixir will rapidly restore your health and instantly cure many ailments.",
+          image: 352,
+          quantity: 2,
+          deterministic: true,
+        },
+        {
+          name: "Gold",
+          description: "A pile of gold coins.",
+          image: 18,
+          quantity: 30,
+          deterministic: true,
+        },
+      ],
+    },
+    {
+      cell: 529,
+      label: "",
+      hidden: true,
+      items: [
+        {
+          name: "Ring of might",
+          description: "This ring enhances the physical traits of the wearer.",
+          image: 224,
+          quantity: 1,
+          deterministic: true,
+        },
+      ],
+    },
+  ];
+  await act(async () => pending.get(mapRequestJson({ ...props, branch: 0 }))!.resolve(data));
+  const view = viewport();
+  vi.spyOn(view, "getBoundingClientRect").mockReturnValue({
+    left: 0,
+    top: 0,
+    width: 600,
+    height: 350,
+  } as DOMRect);
+  view.setPointerCapture = vi.fn();
+}
+async function pointer(type: string, x: number, y: number, pointerType = "mouse") {
+  await act(async () =>
+    viewport().dispatchEvent(
+      new PointerEvent(type, {
+        bubbles: true,
+        pointerId: 1,
+        clientX: x,
+        clientY: y,
+        pointerType,
+        button: 0,
+      }),
+    ),
+  );
+}
+it("inspects stacks by hover and keyboard, dismisses with Escape, and respects secrets", async () => {
+  await render();
+  await finishWithItems();
+  await pointer("pointermove", 305, 180);
+  expect(host.querySelector('[role="tooltip"]')?.textContent).toContain("Potion of healing×2");
+  expect(host.querySelector('[role="tooltip"]')?.textContent).toContain("Gold×30");
+  expect(host.querySelector('[role="tooltip"]')?.textContent).toContain("This elixir");
+  await key("Escape");
+  expect(host.querySelector('[role="tooltip"]')).toBeNull();
+  await pointer("pointermove", 306, 181);
+  expect(host.querySelector('[role="tooltip"]')).toBeNull();
+  expect(host.querySelector('button[aria-label="Ring of might"]')).toBeNull();
+  await act(async () =>
+    host.querySelector<HTMLButtonElement>('button[aria-label="Potion of healing, Gold"]')!.focus(),
+  );
+  expect(host.querySelector('[role="tooltip"]')).not.toBeNull();
+  await key("+");
+  expect(host.querySelector('[role="tooltip"]')).toBeNull();
+  await click("Secrets");
+  expect(host.querySelector('button[aria-label="Ring of might"]')).not.toBeNull();
+});
+it("inspects a touch tap but never a drag or canceled pointer, and clears stale map data", async () => {
+  await render();
+  await finishWithItems();
+  await pointer("pointerdown", 305, 180, "touch");
+  await pointer("pointerup", 305, 180, "touch");
+  expect(host.querySelector('[role="tooltip"]')).not.toBeNull();
+  await pointer("pointerdown", 305, 180, "touch");
+  await pointer("pointermove", 325, 180, "touch");
+  await pointer("pointerup", 305, 180, "touch");
+  expect(host.querySelector('[role="tooltip"]')).toBeNull();
+  await pointer("pointerdown", 305, 180, "touch");
+  await pointer("pointercancel", 305, 180, "touch");
+  expect(host.querySelector('[role="tooltip"]')).toBeNull();
+  await pointer("pointermove", 305, 180);
+  expect(host.querySelector('[role="tooltip"]')).not.toBeNull();
+  await render("mimic_tooth");
+  expect(host.querySelector('[role="tooltip"]')).toBeNull();
+  expect(host.querySelector(".d1-map-item-target")).toBeNull();
+});

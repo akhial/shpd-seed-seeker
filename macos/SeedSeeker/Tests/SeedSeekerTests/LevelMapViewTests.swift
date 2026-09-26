@@ -18,6 +18,31 @@ final class LevelMapViewTests: XCTestCase {
         viewport.keyDown(with: event)
     }
 
+    func testItemInspectionRespectsCoordinatesAndClearsOnSecretsAndReload() async throws {
+        let request = request(1)
+        let bundle = try await LevelMapClient.shared.load(request)
+        let map = bundle.document
+        let tip = try XCTUnwrap(map.itemTooltips?.first { !$0.hidden })
+        XCTAssertFalse(tip.items[0].description.isEmpty)
+        let x = Double(tip.cell % map.width) * 16 + 8
+        let y = Double(tip.cell / map.width) * 16 + 8
+        XCTAssertEqual(map.itemAt(x: x, y: y, secrets: false)?.cell, tip.cell)
+        XCTAssertNil(map.itemAt(x: -1, y: y, secrets: true))
+        let viewport = MapViewport(frame: NSRect(x: 0, y: 0, width: map.pixelWidth + 16, height: map.pixelHeight + 16))
+        viewport.update(bundle: bundle, request: request, time: 0)
+        viewport.inspectItem(at: CGPoint(x: x + 8, y: y + 8))
+        XCTAssertEqual(viewport.inspectedCell, tip.cell)
+        XCTAssertEqual(viewport.subviews.count, 1)
+        viewport.secrets = true
+        XCTAssertNil(viewport.inspectedCell)
+        try press("i", in: viewport)
+        XCTAssertNotNil(viewport.inspectedCell)
+        try press("+", in: viewport)
+        XCTAssertNil(viewport.inspectedCell)
+        viewport.update(bundle: nil, request: request, time: 10)
+        XCTAssertTrue(viewport.subviews.isEmpty)
+    }
+
     func testTrinketReloadKeepsZoomAndPanThroughLoadingAndRemoval() async throws {
         let original = request(), selected = request(trinket: "mimic_tooth")
         let map = try await LevelMapClient.shared.load(original)

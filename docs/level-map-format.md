@@ -386,3 +386,24 @@ heaps, generation-time actor inventory, sleeping states, plants, trap placement,
 and blob locations. Regenerate with `python3 tooling/oracle-4.0/generate-map-contents.py`.
 Item atlas bounds are exported from the evaluated official `ItemSpriteSheet.film`
 using `ItemFilmOracle`, including loop assignments and later overrides.
+
+### Item inspection
+
+The optional `itemTooltips` array is shared by web, Android, macOS, Windows, and
+GTK. It adds metadata to schema v3 without changing scene rendering. Each entry
+has `cell`, `label` (container/inventory owner, empty for loose items), `hidden`
+(inside a concealed secret room), and `items`. Each item has `name`,
+`description`, `image` (the run's item atlas cell), `quantity`, and `deterministic`.
+Clients must suppress hidden entries while Secrets is off, invert the current
+map transform when hit testing, and clear inspection on navigation or gestures.
+Older documents without this array remain renderable without inspection.
+
+Names and static descriptions come from the original English Java messages at
+v4.0.0 commit `2bb34a4e91d29c8785a9363cad6ddfe5122b1d4f`, under GPL-3.0-or-later
+(see `NOTICE`). Regenerate with `python3 scripts/generate-item-text.py`.
+The generated file records each source SHA-256. Game emphasis markers are
+removed; hero/depth-dependent formatted sentences are omitted. No damage,
+upgrade, curse, or future-drop stats are inferred. Seeds include the original
+planting instruction and plant description, and exotic consumables resolve
+through the game's own regular-to-exotic mapping. Unknown future types retain
+a readable name, and runtime-dependent items are marked `Varies with play`.

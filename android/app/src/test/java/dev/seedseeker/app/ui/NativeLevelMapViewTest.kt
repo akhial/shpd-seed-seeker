@@ -17,6 +17,30 @@ import org.robolectric.annotation.GraphicsMode
 @Config(sdk = [35])
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class NativeLevelMapViewTest {
+    @Test fun inspectionUsesOriginalTextHonorsSecretsAndClearsWhenMapChanges() = runBlocking {
+        val request = LevelMapRequest("AAA-AAA-AAA", 1, 0, null)
+        val bundle = LevelMaps.load(request)
+        val map = bundle.map
+        val tip = map.itemTooltips.first { !it.hidden }
+        assertTrue(tip.items.first().description.isNotEmpty())
+        val x = (tip.cell % map.width + .5f) * 16
+        val y = (tip.cell / map.width + .5f) * 16
+        assertEquals(tip, map.itemAt(x, y, false))
+        assertNull(map.itemAt(-1f, y, true))
+        val hidden = tip.copy(hidden = true)
+        val concealed = map.copy(itemTooltips = listOf(hidden))
+        assertNull(concealed.itemAt(x, y, false))
+        assertEquals(hidden, concealed.itemAt(x, y, true))
+        val view = NativeLevelMapView(ApplicationProvider.getApplicationContext())
+        view.layout(0, 0, map.width * 16, map.height * 16)
+        view.bind(bundle, request, false, true, true) {}
+        view.inspectItem(x, y)
+        assertEquals(1, view.childCount)
+        view.bind(null, request.copy(trinket = "mimic_tooth"), false, true, true) {}
+        assertEquals(0, view.childCount)
+        view.release()
+    }
+
     @Test fun viewportSurvivesLoadingRetryAndTrinketsButFitsNewLocations() = runBlocking {
         val request = LevelMapRequest("AAA-AAA-AAA", 12, 0, null)
         val original = LevelMaps.load(request)

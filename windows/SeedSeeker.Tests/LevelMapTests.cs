@@ -7,6 +7,23 @@ namespace SeedSeeker.Tests;
 public sealed class LevelMapTests
 {
     [Fact]
+    public void ItemInspectionDecodesOriginalDescriptionsAndRejectsHiddenCellsAndMargins()
+    {
+        var map = NativeEngine.LevelMap(LevelMapDocument.Request("AAA-AAA-AAA", 1, 0, new QuerySettings(), "none"));
+        var tip = map.ItemTooltips.First(tip => !tip.Hidden);
+        Assert.NotEmpty(tip.Items[0].Description);
+        var x = tip.Cell % map.Width * 16 + 8;
+        var y = tip.Cell / map.Width * 16 + 8;
+        Assert.Same(tip, map.ItemAt(x, y, false));
+        Assert.Null(map.ItemAt(-1, y, true));
+        Assert.Null(map.ItemAt(map.Width * 16, y, true));
+        var hidden = tip with { Hidden = true };
+        var concealed = new LevelMapDocument { Width = map.Width, Height = map.Height, Scene = map.Scene, ItemTooltips = [hidden] };
+        Assert.Null(concealed.ItemAt(x, y, false));
+        Assert.Same(hidden, concealed.ItemAt(x, y, true));
+    }
+
+    [Fact]
     public void GardenShaftsScaleWidthAndHeightIndependently()
     {
         var map = NativeEngine.LevelMap(LevelMapDocument.Request("AAA-AAA-AAA", 4, 0, new QuerySettings(), "none"));

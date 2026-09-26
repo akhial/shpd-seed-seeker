@@ -94,13 +94,22 @@ internal data class MapEmitter(
 internal data class MapBranch(val branch: Int, val kind: String) {
     val label get() = if (kind == "imp_vault") "Imp Vault" else "Blacksmith Mine"
 }
+internal data class MapTooltipItem(val name: String, val description: String, val image: Int, val quantity: Int, val deterministic: Boolean)
+internal data class MapItemTooltip(val cell: Int, val label: String, val hidden: Boolean, val items: List<MapTooltipItem>)
 internal data class LevelMapDocument(
     val seed: String, val depth: Int, val branch: Int, val kind: String,
     val revision: String, val width: Int, val height: Int, val tileSize: Int,
     val secretCount: Int, val branches: List<MapBranch>, val assets: List<String>,
     val sprites: List<MapSprite>, val layers: List<MapLayer>, val concealedLayers: List<MapLayer>,
     val emitters: List<MapEmitter>, val concealedEmitters: List<MapEmitter>,
-)
+    val itemTooltips: List<MapItemTooltip> = emptyList(),
+) {
+    fun itemAt(x: Float, y: Float, secrets: Boolean): MapItemTooltip? {
+        if (x < 0 || y < 0 || x >= width * tileSize || y >= height * tileSize) return null
+        val cell = (y / tileSize).toInt() * width + (x / tileSize).toInt()
+        return itemTooltips.firstOrNull { it.cell == cell && (secrets || !it.hidden) }
+    }
+}
 internal data class LevelMapBundle(val map: LevelMapDocument, val textures: Map<String, Bitmap>)
 
 /** All geometry, objects and hazard schedules come from the scene, never loot metadata. */
@@ -136,6 +145,12 @@ internal object LevelMapCodec {
             root.getJSONArray("assets").objects { it.getString("id") },
             sprites, layers("layers"), layers("concealedLayers"),
             scene.getJSONArray("emitters").objects(::emitter), scene.getJSONArray("concealedEmitters").objects(::emitter),
+            root.optJSONArray("itemTooltips")?.objects { tip ->
+                MapItemTooltip(tip.getInt("cell"), tip.optString("label"), tip.optBoolean("hidden"),
+                    tip.getJSONArray("items").objects { item ->
+                        MapTooltipItem(item.getString("name"), item.optString("description"), item.getInt("image"), item.getInt("quantity"), item.optBoolean("deterministic", true))
+                    })
+            } ?: emptyList(),
         )
     }
 
