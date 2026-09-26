@@ -146,6 +146,14 @@ public sealed record MapParticleState(double X, double Y, double Scale, double S
 /// <summary>Choice letters and conflicts follow the jointly obtainable engine match.</summary>
 public static class ScoutChoices
 {
+    // Scout items contain fixed dungeon loot, not runtime drops or transmutation outcomes.
+    public static IReadOnlySet<string> AvailableArtifacts(IReadOnlyList<ScoutItem> items, IReadOnlySet<int> matches)
+    {
+        var choices = Matched(items, matches);
+        return items.Select((item, index) => (item, index))
+            .Where(x => x.item.Item.Kind == ItemKind.Artifact && !Dimmed(x.item, matches.Contains(x.index), choices))
+            .Select(x => x.item.Item.Id).ToHashSet();
+    }
     public static string Letter(int group) => ((char)('A' + group % 26)).ToString();
     public static IReadOnlyDictionary<int, ulong> Matched(IReadOnlyList<ScoutItem> items, IReadOnlySet<int> matches) =>
         items.Select((item, index) => (item, index)).Where(x => matches.Contains(x.index) && x.item.AccessibilityTag == 1)

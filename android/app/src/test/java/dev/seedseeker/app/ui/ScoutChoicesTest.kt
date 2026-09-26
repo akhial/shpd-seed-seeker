@@ -14,6 +14,26 @@ import org.junit.Test
 class ScoutChoicesTest {
     init { PackagedCatalog.install() }
 
+    @Test fun fixedArtifactsExcludeOnlyRewardsReservedBySearchMatches() {
+        val engine = dev.seedseeker.app.engine.JniNativeSeedFinder()
+        val world = engine.scoutSeed("AAA-AAA-AAA")
+        val natural = setOf("unstable_spellbook", "sandals_of_nature", "alchemists_toolkit", "skeleton_key")
+        assertEquals(natural, availableScoutArtifacts(world.items, emptySet()))
+        val query = dev.seedseeker.app.model.SearchRequest(listOf(
+            dev.seedseeker.app.model.ItemRequirement(key = 1, item = ItemCatalog.findById("ring_haste"), upgrade = 0,
+                upgradeMatch = dev.seedseeker.app.model.UpgradeMatch.ANY, source = ScoutItemSource.IMP_REWARD),
+            dev.seedseeker.app.model.ItemRequirement(key = 2, item = ItemCatalog.findById("wand_prismatic_light"), upgrade = 0,
+                upgradeMatch = dev.seedseeker.app.model.UpgradeMatch.ANY, source = ScoutItemSource.CRYSTAL_CHEST),
+        ), autoApplyTrinket = false)
+        val marks = engine.scoutMatches(world.seed, 0, query)
+        assertEquals(2, marks.matchedSlots)
+        assertEquals(setOf("unstable_spellbook", "skeleton_key"), availableScoutArtifacts(world.items, marks.items))
+        val own = query.copy(requirements = listOf(dev.seedseeker.app.model.ItemRequirement(key = 3,
+            item = ItemCatalog.findById("sandals_of_nature"), upgrade = 0,
+            upgradeMatch = dev.seedseeker.app.model.UpgradeMatch.ANY, source = ScoutItemSource.IMP_REWARD)))
+        assertEquals(natural, availableScoutArtifacts(world.items, engine.scoutMatches(world.seed, 0, own).items))
+    }
+
     @Test fun onlyConflictingUnmatchedOptionsAreDimmed() {
         val chosen = mapOf(2 to 1)
         assertTrue(isAlternateScoutChoice(ScoutAccessibility.Choice(2, 0), false, chosen))

@@ -925,6 +925,7 @@ private fun FittedTrinketName(name: String) {
 @Composable
 private fun ArtifactDeckRow(world: ScoutWorld, matches: ScoutMatches?) {
     val order = world.artifactDecks[0].orEmpty()
+    val naturalArtifacts = availableScoutArtifacts(world.items, matches?.items.orEmpty())
     if (order.isEmpty()) return
     val targets = matches?.transmutedArtifacts.orEmpty().mapNotNull { (depth, index) ->
         world.artifactDecks.entries.lastOrNull { it.key <= depth }?.value?.getOrNull(index)?.id
@@ -933,11 +934,12 @@ private fun ArtifactDeckRow(world: ScoutWorld, matches: ScoutMatches?) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             order.forEach { artifact ->
                 val matched = artifact.id in targets
+                val natural = artifact.id in naturalArtifacts
                 BoxWithConstraints(Modifier.weight(1f), contentAlignment = Alignment.Center) {
                     val tileWidth = minOf(maxWidth, 36.dp)
                     Surface(shape = RoundedCornerShape(6.dp), color = if (matched) SpdGreen.copy(alpha = 0.14f) else Color.Transparent,
                         border = if (matched) androidx.compose.foundation.BorderStroke(1.dp, SpdGreen) else null,
-                        modifier = Modifier.width(tileWidth).semantics { contentDescription = artifact.name + if (matched) ", matches requirement" else "" }) {
+                        modifier = Modifier.width(tileWidth).alpha(if (natural) 0.3f else 1f).semantics { contentDescription = artifact.name + (if (natural) ", available in dungeon" else "") + (if (matched) ", matches requirement" else "") }) {
                         Box(Modifier.padding(2.dp), contentAlignment = Alignment.Center) {
                             ItemSprite(artifact, modifier = Modifier.size((tileWidth - 4.dp).coerceAtLeast(1.dp)))
                         }

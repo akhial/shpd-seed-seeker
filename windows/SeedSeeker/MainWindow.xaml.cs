@@ -2075,6 +2075,7 @@ public sealed partial class MainWindow : Window
     {
         var decks = world.ArtifactDecks!;
         var order = decks.GetValueOrDefault(0) ?? [];
+        var naturalArtifacts = ScoutChoices.AvailableArtifacts(world.Items, matches.Matched);
         var targets = matches.TransmutedArtifacts.Select(mark =>
             decks.Where(entry => entry.Key <= mark.Depth).OrderBy(entry => entry.Key)
                 .LastOrDefault().Value?.ElementAtOrDefault(mark.Index)?.Id).ToHashSet();
@@ -2084,9 +2085,11 @@ public sealed partial class MainWindow : Window
             deck.ColumnDefinitions.Add(new ColumnDefinition());
             var artifact = order[index];
             var matched = targets.Contains(artifact.Id);
+            var natural = naturalArtifacts.Contains(artifact.Id);
             var sprite = new SpriteView { SpriteIndex = artifact.SpriteIndex, SpriteSize = 28, HorizontalAlignment = HorizontalAlignment.Center };
             var tile = new Border { Child = sprite, Padding = new Thickness(2), CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(1), BorderBrush = matched ? new SolidColorBrush(Microsoft.UI.Colors.MediumSeaGreen) : null, HorizontalAlignment = HorizontalAlignment.Center };
-            var label = artifact.Name + (matched ? ", matches requirement" : "");
+            tile.Opacity = natural ? .3 : 1;
+            var label = artifact.Name + (natural ? ", available in dungeon" : "") + (matched ? ", matches requirement" : "");
             ToolTipService.SetToolTip(tile, label);
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(tile, label);
             deck.SizeChanged += (_, _) => {

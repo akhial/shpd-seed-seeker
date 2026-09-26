@@ -21,6 +21,27 @@ final class LevelMapTests: XCTestCase, @unchecked Sendable {
         XCTAssertTrue(items.contains { $0.upgrade == nil && $0.glow == nil })
     }
 
+    func testFixedArtifactsRespectMatchedExclusiveRewards() async throws {
+        let world = try await ProductionSeedFinderEngine().scoutSeed("AAA-AAA-AAA", challenges: 0)
+        let natural: Set<String> = ["unstable_spellbook", "sandals_of_nature", "alchemists_toolkit", "skeleton_key"]
+        XCTAssertEqual(ScoutChoiceStatus.availableArtifactIDs(items: world.items, matched: []), natural)
+        let requirements = [
+            try ItemRequirement(key: 1, item: XCTUnwrap(ItemCatalog.findById("ring_haste")), upgrade: 0, kind: .ring,
+                upgradeMatch: .any, source: .impReward),
+            try ItemRequirement(key: 2, item: XCTUnwrap(ItemCatalog.findById("wand_prismatic_light")), upgrade: 0, kind: .wand,
+                upgradeMatch: .any, source: .crystalChest),
+        ]
+        let query = try SearchRequest(requirements: requirements, autoApplyTrinket: false)
+        let marks = try ScoutMatches.mark(seed: world.seed, challenges: 0, query: query)
+        XCTAssertEqual(marks.matchedRequirements, 2)
+        XCTAssertEqual(ScoutChoiceStatus.availableArtifactIDs(items: world.items, matched: marks.matched), ["unstable_spellbook", "skeleton_key"])
+        let own = try SearchRequest(requirements: [ItemRequirement(key: 3,
+            item: XCTUnwrap(ItemCatalog.findById("sandals_of_nature")), upgrade: 0, kind: .artifact,
+            upgradeMatch: .any, source: .impReward)], autoApplyTrinket: false)
+        let ownMarks = try ScoutMatches.mark(seed: world.seed, challenges: 0, query: own)
+        XCTAssertEqual(ScoutChoiceStatus.availableArtifactIDs(items: world.items, matched: ownMarks.matched), natural)
+    }
+
     func testRequestUsesEngineChallengeNamesAndExplicitNone() throws {
         let document = try XCTUnwrap(JSONSerialization.jsonObject(with: request(challenges: 104).encoded()) as? [String: Any])
         XCTAssertEqual(document["trinket"] as? String, "none")

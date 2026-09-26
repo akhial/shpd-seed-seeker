@@ -104,6 +104,11 @@ deck, captured before any floors are generated. Transmutation targets are
 highlighted by identity, and their obtainable starting artifacts are highlighted
 in floor results. Search still uses the remaining deck at each requirement's
 floor limit. The CLI displays the same starting order without a title or numbers.
+Artifacts available from fixed dungeon loot are shown at 30% opacity, including
+shops, pre-generated mimic contents, and exclusive rewards. An exclusive reward
+stays bright when a different option in that group supplies a search requirement.
+This uses the scouted run's actual items and match witnesses, not random combat
+drops, transmutation outcomes, or just the difference between two decks.
 Reading a deck never advances the generated run's RNG.
 
 Share-link version 14 adds the four-bit artifact limit after version 13's trinket

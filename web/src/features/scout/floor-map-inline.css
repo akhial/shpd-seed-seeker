@@ -136,3 +136,7 @@
   height: auto;
   aspect-ratio: 1;
 }
+
+.d1-artifact-tail .d1-artifact-natural {
+  opacity: 0.3;
+}
