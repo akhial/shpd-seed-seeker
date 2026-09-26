@@ -199,7 +199,7 @@ struct RequirementsView: View {
                 }
             }
             .padding(8)
-            .glassEffect(.regular.tint(AppTheme.seed.opacity(0.06)), in: .rect(cornerRadius: 32))
+            .glassEffect(.regular.tint(AppTheme.seed.opacity(0.10)), in: .rect(cornerRadius: 32))
             .glassEffectID("group-\(cluster)", in: glass)
             .id("group-\(cluster)")
         } else {
@@ -284,7 +284,7 @@ struct RequirementsView: View {
 
     private func chipTint(_ requirement: ItemRequirement, hovered: Bool) -> Color {
         if hovered { return AppTheme.seed.opacity(0.24) }
-        return requirement.alternativeGroup != nil ? AppTheme.seed.opacity(0.025) : .white.opacity(0.015)
+        return requirement.alternativeGroup != nil ? AppTheme.seed.opacity(0.04) : .white.opacity(0.015)
     }
 
     private func chipContent(_ requirement: ItemRequirement, item: BoardItem) -> some View {
