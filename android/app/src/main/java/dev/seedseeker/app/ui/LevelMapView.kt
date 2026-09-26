@@ -30,6 +30,9 @@ import android.graphics.ColorMatrixColorFilter
 import android.graphics.Bitmap
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.text.SpannableStringBuilder
+import android.text.Spanned
+import android.text.style.ReplacementSpan
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -284,6 +287,28 @@ private fun MapCanvas(bundle: LevelMapBundle?, request: LevelMapRequest, secrets
     )
 }
 
+/** An inline chip participates in TextView's native word wrapping. */
+private class TooltipUpgradeSpan(context: Context) : ReplacementSpan() {
+    private val density = context.resources.displayMetrics.density
+    private val foreground = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        color = SpdUpgrade.toArgb()
+        textSize = android.util.TypedValue.applyDimension(android.util.TypedValue.COMPLEX_UNIT_SP, 11f, context.resources.displayMetrics)
+        typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
+    }
+    private val background = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = SpdUpgrade.copy(alpha = 0.12f).toArgb() }
+
+    override fun getSize(paint: Paint, text: CharSequence, start: Int, end: Int, fm: Paint.FontMetricsInt?): Int =
+        kotlin.math.ceil(foreground.measureText(text, start, end) + 8 * density).toInt()
+
+    override fun draw(canvas: Canvas, text: CharSequence, start: Int, end: Int, x: Float, top: Int, y: Int, bottom: Int, paint: Paint) {
+        val metrics = foreground.fontMetrics
+        val width = getSize(paint, text, start, end, null).toFloat()
+        canvas.drawRoundRect(x, y + metrics.ascent - 2 * density, x + width, y + metrics.descent + 2 * density,
+            4 * density, 4 * density, background)
+        canvas.drawText(text, start, end, x + 4 * density, y.toFloat(), foreground)
+    }
+}
+
 /** Android gestures, accessibility scrolling and animation lifetime stay native. */
 internal class NativeLevelMapView(context: Context) : FrameLayout(context) {
     private var tooltipColors: ColorScheme = lightColorScheme()
@@ -390,18 +415,20 @@ internal class NativeLevelMapView(context: Context) : FrameLayout(context) {
                     }, LinearLayout.LayoutParams(dp(32), dp(32)).apply { marginEnd = dp(10) })
                 }
             }
-            heading.addView(TextView(context).apply {
-                text = item.name + if (item.quantity > 1) "  ×${item.quantity}" else ""
+            val title = TextView(context).apply {
+                text = SpannableStringBuilder(item.name).apply {
+                    item.upgrade?.takeIf { it > 0 }?.let { upgrade ->
+                        // Nonbreaking space keeps the final word and chip on one line.
+                        append('\u00a0')
+                        val start = length
+                        append("+$upgrade")
+                        setSpan(TooltipUpgradeSpan(context), start, length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                    }
+                    if (item.quantity > 1) append("\u00a0×${item.quantity}")
+                }
                 textSize = 16f; setTextColor(tooltipColors.onSurface.toArgb()); setTypeface(typeface, Typeface.BOLD)
-            }, LinearLayout.LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
-            item.upgrade?.takeIf { it > 0 }?.let { upgrade ->
-                heading.addView(TextView(context).apply {
-                    text = "+$upgrade"; textSize = 11f; typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
-                    setTextColor(SpdUpgrade.toArgb()); setPadding(dp(4), dp(2), dp(4), dp(2))
-                    contentDescription = "Upgrade +$upgrade"
-                    background = GradientDrawable().apply { setColor(SpdUpgrade.copy(alpha = 0.12f).toArgb()); cornerRadius = dp(4).toFloat() }
-                }, LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply { marginStart = dp(6) })
             }
+            heading.addView(title, LinearLayout.LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
             body.addView(heading)
             if (item.cursed || item.curse != null) {
                 text(if (item.cursed) "Cursed" else "Curse", 12f, tooltipColors.error.toArgb())
@@ -409,7 +436,7 @@ internal class NativeLevelMapView(context: Context) : FrameLayout(context) {
             if (!item.deterministic) text("Varies with play", 11f, tooltipColors.onSurfaceVariant.toArgb())
             if (item.description.isNotEmpty()) text(item.description, 12f, tooltipColors.onSurfaceVariant.toArgb())
         }
-        val cardWidth = minOf(dp(310), width - dp(16)).coerceAtLeast(1)
+        val cardWidth = minOf(dp(330), width - dp(16)).coerceAtLeast(1)
         val card = ScrollView(context).apply {
             addView(body)
             elevation = dp(8).toFloat()

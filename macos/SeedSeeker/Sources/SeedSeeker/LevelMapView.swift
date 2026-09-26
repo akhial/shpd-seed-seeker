@@ -294,7 +294,7 @@ private struct NativeLevelMap: NSViewRepresentable {
         guard tip?.cell != inspectedCell else { return }
         guard let tip else { hideItem(animated: true); return }
         inspectedCell = tip.cell
-        let width = max(1, min(310, bounds.width - 16))
+        let width = max(1, min(330, bounds.width - 16))
         let content = NSHostingView(rootView: MapItemCard(tip: tip).frame(width: width))
         let height = content.fittingSize.height
         let visibleHeight = max(1, min(height, min(320, bounds.height - 16)))
@@ -524,17 +524,7 @@ private struct MapItemCard: View {
             if !tip.label.isEmpty { Text(tip.label).font(.caption).foregroundStyle(.primary.opacity(0.75)).padding(.bottom, 4) }
             ForEach(Array(tip.items.enumerated()), id: \.offset) { index, item in
                 if index > 0 { Divider() }
-                HStack(spacing: 10) {
-                    MapItemSpriteView(item: item)
-                    Text(item.name).font(.system(size: 15, weight: .bold))
-                    if let upgrade = item.upgrade, upgrade > 0 {
-                        Text("+\(upgrade)").font(.system(size: 11, weight: .semibold, design: .monospaced))
-                            .foregroundStyle(Color.shatteredGreen).padding(.horizontal, 4).padding(.vertical, 2)
-                            .background(Color.shatteredGreen.opacity(0.12), in: RoundedRectangle(cornerRadius: 4))
-                            .accessibilityLabel("Upgrade +\(upgrade)")
-                    }
-                    if item.quantity > 1 { Spacer(); Text("×\(item.quantity)").foregroundStyle(.primary.opacity(0.75)) }
-                }
+                MapItemHeading(item: item)
                 if item.cursed == true || item.curse != nil {
                     Text(item.cursed == true ? "Cursed" : "Curse").font(.caption).foregroundStyle(.red)
                 }
@@ -542,6 +532,40 @@ private struct MapItemCard: View {
                 if !item.description.isEmpty { Text(item.description).font(.callout).foregroundStyle(.primary.opacity(0.85)).fixedSize(horizontal: false, vertical: true) }
             }
         }.padding(14).frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct MapItemHeading: View {
+    let item: LevelMapDocument.TooltipItem
+
+    var body: some View {
+        HStack(spacing: 10) {
+            MapItemSpriteView(item: item)
+            title.font(.system(size: 15, weight: .bold))
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityLabel(item.name + (item.upgrade.flatMap { $0 > 0 ? ", upgrade +\($0)" : nil } ?? ""))
+            if item.quantity > 1 {
+                Spacer()
+                Text("×\(item.quantity)").foregroundStyle(.primary.opacity(0.75)).fixedSize()
+            }
+        }
+    }
+
+    private var title: Text {
+        guard let upgrade = item.upgrade, upgrade > 0 else { return Text(item.name) }
+        let font = NSFont.monospacedSystemFont(ofSize: 11, weight: .semibold)
+        let text = "+\(upgrade)" as NSString
+        let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor(Color.shatteredGreen)]
+        let size = NSSize(width: ceil(text.size(withAttributes: attributes).width) + 8,
+                          height: ceil(font.ascender - font.descender) + 4)
+        let badge = NSImage(size: size, flipped: false) { rect in
+            NSColor(Color.shatteredGreen).withAlphaComponent(0.12).setFill()
+            NSBezierPath(roundedRect: rect, xRadius: 4, yRadius: 4).fill()
+            text.draw(at: NSPoint(x: 4, y: 2), withAttributes: attributes)
+            return true
+        }
+        // An inline attachment and nonbreaking space keep the chip with the last word.
+        return Text("\(Text(item.name))\u{00a0}\(Text(Image(nsImage: badge)).baselineOffset(font.descender - 2))")
     }
 }
 

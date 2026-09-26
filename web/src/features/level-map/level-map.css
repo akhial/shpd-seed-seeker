@@ -344,7 +344,7 @@
   position: absolute;
   z-index: 3;
   box-sizing: border-box;
-  width: 310px;
+  width: 330px;
   padding: 14px;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -380,6 +380,8 @@
   min-height: 32px;
 }
 .d1-map-item-heading strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-size: 15px;
   font-weight: 700;
 }
@@ -388,6 +390,8 @@
   image-rendering: pixelated;
 }
 .d1-map-item-quantity {
+  flex-shrink: 0;
+  white-space: nowrap;
   margin-left: auto;
   color: var(--d1-text-2);
   font-variant-numeric: tabular-nums;
@@ -403,11 +407,17 @@
 }
 
 .d1-map-item-title {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
   min-width: 0;
+}
+.d1-map-item-title-tail {
+  display: inline-block;
+  white-space: nowrap;
+}
+.d1-map-item-title .d1-chip-tag {
+  display: inline-block;
+  margin-left: 6px;
+  vertical-align: baseline;
+  white-space: nowrap;
 }
 .d1-map-item-modifiers {
   display: flex;

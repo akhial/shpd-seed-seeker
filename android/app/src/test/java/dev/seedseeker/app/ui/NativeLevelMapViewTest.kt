@@ -3,6 +3,11 @@ package dev.seedseeker.app.ui
 
 import android.os.SystemClock
 import android.view.MotionEvent
+import android.view.View
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.TextView
+import androidx.core.view.children
 import androidx.test.core.app.ApplicationProvider
 import dev.seedseeker.app.engine.LevelMapRequest
 import dev.seedseeker.app.engine.LevelMaps
@@ -17,6 +22,46 @@ import org.robolectric.annotation.GraphicsMode
 @Config(sdk = [35])
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class NativeLevelMapViewTest {
+    @Test fun inspectionKeepsUpgradeWithLastTitleWordWhenWrapping() = runBlocking {
+        val request = LevelMapRequest("AAA-AAA-AAA", 2, 0, null)
+        val bundle = LevelMaps.load(request)
+        val tip = bundle.map.itemTooltips.first { it.items.any { item -> item.name == "Mail Armor of Displacement" } }
+        val view = NativeLevelMapView(ApplicationProvider.getApplicationContext())
+        val density = view.resources.displayMetrics.density
+        fun dp(value: Int) = (value * density).toInt()
+        for (availableWidth in listOf(800, 240)) {
+            val width = dp(availableWidth)
+            val height = dp(600)
+            view.layout(0, 0, width, height)
+            view.bind(bundle, request, false, true, false) {}
+            val mapWidth = bundle.map.width * 16
+            val mapHeight = bundle.map.height * 16
+            val fit = minOf(width.toFloat() / mapWidth, height.toFloat() / mapHeight)
+            val scale = if (fit >= 1) kotlin.math.floor(fit) else fit
+            val x = width / 2f + ((tip.cell % bundle.map.width + .5f) * 16 - mapWidth / 2f) * scale
+            val y = height / 2f + ((tip.cell / bundle.map.width + .5f) * 16 - mapHeight / 2f) * scale
+            view.inspectItem(x, y)
+            view.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY))
+            view.layout(0, 0, width, height)
+            val card = view.getChildAt(0) as ScrollView
+            val body = card.getChildAt(0) as LinearLayout
+            val heading = body.children.filterIsInstance<LinearLayout>().first()
+            val title = heading.children.filterIsInstance<TextView>().first()
+            val text = title.text.toString()
+            assertEquals("Mail Armor of Displacement\u00a0+1", text)
+            val lastWordLine = title.layout.getLineForOffset(text.indexOf("Displacement"))
+            val chipLine = title.layout.getLineForOffset(text.indexOf("+1"))
+            assertEquals("The chip must wrap with the last title word", lastWordLine, chipLine)
+            assertTrue("The complete heading must fit", title.layout.getLineRight(chipLine) <= title.width)
+            assertTrue("Card must stay inside the viewport", card.width <= width - dp(16))
+            if (availableWidth == 240) {
+                assertTrue("Narrow viewports wrap the title without displacing the chip", title.lineCount > 1)
+            }
+        }
+        view.release()
+    }
+
     @Test fun inspectionUsesOriginalTextHonorsSecretsAndClearsWhenMapChanges() = runBlocking {
         val request = LevelMapRequest("AAA-AAA-AAA", 1, 0, null)
         val bundle = LevelMaps.load(request)

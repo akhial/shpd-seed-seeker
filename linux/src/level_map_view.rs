@@ -9,6 +9,7 @@
 
 use std::cell::{Cell, RefCell};
 use std::collections::VecDeque;
+use std::fmt::Write;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex, OnceLock, mpsc};
 use std::time::{Duration, Instant};
@@ -326,34 +327,44 @@ impl FloorMapView {
                     );
                 }
                 for item in tip.items {
-                    let title = if item.quantity > 1 {
-                        format!("{}  ×{}", item.name, item.quantity)
-                    } else {
-                        item.name
-                    };
                     let heading = gtk::Box::new(gtk::Orientation::Horizontal, 10);
                     heading.append(&sprites::map_item_image(
                         item.image, item.icon, item.glow, 32,
                     ));
-                    heading.append(
-                        &gtk::Label::builder()
-                            .label(&title)
-                            .xalign(0.0)
-                            .wrap(true)
-                            .max_width_chars(42)
-                            .valign(gtk::Align::Center)
-                            .css_classes(["map-item-title"])
-                            .build(),
-                    );
-                    if let Some(upgrade) = item.upgrade.filter(|&level| level > 0) {
-                        heading.append(
-                            &gtk::Label::builder()
-                                .label(format!("+{upgrade}"))
-                                .valign(gtk::Align::Center)
-                                .css_classes(["chip-tag", "chip-tag-up"])
-                                .build(),
-                        );
-                    }
+                    let title = gtk::Label::builder()
+                        .label(&item.name)
+                        .xalign(0.0)
+                        .wrap(true)
+                        .max_width_chars(34)
+                        .valign(gtk::Align::Center)
+                        .css_classes(["map-item-title"])
+                        .build();
+                    let name = item.name;
+                    let upgrade = item.upgrade.filter(|&level| level > 0);
+                    let quantity = item.quantity;
+                    title.connect_realize(move |title| {
+                        let mut markup = if let Some(upgrade) = upgrade {
+                            title.add_css_class("success");
+                            let color = title.color();
+                            title.remove_css_class("success");
+                            let color = format!("#{:02x}{:02x}{:02x}",
+                                (color.red() * 255.0).round() as u8,
+                                (color.green() * 255.0).round() as u8,
+                                (color.blue() * 255.0).round() as u8);
+                            let split = name.rfind(' ').map_or(0, |index| index + 1);
+                            // Pango keeps the final word and inline upgrade on the same line.
+                            format!("{}<span allow_breaks=\"false\">{}\u{00a0}<span font_family=\"monospace\" size=\"75%\" foreground=\"{color}\" background=\"{color}\" background_alpha=\"15%\">\u{00a0}+{upgrade}\u{00a0}</span></span>",
+                                glib::markup_escape_text(&name[..split]),
+                                glib::markup_escape_text(&name[split..]))
+                        } else {
+                            glib::markup_escape_text(&name).to_string()
+                        };
+                        if quantity > 1 {
+                            let _ = write!(markup, "\u{00a0}×{quantity}");
+                        }
+                        title.set_markup(&markup);
+                    });
+                    heading.append(&title);
                     body.append(&heading);
                     let modifiers = gtk::Box::new(gtk::Orientation::Horizontal, 6);
                     if item.cursed || item.curse.is_some() {

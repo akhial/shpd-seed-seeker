@@ -7,6 +7,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Documents;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
@@ -152,11 +153,14 @@ internal sealed class LevelMapView : Grid
                 sprite.GlowPeriod = glow.PeriodMs / 1000;
             }
             heading.Children.Add(sprite);
-            var name = new TextBlock { Text = item.Name + (item.Quantity > 1 ? $"  ×{item.Quantity}" : ""),
-                FontSize = 16, FontWeight = Microsoft.UI.Text.FontWeights.Bold, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
+            var name = new RichTextBlock {
+                FontSize = 16, FontWeight = Microsoft.UI.Text.FontWeights.Bold, TextWrapping = TextWrapping.Wrap,
+                IsTextSelectionEnabled = false, VerticalAlignment = VerticalAlignment.Center };
+            var paragraph = new Paragraph();
+            paragraph.Inlines.Add(new Run { Text = item.Name });
+            name.Blocks.Add(paragraph);
             Grid.SetColumn(name, 1); heading.Children.Add(name);
             if (item.Upgrade is > 0 and int upgrade) {
-                heading.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
                 var chip = new Border { Padding = new Thickness(4, 0, 4, 0), CornerRadius = new CornerRadius(4),
                     VerticalAlignment = VerticalAlignment.Center,
                     Background = (Brush)Application.Current.Resources["SystemFillColorSuccessBackgroundBrush"],
@@ -164,8 +168,10 @@ internal sealed class LevelMapView : Grid
                         FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
                         Foreground = (Brush)Application.Current.Resources["SystemFillColorSuccessBrush"] } };
                 AutomationProperties.SetName(chip, $"Upgrade +{upgrade}");
-                Grid.SetColumn(chip, 2); heading.Children.Add(chip);
+                paragraph.Inlines.Add(new Run { Text = "\u00a0" });
+                paragraph.Inlines.Add(new InlineUIContainer { Child = chip });
             }
+            if (item.Quantity > 1) paragraph.Inlines.Add(new Run { Text = $"\u00a0×{item.Quantity}" });
             body.Children.Add(heading);
             var modifiers = new WrapPanel { Spacing = 6, LineSpacing = 4 };
             if (item.Cursed || item.Curse is not null) modifiers.Children.Add(new TextBlock {
@@ -175,7 +181,7 @@ internal sealed class LevelMapView : Grid
             if (!item.Deterministic) body.Children.Add(new TextBlock { Text = "Varies with play", FontSize = 11, Opacity = .7 });
             if (item.Description.Length > 0) body.Children.Add(new TextBlock { Text = item.Description, FontSize = 12, Opacity = .85, TextWrapping = TextWrapping.Wrap });
         }
-        var cardWidth = Math.Max(1, Math.Min(310, stage.ActualWidth - 16));
+        var cardWidth = Math.Max(1, Math.Min(330, stage.ActualWidth - 16));
         itemCard = new Border {
             Width = cardWidth, MaxHeight = Math.Max(1, Math.Min(320, stage.ActualHeight - 16)), Padding = new Thickness(14),
             CornerRadius = (CornerRadius)Application.Current.Resources["OverlayCornerRadius"], BorderThickness = new Thickness(1),
