@@ -323,7 +323,7 @@ fun ScoutScreen(
                 }
 
                 result?.let { world ->
-                    if (world.artifactDecks.isNotEmpty()) item(key = "artifact-deck") { ArtifactDeckCard(world, matches) }
+                    if (world.artifactDecks.isNotEmpty()) item(key = "artifact-deck") { ArtifactDeckRow(world, matches) }
                     val questsByDepth = world.quests.associateBy(ScoutQuest::depth)
                     floors
                         .forEach { (depth, floorItems) ->
@@ -923,30 +923,23 @@ private fun FittedTrinketName(name: String) {
 
 
 @Composable
-private fun ArtifactDeckCard(world: ScoutWorld, matches: ScoutMatches?) {
-    var expanded by remember { mutableStateOf(true) }
+private fun ArtifactDeckRow(world: ScoutWorld, matches: ScoutMatches?) {
     val order = world.artifactDecks[0].orEmpty()
+    if (order.isEmpty()) return
     val targets = matches?.transmutedArtifacts.orEmpty().mapNotNull { (depth, index) ->
         world.artifactDecks.entries.lastOrNull { it.key <= depth }?.value?.getOrNull(index)?.id
     }.toSet()
-    Card(Modifier.fillMaxWidth().padding(vertical = 8.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            TextButton(onClick = { expanded = !expanded }) { Text("Artifact transmutation order") }
-            if (expanded) {
-                if (order.isEmpty()) Text("Deck exhausted.", style = MaterialTheme.typography.bodySmall)
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                    order.forEachIndexed { index, artifact ->
-                        val matched = artifact.id in targets
-                        BoxWithConstraints(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                            val tileWidth = minOf(maxWidth, 36.dp)
-                            Surface(shape = RoundedCornerShape(6.dp), color = if (matched) SpdGreen.copy(alpha = 0.14f) else Color.Transparent,
-                                border = if (matched) androidx.compose.foundation.BorderStroke(1.dp, SpdGreen) else null,
-                                modifier = Modifier.width(tileWidth).semantics { contentDescription = "Starting draw #${index + 1}: ${artifact.name}" + if (matched) ", matches requirement" else "" }) {
-                                Column(Modifier.padding(2.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                    ItemSprite(artifact, modifier = Modifier.size((tileWidth - 4.dp).coerceAtLeast(1.dp)))
-                                    Text("${index + 1}", style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false)
-                                }
-                            }
+    Card(Modifier.fillMaxWidth().padding(vertical = 4.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+            order.forEach { artifact ->
+                val matched = artifact.id in targets
+                BoxWithConstraints(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                    val tileWidth = minOf(maxWidth, 36.dp)
+                    Surface(shape = RoundedCornerShape(6.dp), color = if (matched) SpdGreen.copy(alpha = 0.14f) else Color.Transparent,
+                        border = if (matched) androidx.compose.foundation.BorderStroke(1.dp, SpdGreen) else null,
+                        modifier = Modifier.width(tileWidth).semantics { contentDescription = artifact.name + if (matched) ", matches requirement" else "" }) {
+                        Box(Modifier.padding(2.dp), contentAlignment = Alignment.Center) {
+                            ItemSprite(artifact, modifier = Modifier.size((tileWidth - 4.dp).coerceAtLeast(1.dp)))
                         }
                     }
                 }

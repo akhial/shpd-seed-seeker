@@ -42,8 +42,7 @@ describe("artifact search and scout", () => {
         result={result}
       />,
     );
-    expect(html).toContain("Artifact transmutation order");
-    expect(html).toContain("Starting draw #6: Ethereal Chains, matches requirement");
+    expect(html).toContain("Ethereal Chains, matches requirement");
     expect(result.artifactDecks?.find((deck) => deck.depth === 0)?.order).toHaveLength(11);
     expect(html).toContain("Starting artifact deck order");
     const editor = renderToStaticMarkup(

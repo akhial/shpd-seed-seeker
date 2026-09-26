@@ -96,14 +96,15 @@ rounding through intermediate identities is not calibrated. The normal artifact
 editors use any upgrade. Extremely complex joint filters also have a bounded work
 budget and report unavailable instead of blocking the editor.
 
-Scout shows **Artifact transmutation order** as one compact, static row on
-web, Android, macOS, Windows, and Linux. There is no deck floor picker or hint
-paragraph. Icons shrink to fit one line. It always shows all 11 artifacts in the
-full starting deck, captured before any floors are generated. Positions start at
-1; transmutation targets are highlighted by identity, and their obtainable
-starting artifacts are highlighted in floor results. Search still uses the
-remaining deck at each requirement's floor limit. The CLI displays the same
-starting order. Reading a deck never advances the generated run's RNG.
+Scout shows one compact, always-visible artifact icon row on web, Android,
+macOS, Windows, and Linux. It has no title, numbers, expand/collapse control,
+deck floor picker, or hint paragraph. Vertical padding is minimal and icons
+shrink to fit one line. It always shows all 11 artifacts in the full starting
+deck, captured before any floors are generated. Transmutation targets are
+highlighted by identity, and their obtainable starting artifacts are highlighted
+in floor results. Search still uses the remaining deck at each requirement's
+floor limit. The CLI displays the same starting order without a title or numbers.
+Reading a deck never advances the generated run's RNG.
 
 Share-link version 14 adds the four-bit artifact limit after version 13's trinket
 limit; older links retain their exact encoding. Native clients request `SSQ6` and

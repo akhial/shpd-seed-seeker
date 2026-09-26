@@ -2653,7 +2653,7 @@ private struct SeedDetailView: View {
                     // Lazy sections with variable-height floor groups can loop
                     // in SwiftUI's placement cache while scrolling on macOS.
                     VStack(alignment: .leading, spacing: 0) {
-                        if !world.artifactDecks.isEmpty { ArtifactScoutDeck(world: world, matches: marks).padding() }
+                        if !world.artifactDecks.isEmpty { ArtifactScoutDeck(world: world, matches: marks).padding(.horizontal).padding(.vertical, 4) }
                         ForEach(depths, id: \.self) { depth in
                             let floorItems = (byDepth[depth] ?? []).filter { $0.element.item.kind != .trinket }
                             VStack(alignment: .leading, spacing: 0) {
@@ -3095,35 +3095,28 @@ private func floorLimitBinding(_ value: Binding<Int>) -> Binding<Double> {
 private struct ArtifactScoutDeck: View {
     let world: ScoutWorld
     let matches: ScoutMatches?
-    @State private var expanded = true
     var body: some View {
         let order = world.artifactDecks[0] ?? []
         let targets = Set((matches?.transmutedArtifacts ?? [:]).flatMap { depth, indices in
             let remaining = world.artifactDecks[world.artifactDecks.keys.filter { $0 <= depth }.max() ?? 0] ?? []
             return indices.compactMap { remaining.indices.contains($0) ? remaining[$0].id : nil }
         })
-        DisclosureGroup("Artifact transmutation order", isExpanded: $expanded) {
-            if order.isEmpty {
-                Text("Deck exhausted.").font(.caption).foregroundStyle(.secondary)
-            } else {
-                GeometryReader { geometry in
-                    let size = max(1, min(36, Int((geometry.size.width - CGFloat(order.count - 1) * 2) / CGFloat(order.count))))
-                    HStack(spacing: 2) {
-                        ForEach(Array(order.enumerated()), id: \.element.id) { index, artifact in
-                            let matched = targets.contains(artifact.id)
-                            let label = "Starting draw #\(index + 1): \(artifact.name)" + (matched ? ", matches requirement" : "")
-                            VStack(spacing: 4) {
-                                ItemSpriteView(item: artifact, pointSize: max(1, size - 4), label: label)
-                                Text("\(index + 1)").font(.caption2).lineLimit(1).minimumScaleFactor(0.5)
-                            }.padding(2).frame(width: CGFloat(size))
-                                .background(matched ? Color.shatteredMint.opacity(0.14) : Color.clear, in: RoundedRectangle(cornerRadius: 6))
-                                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(matched ? Color.shatteredMint : Color.clear))
-                                .help(label).accessibilityElement(children: .ignore).accessibilityLabel(label)
-                                .frame(maxWidth: .infinity)
-                        }
+        if !order.isEmpty {
+            GeometryReader { geometry in
+                let size = max(1, min(36, Int((geometry.size.width - CGFloat(order.count - 1) * 2) / CGFloat(order.count))))
+                HStack(spacing: 2) {
+                    ForEach(order, id: \.id) { artifact in
+                        let matched = targets.contains(artifact.id)
+                        let label = artifact.name + (matched ? ", matches requirement" : "")
+                        ItemSpriteView(item: artifact, pointSize: max(1, size - 4), label: label)
+                            .padding(2).frame(width: CGFloat(size))
+                            .background(matched ? Color.shatteredMint.opacity(0.14) : Color.clear, in: RoundedRectangle(cornerRadius: 6))
+                            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(matched ? Color.shatteredMint : Color.clear))
+                            .help(label).accessibilityElement(children: .ignore).accessibilityLabel(label)
+                            .frame(maxWidth: .infinity)
                     }
-                }.frame(height: 52).padding(.top, 8)
-            }
+                }
+            }.frame(height: 36)
         }
     }
 }

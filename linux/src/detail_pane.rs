@@ -1088,44 +1088,21 @@ fn tag(label: &str, color: &str) -> gtk::Label {
 fn artifact_deck_view(
     world: &shpd_seedfinder_core::model::GeneratedWorld,
     marks: &shpd_seedfinder_core::query::ScoutMatches,
-) -> gtk::Expander {
+) -> gtk::Box {
     let order = shpd_seedfinder_core::artifacts::deck_at(world, 0);
     let deck = gtk::Box::builder()
         .orientation(gtk::Orientation::Horizontal)
         .homogeneous(true)
         .spacing(2)
-        .margin_top(8)
+        .margin_top(4)
         .build();
-    if order.is_empty() {
-        deck.append(&gtk::Label::new(Some("Deck exhausted.")));
-    }
-    for (index, &id) in order.iter().enumerate() {
+    for &id in order {
         let matched = marks.transmuted_artifacts.iter().any(|&(depth, position)| {
             shpd_seedfinder_core::artifacts::deck_at(world, depth).get(position) == Some(&id)
         });
-        let tile = gtk::Box::new(gtk::Orientation::Vertical, 4);
-        tile.append(&sprites::trinket_tile(item(id), matched, false));
-        tile.append(
-            &gtk::Label::builder()
-                .label((index + 1).to_string())
-                .css_classes(["caption"])
-                .build(),
-        );
-        let label = format!(
-            "Starting draw #{}: {}{}",
-            index + 1,
-            item(id).name,
-            if matched { ", matches requirement" } else { "" }
-        );
-        tile.set_tooltip_text(Some(&label));
-        tile.update_property(&[gtk::accessible::Property::Label(&label)]);
-        deck.append(&tile);
+        deck.append(&sprites::trinket_tile(item(id), matched, false));
     }
-    gtk::Expander::builder()
-        .label("Artifact transmutation order")
-        .expanded(true)
-        .child(&deck)
-        .build()
+    deck
 }
 
 #[cfg(test)]

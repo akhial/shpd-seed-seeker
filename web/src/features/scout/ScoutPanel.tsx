@@ -584,33 +584,28 @@ export function CatalystEntry({
 
 export function ArtifactDeckOrder({ decks }: { decks: NonNullable<ScoutResult["artifactDecks"]> }) {
   const order = decks.find((deck) => deck.depth === 0)?.order ?? [];
+  if (!order.length) return null;
   return (
-    <details className="d1-artifact-deck" open>
-      <summary>Artifact transmutation order</summary>
-      {order.length ? (
-        <ol
-          className="d1-trinket-tail d1-artifact-tail"
-          aria-label="Starting artifact deck order"
-          style={{
-            gridTemplateColumns: `repeat(${order.length}, minmax(0, 1fr))`,
-            maxWidth: order.length * 40 + (order.length - 1) * 2,
-          }}
-        >
-          {order.map((entry, index) => (
-            <li
-              key={entry.id}
-              className={entry.matched ? "d1-trinket-match" : undefined}
-              title={`Starting draw #${index + 1}: ${entry.name}${entry.matched ? " — matches requirement" : ""}`}
-              aria-label={`Starting draw #${index + 1}: ${entry.name}${entry.matched ? ", matches requirement" : ""}`}
-            >
-              <TrinketSprite cell={entry.spriteIndex} maximum={32} />
-              <span className="d1-caption">{index + 1}</span>
-            </li>
-          ))}
-        </ol>
-      ) : (
-        <p className="d1-caption">Deck exhausted.</p>
-      )}
-    </details>
+    <div className="d1-artifact-deck">
+      <ol
+        className="d1-trinket-tail d1-artifact-tail"
+        aria-label="Starting artifact deck order"
+        style={{
+          gridTemplateColumns: `repeat(${order.length}, minmax(0, 1fr))`,
+          maxWidth: order.length * 40 + (order.length - 1) * 2,
+        }}
+      >
+        {order.map((entry) => (
+          <li
+            key={entry.id}
+            className={entry.matched ? "d1-trinket-match" : undefined}
+            title={`${entry.name}${entry.matched ? " — matches requirement" : ""}`}
+            aria-label={`${entry.name}${entry.matched ? ", matches requirement" : ""}`}
+          >
+            <TrinketSprite cell={entry.spriteIndex} maximum={32} />
+          </li>
+        ))}
+      </ol>
+    </div>
   );
 }

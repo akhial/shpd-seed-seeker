@@ -114,17 +114,14 @@
 }
 
 .d1-artifact-deck {
-  margin: 16px 0;
-  padding: 16px;
+  margin: 4px 0;
+  padding: 4px 16px;
   border: 1px solid var(--line);
   border-radius: 12px;
 }
-.d1-artifact-deck summary {
-  cursor: pointer;
-  font-weight: 600;
-}
-.d1-artifact-tail {
+.d1-trinket-tail.d1-artifact-tail {
   gap: 2px;
+  margin: 0;
 }
 .d1-trinket-tail.d1-artifact-tail li {
   display: flex;

@@ -2078,19 +2078,15 @@ public sealed partial class MainWindow : Window
         var targets = matches.TransmutedArtifacts.Select(mark =>
             decks.Where(entry => entry.Key <= mark.Depth).OrderBy(entry => entry.Key)
                 .LastOrDefault().Value?.ElementAtOrDefault(mark.Index)?.Id).ToHashSet();
-        var deck = new Grid { ColumnSpacing = 2, Margin = new Thickness(0, 8, 0, 0) };
-        if (order.Count == 0) deck.Children.Add(new TextBlock { Text = "Deck exhausted." });
+        var deck = new Grid { ColumnSpacing = 2, Margin = new Thickness(16, 4, 16, 4) };
         for (var index = 0; index < order.Count; index++)
         {
             deck.ColumnDefinitions.Add(new ColumnDefinition());
             var artifact = order[index];
             var matched = targets.Contains(artifact.Id);
             var sprite = new SpriteView { SpriteIndex = artifact.SpriteIndex, SpriteSize = 28, HorizontalAlignment = HorizontalAlignment.Center };
-            var column = new StackPanel { Spacing = 4, HorizontalAlignment = HorizontalAlignment.Center };
-            column.Children.Add(sprite);
-            column.Children.Add(new TextBlock { Text = $"{index + 1}", FontSize = 11, HorizontalAlignment = HorizontalAlignment.Center });
-            var tile = new Border { Child = column, Padding = new Thickness(2), CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(1), BorderBrush = matched ? new SolidColorBrush(Microsoft.UI.Colors.MediumSeaGreen) : null, HorizontalAlignment = HorizontalAlignment.Center };
-            var label = $"Starting draw #{index + 1}: {artifact.Name}" + (matched ? ", matches requirement" : "");
+            var tile = new Border { Child = sprite, Padding = new Thickness(2), CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(1), BorderBrush = matched ? new SolidColorBrush(Microsoft.UI.Colors.MediumSeaGreen) : null, HorizontalAlignment = HorizontalAlignment.Center };
+            var label = artifact.Name + (matched ? ", matches requirement" : "");
             ToolTipService.SetToolTip(tile, label);
             Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(tile, label);
             deck.SizeChanged += (_, _) => {
@@ -2100,7 +2096,7 @@ public sealed partial class MainWindow : Window
             Grid.SetColumn(tile, index);
             deck.Children.Add(tile);
         }
-        return new Expander { Header = "Artifact transmutation order", IsExpanded = true, Content = deck, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 8, 0, 12) };
+        return deck;
     }
 
     private UIElement FloorHeader(ScoutWorld world, int depth)
