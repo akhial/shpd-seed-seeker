@@ -294,17 +294,31 @@ private fun List<ItemRequirement>.moveAfter(
 }
 
 /**
+ * Copies bind to one item family. Refuse a mixed-category join involving a
+ * stack instead of splitting off concrete copies or deleting wildcard copies.
+ */
+fun List<ItemRequirement>.canJoinAlternatives(source: Int, target: Int): Boolean {
+    if (source == target || this[source].blanket != this[target].blanket) return false
+    val group = this[target].alternativeGroup
+    if (group != null && this[source].alternativeGroup == group) return false
+    val family = this[source].kind.family
+    val mixed = this[target].kind.family != family ||
+        (group != null && any { it.alternativeGroup == group && it.kind.family != family })
+    return !mixed || boardItems().none {
+        it.stackCount > 1 && (source in it.members || target in it.members)
+    }
+}
+
+/**
  * The chip at [source] becomes an either/or alternative of the chip at
  * [target]. A combined level cannot travel into a cluster and is dropped; a
  * plain-repeat stack keeps its copies by trading them for identity labels,
- * which the cluster's members then share.
+ * which the cluster's members then share. A mixed-category drop involving a
+ * stack leaves the list unchanged.
  */
 fun List<ItemRequirement>.joinAlternatives(source: Int, target: Int): List<ItemRequirement> {
-    if (source == target || this[source].blanket != this[target].blanket) return this
+    if (!canJoinAlternatives(source, target)) return this
     val group = this[target].alternativeGroup ?: nextAlternativeGroup()
-    if (this[source].alternativeGroup == group) return this
-    val sourceKey = this[source].key
-    val targetKey = this[target].key
     // A copy has to name the kind it copies, and a cluster spanning categories
     // names none — "weapon or wand" is not a kind anything can be a copy of. So
     // a stack follows its chip into a cluster only while the cluster stays
@@ -313,40 +327,39 @@ fun List<ItemRequirement>.joinAlternatives(source: Int, target: Int): List<ItemR
         it == source || it == target || this[it].alternativeGroup == group
     }
     val oneCategory = clusterMembers.map { this[it].kind.family }.distinct().size == 1
-    val next: MutableList<ItemRequirement>
+    val next = toMutableList()
     if (oneCategory) {
-        next = toMutableList()
+        val items = boardItems()
         // Trade plain repeats for identity copies so the stack survives the move.
         for (index in listOf(source, target)) {
             val anchor = next[index]
             val named = anchor.item ?: continue
             if (anchor.blanket || anchor.identityGroup != null) continue
-            val copies = next.indices.filter { it != index && isPlainItemCopy(next[it], named) }
+            // Only this chip's copies belong to the join. Another chip may
+            // name the same ring with different constraints and its own stack.
+            val copies = items.firstOrNull { index in it.members }?.extras.orEmpty()
+                .filter { isPlainItemCopy(next[it], named) }
             if (copies.isEmpty()) continue
             val label = freeGroup(next.map { it.identityGroup }, SearchLimits.IDENTITY_GROUP_MAX) ?: continue
             next[index] = anchor.copy(identityGroup = label)
             for (copy in copies) next[copy] = bareCopy(anchor, label, next[copy].key, next[copy].maximumDepth)
         }
     } else {
-        // The stacks let go: labelled copies are dropped and plain repeats stay
-        // the standalone chips they already encode as. The chip's badge falls
-        // back to ×1, which is the visible half of this.
+        // Counted chips were rejected above. Clear any remaining identity
+        // labels so an uncounted mixed-category group has no shared identity.
         val labels = clusterMembers.mapNotNull { this[it].identityGroup }.toSet()
-        val clusterKeys = clusterMembers.map { this[it].key }.toSet()
-        next = filterNot { it.identityGroup in labels && it.key !in clusterKeys }
-            .map { if (it.identityGroup in labels) it.copy(identityGroup = null) else it }
-            .toMutableList()
+        for (index in next.indices) {
+            if (next[index].identityGroup in labels) next[index] = next[index].copy(identityGroup = null)
+        }
     }
-    val movedSource = next.indexOfFirst { it.key == sourceKey }
-    val movedTarget = next.indexOfFirst { it.key == targetKey }
     val joined = next.mapIndexed { index, requirement ->
-        if (index == movedSource || index == movedTarget) {
+        if (index == source || index == target) {
             requirement.copy(alternativeGroup = group, levelSum = null)
         } else {
             requirement
         }
     }
-    return joined.moveAfter(movedSource) { it.alternativeGroup == group }.normalizeRelations()
+    return joined.moveAfter(source) { it.alternativeGroup == group }.normalizeRelations()
 }
 
 /** Pulls the chip at [index] out of its cluster; it leaves its stack behind. */

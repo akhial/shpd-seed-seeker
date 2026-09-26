@@ -20,9 +20,15 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.ComposeTestRule
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.unit.dp
+import dev.seedseeker.app.catalog.ItemCatalog
+import dev.seedseeker.app.catalog.PackagedCatalog
 import dev.seedseeker.app.model.ArcaneResinFilter
 import dev.seedseeker.app.model.ItemKind
 import dev.seedseeker.app.model.ItemRequirement
+import dev.seedseeker.app.model.applyEdit
+import dev.seedseeker.app.model.boardItems
+import dev.seedseeker.app.model.joinAlternatives
+import dev.seedseeker.app.model.validationProblem
 import dev.seedseeker.app.ui.theme.SeedSeekerTheme
 import java.io.File
 import org.junit.Assert.*
@@ -37,6 +43,7 @@ import org.robolectric.annotation.GraphicsMode
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class RequirementBoardTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+    init { PackagedCatalog.install() }
 
     private val original = listOf(
         ItemRequirement(key = 1, item = null, kind = ItemKind.WAND, upgrade = 3),
@@ -85,8 +92,17 @@ class RequirementBoardTest {
     }
 
     private fun dropOn(node: SemanticsNodeInteraction) {
+        moveOver(node)
+        release()
+    }
+
+    private fun moveOver(node: SemanticsNodeInteraction) {
         val target = node.fetchSemanticsNode().boundsInRoot.center
-        compose.onRoot().performTouchInput { moveTo(target, delayMillis = 100); up() }
+        compose.onRoot().performTouchInput { moveTo(target, delayMillis = 100) }
+    }
+
+    private fun release() {
+        compose.onRoot().performTouchInput { up() }
         compose.onNodeWithText("Drop to remove").assertDoesNotExist()
     }
 
@@ -156,6 +172,82 @@ class RequirementBoardTest {
             assertEquals(listOf(original[1]), requirements.value)
             assertEquals(6, amount.value)
         }
+    }
+
+    @Test fun droppingArmorOnACountedRingKeepsTheRingAndItsCountTogether() {
+        val counted = emptyList<ItemRequirement>().applyEdit(
+            index = null,
+            requirement = ItemRequirement(0, ItemCatalog.findById("ring_energy")!!, 4),
+            count = 3,
+            total = null,
+            copyDepth = 20,
+        ) + ItemRequirement(9, ItemCatalog.findById("plate_armor")!!, 3)
+        requirements.value = counted
+        amount.value = 0
+        show()
+
+        for (isCompact in listOf(false, true)) {
+            compose.runOnIdle { compact.value = isCompact }
+            val ringChip = compose.onNodeWithContentDescription("Ring of Energy,", substring = true)
+            val armorChip = compose.onNodeWithContentDescription("Plate Armor,", substring = true)
+            pickUp(armorChip)
+            moveOver(ringChip)
+            compose.onNodeWithText("Copies can only be grouped with the same item type.").assertIsDisplayed()
+            release()
+            compose.onNodeWithText("Copies can only be grouped with the same item type.").assertDoesNotExist()
+            compose.runOnIdle { assertEquals(counted, requirements.value) }
+            ringChip.assert(hasText("+4"))
+            compose.onNode(hasText("×3") and hasAnyAncestor(hasContentDescription("Ring of Energy,", substring = true)))
+                .assertIsDisplayed()
+
+            pickUp(ringChip)
+            dropOn(armorChip)
+            compose.runOnIdle { assertEquals(counted, requirements.value) }
+        }
+    }
+
+    @Test fun aRejectedDropDoesNotDetachAMemberFromItsOriginalGroup() {
+        val counted = emptyList<ItemRequirement>().applyEdit(
+            index = null,
+            requirement = ItemRequirement(0, ItemCatalog.findById("ring_energy")!!, 4),
+            count = 3,
+            total = null,
+        ) + listOf(original[0].copy(key = 9), original[1].copy(key = 10))
+        val grouped = counted.joinAlternatives(3, 4)
+        requirements.value = grouped
+        amount.value = 0
+        show()
+
+        pickUp(firstWand())
+        dropOn(compose.onNodeWithContentDescription("Ring of Energy,", substring = true))
+        compose.runOnIdle { assertEquals(grouped, requirements.value) }
+        compose.onNodeWithText("or").assertIsDisplayed()
+    }
+
+    @Test fun compatibleRingDropKeepsTheCountOnTheEitherOrGroup() {
+        val counted = emptyList<ItemRequirement>().applyEdit(
+            index = null,
+            requirement = ItemRequirement(0, ItemCatalog.findById("ring_energy")!!, 4),
+            count = 3,
+            total = null,
+            copyDepth = 20,
+        ) + ItemRequirement(9, ItemCatalog.findById("ring_wealth")!!, 2)
+        requirements.value = counted
+        amount.value = 0
+        show()
+
+        pickUp(compose.onNodeWithContentDescription("Ring of Wealth,", substring = true))
+        dropOn(compose.onNodeWithContentDescription("Ring of Energy,", substring = true))
+        compose.runOnIdle {
+            val joined = requirements.value
+            val item = joined.boardItems().single()
+            assertEquals(listOf(1L, 9L), item.members.map { joined[it].key })
+            assertEquals(3, item.stackCount)
+            assertEquals(listOf(20, 20), item.extras.map { joined[it].maximumDepth })
+            assertNull(joined.validationProblem())
+        }
+        compose.onNodeWithText("or").assertIsDisplayed()
+        compose.onNodeWithText("×3").assertIsDisplayed()
     }
 
     @Test fun searchingDisablesResinEditingAndDragging() {

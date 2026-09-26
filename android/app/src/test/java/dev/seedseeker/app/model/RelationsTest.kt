@@ -147,33 +147,62 @@ class RelationsTest {
     }
 
     @Test
-    fun aLabelledStackLetsGoOfItsCopiesInACrossCategoryCluster() {
-        // Dragging a ×3 "any weapon" onto a wand: the copies named weapons, and
-        // "weapon or wand" is not a kind anything can copy, so they go rather
-        // than leaving a query the engine refuses.
+    fun aCrossCategoryDropLeavesALabelledStackIntact() {
         val start = listOf(anyWand(1).copy(kind = ItemKind.WEAPON, item = null))
         val stacked = start.setStackCount(start.boardItems().single(), count = 3) +
             ItemRequirement(9, fireblast, 3)
         assertEquals(3, stacked.count { it.identityGroup != null })
-        val joined = stacked.joinAlternatives(source = 0, target = 3)
-        assertNull(joined.validationProblem())
-        assertNull(joined.firstOrNull { it.identityGroup != null })
-        val item = joined.boardItems().single()
-        assertEquals(2, item.members.size)
-        assertEquals(1, item.stackCount)
+        assertSame(stacked, stacked.joinAlternatives(source = 0, target = 3))
+        assertSame(stacked, stacked.joinAlternatives(source = 3, target = 0))
     }
 
     @Test
-    fun aStackDoesNotFollowItsChipIntoAClusterOfAnotherCategory() {
-        // A copy has to name the kind it copies, and "ring or wand" names none,
-        // so the second ring stays the standalone chip it already encodes as
-        // rather than becoming an impossible copy.
-        val start = listOf(ring(1))
-        val stacked = start.setStackCount(start.boardItems().single(), count = 2) + anyWand(9)
-        val joined = stacked.joinAlternatives(source = 0, target = 2)
+    fun droppingArmorOnACountedRingDoesNotSplitOffItsCopies() {
+        for (count in 2..3) {
+            val stacked = emptyList<ItemRequirement>().applyEdit(
+                index = null,
+                requirement = ItemRequirement(0, ItemCatalog.findById("ring_energy")!!, 4),
+                count = count,
+                total = null,
+                copyDepth = 20,
+            ) + ItemRequirement(9, ItemCatalog.findById("plate_armor")!!, 3)
+            assertSame(stacked, stacked.joinAlternatives(source = count, target = 0))
+            assertSame(stacked, stacked.joinAlternatives(source = 0, target = count))
+        }
+    }
+
+    @Test
+    fun joiningARingOnlyTakesTheCopiesBelongingToThatChip() {
+        val first = listOf(ring(1, upgrade = 2))
+        val counted = first.setStackCount(first.boardItems().single(), count = 2) +
+            ring(9, upgrade = 4) + ItemRequirement(10, ItemCatalog.findById("ring_energy")!!, 1)
+        for ((source, target) in listOf(2 to 3, 3 to 2)) {
+            val joined = counted.joinAlternatives(source, target)
+            val items = joined.boardItems()
+            val untouched = items.single { joined[it.anchor].key == 1L }
+            assertEquals(2, untouched.stackCount)
+            assertEquals(counted.take(2), (untouched.members + untouched.extras).map { joined[it] })
+            assertEquals(1, items.single { it.cluster != null }.stackCount)
+            assertNull(joined.validationProblem())
+        }
+    }
+
+    @Test
+    fun droppingAnotherRingOnACountedRingKeepsItsCopiesAndTheirFloorLimit() {
+        val counted = emptyList<ItemRequirement>().applyEdit(
+            index = null,
+            requirement = ItemRequirement(0, ItemCatalog.findById("ring_energy")!!, 4),
+            count = 3,
+            total = null,
+            copyDepth = 9,
+        ) + ring(9)
+        val joined = counted.joinAlternatives(source = 3, target = 0)
+        val item = joined.boardItems().single()
+        assertEquals(listOf(1L, 9L), item.members.map { joined[it].key })
+        assertEquals(3, item.stackCount)
+        assertEquals(listOf(9, 9), item.extras.map { joined[it].maximumDepth })
+        assertEquals(4, joined[item.anchor].upgrade)
         assertNull(joined.validationProblem())
-        assertNull(joined.firstOrNull { it.identityGroup != null })
-        assertEquals(2, joined.boardCount())
     }
 
     @Test
@@ -186,6 +215,14 @@ class RelationsTest {
         // A cluster of one category is still free to stack.
         val wands = listOf(anyWand(1), ItemRequirement(2, fireblast, 3)).joinAlternatives(0, 1)
         assertTrue(wands.canStack(wands.boardItems().single()))
+    }
+
+    @Test
+    fun aCountedRingCannotJoinTheRingMemberOfAMixedCategoryGroup() {
+        val mixed = listOf(ring(1), anyWand(2)).joinAlternatives(1, 0)
+        val counted = (mixed + ring(9)).let { it.setStackCount(it.boardItems().last(), count = 3) }
+        assertFalse(counted.canJoinAlternatives(source = 2, target = 0))
+        assertSame(counted, counted.joinAlternatives(source = 2, target = 0))
     }
 
     @Test
