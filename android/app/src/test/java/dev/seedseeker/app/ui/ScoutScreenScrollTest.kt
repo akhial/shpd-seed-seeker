@@ -161,8 +161,15 @@ class ScoutScreenScrollTest {
     @Test fun seedAndDateEntryKeepTheSameFieldAndFormHeight() {
         show(initialSeed = "")
         screenshot("input-empty")
-        val field = bounds("scout-run-field")
+        compose.onNodeWithTag("scout-date-picker").assertDoesNotExist()
+        compose.onNodeWithTag("scout-today").assertDoesNotExist()
+        val restingField = bounds("scout-run-field")
         val form = bounds("scout-input")
+        compose.onNodeWithTag("scout-run-field").performClick()
+        val field = bounds("scout-run-field")
+        assertTrue(field.width < restingField.width)
+        assertEquals(restingField.height, field.height, 1f)
+        screenshot("input-editing")
         for (input in listOf("2", "202609", "20260925", "", "ABCDEFGH", "ABCDEFGHI")) {
             compose.onNodeWithTag("scout-run-field").performTextReplacement(input)
             compose.waitForIdle()
@@ -182,14 +189,22 @@ class ScoutScreenScrollTest {
     @Test fun dailyPickerAndTodayUseTheExistingScoutActions() {
         var scouted: String? = null
         show(initialSeed = "2026-09-25", onStep = { scouted = it })
+        compose.onNodeWithTag("scout-run-field").performClick()
         compose.onNodeWithContentDescription("Choose daily run date").assertIsDisplayed().performClick()
         compose.onNodeWithText("Daily run date (UTC)").assertIsDisplayed()
         compose.onNodeWithText("Use date").performClick()
         compose.onNodeWithText("Scout daily run").performClick()
         compose.runOnIdle { assertEquals("2026-09-25", scouted) }
+        compose.onNodeWithTag("scout-date-picker").assertDoesNotExist()
+        compose.onNodeWithTag("scout-today").assertDoesNotExist()
         screenshot("daily-run")
+        compose.onNodeWithTag("scout-run-field").performClick()
+        compose.onNodeWithContentDescription("Choose daily run date").performClick()
+        compose.onNodeWithText("Cancel").performClick()
         compose.onNodeWithText("Today").performClick()
         compose.runOnIdle { assertEquals(dev.seedseeker.app.model.DailyRunDate.today(), scouted) }
+        compose.onNodeWithTag("scout-date-picker").assertDoesNotExist()
+        compose.onNodeWithTag("scout-today").assertDoesNotExist()
         compose.onNodeWithTag("scout-run-field").performTextReplacement("ABCDEFGHI")
         compose.onNodeWithText("Scout seed").assertIsDisplayed()
     }
@@ -286,8 +301,12 @@ class ScoutScreenScrollTest {
     fun narrowPhoneKeepsCompactSeedBadgeAndCopySeparate() {
         show()
         screenshot("input-320dp")
+        compose.onNodeWithTag("scout-run-field").performClick()
         assertTrue(bounds("scout-run-field").right <= bounds("scout-date-picker").left)
         assertTrue(bounds("scout-date-picker").right <= bounds("scout-today").left)
+        screenshot("input-editing-320dp")
+        compose.onNodeWithText("Scout seed").performClick()
+        compose.onNodeWithTag("scout-date-picker").assertDoesNotExist()
         drag(330f)
         val seed = bounds("scout-seed")
         val badge = bounds("scout-requirements")
