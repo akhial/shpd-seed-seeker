@@ -251,7 +251,7 @@ private fun ChipPreview(compact: Boolean) {
             arcaneResinFilter = ArcaneResinFilter(),
             onEditResin = {},
             onRemoveResin = {},
-            modifier = Modifier.padding(12.dp).animateContentSize(MaterialTheme.motionScheme.defaultSpatialSpec()),
+            modifier = Modifier.padding(12.dp).animateContentSize(LayoutSizeSpring),
         )
     }
 }

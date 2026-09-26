@@ -4,6 +4,9 @@ package dev.seedseeker.app.ui
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.VisibilityThreshold
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
@@ -242,6 +245,20 @@ class EntranceMemory {
 /** The app's entrance memory; a screen shown on its own gets a fresh one. */
 val LocalEntranceMemory = staticCompositionLocalOf { EntranceMemory() }
 
+/**
+ * The spring for anything that changes a layout's size. Bounce belongs to
+ * scale and other transforms only: a size that overshoots drags everything
+ * below it up and down while it settles.
+ */
+val LayoutSizeSpring = spring(
+    dampingRatio = Spring.DampingRatioNoBouncy,
+    stiffness = 420f,
+    visibilityThreshold = IntSize.VisibilityThreshold,
+)
+
+/** [LayoutSizeSpring] for fractions of a layout, such as the finder's page split. */
+val LayoutFractionSpring = spring<Float>(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 380f)
+
 /** Squashes a control while it is held, and springs it back on release. */
 fun Modifier.pressScale(interactionSource: InteractionSource, pressed: Float = 0.92f): Modifier = composed {
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -323,26 +340,6 @@ fun Modifier.springEntrance(enabled: Boolean = true, delayMillis: Int = 0, rise:
         alpha = p.coerceIn(0f, 1f)
         translationY = (1f - p) * rise * density
         val scale = 0.9f + 0.1f * p
-        scaleX = scale
-        scaleY = scale
-    }
-}
-
-/**
- * A slow, gentle breathing pulse for things that invite a tap, or that are
- * alive and working. Resting at full size when motion is off.
- */
-fun Modifier.breathe(enabled: Boolean = true, amount: Float = 0.06f, periodMillis: Int = 1600): Modifier = composed {
-    val motion = LocalMotionEnabled.current
-    if (!enabled || !motion) return@composed this
-    val transition = rememberInfiniteTransition(label = "breathe")
-    val scale by transition.animateFloat(
-        initialValue = 1f,
-        targetValue = 1f + amount,
-        animationSpec = infiniteRepeatable(tween(periodMillis / 2), RepeatMode.Reverse),
-        label = "breathe-scale",
-    )
-    this.graphicsLayer {
         scaleX = scale
         scaleY = scale
     }

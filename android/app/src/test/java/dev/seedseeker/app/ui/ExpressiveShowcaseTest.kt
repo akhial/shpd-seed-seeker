@@ -203,6 +203,9 @@ class ExpressiveShowcaseTest {
         compose.onNodeWithText("Next").performClick()
         pump()
         shot("sheet-details", dialogWindow(), settle = false)
+        compose.onNodeWithText("Specific…").performClick()
+        pump()
+        shot("sheet-effects", dialogWindow(), settle = false)
     }
 
     @Test fun resinSheet() {
@@ -261,8 +264,8 @@ class ExpressiveShowcaseTest {
 
     @Test fun seedInfo() {
         host { Scout(world) }
-        compose.mainClock.autoAdvance = false
         compose.onNodeWithContentDescription("Seed information").performClick()
+        compose.mainClock.autoAdvance = false
         shot("seed-info", dialogWindow(), settle = false)
     }
 

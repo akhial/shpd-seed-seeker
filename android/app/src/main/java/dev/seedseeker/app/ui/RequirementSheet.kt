@@ -29,7 +29,11 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.ripple
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
@@ -280,17 +284,20 @@ fun RequirementSheet(
                 modifier = Modifier.padding(start = 20.dp, top = 12.dp, end = 20.dp, bottom = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(
-                    when {
-                        blanket -> if (editing == null) "Add blanket requirement" else "Edit blanket requirement"
-                        editing == null -> "Add requirement"
-                        inAlternativeGroup -> "Edit alternative"
-                        else -> "Edit requirement"
-                    },
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.weight(1f),
-                )
-                StepIndicator(step)
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        when {
+                            blanket -> if (editing == null) "Add blanket requirement" else "Edit blanket requirement"
+                            editing == null -> "Add requirement"
+                            inAlternativeGroup -> "Edit alternative"
+                            else -> "Edit requirement"
+                        },
+                        style = MaterialTheme.typography.titleLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    StepIndicator(step)
+                }
                 TextButton(onClick = onDismiss) { Text("Close") }
             }
 
@@ -1210,10 +1217,13 @@ private fun EffectGrid(
         letterSpacing = 1.sp,
         color = headingColor,
     )
+    // Chips wrap tightly: the 48dp touch margin would double every row gap
+    // on a list this long, and each chip is still 32dp tall and full-width tappable.
+    CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
     FlowRow(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
-        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
     ) {
         names.forEach { name ->
             val checked = name in selected
@@ -1239,6 +1249,7 @@ private fun EffectGrid(
                 shape = CircleShape,
             )
         }
+    }
     }
 }
 
@@ -1279,18 +1290,19 @@ private fun ItemTile(item: CatalogItem, selected: Boolean, onClick: () -> Unit) 
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            Box(contentAlignment = Alignment.Center) {
-                if (seal > 0.01f) {
-                    ShapeBackdrop(
-                        SeekerShapes.Seed,
-                        MaterialTheme.colorScheme.primary.copy(alpha = 0.28f),
-                        Modifier.size(52.dp).graphicsLayer {
-                            scaleX = seal
-                            scaleY = seal
-                        },
-                    )
-                }
-                ItemSprite(item, modifier = Modifier.size(42.dp).graphicsLayer {
+            // The seal is painted behind the sprite's own fixed box, spilling past
+            // it, so its spring never moves the name below.
+            val sealColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)
+            Box(
+                Modifier.size(42.dp).drawBehind {
+                    val side = 52.dp.toPx() * seal
+                    if (side > 0.5f) {
+                        drawPolygon(SeekerShapes.Seed, Offset((size.width - side) / 2f, (size.height - side) / 2f), side, sealColor)
+                    }
+                },
+                contentAlignment = Alignment.Center,
+            ) {
+                ItemSprite(item, modifier = Modifier.fillMaxSize().graphicsLayer {
                     val scale = 1f + 0.12f * seal
                     scaleX = scale
                     scaleY = scale

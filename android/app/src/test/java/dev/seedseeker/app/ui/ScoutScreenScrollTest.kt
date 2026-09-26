@@ -236,7 +236,8 @@ class ScoutScreenScrollTest {
             }
             val label = mappingLabel(entries.first())
             compose.onNodeWithContentDescription(label).performScrollTo().performClick()
-            compose.onNodeWithTag("mapping-detail").performScrollTo().assertIsDisplayed()
+            // The reveal card is pinned above the scrolling grid, so it shows without scrolling.
+            compose.onNodeWithTag("mapping-detail").assertIsDisplayed()
             compose.onNodeWithText(label).assertIsDisplayed()
             compose.onNodeWithContentDescription(label).performScrollTo().performClick()
             compose.onNodeWithTag("mapping-detail").assertDoesNotExist()

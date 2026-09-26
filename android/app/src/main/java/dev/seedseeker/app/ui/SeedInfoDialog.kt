@@ -2,14 +2,10 @@
 package dev.seedseeker.app.ui
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.expandVertically
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.padding
@@ -55,32 +51,30 @@ internal fun SeedInfoDialog(seed: String, mappings: ScoutItemMappings, onDismiss
                 Text(seed, fontFamily = FontFamily.Monospace,
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.tertiary)
-                Text("Tap an unidentified item to reveal it",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         },
         text = {
-            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).testTag("seed-mappings"),
-                verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                // The reveal: what this seed's unknown appearance really is,
-                // popping in on a bright card and swapping as you tap around.
-                AnimatedVisibility(
-                    visible = selected != null,
-                    enter = expandVertically(spring(dampingRatio = 0.7f, stiffness = 420f)) + fadeIn(),
-                    exit = shrinkVertically() + fadeOut(),
-                ) {
-                    var shown by remember { mutableStateOf(selected.orEmpty()) }
-                    selected?.let { shown = it }
-                    Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.tertiaryContainer,
-                        modifier = Modifier.fillMaxWidth()) {
-                        AnimatedContent(
-                            targetState = shown,
-                            transitionSpec = {
-                                (slideInVertically { it / 2 } + fadeIn()).togetherWith(slideOutVertically { -it / 2 } + fadeOut())
-                            },
-                            label = "mapping-reveal",
-                        ) { label ->
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                // The reveal card is always there, pinned above the grid: it holds
+                // a hint until an item is picked, so choosing, changing or clearing
+                // a pick never moves the tiles you are tapping.
+                val container by animateColorAsState(
+                    if (selected != null) MaterialTheme.colorScheme.tertiaryContainer
+                    else MaterialTheme.colorScheme.surfaceContainerHighest,
+                    label = "reveal-container",
+                )
+                Surface(shape = MaterialTheme.shapes.large, color = container, modifier = Modifier.fillMaxWidth()) {
+                    AnimatedContent(
+                        targetState = selected,
+                        transitionSpec = { fadeIn(tween(160)).togetherWith(fadeOut(tween(100))) },
+                        label = "mapping-reveal",
+                    ) { label ->
+                        if (label == null) {
+                            Text("Tap an unidentified item to reveal it",
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        } else {
                             Text(label, modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp)
                                 .then(if (label == selected) Modifier.testTag("mapping-detail") else Modifier),
                                 style = MaterialTheme.typography.bodyLarge,
@@ -89,7 +83,8 @@ internal fun SeedInfoDialog(seed: String, mappings: ScoutItemMappings, onDismiss
                         }
                     }
                 }
-                ItemMappingGrid(mappings, selected, onSelect = { selected = if (selected == it) null else it })
+                ItemMappingGrid(mappings, selected, onSelect = { selected = if (selected == it) null else it },
+                    modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).testTag("seed-mappings"))
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } },

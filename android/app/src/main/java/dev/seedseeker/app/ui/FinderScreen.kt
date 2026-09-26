@@ -217,8 +217,7 @@ fun FinderScreen(
     // The fraction is read only while measuring and drawing, so a page turn
     // re-lays out the screen each frame without recomposing the board.
     val pageAnimation = remember { Animatable(if (showResults) 1f else 0f) }
-    val pageSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
-    LaunchedEffect(showResults) { pageAnimation.animateTo(if (showResults) 1f else 0f, pageSpec) }
+    LaunchedEffect(showResults) { pageAnimation.animateTo(if (showResults) 1f else 0f, LayoutFractionSpring) }
     val resultsFraction = { pageAnimation.value.coerceIn(0f, 1f) }
     // Whether each page is on screen at all; these flip only at the ends of a turn.
     val queryShown by remember { derivedStateOf { pageAnimation.value < 1f } }
@@ -762,8 +761,8 @@ private fun QueryPage(
         )
         AnimatedVisibility(
             visible = validationMessage != null && (requirements.isNotEmpty() || floorRequirements.isNotEmpty() || (arcaneResinAuto || arcaneResin > 0)),
-            enter = expandVertically(spring(dampingRatio = 0.7f, stiffness = 400f)) + fadeIn(),
-            exit = shrinkVertically() + fadeOut(),
+            enter = expandVertically(LayoutSizeSpring) + fadeIn(),
+            exit = shrinkVertically(LayoutSizeSpring) + fadeOut(),
         ) {
             // Keep the last message on screen while the banner folds away.
             var shown by remember { mutableStateOf(validationMessage.orEmpty()) }
@@ -839,8 +838,8 @@ private fun QueryPage(
                 }
                 AnimatedVisibility(
                     visible = blanketsExpanded,
-                    enter = expandVertically(MaterialTheme.motionScheme.defaultSpatialSpec()) + fadeIn(),
-                    exit = shrinkVertically(MaterialTheme.motionScheme.fastSpatialSpec()) + fadeOut(),
+                    enter = expandVertically(LayoutSizeSpring) + fadeIn(),
+                    exit = shrinkVertically(LayoutSizeSpring) + fadeOut(),
                 ) {
                     RequirementBoard(
                         requirements = requirements, blanket = true, enabled = !isSearching,
@@ -1117,7 +1116,7 @@ private fun SearchActionBar(
             transitionSpec = {
                 (fadeIn(tween(220, delayMillis = 60)) + scaleIn(spring(0.7f, 380f), initialScale = 0.85f))
                     .togetherWith(fadeOut(tween(100)) + scaleOut(targetScale = 0.9f))
-                    .using(SizeTransform(clip = false) { _, _ -> spring(dampingRatio = 0.75f, stiffness = 380f) })
+                    .using(SizeTransform(clip = false) { _, _ -> LayoutSizeSpring })
             },
             contentAlignment = Alignment.Center,
             label = "search-bar",

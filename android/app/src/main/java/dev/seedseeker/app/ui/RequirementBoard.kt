@@ -282,12 +282,7 @@ fun RequirementBoard(
                             onDragCancel = { draggingResin = false },
                         )
                     }
-                    AddChip(
-                        enabled = enabled,
-                        // An empty board breathes its Add chip, inviting the first tap.
-                        inviting = items.isEmpty() && !(arcaneResinAuto || arcaneResin > 0),
-                        onClick = onAdd,
-                    )
+                    AddChip(enabled = enabled, onClick = onAdd)
                 }
                 if (dragging != null || draggingResin) {
                     RemoveZone(
@@ -929,11 +924,10 @@ private val RAINBOW = arrayOf(
 /**
  * The trailing "+ Add" chip that opens the editor on a new requirement. It
  * stands as tall as a chip, so the line it shares with one stays level. Its
- * plus turns a quarter on press; on an empty board it fills in and breathes,
- * the one thing on the page asking to be tapped.
+ * plus turns a quarter on press.
  */
 @Composable
-private fun AddChip(enabled: Boolean, inviting: Boolean, onClick: () -> Unit) {
+private fun AddChip(enabled: Boolean, onClick: () -> Unit) {
     val metrics = LocalChipMetrics.current
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
@@ -942,17 +936,11 @@ private fun AddChip(enabled: Boolean, inviting: Boolean, onClick: () -> Unit) {
         MaterialTheme.motionScheme.fastSpatialSpec(),
         label = "add-turn",
     )
-    val fill = if (inviting) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
     Row(
         modifier = Modifier
-            .breathe(enabled = inviting && enabled, amount = 0.05f)
             .pressScale(interaction)
             .clip(CircleShape)
-            .dashedOutline(
-                if (inviting) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-                fill = fill,
-                radius = metrics.radius,
-            )
+            .dashedOutline(MaterialTheme.colorScheme.outline, radius = metrics.radius)
             .clickable(
                 interactionSource = interaction,
                 indication = ripple(),
@@ -972,10 +960,10 @@ private fun AddChip(enabled: Boolean, inviting: Boolean, onClick: () -> Unit) {
         )
         Spacer(Modifier.width(5.dp))
         Text(
-            if (inviting) "Add a requirement" else "Add",
+            "Add",
             style = chipTitleStyle,
             fontWeight = FontWeight.SemiBold,
-            color = if (inviting) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
