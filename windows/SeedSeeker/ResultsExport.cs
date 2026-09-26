@@ -153,6 +153,7 @@ public static class ResultsExport
         if (requirement.RequireUncursed) output["uncursed"] = true;
         if (requirement.SelectTrinket) output["select_trinket"] = true;
         if (requirement.TrinketTransmutations > 0) output["trinket_transmutations"] = requirement.TrinketTransmutations;
+        if (requirement.ArtifactTransmutations > 0) output["artifact_transmutations"] = requirement.ArtifactTransmutations;
         if (requirement.Blanket) output["blanket"] = true;
         if (requirement.ExcludeResin) output["exclude_resin"] = true;
         if (requirement.Source is ScoutItemSource source) output["source"] = SourceNames[(int)source];
@@ -293,6 +294,8 @@ public static class ResultsExport
             SelectTrinket = BoolField(entry, "select_trinket"),
             TrinketTransmutations = entry.ContainsKey("trinket_transmutations")
                 ? IntField(entry, "trinket_transmutations") ?? throw new ResultsExportException("Invalid trinket transmutation limit") : 0,
+            ArtifactTransmutations = entry.ContainsKey("artifact_transmutations")
+                ? IntField(entry, "artifact_transmutations") ?? throw new ResultsExportException("Invalid artifact transmutation limit") : 0,
             Blanket = BoolField(entry, "blanket"),
             ExcludeResin = BoolField(entry, "exclude_resin"),
             AlternativeGroup = alternativeGroup,

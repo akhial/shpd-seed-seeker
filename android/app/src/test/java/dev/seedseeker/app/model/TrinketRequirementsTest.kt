@@ -64,6 +64,29 @@ class TrinketRequirementsTest {
         assertThrows(IllegalArgumentException::class.java) { requirement.copy(selectTrinket = true) }
     }
 
+    @Test fun artifactLimitSurvivesEveryQueryFormatAndScoutsTheDeck() {
+        val requirement = ItemRequirement(key = 1, item = ItemCatalog.artifacts.first { it.id == "ethereal_chains" },
+            upgrade = 0, upgradeMatch = UpgradeMatch.ANY, artifactTransmutations = 4)
+        val query = SearchRequest(listOf(requirement), maximumDepth = 19, autoApplyTrinket = false)
+        assertEquals(query.toPresetQuery(), ResultsExport.decodeQuery(ResultsExport.encodeQuery(query)))
+        assertEquals(query.toPresetQuery(), DeepLink.decode(DeepLink.encodeLink(query.toPresetQuery())))
+        assertEquals(query.toPresetQuery(), ResultsExport.decode(ResultsExport.encode(query.toPresetQuery(), emptyList(), "test")).query)
+        val storage = PresetStorage(MemoryPreferences())
+        storage.saveCurrentQuery(query.toPresetQuery())
+        assertEquals(query.toPresetQuery(), storage.loadCurrentQuery())
+        val marks = dev.seedseeker.app.engine.JniNativeSeedFinder().scoutMatches("AAA-AAA-AAA", 0, query)
+        assertEquals(1, marks.matchedSlots)
+        assertEquals(1, marks.items.size)
+        assertEquals(setOf(19 to 3), marks.transmutedArtifacts)
+        val world = dev.seedseeker.app.engine.JniNativeSeedFinder().scoutSeed("AAA-AAA-AAA")
+        assertEquals(11, world.artifactDecks.getValue(9).size)
+        assertEquals("ethereal_chains", world.artifactDecks.getValue(19)[3].id)
+        for (count in listOf(-1, 11)) assertThrows(IllegalArgumentException::class.java) {
+            requirement.copy(artifactTransmutations = count)
+        }
+        assertThrows(IllegalArgumentException::class.java) { requirement.copy(selectTrinket = true) }
+    }
+
     @Test fun wildcardTrinketIsRejected() {
         assertThrows(IllegalArgumentException::class.java) {
             ItemRequirement(key = 0, item = null, kind = ItemKind.TRINKET, upgrade = 0, upgradeMatch = UpgradeMatch.ANY)

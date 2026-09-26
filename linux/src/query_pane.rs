@@ -1333,9 +1333,18 @@ fn chip_tag(text: &str, class: &str) -> gtk::Label {
 /// item pins its own tier, so only a wildcard shows one.
 fn chip_tags(requirement: &UiRequirement) -> Vec<(String, &'static str)> {
     let mut tags = Vec::new();
-    if requirement.trinket_transmutations > 0 {
+    if requirement
+        .trinket_transmutations
+        .max(requirement.artifact_transmutations)
+        > 0
+    {
         tags.push((
-            format!("Transmute ≤{}", requirement.trinket_transmutations),
+            format!(
+                "Transmute ≤{}",
+                requirement
+                    .trinket_transmutations
+                    .max(requirement.artifact_transmutations)
+            ),
             "chip-tag-plain",
         ));
     }

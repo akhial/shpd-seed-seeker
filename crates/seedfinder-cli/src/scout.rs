@@ -99,6 +99,21 @@ pub fn run(seed: DungeonSeed, items: Option<&Path>, output: Option<&Path>) -> Re
             text.push('\n');
         }
     }
+    let artifact_depth = query.as_ref().map_or(24, |query| query.max_depth);
+    writeln!(
+        text,
+        "\nArtifact transmutation order after floor {artifact_depth}"
+    )
+    .unwrap();
+    let deck = shpd_seedfinder_core::artifacts::deck_at(&world, artifact_depth);
+    if deck.is_empty() {
+        text.push_str("  Deck exhausted; further transmutations produce a ring.\n");
+    } else {
+        text.push_str("  Requires an obtainable artifact; scroll availability is not simulated.\n");
+        for (index, &id) in deck.iter().enumerate() {
+            writeln!(text, "  #{} {}", index + 1, item(id).name).unwrap();
+        }
+    }
     if let Some(output) = output {
         std::fs::write(output, text).map_err(|error| error.to_string())
     } else {

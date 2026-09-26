@@ -31,6 +31,7 @@ pub fn scout_matches_document(request: &[u8], query: &[u8]) -> Result<String, Sc
         "matched": marks.matched_indices(),
         "transmutedTrinkets": marks.transmuted_trinkets.iter().enumerate()
             .filter_map(|(index, &matched)| matched.then_some(index)).collect::<Vec<_>>(),
+        "transmutedArtifacts": marks.transmuted_artifacts.iter().map(|&(depth, index)| json!({"depth":depth,"index":index})).collect::<Vec<_>>(),
         "matchedRequirements": marks.matched_requirements,
         "totalRequirements": marks.total_requirements,
     })

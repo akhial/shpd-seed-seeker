@@ -121,7 +121,7 @@ public enum ScoutCodec {
         guard override.isEmpty || override == "none" || ItemCatalog.findById(override)?.kind == .trinket else {
             throw WireCodecError.invalidValue("Unknown trinket")
         }
-        output.bytes("SSQ5".utf8)
+        output.bytes("SSQ6".utf8)
         output.u16LittleEndian(challenges)
         output.u16LittleEndian(seed.utf8.count)
         output.bytes(seed.utf8)
@@ -134,7 +134,7 @@ public enum ScoutCodec {
     public static func decode(_ packet: Data) throws -> ScoutWorld {
         var input = Reader(data: packet)
         let magic = try input.bytes(4)
-        guard ["SSC3", "SSC4", "SSC5", "SSC6", "SSC7", "SSC8"].contains(where: { magic == Data($0.utf8) }) else { throw WireCodecError.badMagic }
+        guard ["SSC3", "SSC4", "SSC5", "SSC6", "SSC7", "SSC8", "SSC9"].contains(where: { magic == Data($0.utf8) }) else { throw WireCodecError.badMagic }
         let seed = try input.ascii(Int(input.u8()))
         guard SeedCode.isScoutable(seed) else { throw WireCodecError.invalidValue("Malformed seed from native scout") }
         // Twelve gem ordinals, one per ring class in the order the catalog
@@ -205,7 +205,7 @@ public enum ScoutCodec {
             }
         }
         var feelings: [Int: FloorFeeling] = [:]
-        if magic == Data("SSC5".utf8) || magic == Data("SSC6".utf8) || magic == Data("SSC7".utf8) || magic == Data("SSC8".utf8) {
+        if magic == Data("SSC5".utf8) || magic == Data("SSC6".utf8) || magic == Data("SSC7".utf8) || (magic == Data("SSC8".utf8) || magic == Data("SSC9".utf8)) {
             let count = Int(try input.u8())
             guard count <= 20 else { throw WireCodecError.invalidValue("Floor feeling count must be 0..20") }
             var previousDepth = 0
@@ -222,7 +222,7 @@ public enum ScoutCodec {
             }
         }
         var selectedTrinket: String?
-        if magic == Data("SSC6".utf8) || magic == Data("SSC7".utf8) || magic == Data("SSC8".utf8) {
+        if magic == Data("SSC6".utf8) || magic == Data("SSC7".utf8) || (magic == Data("SSC8".utf8) || magic == Data("SSC9".utf8)) {
             let id = try input.utf8(input.u16())
             guard id.isEmpty || trinketOrder.prefix(4).contains(where: { $0.id == id }) else {
                 throw WireCodecError.invalidValue("Selected trinket is not initially offered")
@@ -230,7 +230,7 @@ public enum ScoutCodec {
             selectedTrinket = id.isEmpty ? nil : id
         }
         var mappings: ScoutItemMappings?
-        if magic == Data("SSC7".utf8) || magic == Data("SSC8".utf8) {
+        if magic == Data("SSC7".utf8) || (magic == Data("SSC8".utf8) || magic == Data("SSC9".utf8)) {
             mappings = try ScoutItemMappings(scrolls: readMappings(&input, spriteBase: 304),
                 potions: readMappings(&input, spriteBase: 352), rings: readMappings(&input, spriteBase: 224))
             guard mappings?.rings.map({ $0.spriteIndex - 224 }) == ringGems.ordinals else {
@@ -238,7 +238,7 @@ public enum ScoutCodec {
             }
         }
         var floorRooms: [Int: Set<String>] = [:]
-        if magic == Data("SSC8".utf8) {
+        if (magic == Data("SSC8".utf8) || magic == Data("SSC9".utf8)) {
             let count = Int(try input.u8())
             guard count <= 20 else { throw WireCodecError.invalidValue("Too many floor room summaries") }
             var previousDepth = 0
@@ -258,10 +258,30 @@ public enum ScoutCodec {
                 floorRooms[depth] = rooms
             }
         }
+        var artifactDecks: [Int: [CatalogItem]] = [:]
+        if magic == Data("SSC9".utf8) {
+            let count = Int(try input.u8())
+            guard count <= 24 else { throw WireCodecError.invalidValue("Too many artifact decks") }
+            var previous = 0
+            for _ in 0..<count {
+                let depth = Int(try input.u8())
+                guard (1...24).contains(depth), depth > previous else { throw WireCodecError.invalidValue("Invalid artifact deck floor") }
+                previous = depth
+                let size = Int(try input.u8())
+                guard size <= 11 else { throw WireCodecError.invalidValue("Too many artifacts") }
+                var order: [CatalogItem] = []
+                for _ in 0..<size {
+                    let id = try input.utf8(input.u16())
+                    guard let item = ItemCatalog.findById(id), item.kind == .artifact, !order.contains(item) else { throw WireCodecError.invalidValue("Invalid artifact") }
+                    order.append(item)
+                }
+                artifactDecks[depth] = order
+            }
+        }
         guard input.remaining == 0 else { throw WireCodecError.trailingBytes }
         return ScoutWorld(seed: seed, quests: quests, items: items, ringGems: ringGems,
                           trinketOrder: trinketOrder, feelings: feelings, selectedTrinket: selectedTrinket,
-                          itemMappings: mappings, floorRooms: floorRooms)
+                          itemMappings: mappings, floorRooms: floorRooms, artifactDecks: artifactDecks)
     }
 
     private static func readMappings(_ input: inout Reader, spriteBase: Int) throws -> [ScoutItemMapping] {

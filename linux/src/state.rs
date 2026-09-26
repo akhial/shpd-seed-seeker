@@ -83,6 +83,7 @@ pub struct UiRequirement {
     pub require_uncursed: bool,
     pub select_trinket: bool,
     pub trinket_transmutations: u8,
+    pub artifact_transmutations: u8,
     pub blanket: bool,
     pub exclude_resin: bool,
     pub source: Option<ItemSource>,
@@ -107,6 +108,7 @@ impl UiRequirement {
             require_uncursed: false,
             select_trinket: false,
             trinket_transmutations: 0,
+            artifact_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             source: None,
@@ -129,6 +131,7 @@ impl UiRequirement {
             require_uncursed: self.require_uncursed,
             select_trinket: self.select_trinket,
             trinket_transmutations: self.trinket_transmutations,
+            artifact_transmutations: self.artifact_transmutations,
             blanket: self.blanket,
             exclude_resin: self.exclude_resin,
             source: self.source,
@@ -212,6 +215,9 @@ impl UiRequirement {
         };
         if let Some(effect) = effect_label(self.effect) {
             let _ = write!(text, " \u{b7} {effect}");
+        }
+        if self.artifact_transmutations > 0 {
+            let _ = write!(text, " · Transmute ≤{}", self.artifact_transmutations);
         }
         if self.exclude_resin {
             text.push_str(" · excluded from Auto resin");
@@ -351,6 +357,7 @@ impl AppState {
                 require_uncursed: requirement.require_uncursed,
                 select_trinket: requirement.select_trinket,
                 trinket_transmutations: requirement.trinket_transmutations,
+                artifact_transmutations: requirement.artifact_transmutations,
                 blanket: requirement.blanket,
                 exclude_resin: requirement.exclude_resin,
                 source: requirement.source,
@@ -960,6 +967,7 @@ mod tests {
             item: Some(ItemId::MimicTooth),
             select_trinket: true,
             trinket_transmutations: 0,
+            artifact_transmutations: 0,
             ..UiRequirement::new(1)
         });
         let query = state.to_query().unwrap();
@@ -1241,6 +1249,7 @@ mod tests {
             require_uncursed: true,
             select_trinket: false,
             trinket_transmutations: 0,
+            artifact_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             max_depth: Some(9),

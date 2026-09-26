@@ -300,6 +300,7 @@ fn generate_city_world_with_roots(
     let mut items = Vec::new();
     let mut feelings = Vec::new();
     let mut floor_rooms = Vec::new();
+    let mut artifact_decks = Vec::new();
     let mut next_choice_group = 0_u16;
 
     for (index, &root) in roots[..4].iter().enumerate() {
@@ -322,6 +323,10 @@ fn generate_city_world_with_roots(
             depth: u8::try_from(depth).expect("main-path depths fit u8"),
             feeling: floor.painted.level.feeling,
         });
+        artifact_decks.push(crate::artifacts::ArtifactDeck::capture(
+            u8::try_from(depth).expect("main-path depths fit u8"),
+            &run.generator,
+        ));
         items.extend(floor.world_items);
     }
 
@@ -346,6 +351,10 @@ fn generate_city_world_with_roots(
             depth: u8::try_from(depth).expect("main-path depths fit u8"),
             feeling: floor.painted.level.feeling,
         });
+        artifact_decks.push(crate::artifacts::ArtifactDeck::capture(
+            u8::try_from(depth).expect("main-path depths fit u8"),
+            &run.generator,
+        ));
         items.extend(floor.world_items);
     }
 
@@ -370,6 +379,10 @@ fn generate_city_world_with_roots(
             depth: u8::try_from(depth).expect("main-path depths fit u8"),
             feeling: floor.painted.level.feeling,
         });
+        artifact_decks.push(crate::artifacts::ArtifactDeck::capture(
+            u8::try_from(depth).expect("main-path depths fit u8"),
+            &run.generator,
+        ));
         items.extend(floor.world_items);
     }
 
@@ -394,12 +407,17 @@ fn generate_city_world_with_roots(
             depth: u8::try_from(depth).expect("main-path depths fit u8"),
             feeling: floor.painted.level.feeling,
         });
+        artifact_decks.push(crate::artifacts::ArtifactDeck::capture(
+            u8::try_from(depth).expect("main-path depths fit u8"),
+            &run.generator,
+        ));
         items.extend(floor.world_items);
     }
     Ok(GeneratedWorld {
         seed,
         items,
         floor_rooms,
+        artifact_decks,
         feelings,
         quests: quests.summary(),
         ring_gems: run.appearances.ring_gems,

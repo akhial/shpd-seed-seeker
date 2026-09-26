@@ -323,6 +323,7 @@ fun ScoutScreen(
                 }
 
                 result?.let { world ->
+                    if (world.artifactDecks.isNotEmpty()) item(key = "artifact-deck") { ArtifactDeckCard(world, matches) }
                     val questsByDepth = world.quests.associateBy(ScoutQuest::depth)
                     floors
                         .forEach { (depth, floorItems) ->
@@ -917,5 +918,39 @@ private fun FittedTrinketName(name: String) {
             onTextLayout = { result ->
                 if (result.didOverflowWidth && fontSize > 1f) fontSize = (fontSize * 0.9f).coerceAtLeast(1f)
             })
+    }
+}
+
+
+@Composable
+private fun ArtifactDeckCard(world: ScoutWorld, matches: ScoutMatches?) {
+    var depth by remember(world.seed) { mutableStateOf(matches?.transmutedArtifacts?.firstOrNull()?.first ?: 19) }
+    var expanded by remember { mutableStateOf(true) }
+    val order = world.artifactDecks.entries.lastOrNull { it.key <= depth }?.value.orEmpty()
+    Card(Modifier.fillMaxWidth().padding(vertical = 8.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            TextButton(onClick = { expanded = !expanded }) { Text("Artifact transmutation order") }
+            if (expanded) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("After floor", Modifier.weight(1f))
+                    Stepper(depth, 1..24, { "Floor $it" }, { depth = it })
+                }
+                Text("Remaining artifacts in draw order. Requires an artifact to transform. Later generation and transmutations consume this deck.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                if (order.isEmpty()) Text("Deck exhausted. Further transmutations produce a ring.", style = MaterialTheme.typography.bodySmall)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    order.forEachIndexed { index, artifact ->
+                        val matched = matches?.transmutedArtifacts?.contains(depth to index) == true
+                        Surface(shape = RoundedCornerShape(6.dp), color = if (matched) SpdGreen.copy(alpha = 0.14f) else Color.Transparent,
+                            border = if (matched) androidx.compose.foundation.BorderStroke(1.dp, SpdGreen) else null,
+                            modifier = Modifier.semantics { contentDescription = "Transmutation #${index + 1}: ${artifact.name}" + if (matched) ", matches requirement" else "" }) {
+                            Column(Modifier.padding(4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                ItemSprite(artifact, modifier = Modifier.size(28.dp))
+                                Text("${index + 1}", style = MaterialTheme.typography.labelSmall)
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }

@@ -165,6 +165,7 @@ public enum ResultsExport {
         if requirement.requireUncursed { output["uncursed"] = true }
         if requirement.selectTrinket { output["select_trinket"] = true }
         if requirement.trinketTransmutations > 0 { output["trinket_transmutations"] = requirement.trinketTransmutations }
+        if requirement.artifactTransmutations > 0 { output["artifact_transmutations"] = requirement.artifactTransmutations }
         if requirement.blanket { output["blanket"] = true }
         if requirement.excludeResin { output["exclude_resin"] = true }
         if let source = requirement.source { output["source"] = sourceNames[source.rawValue] }
@@ -330,6 +331,7 @@ public enum ResultsExport {
             alternativeGroup: alternativeGroup,
             levelSum: levelSum, selectTrinket: boolField(entry, "select_trinket"),
             trinketTransmutations: entry["trinket_transmutations"] == nil ? 0 : (intField(entry, "trinket_transmutations") ?? -1),
+            artifactTransmutations: entry["artifact_transmutations"] == nil ? 0 : (intField(entry, "artifact_transmutations") ?? -1),
             blanket: boolField(entry, "blanket"), excludeResin: boolField(entry, "exclude_resin"))
     }
 }

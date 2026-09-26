@@ -297,6 +297,8 @@ pub struct Requirement {
     pub select_trinket: bool,
     /// Maximum acceptable transmutations (0–13), always including initial offers.
     pub trinket_transmutations: u8,
+    /// Maximum remaining-deck draws at the floor limit (0–10); natural finds always count.
+    pub artifact_transmutations: u8,
     /// Extra predicate on an ordinary assigned item or a selected resin donor.
     /// Blanket slots may reuse that item and never consume another occurrence.
     pub blanket: bool,
@@ -323,7 +325,7 @@ impl Requirement {
     }
 
     fn matching_identity(self, candidate: &WorldItem) -> Option<ItemId> {
-        if self.trinket_transmutations > 0 {
+        if self.trinket_transmutations > 0 || self.artifact_transmutations > 0 {
             // Transmutation requires deck context; Assignment supplies a virtual candidate.
             return None;
         }
@@ -413,6 +415,7 @@ impl Requirement {
     /// Returns a validation error for a category mismatch, an effect set of
     /// another family, an upgrade outside the UI's family-specific range, or
     /// an inconsistent group label.
+    #[allow(clippy::too_many_lines)] // Validate each independent requirement predicate.
     pub fn validate(self) -> Result<(), QueryError> {
         if self.exclude_resin && (self.kind != ItemKind::Wand || self.blanket) {
             return Err(QueryError::ResinExclusionRequiresWand);
@@ -428,6 +431,12 @@ impl Requirement {
                 || self.select_trinket)
         {
             return Err(QueryError::InvalidTrinketTransmutations);
+        }
+        if self.artifact_transmutations > 0
+            && (self.kind != ItemKind::Artifact
+                || self.artifact_transmutations > crate::artifacts::TRANSMUTATION_COUNT)
+        {
+            return Err(QueryError::InvalidArtifactTransmutations);
         }
         if self.select_trinket && self.kind != ItemKind::Trinket {
             return Err(QueryError::SelectionRequiresTrinket);
@@ -880,6 +889,9 @@ struct Slot<'query> {
 struct Assignment<'query> {
     resin: resin::ResinSupply,
     items: std::borrow::Cow<'query, [WorldItem]>,
+    artifact_outcomes: Vec<crate::artifacts::Outcome>,
+    artifact_start: usize,
+    conflicts: Vec<Vec<usize>>,
     /// Resolved slots, most constrained slot first.
     slots: Vec<Slot<'query>>,
     sum_groups: BTreeMap<u8, SumGroup>,
@@ -905,8 +917,50 @@ struct Undo {
 impl<'query> Assignment<'query> {
     /// Builds per-slot candidate lists under the query's floor limits and the
     /// blacksmith-reward exclusion, sorted most constrained slot first.
+    #[allow(clippy::too_many_lines)] // Build candidate lists and their shared acquisition constraints.
     fn prepare(query: &'query SearchQuery, world: &'query GeneratedWorld) -> Self {
-        let items = crate::trinkets::matching_items(query, world);
+        let mut items = crate::trinkets::matching_items(query, world);
+        let artifact_start = items.len();
+        let artifact_outcomes = crate::artifacts::outcomes(query, world);
+        if !artifact_outcomes.is_empty() {
+            items
+                .to_mut()
+                .extend(artifact_outcomes.iter().map(|outcome| {
+                    let mut candidate = world.items[outcome.donor].clone();
+                    for &identity in
+                        &crate::artifacts::deck_at(world, outcome.depth)[..=outcome.step]
+                    {
+                        candidate.upgrade = candidate.displayed_upgrade();
+                        candidate.item = identity;
+                    }
+                    candidate.depth = outcome.depth;
+                    candidate
+                }));
+        }
+        let mut conflicts = vec![Vec::new(); items.len()];
+        for (offset, outcome) in artifact_outcomes.iter().enumerate() {
+            let index = artifact_start + offset;
+            for other in 0..index {
+                let conflict = if other >= artifact_start {
+                    let previous = &artifact_outcomes[other - artifact_start];
+                    previous.donor == outcome.donor || previous.identity == outcome.identity
+                        // Snapshots describe independent baseline prefixes, not a replay
+                        // of earlier transmutations into later generated floors.
+                        || previous.depth != outcome.depth
+                        // A later generated donor changes after an earlier transmutation.
+                        || world.items[previous.donor].depth > outcome.depth
+                        || world.items[outcome.donor].depth > previous.depth
+                } else {
+                    other == outcome.donor
+                        || (item(items[other].item).kind == ItemKind::Artifact
+                            && items[other].depth > outcome.depth)
+                };
+                if conflict {
+                    conflicts[index].push(other);
+                    conflicts[other].push(index);
+                }
+            }
+        }
         let mut slots: Vec<Slot<'query>> = Vec::new();
         let mut blankets = Vec::new();
         let reforge_copies = if query.arcane_resin_auto {
@@ -928,9 +982,24 @@ impl<'query> Assignment<'query> {
                     .min(items.len());
                 let predicate = Requirement {
                     trinket_transmutations: 0,
+                    artifact_transmutations: 0,
                     ..*requirement
                 };
-                for index in 0..end {
+                let artifact_indices =
+                    artifact_outcomes
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(offset, outcome)| {
+                            (requirement.artifact_transmutations > 0
+                                && outcome.depth
+                                    == requirement
+                                        .max_depth
+                                        .unwrap_or(query.max_depth)
+                                        .min(query.max_depth)
+                                && outcome.step < usize::from(requirement.artifact_transmutations))
+                            .then_some(artifact_start + offset)
+                        });
+                for index in (0..end.min(artifact_start)).chain(artifact_indices) {
                     let candidate = &items[index];
                     if candidate.depth <= query.max_depth
                         && candidate.depth <= requirement.max_depth.unwrap_or(query.max_depth)
@@ -964,6 +1033,9 @@ impl<'query> Assignment<'query> {
         // Fail early by assigning the most constrained slot first.
         slots.sort_by_key(|slot| slot.candidates.len());
         Self {
+            artifact_outcomes,
+            artifact_start,
+            conflicts,
             resin: resin::ResinSupply::prepare(query, &world.items),
             used: vec![false; items.len()],
             items,
@@ -1037,7 +1109,11 @@ impl<'query> Assignment<'query> {
         requirement: &Requirement,
         upgrade_with_resin: bool,
     ) -> Option<Undo> {
-        if self.used[item_index] {
+        if self.used[item_index]
+            || self.conflicts[item_index]
+                .iter()
+                .any(|&other| self.used[other])
+        {
             return None;
         }
         let mut undo = Undo {
@@ -1132,6 +1208,8 @@ pub struct ScoutMatches {
     pub matched: Vec<bool>,
     /// Matches for transmutations 1–13, separate from generated world item indices.
     pub transmuted_trinkets: [bool; crate::trinkets::TRANSMUTATION_COUNT as usize],
+    /// Matched remaining-deck outcomes (floor, zero-based position).
+    pub transmuted_artifacts: Vec<(u8, usize)>,
     /// How many conditions the selection satisfies: one per filled plain
     /// slot, plus one per combined-level group whose assigned items reach
     /// its total. A satisfied group flags every contributing item, so more
@@ -1186,8 +1264,14 @@ pub fn scout_matches(world: &GeneratedWorld, query: &SearchQuery) -> ScoutMatche
     search.visit(0);
     let mut matched = vec![false; world.items.len()];
     let mut transmuted_trinkets = [false; crate::trinkets::TRANSMUTATION_COUNT as usize];
+    let mut transmuted_artifacts = Vec::new();
     for &index in &search.best {
-        if index < matched.len() {
+        if index >= search.assignment.artifact_start {
+            let outcome =
+                &search.assignment.artifact_outcomes[index - search.assignment.artifact_start];
+            matched[outcome.donor] = true;
+            transmuted_artifacts.push((outcome.depth, outcome.step));
+        } else if index < matched.len() {
             matched[index] = true;
         } else {
             transmuted_trinkets[index - matched.len()] = true;
@@ -1196,6 +1280,7 @@ pub fn scout_matches(world: &GeneratedWorld, query: &SearchQuery) -> ScoutMatche
     ScoutMatches {
         matched,
         transmuted_trinkets,
+        transmuted_artifacts,
         matched_requirements: search.best_conditions
             + query
                 .floor_requirements
@@ -1325,6 +1410,7 @@ pub enum QueryError {
     TrinketRequiresIdentity,
     SelectionRequiresTrinket,
     InvalidTrinketTransmutations,
+    InvalidArtifactTransmutations,
     ResinExclusionRequiresWand,
     ArtifactRequiresIdentity,
     InvalidWeaponCategory,
@@ -1406,6 +1492,9 @@ impl fmt::Display for QueryError {
             }
             Self::SelectionRequiresTrinket => "only a named trinket can be selected",
             Self::TrinketRequiresIdentity => "select a trinket",
+            Self::InvalidArtifactTransmutations => {
+                "artifact transmutations must be 0–10 on a named artifact"
+            }
             Self::ArtifactRequiresIdentity => "select an artifact",
             Self::ItemKindMismatch => "selected item is in a different category",
             Self::InvalidWeaponCategory => {
@@ -1473,6 +1562,7 @@ mod tests {
             require_uncursed: false,
             select_trinket: false,
             trinket_transmutations: 0,
+            artifact_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             source: None,
@@ -1500,6 +1590,7 @@ mod tests {
         };
         let one = GeneratedWorld {
             floor_rooms: Vec::new(),
+            artifact_decks: Vec::new(),
             feelings: Vec::new(),
             quests: crate::quests::QuestSummary::default(),
             seed: DungeonSeed::MIN,
@@ -1509,6 +1600,7 @@ mod tests {
         assert!(!query.matches(&one));
         let two = GeneratedWorld {
             floor_rooms: Vec::new(),
+            artifact_decks: Vec::new(),
             feelings: Vec::new(),
             quests: crate::quests::QuestSummary::default(),
             seed: DungeonSeed::MIN,
@@ -1540,6 +1632,7 @@ mod tests {
         };
         let world = |wandmaker| GeneratedWorld {
             floor_rooms: Vec::new(),
+            artifact_decks: Vec::new(),
             feelings: Vec::new(),
             quests: QuestSummary {
                 wandmaker,
@@ -1591,6 +1684,7 @@ mod tests {
     fn requirement_floor_limit_is_inclusive() {
         let world = GeneratedWorld {
             floor_rooms: Vec::new(),
+            artifact_decks: Vec::new(),
             feelings: Vec::new(),
             quests: crate::quests::QuestSummary::default(),
             seed: DungeonSeed::MIN,
@@ -1634,6 +1728,7 @@ mod tests {
         };
         let world = GeneratedWorld {
             floor_rooms: Vec::new(),
+            artifact_decks: Vec::new(),
             feelings: Vec::new(),
             quests: crate::quests::QuestSummary::default(),
             seed: DungeonSeed::MIN,
@@ -1675,6 +1770,7 @@ mod tests {
         };
         let world = GeneratedWorld {
             floor_rooms: Vec::new(),
+            artifact_decks: Vec::new(),
             feelings: Vec::new(),
             quests: crate::quests::QuestSummary::default(),
             seed: DungeonSeed::MIN,
@@ -1724,6 +1820,7 @@ mod tests {
         );
         let world = GeneratedWorld {
             floor_rooms: Vec::new(),
+            artifact_decks: Vec::new(),
             feelings: Vec::new(),
             quests: crate::quests::QuestSummary::default(),
             seed: DungeonSeed::MIN,
@@ -1774,6 +1871,7 @@ mod tests {
             require_uncursed: false,
             select_trinket: false,
             trinket_transmutations: 0,
+            artifact_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             source: None,
@@ -1799,6 +1897,7 @@ mod tests {
             require_uncursed: false,
             select_trinket: false,
             trinket_transmutations: 0,
+            artifact_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             source: None,
@@ -1880,6 +1979,7 @@ mod tests {
             require_uncursed: true,
             select_trinket: false,
             trinket_transmutations: 0,
+            artifact_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             ..requirement(ItemId::Sword)
@@ -1899,6 +1999,7 @@ mod tests {
             require_uncursed: false,
             select_trinket: false,
             trinket_transmutations: 0,
+            artifact_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             source: None,
@@ -1919,6 +2020,7 @@ mod tests {
             require_uncursed: false,
             select_trinket: false,
             trinket_transmutations: 0,
+            artifact_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             source: None,
@@ -1957,6 +2059,7 @@ mod tests {
             require_uncursed: false,
             select_trinket: false,
             trinket_transmutations: 0,
+            artifact_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             source: None,
@@ -2048,6 +2151,7 @@ mod tests {
             require_uncursed: false,
             select_trinket: false,
             trinket_transmutations: 0,
+            artifact_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             source: None,
@@ -2128,6 +2232,7 @@ mod tests {
             require_uncursed: false,
             select_trinket: false,
             trinket_transmutations: 0,
+            artifact_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             source,
@@ -2159,6 +2264,7 @@ mod tests {
                     require_uncursed: false,
                     select_trinket: false,
                     trinket_transmutations: 0,
+                    artifact_transmutations: 0,
                     blanket: false,
                     exclude_resin: false,
                     source: None,
@@ -2186,6 +2292,7 @@ mod tests {
         };
         let world = GeneratedWorld {
             floor_rooms: Vec::new(),
+            artifact_decks: Vec::new(),
             feelings: Vec::new(),
             quests: crate::quests::QuestSummary::default(),
             seed: DungeonSeed::MIN,
@@ -2237,6 +2344,7 @@ mod tests {
         };
         let smith_only = GeneratedWorld {
             floor_rooms: Vec::new(),
+            artifact_decks: Vec::new(),
             feelings: Vec::new(),
             quests: crate::quests::QuestSummary::default(),
             seed: DungeonSeed::MIN,
@@ -2253,6 +2361,7 @@ mod tests {
         query.require_blacksmith = false;
         let no_blacksmith = GeneratedWorld {
             floor_rooms: Vec::new(),
+            artifact_decks: Vec::new(),
             feelings: Vec::new(),
             quests: crate::quests::QuestSummary::default(),
             seed: DungeonSeed::MIN,
@@ -2274,6 +2383,7 @@ mod tests {
             require_uncursed: false,
             select_trinket: false,
             trinket_transmutations: 0,
+            artifact_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             source: None,
@@ -2390,6 +2500,7 @@ mod tests {
             require_uncursed: false,
             select_trinket: false,
             trinket_transmutations: 0,
+            artifact_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             source: None,
@@ -2476,6 +2587,7 @@ mod tests {
                 require_uncursed: true,
                 select_trinket: false,
                 trinket_transmutations: 0,
+                artifact_transmutations: 0,
                 blanket: false,
                 exclude_resin: false,
                 ..plain(ItemKind::Weapon)
@@ -2492,6 +2604,7 @@ mod tests {
                 require_uncursed: true,
                 select_trinket: false,
                 trinket_transmutations: 0,
+                artifact_transmutations: 0,
                 blanket: false,
                 exclude_resin: false,
                 ..plain(ItemKind::Weapon)
@@ -2772,6 +2885,7 @@ mod tests {
     fn scout_world(items: Vec<WorldItem>) -> GeneratedWorld {
         GeneratedWorld {
             floor_rooms: Vec::new(),
+            artifact_decks: Vec::new(),
             feelings: Vec::new(),
             quests: crate::quests::QuestSummary::default(),
             seed: DungeonSeed::MIN,
@@ -2791,6 +2905,7 @@ mod tests {
             require_uncursed: false,
             select_trinket: false,
             trinket_transmutations: 0,
+            artifact_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             source: None,

@@ -227,6 +227,7 @@ data class ItemRequirement(
     val requireUncursed: Boolean = false,
     val selectTrinket: Boolean = false,
     val trinketTransmutations: Int = 0,
+    val artifactTransmutations: Int = 0,
     val blanket: Boolean = false,
     val excludeResin: Boolean = false,
     /**
@@ -249,6 +250,7 @@ data class ItemRequirement(
         }
         require(!excludeResin || (kind == ItemKind.WAND && !blanket)) { "Only an ordinary wand can exclude Auto resin" }
         require(!selectTrinket || kind == ItemKind.TRINKET) { "Only a named trinket can be selected" }
+        require(artifactTransmutations in 0..10 && (artifactTransmutations == 0 || (kind == ItemKind.ARTIFACT && item != null))) { "Artifact transmutations must be 0–10 on a named artifact" }
         require(trinketTransmutations in 0..13 && (trinketTransmutations == 0 ||
             (kind == ItemKind.TRINKET && item != null && !selectTrinket))) {
             "Transmutations must be 0–13 on a named trinket without manual selection"
@@ -609,6 +611,7 @@ data class ScoutWorld(
      */
     val ringGems: RingGems,
     val trinketOrder: List<CatalogItem> = emptyList(),
+    val artifactDecks: Map<Int, List<CatalogItem>> = emptyMap(),
     val selectedTrinket: String? = null,
     val floorFeelings: Map<Int, FloorFeeling> = emptyMap(),
     /** Absent in legacy scout packets and seedless demo fixtures. */

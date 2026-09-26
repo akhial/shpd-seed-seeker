@@ -118,6 +118,14 @@ pub fn estimate_match_probability(query: &SearchQuery) -> f64 {
 }
 
 fn estimate_uncached(query: &SearchQuery) -> f64 {
+    // Existing supply tables do not encode the remaining deck or consumed donors.
+    if query
+        .requirements
+        .iter()
+        .any(|r| r.artifact_transmutations > 0)
+    {
+        return f64::NAN;
+    }
     if let Some(policy) = crate::auto_trinkets::AutoTrinketPolicy::prepare(query) {
         return crate::auto_trinkets::probability(query, &policy);
     }
@@ -319,6 +327,7 @@ fn trinket_mask(query: &SearchQuery, members: &[usize], identities: &[ItemId], d
             let matches = members.iter().any(|&member| {
                 let requirement = Requirement {
                     trinket_transmutations: 0,
+                    artifact_transmutations: 0,
                     ..query.requirements[member]
                 };
                 requirement.kind == ItemKind::Trinket
@@ -2338,6 +2347,7 @@ mod tests {
             require_uncursed: false,
             select_trinket: false,
             trinket_transmutations: 0,
+            artifact_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             source: None,

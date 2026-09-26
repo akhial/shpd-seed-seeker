@@ -389,6 +389,7 @@ fun requirementDetailLine(requirement: ItemRequirement): String = buildList {
     if (requirement.requireUncursed) add("uncursed")
     if (requirement.selectTrinket) add("choose at +3")
     if (requirement.trinketTransmutations > 0) add("Transmute ≤${requirement.trinketTransmutations}")
+    if (requirement.artifactTransmutations > 0) add("Transmute ≤${requirement.artifactTransmutations}")
     requirement.source?.let { add(it.label) }
     requirement.levelSum?.let { add("Σ≥${it.atLeast}") }
     requirement.maximumDepth?.let { add("≤ floor $it") }

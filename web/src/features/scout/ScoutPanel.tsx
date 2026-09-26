@@ -291,6 +291,10 @@ export function ScoutPanel({
             )}
           </div>
 
+          {!!result.artifactDecks?.length && (
+            <ArtifactDeckOrder key={result.seed.code} decks={result.artifactDecks} />
+          )}
+
           {floors.map(([depth, items]) => {
             const region = regionForDepth(depth);
             const quest = questByDepth.get(depth);
@@ -577,5 +581,52 @@ export function CatalystEntry({
         </>
       )}
     </li>
+  );
+}
+
+export function ArtifactDeckOrder({ decks }: { decks: NonNullable<ScoutResult["artifactDecks"]> }) {
+  const [depth, setDepth] = useState(
+    () => decks.find((deck) => deck.order.some((entry) => entry.matched))?.depth ?? 19,
+  );
+  const order = decks.find((deck) => deck.depth === depth)?.order ?? [];
+  return (
+    <details className="d1-artifact-deck" open>
+      <summary>Artifact transmutation order</summary>
+      <label className="d1-artifact-floor">
+        After floor
+        <select
+          aria-label="Artifact deck floor"
+          value={depth}
+          onChange={(event) => setDepth(Number(event.target.value))}
+        >
+          {decks.map((deck) => (
+            <option key={deck.depth} value={deck.depth}>
+              Floor {deck.depth}
+            </option>
+          ))}
+        </select>
+      </label>
+      <p className="d1-caption">
+        Remaining artifacts, in draw order. Requires an artifact to transform. Later generation and
+        transmutations consume this deck.
+      </p>
+      {order.length ? (
+        <ol className="d1-trinket-tail d1-artifact-tail" aria-label="Remaining artifact deck order">
+          {order.map((entry, index) => (
+            <li
+              key={entry.id}
+              className={entry.matched ? "d1-trinket-match" : undefined}
+              title={`Transmutation #${index + 1}: ${entry.name}${entry.matched ? " — matches requirement" : ""}`}
+              aria-label={`Transmutation #${index + 1}: ${entry.name}${entry.matched ? ", matches requirement" : ""}`}
+            >
+              <TrinketSprite cell={entry.spriteIndex} maximum={32} />
+              <span className="d1-caption">{index + 1}</span>
+            </li>
+          ))}
+        </ol>
+      ) : (
+        <p className="d1-caption">Deck exhausted. Further transmutations produce a ring.</p>
+      )}
+    </details>
   );
 }

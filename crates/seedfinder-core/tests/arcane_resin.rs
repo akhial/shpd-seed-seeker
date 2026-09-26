@@ -39,6 +39,7 @@ fn wand(upgrade: u8) -> WorldItem {
 fn world(items: Vec<WorldItem>) -> GeneratedWorld {
     GeneratedWorld {
         floor_rooms: Vec::new(),
+        artifact_decks: Vec::new(),
         feelings: Vec::new(),
         seed: DungeonSeed::MIN,
         items,

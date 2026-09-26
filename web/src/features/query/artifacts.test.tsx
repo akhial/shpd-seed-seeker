@@ -16,6 +16,55 @@ beforeAll(async () => {
 });
 
 describe("artifact search and scout", () => {
+  it("preserves artifact limits and highlights the remaining deck with its donor", () => {
+    const document = {
+      requirements: [{ item: "ethereal_chains", artifact_transmutations: 4 }],
+      max_depth: 19,
+    };
+    const state = fromQueryJson(JSON.stringify(document));
+    expect(state.requirements[0].artifactTransmutations).toBe(4);
+    expect(toQueryDocument(state).requirements).toMatchObject(document.requirements);
+    const result = JSON.parse(
+      scout(JSON.stringify({ seed: "AAA-AAA-AAA", query: document })),
+    ) as ScoutResult;
+    expect(result.matchedRequirements).toBe(1);
+    expect(result.artifactDecks?.find((deck) => deck.depth === 19)?.order[3]).toMatchObject({
+      id: "ethereal_chains",
+      matched: true,
+    });
+    expect(result.items.filter((entry) => entry.matched)).toHaveLength(1);
+    const html = renderToStaticMarkup(
+      <ScoutPanel
+        input="AAA-AAA-AAA"
+        onInput={() => {}}
+        onScout={() => {}}
+        loading={false}
+        result={result}
+      />,
+    );
+    expect(html).toContain("Artifact transmutation order");
+    expect(html).toContain("Transmutation #4: Ethereal Chains, matches requirement");
+    const editor = renderToStaticMarkup(
+      <RequirementEditor
+        requirement={state.requirements[0]}
+        isNew={false}
+        stack={{ count: 1, inCluster: false }}
+        onSave={() => {}}
+        onCancel={() => {}}
+      />,
+    );
+    expect(editor).toContain("Allow transmutations");
+    expect(editor).toContain("At most 4");
+    for (const count of [-1, 11, 1.5, "1"])
+      expect(() =>
+        fromQueryJson(
+          JSON.stringify({
+            requirements: [{ item: "ethereal_chains", artifact_transmutations: count }],
+          }),
+        ),
+      ).toThrow();
+  });
+
   it("shows the game's rounded levels for every generated artifact", () => {
     for (const item of itemsForKind("artifact")) {
       const expected =

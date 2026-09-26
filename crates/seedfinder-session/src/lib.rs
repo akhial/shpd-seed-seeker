@@ -143,7 +143,9 @@ pub fn production_scout_packet(request: &[u8]) -> Result<Vec<u8>, ScoutCallError
         decoded.query.as_ref(),
         decoded.trinket_override,
     )?;
-    let packet = if request.starts_with(b"SSQ5") {
+    let packet = if request.starts_with(b"SSQ6") {
+        shpd_seedfinder_core::wire::encode_scout_world_with_artifacts(&world, selected)
+    } else if request.starts_with(b"SSQ5") {
         shpd_seedfinder_core::wire::encode_scout_world_with_rooms(&world, selected)
     } else if request.starts_with(b"SSQ4") {
         shpd_seedfinder_core::wire::encode_scout_world_with_mappings(&world, selected)
@@ -860,6 +862,7 @@ mod tests {
     fn matching_world(seed: DungeonSeed) -> GeneratedWorld {
         GeneratedWorld {
             floor_rooms: Vec::new(),
+            artifact_decks: Vec::new(),
             feelings: Vec::new(),
             quests: shpd_seedfinder_core::quests::QuestSummary::default(),
             seed,
@@ -896,6 +899,7 @@ mod tests {
                 require_uncursed: false,
                 select_trinket: false,
                 trinket_transmutations: 0,
+                artifact_transmutations: 0,
                 blanket: false,
                 exclude_resin: false,
                 alternative_group: None,
@@ -1076,6 +1080,7 @@ mod tests {
                 require_uncursed: false,
                 select_trinket: false,
                 trinket_transmutations: 0,
+                artifact_transmutations: 0,
                 blanket: false,
                 exclude_resin: false,
                 alternative_group: None,
@@ -1356,6 +1361,7 @@ mod tests {
                 require_uncursed: false,
                 select_trinket: false,
                 trinket_transmutations: 0,
+                artifact_transmutations: 0,
                 blanket: false,
                 exclude_resin: false,
                 source: None,
@@ -1463,6 +1469,7 @@ mod tests {
             require_uncursed: false,
             select_trinket: false,
             trinket_transmutations: 0,
+            artifact_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             source: None,
@@ -1525,6 +1532,7 @@ mod tests {
             .unwrap();
             assert_eq!(actual_selection, selected);
             let expected_rooms = std::mem::take(&mut expected.floor_rooms);
+            expected.artifact_decks.clear(); // SSC6/SSC7 predate artifact deck snapshots.
             assert_eq!(world, expected);
             let marks = production_scout_matches(&request, query.as_bytes()).unwrap();
             assert_eq!(marks.matched, scout_matches(&world, &decoded_query).matched);
@@ -1562,7 +1570,8 @@ mod tests {
     fn typed_production_scout_matches_the_packet_scout() {
         let seed = DungeonSeed::from_code("AAA-AAA-AAF").unwrap();
         let mut world = production_scout_world(seed, Challenges::NONE).unwrap();
-        world.floor_rooms.clear(); // Native packets retain their existing format.
+        world.floor_rooms.clear(); // This legacy request omits newer metadata.
+        world.artifact_decks.clear();
         let packet = production_scout_packet(b"SSQ2\x00\x00AAA-AAA-AAF").unwrap();
 
         assert_eq!(world, decode_scout_world(&packet).unwrap());

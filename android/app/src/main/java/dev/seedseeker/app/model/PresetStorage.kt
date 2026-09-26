@@ -72,6 +72,7 @@ class PresetStorage(private val preferences: SharedPreferences) {
                     put("requireUncursed", requirement.requireUncursed)
                     put("selectTrinket", requirement.selectTrinket)
                     put("trinketTransmutations", requirement.trinketTransmutations)
+                    put("artifactTransmutations", requirement.artifactTransmutations)
                     put("blanket", requirement.blanket)
                     put("excludeResin", requirement.excludeResin)
                     put("alternativeGroup", requirement.alternativeGroup ?: JSONObject.NULL)
@@ -126,6 +127,7 @@ class PresetStorage(private val preferences: SharedPreferences) {
                         requireUncursed = encoded.optBoolean("requireUncursed", false),
                         selectTrinket = encoded.optBoolean("selectTrinket", false),
                         trinketTransmutations = encoded.optInt("trinketTransmutations", 0),
+                        artifactTransmutations = encoded.optInt("artifactTransmutations", 0),
                         blanket = encoded.optBoolean("blanket", false),
                         excludeResin = encoded.optBoolean("excludeResin", false),
                         alternativeGroup = encoded.optInt("alternativeGroup")

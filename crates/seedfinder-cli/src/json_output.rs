@@ -361,6 +361,7 @@ mod tests {
                     secret: false,
                 }],
                 floor_rooms: Vec::new(),
+                artifact_decks: Vec::new(),
                 feelings: Vec::new(),
                 quests: QuestSummary::default(),
                 ring_gems: RingGems::UNSHUFFLED,

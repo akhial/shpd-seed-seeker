@@ -477,12 +477,15 @@ fn restore(editor: &Rc<Editor>, requirement: &UiRequirement, stack: StackShape) 
     editor.uncursed.set_active(requirement.require_uncursed);
     editor.exclude_resin.set_active(requirement.exclude_resin);
     editor.select_trinket.set_active(requirement.select_trinket);
-    editor
-        .allow_transmutations
-        .set_active(requirement.trinket_transmutations > 0);
-    editor
-        .trinket_transmutations
-        .set_value(f64::from(requirement.trinket_transmutations.max(1)));
+    editor.allow_transmutations.set_active(
+        requirement.trinket_transmutations > 0 || requirement.artifact_transmutations > 0,
+    );
+    editor.trinket_transmutations.set_value(f64::from(
+        requirement
+            .trinket_transmutations
+            .max(requirement.artifact_transmutations)
+            .max(1),
+    ));
     populate_items(editor, requirement.item);
     populate_effects(editor, requirement.effect);
     normalize_upgrades(editor);
@@ -592,6 +595,17 @@ fn collect(editor: &Rc<Editor>) -> (UiRequirement, usize, Option<u8>, Option<u8>
                 .value()
                 .round()
                 .clamp(1.0, 13.0) as u8
+        } else {
+            0
+        },
+        artifact_transmutations: if kind == ItemKind::Artifact
+            && editor.allow_transmutations.is_active()
+        {
+            editor
+                .trinket_transmutations
+                .value()
+                .round()
+                .clamp(1.0, 10.0) as u8
         } else {
             0
         },
@@ -1032,10 +1046,20 @@ fn refresh_visibility(editor: &Rc<Editor>) {
     );
     editor
         .allow_transmutations
-        .set_visible(kind == ItemKind::Trinket);
+        .set_visible(matches!(kind, ItemKind::Trinket | ItemKind::Artifact));
+    editor.trinket_transmutations.set_visible(
+        matches!(kind, ItemKind::Trinket | ItemKind::Artifact)
+            && editor.allow_transmutations.is_active(),
+    );
     editor
         .trinket_transmutations
-        .set_visible(kind == ItemKind::Trinket && editor.allow_transmutations.is_active());
+        .adjustment()
+        .set_upper(if kind == ItemKind::Artifact {
+            10.0
+        } else {
+            13.0
+        });
+    editor.allow_transmutations.set_subtitle(if kind == ItemKind::Artifact { "Includes natural finds or transforms an obtainable artifact using the remaining deck at the floor limit. Source and curse filters apply to the starting artifact. Scroll availability and later generation changes are not simulated." } else { "Includes the initial offers. AutoTrinket can use a helpful starting trinket. Scroll availability and effects after transmuting are not simulated." });
     if editor.allow_transmutations.is_active() {
         editor.select_trinket.set_active(false);
     }

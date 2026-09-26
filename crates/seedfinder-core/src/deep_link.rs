@@ -4,7 +4,7 @@
 //! `https://shpd-seed-seeker.web.app/#q=QAMtCYAA`. The payload is a versioned
 //! bit stream, so codes shared today must keep decoding in every future
 //! release: the numeric code tables below are frozen by tests and may only
-//! ever grow at the end. Versions 4 through 13 are supported; versions 1
+//! ever grow at the end. Versions 4 through 14 are supported; versions 1
 //! and 2 were retired while the feature had next to no users (the effect
 //! table was also re-frozen in journal order at the same time), and version
 //! 3 — the same layout plus the retired fast-mode bit — went with the flag,
@@ -42,6 +42,7 @@ pub const URI_SCHEME: &str = "seedseeker";
 /// Version 11 appends explicit Auto mode and exact-floor requirements after
 /// the item records. Version 12 adds a starting-wand bit after the resin
 /// filters, plus an exclude-resin bit after each blanket bit.
+/// Version 14 adds a four-bit artifact transmutation count after the trinket count.
 /// Version 13 adds a four-bit trinket transmutation count after exclude-resin.
 /// All carry effect sets as a 32-bit mask,
 /// alternative groups and combined-level groups per requirement. Versions 1
@@ -164,6 +165,9 @@ pub fn encode(query: &SearchQuery) -> Result<String, String> {
         if version >= 13 {
             bits.push(requirement.trinket_transmutations.into(), 4);
         }
+        if version >= 14 {
+            bits.push(requirement.artifact_transmutations.into(), 4);
+        }
     }
     if version >= 11 {
         bits.push(query.arcane_resin_auto.into(), 1);
@@ -192,6 +196,12 @@ fn encode_floors(bits: &mut BitWriter, floors: &[crate::floor_filters::FloorRequ
 /// Select the oldest compatible format so existing links retain their bytes.
 fn encoding_version(query: &SearchQuery) -> u32 {
     if query
+        .requirements
+        .iter()
+        .any(|r| r.artifact_transmutations > 0)
+    {
+        14
+    } else if query
         .requirements
         .iter()
         .any(|r| r.trinket_transmutations > 0)
@@ -247,14 +257,15 @@ pub fn encode_link(query: &SearchQuery) -> Result<String, String> {
 ///
 /// Returns a human-readable message for malformed, truncated, or
 /// unsupported codes and for payloads that fail query validation.
+#[allow(clippy::too_many_lines)] // Read each versioned field in wire order.
 pub fn decode(code: &str) -> Result<SearchQuery, String> {
     let bytes = base64url_decode(code.trim())?;
     let mut bits = BitReader::new(&bytes);
     let version = bits.pull(4)?;
-    if !(u32::from(VERSION)..=13).contains(&version) {
+    if !(u32::from(VERSION)..=14).contains(&version) {
         return Err(format!(
             "this link uses format version {version}; this app only understands \
-             versions {VERSION} through 13 — it may have been created by a different release"
+             versions {VERSION} through 14 — it may have been created by a different release"
         ));
     }
     let auto_apply_trinket = version >= 6 && bits.pull(1)? == 1;
@@ -317,6 +328,9 @@ pub fn decode(code: &str) -> Result<SearchQuery, String> {
                     }
                     if version >= 13 {
                         requirement.trinket_transmutations = bits.pull(4)? as u8;
+                    }
+                    if version >= 14 {
+                        requirement.artifact_transmutations = bits.pull(4)? as u8;
                     }
                     Ok(requirement)
                 })
@@ -585,6 +599,7 @@ fn decode_requirement(bits: &mut BitReader<'_>) -> Result<Requirement, String> {
         require_uncursed,
         select_trinket: false,
         trinket_transmutations: 0,
+        artifact_transmutations: 0,
         blanket: false,
         exclude_resin: false,
         source,
@@ -957,6 +972,7 @@ mod tests {
             require_uncursed: false,
             select_trinket: false,
             trinket_transmutations: 0,
+            artifact_transmutations: 0,
             blanket: false,
             exclude_resin: false,
             source: None,
@@ -1010,6 +1026,7 @@ mod tests {
                     require_uncursed: true,
                     select_trinket: false,
                     trinket_transmutations: 0,
+                    artifact_transmutations: 0,
                     blanket: false,
                     exclude_resin: false,
                     source: Some(ItemSource::SacrificialFire),
@@ -1028,6 +1045,7 @@ mod tests {
                     require_uncursed: false,
                     select_trinket: false,
                     trinket_transmutations: 0,
+                    artifact_transmutations: 0,
                     blanket: false,
                     exclude_resin: false,
                     source: None,
@@ -1177,8 +1195,8 @@ mod tests {
         assert!(decode("").is_err());
         assert!(decode("!!!").is_err());
         assert!(decode("A").is_err());
-        // Unsupported future version (bits 1110 in the top nibble).
-        assert!(decode("4AAA").unwrap_err().contains("version 14"));
+        // Unsupported future version (bits 1111 in the top nibble).
+        assert!(decode("8AAA").unwrap_err().contains("version 15"));
         let code = encode(&minimal(vec![wildcard(ItemKind::Wand)])).unwrap();
         assert!(decode(&code[..code.len() - 1]).is_err());
         assert!(decode(&format!("{code}AAAA")).is_err());
@@ -1731,7 +1749,7 @@ mod tests {
             let error = decode(code).unwrap_err();
             assert!(error.contains("format version"), "{error}");
             assert!(
-                error.contains("only understands versions 4 through 13"),
+                error.contains("only understands versions 4 through 14"),
                 "{error}"
             );
         }

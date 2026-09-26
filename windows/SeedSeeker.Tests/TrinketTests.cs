@@ -25,6 +25,27 @@ public sealed class TrinketTests
     }
 
     [Fact]
+    public void ArtifactLimitPersistsAndMarksItsDonorAndFloorDeck()
+    {
+        var query = new QuerySettings { MaximumDepth = 19, Requirements = [
+            new() { Kind = ItemKind.Artifact, Item = ItemCatalog.Find("ethereal_chains"), UpgradeMatch = UpgradeMatch.Any, ArtifactTransmutations = 4 }
+        ] };
+        var document = ResultsExport.EncodeQueryDocument(query);
+        Assert.Equal(4, ResultsExport.DecodeQueryDocument(document).Requirements[0].ArtifactTransmutations);
+        Assert.Equal(4, query.Clone().Requirements[0].ArtifactTransmutations);
+        var shared = NativeEngine.TryEncodeShareLink(document);
+        Assert.NotNull(shared);
+        Assert.Equal(4, ResultsExport.DecodeQueryDocument(NativeEngine.TryDecodeShareText(shared)!).Requirements[0].ArtifactTransmutations);
+        var marks = NativeEngine.ScoutMatches("AAA-AAA-AAA", 0, query);
+        Assert.Equal(1, marks.MatchedRequirements);
+        Assert.Single(marks.Matched);
+        Assert.Contains((19, 3), marks.TransmutedArtifacts);
+        var world = new NativeEngine().Scout("AAA-AAA-AAA", 0);
+        Assert.Equal(11, world.ArtifactDecks[9].Count);
+        Assert.Equal("ethereal_chains", world.ArtifactDecks[19][3].Id);
+    }
+
+    [Fact]
     public void CatalogContainsSeventeenNamedTrinkets()
     {
         var items = ItemCatalog.For(ItemKind.Trinket).ToList();
@@ -146,7 +167,7 @@ public sealed class TrinketTests
             new() { Kind = ItemKind.Trinket, Item = ItemCatalog.Find("mimic_tooth"), SelectTrinket = true },
         ] };
         var bytes = NativeEngine.EncodeScoutRequest("AAA-AAA-AAA", 257, query, "none");
-        Assert.Equal("SSQ5", System.Text.Encoding.UTF8.GetString(bytes, 0, 4));
+        Assert.Equal("SSQ6", System.Text.Encoding.UTF8.GetString(bytes, 0, 4));
         Assert.Equal(new byte[] { 1, 1, 11, 0 }, bytes[4..8]);
         Assert.Equal(new byte[] { 4, 0 }, bytes[19..21]);
         Assert.Equal("none", System.Text.Encoding.UTF8.GetString(bytes, 21, 4));

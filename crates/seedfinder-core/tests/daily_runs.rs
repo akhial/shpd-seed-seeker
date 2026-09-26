@@ -8,7 +8,7 @@ use shpd_seedfinder_core::{
     rng::seed_for_depth,
     seed::DungeonSeed,
     trinkets::trinket_order,
-    wire::{decode_scout_seed, decode_scout_world, encode_scout_world_with_rooms},
+    wire::{decode_scout_seed, decode_scout_world, encode_scout_world_with_artifacts},
 };
 
 #[test]
@@ -44,7 +44,7 @@ fn daily_identity_and_initialization_match_the_official_jar() {
     let selected = trinket_order(seed)[0];
     let world =
         generate_main_world_with_trinket(seed, 1, Challenges::NONE, Some(selected)).unwrap();
-    let packet = encode_scout_world_with_rooms(&world, Some(selected)).unwrap();
+    let packet = encode_scout_world_with_artifacts(&world, Some(selected)).unwrap();
     assert_eq!(decode_scout_world(&packet).unwrap(), world);
     assert_eq!(decode_scout_seed(b"2026-09-25").unwrap(), seed);
     assert!(!world.items.is_empty());

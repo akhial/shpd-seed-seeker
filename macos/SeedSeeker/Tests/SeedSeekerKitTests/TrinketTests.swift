@@ -22,6 +22,25 @@ final class TrinketTests: XCTestCase {
             kind: .trinket, upgradeMatch: .any, selectTrinket: true, trinketTransmutations: 1))
     }
 
+    func testArtifactLimitPersistsAndMarksTheDonorAndDeck() throws {
+        let requirement = try ItemRequirement(key: 1, item: XCTUnwrap(ItemCatalog.findById("ethereal_chains")),
+            upgrade: 0, kind: .artifact, upgradeMatch: .any, artifactTransmutations: 4)
+        let saved = SavedQuery(requirements: [requirement])
+        XCTAssertEqual(try DeepLink.decode(DeepLink.encodeLink(for: saved)).requirements[0].artifactTransmutations, requirement.artifactTransmutations)
+        XCTAssertEqual(QueryPersistence.decode(try XCTUnwrap(QueryPersistence.encode(saved))).requirements[0].artifactTransmutations, 4)
+        XCTAssertEqual(try ResultsExport.decodeQuery(ResultsExport.encodeQuery(saved)).requirements[0].artifactTransmutations, 4)
+        XCTAssertEqual(try JSONDecoder().decode(ItemRequirement.self, from: JSONEncoder().encode(requirement)), requirement)
+        let query = try SearchRequest(requirements: [requirement], maximumDepth: 19)
+        let marks = try ScoutMatches.mark(seed: "AAA-AAA-AAA", challenges: 0, query: query)
+        XCTAssertEqual(marks.matchedRequirements, 1)
+        XCTAssertEqual(marks.matched.count, 1)
+        XCTAssertEqual(marks.transmutedArtifacts, [19: [3]])
+        XCTAssertThrowsError(try ItemRequirement(key: 1, item: requirement.item, upgrade: 0,
+            kind: .artifact, upgradeMatch: .any, artifactTransmutations: 11))
+        XCTAssertThrowsError(try ItemRequirement(key: 1, item: requirement.item, upgrade: 0,
+            kind: .artifact, upgradeMatch: .any, selectTrinket: true, artifactTransmutations: 1))
+    }
+
     private func packet(_ order: [String]) -> Data {
         var bytes = Array("SSC4".utf8) + [11] + Array("AAA-AAA-AAA".utf8)
         bytes += RingGems.catalogDefault.ordinals.map { UInt8($0) }
@@ -48,6 +67,8 @@ final class TrinketTests: XCTestCase {
 
     func testNativeScoutTrinketsAndMatchIndicesAgree() async throws {
         let world = try await ProductionSeedFinderEngine().scoutSeed("AAA-AAA-AAA", challenges: 0)
+        XCTAssertEqual(world.artifactDecks[9]?.count, 11)
+        XCTAssertEqual(world.artifactDecks[19]?[3].id, "ethereal_chains")
         XCTAssertEqual(world.trinketOrder.count, 17)
         XCTAssertEqual(world.trinketOrder.prefix(4).map(\.id),
                        ["dimensional_sundial", "mimic_tooth", "parchment_scrap", "thirteen_leaf_clover"])
@@ -127,7 +148,7 @@ final class TrinketTests: XCTestCase {
             let world = try await engine.scoutSeed("AAA-AAA-AAA", challenges: 0, query: query, trinket: override)
             XCTAssertEqual(world.selectedTrinket, override == "none" ? nil : override)
             let request = try ScoutCodec.encodeRequest(seed: world.seed, challenges: 0, query: query, trinket: override)
-            XCTAssertEqual(String(data: request.prefix(4), encoding: .utf8), "SSQ5")
+            XCTAssertEqual(String(data: request.prefix(4), encoding: .utf8), "SSQ6")
             let marks = try ScoutMatches.mark(request, query: QueryDocument.encode(query))
             XCTAssertEqual(marks.matchedRequirements, 1)
             XCTAssertEqual(world.items[try XCTUnwrap(marks.matched.first)].item.id, "mimic_tooth")

@@ -117,6 +117,7 @@ struct ScoutOutput {
     item_mappings: shpd_seedfinder_core::item_mappings::ItemMappings,
     selected_trinket: Option<&'static str>,
     trinket_order: Vec<TrinketOutput>,
+    artifact_decks: Vec<ArtifactDeckOutput>,
     seed: SeedOutput,
     quests: Vec<ScoutQuestOutput>,
     feelings: Vec<ScoutFeelingOutput>,
@@ -129,6 +130,12 @@ struct ScoutOutput {
     ring_gems: [u8; 12],
     matched_requirements: usize,
     total_requirements: usize,
+}
+
+#[derive(Serialize)]
+struct ArtifactDeckOutput {
+    depth: u8,
+    order: Vec<TrinketOutput>,
 }
 
 #[derive(Serialize)]
@@ -602,6 +609,26 @@ fn scout_impl(request_json: &str) -> Result<String, String> {
     let matched_requirements = marks.as_ref().map_or(0, |marks| marks.matched_requirements);
     let total_requirements = marks.as_ref().map_or(0, |marks| marks.total_requirements);
     let transmuted = marks.as_ref().map(|marks| marks.transmuted_trinkets);
+    let artifact_decks = (1..=24)
+        .map(|depth| ArtifactDeckOutput {
+            depth,
+            order: shpd_seedfinder_core::artifacts::deck_at(&world, depth)
+                .iter()
+                .enumerate()
+                .map(|(index, &id)| {
+                    let entry = item(id);
+                    TrinketOutput {
+                        id: entry.stable_id,
+                        name: entry.name,
+                        sprite_index: entry.sprite_index,
+                        matched: marks.as_ref().is_some_and(|marks| {
+                            marks.transmuted_artifacts.contains(&(depth, index))
+                        }),
+                    }
+                })
+                .collect(),
+        })
+        .collect();
     let matched = marks.map_or_else(|| vec![false; world.items.len()], |marks| marks.matched);
     let items = world
         .items
@@ -612,6 +639,7 @@ fn scout_impl(request_json: &str) -> Result<String, String> {
     Ok(to_json(&ScoutOutput {
         item_mappings: shpd_seedfinder_core::item_mappings::item_mappings(seed),
         selected_trinket: selected.map(|id| item(id).stable_id),
+        artifact_decks,
         seed: seed.into(),
         trinket_order: shpd_seedfinder_core::trinkets::trinket_order(seed)
             .into_iter()

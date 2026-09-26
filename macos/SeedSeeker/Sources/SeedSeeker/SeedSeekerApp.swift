@@ -1478,6 +1478,7 @@ private func chipName(_ requirement: ItemRequirement) -> String {
 private func chipTags(_ requirement: ItemRequirement) -> [ChipTag] {
     var tags: [ChipTag] = []
     if requirement.trinketTransmutations > 0 { tags.append(ChipTag(text: "Transmute ≤\(requirement.trinketTransmutations)")) }
+    if requirement.artifactTransmutations > 0 { tags.append(ChipTag(text: "Transmute ≤\(requirement.artifactTransmutations)")) }
     if requirement.item == nil {
         switch requirement.tierMatch {
         case .any: break
@@ -1627,6 +1628,7 @@ private struct RequirementEditor: View {
     @State private var requireUncursed: Bool
     @State private var selectTrinket: Bool
     @State private var trinketTransmutations: Int
+    @State private var artifactTransmutations: Int
     @State private var excludeResin: Bool
     /// How many items the chip asks for, and what its stack's copies carry.
     @State private var count: Int
@@ -1669,6 +1671,7 @@ private struct RequirementEditor: View {
         _requireUncursed = State(initialValue: requirement.requireUncursed)
         _selectTrinket = State(initialValue: requirement.selectTrinket)
         _trinketTransmutations = State(initialValue: requirement.trinketTransmutations)
+        _artifactTransmutations = State(initialValue: requirement.artifactTransmutations)
         _excludeResin = State(initialValue: requirement.excludeResin)
         _count = State(initialValue: stack.count)
         _total = State(initialValue: stack.total)
@@ -1694,7 +1697,7 @@ private struct RequirementEditor: View {
                     .disabled(editingResin)
                     .onChange(of: kind) { previous, value in
                         if previous.family != value.family {
-                            itemID = ""; tierMatch = .any; tier = 2; selectTrinket = false; trinketTransmutations = 0; excludeResin = false
+                            itemID = ""; tierMatch = .any; tier = 2; selectTrinket = false; trinketTransmutations = 0; artifactTransmutations = 0; excludeResin = false
                             effectMode = .any; selectedEffects = []
                             if value == .trinket || value == .artifact {
                                 itemID = ItemCatalog.forKind(value).first?.id ?? ""
@@ -1756,6 +1759,17 @@ private struct RequirementEditor: View {
                         if trinketTransmutations > 0 {
                             Stepper("At most \(trinketTransmutations) transmutations", value: $trinketTransmutations, in: 1...13)
                             Text("Includes the initial offers. AutoTrinket can use a helpful starting trinket. Scroll availability and effects after transmuting are not simulated.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    if kind == .artifact {
+                        Toggle("Allow transmutations", isOn: Binding(get: { artifactTransmutations > 0 }, set: {
+                            artifactTransmutations = $0 ? 1 : 0
+                            if $0 { selectTrinket = false }
+                        }))
+                        if artifactTransmutations > 0 {
+                            Stepper("At most \(artifactTransmutations) transmutations", value: $artifactTransmutations, in: 1...10)
+                            Text("Includes natural finds or transforms an obtainable artifact using the remaining deck at the floor limit. Source and curse filters apply to the starting artifact. Scroll availability and later generation changes are not simulated.")
                                 .font(.caption).foregroundStyle(.secondary)
                         }
                     }
@@ -2034,7 +2048,7 @@ private struct RequirementEditor: View {
                 requireUncursed: kind != .trinket && requireUncursed,
                 alternativeGroup: original.alternativeGroup,
                 selectTrinket: !original.blanket && kind == .trinket && trinketTransmutations == 0 && selectTrinket,
-                trinketTransmutations: kind == .trinket ? trinketTransmutations : 0, blanket: original.blanket,
+                trinketTransmutations: kind == .trinket ? trinketTransmutations : 0, artifactTransmutations: kind == .artifact ? artifactTransmutations : 0, blanket: original.blanket,
                 excludeResin: !original.blanket && kind == .wand && excludeResin)
             onFinish(EditorResult(
                 requirement: value,
@@ -2639,6 +2653,7 @@ private struct SeedDetailView: View {
                     // Lazy sections with variable-height floor groups can loop
                     // in SwiftUI's placement cache while scrolling on macOS.
                     VStack(alignment: .leading, spacing: 0) {
+                        if !world.artifactDecks.isEmpty { ArtifactScoutDeck(world: world, matches: marks).padding() }
                         ForEach(depths, id: \.self) { depth in
                             let floorItems = (byDepth[depth] ?? []).filter { $0.element.item.kind != .trinket }
                             VStack(alignment: .leading, spacing: 0) {
@@ -3074,4 +3089,34 @@ private func floorLimitBinding(_ value: Binding<Int>) -> Binding<Double> {
             value.wrappedValue = FloorLimits.options[index]
         }
     )
+}
+
+
+private struct ArtifactScoutDeck: View {
+    let world: ScoutWorld
+    let matches: ScoutMatches?
+    @State private var depth = 19
+    @State private var expanded = true
+    var body: some View {
+        DisclosureGroup("Artifact transmutation order", isExpanded: $expanded) {
+            VStack(alignment: .leading, spacing: 10) {
+                Picker("After floor", selection: $depth) { ForEach(1...24, id: \.self) { Text("Floor \($0)").tag($0) } }.frame(maxWidth: 240)
+                Text("Remaining artifacts in draw order. Requires an artifact to transform. Later generation and transmutations consume this deck.").font(.caption).foregroundStyle(.secondary)
+                let order = world.artifactDecks[world.artifactDecks.keys.filter { $0 <= depth }.max() ?? 0] ?? []
+                if order.isEmpty { Text("Deck exhausted. Further transmutations produce a ring.").font(.caption).foregroundStyle(.secondary) }
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 40, maximum: 48))], alignment: .leading, spacing: 8) {
+                    ForEach(Array(order.enumerated()), id: \.element.id) { index, artifact in
+                        let matched = matches?.transmutedArtifacts[depth]?.contains(index) == true
+                        let label = "Transmutation #\(index + 1): \(artifact.name)" + (matched ? ", matches requirement" : "")
+                        VStack(spacing: 4) {
+                            ItemSpriteView(item: artifact, pointSize: 28, label: label)
+                            Text("\(index + 1)").font(.caption2)
+                        }.padding(4).background(matched ? Color.shatteredMint.opacity(0.14) : Color.clear, in: RoundedRectangle(cornerRadius: 6))
+                            .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(matched ? Color.shatteredMint : Color.clear))
+                            .help(label).accessibilityElement(children: .ignore).accessibilityLabel(label)
+                    }
+                }
+            }.padding(.top, 8)
+        }.onAppear { depth = matches?.transmutedArtifacts.keys.min() ?? 19 }
+    }
 }

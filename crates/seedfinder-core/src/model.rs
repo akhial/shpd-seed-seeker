@@ -193,6 +193,8 @@ pub struct GeneratedWorld {
     pub feelings: Vec<FloorFeeling>,
     /// Room presence on regular floors, included in SSC8 and web scout responses.
     pub floor_rooms: Vec<crate::floor_filters::FloorRooms>,
+    /// Remaining artifact deck after each generated floor.
+    pub artifact_decks: Vec<crate::artifacts::ArtifactDeck>,
     /// Quest variants rolled while generating the requested prefix.
     pub quests: QuestSummary,
     /// The gem this run gave each ring class, and so the `items.png` cell every

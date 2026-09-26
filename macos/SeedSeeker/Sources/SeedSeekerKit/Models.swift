@@ -359,6 +359,7 @@ public struct ItemRequirement: Codable, Hashable, Identifiable, Sendable {
     public var requireUncursed: Bool
     public var selectTrinket: Bool
     public var trinketTransmutations: Int
+    public var artifactTransmutations: Int
     public var blanket: Bool
     public var excludeResin: Bool
     /// Requirements sharing a group are alternatives for one slot: any member
@@ -378,11 +379,12 @@ public struct ItemRequirement: Codable, Hashable, Identifiable, Sendable {
                 source: ScoutItemSource? = nil, identityGroup: Int? = nil,
                 maximumDepth: Int? = nil, requireUncursed: Bool = false,
                 alternativeGroup: Int? = nil, levelSum: LevelSum? = nil,
-                selectTrinket: Bool = false, trinketTransmutations: Int = 0, blanket: Bool = false, excludeResin: Bool = false) throws {
+                selectTrinket: Bool = false, trinketTransmutations: Int = 0, artifactTransmutations: Int = 0, blanket: Bool = false, excludeResin: Bool = false) throws {
         guard !excludeResin || (kind == .wand && !blanket) else { throw ModelValidationError.resinExclusion }
         guard !blanket || (identityGroup == nil && levelSum == nil && !selectTrinket) else {
             throw ModelValidationError.blanketStack
         }
+        guard (0...10).contains(artifactTransmutations), artifactTransmutations == 0 || (kind == .artifact && item != nil) else { throw ModelValidationError.itemKind }
         guard (0...13).contains(trinketTransmutations), trinketTransmutations == 0 || (kind == .trinket && item != nil && !selectTrinket) else { throw ModelValidationError.itemKind }
         guard !selectTrinket || (kind == .trinket && item != nil) else { throw ModelValidationError.itemKind }
         guard (kind != .trinket && kind != .artifact) || item != nil else { throw ModelValidationError.itemKind }
@@ -428,6 +430,7 @@ public struct ItemRequirement: Codable, Hashable, Identifiable, Sendable {
         self.requireUncursed = requireUncursed
         self.selectTrinket = selectTrinket
         self.trinketTransmutations = trinketTransmutations
+        self.artifactTransmutations = artifactTransmutations
         self.blanket = blanket
         self.excludeResin = excludeResin
         self.alternativeGroup = alternativeGroup
@@ -463,7 +466,7 @@ public struct ItemRequirement: Codable, Hashable, Identifiable, Sendable {
 
     private enum CodingKeys: String, CodingKey {
         case key, item, upgrade, modifier, effect, kind, tier, tierMatch, upgradeMatch, source
-        case identityGroup, maximumDepth, requireUncursed, alternativeGroup, levelSum, selectTrinket, trinketTransmutations, blanket, excludeResin
+        case identityGroup, maximumDepth, requireUncursed, alternativeGroup, levelSum, selectTrinket, trinketTransmutations, artifactTransmutations, blanket, excludeResin
     }
 
     /// How the saved-query JSON spells the effect filter, beside the classic
@@ -502,6 +505,7 @@ public struct ItemRequirement: Codable, Hashable, Identifiable, Sendable {
             levelSum: values.decodeIfPresent(LevelSum.self, forKey: .levelSum),
             selectTrinket: values.decodeIfPresent(Bool.self, forKey: .selectTrinket) ?? false,
             trinketTransmutations: values.decodeIfPresent(Int.self, forKey: .trinketTransmutations) ?? 0,
+            artifactTransmutations: values.decodeIfPresent(Int.self, forKey: .artifactTransmutations) ?? 0,
             blanket: values.decodeIfPresent(Bool.self, forKey: .blanket) ?? false,
             excludeResin: values.decodeIfPresent(Bool.self, forKey: .excludeResin) ?? false
         )
@@ -527,6 +531,7 @@ public struct ItemRequirement: Codable, Hashable, Identifiable, Sendable {
         try values.encode(requireUncursed, forKey: .requireUncursed)
         try values.encode(selectTrinket, forKey: .selectTrinket)
         try values.encode(trinketTransmutations, forKey: .trinketTransmutations)
+        try values.encode(artifactTransmutations, forKey: .artifactTransmutations)
         try values.encode(blanket, forKey: .blanket)
         try values.encode(excludeResin, forKey: .excludeResin)
         try values.encodeIfPresent(alternativeGroup, forKey: .alternativeGroup)
@@ -552,6 +557,7 @@ public struct ItemRequirement: Codable, Hashable, Identifiable, Sendable {
         if requireUncursed { text += " • uncursed" }
         if selectTrinket { text += " • choose at +3" }
         if trinketTransmutations > 0 { text += " • Transmute ≤\(trinketTransmutations)" }
+        if artifactTransmutations > 0 { text += " • Transmute ≤\(artifactTransmutations)" }
         if excludeResin { text += " • excluded from Auto resin" }
         if let source { text += " • \(source.label)" }
         // The board says the relationships — a stack through its ×N badge, a
@@ -780,6 +786,7 @@ public struct ScoutWorld: Sendable {
     /// fixture, a stub engine) falls back to the catalog's own table.
     public let ringGems: RingGems
     public let trinketOrder: [CatalogItem]
+    public let artifactDecks: [Int: [CatalogItem]]
     public let selectedTrinket: String?
     public let feelings: [Int: FloorFeeling]
     public let itemMappings: ScoutItemMappings?
@@ -788,9 +795,10 @@ public struct ScoutWorld: Sendable {
     public init(seed: String, quests: [ScoutQuest] = [], items: [ScoutItem],
                 ringGems: RingGems = .catalogDefault, trinketOrder: [CatalogItem] = [],
                 feelings: [Int: FloorFeeling] = [:], selectedTrinket: String? = nil,
-                itemMappings: ScoutItemMappings? = nil, floorRooms: [Int: Set<String>] = [:]) {
+                itemMappings: ScoutItemMappings? = nil, floorRooms: [Int: Set<String>] = [:], artifactDecks: [Int: [CatalogItem]] = [:]) {
         self.seed = seed; self.quests = quests; self.items = items; self.ringGems = ringGems
         self.trinketOrder = trinketOrder
+        self.artifactDecks = artifactDecks
         self.feelings = feelings
         self.selectedTrinket = selectedTrinket
         self.itemMappings = itemMappings

@@ -1105,8 +1105,8 @@ public sealed partial class MainWindow : Window
         curseSection.Children.Add(new TextBlock { Text = "Curses", Style = (Style)Application.Current.Resources["Caption"] }); curseSection.Children.Add(cursePanel);
         var effectGrid = new StackPanel { Spacing = 4 }; effectGrid.Children.Add(enchantmentLabel); effectGrid.Children.Add(enchantmentPanel); effectGrid.Children.Add(curseSection);
         var selectTrinket = new CheckBox { Content = "Choose matching trinket at +3", IsChecked = r.SelectTrinket };
-        var allowTransmutations = new CheckBox { Content = "Allow transmutations", IsChecked = r.TrinketTransmutations > 0 };
-        var transmutations = Number("Maximum transmutations", Math.Clamp(r.TrinketTransmutations, 1, 13), 1, 13);
+        var allowTransmutations = new CheckBox { Content = "Allow transmutations", IsChecked = r.TrinketTransmutations > 0 || r.ArtifactTransmutations > 0 };
+        var transmutations = Number("Maximum transmutations", Math.Clamp(Math.Max(r.TrinketTransmutations, r.ArtifactTransmutations), 1, 13), 1, 13);
         transmutations.SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline;
         var transmutationHelp = new TextBlock { Text = "Includes the initial offers. AutoTrinket can use a helpful starting trinket. Scroll availability and effects after transmuting are not simulated.", TextWrapping = TextWrapping.Wrap };
         var excludeResin = new CheckBox { Content = "Exclude from Auto resin", IsChecked = r.ExcludeResin };
@@ -1191,8 +1191,12 @@ public sealed partial class MainWindow : Window
             var k = (ItemKind)Math.Max(0, kind.SelectedIndex); var trinket = k == ItemKind.Trinket; var generic = item.SelectedIndex == 0 && k.Family() is ItemKind.Weapon or ItemKind.Armor;
             resin.Visibility = !r.Blanket && k == ItemKind.Wand && accept == "Add" ? Visibility.Visible : Visibility.Collapsed;
             excludeResin.Visibility = resinHelp.Visibility = k == ItemKind.Wand && !r.Blanket ? Visibility.Visible : Visibility.Collapsed;
-            allowTransmutations.Visibility = trinket ? Visibility.Visible : Visibility.Collapsed;
-            transmutationLimit.Visibility = transmutationHelp.Visibility = trinket && allowTransmutations.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+            allowTransmutations.Visibility = trinket || k == ItemKind.Artifact ? Visibility.Visible : Visibility.Collapsed;
+            transmutationLimit.Visibility = transmutationHelp.Visibility = (trinket || k == ItemKind.Artifact) && allowTransmutations.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+            transmutations.Maximum = k == ItemKind.Artifact ? 10 : 13;
+            transmutationHelp.Text = k == ItemKind.Artifact
+                ? "Includes natural finds or transforms an obtainable artifact using the remaining deck at the floor limit. Source and curse filters apply to the starting artifact. Scroll availability and later generation changes are not simulated."
+                : "Includes the initial offers. AutoTrinket can use a helpful starting trinket. Scroll availability and effects after transmuting are not simulated.";
             selectTrinket.Visibility = !r.Blanket && trinket && allowTransmutations.IsChecked != true ? Visibility.Visible : Visibility.Collapsed;
             var predicate = (TierMatch)Math.Max(0, tierMatch.SelectedIndex); var ranged = predicate is TierMatch.AtLeast or TierMatch.AtMost;
             tierMatch.Visibility = generic ? Visibility.Visible : Visibility.Collapsed;
@@ -1312,6 +1316,7 @@ public sealed partial class MainWindow : Window
         r.UpgradeMatch = (UpgradeMatch)upgradeMatch.SelectedIndex; r.Upgrade = r.UpgradeMatch switch { UpgradeMatch.Any => 0, UpgradeMatch.Exactly => (int)upgrade.Value, UpgradeMatch.AtLeast when r.Kind == ItemKind.Ring => (int)upgrade.Value, UpgradeMatch.AtLeast => selectedMinimumUpgrade, _ => 0 };
         r.RequireUncursed = uncursed.IsChecked == true;
         r.TrinketTransmutations = r.Kind == ItemKind.Trinket && allowTransmutations.IsChecked == true ? Math.Clamp((int)transmutations.Value, 1, 13) : 0;
+        r.ArtifactTransmutations = r.Kind == ItemKind.Artifact && allowTransmutations.IsChecked == true ? Math.Clamp((int)transmutations.Value, 1, 10) : 0;
         r.SelectTrinket = !r.Blanket && r.Kind == ItemKind.Trinket && r.TrinketTransmutations == 0 && selectTrinket.IsChecked == true;
         r.ExcludeResin = !r.Blanket && r.Kind == ItemKind.Wand && excludeResin.IsChecked == true;
         // One checked effect is a single name, as before effect sets existed; an empty "Specific" means any.
@@ -2045,6 +2050,7 @@ public sealed partial class MainWindow : Window
             }).ToList();
             scoutTrinkets = groups.SelectMany(group => group).Select(row => row.TrinketDeck).OfType<TrinketDeckView>().FirstOrDefault();
             ScoutList.ItemsSource = new CollectionViewSource { IsSourceGrouped = true, Source = groups }.View;
+            ScoutList.Header = world.ArtifactDecks?.Count > 0 ? ArtifactDeckPanel(world, matches) : null;
             BuildTrinketDock(world);
             renderedScoutQuery = marked;
             UpdateResultNav();
@@ -2063,6 +2069,33 @@ public sealed partial class MainWindow : Window
             scoutAnchor = null; scoutedSeed = renderedSeed; UpdateResultNav();
         }
         finally { if (generation == scoutGeneration) { ScoutButton.IsEnabled = SeedCode.IsScoutable(SeedInput.Text); ScoutList.IsEnabled = true; scoutLoading = false; DailyDate.IsEnabled = true; DailyToday.IsEnabled = true; SetTrinketDockEnabled(true); } }
+    }
+
+    private static UIElement ArtifactDeckPanel(ScoutWorld world, ScoutMatches matches)
+    {
+        var body = new StackPanel { Spacing = 10 };
+        var floor = new ComboBox { Header = "After floor", ItemsSource = Enumerable.Range(1, 24).Select(depth => $"Floor {depth}").ToArray(), SelectedIndex = matches.TransmutedArtifacts.Select(mark => mark.Depth - 1).DefaultIfEmpty(18).Min() };
+        var deck = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
+        var help = new TextBlock { Text = "Remaining artifacts in draw order. Requires an artifact to transform. Later generation and transmutations consume this deck.", TextWrapping = TextWrapping.Wrap };
+        void Render() {
+            deck.Children.Clear();
+            var depth = floor.SelectedIndex + 1;
+            var order = world.ArtifactDecks!.Where(entry => entry.Key <= depth).OrderBy(entry => entry.Key).LastOrDefault().Value ?? [];
+            if (order.Count == 0) deck.Children.Add(new TextBlock { Text = "Deck exhausted. Further transmutations produce a ring.", TextWrapping = TextWrapping.Wrap });
+            for (var index = 0; index < order.Count; index++) {
+                var artifact = order[index]; var matched = matches.TransmutedArtifacts.Contains((depth, index));
+                var column = new StackPanel { Spacing = 4, HorizontalAlignment = HorizontalAlignment.Center };
+                column.Children.Add(new SpriteView { SpriteIndex = artifact.SpriteIndex, SpriteSize = 28 });
+                column.Children.Add(new TextBlock { Text = $"{index + 1}", HorizontalAlignment = HorizontalAlignment.Center });
+                var tile = new Border { Child = column, Padding = new Thickness(4), CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(matched ? 1 : 0), BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.MediumSeaGreen) };
+                var label = $"Transmutation #{index + 1}: {artifact.Name}" + (matched ? ", matches requirement" : "");
+                ToolTipService.SetToolTip(tile, label); Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(tile, label); deck.Children.Add(tile);
+            }
+        }
+        floor.SelectionChanged += (_, _) => Render(); Render();
+        body.Children.Add(floor); body.Children.Add(help);
+        body.Children.Add(new ScrollViewer { Content = deck, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollMode = ScrollMode.Enabled, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled });
+        return new Expander { Header = "Artifact transmutation order", IsExpanded = true, Content = body, HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 8, 0, 12) };
     }
 
     private UIElement FloorHeader(ScoutWorld world, int depth)

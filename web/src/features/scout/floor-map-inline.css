@@ -112,3 +112,33 @@
     transition: none;
   }
 }
+
+.d1-artifact-deck {
+  margin: 16px 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+.d1-artifact-deck summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.d1-artifact-floor {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 12px 0;
+}
+.d1-artifact-tail {
+  display: flex;
+  justify-content: flex-start;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.d1-artifact-tail li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 36px;
+  padding: 4px;
+}
