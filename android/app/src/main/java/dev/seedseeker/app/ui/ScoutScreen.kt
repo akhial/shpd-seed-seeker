@@ -762,12 +762,14 @@ internal fun ScoutItemCard(
                         Layout(
                             modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 2.dp),
                             content = {
-                                if (hasStatusBadges) {
-                                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                        ScoutItemBadges(scoutItem)
-                                    }
-                                } else {
-                                    // Reuse the empty badge space so the source and chips share a line.
+                                // Status badges, effect and source share one wrapped line beside the
+                                // chips, so a stacked card stays two rows whenever they fit.
+                                FlowRow(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                                    itemVerticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    if (hasStatusBadges) ScoutItemBadges(scoutItem)
                                     ScoutItemDetails(scoutItem)
                                 }
                                 FlowRow(
@@ -794,7 +796,7 @@ internal fun ScoutItemCard(
                             }
                         }
                     }
-                    if (!stackedBadges || hasStatusBadges) {
+                    if (!stackedBadges) {
                         ScoutItemDetails(scoutItem)
                     }
                     accessibilityLabel?.let {

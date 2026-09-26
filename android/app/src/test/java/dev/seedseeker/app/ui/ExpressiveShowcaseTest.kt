@@ -10,6 +10,7 @@ import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -230,6 +231,10 @@ class ExpressiveShowcaseTest {
                 item(find("fishing_spear"), 7, cursed = true, effect = "Annoying"),
                 item(find("wand_lightning"), 12, upgrade = 2),
                 item(find("fishing_spear"), 17),
+                item(find("wand_disintegration"), 2, cursed = true).copy(
+                    source = ScoutItemSource.entries.first(),
+                    accessibility = ScoutAccessibility.Choice(group = 8, option = 0),
+                ),
             ),
             quests = emptyList(),
             ringGems = RingGems.CATALOG,
@@ -241,7 +246,7 @@ class ExpressiveShowcaseTest {
     @Composable
     private fun Scout(result: ScoutWorld?, scouting: Boolean = false) = ScoutScreen(
         seedInput = "EQI-HLQ-RTU", result = result, isScouting = scouting, error = null,
-        matches = if (result == null) null else ScoutMatches(setOf(4, 7), 3, 4),
+        matches = if (result == null) null else ScoutMatches(setOf(4, 7, 11), 3, 4),
         resultSeeds = seeds.map { it.seed }, scoutedSeed = result?.seed,
         onScoutSeed = {}, onSeedChange = {}, onScout = {}, onSelectTrinket = {},
         onSettings = {}, onAbout = {}, bottomBar = { Box(Modifier.fillMaxWidth().height(80.dp)) },
@@ -260,6 +265,27 @@ class ExpressiveShowcaseTest {
     @Test fun scoutWorld() {
         host { Scout(world) }
         shot("scout-world")
+    }
+
+    @Test @Config(qualifiers = "w360dp-h800dp-xhdpi") fun scoutCards() {
+        host {
+          val base = androidx.compose.ui.platform.LocalDensity.current
+          CompositionLocalProvider(androidx.compose.ui.platform.LocalDensity provides androidx.compose.ui.unit.Density(base.density, 1.15f)) {
+            androidx.compose.foundation.layout.Column(
+                Modifier.padding(16.dp),
+                verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+            ) {
+                val cursedChoice = item(find("wand_disintegration"), 2, cursed = true).copy(
+                    source = ScoutItemSource.entries.first(),
+                    accessibility = ScoutAccessibility.Choice(group = 8, option = 0),
+                )
+                ScoutItemCard(cursedChoice, RingGems.CATALOG, matches = true)
+                ScoutItemCard(cursedChoice.copy(effect = "Annoying"), RingGems.CATALOG, matches = true)
+                ScoutItemCard(item(find("wand_fireblast"), 2, upgrade = 3), RingGems.CATALOG, matches = true)
+            }
+          }
+        }
+        shot("scout-cards")
     }
 
     @Test fun seedInfo() {
