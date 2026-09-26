@@ -1085,6 +1085,81 @@ fn tag(label: &str, color: &str) -> gtk::Label {
         .build()
 }
 
+fn artifact_deck_view(
+    world: &shpd_seedfinder_core::model::GeneratedWorld,
+    marks: &shpd_seedfinder_core::query::ScoutMatches,
+) -> gtk::Expander {
+    let content = gtk::Box::new(gtk::Orientation::Vertical, 10);
+    let floor = gtk::SpinButton::with_range(1.0, 24.0, 1.0);
+    floor.set_value(f64::from(
+        marks
+            .transmuted_artifacts
+            .first()
+            .map_or(19, |&(depth, _)| depth),
+    ));
+    floor.update_property(&[gtk::accessible::Property::Label("Artifact deck floor")]);
+    let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
+    row.append(&gtk::Label::new(Some("After floor")));
+    row.append(&floor);
+    content.append(&row);
+    let help = gtk::Label::builder().label("Remaining artifacts in draw order. Requires an artifact to transform. Later generation and transmutations consume this deck.").wrap(true).xalign(0.0).css_classes(["dim-label", "caption"]).build();
+    content.append(&help);
+    let deck = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+    let scroller = gtk::ScrolledWindow::builder()
+        .child(&deck)
+        .hscrollbar_policy(gtk::PolicyType::Automatic)
+        .vscrollbar_policy(gtk::PolicyType::Never)
+        .build();
+    content.append(&scroller);
+    let decks = world.artifact_decks.clone();
+    let highlights = marks.transmuted_artifacts.clone();
+    let render = move |floor: &gtk::SpinButton| {
+        while let Some(child) = deck.first_child() {
+            deck.remove(&child);
+        }
+        let depth = u8::try_from(floor.value_as_int()).unwrap_or(19);
+        let order = decks
+            .iter()
+            .rev()
+            .find(|entry| entry.depth <= depth)
+            .map_or(&[][..], |entry| entry.order.as_slice());
+        if order.is_empty() {
+            deck.append(&gtk::Label::new(Some(
+                "Deck exhausted. Further transmutations produce a ring.",
+            )));
+        }
+        for (index, &id) in order.iter().enumerate() {
+            let matched = highlights.contains(&(depth, index));
+            let tile = gtk::Box::new(gtk::Orientation::Vertical, 4);
+            tile.append(&sprites::item_image_sized(
+                ItemSprite::from_catalog(item(id)),
+                None,
+                28,
+            ));
+            tile.append(&gtk::Label::new(Some(&(index + 1).to_string())));
+            let label = format!(
+                "Transmutation #{}: {}{}",
+                index + 1,
+                item(id).name,
+                if matched { ", matches requirement" } else { "" }
+            );
+            tile.set_tooltip_text(Some(&label));
+            tile.update_property(&[gtk::accessible::Property::Label(&label)]);
+            if matched {
+                tile.add_css_class("trinket-match");
+            }
+            deck.append(&tile);
+        }
+    };
+    render(&floor);
+    floor.connect_value_changed(render);
+    gtk::Expander::builder()
+        .label("Artifact transmutation order")
+        .expanded(true)
+        .child(&content)
+        .build()
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -1274,79 +1349,4 @@ mod tests {
         assert_eq!(match_summary(0, 1), "· 0 of 1 requirement matched");
         assert_eq!(match_summary(2, 3), "· 2 of 3 requirements matched");
     }
-}
-
-fn artifact_deck_view(
-    world: &shpd_seedfinder_core::model::GeneratedWorld,
-    marks: &shpd_seedfinder_core::query::ScoutMatches,
-) -> gtk::Expander {
-    let content = gtk::Box::new(gtk::Orientation::Vertical, 10);
-    let floor = gtk::SpinButton::with_range(1.0, 24.0, 1.0);
-    floor.set_value(f64::from(
-        marks
-            .transmuted_artifacts
-            .first()
-            .map_or(19, |&(depth, _)| depth),
-    ));
-    floor.update_property(&[gtk::accessible::Property::Label("Artifact deck floor")]);
-    let row = gtk::Box::new(gtk::Orientation::Horizontal, 12);
-    row.append(&gtk::Label::new(Some("After floor")));
-    row.append(&floor);
-    content.append(&row);
-    let help = gtk::Label::builder().label("Remaining artifacts in draw order. Requires an artifact to transform. Later generation and transmutations consume this deck.").wrap(true).xalign(0.0).css_classes(["dim-label", "caption"]).build();
-    content.append(&help);
-    let deck = gtk::Box::new(gtk::Orientation::Horizontal, 6);
-    let scroller = gtk::ScrolledWindow::builder()
-        .child(&deck)
-        .hscrollbar_policy(gtk::PolicyType::Automatic)
-        .vscrollbar_policy(gtk::PolicyType::Never)
-        .build();
-    content.append(&scroller);
-    let decks = world.artifact_decks.clone();
-    let matches = marks.transmuted_artifacts.clone();
-    let render = move |floor: &gtk::SpinButton| {
-        while let Some(child) = deck.first_child() {
-            deck.remove(&child);
-        }
-        let depth = u8::try_from(floor.value_as_int()).unwrap_or(19);
-        let order = decks
-            .iter()
-            .rev()
-            .find(|entry| entry.depth <= depth)
-            .map_or(&[][..], |entry| entry.order.as_slice());
-        if order.is_empty() {
-            deck.append(&gtk::Label::new(Some(
-                "Deck exhausted. Further transmutations produce a ring.",
-            )));
-        }
-        for (index, &id) in order.iter().enumerate() {
-            let matched = matches.contains(&(depth, index));
-            let tile = gtk::Box::new(gtk::Orientation::Vertical, 4);
-            tile.append(&sprites::item_image_sized(
-                ItemSprite::from_catalog(item(id)),
-                None,
-                28,
-            ));
-            tile.append(&gtk::Label::new(Some(&(index + 1).to_string())));
-            let label = format!(
-                "Transmutation #{}: {}{}",
-                index + 1,
-                item(id).name,
-                if matched { ", matches requirement" } else { "" }
-            );
-            tile.set_tooltip_text(Some(&label));
-            tile.update_property(&[gtk::accessible::Property::Label(&label)]);
-            if matched {
-                tile.add_css_class("trinket-match");
-            }
-            deck.append(&tile);
-        }
-    };
-    render(&floor);
-    floor.connect_value_changed(render);
-    gtk::Expander::builder()
-        .label("Artifact transmutation order")
-        .expanded(true)
-        .child(&content)
-        .build()
 }
