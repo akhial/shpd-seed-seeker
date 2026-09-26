@@ -30,7 +30,7 @@ struct SeedSeekerApp: App {
 
 enum AppTab: Hashable { case finder, scout }
 enum AppSheet: String, Identifiable {
-    case settings, searchSettings, about, presets
+    case settings, searchSettings, about, presets, clipboardImport
     var id: String { rawValue }
 }
 
@@ -117,8 +117,8 @@ final class AppModel {
         } catch { showError(AndroidCopy.linkError(error), title: "Shared search") }
     }
 
-    func importClipboard() {
-        guard let text = UIPasteboard.general.string, !text.isEmpty else {
+    func importClipboard(_ text: String) {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             showError("The clipboard has no text. Copy results JSON and try again."); return
         }
         importText(text, source: "clipboard")
@@ -194,6 +194,7 @@ final class AppModel {
 struct SeedSeekerRootView: View {
     @Bindable var model: AppModel
     @Environment(\.scenePhase) private var scenePhase
+    @State private var pastedResults: String?
 
     var body: some View {
         TabView(selection: $model.tab) {
@@ -217,7 +218,12 @@ struct SeedSeekerRootView: View {
                 }
             }
         }
-        .sheet(item: $model.sheet) { destination in
+        .sheet(item: $model.sheet, onDismiss: {
+            // Present any import error after the paste sheet has dismissed.
+            guard let text = pastedResults else { return }
+            pastedResults = nil
+            model.importClipboard(text)
+        }) { destination in
             switch destination {
             case .settings: AppSettingsView()
             case .searchSettings:
@@ -225,6 +231,11 @@ struct SeedSeekerRootView: View {
                                    challengesEnabled: !model.scout.loading)
             case .about: AboutView()
             case .presets: PresetsView(query: $model.query, presets: $model.presets)
+            case .clipboardImport:
+                ClipboardImportView { text in
+                    pastedResults = text
+                    model.sheet = nil
+                }
             }
         }
         .sheet(item: $model.sharedLink) { payload in ShareSheet(items: [payload.text]) }

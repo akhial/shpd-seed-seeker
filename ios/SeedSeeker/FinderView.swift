@@ -78,7 +78,7 @@ struct FinderView: View {
                         .disabled(model.query.slotCount == 0)
                     Button("Import results…", systemImage: "square.and.arrow.down") { model.showingImporter = true }
                         .disabled(controller.isRunning)
-                    Button("Import from clipboard", systemImage: "doc.on.clipboard", action: model.importClipboard)
+                    Button("Import from clipboard", systemImage: "doc.on.clipboard") { model.sheet = .clipboardImport }
                         .disabled(controller.isRunning)
                     Button("Export results…", systemImage: "doc.badge.arrow.up", action: model.export)
                         .disabled(controller.isRunning || controller.results.isEmpty)
