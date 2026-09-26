@@ -58,7 +58,27 @@ export interface MapContents {
   }[];
   traps: { cell: number; kind: string; hidden: boolean; active: boolean }[];
 }
+export interface MapItemTooltip {
+  cell: number;
+  bounds?: [number, number, number, number];
+  label: string;
+  hidden: boolean;
+  items: {
+    name: string;
+    description: string;
+    image: number;
+    icon?: [number, number, number, number] | null;
+    quantity: number;
+    deterministic: boolean;
+    upgrade?: number | null;
+    cursed?: boolean;
+    enchantment?: string | null;
+    curse?: string | null;
+    glow?: MapGlow | null;
+  }[];
+}
 export interface LevelMapDocument {
+  itemTooltips?: MapItemTooltip[];
   format: "seed-seeker-level-map";
   schemaVersion: 2 | 3;
   seed: string;

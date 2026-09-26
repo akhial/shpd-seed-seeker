@@ -32,11 +32,13 @@ public sealed class SpriteView : Grid
     private readonly Image art = new() { Stretch = Stretch.Fill };
     private readonly Image glow = new() { Stretch = Stretch.Fill, Opacity = 0 };
 
+    private readonly Image identity = new() { Stretch = Stretch.Fill };
+
     private Storyboard? pulse;
     private bool live;
     private XamlRoot? hookedRoot;
     private TypedEventHandler<XamlRoot, XamlRootChangedEventArgs>? rootChanged;
-    private (int Index, int TypeIcon, int Size, uint Glow, bool Grayscale) rendered = (int.MinValue, int.MinValue, 0, 0, false);
+    private (int Index, int TypeIcon, int Size, uint Glow, bool Grayscale, int[]? Icon, bool AlignLeft) rendered = (int.MinValue, int.MinValue, 0, 0, false, null, false);
     private int generation;
 
     public SpriteView()
@@ -44,6 +46,7 @@ public sealed class SpriteView : Grid
         IsHitTestVisible = false;
         Children.Add(art);
         Children.Add(glow);
+        Children.Add(identity);
         Width = SpriteSize;
         Height = SpriteSize;
         Loaded += OnLoaded;
@@ -75,6 +78,14 @@ public sealed class SpriteView : Grid
     public static readonly DependencyProperty GrayscaleProperty = DependencyProperty.Register(
         nameof(Grayscale), typeof(bool), typeof(SpriteView), new PropertyMetadata(false, OnVisualChanged));
 
+    public static readonly DependencyProperty AlignArtworkLeftProperty = DependencyProperty.Register(
+        nameof(AlignArtworkLeft), typeof(bool), typeof(SpriteView), new PropertyMetadata(false, OnVisualChanged));
+    public bool AlignArtworkLeft
+    {
+        get => (bool)GetValue(AlignArtworkLeftProperty);
+        set => SetValue(AlignArtworkLeftProperty, value);
+    }
+
     public bool Grayscale
     {
         get => (bool)GetValue(GrayscaleProperty);
@@ -99,6 +110,15 @@ public sealed class SpriteView : Grid
     {
         get => (int)GetValue(TypeIconIndexProperty);
         set => SetValue(TypeIconIndexProperty, value);
+    }
+
+    /// <summary>Engine-provided identity glyph source rectangle for map inspection.</summary>
+    public static readonly DependencyProperty IconSourceProperty = DependencyProperty.Register(
+        nameof(IconSource), typeof(int[]), typeof(SpriteView), new PropertyMetadata(null, OnVisualChanged));
+    public int[]? IconSource
+    {
+        get => (int[]?)GetValue(IconSourceProperty);
+        set => SetValue(IconSourceProperty, value);
     }
 
     public double SpriteSize
@@ -158,7 +178,7 @@ public sealed class SpriteView : Grid
         // The high bit distinguishes "no glow" from "glow that happens to be black".
         var tint = period > 0 ? 0x1000000u | (uint)((color.R << 16) | (color.G << 8) | color.B) : 0u;
         var pixels = (int)Math.Max(1, Math.Round(size * EffectiveScale()));
-        var key = (SpriteIndex, TypeIconIndex, pixels, tint, Grayscale);
+        var key = (SpriteIndex, TypeIconIndex, pixels, tint, Grayscale, IconSource, AlignArtworkLeft);
         if (!force && key == rendered) return;
         rendered = key;
         StopPulse();
@@ -166,6 +186,7 @@ public sealed class SpriteView : Grid
         {
             art.Source = null;
             glow.Source = null;
+            identity.Source = null;
             return;
         }
         _ = ApplyAsync(++generation, pixels, period);
@@ -188,7 +209,13 @@ public sealed class SpriteView : Grid
         // Completes synchronously once the atlas has been decoded.
         var atlas = await ItemAtlas.GetAsync();
         if (atlas is null || token != generation) return;
-        art.Source = atlas.Sprite(SpriteIndex, TypeIconIndex, pixels, Grayscale);
+        var left = AlignArtworkLeft && atlas.Contains(SpriteIndex) ? -atlas.ArtworkLeftInset(SpriteIndex, pixels) * SpriteSize / pixels : 0;
+        art.RenderTransform = new TranslateTransform { X = left };
+        glow.RenderTransform = new TranslateTransform { X = left };
+        identity.RenderTransform = new TranslateTransform { X = left };
+        // Map identity glyphs stay above the tint, including on cursed rings.
+        art.Source = atlas.Sprite(SpriteIndex, IconSource is null ? TypeIconIndex : -1, pixels, Grayscale);
+        identity.Source = IconSource is { } icon ? atlas.InspectionSprite(SpriteIndex, icon, pixels, iconOnly: true) : null;
         if (period > 0)
         {
             glow.Source = atlas.Mask(SpriteIndex, pixels, GlowColor);

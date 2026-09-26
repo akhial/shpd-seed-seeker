@@ -117,17 +117,22 @@ pub struct WorldItem {
     pub secret: bool,
 }
 
+/// Identified in-game level, shared by scout rows and map inspection.
+pub(crate) const fn displayed_upgrade(item: ItemId, upgrade: u8) -> u8 {
+    let cap = match item {
+        ItemId::SandalsOfNature => 3,
+        ItemId::EtherealChains | ItemId::TimekeepersHourglass => 5,
+        _ => return upgrade,
+    };
+    let internal = (upgrade * cap + 5) / 10;
+    (internal * 10 + cap / 2) / cap
+}
+
 impl WorldItem {
     /// Identified in-game upgrade: artifacts round both transferUpgrade and visiblyUpgraded.
     #[must_use]
     pub const fn displayed_upgrade(&self) -> u8 {
-        let cap = match self.item {
-            ItemId::SandalsOfNature => 3,
-            ItemId::EtherealChains | ItemId::TimekeepersHourglass => 5,
-            _ => return self.upgrade,
-        };
-        let internal = (self.upgrade * cap + 5) / 10;
-        (internal * 10 + cap / 2) / cap
+        displayed_upgrade(self.item, self.upgrade)
     }
 
     pub(crate) fn catalyst(depth: u8, source: ItemSource, accessibility: Accessibility) -> Self {

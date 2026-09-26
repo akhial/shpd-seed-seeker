@@ -1,7 +1,29 @@
 //! Cell-clipped object sprites. Splitting raised images preserves the cell drawing contract
 //! on every frontend, including large actors crossing several neighbouring cells.
 use super::{Level, MapDraw, MapLayer, MapScene, MapSprite, intern, layer};
-use crate::level_map::{MapContents, MapGlow};
+use crate::level_map::{MapContents, MapGlow, MapHeap};
+
+pub(super) fn heap_image(heap: &MapHeap) -> u16 {
+    match heap.kind.as_str() {
+        "Skeleton" => 32,
+        "Tomb" => 34,
+        "Chest" => 36,
+        "LockedChest" => 37,
+        "CrystalChest" => 38,
+        _ => heap.items.first().map_or(0, |i| i.image),
+    }
+}
+
+pub(super) fn item_bounds(image: u16) -> [i32; 4] {
+    let [w, h] = super::item_rects::ITEM_SIZES[usize::from(image)];
+    let raise = 5 + i32::from(8_u16.saturating_sub(h));
+    [
+        (17 - i32::from(w)) / 2,
+        16 - i32::from(h) - raise,
+        i32::from(w),
+        i32::from(h),
+    ]
+}
 
 pub(super) struct ActorSprite {
     pub asset: &'static str,
@@ -25,18 +47,11 @@ pub(super) fn layers(
         if !visible(level, heap.cell) {
             continue;
         }
-        let image = match heap.kind.as_str() {
-            "Skeleton" => 32,
-            "Tomb" => 34,
-            "Chest" => 36,
-            "LockedChest" => 37,
-            "CrystalChest" => 38,
-            _ => heap.items.first().map_or(0, |i| i.image),
-        };
+        let image = heap_image(heap);
+        let [x, y, _, _] = item_bounds(image);
         let [w, h] = super::item_rects::ITEM_SIZES[usize::from(image)];
-        let raise = 5 + i32::from(8_u16.saturating_sub(h));
         let sources = [[image % 16 * 16, image / 16 * 16, w, h]];
-        let offset = [(17 - i32::from(w)) / 2, 16 - i32::from(h) - raise];
+        let offset = [x, y];
         let opacity = if heap.phantom { 102 } else { 255 };
         shadow(
             scene,

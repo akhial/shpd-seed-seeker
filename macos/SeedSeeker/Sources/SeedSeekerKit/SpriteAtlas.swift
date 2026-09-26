@@ -236,6 +236,27 @@ public enum SpriteLayer: Hashable, Sendable {
         return rendered
     }
 
+    /// A centered item with its shared identity glyph, including exotic consumables.
+    public func inspectionSprite(spriteIndex: Int, icon: [Int]?, pointSize: Int, layer: SpriteLayer = .whole) -> CGImage? {
+        guard let base = composedSprite(spriteIndex: spriteIndex, pointSize: pointSize, layer: .art) else { return nil }
+        if layer == .art { return base }
+        guard let icon, icon.count == 4 else { return layer == .whole ? base : nil }
+        let pixels = pointSize * Self.pixelScale
+        guard let context = CGContext(data: nil, width: pixels, height: pixels,
+            bitsPerComponent: 8, bytesPerRow: 0, space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        context.interpolationQuality = .none
+        context.setShouldAntialias(false)
+        let box = CGFloat(pixels)
+        if layer == .whole { context.draw(base, in: CGRect(x: 0, y: 0, width: box, height: box)) }
+        if let glyph = icons.cropping(to: CGRect(x: icon[0], y: icon[1], width: icon[2], height: icon[3])) {
+            let scale = box / CGFloat(SpriteSheet.cell)
+            let w = CGFloat(icon[2]) * scale, h = CGFloat(icon[3]) * scale
+            context.draw(glyph, in: CGRect(x: box - w, y: box - h, width: w, height: h))
+        }
+        return context.makeImage()
+    }
+
     /// Full journal frames, centered item and identity glyph flush top right.
     public func mappingSprite(entry: ScoutItemMapping, art: ItemMappingArtwork.Category,
                               classIndex: Int, pointSize: Int) -> CGImage? {

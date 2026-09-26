@@ -24,6 +24,17 @@ public sealed class LevelMapDocument
     public MapBranch[] Branches { get; init; } = [];
     public MapAsset[] Assets { get; init; } = [];
     public MapScene Scene { get; init; } = new();
+    public MapItemTooltip[] ItemTooltips { get; init; } = [];
+    public MapItemTooltip? ItemAt(double x, double y, bool secrets)
+    {
+        if (!double.IsFinite(x) || !double.IsFinite(y) || x < 0 || y < 0 || x >= Width * Scene.TileSize || y >= Height * Scene.TileSize) return null;
+        return ItemTooltips.FirstOrDefault(tip => {
+            var bounds = tip.Bounds ?? [0, 0, Scene.TileSize, Scene.TileSize];
+            var left = (tip.Cell % Width) * Scene.TileSize + bounds[0];
+            var top = (tip.Cell / Width) * Scene.TileSize + bounds[1];
+            return (secrets || !tip.Hidden) && x >= left && y >= top && x < left + bounds[2] && y < top + bounds[3];
+        });
+    }
     public bool HasSecrets => SecretRooms.Length + SecretDoors.Length + SecretTraps.Length > 0;
 
     public static LevelMapDocument Parse(byte[] json)
@@ -54,6 +65,9 @@ public sealed class LevelMapDocument
     }
 }
 
+public sealed record MapTooltipItem(string Name, string Description, int Image, int Quantity, bool Deterministic,
+    int[]? Icon = null, int? Upgrade = null, bool Cursed = false, string? Enchantment = null, string? Curse = null, MapGlow? Glow = null);
+public sealed record MapItemTooltip(int Cell, string Label, bool Hidden, MapTooltipItem[] Items, int[]? Bounds = null);
 public sealed record MapBranch(int Depth, int Branch, string Kind, int Entrance);
 public sealed record MapAsset(string Id, int Width, int Height, string Sha256);
 public sealed class MapScene

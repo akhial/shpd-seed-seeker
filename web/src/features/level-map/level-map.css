@@ -322,3 +322,106 @@
     gap: 5px;
   }
 }
+
+.d1-map-item-target {
+  position: absolute;
+  z-index: 1;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  cursor: help;
+  touch-action: none;
+}
+.d1-map-item-target:hover,
+.d1-map-item-target[aria-describedby],
+.d1-map-item-target:focus-visible {
+  outline: 1px solid var(--d1-amber, #dcb469);
+  outline-offset: -1px;
+  background: rgb(220 180 105 / 12%);
+}
+.d1-map-item-tooltip {
+  position: absolute;
+  z-index: 3;
+  box-sizing: border-box;
+  width: 330px;
+  padding: 14px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--d1-border-strong);
+  border-radius: 11px;
+  background: var(--d1-panel);
+  color: var(--d1-text);
+  box-shadow:
+    0 6px 24px #0009,
+    0 1px 4px #0008;
+  font-size: 12px;
+  line-height: 1.55;
+  text-align: left;
+  user-select: text;
+  cursor: auto;
+}
+.d1-map-item-context {
+  color: var(--d1-text-2);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.d1-map-item-entry + .d1-map-item-entry {
+  border-top: 1px solid var(--d1-border);
+  margin-top: 12px;
+  padding-top: 12px;
+}
+.d1-map-item-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 32px;
+}
+.d1-map-item-heading strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 15px;
+  font-weight: 700;
+}
+.d1-map-item-icon {
+  flex: 0 0 32px;
+  image-rendering: pixelated;
+}
+.d1-map-item-quantity {
+  flex-shrink: 0;
+  white-space: nowrap;
+  margin-left: auto;
+  color: var(--d1-text-2);
+  font-variant-numeric: tabular-nums;
+}
+.d1-map-item-entry p {
+  margin: 8px 0 0;
+  color: var(--d1-text-2);
+  white-space: pre-line;
+}
+
+.d1-map-item-tooltip > .d1-map-item-context {
+  margin-bottom: 12px;
+}
+
+.d1-map-item-title {
+  min-width: 0;
+}
+.d1-map-item-title-tail {
+  display: inline-block;
+  white-space: nowrap;
+}
+.d1-map-item-title .d1-chip-tag {
+  display: inline-block;
+  margin-left: 2px;
+  vertical-align: baseline;
+  white-space: nowrap;
+}
+.d1-map-item-modifiers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}

@@ -18,6 +18,49 @@ final class LevelMapViewTests: XCTestCase {
         viewport.keyDown(with: event)
     }
 
+    func testItemInspectionRespectsCoordinatesAndClearsOnSecretsAndReload() async throws {
+        let request = request(1)
+        let bundle = try await LevelMapClient.shared.load(request)
+        let map = bundle.document
+        let tip = try XCTUnwrap(map.itemTooltips?.first { !$0.hidden })
+        XCTAssertFalse(tip.items[0].description.isEmpty)
+        let bounds = try XCTUnwrap(tip.bounds)
+        XCTAssertTrue(map.itemTooltips!.flatMap(\.items).contains { $0.icon?.count == 4 })
+        let spriteX = Double(tip.cell % map.width * 16 + bounds[0]) + Double(bounds[2]) / 2
+        let spriteY = Double(tip.cell / map.width * 16 + bounds[1])
+        XCTAssertEqual(map.itemAt(x: spriteX, y: spriteY + 0.5, secrets: false)?.cell, tip.cell)
+        XCTAssertNotEqual(map.itemAt(x: spriteX, y: spriteY - 0.5, secrets: false)?.cell, tip.cell)
+        let x = Double(tip.cell % map.width) * 16 + 8
+        let y = Double(tip.cell / map.width) * 16 + 8
+        XCTAssertEqual(map.itemAt(x: x, y: y, secrets: false)?.cell, tip.cell)
+        XCTAssertNil(map.itemAt(x: -1, y: y, secrets: true))
+        let viewport = MapViewport(frame: NSRect(x: 0, y: 0, width: map.pixelWidth + 16, height: map.pixelHeight + 16))
+        viewport.update(bundle: bundle, request: request, time: 0)
+        viewport.inspectItem(at: CGPoint(x: x + 8, y: y + 8))
+        XCTAssertEqual(viewport.inspectedCell, tip.cell)
+        XCTAssertEqual(viewport.subviews.count, 1)
+        let overlay = try XCTUnwrap(viewport.subviews.first)
+        let exit = try XCTUnwrap(NSEvent.enterExitEvent(with: .mouseExited, location: .zero,
+            modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil,
+            eventNumber: 0, trackingNumber: 0, userData: nil))
+        viewport.mouseExited(with: exit)
+        XCTAssertNil(viewport.inspectedCell)
+        XCTAssertTrue(viewport.hitTest(CGPoint(x: x + 8, y: y + 8)) === viewport,
+                      "The outgoing glass must not intercept map gestures")
+        viewport.inspectItem(at: CGPoint(x: x + 8, y: y + 8))
+        XCTAssertEqual(viewport.inspectedCell, tip.cell)
+        XCTAssertTrue(viewport.subviews.first === overlay,
+                      "Hover re-entry must reuse the container that owns the native transition")
+        viewport.secrets = true
+        XCTAssertNil(viewport.inspectedCell)
+        try press("i", in: viewport)
+        XCTAssertNotNil(viewport.inspectedCell)
+        try press("+", in: viewport)
+        XCTAssertNil(viewport.inspectedCell)
+        viewport.update(bundle: nil, request: request, time: 10)
+        XCTAssertTrue(viewport.subviews.isEmpty)
+    }
+
     func testTrinketReloadKeepsZoomAndPanThroughLoadingAndRemoval() async throws {
         let original = request(), selected = request(trinket: "mimic_tooth")
         let map = try await LevelMapClient.shared.load(original)

@@ -127,7 +127,7 @@ struct ItemSpriteView: View {
 /// its opacity animating linearly between 0 and ``ItemGlow/peakOpacity``. Held
 /// at a static blend instead when the system asks for reduced motion, matching
 /// the web app under `prefers-reduced-motion`.
-private struct SpriteGlowLayer<Mask: View>: View {
+struct SpriteGlowLayer<Mask: View>: View {
     let glow: ItemGlow
     let reduceMotion: Bool
     @ViewBuilder let mask: Mask
@@ -177,6 +177,31 @@ struct ItemSpriteIcon: View {
             Image(decorative: image, scale: CGFloat(SpriteAtlas.pixelScale))
                 .interpolation(.none)
                 .antialiased(false)
+        }
+    }
+}
+
+/// Seeded map artwork shares the item-list pulse while keeping identity glyphs solid.
+struct MapItemSpriteView: View {
+    let item: LevelMapDocument.TooltipItem
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        ZStack {
+            pixels(.art)
+            if let glow = item.glow, glow.color.count == 3 {
+                let color = String(format: "#%02x%02x%02x", Int(glow.color[0]), Int(glow.color[1]), Int(glow.color[2]))
+                SpriteGlowLayer(glow: ItemGlow(hex: color, period: glow.periodMs / 1000), reduceMotion: reduceMotion) { pixels(.art) }.id(glow)
+            }
+            pixels(.typeIcon)
+        }
+        .offset(x: -CGFloat(16 - (SpriteAtlas.bundled?.bounds(forSprite: item.image).width ?? 16)))
+        .frame(width: 32, height: 32).accessibilityHidden(true)
+    }
+
+    @ViewBuilder private func pixels(_ layer: SpriteLayer) -> some View {
+        if let image = SpriteAtlas.bundled?.inspectionSprite(spriteIndex: item.image, icon: item.icon, pointSize: 32, layer: layer) {
+            Image(decorative: image, scale: CGFloat(SpriteAtlas.pixelScale)).interpolation(.none).antialiased(false)
         }
     }
 }

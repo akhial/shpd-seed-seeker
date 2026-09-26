@@ -3,6 +3,11 @@ package dev.seedseeker.app.ui
 
 import android.os.SystemClock
 import android.view.MotionEvent
+import android.view.View
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.TextView
+import androidx.core.view.children
 import androidx.test.core.app.ApplicationProvider
 import dev.seedseeker.app.engine.LevelMapRequest
 import dev.seedseeker.app.engine.LevelMaps
@@ -17,6 +22,94 @@ import org.robolectric.annotation.GraphicsMode
 @Config(sdk = [35])
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 class NativeLevelMapViewTest {
+    @Test fun inspectionKeepsUpgradeWithLastTitleWordWhenWrapping() = runBlocking {
+        val request = LevelMapRequest("AAA-AAA-AAA", 2, 0, null)
+        val bundle = LevelMaps.load(request)
+        val tip = bundle.map.itemTooltips.first { it.items.any { item -> item.name == "Mail Armor of Displacement" } }
+        val view = NativeLevelMapView(ApplicationProvider.getApplicationContext())
+        val density = view.resources.displayMetrics.density
+        fun dp(value: Int) = (value * density).toInt()
+        for (availableWidth in listOf(800, 240)) {
+            val width = dp(availableWidth)
+            val height = dp(600)
+            view.layout(0, 0, width, height)
+            view.bind(bundle, request, false, true, false) {}
+            val mapWidth = bundle.map.width * 16
+            val mapHeight = bundle.map.height * 16
+            val fit = minOf(width.toFloat() / mapWidth, height.toFloat() / mapHeight)
+            val scale = if (fit >= 1) kotlin.math.floor(fit) else fit
+            val x = width / 2f + ((tip.cell % bundle.map.width + .5f) * 16 - mapWidth / 2f) * scale
+            val y = height / 2f + ((tip.cell / bundle.map.width + .5f) * 16 - mapHeight / 2f) * scale
+            view.inspectItem(x, y)
+            view.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY))
+            view.layout(0, 0, width, height)
+            val card = view.getChildAt(0) as ScrollView
+            val body = card.getChildAt(0) as LinearLayout
+            val heading = body.children.filterIsInstance<LinearLayout>().first()
+            val title = heading.children.filterIsInstance<TextView>().first()
+            val text = title.text.toString()
+            assertEquals("Mail Armor of Displacement\u00a0+1", text)
+            val lastWordLine = title.layout.getLineForOffset(text.indexOf("Displacement"))
+            val chipLine = title.layout.getLineForOffset(text.indexOf("+1"))
+            assertEquals("The chip must wrap with the last title word", lastWordLine, chipLine)
+            assertTrue("The complete heading must fit", title.layout.getLineRight(chipLine) <= title.width)
+            assertTrue("Card must stay inside the viewport", card.width <= width - dp(16))
+            if (availableWidth == 240) {
+                assertTrue("Narrow viewports wrap the title without displacing the chip", title.lineCount > 1)
+            }
+        }
+        view.release()
+    }
+
+    @Test fun inspectionUsesOriginalTextHonorsSecretsAndClearsWhenMapChanges() = runBlocking {
+        val request = LevelMapRequest("AAA-AAA-AAA", 1, 0, null)
+        val bundle = LevelMaps.load(request)
+        val map = bundle.map
+        val tip = map.itemTooltips.first { !it.hidden }
+        assertTrue(tip.items.first().description.isNotEmpty())
+        val bounds = requireNotNull(tip.bounds)
+        assertTrue(map.itemTooltips.flatMap { it.items }.any { it.icon?.size == 4 })
+        val spriteX = tip.cell % map.width * 16 + bounds[0] + bounds[2] / 2f
+        val spriteY = tip.cell / map.width * 16 + bounds[1]
+        assertEquals(tip, map.itemAt(spriteX, spriteY + .5f, false))
+        assertNotEquals(tip, map.itemAt(spriteX, spriteY - .5f, false))
+        val x = (tip.cell % map.width + .5f) * 16
+        val y = (tip.cell / map.width + .5f) * 16
+        assertEquals(tip, map.itemAt(x, y, false))
+        assertNull(map.itemAt(-1f, y, true))
+        val hidden = tip.copy(hidden = true)
+        val concealed = map.copy(itemTooltips = listOf(hidden))
+        assertNull(concealed.itemAt(x, y, false))
+        assertEquals(hidden, concealed.itemAt(x, y, true))
+        val view = NativeLevelMapView(ApplicationProvider.getApplicationContext())
+        view.layout(0, 0, map.width * 16, map.height * 16)
+        view.bind(bundle, request, false, true, true) {}
+        view.inspectItem(x, y)
+        assertEquals(1, view.childCount)
+        view.bind(null, request.copy(trinket = "mimic_tooth"), false, true, true) {}
+        assertEquals(0, view.childCount)
+        view.release()
+    }
+
+    @Test fun inspectionDecodesGeneratedUpgradesEnchantmentsAndCurses() = runBlocking {
+        val bundle = LevelMaps.load(LevelMapRequest("AAA-AAA-AAA", 7, 0, null))
+        val items = bundle.map.itemTooltips.flatMap { it.items }
+        val enchanted = items.first { it.name == "Vorpal Assassin's Blade" }
+        assertEquals(1, enchanted.upgrade)
+        assertEquals("Vorpal", enchanted.enchantment)
+        assertFalse(enchanted.cursed)
+        assertNull(enchanted.curse)
+        assertArrayEquals(intArrayOf(170, 102, 102), enchanted.glow!!.color)
+        assertEquals(1000, enchanted.glow.periodMs)
+        val cursed = items.first { it.curse == "Wondrous" }
+        assertEquals(1, cursed.upgrade)
+        assertTrue(cursed.cursed)
+        assertNull(cursed.enchantment)
+        assertArrayEquals(intArrayOf(0, 0, 0), cursed.glow!!.color)
+        assertTrue(items.any { it.upgrade == null && it.glow == null })
+    }
+
     @Test fun viewportSurvivesLoadingRetryAndTrinketsButFitsNewLocations() = runBlocking {
         val request = LevelMapRequest("AAA-AAA-AAA", 12, 0, null)
         val original = LevelMaps.load(request)

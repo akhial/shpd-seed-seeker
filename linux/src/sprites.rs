@@ -596,6 +596,68 @@ pub fn arcane_resin_image() -> gtk::Widget {
     area.upcast()
 }
 
+/// A map item's seeded appearance and shared identity glyph.
+pub fn map_item_image(
+    index: u16,
+    icon: Option<[u16; 4]>,
+    glow: Option<shpd_seedfinder_core::level_map::MapGlow>,
+    size: i32,
+) -> gtk::Widget {
+    let glow = glow.map(|value| Glow {
+        color: u32::from_be_bytes([0, value.color[0], value.color[1], value.color[2]]),
+        period: f64::from(value.period_ms) / 1000.0,
+    });
+    let area = gtk::DrawingArea::builder()
+        .content_width(size)
+        .content_height(size)
+        .valign(gtk::Align::Center)
+        .halign(gtk::Align::Center)
+        .accessible_role(gtk::AccessibleRole::Presentation)
+        .build();
+    if let Some(glow) = glow {
+        animate(&area, glow.period);
+    }
+    if let Some(atlas) = atlas() {
+        area.set_draw_func(move |area, context, width, height| {
+            let factor = area.scale_factor().max(1);
+            context.scale(1.0 / f64::from(factor), 1.0 / f64::from(factor));
+            let art = atlas.art(index, size * factor);
+            let inset = art
+                .as_ref()
+                .map_or(0, |art| (width * factor - art.width()) / 2);
+            if let Some(art) = art {
+                let x = 0.0_f64;
+                let y = f64::from(height * factor - art.height()) / 2.0;
+                let _ = blit(context, &art, x.round(), y.round());
+                if let Some(glow) = glow {
+                    let value = area.frame_clock().map_or(glow::STATIC_VALUE, |clock| {
+                        glow_value(clock.frame_time(), glow.period)
+                    });
+                    let (red, green, blue) = glow.rgb();
+                    context.set_source_rgba(red, green, blue, value);
+                    let _ = context.mask_surface(&*art, x.round(), y.round());
+                }
+            }
+            if let Some([x, y, w, h]) = icon {
+                let frame = Rect {
+                    x: i32::from(x),
+                    y: i32::from(y),
+                    width: i32::from(w),
+                    height: i32::from(h),
+                };
+                let w = scaled_extent(frame.width, size * factor);
+                let h = scaled_extent(frame.height, size * factor);
+                if let Some(glyph) = scale_nearest(&atlas.icons, frame, w, h) {
+                    let left = (width + size) * factor / 2 - w - inset;
+                    let top = (height - size) * factor / 2;
+                    let _ = blit(context, &glyph, f64::from(left), f64::from(top));
+                }
+            }
+        });
+    }
+    area.upcast()
+}
+
 pub fn item_image_sized(sprite: ItemSprite, glow: Option<Glow>, size: i32) -> gtk::Widget {
     let definition = sprite.definition;
     let Some(atlas) = atlas() else {

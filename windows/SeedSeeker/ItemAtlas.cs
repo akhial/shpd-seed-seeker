@@ -131,6 +131,18 @@ internal sealed class ItemAtlas
         return bitmap;
     }
 
+    public int ArtworkLeftInset(int index, int size) =>
+        (size - Math.Clamp((int)Math.Round(Bounds(index).Width * size / (double)Cell), 1, size)) / 2;
+
+    public WriteableBitmap? InspectionSprite(int index, int[] icon, int size, bool iconOnly = false)
+    {
+        if (!Contains(index) || size <= 0 || icon.Length != 4) return null;
+        var buffer = iconOnly ? new byte[size * size * 4] : Compose(index, size, null, -1);
+        DrawMappingFrame(buffer, size, icons, icon[0] / IconCell + icon[1] / IconCell * IconColumns,
+            IconCell, [icon[2], icon[3]], size / (double)Cell, true);
+        return Bitmap(buffer, size);
+    }
+
     /// <summary>Full journal frames with the identity glyph flush top right.</summary>
     public WriteableBitmap? MappingSprite(ScoutItemMapping entry, MappingArt art, int classIndex, int size)
     {

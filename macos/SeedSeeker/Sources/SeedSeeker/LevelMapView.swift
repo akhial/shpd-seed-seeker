@@ -265,9 +265,56 @@ private struct NativeLevelMap: NSViewRepresentable {
 /// without drawing a focus border over the map.
 @MainActor final class MapViewport: NSView {
     private(set) var request: LevelMapRequest?
+    private var itemOverlay: MapItemOverlayHost?
+    private(set) var inspectedCell: Int?
+    private var tracking: NSTrackingArea?
+    private var dragStart: CGPoint?
+    private var didDrag = false
+    private func hideItem(animated: Bool = false) {
+        inspectedCell = nil
+        if animated {
+            itemOverlay?.presentation.show(nil, animated: true)
+        } else {
+            itemOverlay?.removeFromSuperview(); itemOverlay = nil
+        }
+    }
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let tracking { removeTrackingArea(tracking) }
+        let area = NSTrackingArea(rect: .zero, options: [.activeInKeyWindow, .inVisibleRect, .mouseMoved, .mouseEnteredAndExited], owner: self)
+        addTrackingArea(area); tracking = area
+    }
+    func inspectItem(at point: CGPoint) {
+        guard let renderer else { hideItem(); return }
+        if let frame = itemOverlay?.presentation.card?.frame, frame.insetBy(dx: -18, dy: -18).contains(point) { return }
+        constrain()
+        let scale = fitScale * zoom
+        let tip = renderer.map.itemAt(x: (point.x - bounds.midX - pan.x) / scale + CGFloat(renderer.map.pixelWidth) / 2,
+                                      y: (point.y - bounds.midY - pan.y) / scale + CGFloat(renderer.map.pixelHeight) / 2, secrets: secrets)
+        guard tip?.cell != inspectedCell else { return }
+        guard let tip else { hideItem(animated: true); return }
+        inspectedCell = tip.cell
+        let width = max(1, min(330, bounds.width - 16))
+        let content = NSHostingView(rootView: MapItemCard(tip: tip).frame(width: width))
+        let height = content.fittingSize.height
+        let visibleHeight = max(1, min(height, min(320, bounds.height - 16)))
+        let x = max(8, min(point.x + 16, bounds.width - width - 8))
+        let y = max(8, min(point.y + 16 + visibleHeight < bounds.height ? point.y + 16 : point.y - visibleHeight - 16, bounds.height - visibleHeight - 8))
+        if itemOverlay == nil {
+            let overlay = MapItemOverlayHost(frame: bounds)
+            addSubview(overlay); itemOverlay = overlay
+            // Establish the empty glass container before inserting its effect.
+            overlay.layoutSubtreeIfNeeded()
+        }
+        itemOverlay?.presentation.show(.init(tip: tip, frame: NSRect(x: x, y: y, width: width, height: visibleHeight)), animated: true)
+    }
+    override func mouseMoved(with event: NSEvent) { inspectItem(at: convert(event.locationInWindow, from: nil)) }
+    override func mouseExited(with event: NSEvent) { hideItem(animated: true) }
+    override func setFrameSize(_ newSize: NSSize) { if frame.size != newSize { hideItem() }; super.setFrameSize(newSize) }
+    override func viewDidMoveToWindow() { super.viewDidMoveToWindow(); if window == nil { hideItem() } }
     private var renderer: MapRenderer?
     var hasMap: Bool { renderer != nil }
-    var secrets = false
+    var secrets = false { didSet { if oldValue != secrets { hideItem() } } }
     var elapsed: Double = 0
     var clock = LevelMapClock(now: 0)
     private(set) var zoom: CGFloat = 1
@@ -278,15 +325,15 @@ private struct NativeLevelMap: NSViewRepresentable {
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         focusRingType = .none
-        toolTip = "Scroll or pinch to zoom. Drag to pan. Press 0 to fit the map."
         setAccessibilityElement(true)
         setAccessibilityRole(.image)
-        setAccessibilityHelp("Scroll or pinch to zoom. Drag or use arrow keys to pan. Press zero to fit the map.")
+        setAccessibilityHelp("Scroll or pinch to zoom. Drag or use arrow keys to pan. Press zero to fit the map. Press I to inspect items, Escape to dismiss.")
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     func update(bundle: LevelMapBundle?, request: LevelMapRequest, time: Double) {
         let sceneChanged = self.request != request
+        if sceneChanged || bundle == nil { hideItem() }
         if self.request?.hasSameLocation(as: request) != true {
             zoom = 1; pan = .zero
         }
@@ -313,6 +360,7 @@ private struct NativeLevelMap: NSViewRepresentable {
         pan.x = min(x, max(-x, pan.x)); pan.y = min(y, max(-y, pan.y))
     }
     private func zoom(to value: CGFloat, at anchor: CGPoint = .zero) {
+        hideItem()
         let next = min(8, max(1, value)), ratio = next / zoom
         pan = CGPoint(x: anchor.x - (anchor.x - pan.x) * ratio,
                       y: anchor.y - (anchor.y - pan.y) * ratio)
@@ -326,14 +374,40 @@ private struct NativeLevelMap: NSViewRepresentable {
         zoom(to: zoom * exp(-event.scrollingDeltaY * (event.hasPreciseScrollingDeltas ? 0.008 : 0.08)), at: anchor(event))
     }
     override func magnify(with event: NSEvent) { zoom(to: zoom * (1 + event.magnification), at: anchor(event)) }
-    override func mouseDown(with event: NSEvent) { window?.makeFirstResponder(self) }
+    override func mouseDown(with event: NSEvent) {
+        hideItem(); window?.makeFirstResponder(self)
+        dragStart = convert(event.locationInWindow, from: nil); didDrag = false
+    }
+    override func mouseUp(with event: NSEvent) {
+        if !didDrag { inspectItem(at: convert(event.locationInWindow, from: nil)) }
+        dragStart = nil
+    }
     override func mouseDragged(with event: NSEvent) {
+        if let dragStart {
+            let point = convert(event.locationInWindow, from: nil)
+            didDrag = didDrag || hypot(point.x - dragStart.x, point.y - dragStart.y) > 4
+        }
+        hideItem()
         pan.x += event.deltaX; pan.y += event.deltaY; constrain(); needsDisplay = true
     }
     override func keyDown(with event: NSEvent) {
         guard event.modifierFlags.intersection([.command, .control, .option]).isEmpty else {
             super.keyDown(with: event); return
         }
+        if event.keyCode == 53 && inspectedCell != nil { hideItem(animated: true); return }
+        if event.charactersIgnoringModifiers?.lowercased() == "i", let map = renderer?.map {
+            let tips = (map.itemTooltips ?? []).filter { secrets || !$0.hidden }
+            if !tips.isEmpty {
+                let index = inspectedCell.flatMap { cell in tips.firstIndex { $0.cell == cell } }.map { ($0 + 1) % tips.count } ?? 0
+                let tip = tips[index]
+                zoom = 1; pan = .zero; hideItem(); needsDisplay = true
+                let scale = fitScale
+                inspectItem(at: CGPoint(x: bounds.midX + (CGFloat(tip.cell % map.width) + 0.5) * 16 * scale - CGFloat(map.pixelWidth) * scale / 2,
+                                        y: bounds.midY + (CGFloat(tip.cell / map.width) + 0.5) * 16 * scale - CGFloat(map.pixelHeight) * scale / 2))
+            }
+            return
+        }
+        hideItem()
         switch event.charactersIgnoringModifiers {
         case "+", "=": zoom(to: zoom * 1.5)
         case "-": zoom(to: zoom / 1.5)
@@ -359,6 +433,139 @@ private struct NativeLevelMap: NSViewRepresentable {
         context.interpolationQuality = .none
         renderer.draw(in: context, elapsed: elapsed, secrets: secrets)
         context.restoreGState()
+    }
+}
+
+@MainActor private final class MapItemPresentation: ObservableObject {
+    struct Card {
+        let tip: LevelMapDocument.ItemTooltip
+        let frame: CGRect
+    }
+
+    @Published private(set) var card: Card?
+
+    func show(_ card: Card?, animated: Bool) {
+        if #available(macOS 26, *), animated, !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            // The SDK owns the glass materialization, including its motion.
+            withAnimation { self.card = card }
+        } else {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { self.card = card }
+        }
+    }
+}
+
+/// Keep the glass container alive through dismissal so SwiftUI can finish its
+/// native removal transition. The transparent area passes map gestures through.
+@MainActor private final class MapItemOverlayHost: NSHostingView<MapItemOverlay> {
+    let presentation: MapItemPresentation
+
+    init(frame: NSRect) {
+        let presentation = MapItemPresentation()
+        self.presentation = presentation
+        super.init(rootView: MapItemOverlay(presentation: presentation))
+        self.frame = frame
+        sizingOptions = []
+        autoresizingMask = [.width, .height]
+    }
+
+    required init(rootView: MapItemOverlay) { fatalError("init(rootView:) has not been implemented") }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        guard let frame = presentation.card?.frame, frame.contains(convert(point, from: superview)) else { return nil }
+        return super.hitTest(point)
+    }
+}
+
+private struct MapItemOverlay: View {
+    @ObservedObject var presentation: MapItemPresentation
+    @Namespace private var glassNamespace
+
+    var body: some View {
+        if #available(macOS 26, *) {
+            GlassEffectContainer {
+                ZStack(alignment: .topLeading) {
+                    if let card = presentation.card {
+                        content(card)
+                            .glassEffect(.regular.tint(Color(nsColor: .windowBackgroundColor).opacity(0.35)), in: .rect(cornerRadius: 16))
+                            .glassEffectID(card.tip.cell, in: glassNamespace)
+                            .glassEffectTransition(.materialize)
+                            .offset(x: card.frame.minX, y: card.frame.minY)
+                    }
+                }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            }
+        } else {
+            ZStack(alignment: .topLeading) {
+                if let card = presentation.card {
+                    content(card)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+                        .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1))
+                        .offset(x: card.frame.minX, y: card.frame.minY)
+                }
+            }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+    }
+
+    private func content(_ card: MapItemPresentation.Card) -> some View {
+        ScrollView {
+            MapItemCard(tip: card.tip)
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .frame(width: card.frame.width, height: card.frame.height)
+    }
+}
+
+private struct MapItemCard: View {
+    let tip: LevelMapDocument.ItemTooltip
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if !tip.label.isEmpty { Text(tip.label).font(.caption).foregroundStyle(.primary.opacity(0.75)).padding(.bottom, 4) }
+            ForEach(Array(tip.items.enumerated()), id: \.offset) { index, item in
+                if index > 0 { Divider() }
+                MapItemHeading(item: item)
+                if item.cursed == true || item.curse != nil {
+                    Text(item.cursed == true ? "Cursed" : "Curse").font(.caption).foregroundStyle(.red)
+                }
+                if !item.deterministic { Text("Varies with play").font(.caption).foregroundStyle(.primary.opacity(0.75)) }
+                if !item.description.isEmpty { Text(item.description).font(.callout).foregroundStyle(.primary.opacity(0.85)).fixedSize(horizontal: false, vertical: true) }
+            }
+        }.padding(14).frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct MapItemHeading: View {
+    let item: LevelMapDocument.TooltipItem
+
+    var body: some View {
+        HStack(spacing: 10) {
+            MapItemSpriteView(item: item)
+            title.font(.system(size: 15, weight: .bold))
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityLabel(item.name + (item.upgrade.flatMap { $0 > 0 ? ", upgrade +\($0)" : nil } ?? ""))
+            if item.quantity > 1 {
+                Spacer()
+                Text("×\(item.quantity)").foregroundStyle(.primary.opacity(0.75)).fixedSize()
+            }
+        }
+    }
+
+    private var title: Text {
+        guard let upgrade = item.upgrade, upgrade > 0 else { return Text(item.name) }
+        let font = NSFont.monospacedSystemFont(ofSize: 11, weight: .semibold)
+        let text = "+\(upgrade)" as NSString
+        let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor(Color.shatteredGreen)]
+        let size = NSSize(width: ceil(text.size(withAttributes: attributes).width) + 8,
+                          height: ceil(font.ascender - font.descender) + 4)
+        let badge = NSImage(size: size, flipped: false) { rect in
+            NSColor(Color.shatteredGreen).withAlphaComponent(0.12).setFill()
+            NSBezierPath(roundedRect: rect, xRadius: 4, yRadius: 4).fill()
+            text.draw(at: NSPoint(x: 4, y: 2), withAttributes: attributes)
+            return true
+        }
+        // An inline attachment and nonbreaking space keep the chip with the last word.
+        return Text("\(Text(item.name))\u{00a0}\(Text(Image(nsImage: badge)).baselineOffset(font.descender - 2))")
     }
 }
 

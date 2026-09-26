@@ -1,6 +1,7 @@
 //! Sprite identities from the pinned `ItemSpriteSheet`; appearance decks are run-specific.
 use super::{MapItem, name};
-use crate::catalog::{ItemId, item};
+use crate::catalog::{ItemId, ItemKind, item};
+use crate::equipment::EquipmentRoll;
 use crate::generator::{GeneratedItem, SeedKind, StoneKind};
 use crate::level::{DirectPaintItem, PaintItem};
 use crate::regular_items::{QueuedItemKind, RegularItem};
@@ -22,12 +23,7 @@ pub(super) fn generated(value: GeneratedItem, a: &ItemAppearanceState) -> MapIte
             GeneratedItem::TippedDart { quantity, .. } => quantity,
             _ => 1,
         };
-        return with_glow(
-            equipment(e.item, quantity, a),
-            e.item,
-            e.roll.effect,
-            e.roll.cursed,
-        );
+        return with_roll(equipment(e.item, quantity, a), e.item, e.roll);
     }
     match value {
         GeneratedItem::Food(kind) => MapItem::new(name(kind), [437, 438, 432][kind as usize], 1),
@@ -47,14 +43,26 @@ pub(super) fn generated(value: GeneratedItem, a: &ItemAppearanceState) -> MapIte
             },
             1,
         ),
-        GeneratedItem::Missile(m) => MapItem::new("Dart", 160, m.quantity),
-        GeneratedItem::Artifact(artifact) => MapItem::new(
-            name(artifact.kind),
-            match artifact.kind {
-                crate::generator::ArtifactKind::CloakOfShadows => 240,
-                _ => 263,
+        GeneratedItem::Missile(m) => with_properties(
+            MapItem::new("Dart", 160, m.quantity),
+            ItemKind::Weapon,
+            m.roll,
+        ),
+        GeneratedItem::Artifact(artifact) => with_properties(
+            MapItem::new(
+                name(artifact.kind),
+                match artifact.kind {
+                    crate::generator::ArtifactKind::CloakOfShadows => 240,
+                    _ => 263,
+                },
+                1,
+            ),
+            ItemKind::Artifact,
+            EquipmentRoll {
+                upgrade: 0,
+                effect: None,
+                cursed: artifact.cursed,
             },
-            1,
         ),
         GeneratedItem::Equipment(_) | GeneratedItem::Ring(_) | GeneratedItem::TippedDart { .. } => {
             unreachable!("searchable equipment was handled above")
@@ -252,7 +260,7 @@ pub(super) fn forced(
         I::Regular(i) => regular(*i, a),
         I::EnergyCrystal { quantity } => MapItem::new("EnergyCrystal", 19, *quantity),
         I::AlchemyPage(_) => direct("AlchemyPage", a),
-        I::Shop(S::Searchable(i)) => with_glow(
+        I::Shop(S::Searchable(i)) => with_roll(
             equipment(
                 i.item,
                 if i.item.is_tipped_dart() {
@@ -267,8 +275,11 @@ pub(super) fn forced(
                 a,
             ),
             i.item,
-            i.effect,
-            i.cursed,
+            EquipmentRoll {
+                upgrade: i.upgrade,
+                effect: i.effect,
+                cursed: i.cursed,
+            },
         ),
         I::Shop(S::Generated(i)) => generated(*i, a),
         I::Shop(S::Direct(D::Bag(_))) => {
@@ -291,7 +302,15 @@ pub(super) fn forced(
 pub(super) fn vault(value: crate::vault_loot::VaultItem, a: &ItemAppearanceState) -> MapItem {
     use crate::vault_loot::{VaultConsumable as C, VaultItem as I};
     match value {
-        I::Equipment(i) => with_glow(equipment(i.item, i.quantity, a), i.item, i.effect, false),
+        I::Equipment(i) => with_roll(
+            equipment(i.item, i.quantity, a),
+            i.item,
+            EquipmentRoll {
+                upgrade: i.upgrade,
+                effect: i.effect,
+                cursed: false,
+            },
+        ),
         I::Dart => MapItem::new("Dart", 160, 2),
         I::Consumable(c) => generated(
             match c {
@@ -326,6 +345,9 @@ pub(super) fn imp(value: crate::quests::ImpRewardOption, a: &ItemAppearanceState
         },
         a,
     );
+    if let Some((_, roll)) = value.searchable() {
+        item.roll = Some(roll);
+    }
     // The vault transfers +5 into its artifact option before dropping it.
     item.image += match item.kind.as_str() {
         "sandals_of_nature" => 2,
@@ -335,20 +357,20 @@ pub(super) fn imp(value: crate::quests::ImpRewardOption, a: &ItemAppearanceState
     item
 }
 
-fn with_glow(
-    mut item: MapItem,
-    id: ItemId,
-    effect: Option<crate::catalog::Effect>,
-    cursed: bool,
-) -> MapItem {
-    item.glow = crate::level_map::MapGlow::for_item(crate::catalog::item(id).kind, effect, cursed);
+fn with_roll(item: MapItem, id: ItemId, roll: EquipmentRoll) -> MapItem {
+    with_properties(item, crate::catalog::item(id).kind, roll)
+}
+
+fn with_properties(mut item: MapItem, kind: ItemKind, roll: EquipmentRoll) -> MapItem {
+    item.glow = crate::level_map::MapGlow::for_item(kind, roll.effect, roll.cursed);
+    item.roll = Some(roll);
     item
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::catalog::{ITEMS, ItemKind};
+    use crate::catalog::{Effect, ITEMS, WeaponEffect};
     use crate::equipment::EquipmentRoll;
     use crate::generator::GeneratedEquipment;
     use crate::run::RunState;
@@ -367,9 +389,84 @@ mod tests {
                     },
                 });
                 let sprite = generated(value, &appearances);
+                assert_eq!(
+                    sprite.roll,
+                    Some(EquipmentRoll {
+                        upgrade: 0,
+                        effect: None,
+                        cursed
+                    })
+                );
                 assert_eq!(sprite.kind, wand.stable_id);
                 assert_eq!(sprite.glow, None, "{} cursed={cursed}", wand.stable_id);
             }
         }
+    }
+    #[test]
+    fn equipment_sources_preserve_the_generated_roll_and_pulse() {
+        use crate::model::{Accessibility, ItemSource, WorldItem};
+        use crate::quests::ImpRewardOption;
+        use crate::shop::ShopStockItem;
+        use crate::special_forced::ForcedItem;
+        use crate::vault_loot::{VaultEquipment, VaultEquipmentKind, VaultItem};
+        let appearances = RunState::new(0).appearances;
+        let roll = EquipmentRoll {
+            upgrade: 2,
+            effect: Some(Effect::Weapon(WeaponEffect::Shocking)),
+            cursed: false,
+        };
+        let equipment = GeneratedEquipment {
+            item: ItemId::Shortsword,
+            roll,
+        };
+        let world = WorldItem::from_equipment_roll(
+            equipment.item,
+            roll,
+            6,
+            ItemSource::Shop,
+            Accessibility::Independent,
+        );
+        let sources = [
+            generated(GeneratedItem::Equipment(equipment), &appearances),
+            forced(
+                &ForcedItem::Shop(ShopStockItem::Searchable(world)),
+                &appearances,
+                6,
+            ),
+            vault(
+                VaultItem::Equipment(VaultEquipment {
+                    kind: VaultEquipmentKind::MeleeWeapon,
+                    item: equipment.item,
+                    upgrade: roll.upgrade,
+                    effect: roll.effect,
+                    quantity: 1,
+                }),
+                &appearances,
+            ),
+            imp(ImpRewardOption::Equipment(equipment), &appearances),
+        ];
+        for item in sources {
+            assert_eq!(item.roll, Some(roll));
+            assert_eq!(
+                item.glow,
+                Some(crate::level_map::MapGlow {
+                    color: [255; 3],
+                    period_ms: 500
+                })
+            );
+        }
+        let artifact = imp(
+            ImpRewardOption::Artifact(crate::generator::GeneratedArtifact {
+                kind: crate::generator::ArtifactKind::SandalsOfNature,
+                cursed: false,
+                spellbook_scrolls: None,
+            }),
+            &appearances,
+        );
+        assert_eq!(artifact.roll.unwrap().upgrade, 5);
+        assert_eq!(
+            artifact.image,
+            item(ItemId::SandalsOfNature).sprite_index + 2
+        );
     }
 }

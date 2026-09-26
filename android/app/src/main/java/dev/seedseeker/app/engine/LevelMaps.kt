@@ -94,13 +94,30 @@ internal data class MapEmitter(
 internal data class MapBranch(val branch: Int, val kind: String) {
     val label get() = if (kind == "imp_vault") "Imp Vault" else "Blacksmith Mine"
 }
+internal data class MapTooltipItem(
+    val name: String, val description: String, val image: Int, val quantity: Int, val deterministic: Boolean,
+    val icon: List<Int>? = null, val upgrade: Int? = null, val cursed: Boolean = false,
+    val enchantment: String? = null, val curse: String? = null, val glow: MapGlow? = null,
+)
+internal data class MapItemTooltip(val cell: Int, val label: String, val hidden: Boolean, val items: List<MapTooltipItem>, val bounds: List<Int>? = null)
 internal data class LevelMapDocument(
     val seed: String, val depth: Int, val branch: Int, val kind: String,
     val revision: String, val width: Int, val height: Int, val tileSize: Int,
     val secretCount: Int, val branches: List<MapBranch>, val assets: List<String>,
     val sprites: List<MapSprite>, val layers: List<MapLayer>, val concealedLayers: List<MapLayer>,
     val emitters: List<MapEmitter>, val concealedEmitters: List<MapEmitter>,
-)
+    val itemTooltips: List<MapItemTooltip> = emptyList(),
+) {
+    fun itemAt(x: Float, y: Float, secrets: Boolean): MapItemTooltip? {
+        if (x < 0 || y < 0 || x >= width * tileSize || y >= height * tileSize) return null
+        return itemTooltips.firstOrNull { tip ->
+            val bounds = tip.bounds ?: listOf(0, 0, tileSize, tileSize)
+            val left = (tip.cell % width) * tileSize + bounds[0]
+            val top = (tip.cell / width) * tileSize + bounds[1]
+            (secrets || !tip.hidden) && x >= left && y >= top && x < left + bounds[2] && y < top + bounds[3]
+        }
+    }
+}
 internal data class LevelMapBundle(val map: LevelMapDocument, val textures: Map<String, Bitmap>)
 
 /** All geometry, objects and hazard schedules come from the scene, never loot metadata. */
@@ -136,6 +153,18 @@ internal object LevelMapCodec {
             root.getJSONArray("assets").objects { it.getString("id") },
             sprites, layers("layers"), layers("concealedLayers"),
             scene.getJSONArray("emitters").objects(::emitter), scene.getJSONArray("concealedEmitters").objects(::emitter),
+            root.optJSONArray("itemTooltips")?.objects { tip ->
+                MapItemTooltip(tip.getInt("cell"), tip.optString("label"), tip.optBoolean("hidden"),
+                    tip.getJSONArray("items").objects { item ->
+                        MapTooltipItem(item.getString("name"), item.optString("description"), item.getInt("image"), item.getInt("quantity"), item.optBoolean("deterministic", true),
+                            icon = item.optJSONArray("icon")?.let { a -> List(4) { a.getInt(it) } },
+                            upgrade = if (item.isNull("upgrade")) null else item.getInt("upgrade"),
+                            cursed = item.optBoolean("cursed"),
+                            enchantment = if (item.isNull("enchantment")) null else item.getString("enchantment"),
+                            curse = if (item.isNull("curse")) null else item.getString("curse"),
+                            glow = item.optJSONObject("glow")?.let { MapGlow(it.getJSONArray("color").ints(), it.getInt("periodMs")) })
+                    }, tip.optJSONArray("bounds")?.let { a -> List(4) { a.getInt(it) } })
+            } ?: emptyList(),
         )
     }
 

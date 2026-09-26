@@ -7,6 +7,44 @@ namespace SeedSeeker.Tests;
 public sealed class LevelMapTests
 {
     [Fact]
+    public void ItemInspectionDecodesOriginalDescriptionsAndRejectsHiddenCellsAndMargins()
+    {
+        var map = NativeEngine.LevelMap(LevelMapDocument.Request("AAA-AAA-AAA", 1, 0, new QuerySettings(), "none"));
+        var tip = map.ItemTooltips.First(tip => !tip.Hidden);
+        Assert.NotEmpty(tip.Items[0].Description);
+        Assert.NotNull(tip.Bounds);
+        Assert.Contains(map.ItemTooltips.SelectMany(entry => entry.Items), item => item.Icon is { Length: 4 });
+        var spriteX = tip.Cell % map.Width * 16 + tip.Bounds![0] + tip.Bounds[2] / 2.0;
+        var spriteY = tip.Cell / map.Width * 16 + tip.Bounds[1];
+        Assert.Same(tip, map.ItemAt(spriteX, spriteY + .5, false));
+        Assert.NotSame(tip, map.ItemAt(spriteX, spriteY - .5, false));
+        var x = tip.Cell % map.Width * 16 + 8;
+        var y = tip.Cell / map.Width * 16 + 8;
+        Assert.Same(tip, map.ItemAt(x, y, false));
+        Assert.Null(map.ItemAt(-1, y, true));
+        Assert.Null(map.ItemAt(map.Width * 16, y, true));
+        var hidden = tip with { Hidden = true };
+        var concealed = new LevelMapDocument { Width = map.Width, Height = map.Height, Scene = map.Scene, ItemTooltips = [hidden] };
+        Assert.Null(concealed.ItemAt(x, y, false));
+        Assert.Same(hidden, concealed.ItemAt(x, y, true));
+    }
+
+    [Fact]
+    public void ItemInspectionDecodesGeneratedUpgradesEnchantmentsAndCurses()
+    {
+        var map = NativeEngine.LevelMap(LevelMapDocument.Request("AAA-AAA-AAA", 7, 0, new QuerySettings(), "none"));
+        var items = map.ItemTooltips.SelectMany(tip => tip.Items).ToArray();
+        var enchanted = items.First(item => item.Name == "Vorpal Assassin's Blade");
+        Assert.Equal(1, enchanted.Upgrade); Assert.Equal("Vorpal", enchanted.Enchantment);
+        Assert.False(enchanted.Cursed); Assert.Null(enchanted.Curse);
+        Assert.Equal(new[] { 170, 102, 102 }, enchanted.Glow!.Color); Assert.Equal(1000, enchanted.Glow.PeriodMs);
+        var cursed = items.First(item => item.Curse == "Wondrous");
+        Assert.Equal(1, cursed.Upgrade); Assert.True(cursed.Cursed); Assert.Null(cursed.Enchantment);
+        Assert.Equal(new[] { 0, 0, 0 }, cursed.Glow!.Color);
+        Assert.Contains(items, item => item.Upgrade is null && item.Glow is null);
+    }
+
+    [Fact]
     public void GardenShaftsScaleWidthAndHeightIndependently()
     {
         var map = NativeEngine.LevelMap(LevelMapDocument.Request("AAA-AAA-AAA", 4, 0, new QuerySettings(), "none"));

@@ -7,6 +7,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Documents;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
@@ -124,6 +125,81 @@ internal sealed class LevelMapView : Grid
     private string? profileLocationKey, viewportLocationKey;
     private double zoom = 1, panX, panY;
     private Point? pointer;
+    private Border? itemCard;
+    private int? inspectedCell;
+    private void HideItem() { if (itemCard is not null) stage.Children.Remove(itemCard); itemCard = null; inspectedCell = null; }
+    private void InspectItem(Point point)
+    {
+        if (bundle is null || Fit * zoom <= 0) { HideItem(); return; }
+        if (itemCard is not null && new Rect(itemCard.Margin.Left - 18, itemCard.Margin.Top - 18,
+            itemCard.ActualWidth + 36, itemCard.ActualHeight + 36).Contains(point)) return;
+        var map = bundle.Map; var scale = Fit * zoom;
+        var tip = map.ItemAt((point.X - stage.ActualWidth / 2 - panX) / scale + map.Width * map.Scene.TileSize / 2d,
+            (point.Y - stage.ActualHeight / 2 - panY) / scale + map.Height * map.Scene.TileSize / 2d, session.Secrets);
+        if (tip?.Cell == inspectedCell) return;
+        HideItem();
+        if (tip is null) return;
+        inspectedCell = tip.Cell;
+        var body = new StackPanel { Spacing = 10 };
+        if (tip.Label.Length > 0) body.Children.Add(new TextBlock { Text = tip.Label, FontSize = 11, Opacity = .7, Margin = new Thickness(0, 0, 0, 4) });
+        foreach (var item in tip.Items)
+        {
+            var heading = new Grid { ColumnSpacing = 10 };
+            heading.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+            heading.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
+            var sprite = new SpriteView { SpriteIndex = item.Image, IconSource = item.Icon, AlignArtworkLeft = true, SpriteSize = 32, VerticalAlignment = VerticalAlignment.Center };
+            if (item.Glow is { Color.Length: 3 } glow) {
+                sprite.GlowColor = Windows.UI.Color.FromArgb(255, (byte)glow.Color[0], (byte)glow.Color[1], (byte)glow.Color[2]);
+                sprite.GlowPeriod = glow.PeriodMs / 1000;
+            }
+            heading.Children.Add(sprite);
+            var name = new RichTextBlock {
+                FontSize = 16, FontWeight = Microsoft.UI.Text.FontWeights.Bold, TextWrapping = TextWrapping.Wrap,
+                IsTextSelectionEnabled = false, VerticalAlignment = VerticalAlignment.Center };
+            var paragraph = new Paragraph();
+            paragraph.Inlines.Add(new Run { Text = item.Name });
+            name.Blocks.Add(paragraph);
+            Grid.SetColumn(name, 1); heading.Children.Add(name);
+            if (item.Upgrade is > 0 and int upgrade) {
+                var chip = new Border { Padding = new Thickness(4, 0, 4, 0), CornerRadius = new CornerRadius(4),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Background = (Brush)Application.Current.Resources["SystemFillColorSuccessBackgroundBrush"],
+                    Child = new TextBlock { Text = $"+{upgrade}", FontSize = 11, FontFamily = new FontFamily("Consolas"),
+                        FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                        Foreground = (Brush)Application.Current.Resources["SystemFillColorSuccessBrush"] } };
+                AutomationProperties.SetName(chip, $"Upgrade +{upgrade}");
+                paragraph.Inlines.Add(new Run { Text = "\u00a0" });
+                paragraph.Inlines.Add(new InlineUIContainer { Child = chip });
+            }
+            if (item.Quantity > 1) paragraph.Inlines.Add(new Run { Text = $"\u00a0×{item.Quantity}" });
+            body.Children.Add(heading);
+            var modifiers = new WrapPanel { Spacing = 6, LineSpacing = 4 };
+            if (item.Cursed || item.Curse is not null) modifiers.Children.Add(new TextBlock {
+                Text = item.Cursed ? "Cursed" : "Curse", FontSize = 12,
+                Foreground = (Brush)Application.Current.Resources["SystemFillColorCriticalBrush"] });
+            if (modifiers.Children.Count > 0) body.Children.Add(modifiers);
+            if (!item.Deterministic) body.Children.Add(new TextBlock { Text = "Varies with play", FontSize = 11, Opacity = .7 });
+            if (item.Description.Length > 0) body.Children.Add(new TextBlock { Text = item.Description, FontSize = 12, Opacity = .85, TextWrapping = TextWrapping.Wrap });
+        }
+        var cardWidth = Math.Max(1, Math.Min(330, stage.ActualWidth - 16));
+        itemCard = new Border {
+            Width = cardWidth, MaxHeight = Math.Max(1, Math.Min(320, stage.ActualHeight - 16)), Padding = new Thickness(14),
+            CornerRadius = (CornerRadius)Application.Current.Resources["OverlayCornerRadius"], BorderThickness = new Thickness(1),
+            Background = (Brush)Application.Current.Resources["SolidBackgroundFillColorBaseBrush"],
+            BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
+            HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top,
+            Child = new ScrollViewer { Content = body, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, VerticalScrollBarVisibility = ScrollBarVisibility.Auto },
+        };
+        itemCard.PointerPressed += (_, e) => e.Handled = true;
+        itemCard.PointerWheelChanged += (_, e) => e.Handled = true;
+        itemCard.Tapped += (_, e) => e.Handled = true;
+        itemCard.Measure(new Size(cardWidth, itemCard.MaxHeight));
+        var height = itemCard.DesiredSize.Height;
+        itemCard.Margin = new Thickness(Math.Max(8, Math.Min(point.X + 16, stage.ActualWidth - cardWidth - 8)),
+            Math.Max(8, Math.Min(point.Y + 16 + height < stage.ActualHeight ? point.Y + 16 : point.Y - height - 16, stage.ActualHeight - height - 8)), 0, 0);
+        AutomationProperties.SetName(itemCard, string.Join(", ", tip.Items.Select(item => item.Name)));
+        stage.Children.Add(itemCard);
+    }
     private bool subscribed;
     private bool gestureAtFit;
     private bool? lastMotion;
@@ -165,11 +241,17 @@ internal sealed class LevelMapView : Grid
         retry.Click += (_, _) => { requestKey = null; _ = Load(); };
         secrets.Click += (_, _) =>
         {
+            HideItem();
             session.Secrets = secrets.IsChecked == true;
             if (bundle is not null) renderer = new(bundle.Map, bundle.Textures, session.Secrets);
             UpdateToolbar(); Render();
         };
-        stage.SizeChanged += (_, _) => { Constrain(); Render(); };
+        stage.SizeChanged += (_, _) => { HideItem(); Constrain(); Render(); };
+        stage.PointerExited += (_, e) => {
+            var point = e.GetCurrentPoint(stage).Position;
+            if (point.X < 0 || point.Y < 0 || point.X >= stage.ActualWidth || point.Y >= stage.ActualHeight) HideItem();
+        };
+        stage.Tapped += (_, e) => InspectItem(e.GetPosition(stage));
         stage.PointerWheelChanged += (_, e) =>
         {
             var point = e.GetCurrentPoint(stage);
@@ -178,6 +260,7 @@ internal sealed class LevelMapView : Grid
         };
         stage.PointerPressed += (_, e) =>
         {
+            HideItem();
             var current = e.GetCurrentPoint(stage);
             if (e.Pointer.PointerDeviceType != Microsoft.UI.Input.PointerDeviceType.Mouse || !current.Properties.IsLeftButtonPressed) return;
             stageHost.Focus(FocusState.Pointer);
@@ -185,7 +268,12 @@ internal sealed class LevelMapView : Grid
         };
         stage.PointerMoved += (_, e) =>
         {
-            if (pointer is not Point old) return;
+            if (pointer is not Point old) {
+                var current = e.GetCurrentPoint(stage);
+                if (!current.IsInContact) InspectItem(current.Position);
+                return;
+            }
+            HideItem();
             var point = e.GetCurrentPoint(stage).Position; panX += point.X - old.X; panY += point.Y - old.Y; pointer = point;
             Constrain(); Render(); e.Handled = true;
         };
@@ -213,6 +301,7 @@ internal sealed class LevelMapView : Grid
         };
         Unloaded += (_, _) =>
         {
+            HideItem();
             live = false; ++generation; requestKey = null; session.Changed -= ProfileChanged;
             if (XamlRoot is not null) XamlRoot.Changed -= RootChanged;
             SyncAnimation();
@@ -253,6 +342,7 @@ internal sealed class LevelMapView : Grid
         if (!live || !visible || suspended) return;
         var request = LevelMapDocument.Request(session.World.Seed, depth, branch, session.Query, session.World.SelectedTrinket ?? "none");
         if (requestKey == request) return;
+        HideItem();
         requestKey = request; var token = ++generation; bundle = null; renderer = null; art.Source = null;
         var location = LevelMapDocument.Request(session.World.Seed, depth, branch, session.Query, "none");
         if (viewportLocationKey != location) { zoom = 1; panX = panY = 0; }
@@ -329,9 +419,10 @@ internal sealed class LevelMapView : Grid
         finally { suspended = false; requestKey = null; _ = Load(); SyncAnimation(); }
     }
     private double Fit => renderer is null ? 1 : Math.Min(stage.ActualWidth / renderer.Width, stage.ActualHeight / renderer.Height);
-    private void Reset() { zoom = 1; panX = panY = 0; Render(); }
+    private void Reset() { HideItem(); zoom = 1; panX = panY = 0; Render(); }
     private void Zoom(double value, Point anchor)
     {
+        HideItem();
         var next = Math.Clamp(value, 1, 12); var ratio = next / zoom;
         panX = anchor.X - (anchor.X - panX) * ratio; panY = anchor.Y - (anchor.Y - panY) * ratio;
         zoom = next; Constrain(); Render();
@@ -377,20 +468,31 @@ internal sealed class LevelMapView : Grid
     }
     private void OnKeyDown(object sender, KeyRoutedEventArgs e)
     {
+        if (e.Key == VirtualKey.Escape && itemCard is not null) { HideItem(); e.Handled = true; return; }
+
         if (e.OriginalSource is TextBox || Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down)
             || Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Menu).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down)) return;
         switch (e.Key)
         {
+            case VirtualKey.I when bundle is not null:
+                var tips = bundle.Map.ItemTooltips.Where(tip => session.Secrets || !tip.Hidden).ToArray();
+                if (tips.Length > 0) {
+                    var index = (Array.FindIndex(tips, tip => tip.Cell == inspectedCell) + 1) % tips.Length;
+                    var tip = tips[index]; Reset();
+                    InspectItem(new(stage.ActualWidth / 2 + ((tip.Cell % bundle.Map.Width + .5) * 16 - renderer!.Width / 2d) * Fit,
+                        stage.ActualHeight / 2 + ((tip.Cell / bundle.Map.Width + .5) * 16 - renderer.Height / 2d) * Fit));
+                }
+                break;
             case VirtualKey.J when expanded: Navigate(1); break;
             case VirtualKey.K when expanded: Navigate(-1); break;
             case VirtualKey.Add: case (VirtualKey)187: Zoom(zoom * 1.5, new()); break;
             case VirtualKey.Subtract: case (VirtualKey)189: Zoom(zoom / 1.5, new()); break;
             case VirtualKey.Number0: Reset(); break;
             case VirtualKey.Left or VirtualKey.Right or VirtualKey.Up or VirtualKey.Down when floors.FocusState != FocusState.Unfocused || trinkets.FocusState != FocusState.Unfocused: return;
-            case VirtualKey.Left: panX += 24; Constrain(); Render(); break;
-            case VirtualKey.Right: panX -= 24; Constrain(); Render(); break;
-            case VirtualKey.Up: panY += 24; Constrain(); Render(); break;
-            case VirtualKey.Down: panY -= 24; Constrain(); Render(); break;
+            case VirtualKey.Left: HideItem(); panX += 24; Constrain(); Render(); break;
+            case VirtualKey.Right: HideItem(); panX -= 24; Constrain(); Render(); break;
+            case VirtualKey.Up: HideItem(); panY += 24; Constrain(); Render(); break;
+            case VirtualKey.Down: HideItem(); panY -= 24; Constrain(); Render(); break;
             default: return;
         }
         e.Handled = true;

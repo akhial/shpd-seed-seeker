@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
 import type { FloorFeeling, ScoutQuest, TrinketOffer } from "../../engine/types";
 import { regionForDepth } from "../../shared/game/region";
@@ -17,6 +17,8 @@ import {
   zoomMapAt,
 } from "./map-gestures";
 import type { MapTransform } from "./map-gestures";
+import { itemAtPoint, itemBounds } from "./item-inspection";
+import { MapItemTooltip } from "./MapItemTooltip";
 import "./level-map.css";
 
 type LevelMapViewProps = Omit<LevelMapRequest, "branch"> & {
@@ -373,6 +375,29 @@ function MapCanvas({
   secrets: boolean;
 }) {
   const map = bundle?.map;
+  const tooltipId = useId();
+  const [inspected, setInspected] = useState<number>();
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const lastHovered = useRef<number | undefined>(undefined);
+  const dismissed = useRef<number | undefined>(undefined);
+  const cancelHide = () => {
+    clearTimeout(hideTimer.current);
+    hideTimer.current = undefined;
+  };
+  useEffect(() => () => clearTimeout(hideTimer.current), []);
+  const pointerDown = useRef<{ id: number; x: number; y: number; moved: boolean } | undefined>(
+    undefined,
+  );
+  const tip =
+    ready && active
+      ? map?.itemTooltips?.find((item) => item.cell === inspected && (secrets || !item.hidden))
+      : undefined;
+  useEffect(() => {
+    clearTimeout(hideTimer.current);
+    lastHovered.current = undefined;
+    dismissed.current = undefined;
+    setInspected(undefined);
+  }, [bundle, ready, active, secrets]);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const particleRef = useRef<HTMLCanvasElement>(null);
   const densityRef = useRef(1);
@@ -394,6 +419,7 @@ function MapCanvas({
   densityRef.current = Math.max(1, Math.min(4, scale * (window.devicePixelRatio || 1)));
   const applyTransform = useCallback((next: MapTransform) => {
     // Pointer and wheel events may arrive before React commits a render.
+    setInspected(undefined);
     transformRef.current = next;
     setTransform(next);
   }, []);
@@ -424,6 +450,7 @@ function MapCanvas({
     const viewport = viewportRef.current;
     if (!viewport) return;
     const wheel = (event: WheelEvent) => {
+      if (event.target instanceof Element && event.target.closest(".d1-map-item-tooltip")) return;
       event.preventDefault();
       event.stopPropagation();
       const bounds = viewport.getBoundingClientRect();
@@ -513,10 +540,33 @@ function MapCanvas({
     // Programmatic focus can retain the browser’s prior keyboard-focus styling.
     setPointerFocus(true);
     event.currentTarget.focus({ preventScroll: true });
+    setInspected(undefined);
+    if (pointerDown.current) pointerDown.current.moved = true;
+    else
+      pointerDown.current = {
+        id: event.pointerId,
+        x: event.clientX,
+        y: event.clientY,
+        moved: false,
+      };
     event.currentTarget.setPointerCapture(event.pointerId);
     gestures.current.down(event.pointerId, pointerPoint(event), transformRef.current);
   };
+  const inspect = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const cell =
+      ready && map
+        ? itemAtPoint(map, pointerPoint(event), geometry, transformRef.current, secrets)?.cell
+        : undefined;
+    if (cell !== lastHovered.current) dismissed.current = undefined;
+    lastHovered.current = cell;
+    cancelHide();
+    if (cell === undefined) hideTimer.current = setTimeout(() => setInspected(undefined), 180);
+    else if (dismissed.current !== cell) setInspected(cell);
+  };
   const pointMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const down = pointerDown.current;
+    if (down && Math.hypot(event.clientX - down.x, event.clientY - down.y) > 6) down.moved = true;
+    if (!down && event.pointerType !== "touch") inspect(event);
     const next = gestures.current.move(event.pointerId, pointerPoint(event), geometry);
     if (next) {
       event.stopPropagation();
@@ -524,6 +574,9 @@ function MapCanvas({
     }
   };
   const pointUp = (event: ReactPointerEvent<HTMLDivElement>) => {
+    const down = pointerDown.current;
+    if (event.type === "pointerup" && down?.id === event.pointerId && !down.moved) inspect(event);
+    if (down?.id === event.pointerId) pointerDown.current = undefined;
     gestures.current.up(event.pointerId, transformRef.current);
   };
   const canvasStyle: CSSProperties = {
@@ -537,7 +590,11 @@ function MapCanvas({
       className={`d1-map-viewport ${transform.zoom > 1 ? "d1-map-zoomed" : ""}`}
       tabIndex={0}
       data-pointer-focus={pointerFocus || undefined}
-      onBlur={() => setPointerFocus(false)}
+      onBlur={(event) => {
+        setPointerFocus(false);
+        if (!event.currentTarget.contains(event.relatedTarget)) setInspected(undefined);
+      }}
+      onPointerLeave={() => setInspected(undefined)}
       role="region"
       aria-label={label}
       onPointerDown={pointDown}
@@ -547,6 +604,13 @@ function MapCanvas({
       onLostPointerCapture={pointUp}
       onKeyDown={(event) => {
         setPointerFocus(false);
+        if (event.key === "Escape" && tip) {
+          event.preventDefault();
+          event.stopPropagation();
+          dismissed.current = tip.cell;
+          setInspected(undefined);
+          return;
+        }
         if (event.ctrlKey || event.metaKey || event.altKey) return;
         if (
           ["+", "=", "-", "0", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(
@@ -589,6 +653,57 @@ function MapCanvas({
         role="img"
         aria-label={label}
       />
+      {ready &&
+        active &&
+        map?.itemTooltips
+          ?.filter((item) => secrets || !item.hidden)
+          .map((item) => {
+            const [left, top, width, height] = itemBounds(item, map.width, map.scene.tileSize);
+            return (
+              <button
+                key={item.cell}
+                type="button"
+                className="d1-map-item-target"
+                aria-label={item.items.map((entry) => entry.name).join(", ")}
+                aria-describedby={tip?.cell === item.cell ? tooltipId : undefined}
+                onFocus={() => {
+                  cancelHide();
+                  setInspected(item.cell);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    setInspected(item.cell);
+                  }
+                }}
+                style={{
+                  width: width * scale,
+                  height: height * scale,
+                  left: size.width / 2 + transform.x - (widthPx * scale) / 2 + left * scale,
+                  top: size.height / 2 + transform.y - (heightPx * scale) / 2 + top * scale,
+                }}
+              />
+            );
+          })}
+      {tip && map && (
+        <MapItemTooltip
+          tip={tip}
+          onPointerEnter={cancelHide}
+          id={tooltipId}
+          width={size.width}
+          height={size.height}
+          x={
+            size.width / 2 +
+            transform.x +
+            (((tip.cell % map.width) + 0.5) * map.scene.tileSize - widthPx / 2) * scale
+          }
+          y={
+            size.height / 2 +
+            transform.y +
+            ((Math.floor(tip.cell / map.width) + 0.5) * map.scene.tileSize - heightPx / 2) * scale
+          }
+        />
+      )}
       <canvas
         ref={particleRef}
         style={{ ...canvasStyle, pointerEvents: "none" }}

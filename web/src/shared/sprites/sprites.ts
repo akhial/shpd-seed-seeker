@@ -129,6 +129,23 @@ export function ringIconCss(
   };
 }
 
+/** A shared engine-provided identity glyph, including exotic consumables. */
+export function itemIconCss([x, y, width, height]: readonly number[], size: number): CSSProperties {
+  const scale = size / CELL;
+  return {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    width: width * scale,
+    height: height * scale,
+    backgroundImage: `url(${ICON_SHEET_URL})`,
+    backgroundPosition: `${-x * scale}px ${-y * scale}px`,
+    backgroundSize: `${ICON_COLUMNS * ICON_CELL * scale}px auto`,
+    imageRendering: "pixelated",
+    pointerEvents: "none",
+  };
+}
+
 export function spriteCss(index: number, size: number): CSSProperties {
   const scale = size / CELL;
   const col = index % SHEET_COLUMNS;

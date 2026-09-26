@@ -6,6 +6,9 @@
 
 pub mod assets;
 pub(crate) mod contents;
+mod item_text;
+mod item_tooltips;
+pub use item_tooltips::{MapItemTooltip, MapTooltipItem};
 mod glow;
 pub use contents::{MapContents, MapEffect, MapFeature, MapHeap, MapItem, MapMob, MapPlant};
 pub use glow::MapGlow;

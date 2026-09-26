@@ -386,3 +386,42 @@ heaps, generation-time actor inventory, sleeping states, plants, trap placement,
 and blob locations. Regenerate with `python3 tooling/oracle-4.0/generate-map-contents.py`.
 Item atlas bounds are exported from the evaluated official `ItemSpriteSheet.film`
 using `ItemFilmOracle`, including loop assignments and later overrides.
+
+### Item inspection
+
+The optional `itemTooltips` array is shared by web, Android, macOS, Windows, and
+GTK. It adds metadata to schema v3 without changing scene rendering. Each entry
+has `cell`, `bounds`, `label` (container/inventory owner, empty for loose items), `hidden`
+(inside a concealed secret room), and `items`. Each item has `name`,
+`description`, `image` (the run's item atlas cell), `icon`, `quantity`, and `deterministic`.
+`bounds` is `[x, y, width, height]` relative to the cell in map pixels, using the
+same raised sprite placement as scene rendering. Use it for both hit testing and
+selection outlines; older entries without bounds fall back to the ground tile.
+`icon` is an optional source rectangle in `item_icons.png`, independent of the
+seeded appearance. It covers rings, potions, scrolls, and both exotic categories,
+using the pinned Java `ItemSpriteSheet.Icons` frames. Render it over the centered
+item sprite at the upper right, at the same pixel scale.
+`name` includes the original Java modifier wording (for example, `Chilling Javelin`
+or `Plate Armor of Swiftness`) when a generated enchantment, glyph, or named curse is present.
+`upgrade` is the identified in-game level (including artifact rounding), or null
+when no generated equipment roll is available. `cursed` carries the rolled curse
+flag; `enchantment` names a beneficial weapon enchantment or armor glyph, and
+`curse` names a weapon/armor curse independently of that flag. These are retained
+from generation for heaps, shops, carried mob equipment, and vault rewards.
+`glow` uses the same RGB color and `periodMs` as the map sprite. Pulse the art
+between 0 and 60% tint over twice that period, leave the type glyph solid, and
+hold at 30% tint when reduced motion is enabled. Wands never glow.
+
+Clients must suppress hidden entries while Secrets is off, invert the current
+map transform when hit testing, and clear inspection on navigation or gestures.
+Older documents without this array remain renderable without inspection.
+
+Names and static descriptions come from the original English Java messages at
+v4.0.0 commit `2bb34a4e91d29c8785a9363cad6ddfe5122b1d4f`, under GPL-3.0-or-later
+(see `NOTICE`). Regenerate with `python3 scripts/generate-item-text.py`.
+The generated file records each source SHA-256. Game emphasis markers are
+removed; hero/depth-dependent formatted sentences are omitted. No damage
+or future-drop stats are inferred. Seeds include the original
+planting instruction and plant description, and exotic consumables resolve
+through the game's own regular-to-exotic mapping. Unknown future types retain
+a readable name, and runtime-dependent items are marked `Varies with play`.
