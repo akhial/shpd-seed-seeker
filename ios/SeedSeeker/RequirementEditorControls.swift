@@ -23,15 +23,15 @@ private struct RequirementNativeSegments<Value: Hashable>: UIViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator(selection: $selection, options: options) }
 
-    func makeUIView(context: Context) -> UISegmentedControl {
-        let control = UISegmentedControl(items: options.map(\.1))
-        control.apportionsSegmentWidthsByContent = true
+    func makeUIView(context: Context) -> RequirementUISegmentedControl {
+        let control = RequirementUISegmentedControl(items: options.map(\.1))
+        control.apportionsSegmentWidthsByContent = false
         control.setContentHuggingPriority(.defaultLow, for: .horizontal)
         control.addTarget(context.coordinator, action: #selector(Coordinator.select(_:)), for: .valueChanged)
         return control
     }
 
-    func updateUIView(_ control: UISegmentedControl, context: Context) {
+    func updateUIView(_ control: RequirementUISegmentedControl, context: Context) {
         context.coordinator.selection = $selection
         context.coordinator.options = options
         if control.numberOfSegments != options.count {
@@ -49,13 +49,10 @@ private struct RequirementNativeSegments<Value: Hashable>: UIViewRepresentable {
         control.accessibilityLabel = title
         control.tintColor = UIColor(AppTheme.accent)
         control.selectedSegmentTintColor = UIColor(AppTheme.accent).withAlphaComponent(0.22)
-        let font = UIFont.preferredFont(forTextStyle: .subheadline, compatibleWith: control.traitCollection)
-        control.setTitleTextAttributes([.font: font, .foregroundColor: UIColor.secondaryLabel], for: .normal)
-        control.setTitleTextAttributes([.font: UIFont.systemFont(ofSize: font.pointSize, weight: .semibold),
-                                        .foregroundColor: UIColor(AppTheme.accent)], for: .selected)
+        control.setNeedsLayout()
     }
 
-    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UISegmentedControl, context: Context) -> CGSize? {
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: RequirementUISegmentedControl, context: Context) -> CGSize? {
         CGSize(width: proposal.width ?? uiView.intrinsicContentSize.width, height: proposal.height ?? 52)
     }
 
@@ -72,6 +69,34 @@ private struct RequirementNativeSegments<Value: Hashable>: UIViewRepresentable {
             guard options.indices.contains(control.selectedSegmentIndex) else { return }
             selection.wrappedValue = options[control.selectedSegmentIndex].0
         }
+    }
+}
+
+/// Equal columns retain the native selection lens. A shared fitted font keeps
+/// longer titles on one line without making the selected segment change size.
+private final class RequirementUISegmentedControl: UISegmentedControl {
+    private var appliedFontSize: CGFloat?
+
+    override func layoutSubviews() {
+        if numberOfSegments > 0, bounds.width > 0 {
+            let preferred = UIFont.preferredFont(forTextStyle: .subheadline, compatibleWith: traitCollection)
+            let selected = UIFont.systemFont(ofSize: preferred.pointSize, weight: .semibold)
+            let widest = (0..<numberOfSegments).map { index in
+                let title = (titleForSegment(at: index) ?? "") as NSString
+                return max(title.size(withAttributes: [.font: preferred]).width,
+                           title.size(withAttributes: [.font: selected]).width)
+            }.max() ?? 0
+            let available = max(1, bounds.width / CGFloat(numberOfSegments) - 16)
+            let pointSize = preferred.pointSize * min(1, available / max(1, widest))
+            if appliedFontSize == nil || abs(appliedFontSize! - pointSize) > 0.05 {
+                appliedFontSize = pointSize
+                setTitleTextAttributes([.font: preferred.withSize(pointSize),
+                                       .foregroundColor: UIColor.secondaryLabel], for: .normal)
+                setTitleTextAttributes([.font: UIFont.systemFont(ofSize: pointSize, weight: .semibold),
+                                       .foregroundColor: UIColor(AppTheme.accent)], for: .selected)
+            }
+        }
+        super.layoutSubviews()
     }
 }
 
