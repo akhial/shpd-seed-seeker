@@ -39,6 +39,18 @@ final class LevelMapViewTests: XCTestCase {
         viewport.inspectItem(at: CGPoint(x: x + 8, y: y + 8))
         XCTAssertEqual(viewport.inspectedCell, tip.cell)
         XCTAssertEqual(viewport.subviews.count, 1)
+        let overlay = try XCTUnwrap(viewport.subviews.first)
+        let exit = try XCTUnwrap(NSEvent.enterExitEvent(with: .mouseExited, location: .zero,
+            modifierFlags: [], timestamp: 0, windowNumber: 0, context: nil,
+            eventNumber: 0, trackingNumber: 0, userData: nil))
+        viewport.mouseExited(with: exit)
+        XCTAssertNil(viewport.inspectedCell)
+        XCTAssertTrue(viewport.hitTest(CGPoint(x: x + 8, y: y + 8)) === viewport,
+                      "The outgoing glass must not intercept map gestures")
+        viewport.inspectItem(at: CGPoint(x: x + 8, y: y + 8))
+        XCTAssertEqual(viewport.inspectedCell, tip.cell)
+        XCTAssertTrue(viewport.subviews.first === overlay,
+                      "Hover re-entry must reuse the container that owns the native transition")
         viewport.secrets = true
         XCTAssertNil(viewport.inspectedCell)
         try press("i", in: viewport)
