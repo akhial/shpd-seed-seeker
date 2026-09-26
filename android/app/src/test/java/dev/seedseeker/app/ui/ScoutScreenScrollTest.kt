@@ -25,13 +25,17 @@ import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToKey
+import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.performTouchInput
@@ -98,10 +102,11 @@ class ScoutScreenScrollTest {
         onSelect: (String) -> Unit = {},
         artifactDeck: List<CatalogItem> = emptyList(),
         offerDepth: Int = 1,
+        items: List<ScoutItem>? = null,
     ) {
         val shown = world.copy(
             artifactDecks = if (artifactDeck.isEmpty()) emptyMap() else mapOf(1 to artifactDeck),
-            items = world.items.map { if (it.item in offers) it.copy(depth = offerDepth) else it },
+            items = (items ?: world.items).map { if (it.item in offers) it.copy(depth = offerDepth) else it },
         )
         val atlas = compose.activity.assets.open("third_party/shattered-pixel-dungeon/items.png")
             .use(BitmapFactory::decodeStream)!!.asImageBitmap()
@@ -127,6 +132,25 @@ class ScoutScreenScrollTest {
     }
 
     private fun bounds(tag: String) = compose.onNodeWithTag(tag).fetchSemanticsNode().boundsInRoot
+
+    @Test fun crowdedFloorOnlyComposesNearbyItemsAndKeepsOriginalMatchIndices() {
+        val repeated = item(requireNotNull(ItemCatalog.findById("fishing_spear")), 1)
+        val last = item(requireNotNull(ItemCatalog.findById("force_cube")), 1)
+        show(items = List(80) { repeated } + last, matches = ScoutMatches(setOf(80), 1, 1))
+        drag(330f)
+
+        fun assertBoundedRows() {
+            val composed = compose.onAllNodesWithContentDescription(repeated.item.name).fetchSemanticsNodes().size
+            assertTrue("Only nearby cards should be composed, found $composed", composed < 20)
+        }
+        assertBoundedRows()
+        compose.onNodeWithText(last.item.name).assertDoesNotExist()
+        compose.onNodeWithTag("scout-floors").performScrollToNode(hasText(last.item.name))
+        compose.onNodeWithText(last.item.name).assertIsDisplayed()
+        compose.onNodeWithText("match").assertIsDisplayed()
+        compose.onNodeWithText("FLOOR 1").assertIsDisplayed()
+        assertBoundedRows()
+    }
 
     /** Slow drags with a held release avoid a fling obscuring intermediate assertions. */
     private fun drag(distanceDp: Float, fromHeader: Boolean = false) {
@@ -314,6 +338,28 @@ class ScoutScreenScrollTest {
         compose.onNode(shortcut).assertIsDisplayed()
     }
 
+    @Test fun trinketShortcutsTrackJumpsPastOffersThatHaveNotBeenComposed() {
+        val repeated = item(requireNotNull(ItemCatalog.findById("fishing_spear")), 1)
+        val deck = listOf(requireNotNull(ItemCatalog.findById("chalice_of_blood")))
+        show(items = List(24) { repeated } + world.items, artifactDeck = deck, offerDepth = 3)
+        val shortcut = hasContentDescription("Mimic Tooth") and hasAnyAncestor(hasTestTag("scout-navigation"))
+        compose.onNodeWithText("Cracked Spyglass").assertDoesNotExist()
+        compose.onNode(shortcut).assertDoesNotExist()
+
+        compose.onNodeWithTag("scout-floors").performScrollToKey("floor-4")
+        compose.onNode(shortcut).assertIsDisplayed()
+        compose.onNodeWithTag("scout-floors").performScrollToKey("floor-3")
+        compose.onNodeWithText("Cracked Spyglass").assertIsDisplayed()
+        compose.onNode(shortcut).assertDoesNotExist()
+
+        // Opening a map inserts another lazy row before the offers.
+        compose.onNodeWithText("FLOOR 3").performClick()
+        compose.onNodeWithText("Expand map").assertIsDisplayed()
+        compose.onNode(shortcut).assertDoesNotExist()
+        compose.onNodeWithTag("scout-floors").performScrollToKey("floor-4")
+        compose.onNode(shortcut).assertIsDisplayed()
+    }
+
     @Test fun draggingTheSummaryAlsoScrollsAndPartialMatchesKeepTheirAccessibleCount() {
         show(matches = ScoutMatches(emptySet(), 2, 5))
         drag(bounds("scout-input").height / compose.density.density, fromHeader = true)
@@ -367,7 +413,7 @@ class ScoutScreenScrollTest {
         val progress = mutableFloatStateOf(0.45f)
         compose.setContent {
             SeedSeekerTheme {
-                ScoutSummaryCard(world, ScoutMatches(emptySet(), 5, 5), progress.floatValue, {})
+                ScoutSummaryCard(world, ScoutMatches(emptySet(), 5, 5), { progress.floatValue }, {})
             }
         }
         fun seedLayout(): TextLayoutResult {

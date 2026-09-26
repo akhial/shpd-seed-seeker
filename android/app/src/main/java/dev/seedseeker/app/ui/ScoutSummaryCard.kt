@@ -66,10 +66,12 @@ import kotlin.math.roundToInt
 internal fun ScoutSummaryCard(
     world: ScoutWorld,
     matches: ScoutMatches?,
-    progress: Float,
+    collapseProgress: () -> Float,
     onCollapseDistanceChanged: (Float) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // Keep scroll-driven recomposition inside the summary, away from the floor list.
+    val progress = collapseProgress()
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
     val floors = world.items.map(ScoutItem::depth).distinct().size
