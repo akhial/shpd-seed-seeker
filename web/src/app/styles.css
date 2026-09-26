@@ -2672,6 +2672,7 @@ input[type="range"]::-moz-range-thumb {
   inset: 0;
   z-index: 100;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   place-items: center;
   padding: 18px;
   background: rgba(8, 9, 12, 0.62);
@@ -2720,6 +2721,11 @@ input[type="range"]::-moz-range-thumb {
   border-bottom: 1px solid var(--d1-border);
   background: var(--d1-panel-2);
   border-radius: 11px 11px 0 0;
+}
+
+.d1-modal-title {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .d1-modal-title h2 {
@@ -3222,8 +3228,17 @@ input[type="range"]::-moz-range-thumb {
   color: var(--d1-accent, #bd9df1);
 }
 
-/* Six item families stay legible on a phone-sized requirement editor. */
+/* Keep the editor's controls within a phone-sized dialog. */
 @media (max-width: 480px) {
+  .d1-modal-foot .d1-btn {
+    white-space: normal;
+  }
+
+  .d1-modal .d1-seg button {
+    padding-inline: 6px;
+    white-space: normal;
+  }
+
   .d1-modal .d1-seg[aria-label="Category"] {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));

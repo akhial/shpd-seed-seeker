@@ -324,7 +324,7 @@ export function RequirementEditor({
               fill
             />
             {family === "weapon" && (
-              <Field label="Weapon type">
+              <Field label="Weapon type" stack>
                 <Segmented
                   value={kind}
                   options={WEAPON_TYPE_OPTIONS}
@@ -401,7 +401,7 @@ export function RequirementEditor({
             </Field>
             {wildcardGear && (
               <>
-                <Field label="Tier">
+                <Field label="Tier" stack>
                   <Segmented
                     value={draft.tier.mode}
                     options={[...TIER_OPTIONS]}
@@ -467,7 +467,7 @@ export function RequirementEditor({
               </label>
               {!!draft.trinketTransmutations && (
                 <>
-                  <Field label="Maximum transmutations">
+                  <Field label="Maximum transmutations" stack>
                     <Stepper
                       value={draft.trinketTransmutations}
                       min={1}
