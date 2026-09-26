@@ -68,6 +68,9 @@
 //! Other duplicate scarcity is measured by weapon tier for the canonical
 //! profile and by whole line otherwise; uneven filters can read low.
 
+// Artifact transmutation queries use profile-specific joint donor/deck layouts.
+// See probability/artifact_deck.rs and docs/probability-artifact-calibration.md.
+mod artifact_deck;
 mod artifacts;
 mod blankets;
 mod cache;
@@ -118,14 +121,6 @@ pub fn estimate_match_probability(query: &SearchQuery) -> f64 {
 }
 
 fn estimate_uncached(query: &SearchQuery) -> f64 {
-    // Existing supply tables do not encode the remaining deck or consumed donors.
-    if query
-        .requirements
-        .iter()
-        .any(|r| r.artifact_transmutations > 0)
-    {
-        return f64::NAN;
-    }
     if let Some(policy) = crate::auto_trinkets::AutoTrinketPolicy::prepare(query) {
         return crate::auto_trinkets::probability(query, &policy);
     }
@@ -910,6 +905,9 @@ fn matching_chance_uncached(ordered: &[Predicate]) -> f64 {
     {
         return 0.0;
     }
+    if ordered.iter().any(|p| p.artifact_transmutations > 0) {
+        return artifact_deck::mixed_probability(ordered);
+    }
     // A named artifact can appear only once, so its expected matching count
     // is already its probability, including mutually exclusive room offers.
     if ordered.len() == 1 && ordered[0].kind == ItemKind::Artifact {
@@ -1631,6 +1629,9 @@ fn expected_slots(predicate: &Predicate) -> f64 {
 }
 
 fn expected_slots_uncached(predicate: &Predicate) -> f64 {
+    if predicate.artifact_transmutations > 0 {
+        return artifact_deck::probability(&[*predicate]).0;
+    }
     predicate
         .profile
         .supply_for(predicate.kind)
@@ -1650,6 +1651,7 @@ fn expected_slots_uncached(predicate: &Predicate) -> f64 {
 /// Tiers and upgrades become bit sets so that requirements can be intersected:
 /// the matching needs to know which of them one item could serve at once.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[allow(clippy::struct_excessive_bools)] // Independent item and reward exclusions compose by intersection.
 struct Predicate {
     profile: Profile,
     kind: ItemKind,
@@ -1662,6 +1664,8 @@ struct Predicate {
     source: Option<ItemSource>,
     max_depth: u8,
     exclude_blacksmith: bool,
+    exclude_imp: bool,
+    artifact_transmutations: u8,
     exclude_resin: bool,
 }
 
@@ -1700,6 +1704,8 @@ impl Predicate {
             source: requirement.source,
             max_depth: requirement.max_depth.unwrap_or(DEEPEST_FLOOR),
             exclude_blacksmith: false,
+            exclude_imp: false,
+            artifact_transmutations: requirement.artifact_transmutations,
             exclude_resin: requirement.exclude_resin,
         }
     }
@@ -1757,6 +1763,13 @@ impl Predicate {
             source,
             max_depth: self.max_depth.min(other.max_depth),
             exclude_blacksmith: self.exclude_blacksmith || other.exclude_blacksmith,
+            exclude_imp: self.exclude_imp || other.exclude_imp,
+            artifact_transmutations: if self.max_depth == other.max_depth {
+                self.artifact_transmutations
+                    .min(other.artifact_transmutations)
+            } else {
+                0
+            },
             exclude_resin: self.exclude_resin,
         })
     }
@@ -1777,6 +1790,11 @@ impl Predicate {
             || usize::from(self.max_depth) < depth
             || self.source.is_some_and(|wanted| wanted != supply.source)
             || (self.exclude_blacksmith && supply.source == ItemSource::BlacksmithReward)
+            || (self.exclude_imp
+                && matches!(
+                    supply.source,
+                    ItemSource::ImpReward | ItemSource::VaultTreasure
+                ))
         {
             return 0.0;
         }

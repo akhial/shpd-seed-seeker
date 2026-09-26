@@ -83,9 +83,18 @@ Snapshots describe the unmodified generated run. The matcher does not combine
 transmutations at different floor limits, or retain an artifact generated after an
 earlier transmutation, because those would require replaying later generation.
 Scroll availability and effects on later generation are not simulated. Exhausting
-the deck produces a ring, which is not an artifact match. Probability estimates are
-unavailable for queries allowing artifact transmutations until joint donor/deck
-calibration is available.
+the deck produces a ring, which is not an artifact match.
+
+Transmutation probability uses a separate joint donor/deck model measured over
+8,192 worlds for each of the eight generation profiles. It averages identity
+assignments without replacement, preserves obtainable donor combinations and
+floor boundaries, and reserves the Imp prize across artifacts and equipment.
+AutoTrinket uses the same calibrated scores to select and estimate its policy.
+No worlds are generated while estimating. See [calibration and timing results](probability-artifact-calibration.md).
+Imported queries with upgrade-filtered artifact transmutations remain unavailable:
+rounding through intermediate identities is not calibrated. The normal artifact
+editors use any upgrade. Extremely complex joint filters also have a bounded work
+budget and report unavailable instead of blocking the editor.
 
 Scout shows **Artifact transmutation order** with an **After floor** selector on
 web, Android, macOS, Windows, and Linux. Positions start at 1; matching outcomes

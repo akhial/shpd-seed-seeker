@@ -206,7 +206,7 @@ fn json_links_and_scout_packets_round_trip_and_reject_invalid_counts() {
             json_query::decode(&json_query::encode(&query).to_string()).unwrap(),
             query
         );
-        assert!(shpd_seedfinder_core::probability::estimate_match_probability(&query).is_nan());
+        assert!(shpd_seedfinder_core::probability::estimate_match_probability(&query).is_finite());
     }
     for count in [json!(-1), json!(11), json!(1.5), json!("1"), json!(null)] {
         assert!(json_query::decode(&json!({"requirements":[{"item":"ethereal_chains","artifact_transmutations":count}]}).to_string()).is_err());

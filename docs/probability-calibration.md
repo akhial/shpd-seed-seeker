@@ -55,7 +55,7 @@ room intersections, repeated room presence across floors, and cross-floor
 feeling pairs. Constants need no pair entries. Counts and offsets support
 direct reads after the table is initialized.
 
-The core build losslessly compresses the five binary probability tables with
+The core build losslessly compresses the binary probability tables with
 DEFLATE (a zlib wrapper plus a four-byte original length). Checked-in `.bin`
 files and calibrator output stay unchanged. Each embedded table is decompressed
 once on first use, bounded to its original length, and cached across estimator
@@ -86,6 +86,9 @@ strength dependency tree. Cross-floor corrections account for repeated room
 features and the alternating feelings of Mossy Clump/Trap Mechanism. Unmeasured
 cross-floor interactions, item/floor dependencies, and wider room combinations
 remain approximations. Challenges still use the canonical estimates.
+
+Artifact transmutations have a separate joint donor/deck model for all eight
+profiles; see [artifact calibration](probability-artifact-calibration.md).
 
 ## Validation
 
