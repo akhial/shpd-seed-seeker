@@ -40,9 +40,9 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
-    <release version="0.18.0" date="2026-09-25">
+    <release version="0.19.0" date="2026-09-26">
       <description>
-        <p>Scout daily runs, import results from the clipboard, and improve CLI search and web map rendering.</p>
+        <p>Search artifact transmutations, inspect map items with original descriptions, and refine Scout and daily-run controls.</p>
       </description>
     </release>
     <release version="0.9.1" date="2026-09-07">
