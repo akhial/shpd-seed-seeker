@@ -1,7 +1,38 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package dev.seedseeker.app.ui
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.ripple
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.horizontalScroll
@@ -259,15 +290,25 @@ fun RequirementSheet(
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.weight(1f),
                 )
-                Text(
-                    if (kind == ItemKind.TRINKET) "Trinket" else if (step == SheetStep.ITEM) "1/2 · Item" else "2/2 · Details",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                StepIndicator(step)
                 TextButton(onClick = onDismiss) { Text("Close") }
             }
 
-            when (step) {
+            // Steps slide past each other like pages: forward to the details,
+            // back to the item picker.
+            AnimatedContent(
+                targetState = step,
+                transitionSpec = {
+                    val forward = targetState == SheetStep.DETAILS
+                    val spatial = spring<IntOffset>(dampingRatio = 0.85f, stiffness = 420f)
+                    (slideInHorizontally(spatial) { if (forward) it / 2 else -it / 2 } + fadeIn(tween(200)))
+                        .togetherWith(slideOutHorizontally(spatial) { if (forward) -it / 2 else it / 2 } + fadeOut(tween(120)))
+                },
+                modifier = Modifier.weight(1f),
+                label = "sheet-step",
+            ) { shownStep ->
+            Column(Modifier.fillMaxSize()) {
+            when (shownStep) {
                 SheetStep.ITEM -> {
                     // Category — connected toggle-button group (fixed chrome).
                     Row(
@@ -385,16 +426,21 @@ fun RequirementSheet(
                         }
                     }
 
+                    val nextInteraction = remember { MutableInteractionSource() }
                     Button(
                         onClick = { step = SheetStep.DETAILS },
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = 20.dp)
                             .padding(top = 10.dp)
-                            .height(52.dp),
+                            .height(56.dp)
+                            .pressScale(nextInteraction, pressed = 0.95f),
                         shapes = ButtonDefaults.shapes(),
+                        interactionSource = nextInteraction,
                     ) {
                         Text("Next", style = MaterialTheme.typography.titleMedium)
+                        Spacer(Modifier.width(8.dp))
+                        Icon(Icons.AutoMirrored.Filled.ArrowForward, contentDescription = null, modifier = Modifier.size(20.dp))
                     }
                 }
 
@@ -1000,6 +1046,7 @@ fun RequirementSheet(
                             ) {
                                 Text("Back")
                             }
+                            val saveInteraction = remember { MutableInteractionSource() }
                             Button(
                                 onClick = {
                                     draft.getOrNull()?.let {
@@ -1024,9 +1071,18 @@ fun RequirementSheet(
                                 enabled = draft.isSuccess,
                                 modifier = Modifier
                                     .weight(1f)
-                                    .height(52.dp),
+                                    .height(52.dp)
+                                    .pressScale(saveInteraction, pressed = 0.95f)
+                                    .shakeOnChange(draft.exceptionOrNull()?.message),
                                 shapes = ButtonDefaults.shapes(),
+                                interactionSource = saveInteraction,
                             ) {
+                                Icon(
+                                    if (editing == null) Icons.Filled.Add else Icons.Filled.Check,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                                Spacer(Modifier.width(6.dp))
                                 Text(
                                     if (editing == null) "Add" else "Save",
                                     style = MaterialTheme.typography.titleMedium,
@@ -1035,6 +1091,8 @@ fun RequirementSheet(
                         }
                     }
                 }
+            }
+            }
             }
         }
     }
@@ -1055,7 +1113,11 @@ private fun normalizedUpgrade(value: Int, match: UpgradeMatch, ceiling: Int): In
     UpgradeMatch.AT_LEAST -> value.coerceIn(1, ceiling - 1)
 }
 
-/** A compact −/+ stepper for the small bounded counts the board deals in. */
+/**
+ * A compact −/+ stepper for the small bounded counts the board deals in. The
+ * value rolls up or down like an odometer as it changes.
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun Stepper(
     value: Int,
@@ -1064,29 +1126,75 @@ internal fun Stepper(
     onChange: (Int) -> Unit,
 ) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        IconButton(
+        FilledTonalIconButton(
             onClick = { onChange(value - 1) },
             enabled = value > range.first,
+            shapes = IconButtonDefaults.shapes(),
         ) {
             Text("−", style = MaterialTheme.typography.titleLarge)
         }
-        Text(
-            label(value),
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.widthIn(min = 40.dp),
-            textAlign = TextAlign.Center,
-        )
-        IconButton(
+        AnimatedContent(
+            targetState = value,
+            transitionSpec = {
+                val up = targetState > initialState
+                (slideInVertically { if (up) it else -it } + fadeIn())
+                    .togetherWith(slideOutVertically { if (up) -it else it } + fadeOut())
+                    .using(SizeTransform(clip = false))
+            },
+            label = "stepper-value",
+        ) { shown ->
+            Text(
+                label(shown),
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.widthIn(min = 48.dp),
+                textAlign = TextAlign.Center,
+            )
+        }
+        FilledTonalIconButton(
             onClick = { onChange(value + 1) },
             enabled = value < range.last,
+            shapes = IconButtonDefaults.shapes(),
         ) {
             Text("+", style = MaterialTheme.typography.titleLarge)
         }
     }
 }
 
-/** A two-column checkbox grid of effect names under a small heading. */
+/** Which step of the editor is showing, as two pills — the current one stretched long. */
+@Composable
+private fun StepIndicator(step: SheetStep) {
+    Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+        SheetStep.entries.forEach { entry ->
+            val active = entry == step
+            val width by animateDpAsState(
+                if (active) 22.dp else 8.dp,
+                MaterialTheme.motionScheme.fastSpatialSpec(),
+                label = "step-width",
+            )
+            Box(
+                Modifier
+                    .height(8.dp)
+                    .width(width)
+                    .clip(CircleShape)
+                    .background(if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant),
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Text(
+            if (step == SheetStep.ITEM) "Item" else "Details",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+/**
+ * Effect names under a small heading, as chips. Each chip carries the colour
+ * the effect makes an item glow in the game, pulsing when picked.
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun EffectGrid(
     heading: String,
@@ -1102,50 +1210,66 @@ private fun EffectGrid(
         letterSpacing = 1.sp,
         color = headingColor,
     )
-    names.chunked(2).forEach { pair ->
-        Row(Modifier.fillMaxWidth()) {
-            pair.forEach { name ->
-                val checked = name in selected
-                Row(
-                    modifier = Modifier
-                        .weight(1f)
-                        .toggleable(
-                            value = checked,
-                            role = Role.Checkbox,
-                            onValueChange = { onToggle(name, it) },
-                        )
-                        .padding(vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Checkbox(checked = checked, onCheckedChange = null)
-                    Text(
-                        name,
-                        style = MaterialTheme.typography.bodyMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        names.forEach { name ->
+            val checked = name in selected
+            val glow = ItemGlows.forEffect(name)
+            FilterChip(
+                selected = checked,
+                onClick = { onToggle(name, !checked) },
+                label = { Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                leadingIcon = {
+                    val dot = glow?.color ?: MaterialTheme.colorScheme.outline
+                    Box(
+                        Modifier
+                            .size(if (checked) 14.dp else 10.dp)
+                            .popOnChange(checked, peak = 1.5f)
+                            .clip(CircleShape)
+                            // Black glows (curses, Grim, Stone) get a light rim to read on dark.
+                            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = if (dot.luminanceLow()) 0.5f else 0f))
+                            .padding(if (dot.luminanceLow()) 1.5.dp else 0.dp)
+                            .clip(CircleShape)
+                            .background(dot),
                     )
-                }
-            }
-            if (pair.size == 1) Spacer(Modifier.weight(1f))
+                },
+                shape = CircleShape,
+            )
         }
     }
 }
 
+private fun Color.luminanceLow(): Boolean = (red * 0.299f + green * 0.587f + blue * 0.114f) < 0.18f
+
+/**
+ * One pickable item. Picking it grows a slowly turning seal behind its
+ * sprite, springs the tile and tints it in the primary colours.
+ */
 @Composable
 private fun ItemTile(item: CatalogItem, selected: Boolean, onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    val seal by animateFloatAsState(
+        if (selected) 1f else 0f,
+        spring(dampingRatio = 0.5f, stiffness = 400f),
+        label = "tile-seal",
+    )
+    val container by animateColorAsState(
+        if (selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
+        label = "tile-container",
+    )
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .height(118.dp)
-            .selectable(selected = selected, onClick = onClick),
-        shape = MaterialTheme.shapes.medium,
-        color = if (selected) {
-            MaterialTheme.colorScheme.primaryContainer
-        } else {
-            MaterialTheme.colorScheme.surfaceContainerHigh
-        },
+            .pressScale(interaction)
+            .selectable(selected = selected, interactionSource = interaction, indication = ripple(), onClick = onClick),
+        shape = MaterialTheme.shapes.large,
+        color = container,
         border = if (selected) {
-            BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
+            BorderStroke(2.dp, MaterialTheme.colorScheme.primary)
         } else {
             null
         },
@@ -1155,11 +1279,29 @@ private fun ItemTile(item: CatalogItem, selected: Boolean, onClick: () -> Unit) 
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
-            ItemSprite(item, modifier = Modifier.size(42.dp))
+            Box(contentAlignment = Alignment.Center) {
+                if (seal > 0.01f) {
+                    ShapeBackdrop(
+                        SeekerShapes.Seed,
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.28f),
+                        Modifier.size(52.dp).graphicsLayer {
+                            scaleX = seal
+                            scaleY = seal
+                        },
+                        spinMillis = 8_000,
+                    )
+                }
+                ItemSprite(item, modifier = Modifier.size(42.dp).graphicsLayer {
+                    val scale = 1f + 0.12f * seal
+                    scaleX = scale
+                    scaleY = scale
+                })
+            }
             Spacer(Modifier.height(5.dp))
             Text(
                 item.name,
                 style = MaterialTheme.typography.labelSmall,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                 textAlign = TextAlign.Center,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
@@ -1179,8 +1321,8 @@ private fun ItemTile(item: CatalogItem, selected: Boolean, onClick: () -> Unit) 
 @Composable
 private fun RequirementPreview(draft: Result<ItemRequirement>) {
     Surface(
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceContainerHighest,
+        shape = MaterialTheme.shapes.extraLarge,
+        color = if (draft.isSuccess) MaterialTheme.colorScheme.surfaceContainerHighest else MaterialTheme.colorScheme.errorContainer,
     ) {
         Row(
             modifier = Modifier
@@ -1194,6 +1336,8 @@ private fun RequirementPreview(draft: Result<ItemRequirement>) {
                 wildcardKind = requirement?.kind,
                 glows = requirement?.effect?.let(ItemGlows::forFilter).orEmpty(),
                 tileSize = 44,
+                // Every change to the draft bounces its preview.
+                modifier = Modifier.popOnChange(requirement, peak = 1.12f),
             )
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {

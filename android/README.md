@@ -42,6 +42,23 @@ the wrapper. `ANDROID_HOME` or `android/local.properties` must identify the SDK.
 
 The app targets API 36, supports API 23+, opts into edge-to-edge drawing, and uses AndroidX's predictive-back handler for in-app navigation. It uses Internet access for update checks, foreground-service and wake-lock permissions for background searches, and requests notification permission on Android 13+ when the first search starts. Declining notification permission does not prevent searching; Android still lists the service in its active-apps controls.
 
+## Motion and screenshots
+
+The UI follows Material 3 Expressive: shapes morph, controls spring when
+pressed, counts pop as they change, matches throw a small burst of sparkles and
+new rows spring into place. The shared kit lives in `ui/Expressive.kt`. Every
+looping or celebratory effect settles on its resting frame when Android's
+animator duration scale is 0 (Developer options, or **Remove animations** in
+Accessibility), and all of it is layered on in the draw and layer phases, so
+layouts measure the same with or without motion.
+
+To review every screen without a device, render them to PNGs under
+`app/build/outputs/showcase/`:
+
+```shell
+SEEDSEEKER_SHOWCASE=1 ./gradlew :app:testDebugUnitTest --tests '*ExpressiveShowcaseTest*'
+```
+
 ## Background searches and recovery
 
 **Search** checks every seed in the saved pool against the current query,

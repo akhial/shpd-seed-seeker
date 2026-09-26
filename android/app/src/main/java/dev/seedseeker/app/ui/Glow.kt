@@ -199,7 +199,7 @@ fun rememberGlowPulse(): GlowPulse {
  * False when the user has turned animations off — the developer-options animator
  * scale and the "remove animations" accessibility toggle both zero this setting.
  */
-private fun animationsEnabled(context: Context): Boolean =
+internal fun animationsEnabled(context: Context): Boolean =
     Settings.Global.getFloat(
         context.contentResolver,
         Settings.Global.ANIMATOR_DURATION_SCALE,

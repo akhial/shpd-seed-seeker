@@ -2,7 +2,39 @@
 package dev.seedseeker.app.ui
 
 import android.graphics.BitmapFactory
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.MaterialShapes
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.composed
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.graphics.ShaderBrush
+import androidx.compose.ui.graphics.addOutline
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.text.font.FontWeight
+import dev.seedseeker.app.ui.theme.SpdYellow
+import kotlinx.coroutines.launch
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
@@ -179,6 +211,8 @@ fun ScoutScreen(
         if (error != null || result == null) headerScroll.expand()
     }
     val floors = remember(result) { scoutFloors(result) }
+    // Floors spring in the first time a world shows them, and never again.
+    val entrances = LocalEntranceMemory.current
     val mapFloors = remember(floors) { floors.keys.filter(::isMapDepthSupported) }
     val matchedChoices = remember(result, matches) { matchedScoutChoices(result?.items.orEmpty(), matches?.items.orEmpty()) }
     var openMapDepth by remember(result?.seed, mapChallenges) { mutableStateOf<Int?>(null) }
@@ -201,23 +235,59 @@ fun ScoutScreen(
     val seedIsReady = SeedCode.isScoutable(seedInput)
     // Position within the search results, when the scouted seed came from one.
     val resultIndex = ScoutResultNavigation.position(resultSeeds, scoutedSeed)
+    var lastStep by remember { mutableIntStateOf(0) }
+    // Remembers which way it moved, so the next page can slide in from that side.
     val stepToResult: (Int) -> Unit = { delta ->
-        ScoutResultNavigation.step(resultSeeds, scoutedSeed, delta)?.let(onScoutSeed)
+        ScoutResultNavigation.step(resultSeeds, scoutedSeed, delta)?.let {
+            lastStep = delta
+            onScoutSeed(it)
+        }
     }
     // The gesture coroutine must survive recomposition: search matches stream
     // in every ~90 ms and restarting pointerInput on them would cancel any
     // swipe in progress.
     val currentStepToResult by rememberUpdatedState(stepToResult)
+    // The page follows a horizontal swipe on a rubber band, and springs back —
+    // or, when the swipe steps to another result, the next page slides in
+    // from the side the finger came from.
+    val swipe = remember { Animatable(0f) }
+    val swipeScope = rememberCoroutineScope()
+    val motion = LocalMotionEnabled.current
+    LaunchedEffect(scoutedSeed) {
+        if (lastStep != 0 && motion) {
+            swipe.snapTo(lastStep * 90f)
+            swipe.animateTo(0f, spring(dampingRatio = 0.72f, stiffness = 320f))
+        }
+        lastStep = 0
+    }
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
-                title = { Text("Scout") },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        ShapeBackdrop(
+                            MaterialShapes.Gem,
+                            MaterialTheme.colorScheme.secondaryContainer,
+                            Modifier.size(38.dp),
+                            spinMillis = if (isScouting) 1800 else null,
+                        ) {
+                            Icon(
+                                Icons.Filled.Place,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                        Spacer(Modifier.width(10.dp))
+                        Text("Scout", fontWeight = FontWeight.ExtraBold)
+                    }
+                },
                 actions = {
-                    IconButton(onClick = onSettings) {
+                    IconButton(onClick = onSettings, shapes = IconButtonDefaults.shapes()) {
                         Icon(Icons.Filled.Settings, contentDescription = "Settings")
                     }
-                    IconButton(onClick = onAbout) {
+                    IconButton(onClick = onAbout, shapes = IconButtonDefaults.shapes()) {
                         Icon(Icons.Filled.Info, contentDescription = "About and licenses")
                     }
                 },
@@ -237,20 +307,35 @@ fun ScoutScreen(
                 .pointerInput(Unit) {
                     var dragTotal = 0f
                     val threshold = 64.dp.toPx()
+                    fun settle() = swipeScope.launch { swipe.animateTo(0f, spring(dampingRatio = 0.55f, stiffness = 420f)) }
                     detectHorizontalDragGestures(
                         onDragStart = { dragTotal = 0f },
-                        onDragCancel = { dragTotal = 0f },
+                        onDragCancel = {
+                            dragTotal = 0f
+                            settle()
+                        },
                         onDragEnd = {
                             if (abs(dragTotal) >= threshold) {
                                 currentStepToResult(if (dragTotal < 0f) 1 else -1)
                             }
+                            settle()
                         },
-                    ) { _, dragAmount -> dragTotal += dragAmount }
+                    ) { _, dragAmount ->
+                        dragTotal += dragAmount
+                        // Resist more the further it goes: a rubber band, in dp.
+                        val dp = dragTotal / density
+                        if (motion) swipeScope.launch { swipe.snapTo(dp / (1f + abs(dp) / 160f)) }
+                    }
                 },
             contentAlignment = Alignment.TopCenter,
         ) {
             Column(
-                Modifier.fillMaxHeight().widthIn(max = 680.dp).fillMaxWidth().padding(horizontal = 16.dp)
+                Modifier.fillMaxHeight().widthIn(max = 680.dp).fillMaxWidth()
+                    .graphicsLayer {
+                        translationX = swipe.value * density
+                        alpha = 1f - (abs(swipe.value) / 400f).coerceAtMost(0.35f)
+                    }
+                    .padding(horizontal = 16.dp)
                     .clipToBounds()
                     .nestedScroll(scrollConnection)
                     .scrollable(headerDragState, Orientation.Vertical, enabled = result != null),
@@ -279,7 +364,8 @@ fun ScoutScreen(
                 }
                 if (resultIndex != null || result?.trinketOrder?.isNotEmpty() == true) {
                     ResultNavigationBar(
-                        index = resultIndex, total = resultSeeds.size, onStep = stepToResult,
+                        index = resultIndex, total = resultSeeds.size,
+                        onStep = stepToResult,
                         offers = result?.trinketOrder?.take(4).orEmpty(), selectedTrinket = result?.selectedTrinket,
                         reveal = reveal, enabled = !isScouting, onSelect = onSelectTrinket,
                         modifier = Modifier.testTag("scout-navigation").padding(top = 6.dp),
@@ -287,38 +373,12 @@ fun ScoutScreen(
                 }
                 LazyColumn(state = listState, modifier = Modifier.weight(1f).fillMaxWidth().testTag("scout-floors"),
                     contentPadding = PaddingValues(top = 4.dp, bottom = 24.dp)) {
-                if (result == null && !isScouting) {
-                    item {
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 20.dp),
-                            shape = MaterialTheme.shapes.large,
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                            ),
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(24.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                            ) {
-                                Icon(
-                                    Icons.Outlined.Place,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(44.dp),
-                                    tint = MaterialTheme.colorScheme.primary,
-                                )
-                                Spacer(Modifier.height(14.dp))
-                                Text(
-                                    "Enter a seed or tap a search result to list its items through floor 24.",
-                                    textAlign = TextAlign.Center,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
+                if (result == null) {
+                    item(key = if (isScouting) "scouting" else "empty") {
+                        ScoutPlaceholder(
+                            scouting = isScouting,
+                            onDaily = { onScoutSeed(DailyRunDate.today()) },
+                        )
                     }
                 }
 
@@ -340,7 +400,8 @@ fun ScoutScreen(
                                 )
                             }
                             item(key = "floor-body-$depth") {
-                                Column {
+                                val fresh = remember { entrances.firstTime("floor:${world.seed}:$depth") }
+                                Column(Modifier.springEntrance(enabled = fresh, delayMillis = if (fresh) (depth.coerceAtMost(6)) * 45 else 0)) {
                                     if (openMapDepth == depth && isMapDepthSupported(depth)) {
                                         Box(Modifier.onSizeChanged { if (depth == offerDepth) offerMapHeight = it.height.toFloat() }) {
                                             LevelMapView(world, depth, mapFloors, mapChallenges, isScouting, onSelectTrinket)
@@ -481,29 +542,65 @@ private fun SeedInputCard(
                 }
             }
             Spacer(Modifier.height(12.dp))
+            val scoutInteraction = remember { MutableInteractionSource() }
             Button(
                 onClick = scout,
                 enabled = seedIsReady && !isScouting,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(52.dp),
+                    .height(52.dp)
+                    .pressScale(scoutInteraction, pressed = 0.95f)
+                    // A complete seed makes the button perk up.
+                    .popOnChange(seedIsReady, peak = 1.05f),
                 shapes = ButtonDefaults.shapes(),
+                interactionSource = scoutInteraction,
             ) {
-                if (isScouting) {
-                    LoadingIndicator(modifier = Modifier.size(28.dp))
-                    Spacer(Modifier.width(10.dp))
-                    Text("Generating world…")
-                } else {
-                    Text(if (daily) "Scout daily run" else "Scout seed")
+                AnimatedContent(
+                    targetState = when {
+                        isScouting -> 2
+                        daily -> 1
+                        else -> 0
+                    },
+                    transitionSpec = {
+                        (slideInVertically { it } + fadeIn()).togetherWith(slideOutVertically { -it } + fadeOut())
+                            .using(SizeTransform(clip = false))
+                    },
+                    label = "scout-button",
+                ) { mode ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        when (mode) {
+                            2 -> {
+                                LoadingIndicator(modifier = Modifier.size(28.dp), color = LocalContentColor.current)
+                                Spacer(Modifier.width(10.dp))
+                                Text("Generating world…", style = MaterialTheme.typography.titleMedium)
+                            }
+                            else -> {
+                                Icon(
+                                    if (mode == 1) Icons.Outlined.DateRange else Icons.Filled.Place,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(if (mode == 1) "Scout daily run" else "Scout seed", style = MaterialTheme.typography.titleMedium)
+                            }
+                        }
+                    }
                 }
             }
             error?.let {
                 Spacer(Modifier.height(10.dp))
-                Text(
-                    it,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
+                Surface(
+                    shape = MaterialTheme.shapes.large,
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    modifier = Modifier.fillMaxWidth().shakeOnChange(it),
+                ) {
+                    Text(
+                        it,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                    )
+                }
             }
         }
     }
@@ -521,16 +618,35 @@ private fun ResultNavigationBar(
 ) {
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         if (index != null) {
-            IconButton(onClick = { onStep(-1) }, enabled = index > 0, modifier = Modifier.size(36.dp)) {
+            FilledTonalIconButton(
+                onClick = { onStep(-1) }, enabled = index > 0, modifier = Modifier.size(36.dp),
+                shapes = IconButtonDefaults.shapes(),
+            ) {
                 Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Previous result")
             }
-            Text("${index + 1} of $total", style = MaterialTheme.typography.labelMedium)
-            IconButton(onClick = { onStep(1) }, enabled = index < total - 1, modifier = Modifier.size(36.dp)) {
+            // The position rolls like an odometer in the direction of travel.
+            AnimatedContent(
+                targetState = index,
+                transitionSpec = {
+                    val forward = targetState > initialState
+                    (slideInHorizontally { if (forward) it else -it } + fadeIn())
+                        .togetherWith(slideOutHorizontally { if (forward) -it else it } + fadeOut())
+                        .using(SizeTransform(clip = true))
+                },
+                modifier = Modifier.padding(horizontal = 8.dp),
+                label = "result-position",
+            ) { shown ->
+                Text("${shown + 1} of $total", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+            }
+            FilledTonalIconButton(
+                onClick = { onStep(1) }, enabled = index < total - 1, modifier = Modifier.size(36.dp),
+                shapes = IconButtonDefaults.shapes(),
+            ) {
                 Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Next result")
             }
-        } else Text("Trinkets", style = MaterialTheme.typography.labelMedium)
+        } else Text("Trinkets", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
         Box(Modifier.weight(1f).height(44.dp).clipToBounds(), contentAlignment = Alignment.CenterEnd) {
-            if (index != null) Text("swipe to browse", modifier = Modifier.graphicsLayer { alpha = 1f - reveal },
+            if (index != null) Text("‹ swipe to browse ›", modifier = Modifier.graphicsLayer { alpha = 1f - reveal },
                 style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (reveal > 0) TrinketShortcuts(
                 offers = offers, selectedTrinket = selectedTrinket, enabled = enabled, onSelect = onSelect,
@@ -597,7 +713,8 @@ internal fun ScoutItemCard(
     }
 
     Card(
-        modifier = modifier.fillMaxWidth().alpha(if (dimmed) 0.45f else 1f),
+        modifier = modifier.fillMaxWidth().alpha(if (dimmed) 0.45f else 1f)
+            .then(if (matches) Modifier.matchGlow(MaterialTheme.shapes.large) else Modifier),
         shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(
             containerColor = if (matches) {
@@ -756,8 +873,8 @@ private fun ScoutItemTitle(name: String, modifier: Modifier = Modifier) {
 @Composable
 private fun ScoutItemUpgrade(upgrade: Int) {
     Surface(
-        shape = MaterialTheme.shapes.extraSmall,
-        color = SpdUpgrade.copy(alpha = 0.12f),
+        shape = CircleShape,
+        color = SpdUpgrade.copy(alpha = 0.14f),
     ) {
         Text(
             "+$upgrade",
@@ -773,12 +890,12 @@ private fun ScoutItemUpgrade(upgrade: Int) {
 private fun ScoutItemBadges(scoutItem: ScoutItem) {
     if (scoutItem.cursed) {
         Surface(
-            shape = MaterialTheme.shapes.extraSmall,
-            color = SpdDanger.copy(alpha = 0.14f),
+            shape = CircleShape,
+            color = SpdDanger.copy(alpha = 0.16f),
         ) {
             Text(
                 "cursed",
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                modifier = Modifier.padding(horizontal = 7.dp, vertical = 1.dp),
                 style = MaterialTheme.typography.labelSmall,
                 color = SpdCurse,
             )
@@ -786,12 +903,12 @@ private fun ScoutItemBadges(scoutItem: ScoutItem) {
     }
     if (scoutItem.secret) {
         Surface(
-            shape = MaterialTheme.shapes.extraSmall,
-            color = SpdSecret.copy(alpha = 0.14f),
+            shape = CircleShape,
+            color = SpdSecret.copy(alpha = 0.16f),
         ) {
             Text(
                 "secret",
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                modifier = Modifier.padding(horizontal = 7.dp, vertical = 1.dp),
                 style = MaterialTheme.typography.labelSmall,
                 color = SpdSecret,
             )
@@ -799,25 +916,68 @@ private fun ScoutItemBadges(scoutItem: ScoutItem) {
     }
 }
 
+/**
+ * The row's "this is what you asked for" flag. It lands with a springy pop
+ * when the engine's match marks arrive, a check set in a little burst.
+ */
 @Composable
 private fun ScoutItemMatchChip() {
     Surface(
-        shape = MaterialTheme.shapes.extraSmall,
-        color = SpdGreen.copy(alpha = 0.1f),
+        shape = CircleShape,
+        color = SpdGreen.copy(alpha = 0.16f),
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+            modifier = Modifier.padding(start = 3.dp, end = 8.dp, top = 2.dp, bottom = 2.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.Filled.Check, contentDescription = null,
-                modifier = Modifier.size(12.dp), tint = SpdGreen)
+            ShapeBackdrop(SeekerShapes.Match, SpdGreen, Modifier.size(16.dp)) {
+                Icon(Icons.Filled.Check, contentDescription = null,
+                    modifier = Modifier.size(10.dp), tint = MaterialTheme.colorScheme.surface)
+            }
             Spacer(Modifier.width(4.dp))
-            Text("match", style = MaterialTheme.typography.labelSmall, color = SpdGreen)
+            Text("match", style = MaterialTheme.typography.labelSmall, color = SpdGreen, fontWeight = FontWeight.Bold)
         }
     }
 }
 
+/**
+ * An animated ring around a matched row: the game's upgrade green and gold
+ * chase each other around its edge, so a match "glows" without the row
+ * changing size.
+ */
+private fun Modifier.matchGlow(shape: androidx.compose.ui.graphics.Shape): Modifier = composed {
+    val motion = LocalMotionEnabled.current
+    val angle = if (motion) {
+        rememberInfiniteTransition(label = "match-glow").animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec = infiniteRepeatable(tween(3200, easing = LinearEasing)),
+            label = "match-angle",
+        )
+    } else null
+    // Outline and gradient are built once per size; each frame only turns the gradient.
+    this.drawWithCache {
+        val path = androidx.compose.ui.graphics.Path().apply { addOutline(shape.createOutline(size, layoutDirection, this@drawWithCache)) }
+        val stroke = Stroke(width = 2.dp.toPx())
+        val shader = android.graphics.SweepGradient(
+            size.width / 2f, size.height / 2f,
+            intArrayOf(
+                SpdGreen.toArgb(), SpdUpgrade.copy(alpha = 0.1f).toArgb(), SpdYellow.toArgb(),
+                SpdUpgrade.copy(alpha = 0.1f).toArgb(), SpdGreen.toArgb(),
+            ),
+            null,
+        )
+        val brush = ShaderBrush(shader)
+        val turn = android.graphics.Matrix()
+        onDrawWithContent {
+            drawContent()
+            turn.setRotate(angle?.value ?: 0f, size.width / 2f, size.height / 2f)
+            shader.setLocalMatrix(turn)
+            drawPath(path, brush, style = stroke)
+        }
+    }
+}
 
 /** The catalyst keeps its placement; its deck retains the engine's order. */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
@@ -863,23 +1023,43 @@ private fun TrinketCatalystCard(
                 ordered.forEach { trinket ->
                     val applied = selectedTrinket == trinket.id
                     val matched = choices.any { it.value.item.id == trinket.id && matches?.items?.contains(it.index) == true }
+                    val interaction = remember { MutableInteractionSource() }
+                    // Applying a trinket morphs its tile's corners round and gives
+                    // it a slowly turning sunburst behind the sprite.
+                    val corner by animateDpAsState(
+                        if (applied) 28.dp else 12.dp,
+                        MaterialTheme.motionScheme.defaultSpatialSpec(),
+                        label = "trinket-corner",
+                    )
                     Surface(
                         selected = applied,
                         onClick = { onSelect(if (applied) "none" else trinket.id) },
                         enabled = enabled,
+                        interactionSource = interaction,
                         border = if (applied) androidx.compose.foundation.BorderStroke(2.dp, SpdGreen) else null,
-                        modifier = Modifier.weight(1f).aspectRatio(1f).semantics {
+                        modifier = Modifier.weight(1f).aspectRatio(1f).pressScale(interaction).popOnChange(applied, peak = 1.08f).semantics {
                             contentDescription = trinket.name + if (matched) ", matches requirement" else ""
                         },
-                        shape = MaterialTheme.shapes.small,
+                        shape = RoundedCornerShape(corner),
                         color = if (matched) SpdGreen.copy(alpha = 0.14f) else MaterialTheme.colorScheme.surfaceContainerHigh,
                     ) {
                         BoxWithConstraints {
                             val iconSize = minOf(48.dp, maxWidth * 0.58f)
                             Column(Modifier.fillMaxSize().padding(2.dp), horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.SpaceEvenly) {
-                                if (applied) Text("Applied +3", style = MaterialTheme.typography.labelSmall, color = SpdGreen)
-                                ItemSprite(trinket, modifier = Modifier.size(if (applied) iconSize * 0.8f else iconSize))
+                                if (applied) Text("Applied +3", style = MaterialTheme.typography.labelSmall, color = SpdGreen, fontWeight = FontWeight.Bold)
+                                ShapeBackdrop(
+                                    if (matched) SeekerShapes.Match else SeekerShapes.Celebrate,
+                                    when {
+                                        applied -> SpdGreen.copy(alpha = 0.22f)
+                                        matched -> SpdGreen.copy(alpha = 0.16f)
+                                        else -> Color.Transparent
+                                    },
+                                    Modifier.size(if (applied) iconSize * 0.95f else iconSize),
+                                    spinMillis = if (applied) 9_000 else null,
+                                ) {
+                                    ItemSprite(trinket, modifier = Modifier.size(if (applied) iconSize * 0.8f else iconSize))
+                                }
                                 FittedTrinketName(trinket.name)
                             }
                         }
@@ -930,8 +1110,11 @@ private fun ArtifactDeckRow(world: ScoutWorld, matches: ScoutMatches?) {
     val targets = matches?.transmutedArtifacts.orEmpty().mapNotNull { (depth, index) ->
         world.artifactDecks.entries.lastOrNull { it.key <= depth }?.value?.getOrNull(index)?.id
     }.toSet()
-    Card(Modifier.fillMaxWidth().padding(vertical = 4.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+    Card(Modifier.fillMaxWidth().padding(vertical = 4.dp), shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
+        Text("Artifact deck", modifier = Modifier.padding(start = 16.dp, top = 10.dp),
+            style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             order.forEach { artifact ->
                 val matched = artifact.id in targets
                 val natural = artifact.id in naturalArtifacts
@@ -944,6 +1127,68 @@ private fun ArtifactDeckRow(world: ScoutWorld, matches: ScoutMatches?) {
                             ItemSprite(artifact, modifier = Modifier.size((tileWidth - 4.dp).coerceAtLeast(1.dp)))
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * What the floor list shows before there is a world to list: an invitation
+ * — a shape-shifting seal, a line on what Scout does and a one-tap daily run
+ * — or, while a world generates, the same seal morphing twice as fast.
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun ScoutPlaceholder(scouting: Boolean, onDaily: () -> Unit) {
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(top = 20.dp).springEntrance(),
+        shape = MaterialTheme.shapes.extraLarge,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            MorphingBackdrop(
+                shapes = if (scouting) SeekerShapes.Busy else SeekerShapes.Idle,
+                color = if (scouting) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primaryContainer,
+                modifier = Modifier.size(96.dp),
+                stepMillis = if (scouting) 600 else 1600,
+            ) {
+                Icon(
+                    Icons.Filled.Place,
+                    contentDescription = null,
+                    modifier = Modifier.size(36.dp),
+                    tint = if (scouting) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onPrimaryContainer,
+                )
+            }
+            Spacer(Modifier.height(18.dp))
+            Text(
+                if (scouting) "Generating world…" else "Explore any seed",
+                style = MaterialTheme.typography.titleLarge,
+                textAlign = TextAlign.Center,
+            )
+            Spacer(Modifier.height(6.dp))
+            Text(
+                if (scouting) "Laying out every floor, room and item through floor 24."
+                else "Enter a seed or tap a search result to list its items through floor 24.",
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            if (!scouting) {
+                Spacer(Modifier.height(16.dp))
+                val interaction = remember { MutableInteractionSource() }
+                FilledTonalButton(
+                    onClick = onDaily,
+                    shapes = ButtonDefaults.shapes(),
+                    interactionSource = interaction,
+                    modifier = Modifier.pressScale(interaction),
+                ) {
+                    Icon(Icons.Outlined.DateRange, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Scout today’s daily run")
                 }
             }
         }

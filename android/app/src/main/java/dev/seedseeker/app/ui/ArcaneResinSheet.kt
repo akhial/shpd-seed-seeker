@@ -9,7 +9,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import dev.seedseeker.app.ui.theme.SpdSecret
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -24,7 +29,7 @@ internal fun resinFilterDescription(filter: ArcaneResinFilter): String = listOfN
     filter.maximumDepth?.let { "≤ floor $it" }, filter.source?.label,
 ).joinToString(" · ")
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ArcaneResinSheet(
     amount: Int,
@@ -51,14 +56,40 @@ fun ArcaneResinSheet(
             .navigationBarsPadding().padding(start = 20.dp, top = 12.dp, end = 20.dp, bottom = 20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                ItemSprite(arcaneResinItem, modifier = Modifier.size(40.dp))
-                Text("Arcane Resin", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f).padding(start = 12.dp))
+                // The resin glistens on a slowly turning violet sunburst.
+                ShapeBackdrop(
+                    MaterialShapes.Sunny,
+                    SpdSecret.copy(alpha = 0.22f),
+                    Modifier.size(52.dp),
+                    spinMillis = 16_000,
+                ) {
+                    ItemSprite(arcaneResinItem, modifier = Modifier.size(36.dp).popOnChange(automatic))
+                }
+                Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                    Text("Arcane Resin", style = MaterialTheme.typography.titleLarge)
+                    Text(
+                        if (automatic) "Enough to take every kept wand to +3" else "A fixed amount, at least",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 TextButton(onClick = onDismiss) { Text("Close") }
             }
-            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
                 listOf("Amount", "Auto").forEachIndexed { index, label ->
-                    SegmentedButton(selected = automatic == (index == 1), onClick = { automatic = index == 1 },
-                        shape = SegmentedButtonDefaults.itemShape(index, 2)) { Text(label) }
+                    ToggleButton(
+                        checked = automatic == (index == 1),
+                        onCheckedChange = { automatic = index == 1 },
+                        shapes = if (index == 0) ButtonGroupDefaults.connectedLeadingButtonShapes()
+                        else ButtonGroupDefaults.connectedTrailingButtonShapes(),
+                        colors = ToggleButtonDefaults.toggleButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                        ),
+                        modifier = Modifier.weight(1f).semantics {
+                            role = Role.RadioButton
+                            selected = automatic == (index == 1)
+                        },
+                    ) { Text(label) }
                 }
             }
             if (automatic) Text("Upgrade each kept wand to +3. Excluded wands and extra copies reserved for reforging need no resin.")
@@ -95,9 +126,20 @@ fun ArcaneResinSheet(
                     modifier = Modifier.semantics { contentDescription = "Include Mage’s starting wand" })
             }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (auto || amount > 0) OutlinedButton(onClick = onRemove) { Text("Remove") }
+                if (auto || amount > 0) OutlinedButton(
+                    onClick = onRemove,
+                    shapes = ButtonDefaults.shapes(),
+                    modifier = Modifier.height(52.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                ) { Text("Remove") }
+                val saveInteraction = remember { MutableInteractionSource() }
                 Button(onClick = { if (automatic || parsed != null) onSave(if (automatic) 0 else parsed!!, ArcaneResinFilter(uncursed, depth, source, includeMageWand), automatic) },
-                    enabled = automatic || parsed != null, modifier = Modifier.weight(1f)) { Text(if (auto || amount > 0) "Save" else "Add") }
+                    enabled = automatic || parsed != null,
+                    shapes = ButtonDefaults.shapes(),
+                    interactionSource = saveInteraction,
+                    modifier = Modifier.weight(1f).height(52.dp).pressScale(saveInteraction, pressed = 0.95f)) {
+                    Text(if (auto || amount > 0) "Save" else "Add", style = MaterialTheme.typography.titleMedium)
+                }
             }
         }
     }

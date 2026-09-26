@@ -1,7 +1,21 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package dev.seedseeker.app.ui
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -63,10 +77,18 @@ internal fun ItemMappingGrid(
     Column(modifier, verticalArrangement = Arrangement.spacedBy(14.dp)) {
         for ((category, entries, art) in groups) {
             Column {
-                Text("${category.replaceFirstChar { it.uppercaseChar() }}",
-                    modifier = Modifier.padding(bottom = 6.dp),
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.tertiary)
+                Row(Modifier.padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("${category.replaceFirstChar { it.uppercaseChar() }}",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.tertiary)
+                    Spacer(Modifier.width(8.dp))
+                    Surface(shape = CircleShape, color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.14f)) {
+                        Text("${entries.size}", Modifier.padding(horizontal = 8.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.tertiary)
+                    }
+                }
                 BoxWithConstraints(Modifier.fillMaxWidth()) {
                     val pixel = maxWidth / (6 * slotSize + 5 * slotGap)
                     Column(Modifier.semantics { collectionInfo = CollectionInfo(2, 6) },
@@ -77,9 +99,32 @@ internal fun ItemMappingGrid(
                                     val classIndex = row * 6 + column
                                     val label = mappingLabel(entry)
                                     val isSelected = selectedLabel == label
+                                    val interaction = remember { MutableInteractionSource() }
+                                    // The chosen tile swells onto a spinning seal; the rest wait on soft pads.
+                                    val lift by animateFloatAsState(
+                                        if (isSelected) 1f else 0f,
+                                        spring(dampingRatio = 0.45f, stiffness = 420f),
+                                        label = "mapping-lift",
+                                    )
+                                    val pad = MaterialTheme.colorScheme.surfaceContainerHighest
+                                    val seal = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.3f)
                                     MappingTile(entry, art, classIndex, slotSize,
                                         Modifier.weight(1f).aspectRatio(1f).testTag("mapping-$category-$classIndex")
-                                            .clickable(role = Role.Button) { onSelect(label) }
+                                            .pressScale(interaction, pressed = 0.88f)
+                                            .drawBehind {
+                                                drawRoundRect(pad.copy(alpha = 0.55f * (1f - lift)), cornerRadius = CornerRadius(size.minDimension * 0.22f))
+                                                if (lift > 0.01f) {
+                                                    val side = size.minDimension * (0.7f + 0.45f * lift)
+                                                    drawPolygon(SeekerShapes.Seed, Offset((size.width - side) / 2f, (size.height - side) / 2f),
+                                                        side, seal, degrees = 40f * lift)
+                                                }
+                                            }
+                                            .graphicsLayer {
+                                                val scale = 1f + 0.12f * lift
+                                                scaleX = scale
+                                                scaleY = scale
+                                            }
+                                            .clickable(interactionSource = interaction, indication = null, role = Role.Button) { onSelect(label) }
                                             .semantics { contentDescription = label; selected = isSelected })
                                 }
                             }

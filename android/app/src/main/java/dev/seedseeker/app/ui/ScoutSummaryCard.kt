@@ -29,6 +29,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
@@ -86,7 +88,20 @@ internal fun ScoutSummaryCard(
         shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
     ) {
+        val (sigil, sigilColor) = remember(world.seed) { seedSigil(world.seed) }
+        val sigilTurn = remember(world.seed) { (world.seed.hashCode() % 360).toFloat() }
         Layout(
+            // The seed's sigil, big and faint, pressed into the card like a watermark.
+            modifier = Modifier.drawBehind {
+                val side = 150.dp.toPx()
+                drawPolygon(
+                    sigil,
+                    Offset(size.width - side * 0.62f, size.height / 2f - side / 2f),
+                    side,
+                    sigilColor.copy(alpha = 0.09f),
+                    sigilTurn,
+                )
+            },
             content = {
                 Text(
                     world.seed,
@@ -190,10 +205,21 @@ private fun RequirementBadge(matches: ScoutMatches, progress: Float) {
     val hasMatches = matches.matchedSlots > 0
     val complete = hasMatches && matches.matchedSlots == matches.totalSlots
     val text = scoutMatchText(matches.matchedSlots, matches.totalSlots)
-    val container = if (hasMatches) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest
-    val content = if (hasMatches) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+    val container = when {
+        complete -> MaterialTheme.colorScheme.primary
+        hasMatches -> MaterialTheme.colorScheme.primaryContainer
+        else -> MaterialTheme.colorScheme.surfaceContainerHighest
+    }
+    val content = when {
+        complete -> MaterialTheme.colorScheme.onPrimary
+        hasMatches -> MaterialTheme.colorScheme.onPrimaryContainer
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
     Layout(
-        modifier = Modifier.testTag("scout-requirements").clip(CircleShape).background(container)
+        modifier = Modifier.testTag("scout-requirements")
+            // Meeting every requirement is worth a shout.
+            .celebrate(if (complete) 1 else 0, CelebrationColors, count = 14, reach = 44f)
+            .clip(CircleShape).background(container)
             .clearAndSetSemantics { contentDescription = text },
         content = {
             Text(

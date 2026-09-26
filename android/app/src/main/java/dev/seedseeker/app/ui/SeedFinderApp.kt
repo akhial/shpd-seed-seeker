@@ -19,9 +19,52 @@ import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.SeekableTransitionState
+import androidx.compose.animation.core.rememberTransition
+import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.consumeWindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.MaterialShapes
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.ShortNavigationBar
+import androidx.compose.material3.ShortNavigationBarItem
+import androidx.compose.material3.ShortNavigationBarItemDefaults
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -400,13 +443,32 @@ internal fun SeedFinderApp(
         }
     }
 
+    // Screens change through one seekable transition. Ordinary navigation
+    // plays it; a predictive back gesture scrubs it, so the screen being left
+    // shrinks away over the one it returns to as the finger moves, and a
+    // committed gesture finishes the very same animation from that point.
+    val navigation = remember { SeekableTransitionState(destination) }
+    val navigationScope = rememberCoroutineScope()
+    LaunchedEffect(destination) {
+        if (navigation.currentState != destination || navigation.targetState != destination) {
+            navigation.animateTo(destination)
+        }
+    }
     PredictiveBackHandler(enabled = destination != Destination.FINDER) { progress ->
-        progress.collect { }
-        destination = when (destination) {
+        val from = destination
+        val back = when (from) {
             Destination.ABOUT -> aboutReturnDestination
             Destination.SETTINGS -> settingsReturnDestination
             Destination.SEARCH_SETTINGS -> Destination.FINDER
             else -> Destination.FINDER
+        }
+        try {
+            progress.collect { navigation.seekTo(it.progress, targetState = back) }
+            destination = back
+        } catch (cancelled: CancellationException) {
+            // The gesture was abandoned: spring back to the screen still shown.
+            navigationScope.launch { navigation.animateTo(from) }
+            throw cancelled
         }
     }
 
@@ -473,12 +535,9 @@ internal fun SeedFinderApp(
     val canClearResults = results.isNotEmpty() || target != null || lastFinishedRun != null ||
         searchStatus != null || searchError != null || importNotice != null
 
-    val navBar: @Composable () -> Unit = {
-        SeedSeekerNavBar(
-            current = destination,
-            onSelect = { destination = it },
-        )
-    }
+    // The navigation bar lives outside the screens so that switching tabs
+    // morphs the content between them while the bar itself stays put.
+    val navBar: @Composable () -> Unit = {}
 
     val resultSeeds = remember(results) { results.map { it.seed } }
     // Anchor for result navigation: the in-flight request's seed while
@@ -511,8 +570,23 @@ internal fun SeedFinderApp(
         LocalItemIconAtlas provides itemIcons,
         // One clock drives every enchantment/curse pulse in the app.
         LocalGlowPulse provides rememberGlowPulse(),
+        LocalMotionEnabled provides rememberMotionEnabled(),
+        LocalEntranceMemory provides remember { EntranceMemory() },
     ) {
-        when (destination) {
+      val topLevel = destination == Destination.FINDER || destination == Destination.SCOUT
+      Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        Box(
+            Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                // The bar below already keeps clear of the system navigation.
+                .then(if (topLevel) Modifier.consumeWindowInsets(WindowInsets.navigationBars) else Modifier),
+        ) {
+        rememberTransition(navigation, label = "destination").AnimatedContent(
+            transitionSpec = { destinationTransition(initialState, targetState) },
+        ) { shown ->
+          Box(Modifier.fillMaxSize()) {
+        when (shown) {
             Destination.FINDER -> FinderScreen(
                 requirements = requirements,
                 autoApplyTrinket = autoApplyTrinket,
@@ -771,6 +845,22 @@ internal fun SeedFinderApp(
 
             Destination.ABOUT -> AboutScreen(onBack = { destination = aboutReturnDestination })
         }
+          }
+        }
+        }
+        AnimatedVisibility(
+            visible = topLevel,
+            enter = expandVertically(expandFrom = Alignment.Top) + slideInVertically { it },
+            exit = shrinkVertically(shrinkTowards = Alignment.Top) + slideOutVertically { it },
+        ) {
+            SeedSeekerNavBar(
+                current = destination,
+                onSelect = { destination = it },
+                searching = controller.isSearching,
+                found = foundCount,
+            )
+        }
+      }
 
         if (showResinSheet) {
             ArcaneResinSheet(arcaneResin, arcaneResinFilter, auto = arcaneResinAuto,
@@ -812,6 +902,7 @@ internal fun SeedFinderApp(
         transferError?.let { message ->
             AlertDialog(
                 onDismissRequest = { transferError = null },
+                icon = { DialogSeal(MaterialShapes.SoftBoom, MaterialTheme.colorScheme.errorContainer, Icons.Filled.Warning, MaterialTheme.colorScheme.onErrorContainer) },
                 title = { Text("Results transfer") },
                 text = { Text(message) },
                 confirmButton = {
@@ -823,6 +914,7 @@ internal fun SeedFinderApp(
         linkError?.let { message ->
             AlertDialog(
                 onDismissRequest = { linkError = null },
+                icon = { DialogSeal(MaterialShapes.SoftBoom, MaterialTheme.colorScheme.errorContainer, Icons.Filled.Share, MaterialTheme.colorScheme.onErrorContainer) },
                 title = { Text("Shared search") },
                 text = { Text(message) },
                 confirmButton = {
@@ -835,6 +927,13 @@ internal fun SeedFinderApp(
             val uriHandler = LocalUriHandler.current
             AlertDialog(
                 onDismissRequest = { availableUpdate = null },
+                // News worth a little fanfare: a turning sunburst that throws sparkles as it lands.
+                icon = {
+                    DialogSeal(
+                        MaterialShapes.Sunny, MaterialTheme.colorScheme.tertiaryContainer, Icons.Filled.Star,
+                        MaterialTheme.colorScheme.onTertiaryContainer, spin = true, celebrate = true,
+                    )
+                },
                 title = { Text("Update available") },
                 text = {
                     Text(
@@ -864,43 +963,114 @@ internal fun SeedFinderApp(
     }
 }
 
+/**
+ * Top-level screens fade through each other with a gentle zoom; secondary
+ * screens slide in over the one they were opened from and slide back out.
+ */
+private fun AnimatedContentTransitionScope<Destination>.destinationTransition(
+    from: Destination,
+    to: Destination,
+): ContentTransform {
+    fun depth(destination: Destination) = when (destination) {
+        Destination.FINDER, Destination.SCOUT -> 0
+        else -> 1
+    }
+    val spatial = spring<IntOffset>(dampingRatio = 0.86f, stiffness = 420f)
+    return when {
+        depth(to) > depth(from) ->
+            (slideInHorizontally(spatial) { it / 3 } + fadeIn(tween(220)))
+                .togetherWith(slideOutHorizontally(spatial) { -it / 8 } + fadeOut(tween(160)))
+        depth(to) < depth(from) ->
+            (slideInHorizontally(spatial) { -it / 8 } + fadeIn(tween(220)))
+                .togetherWith(scaleOut(targetScale = 0.9f) + fadeOut(tween(160)))
+        else ->
+            (fadeIn(tween(240, delayMillis = 60)) + scaleIn(spring(0.7f, 380f), initialScale = 0.94f))
+                .togetherWith(fadeOut(tween(110)))
+    }.using(SizeTransform(clip = false))
+}
+
+/**
+ * The expressive short navigation bar. The selected icon swaps to its
+ * filled form with a springy pop, and while a search runs the Finder tab
+ * wears a live badge counting what it has found so far.
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun SeedSeekerNavBar(
     current: Destination,
     onSelect: (Destination) -> Unit,
+    searching: Boolean,
+    found: Int,
 ) {
-    NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
-        NavigationBarItem(
+    val colors = ShortNavigationBarItemDefaults.colors(
+        selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
+        selectedTextColor = MaterialTheme.colorScheme.onSurface,
+        selectedIndicatorColor = MaterialTheme.colorScheme.primaryContainer,
+    )
+    ShortNavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
+        ShortNavigationBarItem(
             selected = current == Destination.FINDER,
             onClick = { onSelect(Destination.FINDER) },
             icon = {
-                Icon(
-                    if (current == Destination.FINDER) Icons.Filled.Search else Icons.Outlined.Search,
-                    contentDescription = null,
-                )
+                BadgedBox(
+                    badge = {
+                        if (searching) {
+                            Badge(
+                                containerColor = MaterialTheme.colorScheme.tertiary,
+                                contentColor = MaterialTheme.colorScheme.onTertiary,
+                                modifier = Modifier.popOnChange(found),
+                            ) { Text(if (found > 999) "999+" else "$found") }
+                        }
+                    },
+                ) {
+                    Icon(
+                        if (current == Destination.FINDER) Icons.Filled.Search else Icons.Outlined.Search,
+                        contentDescription = null,
+                        modifier = Modifier.popOnChange(current == Destination.FINDER, peak = 1.3f, fireIf = current == Destination.FINDER),
+                    )
+                }
             },
             label = { Text("Finder") },
-            colors = NavigationBarItemDefaults.colors(
-                selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                selectedTextColor = MaterialTheme.colorScheme.onSurface,
-                indicatorColor = MaterialTheme.colorScheme.primaryContainer,
-            ),
+            colors = colors,
         )
-        NavigationBarItem(
+        ShortNavigationBarItem(
             selected = current == Destination.SCOUT,
             onClick = { onSelect(Destination.SCOUT) },
             icon = {
                 Icon(
                     if (current == Destination.SCOUT) Icons.Filled.Place else Icons.Outlined.Place,
                     contentDescription = null,
+                    modifier = Modifier.popOnChange(current == Destination.SCOUT, peak = 1.3f, fireIf = current == Destination.SCOUT),
                 )
             },
             label = { Text("Scout") },
-            colors = NavigationBarItemDefaults.colors(
-                selectedIconColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                selectedTextColor = MaterialTheme.colorScheme.onSurface,
-                indicatorColor = MaterialTheme.colorScheme.primaryContainer,
-            ),
+            colors = colors,
         )
+    }
+}
+
+/** A dialog's headline icon, set on an expressive shape; optionally turning and bursting as it appears. */
+@Composable
+private fun DialogSeal(
+    polygon: androidx.graphics.shapes.RoundedPolygon,
+    container: androidx.compose.ui.graphics.Color,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    tint: androidx.compose.ui.graphics.Color,
+    spin: Boolean = false,
+    celebrate: Boolean = false,
+) {
+    var landed by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { landed = true }
+    ShapeBackdrop(
+        polygon,
+        container,
+        Modifier
+            .size(56.dp)
+            .springEntrance(rise = 0f)
+            // A short reach keeps the burst inside the dialog's padding.
+            .then(if (celebrate) Modifier.celebrate(if (landed) 1 else 0, CelebrationColors, count = 14, reach = 26f) else Modifier),
+        spinMillis = if (spin) 14_000 else null,
+    ) {
+        Icon(icon, contentDescription = null, tint = tint)
     }
 }

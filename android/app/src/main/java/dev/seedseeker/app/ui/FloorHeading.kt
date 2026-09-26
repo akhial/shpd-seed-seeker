@@ -13,7 +13,10 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.draw.rotate
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Close
@@ -66,7 +69,9 @@ internal fun FloorHeading(
                 itemVerticalAlignment = Alignment.CenterVertically,
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Box(Modifier.size(width = 3.dp, height = 14.dp).background(region, RoundedCornerShape(2.dp)))
+                    // Each region wears its own silhouette: soft sewers, boxy prisons,
+                    // faceted caves, an ornate city and the spiked halls.
+                    ShapeBackdrop(SeekerShapes.forDepth(depth), region, Modifier.size(16.dp))
                     Text("FLOOR $depth", style = MaterialTheme.typography.labelLarge,
                         letterSpacing = 1.1.sp, color = MaterialTheme.colorScheme.onSurface)
                     if (feeling != null && feeling != FloorFeeling.NONE) FloorFeelingSprite(feeling)
@@ -76,14 +81,14 @@ internal fun FloorHeading(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     questLabel?.let {
-                        Surface(shape = MaterialTheme.shapes.extraSmall, color = region.copy(alpha = 0.12f)) {
-                            Text(it, Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                        Surface(shape = CircleShape, color = region.copy(alpha = 0.14f)) {
+                            Text(it, Modifier.padding(horizontal = 8.dp, vertical = 1.dp),
                                 style = MaterialTheme.typography.labelSmall, color = region)
                         }
                     }
                     if (farming) {
-                        Surface(shape = MaterialTheme.shapes.extraSmall, color = MaterialTheme.colorScheme.secondaryContainer) {
-                            Text("Garden", Modifier.padding(horizontal = 6.dp, vertical = 1.dp),
+                        Surface(shape = CircleShape, color = MaterialTheme.colorScheme.secondaryContainer) {
+                            Text("Garden", Modifier.padding(horizontal = 8.dp, vertical = 1.dp),
                                 style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSecondaryContainer)
                         }
                     }
@@ -98,8 +103,21 @@ internal fun FloorHeading(
                 }
             } else if (onMapToggle != null) {
                 Spacer(Modifier.width(8.dp))
-                Icon(if (mapExpanded) Icons.Filled.KeyboardArrowDown else Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                    null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                // The map chevron turns down as its map unfolds.
+                val turn by animateFloatAsState(
+                    if (mapExpanded) 90f else 0f,
+                    MaterialTheme.motionScheme.fastSpatialSpec(),
+                    label = "map-chevron",
+                )
+                Surface(
+                    shape = CircleShape,
+                    color = if (mapExpanded) region.copy(alpha = 0.22f) else MaterialTheme.colorScheme.surfaceContainerHigh,
+                    modifier = Modifier.size(28.dp),
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null,
+                        Modifier.padding(4.dp).rotate(turn),
+                        tint = if (mapExpanded) region else MaterialTheme.colorScheme.onSurfaceVariant)
+                }
             }
         }
     }
