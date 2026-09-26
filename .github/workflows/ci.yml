@@ -210,7 +210,7 @@ jobs:
   macos:
     name: macOS
     # Matches the release macos-app job so tests exercise the shipping SDK.
-    runs-on: macos-26
+    runs-on: macos-27
     timeout-minutes: 30
 
     steps:
