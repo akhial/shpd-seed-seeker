@@ -92,6 +92,7 @@ import dev.seedseeker.app.model.ItemRequirement
 import dev.seedseeker.app.model.TierMatch
 import dev.seedseeker.app.model.UpgradeMatch
 import dev.seedseeker.app.model.boardItems
+import dev.seedseeker.app.model.canJoinAlternatives
 import dev.seedseeker.app.model.detach
 import dev.seedseeker.app.model.joinAlternatives
 import dev.seedseeker.app.model.removeMember
@@ -176,16 +177,18 @@ fun RequirementBoard(
     /** What the pointer is over, ignoring the dragged chip's own entry. */
     fun targetAt(position: Offset, source: Int): DropTarget? {
         if (rectOf(deleteZone)?.contains(position) == true) return DropTarget.Remove
+        fun join(index: Int): DropTarget =
+            if (requirements.canJoinAlternatives(source, index)) DropTarget.Join(index) else DropTarget.Incompatible
         val own = items.firstOrNull { source in it.members }
         val ownMembers = own?.members ?: listOf(source)
         placements.entries
             .firstOrNull { (index, coordinates) ->
                 index !in ownMembers && rectOf(coordinates)?.contains(position) == true
             }
-            ?.let { return DropTarget.Join(it.key) }
+            ?.let { return join(it.key) }
         return items
             .firstOrNull { it !== own && rectOf(capsules[itemKey(it)])?.contains(position) == true }
-            ?.let { DropTarget.Join(it.anchor) }
+            ?.let { join(it.anchor) }
     }
 
     // Resin is its own requirement and cannot join an either/or item group.
@@ -196,7 +199,9 @@ fun RequirementBoard(
     val metrics = if (compact) ChipMetrics.Compact else ChipMetrics.Regular
     // A light tick each time the held chip finds something new to land on.
     LaunchedEffect(target) {
-        if (target != null) haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+        if (target is DropTarget.Join || target == DropTarget.Remove) {
+            haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+        }
     }
 
     CompositionLocalProvider(LocalChipMetrics provides metrics) {
@@ -236,6 +241,9 @@ fun RequirementBoard(
                                             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                             onChange(requirements.joinAlternatives(source, drop.index))
                                         }
+                                        // A rejected drop is not a drag out of
+                                        // a capsule: keep the original group.
+                                        DropTarget.Incompatible -> Unit
                                         // A lone chip goes with its copies; a member
                                         // leaves the cluster and its stack behind.
                                         DropTarget.Remove -> {
@@ -289,6 +297,13 @@ fun RequirementBoard(
                         over = target == DropTarget.Remove,
                         modifier = Modifier.onGloballyPositioned { deleteZone = it },
                     )
+                    if (target == DropTarget.Incompatible) {
+                        Text(
+                            "Copies can only be grouped with the same item type.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
             // The chip in hand: a lifted, tilted copy riding under the finger
@@ -449,6 +464,9 @@ private val CAPSULE_INSET = 5.dp
 private sealed interface DropTarget {
     /** Become an either/or alternative of the chip at [index]. */
     data class Join(val index: Int) : DropTarget
+
+    /** Joining would separate or discard a stack's copies. */
+    data object Incompatible : DropTarget
 
     /** Leave the board. */
     data object Remove : DropTarget
