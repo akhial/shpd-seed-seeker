@@ -273,7 +273,7 @@ struct RequirementsView: View {
             if query.arcaneResinFilter.includeMageWand { tag("Mage +2") }
             if let depth = query.arcaneResinFilter.maximumDepth { tag("F≤\(depth)") }
             if query.arcaneResinFilter.uncursed {
-                Image(systemName: "shield.lefthalf.filled").font(.caption2).foregroundStyle(AppTheme.softGreen)
+                uncursedTag
             }
         }
         .padding(.horizontal, compactChips ? 12 : 15)
@@ -337,7 +337,7 @@ struct RequirementsView: View {
             HStack(spacing: 4) {
                 ForEach(tags(for: requirement), id: \.text) { value in tag(value.text, upgrade: value.upgrade) }
                 if requirement.requireUncursed {
-                    Image(systemName: "shield.lefthalf.filled").font(.caption2).foregroundStyle(AppTheme.softGreen)
+                    uncursedTag
                 }
                 if item.cluster == nil && item.stackCount > 1 {
                     tag(item.total == nil ? "×\(item.stackCount)" : "≤\(item.stackCount)")
@@ -498,6 +498,14 @@ struct RequirementsView: View {
         return Text(text).font(.caption2.monospaced().weight(upgrade ? .bold : .semibold))
             .foregroundStyle(color).padding(.horizontal, 5).padding(.vertical, 2)
             .background(color.opacity(upgrade ? 0.12 : 0.14), in: Capsule())
+    }
+
+    /// Uncursed is a green checkmark in the same capsule as the text tags.
+    private var uncursedTag: some View {
+        Text(Image(systemName: "checkmark")).font(.caption2.weight(.bold))
+            .foregroundStyle(AppTheme.softGreen).padding(.horizontal, 5).padding(.vertical, 2)
+            .background(AppTheme.softGreen.opacity(0.14), in: Capsule())
+            .accessibilityLabel("Uncursed")
     }
 
     private func tags(for requirement: ItemRequirement) -> [(text: String, upgrade: Bool)] {
