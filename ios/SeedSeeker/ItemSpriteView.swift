@@ -66,6 +66,9 @@ struct ItemSpriteView: View {
     var ringGems: RingGems?
     /// Enchantment or curse glow to pulse with, if any.
     var glow: ItemGlow?
+    /// Alternative effects a requirement accepts. Each gets a complete pulse
+    /// in turn; an empty array keeps the single-glow API used by Scout.
+    var glows: [ItemGlow] = []
     /// Box edge in points. Multiples of 8 keep the pixel scale integral.
     var pointSize: Int = 32
     /// Accessibility label; the sprite is decorative when nil.
@@ -76,7 +79,10 @@ struct ItemSpriteView: View {
     var body: some View {
         ZStack {
             artwork
-            if let glow {
+            if glows.count > 1 {
+                SequencedSpriteGlowLayer(glows: glows, reduceMotion: reduceMotion) { artwork }
+                    .id(glows)
+            } else if let glow = glows.first ?? glow {
                 SpriteGlowLayer(glow: glow, reduceMotion: reduceMotion) { artwork }
                     // Restart the pulse from zero whenever the effect changes,
                     // since list rows are reused as the manifest re-renders.
@@ -120,6 +126,33 @@ struct ItemSpriteView: View {
         return SpriteAtlas.bundled?.composedSprite(spriteIndex: item.spriteIndex(in: ringGems),
                                                    typeIcon: item.typeIconIndex,
                                                    pointSize: pointSize, layer: layer)
+    }
+}
+
+/// Match the web's alternating-effect sprite: equal turns, with the full
+/// round lasting the sum of all the effects' cycles. The colour changes at
+/// zero opacity, so there is no visible jump between differently tinted art.
+private struct SequencedSpriteGlowLayer<Mask: View>: View {
+    let glows: [ItemGlow]
+    let reduceMotion: Bool
+    @ViewBuilder let mask: Mask
+    @State private var startedAt = Date.now
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reduceMotion)) { context in
+            let turnDuration = glows.reduce(0) { $0 + $1.cycleDuration } / Double(glows.count)
+            let elapsed = reduceMotion ? 0 : max(0, context.date.timeIntervalSince(startedAt))
+            let turn = elapsed / turnDuration
+            let index = Int(turn) % glows.count
+            let phase = turn - floor(turn)
+            let opacity = reduceMotion ? ItemGlow.reducedMotionOpacity
+                : ItemGlow.peakOpacity * (1 - abs(2 * phase - 1))
+            let (red, green, blue) = glows[index].components
+            Color(.sRGB, red: red, green: green, blue: blue)
+                .mask { mask }
+                .opacity(opacity)
+        }
+        .allowsHitTesting(false)
     }
 }
 

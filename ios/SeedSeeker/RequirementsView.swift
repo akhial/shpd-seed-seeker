@@ -33,6 +33,7 @@ struct RequirementsView: View {
         GlassEffectContainer(spacing: 10) {
           VStack(alignment: .leading, spacing: 18) {
             board(blanket: false)
+            VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 10) {
                 Button {
                     withAnimation(boardSpring) { blanketsExpanded.toggle() }
@@ -67,6 +68,8 @@ struct RequirementsView: View {
                 .accessibilityLabel("About blanket requirements")
             }
             if blanketsExpanded { board(blanket: true) }
+            }
+            .padding(.bottom, blanketsExpanded ? 16 : 0)
           }
         }
         .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: {
@@ -93,6 +96,7 @@ struct RequirementsView: View {
                         resinPresented = true
                     }
                 },
+                onEditGroupQuantity: groupQuantityAction(for: presentation),
                 onSave: { requirement, count, total, copyDepth in
                     let index = presentation.key.flatMap { key in requirements.firstIndex { $0.key == key } }
                     withAnimation(boardSpring) {
@@ -161,7 +165,7 @@ struct RequirementsView: View {
             .opacity(interaction.isDragging ? 0.4 : 1)
             .disabled(interaction.isDragging)
         }
-        .padding(.vertical, 8)
+        .padding(.vertical, blanket ? 0 : 8)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -177,13 +181,13 @@ struct RequirementsView: View {
                 ForEach(item.members.map { requirements[$0] }, id: \.key) { requirement in
                     HStack(spacing: 8) {
                         chip(requirement, item: item)
-                        if requirement.key == requirements[item.anchor].key && requirements.canStack(item) {
+                        if requirement.key == requirements[item.anchor].key && item.stackCount > 1 && requirements.canStack(item) {
                             Button {
                                 stackKey = RequirementsStackPresentation(id: requirements[item.anchor].key)
                             } label: {
                                 Text("×\(item.stackCount)")
                                     .font(.caption.monospaced().weight(.semibold))
-                                    .foregroundStyle(.primary)
+                                    .foregroundStyle(AppTheme.seed)
                                     .padding(.horizontal, 12).frame(minHeight: 44)
                                     .glassEffect(.regular.interactive(), in: .capsule)
                             }
@@ -195,7 +199,7 @@ struct RequirementsView: View {
                 }
             }
             .padding(8)
-            .glassEffect(.regular.tint(.purple.opacity(0.035)), in: .rect(cornerRadius: 32))
+            .glassEffect(.regular.tint(AppTheme.seed.opacity(0.06)), in: .rect(cornerRadius: 32))
             .glassEffectID("group-\(cluster)", in: glass)
             .id("group-\(cluster)")
         } else {
@@ -233,7 +237,7 @@ struct RequirementsView: View {
             if query.arcaneResinFilter.includeMageWand { tag("Mage +2") }
             if let depth = query.arcaneResinFilter.maximumDepth { tag("F≤\(depth)") }
             if query.arcaneResinFilter.uncursed {
-                Image(systemName: "shield.lefthalf.filled").font(.caption2).foregroundStyle(.mint)
+                Image(systemName: "shield.lefthalf.filled").font(.caption2).foregroundStyle(AppTheme.softGreen)
             }
         }
         .padding(.horizontal, compactChips ? 12 : 15)
@@ -279,8 +283,8 @@ struct RequirementsView: View {
     }
 
     private func chipTint(_ requirement: ItemRequirement, hovered: Bool) -> Color {
-        if hovered { return .purple.opacity(0.28) }
-        return requirement.alternativeGroup != nil ? .purple.opacity(0.08) : .white.opacity(0.015)
+        if hovered { return AppTheme.seed.opacity(0.24) }
+        return requirement.alternativeGroup != nil ? AppTheme.seed.opacity(0.025) : .white.opacity(0.015)
     }
 
     private func chipContent(_ requirement: ItemRequirement, item: BoardItem) -> some View {
@@ -293,19 +297,15 @@ struct RequirementsView: View {
                 .layoutPriority(-1)
                 .foregroundStyle(.primary)
             HStack(spacing: 4) {
-                ForEach(tags(for: requirement), id: \.self) { value in tag(value) }
+                ForEach(tags(for: requirement), id: \.text) { value in tag(value.text, upgrade: value.upgrade) }
                 if requirement.requireUncursed {
-                    Image(systemName: "shield.lefthalf.filled").font(.caption2).foregroundStyle(.mint)
+                    Image(systemName: "shield.lefthalf.filled").font(.caption2).foregroundStyle(AppTheme.softGreen)
                 }
                 if item.cluster == nil && item.stackCount > 1 {
                     tag(item.total == nil ? "×\(item.stackCount)" : "≤\(item.stackCount)")
                 }
                 if let total = item.total, item.cluster == nil { tag("Σ≥\(total)") }
-                if requirement.effect == .anyEnchantment {
-                    Circle().fill(.purple).frame(width: 7, height: 7)
-                } else if requirement.effect.names.count > 1 {
-                    tag("\(requirement.effect.names.count)")
-                }
+                RequirementEffectBadge(effect: requirement.effect, isWildcard: requirement.item == nil)
             }
             .fixedSize(horizontal: true, vertical: false)
         }
@@ -454,29 +454,47 @@ struct RequirementsView: View {
         liftGeneration = UUID()
     }
 
-    private func tag(_ text: String) -> some View {
-        Text(text).font(.caption2.monospaced().weight(.semibold))
-            .foregroundStyle(.tint).padding(.horizontal, 5).padding(.vertical, 2)
-            .background(.tint.opacity(0.12), in: Capsule())
+    private func tag(_ text: String, upgrade: Bool = false) -> some View {
+        let color = upgrade ? AppTheme.upgrade : AppTheme.seed
+        return Text(text).font(.caption2.monospaced().weight(upgrade ? .bold : .semibold))
+            .foregroundStyle(color).padding(.horizontal, 5).padding(.vertical, 2)
+            .background(color.opacity(upgrade ? 0.12 : 0.14), in: Capsule())
     }
 
-    private func tags(for requirement: ItemRequirement) -> [String] {
-        var values: [String] = []
+    private func tags(for requirement: ItemRequirement) -> [(text: String, upgrade: Bool)] {
+        var values: [(text: String, upgrade: Bool)] = []
         switch requirement.tierMatch {
         case .any: break
-        case .exactly: values.append("T\(requirement.tier)")
-        case .atLeast: values.append("T\(requirement.tier)+")
-        case .atMost: values.append("T≤\(requirement.tier)")
+        case .exactly: values.append(("T\(requirement.tier)", false))
+        case .atLeast: values.append(("T\(requirement.tier)+", false))
+        case .atMost: values.append(("T≤\(requirement.tier)", false))
         }
         switch requirement.upgradeMatch {
         case .any: break
-        case .exactly: values.append("+\(requirement.upgrade)")
-        case .atLeast: values.append("+\(requirement.upgrade)↑")
+        case .exactly: values.append(("+\(requirement.upgrade)", true))
+        case .atLeast: values.append(("+\(requirement.upgrade)↑", true))
         }
-        if requirement.excludeResin { values.append("No resin") }
-        if requirement.trinketTransmutations > 0 { values.append("Transmute ≤\(requirement.trinketTransmutations)") }
-        if let floor = requirement.maximumDepth { values.append("F≤\(floor)") }
+        if requirement.excludeResin { values.append(("No resin", false)) }
+        if requirement.trinketTransmutations > 0 { values.append(("Transmute ≤\(requirement.trinketTransmutations)", false)) }
+        if let floor = requirement.maximumDepth { values.append(("F≤\(floor)", false)) }
         return values
+    }
+
+    private func groupQuantityAction(for presentation: RequirementsEditorPresentation) -> (() -> Void)? {
+        guard let key = presentation.key,
+              let index = requirements.firstIndex(where: { $0.key == key }),
+              let item = requirements.boardItem(holding: index),
+              item.cluster != nil, requirements.canStack(item) else { return nil }
+        return {
+            editor = nil
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(350))
+                guard let currentIndex = requirements.firstIndex(where: { $0.key == key }),
+                      let currentItem = requirements.boardItem(holding: currentIndex),
+                      requirements.canStack(currentItem) else { return }
+                stackKey = RequirementsStackPresentation(id: key)
+            }
+        }
     }
 
     private func join(key: Int64, target: Int64) {
@@ -540,7 +558,7 @@ struct RequirementsSprite: View {
     var body: some View {
         Group {
             if let item = requirement.item {
-                ItemSpriteView(item: item, glow: requirement.effect.glowName.flatMap { enchantmentGlows[$0] ?? curseGlow }, pointSize: size)
+                ItemSpriteView(item: item, glows: requirementGlows(requirement.effect), pointSize: size)
             } else {
                 WildcardSpriteView(kind: requirement.kind, pointSize: size)
             }

@@ -1,42 +1,77 @@
 import SwiftUI
 import SeedSeekerKit
+import UIKit
 
-/// A roomy selection control that keeps the selected option in the same glass
-/// surface while its highlight moves between choices.
+/// Retains the system's draggable glass selection lens, with room for the
+/// longer enchantment labels and a comfortable touch target.
 struct RequirementSegmentedControl<Value: Hashable>: View {
     let title: String
     let options: [(Value, String)]
     @Binding var selection: Value
-    @Namespace private var glass
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @ScaledMetric(relativeTo: .subheadline) private var height = 52
 
     var body: some View {
-        GlassEffectContainer(spacing: 4) {
-            HStack(spacing: 4) {
-                ForEach(options, id: \.0) { value, label in
-                    Button {
-                        withAnimation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.78)) {
-                            selection = value
-                        }
-                    } label: {
-                        Text(label)
-                            .font(.subheadline.weight(selection == value ? .semibold : .regular))
-                            .foregroundStyle(selection == value ? Color.primary : Color.secondary)
-                            .frame(maxWidth: .infinity, minHeight: 44)
-                            .contentShape(.capsule)
-                            .glassEffect(selection == value ? .regular.tint(Color.accentColor.opacity(0.12)).interactive() : .identity,
-                                         in: .capsule)
-                            .glassEffectID(selection == value ? "selection" : nil, in: glass)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityAddTraits(selection == value ? .isSelected : [])
-                }
+        RequirementNativeSegments(title: title, options: options, selection: $selection)
+            .frame(height: max(52, height))
+    }
+}
+
+private struct RequirementNativeSegments<Value: Hashable>: UIViewRepresentable {
+    let title: String
+    let options: [(Value, String)]
+    @Binding var selection: Value
+
+    func makeCoordinator() -> Coordinator { Coordinator(selection: $selection, options: options) }
+
+    func makeUIView(context: Context) -> UISegmentedControl {
+        let control = UISegmentedControl(items: options.map(\.1))
+        control.apportionsSegmentWidthsByContent = true
+        control.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        control.addTarget(context.coordinator, action: #selector(Coordinator.select(_:)), for: .valueChanged)
+        return control
+    }
+
+    func updateUIView(_ control: UISegmentedControl, context: Context) {
+        context.coordinator.selection = $selection
+        context.coordinator.options = options
+        if control.numberOfSegments != options.count {
+            control.removeAllSegments()
+            for (index, option) in options.enumerated() {
+                control.insertSegment(withTitle: option.1, at: index, animated: false)
             }
-            .padding(4)
-            .background(.quaternary.opacity(0.4), in: .capsule)
+        } else {
+            for (index, option) in options.enumerated() where control.titleForSegment(at: index) != option.1 {
+                control.setTitle(option.1, forSegmentAt: index)
+            }
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(title)
+        let index = options.firstIndex { $0.0 == selection } ?? UISegmentedControl.noSegment
+        if control.selectedSegmentIndex != index { control.selectedSegmentIndex = index }
+        control.accessibilityLabel = title
+        control.tintColor = UIColor(AppTheme.accent)
+        control.selectedSegmentTintColor = UIColor(AppTheme.accent).withAlphaComponent(0.22)
+        let font = UIFont.preferredFont(forTextStyle: .subheadline, compatibleWith: control.traitCollection)
+        control.setTitleTextAttributes([.font: font, .foregroundColor: UIColor.secondaryLabel], for: .normal)
+        control.setTitleTextAttributes([.font: UIFont.systemFont(ofSize: font.pointSize, weight: .semibold),
+                                        .foregroundColor: UIColor(AppTheme.accent)], for: .selected)
+    }
+
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: UISegmentedControl, context: Context) -> CGSize? {
+        CGSize(width: proposal.width ?? uiView.intrinsicContentSize.width, height: proposal.height ?? 52)
+    }
+
+    @MainActor final class Coordinator: NSObject {
+        var selection: Binding<Value>
+        var options: [(Value, String)]
+
+        init(selection: Binding<Value>, options: [(Value, String)]) {
+            self.selection = selection
+            self.options = options
+        }
+
+        @objc func select(_ control: UISegmentedControl) {
+            guard options.indices.contains(control.selectedSegmentIndex) else { return }
+            selection.wrappedValue = options[control.selectedSegmentIndex].0
+        }
     }
 }
 

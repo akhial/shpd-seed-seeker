@@ -7,43 +7,44 @@ struct ScoutItemCard: View {
     let ringGems: RingGems
     let matched: Bool
     let dimmed: Bool
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
             ItemSpriteView(item: item.item, ringGems: ringGems, glow: itemGlow(item), pointSize: 36)
             VStack(alignment: .leading, spacing: 5) {
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                RequirementsFlowLayout(spacing: 6) {
                     Text(item.item.name).font(.subheadline.weight(.semibold))
-                        .lineLimit(1).minimumScaleFactor(0.55)
+                        .lineLimit(dynamicTypeSize.isAccessibilitySize ? nil : 1).minimumScaleFactor(0.8)
                     if item.displayedUpgrade != 0 {
-                        ScoutBadge(text: "+\(item.displayedUpgrade)", color: AppTheme.seed)
+                        ScoutBadge(text: "+\(item.displayedUpgrade)", color: AppTheme.upgrade, weight: .bold)
                     }
+                    if item.cursed { ScoutBadge(text: "cursed", color: ScoutItemColors.curse, weight: .bold) }
+                    if item.secret { ScoutBadge(text: "secret", color: ScoutItemColors.secret, weight: .bold) }
                 }
-                HStack(spacing: 6) {
+                RequirementsFlowLayout(spacing: 6) {
                     if let effect = item.effect {
-                        Text(effect).foregroundStyle(ItemCatalog.cursesFor(item.item.kind).contains(effect) ? Color.red : AppTheme.teal)
+                        Text(effect).foregroundStyle(ItemCatalog.cursesFor(item.item.kind).contains(effect) ? ScoutItemColors.curseEffect : AppTheme.teal)
                     }
                     Text(item.source.label).foregroundStyle(.secondary)
                 }.font(.caption)
-                if item.cursed || item.secret || matched || hasChoice {
-                    HStack(spacing: 6) {
-                        if item.cursed { ScoutBadge(text: "cursed", color: .red) }
-                        if item.secret { ScoutBadge(text: "secret", color: .purple) }
-                        Spacer(minLength: 0)
-                        if matched {
-                            Label("match", systemImage: "checkmark").font(.caption2)
-                                .foregroundStyle(AppTheme.accent).padding(.horizontal, 6).padding(.vertical, 3)
-                                .background(AppTheme.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
-                        }
-                        ScoutChoiceBadge(accessibility: item.accessibility)
-                    }
-                }
                 if case let .scenarios(group, _) = item.accessibility {
                     Text("Route group \(ScoutChoiceStatus.letter(group)) · access changes with room choices")
                         .font(.caption2).foregroundStyle(.secondary)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            if matched || hasChoice {
+                VStack(alignment: .trailing, spacing: 4) {
+                    if matched {
+                        Label("match", systemImage: "checkmark").font(.caption2.weight(.semibold))
+                            .foregroundStyle(AppTheme.softGreen).padding(.horizontal, 6).padding(.vertical, 3)
+                            .background(AppTheme.softGreen.opacity(0.12), in: Capsule())
+                    }
+                    ScoutChoiceBadge(accessibility: item.accessibility)
+                }
+                .fixedSize()
+            }
         }
         .padding(14)
         .background(matched ? AppTheme.raised : AppTheme.surface, in: RoundedRectangle(cornerRadius: 18))
@@ -54,6 +55,12 @@ struct ScoutItemCard: View {
     private var hasChoice: Bool {
         if case .choice = item.accessibility { true } else { false }
     }
+}
+
+private enum ScoutItemColors {
+    static let curse = Color(red: 242 / 255, green: 149 / 255, blue: 138 / 255)
+    static let curseEffect = Color(red: 217 / 255, green: 108 / 255, blue: 95 / 255)
+    static let secret = Color(red: 201 / 255, green: 166 / 255, blue: 245 / 255)
 }
 
 struct ScoutChoiceBadge: View {
@@ -130,7 +137,7 @@ struct ScoutTrinketCard: View {
                     let matched = choices.contains { $0.element.item.id == trinket.id && matches?.matched.contains($0.offset) == true }
                     Button { onSelect(applied ? "none" : trinket.id) } label: {
                         VStack(spacing: 3) {
-                            if applied { Text("Applied +3").font(.system(size: 10)).foregroundStyle(AppTheme.accent) }
+                            if applied { Text("Applied +3").font(.system(size: 10, weight: .bold)).foregroundStyle(AppTheme.upgrade) }
                             ItemSpriteView(item: trinket, pointSize: applied ? 32 : 40)
                             Text(trinket.name).font(.system(size: 11)).lineLimit(1).minimumScaleFactor(0.25)
                                 .foregroundStyle(.primary)

@@ -9,6 +9,8 @@ enum AppTheme {
     static let surface = Color(red: 35/255, green: 38/255, blue: 47/255)
     static let raised = Color(red: 38/255, green: 42/255, blue: 51/255)
     static let accent = Color(red: 86/255, green: 189/255, blue: 82/255)
+    static let upgrade = Color(red: 131/255, green: 252/255, blue: 100/255)
+    static let softGreen = Color(red: 110/255, green: 201/255, blue: 143/255)
     static let seed = Color(red: 1, green: 1, blue: 85/255)
     static let teal = Color(red: 88/255, green: 194/255, blue: 180/255)
 }

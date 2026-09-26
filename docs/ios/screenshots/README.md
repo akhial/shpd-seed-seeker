@@ -5,7 +5,7 @@ uses the real Rust engine; the status bar is normalized for these screenshots.
 
 | Requirement board | Requirement editor |
 | --- | --- |
-| <img src="01-requirement-board.png" alt="Single-line requirement chips, OR groups, and floating glass actions" width="300"> | <img src="02-requirement-editor.png" alt="Wand requirement editor with upgrade, curse, source, and floor controls" width="300"> |
+| <img src="01-requirement-board.png" alt="Single-line requirement chips, yellow glass groups, and colored enchantment wheels" width="300"> | <img src="02-requirement-editor.png" alt="Requirement editor with native glass selectors and centered enchantment sections" width="300"> |
 
 | Search settings | Arcane Resin |
 | --- | --- |
@@ -13,7 +13,7 @@ uses the real Rust engine; the status bar is normalized for these screenshots.
 
 | Search results | Scout and trinkets |
 | --- | --- |
-| <img src="04-search-results.png" alt="Live seed search results with progress and trinket indicators" width="300"> | <img src="05-scout-and-trinkets.png" alt="Seed scouting with matched requirements and the trinket transmutation deck" width="300"> |
+| <img src="04-search-results.png" alt="Live seed search results with progress and trinket indicators" width="300"> | <img src="05-scout-and-trinkets.png" alt="Two-line Scout items, green upgrades, and region-colored floor and quest headers" width="300"> |
 
 | Seed information | Interactive map |
 | --- | --- |

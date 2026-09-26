@@ -326,8 +326,9 @@ struct ScoutView: View {
 struct ScoutBadge: View {
     let text: String
     var color: Color = .secondary
+    var weight: Font.Weight = .medium
     var body: some View {
-        Text(text).font(.caption2.weight(.medium)).foregroundStyle(color)
+        Text(text).font(.caption2.weight(weight)).foregroundStyle(color)
             .padding(.horizontal, 7).padding(.vertical, 4)
             .background(color.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
             .lineLimit(1).minimumScaleFactor(0.7)
@@ -349,14 +350,22 @@ struct ScoutFloorHeading: View {
         default: "Demon Halls"
         }
     }
-    private var color: Color {
+    private var regionRGB: (red: Double, green: Double, blue: Double) {
         switch depth {
-        case ..<6: AppTheme.accent
-        case ..<11: .orange
-        case ..<16: .cyan
-        case ..<21: .purple
-        default: .red
+        case ..<6: (127, 226, 184)
+        case ..<11: (143, 183, 232)
+        case ..<16: (216, 162, 107)
+        case ..<21: (201, 166, 232)
+        default: (232, 143, 143)
         }
+    }
+    private var color: Color {
+        Color(red: regionRGB.red / 255, green: regionRGB.green / 255, blue: regionRGB.blue / 255)
+    }
+    private var questColor: Color {
+        Color(red: (regionRGB.red * 0.84 + 234 * 0.16) / 255,
+              green: (regionRGB.green * 0.84 + 234 * 0.16) / 255,
+              blue: (regionRGB.blue * 0.84 + 234 * 0.16) / 255)
     }
     var body: some View {
         Group {
@@ -369,22 +378,24 @@ struct ScoutFloorHeading: View {
         }.frame(minHeight: 48)
     }
     private var content: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             RoundedRectangle(cornerRadius: 2).fill(color).frame(width: 3, height: 16)
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 7) {
-                    Text("FLOOR \(depth)").font(.caption.weight(.bold)).tracking(1.1)
-                    if let feeling = world.feelings[depth] { FloorFeelingSpriteView(feeling: feeling) }
-                    Text(region).font(.caption).foregroundStyle(color)
-                }
-                if let quest = world.quests.first(where: { $0.depth == depth }) {
-                    ScoutBadge(text: quest.variant.label, color: color)
-                }
+            Text("FLOOR \(depth)").font(.caption.weight(.bold)).tracking(0.25).fixedSize()
+            if let feeling = world.feelings[depth] { FloorFeelingSpriteView(feeling: feeling).fixedSize() }
+            Text(region).font(.caption).foregroundStyle(color.opacity(0.9))
+                .lineLimit(1).minimumScaleFactor(0.85)
+            if let quest = world.quests.first(where: { $0.depth == depth }) {
+                Text(quest.variant.label).font(.caption2.weight(.semibold))
+                    .foregroundStyle(questColor)
+                    .lineLimit(1).minimumScaleFactor(0.8)
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .background(color.opacity(0.11), in: Capsule())
+                    .overlay(Capsule().strokeBorder(color.opacity(0.3), lineWidth: 1))
             }
             Spacer(minLength: 0)
             if world.isFarmingFloor(depth) { ScoutBadge(text: "Garden", color: AppTheme.accent) }
             let count = world.items.filter { $0.depth == depth }.count
-            Text(count == 1 ? "1 item" : "\(count) items").font(.caption2).foregroundStyle(.secondary)
+            Text(count == 1 ? "1 item" : "\(count) items").font(.caption2).foregroundStyle(.secondary).fixedSize()
             if let onCloseMap {
                 Button(action: onCloseMap) { Image(systemName: "xmark").frame(width: 32, height: 32) }
                     .accessibilityLabel("Close map")

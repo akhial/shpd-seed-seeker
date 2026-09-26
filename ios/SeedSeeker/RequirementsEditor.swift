@@ -7,6 +7,7 @@ struct RequirementsEditor: View {
     let otherRequirements: [ItemRequirement]
     let blanket: Bool
     let onAddResin: (() -> Void)?
+    let onEditGroupQuantity: (() -> Void)?
     let onSave: (ItemRequirement, Int, Int?, Int?) -> Void
     let onRemove: (() -> Void)?
 
@@ -34,12 +35,14 @@ struct RequirementsEditor: View {
     init(editing: ItemRequirement?, otherRequirements: [ItemRequirement], blanket: Bool,
          editingCount: Int = 1, editingTotal: Int? = nil, editingCopyDepth: Int? = nil,
          onAddResin: (() -> Void)? = nil,
+         onEditGroupQuantity: (() -> Void)? = nil,
          onSave: @escaping (ItemRequirement, Int, Int?, Int?) -> Void,
          onRemove: (() -> Void)? = nil) {
         self.editing = editing
         self.otherRequirements = otherRequirements
         self.blanket = blanket
         self.onAddResin = onAddResin
+        self.onEditGroupQuantity = onEditGroupQuantity
         self.onSave = onSave
         self.onRemove = onRemove
         _details = State(initialValue: editing != nil)
@@ -246,6 +249,7 @@ struct RequirementsEditor: View {
                     }
                 }
                 if !blanket && !inAlternative && !namedOnly { stackControls }
+                if let onEditGroupQuantity, !namedOnly { groupQuantityButton(action: onEditGroupQuantity) }
             }
             .padding(20)
         }
@@ -292,11 +296,11 @@ struct RequirementsEditor: View {
             heading("Upgrade")
             RequirementSegmentedControl(title: "Upgrade", options: UpgradeMatch.allCases.map { ($0, $0.label) }, selection: $upgradeMatch)
             if upgradeMatch == .exactly {
-                valueRow("Level", "+\(upgrade)")
+                valueRow("Level", "+\(upgrade)", isUpgrade: true)
                 RequirementGraduatedSlider(title: "Level", value: Binding(get: { Double(upgrade) }, set: { upgrade = Int($0.rounded()) }),
                                            bounds: 1...Double(max(2, ceiling)))
             } else if upgradeMatch == .atLeast {
-                valueRow("At least", "+\(upgrade) or higher")
+                valueRow("At least", "+\(upgrade) or higher", isUpgrade: true)
                 RequirementGraduatedSlider(title: "Minimum upgrade", value: Binding(get: { Double(upgrade) }, set: { upgrade = Int($0.rounded()) }),
                                            bounds: 1...Double(max(2, ceiling - 1)))
             }
@@ -310,8 +314,8 @@ struct RequirementsEditor: View {
                                         options: [(0, "Any"), (1, "Any \(label.lowercased())"), (2, "Specific…")],
                                         selection: $effectMode)
             if effectMode == 2 {
-                effectGrid(heading: kind.family == .weapon ? "ENCHANTMENTS" : "GLYPHS", names: kind.enchantmentNames)
-                if !requireUncursed { effectGrid(heading: "CURSES", names: ItemCatalog.cursesFor(kind)) }
+                effectGrid(heading: kind.family == .weapon ? "Enchantments" : "Glyphs", names: kind.enchantmentNames)
+                if !requireUncursed { effectGrid(heading: "Curses", names: ItemCatalog.cursesFor(kind)) }
                 if selectedEffects.isEmpty {
                     explanation("Nothing picked yet — any \(label.lowercased()) is accepted until you do.")
                 }
@@ -321,7 +325,15 @@ struct RequirementsEditor: View {
 
     private func effectGrid(heading: String, names: [String]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(heading).font(.caption2.weight(.semibold)).tracking(1).foregroundStyle(.secondary)
+            HStack(spacing: 12) {
+                Rectangle().fill(Color(uiColor: .separator)).frame(height: 0.5)
+                Text(heading)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .fixedSize()
+                Rectangle().fill(Color(uiColor: .separator)).frame(height: 0.5)
+            }
+            .padding(.vertical, 6)
             LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)], alignment: .leading, spacing: 7) {
                 ForEach(names, id: \.self) { name in
                     Button {
@@ -372,6 +384,27 @@ struct RequirementsEditor: View {
                 }
             }
         }
+    }
+
+    private func groupQuantityButton(action: @escaping () -> Void) -> some View {
+        Button {
+            if saveDraft() { action() }
+        } label: {
+            HStack(spacing: 12) {
+                Text("How many").foregroundStyle(.primary)
+                Spacer(minLength: 8)
+                Text("×\(stackCount)").foregroundStyle(.secondary)
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .font(.subheadline)
+            .padding(.horizontal, 16)
+            .frame(minHeight: 52)
+            .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 18))
+        }
+        .buttonStyle(.plain)
+        .disabled(draft == nil)
     }
 
     private var footer: some View {
@@ -475,8 +508,15 @@ struct RequirementsEditor: View {
 
     private func heading(_ value: String) -> some View { Text(value).font(.subheadline.weight(.semibold)) }
     private func explanation(_ value: String) -> some View { Text(value).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
-    private func valueRow(_ title: String, _ value: String) -> some View {
-        HStack { Text(title); Spacer(); Text(value).foregroundStyle(.tint) }.font(.subheadline)
+    private func valueRow(_ title: String, _ value: String, isUpgrade: Bool = false) -> some View {
+        HStack {
+            Text(title)
+            Spacer()
+            Text(value)
+                .foregroundStyle(isUpgrade ? AppTheme.upgrade : AppTheme.accent)
+                .fontWeight(isUpgrade ? .bold : .regular)
+        }
+        .font(.subheadline)
     }
 
     private func changeKind(_ entry: ItemKind) {
@@ -511,11 +551,16 @@ struct RequirementsEditor: View {
     }
 
     private func save() {
-        guard let draft else { return }
+        guard saveDraft() else { return }
+        dismiss()
+    }
+
+    private func saveDraft() -> Bool {
+        guard let draft else { return false }
         let total = !blanket && !inAlternative && selectedItem != nil && kind == .ring && stackCount > 1 ? stackTotal : nil
         let copies = !blanket && !inAlternative && stackCount > 1 && total == nil ? copyDepth : nil
         onSave(draft, !blanket && !namedOnly ? stackCount : 1, total, copies)
-        dismiss()
+        return true
     }
 
     private static func items(for kind: ItemKind) -> [CatalogItem] {

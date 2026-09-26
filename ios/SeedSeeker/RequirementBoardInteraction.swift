@@ -72,10 +72,12 @@ struct RequirementsRemoveTarget: View {
         Label("Drop to remove", systemImage: interaction.isOverRemove ? "trash.fill" : "trash")
             .font(.body.weight(.semibold))
             .foregroundStyle(.red)
-            .padding(.horizontal, 24)
-            .frame(height: 54)
+            .fixedSize()
+            .frame(width: !reduceMotion && interaction.isOverRemove ? 252 : 228,
+                   height: !reduceMotion && interaction.isOverRemove ? 62 : 54,
+                   alignment: .center)
             .glassEffect(.regular.tint(.red.opacity(interaction.isOverRemove ? 0.3 : 0.1)), in: .capsule)
-            .scaleEffect(reduceMotion ? 1 : (interaction.isOverRemove ? 1.12 : 1))
+            .frame(height: 62, alignment: .center)
             .symbolEffect(.bounce, value: !reduceMotion && interaction.isOverRemove)
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: {
                 interaction.removeFrame = $0
