@@ -1,5 +1,5 @@
 //! Shared, generation-only item inspection data for every map client.
-use super::item_text::{ITEM_ICONS, ITEM_TEXT};
+use super::item_text::{ITEM_ICONS, ITEM_MODIFIER_NAMES, ITEM_TEXT};
 use super::{LevelMap, MapItem};
 
 #[derive(Clone, Debug, PartialEq)]
@@ -54,6 +54,51 @@ fn words(kind: &str) -> String {
     result
 }
 
+/// The game's name templates put weapon effects before the name and armor
+/// glyphs after it. Keep the entire modified title together on every client.
+fn modified_name(base: String, effect: Option<crate::catalog::Effect>) -> String {
+    let Some(effect) = effect else {
+        return base;
+    };
+    let family = match effect {
+        crate::catalog::Effect::Weapon(_) => "weapon",
+        crate::catalog::Effect::Armor(_) => "armor",
+    };
+    let key = format!(
+        "{family}.{}",
+        effect
+            .wire_name()
+            .chars()
+            .filter(char::is_ascii_alphanumeric)
+            .collect::<String>()
+            .to_ascii_lowercase()
+    );
+    let Ok(index) = ITEM_MODIFIER_NAMES.binary_search_by_key(&key.as_str(), |entry| entry.0) else {
+        return base;
+    };
+    ITEM_MODIFIER_NAMES[index]
+        .1
+        .replace("%s", &base)
+        .split_whitespace()
+        .enumerate()
+        .map(|(index, word)| {
+            if index > 0 && matches!(word, "of" | "and" | "the" | "a" | "an") {
+                return word.to_owned();
+            }
+            word.split('-')
+                .map(|part| {
+                    let mut chars = part.chars();
+                    chars.next().map_or_else(String::new, |first| {
+                        first.to_uppercase().chain(chars).collect()
+                    })
+                })
+                .collect::<Vec<_>>()
+                .join("-")
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 impl MapTooltipItem {
     fn from_item(item: &MapItem) -> Self {
         let key: String = item
@@ -67,13 +112,16 @@ impl MapTooltipItem {
             .ok()
             .map(|index| ITEM_TEXT[index]);
         Self {
-            name: text.map_or_else(
-                || match item.kind.as_str() {
-                    "RuntimeVaultConsumable" => "Random consumable".into(),
-                    "ImpRewardOption" => "Imp reward".into(),
-                    _ => words(&item.kind),
-                },
-                |entry| entry.1.to_owned(),
+            name: modified_name(
+                text.map_or_else(
+                    || match item.kind.as_str() {
+                        "RuntimeVaultConsumable" => "Random consumable".into(),
+                        "ImpRewardOption" => "Imp reward".into(),
+                        _ => words(&item.kind),
+                    },
+                    |entry| entry.1.to_owned(),
+                ),
+                item.roll.and_then(|roll| roll.effect),
             ),
             description: text.map_or("", |entry| entry.2),
             image: item.image,
@@ -367,5 +415,52 @@ mod tests {
         assert_eq!(unknown.enchantment, None);
         assert_eq!(unknown.curse, None);
         assert_eq!(unknown.glow, None);
+    }
+    #[test]
+    fn modified_titles_use_java_weapon_prefixes_and_armor_suffixes() {
+        use crate::catalog::{
+            ALL_ARMOR_EFFECTS, ALL_WEAPON_EFFECTS, ArmorEffect, Effect, WeaponEffect,
+        };
+        for effect in ALL_WEAPON_EFFECTS
+            .iter()
+            .copied()
+            .map(Effect::Weapon)
+            .chain(ALL_ARMOR_EFFECTS.iter().copied().map(Effect::Armor))
+        {
+            assert_ne!(
+                modified_name("Equipment".into(), Some(effect)),
+                "Equipment",
+                "missing Java template for {}",
+                effect.wire_name()
+            );
+        }
+        assert_eq!(
+            modified_name(
+                "Plate armor".into(),
+                Some(Effect::Armor(ArmorEffect::Swiftness))
+            ),
+            "Plate Armor of Swiftness"
+        );
+        assert_eq!(
+            modified_name(
+                "Javelin".into(),
+                Some(Effect::Weapon(WeaponEffect::Chilling))
+            ),
+            "Chilling Javelin"
+        );
+        assert_eq!(
+            modified_name(
+                "Mail armor".into(),
+                Some(Effect::Armor(ArmorEffect::AntiEntropy))
+            ),
+            "Mail Armor of Anti-Entropy"
+        );
+        assert_eq!(
+            modified_name(
+                "Scimitar".into(),
+                Some(Effect::Weapon(WeaponEffect::Wondrous))
+            ),
+            "Wondrous Scimitar"
+        );
     }
 }

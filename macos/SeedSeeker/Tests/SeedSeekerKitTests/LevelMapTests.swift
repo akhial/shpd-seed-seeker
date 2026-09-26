@@ -11,7 +11,7 @@ final class LevelMapTests: XCTestCase, @unchecked Sendable {
     func testItemInspectionDecodesGeneratedUpgradesEnchantmentsAndCurses() async throws {
         let bundle = try await LevelMapClient.shared.load(request(7))
         let items = try XCTUnwrap(bundle.document.itemTooltips).flatMap(\.items)
-        let enchanted = try XCTUnwrap(items.first { $0.name == "Assassin's blade" })
+        let enchanted = try XCTUnwrap(items.first { $0.name == "Vorpal Assassin's Blade" })
         XCTAssertEqual(enchanted.upgrade, 1); XCTAssertEqual(enchanted.enchantment, "Vorpal")
         XCTAssertEqual(enchanted.cursed, false); XCTAssertNil(enchanted.curse)
         XCTAssertEqual(enchanted.glow?.color, [170, 102, 102]); XCTAssertEqual(enchanted.glow?.periodMs, 1000)

@@ -95,6 +95,16 @@ def main():
     for key, (name, desc) in sorted(records.items()):
         output.append("    (" + ", ".join(json.dumps(s, ensure_ascii=False) for s in (key, name, desc)) + "),")
     output += ["];", ""]
+    # Weapon prefixes and armor suffixes use the original Java name templates.
+    modifiers = {}
+    for key, value in messages.items():
+        match = re.fullmatch(r"items\.(weapon|armor)\.(?:enchantments|glyphs|curses)\.(\w+)\.name", key)
+        if match and "%s" in value:
+            modifiers[".".join(match.groups())] = value
+    output += ["#[rustfmt::skip]", "pub(super) const ITEM_MODIFIER_NAMES: &[(&str, &str)] = &["]
+    for key, value in sorted(modifiers.items()):
+        output.append("    (" + ", ".join(json.dumps(s) for s in (key, value)) + "),")
+    output += ["];", ""]
     # Identity glyphs, independently of the randomized bottle/rune/gem image.
     java_icons = sources["ItemSpriteSheet.java"].decode().split("class Icons {", 1)[1]
     icon_records = {}

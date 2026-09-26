@@ -155,7 +155,7 @@ internal sealed class LevelMapView : Grid
             var name = new TextBlock { Text = item.Name + (item.Quantity > 1 ? $"  ×{item.Quantity}" : ""),
                 FontSize = 16, FontWeight = Microsoft.UI.Text.FontWeights.Bold, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
             Grid.SetColumn(name, 1); heading.Children.Add(name);
-            if (item.Upgrade is int upgrade) {
+            if (item.Upgrade is > 0 and int upgrade) {
                 heading.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
                 var chip = new Border { Padding = new Thickness(4, 0, 4, 0), CornerRadius = new CornerRadius(4),
                     VerticalAlignment = VerticalAlignment.Center,
@@ -168,10 +168,8 @@ internal sealed class LevelMapView : Grid
             }
             body.Children.Add(heading);
             var modifiers = new WrapPanel { Spacing = 6, LineSpacing = 4 };
-            if (item.Enchantment is string effect) modifiers.Children.Add(new TextBlock { Text = effect, FontSize = 12,
-                Foreground = (Brush)Application.Current.Resources["AccentTextFillColorPrimaryBrush"] });
             if (item.Cursed || item.Curse is not null) modifiers.Children.Add(new TextBlock {
-                Text = item.Cursed ? "Cursed" + (item.Curse is null ? "" : $" · {item.Curse}") : $"{item.Curse} curse", FontSize = 12,
+                Text = item.Cursed ? "Cursed" : "Curse", FontSize = 12,
                 Foreground = (Brush)Application.Current.Resources["SystemFillColorCriticalBrush"] });
             if (modifiers.Children.Count > 0) body.Children.Add(modifiers);
             if (!item.Deterministic) body.Children.Add(new TextBlock { Text = "Varies with play", FontSize = 11, Opacity = .7 });

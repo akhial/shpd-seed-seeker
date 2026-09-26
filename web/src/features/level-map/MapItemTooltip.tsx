@@ -84,7 +84,7 @@ export function MapItemTooltip({
               </span>
               <div className="d1-map-item-title">
                 <strong>{item.name}</strong>
-                {item.upgrade != null && (
+                {item.upgrade != null && item.upgrade > 0 && (
                   <span
                     className="d1-chip-tag d1-chip-tag-up"
                     aria-label={`Upgrade +${item.upgrade}`}
@@ -95,18 +95,11 @@ export function MapItemTooltip({
               </div>
               {item.quantity > 1 && <span className="d1-map-item-quantity">×{item.quantity}</span>}
             </div>
-            {(item.enchantment || item.curse || item.cursed) && (
+            {(item.curse || item.cursed) && (
               <div className="d1-map-item-modifiers">
-                {item.enchantment && (
-                  <span className="d1-chip-tag d1-chip-tag-soft">{item.enchantment}</span>
-                )}
-                {(item.curse || item.cursed) && (
-                  <span className="d1-chip-tag d1-badge-curse">
-                    {item.cursed
-                      ? `Cursed${item.curse ? ` · ${item.curse}` : ""}`
-                      : `${item.curse} curse`}
-                  </span>
-                )}
+                <span className="d1-chip-tag d1-badge-curse">
+                  {item.cursed ? "Cursed" : "Curse"}
+                </span>
               </div>
             )}
             {!item.deterministic && <span className="d1-map-item-context">Varies with play</span>}

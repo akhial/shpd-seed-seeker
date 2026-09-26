@@ -345,7 +345,7 @@ impl FloorMapView {
                             .css_classes(["map-item-title"])
                             .build(),
                     );
-                    if let Some(upgrade) = item.upgrade {
+                    if let Some(upgrade) = item.upgrade.filter(|&level| level > 0) {
                         heading.append(
                             &gtk::Label::builder()
                                 .label(format!("+{upgrade}"))
@@ -356,21 +356,8 @@ impl FloorMapView {
                     }
                     body.append(&heading);
                     let modifiers = gtk::Box::new(gtk::Orientation::Horizontal, 6);
-                    if let Some(effect) = item.enchantment {
-                        modifiers.append(
-                            &gtk::Label::builder()
-                                .label(effect)
-                                .css_classes(["tag", "accent"])
-                                .build(),
-                        );
-                    }
                     if item.cursed || item.curse.is_some() {
-                        let label = match (item.cursed, item.curse) {
-                            (true, Some(curse)) => format!("Cursed · {curse}"),
-                            (true, None) => "Cursed".into(),
-                            (false, Some(curse)) => format!("{curse} curse"),
-                            (false, None) => unreachable!(),
-                        };
+                        let label = if item.cursed { "Cursed" } else { "Curse" };
                         modifiers.append(
                             &gtk::Label::builder()
                                 .label(label)

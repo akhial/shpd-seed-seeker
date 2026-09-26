@@ -390,7 +390,7 @@ internal class NativeLevelMapView(context: Context) : FrameLayout(context) {
                 text = item.name + if (item.quantity > 1) "  ×${item.quantity}" else ""
                 textSize = 16f; setTextColor(tooltipColors.onSurface.toArgb()); setTypeface(typeface, Typeface.BOLD)
             }, LinearLayout.LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
-            item.upgrade?.let { upgrade ->
+            item.upgrade?.takeIf { it > 0 }?.let { upgrade ->
                 heading.addView(TextView(context).apply {
                     text = "+$upgrade"; textSize = 11f; typeface = Typeface.create(Typeface.MONOSPACE, Typeface.BOLD)
                     setTextColor(SpdUpgrade.toArgb()); setPadding(dp(4), dp(2), dp(4), dp(2))
@@ -399,9 +399,8 @@ internal class NativeLevelMapView(context: Context) : FrameLayout(context) {
                 }, LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply { marginStart = dp(6) })
             }
             body.addView(heading)
-            item.enchantment?.let { text(it, 12f, tooltipColors.primary.toArgb()) }
             if (item.cursed || item.curse != null) {
-                text(if (item.cursed) "Cursed" + (item.curse?.let { " · $it" } ?: "") else "${item.curse} curse", 12f, tooltipColors.error.toArgb())
+                text(if (item.cursed) "Cursed" else "Curse", 12f, tooltipColors.error.toArgb())
             }
             if (!item.deterministic) text("Varies with play", 11f, tooltipColors.onSurfaceVariant.toArgb())
             if (item.description.isNotEmpty()) text(item.description, 12f, tooltipColors.onSurfaceVariant.toArgb())

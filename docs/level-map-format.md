@@ -401,6 +401,8 @@ selection outlines; older entries without bounds fall back to the ground tile.
 seeded appearance. It covers rings, potions, scrolls, and both exotic categories,
 using the pinned Java `ItemSpriteSheet.Icons` frames. Render it over the centered
 item sprite at the upper right, at the same pixel scale.
+`name` includes the original Java modifier wording (for example, `Chilling Javelin`
+or `Plate Armor of Swiftness`) when a generated enchantment, glyph, or named curse is present.
 `upgrade` is the identified in-game level (including artifact rounding), or null
 when no generated equipment roll is available. `cursed` carries the rolled curse
 flag; `enchantment` names a beneficial weapon enchantment or armor glyph, and

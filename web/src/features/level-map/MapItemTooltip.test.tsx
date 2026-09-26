@@ -44,6 +44,7 @@ it("shows the generated upgrade, enchantment and curse independently, with the s
   await show([
     {
       ...sword,
+      name: "Shocking Shortsword",
       upgrade: 2,
       cursed: true,
       enchantment: "Shocking",
@@ -53,7 +54,8 @@ it("shows the generated upgrade, enchantment and curse independently, with the s
   const chip = host.querySelector('[aria-label="Upgrade +2"]');
   expect(chip?.classList.contains("d1-chip-tag-up")).toBe(true);
   expect(chip?.classList.contains("d1-chip-tag")).toBe(true);
-  expect(host.textContent).toContain("Shocking");
+  expect(host.querySelector("strong")?.textContent).toBe("Shocking Shortsword");
+  expect(host.querySelector(".d1-chip-tag-soft")).toBeNull();
   expect(host.textContent).toContain("Cursed");
   const glow = host.querySelector<HTMLElement>(".d1-sprite-glow")!;
   expect(glow.style.animationDuration).toBe("1s");
@@ -64,7 +66,7 @@ it("keeps the identity glyph outside curse tint and names the specific curse", a
   await show([
     {
       ...sword,
-      name: "Mail armor",
+      name: "Mail Armor of Displacement",
       icon: [0, 0, 5, 5],
       upgrade: 0,
       cursed: true,
@@ -72,8 +74,9 @@ it("keeps the identity glyph outside curse tint and names the specific curse", a
       glow: { color: [0, 0, 0], periodMs: 1000 },
     },
   ]);
-  expect(host.querySelector('[aria-label="Upgrade +0"]')).not.toBeNull();
-  expect(host.textContent).toContain("Cursed · Displacement");
+  expect(host.querySelector('[aria-label="Upgrade +0"]')).toBeNull();
+  expect(host.textContent).toContain("Mail Armor of Displacement");
+  expect(host.textContent).toContain("Cursed");
   const sprite = host.querySelector(".d1-map-item-icon")!;
   expect(sprite.children).toHaveLength(2);
   expect(sprite.children[1].querySelector(".d1-sprite-glow")).toBeNull();
