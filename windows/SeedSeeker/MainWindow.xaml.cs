@@ -2050,7 +2050,7 @@ public sealed partial class MainWindow : Window
             }).ToList();
             scoutTrinkets = groups.SelectMany(group => group).Select(row => row.TrinketDeck).OfType<TrinketDeckView>().FirstOrDefault();
             ScoutList.ItemsSource = new CollectionViewSource { IsSourceGrouped = true, Source = groups }.View;
-            ScoutList.Header = world.ArtifactDecks?.Count > 0 ? ArtifactDeckPanel(world, matches) : null;
+            ScoutList.Header = world.ArtifactDecks?.Count > 0 ? ArtifactDeckPanel(world, matches, marked.MaximumDepth) : null;
             BuildTrinketDock(world);
             renderedScoutQuery = marked;
             UpdateResultNav();
@@ -2071,31 +2071,33 @@ public sealed partial class MainWindow : Window
         finally { if (generation == scoutGeneration) { ScoutButton.IsEnabled = SeedCode.IsScoutable(SeedInput.Text); ScoutList.IsEnabled = true; scoutLoading = false; DailyDate.IsEnabled = true; DailyToday.IsEnabled = true; SetTrinketDockEnabled(true); } }
     }
 
-    private static UIElement ArtifactDeckPanel(ScoutWorld world, ScoutMatches matches)
+    private static UIElement ArtifactDeckPanel(ScoutWorld world, ScoutMatches matches, int maximumDepth)
     {
-        var body = new StackPanel { Spacing = 10 };
-        var floor = new ComboBox { Header = "After floor", ItemsSource = Enumerable.Range(1, 24).Select(depth => $"Floor {depth}").ToArray(), SelectedIndex = matches.TransmutedArtifacts.Select(mark => mark.Depth - 1).DefaultIfEmpty(18).Min() };
-        var deck = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
-        var help = new TextBlock { Text = "Remaining artifacts in draw order. Requires an artifact to transform. Later generation and transmutations consume this deck.", TextWrapping = TextWrapping.Wrap };
-        void Render() {
-            deck.Children.Clear();
-            var depth = floor.SelectedIndex + 1;
-            var order = world.ArtifactDecks!.Where(entry => entry.Key <= depth).OrderBy(entry => entry.Key).LastOrDefault().Value ?? [];
-            if (order.Count == 0) deck.Children.Add(new TextBlock { Text = "Deck exhausted. Further transmutations produce a ring.", TextWrapping = TextWrapping.Wrap });
-            for (var index = 0; index < order.Count; index++) {
-                var artifact = order[index]; var matched = matches.TransmutedArtifacts.Contains((depth, index));
-                var column = new StackPanel { Spacing = 4, HorizontalAlignment = HorizontalAlignment.Center };
-                column.Children.Add(new SpriteView { SpriteIndex = artifact.SpriteIndex, SpriteSize = 28 });
-                column.Children.Add(new TextBlock { Text = $"{index + 1}", HorizontalAlignment = HorizontalAlignment.Center });
-                var tile = new Border { Child = column, Padding = new Thickness(4), CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(matched ? 1 : 0), BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.MediumSeaGreen) };
-                var label = $"Transmutation #{index + 1}: {artifact.Name}" + (matched ? ", matches requirement" : "");
-                ToolTipService.SetToolTip(tile, label); Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(tile, label); deck.Children.Add(tile);
-            }
+        var depth = matches.TransmutedArtifacts.Select(mark => mark.Depth).DefaultIfEmpty(maximumDepth).Min();
+        var order = world.ArtifactDecks!.Where(entry => entry.Key <= depth).OrderBy(entry => entry.Key).LastOrDefault().Value ?? [];
+        var deck = new Grid { ColumnSpacing = 2, Margin = new Thickness(0, 8, 0, 0) };
+        if (order.Count == 0) deck.Children.Add(new TextBlock { Text = "Deck exhausted." });
+        for (var index = 0; index < order.Count; index++)
+        {
+            deck.ColumnDefinitions.Add(new ColumnDefinition());
+            var artifact = order[index];
+            var matched = matches.TransmutedArtifacts.Contains((depth, index));
+            var sprite = new SpriteView { SpriteIndex = artifact.SpriteIndex, SpriteSize = 28, HorizontalAlignment = HorizontalAlignment.Center };
+            var column = new StackPanel { Spacing = 4, HorizontalAlignment = HorizontalAlignment.Center };
+            column.Children.Add(sprite);
+            column.Children.Add(new TextBlock { Text = $"{index + 1}", FontSize = 11, HorizontalAlignment = HorizontalAlignment.Center });
+            var tile = new Border { Child = column, Padding = new Thickness(2), CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(1), BorderBrush = matched ? new SolidColorBrush(Microsoft.UI.Colors.MediumSeaGreen) : null, HorizontalAlignment = HorizontalAlignment.Center };
+            var label = $"Transmutation #{index + 1}: {artifact.Name}" + (matched ? ", matches requirement" : "");
+            ToolTipService.SetToolTip(tile, label);
+            Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(tile, label);
+            deck.SizeChanged += (_, _) => {
+                tile.Width = Math.Max(1, Math.Min(36, (deck.ActualWidth - (order.Count - 1) * 2) / order.Count));
+                sprite.SpriteSize = Math.Max(1, tile.Width - 6);
+            };
+            Grid.SetColumn(tile, index);
+            deck.Children.Add(tile);
         }
-        floor.SelectionChanged += (_, _) => Render(); Render();
-        body.Children.Add(floor); body.Children.Add(help);
-        body.Children.Add(new ScrollViewer { Content = deck, HorizontalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollMode = ScrollMode.Enabled, VerticalScrollBarVisibility = ScrollBarVisibility.Disabled });
-        return new Expander { Header = "Artifact transmutation order", IsExpanded = true, Content = body, HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 8, 0, 12) };
+        return new Expander { Header = "Artifact transmutation order", IsExpanded = true, Content = deck, HorizontalAlignment = HorizontalAlignment.Stretch, HorizontalContentAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 8, 0, 12) };
     }
 
     private UIElement FloorHeader(ScoutWorld world, int depth)

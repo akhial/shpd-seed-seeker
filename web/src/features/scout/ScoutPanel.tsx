@@ -45,6 +45,7 @@ export function ScoutPanel({
   error,
   result,
   renderedChallenges = [],
+  maximumDepth = 24,
   nav,
   onNavigate,
   onTrinketChange,
@@ -57,6 +58,7 @@ export function ScoutPanel({
   result?: ScoutResult;
   /** Challenges used to produce the rendered scout, independent of current query edits. */
   renderedChallenges?: readonly ChallengeName[];
+  maximumDepth?: number;
   /** Position of the scouted seed within the search results, when it is one. */
   nav?: ResultPosition;
   onNavigate?: (delta: number) => void;
@@ -292,7 +294,7 @@ export function ScoutPanel({
           </div>
 
           {!!result.artifactDecks?.length && (
-            <ArtifactDeckOrder key={result.seed.code} decks={result.artifactDecks} />
+            <ArtifactDeckOrder decks={result.artifactDecks} maximumDepth={maximumDepth} />
           )}
 
           {floors.map(([depth, items]) => {
@@ -584,34 +586,28 @@ export function CatalystEntry({
   );
 }
 
-export function ArtifactDeckOrder({ decks }: { decks: NonNullable<ScoutResult["artifactDecks"]> }) {
-  const [depth, setDepth] = useState(
-    () => decks.find((deck) => deck.order.some((entry) => entry.matched))?.depth ?? 19,
-  );
-  const order = decks.find((deck) => deck.depth === depth)?.order ?? [];
+export function ArtifactDeckOrder({
+  decks,
+  maximumDepth,
+}: {
+  decks: NonNullable<ScoutResult["artifactDecks"]>;
+  maximumDepth: number;
+}) {
+  const depth =
+    decks.find((deck) => deck.order.some((entry) => entry.matched))?.depth ?? maximumDepth;
+  const order = decks.filter((deck) => deck.depth <= depth).at(-1)?.order ?? [];
   return (
     <details className="d1-artifact-deck" open>
       <summary>Artifact transmutation order</summary>
-      <label className="d1-artifact-floor">
-        After floor
-        <select
-          aria-label="Artifact deck floor"
-          value={depth}
-          onChange={(event) => setDepth(Number(event.target.value))}
-        >
-          {decks.map((deck) => (
-            <option key={deck.depth} value={deck.depth}>
-              Floor {deck.depth}
-            </option>
-          ))}
-        </select>
-      </label>
-      <p className="d1-caption">
-        Remaining artifacts, in draw order. Requires an artifact to transform. Later generation and
-        transmutations consume this deck.
-      </p>
       {order.length ? (
-        <ol className="d1-trinket-tail d1-artifact-tail" aria-label="Remaining artifact deck order">
+        <ol
+          className="d1-trinket-tail d1-artifact-tail"
+          aria-label="Remaining artifact deck order"
+          style={{
+            gridTemplateColumns: `repeat(${order.length}, minmax(0, 1fr))`,
+            maxWidth: order.length * 40 + (order.length - 1) * 2,
+          }}
+        >
           {order.map((entry, index) => (
             <li
               key={entry.id}
@@ -625,7 +621,7 @@ export function ArtifactDeckOrder({ decks }: { decks: NonNullable<ScoutResult["a
           ))}
         </ol>
       ) : (
-        <p className="d1-caption">Deck exhausted. Further transmutations produce a ring.</p>
+        <p className="d1-caption">Deck exhausted.</p>
       )}
     </details>
   );

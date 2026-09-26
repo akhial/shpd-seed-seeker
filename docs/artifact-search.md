@@ -96,10 +96,12 @@ rounding through intermediate identities is not calibrated. The normal artifact
 editors use any upgrade. Extremely complex joint filters also have a bounded work
 budget and report unavailable instead of blocking the editor.
 
-Scout shows **Artifact transmutation order** with an **After floor** selector on
-web, Android, macOS, Windows, and Linux. Positions start at 1; matching outcomes
-and their starting artifacts are highlighted. Boss floors inherit the last generated
-deck. The CLI displays the deck at the query's overall floor limit (24 without a
+Scout shows **Artifact transmutation order** as one compact, static row on
+web, Android, macOS, Windows, and Linux. There is no deck floor picker or hint
+paragraph. Icons shrink to fit one line. The deck uses a matched transmutation
+requirement's floor when present, otherwise the scouted search's floor limit
+(24 without a query). Positions start at 1; matching outcomes and their starting
+artifacts are highlighted. Boss floors inherit the last generated deck. The CLI displays the deck at the query's overall floor limit (24 without a
 query). Reading a deck never advances the generated run's RNG.
 
 Share-link version 14 adds the four-bit artifact limit after version 13's trinket
