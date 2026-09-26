@@ -1,7 +1,26 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package dev.seedseeker.app.ui
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.offset
+import androidx.compose.material3.ripple
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.unit.IntOffset
+import kotlin.math.roundToInt
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -127,6 +146,7 @@ fun RequirementBoard(
         requirements.boardItems().filter { requirements[it.anchor].blanket == blanket }
     }
     val haptics = LocalHapticFeedback.current
+    val entrances = LocalEntranceMemory.current
     // Live layout handles, so a drop can name what it landed on. Bounds are
     // resolved against the board only at hit-test time, which keeps them right
     // through scrolling.
@@ -143,6 +163,9 @@ fun RequirementBoard(
     var resinPlacement by remember { mutableStateOf<LayoutCoordinates?>(null) }
     var draggingResin by remember { mutableStateOf(false) }
     var dragPosition by remember { mutableStateOf(Offset.Zero) }
+    // Where inside the held chip the finger landed, so the lifted copy that
+    // follows the finger keeps that same grip.
+    var grabOffset by remember { mutableStateOf(Offset.Zero) }
 
     fun rectOf(child: LayoutCoordinates?): Rect? {
         val root = board?.takeIf { it.isAttached } ?: return null
@@ -171,6 +194,10 @@ fun RequirementBoard(
     } else dragging?.let { targetAt(dragPosition, it) }
     val hovered = (target as? DropTarget.Join)?.index
     val metrics = if (compact) ChipMetrics.Compact else ChipMetrics.Regular
+    // A light tick each time the held chip finds something new to land on.
+    LaunchedEffect(target) {
+        if (target != null) haptics.performHapticFeedback(HapticFeedbackType.SegmentTick)
+    }
 
     CompositionLocalProvider(LocalChipMetrics provides metrics) {
         Box(modifier = modifier.onGloballyPositioned { board = it }) {
@@ -179,9 +206,12 @@ fun RequirementBoard(
                     horizontalArrangement = Arrangement.spacedBy(metrics.spacing),
                     verticalArrangement = Arrangement.spacedBy(metrics.spacing),
                 ) {
-                    items.forEach { item ->
+                    items.forEachIndexed { position, item ->
                         key(itemKey(item)) {
+                            // Chips spring in when added, not every time the board reappears.
+                            val fresh = remember { entrances.firstTime("chip:${itemKey(item)}") }
                             BoardEntry(
+                                modifier = Modifier.springEntrance(enabled = fresh, delayMillis = if (fresh) (position % 10) * 30 else 0),
                                 requirements = requirements,
                                 item = item,
                                 enabled = enabled,
@@ -193,6 +223,7 @@ fun RequirementBoard(
                                 onDragStart = { index, offset ->
                                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                     dragging = index
+                                    grabOffset = offset
                                     dragPosition = (rectOf(placements[index])?.topLeft ?: Offset.Zero) + offset
                                 },
                                 onDrag = { delta -> dragPosition += delta },
@@ -237,6 +268,7 @@ fun RequirementBoard(
                             onDragStart = { offset ->
                                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                 draggingResin = true
+                                grabOffset = offset
                                 dragPosition = (rectOf(resinPlacement)?.topLeft ?: Offset.Zero) + offset
                             },
                             onDrag = { delta -> dragPosition += delta },
@@ -257,6 +289,70 @@ fun RequirementBoard(
                         over = target == DropTarget.Remove,
                         modifier = Modifier.onGloballyPositioned { deleteZone = it },
                     )
+                }
+            }
+            // The chip in hand: a lifted, tilted copy riding under the finger
+            // while its place on the board waits, faded, for it to come back.
+            val held = dragging?.let { requirements.getOrNull(it) }
+            if (held != null || draggingResin) {
+                val lift = remember { Animatable(0f) }
+                LaunchedEffect(Unit) { lift.animateTo(1f, spring(dampingRatio = 0.5f, stiffness = 500f)) }
+                val overBin by animateFloatAsState(
+                    if (target == DropTarget.Remove) 0.86f else 1f,
+                    spring(dampingRatio = 0.5f, stiffness = 500f),
+                    label = "ghost-over-bin",
+                )
+                Box(
+                    Modifier
+                        .offset {
+                            val corner = dragPosition - grabOffset
+                            IntOffset(corner.x.roundToInt(), corner.y.roundToInt())
+                        }
+                        .graphicsLayer {
+                            // Held over the bin, the chip shrinks as if about to be swallowed.
+                            val scale = (1f + 0.06f * lift.value) * overBin
+                            scaleX = scale
+                            scaleY = scale
+                            rotationZ = -2f * lift.value
+                            // Float just above the finger so the chip underneath stays in view.
+                            translationY = -14.dp.toPx() * lift.value
+                            shadowElevation = 12.dp.toPx() * lift.value
+                            shape = CircleShape
+                            // Stays opaque: a translucent layer renders offscreen at its
+                            // unscaled size, which would crop the enlarged capsule's ends.
+                        }
+                        .clearAndSetSemantics {},
+                ) {
+                    if (held != null) {
+                        RequirementChip(
+                            requirement = held,
+                            stackCount = 1,
+                            total = null,
+                            enabled = false,
+                            dimmed = false,
+                            highlighted = false,
+                            onPlaced = {},
+                            onClick = {},
+                            onDragStart = {},
+                            onDrag = {},
+                            onDragEnd = {},
+                            onDragCancel = {},
+                        )
+                    } else {
+                        ArcaneResinChip(
+                            amount = arcaneResin,
+                            auto = arcaneResinAuto,
+                            filter = arcaneResinFilter,
+                            enabled = false,
+                            dimmed = false,
+                            onPlaced = {},
+                            onClick = {},
+                            onDragStart = {},
+                            onDrag = {},
+                            onDragEnd = {},
+                            onDragCancel = {},
+                        )
+                    }
                 }
             }
         }
@@ -373,6 +469,7 @@ private fun BoardEntry(
     onDrag: (Offset) -> Unit,
     onDragEnd: () -> Unit,
     onDragCancel: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     if (item.cluster == null) {
         RequirementChip(
@@ -385,6 +482,7 @@ private fun BoardEntry(
             enabled = enabled,
             dimmed = draggingIndex == item.anchor,
             highlighted = hoveredIndex == item.anchor,
+            modifier = modifier,
             onPlaced = { onPlaced(item.anchor, it) },
             onClick = { onEdit(item.anchor) },
             onDragStart = { offset -> onDragStart(item.anchor, offset) },
@@ -397,18 +495,39 @@ private fun BoardEntry(
     val highlighted = hoveredIndex != null && hoveredIndex in item.members
     val edge = MaterialTheme.colorScheme.tertiary
     val metrics = LocalChipMetrics.current
+    // A capsule a chip is about to join marches its dashes like ants and swells.
+    val march = if (highlighted && LocalMotionEnabled.current) {
+        rememberInfiniteTransition(label = "capsule-march").animateFloat(
+            initialValue = 0f,
+            targetValue = 14f,
+            animationSpec = infiniteRepeatable(tween(420, easing = LinearEasing)),
+            label = "capsule-phase",
+        ).value
+    } else 0f
+    val swell by animateFloatAsState(
+        if (highlighted) 1.04f else 1f,
+        spring(dampingRatio = 0.45f, stiffness = 500f),
+        label = "capsule-swell",
+    )
     // The capsule is exactly as wide as what it holds, and what it holds flows
     // too: a member that will not fit beside the last drops to the next line
     // *inside* the dashed edge, its "or" going with it, so the capsule still
     // reads as one slot however tall it grows.
     FlowRow(
-        modifier = Modifier
+        modifier = modifier
             .onGloballyPositioned(onCapsulePlaced)
+            // A new member joining the capsule makes it shout.
+            .popOnChange(item.members.size, peak = 1.08f)
+            .graphicsLayer {
+                scaleX = swell
+                scaleY = swell
+            }
             .dashedOutline(
                 color = if (highlighted) edge else edge.copy(alpha = 0.55f),
-                fill = edge.copy(alpha = 0.05f),
+                fill = edge.copy(alpha = if (highlighted) 0.12f else 0.05f),
                 radius = metrics.radius + CAPSULE_INSET,
                 width = if (highlighted) 2.dp else 1.dp,
+                phase = march,
             )
             .padding(CAPSULE_INSET),
         verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -593,6 +712,25 @@ private fun BoardChip(
         MaterialTheme.colorScheme.outlineVariant
     }
     val metrics = LocalChipMetrics.current
+    // A drop target swells toward the chip in hand; the chip's own empty place shrinks back.
+    val scale by animateFloatAsState(
+        when {
+            highlighted -> 1.08f
+            dimmed -> 0.92f
+            else -> 1f
+        },
+        spring(dampingRatio = 0.42f, stiffness = 520f),
+        label = "chip-scale",
+    )
+    val fade by animateFloatAsState(if (dimmed) 0.35f else 1f, tween(160), label = "chip-fade")
+    // A tap squashes the chip a little before the editor opens.
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val press by animateFloatAsState(
+        if (pressed) 0.94f else 1f,
+        MaterialTheme.motionScheme.fastSpatialSpec(),
+        label = "chip-press",
+    )
     // Keep a held gesture alive through recomposition while using current state.
     val currentOnDragStart by rememberUpdatedState(onDragStart)
     val currentOnDrag by rememberUpdatedState(onDrag)
@@ -602,10 +740,11 @@ private fun BoardChip(
         // A capsule, not a rounded rectangle: the ends stay half circles
         // however tall the chip grows at a larger font scale.
         shape = CircleShape,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        color = if (highlighted) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh,
         border = BorderStroke(if (highlighted) 2.dp else 1.dp, outline),
         modifier = modifier
-            .alpha(if (dimmed) 0.4f else 1f)
+            // Position and drag deltas are read outside the scale below, so
+            // a swelling or shrinking chip never skews where the finger is.
             .onGloballyPositioned(onPlaced)
             .pointerInput(enabled) {
                 if (!enabled) return@pointerInput
@@ -619,7 +758,12 @@ private fun BoardChip(
                     onDragCancel = { currentOnDragCancel() },
                 )
             }
-            .clickable(enabled = enabled, onClick = onClick)
+            .graphicsLayer {
+                alpha = fade
+                scaleX = scale * press
+                scaleY = scale * press
+            }
+            .clickable(interactionSource = interaction, indication = ripple(), enabled = enabled, onClick = onClick)
             .semantics { contentDescription = description },
     ) {
         Row(
@@ -779,16 +923,30 @@ private val RAINBOW = arrayOf(
 
 /**
  * The trailing "+ Add" chip that opens the editor on a new requirement. It
- * stands as tall as a chip, so the line it shares with one stays level.
+ * stands as tall as a chip, so the line it shares with one stays level. Its
+ * plus turns a quarter on press.
  */
 @Composable
 private fun AddChip(enabled: Boolean, onClick: () -> Unit) {
     val metrics = LocalChipMetrics.current
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val turn by animateFloatAsState(
+        if (pressed) 90f else 0f,
+        MaterialTheme.motionScheme.fastSpatialSpec(),
+        label = "add-turn",
+    )
     Row(
         modifier = Modifier
+            .pressScale(interaction)
             .clip(CircleShape)
             .dashedOutline(MaterialTheme.colorScheme.outline, radius = metrics.radius)
-            .clickable(enabled = enabled, onClick = onClick)
+            .clickable(
+                interactionSource = interaction,
+                indication = ripple(),
+                enabled = enabled,
+                onClick = onClick,
+            )
             .semantics { contentDescription = "Add requirement" }
             .height(metrics.height)
             .padding(start = metrics.startPadding + 6.dp, end = metrics.endPadding + 6.dp),
@@ -797,7 +955,7 @@ private fun AddChip(enabled: Boolean, onClick: () -> Unit) {
         Icon(
             Icons.Filled.Add,
             contentDescription = null,
-            modifier = Modifier.size(metrics.addIconSize),
+            modifier = Modifier.size(metrics.addIconSize).rotate(turn),
             tint = MaterialTheme.colorScheme.primary,
         )
         Spacer(Modifier.width(5.dp))
@@ -813,19 +971,39 @@ private fun AddChip(enabled: Boolean, onClick: () -> Unit) {
 /**
  * The zone the board opens under itself while a chip is held. It stands as
  * tall as a chip, so the chip it swallows and the row it replaces match.
+ * It springs open when a chip is picked up, and when the chip hovers over it
+ * the zone fills, swells and wags its bin.
  */
 @Composable
 private fun RemoveZone(over: Boolean, modifier: Modifier = Modifier) {
     val danger = MaterialTheme.colorScheme.error
     val fill = MaterialTheme.colorScheme.errorContainer
+    val swell by animateFloatAsState(
+        if (over) 1.04f else 1f,
+        spring(dampingRatio = 0.4f, stiffness = 600f),
+        label = "remove-swell",
+    )
+    val wag = if (over && LocalMotionEnabled.current) {
+        rememberInfiniteTransition(label = "bin-wag").animateFloat(
+            initialValue = -14f,
+            targetValue = 14f,
+            animationSpec = infiniteRepeatable(tween(130), RepeatMode.Reverse),
+            label = "bin-angle",
+        ).value
+    } else 0f
     Row(
         modifier = modifier
+            .springEntrance(rise = 10f)
+            .graphicsLayer {
+                scaleX = swell
+                scaleY = swell
+            }
             .fillMaxWidth()
             .then(
                 if (over) {
-                    Modifier.clip(RoundedCornerShape(10.dp)).background(fill)
+                    Modifier.clip(RoundedCornerShape(LocalChipMetrics.current.radius)).background(fill)
                 } else {
-                    Modifier.dashedOutline(danger.copy(alpha = 0.6f), radius = 10.dp)
+                    Modifier.dashedOutline(danger.copy(alpha = 0.6f), radius = LocalChipMetrics.current.radius)
                 },
             )
             .height(LocalChipMetrics.current.height),
@@ -835,7 +1013,7 @@ private fun RemoveZone(over: Boolean, modifier: Modifier = Modifier) {
         Icon(
             Icons.Filled.Delete,
             contentDescription = null,
-            modifier = Modifier.size(14.dp),
+            modifier = Modifier.size(if (over) 18.dp else 14.dp).rotate(wag),
             tint = if (over) MaterialTheme.colorScheme.onErrorContainer else danger,
         )
         Spacer(Modifier.width(6.dp))
@@ -853,6 +1031,7 @@ private fun Modifier.dashedOutline(
     fill: Color = Color.Transparent,
     radius: Dp = 16.dp,
     width: Dp = 1.dp,
+    phase: Float = 0f,
 ): Modifier = drawBehind {
     if (fill != Color.Transparent) {
         drawRoundRect(color = fill, cornerRadius = CornerRadius(radius.toPx()))
@@ -865,7 +1044,7 @@ private fun Modifier.dashedOutline(
         cornerRadius = CornerRadius((radius.toPx() - stroke / 2f).coerceAtLeast(0f)),
         style = Stroke(
             width = stroke,
-            pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx())),
+            pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx()), phase.dp.toPx()),
         ),
     )
 }

@@ -1,7 +1,24 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package dev.seedseeker.app.ui
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.filled.Build
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -30,7 +47,7 @@ import dev.seedseeker.app.model.*
 import kotlin.math.roundToInt
 
 /** Query values remain owned by the app, so every change is saved before navigating back. */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun SearchSettingsScreen(
     query: PresetQuery,
@@ -48,10 +65,17 @@ internal fun SearchSettingsScreen(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            LargeTopAppBar(
-                title = { Text("Search settings") },
+            LargeFlexibleTopAppBar(
+                title = { Text("Search settings", fontWeight = FontWeight.ExtraBold) },
+                subtitle = {
+                    Text(
+                        scopeSummaryText(query.maximumDepth, query.requireBlacksmith, query.excludeBlacksmithRewards,
+                            query.wandmakerQuest, query.challenges),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = onBack, shapes = IconButtonDefaults.shapes()) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
@@ -72,7 +96,7 @@ internal fun SearchSettingsScreen(
             ) {
                 if (!enabled) SettingsNotice("Stop the search to change its settings.")
 
-                SettingsGroupTitle("Dungeon")
+                SettingsGroupTitle("Dungeon", MaterialShapes.Gem, Icons.Filled.Place)
                 SearchSettingsCard {
                     SearchSliderHeading("Max floor", "${query.maximumDepth}")
                     Slider(
@@ -92,7 +116,7 @@ internal fun SearchSettingsScreen(
                     )
                 }
 
-                SettingsGroupTitle("Rooms and feelings")
+                SettingsGroupTitle("Rooms and feelings", MaterialShapes.Flower, Icons.Filled.Home)
                 SearchSettingsCard {
                     FarmingFloorsSection(query.floorRequirements, enabled,
                         onToggle = { onQueryChange(query.toggleFarmingFloor(it)) },
@@ -101,7 +125,7 @@ internal fun SearchSettingsScreen(
                 }
                 query.floorRequirements.floorValidationProblem(query.maximumDepth)?.let { SettingsNotice(it) }
 
-                SettingsGroupTitle("Quests and items")
+                SettingsGroupTitle("Quests and items", MaterialShapes.Sunny, Icons.Filled.Star)
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     SearchSettingSwitch(
                         title = "AutoTrinket",
@@ -141,7 +165,7 @@ internal fun SearchSettingsScreen(
                 }
 
                 if (workerCeiling > 1) {
-                    SettingsGroupTitle("Performance")
+                    SettingsGroupTitle("Performance", MaterialShapes.SoftBurst, Icons.Filled.Build)
                     SearchSettingsCard {
                         val shown = workerCount.coerceIn(1, workerCeiling)
                         SearchSliderHeading("Workers", "$shown / $workerCeiling")
@@ -160,7 +184,7 @@ internal fun SearchSettingsScreen(
                     }
                 }
 
-                SettingsGroupTitle("Challenges · ${Integer.bitCount(query.challenges)} on")
+                SettingsGroupTitle("Challenges · ${Integer.bitCount(query.challenges)} on", MaterialShapes.SoftBoom, Icons.Filled.Warning)
                 Text("Used for both searches and scouting.",
                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(start = 8.dp, bottom = 8.dp))
@@ -183,6 +207,11 @@ internal fun SearchSettingsScreen(
     }
     if (chooseQuest) AlertDialog(
         onDismissRequest = { chooseQuest = false },
+        icon = {
+            ShapeBackdrop(MaterialShapes.Flower, MaterialTheme.colorScheme.tertiaryContainer, Modifier.size(52.dp)) {
+                Icon(Icons.Filled.Star, contentDescription = null, tint = MaterialTheme.colorScheme.onTertiaryContainer)
+            }
+        },
         title = { Text("Wandmaker quest") },
         text = {
             Column(Modifier.selectableGroup().verticalScroll(rememberScrollState())) {
@@ -207,20 +236,34 @@ internal fun SearchSettingsScreen(
     )
 }
 
+/** A slider's name and its value, which rolls like an odometer as the thumb moves. */
 @Composable
 private fun SearchSliderHeading(title: String, value: String) {
     val headingStyle = MaterialTheme.typography.titleMedium.copy(fontSize = 18.sp)
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(title, style = headingStyle, modifier = Modifier.weight(1f))
-        Text(value, style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.tertiary)
+        AnimatedContent(
+            targetState = value,
+            transitionSpec = {
+                val up = (targetState.substringBefore(' ').toIntOrNull() ?: 0) >
+                    (initialState.substringBefore(' ').toIntOrNull() ?: 0)
+                (slideInVertically { if (up) it else -it } + fadeIn())
+                    .togetherWith(slideOutVertically { if (up) -it else it } + fadeOut())
+                    .using(SizeTransform(clip = false))
+            },
+            label = "slider-value",
+        ) { shown ->
+            Text(shown, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold,
+                color = MaterialTheme.colorScheme.tertiary)
+        }
     }
 }
 
 @Composable
-private fun SettingsGroupTitle(title: String) {
-    Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.tertiary,
-        modifier = Modifier.padding(start = 8.dp, top = 20.dp, bottom = 4.dp))
+private fun SettingsGroupTitle(title: String, polygon: androidx.graphics.shapes.RoundedPolygon, icon: androidx.compose.ui.graphics.vector.ImageVector) {
+    SectionHeading(title, polygon, icon, modifier = Modifier.padding(start = 6.dp, top = 20.dp, bottom = 4.dp),
+        color = MaterialTheme.colorScheme.tertiary)
 }
 
 @Composable
@@ -244,9 +287,17 @@ private fun SearchSettingSwitch(
     onCheckedChange: (Boolean) -> Unit,
     shape: RoundedCornerShape,
 ) {
-    Surface(shape = shape, color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+    val interaction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    // Checked rows glow faintly in the primary colour.
+    val container by animateColorAsState(
+        if (checked && enabled) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+        else MaterialTheme.colorScheme.surfaceContainerHigh,
+        label = "setting-row",
+    )
+    Surface(shape = shape, color = container, modifier = Modifier.pressScale(interaction, pressed = 0.98f)) {
         Row(Modifier.fillMaxWidth()
-            .toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onCheckedChange)
+            .toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onCheckedChange,
+                interactionSource = interaction, indication = ripple())
             .padding(20.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -270,15 +321,20 @@ private fun SettingsNotice(message: String) {
     }
 }
 
+/** The finder's doorway into these settings; its cog turns a notch whenever it is pressed. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun SearchSettingsLink(summary: String, onClick: () -> Unit) {
-    Surface(onClick = onClick, shape = MaterialTheme.shapes.extraLarge,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+    val interaction = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val turn by animateFloatAsState(if (pressed) 60f else 0f, MaterialTheme.motionScheme.defaultSpatialSpec(), label = "cog")
+    Surface(onClick = onClick, shape = MaterialTheme.shapes.extraLarge, interactionSource = interaction,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh, modifier = Modifier.pressScale(interaction, pressed = 0.97f)) {
         Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Surface(shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.primaryContainer) {
+            ShapeBackdrop(MaterialShapes.Cookie9Sided, MaterialTheme.colorScheme.primaryContainer, Modifier.size(48.dp)) {
                 Icon(Icons.Filled.Settings, contentDescription = null, tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(12.dp).size(24.dp))
+                    modifier = Modifier.size(24.dp).rotate(turn))
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("Search settings", style = MaterialTheme.typography.titleMedium)

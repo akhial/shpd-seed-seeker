@@ -51,7 +51,29 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.LoadingIndicator
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -119,7 +141,7 @@ internal fun LevelMapView(
 
 /** Inline and expanded maps retain separate loads, branches and native viewports. */
 @Composable
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 private fun LevelMapPanel(
     world: ScoutWorld,
     depth: Int,
@@ -195,28 +217,49 @@ private fun LevelMapPanel(
         }
     }
     val stage: @Composable (Modifier, Boolean) -> Unit = { modifier, full ->
+        // A freshly charted map blooms in from slightly small; a reload fades it back.
+        val bloom by animateFloatAsState(
+            if (bundle != null) 1f else 0f,
+            spring(dampingRatio = 0.7f, stiffness = 260f),
+            label = "map-bloom",
+        )
         Box(modifier.background(Color.Black), contentAlignment = Alignment.Center) {
-            MapCanvas(bundle, request, secrets, title, full, animated, navigate)
+            Box(Modifier.fillMaxSize().graphicsLayer {
+                alpha = bloom.coerceIn(0f, 1f)
+                val scale = 0.94f + 0.06f * bloom
+                scaleX = scale
+                scaleY = scale
+            }) {
+                MapCanvas(bundle, request, secrets, title, full, animated, navigate)
+            }
             when {
                 current?.isFailure == true -> Column(Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("Couldn’t load this map.", color = Color.White)
                     Text(current.exceptionOrNull()?.message ?: "Map generation failed", color = Color.LightGray,
                         style = MaterialTheme.typography.bodySmall)
-                    TextButton(onClick = { retry++; }) { Text("Try again") }
+                    FilledTonalButton(onClick = { retry++; }, shapes = ButtonDefaults.shapes()) { Text("Try again") }
                 }
                 bundle == null -> Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    CircularProgressIndicator(Modifier.size(24.dp))
+                    LoadingIndicator(Modifier.size(56.dp), color = floorRegionColor(depth))
                     Text("Charting ${if (branch == 0) "floor $depth" else "the quest level"}…", color = Color.LightGray)
                 }
             }
-            if (!full) Surface(modifier = Modifier.align(Alignment.TopEnd).padding(6.dp), shape = MaterialTheme.shapes.medium,
-                color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.92f)) {
-                TextButton(onClick = { onExpand(branch, secrets) }) { Text("Expand map") }
+            if (!full) {
+                val expandInteraction = remember { MutableInteractionSource() }
+                FilledTonalButton(
+                    onClick = { onExpand(branch, secrets) },
+                    shapes = ButtonDefaults.shapes(),
+                    interactionSource = expandInteraction,
+                    contentPadding = PaddingValues(horizontal = 14.dp),
+                    modifier = Modifier.align(Alignment.TopEnd).padding(8.dp).height(36.dp).pressScale(expandInteraction),
+                ) {
+                    Text("Expand map")
+                }
             }
         }
     }
-    if (!full) Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow,
-        modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp)) {
+    if (!full) Surface(shape = MaterialTheme.shapes.extraLarge, color = MaterialTheme.colorScheme.surfaceContainerLow,
+        modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp).springEntrance(rise = 12f)) {
         Column {
             toolbar()
             stage(Modifier.fillMaxWidth().height(280.dp), false)
@@ -252,17 +295,37 @@ private fun LevelMapPanel(
                 if (hasSublevels) toolbar()
                 Box(Modifier.fillMaxWidth().weight(1f)) {
                     stage(Modifier.fillMaxSize(), true)
+                    // A floating toolbar: step between floors while the floor number
+                    // rolls past in the direction you travel, tinted by region.
                     Surface(
-                        modifier = Modifier.align(Alignment.BottomCenter).padding(12.dp),
-                        shape = MaterialTheme.shapes.large,
-                        color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.92f),
+                        modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.94f),
+                        shadowElevation = 6.dp,
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            IconButton(onClick = { navigate(-1) }, enabled = floors.indexOf(depth) > 0) {
+                        Row(Modifier.padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            FilledTonalIconButton(onClick = { navigate(-1) }, enabled = floors.indexOf(depth) > 0,
+                                shapes = IconButtonDefaults.shapes()) {
                                 Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Previous floor")
                             }
-                            VerticalDivider(Modifier.height(24.dp))
-                            IconButton(onClick = { navigate(1) }, enabled = floors.indexOf(depth) < floors.lastIndex) {
+                            AnimatedContent(
+                                targetState = depth,
+                                transitionSpec = {
+                                    val deeper = targetState > initialState
+                                    (slideInHorizontally { if (deeper) it else -it } + fadeIn())
+                                        .togetherWith(slideOutHorizontally { if (deeper) -it else it } + fadeOut())
+                                        .using(SizeTransform(clip = true))
+                                },
+                                label = "map-floor",
+                            ) { shown ->
+                                Row(Modifier.padding(horizontal = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Box(Modifier.size(width = 3.dp, height = 14.dp).background(floorRegionColor(shown), RoundedCornerShape(2.dp)))
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("Floor $shown", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                            FilledTonalIconButton(onClick = { navigate(1) }, enabled = floors.indexOf(depth) < floors.lastIndex,
+                                shapes = IconButtonDefaults.shapes()) {
                                 Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Next floor")
                             }
                         }
@@ -454,6 +517,14 @@ internal class NativeLevelMapView(context: Context) : FrameLayout(context) {
         val top = (if (y + dp(16) + cardHeight < height) y + dp(16) else y - cardHeight - dp(16)).toInt().coerceIn(dp(8), maxOf(dp(8), height - cardHeight - dp(8)))
         addView(card, LayoutParams(cardWidth, cardHeight).apply { leftMargin = left; topMargin = top })
         itemCard = card
+        // The card springs out of the tapped tile rather than simply appearing.
+        if (animate) {
+            card.pivotX = (x - left).coerceIn(0f, cardWidth.toFloat())
+            card.pivotY = (y - top).coerceIn(0f, cardHeight.toFloat())
+            card.scaleX = 0.6f; card.scaleY = 0.6f; card.alpha = 0f
+            card.animate().scaleX(1f).scaleY(1f).alpha(1f).setDuration(260)
+                .setInterpolator(android.view.animation.OvershootInterpolator(1.6f)).start()
+        }
     }
     override fun onHoverEvent(event: MotionEvent): Boolean {
         when (event.actionMasked) {

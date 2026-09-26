@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -29,6 +30,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
@@ -190,10 +193,21 @@ private fun RequirementBadge(matches: ScoutMatches, progress: Float) {
     val hasMatches = matches.matchedSlots > 0
     val complete = hasMatches && matches.matchedSlots == matches.totalSlots
     val text = scoutMatchText(matches.matchedSlots, matches.totalSlots)
-    val container = if (hasMatches) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest
-    val content = if (hasMatches) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant
+    val container = when {
+        complete -> MaterialTheme.colorScheme.primary
+        hasMatches -> MaterialTheme.colorScheme.primaryContainer
+        else -> MaterialTheme.colorScheme.surfaceContainerHighest
+    }
+    val content = when {
+        complete -> MaterialTheme.colorScheme.onPrimary
+        hasMatches -> MaterialTheme.colorScheme.onPrimaryContainer
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
     Layout(
-        modifier = Modifier.testTag("scout-requirements").clip(CircleShape).background(container)
+        modifier = Modifier.testTag("scout-requirements")
+            // Meeting every requirement is worth a shout.
+            .celebrate(if (complete) 1 else 0, CelebrationColors, count = 14, reach = 44f)
+            .clip(CircleShape).background(container)
             .clearAndSetSemantics { contentDescription = text },
         content = {
             Text(
@@ -218,10 +232,17 @@ private fun RequirementBadge(matches: ScoutMatches, progress: Float) {
                 color = content,
                 maxLines = 1,
             )
-            Box(Modifier.size(20.dp).graphicsLayer {
+            Box(Modifier.defaultMinSize(20.dp, 20.dp).graphicsLayer {
                 alpha = ((progress - 0.45f) / 0.55f).coerceIn(0f, 1f)
             }, contentAlignment = Alignment.Center) {
-                Icon(if (complete) Icons.Filled.Check else Icons.Filled.Info, contentDescription = null, tint = content)
+                // Collapsed, the badge keeps its count rather than a second info glyph
+                // beside the seed-information button.
+                if (complete) {
+                    Icon(Icons.Filled.Check, contentDescription = null, tint = content)
+                } else {
+                    Text("${matches.matchedSlots}/${matches.totalSlots}", style = MaterialTheme.typography.labelSmall,
+                        color = content, maxLines = 1, softWrap = false)
+                }
             }
         },
     ) { measurables, constraints ->

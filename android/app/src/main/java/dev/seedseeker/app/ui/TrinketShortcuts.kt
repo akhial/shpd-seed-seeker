@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 package dev.seedseeker.app.ui
 
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -30,15 +35,23 @@ internal fun TrinketShortcuts(
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.CenterHorizontally)) {
         offers.take(4).forEach { offer ->
             val applied = selectedTrinket == offer.id
+            val interaction = remember { MutableInteractionSource() }
+            // Applied shortcuts round into circles; the rest keep soft squares.
+            val corner by animateDpAsState(
+                if (applied) 18.dp else 10.dp,
+                MaterialTheme.motionScheme.fastSpatialSpec(),
+                label = "shortcut-corner",
+            )
             Surface(
                 selected = applied,
                 onClick = { onSelect(if (applied) "none" else offer.id) },
                 enabled = enabled,
-                modifier = Modifier.size(36.dp).semantics {
+                interactionSource = interaction,
+                modifier = Modifier.size(36.dp).pressScale(interaction, pressed = 0.85f).popOnChange(applied, peak = 1.15f).semantics {
                     contentDescription = offer.name
                     stateDescription = if (applied) "Applied +3" else "Not applied"
                 },
-                shape = MaterialTheme.shapes.small,
+                shape = RoundedCornerShape(corner),
                 border = BorderStroke(
                     if (applied) 2.dp else 1.dp,
                     if (applied) SpdGreen else MaterialTheme.colorScheme.outlineVariant,
