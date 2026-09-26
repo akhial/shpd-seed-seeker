@@ -40,9 +40,9 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
-    <release version="0.20.0" date="2026-09-26">
+    <release version="0.20.1" date="2026-09-27">
       <description>
-        <p>Add an iOS app and refresh Android with Material 3 Expressive.</p>
+        <p>Improve Android Scout scrolling for long lists of items and results.</p>
       </description>
     </release>
     <release version="0.9.1" date="2026-09-07">
