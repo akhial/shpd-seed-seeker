@@ -176,10 +176,6 @@ struct RequirementsView: View {
             RequirementsFlowLayout(spacing: 8, fillsWidth: false) {
                 ForEach(item.members.map { requirements[$0] }, id: \.key) { requirement in
                     HStack(spacing: 8) {
-                        if requirement.key != requirements[item.anchor].key {
-                            Text("or").font(.caption.monospaced().weight(.medium))
-                                .foregroundStyle(.purple.opacity(0.85))
-                        }
                         chip(requirement, item: item)
                         if requirement.key == requirements[item.anchor].key && requirements.canStack(item) {
                             Button {
@@ -199,14 +195,8 @@ struct RequirementsView: View {
                 }
             }
             .padding(8)
-            .background {
-                RoundedRectangle(cornerRadius: 30, style: .continuous)
-                    .fill(.purple.opacity(0.025))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 30, style: .continuous)
-                            .strokeBorder(.purple.opacity(0.22), lineWidth: 1)
-                    }
-            }
+            .glassEffect(.regular.tint(.purple.opacity(0.035)), in: .rect(cornerRadius: 32))
+            .glassEffectID("group-\(cluster)", in: glass)
             .id("group-\(cluster)")
         } else {
             chip(requirements[item.anchor], item: item)
