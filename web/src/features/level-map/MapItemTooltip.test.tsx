@@ -40,7 +40,7 @@ const sword = {
   quantity: 1,
   deterministic: true,
 };
-it("shows the generated upgrade, enchantment and curse independently, with the shared pulse", async () => {
+it("shows the inline upgrade, modified title and curse, with the shared pulse", async () => {
   await show([
     {
       ...sword,
@@ -54,7 +54,7 @@ it("shows the generated upgrade, enchantment and curse independently, with the s
   const chip = host.querySelector('[aria-label="Upgrade +2"]');
   expect(chip?.classList.contains("d1-chip-tag-up")).toBe(true);
   expect(chip?.classList.contains("d1-chip-tag")).toBe(true);
-  expect(host.querySelector("strong")?.textContent).toBe("Shocking Shortsword");
+  expect(host.querySelector("strong")?.textContent).toBe("Shocking Shortsword +2");
   expect(host.querySelector(".d1-chip-tag-soft")).toBeNull();
   expect(host.textContent).toContain("Cursed");
   const glow = host.querySelector<HTMLElement>(".d1-sprite-glow")!;

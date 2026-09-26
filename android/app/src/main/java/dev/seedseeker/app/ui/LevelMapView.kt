@@ -303,9 +303,11 @@ private class TooltipUpgradeSpan(context: Context) : ReplacementSpan() {
     override fun draw(canvas: Canvas, text: CharSequence, start: Int, end: Int, x: Float, top: Int, y: Int, bottom: Int, paint: Paint) {
         val metrics = foreground.fontMetrics
         val width = getSize(paint, text, start, end, null).toFloat()
-        canvas.drawRoundRect(x, y + metrics.ascent - 2 * density, x + width, y + metrics.descent + 2 * density,
+        // Center the whole chip on this title line, including its font's descent.
+        val baseline = y + (paint.ascent() + paint.descent() - metrics.ascent - metrics.descent) / 2f
+        canvas.drawRoundRect(x, baseline + metrics.ascent - 2 * density, x + width, baseline + metrics.descent + 2 * density,
             4 * density, 4 * density, background)
-        canvas.drawText(text, start, end, x + 4 * density, y.toFloat(), foreground)
+        canvas.drawText(text, start, end, x + 4 * density, baseline, foreground)
     }
 }
 

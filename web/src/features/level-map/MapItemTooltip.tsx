@@ -90,7 +90,7 @@ export function MapItemTooltip({
                     <>
                       {item.name.slice(0, lastSpace + 1)}
                       <span className="d1-map-item-title-tail">
-                        {item.name.slice(lastSpace + 1)}
+                        {item.name.slice(lastSpace + 1)}{" "}
                         <span
                           className="d1-chip-tag d1-chip-tag-up"
                           aria-label={`Upgrade +${item.upgrade}`}

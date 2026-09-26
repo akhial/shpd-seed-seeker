@@ -415,7 +415,7 @@
 }
 .d1-map-item-title .d1-chip-tag {
   display: inline-block;
-  margin-left: 6px;
+  margin-left: 2px;
   vertical-align: baseline;
   white-space: nowrap;
 }
