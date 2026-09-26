@@ -391,9 +391,16 @@ using `ItemFilmOracle`, including loop assignments and later overrides.
 
 The optional `itemTooltips` array is shared by web, Android, macOS, Windows, and
 GTK. It adds metadata to schema v3 without changing scene rendering. Each entry
-has `cell`, `label` (container/inventory owner, empty for loose items), `hidden`
+has `cell`, `bounds`, `label` (container/inventory owner, empty for loose items), `hidden`
 (inside a concealed secret room), and `items`. Each item has `name`,
-`description`, `image` (the run's item atlas cell), `quantity`, and `deterministic`.
+`description`, `image` (the run's item atlas cell), `icon`, `quantity`, and `deterministic`.
+`bounds` is `[x, y, width, height]` relative to the cell in map pixels, using the
+same raised sprite placement as scene rendering. Use it for both hit testing and
+selection outlines; older entries without bounds fall back to the ground tile.
+`icon` is an optional source rectangle in `item_icons.png`, independent of the
+seeded appearance. It covers rings, potions, scrolls, and both exotic categories,
+using the pinned Java `ItemSpriteSheet.Icons` frames. Render it over the centered
+item sprite at the upper right, at the same pixel scale.
 Clients must suppress hidden entries while Secrets is off, invert the current
 map transform when hit testing, and clear inspection on navigation or gestures.
 Older documents without this array remain renderable without inspection.

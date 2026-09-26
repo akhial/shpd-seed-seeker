@@ -20,6 +20,12 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.ImageView
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.material3.ColorScheme
+import androidx.compose.material3.lightColorScheme
+import android.graphics.Paint
+import android.graphics.RectF
 import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import android.graphics.Typeface
@@ -264,16 +270,46 @@ private fun LevelMapPanel(
 
 @Composable
 private fun MapCanvas(bundle: LevelMapBundle?, request: LevelMapRequest, secrets: Boolean, label: String, expanded: Boolean, animated: Boolean, navigate: (Int) -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    val icons = LocalItemIconAtlas.current?.asAndroidBitmap()
     AndroidView(
         modifier = Modifier.fillMaxSize(),
         factory = { context -> NativeLevelMapView(context) },
-        update = { it.bind(bundle, request, secrets, expanded, animated, navigate); it.contentDescription = label },
+        update = { it.setTooltipTheme(colors, icons); it.bind(bundle, request, secrets, expanded, animated, navigate); it.contentDescription = label },
         onRelease = { it.release() },
     )
 }
 
 /** Android gestures, accessibility scrolling and animation lifetime stay native. */
 internal class NativeLevelMapView(context: Context) : FrameLayout(context) {
+    private var tooltipColors: ColorScheme = lightColorScheme()
+    private var tooltipIcons: Bitmap? = null
+    fun setTooltipTheme(colors: ColorScheme, icons: Bitmap?) {
+        if (tooltipColors != colors || tooltipIcons !== icons) hideItem()
+        tooltipColors = colors; tooltipIcons = icons
+    }
+    private fun itemArtwork(atlas: Bitmap, image: Int, icon: List<Int>?): Bitmap {
+        val sx = image % 16 * 16; val sy = image / 16 * 16
+        var left = 16; var top = 16; var right = -1; var bottom = -1
+        for (y in 0 until 16) for (x in 0 until 16) {
+            if (atlas.getPixel(sx + x, sy + y) ushr 24 > 8) {
+                left = minOf(left, x); top = minOf(top, y); right = maxOf(right, x); bottom = maxOf(bottom, y)
+            }
+        }
+        if (right < 0) { left = 0; top = 0; right = 15; bottom = 15 }
+        val pixels = (32 * resources.displayMetrics.density).toInt().coerceAtLeast(1)
+        val result = Bitmap.createBitmap(pixels, pixels, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(result); val paint = Paint().apply { isFilterBitmap = false }
+        val scale = pixels / 16f
+        val w = (right - left + 1) * scale; val h = (bottom - top + 1) * scale
+        canvas.drawBitmap(atlas, Rect(sx + left, sy + top, sx + right + 1, sy + bottom + 1),
+            RectF((pixels - w) / 2, (pixels - h) / 2, (pixels + w) / 2, (pixels + h) / 2), paint)
+        if (icon != null) tooltipIcons?.let { sheet ->
+            canvas.drawBitmap(sheet, Rect(icon[0], icon[1], icon[0] + icon[2], icon[1] + icon[3]),
+                RectF(pixels - icon[2] * scale, 0f, pixels.toFloat(), icon[3] * scale), paint)
+        }
+        return result
+    }
     private var inspectedCell: Int? = null
     private var itemCard: ScrollView? = null
     private fun hideItem() { itemCard?.let(::removeView); itemCard = null; inspectedCell = null }
@@ -302,7 +338,10 @@ internal class NativeLevelMapView(context: Context) : FrameLayout(context) {
                 setPadding(0, dp(4), 0, dp(4))
             })
         }
-        if (tip.label.isNotEmpty()) text(tip.label, 11f, 0xFFC5A97B.toInt(), true)
+        if (tip.label.isNotEmpty()) {
+            text(tip.label, 11f, tooltipColors.onSurfaceVariant.toArgb(), true)
+            body.addView(View(context), LinearLayout.LayoutParams(1, dp(12)))
+        }
         for (item in tip.items) {
             val heading = LinearLayout(context).apply { orientation = LinearLayout.HORIZONTAL; gravity = android.view.Gravity.CENTER_VERTICAL }
             bundle?.textures?.get("items.png")?.let { atlas ->
@@ -310,25 +349,25 @@ internal class NativeLevelMapView(context: Context) : FrameLayout(context) {
                 val sy = item.image / 16 * 16
                 if (sx + 16 <= atlas.width && sy + 16 <= atlas.height) {
                     heading.addView(ImageView(context).apply {
-                        setImageDrawable(BitmapDrawable(resources, Bitmap.createBitmap(atlas, sx, sy, 16, 16)).apply { isFilterBitmap = false })
+                        setImageDrawable(BitmapDrawable(resources, itemArtwork(atlas, item.image, item.icon)).apply { isFilterBitmap = false })
                         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
                     }, LinearLayout.LayoutParams(dp(32), dp(32)).apply { marginEnd = dp(10) })
                 }
             }
             heading.addView(TextView(context).apply {
                 text = item.name + if (item.quantity > 1) "  ×${item.quantity}" else ""
-                textSize = 14f; setTextColor(AndroidColor.WHITE); setTypeface(typeface, Typeface.BOLD)
+                textSize = 16f; setTextColor(tooltipColors.onSurface.toArgb()); setTypeface(typeface, Typeface.BOLD)
             }, LinearLayout.LayoutParams(0, LayoutParams.WRAP_CONTENT, 1f))
             body.addView(heading)
-            if (!item.deterministic) text("Varies with play", 11f, 0xFFC5A97B.toInt())
-            if (item.description.isNotEmpty()) text(item.description, 12f, 0xFFBDC0C6.toInt())
+            if (!item.deterministic) text("Varies with play", 11f, tooltipColors.onSurfaceVariant.toArgb())
+            if (item.description.isNotEmpty()) text(item.description, 12f, tooltipColors.onSurfaceVariant.toArgb())
         }
         val cardWidth = minOf(dp(310), width - dp(16)).coerceAtLeast(1)
         val card = ScrollView(context).apply {
             addView(body)
             elevation = dp(8).toFloat()
             background = GradientDrawable().apply {
-                setColor(0xFF181B20.toInt()); cornerRadius = dp(10).toFloat(); setStroke(dp(1), 0xFF655339.toInt())
+                setColor(tooltipColors.surfaceContainer.toArgb()); cornerRadius = 0f; setStroke(dp(1).coerceAtLeast(1), tooltipColors.outlineVariant.toArgb())
             }
             androidx.core.view.ViewCompat.setAccessibilityPaneTitle(this, tip.items.first().name)
         }

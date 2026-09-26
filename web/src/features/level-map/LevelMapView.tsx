@@ -17,7 +17,7 @@ import {
   zoomMapAt,
 } from "./map-gestures";
 import type { MapTransform } from "./map-gestures";
-import { itemAtPoint } from "./item-inspection";
+import { itemAtPoint, itemBounds } from "./item-inspection";
 import { MapItemTooltip } from "./MapItemTooltip";
 import "./level-map.css";
 
@@ -658,7 +658,7 @@ function MapCanvas({
         map?.itemTooltips
           ?.filter((item) => secrets || !item.hidden)
           .map((item) => {
-            const tile = map.scene.tileSize * scale;
+            const [left, top, width, height] = itemBounds(item, map.width, map.scene.tileSize);
             return (
               <button
                 key={item.cell}
@@ -677,18 +677,10 @@ function MapCanvas({
                   }
                 }}
                 style={{
-                  width: tile,
-                  height: tile,
-                  left:
-                    size.width / 2 +
-                    transform.x -
-                    (widthPx * scale) / 2 +
-                    (item.cell % map.width) * tile,
-                  top:
-                    size.height / 2 +
-                    transform.y -
-                    (heightPx * scale) / 2 +
-                    Math.floor(item.cell / map.width) * tile,
+                  width: width * scale,
+                  height: height * scale,
+                  left: size.width / 2 + transform.x - (widthPx * scale) / 2 + left * scale,
+                  top: size.height / 2 + transform.y - (heightPx * scale) / 2 + top * scale,
                 }}
               />
             );

@@ -328,12 +328,13 @@
   z-index: 1;
   padding: 0;
   border: 0;
-  border-radius: 2px;
+  border-radius: 0;
   background: transparent;
   cursor: help;
   touch-action: none;
 }
 .d1-map-item-target:hover,
+.d1-map-item-target[aria-describedby],
 .d1-map-item-target:focus-visible {
   outline: 1px solid var(--d1-amber, #dcb469);
   outline-offset: -1px;
@@ -347,10 +348,10 @@
   padding: 14px;
   overflow-y: auto;
   overscroll-behavior: contain;
-  border: 1px solid #655339;
-  border-radius: 10px;
-  background: #181b20;
-  color: #e9e7e2;
+  border: 1px solid var(--d1-border-strong);
+  border-radius: 0;
+  background: var(--d1-panel);
+  color: var(--d1-text);
   box-shadow:
     0 6px 24px #0009,
     0 1px 4px #0008;
@@ -361,14 +362,14 @@
   cursor: auto;
 }
 .d1-map-item-context {
-  color: #c5a97b;
+  color: var(--d1-text-2);
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 .d1-map-item-entry + .d1-map-item-entry {
-  border-top: 1px solid #ffffff14;
+  border-top: 1px solid var(--d1-border);
   margin-top: 12px;
   padding-top: 12px;
 }
@@ -379,8 +380,8 @@
   min-height: 32px;
 }
 .d1-map-item-heading strong {
-  font-size: 13px;
-  font-weight: 650;
+  font-size: 15px;
+  font-weight: 700;
 }
 .d1-map-item-icon {
   flex: 0 0 32px;
@@ -388,11 +389,15 @@
 }
 .d1-map-item-quantity {
   margin-left: auto;
-  color: #c5a97b;
+  color: var(--d1-text-2);
   font-variant-numeric: tabular-nums;
 }
 .d1-map-item-entry p {
   margin: 8px 0 0;
-  color: #bdc0c6;
+  color: var(--d1-text-2);
   white-space: pre-line;
+}
+
+.d1-map-item-tooltip > .d1-map-item-context {
+  margin-bottom: 12px;
 }

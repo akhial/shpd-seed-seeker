@@ -1,5 +1,5 @@
 //! Shared, generation-only item inspection data for every map client.
-use super::item_text::ITEM_TEXT;
+use super::item_text::{ITEM_ICONS, ITEM_TEXT};
 use super::{LevelMap, MapItem};
 
 #[derive(Clone, Debug, PartialEq)]
@@ -7,6 +7,8 @@ use super::{LevelMap, MapItem};
 #[cfg_attr(feature = "json-query", serde(rename_all = "camelCase"))]
 pub struct MapItemTooltip {
     pub cell: usize,
+    /// Sprite bounds relative to its tile, in map pixels: x, y, width, height.
+    pub bounds: [i32; 4],
     /// Empty for loose items; otherwise the container or inventory owner.
     pub label: String,
     pub hidden: bool,
@@ -19,6 +21,8 @@ pub struct MapTooltipItem {
     pub name: String,
     pub description: &'static str,
     pub image: u16,
+    /// Type glyph source rectangle in `item_icons.png`, independent of appearance.
+    pub icon: Option<[u16; 4]>,
     pub quantity: i32,
     pub deterministic: bool,
 }
@@ -64,6 +68,10 @@ impl MapTooltipItem {
             ),
             description: text.map_or("", |entry| entry.2),
             image: item.image,
+            icon: ITEM_ICONS
+                .binary_search_by_key(&key.as_str(), |entry| entry.0)
+                .ok()
+                .map(|index| ITEM_ICONS[index].1),
             quantity: item.quantity,
             deterministic: item.deterministic,
         }
@@ -97,20 +105,42 @@ impl LevelMap {
                 } else {
                     label
                 };
-                (heap.cell, label, &heap.items)
+                (
+                    heap.cell,
+                    label,
+                    &heap.items,
+                    super::visuals::heap_bounds(heap),
+                )
             })
             .chain(
                 self.contents
                     .mobs
                     .iter()
                     .filter(|mob| !mob.items.is_empty())
-                    .map(|mob| (mob.cell, words(&mob.kind), &mob.items)),
+                    .map(|mob| {
+                        (
+                            mob.cell,
+                            words(&mob.kind),
+                            &mob.items,
+                            super::visuals::mob_bounds(&mob.kind),
+                        )
+                    }),
             );
-        for (cell, label, items) in sources {
+        for (cell, label, items, bounds) in sources {
             if items.is_empty() {
                 continue;
             }
             if let Some(tip) = tips.iter_mut().find(|tip| tip.cell == cell) {
+                let [x, y, w, h] = tip.bounds;
+                let [bx, by, bw, bh] = bounds;
+                let left = x.min(bx);
+                let top = y.min(by);
+                tip.bounds = [
+                    left,
+                    top,
+                    (x + w).max(bx + bw) - left,
+                    (y + h).max(by + bh) - top,
+                ];
                 tip.items
                     .extend(items.iter().map(MapTooltipItem::from_item));
                 if !label.is_empty() {
@@ -127,6 +157,7 @@ impl LevelMap {
             tips.push(MapItemTooltip {
                 cell: usize::try_from(cell).expect("map cell is nonnegative"),
                 label,
+                bounds,
                 hidden: self.secret_rooms.iter().any(|&[left, top, right, bottom]| {
                     x > left && x < right && y > top && y < bottom
                 }),
@@ -171,6 +202,7 @@ mod tests {
         let tips = map.item_tooltips();
         assert_eq!(tips.len(), 1);
         assert_eq!(tips[0].label, "Locked Chest");
+        assert_eq!(tips[0].bounds, [0, -3, 16, 14]);
         assert!(tips[0].hidden);
         assert_eq!(tips[0].items[0].name, "Potion of healing");
         assert_eq!(tips[0].items[0].quantity, 2);
@@ -211,5 +243,35 @@ mod tests {
         let tip = MapTooltipItem::from_item(&MapItem::new("FutureItem", 0, 1));
         assert_eq!(tip.name, "Future Item");
         assert!(tip.description.is_empty());
+    }
+
+    #[test]
+    fn identity_glyphs_follow_type_including_exotics_not_randomized_appearance() {
+        for (kind, icon) in [
+            ("ring_might", [64, 0, 7, 7]),
+            ("PotionOfFrost", [24, 40, 7, 7]),
+            ("ExoticPotionOfFrost", [24, 48, 7, 7]),
+            ("PotionOfSnapFreeze", [24, 48, 7, 7]),
+            ("ScrollOfIdentify", [8, 16, 4, 7]),
+            ("ExoticScrollOfIdentify", [8, 24, 7, 6]),
+            ("ScrollOfDivination", [8, 24, 7, 6]),
+        ] {
+            for image in [224, 235, 304, 315, 352, 363] {
+                let tip = MapTooltipItem::from_item(&MapItem::new(kind, image, 1));
+                assert_eq!(tip.icon, Some(icon), "{kind}");
+                assert_eq!(tip.image, image);
+            }
+        }
+        assert!(
+            MapTooltipItem::from_item(&MapItem::new("Gold", 18, 1))
+                .icon
+                .is_none()
+        );
+        let unique: std::collections::HashSet<_> = ITEM_ICONS.iter().map(|entry| entry.1).collect();
+        assert_eq!(
+            unique.len(),
+            60,
+            "12 rings and 24 each of potions and scrolls"
+        );
     }
 }

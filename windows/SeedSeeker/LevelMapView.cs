@@ -140,15 +140,15 @@ internal sealed class LevelMapView : Grid
         if (tip is null) return;
         inspectedCell = tip.Cell;
         var body = new StackPanel { Spacing = 10 };
-        if (tip.Label.Length > 0) body.Children.Add(new TextBlock { Text = tip.Label, FontSize = 11, Opacity = .7 });
+        if (tip.Label.Length > 0) body.Children.Add(new TextBlock { Text = tip.Label, FontSize = 11, Opacity = .7, Margin = new Thickness(0, 0, 0, 4) });
         foreach (var item in tip.Items)
         {
             var heading = new Grid { ColumnSpacing = 10 };
             heading.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
             heading.ColumnDefinitions.Add(new() { Width = new GridLength(1, GridUnitType.Star) });
-            heading.Children.Add(new SpriteView { SpriteIndex = item.Image, SpriteSize = 32 });
+            heading.Children.Add(new SpriteView { SpriteIndex = item.Image, IconSource = item.Icon, SpriteSize = 32, VerticalAlignment = VerticalAlignment.Center });
             var name = new TextBlock { Text = item.Name + (item.Quantity > 1 ? $"  ×{item.Quantity}" : ""),
-                FontSize = 14, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
+                FontSize = 16, FontWeight = Microsoft.UI.Text.FontWeights.Bold, TextWrapping = TextWrapping.Wrap, VerticalAlignment = VerticalAlignment.Center };
             Grid.SetColumn(name, 1); heading.Children.Add(name); body.Children.Add(heading);
             if (!item.Deterministic) body.Children.Add(new TextBlock { Text = "Varies with play", FontSize = 11, Opacity = .7 });
             if (item.Description.Length > 0) body.Children.Add(new TextBlock { Text = item.Description, FontSize = 12, Opacity = .85, TextWrapping = TextWrapping.Wrap });
@@ -156,7 +156,7 @@ internal sealed class LevelMapView : Grid
         var cardWidth = Math.Max(1, Math.Min(310, stage.ActualWidth - 16));
         itemCard = new Border {
             Width = cardWidth, MaxHeight = Math.Max(1, Math.Min(320, stage.ActualHeight - 16)), Padding = new Thickness(14),
-            CornerRadius = new CornerRadius(10), BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(0), BorderThickness = new Thickness(1),
             Background = (Brush)Application.Current.Resources["SolidBackgroundFillColorBaseBrush"],
             BorderBrush = (Brush)Application.Current.Resources["CardStrokeColorDefaultBrush"],
             HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top,

@@ -24,6 +24,12 @@ final class LevelMapViewTests: XCTestCase {
         let map = bundle.document
         let tip = try XCTUnwrap(map.itemTooltips?.first { !$0.hidden })
         XCTAssertFalse(tip.items[0].description.isEmpty)
+        let bounds = try XCTUnwrap(tip.bounds)
+        XCTAssertTrue(map.itemTooltips!.flatMap(\.items).contains { $0.icon?.count == 4 })
+        let spriteX = Double(tip.cell % map.width * 16 + bounds[0]) + Double(bounds[2]) / 2
+        let spriteY = Double(tip.cell / map.width * 16 + bounds[1])
+        XCTAssertEqual(map.itemAt(x: spriteX, y: spriteY + 0.5, secrets: false)?.cell, tip.cell)
+        XCTAssertNotEqual(map.itemAt(x: spriteX, y: spriteY - 0.5, secrets: false)?.cell, tip.cell)
         let x = Double(tip.cell % map.width) * 16 + 8
         let y = Double(tip.cell / map.width) * 16 + 8
         XCTAssertEqual(map.itemAt(x: x, y: y, secrets: false)?.cell, tip.cell)

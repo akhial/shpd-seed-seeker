@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import { spriteCss } from "../../shared/sprites/sprites";
+import { spriteBoxCss, itemIconCss } from "../../shared/sprites/sprites";
 import type { MapItemTooltip as ItemTooltip } from "./types";
 
 export function MapItemTooltip({
@@ -50,21 +50,23 @@ export function MapItemTooltip({
       onPointerMove={(event) => event.stopPropagation()}
     >
       {tip.label && <div className="d1-map-item-context">{tip.label}</div>}
-      {tip.items.map((item, index) => (
-        <article key={index} className="d1-map-item-entry">
-          <div className="d1-map-item-heading">
-            <span
-              className="d1-map-item-icon"
-              aria-hidden="true"
-              style={spriteCss(item.image, 32)}
-            />
-            <strong>{item.name}</strong>
-            {item.quantity > 1 && <span className="d1-map-item-quantity">×{item.quantity}</span>}
-          </div>
-          {!item.deterministic && <span className="d1-map-item-context">Varies with play</span>}
-          {item.description && <p>{item.description}</p>}
-        </article>
-      ))}
+      {tip.items.map((item, index) => {
+        const sprite = spriteBoxCss(item.image, 32);
+        return (
+          <article key={index} className="d1-map-item-entry">
+            <div className="d1-map-item-heading">
+              <span className="d1-map-item-icon" aria-hidden="true" style={sprite.outer}>
+                <span style={sprite.inner} />
+                {item.icon && <span style={itemIconCss(item.icon, 32)} />}
+              </span>
+              <strong>{item.name}</strong>
+              {item.quantity > 1 && <span className="d1-map-item-quantity">×{item.quantity}</span>}
+            </div>
+            {!item.deterministic && <span className="d1-map-item-context">Varies with play</span>}
+            {item.description && <p>{item.description}</p>}
+          </article>
+        );
+      })}
     </div>
   );
 }

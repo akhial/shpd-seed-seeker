@@ -23,6 +23,12 @@ class NativeLevelMapViewTest {
         val map = bundle.map
         val tip = map.itemTooltips.first { !it.hidden }
         assertTrue(tip.items.first().description.isNotEmpty())
+        val bounds = requireNotNull(tip.bounds)
+        assertTrue(map.itemTooltips.flatMap { it.items }.any { it.icon?.size == 4 })
+        val spriteX = tip.cell % map.width * 16 + bounds[0] + bounds[2] / 2f
+        val spriteY = tip.cell / map.width * 16 + bounds[1]
+        assertEquals(tip, map.itemAt(spriteX, spriteY + .5f, false))
+        assertNotEquals(tip, map.itemAt(spriteX, spriteY - .5f, false))
         val x = (tip.cell % map.width + .5f) * 16
         val y = (tip.cell / map.width + .5f) * 16
         assertEquals(tip, map.itemAt(x, y, false))

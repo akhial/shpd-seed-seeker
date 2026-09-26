@@ -596,8 +596,8 @@ pub fn arcane_resin_image() -> gtk::Widget {
     area.upcast()
 }
 
-/// A map item's seeded appearance, without a catalog-derived identity glyph.
-pub fn map_item_image(index: u16, size: i32) -> gtk::Widget {
+/// A map item's seeded appearance and shared identity glyph.
+pub fn map_item_image(index: u16, icon: Option<[u16; 4]>, size: i32) -> gtk::Widget {
     let area = gtk::DrawingArea::builder()
         .content_width(size)
         .content_height(size)
@@ -613,6 +613,21 @@ pub fn map_item_image(index: u16, size: i32) -> gtk::Widget {
                 let x = f64::from(width * factor - art.width()) / 2.0;
                 let y = f64::from(height * factor - art.height()) / 2.0;
                 let _ = blit(context, &art, x.round(), y.round());
+            }
+            if let Some([x, y, w, h]) = icon {
+                let frame = Rect {
+                    x: i32::from(x),
+                    y: i32::from(y),
+                    width: i32::from(w),
+                    height: i32::from(h),
+                };
+                let w = scaled_extent(frame.width, size * factor);
+                let h = scaled_extent(frame.height, size * factor);
+                if let Some(glyph) = scale_nearest(&atlas.icons, frame, w, h) {
+                    let left = (width + size) * factor / 2 - w;
+                    let top = (height - size) * factor / 2;
+                    let _ = blit(context, &glyph, f64::from(left), f64::from(top));
+                }
             }
         });
     }

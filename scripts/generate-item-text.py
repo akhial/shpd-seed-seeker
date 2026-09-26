@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Generate map inspection text from the pinned Java game's English messages.
 
-Run with --source-dir containing items.properties, plants.properties and the two
-Exotic*.java files for an offline regeneration. Otherwise fetch the pinned files.
+Run with --source-dir containing items.properties, plants.properties, both
+Exotic*.java files and ItemSpriteSheet.java for an offline regeneration.
+Otherwise fetch the pinned files.
 Only static description text is included: hero-dependent formatted sentences and
 paragraphs are omitted rather than displaying unresolved Java format arguments.
 """
@@ -17,6 +18,7 @@ REVISION = "2bb34a4e91d29c8785a9363cad6ddfe5122b1d4f"
 ROOT = Path(__file__).resolve().parents[1]
 BASE = f"https://raw.githubusercontent.com/00-Evan/shattered-pixel-dungeon/{REVISION}/core/src/main/"
 FILES = {
+    "ItemSpriteSheet.java": "java/com/shatteredpixel/shatteredpixeldungeon/sprites/ItemSpriteSheet.java",
     "items.properties": "assets/messages/items/items.properties",
     "plants.properties": "assets/messages/plants/plants.properties",
     "ExoticPotion.java": "java/com/shatteredpixel/shatteredpixeldungeon/items/potions/exotic/ExoticPotion.java",
@@ -92,6 +94,36 @@ def main():
     output += ["#[rustfmt::skip]", "pub(super) const ITEM_TEXT: &[(&str, &str, &str)] = &["]
     for key, (name, desc) in sorted(records.items()):
         output.append("    (" + ", ".join(json.dumps(s, ensure_ascii=False) for s in (key, name, desc)) + "),")
+    output += ["];", ""]
+    # Identity glyphs, independently of the randomized bottle/rune/gem image.
+    java_icons = sources["ItemSpriteSheet.java"].decode().split("class Icons {", 1)[1]
+    icon_records = {}
+    categories = {"RINGS": ["RingOf" + name for name in (
+        "Accuracy", "Arcana", "Elements", "Energy", "Evasion", "Force", "Furor",
+        "Haste", "Might", "Sharpshooting", "Tenacity", "Wealth")]}
+    for file, category in (("ExoticPotion.java", "POTIONS"), ("ExoticScroll.java", "SCROLLS")):
+        pairs = re.findall(r"regToExo.put\((\w+)\.class, (\w+)\.class\)", sources[file].decode())
+        categories[category] = [regular for regular, _ in pairs]
+        categories["EXOTIC_" + category] = [exotic for _, exotic in pairs]
+    for category, classes in categories.items():
+        x, y = map(int, re.search(r"int " + category + r"\s*=\s*xy\((\d+), (\d+)\)", java_icons).groups())
+        base = x - 1 + 16 * (y - 1)
+        constants = re.findall(r"int (\w+)\s*=\s*" + category + r"\+(\d+)", java_icons)
+        assert len(constants) == len(classes) == 12
+        for constant, offset in constants:
+            index = base + int(offset)
+            width, height = map(int, re.search(r"assignIconRect\(\s*" + constant + r",\s*(\d+),\s*(\d+)\s*\)", java_icons).groups())
+            icon_records[normalize(classes[int(offset)])] = [index % 16 * 8, index // 16 * 8, width, height]
+    for alias, target in aliases.items():
+        if normalize(target) in icon_records:
+            icon_records[normalize(alias)] = icon_records[normalize(target)]
+    for item in catalog["entries"]:
+        identifier = by_name.get(normalize(item["name"]))
+        if identifier in icon_records:
+            icon_records[normalize(item["id"])] = icon_records[identifier]
+    output += ["#[rustfmt::skip]", "pub(super) const ITEM_ICONS: &[(&str, [u16; 4])] = &["]
+    for key, rect in sorted(icon_records.items()):
+        output.append(f"    ({json.dumps(key)}, {rect}),")
     output += ["];", ""]
     (ROOT / "crates/seedfinder-core/src/level_map/item_text.rs").write_text("\n".join(output))
     print(f"Generated {len(records)} item descriptions")

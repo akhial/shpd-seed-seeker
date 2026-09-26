@@ -60,12 +60,14 @@ export interface MapContents {
 }
 export interface MapItemTooltip {
   cell: number;
+  bounds?: [number, number, number, number];
   label: string;
   hidden: boolean;
   items: {
     name: string;
     description: string;
     image: number;
+    icon?: [number, number, number, number] | null;
     quantity: number;
     deterministic: boolean;
   }[];

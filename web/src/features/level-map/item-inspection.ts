@@ -12,14 +12,24 @@ export function itemAtPoint(
   secrets: boolean,
 ): MapItemTooltip | undefined {
   const scale = mapFitScale(geometry) * transform.zoom;
-  const x = Math.floor(
-    ((point.x - transform.x) / scale + geometry.mapWidth / 2) / map.scene.tileSize,
-  );
-  const y = Math.floor(
-    ((point.y - transform.y) / scale + geometry.mapHeight / 2) / map.scene.tileSize,
-  );
-  if (x < 0 || y < 0 || x >= map.width || y >= map.height) return;
-  return map.itemTooltips?.find(
-    (tip) => tip.cell === y * map.width + x && (!tip.hidden || secrets),
-  );
+  const x = (point.x - transform.x) / scale + geometry.mapWidth / 2;
+  const y = (point.y - transform.y) / scale + geometry.mapHeight / 2;
+  if (x < 0 || y < 0 || x >= geometry.mapWidth || y >= geometry.mapHeight) return;
+  return map.itemTooltips?.find((tip) => {
+    const [left, top, width, height] = itemBounds(tip, map.width, map.scene.tileSize);
+    return (
+      (!tip.hidden || secrets) && x >= left && y >= top && x < left + width && y < top + height
+    );
+  });
+}
+
+/** The same raised sprite rectangle drives hit testing and the visible selector. */
+export function itemBounds(tip: MapItemTooltip, columns: number, tile: number) {
+  const [x, y, width, height] = tip.bounds ?? [0, 0, tile, tile];
+  return [
+    (tip.cell % columns) * tile + x,
+    Math.floor(tip.cell / columns) * tile + y,
+    width,
+    height,
+  ];
 }

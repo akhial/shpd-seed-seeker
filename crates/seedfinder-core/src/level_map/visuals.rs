@@ -18,6 +18,18 @@ use crate::level::{Level, TrapKind};
 use crate::rng::{RandomStack, seed_for_depth};
 use crate::seed::DungeonSeed;
 
+pub(super) fn heap_bounds(heap: &super::MapHeap) -> [i32; 4] {
+    objects::item_bounds(objects::heap_image(heap))
+}
+
+pub(super) fn mob_bounds(kind: &str) -> [i32; 4] {
+    actors::actor(kind).map_or([0, 0, 16, 16], |sprite| {
+        let w = i32::from(sprite.width);
+        let h = i32::from(sprite.height);
+        [(17 - w).div_euclid(2), 16 - h - sprite.raise, w, h]
+    })
+}
+
 pub(super) fn scene(
     seed: DungeonSeed,
     level: &Level,

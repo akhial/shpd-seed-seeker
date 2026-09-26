@@ -117,7 +117,8 @@ impl FloorMapView {
         let title = gtk::Label::builder()
             .hexpand(true)
             .xalign(0.0)
-            .css_classes(["heading"])
+            .valign(gtk::Align::Center)
+            .css_classes(["map-item-title"])
             .build();
         let previous = button("go-previous-symbolic", "Previous floor (K)");
         let next = button("go-next-symbolic", "Next floor (J)");
@@ -282,22 +283,39 @@ impl FloorMapView {
                 } else {
                     (f64::from(x), f64::from(y))
                 };
-                let col = ((x - w / 2.0 - pan_x) / scale / 16.0 + f64::from(map.width) / 2.0)
-                    .floor() as i32;
-                let row = ((y - h / 2.0 - pan_y) / scale / 16.0 + f64::from(map.height) / 2.0)
-                    .floor() as i32;
-                if col < 0 || row < 0 || col >= map.width || row >= map.height {
-                    return false;
-                }
-                let cell = (row * map.width + col) as usize;
-                let Some(tip) = map
-                    .item_tooltips()
-                    .into_iter()
-                    .find(|tip| tip.cell == cell && (view.secrets.get() || !tip.hidden))
-                else {
+                let map_x = (x - w / 2.0 - pan_x) / scale + f64::from(map.width * 8);
+                let map_y = (y - h / 2.0 - pan_y) / scale + f64::from(map.height * 8);
+                let Some(tip) = map.item_tooltips().into_iter().find(|tip| {
+                    let [bx, by, bw, bh] = tip.bounds;
+                    let left =
+                        (i32::try_from(tip.cell).expect("map cell fits i32") % map.width) * 16 + bx;
+                    let top =
+                        (i32::try_from(tip.cell).expect("map cell fits i32") / map.width) * 16 + by;
+                    (view.secrets.get() || !tip.hidden)
+                        && map_x >= f64::from(left)
+                        && map_y >= f64::from(top)
+                        && map_x < f64::from(left + bw)
+                        && map_y < f64::from(top + bh)
+                }) else {
                     return false;
                 };
-                let body = gtk::Box::new(gtk::Orientation::Vertical, 8);
+                let [bx, by, bw, bh] = tip.bounds;
+                let left =
+                    (i32::try_from(tip.cell).expect("map cell fits i32") % map.width) * 16 + bx;
+                let top =
+                    (i32::try_from(tip.cell).expect("map cell fits i32") / map.width) * 16 + by;
+                let body = gtk::Box::new(gtk::Orientation::Vertical, 12);
+                // Scope the shape and semantic colors to this native tooltip window.
+                body.connect_realize(|body| {
+                    if let Some(root) = body.root().and_downcast::<gtk::Window>() {
+                        root.add_css_class("map-item-tooltip");
+                    }
+                });
+                body.connect_unrealize(|body| {
+                    if let Some(root) = body.root().and_downcast::<gtk::Window>() {
+                        root.remove_css_class("map-item-tooltip");
+                    }
+                });
                 if !tip.label.is_empty() {
                     body.append(
                         &gtk::Label::builder()
@@ -314,14 +332,15 @@ impl FloorMapView {
                         item.name
                     };
                     let heading = gtk::Box::new(gtk::Orientation::Horizontal, 10);
-                    heading.append(&sprites::map_item_image(item.image, 32));
+                    heading.append(&sprites::map_item_image(item.image, item.icon, 32));
                     heading.append(
                         &gtk::Label::builder()
                             .label(&title)
                             .xalign(0.0)
                             .wrap(true)
                             .max_width_chars(42)
-                            .css_classes(["heading"])
+                            .valign(gtk::Align::Center)
+                            .css_classes(["map-item-title"])
                             .build(),
                     );
                     body.append(&heading);
@@ -347,10 +366,10 @@ impl FloorMapView {
                 }
                 tooltip.set_custom(Some(&body));
                 tooltip.set_tip_area(&gdk::Rectangle::new(
-                    (w / 2.0 + pan_x + f64::from(col * 16 - map.width * 8) * scale).floor() as i32,
-                    (h / 2.0 + pan_y + f64::from(row * 16 - map.height * 8) * scale).floor() as i32,
-                    (16.0 * scale).ceil() as i32,
-                    (16.0 * scale).ceil() as i32,
+                    (w / 2.0 + pan_x + f64::from(left - map.width * 8) * scale).floor() as i32,
+                    (h / 2.0 + pan_y + f64::from(top - map.height * 8) * scale).floor() as i32,
+                    (f64::from(bw) * scale).ceil() as i32,
+                    (f64::from(bh) * scale).ceil() as i32,
                 ));
                 true
             }

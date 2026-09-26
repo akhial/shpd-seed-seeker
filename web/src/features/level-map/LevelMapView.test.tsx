@@ -290,6 +290,7 @@ async function finishWithItems() {
   data.map.itemTooltips = [
     {
       cell: 528,
+      bounds: [0, -3, 16, 14],
       label: "Chest",
       hidden: false,
       items: [
@@ -298,6 +299,7 @@ async function finishWithItems() {
           description:
             "This elixir will rapidly restore your health and instantly cure many ailments.",
           image: 352,
+          icon: [8, 40, 6, 7],
           quantity: 2,
           deterministic: true,
         },

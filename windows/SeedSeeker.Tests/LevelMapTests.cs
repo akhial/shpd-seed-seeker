@@ -12,6 +12,12 @@ public sealed class LevelMapTests
         var map = NativeEngine.LevelMap(LevelMapDocument.Request("AAA-AAA-AAA", 1, 0, new QuerySettings(), "none"));
         var tip = map.ItemTooltips.First(tip => !tip.Hidden);
         Assert.NotEmpty(tip.Items[0].Description);
+        Assert.NotNull(tip.Bounds);
+        Assert.Contains(map.ItemTooltips.SelectMany(entry => entry.Items), item => item.Icon is { Length: 4 });
+        var spriteX = tip.Cell % map.Width * 16 + tip.Bounds![0] + tip.Bounds[2] / 2.0;
+        var spriteY = tip.Cell / map.Width * 16 + tip.Bounds[1];
+        Assert.Same(tip, map.ItemAt(spriteX, spriteY + .5, false));
+        Assert.NotSame(tip, map.ItemAt(spriteX, spriteY - .5, false));
         var x = tip.Cell % map.Width * 16 + 8;
         var y = tip.Cell / map.Width * 16 + 8;
         Assert.Same(tip, map.ItemAt(x, y, false));

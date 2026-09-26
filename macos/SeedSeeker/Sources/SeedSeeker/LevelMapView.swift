@@ -296,7 +296,7 @@ private struct NativeLevelMap: NSViewRepresentable {
         card.documentView = content; card.hasVerticalScroller = true
         card.drawsBackground = false; card.wantsLayer = true
         card.layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
-        card.layer?.cornerRadius = 10; card.layer?.borderWidth = 1
+        card.layer?.cornerRadius = 0; card.layer?.borderWidth = 1
         card.layer?.borderColor = NSColor.separatorColor.cgColor
         let visibleHeight = max(1, min(height, min(320, bounds.height - 16)))
         let x = max(8, min(point.x + 16, bounds.width - width - 8))
@@ -436,14 +436,14 @@ private struct MapItemCard: View {
     let tip: LevelMapDocument.ItemTooltip
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            if !tip.label.isEmpty { Text(tip.label).font(.caption).foregroundStyle(.secondary) }
+            if !tip.label.isEmpty { Text(tip.label).font(.caption).foregroundStyle(.secondary).padding(.bottom, 4) }
             ForEach(Array(tip.items.enumerated()), id: \.offset) { index, item in
                 if index > 0 { Divider() }
                 HStack(spacing: 10) {
-                    if let image = SpriteAtlas.bundled?.composedSprite(spriteIndex: item.image, pointSize: 32, layer: .art) {
+                    if let image = SpriteAtlas.bundled?.inspectionSprite(spriteIndex: item.image, icon: item.icon, pointSize: 32) {
                         Image(decorative: image, scale: CGFloat(SpriteAtlas.pixelScale)).interpolation(.none)
                     }
-                    Text(item.name).font(.headline)
+                    Text(item.name).font(.system(size: 15, weight: .bold))
                     if item.quantity > 1 { Spacer(); Text("×\(item.quantity)").foregroundStyle(.secondary) }
                 }
                 if !item.deterministic { Text("Varies with play").font(.caption).foregroundStyle(.secondary) }
