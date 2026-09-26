@@ -157,6 +157,11 @@ registered `seedseeker://q/CODE` form works in local simulator builds.
 
 ## Tests
 
+The [CI workflow](../.github/workflows/ci.yml) builds the unsigned ARM64 device
+app and packages and validates its IPA on every pull request and push to `main`.
+The `iOS` job uses Xcode 27 and needs no signing secrets. Its `ios-ipa` artifact
+contains `SeedSeeker.ipa` and is retained for seven days.
+
 The iOS test target runs the shared Apple engine/model tests inside the app so
 catalog and sprite resources resolve from the real bundle:
 

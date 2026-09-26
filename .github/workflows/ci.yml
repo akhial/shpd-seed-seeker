@@ -168,6 +168,45 @@ jobs:
           ./gradlew :app:testDebugUnitTest :app:lintDebug :app:assembleRelease --stacktrace
           python3 ../scripts/check-android-apk.py app/build/outputs/apk/release/app-release-unsigned.apk "$ANDROID_ABIS"
 
+  ios:
+    name: iOS
+    # Match the release iOS job's Xcode and SDK for device builds.
+    runs-on: xcode-27
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Select Xcode 27
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '27.0'
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: ios
+
+      # Keep this usable on fork PRs without signing credentials.
+      - name: Build unsigned device app
+        run: bash scripts/build-ios-app.sh device CODE_SIGNING_ALLOWED=NO
+
+      - name: Package and validate IPA
+        run: bash scripts/package-ios-ipa.sh
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-ipa
+          path: dist/ios/SeedSeeker.ipa
+          if-no-files-found: error
+          retention-days: 7
+
   macos:
     name: macOS
     # Matches the release macos-app job so tests exercise the shipping SDK.
