@@ -2,6 +2,12 @@
 package dev.seedseeker.app.ui
 
 import android.graphics.BitmapFactory
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.rememberDatePickerState
@@ -19,6 +25,7 @@ import dev.seedseeker.app.model.FloorFeeling
 import kotlin.math.roundToInt
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.rememberScrollableState
@@ -92,11 +99,13 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.TextRange
@@ -374,7 +383,13 @@ private fun SeedInputCard(
     onScoutSeed: (String) -> Unit,
 ) {
     val daily = seedInput.firstOrNull()?.let { it in '0'..'9' } == true
+    val focusManager = LocalFocusManager.current
+    var entryFocused by remember { mutableStateOf(false) }
     var showDatePicker by remember { mutableStateOf(false) }
+    val scout = {
+        focusManager.clearFocus()
+        onScout()
+    }
     if (showDatePicker) {
         val picker = rememberDatePickerState(
             initialSelectedDateMillis = DailyRunDate.parse(seedInput) ?: System.currentTimeMillis(),
@@ -410,7 +425,10 @@ private fun SeedInputCard(
         Column(Modifier.padding(start = 18.dp, top = 10.dp, end = 18.dp, bottom = 18.dp)) {
             BoxWithConstraints(Modifier.fillMaxWidth()) {
                 val compact = maxWidth < 300.dp
-                Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.Bottom) {
+                Row(
+                    modifier = Modifier.onFocusChanged { entryFocused = it.hasFocus }.focusGroup(),
+                    verticalAlignment = Alignment.Bottom,
+                ) {
                     OutlinedTextField(
                         value = fieldValue,
                         onValueChange = {
@@ -435,23 +453,35 @@ private fun SeedInputCard(
                             imeAction = ImeAction.Search,
                         ),
                         keyboardActions = KeyboardActions(
-                            onSearch = { if (seedIsReady && !isScouting) onScout() },
+                            onSearch = { if (seedIsReady && !isScouting) scout() },
                         ),
                     )
-                    IconButton(
-                        onClick = { showDatePicker = true }, enabled = !isScouting,
-                        modifier = Modifier.width(48.dp).height(56.dp).testTag("scout-date-picker"),
-                    ) { Icon(Icons.Outlined.DateRange, contentDescription = "Choose daily run date") }
-                    TextButton(
-                        onClick = { onScoutSeed(DailyRunDate.today()) }, enabled = !isScouting,
-                        modifier = Modifier.widthIn(min = 48.dp).height(56.dp).testTag("scout-today"),
-                        contentPadding = PaddingValues(horizontal = 4.dp),
-                    ) { Text("Today", maxLines = 1) }
+                    // Keep the actions available when focus moves into them or the picker.
+                    AnimatedVisibility(
+                        visible = !isScouting && (entryFocused || showDatePicker),
+                        enter = expandHorizontally(tween(160), expandFrom = Alignment.End) + fadeIn(tween(120)),
+                        exit = shrinkHorizontally(tween(140), shrinkTowards = Alignment.End) + fadeOut(tween(100)),
+                    ) {
+                        Row(Modifier.padding(start = 4.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            IconButton(
+                                onClick = { showDatePicker = true }, enabled = !isScouting,
+                                modifier = Modifier.width(48.dp).height(56.dp).testTag("scout-date-picker"),
+                            ) { Icon(Icons.Outlined.DateRange, contentDescription = "Choose daily run date") }
+                            TextButton(
+                                onClick = {
+                                    focusManager.clearFocus()
+                                    onScoutSeed(DailyRunDate.today())
+                                }, enabled = !isScouting,
+                                modifier = Modifier.widthIn(min = 48.dp).height(56.dp).testTag("scout-today"),
+                                contentPadding = PaddingValues(horizontal = 4.dp),
+                            ) { Text("Today", maxLines = 1) }
+                        }
+                    }
                 }
             }
             Spacer(Modifier.height(12.dp))
             Button(
-                onClick = onScout,
+                onClick = scout,
                 enabled = seedIsReady && !isScouting,
                 modifier = Modifier
                     .fillMaxWidth()
