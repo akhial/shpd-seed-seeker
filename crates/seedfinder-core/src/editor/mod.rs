@@ -41,9 +41,18 @@
 //! chips with their tags and popover text, badges, join candidates, the
 //! Arcane Resin chip — and [`problems()`] says what is wrong with the list,
 //! row by row and between rows, in the words every platform shows.
+//!
+//! # The requirement sheet
+//!
+//! A chip opens into a sheet held as a [`Draft`]: [`open`] builds it from
+//! the rows, [`change`] applies one control the user moved, [`form`] says
+//! what the sheet shows — every control, the preview chip, the errors — and
+//! [`save`] writes it back as an [`Edit::Save`] (or as the query's Arcane
+//! Resin), refusing a save that would newly break the list.
 
 mod board;
 mod chips;
+mod draft;
 pub mod labels;
 mod problems;
 mod stack;
@@ -62,6 +71,12 @@ pub use chips::{
     Badge, Badges, BoardView, ChipView, Counts, EffectBadge, ItemView, Relation, RelationGlyph,
     ResinAmount, ResinChip, ResinState, Tag, TagStyle, board_view, chip_description, chip_details,
     chip_tags, chip_trailing_tags, effect_badge, resin_chip,
+};
+pub use draft::{
+    Change, Choice, DRAFT_VERSION, DUPLICATE_TRINKET, Draft, EffectChoice, EffectControl,
+    EffectGroup, EffectMode, FloorToggle, Form, FormMode, ItemChoice, ModeRange, Opt, Origin,
+    RESIN_AMOUNT_RANGE, RangeToggle, ResinControl, ResinDraft, ResinOutcome, SaveResult,
+    StackControl, TierMode, Toggle, UpgradeMode, change, form, open, save,
 };
 pub use labels::KindName;
 pub use problems::{NO_ORDINARY_REQUIREMENT, Problem, ProblemScope, problems, row_problems};

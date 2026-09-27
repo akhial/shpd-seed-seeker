@@ -16,7 +16,9 @@ use crate::query::{
     Requirement, TierRequirement, UpgradeRequirement,
 };
 
-use super::stack::{can_count_levels, can_grow, default_total, level_capacity};
+use super::stack::{
+    can_count_levels, can_grow, copy_depth as stack_copy_depth, default_total, level_capacity,
+};
 use super::{Row, STACK_MAX, is_valid_key, mint_key, next_key, repair_keys};
 
 /// A board entry's identity, stable while the entry survives an edit: a chip
@@ -560,7 +562,9 @@ pub enum Edit {
     /// Stores a requirement from the sheet with its stack's shape. `key`
     /// names the edited row; `None`, or a key not in the list, adds a new
     /// row at the end (with that key, when one is given). A stack that finds
-    /// no free label refuses the whole save.
+    /// no free label refuses the whole save. Saving what is already there —
+    /// the same requirement, count, combined level and copy floor — changes
+    /// nothing.
     Save {
         key: Option<u64>,
         requirement: Requirement,
@@ -1226,6 +1230,16 @@ fn save(
         };
         let item = &board.items[position];
         let current = rows[index].requirement;
+        if saves_nothing(
+            rows,
+            item,
+            &current,
+            &requirement,
+            (count, total, copy_depth),
+        ) {
+            let focus = rows[item.anchor()].key;
+            return Outcome::from_step(Step::Rows(rows.to_vec()), Some(focus));
+        }
         let doomed: &[usize] = if item.cluster.is_some() {
             &[]
         } else {
@@ -1272,6 +1286,55 @@ fn save(
         .and_then(|index| board.owner[index])
         .map(|position| next[board.items[position].anchor()].key);
     Outcome::from_step(Step::Rows(next), focus)
+}
+
+/// Whether saving `requirement` (its labels already stripped) with the
+/// sheet's `(count, total, copy_depth)` onto the visible row `current`, a
+/// member of `item`, would store what is already there: the same
+/// requirement, and — for a lone chip — the same count, the same combined
+/// level, or the copy floor the sheet showed ([`super::copy_depth`], the
+/// first copy's). Such a save is a no-op and returns the rows verbatim.
+///
+/// Rebuilding would not always give the rows back: copies left behind a
+/// chip that joined and left a cluster would come back right after it, and
+/// copies with floors of their own — a plain repeat saved with its own
+/// floor folds into the earlier chip — would all take the first one's. A
+/// platform comparing whole lists (Android's refine plan) would see a
+/// change the user never made.
+fn saves_nothing(
+    rows: &[Row],
+    item: &BoardItem,
+    current: &Requirement,
+    requirement: &Requirement,
+    (count, total, copy_depth): (u8, Option<u8>, Option<u8>),
+) -> bool {
+    let unlabelled = Requirement {
+        identity_group: None,
+        level_sum: None,
+        alternative_group: None,
+        ..*current
+    };
+    if unlabelled != *requirement {
+        return false;
+    }
+    // A cluster member's stack belongs to the cluster; the save only
+    // replaces the requirement.
+    if item.cluster.is_some() {
+        return true;
+    }
+    if usize::from(count.clamp(1, STACK_MAX)) != item.count() {
+        return false;
+    }
+    let counting = total.is_some() && can_count_levels(rows, item);
+    match item.total {
+        Some(current_total) => counting && total == Some(current_total),
+        None if counting => false,
+        None => {
+            let depth =
+                copy_depth.map(|depth| normalize_floor_limit(depth.clamp(1, MAX_SEARCH_DEPTH)));
+            item.extras.is_empty() || stack_copy_depth(rows, item) == depth
+        }
+    }
 }
 
 /// Gives the saved lone chip the stack shape the sheet asked for. Returns a

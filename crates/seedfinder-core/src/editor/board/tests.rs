@@ -1195,6 +1195,47 @@ fn saving_an_unchanged_chip_gives_back_identical_rows_and_keys() {
     }
 }
 
+/// A stack's copies need not sit right after their chip: a chip that joined
+/// a cluster and left it again leaves its plain repeats where they were.
+/// Rebuilding the stack on an unchanged save would move them back behind the
+/// chip; the save is a no-op instead, whatever order the list is in.
+#[test]
+fn an_unchanged_save_keeps_copies_where_the_list_has_them() {
+    let frost = named(1, ItemId::WandFrost);
+    let rows = [
+        frost,
+        row(2, ItemKind::Ring),
+        floor(named(3, ItemId::WandFrost), 9),
+    ];
+    assert_eq!(counts(&rows), [2, 1]);
+    let result = run(&rows, &[resaved(1, frost.requirement, 2, None, Some(9))]);
+    assert!(!result.changed, "{:?}", result.rows);
+    assert_eq!(result.rows, rows);
+    assert_eq!(result.focus, Some(1));
+    // Copies with floors of their own: a plain repeat saved with its own
+    // floor folds into the earlier chip. The sheet shows the first copy's
+    // floor, and saving that changes none of them.
+    let own = [
+        frost,
+        floor(named(2, ItemId::WandFrost), 9),
+        row(3, ItemKind::Ring),
+        floor(named(4, ItemId::WandFrost), 4),
+    ];
+    assert_eq!(counts(&own), [3, 1]);
+    let result = run(&own, &[resaved(1, frost.requirement, 3, None, Some(9))]);
+    assert!(!result.changed, "{:?}", result.rows);
+    // A different copy floor, count or requirement still rebuilds the stack.
+    for edit in [
+        resaved(1, frost.requirement, 2, None, None),
+        resaved(1, frost.requirement, 3, None, Some(9)),
+        resaved(1, exact(frost, 2).requirement, 2, None, Some(9)),
+    ] {
+        let result = run(&rows, &[edit]);
+        assert!(result.changed, "{edit:?}");
+        assert_eq!(keys(&result.rows)[..2], [1, 3], "{edit:?}");
+    }
+}
+
 /// Linux M1: Linux found the saved chip through hidden copies, so an edit
 /// that turned a chip into a plain repeat of an earlier one deleted it (at
 /// ×1) or restacked the earlier chip (at ×3). The repeat folds into the
