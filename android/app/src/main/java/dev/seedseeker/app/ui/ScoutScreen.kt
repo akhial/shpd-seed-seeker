@@ -53,6 +53,9 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.Velocity
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.navigationBars
 import dev.seedseeker.app.model.FloorFeeling
 import kotlin.math.roundToInt
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -197,6 +200,24 @@ fun ScoutScreen(
     val collapseWindow = with(LocalDensity.current) { 96.dp.toPx() }
     val headerScroll = remember(collapseWindow) { ScoutHeaderScrollState(collapseWindow) }
     val hasResult by rememberUpdatedState(result != null)
+    // The app bar hides first on the way down and returns on any scroll back up.
+    val appBarScroll = TopAppBarDefaults.enterAlwaysScrollBehavior(canScroll = { hasResult })
+    val appBarConnection = remember(appBarScroll) {
+        object : NestedScrollConnection {
+            // Material's connection swallows the whole delta while the bar moves; take only
+            // the bar's travel so the rest of a large scroll still reaches the form and list.
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (!hasResult) return Offset.Zero
+                val state = appBarScroll.state
+                val previous = state.heightOffset
+                state.heightOffset = previous + available.y
+                return Offset(0f, state.heightOffset - previous)
+            }
+
+            override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity =
+                appBarScroll.nestedScrollConnection.onPostFling(consumed, available)
+        }
+    }
     val scrollConnection = remember(headerScroll) {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset =
@@ -209,7 +230,10 @@ fun ScoutScreen(
     // Gestures starting on the form/summary also scroll the same floor list.
     val headerDragState = rememberScrollableState { delta -> -listState.dispatchRawDelta(-delta) }
     LaunchedEffect(error, result == null) {
-        if (error != null || result == null) headerScroll.expand()
+        if (error != null || result == null) {
+            headerScroll.expand()
+            appBarScroll.state.heightOffset = 0f
+        }
     }
     val floors = remember(result) { scoutFloors(result) }
     val mapFloors = remember(floors) { floors.keys.filter(::isMapDepthSupported) }
@@ -262,10 +286,12 @@ fun ScoutScreen(
         lastStep = 0
     }
     Scaffold(
+        modifier = Modifier.nestedScroll(appBarConnection),
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
                 title = { Text("Scout", fontWeight = FontWeight.ExtraBold) },
+                modifier = Modifier.testTag("scout-app-bar"),
                 actions = {
                     IconButton(onClick = onSettings, shapes = IconButtonDefaults.shapes()) {
                         Icon(Icons.Filled.Settings, contentDescription = "Settings")
@@ -274,12 +300,27 @@ fun ScoutScreen(
                         Icon(Icons.Filled.Info, contentDescription = "About and licenses")
                     }
                 },
+                scrollBehavior = appBarScroll,
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background,
+                    scrolledContainerColor = MaterialTheme.colorScheme.background,
                 ),
             )
         },
-        bottomBar = bottomBar,
+        bottomBar = {
+            // The navigation bar slides away with the app bar. It keeps the system
+            // navigation inset so the content does not jump when it finishes hiding.
+            val navigationInset = WindowInsets.navigationBars.getBottom(LocalDensity.current)
+            Box(
+                Modifier.clipToBounds().layout { measurable, constraints ->
+                    val placeable = measurable.measure(constraints)
+                    val travel = (placeable.height - navigationInset).coerceAtLeast(0)
+                    layout(placeable.width, placeable.height - (travel * appBarScroll.state.collapsedFraction).roundToInt()) {
+                        placeable.placeRelative(0, 0)
+                    }
+                }.graphicsLayer { alpha = 1f - appBarScroll.state.collapsedFraction },
+            ) { bottomBar() }
+        },
     ) { scaffoldPadding ->
         Box(
             modifier = Modifier

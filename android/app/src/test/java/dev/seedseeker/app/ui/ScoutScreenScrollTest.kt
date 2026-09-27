@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertContentDescriptionEquals
 import androidx.compose.ui.test.assertIsDisplayed
@@ -124,7 +125,7 @@ class ScoutScreenScrollTest {
                         seedInput = input.value, result = shown, isScouting = false, error = null,
                         matches = matches, resultSeeds = listOf(world.seed, "ABC-DEF-GHI"), scoutedSeed = world.seed,
                         onScoutSeed = onStep, onSeedChange = { input.value = it }, onScout = { onStep(input.value) }, onSelectTrinket = onSelect,
-                        onSettings = {}, onAbout = {}, bottomBar = { Box(Modifier.fillMaxWidth().height(80.dp)) },
+                        onSettings = {}, onAbout = {}, bottomBar = { Box(Modifier.fillMaxWidth().height(80.dp).testTag("bottom-bar")) },
                     )
                 }
             }
@@ -275,9 +276,14 @@ class ScoutScreenScrollTest {
         show()
         val expanded = bounds("scout-summary")
         assertTrue(bounds("scout-navigation").top >= expanded.bottom)
+        val appBar = bounds("scout-app-bar")
+        val bottomBar = bounds("bottom-bar")
         screenshot("expanded")
-        // Keep the intermediate collapse assertion independent of form controls.
-        drag(bounds("scout-input").height / compose.density.density - 30f)
+        // The app bar hides first; keep the intermediate collapse assertion independent of form controls.
+        drag((appBar.height + bounds("scout-input").height) / compose.density.density - 30f)
+        compose.onNodeWithContentDescription("Settings").assertIsNotDisplayed()
+        assertTrue(bounds("scout-app-bar").height < 1f)
+        compose.onNodeWithTag("bottom-bar").assertIsNotDisplayed()
         val middle = bounds("scout-summary")
         assertTrue(middle.top < expanded.top)
         assertTrue(middle.height < expanded.height)
@@ -292,7 +298,13 @@ class ScoutScreenScrollTest {
         assertTrue(bounds("scout-navigation").top >= compact.bottom)
         compose.onNodeWithText("Copy").assertIsDisplayed().performClick()
         screenshot("compact")
+        drag(-100f)
+        compose.onNodeWithContentDescription("Settings").assertIsDisplayed()
+        compose.onNodeWithTag("bottom-bar").assertIsDisplayed()
+        compose.onNodeWithTag("scout-input").assertIsNotDisplayed()
         repeat(4) { drag(-300f) }
+        assertEquals(appBar, bounds("scout-app-bar"))
+        assertEquals(bottomBar, bounds("bottom-bar"))
         compose.onNodeWithTag("scout-input").assertIsDisplayed()
         assertEquals(expanded.height, bounds("scout-summary").height, 1f)
         assertEquals(expanded.top, bounds("scout-summary").top, 1f)
@@ -362,7 +374,7 @@ class ScoutScreenScrollTest {
 
     @Test fun draggingTheSummaryAlsoScrollsAndPartialMatchesKeepTheirAccessibleCount() {
         show(matches = ScoutMatches(emptySet(), 2, 5))
-        drag(bounds("scout-input").height / compose.density.density, fromHeader = true)
+        drag((bounds("scout-app-bar").height + bounds("scout-input").height) / compose.density.density, fromHeader = true)
         drag(100f, fromHeader = true)
         val badge = bounds("scout-requirements")
         assertEquals(badge.width, badge.height, 1f)
