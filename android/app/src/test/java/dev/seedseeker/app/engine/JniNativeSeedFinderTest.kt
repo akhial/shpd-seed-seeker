@@ -198,6 +198,21 @@ class JniNativeSeedFinderTest {
         assertTrue(bindings.scoutMatchQuery.contentEquals(QueryDocument.encode(request)))
     }
 
+    @Test
+    fun scoutMatchesReadsResinDonorsAndTreatsAMissingKeyAsNone() {
+        val bindings = RecordingBindings()
+        val finder = JniNativeSeedFinder(bindings)
+        val request = SearchRequest(listOf(ItemRequirement(1, ItemCatalog.wands.first(), 1)))
+
+        assertEquals(emptySet<Int>(), finder.scoutMatches("AAA-AAA-AAB", 0, request).resinDonors)
+        bindings.scoutMatchEnvelope =
+            """{"matched":[1,3,4],"resinDonors":[3,4],"matchedRequirements":2,"totalRequirements":2}"""
+        assertEquals(
+            ScoutMatches(items = setOf(1, 3, 4), matchedSlots = 2, totalSlots = 2, resinDonors = setOf(3, 4)),
+            finder.scoutMatches("AAA-AAA-AAB", 0, request),
+        )
+    }
+
 
 
     private class RecordingBindings : NativeBindings {
@@ -281,11 +296,13 @@ class JniNativeSeedFinderTest {
         ) + "AAA-AAA-AAA".encodeToByteArray() + ByteArray(12) { it.toByte() } +
             byteArrayOf(0, 0, 0)
 
+        /** An envelope from before `resinDonors`, unless a test swaps in a newer one. */
+        var scoutMatchEnvelope = """{"matched":[1,3],"matchedRequirements":2,"totalRequirements":2}"""
+
         override fun scoutMatches(request: ByteArray, query: ByteArray): ByteArray {
             scoutMatchRequest = request.copyOf()
             scoutMatchQuery = query.copyOf()
-            return """{"matched":[1,3],"matchedRequirements":2,"totalRequirements":2}"""
-                .encodeToByteArray()
+            return scoutMatchEnvelope.encodeToByteArray()
         }
 
 

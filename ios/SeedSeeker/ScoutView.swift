@@ -376,6 +376,7 @@ struct ScoutView: View {
             ForEach(items.filter { $0.element.item.kind != .trinket }, id: \.offset) { entry in
                 let matched = model.matches?.matched.contains(entry.offset) == true
                 ScoutItemCard(item: entry.element, ringGems: world.ringGems, matched: matched,
+                              resinDonor: model.matches?.resinDonors.contains(entry.offset) == true,
                               dimmed: choices.isDimmed(entry.element.accessibility, matched: matched))
             }
         }.padding(.bottom, 8)

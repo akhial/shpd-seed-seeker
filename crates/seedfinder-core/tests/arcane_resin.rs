@@ -153,6 +153,30 @@ fn credit_and_excluded_wands_do_not_create_blanket_donors() {
 }
 
 #[test]
+fn scout_marks_resin_donors_apart_from_kept_wands() {
+    let resin = auto_query(r#"[{"item":"wand_lightning"}]"#);
+    // Upgrading the +0 Lightning to +3 costs six resin: three +0 donors.
+    let mut items = vec![wand(0)];
+    items.extend((0..3).map(|_| WorldItem {
+        item: ItemId::WandFrost,
+        ..wand(0)
+    }));
+    let candidate = world(items);
+    let marks = scout_matches(&candidate, &resin);
+    assert_eq!(marks.matched_requirements, 2);
+    assert!(marks.matched[0] && !marks.resin_donors[0]);
+    assert_eq!(marks.matched, vec![true; 4]);
+    assert_eq!(marks.resin_donors, vec![false, true, true, true]);
+    // Without resin nothing is flagged as a donor.
+    let plain = query(0, r#"[{"item":"wand_lightning"}]"#);
+    assert!(
+        !scout_matches(&candidate, &plain)
+            .resin_donors
+            .contains(&true)
+    );
+}
+
+#[test]
 fn resin_planning_options_round_trip_and_validate() {
     for auto in [false, true] {
         for mage in [false, true] {

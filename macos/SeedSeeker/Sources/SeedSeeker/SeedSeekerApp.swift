@@ -549,6 +549,10 @@ extension Color {
     static let shatteredMint = Color(.sRGB, red: 110 / 255, green: 201 / 255, blue: 143 / 255)
     /// The game's highlight yellow, the web app's `--d1-amber`.
     static let shatteredYellow = Color(.sRGB, red: 1, green: 1, blue: 85 / 255)
+    /// The purple that marks wands an Arcane Resin requirement consumes as
+    /// donors, and the tint its chip's fill and border are drawn from.
+    static let resinDonor = Color(.sRGB, red: 201 / 255, green: 166 / 255, blue: 245 / 255)
+    static let resinDonorTint = Color(.sRGB, red: 140 / 255, green: 100 / 255, blue: 220 / 255)
 }
 
 // MARK: - Query sidebar
@@ -2632,6 +2636,7 @@ private struct SeedDetailView: View {
             ? openedMap?.depth : nil
         let marks = engineMatches(in: world)
         let matches = marks?.matched ?? []
+        let resinDonors = marks?.resinDonors ?? []
         let choices = ScoutChoiceStatus(items: world.items, matched: matches)
         // Slots, not rows: an "any of these" group counts once.
         let matched = marks?.matchedRequirements ?? 0
@@ -2680,7 +2685,8 @@ private struct SeedDetailView: View {
                                             transmutedTrinkets: model.matches?.transmutedTrinkets ?? [])
                                     }
                                     ForEach(floorItems, id: \.offset) { entry in
-                                        ScoutItemRow(item: entry.element, ringGems: world.ringGems, matches: matches.contains(entry.offset))
+                                        ScoutItemRow(item: entry.element, ringGems: world.ringGems, matches: matches.contains(entry.offset),
+                                            resinDonor: resinDonors.contains(entry.offset))
                                             .opacity(choices.isDimmed(entry.element.accessibility, matched: matches.contains(entry.offset)) ? 0.42 : 1)
                                             .padding(.vertical, 5)
                                         if entry.offset != floorItems.last?.offset { Divider() }
@@ -2980,6 +2986,8 @@ private struct ScoutItemRow: View {
     /// holds, so a ring must be drawn in the gem that run gave its class.
     let ringGems: RingGems
     let matches: Bool
+    /// A matched wand the Arcane Resin requirement consumes rather than keeps.
+    let resinDonor: Bool
 
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
@@ -3016,7 +3024,16 @@ private struct ScoutItemRow: View {
             }
             Spacer(minLength: 0)
             VStack(alignment: .trailing, spacing: 5) {
-                if matches {
+                if matches && resinDonor {
+                    Label { Text("Match") } icon: { ItemSpriteIcon(item: arcaneResinItem) }
+                        .font(.caption.bold()).foregroundStyle(Color.resinDonor)
+                        .padding(.horizontal, 7).padding(.vertical, 2)
+                        .background(Color.resinDonorTint.opacity(0.14), in: Capsule())
+                        .overlay(Capsule().strokeBorder(Color.resinDonorTint.opacity(0.4)))
+                        .help("Arcane Resin donor match")
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel("Arcane Resin donor match")
+                } else if matches {
                     Label("Match", systemImage: "checkmark")
                         .font(.caption.bold()).foregroundStyle(Color.shatteredMint)
                         .padding(.horizontal, 7).padding(.vertical, 2)

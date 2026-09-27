@@ -37,6 +37,12 @@ val SpdCurse = Color(0xFFF2958A)
 /** Secret-room badge tint, a violet light enough to read on a dark fill. */
 val SpdSecret = Color(0xFFB388FF)
 
+/** Arcane Resin's violet, used at low alpha for donor match fills and edges. */
+val SpdResin = Color(0xFF8C64DC)
+
+/** Arcane Resin donor text, a lighter violet that reads on [SpdResin] fills. */
+val SpdResinText = Color(0xFFC9A6F5)
+
 // Region accents, mirrored from `web/src/shared/game/region.ts`.
 val RegionSewers = Color(0xFF7FE2B8)
 val RegionPrison = Color(0xFF8FB7E8)

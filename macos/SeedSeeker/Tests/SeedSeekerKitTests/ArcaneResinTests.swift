@@ -54,6 +54,7 @@ final class ArcaneResinTests: XCTestCase {
         XCTAssertEqual(marks.totalRequirements, 1)
         XCTAssertEqual(marks.matchedRequirements, 1)
         XCTAssertFalse(marks.matched.isEmpty)
+        XCTAssertTrue(marks.resinDonors.isSubset(of: marks.matched))
         for index in marks.matched { XCTAssertEqual(world.items[index].item.kind, .wand) }
         var harder = query; harder.arcaneResin = 65535
         XCTAssertEqual(try ScoutMatches.mark(seed: world.seed, challenges: 0, query: harder).matchedRequirements, 0)
@@ -74,6 +75,18 @@ final class ArcaneResinTests: XCTestCase {
         let directProbability = try XCTUnwrap(QueryAnalysis.analyze(QueryDocument.encode(direct)).probability)
         XCTAssertEqual(probability, directProbability, accuracy: 1e-12)
         XCTAssertThrowsError(try SearchRequest(requirements: query.requirements.filter { $0.blanket }, arcaneResinAuto: true))
+    }
+
+    func testScoutMatchesDecodesResinDonorsAndToleratesOlderEnvelopes() throws {
+        let current = try ScoutMatches.decode(Data(#"{"matched":[0,1,2,3],"resinDonors":[1,3],"transmutedTrinkets":[],"transmutedArtifacts":[],"matchedRequirements":2,"totalRequirements":2}"#.utf8))
+        XCTAssertEqual(current.matched, [0, 1, 2, 3])
+        XCTAssertEqual(current.resinDonors, [1, 3])
+        XCTAssertEqual(current.matchedRequirements, 2)
+        let legacy = try ScoutMatches.decode(Data(#"{"matched":[0,2],"matchedRequirements":1,"totalRequirements":1}"#.utf8))
+        XCTAssertEqual(legacy.matched, [0, 2])
+        XCTAssertTrue(legacy.resinDonors.isEmpty)
+        XCTAssertTrue(legacy.transmutedTrinkets.isEmpty)
+        XCTAssertThrowsError(try ScoutMatches.decode(Data(#"{"resinDonors":[0]}"#.utf8)))
     }
 
 }

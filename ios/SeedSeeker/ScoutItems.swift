@@ -42,8 +42,12 @@ struct ScoutItemCard: View {
     let item: ScoutItem
     let ringGems: RingGems
     let matched: Bool
+    /// A matched wand the Arcane Resin requirement consumes rather than keeps.
+    let resinDonor: Bool
     let dimmed: Bool
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    private let arcaneResin = CatalogItem(id: "arcane_resin", name: "Arcane Resin", kind: .wand, spriteIndex: 317)
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
@@ -72,7 +76,19 @@ struct ScoutItemCard: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             if matched || hasChoice {
                 VStack(alignment: .trailing, spacing: 4) {
-                    if matched {
+                    if matched && resinDonor {
+                        Label {
+                            Text("match")
+                        } icon: {
+                            ItemSpriteView(item: arcaneResin, pointSize: 16)
+                        }
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(ScoutItemColors.resinDonor).padding(.horizontal, 6).padding(.vertical, 3)
+                        .background(ScoutItemColors.resinDonorTint.opacity(0.14), in: Capsule())
+                        .overlay(Capsule().strokeBorder(ScoutItemColors.resinDonorTint.opacity(0.4)))
+                        .accessibilityElement(children: .ignore)
+                        .accessibilityLabel("Arcane Resin donor match")
+                    } else if matched {
                         Label("match", systemImage: "checkmark").font(.caption2.weight(.semibold))
                             .foregroundStyle(AppTheme.softGreen).padding(.horizontal, 6).padding(.vertical, 3)
                             .background(AppTheme.softGreen.opacity(0.12), in: Capsule())
@@ -97,6 +113,9 @@ private enum ScoutItemColors {
     static let curse = Color(red: 242 / 255, green: 149 / 255, blue: 138 / 255)
     static let curseEffect = AppTheme.curse
     static let secret = Color(red: 201 / 255, green: 166 / 255, blue: 245 / 255)
+    /// Arcane Resin donors: wands the resin requirement consumes, not keeps.
+    static let resinDonor = Color(red: 201 / 255, green: 166 / 255, blue: 245 / 255)
+    static let resinDonorTint = Color(red: 140 / 255, green: 100 / 255, blue: 220 / 255)
 }
 
 struct ScoutChoiceBadge: View {

@@ -152,6 +152,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import dev.seedseeker.app.model.ItemKind
@@ -169,6 +170,8 @@ import dev.seedseeker.app.model.ScoutWorld
 import dev.seedseeker.app.ui.theme.SpdCurse
 import dev.seedseeker.app.ui.theme.SpdDanger
 import dev.seedseeker.app.ui.theme.SpdGreen
+import dev.seedseeker.app.ui.theme.SpdResin
+import dev.seedseeker.app.ui.theme.SpdResinText
 import dev.seedseeker.app.ui.theme.SpdSecret
 import dev.seedseeker.app.ui.theme.SpdTeal
 import dev.seedseeker.app.ui.theme.SpdUpgrade
@@ -398,6 +401,7 @@ fun ScoutScreen(
                                         val indexedItem = row.indexedItem
                                         ScoutItemCard(scoutItem = indexedItem.value, ringGems = world.ringGems,
                                             matches = matches?.items?.contains(indexedItem.index) == true,
+                                            resinDonor = matches?.resinDonors?.contains(indexedItem.index) == true,
                                             dimmed = isAlternateScoutChoice(indexedItem.value.accessibility, indexedItem.index in matches?.items.orEmpty(), matchedChoices),
                                             modifier = Modifier.padding(bottom = 8.dp))
                                     }
@@ -678,16 +682,22 @@ internal fun FloorFeelingSprite(feeling: FloorFeeling) {
     }
 }
 
-/** One row of a scouted world, drawn with the gems [ringGems] says that run holds. */
+/**
+ * One row of a scouted world, drawn with the gems [ringGems] says that run holds.
+ * A match the engine spends as an Arcane Resin donor ([resinDonor]) is marked in
+ * the resin's violet instead of green.
+ */
 @Composable
 internal fun ScoutItemCard(
     scoutItem: ScoutItem,
     ringGems: RingGems,
     matches: Boolean,
+    resinDonor: Boolean = false,
     dimmed: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val hasStatusBadges = scoutItem.cursed || scoutItem.secret
+    val matchEdge = if (resinDonor) SpdResin else SpdGreen
     val accessibilityLabel = when (scoutItem.accessibility) {
         ScoutAccessibility.Independent -> null
         is ScoutAccessibility.Choice -> null
@@ -697,8 +707,8 @@ internal fun ScoutItemCard(
 
     Card(
         modifier = modifier.fillMaxWidth().alpha(if (dimmed) 0.45f else 1f)
-            // A quiet green edge marks a match; the chip says the rest.
-            .then(if (matches) Modifier.border(1.dp, SpdGreen.copy(alpha = 0.45f), MaterialTheme.shapes.large) else Modifier),
+            // A quiet green (or resin violet) edge marks a match; the chip says the rest.
+            .then(if (matches) Modifier.border(1.dp, matchEdge.copy(alpha = 0.45f), MaterialTheme.shapes.large) else Modifier),
         shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(
             containerColor = if (matches) {
@@ -777,7 +787,7 @@ internal fun ScoutItemCard(
                                     horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
                                     verticalArrangement = Arrangement.spacedBy(4.dp),
                                 ) {
-                                    if (matches) ScoutItemMatchChip()
+                                    if (matches) ScoutItemMatchChip(resinDonor)
                                     (scoutItem.accessibility as? ScoutAccessibility.Choice)?.let { ChoiceGroupChip(it) }
                                 }
                             },
@@ -811,7 +821,7 @@ internal fun ScoutItemCard(
                 if (!stackedBadges) {
                     Spacer(Modifier.width(10.dp))
                     Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        if (matches) ScoutItemMatchChip()
+                        if (matches) ScoutItemMatchChip(resinDonor)
                         (scoutItem.accessibility as? ScoutAccessibility.Choice)?.let { ChoiceGroupChip(it) }
                     }
                 }
@@ -904,25 +914,36 @@ private fun ScoutItemBadges(scoutItem: ScoutItem) {
 
 /**
  * The row's "this is what you asked for" flag. It lands with a springy pop
- * when the engine's match marks arrive, a check set in a little burst.
+ * when the engine's match marks arrive, a check set in a little burst. A
+ * [resinDonor] match wears the resin's violet with its sprite in place of the check.
  */
 @Composable
-private fun ScoutItemMatchChip() {
+private fun ScoutItemMatchChip(resinDonor: Boolean = false) {
     Surface(
         shape = CircleShape,
-        color = SpdGreen.copy(alpha = 0.16f),
+        color = if (resinDonor) SpdResin.copy(alpha = 0.14f) else SpdGreen.copy(alpha = 0.16f),
+        border = if (resinDonor) androidx.compose.foundation.BorderStroke(1.dp, SpdResin.copy(alpha = 0.40f)) else null,
+        modifier = if (resinDonor) {
+            Modifier.semantics(mergeDescendants = true) { contentDescription = "Arcane Resin donor match" }
+        } else Modifier,
     ) {
         Row(
             modifier = Modifier.padding(start = 3.dp, end = 8.dp, top = 2.dp, bottom = 2.dp),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            ShapeBackdrop(SeekerShapes.Match, SpdGreen, Modifier.size(16.dp)) {
-                Icon(Icons.Filled.Check, contentDescription = null,
-                    modifier = Modifier.size(10.dp), tint = MaterialTheme.colorScheme.surface)
+            if (resinDonor) {
+                // The chip's own label names the resin; the sprite stays silent.
+                ItemSprite(arcaneResinItem, modifier = Modifier.size(16.dp).clearAndSetSemantics {})
+            } else {
+                ShapeBackdrop(SeekerShapes.Match, SpdGreen, Modifier.size(16.dp)) {
+                    Icon(Icons.Filled.Check, contentDescription = null,
+                        modifier = Modifier.size(10.dp), tint = MaterialTheme.colorScheme.surface)
+                }
             }
             Spacer(Modifier.width(4.dp))
-            Text("match", style = MaterialTheme.typography.labelSmall, color = SpdGreen, fontWeight = FontWeight.Bold)
+            Text("match", style = MaterialTheme.typography.labelSmall,
+                color = if (resinDonor) SpdResinText else SpdGreen, fontWeight = FontWeight.Bold)
         }
     }
 }

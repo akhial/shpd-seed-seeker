@@ -2038,7 +2038,8 @@ public sealed partial class MainWindow : Window
                 {
                     if (entry.Item.Item.Kind != ItemKind.Trinket)
                         group.Add(ScoutRow.From(entry.Item, matches.Matched.Contains(entry.Index), world.Gems,
-                            ScoutChoices.Dimmed(entry.Item, matches.Matched.Contains(entry.Index), matchedChoices)));
+                            ScoutChoices.Dimmed(entry.Item, matches.Matched.Contains(entry.Index), matchedChoices),
+                            matches.ResinDonors.Contains(entry.Index)));
                     else if (entry.Index == trinkets[0].Index)
                         group.Add(ScoutRow.Catalyst(entry.Item, world.TrinketOrder ?? trinkets.Select(x => x.Item.Item).ToList(),
                             trinkets.Where(x => matches.Matched.Contains(x.Index)).Select(x => x.Item.Item.Id)
@@ -2285,6 +2286,9 @@ public sealed class ScoutRow
     public string Accessibility { get; init; } = "";
     public Visibility AccessibilityVisibility { get; init; } = Visibility.Collapsed;
     public Visibility MatchVisibility { get; init; } = Visibility.Collapsed;
+    /// <summary>A matched wand the query consumes as Arcane Resin: its match chip is the purple resin one instead of the green one.</summary>
+    public bool ResinDonor { get; init; }
+    public Visibility ResinDonorVisibility { get; init; } = Visibility.Collapsed;
     public string Choice { get; init; } = "";
     public Visibility ChoiceVisibility { get; init; } = Visibility.Collapsed;
     public double RowOpacity { get; init; } = 1;
@@ -2303,8 +2307,11 @@ public sealed class ScoutRow
 
     /// <param name="gems">The scouted run's ring gems, which decide the cell a
     /// ring is drawn in; the same item is a different colour in another run.</param>
-    public static ScoutRow From(ScoutItem x, bool match, RingGems gems, bool dimmed = false)
+    /// <param name="resinDonor">Whether this matched item is consumed as an
+    /// Arcane Resin donor; ignored unless <paramref name="match"/>.</param>
+    public static ScoutRow From(ScoutItem x, bool match, RingGems gems, bool dimmed = false, bool resinDonor = false)
     {
+        resinDonor &= match;
         var access = x.AccessibilityTag switch { 1 => $"One reward of choice group {ScoutChoices.Letter(x.AccessibilityGroup)} (option {x.AccessibilityValue + 1})", 2 => $"Only in some outcomes of scenario group {ScoutChoices.Letter(x.AccessibilityGroup)}", _ => "" };
         var isCurse = x.Effect is not null && ItemCatalog.IsCurse(x.Item.Kind, x.Effect);
         var glow = ItemGlow.ForItem(x);
@@ -2321,7 +2328,8 @@ public sealed class ScoutRow
             Accessibility = access, AccessibilityVisibility = x.AccessibilityTag == 2 ? Visibility.Visible : Visibility.Collapsed,
             Choice = ScoutChoices.Letter(x.AccessibilityGroup), ChoiceVisibility = x.AccessibilityTag == 1 ? Visibility.Visible : Visibility.Collapsed,
             RowOpacity = dimmed ? .45 : 1,
-            MatchVisibility = match ? Visibility.Visible : Visibility.Collapsed,
+            MatchVisibility = match && !resinDonor ? Visibility.Visible : Visibility.Collapsed,
+            ResinDonor = resinDonor, ResinDonorVisibility = resinDonor ? Visibility.Visible : Visibility.Collapsed,
             Weight = match ? FontWeights.SemiBold : FontWeights.Normal,
             SpriteIndex = gems.SpriteIndex(x.Item), TypeIconIndex = x.Item.TypeIconIndex ?? -1,
             GlowColor = glow?.Color ?? default, GlowPeriod = glow?.Period ?? 0,

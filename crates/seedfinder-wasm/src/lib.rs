@@ -174,6 +174,7 @@ struct ScoutQuestOutput {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(clippy::struct_excessive_bools)] // Independent flags in the scout JSON document.
 struct ScoutItemOutput {
     id: &'static str,
     name: &'static str,
@@ -187,6 +188,8 @@ struct ScoutItemOutput {
     source: &'static str,
     accessibility: AccessibilityOutput,
     matched: bool,
+    /// Matched as a surplus wand consumed for Arcane Resin.
+    resin_donor: bool,
 }
 
 #[derive(Serialize)]
@@ -644,12 +647,22 @@ fn scout_impl(request_json: &str) -> Result<String, String> {
     let total_requirements = marks.as_ref().map_or(0, |marks| marks.total_requirements);
     let transmuted = marks.as_ref().map(|marks| marks.transmuted_trinkets);
     let artifact_decks = artifact_deck_outputs(&world, marks.as_ref());
-    let matched = marks.map_or_else(|| vec![false; world.items.len()], |marks| marks.matched);
+    let (matched, resin_donors) = marks.map_or_else(
+        || {
+            (
+                vec![false; world.items.len()],
+                vec![false; world.items.len()],
+            )
+        },
+        |marks| (marks.matched, marks.resin_donors),
+    );
     let items = world
         .items
         .iter()
-        .zip(matched)
-        .map(|(world_item, matched)| scout_item_output(world_item, matched))
+        .zip(matched.into_iter().zip(resin_donors))
+        .map(|(world_item, (matched, resin_donor))| {
+            scout_item_output(world_item, matched, resin_donor)
+        })
         .collect();
     Ok(to_json(&ScoutOutput {
         item_mappings: shpd_seedfinder_core::item_mappings::item_mappings(seed),
@@ -734,7 +747,7 @@ fn scout_quest_outputs(quests: QuestSummary) -> Vec<ScoutQuestOutput> {
     output
 }
 
-fn scout_item_output(world_item: &WorldItem, matched: bool) -> ScoutItemOutput {
+fn scout_item_output(world_item: &WorldItem, matched: bool, resin_donor: bool) -> ScoutItemOutput {
     let definition = item(world_item.item);
     ScoutItemOutput {
         id: definition.stable_id,
@@ -749,6 +762,7 @@ fn scout_item_output(world_item: &WorldItem, matched: bool) -> ScoutItemOutput {
         source: item_source_name(world_item.source),
         accessibility: accessibility_output(world_item.accessibility),
         matched,
+        resin_donor,
     }
 }
 

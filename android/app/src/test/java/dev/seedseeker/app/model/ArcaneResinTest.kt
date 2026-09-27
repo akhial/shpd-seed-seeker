@@ -103,6 +103,8 @@ class ArcaneResinTest {
         assertEquals(1, marks.totalSlots)
         assertEquals(1, marks.matchedSlots)
         assertTrue(marks.items.isNotEmpty())
+        // With no item slots, every marked wand is spent as a donor.
+        assertEquals(marks.items, marks.resinDonors)
         val harder = query.copy(arcaneResin = 65535)
         assertTrue(engine.filterSeeds(harder, listOf("AAA-AAA-AAA")).isEmpty())
     }

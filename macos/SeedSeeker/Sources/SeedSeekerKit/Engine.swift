@@ -82,6 +82,10 @@ public struct ScoutMatches: Sendable {
     /// Indices into the scouted world's item list, in the order
     /// `scoutSeed(_:challenges:)` returns it.
     public let matched: Set<Int>
+    /// The subset of `matched` an Arcane Resin requirement consumes as resin
+    /// donors rather than keeps. Empty without resin, and for engines whose
+    /// envelope predates the key.
+    public let resinDonors: Set<Int>
     public let transmutedTrinkets: Set<Int>
     public let transmutedArtifacts: [Int: Set<Int>]
     /// How many conditions the marks satisfy, and how many there are. An
@@ -92,8 +96,9 @@ public struct ScoutMatches: Sendable {
     public let matchedRequirements: Int
     public let totalRequirements: Int
 
-    public init(matched: Set<Int>, matchedRequirements: Int, totalRequirements: Int, transmutedTrinkets: Set<Int> = [], transmutedArtifacts: [Int: Set<Int>] = [:]) {
+    public init(matched: Set<Int>, matchedRequirements: Int, totalRequirements: Int, transmutedTrinkets: Set<Int> = [], transmutedArtifacts: [Int: Set<Int>] = [:], resinDonors: Set<Int> = []) {
         self.matched = matched
+        self.resinDonors = resinDonors.intersection(matched)
         self.transmutedTrinkets = transmutedTrinkets
         self.transmutedArtifacts = transmutedArtifacts
         self.matchedRequirements = matchedRequirements
@@ -114,6 +119,13 @@ public struct ScoutMatches: Sendable {
                 }
             }
         }
+        return try decode(packet)
+    }
+
+    /// Reads the engine's scout-matches envelope. Keys added after the first
+    /// release (`resinDonors`, `transmutedTrinkets`, `transmutedArtifacts`)
+    /// decode as empty when an older engine leaves them out.
+    static func decode(_ packet: Data) throws -> ScoutMatches {
         guard let document = (try? JSONSerialization.jsonObject(with: packet)) as? [String: Any],
               let matched = document["matched"] as? [Int],
               let matchedRequirements = document["matchedRequirements"] as? Int,
@@ -125,7 +137,8 @@ public struct ScoutMatches: Sendable {
             if let depth = entry["depth"], let index = entry["index"] { artifacts[depth, default: []].insert(index) }
         }
         return ScoutMatches(matched: Set(matched), matchedRequirements: matchedRequirements,
-                            totalRequirements: totalRequirements, transmutedTrinkets: Set(document["transmutedTrinkets"] as? [Int] ?? []), transmutedArtifacts: artifacts)
+                            totalRequirements: totalRequirements, transmutedTrinkets: Set(document["transmutedTrinkets"] as? [Int] ?? []), transmutedArtifacts: artifacts,
+                            resinDonors: Set(document["resinDonors"] as? [Int] ?? []))
     }
 
     /// Marks the world `seed` generates under `challenges` against `query`.

@@ -2525,6 +2525,14 @@ input[type="range"]::-moz-range-thumb {
   background: rgba(110, 201, 143, 0.09);
 }
 
+.d1-item-resin {
+  background: rgba(140, 100, 220, 0.07);
+}
+
+.d1-item-resin:hover {
+  background: rgba(140, 100, 220, 0.1);
+}
+
 /* A match at the top of its floor meets the header; one at the bottom meets
    the next floor. A lone match is both, so it fills the whole block. */
 .d1-item-matched:first-child {
@@ -2599,6 +2607,17 @@ input[type="range"]::-moz-range-thumb {
 }
 
 .d1-badge-match svg {
+  flex: 0 0 auto;
+}
+
+/* Surplus wands consumed for Arcane Resin match in the resin's violet. */
+.d1-badge-resin {
+  color: #c9a6f5;
+  background: rgba(140, 100, 220, 0.14);
+  border-color: rgba(140, 100, 220, 0.4);
+}
+
+.d1-badge-resin .d1-sprite {
   flex: 0 0 auto;
 }
 
