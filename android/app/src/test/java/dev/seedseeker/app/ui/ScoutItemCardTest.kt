@@ -5,6 +5,9 @@ import android.graphics.Rect
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onNodeWithContentDescription
 import kotlin.math.ceil
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -132,6 +135,35 @@ class ScoutItemCardTest {
         compose.onNodeWithText("match").assertIsDisplayed()
         compose.runOnIdle { width.value = 360.dp }
         compose.onNodeWithText("match").assertIsDisplayed()
+    }
+
+    @Test fun resinDonorMatchesWearTheResinChip() {
+        val donor = mutableStateOf(true)
+        val item = ScoutItem(
+            item = requireNotNull(ItemCatalog.findById("wand_frost")),
+            depth = 3, upgrade = 0, effect = null, cursed = false,
+            source = ScoutItemSource.HEAP,
+            accessibility = ScoutAccessibility.Independent,
+        )
+        val atlas = compose.activity.assets.open("third_party/shattered-pixel-dungeon/items.png")
+            .use(BitmapFactory::decodeStream)!!.asImageBitmap()
+        compose.setContent {
+            SeedSeekerTheme {
+                CompositionLocalProvider(LocalItemAtlas provides atlas) {
+                    ScoutItemCard(item, RingGems.CATALOG, matches = true, resinDonor = donor.value,
+                        modifier = Modifier.width(360.dp).testTag("item-card"))
+                }
+            }
+        }
+        // The donor chip keeps the "match" label but is announced as a resin donor,
+        // and its sprite adds no second "Arcane Resin" announcement.
+        compose.onNodeWithText("match").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Arcane Resin donor match").assertIsDisplayed()
+        compose.onAllNodesWithContentDescription("Arcane Resin", useUnmergedTree = true).assertCountEquals(0)
+        screenshot("item-resin-donor-match")
+        compose.runOnIdle { donor.value = false }
+        compose.onNodeWithText("match").assertIsDisplayed()
+        compose.onAllNodesWithContentDescription("Arcane Resin donor match").assertCountEquals(0)
     }
 
     @Test fun longNamesStayCompleteWithBadgesAndLargeFonts() {

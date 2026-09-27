@@ -65,8 +65,25 @@ public sealed class ArcaneResinTests
         Assert.Equal(1, marks.TotalRequirements);
         Assert.NotEmpty(marks.Matched);
         Assert.All(marks.Matched, index => Assert.Equal(ItemKind.Wand, world.Items[index].Item.Kind));
+        // With no item requirement to keep, every matched wand is a donor.
+        Assert.True(marks.ResinDonors.SetEquals(marks.Matched));
         var harder = query.Clone(); harder.ArcaneResin = 65535;
         Assert.Equal(0, NativeEngine.ScoutMatches(world.Seed, 0, harder).MatchedRequirements);
+        var plain = new QuerySettings { Requirements = new([new ItemRequirement { Kind = ItemKind.Wand }]) };
+        Assert.Empty(NativeEngine.ScoutMatches(world.Seed, 0, plain).ResinDonors);
+    }
+
+    [Fact]
+    public void ScoutMatchEnvelopeDecodesResinDonorsAndToleratesTheirAbsence()
+    {
+        var marks = NativeEngine.DecodeScoutMatches("""{"matched":[2,5,9],"resinDonors":[5,9],"matchedRequirements":2,"totalRequirements":2}""", 2);
+        Assert.Equal(new[] { 2, 5, 9 }, marks.Matched.Order());
+        Assert.Equal(new[] { 5, 9 }, marks.ResinDonors.Order());
+        Assert.True(marks.ResinDonors.IsSubsetOf(marks.Matched));
+        var older = NativeEngine.DecodeScoutMatches("""{"matched":[2,5],"matchedRequirements":1,"totalRequirements":1}""", 1);
+        Assert.Equal(new[] { 2, 5 }, older.Matched.Order());
+        Assert.Empty(older.ResinDonors);
+        Assert.Empty(NativeEngine.DecodeScoutMatches("""{"matched":[],"resinDonors":[]}""", 0).ResinDonors);
     }
     [Fact]
     public void AutoBlanketSharesItsWitnessAndPreservesTheEngineEstimate()

@@ -36,6 +36,14 @@ entry.seed-entry {
   color: var(--warning-color);
 }
 
+/* A wand consumed for Arcane Resin: a purple match led by the resin sprite. */
+.tag.resin-match {
+  padding: 0 8px 0 4px;
+  color: #c9a6f5;
+  background: rgba(140, 100, 220, 0.14);
+  border: 1px solid rgba(140, 100, 220, 0.4);
+}
+
 /* ---------- Requirement board ---------- */
 
 /* 14/18 of the 24px sprite box, matching the web wildcard mark. */

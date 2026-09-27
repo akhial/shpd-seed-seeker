@@ -126,6 +126,8 @@ class ScoutMatcherTest {
         assertEquals(1, marks.items.size)
         assertEquals(1, marks.matchedSlots)
         assertEquals(1, marks.totalSlots)
+        // Without Arcane Resin no matched wand is a donor.
+        assertEquals(emptySet<Int>(), marks.resinDonors)
 
         // A member the world lacks does not stop the other from serving the slot.
         val partial = marksFor(

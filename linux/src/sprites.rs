@@ -574,9 +574,15 @@ pub fn wildcard_image(kind: ItemKind, category: Option<WeaponCategory>) -> gtk::
 
 /// The query-wide resin requirement uses the same cropped atlas artwork as item chips.
 pub fn arcane_resin_image() -> gtk::Widget {
+    arcane_resin_image_sized(SIZE)
+}
+
+/// The Arcane Resin artwork in a `size`-pixel box, e.g. inside a manifest
+/// row's donor match tag.
+pub fn arcane_resin_image_sized(size: i32) -> gtk::Widget {
     let area = gtk::DrawingArea::builder()
-        .content_width(SIZE)
-        .content_height(SIZE)
+        .content_width(size)
+        .content_height(size)
         .valign(gtk::Align::Center)
         .halign(gtk::Align::Center)
         .accessible_role(gtk::AccessibleRole::Img)
@@ -586,7 +592,7 @@ pub fn arcane_resin_image() -> gtk::Widget {
         area.set_draw_func(move |area, context, width, height| {
             let factor = area.scale_factor().max(1);
             context.scale(1.0 / f64::from(factor), 1.0 / f64::from(factor));
-            if let Some(art) = atlas.art(317, SIZE * factor) {
+            if let Some(art) = atlas.art(317, size * factor) {
                 let x = f64::from(width * factor - art.width()) / 2.0;
                 let y = f64::from(height * factor - art.height()) / 2.0;
                 let _ = blit(context, &art, x.round(), y.round());

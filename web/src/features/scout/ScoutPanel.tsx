@@ -8,7 +8,7 @@ import { CheckIcon, CopyIcon, FlagIcon, ForkIcon } from "../../shared/ui/icons";
 import { isMapDepthSupported, requestLevelMap } from "../level-map/client";
 import { regionForDepth } from "../../shared/game/region";
 import type { ResultPosition } from "../results/scout-nav";
-import { itemArt } from "../../shared/sprites/sprites";
+import { ARCANE_RESIN_SPRITE, itemArt } from "../../shared/sprites/sprites";
 import { queryStore } from "../../app/store";
 import type { ChallengeName, ScoutItem, ScoutResult, TrinketOffer } from "../../engine/types";
 import { Sprite } from "../../shared/ui/primitives";
@@ -406,7 +406,7 @@ export function ScoutPanel({
                         <li
                           className={
                             item.matched
-                              ? "d1-item d1-item-matched"
+                              ? `d1-item d1-item-matched${item.resinDonor ? " d1-item-resin" : ""}`
                               : dimmed
                                 ? "d1-item d1-item-dimmed"
                                 : "d1-item"
@@ -456,14 +456,23 @@ export function ScoutPanel({
                           </div>
                           {(item.matched || item.accessibility.type === "choice") && (
                             <div className="d1-item-status">
-                              {item.matched && (
-                                <span
-                                  className="d1-badge d1-badge-match"
-                                  title="Selected as part of a jointly obtainable requirement match"
-                                >
-                                  <CheckIcon size={12} /> match
-                                </span>
-                              )}
+                              {item.matched &&
+                                (item.resinDonor ? (
+                                  <span
+                                    className="d1-badge d1-badge-match d1-badge-resin"
+                                    title="Consumed as Arcane Resin for the requirement match"
+                                    aria-label="Arcane Resin donor match"
+                                  >
+                                    <Sprite art={itemArt(ARCANE_RESIN_SPRITE)} size={14} /> match
+                                  </span>
+                                ) : (
+                                  <span
+                                    className="d1-badge d1-badge-match"
+                                    title="Selected as part of a jointly obtainable requirement match"
+                                  >
+                                    <CheckIcon size={12} /> match
+                                  </span>
+                                ))}
                               {item.accessibility.type === "choice" && (
                                 <span className="d1-item-choice" title={note} aria-label={note}>
                                   <ForkIcon size={12} />

@@ -264,6 +264,8 @@ export interface ScoutItem {
   source: ItemSource;
   accessibility: Accessibility;
   matched: boolean;
+  /** Matched as a surplus wand consumed for Arcane Resin. */
+  resinDonor?: boolean;
 }
 
 export interface ScoutRequest {

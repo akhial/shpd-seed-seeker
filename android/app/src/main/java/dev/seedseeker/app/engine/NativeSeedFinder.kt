@@ -82,7 +82,8 @@ interface NativeSeedFinder {
  * The engine's marks over a scouted world: [items] indexes the world's item
  * list; [matchedSlots] of [totalSlots] engine-level requirements (an "any of
  * these" group is one slot) are satisfied. Items serving an incomplete
- * combined-upgrade group are not marked.
+ * combined-upgrade group are not marked. [resinDonors] is the subset of
+ * [items] consumed as Arcane Resin donors.
  */
 data class ScoutMatches(
     val items: Set<Int>,
@@ -90,6 +91,7 @@ data class ScoutMatches(
     val totalSlots: Int,
     val transmutedTrinkets: Set<Int> = emptySet(),
     val transmutedArtifacts: Set<Pair<Int, Int>> = emptySet(),
+    val resinDonors: Set<Int> = emptySet(),
 )
 
 interface NativeSearchSession : AutoCloseable {
@@ -677,6 +679,10 @@ private object ScoutMatchCodec {
             } ?: emptySet(),
             transmutedTrinkets = envelope.optJSONArray("transmutedTrinkets")?.let { steps ->
                 buildSet { for (index in 0 until steps.length()) add(steps.getInt(index)) }
+            }.orEmpty(),
+            // Older engines predate the key; no donors then.
+            resinDonors = envelope.optJSONArray("resinDonors")?.let { donors ->
+                buildSet { for (index in 0 until donors.length()) add(donors.getInt(index)) }
             }.orEmpty(),
         )
     }

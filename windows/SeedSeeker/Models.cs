@@ -1434,6 +1434,8 @@ public sealed record SearchStatus(SearchState State, long Scanned, long Total, l
 /// </summary>
 public sealed record ScoutMatches(IReadOnlySet<int> Matched, int MatchedRequirements, int TotalRequirements)
 {
+    /// <summary>The matched wands consumed as Arcane Resin donors; always a subset of <see cref="Matched"/>.</summary>
+    public IReadOnlySet<int> ResinDonors { get; init; } = new HashSet<int>();
     public IReadOnlySet<int> TransmutedTrinkets { get; init; } = new HashSet<int>();
     public IReadOnlySet<(int Depth, int Index)> TransmutedArtifacts { get; init; } = new HashSet<(int, int)>();
 }

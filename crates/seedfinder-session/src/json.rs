@@ -18,6 +18,7 @@ use crate::{ScoutMatchError, production_scout_matches};
 /// address the item list of the `SSC5` packet the same request scouts to.
 /// `transmutedTrinkets` contains separate zero-based indices into the 13-card
 /// tail. It never changes the generated item indices; older clients ignore it.
+/// `resinDonors` lists the subset of `matched` consumed as Arcane Resin donors.
 /// The keys are camelCase like every other bridge-built document (the
 /// browser's own scout output and `engine_info`); only the persisted formats
 /// — query documents and results files — are `snake_case`.
@@ -29,6 +30,8 @@ pub fn scout_matches_document(request: &[u8], query: &[u8]) -> Result<String, Sc
     let marks = production_scout_matches(request, query)?;
     Ok(json!({
         "matched": marks.matched_indices(),
+        "resinDonors": marks.resin_donors.iter().enumerate()
+            .filter_map(|(index, &donor)| donor.then_some(index)).collect::<Vec<_>>(),
         "transmutedTrinkets": marks.transmuted_trinkets.iter().enumerate()
             .filter_map(|(index, &matched)| matched.then_some(index)).collect::<Vec<_>>(),
         "transmutedArtifacts": marks.transmuted_artifacts.iter().map(|&(depth, index)| json!({"depth":depth,"index":index})).collect::<Vec<_>>(),
@@ -63,6 +66,7 @@ mod tests {
             serde_json::from_str(&scout_matches_document(b"AAA-AAA-AAA", query).unwrap()).unwrap();
         assert_eq!(envelope["matched"], json!([]));
         assert_eq!(envelope["transmutedTrinkets"], json!([10]));
+        assert_eq!(envelope["resinDonors"], json!([]));
         assert_eq!(envelope["matchedRequirements"], 1);
     }
 

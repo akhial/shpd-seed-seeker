@@ -423,6 +423,15 @@
                         <TextBlock Text="Match" FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource SystemFillColorSuccessBrush}"/>
                       </StackPanel>
                     </Border>
+                    <!-- A matched wand the query consumes as Arcane Resin. The 1px border
+                         comes out of the padding so both match chips are the same size. -->
+                    <Border Visibility="{Binding ResinDonorVisibility}" Background="#248C64DC" BorderBrush="#668C64DC" BorderThickness="1" CornerRadius="10" Padding="7,1"
+                            ToolTipService.ToolTip="Arcane Resin donor match" AutomationProperties.Name="Arcane Resin donor match">
+                      <StackPanel Orientation="Horizontal" Spacing="5">
+                        <local:SpriteView SpriteIndex="317" SpriteSize="14" VerticalAlignment="Center"/>
+                        <TextBlock Text="Match" FontSize="11" FontWeight="SemiBold" Foreground="#C9A6F5" VerticalAlignment="Center"/>
+                      </StackPanel>
+                    </Border>
                     <Border Visibility="{Binding ChoiceVisibility}" Background="{ThemeResource SubtleFillColorSecondaryBrush}" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="10" Padding="8,2"
                             ToolTipService.ToolTip="{Binding Accessibility}" AutomationProperties.Name="{Binding Accessibility}">
                       <StackPanel Orientation="Horizontal" Spacing="5">

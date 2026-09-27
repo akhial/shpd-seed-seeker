@@ -14,7 +14,7 @@ use shpd_seedfinder_core::catalog::{Effect, ItemId, ItemKind, item};
 use shpd_seedfinder_core::challenges::Challenges;
 use shpd_seedfinder_core::feasibility::QueryPlan;
 use shpd_seedfinder_core::model::{Accessibility, GeneratedWorld, WorldItem};
-use shpd_seedfinder_core::query::{SearchQuery, scout_matches};
+use shpd_seedfinder_core::query::{ScoutMatches, SearchQuery, scout_matches};
 use shpd_seedfinder_core::run::RingGems;
 use shpd_seedfinder_core::search::FloorGate;
 use shpd_seedfinder_core::seed::{DungeonSeed, format_input};
@@ -829,7 +829,7 @@ impl DetailPane {
                     }
                 } else {
                     let world_item = &world.items[*index];
-                    let row = item_row(world_item, gems, marks.matched[*index]);
+                    let row = item_row(world_item, gems, RowMatch::of(&marks, *index));
                     if choice_is_dimmed(
                         world_item.accessibility,
                         marks.matched[*index],
@@ -914,7 +914,7 @@ fn trinket_choices(
     let content = gtk::Box::new(gtk::Orientation::Vertical, 8);
     let mut catalyst = location.clone();
     catalyst.item = ItemId::TrinketCatalyst;
-    content.append(&item_row(&catalyst, world.ring_gems, false));
+    content.append(&item_row(&catalyst, world.ring_gems, RowMatch::Unmatched));
     let choices = gtk::Box::builder()
         .orientation(gtk::Orientation::Horizontal)
         .homogeneous(true)
@@ -995,7 +995,29 @@ fn trinket_choices(
     (content, choices)
 }
 
-fn item_row(world_item: &WorldItem, gems: RingGems, matched: bool) -> adw::ActionRow {
+/// How a manifest row took part in the scouted match.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RowMatch {
+    Unmatched,
+    /// Kept to fulfill a requirement.
+    Requirement,
+    /// Consumed as an Arcane Resin donor.
+    ResinDonor,
+}
+
+impl RowMatch {
+    fn of(marks: &ScoutMatches, index: usize) -> Self {
+        if marks.resin_donors.get(index).copied().unwrap_or(false) {
+            Self::ResinDonor
+        } else if marks.matched[index] {
+            Self::Requirement
+        } else {
+            Self::Unmatched
+        }
+    }
+}
+
+fn item_row(world_item: &WorldItem, gems: RingGems, matched: RowMatch) -> adw::ActionRow {
     let mut subtitle = source_label(world_item.source).to_owned();
     match world_item.accessibility {
         Accessibility::Independent | Accessibility::Choice { .. } => {}
@@ -1044,12 +1066,16 @@ fn item_row(world_item: &WorldItem, gems: RingGems, matched: bool) -> adw::Actio
         badge.set_tooltip_text(Some("Hidden in a secret room — search to reveal it"));
         row.add_suffix(&badge);
     }
-    if matched {
-        let badge = tag("Match", "success");
-        badge.set_tooltip_text(Some(
-            "Selected as part of a jointly obtainable requirement match",
-        ));
-        row.add_suffix(&badge);
+    match matched {
+        RowMatch::Unmatched => {}
+        RowMatch::Requirement => {
+            let badge = tag("Match", "success");
+            badge.set_tooltip_text(Some(
+                "Selected as part of a jointly obtainable requirement match",
+            ));
+            row.add_suffix(&badge);
+        }
+        RowMatch::ResinDonor => row.add_suffix(&resin_donor_tag()),
     }
     if let Accessibility::Choice { group, option } = world_item.accessibility {
         let badge = tag(&format!("⑂ {}", choice_letter(group)), "dim-label");
@@ -1084,6 +1110,23 @@ fn tag(label: &str, color: &str) -> gtk::Label {
         .css_classes(["tag", color])
         .valign(gtk::Align::Center)
         .build()
+}
+
+/// The match tag of a wand consumed for Arcane Resin: purple, led by the
+/// resin's own sprite instead of plain text.
+fn resin_donor_tag() -> gtk::Box {
+    let label = "Arcane Resin donor match";
+    let badge = gtk::Box::builder()
+        .orientation(gtk::Orientation::Horizontal)
+        .spacing(4)
+        .css_classes(["tag", "resin-match"])
+        .valign(gtk::Align::Center)
+        .tooltip_text(label)
+        .build();
+    badge.update_property(&[gtk::accessible::Property::Label(label)]);
+    badge.append(&sprites::arcane_resin_image_sized(16));
+    badge.append(&gtk::Label::new(Some("Match")));
+    badge
 }
 
 // World items are fixed dungeon loot, never runtime drops or transmutation outcomes.

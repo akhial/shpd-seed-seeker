@@ -352,16 +352,34 @@ public sealed class NativeEngine
         var slots = query.SlotCount;
         if (code == -1) return new(new HashSet<int>(), 0, slots);
         if (code != 0) throw new InvalidOperationException($"Native scout matches failed ({code}).");
-        var document = JsonNode.Parse(Encoding.UTF8.GetString(CopyAndFree(ptr, len))) as JsonObject
+        return DecodeScoutMatches(Encoding.UTF8.GetString(CopyAndFree(ptr, len)), slots);
+    }
+
+    /// <summary>
+    /// Decodes the engine's scout match envelope. <c>resinDonors</c> — the
+    /// matched wands the query consumes as Arcane Resin — is a subset of
+    /// <c>matched</c>; envelopes from before it existed simply lack the key,
+    /// which reads as no donors.
+    /// </summary>
+    internal static ScoutMatches DecodeScoutMatches(string json, int slots)
+    {
+        var document = JsonNode.Parse(json) as JsonObject
             ?? throw new InvalidDataException("Unreadable scout match document");
-        var matched = new HashSet<int>();
-        foreach (var index in document["matched"] as JsonArray ?? [])
-            if (index is JsonValue value && value.TryGetValue(out int number)) matched.Add(number);
+        var matched = Indices(document["matched"]);
         return new(matched, (int?)document["matchedRequirements"] ?? matched.Count,
             (int?)document["totalRequirements"] ?? slots) {
+                ResinDonors = Indices(document["resinDonors"]),
                 TransmutedTrinkets = (document["transmutedTrinkets"] as JsonArray ?? []).Select(value => (int)value!).ToHashSet(),
                 TransmutedArtifacts = (document["transmutedArtifacts"] as JsonArray ?? []).Select(value => ((int)value!["depth"]!, (int)value!["index"]!)).ToHashSet()
             };
+
+        static HashSet<int> Indices(JsonNode? node)
+        {
+            var indices = new HashSet<int>();
+            foreach (var index in node as JsonArray ?? [])
+                if (index is JsonValue value && value.TryGetValue(out int number)) indices.Add(number);
+            return indices;
+        }
     }
 
     /// <summary>The full web share link for a canonical JSON query document, or null when the engine rejects the query.</summary>

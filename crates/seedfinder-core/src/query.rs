@@ -1206,6 +1206,9 @@ pub struct ScoutMatches {
     /// order [`crate::wire::encode_scout_world`] emits — set for every item
     /// the selection claimed for a satisfied condition.
     pub matched: Vec<bool>,
+    /// One flag per world item, set for the matched items the selection
+    /// consumes as Arcane Resin donors rather than keeping for a slot.
+    pub resin_donors: Vec<bool>,
     /// Matches for transmutations 1–13, separate from generated world item indices.
     pub transmuted_trinkets: [bool; crate::trinkets::TRANSMUTATION_COUNT as usize],
     /// Matched remaining-deck outcomes (floor, zero-based position).
@@ -1259,10 +1262,15 @@ pub fn scout_matches(world: &GeneratedWorld, query: &SearchQuery) -> ScoutMatche
         assignment: Assignment::prepare(query, world),
         selected: Vec::new(),
         best: Vec::new(),
+        best_resin: Vec::new(),
         best_conditions: 0,
     };
     search.visit(0);
     let mut matched = vec![false; world.items.len()];
+    let mut resin_donors = vec![false; world.items.len()];
+    for &index in &search.best_resin {
+        resin_donors[index] = true;
+    }
     let mut transmuted_trinkets = [false; crate::trinkets::TRANSMUTATION_COUNT as usize];
     let mut transmuted_artifacts = Vec::new();
     for &index in &search.best {
@@ -1279,6 +1287,7 @@ pub fn scout_matches(world: &GeneratedWorld, query: &SearchQuery) -> ScoutMatche
     }
     ScoutMatches {
         matched,
+        resin_donors,
         transmuted_trinkets,
         transmuted_artifacts,
         matched_requirements: search.best_conditions
@@ -1299,6 +1308,8 @@ struct BestSubset<'query> {
     selected: Vec<(usize, Option<u8>)>,
     /// The items of the best selection.
     best: Vec<usize>,
+    /// The resin donors among `best`.
+    best_resin: Vec<usize>,
     /// The conditions the best selection satisfies.
     best_conditions: usize,
 }
@@ -1313,6 +1324,7 @@ impl BestSubset<'_> {
             let mut items: Vec<usize> = Vec::new();
             let mut satisfied_groups: Vec<u8> = Vec::new();
             let mut conditions = 0;
+            let mut resin_donors = Vec::new();
             for &(item_index, sum_group) in &self.selected {
                 match sum_group {
                     None => {
@@ -1353,7 +1365,8 @@ impl BestSubset<'_> {
                     false,
                 ) {
                     conditions += 1;
-                    items.extend(resin_items);
+                    items.extend(&resin_items);
+                    resin_donors = resin_items;
                 }
             }
             conditions += self
@@ -1365,6 +1378,7 @@ impl BestSubset<'_> {
             if conditions > self.best_conditions {
                 self.best_conditions = conditions;
                 self.best = items;
+                self.best_resin = resin_donors;
             }
             return;
         }
