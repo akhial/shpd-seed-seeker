@@ -54,8 +54,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.Velocity
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.material3.TopAppBarState
+import androidx.compose.material3.rememberTopAppBarState
 import dev.seedseeker.app.model.FloorFeeling
 import kotlin.math.roundToInt
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -195,13 +195,17 @@ fun ScoutScreen(
     onAbout: () -> Unit,
     bottomBar: @Composable () -> Unit,
     mapChallenges: Int = 0,
+    // Hoisted so the app's navigation bar can hide along with the app bar.
+    appBarState: TopAppBarState = rememberTopAppBarState(),
 ) {
     val listState = rememberLazyListState()
     val collapseWindow = with(LocalDensity.current) { 96.dp.toPx() }
     val headerScroll = remember(collapseWindow) { ScoutHeaderScrollState(collapseWindow) }
     val hasResult by rememberUpdatedState(result != null)
     // The app bar hides first on the way down and returns on any scroll back up.
-    val appBarScroll = TopAppBarDefaults.enterAlwaysScrollBehavior(canScroll = { hasResult })
+    val appBarScroll = TopAppBarDefaults.enterAlwaysScrollBehavior(appBarState, canScroll = { hasResult })
+    // The list and form start expanded each time Scout opens, so the bars must too.
+    LaunchedEffect(appBarState) { appBarState.heightOffset = 0f }
     val appBarConnection = remember(appBarScroll) {
         object : NestedScrollConnection {
             // Material's connection swallows the whole delta while the bar moves; take only
@@ -307,20 +311,7 @@ fun ScoutScreen(
                 ),
             )
         },
-        bottomBar = {
-            // The navigation bar slides away with the app bar. It keeps the system
-            // navigation inset so the content does not jump when it finishes hiding.
-            val navigationInset = WindowInsets.navigationBars.getBottom(LocalDensity.current)
-            Box(
-                Modifier.clipToBounds().layout { measurable, constraints ->
-                    val placeable = measurable.measure(constraints)
-                    val travel = (placeable.height - navigationInset).coerceAtLeast(0)
-                    layout(placeable.width, placeable.height - (travel * appBarScroll.state.collapsedFraction).roundToInt()) {
-                        placeable.placeRelative(0, 0)
-                    }
-                }.graphicsLayer { alpha = 1f - appBarScroll.state.collapsedFraction },
-            ) { bottomBar() }
-        },
+        bottomBar = bottomBar,
     ) { scaffoldPadding ->
         Box(
             modifier = Modifier
@@ -1173,3 +1164,16 @@ private fun ScoutPlaceholder(scouting: Boolean, onDaily: () -> Unit) {
         }
     }
 }
+
+/**
+ * Slides a bottom bar down and out of view as [fraction] goes from 0 to 1, keeping
+ * [keep] pixels (the system navigation inset) so the content above does not jump.
+ */
+internal fun Modifier.slideAway(fraction: () -> Float, keep: Int = 0): Modifier =
+    clipToBounds().layout { measurable, constraints ->
+        val placeable = measurable.measure(constraints)
+        val travel = (placeable.height - keep).coerceAtLeast(0)
+        layout(placeable.width, placeable.height - (travel * fraction()).roundToInt()) {
+            placeable.placeRelative(0, 0)
+        }
+    }.graphicsLayer { alpha = 1f - fraction() }

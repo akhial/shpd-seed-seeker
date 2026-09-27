@@ -67,6 +67,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -538,6 +540,8 @@ internal fun SeedFinderApp(
     // The navigation bar lives outside the screens so that switching tabs
     // morphs the content between them while the bar itself stays put.
     val navBar: @Composable () -> Unit = {}
+    // Scout's app bar scroll state; the navigation bar hides along with it.
+    val scoutBars = rememberTopAppBarState()
 
     val resultSeeds = remember(results) { results.map { it.seed } }
     // Anchor for result navigation: the in-flight request's seed while
@@ -809,6 +813,7 @@ internal fun SeedFinderApp(
                     destination = Destination.ABOUT
                 },
                 bottomBar = navBar,
+                appBarState = scoutBars,
             )
 
             Destination.SETTINGS -> SettingsScreen(
@@ -853,12 +858,15 @@ internal fun SeedFinderApp(
             enter = expandVertically(expandFrom = Alignment.Top) + slideInVertically { it },
             exit = shrinkVertically(shrinkTowards = Alignment.Top) + slideOutVertically { it },
         ) {
-            SeedSeekerNavBar(
-                current = destination,
-                onSelect = { destination = it },
-                searching = controller.isSearching,
-                found = foundCount,
-            )
+            val navigationInset = WindowInsets.navigationBars.getBottom(LocalDensity.current)
+            Box(Modifier.slideAway({ if (destination == Destination.SCOUT) scoutBars.collapsedFraction else 0f }, keep = navigationInset)) {
+                SeedSeekerNavBar(
+                    current = destination,
+                    onSelect = { destination = it },
+                    searching = controller.isSearching,
+                    found = foundCount,
+                )
+            }
         }
       }
 

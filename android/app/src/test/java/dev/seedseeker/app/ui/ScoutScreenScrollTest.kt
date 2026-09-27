@@ -8,6 +8,8 @@ import android.os.Looper
 import android.view.PixelCopy
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Box
+import androidx.compose.material3.rememberTopAppBarState
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.CompositionLocalProvider
@@ -115,18 +117,25 @@ class ScoutScreenScrollTest {
             .use(BitmapFactory::decodeStream)!!.asImageBitmap()
         compose.setContent {
             val input = remember { mutableStateOf(initialSeed) }
+            val bars = rememberTopAppBarState()
             SeedSeekerTheme {
                 CompositionLocalProvider(
                     LocalItemAtlas provides atlas,
                     LocalItemIconAtlas provides iconAtlas,
                     LocalDensity provides Density(compose.density.density, fontScale),
                 ) {
-                    ScoutScreen(
-                        seedInput = input.value, result = shown, isScouting = false, error = null,
-                        matches = matches, resultSeeds = listOf(world.seed, "ABC-DEF-GHI"), scoutedSeed = world.seed,
-                        onScoutSeed = onStep, onSeedChange = { input.value = it }, onScout = { onStep(input.value) }, onSelectTrinket = onSelect,
-                        onSettings = {}, onAbout = {}, bottomBar = { Box(Modifier.fillMaxWidth().height(80.dp).testTag("bottom-bar")) },
-                    )
+                    // As in the app, the navigation bar sits below the screen and follows its app bar.
+                    Column {
+                        Box(Modifier.weight(1f)) {
+                            ScoutScreen(
+                                seedInput = input.value, result = shown, isScouting = false, error = null,
+                                matches = matches, resultSeeds = listOf(world.seed, "ABC-DEF-GHI"), scoutedSeed = world.seed,
+                                onScoutSeed = onStep, onSeedChange = { input.value = it }, onScout = { onStep(input.value) }, onSelectTrinket = onSelect,
+                                onSettings = {}, onAbout = {}, bottomBar = {}, appBarState = bars,
+                            )
+                        }
+                        Box(Modifier.slideAway({ bars.collapsedFraction }).fillMaxWidth().height(80.dp).testTag("bottom-bar"))
+                    }
                 }
             }
         }
