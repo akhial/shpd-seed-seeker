@@ -319,6 +319,32 @@ pub struct Requirement {
 }
 
 impl Requirement {
+    /// The wildcard requirement for `kind`: any item of the family, with
+    /// every predicate open and no relationship — the row every editor
+    /// starts a new chip from, and the base a copy is built on.
+    #[must_use]
+    pub const fn any(kind: ItemKind) -> Self {
+        Self {
+            kind,
+            weapon_category: None,
+            item: None,
+            tier: TierRequirement::Any,
+            upgrade: UpgradeRequirement::Any,
+            effect: EffectRequirement::Any,
+            require_uncursed: false,
+            select_trinket: false,
+            trinket_transmutations: 0,
+            artifact_transmutations: 0,
+            blanket: false,
+            exclude_resin: false,
+            source: None,
+            identity_group: None,
+            max_depth: None,
+            alternative_group: None,
+            level_sum: None,
+        }
+    }
+
     #[must_use]
     pub fn matches(self, candidate: &WorldItem) -> bool {
         self.matching_identity(candidate).is_some()

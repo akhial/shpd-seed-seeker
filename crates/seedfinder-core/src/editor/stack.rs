@@ -1,0 +1,163 @@
+//! Stack rules: what a board entry's count and combined-level badges offer.
+//!
+//! Every platform draws the badges and steppers itself; these functions say
+//! what they may offer, so a stepper never proposes an edit [`super::apply`]
+//! would refuse or ignore.
+
+use crate::catalog::ItemKind;
+use crate::query::{Requirement, SumGroup, UpgradeRequirement};
+
+use super::labels::{count_text, total_text};
+use super::{BoardItem, STACK_MAX};
+
+/// Whether the entry can grow a stack (web `canStack`). A copy has to name
+/// the kind it copies, so every member must share the anchor's family, and
+/// a cluster spanning two — "spear or ring" — names none. Trinkets and
+/// artifacts are unique finds and never stack, and a blanket requirement
+/// constrains items the ordinary ones reserve rather than reserving more.
+///
+/// Every member, not only the anchor, must be ordinary: a stack labels all
+/// of a cluster's members, and the engine rejects a label on a blanket.
+#[must_use]
+pub fn can_grow<R: AsRef<Requirement>>(rows: &[R], item: &BoardItem) -> bool {
+    let family = rows[item.anchor()].as_ref().kind;
+    !matches!(family, ItemKind::Trinket | ItemKind::Artifact)
+        && item.members.iter().all(|&index| {
+            let member = rows[index].as_ref();
+            member.kind == family && !member.blanket
+        })
+}
+
+/// Whether the count stepper is live: the entry can grow, or it holds
+/// copies to shed (shrinking a cluster that spans categories is fine).
+#[must_use]
+pub fn can_change_count<R: AsRef<Requirement>>(rows: &[R], item: &BoardItem) -> bool {
+    can_grow(rows, item) || item.count() > 1
+}
+
+/// Whether the entry may count its items' levels together: a lone chip of
+/// a named ring with copies, since levels add up across rings alone. A
+/// stack already counting levels reports `true` so it can be turned off.
+#[must_use]
+pub fn can_count_levels<R: AsRef<Requirement>>(rows: &[R], item: &BoardItem) -> bool {
+    let anchor = rows[item.anchor()].as_ref();
+    item.cluster.is_none()
+        && !anchor.blanket
+        && anchor.item.is_some()
+        && (item.total.is_some() || (item.count() > 1 && anchor.kind == ItemKind::Ring))
+}
+
+/// The largest total the entry's combined level can ask for.
+///
+/// With a total set it is the level-sum group's
+/// [`SumGroup::attainable_capacity`]; without one, the capacity the stack
+/// would have once counting — its items as any-upgrade copies of the anchor
+/// — so the stepper's range does not move when the switch is turned on. For
+/// rings that is `(MAX_GENERATED_UPGRADE + 1) + (count − 1) ×
+/// (MAX_STANDARD_RING_UPGRADE + 1)`: a world levels only one ring past the
+/// standard roll.
+#[must_use]
+pub fn level_capacity<R: AsRef<Requirement>>(rows: &[R], item: &BoardItem) -> u8 {
+    let anchor = *rows[item.anchor()].as_ref();
+    let group = if let (Some(_), Some(sum)) = (item.total, anchor.level_sum) {
+        let mut group = SumGroup::default();
+        for row in rows {
+            let row = row.as_ref();
+            if row
+                .level_sum
+                .is_some_and(|member| member.group == sum.group)
+            {
+                group.members = group.members.saturating_add(1);
+                group.capacity = group
+                    .capacity
+                    .saturating_add(u16::from(row.maximum_level()));
+            }
+        }
+        group
+    } else {
+        let members = u16::try_from(item.count()).unwrap_or(u16::MAX);
+        let copy = Requirement {
+            upgrade: UpgradeRequirement::Any,
+            ..anchor
+        };
+        SumGroup {
+            members,
+            minimum_total: 0,
+            capacity: members.saturating_mul(u16::from(copy.maximum_level())),
+        }
+    };
+    u8::try_from(group.attainable_capacity()).unwrap_or(u8::MAX)
+}
+
+/// The total a stack starts counting at: one level per item, within the
+/// capacity.
+#[must_use]
+pub fn default_total<R: AsRef<Requirement>>(rows: &[R], item: &BoardItem) -> u8 {
+    u8::try_from(item.count())
+        .unwrap_or(u8::MAX)
+        .clamp(1, level_capacity(rows, item).max(1))
+}
+
+/// The floor limit the stack's hidden copies share: the first copy's, when
+/// a hand-written document gave them different ones.
+#[must_use]
+pub fn copy_depth<R: AsRef<Requirement>>(rows: &[R], item: &BoardItem) -> Option<u8> {
+    item.extras
+        .first()
+        .and_then(|&index| rows[index].as_ref().max_depth)
+}
+
+/// Whether the copies' floor limit is editable: there are copies, and they
+/// are not identical combined-level members bound by the anchor's own limit.
+#[must_use]
+pub fn can_set_copy_depth(item: &BoardItem) -> bool {
+    item.count() > 1 && item.total.is_none()
+}
+
+/// Everything the count and combined-level badges and steppers show.
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[allow(clippy::struct_excessive_bools)] // Independent capabilities of one badge pair.
+pub struct StackView {
+    /// How many items the entry asks for, its anchor included.
+    pub count: u8,
+    /// The count stepper's upper bound, [`STACK_MAX`].
+    pub max: u8,
+    pub can_grow: bool,
+    pub can_change_count: bool,
+    /// The combined level, when the stack counts levels.
+    pub total: Option<u8>,
+    pub can_count_levels: bool,
+    /// The total stepper's upper bound ([`level_capacity`]).
+    pub level_capacity: u8,
+    /// Where the total stepper starts when counting is turned on.
+    pub default_total: u8,
+    /// The hidden copies' floor limit.
+    pub copy_depth: Option<u8>,
+    pub can_set_copy_depth: bool,
+    /// The count badge's text, `×N` (or `≤N` while counting levels, the
+    /// members being optional) — shown by steppers even at ×1.
+    pub count_text: String,
+    /// The total badge's text, `Σ ≥ T` (`Σ ≥ 0` while a stepper edits an
+    /// entry without a total yet).
+    pub total_text: String,
+}
+
+/// The [`StackView`] of `item`, one of [`super::board_items`] of `rows`.
+#[must_use]
+pub fn stack_view<R: AsRef<Requirement>>(rows: &[R], item: &BoardItem) -> StackView {
+    let count = u8::try_from(item.count()).unwrap_or(u8::MAX);
+    StackView {
+        count,
+        max: STACK_MAX,
+        can_grow: can_grow(rows, item),
+        can_change_count: can_change_count(rows, item),
+        total: item.total,
+        can_count_levels: can_count_levels(rows, item),
+        level_capacity: level_capacity(rows, item),
+        default_total: default_total(rows, item),
+        copy_depth: copy_depth(rows, item),
+        can_set_copy_depth: can_set_copy_depth(item),
+        count_text: count_text(count, item.total.is_some()),
+        total_text: total_text(item.total.unwrap_or(0)),
+    }
+}

@@ -555,43 +555,10 @@ pub const CHALLENGE_NAMES: &[(&str, Challenges)] = &[
     ("badder_bosses", Challenges::STRONGER_BOSSES),
 ];
 
-/// Stable document name for one item family.
-#[must_use]
-pub const fn kind_name(kind: ItemKind) -> &'static str {
-    match kind {
-        ItemKind::Weapon => "weapon",
-        ItemKind::Armor => "armor",
-        ItemKind::Wand => "wand",
-        ItemKind::Ring => "ring",
-        ItemKind::Trinket => "trinket",
-        ItemKind::Artifact => "artifact",
-    }
-}
-
-/// Stable document name for one item source.
-#[must_use]
-pub const fn source_name(source: ItemSource) -> &'static str {
-    match source {
-        ItemSource::Heap => "heap",
-        ItemSource::Chest => "chest",
-        ItemSource::LockedChest => "locked_chest",
-        ItemSource::CrystalChest => "crystal_chest",
-        ItemSource::Tomb => "tomb",
-        ItemSource::Skeleton => "skeleton",
-        ItemSource::SacrificialFire => "sacrificial_fire",
-        ItemSource::Mimic => "mimic",
-        ItemSource::GoldenMimic => "golden_mimic",
-        ItemSource::CrystalMimic => "crystal_mimic",
-        ItemSource::Statue => "statue",
-        ItemSource::ArmoredStatue => "armored_statue",
-        ItemSource::Shop => "shop",
-        ItemSource::GhostReward => "ghost_reward",
-        ItemSource::WandmakerReward => "wandmaker_reward",
-        ItemSource::BlacksmithReward => "blacksmith_reward",
-        ItemSource::ImpReward => "imp_reward",
-        ItemSource::VaultTreasure => "vault_treasure",
-    }
-}
+// The wire names live beside the types they name, outside this feature-gated
+// module, so the always-built requirement editor can use them too.
+pub use crate::catalog::kind_name;
+pub use crate::model::source_name;
 
 /// Encodes a query as the canonical JSON document accepted by [`decode`].
 ///
