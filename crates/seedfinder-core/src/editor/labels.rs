@@ -10,10 +10,132 @@
 //! sentence-case sources ([`crate::model::ItemSource::label`]), "Any Tier 3
 //! weapon" titles and the short "Any melee" chip names.
 
-use crate::catalog::{Effect, ItemKind, WeaponCategory, item};
+use crate::catalog::{Effect, ItemKind, WeaponCategory, item, kind_name};
 use crate::query::{
     EffectRequirement, EffectSet, Requirement, TierRequirement, UpgradeRequirement,
 };
+
+/// A requirement's kind as the flat kind picker and the envelopes name it:
+/// its family, with weapons split into any, melee and thrown. The core
+/// model carries the split as [`Requirement::weapon_category`]; the
+/// platforms' models (and the query document) fold it into the kind.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum KindName {
+    Weapon,
+    MeleeWeapon,
+    ThrownWeapon,
+    Armor,
+    Wand,
+    Ring,
+    Trinket,
+    Artifact,
+}
+
+impl KindName {
+    /// Every kind, weapons first, in the order the kind picker lists them.
+    pub const ALL: [Self; 8] = [
+        Self::Weapon,
+        Self::MeleeWeapon,
+        Self::ThrownWeapon,
+        Self::Armor,
+        Self::Wand,
+        Self::Ring,
+        Self::Trinket,
+        Self::Artifact,
+    ];
+
+    /// The kind of a family with its melee/thrown narrowing, which only
+    /// means something on weapons and is ignored elsewhere.
+    #[must_use]
+    pub const fn of(kind: ItemKind, category: Option<WeaponCategory>) -> Self {
+        match (kind, category) {
+            (ItemKind::Weapon, None) => Self::Weapon,
+            (ItemKind::Weapon, Some(WeaponCategory::Melee)) => Self::MeleeWeapon,
+            (ItemKind::Weapon, Some(WeaponCategory::Thrown)) => Self::ThrownWeapon,
+            (ItemKind::Armor, _) => Self::Armor,
+            (ItemKind::Wand, _) => Self::Wand,
+            (ItemKind::Ring, _) => Self::Ring,
+            (ItemKind::Trinket, _) => Self::Trinket,
+            (ItemKind::Artifact, _) => Self::Artifact,
+        }
+    }
+
+    /// The kind a requirement asks for.
+    #[must_use]
+    pub const fn of_requirement(requirement: &Requirement) -> Self {
+        Self::of(requirement.kind, requirement.weapon_category)
+    }
+
+    /// The broad family.
+    #[must_use]
+    pub const fn family(self) -> ItemKind {
+        match self {
+            Self::Weapon | Self::MeleeWeapon | Self::ThrownWeapon => ItemKind::Weapon,
+            Self::Armor => ItemKind::Armor,
+            Self::Wand => ItemKind::Wand,
+            Self::Ring => ItemKind::Ring,
+            Self::Trinket => ItemKind::Trinket,
+            Self::Artifact => ItemKind::Artifact,
+        }
+    }
+
+    /// The melee/thrown narrowing, for the two narrowed weapon kinds.
+    #[must_use]
+    pub const fn weapon_category(self) -> Option<WeaponCategory> {
+        match self {
+            Self::MeleeWeapon => Some(WeaponCategory::Melee),
+            Self::ThrownWeapon => Some(WeaponCategory::Thrown),
+            _ => None,
+        }
+    }
+
+    /// The stable snake-case name the query document's `kind` and the
+    /// envelopes carry: [`kind_name`], plus `melee_weapon` and
+    /// `thrown_weapon`.
+    #[must_use]
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::MeleeWeapon => "melee_weapon",
+            Self::ThrownWeapon => "thrown_weapon",
+            _ => kind_name(self.family()),
+        }
+    }
+
+    /// The kind picker's label ([`kind_label`]): "Melee weapon".
+    #[must_use]
+    pub const fn label(self) -> &'static str {
+        kind_label(self.family(), self.weapon_category())
+    }
+}
+
+/// A trinket chosen at +3 from the initial offer, as its chip tag and detail.
+pub const SELECT_TRINKET: &str = "choose at +3";
+
+/// The chip tag of a wand kept out of Auto resin's budget.
+pub const NO_RESIN: &str = "No resin";
+
+/// The detail of a wand kept out of Auto resin's budget.
+pub const EXCLUDED_FROM_RESIN: &str = "excluded from Auto resin";
+
+/// The detail of a requirement that rules out cursed items.
+pub const UNCURSED: &str = "uncursed";
+
+/// The name the resin chip and the item picker's resin option show. Arcane
+/// Resin is not a catalog item: it is what surplus wands melt into.
+pub const ARCANE_RESIN: &str = "Arcane Resin";
+
+/// The resin chip's word for an amount derived from the kept wands.
+pub const RESIN_AUTO: &str = "Auto";
+
+/// What an Auto resin amount means, for the resin chip's tooltip.
+pub const RESIN_AUTO_TOOLTIP: &str =
+    "Enough resin to upgrade kept wands to +3, excluding No resin wands and reforge copies";
+
+/// The resin chip's tag for the starting Magic Missile's credit.
+pub const RESIN_MAGE_TAG: &str = "Mage +2";
+
+/// The resin detail for the starting Magic Missile's credit.
+pub const RESIN_MAGE_DETAIL: &str = "starting Magic Missile contributes 2 resin";
 
 /// A family as a category picker names it.
 #[must_use]
@@ -259,6 +381,62 @@ pub fn total_text(total: u8) -> String {
 #[must_use]
 pub fn alternatives_label(members: usize) -> String {
     format!("Any of {members}")
+}
+
+/// The combined-level badge where space is tight — the phone boards, whose
+/// chips give up their name before their tags: `Σ≥5`.
+#[must_use]
+pub fn compact_total_text(total: u8) -> String {
+    format!("Σ≥{total}")
+}
+
+/// The count badge's tooltip: `3 of the same kind`, or `Up to 3 items`
+/// while the stack counts levels and its members are optional.
+#[must_use]
+pub fn count_tooltip(count: u8, counting_levels: bool) -> String {
+    if counting_levels {
+        format!("Up to {count} items")
+    } else {
+        format!("{count} of the same kind")
+    }
+}
+
+/// The combined-level badge's tooltip, which spells out how levels count.
+#[must_use]
+pub fn total_tooltip(total: u8) -> String {
+    format!("Levels add to at least {total} (a +0 item counts 1)")
+}
+
+/// The popover line of a stack counting levels: `up to 3 — levels add to
+/// ≥ 5`.
+#[must_use]
+pub fn level_sum_relation(count: u8, total: u8) -> String {
+    format!("up to {count} — levels add to ≥ {total}")
+}
+
+/// The floor limits a stack's hidden copies share, as its popover line
+/// says them.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum CopyFloors {
+    /// Every copy may lie on any floor.
+    Any,
+    /// Every copy lies within the first N floors.
+    Within(u8),
+    /// The copies disagree (a hand-written list).
+    Own,
+}
+
+/// The popover line of a plain stack: `3 of the same kind — the extra
+/// copies: any upgrade, floors 1–4`. The chip's own bounds (+3, F≤4)
+/// describe the anchor alone, so the line says what the copies ask.
+#[must_use]
+pub fn stack_relation(count: u8, floors: CopyFloors) -> String {
+    let floors = match floors {
+        CopyFloors::Any => "any floor".to_owned(),
+        CopyFloors::Within(depth) => floor_detail(depth),
+        CopyFloors::Own => "own floor limits".to_owned(),
+    };
+    format!("{count} of the same kind — the extra copies: any upgrade, {floors}")
 }
 
 #[cfg(test)]

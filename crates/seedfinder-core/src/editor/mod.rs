@@ -34,9 +34,18 @@
 //!   N items reaching T levels".
 //!
 //! [`board_items`] folds the list into that view; [`apply`] runs the edits.
+//!
+//! # Presentation
+//!
+//! [`board_view`] renders the fold into everything a board draws — entries,
+//! chips with their tags and popover text, badges, join candidates, the
+//! Arcane Resin chip — and [`problems()`] says what is wrong with the list,
+//! row by row and between rows, in the words every platform shows.
 
 mod board;
+mod chips;
 pub mod labels;
+mod problems;
 mod stack;
 
 use std::collections::BTreeSet;
@@ -49,6 +58,13 @@ pub use board::{
     BoardItem, DropAction, DropTarget, Edit, EditResult, ItemKey, JoinCandidates, Refusal, apply,
     board_items, drop_action, join_candidates,
 };
+pub use chips::{
+    Badge, Badges, BoardView, ChipView, Counts, EffectBadge, ItemView, Relation, RelationGlyph,
+    ResinAmount, ResinChip, ResinState, Tag, TagStyle, board_view, chip_description, chip_details,
+    chip_tags, chip_trailing_tags, effect_badge, resin_chip,
+};
+pub use labels::KindName;
+pub use problems::{NO_ORDINARY_REQUIREMENT, Problem, ProblemScope, problems, row_problems};
 pub use stack::{
     StackView, can_change_count, can_count_levels, can_grow, can_set_copy_depth, copy_depth,
     default_total, level_capacity, stack_view,

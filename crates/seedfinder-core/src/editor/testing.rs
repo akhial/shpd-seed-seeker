@@ -377,3 +377,118 @@ pub(crate) fn random_edit(rng: &mut Rng, rows: &[Row]) -> Edit {
         }
     }
 }
+
+/// A random requirement with every field drawn independently, valid or not:
+/// items of any family, tiers and upgrades out of range, effects of the
+/// other family, flags on families that reject them, labels from 0 up. The
+/// problem list must word every combination.
+pub(crate) fn arbitrary_requirement(rng: &mut Rng) -> Requirement {
+    let kind = rng.pick(&[
+        ItemKind::Weapon,
+        ItemKind::Armor,
+        ItemKind::Wand,
+        ItemKind::Ring,
+        ItemKind::Trinket,
+        ItemKind::Artifact,
+    ]);
+    let mut requirement = Requirement::any(kind);
+    if rng.chance(50) {
+        requirement.item = Some(if rng.chance(70) {
+            let own = items_of(kind);
+            rng.pick(&own)
+        } else {
+            ITEMS[rng.below(ITEMS.len())].id
+        });
+    }
+    if rng.chance(20) {
+        requirement.weapon_category =
+            Some(rng.pick(&[WeaponCategory::Melee, WeaponCategory::Thrown]));
+    }
+    // Small values mostly, and now and then the top of the range, where
+    // arithmetic on an unchecked field would overflow.
+    let value = |rng: &mut Rng, high: u8| {
+        if rng.chance(5) {
+            u8::MAX
+        } else {
+            rng.range(0, high)
+        }
+    };
+    requirement.tier = match rng.below(6) {
+        0 => TierRequirement::Exact(value(rng, 7)),
+        1 => TierRequirement::AtLeast(value(rng, 7)),
+        2 => TierRequirement::AtMost(value(rng, 7)),
+        _ => TierRequirement::Any,
+    };
+    requirement.upgrade = match rng.below(4) {
+        0 => UpgradeRequirement::Exact(value(rng, 7)),
+        1 => UpgradeRequirement::AtLeast(value(rng, 7)),
+        _ => UpgradeRequirement::Any,
+    };
+    if rng.chance(30) {
+        let family: Vec<Effect> = if rng.chance(50) {
+            ALL_WEAPON_EFFECTS
+                .iter()
+                .copied()
+                .map(Effect::Weapon)
+                .collect()
+        } else {
+            ALL_ARMOR_EFFECTS
+                .iter()
+                .copied()
+                .map(Effect::Armor)
+                .collect()
+        };
+        let set = if rng.chance(20) {
+            EffectSet::enchantments(match family[0] {
+                Effect::Weapon(_) => ItemKind::Weapon,
+                Effect::Armor(_) => ItemKind::Armor,
+            })
+        } else {
+            EffectSet::from_effects((0..rng.range(1, 3)).map(|_| rng.pick(&family)))
+        };
+        if let Some(set) = set {
+            requirement.effect = EffectRequirement::OneOf(set);
+        }
+    }
+    requirement.require_uncursed = rng.chance(25);
+    requirement.select_trinket = rng.chance(10);
+    if rng.chance(15) {
+        requirement.trinket_transmutations = value(rng, 16);
+    }
+    if rng.chance(15) {
+        requirement.artifact_transmutations = value(rng, 12);
+    }
+    requirement.blanket = rng.chance(15);
+    requirement.exclude_resin = rng.chance(12);
+    if rng.chance(15) {
+        requirement.source = Some(rng.pick(ItemSource::ALL));
+    }
+    if rng.chance(20) {
+        requirement.identity_group = Some(value(rng, 6));
+    }
+    if rng.chance(25) {
+        requirement.max_depth = Some(value(rng, 27));
+    }
+    if rng.chance(20) {
+        requirement.alternative_group = Some(value(rng, 4));
+    }
+    if rng.chance(20) {
+        requirement.level_sum = Some(LevelSum {
+            group: value(rng, 6),
+            minimum_total: value(rng, 14),
+        });
+    }
+    requirement
+}
+
+/// [`random_rows`] with some rows swapped for [`arbitrary_requirement`]s —
+/// lists whose groups mostly make sense and whose rows often do not.
+pub(crate) fn mixed_rows(rng: &mut Rng) -> Vec<Row> {
+    let mut rows = random_rows(rng);
+    for row in &mut rows {
+        if rng.chance(30) {
+            row.requirement = arbitrary_requirement(rng);
+        }
+    }
+    rows
+}

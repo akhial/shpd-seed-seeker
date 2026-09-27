@@ -1,0 +1,629 @@
+//! The board as every frontend draws it: entries, chips, badges, the resin
+//! chip, and every word on them.
+//!
+//! [`board_view`] is one pass over the list that answers everything a board
+//! render asks — which rows collapse into which entry, what each chip is
+//! called and tagged, what its popover says, which chips it may join or is
+//! refused by, and what is wrong with it. The platforms keep the drawing:
+//! sprites, glow colours, layout, gestures. Before, each carried its own
+//! chip text and the six boards disagreed on tag order, tier wording, badge
+//! spacing and which chips were marked as errors.
+//!
+//! The text follows the web board (`RequirementBoard.tsx`: the chip, its
+//! badges and its `ChipPopover`) with the shared design's settled wording:
+//! title-case item names, "Any Tier 3 weapon" titles, the short "Any
+//! melee" chip names, "any glyph" on armor, and a "choose at +3" tag.
+
+use std::collections::BTreeSet;
+
+use crate::catalog::{Effect, ItemId, ItemKind};
+use crate::model::ItemSource;
+use crate::query::{
+    ArcaneResinFilter, EffectRequirement, EffectSet, Requirement, UpgradeRequirement,
+};
+
+use super::Row;
+use super::board::{BoardItem, ItemKey, JoinCandidates, Refusal, board_items, join_candidates};
+use super::labels::{
+    ARCANE_RESIN, CopyFloors, EXCLUDED_FROM_RESIN, KindName, NO_RESIN, RESIN_AUTO,
+    RESIN_AUTO_TOOLTIP, RESIN_MAGE_DETAIL, RESIN_MAGE_TAG, SELECT_TRINKET, UNCURSED,
+    alternatives_label, compact_total_text, count_text, count_tooltip, effect_label, floor_detail,
+    floor_tag, level_sum_relation, requirement_name, requirement_title, stack_relation, tier_tag,
+    total_text, total_tooltip, transmutations_detail, transmutations_tag, upgrade_detail,
+    upgrade_tag,
+};
+use super::problems::{IndexedProblem, Problem, ProblemScope, indexed_problems, keyed};
+use super::stack::{StackView, stack_view};
+
+/// Everything a board render needs, from one fold of the list.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BoardView {
+    /// The board's entries in list order, both sections together: a
+    /// platform splits them by [`ItemView::blanket`].
+    pub items: Vec<ItemView>,
+    pub counts: Counts,
+    /// Everything wrong with the list ([`super::problems()`]).
+    pub problems: Vec<Problem>,
+    /// The Arcane Resin chip, when the query asks for resin.
+    pub resin: Option<ResinChip>,
+}
+
+/// How many entries each board section shows — what a section header
+/// counts as its "requirements", clusters and stacks counting once.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub struct Counts {
+    pub ordinary: usize,
+    pub blanket: usize,
+}
+
+/// One board entry: a chip, or an either/or cluster of chips, with its
+/// stack badges.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ItemView {
+    /// The entry's identity, stable while it survives an edit.
+    pub id: ItemKey,
+    /// Which section the entry sits in (its anchor's).
+    pub blanket: bool,
+    /// The alternative group of a cluster of two or more.
+    pub cluster: Option<u8>,
+    /// A cluster's caption, `Any of N`.
+    pub label: Option<String>,
+    /// The visible rows' keys: one for a chip, every member of a cluster.
+    pub members: Vec<u64>,
+    /// The hidden copies' keys behind the stack badge.
+    pub extras: Vec<u64>,
+    /// What the count and combined-level steppers offer.
+    pub stack: StackView,
+    /// The badges the entry shows at rest.
+    pub badges: Badges,
+    /// One chip per member, in member order.
+    pub chips: Vec<ChipView>,
+    /// The first problem touching any member or hidden copy, so a problem
+    /// on a copy the board folds away still shows somewhere.
+    pub problem: Option<String>,
+}
+
+/// The badges an entry shows at rest. The steppers that edit them read
+/// [`StackView::count_text`] and [`StackView::total_text`] instead, which
+/// exist even when the badge does not.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct Badges {
+    /// `×N` (or `≤N` while counting levels), when the entry asks for more
+    /// than one item.
+    pub count: Option<Badge>,
+    /// `Σ ≥ T`, when the stack counts levels together.
+    pub total: Option<Badge>,
+}
+
+/// One badge's words.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Badge {
+    pub text: String,
+    /// The same with no spaces, for boards where a chip gives up its name
+    /// before its badges (the phones).
+    pub compact_text: String,
+    pub tooltip: String,
+}
+
+/// How a chip tag is drawn.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum TagStyle {
+    Plain,
+    /// The upgrade, tinted apart from the rest.
+    Upgrade,
+}
+
+/// A qualifier beside a chip's name.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Tag {
+    pub text: String,
+    pub style: TagStyle,
+}
+
+impl Tag {
+    fn plain(text: impl Into<String>) -> Self {
+        Self {
+            text: text.into(),
+            style: TagStyle::Plain,
+        }
+    }
+}
+
+/// The effect filter as a chip shows it. Platforms pick the cue — a glow on
+/// a named item's sprite, a dot, a ring of colours, a count — from these
+/// facts; the colours are theirs.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct EffectBadge {
+    /// The filter in words: `any enchantment` (`any glyph` on armor), one
+    /// effect's name, or `effect: A/B/C`.
+    pub label: String,
+    /// Every accepted effect in catalog order — the full non-curse set for
+    /// "any enchantment", so a glow can be drawn from it.
+    pub effects: Vec<Effect>,
+    /// Whether the filter is "any enchantment" (or "any glyph"), which
+    /// platforms draw as its own cue rather than as a count of effects.
+    pub any_enchantment: bool,
+    /// Whether the filter accepts curses only.
+    pub curses_only: bool,
+}
+
+/// What a relation line of a chip's popover is about.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum RelationGlyph {
+    /// Either/or: the cluster's other members (`or`).
+    Or,
+    /// A combined level (`Σ`).
+    Sum,
+    /// A stack of copies (`×`).
+    Times,
+}
+
+/// One relation line of a chip's popover.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Relation {
+    pub glyph: RelationGlyph,
+    pub text: String,
+}
+
+/// One chip: a visible row, alone or as a cluster member.
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[allow(clippy::struct_excessive_bools)] // Independent facts about one chip.
+pub struct ChipView {
+    pub key: u64,
+    /// The short name beside the sprite: the item, or `Any melee`.
+    pub name: String,
+    /// The full title the popover and the sheet lead with: the item, or
+    /// `Any Tier 3+ melee weapon`.
+    pub title: String,
+    pub item: Option<ItemId>,
+    pub kind: KindName,
+    pub family: ItemKind,
+    /// Qualifiers after the name, before the effect cue: transmutations or
+    /// `choose at +3`, the tier (wildcards only), the upgrade, `F≤N`.
+    pub tags: Vec<Tag>,
+    /// Qualifiers after the effect cue: `No resin`.
+    pub trailing_tags: Vec<Tag>,
+    pub effect: Option<EffectBadge>,
+    /// Whether cursed items are ruled out (drawn as a check mark).
+    pub uncursed: bool,
+    /// The popover's detail line, as parts: what the chip asks of its item.
+    pub details: Vec<String>,
+    /// The popover's relation lines: the cluster, the combined level, the
+    /// stack.
+    pub relations: Vec<Relation>,
+    /// The accessibility label: the title, then the details.
+    pub description: String,
+    /// The chip's own first problem, else the first problem between rows
+    /// that blames it; the anchor also speaks for its hidden copies.
+    pub problem: Option<String>,
+    pub in_cluster: bool,
+    /// Whether "On its own" ([`super::Edit::Detach`]) applies.
+    pub can_detach: bool,
+    /// The visible rows this chip may join ([`super::Edit::Join`]) — what
+    /// "Either/or with…" menus, pick mode, accessibility actions and drag
+    /// hover feedback offer.
+    pub join: Vec<u64>,
+    /// The visible rows a join onto is refused, with the reason to show.
+    pub refuse: Vec<(u64, Refusal)>,
+}
+
+/// The query's Arcane Resin condition, as the resin chip and the
+/// requirement sheet read it.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ResinState {
+    pub amount: ResinAmount,
+    pub filter: ArcaneResinFilter,
+}
+
+/// How much resin the query asks for.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ResinAmount {
+    /// Enough to bring the kept wands to +3.
+    Auto,
+    AtLeast(u16),
+}
+
+/// The Arcane Resin chip.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ResinChip {
+    /// Always [`ARCANE_RESIN`].
+    pub name: String,
+    /// `Auto` or `≥N`, then `Mage +2`, then `F≤N`.
+    pub tags: Vec<Tag>,
+    /// Whether donor wands must be uncursed (drawn as a check mark).
+    pub uncursed: bool,
+    /// The chip's hover text: what Auto means, then the donors' source —
+    /// the one filter no tag shows. `None` when there is neither.
+    pub tooltip: Option<String>,
+    /// The filter in words, like a chip's details.
+    pub details: Vec<String>,
+    /// The accessibility label: the name, then the details.
+    pub description: String,
+}
+
+/// The chip tags of `requirement`, in the order they follow its name:
+/// transmutations (`Transmute ≤N`) or `choose at +3`, the tier (`T3`,
+/// `T3+`, `T≤3` — wildcards only; a named item is the tier it is), the
+/// upgrade (`+3`, `+3↑`, drawn apart), the floor limit (`F≤N`). The effect
+/// cue and [`chip_trailing_tags`] come after.
+#[must_use]
+pub fn chip_tags(requirement: &Requirement) -> Vec<Tag> {
+    let mut tags = Vec::new();
+    let transmutations = transmutations(requirement);
+    if transmutations > 0 {
+        tags.push(Tag::plain(transmutations_tag(transmutations)));
+    }
+    if requirement.select_trinket {
+        tags.push(Tag::plain(SELECT_TRINKET));
+    }
+    if requirement.item.is_none()
+        && let Some(tier) = tier_tag(requirement.tier)
+    {
+        tags.push(Tag::plain(tier));
+    }
+    if let Some(upgrade) = upgrade_tag(requirement.upgrade) {
+        tags.push(Tag {
+            text: upgrade,
+            style: TagStyle::Upgrade,
+        });
+    }
+    if let Some(depth) = requirement.max_depth {
+        tags.push(Tag::plain(floor_tag(depth)));
+    }
+    tags
+}
+
+/// The chip tags after the effect cue: `No resin`.
+#[must_use]
+pub fn chip_trailing_tags(requirement: &Requirement) -> Vec<Tag> {
+    if requirement.exclude_resin {
+        vec![Tag::plain(NO_RESIN)]
+    } else {
+        Vec::new()
+    }
+}
+
+/// The transmutation limit a trinket or artifact carries, whichever field
+/// holds it (the web reads the trinket's first).
+fn transmutations(requirement: &Requirement) -> u8 {
+    if requirement.trinket_transmutations > 0 {
+        requirement.trinket_transmutations
+    } else {
+        requirement.artifact_transmutations
+    }
+}
+
+/// The effect cue of `requirement`, or `None` for the wildcard.
+#[must_use]
+pub fn effect_badge(requirement: &Requirement) -> Option<EffectBadge> {
+    let EffectRequirement::OneOf(set) = requirement.effect else {
+        return None;
+    };
+    Some(EffectBadge {
+        label: effect_label(requirement.effect)?,
+        effects: set.effects().collect(),
+        any_enchantment: EffectSet::enchantments(set.family()) == Some(set),
+        curses_only: set.is_curses_only(),
+    })
+}
+
+/// What `requirement` asks of its item, as the popover's detail parts:
+/// the transmutation limit, `choose at +3`, the upgrade, the effect,
+/// `uncursed`, the resin exclusion, the source, the floor limit.
+///
+/// "any upgrade" is left out when it says nothing: on a stack counting
+/// levels, whose total speaks for the upgrades, and on trinkets and
+/// artifacts, which are never upgraded in a search.
+#[must_use]
+pub fn chip_details(requirement: &Requirement, counting_levels: bool) -> Vec<String> {
+    let mut details = Vec::new();
+    let transmutations = transmutations(requirement);
+    if transmutations > 0 {
+        details.push(transmutations_detail(transmutations));
+    }
+    if requirement.select_trinket {
+        details.push(SELECT_TRINKET.to_owned());
+    }
+    let silent = requirement.upgrade == UpgradeRequirement::Any
+        && (counting_levels || matches!(requirement.kind, ItemKind::Trinket | ItemKind::Artifact));
+    if !silent {
+        details.push(upgrade_detail(requirement.upgrade));
+    }
+    if let Some(effect) = effect_label(requirement.effect) {
+        details.push(effect);
+    }
+    if requirement.require_uncursed {
+        details.push(UNCURSED.to_owned());
+    }
+    if requirement.exclude_resin {
+        details.push(EXCLUDED_FROM_RESIN.to_owned());
+    }
+    if let Some(source) = requirement.source {
+        details.push(source.label().to_owned());
+    }
+    if let Some(depth) = requirement.max_depth {
+        details.push(floor_detail(depth));
+    }
+    details
+}
+
+/// An accessibility label: `title`, then `details` — `Rat Skull, within 3
+/// transmutations`.
+#[must_use]
+pub fn chip_description(title: &str, details: &[String]) -> String {
+    if details.is_empty() {
+        title.to_owned()
+    } else {
+        format!("{title}, {}", details.join(", "))
+    }
+}
+
+/// The popover's relation lines for the chip at `index`, a member of
+/// `item`: the cluster's other members, then the combined level or the
+/// stack.
+fn relations(rows: &[Row], item: &BoardItem, index: usize) -> Vec<Relation> {
+    let mut relations = Vec::new();
+    if item.cluster.is_some() {
+        let peers: Vec<&str> = item
+            .members
+            .iter()
+            .filter(|&&member| member != index)
+            .map(|&member| requirement_name(&rows[member].requirement))
+            .collect();
+        relations.push(Relation {
+            glyph: RelationGlyph::Or,
+            text: peers.join(", "),
+        });
+    }
+    let count = u8::try_from(item.count()).unwrap_or(u8::MAX);
+    if let Some(total) = item.total {
+        relations.push(Relation {
+            glyph: RelationGlyph::Sum,
+            text: level_sum_relation(count, total),
+        });
+    } else if count > 1 {
+        let depths: BTreeSet<Option<u8>> = item
+            .extras
+            .iter()
+            .map(|&extra| rows[extra].requirement.max_depth)
+            .collect();
+        let floors = match depths.into_iter().collect::<Vec<_>>()[..] {
+            [Some(depth)] => CopyFloors::Within(depth),
+            [None] => CopyFloors::Any,
+            _ => CopyFloors::Own,
+        };
+        relations.push(Relation {
+            glyph: RelationGlyph::Times,
+            text: stack_relation(count, floors),
+        });
+    }
+    relations
+}
+
+/// The badges `item` shows at rest.
+fn badges(item: &BoardItem) -> Badges {
+    let count = u8::try_from(item.count()).unwrap_or(u8::MAX);
+    let counting = item.total.is_some();
+    Badges {
+        count: (count > 1).then(|| {
+            let text = count_text(count, counting);
+            Badge {
+                compact_text: text.clone(),
+                text,
+                tooltip: count_tooltip(count, counting),
+            }
+        }),
+        total: item.total.map(|total| Badge {
+            text: total_text(total),
+            compact_text: compact_total_text(total),
+            tooltip: total_tooltip(total),
+        }),
+    }
+}
+
+/// The resin chip for the query's resin condition.
+#[must_use]
+pub fn resin_chip(resin: &ResinState) -> ResinChip {
+    let filter = resin.filter;
+    let (amount_tag, amount_detail) = match resin.amount {
+        ResinAmount::Auto => (RESIN_AUTO.to_owned(), RESIN_AUTO.to_owned()),
+        ResinAmount::AtLeast(amount) => (format!("≥{amount}"), format!("at least {amount}")),
+    };
+    let mut tags = vec![Tag::plain(amount_tag)];
+    if filter.include_mage_wand {
+        tags.push(Tag::plain(RESIN_MAGE_TAG));
+    }
+    if let Some(depth) = filter.max_depth {
+        tags.push(Tag::plain(floor_tag(depth)));
+    }
+    let tooltip: Vec<&str> = [
+        (resin.amount == ResinAmount::Auto).then_some(RESIN_AUTO_TOOLTIP),
+        filter.source.map(ItemSource::label),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    let mut details = vec![amount_detail];
+    if filter.include_mage_wand {
+        details.push(RESIN_MAGE_DETAIL.to_owned());
+    }
+    details.push(
+        if filter.uncursed {
+            "uncursed wands"
+        } else {
+            "any wands"
+        }
+        .to_owned(),
+    );
+    if let Some(source) = filter.source {
+        details.push(source.label().to_owned());
+    }
+    if let Some(depth) = filter.max_depth {
+        details.push(floor_detail(depth));
+    }
+    ResinChip {
+        name: ARCANE_RESIN.to_owned(),
+        tags,
+        uncursed: filter.uncursed,
+        tooltip: (!tooltip.is_empty()).then(|| tooltip.join("\n")),
+        description: chip_description(ARCANE_RESIN, &details),
+        details,
+    }
+}
+
+/// Which problem each row's chip can show: for every row, the first
+/// problem of its own and the first problem between rows that blames it.
+struct Blame<'a> {
+    /// The first own (row-scope) problem of each row.
+    own: Vec<Option<&'a str>>,
+    /// The first problem between rows that blames each row.
+    shared: Vec<Option<&'a str>>,
+}
+
+impl<'a> Blame<'a> {
+    fn new(len: usize, found: &'a [IndexedProblem]) -> Self {
+        let mut blame = Self {
+            own: vec![None; len],
+            shared: vec![None; len],
+        };
+        for problem in found {
+            let slots = match problem.scope {
+                ProblemScope::Row => &mut blame.own,
+                ProblemScope::Group => &mut blame.shared,
+                ProblemScope::List => continue,
+            };
+            for &index in &problem.rows {
+                slots[index].get_or_insert(problem.message.as_str());
+            }
+        }
+        blame
+    }
+
+    /// The chip problem of the row at `index`: its own, else a shared one;
+    /// `copies` (an anchor's hidden copies) speak after it, own problems
+    /// first.
+    fn chip(&self, index: usize, copies: &[usize]) -> Option<&'a str> {
+        self.own[index]
+            .or(self.shared[index])
+            .or_else(|| copies.iter().find_map(|&copy| self.own[copy]))
+            .or_else(|| copies.iter().find_map(|&copy| self.shared[copy]))
+    }
+}
+
+/// The whole board: every entry with its chips, badges and stack controls,
+/// the section counts, the list's problems, and the resin chip when `resin`
+/// is set. `rows` are shown as they are; platforms normalize a list once on
+/// load ([`super::Edit::Normalize`]).
+#[must_use]
+pub fn board_view(rows: &[Row], resin: Option<&ResinState>) -> BoardView {
+    let items = board_items(rows);
+    let candidates = join_candidates(rows, &items);
+    let found = indexed_problems(rows);
+    let blame = Blame::new(rows.len(), &found);
+    let mut counts = Counts::default();
+    let views = items
+        .iter()
+        .map(|item| {
+            let anchor = &rows[item.anchor()].requirement;
+            if anchor.blanket {
+                counts.blanket += 1;
+            } else {
+                counts.ordinary += 1;
+            }
+            item_view(rows, item, &candidates, &found, &blame)
+        })
+        .collect();
+    BoardView {
+        items: views,
+        counts,
+        problems: keyed(rows, found),
+        resin: resin.map(resin_chip),
+    }
+}
+
+/// The view of `item`, one of [`board_items`] of `rows`.
+fn item_view(
+    rows: &[Row],
+    item: &BoardItem,
+    candidates: &[JoinCandidates],
+    found: &[IndexedProblem],
+    blame: &Blame<'_>,
+) -> ItemView {
+    let keys = |indices: &[usize]| indices.iter().map(|&index| rows[index].key).collect();
+    let chips = item
+        .members
+        .iter()
+        .map(|&index| {
+            let copies: &[usize] = if index == item.anchor() {
+                &item.extras
+            } else {
+                &[]
+            };
+            chip_view(
+                rows,
+                item,
+                index,
+                &candidates[index],
+                blame.chip(index, copies).map(str::to_owned),
+            )
+        })
+        .collect();
+    let problem = found
+        .iter()
+        .find(|problem| {
+            problem
+                .rows
+                .iter()
+                .any(|index| item.members.contains(index) || item.extras.contains(index))
+        })
+        .map(|problem| problem.message.clone());
+    ItemView {
+        id: item.key(rows),
+        blanket: rows[item.anchor()].requirement.blanket,
+        cluster: item.cluster,
+        label: item.cluster.map(|_| alternatives_label(item.members.len())),
+        members: keys(&item.members),
+        extras: keys(&item.extras),
+        stack: stack_view(rows, item),
+        badges: badges(item),
+        chips,
+        problem,
+    }
+}
+
+/// The chip of the row at `index`, a member of `item`.
+fn chip_view(
+    rows: &[Row],
+    item: &BoardItem,
+    index: usize,
+    candidates: &JoinCandidates,
+    problem: Option<String>,
+) -> ChipView {
+    let row = &rows[index];
+    let requirement = &row.requirement;
+    let title = requirement_title(requirement);
+    let details = chip_details(requirement, item.total.is_some());
+    ChipView {
+        key: row.key,
+        name: requirement_name(requirement).to_owned(),
+        description: chip_description(&title, &details),
+        title,
+        item: requirement.item,
+        kind: KindName::of_requirement(requirement),
+        family: requirement.kind,
+        tags: chip_tags(requirement),
+        trailing_tags: chip_trailing_tags(requirement),
+        effect: effect_badge(requirement),
+        uncursed: requirement.require_uncursed,
+        details,
+        relations: relations(rows, item, index),
+        problem,
+        in_cluster: item.cluster.is_some(),
+        can_detach: item.cluster.is_some(),
+        join: candidates.join.clone(),
+        refuse: candidates.refuse.clone(),
+    }
+}
+
+#[cfg(test)]
+mod tests;
