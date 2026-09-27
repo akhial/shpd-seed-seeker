@@ -1,0 +1,15 @@
+{
+  "about": "A draft from another version (or none at all) cannot be read; the platform reopens the sheet.",
+  "envelope": "requirement_editor",
+  "request": {
+    "change": {
+      "type": "set_uncursed",
+      "value": true
+    },
+    "draft": "{\"v\":99}",
+    "op": "change"
+  },
+  "response": {
+    "error": "The draft cannot be read; reopen the sheet: it is version 99, this editor reads version 1"
+  }
+}

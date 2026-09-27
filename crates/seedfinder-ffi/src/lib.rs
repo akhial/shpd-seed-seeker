@@ -13,7 +13,7 @@ use std::num::NonZeroUsize;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::ptr;
 
-use shpd_seedfinder_core::{deep_link, engine_info, json_query, results_export, seed};
+use shpd_seedfinder_core::{deep_link, editor, engine_info, json_query, results_export, seed};
 use shpd_seedfinder_session::{
     FilterPacketError, MAX_RESULTS, NativeSession, ScoutCallError, ScoutMatchError,
     ScoutPacketError, SearchError, StartSessionError, available_workers, close_session, json,
@@ -435,6 +435,72 @@ pub extern "C" fn seedfinder_engine_info(out_packet: *mut *mut u8, out_len: *mut
             out_packet,
             out_len,
         )
+    }))
+    .unwrap_or(INTERNAL)
+}
+
+/// Answers a requirement-board request (`docs/requirement-editor.md`): the
+/// board's rows after the request's edits, with everything the board draws.
+/// A request the editor cannot read still returns `OK`, with the UTF-8 JSON
+/// `{"error": ...}` the envelope answers, so the Swift and C# callers decode
+/// one shape; `INVALID` is kept for a null request or output pointer and for
+/// bytes that are not UTF-8, `INTERNAL` for a panic.
+#[unsafe(no_mangle)]
+pub extern "C" fn seedfinder_requirement_board(
+    request: *const u8,
+    request_len: usize,
+    out_packet: *mut *mut u8,
+    out_len: *mut usize,
+) -> i32 {
+    editor_entry(
+        request,
+        request_len,
+        out_packet,
+        out_len,
+        editor::requirement_board,
+    )
+}
+
+/// Answers a requirement-sheet request (`docs/requirement-editor.md`):
+/// `open`, `change` or `save`. Return codes as for
+/// [`seedfinder_requirement_board`].
+#[unsafe(no_mangle)]
+pub extern "C" fn seedfinder_requirement_editor(
+    request: *const u8,
+    request_len: usize,
+    out_packet: *mut *mut u8,
+    out_len: *mut usize,
+) -> i32 {
+    editor_entry(
+        request,
+        request_len,
+        out_packet,
+        out_len,
+        editor::requirement_editor,
+    )
+}
+
+/// The shared marshalling of the two editor envelopes, which never fail on a
+/// readable request.
+fn editor_entry(
+    request: *const u8,
+    request_len: usize,
+    out_packet: *mut *mut u8,
+    out_len: *mut usize,
+    envelope: fn(&str) -> String,
+) -> i32 {
+    clear_outputs(out_packet, out_len);
+    catch_unwind(AssertUnwindSafe(|| {
+        if out_packet.is_null() || out_len.is_null() {
+            return INVALID;
+        }
+        let Some(bytes) = request_slice(request, request_len) else {
+            return INVALID;
+        };
+        let Ok(text) = std::str::from_utf8(bytes) else {
+            return INVALID;
+        };
+        return_packet(envelope(text).into_bytes(), out_packet, out_len)
     }))
     .unwrap_or(INTERNAL)
 }
@@ -949,6 +1015,54 @@ mod tests {
             seedfinder_engine_info(ptr::null_mut(), &raw mut len),
             INVALID
         );
+    }
+
+    #[test]
+    fn requirement_editor_bridges_answer_the_envelopes_and_errors_in_band() {
+        let board = r#"{"rows":[{"key":1,"kind":"ring","item":"ring_might","upgrade":2}],
+            "edits":[{"type":"set_count","key":1,"count":2}]}"#;
+        let answer = call_text_entry(seedfinder_requirement_board, board).unwrap();
+        assert_eq!(answer, editor::requirement_board(board));
+        let answer: Value = serde_json::from_str(&answer).unwrap();
+        assert_eq!(
+            answer["rows"][1],
+            serde_json::json!({"key": 2, "kind": "ring", "item": "ring_might"})
+        );
+
+        let open = r#"{"op":"open","rows":[]}"#;
+        let answer = call_text_entry(seedfinder_requirement_editor, open).unwrap();
+        assert_eq!(answer, editor::requirement_editor(open));
+        let answer: Value = serde_json::from_str(&answer).unwrap();
+        assert!(answer["draft"].is_string());
+
+        // A request the editor cannot read is answered, not refused.
+        for entry in [seedfinder_requirement_board, seedfinder_requirement_editor] {
+            let answer: Value =
+                serde_json::from_str(&call_text_entry(entry, "{broken").unwrap()).unwrap();
+            assert!(answer["error"].is_string(), "{answer}");
+            let mut pointer = ptr::null_mut();
+            let mut len = 0;
+            assert_eq!(
+                entry(ptr::null(), 0, &raw mut pointer, &raw mut len),
+                INVALID
+            );
+            let invalid = [0xff_u8, 0xfe];
+            assert_eq!(
+                entry(
+                    invalid.as_ptr(),
+                    invalid.len(),
+                    &raw mut pointer,
+                    &raw mut len
+                ),
+                INVALID
+            );
+            assert!(pointer.is_null());
+            assert_eq!(len, 0);
+            assert_eq!(
+                entry(open.as_ptr(), open.len(), ptr::null_mut(), &raw mut len),
+                INVALID
+            );
+        }
     }
 
     #[test]

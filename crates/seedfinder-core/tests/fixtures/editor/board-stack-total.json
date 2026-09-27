@@ -1,0 +1,127 @@
+{
+  "about": "Two Rings of Might counting levels to at least 3 (the third web stack document).",
+  "envelope": "requirement_board",
+  "request": {
+    "edits": [
+      {
+        "count": 2,
+        "key": 1,
+        "type": "set_count"
+      },
+      {
+        "key": 1,
+        "total": 3,
+        "type": "set_total"
+      }
+    ],
+    "rows": [
+      {
+        "item": "ring_might",
+        "key": 1,
+        "kind": "ring",
+        "upgrade": 2
+      }
+    ]
+  },
+  "response": {
+    "changed": true,
+    "counts": {
+      "blanket": 0,
+      "ordinary": 1
+    },
+    "focus": 1,
+    "items": [
+      {
+        "badges": {
+          "count": {
+            "compact_text": "≤2",
+            "text": "≤2",
+            "tooltip": "Up to 2 items"
+          },
+          "total": {
+            "compact_text": "Σ≥3",
+            "text": "Σ ≥ 3",
+            "tooltip": "Levels add to at least 3 (a +0 item counts 1)"
+          }
+        },
+        "blanket": false,
+        "chips": [
+          {
+            "can_detach": false,
+            "description": "Ring of Might",
+            "details": [],
+            "effect": null,
+            "family": "ring",
+            "in_cluster": false,
+            "item": "ring_might",
+            "join": [],
+            "key": 1,
+            "kind": "ring",
+            "name": "Ring of Might",
+            "problem": null,
+            "refuse": [],
+            "relations": [
+              {
+                "glyph": "sum",
+                "text": "up to 2 — levels add to ≥ 3"
+              }
+            ],
+            "tags": [],
+            "title": "Ring of Might",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [
+          2
+        ],
+        "id": "r1",
+        "label": null,
+        "members": [
+          1
+        ],
+        "problem": null,
+        "stack": {
+          "can_change_count": true,
+          "can_count_levels": true,
+          "can_grow": true,
+          "can_set_copy_depth": false,
+          "copy_depth": null,
+          "count": 2,
+          "count_text": "≤2",
+          "default_total": 2,
+          "level_capacity": 8,
+          "max": 3,
+          "total": 3,
+          "total_text": "Σ ≥ 3"
+        }
+      }
+    ],
+    "next_key": 3,
+    "problems": [],
+    "refused": null,
+    "rekeyed": [],
+    "resin": null,
+    "rows": [
+      {
+        "item": "ring_might",
+        "key": 1,
+        "kind": "ring",
+        "level_sum": {
+          "at_least": 3,
+          "group": 1
+        }
+      },
+      {
+        "item": "ring_might",
+        "key": 2,
+        "kind": "ring",
+        "level_sum": {
+          "at_least": 3,
+          "group": 1
+        }
+      }
+    ]
+  }
+}

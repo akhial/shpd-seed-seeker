@@ -1,0 +1,617 @@
+{
+  "about": "Every kind of entry, with the Auto resin chip; no edits, so the rows come back as sent.",
+  "envelope": "requirement_board",
+  "request": {
+    "resin": {
+      "amount": "auto",
+      "filter": {
+        "include_mage_wand": true,
+        "max_depth": null,
+        "source": "heap",
+        "uncursed": true
+      }
+    },
+    "rows": [
+      {
+        "item": "ring_might",
+        "key": 1,
+        "kind": "ring",
+        "upgrade": 2
+      },
+      {
+        "item": "ring_might",
+        "key": 2,
+        "kind": "ring"
+      },
+      {
+        "item": "ring_might",
+        "key": 3,
+        "kind": "ring"
+      },
+      {
+        "effect": "any_enchantment",
+        "key": 4,
+        "kind": "melee_weapon",
+        "max_depth": 9,
+        "tier": {
+          "at_least": 3
+        },
+        "uncursed": true,
+        "upgrade": {
+          "at_least": 2
+        }
+      },
+      {
+        "alternative_group": 1,
+        "item": "wand_fireblast",
+        "key": 5,
+        "kind": "wand",
+        "upgrade": 3
+      },
+      {
+        "alternative_group": 1,
+        "exclude_resin": true,
+        "key": 6,
+        "kind": "wand",
+        "upgrade": 3
+      },
+      {
+        "item": "rat_skull",
+        "key": 7,
+        "kind": "trinket",
+        "trinket_transmutations": 3
+      },
+      {
+        "blanket": true,
+        "effect": [
+          "Brimstone",
+          "Viscosity"
+        ],
+        "key": 8,
+        "kind": "armor",
+        "source": "locked_chest"
+      }
+    ]
+  },
+  "response": {
+    "changed": false,
+    "counts": {
+      "blanket": 1,
+      "ordinary": 4
+    },
+    "focus": null,
+    "items": [
+      {
+        "badges": {
+          "count": {
+            "compact_text": "×3",
+            "text": "×3",
+            "tooltip": "3 of the same kind"
+          },
+          "total": null
+        },
+        "blanket": false,
+        "chips": [
+          {
+            "can_detach": false,
+            "description": "Ring of Might, exactly +2",
+            "details": [
+              "exactly +2"
+            ],
+            "effect": null,
+            "family": "ring",
+            "in_cluster": false,
+            "item": "ring_might",
+            "join": [],
+            "key": 1,
+            "kind": "ring",
+            "name": "Ring of Might",
+            "problem": null,
+            "refuse": [
+              {
+                "key": 4,
+                "message": "Copies can only be grouped with the same item type.",
+                "reason": "mixed_category_stack"
+              },
+              {
+                "key": 5,
+                "message": "Copies can only be grouped with the same item type.",
+                "reason": "mixed_category_stack"
+              },
+              {
+                "key": 6,
+                "message": "Copies can only be grouped with the same item type.",
+                "reason": "mixed_category_stack"
+              },
+              {
+                "key": 7,
+                "message": "Copies can only be grouped with the same item type.",
+                "reason": "mixed_category_stack"
+              }
+            ],
+            "relations": [
+              {
+                "glyph": "times",
+                "text": "3 of the same kind — the extra copies: any upgrade, any floor"
+              }
+            ],
+            "tags": [
+              {
+                "style": "upgrade",
+                "text": "+2"
+              }
+            ],
+            "title": "Ring of Might",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [
+          2,
+          3
+        ],
+        "id": "r1",
+        "label": null,
+        "members": [
+          1
+        ],
+        "problem": null,
+        "stack": {
+          "can_change_count": true,
+          "can_count_levels": true,
+          "can_grow": true,
+          "can_set_copy_depth": true,
+          "copy_depth": null,
+          "count": 3,
+          "count_text": "×3",
+          "default_total": 3,
+          "level_capacity": 11,
+          "max": 3,
+          "total": null,
+          "total_text": "Σ ≥ 0"
+        }
+      },
+      {
+        "badges": {
+          "count": null,
+          "total": null
+        },
+        "blanket": false,
+        "chips": [
+          {
+            "can_detach": false,
+            "description": "Any Tier 3+ melee weapon, +2 or higher, any enchantment, uncursed, floors 1–9",
+            "details": [
+              "+2 or higher",
+              "any enchantment",
+              "uncursed",
+              "floors 1–9"
+            ],
+            "effect": {
+              "any_enchantment": true,
+              "curses_only": false,
+              "effects": [
+                "Blazing",
+                "Chilling",
+                "Kinetic",
+                "Shocking",
+                "Venomous",
+                "Blocking",
+                "Blooming",
+                "Eldritch",
+                "Elastic",
+                "Lucky",
+                "Projecting",
+                "Unstable",
+                "Vorpal",
+                "Corrupting",
+                "Crystal",
+                "Grim",
+                "Vampiric"
+              ],
+              "label": "any enchantment"
+            },
+            "family": "weapon",
+            "in_cluster": false,
+            "item": null,
+            "join": [
+              5,
+              6,
+              7
+            ],
+            "key": 4,
+            "kind": "melee_weapon",
+            "name": "Any melee",
+            "problem": null,
+            "refuse": [
+              {
+                "key": 1,
+                "message": "Copies can only be grouped with the same item type.",
+                "reason": "mixed_category_stack"
+              }
+            ],
+            "relations": [],
+            "tags": [
+              {
+                "style": "plain",
+                "text": "T3+"
+              },
+              {
+                "style": "upgrade",
+                "text": "+2↑"
+              },
+              {
+                "style": "plain",
+                "text": "F≤9"
+              }
+            ],
+            "title": "Any Tier 3+ melee weapon",
+            "trailing_tags": [],
+            "uncursed": true
+          }
+        ],
+        "cluster": null,
+        "extras": [],
+        "id": "r4",
+        "label": null,
+        "members": [
+          4
+        ],
+        "problem": null,
+        "stack": {
+          "can_change_count": true,
+          "can_count_levels": false,
+          "can_grow": true,
+          "can_set_copy_depth": false,
+          "copy_depth": null,
+          "count": 1,
+          "count_text": "×1",
+          "default_total": 1,
+          "level_capacity": 5,
+          "max": 3,
+          "total": null,
+          "total_text": "Σ ≥ 0"
+        }
+      },
+      {
+        "badges": {
+          "count": null,
+          "total": null
+        },
+        "blanket": false,
+        "chips": [
+          {
+            "can_detach": true,
+            "description": "Wand of Fireblast, exactly +3",
+            "details": [
+              "exactly +3"
+            ],
+            "effect": null,
+            "family": "wand",
+            "in_cluster": true,
+            "item": "wand_fireblast",
+            "join": [
+              4,
+              7
+            ],
+            "key": 5,
+            "kind": "wand",
+            "name": "Wand of Fireblast",
+            "problem": null,
+            "refuse": [
+              {
+                "key": 1,
+                "message": "Copies can only be grouped with the same item type.",
+                "reason": "mixed_category_stack"
+              }
+            ],
+            "relations": [
+              {
+                "glyph": "or",
+                "text": "Any wand"
+              }
+            ],
+            "tags": [
+              {
+                "style": "upgrade",
+                "text": "+3"
+              }
+            ],
+            "title": "Wand of Fireblast",
+            "trailing_tags": [],
+            "uncursed": false
+          },
+          {
+            "can_detach": true,
+            "description": "Any wand, exactly +3, excluded from Auto resin",
+            "details": [
+              "exactly +3",
+              "excluded from Auto resin"
+            ],
+            "effect": null,
+            "family": "wand",
+            "in_cluster": true,
+            "item": null,
+            "join": [
+              4,
+              7
+            ],
+            "key": 6,
+            "kind": "wand",
+            "name": "Any wand",
+            "problem": null,
+            "refuse": [
+              {
+                "key": 1,
+                "message": "Copies can only be grouped with the same item type.",
+                "reason": "mixed_category_stack"
+              }
+            ],
+            "relations": [
+              {
+                "glyph": "or",
+                "text": "Wand of Fireblast"
+              }
+            ],
+            "tags": [
+              {
+                "style": "upgrade",
+                "text": "+3"
+              }
+            ],
+            "title": "Any wand",
+            "trailing_tags": [
+              {
+                "style": "plain",
+                "text": "No resin"
+              }
+            ],
+            "uncursed": false
+          }
+        ],
+        "cluster": 1,
+        "extras": [],
+        "id": "c1",
+        "label": "Any of 2",
+        "members": [
+          5,
+          6
+        ],
+        "problem": null,
+        "stack": {
+          "can_change_count": true,
+          "can_count_levels": false,
+          "can_grow": true,
+          "can_set_copy_depth": false,
+          "copy_depth": null,
+          "count": 1,
+          "count_text": "×1",
+          "default_total": 1,
+          "level_capacity": 5,
+          "max": 3,
+          "total": null,
+          "total_text": "Σ ≥ 0"
+        }
+      },
+      {
+        "badges": {
+          "count": null,
+          "total": null
+        },
+        "blanket": false,
+        "chips": [
+          {
+            "can_detach": false,
+            "description": "Rat Skull, within 3 transmutations",
+            "details": [
+              "within 3 transmutations"
+            ],
+            "effect": null,
+            "family": "trinket",
+            "in_cluster": false,
+            "item": "rat_skull",
+            "join": [
+              4,
+              5,
+              6
+            ],
+            "key": 7,
+            "kind": "trinket",
+            "name": "Rat Skull",
+            "problem": null,
+            "refuse": [
+              {
+                "key": 1,
+                "message": "Copies can only be grouped with the same item type.",
+                "reason": "mixed_category_stack"
+              }
+            ],
+            "relations": [],
+            "tags": [
+              {
+                "style": "plain",
+                "text": "Transmute ≤3"
+              }
+            ],
+            "title": "Rat Skull",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [],
+        "id": "r7",
+        "label": null,
+        "members": [
+          7
+        ],
+        "problem": null,
+        "stack": {
+          "can_change_count": false,
+          "can_count_levels": false,
+          "can_grow": false,
+          "can_set_copy_depth": false,
+          "copy_depth": null,
+          "count": 1,
+          "count_text": "×1",
+          "default_total": 1,
+          "level_capacity": 1,
+          "max": 3,
+          "total": null,
+          "total_text": "Σ ≥ 0"
+        }
+      },
+      {
+        "badges": {
+          "count": null,
+          "total": null
+        },
+        "blanket": true,
+        "chips": [
+          {
+            "can_detach": false,
+            "description": "Any armor, any upgrade, effect: Viscosity/Brimstone, Locked chest",
+            "details": [
+              "any upgrade",
+              "effect: Viscosity/Brimstone",
+              "Locked chest"
+            ],
+            "effect": {
+              "any_enchantment": false,
+              "curses_only": false,
+              "effects": [
+                "Viscosity",
+                "Brimstone"
+              ],
+              "label": "effect: Viscosity/Brimstone"
+            },
+            "family": "armor",
+            "in_cluster": false,
+            "item": null,
+            "join": [],
+            "key": 8,
+            "kind": "armor",
+            "name": "Any armor",
+            "problem": null,
+            "refuse": [],
+            "relations": [],
+            "tags": [],
+            "title": "Any armor",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [],
+        "id": "r8",
+        "label": null,
+        "members": [
+          8
+        ],
+        "problem": null,
+        "stack": {
+          "can_change_count": false,
+          "can_count_levels": false,
+          "can_grow": false,
+          "can_set_copy_depth": false,
+          "copy_depth": null,
+          "count": 1,
+          "count_text": "×1",
+          "default_total": 1,
+          "level_capacity": 5,
+          "max": 3,
+          "total": null,
+          "total_text": "Σ ≥ 0"
+        }
+      }
+    ],
+    "next_key": 9,
+    "problems": [],
+    "refused": null,
+    "rekeyed": [],
+    "resin": {
+      "description": "Arcane Resin, Auto, starting Magic Missile contributes 2 resin, uncursed wands, Heap",
+      "details": [
+        "Auto",
+        "starting Magic Missile contributes 2 resin",
+        "uncursed wands",
+        "Heap"
+      ],
+      "name": "Arcane Resin",
+      "tags": [
+        {
+          "style": "plain",
+          "text": "Auto"
+        },
+        {
+          "style": "plain",
+          "text": "Mage +2"
+        }
+      ],
+      "tooltip": "Enough resin to upgrade kept wands to +3, excluding No resin wands and reforge copies\nHeap",
+      "uncursed": true
+    },
+    "rows": [
+      {
+        "item": "ring_might",
+        "key": 1,
+        "kind": "ring",
+        "upgrade": 2
+      },
+      {
+        "item": "ring_might",
+        "key": 2,
+        "kind": "ring"
+      },
+      {
+        "item": "ring_might",
+        "key": 3,
+        "kind": "ring"
+      },
+      {
+        "effect": "any_enchantment",
+        "key": 4,
+        "kind": "melee_weapon",
+        "max_depth": 9,
+        "tier": {
+          "at_least": 3
+        },
+        "uncursed": true,
+        "upgrade": {
+          "at_least": 2
+        }
+      },
+      {
+        "alternative_group": 1,
+        "item": "wand_fireblast",
+        "key": 5,
+        "kind": "wand",
+        "upgrade": 3
+      },
+      {
+        "alternative_group": 1,
+        "exclude_resin": true,
+        "key": 6,
+        "kind": "wand",
+        "upgrade": 3
+      },
+      {
+        "item": "rat_skull",
+        "key": 7,
+        "kind": "trinket",
+        "trinket_transmutations": 3
+      },
+      {
+        "blanket": true,
+        "effect": [
+          "Viscosity",
+          "Brimstone"
+        ],
+        "key": 8,
+        "kind": "armor",
+        "source": "locked_chest"
+      }
+    ]
+  }
+}

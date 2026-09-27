@@ -19,7 +19,7 @@ use crate::query::{
 use super::stack::{
     can_count_levels, can_grow, copy_depth as stack_copy_depth, default_total, level_capacity,
 };
-use super::{Row, STACK_MAX, is_valid_key, mint_key, next_key, repair_keys};
+use super::{Row, STACK_MAX, is_valid_key, mint_key, next_key, redirects, repair_keys};
 
 /// A board entry's identity, stable while the entry survives an edit: a chip
 /// is named by its anchor row's key, a cluster by its alternative group.
@@ -575,9 +575,9 @@ pub enum Edit {
 }
 
 impl Edit {
-    /// The edit with its keys read through a key repair: a key that was
-    /// re-keyed names its first occurrence's new key.
-    fn resolved(self, map: &HashMap<u64, u64>) -> Self {
+    /// The edit with its keys read through a key repair's [`redirects`]: a
+    /// key that was re-keyed names its first occurrence's new key.
+    pub(crate) fn resolved(self, map: &HashMap<u64, u64>) -> Self {
         let key = |key: u64| map.get(&key).copied().unwrap_or(key);
         match self {
             Self::Normalize => Self::Normalize,
@@ -647,14 +647,7 @@ pub struct EditResult {
 #[must_use]
 pub fn apply(rows: &[Row], next_key_hint: Option<u64>, edits: &[Edit]) -> EditResult {
     let (mut current, rekeyed) = repair_keys(rows, next_key_hint);
-    // A duplicate's first occurrence keeps its key, so only keys no row
-    // kept — zero or out of range — are redirected, to their first row.
-    let mut map: HashMap<u64, u64> = HashMap::new();
-    for &(old, new) in &rekeyed {
-        if !is_valid_key(old) {
-            map.entry(old).or_insert(new);
-        }
-    }
+    let map = redirects(&rekeyed);
     let mut changed = !rekeyed.is_empty();
     let mut focus = None;
     let mut refused = None;

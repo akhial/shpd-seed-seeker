@@ -1,0 +1,296 @@
+{
+  "about": "Problems in order: each row's own in list order, then those between rows, blaming every row of the group.",
+  "envelope": "requirement_board",
+  "request": {
+    "rows": [
+      {
+        "item": "ring_might",
+        "key": 1,
+        "kind": "ring",
+        "level_sum": {
+          "at_least": 3,
+          "group": 1
+        }
+      },
+      {
+        "key": 2,
+        "kind": "wand",
+        "max_depth": 30
+      },
+      {
+        "item": "ring_might",
+        "key": 3,
+        "kind": "ring",
+        "level_sum": {
+          "at_least": 4,
+          "group": 1
+        }
+      },
+      {
+        "blanket": true,
+        "identity_group": 2,
+        "key": 4,
+        "kind": "armor"
+      }
+    ]
+  },
+  "response": {
+    "changed": false,
+    "counts": {
+      "blanket": 1,
+      "ordinary": 2
+    },
+    "focus": null,
+    "items": [
+      {
+        "badges": {
+          "count": {
+            "compact_text": "≤2",
+            "text": "≤2",
+            "tooltip": "Up to 2 items"
+          },
+          "total": {
+            "compact_text": "Σ≥3",
+            "text": "Σ ≥ 3",
+            "tooltip": "Levels add to at least 3 (a +0 item counts 1)"
+          }
+        },
+        "blanket": false,
+        "chips": [
+          {
+            "can_detach": false,
+            "description": "Ring of Might",
+            "details": [],
+            "effect": null,
+            "family": "ring",
+            "in_cluster": false,
+            "item": "ring_might",
+            "join": [],
+            "key": 1,
+            "kind": "ring",
+            "name": "Ring of Might",
+            "problem": "A stack must share one combined level.",
+            "refuse": [
+              {
+                "key": 2,
+                "message": "Copies can only be grouped with the same item type.",
+                "reason": "mixed_category_stack"
+              }
+            ],
+            "relations": [
+              {
+                "glyph": "sum",
+                "text": "up to 2 — levels add to ≥ 3"
+              }
+            ],
+            "tags": [],
+            "title": "Ring of Might",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [
+          3
+        ],
+        "id": "r1",
+        "label": null,
+        "members": [
+          1
+        ],
+        "problem": "A stack must share one combined level.",
+        "stack": {
+          "can_change_count": true,
+          "can_count_levels": true,
+          "can_grow": true,
+          "can_set_copy_depth": false,
+          "copy_depth": null,
+          "count": 2,
+          "count_text": "≤2",
+          "default_total": 2,
+          "level_capacity": 8,
+          "max": 3,
+          "total": 3,
+          "total_text": "Σ ≥ 3"
+        }
+      },
+      {
+        "badges": {
+          "count": null,
+          "total": null
+        },
+        "blanket": false,
+        "chips": [
+          {
+            "can_detach": false,
+            "description": "Any wand, any upgrade, floors 1–30",
+            "details": [
+              "any upgrade",
+              "floors 1–30"
+            ],
+            "effect": null,
+            "family": "wand",
+            "in_cluster": false,
+            "item": null,
+            "join": [],
+            "key": 2,
+            "kind": "wand",
+            "name": "Any wand",
+            "problem": "Requirement floor must be 1 through 24.",
+            "refuse": [
+              {
+                "key": 1,
+                "message": "Copies can only be grouped with the same item type.",
+                "reason": "mixed_category_stack"
+              }
+            ],
+            "relations": [],
+            "tags": [
+              {
+                "style": "plain",
+                "text": "F≤30"
+              }
+            ],
+            "title": "Any wand",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [],
+        "id": "r2",
+        "label": null,
+        "members": [
+          2
+        ],
+        "problem": "Requirement floor must be 1 through 24.",
+        "stack": {
+          "can_change_count": true,
+          "can_count_levels": false,
+          "can_grow": true,
+          "can_set_copy_depth": false,
+          "copy_depth": null,
+          "count": 1,
+          "count_text": "×1",
+          "default_total": 1,
+          "level_capacity": 5,
+          "max": 3,
+          "total": null,
+          "total_text": "Σ ≥ 0"
+        }
+      },
+      {
+        "badges": {
+          "count": null,
+          "total": null
+        },
+        "blanket": true,
+        "chips": [
+          {
+            "can_detach": false,
+            "description": "Any armor, any upgrade",
+            "details": [
+              "any upgrade"
+            ],
+            "effect": null,
+            "family": "armor",
+            "in_cluster": false,
+            "item": null,
+            "join": [],
+            "key": 4,
+            "kind": "armor",
+            "name": "Any armor",
+            "problem": "A blanket requirement cannot request extra copies, combined levels, or trinket selection.",
+            "refuse": [],
+            "relations": [],
+            "tags": [],
+            "title": "Any armor",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [],
+        "id": "r4",
+        "label": null,
+        "members": [
+          4
+        ],
+        "problem": "A blanket requirement cannot request extra copies, combined levels, or trinket selection.",
+        "stack": {
+          "can_change_count": false,
+          "can_count_levels": false,
+          "can_grow": false,
+          "can_set_copy_depth": false,
+          "copy_depth": null,
+          "count": 1,
+          "count_text": "×1",
+          "default_total": 1,
+          "level_capacity": 5,
+          "max": 3,
+          "total": null,
+          "total_text": "Σ ≥ 0"
+        }
+      }
+    ],
+    "next_key": 5,
+    "problems": [
+      {
+        "keys": [
+          2
+        ],
+        "message": "Requirement floor must be 1 through 24.",
+        "scope": "row"
+      },
+      {
+        "keys": [
+          4
+        ],
+        "message": "A blanket requirement cannot request extra copies, combined levels, or trinket selection.",
+        "scope": "row"
+      },
+      {
+        "keys": [
+          1,
+          3
+        ],
+        "message": "A stack must share one combined level.",
+        "scope": "group"
+      }
+    ],
+    "refused": null,
+    "rekeyed": [],
+    "resin": null,
+    "rows": [
+      {
+        "item": "ring_might",
+        "key": 1,
+        "kind": "ring",
+        "level_sum": {
+          "at_least": 3,
+          "group": 1
+        }
+      },
+      {
+        "key": 2,
+        "kind": "wand",
+        "max_depth": 30
+      },
+      {
+        "item": "ring_might",
+        "key": 3,
+        "kind": "ring",
+        "level_sum": {
+          "at_least": 4,
+          "group": 1
+        }
+      },
+      {
+        "blanket": true,
+        "identity_group": 2,
+        "key": 4,
+        "kind": "armor"
+      }
+    ]
+  }
+}

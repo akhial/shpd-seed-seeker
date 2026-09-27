@@ -49,15 +49,25 @@
 //! what the sheet shows — every control, the preview chip, the errors — and
 //! [`save`] writes it back as an [`Edit::Save`] (or as the query's Arcane
 //! Resin), refusing a save that would newly break the list.
+//!
+//! # The envelopes
+//!
+//! With the `json-query` feature, `requirement_board` and
+//! `requirement_editor` project all of the above onto two stateless JSON
+//! calls, for the platforms that reach the core through WebAssembly, the C
+//! ABI or JNI. They decide nothing themselves; `docs/requirement-editor.md`
+//! specifies the wire format.
 
 mod board;
 mod chips;
 mod draft;
+#[cfg(feature = "json-query")]
+mod json;
 pub mod labels;
 mod problems;
 mod stack;
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 
 use crate::main_world::EMPTY_BOSS_FLOORS;
 use crate::query::Requirement;
@@ -78,6 +88,8 @@ pub use draft::{
     RESIN_AMOUNT_RANGE, RangeToggle, ResinControl, ResinDraft, ResinOutcome, SaveResult,
     StackControl, TierMode, Toggle, UpgradeMode, change, form, open, save,
 };
+#[cfg(feature = "json-query")]
+pub use json::{UNKNOWN_REQUIREMENT, requirement_board, requirement_editor};
 pub use labels::KindName;
 pub use problems::{NO_ORDINARY_REQUIREMENT, Problem, ProblemScope, problems, row_problems};
 pub use stack::{
@@ -234,6 +246,19 @@ pub(crate) fn repair_keys(rows: &[Row], hint: Option<u64>) -> (Vec<Row>, Vec<(u6
         kept.push(repaired[index]);
     }
     (repaired, rekeyed)
+}
+
+/// Where a request's own references to keys go after [`repair_keys`]: a
+/// duplicate's first occurrence kept its key, so only keys no row kept —
+/// zero or out of range — are redirected, to their first row's new key.
+pub(crate) fn redirects(rekeyed: &[(u64, u64)]) -> HashMap<u64, u64> {
+    let mut map: HashMap<u64, u64> = HashMap::new();
+    for &(old, new) in rekeyed {
+        if !is_valid_key(old) {
+            map.entry(old).or_insert(new);
+        }
+    }
+    map
 }
 
 #[cfg(test)]

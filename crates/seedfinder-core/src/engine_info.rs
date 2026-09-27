@@ -9,9 +9,11 @@
 
 use serde_json::{Value, json};
 
+use crate::artifacts::TRANSMUTATION_COUNT as ARTIFACT_TRANSMUTATIONS;
 use crate::catalog::{
     EXTRA_UPGRADE_TIER, ItemKind, MAX_GENERATED_UPGRADE, MAX_STANDARD_RING_UPGRADE,
 };
+use crate::editor::STACK_MAX;
 use crate::feasibility::Quest;
 use crate::json_query::CHALLENGE_NAMES;
 use crate::main_world::EMPTY_BOSS_FLOORS;
@@ -22,6 +24,7 @@ use crate::query::{
 use crate::results_export::{MAX_FILE_BYTES, MAX_RESULTS};
 use crate::search::PRODUCTION_SEARCH_START_STRIDE;
 use crate::seed::TOTAL_SEEDS;
+use crate::trinkets::TRANSMUTATION_COUNT as TRINKET_TRANSMUTATIONS;
 use crate::{SHPD_COMMIT, SHPD_VERSION};
 
 /// Builds the engine-info document. Every key is camelCase: the four keys the
@@ -68,6 +71,12 @@ pub fn document() -> Value {
             "maxUpgradeAnyTier": MAX_GENERATED_UPGRADE,
             "extraUpgradeTier": EXTRA_UPGRADE_TIER,
             "resultsFileMaxBytes": MAX_FILE_BYTES,
+            // The requirement editor's own bounds: how many items one chip
+            // or cluster may ask for, and how many transmutations a trinket
+            // or artifact requirement may allow.
+            "stackMax": STACK_MAX,
+            "trinketTransmutationsMax": TRINKET_TRANSMUTATIONS,
+            "artifactTransmutationsMax": ARTIFACT_TRANSMUTATIONS,
         },
         "emptyBossFloors": EMPTY_BOSS_FLOORS,
         "levelMaps": {
@@ -146,6 +155,9 @@ mod tests {
         assert_eq!(info["limits"]["maxUpgradeAnyTier"], 4);
         assert_eq!(info["limits"]["extraUpgradeTier"], 4);
         assert_eq!(info["limits"]["resultsFileMaxBytes"], 2 * 1_024 * 1_024);
+        assert_eq!(info["limits"]["stackMax"], 3);
+        assert_eq!(info["limits"]["trinketTransmutationsMax"], 13);
+        assert_eq!(info["limits"]["artifactTransmutationsMax"], 10);
         assert_eq!(
             info["limits"]
                 .as_object()
@@ -153,6 +165,7 @@ mod tests {
                 .keys()
                 .collect::<Vec<_>>(),
             [
+                "artifactTransmutationsMax",
                 "boundedTierMax",
                 "boundedTierMin",
                 "exactTierMax",
@@ -168,6 +181,8 @@ mod tests {
                 "maxUpgradeRingStandard",
                 "maxUpgradeWeapon",
                 "resultsFileMaxBytes",
+                "stackMax",
+                "trinketTransmutationsMax",
             ]
         );
         assert_eq!(

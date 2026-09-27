@@ -1,0 +1,800 @@
+{
+  "about": "A sheet on a ring stack counting levels.",
+  "envelope": "requirement_editor",
+  "request": {
+    "key": 1,
+    "op": "open",
+    "rows": [
+      {
+        "item": "ring_might",
+        "key": 1,
+        "kind": "ring",
+        "level_sum": {
+          "at_least": 3,
+          "group": 1
+        }
+      },
+      {
+        "item": "ring_might",
+        "key": 2,
+        "kind": "ring",
+        "level_sum": {
+          "at_least": 3,
+          "group": 1
+        }
+      }
+    ]
+  },
+  "response": {
+    "draft": "{\"blanket\":false,\"copy_depth\":null,\"copy_depth_memory\":4,\"count\":2,\"effect_mode\":\"any\",\"floor_limit_memory\":4,\"in_cluster\":false,\"key\":1,\"offer_resin\":false,\"origin\":{\"key\":1,\"type\":\"row\"},\"requirement\":{\"item\":\"ring_might\",\"kind\":\"ring\"},\"resin\":{\"amount\":2.0,\"auto\":false,\"include_mage_wand\":false,\"max_depth\":null,\"source\":null,\"uncursed\":true},\"resin_picked\":false,\"rows\":[{\"item\":\"ring_might\",\"key\":1,\"kind\":\"ring\",\"level_sum\":{\"at_least\":3,\"group\":1}},{\"item\":\"ring_might\",\"key\":2,\"kind\":\"ring\",\"level_sum\":{\"at_least\":3,\"group\":1}}],\"taken_trinkets\":[],\"tier_value\":3,\"total\":3,\"transmutations_memory\":1,\"upgrade_value\":1,\"v\":1}",
+    "form": {
+      "blanket": false,
+      "can_save": true,
+      "category": {
+        "options": [
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Weapon",
+            "value": "weapon"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Armor",
+            "value": "armor"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Wand",
+            "value": "wand"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Ring",
+            "value": "ring"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Trinket",
+            "value": "trinket"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Artifact",
+            "value": "artifact"
+          }
+        ],
+        "value": "ring",
+        "visible": true
+      },
+      "effect": {
+        "caption": "Tick the effects the item may carry; none ticked means any.",
+        "choices": [],
+        "groups": [],
+        "mode": "any",
+        "modes": [
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Any",
+            "value": "any"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Any enchantment",
+            "value": "any_enchantment"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Specific…",
+            "value": "specific"
+          }
+        ],
+        "visible": false
+      },
+      "errors": [],
+      "exclude_resin": {
+        "label": "Exclude from Auto resin",
+        "value": false,
+        "visible": false
+      },
+      "floor_limit": {
+        "enabled": false,
+        "label": "Limit this item to a floor",
+        "options": [
+          {
+            "group": null,
+            "hidden": false,
+            "label": "1",
+            "value": 1
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "2",
+            "value": 2
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "3",
+            "value": 3
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "4",
+            "value": 4
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "6",
+            "value": 6
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "7",
+            "value": 7
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "8",
+            "value": 8
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "9",
+            "value": 9
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "11",
+            "value": 11
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "12",
+            "value": 12
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "13",
+            "value": 13
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "14",
+            "value": 14
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "16",
+            "value": 16
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "17",
+            "value": 17
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "18",
+            "value": 18
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "19",
+            "value": 19
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "20",
+            "value": 20
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "21",
+            "value": 21
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "22",
+            "value": 22
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "23",
+            "value": 23
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "24",
+            "value": 24
+          }
+        ],
+        "value": 4,
+        "value_label": "Within first 4 floors",
+        "visible": true
+      },
+      "in_cluster": false,
+      "item": {
+        "options": [
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Any ring",
+            "value": null
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Ring of Accuracy",
+            "value": "ring_accuracy"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Ring of Arcana",
+            "value": "ring_arcana"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Ring of Elements",
+            "value": "ring_elements"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Ring of Energy",
+            "value": "ring_energy"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Ring of Evasion",
+            "value": "ring_evasion"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Ring of Force",
+            "value": "ring_force"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Ring of Furor",
+            "value": "ring_furor"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Ring of Haste",
+            "value": "ring_haste"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Ring of Might",
+            "value": "ring_might"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Ring of Sharpshooting",
+            "value": "ring_sharpshooting"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Ring of Tenacity",
+            "value": "ring_tenacity"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Ring of Wealth",
+            "value": "ring_wealth"
+          }
+        ],
+        "value": "ring_might",
+        "visible": true
+      },
+      "kind": {
+        "options": [
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Weapon",
+            "value": "weapon"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Melee weapon",
+            "value": "melee_weapon"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Thrown weapon",
+            "value": "thrown_weapon"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Armor",
+            "value": "armor"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Wand",
+            "value": "wand"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Ring",
+            "value": "ring"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Trinket",
+            "value": "trinket"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Artifact",
+            "value": "artifact"
+          }
+        ],
+        "value": "ring",
+        "visible": true
+      },
+      "mode": "edit",
+      "origin": {
+        "key": 1,
+        "type": "row"
+      },
+      "preview": {
+        "can_detach": false,
+        "description": "Ring of Might",
+        "details": [],
+        "effect": null,
+        "family": "ring",
+        "in_cluster": false,
+        "item": "ring_might",
+        "join": [],
+        "key": 0,
+        "kind": "ring",
+        "name": "Ring of Might",
+        "problem": null,
+        "refuse": [],
+        "relations": [
+          {
+            "glyph": "sum",
+            "text": "up to 2 — levels add to ≥ 3"
+          }
+        ],
+        "tags": [],
+        "title": "Ring of Might",
+        "trailing_tags": [],
+        "uncursed": false
+      },
+      "resin": {
+        "amount": 2.0,
+        "auto": false,
+        "include_mage_wand": false,
+        "visible": false
+      },
+      "resin_picked": false,
+      "select_trinket": {
+        "label": "Choose matching trinket at +3",
+        "value": false,
+        "visible": false
+      },
+      "source": {
+        "options": [
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Any",
+            "value": null
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Heap",
+            "value": "heap"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Chest",
+            "value": "chest"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Locked chest",
+            "value": "locked_chest"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Crystal chest",
+            "value": "crystal_chest"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Tomb",
+            "value": "tomb"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Skeleton",
+            "value": "skeleton"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Sacrificial fire",
+            "value": "sacrificial_fire"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Mimic",
+            "value": "mimic"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Golden mimic",
+            "value": "golden_mimic"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Crystal mimic",
+            "value": "crystal_mimic"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Statue",
+            "value": "statue"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Armored statue",
+            "value": "armored_statue"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Shop",
+            "value": "shop"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Ghost reward",
+            "value": "ghost_reward"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Wandmaker reward",
+            "value": "wandmaker_reward"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Blacksmith reward",
+            "value": "blacksmith_reward"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Imp reward",
+            "value": "imp_reward"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Vault treasure",
+            "value": "vault_treasure"
+          }
+        ],
+        "value": null,
+        "visible": true
+      },
+      "stack": {
+        "copy_depth": {
+          "enabled": false,
+          "label": "Limit the extra copies to a floor",
+          "options": [
+            {
+              "group": null,
+              "hidden": false,
+              "label": "1",
+              "value": 1
+            },
+            {
+              "group": null,
+              "hidden": false,
+              "label": "2",
+              "value": 2
+            },
+            {
+              "group": null,
+              "hidden": false,
+              "label": "3",
+              "value": 3
+            },
+            {
+              "group": null,
+              "hidden": false,
+              "label": "4",
+              "value": 4
+            },
+            {
+              "group": null,
+              "hidden": false,
+              "label": "6",
+              "value": 6
+            },
+            {
+              "group": null,
+              "hidden": false,
+              "label": "7",
+              "value": 7
+            },
+            {
+              "group": null,
+              "hidden": false,
+              "label": "8",
+              "value": 8
+            },
+            {
+              "group": null,
+              "hidden": false,
+              "label": "9",
+              "value": 9
+            },
+            {
+              "group": null,
+              "hidden": false,
+              "label": "11",
+              "value": 11
+            },
+            {
+              "group": null,
+              "hidden": false,
+              "label": "12",
+              "value": 12
+            },
+            {
+              "group": null,
+              "hidden": false,
+              "label": "13",
+              "value": 13
+            },
+            {
+              "group": null,
+              "hidden": false,
+              "label": "14",
+              "value": 14
+            },
+            {
+              "group": null,
+              "hidden": false,
+              "label": "16",
+              "value": 16
+            },
+            {
+              "group": null,
+              "hidden": false,
+              "label": "17",
+              "value": 17
+            },
+            {
+              "group": null,
+              "hidden": false,
+              "label": "18",
+              "value": 18
+            },
+            {
+              "group": null,
+              "hidden": false,
+              "label": "19",
+              "value": 19
+            },
+            {
+              "group": null,
+              "hidden": false,
+              "label": "20",
+              "value": 20
+            },
+            {
+              "group": null,
+              "hidden": false,
+              "label": "21",
+              "value": 21
+            },
+            {
+              "group": null,
+              "hidden": false,
+              "label": "22",
+              "value": 22
+            },
+            {
+              "group": null,
+              "hidden": false,
+              "label": "23",
+              "value": 23
+            },
+            {
+              "group": null,
+              "hidden": false,
+              "label": "24",
+              "value": 24
+            }
+          ],
+          "value": 4,
+          "value_label": "Copies within first 4 floors",
+          "visible": false
+        },
+        "count": 2,
+        "count_levels": {
+          "caption": null,
+          "enabled": true,
+          "label": "Count levels together",
+          "max": 8,
+          "min": 1,
+          "value": 3,
+          "value_label": "≥ 3 across up to 2",
+          "visible": true
+        },
+        "max": 3,
+        "min": 1,
+        "value_label": "×2",
+        "visible": true
+      },
+      "tier": {
+        "max": 5,
+        "min": 2,
+        "mode": "any",
+        "modes": [
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Any",
+            "value": "any"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Exactly",
+            "value": "exact"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "At least",
+            "value": "at_least"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "At most",
+            "value": "at_most"
+          }
+        ],
+        "value": 3,
+        "value_label": "Tier 3",
+        "visible": false
+      },
+      "transmutations": {
+        "caption": "Matches an initial offer or any of the next 1 trinket. AutoTrinket can use a helpful starting trinket while your target waits in the deck. Scroll availability and effects after transmuting are not simulated.",
+        "enabled": false,
+        "label": "Allow transmutations",
+        "max": 13,
+        "min": 1,
+        "value": 1,
+        "value_label": "At most 1",
+        "visible": false
+      },
+      "uncursed": {
+        "label": "Require uncursed",
+        "value": false,
+        "visible": true
+      },
+      "upgrade": {
+        "max": 4,
+        "min": 1,
+        "mode": "any",
+        "modes": [
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Any",
+            "value": "any"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Exactly",
+            "value": "exact"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "At least",
+            "value": "at_least"
+          }
+        ],
+        "value": 1,
+        "value_label": "+1",
+        "visible": false
+      },
+      "v": 1,
+      "weapon_type": {
+        "options": [
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Any",
+            "value": "any"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Melee",
+            "value": "melee"
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Thrown",
+            "value": "thrown"
+          }
+        ],
+        "value": "any",
+        "visible": false
+      }
+    }
+  }
+}

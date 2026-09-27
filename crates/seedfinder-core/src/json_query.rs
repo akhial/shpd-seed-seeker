@@ -166,10 +166,13 @@ struct FileLevelSum {
 /// The effect shorthand for [`EffectSet::enchantments`].
 const ANY_ENCHANTMENT: &str = "any_enchantment";
 
+/// One requirement object as the query document spells it. The requirement
+/// editor's envelopes read their rows through it too (`editor::json`), so a
+/// row and a document entry can never disagree on a field.
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 #[allow(clippy::struct_excessive_bools)] // Independent flags in the shared JSON schema.
-struct FileRequirement {
+pub(crate) struct FileRequirement {
     #[serde(default)]
     kind: Option<FileItemKind>,
     #[serde(default)]
@@ -237,7 +240,7 @@ struct AtMostTier {
 
 #[derive(Clone, Copy, Deserialize)]
 #[serde(rename_all = "snake_case")]
-enum FileItemKind {
+pub(crate) enum FileItemKind {
     Weapon,
     /// A weapon narrowed to wielded weapons. Plain "weapon" continues to
     /// match both melee and thrown weapons, so pre-existing documents keep
@@ -253,7 +256,7 @@ enum FileItemKind {
 }
 
 impl FileItemKind {
-    const fn decompose(self) -> (ItemKind, Option<WeaponCategory>) {
+    pub(crate) const fn decompose(self) -> (ItemKind, Option<WeaponCategory>) {
         match self {
             Self::Weapon => (ItemKind::Weapon, None),
             Self::MeleeWeapon => (ItemKind::Weapon, Some(WeaponCategory::Melee)),
@@ -296,7 +299,7 @@ struct AtLeastUpgrade {
 
 #[derive(Clone, Copy, Deserialize)]
 #[serde(rename_all = "snake_case")]
-enum FileItemSource {
+pub(crate) enum FileItemSource {
     Heap,
     Chest,
     LockedChest,
@@ -479,7 +482,9 @@ fn convert_effect(kind: ItemKind, effect: FileEffect) -> Result<EffectRequiremen
     }
 }
 
-fn convert_requirement(
+/// Converts one requirement object into a [`Requirement`] in the given
+/// alternative group, without validating it.
+pub(crate) fn convert_requirement(
     requirement: FileRequirement,
     alternative_group: Option<u8>,
 ) -> Result<Requirement, String> {
@@ -647,6 +652,14 @@ fn document_effect_order(set: EffectSet) -> Vec<Effect> {
 }
 
 fn encode_requirement(requirement: &Requirement) -> Value {
+    Value::Object(requirement_object(requirement))
+}
+
+/// The canonical requirement object of `requirement`, defaults omitted —
+/// one entry of the document's `requirements`, and the body of a row in the
+/// requirement editor's envelopes. The alternative group is not part of it:
+/// the document writes groups as `any_of` entries, a row as its own field.
+pub(crate) fn requirement_object(requirement: &Requirement) -> Map<String, Value> {
     let mut output = Map::new();
     // A weapon-category narrowing is part of the kind in this format;
     // dropping it here would silently widen the requirement on re-import.
@@ -736,7 +749,7 @@ fn encode_requirement(requirement: &Requirement) -> Value {
             json!({ "group": sum.group, "at_least": sum.minimum_total }),
         );
     }
-    Value::Object(output)
+    output
 }
 
 #[cfg(test)]

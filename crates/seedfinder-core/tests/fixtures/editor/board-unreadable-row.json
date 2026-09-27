@@ -1,0 +1,222 @@
+{
+  "about": "A row naming an item the catalog does not know is kept verbatim and shown as an unknown chip.",
+  "envelope": "requirement_board",
+  "request": {
+    "rows": [
+      {
+        "key": 1,
+        "kind": "wand"
+      },
+      {
+        "item": "wand_of_wonders",
+        "key": 2,
+        "kind": "wand",
+        "upgrade": 3
+      },
+      {
+        "key": 3,
+        "kind": "ring"
+      }
+    ]
+  },
+  "response": {
+    "changed": false,
+    "counts": {
+      "blanket": 0,
+      "ordinary": 3
+    },
+    "focus": null,
+    "items": [
+      {
+        "badges": {
+          "count": null,
+          "total": null
+        },
+        "blanket": false,
+        "chips": [
+          {
+            "can_detach": false,
+            "description": "Any wand, any upgrade",
+            "details": [
+              "any upgrade"
+            ],
+            "effect": null,
+            "family": "wand",
+            "in_cluster": false,
+            "item": null,
+            "join": [
+              3
+            ],
+            "key": 1,
+            "kind": "wand",
+            "name": "Any wand",
+            "problem": null,
+            "refuse": [],
+            "relations": [],
+            "tags": [],
+            "title": "Any wand",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [],
+        "id": "r1",
+        "label": null,
+        "members": [
+          1
+        ],
+        "problem": null,
+        "stack": {
+          "can_change_count": true,
+          "can_count_levels": false,
+          "can_grow": true,
+          "can_set_copy_depth": false,
+          "copy_depth": null,
+          "count": 1,
+          "count_text": "×1",
+          "default_total": 1,
+          "level_capacity": 5,
+          "max": 3,
+          "total": null,
+          "total_text": "Σ ≥ 0"
+        }
+      },
+      {
+        "badges": {
+          "count": null,
+          "total": null
+        },
+        "blanket": false,
+        "chips": [
+          {
+            "can_detach": false,
+            "description": "Unknown requirement",
+            "details": [],
+            "effect": null,
+            "family": null,
+            "in_cluster": false,
+            "item": null,
+            "join": [],
+            "key": 2,
+            "kind": null,
+            "name": "Unknown requirement",
+            "problem": "This requirement cannot be read: unknown item 'wand_of_wonders'.",
+            "refuse": [],
+            "relations": [],
+            "tags": [],
+            "title": "Unknown requirement",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [],
+        "id": "r2",
+        "label": null,
+        "members": [
+          2
+        ],
+        "problem": "This requirement cannot be read: unknown item 'wand_of_wonders'.",
+        "stack": {
+          "can_change_count": false,
+          "can_count_levels": false,
+          "can_grow": false,
+          "can_set_copy_depth": false,
+          "copy_depth": null,
+          "count": 1,
+          "count_text": "×1",
+          "default_total": 1,
+          "level_capacity": 1,
+          "max": 3,
+          "total": null,
+          "total_text": "Σ ≥ 0"
+        }
+      },
+      {
+        "badges": {
+          "count": null,
+          "total": null
+        },
+        "blanket": false,
+        "chips": [
+          {
+            "can_detach": false,
+            "description": "Any ring, any upgrade",
+            "details": [
+              "any upgrade"
+            ],
+            "effect": null,
+            "family": "ring",
+            "in_cluster": false,
+            "item": null,
+            "join": [
+              1
+            ],
+            "key": 3,
+            "kind": "ring",
+            "name": "Any ring",
+            "problem": null,
+            "refuse": [],
+            "relations": [],
+            "tags": [],
+            "title": "Any ring",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [],
+        "id": "r3",
+        "label": null,
+        "members": [
+          3
+        ],
+        "problem": null,
+        "stack": {
+          "can_change_count": true,
+          "can_count_levels": false,
+          "can_grow": true,
+          "can_set_copy_depth": false,
+          "copy_depth": null,
+          "count": 1,
+          "count_text": "×1",
+          "default_total": 1,
+          "level_capacity": 5,
+          "max": 3,
+          "total": null,
+          "total_text": "Σ ≥ 0"
+        }
+      }
+    ],
+    "next_key": 4,
+    "problems": [
+      {
+        "keys": [
+          2
+        ],
+        "message": "This requirement cannot be read: unknown item 'wand_of_wonders'.",
+        "scope": "row"
+      }
+    ],
+    "refused": null,
+    "rekeyed": [],
+    "resin": null,
+    "rows": [
+      {
+        "key": 1,
+        "kind": "wand"
+      },
+      {
+        "item": "wand_of_wonders",
+        "key": 2,
+        "kind": "wand",
+        "upgrade": 3
+      },
+      {
+        "key": 3,
+        "kind": "ring"
+      }
+    ]
+  }
+}

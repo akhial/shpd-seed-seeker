@@ -1,0 +1,162 @@
+{
+  "about": "A blanket requirement cannot count levels together.",
+  "envelope": "requirement_board",
+  "request": {
+    "edits": [
+      {
+        "key": 2,
+        "type": "toggle_levels"
+      }
+    ],
+    "rows": [
+      {
+        "item": "ring_might",
+        "key": 1,
+        "kind": "ring"
+      },
+      {
+        "blanket": true,
+        "item": "ring_might",
+        "key": 2,
+        "kind": "ring"
+      }
+    ]
+  },
+  "response": {
+    "changed": false,
+    "counts": {
+      "blanket": 1,
+      "ordinary": 1
+    },
+    "focus": null,
+    "items": [
+      {
+        "badges": {
+          "count": null,
+          "total": null
+        },
+        "blanket": false,
+        "chips": [
+          {
+            "can_detach": false,
+            "description": "Ring of Might, any upgrade",
+            "details": [
+              "any upgrade"
+            ],
+            "effect": null,
+            "family": "ring",
+            "in_cluster": false,
+            "item": "ring_might",
+            "join": [],
+            "key": 1,
+            "kind": "ring",
+            "name": "Ring of Might",
+            "problem": null,
+            "refuse": [],
+            "relations": [],
+            "tags": [],
+            "title": "Ring of Might",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [],
+        "id": "r1",
+        "label": null,
+        "members": [
+          1
+        ],
+        "problem": null,
+        "stack": {
+          "can_change_count": true,
+          "can_count_levels": false,
+          "can_grow": true,
+          "can_set_copy_depth": false,
+          "copy_depth": null,
+          "count": 1,
+          "count_text": "×1",
+          "default_total": 1,
+          "level_capacity": 5,
+          "max": 3,
+          "total": null,
+          "total_text": "Σ ≥ 0"
+        }
+      },
+      {
+        "badges": {
+          "count": null,
+          "total": null
+        },
+        "blanket": true,
+        "chips": [
+          {
+            "can_detach": false,
+            "description": "Ring of Might, any upgrade",
+            "details": [
+              "any upgrade"
+            ],
+            "effect": null,
+            "family": "ring",
+            "in_cluster": false,
+            "item": "ring_might",
+            "join": [],
+            "key": 2,
+            "kind": "ring",
+            "name": "Ring of Might",
+            "problem": null,
+            "refuse": [],
+            "relations": [],
+            "tags": [],
+            "title": "Ring of Might",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [],
+        "id": "r2",
+        "label": null,
+        "members": [
+          2
+        ],
+        "problem": null,
+        "stack": {
+          "can_change_count": false,
+          "can_count_levels": false,
+          "can_grow": false,
+          "can_set_copy_depth": false,
+          "copy_depth": null,
+          "count": 1,
+          "count_text": "×1",
+          "default_total": 1,
+          "level_capacity": 5,
+          "max": 3,
+          "total": null,
+          "total_text": "Σ ≥ 0"
+        }
+      }
+    ],
+    "next_key": 3,
+    "problems": [],
+    "refused": {
+      "message": "A blanket requirement cannot count levels together.",
+      "reason": "blanket_total"
+    },
+    "rekeyed": [],
+    "resin": null,
+    "rows": [
+      {
+        "item": "ring_might",
+        "key": 1,
+        "kind": "ring"
+      },
+      {
+        "blanket": true,
+        "item": "ring_might",
+        "key": 2,
+        "kind": "ring"
+      }
+    ]
+  }
+}

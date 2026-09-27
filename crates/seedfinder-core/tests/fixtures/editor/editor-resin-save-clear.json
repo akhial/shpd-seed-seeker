@@ -1,0 +1,46 @@
+{
+  "about": "The resin chip saved as a Wand of Frost adds the wand and clears the query's resin.",
+  "envelope": "requirement_editor",
+  "request": {
+    "draft": "{\"blanket\":false,\"copy_depth\":null,\"copy_depth_memory\":4,\"count\":1,\"effect_mode\":\"any\",\"floor_limit_memory\":4,\"in_cluster\":false,\"key\":null,\"offer_resin\":true,\"origin\":{\"type\":\"resin\"},\"requirement\":{\"item\":\"wand_frost\",\"kind\":\"wand\"},\"resin\":{\"amount\":2.0,\"auto\":true,\"include_mage_wand\":true,\"max_depth\":null,\"source\":\"chest\",\"uncursed\":false},\"resin_picked\":false,\"rows\":[{\"key\":1,\"kind\":\"wand\"},{\"item\":\"rat_skull\",\"key\":2,\"kind\":\"trinket\"}],\"taken_trinkets\":[\"rat_skull\"],\"tier_value\":3,\"total\":null,\"transmutations_memory\":1,\"upgrade_value\":1,\"v\":1}",
+    "op": "save",
+    "rows": [
+      {
+        "key": 1,
+        "kind": "wand"
+      },
+      {
+        "item": "rat_skull",
+        "key": 2,
+        "kind": "trinket"
+      }
+    ]
+  },
+  "response": {
+    "saved": {
+      "changed": true,
+      "focus": 3,
+      "next_key": 4,
+      "rekeyed": [],
+      "resin": {
+        "clear": true
+      },
+      "rows": [
+        {
+          "key": 1,
+          "kind": "wand"
+        },
+        {
+          "item": "rat_skull",
+          "key": 2,
+          "kind": "trinket"
+        },
+        {
+          "item": "wand_frost",
+          "key": 3,
+          "kind": "wand"
+        }
+      ]
+    }
+  }
+}

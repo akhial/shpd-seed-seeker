@@ -13,8 +13,8 @@
 //! sliders stepping over empty boss floors, and a save guard.
 
 use super::super::testing::{
-    Rng, arbitrary_requirement, assert_emittable, mixed_rows, named, random_edit,
-    random_requirement, random_rows, row, validate, with,
+    Rng, arbitrary_requirement, assert_emittable, mixed_rows, named, random_change, random_edit,
+    random_requirement, random_resin, random_rows, row, validate, with,
 };
 use super::super::{
     Edit, EditResult, NO_ORDINARY_REQUIREMENT, Refusal, apply, board_items, problems, row_problems,
@@ -2211,91 +2211,6 @@ fn a_save_onto_changed_rows_checks_them_and_keeps_them() {
 }
 
 // --- properties --------------------------------------------------------------
-
-const KINDS: [ItemKind; 6] = [
-    ItemKind::Weapon,
-    ItemKind::Armor,
-    ItemKind::Wand,
-    ItemKind::Ring,
-    ItemKind::Trinket,
-    ItemKind::Artifact,
-];
-
-const TYPES: [Option<WeaponCategory>; 3] = [None, MELEE, THROWN];
-
-/// A random change, its items drawn mostly from the draft's own family.
-fn random_change(rng: &mut Rng, draft: &Draft) -> Change {
-    let floor = |rng: &mut Rng| rng.range(0, 26);
-    match rng.below(26) {
-        0 => Change::SetCategory(rng.pick(&KINDS)),
-        1 => Change::SetWeaponType(rng.pick(&TYPES)),
-        2 => Change::SetKind(rng.pick(&KINDS), rng.pick(&TYPES)),
-        3 => Change::SetItem(match rng.below(5) {
-            0 => ItemChoice::Any,
-            1 => ItemChoice::ArcaneResin,
-            2 => ItemChoice::Item(crate::catalog::ITEMS[rng.below(crate::catalog::ITEMS.len())].id),
-            _ => {
-                let own: Vec<ItemId> = crate::catalog::ITEMS
-                    .iter()
-                    .filter(|definition| definition.kind == draft.requirement.kind)
-                    .map(|definition| definition.id)
-                    .collect();
-                ItemChoice::Item(rng.pick(&own))
-            }
-        }),
-        4 => Change::SetTierMode(rng.pick(&TierMode::ALL)),
-        5 => Change::SetTier(rng.range(0, 7)),
-        6 => Change::SetUpgradeMode(rng.pick(&UpgradeMode::ALL)),
-        7 => Change::SetUpgrade(rng.range(0, 7)),
-        8 => Change::SetEffectMode(rng.pick(&EffectMode::ALL)),
-        9 => Change::ToggleEffect(if rng.chance(50) {
-            Effect::Weapon(rng.pick(ALL_WEAPON_EFFECTS))
-        } else {
-            Effect::Armor(rng.pick(ALL_ARMOR_EFFECTS))
-        }),
-        10 => Change::SetUncursed(rng.chance(50)),
-        11 => Change::SetSource(rng.chance(60).then(|| rng.pick(ItemSource::ALL))),
-        12 => Change::SetFloorLimitEnabled(rng.chance(60)),
-        13 => Change::SetFloorLimit(floor(rng)),
-        14 => Change::SetExcludeResin(rng.chance(50)),
-        15 => Change::SetTransmutationsEnabled(rng.chance(60)),
-        16 => Change::SetTransmutations(rng.range(0, 16)),
-        17 => Change::SetSelectTrinket(rng.chance(50)),
-        18 => Change::SetCount(rng.range(0, 5)),
-        19 => Change::SetCopyDepthEnabled(rng.chance(60)),
-        20 => Change::SetCopyDepth(floor(rng)),
-        21 => Change::SetCountLevels(rng.chance(60)),
-        22 => Change::SetTotal(rng.range(0, 14)),
-        23 => Change::SetResinAuto(rng.chance(50)),
-        24 => Change::SetResinAmount(rng.pick(&[
-            None,
-            Some(0.0),
-            Some(1.0),
-            Some(2.5),
-            Some(7.0),
-            Some(65_535.0),
-            Some(70_000.0),
-        ])),
-        _ => Change::SetIncludeMageWand(rng.chance(50)),
-    }
-}
-
-/// A random resin condition, as a query might hold one.
-fn random_resin(rng: &mut Rng) -> ResinState {
-    ResinState {
-        amount: if rng.chance(30) {
-            ResinAmount::Auto
-        } else {
-            ResinAmount::AtLeast(u16::from(rng.range(1, 30)))
-        },
-        filter: ArcaneResinFilter {
-            include_mage_wand: rng.chance(30),
-            uncursed: rng.chance(70),
-            max_depth: rng.chance(30).then(|| rng.range(1, 24)),
-            source: rng.chance(20).then(|| rng.pick(ItemSource::ALL)),
-        },
-    }
-}
 
 /// A sheet opened some random way on `rows`.
 fn random_sheet(rng: &mut Rng, rows: &[Row]) -> Draft {

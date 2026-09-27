@@ -1,0 +1,23 @@
+{
+  "about": "An unreadable row has no sheet; the error names its key.",
+  "envelope": "requirement_editor",
+  "request": {
+    "key": 2,
+    "op": "open",
+    "rows": [
+      {
+        "key": 1,
+        "kind": "wand"
+      },
+      {
+        "item": "wand_of_wonders",
+        "key": 2,
+        "kind": "wand"
+      }
+    ]
+  },
+  "response": {
+    "error": "This requirement cannot be read: unknown item 'wand_of_wonders'.",
+    "key": 2
+  }
+}

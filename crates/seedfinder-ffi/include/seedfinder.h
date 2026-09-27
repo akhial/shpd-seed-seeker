@@ -93,13 +93,29 @@ int32_t seedfinder_level_map_asset(const uint8_t *asset_id, size_t asset_id_len,
 // Returns the engine's own constants as UTF-8 JSON: {"shpdVersion", "shpdCommit",
 // "totalSeeds", "maxResults", "limits": {"maxDepth", "exactTierMin",
 // "exactTierMax", "boundedTierMin", "boundedTierMax", "identityGroupMax",
-// "levelSumGroupMax", "maxUpgradeDefault", "maxUpgradeRing", "resultsFileMaxBytes"},
-// "emptyBossFloors": [5,10,15], "questWindows": {"ghost", "wandmaker",
-// "blacksmith", "imp"} each [first, last], "challenges": [{"name", "mask",
-// "changesLevelGeneration"}, ...] in mask order, "searchStartStride"}. Every
-// key is camelCase. Frontends read their limits from here instead of
-// hardcoding mirrors. The return packet is freed with seedfinder_buffer_free.
+// "levelSumGroupMax", "maxUpgradeDefault", "maxUpgradeRing",
+// "maxUpgradeRingStandard", "maxUpgradeWeapon", "maxUpgradeByKind",
+// "maxUpgradeAnyTier", "extraUpgradeTier", "resultsFileMaxBytes", "stackMax",
+// "trinketTransmutationsMax", "artifactTransmutationsMax"},
+// "emptyBossFloors": [5,10,15], "levelMaps", "roomTypes", "questWindows":
+// {"ghost", "wandmaker", "blacksmith", "imp"} each [first, last],
+// "challenges": [{"name", "mask", "changesLevelGeneration"}, ...] in mask
+// order, "searchStartStride"}. Every key is camelCase. Frontends read their
+// limits from here instead of hardcoding mirrors. The return packet is freed
+// with seedfinder_buffer_free.
 int32_t seedfinder_engine_info(uint8_t **out_packet, size_t *out_len);
+// The requirement editor (docs/requirement-editor.md): the requirement board
+// and sheet rules, stateless, as UTF-8 JSON in and out. request is a board
+// request {"rows", "next_key"?, "edits"?, "resin"?} or a sheet request
+// {"op": "open" | "change" | "save", ...}; the response is the board or sheet
+// answer. A request the editor cannot read is still answered: the call
+// returns 0 with the UTF-8 JSON {"error": "<message>"} (plus "key" when one
+// row is at fault), so a caller decodes one shape. -1 means the request
+// pointer is null or the bytes are not UTF-8 (or an output pointer is null);
+// -2 means the editor failed internally. Both return packets are freed with
+// seedfinder_buffer_free.
+int32_t seedfinder_requirement_board(const uint8_t *request, size_t request_len, uint8_t **out_packet, size_t *out_len);
+int32_t seedfinder_requirement_editor(const uint8_t *request, size_t request_len, uint8_t **out_packet, size_t *out_len);
 // Format detects the first ASCII letter or digit in partial UTF-8 input.
 // Letter-first input keeps nine ASCII letters in uppercase groups of three;
 // digit-first input keeps eight digits in YYYY-MM-DD groups. It returns UTF-8

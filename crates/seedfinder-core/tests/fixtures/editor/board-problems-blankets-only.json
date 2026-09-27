@@ -1,0 +1,94 @@
+{
+  "about": "Blanket requirements alone constrain nothing: the list's own problem, blaming no row.",
+  "envelope": "requirement_board",
+  "request": {
+    "rows": [
+      {
+        "blanket": true,
+        "key": 1,
+        "kind": "wand"
+      }
+    ]
+  },
+  "response": {
+    "changed": false,
+    "counts": {
+      "blanket": 1,
+      "ordinary": 0
+    },
+    "focus": null,
+    "items": [
+      {
+        "badges": {
+          "count": null,
+          "total": null
+        },
+        "blanket": true,
+        "chips": [
+          {
+            "can_detach": false,
+            "description": "Any wand, any upgrade",
+            "details": [
+              "any upgrade"
+            ],
+            "effect": null,
+            "family": "wand",
+            "in_cluster": false,
+            "item": null,
+            "join": [],
+            "key": 1,
+            "kind": "wand",
+            "name": "Any wand",
+            "problem": null,
+            "refuse": [],
+            "relations": [],
+            "tags": [],
+            "title": "Any wand",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [],
+        "id": "r1",
+        "label": null,
+        "members": [
+          1
+        ],
+        "problem": null,
+        "stack": {
+          "can_change_count": false,
+          "can_count_levels": false,
+          "can_grow": false,
+          "can_set_copy_depth": false,
+          "copy_depth": null,
+          "count": 1,
+          "count_text": "×1",
+          "default_total": 1,
+          "level_capacity": 5,
+          "max": 3,
+          "total": null,
+          "total_text": "Σ ≥ 0"
+        }
+      }
+    ],
+    "next_key": 2,
+    "problems": [
+      {
+        "keys": [],
+        "message": "Add at least one ordinary requirement.",
+        "scope": "list"
+      }
+    ],
+    "refused": null,
+    "rekeyed": [],
+    "resin": null,
+    "rows": [
+      {
+        "blanket": true,
+        "key": 1,
+        "kind": "wand"
+      }
+    ]
+  }
+}

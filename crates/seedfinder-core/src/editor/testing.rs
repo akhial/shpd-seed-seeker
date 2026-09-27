@@ -11,7 +11,10 @@ use crate::query::{
     MAX_LEVEL_SUM_GROUP, QueryError, Requirement, SearchQuery, TierRequirement, UpgradeRequirement,
 };
 
-use super::{Edit, MAX_KEY, Row};
+use super::{
+    Change, Draft, Edit, EffectMode, ItemChoice, MAX_KEY, ResinAmount, ResinState, Row, TierMode,
+    UpgradeMode,
+};
 
 /// A wildcard row of `kind`.
 pub(crate) fn row(key: u64, kind: ItemKind) -> Row {
@@ -491,4 +494,93 @@ pub(crate) fn mixed_rows(rng: &mut Rng) -> Vec<Row> {
         }
     }
     rows
+}
+
+const KINDS: [ItemKind; 6] = [
+    ItemKind::Weapon,
+    ItemKind::Armor,
+    ItemKind::Wand,
+    ItemKind::Ring,
+    ItemKind::Trinket,
+    ItemKind::Artifact,
+];
+
+const TYPES: [Option<WeaponCategory>; 3] = [
+    None,
+    Some(WeaponCategory::Melee),
+    Some(WeaponCategory::Thrown),
+];
+
+/// A random change, its items drawn mostly from the draft's own family.
+pub(crate) fn random_change(rng: &mut Rng, draft: &Draft) -> Change {
+    let floor = |rng: &mut Rng| rng.range(0, 26);
+    match rng.below(26) {
+        0 => Change::SetCategory(rng.pick(&KINDS)),
+        1 => Change::SetWeaponType(rng.pick(&TYPES)),
+        2 => Change::SetKind(rng.pick(&KINDS), rng.pick(&TYPES)),
+        3 => Change::SetItem(match rng.below(5) {
+            0 => ItemChoice::Any,
+            1 => ItemChoice::ArcaneResin,
+            2 => ItemChoice::Item(crate::catalog::ITEMS[rng.below(crate::catalog::ITEMS.len())].id),
+            _ => {
+                let own: Vec<ItemId> = crate::catalog::ITEMS
+                    .iter()
+                    .filter(|definition| definition.kind == draft.requirement.kind)
+                    .map(|definition| definition.id)
+                    .collect();
+                ItemChoice::Item(rng.pick(&own))
+            }
+        }),
+        4 => Change::SetTierMode(rng.pick(&TierMode::ALL)),
+        5 => Change::SetTier(rng.range(0, 7)),
+        6 => Change::SetUpgradeMode(rng.pick(&UpgradeMode::ALL)),
+        7 => Change::SetUpgrade(rng.range(0, 7)),
+        8 => Change::SetEffectMode(rng.pick(&EffectMode::ALL)),
+        9 => Change::ToggleEffect(if rng.chance(50) {
+            Effect::Weapon(rng.pick(ALL_WEAPON_EFFECTS))
+        } else {
+            Effect::Armor(rng.pick(ALL_ARMOR_EFFECTS))
+        }),
+        10 => Change::SetUncursed(rng.chance(50)),
+        11 => Change::SetSource(rng.chance(60).then(|| rng.pick(ItemSource::ALL))),
+        12 => Change::SetFloorLimitEnabled(rng.chance(60)),
+        13 => Change::SetFloorLimit(floor(rng)),
+        14 => Change::SetExcludeResin(rng.chance(50)),
+        15 => Change::SetTransmutationsEnabled(rng.chance(60)),
+        16 => Change::SetTransmutations(rng.range(0, 16)),
+        17 => Change::SetSelectTrinket(rng.chance(50)),
+        18 => Change::SetCount(rng.range(0, 5)),
+        19 => Change::SetCopyDepthEnabled(rng.chance(60)),
+        20 => Change::SetCopyDepth(floor(rng)),
+        21 => Change::SetCountLevels(rng.chance(60)),
+        22 => Change::SetTotal(rng.range(0, 14)),
+        23 => Change::SetResinAuto(rng.chance(50)),
+        24 => Change::SetResinAmount(rng.pick(&[
+            None,
+            Some(0.0),
+            Some(1.0),
+            Some(2.5),
+            Some(7.0),
+            Some(65_535.0),
+            Some(70_000.0),
+        ])),
+        _ => Change::SetIncludeMageWand(rng.chance(50)),
+    }
+}
+
+/// A random resin condition, as a query might hold one.
+pub(crate) fn random_resin(rng: &mut Rng) -> ResinState {
+    ResinState {
+        amount: if rng.chance(30) {
+            ResinAmount::Auto
+        } else {
+            ResinAmount::AtLeast(u16::from(rng.range(1, 30)))
+        },
+        filter: ArcaneResinFilter {
+            include_mage_wand: rng.chance(30),
+            uncursed: rng.chance(70),
+            max_depth: rng.chance(30).then(|| rng.range(1, 24)),
+            source: rng.chance(20).then(|| rng.pick(ItemSource::ALL)),
+        },
+    }
 }

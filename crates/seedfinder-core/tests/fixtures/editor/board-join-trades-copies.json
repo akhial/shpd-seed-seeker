@@ -1,0 +1,182 @@
+{
+  "about": "A Spear stack joined to a wildcard weapon: its plain repeats become identity copies the cluster shares.",
+  "envelope": "requirement_board",
+  "request": {
+    "edits": [
+      {
+        "source": 3,
+        "target": 1,
+        "type": "join"
+      }
+    ],
+    "rows": [
+      {
+        "item": "spear",
+        "key": 1,
+        "kind": "weapon",
+        "upgrade": 2
+      },
+      {
+        "item": "spear",
+        "key": 2,
+        "kind": "weapon"
+      },
+      {
+        "key": 3,
+        "kind": "weapon",
+        "tier": {
+          "exact": 3
+        }
+      }
+    ]
+  },
+  "response": {
+    "changed": true,
+    "counts": {
+      "blanket": 0,
+      "ordinary": 1
+    },
+    "focus": 3,
+    "items": [
+      {
+        "badges": {
+          "count": {
+            "compact_text": "×2",
+            "text": "×2",
+            "tooltip": "2 of the same kind"
+          },
+          "total": null
+        },
+        "blanket": false,
+        "chips": [
+          {
+            "can_detach": true,
+            "description": "Spear, exactly +2",
+            "details": [
+              "exactly +2"
+            ],
+            "effect": null,
+            "family": "weapon",
+            "in_cluster": true,
+            "item": "spear",
+            "join": [],
+            "key": 1,
+            "kind": "weapon",
+            "name": "Spear",
+            "problem": null,
+            "refuse": [],
+            "relations": [
+              {
+                "glyph": "or",
+                "text": "Any weapon"
+              },
+              {
+                "glyph": "times",
+                "text": "2 of the same kind — the extra copies: any upgrade, any floor"
+              }
+            ],
+            "tags": [
+              {
+                "style": "upgrade",
+                "text": "+2"
+              }
+            ],
+            "title": "Spear",
+            "trailing_tags": [],
+            "uncursed": false
+          },
+          {
+            "can_detach": true,
+            "description": "Any Tier 3 weapon, any upgrade",
+            "details": [
+              "any upgrade"
+            ],
+            "effect": null,
+            "family": "weapon",
+            "in_cluster": true,
+            "item": null,
+            "join": [],
+            "key": 3,
+            "kind": "weapon",
+            "name": "Any weapon",
+            "problem": null,
+            "refuse": [],
+            "relations": [
+              {
+                "glyph": "or",
+                "text": "Spear"
+              },
+              {
+                "glyph": "times",
+                "text": "2 of the same kind — the extra copies: any upgrade, any floor"
+              }
+            ],
+            "tags": [
+              {
+                "style": "plain",
+                "text": "T3"
+              }
+            ],
+            "title": "Any Tier 3 weapon",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": 1,
+        "extras": [
+          2
+        ],
+        "id": "c1",
+        "label": "Any of 2",
+        "members": [
+          1,
+          3
+        ],
+        "problem": null,
+        "stack": {
+          "can_change_count": true,
+          "can_count_levels": false,
+          "can_grow": true,
+          "can_set_copy_depth": true,
+          "copy_depth": null,
+          "count": 2,
+          "count_text": "×2",
+          "default_total": 2,
+          "level_capacity": 8,
+          "max": 3,
+          "total": null,
+          "total_text": "Σ ≥ 0"
+        }
+      }
+    ],
+    "next_key": 4,
+    "problems": [],
+    "refused": null,
+    "rekeyed": [],
+    "resin": null,
+    "rows": [
+      {
+        "alternative_group": 1,
+        "identity_group": 1,
+        "item": "spear",
+        "key": 1,
+        "kind": "weapon",
+        "upgrade": 2
+      },
+      {
+        "alternative_group": 1,
+        "identity_group": 1,
+        "key": 3,
+        "kind": "weapon",
+        "tier": {
+          "exact": 3
+        }
+      },
+      {
+        "identity_group": 1,
+        "key": 2,
+        "kind": "weapon"
+      }
+    ]
+  }
+}
