@@ -40,9 +40,9 @@
   </provides>
   <content_rating type="oars-1.1"/>
   <releases>
-    <release version="0.20.2" date="2026-09-27">
+    <release version="0.20.3" date="2026-09-27">
       <description>
-        <p>Keep counted item copies together when joining Android requirement alternatives.</p>
+        <p>Mark Arcane Resin donors with purple Scout match chips and hide Android Scout bars while scrolling.</p>
       </description>
     </release>
     <release version="0.9.1" date="2026-09-07">
