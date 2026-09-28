@@ -838,7 +838,7 @@ fn a_problem_between_rows_marks_every_chip_it_blames() {
         row(3, ItemKind::Ring),
     ];
     let board = view(&rows);
-    let message = "Only one item of a stack, or the members of one either/or group, can carry constraints; the extra copies are plain.";
+    let message = "A stack follows one item, or the members of one either/or group: only they carry constraints, and the extra copies are plain.";
     for key in [1, 2] {
         assert_eq!(chip(&board, key).problem.as_deref(), Some(message));
         assert_eq!(entry(&board, key).problem.as_deref(), Some(message));

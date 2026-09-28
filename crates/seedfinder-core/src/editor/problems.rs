@@ -253,8 +253,8 @@ fn group_message(error: QueryError, members: usize) -> String {
             "The copies of a stack must share its category.".to_owned()
         }
         QueryError::OverconstrainedIdentityGroup => {
-            "Only one item of a stack, or the members of one either/or group, can carry \
-             constraints; the extra copies are plain."
+            "A stack follows one item, or the members of one either/or group: only they \
+             carry constraints, and the extra copies are plain."
                 .to_owned()
         }
         // The group check reports nothing else; should that change, the

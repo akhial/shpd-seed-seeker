@@ -72,4 +72,8 @@ copies are required when such a member fills the group and waived when another
 member does ([stacks](search-query-format.md#stacks)). A saved query written
 with that shape before this reading — its copies then always required — is
 verified under the new one, so re-verifying the pool can change which saved
-seeds match — typically admitting seeds whose other member matched.
+seeds match — typically admitting seeds whose other member matched. Its
+members anchor the stack even when they name no quality, so a saved query
+whose label on some members also sits on another either/or group, on a lone
+requirement naming qualities, or on a copy with a combined level now has two
+anchors: it fails validation and no longer loads.

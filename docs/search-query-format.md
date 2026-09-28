@@ -194,13 +194,20 @@ kind from the other members (`{Wand of Frost ×2 | Plate Armor}`); a label's
 own requirements always share one kind. A waived copy reserves no item and
 adds no Arcane Resin cost. Validation rejects a label spanning kinds, two
 anchors (two requirements outside one `any_of` group naming qualities), and a
-member stack's label on a second `any_of` group or on a copy with qualities.
+member stack's label on a second `any_of` group, on a lone requirement naming
+qualities, or on a copy with qualities. A copy of a member stack may not carry
+a `level_sum` either: its copies may be waived, and a combined level stays a
+lone stack's own.
 
 **Changed meaning.** Before member stacks, a label on only some members of an
 `any_of` group still made its copies always required, binding them freely when
 another member matched. Documents written that way now read as member
 stacks. Labels on every member, or on a lone anchor, keep their meaning, and
-no format version changed.
+no format version changed. A member stack's members anchor it even when they
+name no quality, so a few documents that used to validate now have two anchors
+and are rejected: a label on only some members of one `any_of` group that also
+sits on another `any_of` group, on a lone requirement naming qualities, or on a
+copy with a `level_sum`. A stored query of that shape no longer loads.
 
 ## Ring of Wealth farming floors
 

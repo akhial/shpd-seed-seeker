@@ -423,7 +423,7 @@ fn a_stack_has_one_category_and_one_constrained_unit() {
     assert_eq!(
         messages(&keyed(&[clustered(spear), clustered(sword), mace])),
         [
-            "Only one item of a stack, or the members of one either/or group, can carry constraints; the extra copies are plain."
+            "A stack follows one item, or the members of one either/or group: only they carry constraints, and the extra copies are plain."
         ]
     );
 }
@@ -463,7 +463,7 @@ fn identity_groups_are_stacks_with_one_anchor() {
     };
     let check = |requirements: &[Requirement]| messages(&keyed(requirements));
     let overconstrained = [
-        "Only one item of a stack, or the members of one either/or group, can carry constraints; the extra copies are plain.",
+        "A stack follows one item, or the members of one either/or group: only they carry constraints, and the extra copies are plain.",
     ];
     // One anchor with plain copies; a floor limit on a copy is fine.
     assert!(
@@ -512,6 +512,34 @@ fn identity_groups_are_stacks_with_one_anchor() {
     assert!(check(&[thrown, plain(ItemKind::Weapon, 2, None)]).is_empty());
     // Separate groups are separate stacks.
     assert!(check(&[named(1, None), named(2, None)]).is_empty());
+    // A label on some members of a cluster is their own stack: those
+    // members anchor it even when plain, so the label may not also sit on
+    // a second cluster, nor on copies counting a combined level, which
+    // may be waived.
+    let member = |group| Requirement {
+        identity_group: Some(1),
+        alternative_group: Some(group),
+        ..Requirement::any(ItemKind::Ring)
+    };
+    let other = |group| Requirement {
+        alternative_group: Some(group),
+        ..might()
+    };
+    assert!(check(&[member(1), other(1), plain(ItemKind::Ring, 1, None)]).is_empty());
+    assert_eq!(
+        check(&[member(1), other(1), member(2), other(2)]),
+        overconstrained
+    );
+    let summed = Requirement {
+        level_sum: level_sum(1, 3),
+        ..plain(ItemKind::Ring, 1, None)
+    };
+    assert_eq!(
+        check(&[member(1), other(1), summed, summed]),
+        overconstrained
+    );
+    // A lone stack counts its combined level as before.
+    assert!(check(&[summed, summed]).is_empty());
 }
 
 #[test]

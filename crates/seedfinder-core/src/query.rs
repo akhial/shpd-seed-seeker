@@ -912,7 +912,8 @@ pub(crate) fn requirement_group_errors(
     // When only some members of an alternative group carry the label (a
     // member stack), those members anchor it even when bare: they decide
     // whether its copies are needed at all, so any other group carrying the
-    // label, or a constrained copy, is a second anchor.
+    // label, or a constrained copy, is a second anchor. A combined level
+    // counts as a constraint there: the copies it would sum may be waived.
     for (label, rows) in identity_groups {
         let kind = requirements[rows[0]].kind;
         if rows.iter().any(|&index| requirements[index].kind != kind) {
@@ -923,7 +924,8 @@ pub(crate) fn requirement_group_errors(
         let mut anchor: Option<(Option<u8>, usize)> = None;
         let overconstrained = rows.iter().any(|&index| {
             let requirement = &requirements[index];
-            if requirement.is_bare() && !(member_stack && requirement.alternative_group.is_some()) {
+            let bare = requirement.is_bare() && !(member_stack && requirement.level_sum.is_some());
+            if bare && !(member_stack && requirement.alternative_group.is_some()) {
                 return false;
             }
             // Members of one alternative group form a single unit.
@@ -2940,6 +2942,23 @@ mod tests {
             ),
             Err(QueryError::OverconstrainedIdentityGroup)
         );
+        // A combined level on the copies would sum rings that may be waived.
+        assert_eq!(
+            validate(
+                r#"[{"any_of":[{"item":"ring_might","identity_group":1},{"item":"ring_energy"}]},
+                   {"kind":"ring","identity_group":1,"level_sum":{"group":1,"at_least":3}},
+                   {"kind":"ring","identity_group":1,"level_sum":{"group":1,"at_least":3}}]"#
+            ),
+            Err(QueryError::OverconstrainedIdentityGroup)
+        );
+        // It stays a lone stack's own, labelled or not.
+        assert_eq!(
+            validate(
+                r#"[{"kind":"ring","identity_group":1,"level_sum":{"group":1,"at_least":3}},
+                   {"kind":"ring","identity_group":1,"level_sum":{"group":1,"at_least":3}}]"#
+            ),
+            Ok(())
+        );
         // A group every member of which carries the label gates nothing:
         // its bare members stay copies, as before.
         assert_eq!(
@@ -3692,6 +3711,7 @@ mod tests {
             });
             let mut anchor: Option<(Option<u8>, usize)> = None;
             for &(index, alternative, _, bare) in members {
+                let bare = bare && !(member_stack && requirements[index].level_sum.is_some());
                 if bare && !(member_stack && alternative.is_some()) {
                     continue;
                 }

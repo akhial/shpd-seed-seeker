@@ -87,8 +87,11 @@ is two Wands of Frost or one Wand of Disintegration. A waived copy reserves no
 item. No bits or version changed for this: a link whose label sits on every
 member, or on a lone anchor, reads as before, while one whose label sits on only
 some members — whose copies used to be always required, binding freely when
-another member matched — now reads as those members' own stack. See
-[stacks](search-query-format.md#stacks).
+another member matched — now reads as those members' own stack. Such members
+anchor the stack even when they name no quality, so a link whose label on some
+members also sits on another alternative group, on a lone requirement naming
+qualities, or on a copy with a combined level has two anchors: it used to
+decode and is now rejected. See [stacks](search-query-format.md#stacks).
 
 ### Floor extension (versions 11–14)
 

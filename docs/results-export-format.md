@@ -111,7 +111,11 @@ It is decoded by `crates/seedfinder-core/src/json_query.rs`:
     Disintegration; a label on every member is copies of whichever matched.
     See [stacks](search-query-format.md#stacks). A file with a label on only
     some members of a group was read before as copies always required; it
-    now reads as that member's own stack, without a format change,
+    now reads as that member's own stack, without a format change. Those
+    members anchor the stack even when they name no quality, so a file whose
+    label on some members also sits on another `any_of` group, on a lone
+    requirement naming qualities, or on a copy with a `level_sum` has two
+    anchors and is now rejected,
   - `max_depth` — integer 1–24,
   - `blanket` — optional boolean, default false. When true, this condition must
     match an item assigned to an ordinary requirement or selected as an Arcane
