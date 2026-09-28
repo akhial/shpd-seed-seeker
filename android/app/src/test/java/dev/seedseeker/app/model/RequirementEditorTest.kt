@@ -62,6 +62,30 @@ class RequirementEditorTest {
         }
     }
 
+    @Test fun everyGoldenAnswerDecodesIntoWhatTheAppReads() {
+        val files = fixtures.listFiles { file -> file.extension == "json" }.orEmpty().sortedBy { it.name }
+        var decoded = 0
+        for (file in files) {
+            val fixture = JSONObject(file.readText())
+            val response = fixture.getJSONObject("response")
+            if (response.has("error")) continue
+            // Every field the app reads is there, of the type it reads it as.
+            runCatching {
+                when {
+                    fixture.getString("envelope") == "requirement_board" -> BoardAnswer.decode(response)
+                    response.has("saved") -> response.getJSONObject("saved").let { saved ->
+                        RequirementEditor.changedRows(saved)
+                        RequirementEditor.rekeyed(saved)
+                        saved.objectOrNull("resin")?.objectOrNull("set")?.let(ResinCondition::decode)
+                    }
+                    else -> EditorSheet.decode(response).form
+                }
+            }.onFailure { throw AssertionError("${file.name}: ${it.message}", it) }
+            decoded++
+        }
+        assertTrue(decoded >= 40)
+    }
+
     @Test fun theBoardTourDecodesIntoWhatTheBoardDraws() {
         val board = BoardView.decode(fixture("board-tour").getJSONObject("response"))
         assertEquals(4, board.ordinaryCount)
