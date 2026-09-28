@@ -415,7 +415,8 @@ public sealed partial class MainWindow : Window
     // cluster, drag a chip out of its cluster onto the empty board to make it
     // standalone again, drop it on the zone below to take one item off it.
     // Every drag moves one item: a stacked chip gives up one copy and keeps
-    // the rest, and the ghost is that one item, without badges. Everything
+    // the rest, and the ghost is that one item, without badges, while the
+    // chip it left, dimmed, shows the badges the rest keeps. Everything
     // else is a property of the chip itself, a cluster member's as much as a
     // lone chip's — a stack badge (×N / ≤N) for "more of the same kind", and
     // a Σ badge for a lone ring stack counting its levels together.
@@ -440,6 +441,8 @@ public sealed partial class MainWindow : Window
     {
         public required long Key; public required Button Chip; public required uint PointerId;
         public required Point Origin; public bool Dragging;
+        /// <summary>The chip's face at rest, while a drag shows what it leaves behind in its place.</summary>
+        public object? RestContent;
     }
     private ChipPress? press;
     /// <summary>
@@ -512,7 +515,8 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// A chip's face: the sprite with its glow, the name, the qualifiers, and
     /// the chip's own stack badges — a cluster member's too, inside the
-    /// cluster's outline. The drag ghost draws the lifted chip, which has none.
+    /// cluster's outline. The drag ghost draws the lifted chip, which has none,
+    /// and the chip it leaves from draws the badges the rest keeps.
     /// </summary>
     private StackPanel ChipContent(BoardChip view)
     {
@@ -888,6 +892,9 @@ public sealed partial class MainWindow : Window
         if (current.Key == ArcaneResinKey ? boardView.Resin is null : chip is null) { press = null; return; }
         current.Dragging = true; dragClickGuard = true;
         current.Chip.Opacity = 0.35;
+        // The origin shows what stays once the one item has gone: its stack
+        // one fewer (BoardChip.LeftBehind). A chip that leaves whole stays as it was.
+        if (chip?.LeftBehind is { } left) { current.RestContent = current.Chip.Content; current.Chip.Content = ChipContent(left); }
         RemoveZone.Visibility = Visibility.Visible;
         foreach (var target in dropTargets)
             if (ToolTipService.GetToolTip(target.Element) is { } tip) { suspendedToolTips.Add((target.Element, tip)); ToolTipService.SetToolTip(target.Element, null); }
@@ -943,6 +950,7 @@ public sealed partial class MainWindow : Window
     {
         Light(null);
         current.Chip.Opacity = 1;
+        if (current.RestContent is { } rest) { current.Chip.Content = rest; current.RestContent = null; }
         RemoveZone.Visibility = Visibility.Collapsed;
         if (ghost is not null) { DragLayer.Children.Remove(ghost); ghost = null; ghostCaption = null; ghostCaptionText = null; }
         foreach (var (element, tip) in suspendedToolTips) ToolTipService.SetToolTip(element, tip);
