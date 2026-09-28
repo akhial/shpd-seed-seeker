@@ -77,6 +77,18 @@ extension ResultsExport {
         return try? decodeRequirement(row, key: key, alternativeGroup: group)
     }
 
+    /// The rows of an answer, or nil unless every one is a requirement this
+    /// build can model: a list is taken whole or not at all.
+    static func decodeRows(_ value: Any?) -> [ItemRequirement]? {
+        guard let written = value as? [Any] else { return nil }
+        var rows: [ItemRequirement] = []
+        for value in written {
+            guard let row = decodeRow(value) else { return nil }
+            rows.append(row)
+        }
+        return rows
+    }
+
     /// The kind a document name (`melee_weapon`) stands for.
     static func kind(named name: String?) -> ItemKind? {
         guard let name, let index = kindNames.firstIndex(of: name) else { return nil }

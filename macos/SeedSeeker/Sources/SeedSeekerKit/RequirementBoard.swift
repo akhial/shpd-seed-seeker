@@ -184,22 +184,12 @@ public struct RequirementBoard: Sendable {
         let changed = jsonFlag(answer["changed"])
         var list = rows
         if changed {
-            guard let written = answer["rows"] as? [Any] else { return nil }
-            var decoded: [ItemRequirement] = []
-            for value in written {
-                guard let row = ResultsExport.decodeRow(value) else { return nil }
-                decoded.append(row)
-            }
-            list = decoded
+            guard let written = ResultsExport.decodeRows(answer["rows"]) else { return nil }
+            list = written
         }
         let counts = answer["counts"] as? [String: Any] ?? [:]
-        let rekeyed = (answer["rekeyed"] as? [Any] ?? []).compactMap { pair -> BoardKeyChange? in
-            let keys = jsonKeys(pair)
-            guard keys.count == 2 else { return nil }
-            return BoardKeyChange(from: keys[0], to: keys[1])
-        }
         return RequirementBoard(
-            rows: list, changed: changed, rekeyed: rekeyed,
+            rows: list, changed: changed, rekeyed: jsonKeyChanges(answer["rekeyed"]),
             focus: jsonKey(answer["focus"]),
             refusal: BoardRefusal(json: answer["refused"]),
             items: jsonObjects(answer["items"]).compactMap(BoardItem.init(json:)),
@@ -562,9 +552,10 @@ public struct BoardResinChip: Hashable, Sendable {
 
 // Every field has one JSON type. Numbers and booleans both arrive as
 // NSNumber, which converts either way, so each reader checks which one it
-// holds rather than trusting the cast.
+// holds rather than trusting the cast. Internal, not private: the sheet's
+// answers (`RequirementSheet`) are read the same way.
 
-private func jsonString(_ value: Any?) -> String? {
+func jsonString(_ value: Any?) -> String? {
     value as? String
 }
 
@@ -572,31 +563,46 @@ private func jsonIsBoolean(_ number: NSNumber) -> Bool {
     CFGetTypeID(number as CFTypeRef) == CFBooleanGetTypeID()
 }
 
-private func jsonInt(_ value: Any?) -> Int? {
+func jsonInt(_ value: Any?) -> Int? {
     guard let number = value as? NSNumber, !jsonIsBoolean(number) else { return nil }
     return Int(exactly: number)
 }
 
-private func jsonKey(_ value: Any?) -> Int64? {
+/// A number that may have a fraction: the resin amount as typed.
+func jsonNumber(_ value: Any?) -> Double? {
+    guard let number = value as? NSNumber, !jsonIsBoolean(number) else { return nil }
+    return number.doubleValue
+}
+
+func jsonKey(_ value: Any?) -> Int64? {
     guard let number = value as? NSNumber, !jsonIsBoolean(number) else { return nil }
     return Int64(exactly: number)
 }
 
-private func jsonFlag(_ value: Any?) -> Bool {
+func jsonFlag(_ value: Any?) -> Bool {
     guard let number = value as? NSNumber, jsonIsBoolean(number) else { return false }
     return number.boolValue
 }
 
-private func jsonKeys(_ value: Any?) -> [Int64] {
+func jsonKeys(_ value: Any?) -> [Int64] {
     (value as? [Any] ?? []).compactMap { jsonKey($0) }
 }
 
-private func jsonStrings(_ value: Any?) -> [String] {
+func jsonStrings(_ value: Any?) -> [String] {
     (value as? [Any] ?? []).compactMap { $0 as? String }
 }
 
-private func jsonObjects(_ value: Any?) -> [[String: Any]] {
+func jsonObjects(_ value: Any?) -> [[String: Any]] {
     (value as? [Any] ?? []).compactMap { $0 as? [String: Any] }
+}
+
+/// The `rekeyed` pairs of an answer: each repaired key and its new one.
+func jsonKeyChanges(_ value: Any?) -> [BoardKeyChange] {
+    (value as? [Any] ?? []).compactMap { pair -> BoardKeyChange? in
+        let keys = jsonKeys(pair)
+        guard keys.count == 2 else { return nil }
+        return BoardKeyChange(from: keys[0], to: keys[1])
+    }
 }
 
 /// A board request's inputs, what the memo is keyed by.
@@ -629,11 +635,13 @@ private final class BoardCache: @unchecked Sendable {
     }
 }
 
-private func wireByte(_ value: Int) -> Int {
+/// A count, level or floor as the envelopes read one: a byte.
+func wireByte(_ value: Int) -> Int {
     min(max(value, 0), 255)
 }
 
-private func nullable<Value>(_ value: Value?) -> Any {
+/// The value, or JSON's null.
+func nullable<Value>(_ value: Value?) -> Any {
     if let value { return value }
     return NSNull()
 }
