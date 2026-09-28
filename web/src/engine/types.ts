@@ -261,9 +261,11 @@ export interface StackView {
   total_text: string;
 }
 
-/** One visible row of the board: a chip, or one member of a cluster. */
-export interface ChipView {
-  key: number;
+/**
+ * What a chip shows of one item: its own row's face, or the face of the bare
+ * copy a drag of it carries (`ChipView.lifted`). Drawn, never edited.
+ */
+export interface ChipFace {
   name: string;
   title: string;
   item: string | null;
@@ -280,8 +282,13 @@ export interface ChipView {
   } | null;
   uncursed: boolean;
   details: string[];
-  relations: { glyph: "or" | "sum" | "times"; text: string }[];
   description: string;
+}
+
+/** One visible row of the board: a chip, or one member of a cluster. Its face is its own row's. */
+export interface ChipView extends ChipFace {
+  key: number;
+  relations: { glyph: "or" | "sum" | "times"; text: string }[];
   problem: string | null;
   /** The badges at rest; a cluster member's are its own, drawn on its chip. */
   badges: ChipBadges;
@@ -290,6 +297,11 @@ export interface ChipView {
    * origin shows; null when the chip has no copies and the whole chip leaves.
    */
   remaining_badges: ChipBadges | null;
+  /**
+   * The face of the item a drag of the chip carries — a bare copy of it, which
+   * the moving chip draws — or null when the chip has no copies and moves itself.
+   */
+  lifted: ChipFace | null;
   /** The hidden copies behind the chip's badge; members whose stacks are alike share theirs. */
   copies: number[];
   stack: StackView;

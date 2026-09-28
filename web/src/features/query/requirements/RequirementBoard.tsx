@@ -15,6 +15,7 @@ import type {
   BoardEdit,
   BoardItemView,
   ChipBadges,
+  ChipFace,
   ChipTag,
   ChipView,
   ResinChipView,
@@ -29,8 +30,9 @@ import { rekey } from "./board";
  * a lone chip or a cluster member alike: a stack badge (×N / ≤N) for "more
  * of the same kind", and a Σ badge for a stack whose items count their
  * levels towards one total. A cluster draws no badge of its own. Every drag
- * moves one item, so the chip in flight is drawn without its badges, and the
- * dimmed chip it leaves shows the badges its stack keeps.
+ * moves one item — for a stack, a bare copy of it — so the chip in flight
+ * draws the core's `lifted` face without badges, and the dimmed chip it
+ * leaves keeps its own face with the badges its stack keeps.
  *
  * The board draws what the shared core answers — its entries, their words,
  * which drops join and which are refused — and sends the gestures back as
@@ -50,13 +52,13 @@ const RELATION_GLYPHS: Record<ChipView["relations"][number]["glyph"], string> = 
   times: "×",
 };
 
-function ChipSprite({ chip, glows }: { chip: ChipView; glows?: Glow[] }) {
-  return chip.item ? (
-    <Sprite art={requirementArt(chip)} size={18} glow={glows} />
+function ChipSprite({ face, glows }: { face: ChipFace; glows?: Glow[] }) {
+  return face.item ? (
+    <Sprite art={requirementArt(face)} size={18} glow={glows} />
   ) : (
     <span className="d1-chip-wildcard" aria-hidden="true">
       <span className="d1-chip-wildcard-silhouette">
-        <Sprite art={requirementArt(chip)} size={18} />
+        <Sprite art={requirementArt(face)} size={18} />
       </span>
       <span className="d1-chip-wildcard-mark">?</span>
     </span>
@@ -91,19 +93,19 @@ function effectRingCss(glows: Glow[]): CSSProperties {
 }
 
 /**
- * What a chip shows of its item — sprite, name, tags, effect cue, trailing
+ * What a chip shows of an item — sprite, name, tags, effect cue, trailing
  * tags and the uncursed check — without its badges, so the board's chip and
- * the drag ghost draw the same face.
+ * the drag ghost draw a face the same way.
  */
-function ChipFace({ chip }: { chip: ChipView }) {
-  const effect = chip.effect;
+function ItemFace({ face }: { face: ChipFace }) {
+  const effect = face.effect;
   const glows = effect && !effect.any_enchantment ? effectGlows(effect.effects) : [];
   const glow = glows[0] ?? null;
   return (
     <>
-      <ChipSprite chip={chip} glows={glows} />
-      <span className="d1-chip-name">{chip.name}</span>
-      <Tags tags={chip.tags} />
+      <ChipSprite face={face} glows={glows} />
+      <span className="d1-chip-name">{face.name}</span>
+      <Tags tags={face.tags} />
       {/* Named items show a single effect through their sprite's glow.
         Wildcards keep their green question mark and show an effect badge. */}
       {effect &&
@@ -116,7 +118,7 @@ function ChipFace({ chip }: { chip: ChipView }) {
             {glows.length}
           </span>
         ) : glow ? (
-          chip.item ? null : (
+          face.item ? null : (
             <span
               className="d1-chip-effect"
               style={{ color: glow.color, backgroundColor: glow.color }}
@@ -129,8 +131,8 @@ function ChipFace({ chip }: { chip: ChipView }) {
             title={effect.label}
           />
         ))}
-      <Tags tags={chip.trailing_tags} />
-      {chip.uncursed && (
+      <Tags tags={face.trailing_tags} />
+      {face.uncursed && (
         <span className="d1-chip-tag d1-chip-tag-soft" title="Uncursed">
           <CheckIcon size={12} />
         </span>
@@ -138,6 +140,12 @@ function ChipFace({ chip }: { chip: ChipView }) {
     </>
   );
 }
+
+/**
+ * The face of the item a move of `chip` carries: the bare copy the core lifts
+ * from a stack, else the chip itself.
+ */
+const movingFace = (chip: ChipView): ChipFace => chip.lifted ?? chip;
 
 type DropTarget =
   | { kind: "chip"; key: number }
@@ -502,7 +510,7 @@ export function RequirementBoard({
           if (hoveredKey === chip.key) setHovered(null);
         }}
       >
-        <ChipFace chip={chip} />
+        <ItemFace face={chip} />
         {/* A chip picked up to join shows the one item that moves; a dragged
             chip's origin shows what its stack keeps while that item is away. */}
         {pick?.source === chip.key
@@ -758,9 +766,10 @@ export function RequirementBoard({
           style={{ left: drag.x, top: drag.y }}
           aria-hidden="true"
         >
-          {/* The one item that moves: the chip's face, never its badges. */}
+          {/* The one item that moves — a stack's bare copy, else the chip
+              itself — never its badges. */}
           {dragSource ? (
-            <ChipFace chip={dragSource} />
+            <ItemFace face={movingFace(dragSource)} />
           ) : (
             draggingResin && <ResinChipBody chip={resin.chip} amountOnly />
           )}

@@ -405,6 +405,71 @@ it("drags one item: the ghost is the chip alone, and a round trip folds back", a
   expect(badges("Wand of Disintegration")).toEqual(["×2"]);
 });
 
+const tags = (element: Element) =>
+  [...element.querySelectorAll(".d1-chip-tag")].map((tag) => tag.textContent);
+
+it("drags a bare copy of a stack: only the origin reads +4, and a round trip folds back", async () => {
+  // The report: Ring of Energy +4 ×3 lifted both chips as +4.
+  const ENERGY = { kind: "ring", item: "ring_energy" };
+  await render(
+    JSON.stringify({ requirements: [{ ...ENERGY, upgrade: 4 }, ENERGY, ENERGY, DISINTEGRATION] }),
+  );
+  const energy = chip("Ring of Energy");
+  expect(tags(energy)).toEqual(["+4"]);
+  await dragOver(energy, chip("Wand of Disintegration"));
+  // The ghost is the core's lifted face: a plain ring, no badges.
+  const ghost = host.querySelector<HTMLElement>(".d1-chip-ghost")!;
+  expect(ghost.querySelector(".d1-chip-name")!.textContent).toBe("Ring of Energy");
+  expect(tags(ghost)).toEqual([]);
+  expect(ghost.querySelector(".d1-stack-badge")).toBeNull();
+  // The dimmed origin keeps its +4 and the two rings it leaves.
+  expect(tags(energy)).toEqual(["+4"]);
+  expect(badges("Ring of Energy")).toEqual(["×2"]);
+  await release(energy);
+  expect(requirements()).toEqual([
+    { ...ENERGY, upgrade: 4 },
+    ENERGY,
+    { any_of: [DISINTEGRATION, ENERGY] },
+  ]);
+  const member = chipWhere("Ring of Energy", true);
+  expect(tags(member)).toEqual([]);
+  expect(member.getAttribute("aria-label")).toBe("Ring of Energy, any upgrade");
+  const stack = chipWhere("Ring of Energy", false);
+  expect(tags(stack)).toEqual(["+4"]);
+  expect(stack.querySelector(".d1-stack-badge")!.textContent).toBe("×2");
+
+  // The member has no copies: it moves itself, and folds back into the stack.
+  await dragOver(member, host.querySelector('[data-drop="board"]'));
+  expect(tags(host.querySelector(".d1-chip-ghost")!)).toEqual([]);
+  await release(member);
+  expect(requirements()).toEqual([{ ...ENERGY, upgrade: 4 }, ENERGY, DISINTEGRATION, ENERGY]);
+  expect(host.querySelector(".d1-cluster")).toBeNull();
+  expect(badges("Ring of Energy")).toEqual(["×3"]);
+  expect(tags(chip("Ring of Energy"))).toEqual(["+4"]);
+});
+
+it("detaches a bare copy of a member's stack, which keeps its +2 in the cluster", async () => {
+  await render(
+    JSON.stringify({
+      requirements: [
+        { any_of: [{ ...FROST, upgrade: 2, identity_group: 1 }, DISINTEGRATION] },
+        { kind: "wand", identity_group: 1 },
+      ],
+    }),
+  );
+  const frost = chip("Wand of Frost");
+  expect(tags(frost)).toEqual(["+2"]);
+  await dragOver(frost, host.querySelector('[data-drop="board"]'));
+  const ghost = host.querySelector<HTMLElement>(".d1-chip-ghost")!;
+  expect(ghost.querySelector(".d1-chip-name")!.textContent).toBe("Wand of Frost");
+  expect(tags(ghost)).toEqual([]);
+  expect(tags(frost)).toEqual(["+2"]);
+  await release(frost);
+  expect(requirements()).toEqual([{ any_of: [{ ...FROST, upgrade: 2 }, DISINTEGRATION] }, FROST]);
+  expect(tags(chipWhere("Wand of Frost", true))).toEqual(["+2"]);
+  expect(tags(chipWhere("Wand of Frost", false))).toEqual([]);
+});
+
 it("draws the ghost with the chip's whole face: its trailing tags and uncursed check", async () => {
   await render(
     JSON.stringify({
