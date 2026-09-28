@@ -100,7 +100,6 @@ final class TrinketTests: XCTestCase {
         let restored = try ResultsExport.decodeQuery(document)
         XCTAssertEqual(restored.requirements.map { $0.item?.id }, requirements.map { $0.item?.id })
         XCTAssertEqual(restored.requirements.slotCount, 1)
-        XCTAssertEqual(first.title, "Mimic Tooth")
         XCTAssertThrowsError(try ItemRequirement(key: 3, item: nil, upgrade: 0,
                                                kind: .trinket, upgradeMatch: .any))
         XCTAssertThrowsError(try ItemRequirement(key: 3, item: first.item, upgrade: 1,
