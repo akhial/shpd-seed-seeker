@@ -293,6 +293,20 @@ fn board_fixtures(fixtures: &mut Fixtures) {
         }),
     );
     fixtures.add(
+        "board-join-hand-written-stack",
+        "A Wand of Disintegration +3 ×3 written as bare copies under a stack label, the way a list from elsewhere may hold it, dragged onto Wand of Frost: the two left behind stay Disintegrations, not Any wand.",
+        Board,
+        &json!({
+            "rows": [
+                {"key": 1, "kind": "wand", "item": "wand_disintegration", "upgrade": 3, "identity_group": 1},
+                {"key": 2, "kind": "wand", "identity_group": 1},
+                {"key": 3, "kind": "wand", "identity_group": 1},
+                {"key": 7, "kind": "wand", "item": "wand_frost"},
+            ],
+            "edits": [{"type": "join", "source": 1, "target": 7}],
+        }),
+    );
+    fixtures.add(
         "board-detach",
         "A cluster member taken out on its own; the cluster of one dissolves.",
         Board,

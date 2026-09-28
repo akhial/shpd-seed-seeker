@@ -2517,6 +2517,104 @@ fn a_member_leaving_a_stacked_cluster_leaves_its_count_behind() {
     assert!(problems(&result.rows).is_empty());
 }
 
+/// A list from elsewhere may write a named stack as bare copies under a
+/// stack label, or a cluster's label on one member alone; the board shows
+/// both as the canonical shape. A row taken out of such an entry — joined,
+/// detached or removed — leaves its copies what the board showed them to
+/// be, not wildcards whose label dissolved with the row that carried it.
+#[test]
+fn a_row_leaving_a_hand_written_stack_leaves_the_copies_the_board_showed() {
+    // Disintegration ×2 as an anchor and a bare copy, dragged onto Frost.
+    let source = [
+        with(named(1, ItemId::WandDisintegration), |r| {
+            r.identity_group = Some(1);
+        }),
+        bare_wand(2, 1),
+        named(7, ItemId::WandFrost),
+    ];
+    assert_eq!(counts(&source), [2, 1]);
+    let join = Edit::Join {
+        source: 1,
+        target: 7,
+    };
+    let joined = edited(&source, &[join]);
+    assert_eq!(
+        joined,
+        [
+            named(2, ItemId::WandDisintegration),
+            member(named(7, ItemId::WandFrost), 1, None),
+            member(named(1, ItemId::WandDisintegration), 1, None),
+        ]
+    );
+    assert_eq!(joined, edited(&source, &[Edit::Normalize, join]));
+    // A constrained anchor's copies stay plain repeats of its item.
+    let upgraded = [
+        with(exact(named(1, ItemId::WandDisintegration), 3), |r| {
+            r.identity_group = Some(1);
+        }),
+        bare_wand(2, 1),
+        bare_wand(3, 1),
+        named(7, ItemId::WandFrost),
+    ];
+    let joined = edited(&upgraded, &[join]);
+    assert_eq!(
+        joined[..2],
+        [
+            named(2, ItemId::WandDisintegration),
+            named(3, ItemId::WandDisintegration),
+        ]
+    );
+    assert_eq!(counts(&joined), [2, 1]);
+
+    // The same stack as the target.
+    let target = [
+        named(1, ItemId::WandDisintegration),
+        with(named(7, ItemId::WandFrost), |r| r.identity_group = Some(1)),
+        bare_wand(8, 1),
+    ];
+    assert_eq!(
+        edited(&target, &[join]),
+        [
+            member(named(7, ItemId::WandFrost), 1, None),
+            member(named(1, ItemId::WandDisintegration), 1, None),
+            named(8, ItemId::WandFrost),
+        ]
+    );
+
+    // {Frost | Disintegration} ×2 with the label on Frost alone: Frost
+    // leaves, and the group's count stays with Disintegration.
+    let cluster = [
+        member(named(1, ItemId::WandFrost), 1, Some(1)),
+        member(named(2, ItemId::WandDisintegration), 1, None),
+        bare_wand(3, 1),
+    ];
+    assert_eq!(counts(&cluster), [2]);
+    let rest = [
+        named(2, ItemId::WandDisintegration),
+        named(3, ItemId::WandDisintegration),
+    ];
+    let detached = edited(&cluster, &[Edit::Detach { key: 1 }]);
+    assert_eq!(detached[0], named(1, ItemId::WandFrost));
+    assert_eq!(detached[1..], rest);
+    assert_eq!(edited(&cluster, &[Edit::Remove { key: 1 }]), rest);
+    let lightning = [
+        cluster[0],
+        cluster[1],
+        cluster[2],
+        named(4, ItemId::WandLightning),
+    ];
+    let joined = edited(
+        &lightning,
+        &[Edit::Join {
+            source: 1,
+            target: 4,
+        }],
+    );
+    assert_eq!(joined[..2], rest);
+    assert_eq!(counts(&joined), [2, 1]);
+    assert_eq!(entry(&joined, 1).members.len(), 2);
+}
+
 /// What a canonical list asks for, entry by entry, blind to where rows sit
 /// and to which chip a plain repeat folds into: each row of a named chip's
 /// plain stack on its own, a wildcard or combined-level stack as its rows
@@ -2718,16 +2816,65 @@ fn random_board(rng: &mut Rng) -> Vec<Row> {
     rows
 }
 
+/// `rows` with every lone named stack written as a list from elsewhere may
+/// write it — the anchor and bare copies under a free stack label — which
+/// the board folds the same way.
+fn with_bare_copies(rows: &[Row]) -> Vec<Row> {
+    let mut encoded = rows.to_vec();
+    for item in board_items(rows) {
+        let anchor = rows[item.anchor()].requirement;
+        if item.cluster.is_some()
+            || item.total.is_some()
+            || item.extras.is_empty()
+            || anchor.item.is_none()
+            || !takes_stack_label(&anchor)
+        {
+            continue;
+        }
+        let used = taken(
+            encoded.iter().map(|row| row.requirement.identity_group),
+            &BTreeSet::new(),
+        );
+        let Some(label) = free_group(&used, MAX_IDENTITY_GROUP) else {
+            break;
+        };
+        encoded[item.anchor()].requirement.identity_group = Some(label);
+        for &index in &item.extras {
+            encoded[index].requirement =
+                bare_copy(&anchor, label, rows[index].requirement.max_depth);
+        }
+    }
+    encoded
+}
+
+/// The drop policy joins `source` onto `target` in `rows`, and the join
+/// writes `after`.
+fn assert_joins_to(rows: &[Row], (source, target): (u64, u64), after: &[Row], context: &str) {
+    assert_eq!(
+        drop_action(rows, source, DropTarget::Row(target)),
+        DropAction::Join { target },
+        "{context} from {rows:?}"
+    );
+    assert_eq!(
+        run(rows, &[Edit::Join { source, target }]).rows,
+        after,
+        "{context} from {rows:?}"
+    );
+}
+
 /// Canonical valid lists built by board edits, each joined every way its
 /// visible rows allow (1,024 lists, per the test budget): a join adds and
 /// removes no row; every entry but the two joined asks for what it did, a
 /// stacked chip's other copies stay behind and a cluster keeps its count —
 /// no copy is orphaned; no entry without copies keeps a stack or
-/// combined-level label; and the result is valid and canonical.
+/// combined-level label; and the result is valid and canonical. The same
+/// list with its named stacks written as bare copies joins to the very same
+/// rows.
 #[test]
 fn a_join_moves_one_item_and_leaves_every_copy_where_it_belongs() {
     let mut rng = Rng::new(0x0a1e_c0de_d15a_2026);
     let mut joins = 0;
+    let mut encoded_joins = 0;
     for case in 0..1024 {
         let rows = random_board(&mut rng);
         if validate(&rows).is_err() {
@@ -2737,6 +2884,8 @@ fn a_join_moves_one_item_and_leaves_every_copy_where_it_belongs() {
             !run(&rows, &[Edit::Normalize]).changed,
             "case {case}: {rows:?}"
         );
+        let encoded = with_bare_copies(&rows);
+        assert_eq!(counts(&encoded), counts(&rows), "case {case}: {encoded:?}");
         let visible: Vec<usize> = board_items(&rows)
             .into_iter()
             .flat_map(|item| item.members)
@@ -2800,10 +2949,18 @@ fn a_join_moves_one_item_and_leaves_every_copy_where_it_belongs() {
                 assert_eq!(validate(after), Ok(()), "{context}");
                 assert_emittable(after, &context);
                 assert!(!run(after, &[Edit::Normalize]).changed, "{context}");
+                if encoded != rows {
+                    encoded_joins += 1;
+                    assert_joins_to(&encoded, (source_key, target_key), after, &context);
+                }
             }
         }
     }
     assert!(joins > 2000, "only {joins} joins");
+    assert!(
+        encoded_joins > 200,
+        "only {encoded_joins} joins of bare copies"
+    );
 }
 
 // --- the edit sequence --------------------------------------------------

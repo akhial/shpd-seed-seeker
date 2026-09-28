@@ -519,6 +519,22 @@ fn normalize(rows: &mut [Row]) {
     }
 }
 
+/// `rows` [`normalize`]d, for an edit that takes a row out of its entry.
+///
+/// A list from elsewhere — a saved query, a preset, a results file — may
+/// encode a stack another way than the board writes it: a named stack as
+/// bare copies under a stack label, a cluster's label on one member alone.
+/// The board folds both as the canonical shape, but clearing the label of
+/// the row that carries it would leave the copies to dissolve into
+/// wildcards. Normalizing keeps every row's key and index, so the caller
+/// still finds the rows it read on the list as written — where
+/// [`drop_action`] and [`join_candidates`] read them too.
+fn canonical(rows: &[Row]) -> Vec<Row> {
+    let mut rows = rows.to_vec();
+    normalize(&mut rows);
+    rows
+}
+
 /// Moves every group label a hand-written list holds out of range onto a
 /// free one in range: a stack or combined-level label outside 1–4
 /// ([`MAX_IDENTITY_GROUP`], [`MAX_LEVEL_SUM_GROUP`]) — the document codec
@@ -1200,7 +1216,7 @@ fn detach(rows: &[Row], key: u64) -> Outcome {
     if item.cluster.is_none() {
         return Outcome::unchanged();
     }
-    let mut next = rows.to_vec();
+    let mut next = canonical(rows);
     next[index].requirement.alternative_group = None;
     next[index].requirement.identity_group = None;
     Outcome::rows(next, Some(key))
@@ -1218,7 +1234,7 @@ fn remove(rows: &[Row], key: u64, whole: bool) -> Outcome {
     } else {
         item.members.iter().chain(&item.extras).copied().collect()
     };
-    Outcome::rows(without(rows, &doomed), None)
+    Outcome::rows(without(&canonical(rows), &doomed), None)
 }
 
 /// Precomputed answers to "may this visible row join that one?", shared by
@@ -1333,7 +1349,7 @@ fn join(rows: &[Row], source_key: u64, target_key: u64, held: &HeldLabels) -> Ou
     let one_category = members
         .iter()
         .all(|&index| rows[index].requirement.kind == first_kind);
-    let mut next = rows.to_vec();
+    let mut next = canonical(rows);
     if !one_category {
         // Stacks were refused above, so only leftover labels remain.
         clear_identity_labels(&mut next, &members);

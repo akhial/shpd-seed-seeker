@@ -249,6 +249,14 @@ canonical — a cluster of one, repeats a stack would fold, a stack labelled
   gate Start and Share, so a label out of range is reported rather than
   searched.
 
+An edit that takes a row out of its entry — `join`, `detach`, `remove` —
+reads such a list in its canonical encoding first. A named stack written
+as bare copies under a stack label, or a cluster whose stack label only one
+member carries, then leaves its copies what the board showed them to be:
+`Wand of Disintegration` copies stay Disintegrations, not `Any wand`. The
+drop policy and the join candidates still answer for the list as written,
+and agree with the edit.
+
 ### Response
 
 ```json
@@ -632,13 +640,13 @@ These are the core's own choices:
 request/response pairs for both envelopes: the board tour, the four stack
 encodings, joins (one copy moving out of a stack, the reported list and
 its round trip, onto a stacked chip and a stacked cluster, a combined
-level and a group member leaving, refused), detach and removals, copy
-floors, combined levels (their copies' floors kept both ways), a group
-stepped down to ×1, saves (new and unchanged), problems, key repair, label
-compaction and labels moved into range, unreadable rows, the sheet's
-open/change/save flow, an untouched save and one that repairs its row, the
-resin flows (a query with resin and one without, and the resin chip saved
-untouched), and the error envelopes. Each file is
+level, a group member leaving and a hand-written stack, refused), detach
+and removals, copy floors, combined levels (their copies' floors kept both
+ways), a group stepped down to ×1, saves (new and unchanged), problems,
+key repair, label compaction and labels moved into range, unreadable rows,
+the sheet's open/change/save flow, an untouched save and one that repairs
+its row, the resin flows (a query with resin and one without, and the
+resin chip saved untouched), and the error envelopes. Each file is
 
 ```json
 {"about": "...", "envelope": "requirement_board", "request": {...}, "response": {...}}
