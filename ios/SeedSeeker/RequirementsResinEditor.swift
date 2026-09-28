@@ -1,50 +1,33 @@
 import SwiftUI
 import SeedSeekerKit
 
+/// The Arcane Resin sheet: a requirement sheet with the resin picked, opened
+/// on the query's resin chip or handed over from a wand's item page. Its
+/// controls are the shared core's resin section and donor filter.
 struct RequirementsResinEditor: View {
-    let initialAmount: Int
-    let initialAuto: Bool
-    let initialFilter: ArcaneResinFilter
     let hasRequirement: Bool
-    let onSave: (Int, Bool, ArcaneResinFilter) -> Void
+    /// Saves the sheet; answers the sheet to keep showing when the core
+    /// refused the save, its errors saying why.
+    let onSave: (RequirementSheet) -> RequirementSheet?
     let onRemove: () -> Void
 
     @Environment(\.dismiss) private var dismiss
+    /// The sheet as the core last answered it.
+    @State private var sheet: RequirementSheet
+    /// The amount as typed; the core is sent whatever number it holds.
     @State private var minimum: String
-    @State private var automatic: Bool
-    @State private var filter: ArcaneResinFilter
 
-    init(initialAmount: Int, initialAuto: Bool, initialFilter: ArcaneResinFilter,
-         hasRequirement: Bool, onSave: @escaping (Int, Bool, ArcaneResinFilter) -> Void,
+    init(sheet: RequirementSheet, hasRequirement: Bool,
+         onSave: @escaping (RequirementSheet) -> RequirementSheet?,
          onRemove: @escaping () -> Void) {
-        self.initialAmount = initialAmount
-        self.initialAuto = initialAuto
-        self.initialFilter = initialFilter
         self.hasRequirement = hasRequirement
         self.onSave = onSave
         self.onRemove = onRemove
-        _minimum = State(initialValue: String(initialAmount > 0 ? initialAmount : 2))
-        _automatic = State(initialValue: initialAuto)
-        _filter = State(initialValue: initialFilter)
+        _sheet = State(initialValue: sheet)
+        _minimum = State(initialValue: sheet.form.resin.amountText)
     }
 
-    private var parsedMinimum: Int? {
-        guard let amount = Int(minimum), (1...65_535).contains(amount) else { return nil }
-        return amount
-    }
-
-    private var floorDescription: String {
-        filter.maximumDepth.map { "Wands within floor \($0)" } ?? "Wands within search limit"
-    }
-
-    private var floorSelection: Binding<Double> {
-        Binding {
-            Double(filter.maximumDepth.map { FloorLimits.index(of: $0) + 1 } ?? 0)
-        } set: { value in
-            let index = min(FloorLimits.options.count, max(0, Int(value.rounded())))
-            filter.maximumDepth = index == 0 ? nil : FloorLimits.options[index - 1]
-        }
-    }
+    private var form: SheetForm { sheet.form }
 
     var body: some View {
         NavigationStack {
@@ -54,10 +37,11 @@ struct RequirementsResinEditor: View {
                         ItemSpriteView(item: CatalogItem(id: "arcane_resin", name: "Arcane Resin",
                                                         kind: .wand, spriteIndex: 317), pointSize: 44)
                         RequirementSegmentedControl(title: "Minimum resin",
-                                                    options: [(false, "Amount"), (true, "Auto")], selection: $automatic)
+                                                    options: [(false, "Amount"), (true, "Auto")],
+                                                    selection: flag(form.resin.auto) { .resinAuto($0) })
                     }
 
-                    if automatic {
+                    if form.resin.auto {
                         Text("Upgrade each kept wand to +3. Excluded wands and extra copies reserved for reforging need no resin.")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
@@ -71,25 +55,33 @@ struct RequirementsResinEditor: View {
                                 .padding(.horizontal, 16).padding(.vertical, 14)
                                 .glassEffect(.regular, in: .rect(cornerRadius: 18))
                                 .accessibilityLabel("Minimum resin")
-                            if parsedMinimum == nil {
-                                Text("Enter a whole number.")
+                                .onChange(of: minimum) { _, text in
+                                    send(.resinAmount(Double(text.trimmingCharacters(in: .whitespaces))))
+                                }
+                            ForEach(form.errors, id: \.self) { error in
+                                Text(error)
                                     .font(.caption)
                                     .foregroundStyle(.red)
                             }
                         }
                     }
 
-                    Toggle("Require uncursed wands", isOn: $filter.uncursed)
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(floorDescription).font(.subheadline.weight(.semibold))
-                        RequirementGraduatedSlider(title: floorDescription, value: floorSelection,
-                                                   bounds: 0...Double(FloorLimits.options.count))
+                    if form.uncursed.visible {
+                        Toggle(form.uncursed.label, isOn: flag(form.uncursed.value) { .uncursed($0) })
                     }
 
-                    RequirementSourceSelector(title: "Wand source", source: $filter.source)
+                    if form.floorLimit.visible {
+                        RequirementsFloorControl(control: form.floorLimit,
+                                                 enabled: flag(form.floorLimit.enabled) { .floorLimitEnabled($0) },
+                                                 floor: number(form.floorLimit.value) { .floorLimit($0) })
+                    }
 
-                    Toggle(isOn: $filter.includeMageWand) {
+                    if form.source.visible {
+                        RequirementSourceSelector(title: "Wand source", options: form.source.options,
+                                                  selection: pickOptional(form.source.value) { .source($0) })
+                    }
+
+                    Toggle(isOn: flag(form.resin.includeMageWand) { .includeMageWand($0) }) {
                         VStack(alignment: .leading, spacing: 6) {
                             Text("Include Mage’s starting wand")
                             Text("Adds 2 resin from Magic Missile. Assumes you recover it with Wand Preservation and dismantle it after imbuing.")
@@ -122,9 +114,7 @@ struct RequirementsResinEditor: View {
                         }
                         Spacer(minLength: 12)
                         Button {
-                            guard automatic || parsedMinimum != nil else { return }
-                            onSave(automatic ? 0 : parsedMinimum!, automatic, filter)
-                            dismiss()
+                            if let refused = onSave(sheet) { sheet = refused } else { dismiss() }
                         } label: {
                             HStack(spacing: 9) {
                                 Text(hasRequirement ? "Save" : "Add")
@@ -137,8 +127,8 @@ struct RequirementsResinEditor: View {
                             .glassEffect(.regular.tint(AppTheme.accent.opacity(0.3)).interactive(), in: .capsule)
                         }
                         .buttonStyle(.plain)
-                        .disabled(!automatic && parsedMinimum == nil)
-                        .opacity(!automatic && parsedMinimum == nil ? 0.45 : 1)
+                        .disabled(!form.canSave)
+                        .opacity(form.canSave ? 1 : 0.45)
                     }
                 }
                 .padding(.horizontal, 20)
@@ -155,5 +145,31 @@ struct RequirementsResinEditor: View {
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
         .interactiveDismissDisabled()
+    }
+
+    // MARK: Changes
+
+    /// Sends one change; the core's answer is the sheet shown next.
+    private func send(_ change: SheetChange) {
+        if let next = sheet.changing(change) { sheet = next }
+    }
+
+    private func flag(_ value: Bool, _ change: @escaping @Sendable (Bool) -> SheetChange) -> Binding<Bool> {
+        Binding(get: { value }, set: { next in
+            if next != value { send(change(next)) }
+        })
+    }
+
+    private func number(_ value: Int, _ change: @escaping @Sendable (Int) -> SheetChange) -> Binding<Int> {
+        Binding(get: { value }, set: { next in
+            if next != value { send(change(next)) }
+        })
+    }
+
+    private func pickOptional(_ value: String?,
+                              _ change: @escaping @Sendable (String?) -> SheetChange) -> Binding<String?> {
+        Binding(get: { value }, set: { next in
+            if next != value { send(change(next)) }
+        })
     }
 }

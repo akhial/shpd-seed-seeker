@@ -91,12 +91,6 @@ public enum ItemKind: Int, Codable, CaseIterable, Sendable {
 
     /// The broad item family; catalog items always carry the family.
     public var family: ItemKind { self == .meleeWeapon || self == .thrownWeapon ? .weapon : self }
-    /// The weapon class this kind restricts to, or nil when unrestricted.
-    public var weaponClass: WeaponClass? { self == .meleeWeapon ? .melee : self == .thrownWeapon ? .thrown : nil }
-    /// Whether a catalog item can satisfy a requirement of this kind.
-    public func accepts(_ item: CatalogItem) -> Bool {
-        item.kind == family && (weaponClass == nil || ItemCatalog.weaponClass(of: item.id) == weaponClass)
-    }
 }
 
 /// Melee/thrown classification of weapon catalog entries.
@@ -124,13 +118,6 @@ public struct CatalogItem: Codable, Hashable, Identifiable, Sendable {
         self.id = id; self.name = name; self.kind = kind; self.spriteIndex = spriteIndex
         self.tier = tier; self.typeIconIndex = typeIconIndex
     }
-
-    /// Whether this is a tipped dart. Every shop stocks tipped darts and any
-    /// dart can be tipped by hand, so the item picker never offers them —
-    /// though a scouted world still lists the ones it rolled. The engine's
-    /// catalog keeps the `_dart` suffix unambiguous (the plain dart has no
-    /// entry), and its wasm cross-check test pins the suffix to the tipped set.
-    public var isTippedDart: Bool { id.hasSuffix("_dart") }
 
     private enum CodingKeys: String, CodingKey {
         case id, name, kind, spriteIndex, tier, typeIconIndex

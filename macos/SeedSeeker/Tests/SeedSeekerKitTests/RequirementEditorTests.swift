@@ -7,7 +7,8 @@ import XCTest
 /// and the problem list. These hold the app's bridge to them: the golden
 /// request/response pairs the core pins answer the same through the linked
 /// engine, the typed views read them, rows survive the app's codec, and the
-/// edits the boards send land — or are refused — as the core decides.
+/// edits the boards send land — or are refused — as the core decides. The
+/// sheet's bridge has its own cases in `RequirementSheetTests`.
 final class RequirementEditorTests: XCTestCase {
     // MARK: - Fixtures
 
@@ -211,29 +212,6 @@ final class RequirementEditorTests: XCTestCase {
         XCTAssertEqual(refused.refusal?.message, "Copies can only be grouped with the same item type.")
     }
 
-    /// A new chip takes the key the board mints — never the draft's own — and
-    /// saving an unchanged chip gives back the very rows.
-    func testSavesMintKeysAndAnUnchangedSaveChangesNothing() throws {
-        let wand = try requirement(1, kind: .wand)
-        let draft = try requirement(0, kind: .thrownWeapon, upgrade: 2, upgradeMatch: .atLeast)
-        let saved = try XCTUnwrap(RequirementBoard.apply(
-            [.save(key: nil, requirement: draft, count: 2, total: nil, copyDepth: 6)], to: [wand]))
-        XCTAssertTrue(saved.changed)
-        XCTAssertEqual(saved.rows.map(\.key), [1, 2, 3])
-        XCTAssertEqual(saved.focus, 2)
-        XCTAssertEqual(saved.item(holding: 2)?.stack.count, 2)
-        XCTAssertEqual(saved.item(holding: 2)?.stack.copyDepth, 6)
-        XCTAssertNoThrow(try SearchRequest(requirements: saved.rows))
-
-        let chip = [try requirement(1, item: "ring_might", upgrade: 2, upgradeMatch: .exactly),
-                    try requirement(7, item: "ring_might", maximumDepth: 9)]
-        let again = try XCTUnwrap(RequirementBoard.apply(
-            [.save(key: 1, requirement: chip[0], count: 2, total: nil, copyDepth: 9)], to: chip))
-        XCTAssertFalse(again.changed)
-        XCTAssertEqual(again.focus, 1)
-        XCTAssertEqual(again.rows, chip)
-    }
-
     /// Stack edits in one request, the way the cluster's stack sheet sends
     /// its count and copy floor together.
     func testStackEditsRunInOrder() throws {
@@ -266,9 +244,14 @@ final class RequirementEditorTests: XCTestCase {
         let named = try requirement(1, item: "wand_frost", excludeResin: true)
         let three = try XCTUnwrap(RequirementBoard.apply([.setCount(1, 3)], to: [named]))
         XCTAssertEqual(three.items.map(\.stack.count), [3])
-        let resaved = try XCTUnwrap(RequirementBoard.apply(
-            [.save(key: 1, requirement: named, count: 3, total: nil, copyDepth: nil)], to: three.rows))
+        // Its sheet opens on the whole stack and saves it back as it was.
+        let sheet = try XCTUnwrap(RequirementSheet.open(rows: three.rows, key: 1))
+        XCTAssertEqual(sheet.form.stack.count, 3)
+        guard case .saved(let resaved) = try XCTUnwrap(sheet.save(onto: three.rows)) else {
+            return XCTFail("an unchanged stack must save")
+        }
         XCTAssertFalse(resaved.changed)
+        XCTAssertEqual(resaved.rows, three.rows)
     }
 
     /// The resin condition the query holds draws its chip; a query without

@@ -1,13 +1,9 @@
 import SeedSeekerKit
 import SwiftUI
 
-/// Resolve the full selected set in catalog order, as the web's effectGlows
-/// does. "Any enchantment" has no fixed sprite colour of its own.
-func requirementGlows(_ effect: EffectFilter) -> [ItemGlow] {
-    effect.names.map { enchantmentGlows[$0] ?? curseGlow }
-}
-
-/// The glows a board chip's sprite pulses through, as `requirementGlows`.
+/// The glows a board chip's sprite pulses through: the full selected set in
+/// catalog order, as the web's effectGlows does. "Any enchantment" has no
+/// fixed sprite colour of its own.
 func chipGlows(_ effect: ChipEffect?) -> [ItemGlow] {
     (effect?.glowNames ?? []).map { enchantmentGlows[$0] ?? curseGlow }
 }

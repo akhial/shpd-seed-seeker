@@ -14,7 +14,7 @@ struct RequirementsView: View {
     @Namespace private var glass
     @GestureState private var gestureActive = false
     @State private var editor: RequirementsEditorPresentation?
-    @State private var resinPresented = false
+    @State private var resinEditor: RequirementsResinPresentation?
     @State private var blanketsExpanded = false
     @State private var blanketHelp = false
     @State private var chipFrames: [String: CGRect] = [:]
@@ -24,7 +24,6 @@ struct RequirementsView: View {
     @State private var liftGeneration = UUID()
     @State private var suppressEditingUntil = Date.distantPast
     @State private var stackKey: RequirementsStackPresentation?
-    @State private var resinSource = "resin"
     @State private var landedKey: Int64?
     /// Why the last drop could not join, shown in the hint's place for a moment.
     @State private var notice: String?
@@ -108,45 +107,27 @@ struct RequirementsView: View {
         .onDisappear { resetLift() }
         .sheet(item: $editor) { presentation in
             RequirementsEditor(
-                editing: presentation.key.flatMap { key in requirements.first { $0.key == key } },
-                otherRequirements: requirements.filter { $0.key != presentation.key },
-                blanket: presentation.blanket,
-                editingCount: presentation.count,
-                editingTotal: presentation.total,
-                editingCopyDepth: presentation.copyDepth,
-                onAddResin: presentation.blanket ? nil : {
+                sheet: presentation.sheet,
+                onPickResin: { picked in
+                    // Arcane Resin has a sheet of its own; the picked draft
+                    // moves there, with the wand chip it may replace.
                     editor = nil
                     Task { @MainActor in
                         try? await Task.sleep(for: .milliseconds(350))
-                        resinSource = presentation.source
-                        resinPresented = true
+                        resinEditor = RequirementsResinPresentation(sheet: picked, source: presentation.source)
                     }
                 },
                 onEditGroupQuantity: groupQuantityAction(for: presentation),
-                onSave: { requirement, count, total, copyDepth in
-                    // The board writes the chip and its stack through the
-                    // shared core's `save`, which may refuse it; the editor
-                    // then stays open and says why.
-                    let result = apply([.save(key: presentation.key, requirement: requirement,
-                                              count: count, total: total, copyDepth: copyDepth)])
-                    if let refusal = result?.refusal { return refusal.message }
-                    if presentation.key == nil { land(result?.focus) }
-                    return nil
-                },
+                onSave: { save($0) },
                 onRemove: presentation.key.map { key in { remove(key: key) } }
             )
             .navigationTransition(.zoom(sourceID: presentation.source, in: sheetZoom))
         }
-        .sheet(isPresented: $resinPresented) {
-            RequirementsResinEditor(initialAmount: query.arcaneResin, initialAuto: query.arcaneResinAuto,
-                                    initialFilter: query.arcaneResinFilter,
+        .sheet(item: $resinEditor) { presentation in
+            RequirementsResinEditor(sheet: presentation.sheet,
                                     hasRequirement: query.arcaneResinAuto || query.arcaneResin > 0,
-                                    onSave: { amount, auto, filter in
-                                        query.arcaneResin = amount
-                                        query.arcaneResinAuto = auto
-                                        query.arcaneResinFilter = filter
-                                    }, onRemove: removeResin)
-                .navigationTransition(.zoom(sourceID: resinSource, in: sheetZoom))
+                                    onSave: { save($0) }, onRemove: removeResin)
+                .navigationTransition(.zoom(sourceID: presentation.source, in: sheetZoom))
         }
         .sheet(item: $stackKey) { presentation in
             if let item = snapshot.item(holding: presentation.id) {
@@ -190,7 +171,9 @@ struct RequirementsView: View {
                 resinChip(resin)
             }
             Button {
-                editor = RequirementsEditorPresentation(blanket: blanket, source: blanket ? "add-blanket" : "add")
+                openEditor(RequirementSheet.open(rows: requirements, blanket: blanket, resin: query.boardResin,
+                                                 offerResin: true),
+                           key: nil, source: blanket ? "add-blanket" : "add")
             } label: {
                 Label("Add", systemImage: "plus")
                     .font(.subheadline.weight(.semibold))
@@ -252,9 +235,10 @@ struct RequirementsView: View {
 
     private func resinChip(_ resin: BoardResinChip) -> some View {
         Button {
-            guard lift == nil, Date.now >= suppressEditingUntil else { return }
-            resinSource = "resin"
-            resinPresented = true
+            guard lift == nil, Date.now >= suppressEditingUntil,
+                  let sheet = RequirementSheet.open(rows: requirements, resin: query.boardResin,
+                                                    openResin: true) else { return }
+            resinEditor = RequirementsResinPresentation(sheet: sheet, source: "resin")
         } label: {
             resinContent(resin)
                 .glassEffect(.regular.tint(.orange.opacity(0.05)).interactive(), in: .capsule)
@@ -292,9 +276,9 @@ struct RequirementsView: View {
         let hovered = hoverKey == chip.key
         return Button {
             guard lift == nil, Date.now >= suppressEditingUntil else { return }
-            editor = RequirementsEditorPresentation(key: chip.key, blanket: item.blanket,
-                                                   count: item.stack.count, total: item.stack.total,
-                                                   copyDepth: item.stack.copyDepth, source: id)
+            openEditor(RequirementSheet.open(rows: requirements, key: chip.key, resin: query.boardResin,
+                                             offerResin: true),
+                       key: chip.key, source: id)
         } label: {
             chipContent(chip, item: item)
                 .glassEffect(.regular.tint(chipTint(chip, hovered: hovered)).interactive(), in: .capsule)
@@ -538,6 +522,46 @@ struct RequirementsView: View {
         }
     }
 
+    /// Shows a sheet the shared core opened as the chip or "Add" was tapped,
+    /// never from the sheet's own builder, which runs again on every update.
+    private func openEditor(_ sheet: RequirementSheet?, key: Int64?, source: String) {
+        guard let sheet else { return }
+        editor = RequirementsEditorPresentation(sheet: sheet, key: key, source: source)
+    }
+
+    /// Saves a sheet onto the list as it is now, through the shared core:
+    /// the rows it writes back — only when they changed — and the query's
+    /// resin when the sheet set or cleared it. Answers the sheet to keep
+    /// showing when the core refused the save; its errors say why.
+    private func save(_ sheet: RequirementSheet) -> RequirementSheet? {
+        guard let outcome = sheet.save(onto: requirements) else { return sheet }
+        switch outcome {
+        case .refused(let refused):
+            return refused
+        case .saved(let saved):
+            withAnimation(boardSpring) {
+                if saved.changed { query.requirements = saved.rows }
+                switch saved.resin {
+                case .set(let condition):
+                    query.arcaneResin = condition.amount
+                    query.arcaneResinAuto = condition.auto
+                    query.arcaneResinFilter = condition.filter
+                case .clear:
+                    query.arcaneResin = 0
+                    query.arcaneResinAuto = false
+                    query.arcaneResinFilter = ArcaneResinFilter()
+                case .unchanged:
+                    break
+                }
+            }
+            // Keys the core had to repair carry the chip the board is
+            // following along with them.
+            if saved.changed { landedKey = landedKey.map { saved.key(following: $0) } }
+            if sheet.form.mode == .new { land(saved.focus) }
+            return nil
+        }
+    }
+
     /// A new chip lands lit: its glass takes on the accent as the editor
     /// folds away, then cools to the board's own tint.
     private func land(_ key: Int64?) {
@@ -612,14 +636,19 @@ private struct RequirementChipFrames: PreferenceKey {
 }
 
 private struct RequirementsEditorPresentation: Identifiable {
-    var id = UUID()
-    var key: Int64?
-    var blanket: Bool
-    var count = 1
-    var total: Int?
-    var copyDepth: Int?
+    let id = UUID()
+    let sheet: RequirementSheet
+    /// The row the sheet was opened on, nil for a new chip.
+    let key: Int64?
     /// The chip or Add button the editor grows from.
-    var source: String
+    let source: String
+}
+
+private struct RequirementsResinPresentation: Identifiable {
+    let id = UUID()
+    let sheet: RequirementSheet
+    /// The resin chip, or the chip whose sheet picked Arcane Resin.
+    let source: String
 }
 
 private struct RequirementsStackPresentation: Identifiable {
@@ -638,22 +667,6 @@ struct RequirementsChipSprite: View {
                 ItemSpriteView(item: item, glows: chipGlows(chip.effect), pointSize: size)
             } else if let kind = chip.kind {
                 WildcardSpriteView(kind: kind, pointSize: size)
-            }
-        }
-        .frame(width: CGFloat(size), height: CGFloat(size))
-        .accessibilityHidden(true)
-    }
-}
-
-struct RequirementsSprite: View {
-    let requirement: ItemRequirement
-    var size: Int = 32
-    var body: some View {
-        Group {
-            if let item = requirement.item {
-                ItemSpriteView(item: item, glows: requirementGlows(requirement.effect), pointSize: size)
-            } else {
-                WildcardSpriteView(kind: requirement.kind, pointSize: size)
             }
         }
         .frame(width: CGFloat(size), height: CGFloat(size))
@@ -739,7 +752,7 @@ private struct RequirementsStackEditor: View {
                 if count > 1 {
                     Section {
                         Toggle("Limit the extra copies to a floor", isOn: Binding(get: { copyDepth != nil }, set: { copyDepth = $0 ? 4 : nil }))
-                        if copyDepth != nil { RequirementsFloorPicker(title: "Copies within first", depth: $copyDepth, allowsNone: false) }
+                        if copyDepth != nil { RequirementsCopyFloorPicker(title: "Copies within first", depth: $copyDepth) }
                     } footer: {
                         Text("A floor limit is where an item lies, not what it is, so the copies keep their own.")
                     }
@@ -755,5 +768,34 @@ private struct RequirementsStackEditor: View {
             }
         }
         .presentationDetents([.medium, .large])
+    }
+}
+
+/// The cluster stack sheet's floor slider for the extra copies, over the
+/// floors a search may be limited to.
+private struct RequirementsCopyFloorPicker: View {
+    let title: String
+    @Binding var depth: Int?
+
+    private var selection: Binding<Double> {
+        Binding(get: {
+            Double(depth.map { FloorLimits.index(of: $0) } ?? 0)
+        }, set: { value in
+            depth = FloorLimits.options[min(max(Int(value.rounded()), 0), FloorLimits.options.count - 1)]
+        })
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack {
+                Text(title).font(.subheadline.weight(.semibold))
+                Spacer()
+                Text(depth.map { "\($0) floor\($0 == 1 ? "" : "s")" } ?? "")
+                    .font(.subheadline).foregroundStyle(.tint)
+            }
+            RequirementGraduatedSlider(title: title, value: selection,
+                                       bounds: 0...Double(FloorLimits.options.count - 1))
+                .accessibilityValue(depth.map { "Floor \($0)" } ?? "")
+        }
     }
 }

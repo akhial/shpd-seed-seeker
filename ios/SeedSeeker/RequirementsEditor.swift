@@ -1,119 +1,47 @@
 import SwiftUI
 import SeedSeekerKit
 
+/// The requirement sheet. Every control is drawn from the shared core's
+/// form — whether it shows, what it offers, its bounds and its words — and
+/// each move is one change sent to the core, whose answer is the form drawn
+/// next. The sheet keeps what is its own: the two pages, the glass, the
+/// title and buttons, and the help text under a few controls.
 struct RequirementsEditor: View {
     @Environment(\.dismiss) private var dismiss
-    let editing: ItemRequirement?
-    let otherRequirements: [ItemRequirement]
-    let blanket: Bool
-    let onAddResin: (() -> Void)?
+    /// Hands the sheet over to the resin sheet once Arcane Resin is picked.
+    let onPickResin: (RequirementSheet) -> Void
     let onEditGroupQuantity: (() -> Void)?
-    /// Hands the draft and its stack to the board; answers why the board
-    /// refused it, keeping the editor open.
-    let onSave: (ItemRequirement, Int, Int?, Int?) -> String?
+    /// Saves the sheet onto the board; answers the sheet to keep showing
+    /// when the core refused the save, its errors saying why.
+    let onSave: (RequirementSheet) -> RequirementSheet?
     let onRemove: (() -> Void)?
 
+    /// The sheet as the core last answered it.
+    @State private var sheet: RequirementSheet
     @State private var details: Bool
-    @State private var kind: ItemKind
-    @State private var selectedItem: CatalogItem?
-    @State private var tierMatch: TierMatch
-    @State private var tier: Int
-    @State private var upgradeMatch: UpgradeMatch
-    @State private var upgrade: Int
-    @State private var effectMode: Int
-    @State private var selectedEffects: Set<String>
-    @State private var source: ScoutItemSource?
-    @State private var maximumDepth: Int?
-    @State private var requireUncursed: Bool
-    @State private var selectTrinket: Bool
-    @State private var trinketTransmutations: Int
-    @State private var artifactTransmutations: Int
-    @State private var excludeResin: Bool
-    @State private var stackCount: Int
-    @State private var stackTotal: Int?
-    @State private var copyDepth: Int?
-    /// Why the board refused the last save.
-    @State private var refusal: String?
     @Namespace private var editorGlass
     @Namespace private var selectorGlass
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    init(editing: ItemRequirement?, otherRequirements: [ItemRequirement], blanket: Bool,
-         editingCount: Int = 1, editingTotal: Int? = nil, editingCopyDepth: Int? = nil,
-         onAddResin: (() -> Void)? = nil,
+    init(sheet: RequirementSheet,
+         onPickResin: @escaping (RequirementSheet) -> Void,
          onEditGroupQuantity: (() -> Void)? = nil,
-         onSave: @escaping (ItemRequirement, Int, Int?, Int?) -> String?,
+         onSave: @escaping (RequirementSheet) -> RequirementSheet?,
          onRemove: (() -> Void)? = nil) {
-        self.editing = editing
-        self.otherRequirements = otherRequirements
-        self.blanket = blanket
-        self.onAddResin = onAddResin
+        self.onPickResin = onPickResin
         self.onEditGroupQuantity = onEditGroupQuantity
         self.onSave = onSave
         self.onRemove = onRemove
-        _details = State(initialValue: editing != nil)
-        let kind = editing?.kind ?? .weapon
-        _kind = State(initialValue: kind)
-        _selectedItem = State(initialValue: editing == nil ? (blanket && kind != .trinket && kind != .artifact ? nil : Self.items(for: kind).first) : editing?.item)
-        _tierMatch = State(initialValue: editing?.tierMatch ?? .any)
-        _tier = State(initialValue: max(2, editing?.tier ?? 2))
-        _upgradeMatch = State(initialValue: editing?.upgradeMatch ?? .exactly)
-        _upgrade = State(initialValue: editing?.upgrade ?? 1)
-        _effectMode = State(initialValue: editing?.effect == .anyEnchantment ? 1 : editing?.effect.names.isEmpty == false ? 2 : 0)
-        _selectedEffects = State(initialValue: Set(editing?.effect.names ?? []))
-        _source = State(initialValue: editing?.source)
-        _maximumDepth = State(initialValue: editing?.maximumDepth)
-        _requireUncursed = State(initialValue: editing?.requireUncursed ?? false)
-        _selectTrinket = State(initialValue: editing?.selectTrinket ?? false)
-        _trinketTransmutations = State(initialValue: editing?.trinketTransmutations ?? 0)
-        _artifactTransmutations = State(initialValue: editing?.artifactTransmutations ?? 0)
-        _excludeResin = State(initialValue: editing?.excludeResin ?? false)
-        _stackCount = State(initialValue: min(SearchLimits.stackMax, max(1, editingCount)))
-        _stackTotal = State(initialValue: editingTotal)
-        _copyDepth = State(initialValue: editingCopyDepth)
+        _sheet = State(initialValue: sheet)
+        _details = State(initialValue: sheet.form.mode == .edit)
     }
 
-    private var namedOnly: Bool { kind == .trinket || kind == .artifact }
-    private var inAlternative: Bool { editing?.alternativeGroup != nil }
-    private var ceiling: Int {
-        SearchLimits.maximumUpgrade(kind: kind, item: selectedItem,
-                                    tier: tierMatch == .any ? 0 : tier, tierMatch: tierMatch)
-    }
-    private var levelCapacity: Int {
-        min(((upgradeMatch == .exactly ? upgrade : ceiling) + 1) * stackCount,
-            SearchLimits.ringStackCapacity(stackCount))
-    }
+    private var form: SheetForm { sheet.form }
+
     private var title: String {
-        if blanket { return editing == nil ? "Add blanket requirement" : "Edit blanket requirement" }
-        if editing == nil { return "Add requirement" }
-        return inAlternative ? "Edit alternative" : "Edit requirement"
-    }
-    private var duplicateTrinket: Bool {
-        !blanket && kind == .trinket && selectedItem != nil &&
-        otherRequirements.contains { !$0.blanket && $0.item?.id == selectedItem?.id }
-    }
-    private var effect: EffectFilter {
-        if effectMode == 1 { return .anyEnchantment }
-        guard effectMode == 2 else { return .any }
-        let ordered = ItemCatalog.modifiersFor(kind).filter { selectedEffects.contains($0) }
-        return ordered.isEmpty ? .any : .oneOf(ordered)
-    }
-    private var draft: ItemRequirement? {
-        guard !duplicateTrinket else { return nil }
-        return try? ItemRequirement(
-            key: editing?.key ?? 0, item: selectedItem, upgrade: namedOnly ? 0 : upgrade,
-            effect: effect, kind: kind, tier: tierMatch == .any ? 0 : tier,
-            tierMatch: tierMatch, upgradeMatch: namedOnly ? .any : upgradeMatch,
-            source: kind == .trinket ? nil : source,
-            identityGroup: blanket || namedOnly ? nil : editing?.identityGroup,
-            maximumDepth: kind == .trinket ? nil : maximumDepth,
-            requireUncursed: kind != .trinket && requireUncursed,
-            alternativeGroup: editing?.alternativeGroup,
-            selectTrinket: !blanket && kind == .trinket && trinketTransmutations == 0 && selectTrinket,
-            trinketTransmutations: kind == .trinket ? trinketTransmutations : 0,
-            artifactTransmutations: kind == .artifact ? artifactTransmutations : 0,
-            blanket: blanket, excludeResin: !blanket && kind == .wand && excludeResin
-        )
+        if form.blanket { return form.mode == .new ? "Add blanket requirement" : "Edit blanket requirement" }
+        if form.mode == .new { return "Add requirement" }
+        return form.inCluster ? "Edit alternative" : "Edit requirement"
     }
 
     var body: some View {
@@ -129,15 +57,6 @@ struct RequirementsEditor: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } }
             }
-            .onAppear { normalizeBounds() }
-            .onChange(of: upgradeMatch) { _, _ in normalizeBounds() }
-            .onChange(of: tierMatch) { _, match in
-                if match == .atLeast || match == .atMost { tier = min(4, max(3, tier)) }
-                normalizeBounds()
-            }
-            .onChange(of: tier) { _, _ in normalizeBounds() }
-            .onChange(of: upgrade) { _, _ in clampTotal() }
-            .onChange(of: stackCount) { _, _ in clampTotal() }
         }
         .presentationDetents([.large])
         .presentationDragIndicator(.visible)
@@ -146,16 +65,16 @@ struct RequirementsEditor: View {
     private var itemPage: some View {
         ScrollView {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 100), spacing: 10)], spacing: 10) {
-                ForEach(Self.items(for: kind)) { item in
-                    itemCard(item)
+                ForEach(form.item.options.filter(\.isCatalogItem)) { option in
+                    itemCard(option)
                 }
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 12)
             // The category lens slides; the catalog underneath simply swaps.
-            .transaction(value: kind) { $0.animation = nil }
+            .transaction(value: form.category.value) { $0.animation = nil }
         }
-        .sensoryFeedback(.selection, trigger: selectedItem?.id)
+        .sensoryFeedback(.selection, trigger: form.item.value)
         .safeAreaBar(edge: .top, spacing: 0) { itemSelectors }
         .scrollEdgeEffectStyle(.soft, for: .vertical)
     }
@@ -165,9 +84,10 @@ struct RequirementsEditor: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 GlassEffectContainer(spacing: 8) {
                     HStack(spacing: 8) {
-                        ForEach([ItemKind.weapon, .armor, .wand, .ring, .trinket, .artifact], id: \.rawValue) { entry in
-                            choice(entry.label, id: "kind-\(entry.rawValue)", lens: "family", selected: kind.family == entry) {
-                                changeKind(entry)
+                        ForEach(form.category.options) { option in
+                            choice(option.label, id: "kind-\(option.id)", lens: "family",
+                                   selected: form.category.value == option.value) {
+                                send(.category(option.value ?? ""))
                             }
                         }
                     }
@@ -179,25 +99,23 @@ struct RequirementsEditor: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 GlassEffectContainer(spacing: 7) {
                     HStack(spacing: 7) {
-                        if !namedOnly {
-                            choice("Any \(kind.label.lowercased())", id: "any", lens: "any", selected: selectedItem == nil) {
-                                selectedItem = nil
-                                normalizeBounds()
+                        // The wildcard and Arcane Resin lead the item row; the
+                        // catalog's own items are the grid below.
+                        ForEach(form.item.options.filter { !$0.isCatalogItem }) { option in
+                            if option.isArcaneResin {
+                                choice(option.label, id: "resin", lens: "resin", selected: false) { pickResin() }
+                            } else {
+                                choice(option.label, id: "any", lens: "any",
+                                       selected: !form.resinPicked && form.item.value == nil) {
+                                    send(.item(nil))
+                                }
                             }
                         }
-                        if kind == .wand, let onAddResin {
-                            choice("Arcane Resin", id: "resin", lens: "resin", selected: false, action: onAddResin)
-                        }
-                        if kind.family == .weapon {
-                            ForEach([ItemKind.weapon, .meleeWeapon, .thrownWeapon], id: \.rawValue) { entry in
-                                choice(entry == .weapon ? "All" : entry == .meleeWeapon ? "Melee" : "Thrown",
-                                       id: "subkind-\(entry.rawValue)", lens: "weapon-kind", selected: kind == entry) {
-                                    if kind != entry {
-                                        kind = entry
-                                        if selectedItem.map(entry.accepts) != true { selectedItem = Self.items(for: entry).first }
-                                        tierMatch = .any
-                                        normalizeBounds()
-                                    }
+                        if form.weaponType.visible {
+                            ForEach(form.weaponType.options) { option in
+                                choice(option.label, id: "subkind-\(option.id)", lens: "weapon-kind",
+                                       selected: form.weaponType.value == option.value) {
+                                    send(.weaponType(option.value ?? ""))
                                 }
                             }
                         }
@@ -211,20 +129,17 @@ struct RequirementsEditor: View {
         }
     }
 
-    private func itemCard(_ item: CatalogItem) -> some View {
-        let selected = selectedItem?.id == item.id
+    private func itemCard(_ option: SheetOption) -> some View {
+        let selected = !form.resinPicked && form.item.value == option.value
         return Button {
-            withAnimation(AppTheme.glassSpring(reduceMotion)) {
-                selectedItem = item
-                tierMatch = .any
-                normalizeBounds()
-            }
+            withAnimation(AppTheme.glassSpring(reduceMotion)) { send(.item(option.value)) }
         } label: {
             VStack(spacing: 9) {
-                ItemSpriteView(item: item, pointSize: 43).frame(height: 48)
+                ItemSpriteView(item: option.value.flatMap { ItemCatalog.findById($0) }, pointSize: 43)
+                    .frame(height: 48)
                     .scaleEffect(selected && !reduceMotion ? 1.14 : 1)
                     .offset(y: selected && !reduceMotion ? -2 : 0)
-                Text(item.name)
+                Text(option.label)
                     .font(.caption.weight(.medium))
                     .lineLimit(3)
                     .multilineTextAlignment(.center)
@@ -258,59 +173,44 @@ struct RequirementsEditor: View {
     private var detailsPage: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                if kind == .trinket { trinketControls }
-                if kind == .artifact { artifactControls }
-                if selectedItem == nil && (kind.family == .weapon || kind.family == .armor) { tierControls }
-                if !namedOnly { upgradeControls }
-                if let label = kind.modifierLabel { effectControls(label: label) }
-                if kind != .trinket { placementControls }
-                if !blanket && kind == .wand {
+                if form.transmutations.visible || form.selectTrinket.visible { trinketControls }
+                if form.tier.visible { tierControls }
+                if form.upgrade.visible { upgradeControls }
+                if form.effect.visible { effectControls }
+                if form.uncursed.visible || form.source.visible || form.floorLimit.visible { placementControls }
+                if form.excludeResin.visible {
                     VStack(alignment: .leading, spacing: 8) {
-                        Toggle("Exclude from Auto resin", isOn: $excludeResin)
+                        Toggle(form.excludeResin.label, isOn: flag(form.excludeResin.value) { .excludeResin($0) })
                         explanation("Keep this wand without budgeting resin to upgrade it. Useful for imbuing: resin upgrades do not transfer to the staff. Extra copies are reserved for reforging and never need Auto resin.")
                     }
                 }
-                if !blanket && !inAlternative && !namedOnly { stackControls }
-                if let onEditGroupQuantity, !namedOnly { groupQuantityButton(action: onEditGroupQuantity) }
+                if form.stack.visible { stackControls }
+                if let onEditGroupQuantity, form.inCluster { groupQuantityButton(action: onEditGroupQuantity) }
             }
             .padding(20)
         }
     }
 
+    /// Transmutations, and choosing a trinket at +3.
     private var trinketControls: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Toggle("Allow transmutations", isOn: Binding(get: { trinketTransmutations > 0 }, set: {
-                trinketTransmutations = $0 ? 1 : 0
-                if $0 { selectTrinket = false }
-            }))
-            if trinketTransmutations > 0 {
-                Stepper(value: $trinketTransmutations, in: 1...13) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Maximum transmutations")
-                        Text("At most \(trinketTransmutations)").foregroundStyle(.tint)
+            if form.transmutations.visible {
+                Toggle(form.transmutations.label,
+                       isOn: flag(form.transmutations.enabled) { .transmutationsEnabled($0) })
+                if form.transmutations.enabled {
+                    Stepper(value: number(form.transmutations.value) { .transmutations($0) },
+                            in: form.transmutations.range) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Maximum transmutations")
+                            Text(form.transmutations.valueLabel).foregroundStyle(.tint)
+                        }
                     }
+                    if let caption = form.transmutations.caption { explanation(caption) }
                 }
-                explanation("Includes the initial offers. AutoTrinket can use a helpful starting trinket. Scroll availability and effects after transmuting are not simulated.")
-            } else if !blanket {
-                Toggle("Choose matching trinket at +3", isOn: $selectTrinket)
-                explanation("Applies after the first brewing opportunity. If several alternatives are offered, no trinket is chosen.")
             }
-        }
-    }
-
-    private var artifactControls: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Toggle("Allow transmutations", isOn: Binding(get: { artifactTransmutations > 0 }, set: {
-                artifactTransmutations = $0 ? 1 : 0
-            }))
-            if artifactTransmutations > 0 {
-                Stepper(value: $artifactTransmutations, in: 1...10) {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Maximum transmutations")
-                        Text("At most \(artifactTransmutations)").foregroundStyle(.tint)
-                    }
-                }
-                explanation("Includes natural finds or transforms an obtainable artifact using the remaining deck at the floor limit. Source and curse filters apply to the starting artifact. Scroll availability and later generation changes are not simulated.")
+            if form.selectTrinket.visible {
+                Toggle(form.selectTrinket.label, isOn: flag(form.selectTrinket.value) { .selectTrinket($0) })
+                explanation("Applies after the first brewing opportunity. If several alternatives are offered, no trinket is chosen.")
             }
         }
     }
@@ -318,51 +218,48 @@ struct RequirementsEditor: View {
     private var tierControls: some View {
         VStack(alignment: .leading, spacing: 10) {
             heading("Tier")
-            RequirementSegmentedControl(title: "Tier", options: TierMatch.allCases.map { ($0, $0.label) }, selection: $tierMatch)
-            if tierMatch == .exactly {
-                valueRow("Exact tier", "Tier \(tier)")
-                RequirementGraduatedSlider(title: "Exact tier", value: Binding(get: { Double(tier) }, set: { tier = Int($0.rounded()) }), bounds: 2...5)
-            } else if tierMatch != .any {
-                Picker(tierMatch == .atLeast ? "Minimum tier" : "Maximum tier", selection: $tier) {
-                    ForEach(Array(SearchLimits.boundedTiers), id: \.self) { value in Text("Tier \(value)").tag(value) }
-                }.pickerStyle(.menu)
-            }
+            RequirementSegmentedControl(title: "Tier", options: form.tier.modes.map { ($0.value ?? "", $0.label) },
+                                        selection: pick(form.tier.mode) { .tierMode($0) })
+            if form.tier.hasValue { valueSlider(form.tier) { .tier($0) } }
         }
     }
 
     private var upgradeControls: some View {
         VStack(alignment: .leading, spacing: 10) {
             heading("Upgrade")
-            RequirementSegmentedControl(title: "Upgrade", options: UpgradeMatch.allCases.map { ($0, $0.label) }, selection: $upgradeMatch)
-            if upgradeMatch == .exactly {
-                valueRow("Level", "+\(upgrade)", isUpgrade: true)
-                RequirementGraduatedSlider(title: "Level", value: Binding(get: { Double(upgrade) }, set: { upgrade = Int($0.rounded()) }),
-                                           bounds: 1...Double(max(2, ceiling)))
-            } else if upgradeMatch == .atLeast {
-                valueRow("At least", "+\(upgrade) or higher", isUpgrade: true)
-                RequirementGraduatedSlider(title: "Minimum upgrade", value: Binding(get: { Double(upgrade) }, set: { upgrade = Int($0.rounded()) }),
-                                           bounds: 1...Double(max(2, ceiling - 1)))
-            }
+            RequirementSegmentedControl(title: "Upgrade", options: form.upgrade.modes.map { ($0.value ?? "", $0.label) },
+                                        selection: pick(form.upgrade.mode) { .upgradeMode($0) })
+            if form.upgrade.hasValue { valueSlider(form.upgrade, isUpgrade: true) { .upgrade($0) } }
         }
     }
 
-    private func effectControls(label: String) -> some View {
+    /// A mode's value in words, and a slider over the bounds the core gives.
+    private func valueSlider(_ control: SheetModeRange, isUpgrade: Bool = false,
+                             _ change: @escaping @Sendable (Int) -> SheetChange) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            heading(label)
-            RequirementSegmentedControl(title: label,
-                                        options: [(0, "Any"), (1, "Any \(label.lowercased())"), (2, "Specific…")],
-                                        selection: $effectMode)
-            if effectMode == 2 {
-                effectGrid(heading: kind.family == .weapon ? "Enchantments" : "Glyphs", names: kind.enchantmentNames)
-                if !requireUncursed { effectGrid(heading: "Curses", names: ItemCatalog.cursesFor(kind)) }
-                if selectedEffects.isEmpty {
-                    explanation("Nothing picked yet — any \(label.lowercased()) is accepted until you do.")
-                }
+            valueRow(control.modeLabel, control.valueLabel, isUpgrade: isUpgrade)
+            if control.isAdjustable {
+                RequirementGraduatedSlider(title: control.modeLabel, value: slider(control.value, change),
+                                           bounds: Double(control.min)...Double(control.max))
             }
         }
     }
 
-    private func effectGrid(heading: String, names: [String]) -> some View {
+    private var effectControls: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            heading("Effect")
+            RequirementSegmentedControl(title: "Effect", options: form.effect.modes.map { ($0.value ?? "", $0.label) },
+                                        selection: pick(form.effect.mode) { .effectMode($0) })
+            if form.effect.isSpecific {
+                ForEach(form.effect.groups) { group in
+                    effectGrid(heading: group.label, choices: form.effect.choices(in: group.value))
+                }
+                explanation(form.effect.caption)
+            }
+        }
+    }
+
+    private func effectGrid(heading: String, choices: [SheetEffectChoice]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 12) {
                 Rectangle().fill(Color(uiColor: .separator)).frame(height: 0.5)
@@ -375,24 +272,22 @@ struct RequirementsEditor: View {
             .padding(.vertical, 6)
             GlassEffectContainer(spacing: 8) {
                 RequirementsFlowLayout(spacing: 8) {
-                    ForEach(names, id: \.self) { name in
-                        effectChip(name, color: enchantmentGlows[name].map(AppTheme.glowDisplayColor) ?? AppTheme.curse)
+                    ForEach(choices) { effect in
+                        effectChip(effect, color: enchantmentGlows[effect.value].map(AppTheme.glowDisplayColor) ?? AppTheme.curse)
                     }
                 }
             }
         }
-        .sensoryFeedback(.selection, trigger: selectedEffects)
+        .sensoryFeedback(.selection, trigger: choices)
     }
 
     /// Each enchantment is glass tinted with the colour the item will glow in
     /// the game, so the chosen set reads like the pulsing sprite it describes.
     /// Its marker keeps one size, so choosing never reflows the chips.
-    private func effectChip(_ name: String, color: Color) -> some View {
-        let selected = selectedEffects.contains(name)
+    private func effectChip(_ effect: SheetEffectChoice, color: Color) -> some View {
+        let selected = effect.selected
         return Button {
-            withAnimation(AppTheme.glassSpring(reduceMotion)) {
-                if selected { selectedEffects.remove(name) } else { selectedEffects.insert(name) }
-            }
+            withAnimation(AppTheme.glassSpring(reduceMotion)) { send(.toggleEffect(effect.value)) }
         } label: {
             HStack(spacing: 7) {
                 ZStack {
@@ -406,7 +301,7 @@ struct RequirementsEditor: View {
                         .opacity(selected ? 0 : 0.9)
                 }
                 .frame(width: 16, height: 16)
-                Text(name).font(.subheadline.weight(.medium))
+                Text(effect.label).font(.subheadline.weight(.medium))
                     .foregroundStyle(selected ? Color.primary : Color.primary.opacity(0.8))
             }
             .padding(.leading, 11).padding(.trailing, 14)
@@ -415,39 +310,49 @@ struct RequirementsEditor: View {
             .glassEffect(.regular.tint(selected ? color.opacity(0.34) : nil).interactive(), in: .capsule)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(name)
+        .accessibilityLabel(effect.label)
         .accessibilityAddTraits(selected ? [.isSelected] : [])
     }
 
     private var placementControls: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Toggle("Require uncursed", isOn: Binding(get: { requireUncursed }, set: { value in
-                requireUncursed = value
-                if value { selectedEffects.subtract(ItemCatalog.cursesFor(kind)) }
-            }))
-            RequirementSourceSelector(source: $source)
-            RequirementsFloorPicker(title: "Floor limit", depth: $maximumDepth)
+            if form.uncursed.visible {
+                Toggle(form.uncursed.label, isOn: flag(form.uncursed.value) { .uncursed($0) })
+            }
+            if form.source.visible {
+                RequirementSourceSelector(options: form.source.options,
+                                          selection: pickOptional(form.source.value) { .source($0) })
+            }
+            if form.floorLimit.visible {
+                RequirementsFloorControl(control: form.floorLimit,
+                                         enabled: flag(form.floorLimit.enabled) { .floorLimitEnabled($0) },
+                                         floor: number(form.floorLimit.value) { .floorLimit($0) })
+            }
         }
     }
 
     private var stackControls: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Stepper(value: $stackCount, in: 1...SearchLimits.stackMax) {
-                HStack { heading("How many"); Spacer(); Text("×\(stackCount)").foregroundStyle(.tint) }
+            Stepper(value: number(form.stack.count) { .count($0) }, in: form.stack.range) {
+                HStack { heading("How many"); Spacer(); Text(form.stack.valueLabel).foregroundStyle(.tint) }
             }
-            if stackCount > 1 && stackTotal == nil {
-                Toggle("Limit the extra copies to a floor", isOn: Binding(get: { copyDepth != nil }, set: { copyDepth = $0 ? 4 : nil }))
+            if form.stack.copyDepth.visible {
+                RequirementsFloorControl(control: form.stack.copyDepth,
+                                         enabled: flag(form.stack.copyDepth.enabled) { .copyDepthEnabled($0) },
+                                         floor: number(form.stack.copyDepth.value) { .copyDepth($0) })
                 explanation("A floor limit is where an item lies, not what it is, so the copies keep their own.")
-                if copyDepth != nil { RequirementsFloorPicker(title: "Copies within first", depth: $copyDepth, allowsNone: false) }
             }
-            if stackCount > 1 && selectedItem != nil && kind == .ring {
-                Toggle("Combined level", isOn: Binding(get: { stackTotal != nil }, set: { stackTotal = $0 ? max(1, levelCapacity) : nil }))
+            if form.stack.countLevels.visible {
+                Toggle(form.stack.countLevels.label, isOn: flag(form.stack.countLevels.enabled) { .countLevels($0) })
                 explanation("Each item counts its upgrade plus one, and spare items may go unused.")
-                if let total = stackTotal {
-                    valueRow("Levels together", "≥ \(total) of \(levelCapacity)")
-                    RequirementGraduatedSlider(title: "Combined level at least \(total)",
-                                               value: Binding(get: { Double(stackTotal ?? 1) }, set: { stackTotal = Int($0.rounded()) }),
-                                               bounds: 1...Double(max(2, levelCapacity)))
+                if form.stack.countLevels.enabled {
+                    valueRow("Levels together", form.stack.countLevels.valueLabel)
+                    if form.stack.countLevels.isAdjustable {
+                        RequirementGraduatedSlider(title: "Combined level",
+                                                   value: slider(form.stack.countLevels.value) { .total($0) },
+                                                   bounds: Double(form.stack.countLevels.min)...Double(form.stack.countLevels.max))
+                            .accessibilityValue(form.stack.countLevels.valueLabel)
+                    }
                 }
             }
         }
@@ -460,7 +365,7 @@ struct RequirementsEditor: View {
             HStack(spacing: 12) {
                 Text("How many").foregroundStyle(.primary)
                 Spacer(minLength: 8)
-                Text("×\(stackCount)").foregroundStyle(.secondary)
+                Text(form.stack.valueLabel).foregroundStyle(.secondary)
                 Image(systemName: "chevron.right")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
@@ -471,7 +376,7 @@ struct RequirementsEditor: View {
             .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 18))
         }
         .buttonStyle(.plain)
-        .disabled(draft == nil)
+        .disabled(!form.canSave)
     }
 
     private var footer: some View {
@@ -501,13 +406,13 @@ struct RequirementsEditor: View {
                             }
                             .buttonStyle(.plain)
                             .tint(.red)
-                            .accessibilityLabel(inAlternative ? "Remove alternative" : "Remove requirement")
+                            .accessibilityLabel(form.inCluster ? "Remove alternative" : "Remove requirement")
                             .glassEffectID("remove", in: editorGlass)
                         }
                         Spacer(minLength: 12)
-                        primaryAction(editing == nil ? "Add" : "Save", symbol: "checkmark", action: save)
-                            .disabled(draft == nil)
-                            .opacity(draft == nil ? 0.45 : 1)
+                        primaryAction(form.mode == .new ? "Add" : "Save", symbol: "checkmark", action: save)
+                            .disabled(!form.canSave)
+                            .opacity(form.canSave ? 1 : 0.45)
                     }
                 } else {
                     HStack {
@@ -524,23 +429,23 @@ struct RequirementsEditor: View {
         .padding(.bottom, 10)
     }
 
+    /// The chip the save would put on the board, or why it cannot be saved.
     private var requirementPreview: some View {
         HStack(spacing: 12) {
-            if let draft {
-                RequirementsSprite(requirement: draft, size: 36)
+            if let preview = form.preview {
+                RequirementsChipSprite(chip: preview, size: 36)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(draft.title).font(.subheadline.weight(.semibold))
-                    Text(draft.description.replacingOccurrences(of: " • ", with: " · "))
-                        .font(.caption).foregroundStyle(.secondary)
-                        .contentTransition(.numericText())
-                    if let refusal {
-                        Text(refusal).font(.caption).foregroundStyle(.red)
+                    Text(preview.title).font(.subheadline.weight(.semibold))
+                    if !preview.details.isEmpty {
+                        Text(preview.details.joined(separator: " · "))
+                            .font(.caption).foregroundStyle(.secondary)
+                            .contentTransition(.numericText())
                     }
                 }
-                .animation(reduceMotion ? nil : .snappy, value: draft.description)
+                .animation(reduceMotion ? nil : .snappy, value: preview.details)
                 .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                Text(duplicateTrinket ? "This trinket is already required. Each trinket appears only once in the deck." : "This requirement cannot be saved.")
+                Text(form.errors.joined(separator: "\n"))
                     .font(.caption).foregroundStyle(.red).frame(maxWidth: .infinity, alignment: .leading)
             }
         }
@@ -599,38 +504,12 @@ struct RequirementsEditor: View {
         .font(.subheadline)
     }
 
-    private func changeKind(_ entry: ItemKind) {
-        guard kind.family != entry else { return }
-        kind = entry
-        selectedItem = Self.items(for: entry).first
-        tierMatch = .any
-        tier = 2
-        effectMode = 0
-        selectedEffects = []
-        selectTrinket = false
-        trinketTransmutations = 0
-        artifactTransmutations = 0
-        if namedOnly {
-            stackCount = 1
-            stackTotal = nil
-            copyDepth = nil
-            upgradeMatch = .any
-            upgrade = 0
-            source = nil
-            requireUncursed = false
-        }
-        if entry != .ring { stackTotal = nil }
-        normalizeBounds()
-    }
-
-    private func normalizeBounds() {
-        if namedOnly || upgradeMatch == .any { upgrade = 0 }
-        else { upgrade = min(max(1, upgrade), upgradeMatch == .exactly ? ceiling : max(1, ceiling - 1)) }
-        clampTotal()
-    }
-
-    private func clampTotal() {
-        if let total = stackTotal { stackTotal = min(total, max(1, levelCapacity)) }
+    /// Arcane Resin is the query's own condition, edited on its own sheet:
+    /// the picked resin goes there, with the chip it may replace.
+    private func pickResin() {
+        guard let picked = sheet.changing(.item(RequirementSheet.arcaneResin)), picked.form.resinPicked else { return }
+        sheet = picked
+        onPickResin(picked)
     }
 
     private func save() {
@@ -639,44 +518,80 @@ struct RequirementsEditor: View {
     }
 
     private func saveDraft() -> Bool {
-        guard let draft else { return false }
-        let total = !blanket && !inAlternative && selectedItem != nil && kind == .ring && stackCount > 1 ? stackTotal : nil
-        let copies = !blanket && !inAlternative && stackCount > 1 && total == nil ? copyDepth : nil
-        refusal = onSave(draft, !blanket && !namedOnly ? stackCount : 1, total, copies)
-        return refusal == nil
+        guard let refused = onSave(sheet) else { return true }
+        sheet = refused
+        return false
     }
 
-    private static func items(for kind: ItemKind) -> [CatalogItem] {
-        ItemCatalog.forKind(kind).filter { $0.tier != 1 && !$0.isTippedDart }
+    // MARK: Changes
+
+    /// Sends one change; the core's answer is the sheet shown next. A change
+    /// the core cannot apply leaves the sheet as it was.
+    private func send(_ change: SheetChange) {
+        if let next = sheet.changing(change) { sheet = next }
+    }
+
+    // Each control reads the form and sends a change when it moves — none
+    // when it lands on the value shown, since sliders repeat theirs.
+
+    private func flag(_ value: Bool, _ change: @escaping @Sendable (Bool) -> SheetChange) -> Binding<Bool> {
+        Binding(get: { value }, set: { next in
+            if next != value { send(change(next)) }
+        })
+    }
+
+    private func number(_ value: Int, _ change: @escaping @Sendable (Int) -> SheetChange) -> Binding<Int> {
+        Binding(get: { value }, set: { next in
+            if next != value { send(change(next)) }
+        })
+    }
+
+    private func slider(_ value: Int, _ change: @escaping @Sendable (Int) -> SheetChange) -> Binding<Double> {
+        Binding(get: { Double(value) }, set: { next in
+            let rounded = Int(next.rounded())
+            if rounded != value { send(change(rounded)) }
+        })
+    }
+
+    private func pick(_ value: String, _ change: @escaping @Sendable (String) -> SheetChange) -> Binding<String> {
+        Binding(get: { value }, set: { next in
+            if next != value { send(change(next)) }
+        })
+    }
+
+    private func pickOptional(_ value: String?,
+                              _ change: @escaping @Sendable (String?) -> SheetChange) -> Binding<String?> {
+        Binding(get: { value }, set: { next in
+            if next != value { send(change(next)) }
+        })
     }
 }
 
-struct RequirementsFloorPicker: View {
-    let title: String
-    @Binding var depth: Int?
-    var allowsNone = true
+/// A floor limit as the shared core offers it: its switch and, while it is
+/// on, a slider over the floors it stops at, which skip the empty boss floors.
+struct RequirementsFloorControl: View {
+    let control: SheetFloorToggle
+    @Binding var enabled: Bool
+    @Binding var floor: Int
 
-    private var selection: Binding<Double> {
-        Binding(get: {
-            guard let depth else { return 0 }
-            return Double(FloorLimits.index(of: depth) + (allowsNone ? 1 : 0))
-        }, set: { value in
-            let index = Int(value.rounded()) - (allowsNone ? 1 : 0)
-            depth = index < 0 ? nil : FloorLimits.options[min(index, FloorLimits.options.count - 1)]
+    private var position: Binding<Double> {
+        Binding(get: { Double(control.index) }, set: { value in
+            if let next = control.floor(at: Int(value.rounded())) { floor = next }
         })
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
-            HStack {
-                Text(title).font(.subheadline.weight(.semibold))
-                Spacer()
-                Text(depth.map { allowsNone ? "≤ floor \($0)" : "\($0) floor\($0 == 1 ? "" : "s")" } ?? "Search limit")
-                    .font(.subheadline).foregroundStyle(.tint)
+            Toggle(control.label, isOn: $enabled)
+            if control.enabled {
+                HStack {
+                    Spacer()
+                    Text(control.valueLabel).font(.subheadline).foregroundStyle(.tint)
+                }
+                RequirementGraduatedSlider(title: control.label, value: position,
+                                           bounds: 0...Double(max(1, control.options.count - 1)))
+                    .accessibilityValue(control.valueLabel)
             }
-            RequirementGraduatedSlider(title: title, value: selection,
-                                       bounds: 0...Double(FloorLimits.options.count - (allowsNone ? 0 : 1)))
-                .accessibilityValue(depth.map { "Floor \($0)" } ?? "No limit")
         }
     }
 }

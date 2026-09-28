@@ -22,10 +22,6 @@ public enum BoardEdit: Sendable {
     case toggleLevels(Int64)
     /// Sets or clears the floor limit of the stack's hidden copies.
     case setCopyDepth(Int64, Int?)
-    /// Stores a requirement with its stack's shape: onto the row `key`, or
-    /// as a new row when `key` is nil. The requirement's own key and group
-    /// labels are ignored; the relationships are the board's to write.
-    case save(key: Int64?, requirement: ItemRequirement, count: Int, total: Int?, copyDepth: Int?)
 
     var object: [String: Any] {
         switch self {
@@ -47,11 +43,6 @@ public enum BoardEdit: Sendable {
             return ["type": "toggle_levels", "key": key]
         case .setCopyDepth(let key, let depth):
             return ["type": "set_copy_depth", "key": key, "max_depth": nullable(depth.map(wireByte))]
-        case .save(let key, let requirement, let count, let total, let copyDepth):
-            return ["type": "save", "key": nullable(key),
-                    "requirement": ResultsExport.encodeRequirement(requirement),
-                    "count": wireByte(count), "total": nullable(total.map(wireByte)),
-                    "copy_depth": nullable(copyDepth.map(wireByte))]
         }
     }
 }
@@ -103,8 +94,8 @@ public struct RequirementBoard: Sendable {
     /// Keys the core had to repair, a zero or repeated key say. Lists are
     /// keyed in order as they load, so this is normally empty.
     public let rekeyed: [BoardKeyChange]
-    /// The row to follow after the edits: the joined, detached or saved row's
-    /// entry. Nil after a removal and when no edit applied.
+    /// The row to follow after the edits: the joined or detached row, or the
+    /// entry an edit reshaped. Nil after a removal and when no edit applied.
     public let focus: Int64?
     /// Why an edit was refused; the edits before it still applied.
     public let refusal: BoardRefusal?
