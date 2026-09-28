@@ -199,6 +199,40 @@ class RequirementEditorTest {
         assertTrue(RequirementEditor.view(rows).problems.isEmpty())
     }
 
+    /**
+     * The four stack shapes the editor writes, through the app's own query
+     * document and back: the document is the one the web writes for the same
+     * gestures, and loading it folds into the board the editor drew.
+     */
+    @Test fun theFourStackShapesSurviveTheQueryDocumentAndALoad() {
+        val webDocuments = mapOf(
+            "board-stack-concrete" to """[{"kind":"ring","item":"ring_might","upgrade":2},""" +
+                """{"kind":"ring","item":"ring_might"},{"kind":"ring","item":"ring_might"}]""",
+            "board-stack-wildcard" to """[{"kind":"wand","upgrade":3,"identity_group":1},""" +
+                """{"kind":"wand","identity_group":1},{"kind":"wand","identity_group":1}]""",
+            "board-stack-total" to """[{"kind":"ring","item":"ring_might","level_sum":{"group":1,"at_least":3}},""" +
+                """{"kind":"ring","item":"ring_might","level_sum":{"group":1,"at_least":3}}]""",
+            "board-stack-cluster" to """[{"any_of":[{"kind":"wand","item":"wand_fireblast","upgrade":3,"identity_group":1},""" +
+                """{"kind":"wand","upgrade":3,"identity_group":1}]},""" +
+                """{"kind":"wand","identity_group":1},{"kind":"wand","identity_group":1}]""",
+        )
+        for ((name, web) in webDocuments) {
+            val answer = fixture(name).getJSONObject("response")
+            val rows = RequirementEditor.decodeRows(answer.getJSONArray("rows"))
+            val document = ResultsExport.encodeQuery(PresetQuery(rows))
+            assertEquals(name, canonical(JSONArray(web)), canonical(document.getJSONArray("requirements")))
+
+            val loaded = RequirementEditor.loaded(ResultsExport.decodeQuery(document).requirements, firstKey = 1)
+            val board = RequirementEditor.view(loaded)
+            val drawn = BoardView.decode(answer)
+            assertEquals(name, drawn.items.map { Triple(it.cluster != null, it.count, it.total) }, board.items.map { Triple(it.cluster != null, it.count, it.total) })
+            assertEquals(name, drawn.items.map { item -> item.chips.map { it.name } }, board.items.map { item -> item.chips.map { it.name } })
+            assertTrue(name, board.problems.isEmpty())
+            // Already canonical: loading re-keys the rows and changes nothing else.
+            assertEquals(name, rows.map { it.copy(key = 0, alternativeGroup = null) }, loaded.map { it.copy(key = 0, alternativeGroup = null) })
+        }
+    }
+
     @Test fun aJoinIsAdoptedAndARefusedOneLeavesTheListAlone() {
         val energy = find("ring_energy")
         val rows = listOf(
