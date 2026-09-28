@@ -203,7 +203,8 @@ class ExpressiveShowcaseTest {
     }
 
     @Test fun requirementSheet() {
-        host(settle = false) { RequirementSheet(editing = null, onDismiss = {}, onSave = { _, _, _, _ -> null }) }
+        val sheet = RequirementEditor.open(emptyList(), offerResin = true)
+        host(settle = false) { RequirementSheet(sheet, emptyList(), onDismiss = {}, onSaved = {}, onPickResin = {}) }
         shot("sheet-item", dialogWindow(), settle = false)
         compose.onNodeWithText("Next").performClick()
         pump()
@@ -214,7 +215,8 @@ class ExpressiveShowcaseTest {
     }
 
     @Test fun resinSheet() {
-        host(settle = false) { ArcaneResinSheet(amount = 6, filter = ArcaneResinFilter(), onDismiss = {}, onSave = { _, _, _ -> }, onRemove = {}) }
+        val sheet = RequirementEditor.open(emptyList(), resin = ResinCondition(6, auto = false, ArcaneResinFilter()), openResin = true)
+        host(settle = false) { ArcaneResinSheet(sheet, emptyList(), onDismiss = {}, onSaved = {}, onRemove = {}) }
         shot("sheet-resin", dialogWindow(), settle = false)
     }
 

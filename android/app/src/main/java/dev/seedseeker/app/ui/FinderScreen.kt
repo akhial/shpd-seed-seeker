@@ -172,6 +172,9 @@ fun FinderScreen(
     /** Opens the editor on the row with this key. */
     onEdit: (Long) -> Unit,
     onBoardChange: (BoardEdit) -> Unit,
+    /** The chip a save landed in, which the board brings into view once, then reports through [onBoardFocused]. */
+    boardFocus: Long? = null,
+    onBoardFocused: () -> Unit = {},
     /** Why the query cannot run yet, shown in the header; null when it is runnable. */
     validationMessage: String?,
     onSearch: () -> Unit,
@@ -398,6 +401,8 @@ fun FinderScreen(
                         onAdd = onAdd,
                         onEdit = onEdit,
                         onBoardChange = onBoardChange,
+                        boardFocus = boardFocus,
+                        onBoardFocused = onBoardFocused,
                         onSearchSettings = onSearchSettings,
                         // Takes every line down to the closed page's header,
                         // which waits at the bottom edge above the search bar
@@ -735,6 +740,8 @@ private fun QueryPage(
     onAdd: (Boolean) -> Unit,
     onEdit: (Long) -> Unit,
     onBoardChange: (BoardEdit) -> Unit,
+    boardFocus: Long?,
+    onBoardFocused: () -> Unit,
     onSearchSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -750,6 +757,8 @@ private fun QueryPage(
             onChange = onBoardChange,
             onEdit = onEdit,
             onAdd = { onAdd(false) },
+            focus = boardFocus,
+            onFocused = onBoardFocused,
             resin = board.resin,
             onEditResin = onEditResin,
             onRemoveResin = onRemoveResin,
@@ -841,6 +850,7 @@ private fun QueryPage(
                         board = board, blanket = true, enabled = !isSearching,
                         compact = compactChips, onChange = onBoardChange,
                         onEdit = onEdit, onAdd = { onAdd(true) },
+                        focus = boardFocus, onFocused = onBoardFocused,
                         modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 14.dp),
                     )
                 }

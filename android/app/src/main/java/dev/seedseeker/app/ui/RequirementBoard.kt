@@ -23,6 +23,8 @@ import androidx.compose.ui.unit.IntOffset
 import kotlin.math.roundToInt
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -139,6 +141,9 @@ fun RequirementBoard(
     onChange: (BoardEdit) -> Unit,
     onEdit: (Long) -> Unit,
     onAdd: () -> Unit,
+    /** The row whose entry to bring into view — where a save landed — reported through [onFocused] once it is. */
+    focus: Long? = null,
+    onFocused: () -> Unit = {},
     /** The Arcane Resin chip, drawn after the ordinary section's chips. */
     resin: ResinChipView? = null,
     onEditResin: () -> Unit = {},
@@ -212,8 +217,17 @@ fun RequirementBoard(
                         key(item.anchor) {
                             // Chips spring in when added, not every time the board reappears.
                             val fresh = remember { entrances.firstTime("chip:${item.anchor}") }
+                            val view = remember { BringIntoViewRequester() }
+                            if (focus != null && focus in item.members) {
+                                LaunchedEffect(focus) {
+                                    view.bringIntoView()
+                                    onFocused()
+                                }
+                            }
                             BoardEntry(
-                                modifier = Modifier.springEntrance(enabled = fresh, delayMillis = if (fresh) (position % 10) * 30 else 0),
+                                modifier = Modifier
+                                    .bringIntoViewRequester(view)
+                                    .springEntrance(enabled = fresh, delayMillis = if (fresh) (position % 10) * 30 else 0),
                                 item = item,
                                 enabled = enabled,
                                 dragging = dragging,

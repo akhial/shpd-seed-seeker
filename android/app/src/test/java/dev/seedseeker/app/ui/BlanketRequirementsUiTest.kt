@@ -6,6 +6,7 @@ import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsSelected
 import dev.seedseeker.app.catalog.ItemCatalog
 import dev.seedseeker.app.catalog.PackagedCatalog
 import dev.seedseeker.app.model.*
@@ -44,22 +45,49 @@ class BlanketRequirementsUiTest {
     }
 
     @Test fun blanketSheetSavesFiltersWithoutOfferingExtraCopies() {
-        val blanket = ItemRequirement(2, null, 3, kind = ItemKind.WAND, blanket = true,
-            source = ScoutItemSource.WANDMAKER_REWARD)
-        var saved: ItemRequirement? = null
+        val rows = listOf(
+            ItemRequirement(1, ItemCatalog.findById("wand_frost")!!, 2),
+            ItemRequirement(2, null, 3, kind = ItemKind.WAND, blanket = true,
+                source = ScoutItemSource.WANDMAKER_REWARD),
+        )
+        var saved: SheetSave.Saved? = null
+        val sheet = RequirementEditor.open(rows, key = 2)
         compose.setContent {
             SeedSeekerTheme {
-                RequirementSheet(editing = blanket, onDismiss = {}, onSave = { requirement, count, total, _ ->
-                    saved = requirement
-                    assertEquals(1, count)
-                    assertNull(total)
-                    null
-                })
+                RequirementSheet(sheet, rows, onDismiss = {}, onSaved = { saved = it })
             }
         }
         compose.onNodeWithText("Edit blanket requirement").assertIsDisplayed()
         compose.onNodeWithText("How many").assertDoesNotExist()
+        compose.onNodeWithText("Exclude from Auto resin").assertDoesNotExist()
         compose.onNodeWithText("Save").performClick()
-        compose.runOnIdle { assertEquals(blanket, saved) }
+        // Saving what is already there changes nothing, and lands on the blanket.
+        compose.runOnIdle {
+            assertNull(saved!!.rows)
+            assertEquals(2L, saved!!.focus)
+        }
+    }
+
+    @Test fun aNewBlanketStartsOnTheFirstOrdinaryKind() {
+        val rows = listOf(ItemRequirement(1, null, 2, kind = ItemKind.MELEE_WEAPON))
+        var saved: SheetSave.Saved? = null
+        val sheet = RequirementEditor.open(rows, blanket = true)
+        compose.setContent {
+            SeedSeekerTheme {
+                RequirementSheet(sheet, rows, nextKey = 5, onDismiss = {}, onSaved = { saved = it })
+            }
+        }
+        compose.onNodeWithText("Add blanket requirement").assertIsDisplayed()
+        compose.onNodeWithText("Any melee weapon").assertIsSelected()
+        compose.onNodeWithText("Arcane Resin").assertDoesNotExist()
+        compose.onNodeWithText("Next").performClick()
+        compose.onNodeWithText("Add").performClick()
+        compose.runOnIdle {
+            val blanket = saved!!.rows!!.last()
+            assertEquals(5L, blanket.key)
+            assertTrue(blanket.blanket)
+            assertEquals(ItemKind.MELEE_WEAPON, blanket.kind)
+            assertEquals(5L, saved!!.focus)
+        }
     }
 }
