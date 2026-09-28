@@ -405,6 +405,22 @@ it("drags one item: the ghost is the chip alone, and a round trip folds back", a
   expect(badges("Wand of Disintegration")).toEqual(["×2"]);
 });
 
+it("draws the ghost with the chip's whole face: its trailing tags and uncursed check", async () => {
+  await render(
+    JSON.stringify({
+      requirements: [{ ...FROST, exclude_resin: true, uncursed: true }, DISINTEGRATION],
+    }),
+  );
+  const frost = chip("Wand of Frost");
+  expect(frost.textContent).toContain("No resin");
+  await dragOver(frost, chip("Wand of Disintegration"));
+  const ghost = host.querySelector<HTMLElement>(".d1-chip-ghost")!;
+  expect(ghost.querySelector(".d1-chip-name")!.textContent).toBe("Wand of Frost");
+  expect(ghost.textContent).toContain("No resin");
+  expect(ghost.querySelector('[title="Uncursed"]')).not.toBeNull();
+  await release(frost);
+});
+
 it("keeps a stacked target's stack as a member, and detaches one copy of it", async () => {
   await render(JSON.stringify({ requirements: [FROST, FROST, DISINTEGRATION] }));
   const disintegration = chip("Wand of Disintegration");

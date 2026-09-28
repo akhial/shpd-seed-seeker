@@ -87,6 +87,55 @@ function effectRingCss(glows: Glow[]): CSSProperties {
   return { "--d1-ring": `conic-gradient(${stops.join(", ")})` } as CSSProperties;
 }
 
+/**
+ * What a chip shows of its item — sprite, name, tags, effect cue, trailing
+ * tags and the uncursed check — without its badges, so the board's chip and
+ * the drag ghost draw the same face.
+ */
+function ChipFace({ chip }: { chip: ChipView }) {
+  const effect = chip.effect;
+  const glows = effect && !effect.any_enchantment ? effectGlows(effect.effects) : [];
+  const glow = glows[0] ?? null;
+  return (
+    <>
+      <ChipSprite chip={chip} glows={glows} />
+      <span className="d1-chip-name">{chip.name}</span>
+      <Tags tags={chip.tags} />
+      {/* Named items show a single effect through their sprite's glow.
+        Wildcards keep their green question mark and show an effect badge. */}
+      {effect &&
+        (glows.length > 1 ? (
+          <span
+            className="d1-chip-effect d1-chip-effect-multi"
+            style={effectRingCss(glows)}
+            title={effect.label}
+          >
+            {glows.length}
+          </span>
+        ) : glow ? (
+          chip.item ? null : (
+            <span
+              className="d1-chip-effect"
+              style={{ color: glow.color, backgroundColor: glow.color }}
+              title={effect.label}
+            />
+          )
+        ) : (
+          <span
+            className={`d1-chip-effect ${effect.any_enchantment ? "d1-chip-effect-any" : "d1-chip-effect-curse"}`}
+            title={effect.label}
+          />
+        ))}
+      <Tags tags={chip.trailing_tags} />
+      {chip.uncursed && (
+        <span className="d1-chip-tag d1-chip-tag-soft" title="Uncursed">
+          <CheckIcon size={12} />
+        </span>
+      )}
+    </>
+  );
+}
+
 type DropTarget =
   | { kind: "chip"; key: number }
   | { kind: "cluster"; group: number }
@@ -406,9 +455,6 @@ export function RequirementBoard({
       else if (chips.get(pick.source)?.chip.join.includes(chip.key))
         classes.push("d1-chip-pickable");
     }
-    const effect = chip.effect;
-    const glows = effect && !effect.any_enchantment ? effectGlows(effect.effects) : [];
-    const glow = glows[0] ?? null;
     return (
       <div
         key={chip.key}
@@ -436,40 +482,7 @@ export function RequirementBoard({
           if (hoveredKey === chip.key) setHovered(null);
         }}
       >
-        <ChipSprite chip={chip} glows={glows} />
-        <span className="d1-chip-name">{chip.name}</span>
-        <Tags tags={chip.tags} />
-        {/* Named items show a single effect through their sprite's glow.
-            Wildcards keep their green question mark and show an effect badge. */}
-        {effect &&
-          (glows.length > 1 ? (
-            <span
-              className="d1-chip-effect d1-chip-effect-multi"
-              style={effectRingCss(glows)}
-              title={effect.label}
-            >
-              {glows.length}
-            </span>
-          ) : glow ? (
-            chip.item ? null : (
-              <span
-                className="d1-chip-effect"
-                style={{ color: glow.color, backgroundColor: glow.color }}
-                title={effect.label}
-              />
-            )
-          ) : (
-            <span
-              className={`d1-chip-effect ${effect.any_enchantment ? "d1-chip-effect-any" : "d1-chip-effect-curse"}`}
-              title={effect.label}
-            />
-          ))}
-        <Tags tags={chip.trailing_tags} />
-        {chip.uncursed && (
-          <span className="d1-chip-tag d1-chip-tag-soft" title="Uncursed">
-            <CheckIcon size={12} />
-          </span>
-        )}
+        <ChipFace chip={chip} />
         {/* A chip picked up to join shows the one item that moves. */}
         {pick?.source !== chip.key && renderBadges(chip)}
       </div>
@@ -719,13 +732,9 @@ export function RequirementBoard({
           style={{ left: drag.x, top: drag.y }}
           aria-hidden="true"
         >
-          {/* The one item that moves: its name and tags, never its badges. */}
+          {/* The one item that moves: the chip's face, never its badges. */}
           {dragSource ? (
-            <>
-              <ChipSprite chip={dragSource} />
-              <span className="d1-chip-name">{dragSource.name}</span>
-              <Tags tags={dragSource.tags} />
-            </>
+            <ChipFace chip={dragSource} />
           ) : (
             draggingResin && <ResinChipBody chip={resin.chip} amountOnly />
           )}
