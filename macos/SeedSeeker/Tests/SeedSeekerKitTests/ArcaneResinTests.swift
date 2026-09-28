@@ -32,7 +32,7 @@ final class ArcaneResinTests: XCTestCase {
         XCTAssertEqual(query.requirements.map(\.excludeResin), [true, false, false])
         let board = RequirementBoard.of(query.requirements)
         XCTAssertEqual(board.items.count, 1)
-        XCTAssertEqual(board.items.first?.stack.count, 3)
+        XCTAssertEqual(board.items.first?.chips.first?.stack.count, 3)
         for restored in [
             try JSONDecoder().decode(SavedQuery.self, from: JSONEncoder().encode(query)),
             try DeepLink.decode(DeepLink.encodeLink(for: query)),

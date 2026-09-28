@@ -117,7 +117,6 @@ struct RequirementsView: View {
                         resinEditor = RequirementsResinPresentation(sheet: picked, source: presentation.source)
                     }
                 },
-                onEditGroupQuantity: groupQuantityAction(for: presentation),
                 onSave: { save($0) },
                 onRemove: presentation.key.map { key in { remove(key: key) } }
             )
@@ -129,8 +128,8 @@ struct RequirementsView: View {
                 .navigationTransition(.zoom(sourceID: presentation.source, in: sheetZoom))
         }
         .sheet(item: $stackKey) { presentation in
-            if let item = snapshot.item(holding: presentation.id) {
-                RequirementsStackEditor(key: presentation.id, stack: item.stack,
+            if let member = snapshot.chip(presentation.id) {
+                RequirementsStackEditor(key: presentation.id, stack: member.stack,
                                         control: presentation.control) { edit in
                     editStack(presentation.id, edit)
                 }
@@ -203,10 +202,12 @@ struct RequirementsView: View {
             RequirementsFlowLayout(spacing: 8, fillsWidth: false) {
                 ForEach(item.chips) { member in
                     HStack(spacing: 8) {
-                        chip(member, item: item)
-                        if member.key == item.anchor, let badge = item.countBadge, item.stack.canChangeCount {
+                        chip(member)
+                        // Each member's stack is its own: its ×N sits beside
+                        // it and opens that member's "How many" sheet.
+                        if let badge = memberCountBadge(member) {
                             Button {
-                                showStack(item.anchor, source: "stack-\(cluster)")
+                                showStack(member.key, source: "stack-\(member.key)")
                             } label: {
                                 Text(badge.compactText)
                                     .font(.caption.monospaced().weight(.semibold))
@@ -215,8 +216,8 @@ struct RequirementsView: View {
                                     .glassEffect(.regular.interactive(), in: .capsule)
                             }
                             .buttonStyle(.plain)
-                            .matchedTransitionSource(id: "stack-\(cluster)", in: sheetZoom)
-                            .background(frameReader(id: "stack-\(cluster)"))
+                            .matchedTransitionSource(id: "stack-\(member.key)", in: sheetZoom)
+                            .background(frameReader(id: "stack-\(member.key)"))
                             .accessibilityLabel("How many")
                         }
                     }
@@ -227,8 +228,16 @@ struct RequirementsView: View {
             .glassEffectID("group-\(cluster)", in: glass)
             .id("group-\(cluster)")
         } else if let member = item.chips.first {
-            chip(member, item: item)
+            chip(member)
         }
+    }
+
+    /// A cluster member's ×N when it is the member's own "How many" button
+    /// beside the chip rather than a tag inside it: while the core offers
+    /// the member a count.
+    private func memberCountBadge(_ chip: BoardChip) -> BoardBadge? {
+        guard chip.inCluster, chip.stack.canChangeCount else { return nil }
+        return chip.countBadge
     }
 
     private func resinChip(_ resin: BoardResinChip) -> some View {
@@ -272,7 +281,7 @@ struct RequirementsView: View {
         .frame(minHeight: compactChips ? 44 : 52)
     }
 
-    private func chip(_ chip: BoardChip, item: BoardItem) -> some View {
+    private func chip(_ chip: BoardChip) -> some View {
         let id = "chip-\(chip.key)"
         let hovered = hoverKey == chip.key
         return Button {
@@ -281,7 +290,7 @@ struct RequirementsView: View {
                                              offerResin: true),
                        key: chip.key, source: id)
         } label: {
-            chipContent(chip, item: item)
+            chipContent(chip)
                 .glassEffect(.regular.tint(chipTint(chip, hovered: hovered)).interactive(), in: .capsule)
                 .glassEffectID(id, in: glass)
                 .glassEffectUnion(id: id, namespace: glass)
@@ -321,7 +330,7 @@ struct RequirementsView: View {
         return chip.inCluster ? AppTheme.seed.opacity(0.04) : .white.opacity(0.015)
     }
 
-    private func chipContent(_ chip: BoardChip, item: BoardItem) -> some View {
+    private func chipContent(_ chip: BoardChip) -> some View {
         HStack(spacing: compactChips ? 6 : 8) {
             RequirementsChipSprite(chip: chip, size: compactChips ? 23 : 28)
             Text(chip.name)
@@ -335,8 +344,8 @@ struct RequirementsView: View {
                 if chip.uncursed {
                     uncursedTag
                 }
-                if item.cluster == nil, let badge = item.countBadge { tag(badge.compactText) }
-                if item.cluster == nil, let badge = item.totalBadge { tag(badge.compactText) }
+                if memberCountBadge(chip) == nil, let badge = chip.countBadge { tag(badge.compactText) }
+                if let badge = chip.totalBadge { tag(badge.compactText) }
                 RequirementEffectBadge(effect: chip.effect, isWildcard: chip.item == nil)
                 ForEach(chip.trailingTags, id: \.self) { value in tag(value.text, upgrade: value.isUpgrade) }
             }
@@ -383,9 +392,8 @@ struct RequirementsView: View {
         // The chip carries its join candidates and refusals, read once here
         // rather than on every frame of the drag.
         let lifted = key.flatMap { shown.chip($0) }
-        let item = key.flatMap { shown.item(holding: $0) }
-        if let lifted, let item {
-            interaction.preview = AnyView(chipContent(lifted, item: item))
+        if let lifted {
+            interaction.preview = AnyView(chipContent(lifted))
         } else if let resin = shown.resin {
             interaction.preview = AnyView(resinContent(resin))
         }
@@ -393,7 +401,7 @@ struct RequirementsView: View {
         suppressEditingUntil = .distantFuture
         settling = false
         withAnimation(boardSpring) {
-            lift = RequirementLift(id: id, frame: frame, chip: lifted, item: item,
+            lift = RequirementLift(id: id, frame: frame, chip: lifted,
                                    scale: reduceMotion ? 1 : 1.06)
             interaction.activeID = id
             interaction.location = CGPoint(x: frame.midX, y: frame.midY)
@@ -508,28 +516,13 @@ struct RequirementsView: View {
             .accessibilityLabel("Uncursed")
     }
 
-    /// A cluster's stack is the cluster's, so its member's editor hands
-    /// "How many" over to the stack sheet — while the core offers a count.
-    private func groupQuantityAction(for presentation: RequirementsEditorPresentation) -> (() -> Void)? {
-        guard let key = presentation.key, let item = snapshot.item(holding: key),
-              item.cluster != nil, item.stack.canChangeCount else { return nil }
-        return {
-            editor = nil
-            Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(350))
-                guard let current = snapshot.item(holding: key), current.stack.canChangeCount else { return }
-                showStack(key, source: "chip-\(key)")
-            }
-        }
-    }
-
-    /// Opens a cluster's "How many" sheet on its anchor `key`.
+    /// Opens a cluster member's "How many" sheet on its `key`.
     private func showStack(_ key: Int64, source: String) {
         stackKey = RequirementsStackPresentation(id: key, source: source,
                                                  control: stackControl(of: key, in: requirements))
     }
 
-    /// Runs one edit of the cluster's "How many" sheet on the board as it is
+    /// Runs one edit of a member's "How many" sheet on the board as it is
     /// made, and answers what the sheet shows next: why the core refused it,
     /// and the stack section's words and copy floor after it.
     private func editStack(_ key: Int64, _ edit: BoardEdit) -> (refusal: String?, control: SheetStack?) {
@@ -538,12 +531,9 @@ struct RequirementsView: View {
         return (result?.refusal?.message, stackControl(of: key, in: result?.rows ?? requirements))
     }
 
-    /// The stack section as the shared core words it for the chip's own
+    /// The stack section as the shared core words it for the member's own
     /// sheet: the count's label, and the copies' floor control — its switch,
-    /// the floors it stops at and the floor it turns on at. A cluster
-    /// member's sheet hides the section — the stack is the cluster's, and the
-    /// "How many" sheet edits it on the board — but the core fills it in all
-    /// the same.
+    /// the floors it stops at and the floor it turns on at.
     private func stackControl(of key: Int64, in rows: [ItemRequirement]) -> SheetStack? {
         RequirementSheet.open(rows: rows, key: key)?.form.stack
     }
@@ -762,14 +752,14 @@ struct RequirementsFlowLayout: Layout {
     }
 }
 
-/// The "How many" sheet of an either/or cluster, whose stack is the
-/// cluster's rather than any one member's. Every control is one board edit,
-/// applied as it is made, so the sheet always shows the stack the board holds.
+/// The "How many" sheet of an either/or cluster's member, whose stack is its
+/// own. Every control is one board edit, applied as it is made, so the sheet
+/// always shows the stack the board holds.
 private struct RequirementsStackEditor: View {
     @Environment(\.dismiss) private var dismiss
-    /// The cluster's anchor, which the edits name.
+    /// The member, which the edits name.
     let key: Int64
-    /// The cluster's stack as the board draws it now.
+    /// The member's stack as the board draws it now.
     let stack: BoardStack
     /// The stack section — the count's label and the copies' floor control —
     /// in the shared core's words.

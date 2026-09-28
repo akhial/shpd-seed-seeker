@@ -29,7 +29,6 @@ struct RequirementLift {
     /// The lifted chip as the board drew it, with the rows it may join; nil
     /// for the resin chip.
     let chip: BoardChip?
-    let item: BoardItem?
     var translation = CGSize.zero
     var scale: CGFloat = 1.06
     var opacity: Double = 1

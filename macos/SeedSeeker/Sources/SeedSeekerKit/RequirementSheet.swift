@@ -255,16 +255,18 @@ public struct SheetForm: Hashable, Sendable {
     public let mode: Mode
     public let origin: Origin
     public let blanket: Bool
-    /// The row is a member of an either/or cluster, whose stack is the
-    /// cluster's.
+    /// The row is a member of an either/or cluster. Its stack is its own,
+    /// so the stack section shows its count and copy floor — never a
+    /// combined level.
     public let inCluster: Bool
     /// The sheet edits the query's resin rather than an item.
     public let resinPicked: Bool
     /// The requirement's title (`Any Tier 3+ melee weapon`), or `Arcane
     /// Resin`; there even while the draft has errors.
     public let title: String
-    /// The chip a save would put on the board (key 0, no join candidates),
-    /// or nil while the draft has errors or the resin is picked.
+    /// The chip a save would put on the board, with its stack and badges
+    /// (key 0, no copy keys, no join candidates), or nil while the draft has
+    /// errors or the resin is picked.
     public let preview: BoardChip?
     /// The six families.
     public let category: SheetPicker

@@ -32,10 +32,12 @@ final class RequirementEditorTests: XCTestCase {
     private func requirement(_ key: Int64, item id: String? = nil, kind: ItemKind? = nil,
                              upgrade: Int = 0, upgradeMatch: UpgradeMatch = .any,
                              maximumDepth: Int? = nil, alternativeGroup: Int? = nil,
+                             identityGroup: Int? = nil,
                              blanket: Bool = false, excludeResin: Bool = false) throws -> ItemRequirement {
         let item = try id.map { try XCTUnwrap(ItemCatalog.findById($0), "unknown catalog item \($0)") }
         return try ItemRequirement(key: key, item: item, upgrade: upgrade,
                                    kind: kind ?? item?.kind ?? .weapon, upgradeMatch: upgradeMatch,
+                                   identityGroup: identityGroup,
                                    maximumDepth: maximumDepth, alternativeGroup: alternativeGroup,
                                    blanket: blanket, excludeResin: excludeResin)
     }
@@ -80,20 +82,21 @@ final class RequirementEditorTests: XCTestCase {
         XCTAssertEqual(board.section(blanket: true).map(\.id), ["r8"])
         XCTAssertTrue(board.problems.isEmpty)
 
-        // A concrete ring stack: its copies fold behind the ×3 badge.
+        // A concrete ring stack: its copies fold behind the chip's ×3 badge.
         let rings = board.items[0]
         XCTAssertEqual(rings.members, [1])
         XCTAssertEqual(rings.extras, [2, 3])
-        XCTAssertEqual(rings.countBadge?.text, "×3")
-        XCTAssertEqual(rings.countBadge?.tooltip, "3 of the same kind")
-        XCTAssertNil(rings.totalBadge)
-        XCTAssertEqual(rings.stack.count, 3)
-        XCTAssertTrue(rings.stack.canCountLevels)
-        XCTAssertEqual(rings.stack.levelCapacity, 11)
-        XCTAssertEqual(rings.stack.countMax, 3)
-        XCTAssertEqual(rings.stack.countRange, 1...3)
         XCTAssertNil(board.item(holding: 2), "a hidden copy is no visible row")
         let might = try XCTUnwrap(rings.chips.first)
+        XCTAssertEqual(might.countBadge?.text, "×3")
+        XCTAssertEqual(might.countBadge?.tooltip, "3 of the same kind")
+        XCTAssertNil(might.totalBadge)
+        XCTAssertEqual(might.copies, [2, 3])
+        XCTAssertEqual(might.stack.count, 3)
+        XCTAssertTrue(might.stack.canCountLevels)
+        XCTAssertEqual(might.stack.levelCapacity, 11)
+        XCTAssertEqual(might.stack.countMax, 3)
+        XCTAssertEqual(might.stack.countRange, 1...3)
         XCTAssertEqual(might.catalogItem?.id, "ring_might")
         XCTAssertEqual(might.kind, .ring)
         XCTAssertEqual(might.tags.map(\.text), ["+2"])
@@ -101,7 +104,10 @@ final class RequirementEditorTests: XCTestCase {
         XCTAssertEqual(might.tags.map(\.style), [.upgrade])
         XCTAssertEqual(might.tags.map(\.tooltip), [nil], "a chip's tags have no hover text of their own")
         XCTAssertEqual(might.relations.map(\.glyph), [.times])
-        XCTAssertEqual(might.refusal(onto: 5)?.reason, "mixed_category_stack")
+        // Every copy keeps its own chip's kind, so the ring stack may join
+        // the wands: #190's refusal is lifted.
+        XCTAssertEqual(might.join, [4, 5, 6, 7])
+        XCTAssertNil(might.refusal(onto: 5))
 
         // A narrowed wildcard with any enchantment: no one glow to pulse.
         let melee = try XCTUnwrap(board.chip(4))
@@ -127,6 +133,7 @@ final class RequirementEditorTests: XCTestCase {
         XCTAssertEqual(board.items.map(\.name),
                        ["Ring of Might", "Any melee", "Wand of Fireblast or Any wand", "Rat Skull", "Any armor"])
         XCTAssertEqual(cluster.anchor, 5)
+        XCTAssertTrue(cluster.chips.allSatisfy { $0.countBadge == nil && $0.stack.count == 1 })
         XCTAssertEqual(board.item(holding: 6)?.id, "c1")
         let excluded = try XCTUnwrap(board.chip(6))
         XCTAssertTrue(excluded.inCluster)
@@ -136,9 +143,10 @@ final class RequirementEditorTests: XCTestCase {
         XCTAssertEqual(excluded.relations.first?.text, "Wand of Fireblast")
 
         // A trinket never stacks; a blanket lists its effects in catalog order.
-        XCTAssertFalse(board.items[3].stack.canChangeCount)
-        XCTAssertEqual(board.items[3].stack.countMax, 1)
-        XCTAssertEqual(board.items[3].stack.countRange, 1...1)
+        let skull = try XCTUnwrap(board.chip(7)).stack
+        XCTAssertFalse(skull.canChangeCount)
+        XCTAssertEqual(skull.countMax, 1)
+        XCTAssertEqual(skull.countRange, 1...1)
         XCTAssertEqual(board.chip(7)?.tags.map(\.text), ["Transmute ≤3"])
         XCTAssertTrue(board.items[4].blanket)
         XCTAssertEqual(board.chip(8)?.effect?.effects, ["Viscosity", "Brimstone"])
@@ -190,8 +198,10 @@ final class RequirementEditorTests: XCTestCase {
         XCTAssertEqual(blankets.problems.last?.keys, [])
 
         let refused = try XCTUnwrap(RequirementBoard.decode(try response("board-join-refused"), sent: []))
-        XCTAssertEqual(refused.refusal?.reason, "mixed_category_stack")
-        XCTAssertEqual(refused.refusal?.message, "Copies can only be grouped with the same item type.")
+        XCTAssertEqual(refused.refusal?.reason, "no_free_group")
+        XCTAssertEqual(refused.refusal?.message,
+                       "Every group label is in use. Remove a stack or a combined level first.")
+        XCTAssertEqual(refused.chip(11)?.refusal(onto: 9)?.reason, "no_free_group")
 
         // A repaired list is rows this build models, read whole.
         let repaired = try XCTUnwrap(RequirementBoard.decode(try response("board-key-repair"), sent: []))
@@ -207,7 +217,9 @@ final class RequirementEditorTests: XCTestCase {
     /// exactly: the canonical requirement plus the key and either/or label.
     func testRowsRoundTripThroughTheAppCodec() throws {
         for name in ["board-tour", "board-stack-concrete", "board-stack-wildcard", "board-stack-cluster",
-                     "board-stack-total", "board-copy-depth", "board-save-new", "board-join-trades-copies"] {
+                     "board-stack-total", "board-copy-depth", "board-save-new", "board-join-leaves-copies",
+                     "board-stack-member", "board-cluster-alike-stacks", "board-join-member-moves-one",
+                     "board-join-across-categories", "board-detach-one-copy", "board-remove-one-member"] {
             let rows = try XCTUnwrap(try response(name)["rows"] as? [[String: Any]], name)
             XCTAssertFalse(rows.isEmpty, name)
             for row in rows {
@@ -219,8 +231,9 @@ final class RequirementEditorTests: XCTestCase {
 
     // MARK: - Edits through the engine
 
-    /// A drop joins, a join across a stack's category is refused and changes
-    /// nothing, and the board already said so before the drop.
+    /// A drop joins — across categories too, a stack keeping its own kind of
+    /// copies — and a refused join changes nothing, as the board already
+    /// said before the drop.
     func testJoinsLandAndRefusalsChangeNothing() throws {
         let rows = [try requirement(1, item: "spear", upgrade: 2, upgradeMatch: .exactly),
                     try requirement(2, item: "mace"),
@@ -237,53 +250,111 @@ final class RequirementEditorTests: XCTestCase {
         // The answer is also the board of the list it returns.
         XCTAssertEqual(RequirementBoard.of(joined.rows).items.map(\.id), joined.items.map(\.id))
 
+        // #190 refused a wand dropped on a ring stack; now the ring keeps
+        // its stack as a member: two Rings of Might, or the wand.
         let stacked = [try requirement(1, item: "ring_might", upgrade: 2, upgradeMatch: .exactly),
                        try requirement(2, item: "ring_might"),
                        try requirement(3, kind: .wand)]
-        XCTAssertEqual(RequirementBoard.of(stacked).chip(3)?.refusal(onto: 1)?.reason, "mixed_category_stack")
-        let refused = try XCTUnwrap(RequirementBoard.apply([.join(source: 3, target: 1)], to: stacked))
+        XCTAssertEqual(RequirementBoard.of(stacked).chip(3)?.join, [1])
+        let across = try XCTUnwrap(RequirementBoard.apply([.join(source: 3, target: 1)], to: stacked))
+        XCTAssertTrue(across.changed)
+        XCTAssertNil(across.refusal)
+        XCTAssertEqual(across.focus, 3)
+        XCTAssertEqual(across.rows.map(\.key), [1, 3, 2])
+        XCTAssertEqual(across.rows.map(\.identityGroup), [1, nil, 1])
+        XCTAssertEqual(across.rows.map(\.alternativeGroup), [1, 1, nil])
+        XCTAssertEqual(across.items.map(\.id), ["c1"])
+        XCTAssertEqual(across.chip(1)?.countBadge?.text, "×2")
+        XCTAssertEqual(across.chip(1)?.copies, [2])
+        XCTAssertNil(across.chip(3)?.countBadge)
+        XCTAssertNoThrow(try SearchRequest(requirements: across.rows))
+
+        // With every group label in use, Frost ×2 has none to keep its stack
+        // as a member: the join is refused, and the list is left as it was.
+        var full: [ItemRequirement] = []
+        for group in 1...4 {
+            for copy in 0..<2 {
+                full.append(try requirement(Int64(8 + 2 * group + copy), kind: .armor, identityGroup: group))
+            }
+        }
+        full.append(contentsOf: [try requirement(1, item: "wand_frost"), try requirement(2, item: "wand_frost"),
+                                 try requirement(3, item: "wand_disintegration")])
+        XCTAssertEqual(RequirementBoard.of(full).chip(3)?.refusal(onto: 1)?.reason, "no_free_group")
+        let refused = try XCTUnwrap(RequirementBoard.apply([.join(source: 3, target: 1)], to: full))
         XCTAssertFalse(refused.changed)
-        XCTAssertEqual(refused.rows, stacked)
-        XCTAssertEqual(refused.refusal?.message, "Copies can only be grouped with the same item type.")
+        XCTAssertEqual(refused.rows, full)
+        XCTAssertEqual(refused.refusal?.message,
+                       "Every group label is in use. Remove a stack or a combined level first.")
     }
 
-    /// Stack edits in one request run in order.
+    /// Stack edits in one request run in order, and a member's stack is its
+    /// own: Spear grows to ×3 while Mace stays one item.
     func testStackEditsRunInOrder() throws {
         let cluster = [try requirement(1, item: "spear", alternativeGroup: 1),
                        try requirement(2, item: "mace", alternativeGroup: 1)]
         let board = RequirementBoard.of(cluster)
-        XCTAssertTrue(try XCTUnwrap(board.item(holding: 1)).stack.canGrow)
+        XCTAssertTrue(try XCTUnwrap(board.chip(1)).stack.canGrow)
         let grown = try XCTUnwrap(RequirementBoard.apply([.setCount(1, 3), .setCopyDepth(1, 9)], to: cluster))
         XCTAssertTrue(grown.changed)
-        let item = try XCTUnwrap(grown.item(holding: 2))
-        XCTAssertEqual(item.stack.count, 3)
-        XCTAssertEqual(item.stack.copyDepth, 9)
-        XCTAssertEqual(item.countBadge?.text, "×3")
+        XCTAssertEqual(grown.focus, 1)
+        let spear = try XCTUnwrap(grown.chip(1))
+        XCTAssertEqual(spear.stack.count, 3)
+        XCTAssertEqual(spear.stack.copyDepth, 9)
+        XCTAssertEqual(spear.countBadge?.text, "×3")
+        XCTAssertEqual(spear.copies, [3, 4])
+        XCTAssertFalse(spear.stack.canCountLevels, "a member counts no levels")
+        let mace = try XCTUnwrap(grown.chip(2))
+        XCTAssertEqual(mace.stack.count, 1)
+        XCTAssertNil(mace.countBadge)
+        XCTAssertEqual(grown.item(holding: 2)?.extras, [3, 4])
         XCTAssertNoThrow(try SearchRequest(requirements: grown.rows))
-        let shrunk = try XCTUnwrap(RequirementBoard.apply([.setCount(2, 1)], to: grown.rows))
-        XCTAssertEqual(shrunk.item(holding: 1)?.stack.count, 1)
+        XCTAssertEqual(RequirementBoard.apply([.setCount(2, 1)], to: grown.rows)?.changed, false)
+        let shrunk = try XCTUnwrap(RequirementBoard.apply([.setCount(1, 1)], to: grown.rows))
+        XCTAssertEqual(shrunk.chip(1)?.stack.count, 1)
+        XCTAssertEqual(shrunk.rows.map(\.key), [1, 2])
     }
 
-    /// A stack a hand-written list gives a mixed cluster cannot grow: its
-    /// count stepper runs only down from its count, as the core bounds it.
-    func testAStackThatCannotGrowOnlySheds() throws {
-        let spear = try XCTUnwrap(ItemCatalog.findById("spear"))
-        let rows = [
-            try ItemRequirement(key: 1, item: spear, upgrade: 0, kind: .weapon, upgradeMatch: .any,
-                                identityGroup: 1, alternativeGroup: 1),
-            try ItemRequirement(key: 2, item: nil, upgrade: 0, kind: .wand, upgradeMatch: .any,
-                                identityGroup: 1, alternativeGroup: 1),
-            try ItemRequirement(key: 3, item: nil, upgrade: 0, kind: .weapon, upgradeMatch: .any,
-                                identityGroup: 1),
-        ]
-        let cluster = try XCTUnwrap(RequirementBoard.of(rows).item(holding: 1))
-        XCTAssertEqual(cluster.name, "Spear or Any wand")
-        XCTAssertFalse(cluster.stack.canGrow)
-        XCTAssertTrue(cluster.stack.canChangeCount)
-        XCTAssertEqual(cluster.stack.count, 2)
-        XCTAssertEqual(cluster.stack.max, 3)
-        XCTAssertEqual(cluster.stack.countMax, 2)
-        XCTAssertEqual(cluster.stack.countRange, 1...2)
+    /// A chip's stack reads from the chip: a stack that cannot grow only
+    /// sheds, its count stepper running down from its count as the core
+    /// bounds it, and a chip whose answer has no stack is one item with
+    /// nothing to step rather than no chip at all.
+    func testAChipsStackReadsFromTheChip() throws {
+        let answer = #"""
+        {"key": 1, "name": "Rat Skull", "copies": [2],
+         "badges": {"count": {"text": "×2", "compact_text": "×2", "tooltip": "2 of the same kind"}, "total": null},
+         "stack": {"count": 2, "max": 3, "can_grow": false, "can_change_count": true, "count_max": 2,
+                   "count_text": "×2"}}
+        """#
+        let object = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(answer.utf8)) as? [String: Any])
+        let sheds = try XCTUnwrap(BoardChip(json: object))
+        XCTAssertEqual(sheds.copies, [2])
+        XCTAssertEqual(sheds.countBadge?.compactText, "×2")
+        XCTAssertNil(sheds.totalBadge)
+        XCTAssertFalse(sheds.stack.canGrow)
+        XCTAssertTrue(sheds.stack.canChangeCount)
+        XCTAssertEqual(sheds.stack.max, 3)
+        XCTAssertEqual(sheds.stack.countRange, 1...2)
+
+        let bare = try XCTUnwrap(BoardChip(json: ["key": NSNumber(value: 1), "name": "Spear"]))
+        XCTAssertEqual(bare.stack.count, 1)
+        XCTAssertFalse(bare.stack.canChangeCount)
+        XCTAssertEqual(bare.stack.countRange, 1...1)
+        XCTAssertNil(bare.countBadge)
+        XCTAssertEqual(bare.copies, [])
+    }
+
+    /// Alike member stacks share one label and one copy: each member of
+    /// {Frost ×2 | Disintegration ×2 | Lightning} shows its own ×2, and
+    /// the cluster none.
+    func testAlikeMemberStacksShowOnEveryMember() throws {
+        let board = try XCTUnwrap(RequirementBoard.decode(try response("board-cluster-alike-stacks"), sent: []))
+        let cluster = try XCTUnwrap(board.items.first)
+        XCTAssertEqual(cluster.members, [1, 2, 3])
+        XCTAssertEqual(cluster.extras, [4])
+        XCTAssertEqual(cluster.chips.map { $0.countBadge?.text }, ["×2", "×2", nil])
+        XCTAssertEqual(cluster.chips.map(\.copies), [[4], [4], []])
+        XCTAssertEqual(cluster.chips.map(\.stack.count), [2, 2, 1])
+        XCTAssertTrue(cluster.chips.allSatisfy { !$0.stack.canCountLevels && $0.totalBadge == nil })
     }
 
     /// A count the board offers can still be refused when every group label
@@ -298,8 +369,7 @@ final class RequirementEditorTests: XCTestCase {
         }
         rows.append(try requirement(1, item: "spear", alternativeGroup: 1))
         rows.append(try requirement(2, item: "mace", alternativeGroup: 1))
-        let cluster = try XCTUnwrap(RequirementBoard.of(rows).item(holding: 1))
-        XCTAssertTrue(cluster.stack.canGrow)
+        XCTAssertTrue(try XCTUnwrap(RequirementBoard.of(rows).chip(1)).stack.canGrow)
         let refused = try XCTUnwrap(RequirementBoard.apply([.setCount(1, 2)], to: rows))
         XCTAssertFalse(refused.changed)
         XCTAssertEqual(refused.rows, rows)
@@ -308,21 +378,23 @@ final class RequirementEditorTests: XCTestCase {
                        "Every group label is in use. Remove a stack or a combined level first.")
     }
 
-    /// The iOS cluster "How many" sheet: each control is one board edit, and
+    /// A member's iOS "How many" sheet: each control is one board edit, and
     /// the copies' floor control — words, stops and the floor it turns on
-    /// at — is the core's, read off the member's own sheet, which hides it.
-    func testAClustersCopyFloorComesFromTheCore() throws {
+    /// at — is the core's, read off the member's own sheet, which shows it.
+    func testAMembersCopyFloorComesFromTheCore() throws {
         let cluster = [try requirement(1, item: "spear", alternativeGroup: 1),
                        try requirement(2, item: "mace", alternativeGroup: 1)]
         let grown = try XCTUnwrap(RequirementBoard.apply([.setCount(1, 3)], to: cluster))
-        let stack = try XCTUnwrap(grown.item(holding: 1)).stack
+        let stack = try XCTUnwrap(grown.chip(1)).stack
         XCTAssertTrue(stack.canSetCopyDepth)
         XCTAssertEqual(stack.countText, "×3")
         XCTAssertNil(stack.copyDepth)
 
         let sheet = try XCTUnwrap(RequirementSheet.open(rows: grown.rows, key: 1))
         XCTAssertTrue(sheet.form.inCluster)
-        XCTAssertFalse(sheet.form.stack.visible)
+        XCTAssertTrue(sheet.form.stack.visible)
+        XCTAssertEqual(sheet.form.stack.count, 3)
+        XCTAssertFalse(sheet.form.stack.countLevels.visible)
         let off = sheet.form.stack.copyDepth
         XCTAssertFalse(off.enabled)
         XCTAssertEqual(off.value, 4)
@@ -330,7 +402,8 @@ final class RequirementEditorTests: XCTestCase {
 
         let limited = try XCTUnwrap(RequirementBoard.apply([.setCopyDepth(1, off.value)], to: grown.rows))
         XCTAssertTrue(limited.changed)
-        XCTAssertEqual(limited.item(holding: 1)?.stack.copyDepth, 4)
+        XCTAssertEqual(limited.chip(1)?.stack.copyDepth, 4)
+        XCTAssertNil(limited.chip(2)?.stack.copyDepth)
         let on = try XCTUnwrap(RequirementSheet.open(rows: limited.rows, key: 1)).form.stack.copyDepth
         XCTAssertTrue(on.enabled)
         XCTAssertEqual(on.label, "Limit the extra copies to a floor")
@@ -338,7 +411,7 @@ final class RequirementEditorTests: XCTestCase {
         XCTAssertNoThrow(try SearchRequest(requirements: limited.rows))
 
         let cleared = try XCTUnwrap(RequirementBoard.apply([.setCopyDepth(1, nil)], to: limited.rows))
-        XCTAssertNil(cleared.item(holding: 1)?.stack.copyDepth)
+        XCTAssertNil(cleared.chip(1)?.stack.copyDepth)
     }
 
     /// A stack of wands kept out of Auto resin grows plain copies — only the
@@ -347,14 +420,14 @@ final class RequirementEditorTests: XCTestCase {
         let excluded = try requirement(1, kind: .wand, upgrade: 3, upgradeMatch: .exactly, excludeResin: true)
         let grown = try XCTUnwrap(RequirementBoard.apply([.setCount(1, 2)], to: [excluded]))
         XCTAssertEqual(grown.items.count, 1)
-        XCTAssertEqual(grown.items.first?.stack.count, 2)
+        XCTAssertEqual(grown.items.first?.chips.first?.stack.count, 2)
         XCTAssertEqual(grown.rows.map(\.excludeResin), [true, false])
         XCTAssertTrue(grown.problems.isEmpty)
         XCTAssertNoThrow(try SearchRequest(requirements: grown.rows))
 
         let named = try requirement(1, item: "wand_frost", excludeResin: true)
         let three = try XCTUnwrap(RequirementBoard.apply([.setCount(1, 3)], to: [named]))
-        XCTAssertEqual(three.items.map(\.stack.count), [3])
+        XCTAssertEqual(three.items.flatMap(\.chips).map(\.stack.count), [3])
         // Its sheet opens on the whole stack and saves it back as it was.
         let sheet = try XCTUnwrap(RequirementSheet.open(rows: three.rows, key: 1))
         XCTAssertEqual(sheet.form.stack.count, 3)
@@ -410,7 +483,7 @@ final class RequirementEditorTests: XCTestCase {
         let wandKey = board.key(following: 0)
         XCTAssertNotEqual(wandKey, 0)
         let grown = try XCTUnwrap(RequirementBoard.apply([.setCount(wandKey, 2)], to: rows))
-        XCTAssertEqual(grown.item(holding: wandKey)?.stack.count, 2)
+        XCTAssertEqual(grown.chip(wandKey)?.stack.count, 2)
         XCTAssertFalse(grown.rows.contains { $0.key == 0 })
     }
 

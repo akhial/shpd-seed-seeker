@@ -31,11 +31,13 @@ final class RequirementSheetTests: XCTestCase {
 
     private func requirement(_ key: Int64, item id: String? = nil, kind: ItemKind? = nil,
                              upgrade: Int = 0, upgradeMatch: UpgradeMatch = .any,
-                             maximumDepth: Int? = nil, excludeResin: Bool = false) throws -> ItemRequirement {
+                             maximumDepth: Int? = nil, alternativeGroup: Int? = nil,
+                             identityGroup: Int? = nil, excludeResin: Bool = false) throws -> ItemRequirement {
         let item = try id.map { try XCTUnwrap(ItemCatalog.findById($0), "unknown catalog item \($0)") }
         return try ItemRequirement(key: key, item: item, upgrade: upgrade,
                                    kind: kind ?? item?.kind ?? .weapon, upgradeMatch: upgradeMatch,
-                                   maximumDepth: maximumDepth, excludeResin: excludeResin)
+                                   identityGroup: identityGroup, maximumDepth: maximumDepth,
+                                   alternativeGroup: alternativeGroup, excludeResin: excludeResin)
     }
 
     /// The sheet after the user moved each control in turn.
@@ -76,6 +78,13 @@ final class RequirementSheetTests: XCTestCase {
         XCTAssertEqual(form.preview?.title, "Ring of Might")
         XCTAssertEqual(form.preview?.key, 0)
         XCTAssertEqual(form.preview?.relations.first?.glyph, .sum)
+        // The preview is the chip a save would draw, badges and stack
+        // included, with no copy keys of its own.
+        XCTAssertEqual(form.preview?.countBadge?.text, "≤2")
+        XCTAssertEqual(form.preview?.totalBadge?.text, "Σ ≥ 3")
+        XCTAssertEqual(form.preview?.totalBadge?.compactText, "Σ≥3")
+        XCTAssertEqual(form.preview?.stack.total, 3)
+        XCTAssertEqual(form.preview?.copies, [])
         XCTAssertEqual(form.category.value, "ring")
         XCTAssertEqual(form.category.options.map(\.label), ["Weapon", "Armor", "Wand", "Ring", "Trinket", "Artifact"])
         XCTAssertEqual(form.item.value, "ring_might")
@@ -123,6 +132,39 @@ final class RequirementSheetTests: XCTestCase {
         XCTAssertFalse(form.resin.visible)
         XCTAssertTrue(form.errors.isEmpty)
         XCTAssertTrue(form.canSave)
+    }
+
+    /// A cluster member's sheet shows its own stack — its count and copy
+    /// floor, never a combined level — and saves it: the Frost of
+    /// {Frost ×2 | Disintegration} saved at ×3 grows Frost alone.
+    func testAMembersSheetEditsItsOwnStack() throws {
+        let form = try fixtureForm("editor-open-member")
+        XCTAssertTrue(form.inCluster)
+        XCTAssertTrue(form.stack.visible)
+        XCTAssertEqual(form.stack.count, 2)
+        XCTAssertEqual(form.stack.valueLabel, "×2")
+        XCTAssertTrue(form.stack.copyDepth.visible)
+        XCTAssertFalse(form.stack.countLevels.visible)
+        XCTAssertEqual(form.preview?.countBadge?.text, "×2")
+        XCTAssertFalse(try XCTUnwrap(form.preview).stack.canCountLevels)
+
+        let rows = [try requirement(1, item: "wand_frost", alternativeGroup: 1, identityGroup: 1),
+                    try requirement(2, item: "wand_disintegration", alternativeGroup: 1),
+                    try requirement(3, kind: .wand, identityGroup: 1)]
+        let opened = try XCTUnwrap(RequirementSheet.open(rows: rows, key: 1))
+        XCTAssertEqual(opened.form.stack.count, 2)
+        let grown = try moved(opened, [.count(3)])
+        XCTAssertEqual(grown.form.stack.valueLabel, "×3")
+        let saved = try landed(grown.save(onto: rows))
+        XCTAssertTrue(saved.changed)
+        XCTAssertEqual(saved.focus, 1)
+        XCTAssertEqual(saved.rows.map(\.key), [1, 2, 3, 4])
+        XCTAssertEqual(saved.rows.map(\.identityGroup), [1, nil, 1, 1])
+        let board = RequirementBoard.of(saved.rows)
+        XCTAssertEqual(board.chip(1)?.countBadge?.text, "×3")
+        XCTAssertNil(board.chip(2)?.countBadge)
+        XCTAssertEqual(try XCTUnwrap(RequirementSheet.open(rows: rows, key: 2)).form.stack.valueLabel, "×1")
+        XCTAssertNoThrow(try SearchRequest(requirements: saved.rows))
     }
 
     /// A new chip starts on any weapon, its items under their tiers.
@@ -303,7 +345,7 @@ final class RequirementSheetTests: XCTestCase {
         XCTAssertEqual(saved.focus, 2)
         XCTAssertEqual(saved.rows.map(\.key), [1, 2, 3])
         XCTAssertEqual(saved.rows.dropFirst().map(\.levelSum?.atLeast), [6, 6])
-        XCTAssertEqual(RequirementBoard.of(saved.rows).item(holding: 2)?.stack.total, 6)
+        XCTAssertEqual(RequirementBoard.of(saved.rows).chip(2)?.stack.total, 6)
         XCTAssertNoThrow(try SearchRequest(requirements: saved.rows))
     }
 
@@ -321,8 +363,8 @@ final class RequirementSheetTests: XCTestCase {
         XCTAssertEqual(saved.rows.map(\.key), [1, 2, 3])
         XCTAssertEqual(saved.focus, 2)
         let board = RequirementBoard.of(saved.rows)
-        XCTAssertEqual(board.item(holding: 2)?.stack.count, 2)
-        XCTAssertEqual(board.item(holding: 2)?.stack.copyDepth, 6)
+        XCTAssertEqual(board.chip(2)?.stack.count, 2)
+        XCTAssertEqual(board.chip(2)?.stack.copyDepth, 6)
         XCTAssertNoThrow(try SearchRequest(requirements: saved.rows))
 
         let chip = [try requirement(1, item: "ring_might", upgrade: 2, upgradeMatch: .exactly),

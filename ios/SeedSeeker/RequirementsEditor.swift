@@ -10,7 +10,6 @@ struct RequirementsEditor: View {
     @Environment(\.dismiss) private var dismiss
     /// Hands the sheet over to the resin sheet once Arcane Resin is picked.
     let onPickResin: (RequirementSheet) -> Void
-    let onEditGroupQuantity: (() -> Void)?
     /// Saves the sheet onto the board; answers the sheet to keep showing
     /// when the core refused the save, its errors saying why.
     let onSave: (RequirementSheet) -> RequirementSheet?
@@ -25,11 +24,9 @@ struct RequirementsEditor: View {
 
     init(sheet: RequirementSheet,
          onPickResin: @escaping (RequirementSheet) -> Void,
-         onEditGroupQuantity: (() -> Void)? = nil,
          onSave: @escaping (RequirementSheet) -> RequirementSheet?,
          onRemove: (() -> Void)? = nil) {
         self.onPickResin = onPickResin
-        self.onEditGroupQuantity = onEditGroupQuantity
         self.onSave = onSave
         self.onRemove = onRemove
         _sheet = State(initialValue: sheet)
@@ -184,8 +181,9 @@ struct RequirementsEditor: View {
                         explanation(form.excludeResin.caption)
                     }
                 }
+                // A cluster member's stack is its own, so its sheet shows it
+                // like a lone chip's.
                 if form.stack.visible { stackControls }
-                if let onEditGroupQuantity, form.inCluster { groupQuantityButton(action: onEditGroupQuantity) }
             }
             .padding(20)
         }
@@ -359,27 +357,6 @@ struct RequirementsEditor: View {
                 }
             }
         }
-    }
-
-    private func groupQuantityButton(action: @escaping () -> Void) -> some View {
-        Button {
-            if saveDraft() { action() }
-        } label: {
-            HStack(spacing: 12) {
-                Text(form.stack.label).foregroundStyle(.primary)
-                Spacer(minLength: 8)
-                Text(form.stack.valueLabel).foregroundStyle(.secondary)
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-            }
-            .font(.subheadline)
-            .padding(.horizontal, 16)
-            .frame(minHeight: 52)
-            .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 18))
-        }
-        .buttonStyle(.plain)
-        .disabled(!form.canSave)
     }
 
     private var footer: some View {

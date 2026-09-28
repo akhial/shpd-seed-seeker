@@ -16,13 +16,16 @@ struct FinderView: View {
         model.query.board.ordinaryCount
             + (model.query.arcaneResinAuto || model.query.arcaneResin > 0 ? 1 : 0)
     }
-    /// Each entry under the name the core gives it, and the resin chip as
-    /// its amount tag — always its first — and its name.
+    /// Each entry under the name the core gives it — a chip on its own with
+    /// its count, since stacks are the chips' and a cluster has none of its
+    /// own — and the resin chip as its amount tag (always its first) and its
+    /// name.
     private var requirementsSummary: String {
         let board = model.query.board
-        var parts = board.items.map { item in
-            (item.blanket ? "Blanket: " : "") + item.name
-                + (item.countBadge.map { " \($0.compactText)" } ?? "")
+        var parts = board.items.map { item -> String in
+            let count = item.cluster == nil ? item.chips.first?.countBadge : nil
+            return (item.blanket ? "Blanket: " : "") + item.name
+                + (count.map { " \($0.compactText)" } ?? "")
         }
         if let resin = board.resin {
             let amount = resin.tags.first.map { "\($0.text) " } ?? ""

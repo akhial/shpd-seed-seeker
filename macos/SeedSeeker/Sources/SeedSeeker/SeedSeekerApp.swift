@@ -977,9 +977,10 @@ private struct QueryView: View {
 /**
  The requirement board: every requirement is a chip; drop one chip onto
  another for an either/or cluster, drag a chip out of its cluster to make it
- standalone again. Everything else is a property of the chip itself — a stack
- badge (×N / ≤N) for "more of the same kind", and a Σ badge for a stack whose
- items count their levels towards one total.
+ standalone again. Everything else is a property of the chip itself, a
+ cluster member's included — a stack badge (×N / ≤N) for "more of the same
+ kind", and a Σ badge for a stack on its own whose items count their levels
+ towards one total.
 
  The board draws what the shared core's ``RequirementBoard`` says — the
  folded entries, every chip's words, what each chip may join — and every
@@ -1011,7 +1012,7 @@ private struct RequirementBoardView: View {
             FlowLayout(spacing: 6, lineSpacing: 8) {
                 ForEach(board.section(blanket: blanket)) { item in
                     if item.cluster == nil, let chip = item.chips.first {
-                        ChipView(board: board, chip: chip, item: item, inCluster: false,
+                        ChipView(board: board, chip: chip,
                                  dragging: $dragging, onOpen: onOpen, perform: { run($0) },
                                  onDrop: { drop($0, onto: $1) })
                     } else {
@@ -1114,8 +1115,8 @@ private struct RequirementBoardView: View {
     }
 }
 
-/// An either/or cluster: its chips wrap within one dashed outline, followed
-/// by the stack badges, since the stack is the cluster's.
+/// An either/or cluster: its chips wrap within one dashed outline, each
+/// member with its own stack badges; the cluster has none of its own.
 private struct ClusterView: View {
     let board: RequirementBoard
     let item: BoardItem
@@ -1135,13 +1136,9 @@ private struct ClusterView: View {
                             .foregroundStyle(Color.shatteredYellow.opacity(0.9))
                             .padding(.horizontal, 2)
                     }
-                    ChipView(board: board, chip: entry.element, item: item, inCluster: true,
+                    ChipView(board: board, chip: entry.element,
                              dragging: $dragging, onOpen: onOpen, perform: perform, onDrop: onDrop)
                 }
-            }
-            if item.countBadge != nil || item.totalBadge != nil {
-                StackBadgesView(item: item, perform: perform)
-                    .padding(.leading, 1).padding(.trailing, 3)
             }
         }
         .padding(3)
@@ -1163,14 +1160,11 @@ private struct ClusterView: View {
 }
 
 /// One chip: the item's sprite, its short name, the qualifiers that fit in a
-/// capsule, and — for a chip standing on its own — its stack badges.
+/// capsule, and its stack badges — a cluster member's own included.
 private struct ChipView: View {
     let board: RequirementBoard
-    /// The chip as this pass of the board drew it.
+    /// The chip as this pass of the board drew it, with its own stack.
     let chip: BoardChip
-    /// The board entry the chip belongs to: its own, or its cluster's.
-    let item: BoardItem
-    let inCluster: Bool
     @Binding var dragging: RequirementChipDrag?
     let onOpen: (Int64) -> Void
     let perform: ([BoardEdit]) -> BoardRefusal?
@@ -1180,34 +1174,11 @@ private struct ChipView: View {
 
     var body: some View {
         HStack(spacing: 5) {
-            HStack(spacing: 5) {
-                // No seed here: a chip names an item class the search is to
-                // look for, so its ring keeps the catalog's own cell.
-                if let catalogItem = chip.catalogItem {
-                    ItemSpriteView(item: catalogItem,
-                                   glow: effectGlow(chip.effect?.glowNames.first), pointSize: 16)
-                } else if let kind = chip.kind {
-                    WildcardSpriteView(kind: kind)
-                }
-                Text(chip.name)
-                    .font(.system(size: 12, weight: .semibold))
-                    .lineLimit(1).truncationMode(.tail)
-                    .frame(maxWidth: 150, alignment: .leading)
-                ForEach(chip.tags, id: \.self) { tag in RequirementTagView(tag: tag) }
-                effectBadge
-                ForEach(chip.trailingTags, id: \.self) { tag in RequirementTagView(tag: tag) }
-                if chip.uncursed {
-                    Text("✓")
-                        .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(Color.shatteredMint)
-                        .padding(.horizontal, 4)
-                        .background(Color.shatteredMint.opacity(0.14), in: RoundedRectangle(cornerRadius: 4))
-                }
-            }
-            .contentShape(Rectangle())
-            .onTapGesture { onOpen(chip.key) }
-            if !inCluster, item.countBadge != nil || item.totalBadge != nil {
-                StackBadgesView(item: item, perform: perform)
+            face
+                .contentShape(Rectangle())
+                .onTapGesture { onOpen(chip.key) }
+            if chip.countBadge != nil || chip.totalBadge != nil {
+                StackBadgesView(chip: chip, perform: perform)
             }
         }
         .padding(.leading, 7).padding(.trailing, 7)
@@ -1229,6 +1200,34 @@ private struct ChipView: View {
         } isTargeted: { isTargeted = $0 }
         .contextMenu { menu }
         .accessibilityLabel(chip.description)
+    }
+
+    /// The chip without its badges: sprite, name and qualifiers.
+    private var face: some View {
+        HStack(spacing: 5) {
+            // No seed here: a chip names an item class the search is to
+            // look for, so its ring keeps the catalog's own cell.
+            if let catalogItem = chip.catalogItem {
+                ItemSpriteView(item: catalogItem,
+                               glow: effectGlow(chip.effect?.glowNames.first), pointSize: 16)
+            } else if let kind = chip.kind {
+                WildcardSpriteView(kind: kind)
+            }
+            Text(chip.name)
+                .font(.system(size: 12, weight: .semibold))
+                .lineLimit(1).truncationMode(.tail)
+                .frame(maxWidth: 150, alignment: .leading)
+            ForEach(chip.tags, id: \.self) { tag in RequirementTagView(tag: tag) }
+            effectBadge
+            ForEach(chip.trailingTags, id: \.self) { tag in RequirementTagView(tag: tag) }
+            if chip.uncursed {
+                Text("✓")
+                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .foregroundStyle(Color.shatteredMint)
+                    .padding(.horizontal, 4)
+                    .background(Color.shatteredMint.opacity(0.14), in: RoundedRectangle(cornerRadius: 4))
+            }
+        }
     }
 
     private var borderColour: Color {
@@ -1304,18 +1303,19 @@ private struct ChipView: View {
                 }
             }
         }
-        if item.stack.canChangeCount {
+        // The chip's own stack, a cluster member's included.
+        if chip.stack.canChangeCount {
             Divider()
             Menu("How many") {
-                ForEach(item.stack.countRange, id: \.self) { count in
+                ForEach(chip.stack.countRange, id: \.self) { count in
                     Toggle("\(count)", isOn: Binding(
-                        get: { item.stack.count == count },
+                        get: { chip.stack.count == count },
                         set: { on in if on { _ = perform([.setCount(chip.key, count)]) } }))
                 }
             }
         }
-        if item.stack.canCountLevels {
-            Button(item.stack.total == nil ? "Count levels together" : "Stop counting levels") {
+        if chip.stack.canCountLevels {
+            Button(chip.stack.total == nil ? "Count levels together" : "Stop counting levels") {
                 _ = perform([.toggleLevels(chip.key)])
             }
         }
@@ -1377,41 +1377,41 @@ struct RequirementTagView: View {
     }
 }
 
-/// The stack badges: how many of the chip (×N, or ≤N once the levels are being
+/// A chip's stack badges: how many of it (×N, or ≤N once the levels are being
 /// counted) and the combined level (Σ ≥ T). Clicking one adjusts it in place.
 private struct StackBadgesView: View {
-    /// The entry as this pass of the board drew it; its anchor's key survives
-    /// every edit the steppers make.
-    let item: BoardItem
+    /// The chip — on its own or a cluster member — as this pass of the board
+    /// drew it; its key survives every edit the steppers make.
+    let chip: BoardChip
     let perform: ([BoardEdit]) -> BoardRefusal?
     @State private var editingCount = false
     @State private var editingTotal = false
 
     var body: some View {
         HStack(spacing: 3) {
-            if let badge = item.countBadge {
+            if let badge = chip.countBadge {
                 Button { editingCount = true } label: { badgeView(badge.text) }
                     .buttonStyle(.plain)
                     .help(badge.tooltip)
                     .popover(isPresented: $editingCount, arrowEdge: .bottom) {
-                        // A hand-written document can hand a mixed cluster a
-                        // stack; it may then only be shrunk, never grown.
-                        Stepper(value: countBinding, in: item.stack.countRange) {
+                        // A hand-written stack on a chip that cannot grow
+                        // may only be shrunk.
+                        Stepper(value: countBinding, in: chip.stack.countRange) {
                             LabeledContent("How many") {
-                                Text(item.stack.countText).monospacedDigit().foregroundStyle(.secondary)
+                                Text(chip.stack.countText).monospacedDigit().foregroundStyle(.secondary)
                             }
                         }
                         .padding(14).frame(width: 200)
                     }
             }
-            if let badge = item.totalBadge {
+            if let badge = chip.totalBadge {
                 Button { editingTotal = true } label: { badgeView(badge.text) }
                     .buttonStyle(.plain)
                     .help(badge.tooltip)
                     .popover(isPresented: $editingTotal, arrowEdge: .bottom) {
-                        Stepper(value: totalBinding, in: item.stack.totalRange) {
+                        Stepper(value: totalBinding, in: chip.stack.totalRange) {
                             LabeledContent("Combined level") {
-                                Text(item.stack.totalText).monospacedDigit().foregroundStyle(.secondary)
+                                Text(chip.stack.totalText).monospacedDigit().foregroundStyle(.secondary)
                             }
                         }
                         .padding(14).frame(width: 210)
@@ -1433,14 +1433,14 @@ private struct StackBadgesView: View {
     }
 
     private var countBinding: Binding<Int> {
-        Binding(get: { item.stack.count }, set: { value in
-            _ = perform([.setCount(item.anchor, value)])
+        Binding(get: { chip.stack.count }, set: { value in
+            _ = perform([.setCount(chip.key, value)])
         })
     }
 
     private var totalBinding: Binding<Int> {
-        Binding(get: { item.stack.total ?? 1 }, set: { value in
-            _ = perform([.setTotal(item.anchor, value)])
+        Binding(get: { chip.stack.total ?? 1 }, set: { value in
+            _ = perform([.setTotal(chip.key, value)])
         })
     }
 }

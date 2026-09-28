@@ -36,7 +36,7 @@ final class BlanketRequirementsTests: XCTestCase {
         let board = RequirementBoard.of(requirements)
         XCTAssertEqual(board.ordinaryCount, 1)
         XCTAssertEqual(board.blanketCount, 2)
-        XCTAssertFalse(try XCTUnwrap(board.item(holding: 2)).stack.canGrow)
+        XCTAssertFalse(try XCTUnwrap(board.chip(2)).stack.canGrow)
         XCTAssertEqual(board.chip(1)?.join, [])
         XCTAssertEqual(RequirementBoard.apply([.setCount(2, 3)], to: requirements)?.changed, false)
         XCTAssertEqual(RequirementBoard.apply([.join(source: 1, target: 2)], to: requirements)?.changed, false)

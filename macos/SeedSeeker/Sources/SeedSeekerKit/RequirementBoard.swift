@@ -14,13 +14,13 @@ public enum BoardEdit: Sendable {
     case remove(Int64)
     /// Removes the whole entry holding the row: members and hidden copies.
     case removeItem(Int64)
-    /// How many items the entry asks for.
+    /// How many items the chip asks for — a lone chip or one cluster member.
     case setCount(Int64, Int)
-    /// Sets or clears the stack's combined level.
+    /// Sets or clears a lone ring stack's combined level.
     case setTotal(Int64, Int?)
     /// Turns counting levels on or off.
     case toggleLevels(Int64)
-    /// Sets or clears the floor limit of the stack's hidden copies.
+    /// Sets or clears the floor limit of the chip's hidden copies.
     case setCopyDepth(Int64, Int?)
 
     var object: [String: Any] {
@@ -217,7 +217,7 @@ public struct BoardKeyChange: Hashable, Sendable {
 
 /// Why an edit was refused.
 public struct BoardRefusal: Hashable, Sendable {
-    /// Stable: `mixed_category_stack`, `blanket_total` or `no_free_group`.
+    /// Stable: `blanket_total` or `no_free_group`.
     public let reason: String
     /// The sentence to show.
     public let message: String
@@ -259,8 +259,9 @@ public struct BoardProblem: Hashable, Sendable {
 
 // MARK: - Entries and chips
 
-/// One board entry: a chip, or an either/or cluster of chips, with the
-/// stack its badges show.
+/// One board entry: a chip, or an either/or cluster of chips. Stacks and
+/// their badges belong to the chips, a cluster's members included; nothing
+/// is counted per entry.
 public struct BoardItem: Hashable, Identifiable, Sendable {
     /// `r17` for a chip, `c3` for a cluster; stable while the entry
     /// survives an edit.
@@ -275,27 +276,20 @@ public struct BoardItem: Hashable, Identifiable, Sendable {
     public let name: String
     /// The visible rows: one for a chip, every member of a cluster.
     public let members: [Int64]
-    /// The hidden copies behind the stack badge.
+    /// Every hidden copy of the entry: those behind each chip's badge.
     public let extras: [Int64]
-    public let stack: BoardStack
-    /// The badges shown at rest: the count (`×3`) when the entry asks for
-    /// more than one item, the combined level (`Σ ≥ 5`) when it counts levels.
-    public let countBadge: BoardBadge?
-    public let totalBadge: BoardBadge?
     /// One chip per member.
     public let chips: [BoardChip]
     /// The first problem touching any member or hidden copy.
     public let problem: String?
 
-    /// The row the entry's stack and badges act on.
+    /// The entry's first visible row, which names it where a view needs one.
     public var anchor: Int64 { members[0] }
 
     init?(json object: [String: Any]) {
         let members = jsonKeys(object["members"])
         let chips = jsonObjects(object["chips"]).compactMap(BoardChip.init(json:))
-        guard let id = jsonString(object["id"]), !members.isEmpty, !chips.isEmpty,
-              let stack = BoardStack(json: object["stack"]) else { return nil }
-        let badges = object["badges"] as? [String: Any] ?? [:]
+        guard let id = jsonString(object["id"]), !members.isEmpty, !chips.isEmpty else { return nil }
         self.id = id
         blanket = jsonFlag(object["blanket"])
         cluster = jsonInt(object["cluster"])
@@ -303,31 +297,30 @@ public struct BoardItem: Hashable, Identifiable, Sendable {
         name = jsonString(object["name"]) ?? chips[0].name
         self.members = members
         extras = jsonKeys(object["extras"])
-        self.stack = stack
-        countBadge = BoardBadge(json: badges["count"])
-        totalBadge = BoardBadge(json: badges["total"])
         self.chips = chips
         problem = jsonString(object["problem"])
     }
 }
 
-/// What an entry's count and combined-level steppers offer.
+/// What a chip's count, combined-level and copy-floor steppers offer: its
+/// own stack, whether it stands alone or is a cluster member.
 public struct BoardStack: Hashable, Sendable {
-    /// How many items the entry asks for, its anchor included.
+    /// How many items the chip asks for, itself included.
     public let count: Int
     /// The most items any stack may ask for.
     public let max: Int
-    /// Whether the entry can grow a stack at all.
+    /// Whether the chip can grow a stack at all.
     public let canGrow: Bool
-    /// Whether the count stepper is live: the entry can grow, or it has
+    /// Whether the count stepper is live: the chip can grow, or it has
     /// copies to shed.
     public let canChangeCount: Bool
-    /// The count stepper's upper bound: ``max`` while the entry can grow,
+    /// The count stepper's upper bound: ``max`` while the chip can grow,
     /// else its count, which it may only shed copies from.
     public let countMax: Int
     /// The combined level, when the stack counts levels.
     public let total: Int?
-    /// Whether "count levels together" applies (or can be turned off).
+    /// Whether "count levels together" applies (or can be turned off):
+    /// only a ring stack standing on its own, never a cluster member.
     public let canCountLevels: Bool
     /// The total stepper's upper bound.
     public let levelCapacity: Int
@@ -346,8 +339,11 @@ public struct BoardStack: Hashable, Sendable {
     /// The totals the combined-level stepper offers.
     public var totalRange: ClosedRange<Int> { 1...Swift.max(1, levelCapacity) }
 
-    init?(json value: Any?) {
-        guard let object = value as? [String: Any], let count = jsonInt(object["count"]) else { return nil }
+    /// Missing or unreadable, the stack is one item with nothing to step:
+    /// a chip is never dropped for want of its stack.
+    init(json value: Any?) {
+        let object = value as? [String: Any] ?? [:]
+        let count = jsonInt(object["count"]) ?? 1
         self.count = count
         max = jsonInt(object["max"]) ?? count
         canGrow = jsonFlag(object["can_grow"])
@@ -410,6 +406,17 @@ public struct BoardChip: Hashable, Identifiable, Sendable {
     public let description: String
     /// The row's own first problem, else the first one between rows blaming it.
     public let problem: String?
+    /// The badges the chip shows at rest: the count (`×3`) when it asks for
+    /// more than one item, the combined level (`Σ ≥ 5`) when it counts
+    /// levels. A cluster member's are its own; a picked-up chip shows
+    /// neither, since a drag moves one item.
+    public let countBadge: BoardBadge?
+    public let totalBadge: BoardBadge?
+    /// The hidden copies behind the chip's count badge. Members whose stacks
+    /// are alike share theirs.
+    public let copies: [Int64]
+    /// What the chip's steppers offer.
+    public let stack: BoardStack
     public let inCluster: Bool
     /// Whether "on its own" applies.
     public let canDetach: Bool
@@ -444,6 +451,11 @@ public struct BoardChip: Hashable, Identifiable, Sendable {
         relations = jsonObjects(object["relations"]).compactMap(ChipRelation.init(json:))
         description = jsonString(object["description"]) ?? title
         problem = jsonString(object["problem"])
+        let badges = object["badges"] as? [String: Any] ?? [:]
+        countBadge = BoardBadge(json: badges["count"])
+        totalBadge = BoardBadge(json: badges["total"])
+        copies = jsonKeys(object["copies"])
+        stack = BoardStack(json: object["stack"])
         inCluster = jsonFlag(object["in_cluster"])
         canDetach = jsonFlag(object["can_detach"])
         join = jsonKeys(object["join"])
