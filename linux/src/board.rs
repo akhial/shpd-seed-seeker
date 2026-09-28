@@ -224,8 +224,13 @@ pub fn resin_tooltip(resin: &ResinChip) -> String {
 
 #[cfg(test)]
 mod tests {
+    use serde_json::{Value, json};
     use shpd_seedfinder_core::catalog::{ItemId, ItemKind};
-    use shpd_seedfinder_core::editor::{self, Edit, ResinAmount, ResinState, Row};
+    use shpd_seedfinder_core::editor::{
+        self, BoardView, ChipView, Edit, EditResult, ItemView, ResinAmount, ResinState, Row, Tag,
+        TagStyle,
+    };
+    use shpd_seedfinder_core::json_query;
     use shpd_seedfinder_core::query::{ArcaneResinFilter, Requirement, UpgradeRequirement};
 
     use super::{
@@ -233,6 +238,357 @@ mod tests {
         join_choices, resin_tooltip,
     };
     use crate::state::AppState;
+
+    /// A golden request/response pair of the editor's board envelope.
+    struct Fixture {
+        name: &'static str,
+        request: Value,
+        response: Value,
+    }
+
+    fn fixture(name: &'static str, text: &str) -> Fixture {
+        let document: Value = serde_json::from_str(text).expect("fixtures are JSON");
+        assert_eq!(document["envelope"], "requirement_board", "{name}");
+        Fixture {
+            name,
+            request: document["request"].clone(),
+            response: document["response"].clone(),
+        }
+    }
+
+    /// Board fixtures whose rows every Linux list can hold, replayed through
+    /// the typed API the board calls.
+    fn board_fixtures() -> Vec<Fixture> {
+        macro_rules! golden {
+            ($($name:literal),* $(,)?) => {
+                vec![$(fixture(
+                    $name,
+                    include_str!(concat!(
+                        "../../crates/seedfinder-core/tests/fixtures/editor/",
+                        $name,
+                        ".json"
+                    )),
+                )),*]
+            };
+        }
+        golden![
+            "board-tour",
+            "board-empty",
+            "board-join-refused",
+            "board-join-trades-copies",
+            "board-detach",
+            "board-remove-member",
+            "board-remove-item",
+            "board-stack-concrete",
+            "board-stack-wildcard",
+            "board-stack-cluster",
+            "board-stack-total",
+            "board-copy-depth",
+            "board-toggle-levels",
+            "board-blanket-total-refused",
+            "board-save-new",
+            "board-save-unchanged",
+            "board-problems",
+            "board-problems-blankets-only",
+        ]
+    }
+
+    /// One requirement through the app's own codec: the canonical query
+    /// document it saves, shares and loads.
+    fn decode_requirement(entry: &Value) -> Requirement {
+        let document = json!({ "requirements": [entry] }).to_string();
+        json_query::decode_unvalidated(&document)
+            .expect("fixture rows are readable")
+            .requirements[0]
+    }
+
+    /// A fixture row as the board holds it. The document writes clusters as
+    /// `any_of` entries; a row carries its label instead.
+    fn decode_row(entry: &Value) -> Row {
+        let mut fields = entry.as_object().expect("a row is an object").clone();
+        let key = fields.remove("key").and_then(|key| key.as_u64()).unwrap();
+        let group = fields
+            .remove("alternative_group")
+            .map(|group| u8::try_from(group.as_u64().unwrap()).unwrap());
+        Row {
+            key,
+            requirement: Requirement {
+                alternative_group: group,
+                ..decode_requirement(&Value::Object(fields))
+            },
+        }
+    }
+
+    /// A row as the envelope writes it, from the entry the app's codec
+    /// writes for its requirement.
+    fn encode_row(row: &Row) -> Value {
+        let mut state = AppState::default();
+        state.requirements = vec![Row {
+            key: row.key,
+            requirement: Requirement {
+                alternative_group: None,
+                ..row.requirement
+            },
+        }];
+        let mut entry = json_query::encode(&state.unvalidated_query())["requirements"][0].clone();
+        entry["key"] = json!(row.key);
+        if let Some(group) = row.requirement.alternative_group {
+            entry["alternative_group"] = json!(group);
+        }
+        entry
+    }
+
+    fn decode_edit(edit: &Value) -> Edit {
+        let key = |field: &str| edit[field].as_u64().unwrap();
+        let small = |field: &str| {
+            edit[field]
+                .as_u64()
+                .map(|value| u8::try_from(value).unwrap())
+        };
+        match edit["type"].as_str().unwrap() {
+            "normalize" => Edit::Normalize,
+            "join" => Edit::Join {
+                source: key("source"),
+                target: key("target"),
+            },
+            "detach" => Edit::Detach { key: key("key") },
+            "remove" => Edit::Remove { key: key("key") },
+            "remove_item" => Edit::RemoveItem { key: key("key") },
+            "set_count" => Edit::SetCount {
+                key: key("key"),
+                count: small("count").unwrap(),
+            },
+            "set_total" => Edit::SetTotal {
+                key: key("key"),
+                total: small("total"),
+            },
+            "toggle_levels" => Edit::ToggleLevels { key: key("key") },
+            "set_copy_depth" => Edit::SetCopyDepth {
+                key: key("key"),
+                max_depth: small("max_depth"),
+            },
+            "save" => Edit::Save {
+                key: edit["key"].as_u64(),
+                requirement: decode_requirement(&edit["requirement"]),
+                count: small("count").unwrap(),
+                total: small("total"),
+                copy_depth: small("copy_depth"),
+            },
+            other => panic!("unknown edit {other}"),
+        }
+    }
+
+    fn decode_resin(resin: &Value) -> Option<ResinState> {
+        if resin.is_null() {
+            return None;
+        }
+        let document = json!({
+            "requirements": [],
+            "arcane_resin": resin["amount"],
+            "arcane_resin_filter": resin["filter"],
+        });
+        let state = AppState::from_query(
+            &json_query::decode_unvalidated(&document.to_string()).expect("a resin condition"),
+        );
+        state.resin()
+    }
+
+    fn keys(value: &Value) -> Vec<u64> {
+        value
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|key| key.as_u64().unwrap())
+            .collect()
+    }
+
+    fn tags(tags: &[Tag]) -> Value {
+        tags.iter()
+            .map(|tag| {
+                let style = match tag.style {
+                    TagStyle::Plain => "plain",
+                    TagStyle::Upgrade => "upgrade",
+                };
+                json!({ "text": tag.text, "style": style })
+            })
+            .collect()
+    }
+
+    /// The typed answer compared with the envelope's golden one, field by
+    /// field the board reads.
+    fn assert_matches(name: &str, result: &EditResult, view: &BoardView, response: &Value) {
+        let rows: Vec<Value> = result.rows.iter().map(encode_row).collect();
+        assert_eq!(Value::Array(rows), response["rows"], "{name}: rows");
+        assert_eq!(result.changed, response["changed"], "{name}: changed");
+        assert_eq!(result.next_key, response["next_key"], "{name}: next_key");
+        assert_eq!(json!(result.focus), response["focus"], "{name}: focus");
+        let refused = result.refused.map_or(
+            Value::Null,
+            |refusal| json!({ "reason": refusal.name(), "message": refusal.to_string() }),
+        );
+        assert_eq!(refused, response["refused"], "{name}: refused");
+        let counts = json!({ "ordinary": view.counts.ordinary, "blanket": view.counts.blanket });
+        assert_eq!(counts, response["counts"], "{name}: counts");
+        let problems: Vec<Value> = view
+            .problems
+            .iter()
+            .map(|problem| json!([problem.message, problem.keys]))
+            .collect();
+        let expected: Vec<Value> = response["problems"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|problem| json!([problem["message"], problem["keys"]]))
+            .collect();
+        assert_eq!(problems, expected, "{name}: problems");
+        let items = response["items"].as_array().unwrap();
+        assert_eq!(view.items.len(), items.len(), "{name}: items");
+        for (item, expected) in view.items.iter().zip(items) {
+            assert_item_matches(name, item, expected);
+        }
+        let resin = view.resin.as_ref().map_or(Value::Null, |resin| {
+            json!([resin.name, resin.description, tags(&resin.tags)])
+        });
+        let expected = &response["resin"];
+        let expected = if expected.is_null() {
+            Value::Null
+        } else {
+            json!([expected["name"], expected["description"], expected["tags"]])
+        };
+        assert_eq!(resin, expected, "{name}: resin");
+    }
+
+    fn assert_item_matches(name: &str, item: &ItemView, expected: &Value) {
+        assert_eq!(item.id.to_string(), expected["id"], "{name}: id");
+        assert_eq!(item.blanket, expected["blanket"], "{name}");
+        assert_eq!(item.members, keys(&expected["members"]), "{name}");
+        assert_eq!(item.extras, keys(&expected["extras"]), "{name}");
+        assert_eq!(json!(item.label), expected["label"], "{name}: label");
+        assert_eq!(json!(item.problem), expected["problem"], "{name}");
+        let stack = &item.stack;
+        let shown = json!({
+            "count": stack.count,
+            "can_grow": stack.can_grow,
+            "can_change_count": stack.can_change_count,
+            "can_count_levels": stack.can_count_levels,
+            "level_capacity": stack.level_capacity,
+            "default_total": stack.default_total,
+            "total": stack.total,
+        });
+        let expected_stack = &expected["stack"];
+        let wanted = json!({
+            "count": expected_stack["count"],
+            "can_grow": expected_stack["can_grow"],
+            "can_change_count": expected_stack["can_change_count"],
+            "can_count_levels": expected_stack["can_count_levels"],
+            "level_capacity": expected_stack["level_capacity"],
+            "default_total": expected_stack["default_total"],
+            "total": expected_stack["total"],
+        });
+        assert_eq!(shown, wanted, "{name}: stack");
+        for (badge, expected) in [
+            (&item.badges.count, &expected["badges"]["count"]),
+            (&item.badges.total, &expected["badges"]["total"]),
+        ] {
+            assert_eq!(
+                badge
+                    .as_ref()
+                    .map_or(Value::Null, |badge| json!([badge.text, badge.tooltip])),
+                if expected.is_null() {
+                    Value::Null
+                } else {
+                    json!([expected["text"], expected["tooltip"]])
+                },
+                "{name}: badge"
+            );
+        }
+        let chips = expected["chips"].as_array().unwrap();
+        assert_eq!(item.chips.len(), chips.len(), "{name}: chips");
+        for (chip, expected) in item.chips.iter().zip(chips) {
+            assert_chip_matches(name, chip, expected);
+        }
+    }
+
+    fn assert_chip_matches(name: &str, chip: &ChipView, expected: &Value) {
+        assert_eq!(chip.key, expected["key"], "{name}");
+        assert_eq!(chip.name, expected["name"], "{name}: name");
+        assert_eq!(chip.title, expected["title"], "{name}: title");
+        assert_eq!(chip.description, expected["description"], "{name}");
+        assert_eq!(json!(chip.problem), expected["problem"], "{name}");
+        assert_eq!(tags(&chip.tags), expected["tags"], "{name}: tags");
+        assert_eq!(
+            tags(&chip.trailing_tags),
+            expected["trailing_tags"],
+            "{name}: trailing tags"
+        );
+        assert_eq!(json!(chip.details), expected["details"], "{name}: details");
+        assert_eq!(
+            json!(chip.effect.as_ref().map(|effect| &effect.label)),
+            if expected["effect"].is_null() {
+                Value::Null
+            } else {
+                expected["effect"]["label"].clone()
+            },
+            "{name}: effect"
+        );
+        assert_eq!(chip.uncursed, expected["uncursed"], "{name}");
+        assert_eq!(chip.can_detach, expected["can_detach"], "{name}");
+        assert_eq!(chip.join, keys(&expected["join"]), "{name}: join");
+        let refused: Vec<Value> = chip
+            .refuse
+            .iter()
+            .map(|&(key, refusal)| {
+                json!({ "key": key, "reason": refusal.name(), "message": refusal.to_string() })
+            })
+            .collect();
+        assert_eq!(Value::Array(refused), expected["refuse"], "{name}: refuse");
+    }
+
+    #[test]
+    fn the_typed_editor_gives_the_golden_board_answers_through_the_app_codec() {
+        for Fixture {
+            name,
+            request,
+            response,
+        } in board_fixtures()
+        {
+            let rows: Vec<Row> = request["rows"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(decode_row)
+                .collect();
+            let edits: Vec<Edit> = request["edits"]
+                .as_array()
+                .map(|edits| edits.iter().map(decode_edit).collect())
+                .unwrap_or_default();
+            let result = editor::apply(&rows, request["next_key"].as_u64(), &edits);
+            let view = editor::board_view(&result.rows, decode_resin(&request["resin"]).as_ref());
+            assert_matches(name, &result, &view, &response);
+        }
+    }
+
+    #[test]
+    fn fixture_rows_survive_the_app_codec() {
+        for Fixture {
+            name,
+            request,
+            response,
+        } in board_fixtures()
+        {
+            // What the editor writes is what the app's codec writes, byte
+            // for byte as JSON values…
+            for entry in response["rows"].as_array().unwrap() {
+                assert_eq!(&encode_row(&decode_row(entry)), entry, "{name}");
+            }
+            // …and a row the app reads comes back as the same requirement,
+            // however its effects were listed.
+            for entry in request["rows"].as_array().unwrap() {
+                let row = decode_row(entry);
+                assert_eq!(decode_row(&encode_row(&row)), row, "{name}");
+            }
+        }
+    }
 
     fn ring(key: u64, upgrade: UpgradeRequirement) -> Row {
         Row {
