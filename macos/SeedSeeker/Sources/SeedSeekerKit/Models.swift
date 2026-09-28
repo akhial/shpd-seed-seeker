@@ -91,6 +91,12 @@ public enum ItemKind: Int, Codable, CaseIterable, Sendable {
 
     /// The broad item family; catalog items always carry the family.
     public var family: ItemKind { self == .meleeWeapon || self == .thrownWeapon ? .weapon : self }
+    /// The weapon class this kind restricts to, or nil when unrestricted.
+    public var weaponClass: WeaponClass? { self == .meleeWeapon ? .melee : self == .thrownWeapon ? .thrown : nil }
+    /// Whether a catalog item can satisfy a requirement of this kind.
+    public func accepts(_ item: CatalogItem) -> Bool {
+        item.kind == family && (weaponClass == nil || ItemCatalog.weaponClass(of: item.id) == weaponClass)
+    }
 }
 
 /// Melee/thrown classification of weapon catalog entries.
