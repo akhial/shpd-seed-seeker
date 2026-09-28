@@ -261,9 +261,6 @@ public sealed class EffectFilter
 /// </summary>
 public sealed record LevelSum(int Group, int AtLeast);
 
-/// <summary>A tiny qualifier beside a chip's name; the upgrade is tinted apart from the rest.</summary>
-public sealed record ChipTag(string Text, bool Upgrade = false);
-
 public sealed partial class ItemRequirement
 {
     public long Key { get; set; } = Random.Shared.NextInt64(1, long.MaxValue);
