@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
-import { itemsForKind } from "../../shared/game/catalog";
+import { itemsByCategory } from "../../shared/game/catalog";
 import { fromQueryJson, toQueryDocument } from "./query";
 import { validateQuery } from "./validation";
 import type { EditorSheet, QueryState, ScoutItem } from "../../engine/types";
@@ -52,7 +52,7 @@ describe("offered trinket pilot", () => {
   });
 
   it("highlights matched transmutations and names their exact positions", () => {
-    const order = itemsForKind("trinket").map((item, index) => ({
+    const order = itemsByCategory.trinket.map((item, index) => ({
       id: item.id,
       name: item.name,
       spriteIndex: item.sprite,
@@ -83,7 +83,7 @@ describe("offered trinket pilot", () => {
     );
     expect(query.requirements[0].selectTrinket).toBe(true);
     expect(fromQueryJson(JSON.stringify(toQueryDocument(query)))).toEqual(query);
-    const order = itemsForKind("trinket").map((i) => ({
+    const order = itemsByCategory.trinket.map((i) => ({
       id: i.id,
       name: i.name,
       spriteIndex: i.sprite,
@@ -125,7 +125,7 @@ describe("offered trinket pilot", () => {
   });
 
   it("preserves all 17 identities, draws four choices in deck order, and highlights the match", () => {
-    const order = itemsForKind("trinket")
+    const order = itemsByCategory.trinket
       .map((item) => ({
         id: item.id,
         name: item.name,
@@ -168,7 +168,7 @@ describe("offered trinket pilot", () => {
     expect(tail).toContain("width:24px");
     expect(tail).toContain("image-rendering:pixelated");
     expect(tail).not.toMatch(/>\d+<\//);
-    for (const trinket of itemsForKind("trinket")) {
+    for (const trinket of itemsByCategory.trinket) {
       expect(trinket.name).toBe(trinket.name.replace(/\b\w/g, (letter) => letter.toUpperCase()));
     }
   });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vite-plus/test";
-import { clampUpgrade, defaultQueryState, fromQueryJson, validateRequirement } from "./query";
+import { defaultQueryState, fromQueryJson } from "./query";
 import { validateQuery } from "./validation";
 import type { RequirementState } from "../../engine/types";
 
@@ -67,32 +67,5 @@ describe("query validation", () => {
       "Requirement 1: Requirement floor must be 1 through 24.",
     ]);
     expect(validateQuery(defaultQueryState()).errors).toEqual(["Add at least one requirement."]);
-  });
-
-  it("pulls an out-of-reach upgrade back when the tier narrows", () => {
-    const plus5 = requirement({ upgrade: { mode: "exact", value: 5 } });
-    expect(clampUpgrade(plus5)).toBe(plus5);
-    expect(clampUpgrade({ ...plus5, tier: { mode: "exact", value: 5 } }).upgrade).toEqual({
-      mode: "exact",
-      value: 4,
-    });
-    expect(clampUpgrade({ ...plus5, item: "sword" }).upgrade).toEqual({ mode: "exact", value: 4 });
-    expect(clampUpgrade({ ...plus5, item: "battle_axe" }).upgrade).toEqual({
-      mode: "exact",
-      value: 5,
-    });
-    // An "at least" bound stops one below the ceiling: the top level is what
-    // "exactly" already says.
-    const atLeast4 = requirement({ upgrade: { mode: "at_least", value: 4 } });
-    expect(clampUpgrade({ ...atLeast4, tier: { mode: "exact", value: 5 } }).upgrade).toEqual({
-      mode: "at_least",
-      value: 3,
-    });
-  });
-
-  it("keeps the editor from saving an empty effect choice", () => {
-    expect(validateRequirement(requirement({ effect: [] }))).toEqual([
-      "Choose at least one effect.",
-    ]);
   });
 });

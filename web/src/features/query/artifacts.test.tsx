@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeAll, describe, expect, it } from "vite-plus/test";
-import { displayedUpgrade, itemsForKind } from "../../shared/game/catalog";
+import { displayedUpgrade, itemsByCategory } from "../../shared/game/catalog";
 import { fromQueryJson, toQueryDocument } from "./query";
 import init, { analyze_query, filter_seeds, scout } from "../../engine/pkg/seedfinder.js";
 import type { BoardEdit, EditorSheet, QueryState, ScoutResult } from "../../engine/types";
@@ -123,7 +123,7 @@ describe("artifact search and scout", () => {
   });
 
   it("shows the game's rounded levels for every generated artifact", () => {
-    for (const item of itemsForKind("artifact")) {
+    for (const item of itemsByCategory.artifact) {
       const expected =
         item.id === "sandals_of_nature"
           ? 7
@@ -139,7 +139,7 @@ describe("artifact search and scout", () => {
     const wildcard = fromQueryJson('{"requirements":[{"kind":"artifact"}]}');
     expect(boardOf(wildcard).items[0].problem).not.toBeNull();
     expect(JSON.parse(analyze_query('{"requirements":[{"kind":"artifact"}]}')).valid).toBe(false);
-    expect(itemsForKind("artifact")).toHaveLength(11);
+    expect(itemsByCategory.artifact).toHaveLength(11);
     const query = fromQueryJson(
       '{"requirements":[{"item":"sandals_of_nature","upgrade":5,"max_depth":19}]}',
     );
@@ -213,7 +213,7 @@ describe("artifact search and scout", () => {
     });
     expect(artifact?.accessibility.type).toBe("choice");
     for (const entry of result.items.filter((entry) => entry.category === "artifact")) {
-      expect(itemsForKind("artifact").find((item) => item.id === entry.id)).toMatchObject({
+      expect(itemsByCategory.artifact.find((item) => item.id === entry.id)).toMatchObject({
         name: entry.name,
         sprite: entry.spriteIndex,
       });

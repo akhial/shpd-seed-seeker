@@ -3,24 +3,9 @@ import { beforeAll, describe, expect, it } from "vite-plus/test";
 import { LEVEL_GEN_CHALLENGES, challenges } from "../shared/game/catalog";
 import {
   BLACKSMITH_LAST_FLOOR,
-  BOUNDED_TIER_MAX,
-  BOUNDED_TIER_MIN,
   EMPTY_BOSS_FLOORS,
-  EXACT_TIER_MAX,
-  EXACT_TIER_MIN,
-  EXTRA_UPGRADE_TIER,
-  IDENTITY_GROUP_MAX,
   MAX_DEPTH,
-  MAX_UPGRADE_ANY_TIER,
-  MAX_UPGRADE_DEFAULT,
-  MAX_UPGRADE_RING,
-  MAX_UPGRADE_RING_STANDARD,
-  MAX_UPGRADE_WEAPON,
-  LEVEL_SUM_GROUP_MAX,
-  STACK_MAX,
   TRINKET_TRANSMUTATION_MAX,
-  maxUpgradeFor,
-  maxUpgradeOf,
 } from "../features/query/query";
 import { RESULT_CAP } from "../features/search/coordinator-state";
 import { SEARCH_START_STRIDE, TOTAL_SEEDS } from "../features/search/traversal";
@@ -46,56 +31,10 @@ beforeAll(async () => {
 
 describe("local constants match the engine document", () => {
   it("query bounds", () => {
+    // The requirement sheet's bounds (tiers, upgrades, stacks, group labels)
+    // are the shared core's, drawn in its form; the app keeps no copy.
     expect(MAX_DEPTH).toBe(info.limits.maxDepth);
-    expect(EXACT_TIER_MIN).toBe(info.limits.exactTierMin);
-    expect(EXACT_TIER_MAX).toBe(info.limits.exactTierMax);
-    expect(BOUNDED_TIER_MIN).toBe(info.limits.boundedTierMin);
-    expect(BOUNDED_TIER_MAX).toBe(info.limits.boundedTierMax);
-    expect(IDENTITY_GROUP_MAX).toBe(info.limits.identityGroupMax);
-    expect(LEVEL_SUM_GROUP_MAX).toBe(info.limits.levelSumGroupMax);
-    expect(MAX_UPGRADE_DEFAULT).toBe(info.limits.maxUpgradeDefault);
-    expect(MAX_UPGRADE_RING).toBe(info.limits.maxUpgradeRing);
-    expect(MAX_UPGRADE_RING_STANDARD).toBe(info.limits.maxUpgradeRingStandard);
-    expect(MAX_UPGRADE_WEAPON).toBe(info.limits.maxUpgradeWeapon);
-    expect(MAX_UPGRADE_ANY_TIER).toBe(info.limits.maxUpgradeAnyTier);
-    expect(EXTRA_UPGRADE_TIER).toBe(info.limits.extraUpgradeTier);
-  });
-
-  it("requirement sheet bounds", () => {
-    expect(STACK_MAX).toBe(info.limits.stackMax);
     expect(TRINKET_TRANSMUTATION_MAX).toBe(info.limits.trinketTransmutationsMax);
-  });
-
-  it("upgrade ceilings per item family", () => {
-    // `maxUpgradeFor` is what every picker and level-sum capacity reads, so
-    // it — not just the constants behind it — is checked against the engine.
-    expect(maxUpgradeFor("weapon")).toBe(info.limits.maxUpgradeWeapon);
-    expect(maxUpgradeFor("armor")).toBe(info.limits.maxUpgradeDefault);
-    expect(maxUpgradeFor("wand")).toBe(info.limits.maxUpgradeDefault);
-    expect(maxUpgradeFor("ring")).toBe(info.limits.maxUpgradeRing);
-  });
-
-  it("the top weapon upgrade needs the tier that reaches it", () => {
-    // Only a tier-4 weapon is levelled past `maxUpgradeAnyTier`, so a
-    // requirement that rules that tier out loses the top of its range.
-    const anyWeapon = {
-      kind: "weapon" as const,
-      item: undefined,
-      tier: { mode: "any" as const, value: 3 },
-    };
-    expect(maxUpgradeOf(anyWeapon)).toBe(info.limits.maxUpgradeWeapon);
-    expect(
-      maxUpgradeOf({ ...anyWeapon, tier: { mode: "exact", value: info.limits.extraUpgradeTier } }),
-    ).toBe(info.limits.maxUpgradeWeapon);
-    expect(maxUpgradeOf({ ...anyWeapon, tier: { mode: "exact", value: 5 } })).toBe(
-      info.limits.maxUpgradeAnyTier,
-    );
-    expect(maxUpgradeOf({ ...anyWeapon, tier: { mode: "at_most", value: 3 } })).toBe(
-      info.limits.maxUpgradeAnyTier,
-    );
-    expect(maxUpgradeOf({ ...anyWeapon, item: "battle_axe" })).toBe(info.limits.maxUpgradeWeapon);
-    expect(maxUpgradeOf({ ...anyWeapon, item: "javelin" })).toBe(info.limits.maxUpgradeWeapon);
-    expect(maxUpgradeOf({ ...anyWeapon, item: "sword" })).toBe(info.limits.maxUpgradeAnyTier);
   });
 
   it("result cap and seed space", () => {
