@@ -4249,7 +4249,9 @@ fn pool_world(rng: &mut Rng) -> crate::model::GeneratedWorld {
 }
 
 /// A list the board's own edits built from pool requirements: counts,
-/// joins, detaches, removals of one item, copy floors, combined levels.
+/// joins, detaches, removals of one item or of a chip's stack, copy floors,
+/// combined levels and their totals, and sheet saves — a member's or a lone
+/// chip's count and copy floor, sometimes as another item or category.
 fn pool_board(rng: &mut Rng) -> Vec<Row> {
     let mut rows: Vec<Row> = (1..=u64::from(rng.range(2, 5)))
         .map(|key| Row {
@@ -4263,7 +4265,7 @@ fn pool_board(rng: &mut Rng) -> Vec<Row> {
         }
         let key = |rng: &mut Rng, rows: &[Row]| rows[rng.below(rows.len())].key;
         let picked = key(rng, &rows);
-        let edit = match rng.below(10) {
+        let edit = match rng.below(14) {
             0..=2 => Edit::SetCount {
                 key: picked,
                 count: rng.range(2, STACK_MAX),
@@ -4274,11 +4276,34 @@ fn pool_board(rng: &mut Rng) -> Vec<Row> {
             },
             6 => Edit::Detach { key: picked },
             7 => Edit::RemoveOne { key: picked },
-            8 => Edit::SetCopyDepth {
+            8 => Edit::Remove { key: picked },
+            9 => Edit::SetCopyDepth {
                 key: picked,
                 max_depth: rng.chance(70).then(|| rng.range(2, 6)),
             },
-            _ => Edit::ToggleLevels { key: picked },
+            10 => Edit::ToggleLevels { key: picked },
+            11 => Edit::SetTotal {
+                key: picked,
+                total: rng.chance(80).then(|| rng.range(1, 9)),
+            },
+            _ => {
+                let own = rows[index_of(&rows, picked).expect("a listed key")].requirement;
+                let requirement = if rng.chance(60) {
+                    Requirement {
+                        max_depth: rng.chance(20).then(|| rng.range(3, 9)),
+                        ..own
+                    }
+                } else {
+                    pool_requirement(rng)
+                };
+                Edit::Save {
+                    key: Some(picked),
+                    requirement,
+                    count: rng.range(1, 3),
+                    total: None,
+                    copy_depth: rng.chance(30).then(|| rng.range(2, 6)),
+                }
+            }
         };
         rows = run(&rows, &[edit]).rows;
     }

@@ -851,32 +851,47 @@ fn stack_copy(rng: &mut Rng, kind: ItemKind, label: u8) -> Requirement {
 /// one member (that member's own stack), labels of their own on two
 /// members, one label on every member of the first member's kind (all of
 /// them when the group agrees on a kind: copies of whichever matched), and
-/// none. Copies may carry floor limits of their own; a plain requirement
-/// and Auto resin sometimes join them (1,024 cases).
+/// none. Copies may carry floor limits of their own; a second group gating
+/// a stack of its own, a plain requirement and Auto resin sometimes join
+/// them (1,024 cases).
 #[test]
 #[allow(clippy::too_many_lines)] // Keep the labellings of one reused world together.
 fn member_stacks_agree_with_exhaustive_enumeration() {
     const WORLDS: usize = 256;
     let mut rng = Rng(0x57AC_CED0_0B1E_55ED);
     let mut matched = [0; 4];
-    let mut waived = 0;
+    let (mut waived, mut two_groups) = (0, 0);
     for _ in 0..WORLDS {
         let world = random_world_from(&mut rng, &STACK_POOL);
-        let members: Vec<Requirement> = (0..2 + rng.below(2))
-            .map(|_| {
-                let id = STACK_POOL[rng.below(STACK_POOL.len())];
-                Requirement {
-                    item: rng.chance(75).then_some(id),
-                    upgrade: if rng.chance(25) {
-                        UpgradeRequirement::AtLeast(1)
-                    } else {
-                        UpgradeRequirement::Any
-                    },
-                    alternative_group: Some(1),
-                    ..Requirement::any(item(id).kind)
-                }
-            })
-            .collect();
+        let member = |rng: &mut Rng, group: u8| {
+            let id = STACK_POOL[rng.below(STACK_POOL.len())];
+            Requirement {
+                item: rng.chance(75).then_some(id),
+                upgrade: if rng.chance(25) {
+                    UpgradeRequirement::AtLeast(1)
+                } else {
+                    UpgradeRequirement::Any
+                },
+                alternative_group: Some(group),
+                ..Requirement::any(item(id).kind)
+            }
+        };
+        let members: Vec<Requirement> =
+            (0..2 + rng.below(2)).map(|_| member(&mut rng, 1)).collect();
+        // A second group gating a stack of its own, the same in every
+        // labelling.
+        let second: Vec<Requirement> = if rng.chance(35) {
+            let gate = Requirement {
+                identity_group: Some(3),
+                ..member(&mut rng, 2)
+            };
+            let other = member(&mut rng, 2);
+            let copies = (0..=rng.below(2)).map(|_| stack_copy(&mut rng, gate.kind, 3));
+            [gate, other].into_iter().chain(copies).collect()
+        } else {
+            Vec::new()
+        };
+        two_groups += usize::from(!second.is_empty());
         let plain = rng.chance(40).then(|| {
             let id = STACK_POOL[rng.below(STACK_POOL.len())];
             Requirement {
@@ -913,6 +928,7 @@ fn member_stacks_agree_with_exhaustive_enumeration() {
                 _ => {}
             }
             requirements.extend(copies);
+            requirements.extend(second.iter().copied());
             requirements.extend(plain);
             let query = SearchQuery {
                 floor_requirements: Vec::new(),
@@ -978,4 +994,8 @@ fn member_stacks_agree_with_exhaustive_enumeration() {
         "{matched:?} of {WORLDS} matched"
     );
     assert!(waived >= 10, "{waived} matches waived a copy");
+    assert!(
+        two_groups >= 40,
+        "{two_groups} worlds with a second gating group"
+    );
 }
