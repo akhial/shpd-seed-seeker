@@ -85,6 +85,47 @@ class RequirementEditingAppTest {
         compose.runOnIdle { assertEquals(listOf("wand_frost"), items()) }
     }
 
+    private val frost = ItemRequirement(1, ItemCatalog.findById("wand_frost")!!, 2)
+    private fun resinChip() = compose.onNodeWithContentDescription("Arcane Resin,", substring = true)
+    private fun inSheet(text: String) = compose.onNode(hasText(text) and hasAnyAncestor(isDialog()))
+
+    @Test fun theResinChipSavedUntouchedKeepsTheQuerysResin() {
+        // Floor 5 holds no items, so the sheet's slider shows it as 4.
+        show(PresetQuery(listOf(frost), arcaneResin = 4, arcaneResinFilter = ArcaneResinFilter(maximumDepth = 5)))
+        compose.onNodeWithContentDescription("Show requirements").performClick()
+        val before = draft
+        resinChip().performClick()
+        inSheet("Within first 4 floors").performScrollTo().assertIsDisplayed()
+        inSheet("Remove").performScrollTo().assertIsDisplayed()
+        inSheet("Save").performScrollTo().performClick()
+        inSheet("Save").assertDoesNotExist()
+        compose.runOnIdle {
+            assertEquals(before, draft)
+            assertEquals(5, draft.arcaneResinFilter.maximumDepth)
+        }
+    }
+
+    @Test fun aQueryWithoutResinAddsItFromTheSheetAndThenOffersRemove() {
+        show(PresetQuery(listOf(frost)))
+        compose.onNodeWithContentDescription("Show requirements").performClick()
+        compose.onNodeWithContentDescription("Add requirement").performClick()
+        inSheet("Wand").performClick()
+        inSheet("Arcane Resin").performClick()
+        // The editor opens the resin the query lacks as new: Add, nothing to remove.
+        inSheet("Remove").assertDoesNotExist()
+        inSheet("Save").assertDoesNotExist()
+        inSheet("Add").performScrollTo().performClick()
+        inSheet("Add").assertDoesNotExist()
+        compose.runOnIdle { assertEquals(2 to false, draft.arcaneResin to draft.arcaneResinAuto) }
+
+        resinChip().performClick()
+        inSheet("Save").performScrollTo().assertIsDisplayed()
+        inSheet("Remove").performScrollTo().performClick()
+        inSheet("Remove").assertDoesNotExist()
+        compose.runOnIdle { assertEquals(0, draft.arcaneResin) }
+        resinChip().assertDoesNotExist()
+    }
+
     private val blanketOnly = listOf(
         ItemRequirement(1, null, 0, kind = ItemKind.WAND, upgradeMatch = UpgradeMatch.ANY, blanket = true),
     )
