@@ -95,7 +95,7 @@ impl DetailPane {
         let info_button = gtk::Button::builder()
             .icon_name("dialog-information-symbolic")
             .css_classes(["flat"])
-            .tooltip_text("Seed information")
+            .tooltip_text("Seed Information")
             .visible(false)
             .build();
         let entry_area = gtk::Box::builder()

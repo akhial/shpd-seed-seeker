@@ -842,22 +842,23 @@ pub fn trinket_tile(
         if !primary && matched {
             draw_trinket_match(context, width, height);
         }
-        // A primary tile keeps its lower quarter for the name.
-        let art_height = if primary { height * 3 / 4 } else { height };
+        // A primary tile draws its art in the band between the "Applied"
+        // badge across its top and the name in its lower quarter.
+        let art_top = if primary { height * 18 / 100 } else { 0 };
+        let art_height = if primary {
+            height * 3 / 4 - art_top
+        } else {
+            height
+        };
         let size = if primary {
-            (width - 16).min(art_height - 12).min(48)
+            (width - 16).min(art_height).min(48)
         } else {
             (width - 8).min(art_height - 8).min(24)
         }
         .max(1);
         if let Some(atlas) = atlas() {
             let _ = context.save();
-            if primary {
-                // Sit the art a little below the top edge, clear of the
-                // "Applied" badge, rather than dead centre of its three
-                // quarters.
-                context.translate(0.0, f64::from(height) * 0.04);
-            }
+            context.translate(0.0, f64::from(art_top));
             draw(
                 &atlas,
                 area,

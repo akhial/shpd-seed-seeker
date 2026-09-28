@@ -189,7 +189,7 @@ fn build(sheet: Sheet) -> Editor {
         tier_row: combo_row("Tier"),
         tier_value: spin_row(""),
         upgrade_group: adw::PreferencesGroup::builder()
-            .title("Upgrade Level")
+            .title("Upgrade level")
             .build(),
         upgrade_row: combo_row("Upgrade"),
         upgrade_value: spin_row(""),

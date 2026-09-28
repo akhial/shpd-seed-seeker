@@ -33,7 +33,7 @@ pub static ARTWORK: LazyLock<Artwork> = LazyLock::new(|| {
 
 pub fn present(parent: &impl IsA<gtk::Widget>, seed: DungeonSeed) -> adw::Dialog {
     let dialog = adw::Dialog::builder()
-        .title("Seed information")
+        .title("Seed Information")
         .content_width(369)
         .content_height(600)
         .build();
@@ -49,7 +49,7 @@ pub fn present(parent: &impl IsA<gtk::Widget>, seed: DungeonSeed) -> adw::Dialog
         &gtk::Label::builder()
             .label(seed.to_code())
             .xalign(0.0)
-            .css_classes(["title-3", "monospace"])
+            .css_classes(["title-3", "monospace", "spd-heading"])
             .build(),
     );
     let detail = gtk::Label::builder()

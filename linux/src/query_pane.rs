@@ -605,6 +605,7 @@ impl QueryPane {
             let remove = gtk::Button::builder()
                 .icon_name("edit-delete-symbolic")
                 .valign(gtk::Align::Center)
+                .css_classes(["flat"])
                 .tooltip_text(format!("Remove floor {} requirement", floor.depth))
                 .build();
             let pane = Rc::clone(self);
@@ -612,6 +613,11 @@ impl QueryPane {
             remove.connect_clicked(move |_| pane.emit(BoardAction::RemoveFloorRequirement(depth)));
             row.add_suffix(&remove);
             self.other_floors.append(&row);
+        }
+        // The expander wraps the box in a list row of its own; an empty one
+        // would still draw a separator under the farming floors.
+        if let Some(row) = self.other_floors.parent() {
+            row.set_visible(self.other_floors.first_child().is_some());
         }
         self.rebuild_board(state);
         let enabled = state.challenges.bits().count_ones();
