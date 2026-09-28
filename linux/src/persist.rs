@@ -213,7 +213,7 @@ mod tests {
     use serde_json::json;
     use shpd_seedfinder_core::catalog::{Effect, ItemId, ItemKind, WeaponCategory, WeaponEffect};
     use shpd_seedfinder_core::challenges::Challenges;
-    use shpd_seedfinder_core::editor::Row;
+    use shpd_seedfinder_core::editor::{self, Row};
     use shpd_seedfinder_core::json_query;
     use shpd_seedfinder_core::model::ItemSource;
     use shpd_seedfinder_core::query::{
@@ -525,6 +525,60 @@ mod tests {
                 .changed
         );
         assert_eq!(predicates(&again), predicates(&restored));
+    }
+
+    #[test]
+    fn hand_edited_stack_labels_past_four_load_into_range_and_search() {
+        // Linux never writes a stack or combined-level label above 4, but the
+        // engine reads any up to 255, so a hand-edited saved state or preset
+        // may hold one. Loading moves each onto a free label in range, and
+        // the chips, Start and Copy Link find nothing wrong.
+        let document = json!({ "requirements": [
+            { "kind": "wand", "upgrade": 3, "identity_group": 7 },
+            { "kind": "wand", "identity_group": 7 },
+            { "item": "ring_might", "level_sum": { "at_least": 3, "group": 9 } },
+            { "item": "ring_might", "level_sum": { "at_least": 3, "group": 9 } },
+        ]});
+        let labels = |state: &AppState| {
+            state
+                .requirements
+                .iter()
+                .map(|row| {
+                    let requirement = row.requirement;
+                    (
+                        requirement.identity_group,
+                        requirement.level_sum.map(|sum| sum.group),
+                    )
+                })
+                .collect::<Vec<_>>()
+        };
+        let state = decode_state(&document.to_string()).expect("the engine reads the labels");
+        assert_eq!(
+            labels(&state),
+            [
+                (Some(1), None),
+                (Some(1), None),
+                (None, Some(1)),
+                (None, Some(1))
+            ]
+        );
+        assert!(editor::problems(&state.requirements).is_empty());
+        let query = state
+            .to_query()
+            .expect("a hand-edited stack still searches");
+        assert_eq!(query.requirements.len(), 4);
+
+        // A preset holding the list loads the same way.
+        let presets =
+            decode_presets(&json!([{ "name": "Hand-edited", "query": document }]).to_string());
+        assert_eq!(presets.len(), 1);
+        assert_eq!(labels(&presets[0].state), labels(&state));
+        assert_eq!(presets[0].state.to_query(), Ok(query));
+        // So does an imported results file, which carries the query too.
+        let imported = AppState::load(
+            &json_query::decode_unvalidated(&document.to_string()).expect("a readable query"),
+        );
+        assert_eq!(labels(&imported), labels(&state));
     }
 
     #[test]
