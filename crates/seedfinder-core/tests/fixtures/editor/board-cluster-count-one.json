@@ -1,0 +1,151 @@
+{
+  "about": "(Frost or Disintegration) ×2 stepped down to ×1: the group drops its stack label.",
+  "envelope": "requirement_board",
+  "request": {
+    "edits": [
+      {
+        "count": 1,
+        "key": 1,
+        "type": "set_count"
+      }
+    ],
+    "rows": [
+      {
+        "alternative_group": 1,
+        "identity_group": 1,
+        "item": "wand_frost",
+        "key": 1,
+        "kind": "wand"
+      },
+      {
+        "alternative_group": 1,
+        "identity_group": 1,
+        "item": "wand_disintegration",
+        "key": 2,
+        "kind": "wand"
+      },
+      {
+        "identity_group": 1,
+        "key": 3,
+        "kind": "wand"
+      }
+    ]
+  },
+  "response": {
+    "changed": true,
+    "counts": {
+      "blanket": 0,
+      "ordinary": 1
+    },
+    "focus": 1,
+    "items": [
+      {
+        "badges": {
+          "count": null,
+          "total": null
+        },
+        "blanket": false,
+        "chips": [
+          {
+            "can_detach": true,
+            "description": "Wand of Frost, any upgrade",
+            "details": [
+              "any upgrade"
+            ],
+            "effect": null,
+            "family": "wand",
+            "in_cluster": true,
+            "item": "wand_frost",
+            "join": [],
+            "key": 1,
+            "kind": "wand",
+            "name": "Wand of Frost",
+            "problem": null,
+            "refuse": [],
+            "relations": [
+              {
+                "glyph": "or",
+                "text": "Wand of Disintegration"
+              }
+            ],
+            "tags": [],
+            "title": "Wand of Frost",
+            "trailing_tags": [],
+            "uncursed": false
+          },
+          {
+            "can_detach": true,
+            "description": "Wand of Disintegration, any upgrade",
+            "details": [
+              "any upgrade"
+            ],
+            "effect": null,
+            "family": "wand",
+            "in_cluster": true,
+            "item": "wand_disintegration",
+            "join": [],
+            "key": 2,
+            "kind": "wand",
+            "name": "Wand of Disintegration",
+            "problem": null,
+            "refuse": [],
+            "relations": [
+              {
+                "glyph": "or",
+                "text": "Wand of Frost"
+              }
+            ],
+            "tags": [],
+            "title": "Wand of Disintegration",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": 1,
+        "extras": [],
+        "id": "c1",
+        "label": "Any of 2",
+        "members": [
+          1,
+          2
+        ],
+        "name": "Wand of Frost or Wand of Disintegration",
+        "problem": null,
+        "stack": {
+          "can_change_count": true,
+          "can_count_levels": false,
+          "can_grow": true,
+          "can_set_copy_depth": false,
+          "copy_depth": null,
+          "count": 1,
+          "count_max": 3,
+          "count_text": "×1",
+          "default_total": 1,
+          "level_capacity": 5,
+          "max": 3,
+          "total": null,
+          "total_text": "Σ ≥ 0"
+        }
+      }
+    ],
+    "next_key": 3,
+    "problems": [],
+    "refused": null,
+    "rekeyed": [],
+    "resin": null,
+    "rows": [
+      {
+        "alternative_group": 1,
+        "item": "wand_frost",
+        "key": 1,
+        "kind": "wand"
+      },
+      {
+        "alternative_group": 1,
+        "item": "wand_disintegration",
+        "key": 2,
+        "kind": "wand"
+      }
+    ]
+  }
+}

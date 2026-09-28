@@ -129,6 +129,38 @@ fn reloaded(rows: &[Row]) -> Vec<Row> {
         .collect()
 }
 
+/// `row` as a member of the either/or group `group`, under the stack label
+/// `label` if any.
+fn member(row: Row, group: u8, label: Option<u8>) -> Row {
+    with(row, |r| {
+        r.alternative_group = Some(group);
+        r.identity_group = label;
+    })
+}
+
+/// A bare wand copy under the stack label `label`.
+fn bare_wand(key: u64, label: u8) -> Row {
+    with(row(key, ItemKind::Wand), |r| r.identity_group = Some(label))
+}
+
+/// A row's key, alternative label, stack label and combined total.
+type RowLabels = (u64, Option<u8>, Option<u8>, Option<u8>);
+
+/// Every row's [`RowLabels`].
+fn shape(rows: &[Row]) -> Vec<RowLabels> {
+    rows.iter()
+        .map(|row| {
+            let r = row.requirement;
+            (
+                row.key,
+                r.alternative_group,
+                r.identity_group,
+                r.level_sum.map(|sum| sum.minimum_total),
+            )
+        })
+        .collect()
+}
+
 // --- either/or clusters -------------------------------------------------
 
 #[test]
@@ -775,6 +807,28 @@ fn detach_and_remove_apply_to_cluster_members_only_as_members() {
     }
 }
 
+#[test]
+fn a_cluster_stepped_down_to_one_drops_its_stack_label() {
+    let cluster = [
+        member(named(1, ItemId::WandFrost), 1, Some(1)),
+        member(named(2, ItemId::WandDisintegration), 1, Some(1)),
+        bare_wand(3, 1),
+    ];
+    let result = run(&cluster, &[Edit::SetCount { key: 1, count: 1 }]);
+    assert_eq!(
+        shape(&result.rows),
+        [(1, Some(1), None, None), (2, Some(1), None, None)]
+    );
+    assert_eq!(counts(&result.rows), [1]);
+    // A hand-written leftover label goes the same way.
+    let leftover = run(&cluster[..2], &[Edit::Normalize]);
+    assert!(leftover.changed);
+    assert_eq!(leftover.rows, result.rows);
+    // The label is free for the next stack.
+    let regrown = edited(&result.rows, &[Edit::SetCount { key: 2, count: 2 }]);
+    assert_eq!(labels_of(&regrown), [Some(1), Some(1), Some(1)]);
+}
+
 // --- combined levels ----------------------------------------------------
 
 #[test]
@@ -1326,16 +1380,15 @@ fn a_cluster_label_never_spreads_onto_a_trinket_artifact_or_blanket() {
     let again = run(&result.rows, &[resaved(2, fireblast, 1, None, None)]);
     assert!(!again.changed, "{:?}", again.rows);
 
-    // Shrunk to ×1, the cluster keeps its stack label (M2). A member that
+    // Shrunk to ×1, the cluster drops its stack label. A member that
     // becomes a trinket or artifact then follows the uncounted join rule:
-    // the leftover labels are cleared, nothing is deleted, and nothing
-    // spreads onto it.
+    // nothing is deleted, and no label spreads onto it.
     let shrunk = edited(&stacked, &[Edit::SetCount { key: 2, count: 1 }]);
     assert_eq!(counts(&shrunk), [1]);
     assert!(
         shrunk
             .iter()
-            .all(|row| row.requirement.identity_group == Some(1))
+            .all(|row| row.requirement.identity_group.is_none())
     );
     for requirement in trinkets {
         let result = run(&shrunk, &[resaved(1, requirement, 1, None, None)]);
@@ -1576,25 +1629,19 @@ fn a_wildcard_stack_is_refused_a_cluster_of_another_category() {
 
 #[test]
 fn an_uncounted_mixed_join_clears_leftover_labels_and_deletes_nothing() {
-    // A cluster that shrank back to ×1 keeps its stack label (the canonical
-    // leftover until the follow-up); joining another category clears it.
-    let leftover = edited(
-        &[named(1, ItemId::Spear), named(2, ItemId::Mace)],
-        &[
-            Edit::Join {
-                source: 2,
-                target: 1,
-            },
-            Edit::SetCount { key: 1, count: 2 },
-            Edit::SetCount { key: 1, count: 1 },
-        ],
-    );
-    assert!(
-        leftover
-            .iter()
-            .all(|row| row.requirement.identity_group == Some(1))
-    );
-    let mut rows = leftover;
+    // A hand-written cluster of ×1 holding a stack label (the editor's own
+    // edits drop such a label); joining another category clears it.
+    let leftover = [
+        with(named(1, ItemId::Spear), |r| {
+            r.alternative_group = Some(1);
+            r.identity_group = Some(1);
+        }),
+        with(named(2, ItemId::Mace), |r| {
+            r.alternative_group = Some(1);
+            r.identity_group = Some(1);
+        }),
+    ];
+    let mut rows = leftover.to_vec();
     rows.push(row(9, ItemKind::Wand));
     let joined = edited(
         &rows,

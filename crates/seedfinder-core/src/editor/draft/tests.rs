@@ -2509,9 +2509,9 @@ fn the_save_guard_refuses_a_save_that_breaks_a_stack() {
     assert_eq!(stored(&wand).len(), 2);
 }
 
-/// A cluster shrunk to ×1 keeps its stack label (M2). Moving a member into
+/// A cluster shrunk to ×1 drops its stack label. Moving a member into
 /// another category then saves as a drag of that item onto the cluster
-/// would: the leftover labels are cleared and nothing is deleted — the sheet
+/// would: no label is left and nothing is deleted — the sheet
 /// used to refuse it with a message about copies the board did not show.
 #[test]
 fn a_member_of_a_cluster_shrunk_to_one_changes_category_like_a_join() {
@@ -2528,7 +2528,7 @@ fn a_member_of_a_cluster_shrunk_to_one_changes_category_like_a_join() {
     assert_eq!(counts(&rows), [1]);
     assert!(
         rows.iter()
-            .all(|row| row.requirement.identity_group.is_some())
+            .all(|row| row.requirement.identity_group.is_none())
     );
     let wand = [Row {
         key: 9,

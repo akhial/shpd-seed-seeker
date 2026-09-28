@@ -262,6 +262,19 @@ fn board_fixtures(fixtures: &mut Fixtures) {
         }),
     );
     fixtures.add(
+        "board-cluster-count-one",
+        "(Frost or Disintegration) ×2 stepped down to ×1: the group drops its stack label.",
+        Board,
+        &json!({
+            "rows": [
+                {"key": 1, "kind": "wand", "item": "wand_frost", "alternative_group": 1, "identity_group": 1},
+                {"key": 2, "kind": "wand", "item": "wand_disintegration", "alternative_group": 1, "identity_group": 1},
+                {"key": 3, "kind": "wand", "identity_group": 1},
+            ],
+            "edits": [{"type": "set_count", "key": 1, "count": 1}],
+        }),
+    );
+    fixtures.add(
         "board-blanket-total-refused",
         "A blanket requirement cannot count levels together.",
         Board,

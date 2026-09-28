@@ -400,7 +400,9 @@ fn takes_stack_label(row: &Requirement) -> bool {
 /// - a lone alternative and a lone level-sum member dissolve;
 /// - a stack anchored on a lone concrete chip carries plain repeats, not
 ///   identity labels;
-/// - a lone identity label dissolves.
+/// - a lone identity label dissolves, and so does one only the members of
+///   one cluster carry — a cluster stepped down to ×1, or left without its
+///   copies.
 ///
 /// The steps run in that order so one pass is enough: a second changes
 /// nothing. Rows keep their keys and their order. [`apply`] then moves the
@@ -484,12 +486,32 @@ fn normalize(rows: &mut [Row]) {
             };
         }
     }
+    // A label held by one row, or only by the members of one cluster, ties
+    // no copy to anything: the cluster asks for one item, and the label
+    // would only use up one of the four and travel into shared queries.
+    let mut spans: BTreeMap<u8, BTreeSet<Option<u8>>> = BTreeMap::new();
+    for row in rows.iter() {
+        if let Some(label) = row.requirement.identity_group {
+            spans
+                .entry(label)
+                .or_default()
+                .insert(row.requirement.alternative_group);
+        }
+    }
     let identities = counted(rows.iter().map(|row| row.requirement.identity_group));
+    let idle: BTreeSet<u8> = spans
+        .into_iter()
+        .filter(|(label, clusters)| {
+            identities[label] < 2
+                || (clusters.len() == 1 && clusters.first().is_some_and(Option::is_some))
+        })
+        .map(|(label, _)| label)
+        .collect();
     for row in rows.iter_mut() {
         let requirement = &mut row.requirement;
         if requirement
             .identity_group
-            .is_some_and(|group| identities[&group] < 2)
+            .is_some_and(|group| idle.contains(&group))
         {
             requirement.identity_group = None;
         }

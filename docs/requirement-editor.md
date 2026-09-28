@@ -518,6 +518,7 @@ decided once.
 | Drop on the empty board | Detaches cluster members only; a lone chip stays. |
 | Combined level on a blanket | Refused. |
 | A cluster's stack label | Never spread onto trinket, artifact or blanket members. |
+| A group stepped down to ×1 | Drops its stack label, so it uses none of the four and none reaches a saved or shared query. |
 | Copy contents | Built from defaults; plain copies keep the melee/thrown narrowing; resin exclusion, blanket, trinket selection and transmutations are never copied. |
 | Key lookup | Visible members only, never hidden copies. |
 | Labels out of range | Moved onto free labels in range by `normalize` and every edit that changes the rows; never merged to fit. |
@@ -556,8 +557,6 @@ decided once.
 The apps shared these behaviours before the move, and the core keeps them
 for now:
 
-- A cluster whose stack shrinks to ×1 keeps its stack label, which still
-  uses up one of the four labels.
 - Joining a stacked chip onto a stacked cluster of the same category takes
   the chip's stack label for the whole cluster; the cluster's old copies
   lose theirs and become a standalone wildcard chip.
@@ -599,7 +598,8 @@ These are the core's own choices:
 `crates/seedfinder-core/tests/fixtures/editor/*.json` pins representative
 request/response pairs for both envelopes: the board tour, the four stack
 encodings, joins (traded, refused), detach and removals, copy floors,
-combined levels, saves (new and unchanged), problems, key repair, label
+combined levels, a group stepped down to ×1, saves (new and unchanged),
+problems, key repair, label
 compaction and labels moved into range, unreadable rows, the sheet's
 open/change/save flow, an untouched save and one that repairs its row, the
 resin flows (a query with resin and one without, and the resin chip saved
