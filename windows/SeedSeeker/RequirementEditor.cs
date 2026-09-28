@@ -200,7 +200,10 @@ public sealed class BoardView(IReadOnlyList<BoardEntry> entries, BoardCounts cou
 public sealed record BoardAnswer(BoardView View, IReadOnlyList<ItemRequirement>? Rows, long NextKey, bool Changed,
     IReadOnlyList<(long Old, long New)> Rekeyed, long? Focus, BoardRefusal? Refused);
 
-/// <summary>One board edit (the EDIT of docs/requirement-editor.md), applied by the editor to the whole list.</summary>
+/// <summary>
+/// One board edit (the EDIT of docs/requirement-editor.md), applied by the
+/// editor to the whole list. The sheet saves through <see cref="RequirementSheet.Save"/>.
+/// </summary>
 public sealed class BoardEdit
 {
     private readonly JsonObject json;
@@ -227,18 +230,6 @@ public sealed class BoardEdit
     public static BoardEdit SetTotal(long key, int? total) => new("set_total", new() { ["key"] = key, ["total"] = Byte(total) });
     /// <summary>Turns counting levels together on, at the stack's default total, or off.</summary>
     public static BoardEdit ToggleLevels(long key) => new("toggle_levels", new() { ["key"] = key });
-    /// <summary>
-    /// Stores <paramref name="requirement"/> with its stack's shape: onto the
-    /// row <paramref name="key"/>, or appended as a new row when the key is
-    /// null or names no row. The requirement's own row fields — its key and
-    /// its group labels — are the editor's to keep.
-    /// </summary>
-    public static BoardEdit Save(long? key, ItemRequirement requirement, int count, int? total, int? copyDepth) => new("save", new()
-    {
-        ["key"] = key is long value ? Math.Max(0, value) : null,
-        ["requirement"] = ResultsExport.EncodeRequirement(requirement),
-        ["count"] = Byte(count), ["total"] = Byte(total), ["copy_depth"] = Byte(copyDepth),
-    });
 
     /// <summary>The editor reads these counts as bytes; it clamps them to their own ranges.</summary>
     private static int Byte(int value) => Math.Clamp(value, 0, byte.MaxValue);

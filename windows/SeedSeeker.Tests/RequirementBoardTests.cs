@@ -10,8 +10,8 @@ namespace SeedSeeker.Tests;
 /// golden fixtures (crates/seedfinder-core/tests/fixtures/editor), the answer
 /// reads into the typed board, rows cross the row codec unchanged, the board
 /// is asked once per list, and the edits the window sends — joins, refusals,
-/// saves, removals — come back through the real engine as the window adopts
-/// them.
+/// counts, combined levels, removals — come back through the real engine as
+/// the window adopts them.
 /// </summary>
 public sealed class RequirementBoardTests
 {
@@ -299,11 +299,11 @@ public sealed class RequirementBoardTests
     }
 
     [Fact]
-    public void JoinsRefusalsSavesAndRemovalsRunThroughTheEngine()
+    public void JoinsRefusalsDetachesAndRemovalsRunThroughTheEngine()
     {
         var editor = new BoardEditor();
-        var query = Loaded(editor, Named("spear"), Named("mace"), new() { Kind = ItemKind.Wand });
-        var spear = KeyOf(query, "spear"); var mace = KeyOf(query, "mace"); var wand = query.Requirements[2].Key;
+        var query = Loaded(editor, Named("spear"), Named("mace"), new() { Kind = ItemKind.Wand }, new() { Kind = ItemKind.Armor, UpgradeMatch = UpgradeMatch.Exactly, Upgrade = 3 });
+        var spear = KeyOf(query, "spear"); var mace = KeyOf(query, "mace"); var wand = query.Requirements[2].Key; var armor = query.Requirements[3].Key;
 
         // A join makes one slot, the source placed after its target.
         var joined = Apply(editor, query, BoardEdit.Join(mace, spear));
@@ -311,7 +311,7 @@ public sealed class RequirementBoardTests
         var cluster = Assert.Single(joined.View.Entries, item => item.Cluster is not null);
         Assert.Equal([spear, mace], cluster.Members);
         Assert.Contains("any_of", ResultsExport.EncodeQueryDocument(query));
-        Assert.Equal(2, query.SlotCount);
+        Assert.Equal(3, query.SlotCount);
 
         // A stacked cluster refuses a member of another category, and says why.
         Apply(editor, query, BoardEdit.SetCount(spear, 2));
@@ -326,26 +326,50 @@ public sealed class RequirementBoardTests
         Assert.Equal(drop.Message, refused.Refused.Message);
         Assert.Same(rows, query.Requirements);
 
-        // The board's save edit, which a sheet's save runs: a new chip is
-        // appended with a fresh key; an unchanged save names its chip and
-        // changes nothing.
-        var added = Apply(editor, query, BoardEdit.Save(null, new() { Kind = ItemKind.Armor, UpgradeMatch = UpgradeMatch.Exactly, Upgrade = 3 }, 2, null, 9));
-        var armor = added.Focus!.Value;
-        Assert.DoesNotContain(armor, rows.Select(row => row.Key));
-        Assert.Equal(ItemKind.Armor, query.Requirements.Single(row => row.Key == armor).Kind);
-        Assert.Equal(9, added.View.EntryOf(armor)!.Stack.CopyDepth);
-        var saved = query.Requirements.Single(row => row.Key == armor).Clone();
-        var unchanged = Apply(editor, query, BoardEdit.Save(armor, saved, 2, null, 9));
-        Assert.False(unchanged.Changed);
-        Assert.Equal(armor, unchanged.Focus);
-
         // A cluster member leaves on its own; removing a chip takes its copies.
         Apply(editor, query, BoardEdit.Detach(mace));
         Assert.Null(query.Requirements.Single(row => row.Key == mace).AlternativeGroup);
+        Apply(editor, query, BoardEdit.SetCount(armor, 2));
+        Assert.Equal(2, query.Requirements.Count(row => row.Kind == ItemKind.Armor));
         var removed = Apply(editor, query, BoardEdit.Remove(armor));
         Assert.Null(removed.Focus);
         Assert.DoesNotContain(query.Requirements, row => row.Kind == ItemKind.Armor);
         Assert.Null(editor.View(query).Problem);
+    }
+
+    [Fact]
+    public void CombinedLevelsAreCountedAndClearedThroughTheEngine()
+    {
+        var editor = new BoardEditor();
+        var query = Loaded(editor, Named("ring_might", UpgradeMatch.Exactly, 2));
+        var ring = KeyOf(query, "ring_might");
+        Apply(editor, query, BoardEdit.SetCount(ring, 2));
+
+        // "Count levels together" starts at the item count, within the rings' capacity.
+        var counting = Apply(editor, query, BoardEdit.ToggleLevels(ring));
+        Assert.True(counting.Changed);
+        var stack = counting.View.EntryOf(ring)!.Stack;
+        Assert.Equal((2, (int?)2, "≤2"), (stack.DefaultTotal, stack.Total, stack.CountText));
+        Assert.Equal(new LevelSum(1, 2), query.Requirements[0].LevelSum);
+
+        // The Σ badge's flyout sets the total, and clearing it stops counting.
+        var total = Apply(editor, query, BoardEdit.SetTotal(ring, 5));
+        Assert.Equal(5, total.View.EntryOf(ring)!.Stack.Total);
+        Assert.Equal(new BoardBadge("Σ ≥ 5", "Σ≥5", "Levels add to at least 5 (a +0 item counts 1)"), total.View.EntryOf(ring)!.TotalBadge);
+        Assert.All(query.Requirements, row => Assert.Equal(new LevelSum(1, 5), row.LevelSum));
+        var cleared = Apply(editor, query, BoardEdit.SetTotal(ring, null));
+        Assert.True(cleared.Changed);
+        var entry = cleared.View.EntryOf(ring)!;
+        Assert.Null(entry.Stack.Total);
+        Assert.Null(entry.TotalBadge);
+        Assert.Equal("×2", entry.CountBadge!.Text);
+        Assert.All(query.Requirements, row => Assert.Null(row.LevelSum));
+
+        // Turned on and off again, the list is as it was, and nothing is written back.
+        var rows = query.Requirements;
+        var twice = Apply(editor, query, BoardEdit.ToggleLevels(ring), BoardEdit.ToggleLevels(ring));
+        Assert.False(twice.Changed);
+        Assert.Same(rows, query.Requirements);
     }
 
     [Fact]
@@ -391,25 +415,22 @@ public sealed class RequirementBoardTests
     public void TheChipDetailReadsTheStackAndTheRelationsAroundIt()
     {
         var editor = new BoardEditor();
-        var query = Loaded(editor);
-        var longsword = Apply(editor, query, BoardEdit.Save(null, Named("longsword"), 3, null, 4)).Focus!.Value;
+        var copy = Named("longsword"); copy.MaximumDepth = 4;
+        // v4.0.0's vault treasure reads as its own source, like every other one.
+        var vault = Named("greatsword"); vault.Source = ScoutItemSource.VaultTreasure;
+        var query = Loaded(editor, Named("longsword"), copy, copy.Clone(), Named("ring_might"), Named("spear"), Named("shuriken"), vault);
+        var (longsword, ring, spear, shuriken) = (KeyOf(query, "longsword"), KeyOf(query, "ring_might"), KeyOf(query, "spear"), KeyOf(query, "shuriken"));
         Assert.Equal(
             "Longsword\nany upgrade\n× 3 of the same kind — the extra copies: any upgrade, floors 1–4",
             editor.View(query).ChipOf(longsword)!.Detail);
+        Assert.Equal("Greatsword\nany upgrade · Vault treasure", editor.View(query).ChipOf(KeyOf(query, "greatsword"))!.Detail);
         // A combined level speaks for the upgrades, so the chip's own says nothing.
-        var ring = Apply(editor, query, BoardEdit.Save(null, Named("ring_might"), 3, 5, null)).Focus!.Value;
+        Apply(editor, query, BoardEdit.SetCount(ring, 3), BoardEdit.SetTotal(ring, 5));
         Assert.Equal("Ring of Might\nΣ up to 3 — levels add to ≥ 5", editor.View(query).ChipOf(ring)!.Detail);
-        Assert.Equal(new BoardBadge("Σ ≥ 5", "Σ≥5", "Levels add to at least 5 (a +0 item counts 1)"), editor.View(query).EntryOf(ring)!.TotalBadge);
         Assert.Equal("≤3", editor.View(query).EntryOf(ring)!.CountBadge!.Text);
         // A cluster member names its peers.
-        var spear = Apply(editor, query, BoardEdit.Save(null, Named("spear"), 1, null, null)).Focus!.Value;
-        var shuriken = Apply(editor, query, BoardEdit.Save(null, Named("shuriken"), 1, null, null)).Focus!.Value;
         Apply(editor, query, BoardEdit.Join(shuriken, spear));
         Assert.Equal("Spear\nany upgrade\nor Shuriken", editor.View(query).ChipOf(spear)!.Detail);
-        // v4.0.0's vault treasure reads as its own source, like every other one.
-        var vault = Named("greatsword"); vault.Source = ScoutItemSource.VaultTreasure;
-        var greatsword = Apply(editor, query, BoardEdit.Save(null, vault, 1, null, null)).Focus!.Value;
-        Assert.Equal("Greatsword\nany upgrade · Vault treasure", editor.View(query).ChipOf(greatsword)!.Detail);
     }
 
     [Fact]
