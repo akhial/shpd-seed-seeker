@@ -152,13 +152,15 @@ export function SliderRow(
     label: string;
     /** The value in words; leave it out when `label` already says it. */
     valueLabel?: string;
+    /** The range input's name, when `label` changes with the value. */
+    ariaLabel?: string;
     value: number;
     onChange: (value: number) => void;
     /** Fill the track left of the thumb — for "first N floors" style ranges. */
     fill?: boolean;
   } & SliderRowScale,
 ) {
-  const { label, valueLabel, value, onChange, fill = false } = props;
+  const { label, valueLabel, ariaLabel = label, value, onChange, fill = false } = props;
   const options =
     props.values !== undefined
       ? props.values
@@ -180,7 +182,7 @@ export function SliderRow(
         max={options.length - 1}
         step={1}
         value={index}
-        aria-label={label}
+        aria-label={ariaLabel}
         aria-valuetext={String(options[index])}
         onChange={(event) => onChange(options[Number(event.currentTarget.value)])}
       />

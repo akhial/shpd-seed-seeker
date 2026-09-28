@@ -81,11 +81,21 @@ it("draws the core's form and saves a stack with its copies' floor", async () =>
   expect(modal()!.querySelector(".d1-stepper-value")!.textContent).toBe("×2");
   await toggle("Limit the extra copies to a floor");
   expect(modal()!.textContent).toContain("Copies within first 4 floors");
+  // The slider's name stays put while its reading moves.
+  const floors = modal()!.querySelector<HTMLInputElement>('input[type="range"]')!;
+  expect(floors.getAttribute("aria-label")).toBe("Copies within first");
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(floors, "4");
+    floors.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  expect(modal()!.textContent).toContain("Copies within first 6 floors");
+  expect(floors.getAttribute("aria-label")).toBe("Copies within first");
+  expect(floors.getAttribute("aria-valuetext")).toBe("6");
   await click("Save Changes");
   expect(modal()).toBeNull();
   expect(toQueryDocument(queryStore.state).requirements).toEqual([
     { kind: "weapon", item: "spear" },
-    { kind: "weapon", item: "spear", max_depth: 4 },
+    { kind: "weapon", item: "spear", max_depth: 6 },
   ]);
 });
 

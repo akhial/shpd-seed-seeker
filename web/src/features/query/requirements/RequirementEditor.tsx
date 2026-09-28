@@ -54,13 +54,19 @@ function ItemOptions({ options }: { options: EditorOption<string | null>[] }) {
   );
 }
 
-/** A floor switch and its slider, which offers the floors the core lists. */
+/**
+ * A floor switch and its slider, which offers the floors the core lists. The
+ * core's value label says the whole reading ("Within first 4 floors"), so the
+ * slider keeps a fixed name of its own.
+ */
 function FloorLimit({
   control,
+  name,
   onEnabled,
   onFloor,
 }: {
   control: EditorFloorToggle;
+  name: string;
   onEnabled: (enabled: boolean) => void;
   onFloor: (floor: number) => void;
 }) {
@@ -77,6 +83,7 @@ function FloorLimit({
       {control.enabled && (
         <SliderRow
           label={control.value_label}
+          ariaLabel={name}
           values={control.options.map((option) => option.value)}
           value={control.value}
           fill
@@ -341,6 +348,7 @@ export function RequirementEditor({
               {stack.copy_depth.visible && (
                 <FloorLimit
                   control={stack.copy_depth}
+                  name="Copies within first"
                   onEnabled={(value) => onChange({ type: "set_copy_depth_enabled", value })}
                   onFloor={(value) => onChange({ type: "set_copy_depth", value })}
                 />
@@ -447,6 +455,7 @@ export function RequirementEditor({
               {form.floor_limit.visible && (
                 <FloorLimit
                   control={form.floor_limit}
+                  name="Within first"
                   onEnabled={(value) => onChange({ type: "set_floor_limit_enabled", value })}
                   onFloor={(value) => onChange({ type: "set_floor_limit", value })}
                 />
