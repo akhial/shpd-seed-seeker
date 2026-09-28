@@ -11,12 +11,13 @@ use adw::prelude::*;
 use gtk::{gdk, gio, glib};
 
 use shpd_seedfinder_core::deep_link;
+use shpd_seedfinder_core::editor::Draft;
 use shpd_seedfinder_core::results_export;
 use shpd_seedfinder_session::MAX_RESULTS;
 
 use crate::config::APP_NAME;
 use crate::query_pane::BoardAction;
-use crate::state::{AppState, StackShape, UiRequirement};
+use crate::state::AppState;
 use crate::{
     challenges_dialog, detail_pane, persist, presets_dialog, query_pane, requirement_editor,
     results_pane, update,
@@ -122,74 +123,66 @@ pub fn present(app: &adw::Application) {
         }
     });
 
-    let edit_requirement: Rc<dyn Fn(UiRequirement, StackShape, bool)> = Rc::new({
+    // The requirement sheet saves through the shared editor onto the rows
+    // as they are when it closes; a refused save keeps it open with why.
+    let edit_requirement: Rc<dyn Fn(Draft)> = Rc::new({
         let state = Rc::clone(&state);
+        let query = Rc::clone(&query);
         let refresh_all = Rc::clone(&refresh_all);
         let window = window.clone();
-        move |requirement, stack, is_new| {
-            let context = state.borrow().clone();
+        move |draft| {
             let state = Rc::clone(&state);
+            let query = Rc::clone(&query);
             let refresh_all = Rc::clone(&refresh_all);
-            requirement_editor::present(
-                &window,
-                &context,
-                &requirement,
-                stack,
-                is_new,
-                move |result, count, total, copy_depth| {
-                    state
-                        .borrow_mut()
-                        .apply_edit(result, count, total, copy_depth);
-                    refresh_all();
-                },
-            );
+            requirement_editor::present(&window, draft, move |draft| {
+                let saved = state.borrow_mut().save(draft)?;
+                query.follow_rekeyed(&saved.rekeyed);
+                refresh_all();
+                Ok(())
+            });
         }
     });
 
     // Every board gesture — activating a chip, dropping one on another,
-    // the context menu — arrives here as one of these.
+    // the context menu — arrives here as one of these. Board edits go to the
+    // shared editor, which may refuse one and say why; the board redraws
+    // only when the rows changed.
     query.connect_board({
         let state = Rc::clone(&state);
+        let query = Rc::clone(&query);
         let edit_requirement = Rc::clone(&edit_requirement);
         let refresh_all = Rc::clone(&refresh_all);
+        let toasts = toasts.clone();
         move |action| {
-            if let BoardAction::Edit(key) = action {
-                let snapshot = state.borrow();
-                let requirement = snapshot.requirement(key).copied();
-                let stack = snapshot.stack_shape(key);
-                drop(snapshot);
-                if let Some(requirement) = requirement {
-                    edit_requirement(requirement, stack, false);
+            let edit = match action {
+                BoardAction::Open(key) => {
+                    let draft = state.borrow_mut().open_sheet(Some(key), false);
+                    edit_requirement(draft);
+                    return;
                 }
-                return;
-            }
-            {
-                let mut state = state.borrow_mut();
-                match action {
-                    BoardAction::Edit(_) => {}
-                    BoardAction::ToggleFarmingFloor(depth) => state.toggle_farming_floor(depth),
-                    BoardAction::RemoveFloorRequirement(depth) => state
+                BoardAction::ToggleFarmingFloor(depth) => {
+                    state.borrow_mut().toggle_farming_floor(depth);
+                    refresh_all();
+                    return;
+                }
+                BoardAction::RemoveFloorRequirement(depth) => {
+                    state
+                        .borrow_mut()
                         .floor_requirements
-                        .retain(|floor| floor.depth != depth),
-                    BoardAction::Join { source, target } => state.join(source, target),
-                    BoardAction::Detach(key) => state.detach(key),
-                    BoardAction::Remove(key) => state.remove(key),
-                    BoardAction::Count { key, count } => state.set_stack_count(key, count),
-                    BoardAction::Total { key, total } => {
-                        // The menu asks to start or stop counting levels
-                        // without naming a total; a fresh one starts at the
-                        // stack's own size, which is always reachable.
-                        let total = total.or_else(|| {
-                            state
-                                .board_item(key)
-                                .filter(|item| item.total.is_none())
-                                .map(|item| u8::try_from(item.stack_count()).unwrap_or(1).max(1))
-                        });
-                        state.set_stack_total(key, total);
-                    }
+                        .retain(|floor| floor.depth != depth);
+                    refresh_all();
+                    return;
                 }
+                BoardAction::Edit(edit) => edit,
+            };
+            let result = state.borrow_mut().apply(&[edit]);
+            query.follow_rekeyed(&result.rekeyed);
+            if let Some(refusal) = result.refused {
+                toasts.add_toast(adw::Toast::new(&refusal.to_string()));
             }
-            refresh_all();
+            if result.changed {
+                refresh_all();
+            }
         }
     });
     query.connect_changed({
@@ -401,13 +394,7 @@ pub fn present(app: &adw::Application) {
         let state = Rc::clone(&state);
         let refresh_all = Rc::clone(&refresh_all);
         move |_, _| {
-            {
-                let mut state = state.borrow_mut();
-                state.arcane_resin = 0;
-                state.arcane_resin_auto = false;
-                state.arcane_resin_filter =
-                    shpd_seedfinder_core::query::ArcaneResinFilter::default();
-            }
+            state.borrow_mut().set_resin(None);
             refresh_all();
         }
     });
@@ -418,8 +405,8 @@ pub fn present(app: &adw::Application) {
         let state = Rc::clone(&state);
         let edit_requirement = Rc::clone(&edit_requirement);
         move |_, _| {
-            let draft = UiRequirement::new(state.borrow_mut().claim_key());
-            edit_requirement(draft, StackShape::lone(), true);
+            let draft = state.borrow_mut().open_sheet(None, false);
+            edit_requirement(draft);
         }
     });
     window.add_action(&add_action);
@@ -429,13 +416,8 @@ pub fn present(app: &adw::Application) {
         let state = Rc::clone(&state);
         let edit_requirement = Rc::clone(&edit_requirement);
         move |_, _| {
-            let mut draft = UiRequirement::new(state.borrow_mut().claim_key());
-            draft.blanket = true;
-            if let Some(first) = state.borrow().requirements.iter().find(|r| !r.blanket) {
-                draft.kind = first.kind;
-                draft.weapon_category = first.weapon_category;
-            }
-            edit_requirement(draft, StackShape::lone(), true);
+            let draft = state.borrow_mut().open_sheet(None, true);
+            edit_requirement(draft);
         }
     });
     window.add_action(&blanket_action);
@@ -506,7 +488,7 @@ pub fn present(app: &adw::Application) {
             }
             match deep_link::decode_text(text) {
                 Ok(query) => {
-                    *state.borrow_mut() = AppState::from_query(&query);
+                    *state.borrow_mut() = AppState::load(&query);
                     refresh_all();
                     toasts.add_toast(adw::Toast::new("Search loaded from link"));
                 }
@@ -584,7 +566,7 @@ pub fn present(app: &adw::Application) {
                 Ok(imported) => {
                     let (kept, dropped) =
                         results_export::dedupe_and_cap(&imported.seeds, MAX_RESULTS);
-                    *state.borrow_mut() = AppState::from_query(&imported.query);
+                    *state.borrow_mut() = AppState::load(&imported.query);
                     let codes: Vec<String> = kept.iter().map(|seed| seed.to_code()).collect();
                     // The import becomes the session's Target: the
                     // imported query plus seeds, with no coverage.

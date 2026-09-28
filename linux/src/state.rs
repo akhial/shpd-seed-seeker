@@ -2,22 +2,18 @@
 
 //! Shared query state and presentation labels for the whole window.
 
-use std::fmt::Write as _;
-
-use shpd_seedfinder_core::catalog::{Effect, ItemId, ItemKind, WeaponCategory, item};
+use shpd_seedfinder_core::catalog::{ItemKind, WeaponCategory};
 use shpd_seedfinder_core::challenges::Challenges;
-use shpd_seedfinder_core::feasibility::Quest;
-use shpd_seedfinder_core::main_world::EMPTY_BOSS_FLOORS;
-use shpd_seedfinder_core::model::ItemSource;
-use shpd_seedfinder_core::query::{
-    EffectRequirement, EffectSet, LevelSum, Requirement, SearchQuery, TierRequirement,
-    UpgradeRequirement,
+use shpd_seedfinder_core::editor::{
+    self, Draft, Edit, EditResult, ResinAmount, ResinOutcome, ResinState, Row, SaveResult,
 };
+use shpd_seedfinder_core::feasibility::Quest;
+use shpd_seedfinder_core::model::ItemSource;
+use shpd_seedfinder_core::query::{ArcaneResinFilter, SearchQuery};
 use shpd_seedfinder_core::quests::{
     BlacksmithQuestType, GhostQuestType, ImpQuestType, QuestSummary, WandmakerQuestType,
 };
 
-use crate::relations::{self, BoardItem};
 use shpd_seedfinder_core::floor_filters::{FloorRequirement, RoomType};
 use shpd_seedfinder_core::level_prelude::Feeling;
 
@@ -30,24 +26,6 @@ pub fn is_farming_requirement(floor: &FloorRequirement) -> bool {
         && floor.any_rooms.len() == 2
         && floor.any_rooms.contains(&RoomType::SpecialGarden)
         && floor.any_rooms.contains(&RoomType::SecretGarden)
-}
-
-/// Where a floor-limit control lands when the user moves it onto an empty
-/// boss floor. A single upward step (spin button, arrow key, scroll)
-/// continues to the next real floor; every other move — single steps down
-/// and typed jumps in either direction — snaps to the equivalent floor
-/// below, matching
-/// [`shpd_seedfinder_core::main_world::normalize_floor_limit`]. Typing "10"
-/// therefore means "first 10 floors" (≡ 9), never 11.
-#[must_use]
-pub fn floor_limit_skip_target(previous: u8, requested: u8) -> u8 {
-    if !EMPTY_BOSS_FLOORS.contains(&requested) {
-        requested
-    } else if requested == previous.saturating_add(1) {
-        requested + 1
-    } else {
-        requested - 1
-    }
 }
 
 /// One entry in the requirement editor's category picker: an item family,
@@ -67,199 +45,18 @@ pub const ALL_KIND_CHOICES: &[KindChoice] = &[
     (ItemKind::Artifact, None),
 ];
 
-/// One item requirement as edited in the interface. All predicate fields
-/// mirror [`Requirement`]; `key` is a session-stable row identity.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[allow(clippy::struct_excessive_bools)] // Mirrors independent engine requirement flags.
-pub struct UiRequirement {
-    pub key: u64,
-    pub kind: ItemKind,
-    /// Optional melee/thrown narrowing for weapon requirements.
-    pub weapon_category: Option<WeaponCategory>,
-    pub item: Option<ItemId>,
-    pub tier: TierRequirement,
-    pub upgrade: UpgradeRequirement,
-    pub effect: EffectRequirement,
-    pub require_uncursed: bool,
-    pub select_trinket: bool,
-    pub trinket_transmutations: u8,
-    pub artifact_transmutations: u8,
-    pub blanket: bool,
-    pub exclude_resin: bool,
-    pub source: Option<ItemSource>,
-    pub identity_group: Option<u8>,
-    pub max_depth: Option<u8>,
-    /// Members of one alternative group form a single "any of these" slot.
-    pub alternative_group: Option<u8>,
-    /// Membership in a combined-level group; never set on an alternative.
-    pub level_sum: Option<LevelSum>,
-}
-
-impl UiRequirement {
-    pub const fn new(key: u64) -> Self {
-        Self {
-            key,
-            kind: ItemKind::Weapon,
-            weapon_category: None,
-            item: None,
-            tier: TierRequirement::Any,
-            upgrade: UpgradeRequirement::Any,
-            effect: EffectRequirement::Any,
-            require_uncursed: false,
-            select_trinket: false,
-            trinket_transmutations: 0,
-            artifact_transmutations: 0,
-            blanket: false,
-            exclude_resin: false,
-            source: None,
-            identity_group: None,
-            max_depth: None,
-            alternative_group: None,
-            level_sum: None,
-        }
-    }
-
-    #[must_use]
-    pub const fn to_core(self) -> Requirement {
-        Requirement {
-            kind: self.kind,
-            weapon_category: self.weapon_category,
-            item: self.item,
-            tier: self.tier,
-            upgrade: self.upgrade,
-            effect: self.effect,
-            require_uncursed: self.require_uncursed,
-            select_trinket: self.select_trinket,
-            trinket_transmutations: self.trinket_transmutations,
-            artifact_transmutations: self.artifact_transmutations,
-            blanket: self.blanket,
-            exclude_resin: self.exclude_resin,
-            source: self.source,
-            identity_group: self.identity_group,
-            max_depth: self.max_depth,
-            alternative_group: self.alternative_group,
-            level_sum: self.level_sum,
-        }
-    }
-
-    /// The one effect this requirement pins, when its effect set holds
-    /// exactly one member; wider sets and the wildcard give `None`.
-    #[must_use]
-    pub fn pinned_effect(&self) -> Option<Effect> {
-        match self.effect {
-            EffectRequirement::OneOf(set) if set.count() == 1 => set.effects().next(),
-            _ => None,
-        }
-    }
-
-    /// The editor category choice this requirement uses.
-    #[must_use]
-    pub const fn kind_choice(&self) -> KindChoice {
-        (self.kind, self.weapon_category)
-    }
-
-    /// Primary row label, e.g. `Any Tier 3+ thrown weapon` or `Ring of tenacity`.
-    #[must_use]
-    pub fn title(&self) -> String {
-        if let Some(item_id) = self.item {
-            return item(item_id).name.to_owned();
-        }
-        if matches!(self.kind, ItemKind::Trinket | ItemKind::Artifact) {
-            return kind_choice_label(self.kind_choice()).to_owned();
-        }
-        let singular = kind_choice_singular(self.kind_choice());
-        match self.tier {
-            TierRequirement::Any => format!("Any {singular}"),
-            TierRequirement::Exact(tier) => {
-                format!("Any Tier {tier} {singular}")
-            }
-            TierRequirement::AtLeast(tier) => {
-                format!("Any Tier {tier}+ {singular}")
-            }
-            TierRequirement::AtMost(tier) => {
-                format!("Any Tier {tier} or lower {singular}")
-            }
-        }
-    }
-
-    /// The short name a board chip shows: the item, or its wildcard family.
-    /// The tier rides beside it as a tag, so it stays out of the name.
-    #[must_use]
-    pub fn chip_name(&self) -> String {
-        match self.item {
-            Some(item_id) => item(item_id).name.to_owned(),
-            None if matches!(self.kind, ItemKind::Trinket | ItemKind::Artifact) => {
-                kind_choice_label(self.kind_choice()).to_owned()
-            }
-            None => format!("Any {}", chip_family(self.kind_choice())),
-        }
-    }
-
-    /// The line under a chip's name: everything it asks of one item, in the
-    /// order the editor lays the controls out.
-    #[must_use]
-    pub fn subtitle(&self) -> String {
-        if self.kind == ItemKind::Trinket {
-            return if self.trinket_transmutations > 0 {
-                format!("Transmute ≤{}", self.trinket_transmutations)
-            } else if self.select_trinket {
-                "choose at +3".to_owned()
-            } else {
-                String::new()
-            };
-        }
-        let mut text = match self.upgrade {
-            UpgradeRequirement::Any => "any upgrade".to_owned(),
-            UpgradeRequirement::Exact(upgrade) => format!("exactly +{upgrade}"),
-            UpgradeRequirement::AtLeast(upgrade) => format!("+{upgrade} or higher"),
-        };
-        if let Some(effect) = effect_label(self.effect) {
-            let _ = write!(text, " \u{b7} {effect}");
-        }
-        if self.artifact_transmutations > 0 {
-            let _ = write!(text, " · Transmute ≤{}", self.artifact_transmutations);
-        }
-        if self.exclude_resin {
-            text.push_str(" · excluded from Auto resin");
-        }
-        if self.require_uncursed {
-            text.push_str(" \u{b7} uncursed");
-        }
-        if let Some(source) = self.source {
-            let _ = write!(text, " \u{b7} {}", source_label(source));
-        }
-        if let Some(depth) = self.max_depth {
-            let _ = write!(text, " \u{b7} floors 1\u{2013}{depth}");
-        }
-        text
-    }
-}
-
-/// The effect predicate as label text: `None` for the wildcard, "any
-/// enchantment" for the full non-curse family set, otherwise the members
-/// joined with "or" in catalog order.
-#[must_use]
-pub fn effect_label(effect: EffectRequirement) -> Option<String> {
-    let EffectRequirement::OneOf(set) = effect else {
-        return None;
-    };
-    if EffectSet::enchantments(set.family()) == Some(set) {
-        return Some("any enchantment".to_owned());
-    }
-    let names: Vec<_> = set.effects().map(Effect::wire_name).collect();
-    Some(names.join(" or "))
-}
-
 /// The whole persisted query state shared by all panes.
 #[derive(Clone, Debug)]
 #[allow(clippy::struct_excessive_bools)] // Mirrors independent engine query options.
 pub struct AppState {
     pub arcane_resin: u16,
     pub arcane_resin_auto: bool,
-    pub arcane_resin_filter: shpd_seedfinder_core::query::ArcaneResinFilter,
+    pub arcane_resin_filter: ArcaneResinFilter,
     pub auto_apply_trinket: bool,
     pub floor_requirements: Vec<FloorRequirement>,
-    pub requirements: Vec<UiRequirement>,
+    /// Both board sections in one list, each row under a session-stable key;
+    /// the shared editor folds them into the board and edits them.
+    pub requirements: Vec<Row>,
     pub max_depth: u8,
     pub require_blacksmith: bool,
     pub exclude_blacksmith_rewards: bool,
@@ -274,7 +71,7 @@ impl Default for AppState {
             auto_apply_trinket: true,
             arcane_resin: 0,
             arcane_resin_auto: false,
-            arcane_resin_filter: shpd_seedfinder_core::query::ArcaneResinFilter::default(),
+            arcane_resin_filter: ArcaneResinFilter::default(),
             floor_requirements: Vec::new(),
             requirements: Vec::new(),
             max_depth: 24,
@@ -311,12 +108,37 @@ impl AppState {
         self.arcane_resin_auto || self.arcane_resin > 0
     }
 
-    pub fn resin_label(&self) -> String {
-        if self.arcane_resin_auto {
-            "Auto".to_owned()
-        } else {
-            format!("≥{}", self.arcane_resin)
+    /// The query's Arcane Resin condition as the editor reads it — for the
+    /// resin chip and the sheet's resin section — or `None` when the query
+    /// asks for no resin.
+    #[must_use]
+    pub const fn resin(&self) -> Option<ResinState> {
+        if !self.needs_resin() {
+            return None;
         }
+        Some(ResinState {
+            amount: if self.arcane_resin_auto {
+                ResinAmount::Auto
+            } else {
+                ResinAmount::AtLeast(self.arcane_resin)
+            },
+            filter: self.arcane_resin_filter,
+        })
+    }
+
+    /// Sets the query's Arcane Resin condition, or with `None` drops it.
+    pub fn set_resin(&mut self, resin: Option<ResinState>) {
+        let Some(resin) = resin else {
+            self.arcane_resin = 0;
+            self.arcane_resin_auto = false;
+            self.arcane_resin_filter = ArcaneResinFilter::default();
+            return;
+        };
+        (self.arcane_resin_auto, self.arcane_resin) = match resin.amount {
+            ResinAmount::Auto => (true, 0),
+            ResinAmount::AtLeast(amount) => (false, amount),
+        };
+        self.arcane_resin_filter = resin.filter;
     }
 
     /// Hands out a fresh row key, unique within this session.
@@ -326,8 +148,9 @@ impl AppState {
         key
     }
 
-    /// Rebuilds editor state from a decoded engine query, assigning fresh
-    /// session row keys.
+    /// Rebuilds editor state from a decoded engine query, keying its rows
+    /// 1…n. The rows are kept exactly as the query holds them; a query the
+    /// user loads into the editor goes through [`Self::load`] instead.
     #[must_use]
     pub fn from_query(query: &SearchQuery) -> Self {
         let mut state = Self {
@@ -346,28 +169,86 @@ impl AppState {
         };
         for requirement in &query.requirements {
             let key = state.claim_key();
-            state.requirements.push(UiRequirement {
+            state.requirements.push(Row {
                 key,
-                kind: requirement.kind,
-                weapon_category: requirement.weapon_category,
-                item: requirement.item,
-                tier: requirement.tier,
-                upgrade: requirement.upgrade,
-                effect: requirement.effect,
-                require_uncursed: requirement.require_uncursed,
-                select_trinket: requirement.select_trinket,
-                trinket_transmutations: requirement.trinket_transmutations,
-                artifact_transmutations: requirement.artifact_transmutations,
-                blanket: requirement.blanket,
-                exclude_resin: requirement.exclude_resin,
-                source: requirement.source,
-                identity_group: requirement.identity_group,
-                max_depth: requirement.max_depth,
-                alternative_group: requirement.alternative_group,
-                level_sum: requirement.level_sum,
+                requirement: *requirement,
             });
         }
         state
+    }
+
+    /// Rebuilds editor state from a query the user loaded or imported — a
+    /// share link, a results file — keyed 1…n and brought once into the
+    /// editor's canonical encoding, so the board writes back what it reads.
+    #[must_use]
+    pub fn load(query: &SearchQuery) -> Self {
+        let mut state = Self::from_query(query);
+        state.normalize();
+        state
+    }
+
+    /// Rewrites the rows into the editor's canonical encoding: groups that
+    /// no longer say anything dissolve, and a stack of one named item is
+    /// written as plain repeats. A canonical list stays exactly as it was.
+    pub fn normalize(&mut self) {
+        self.apply(&[Edit::Normalize]);
+    }
+
+    /// Runs board edits through the shared editor. The rows are written back
+    /// only when the editor changed them, so an edit that says nothing leaves
+    /// the query — and a search resumed on it — exactly as it was; the key
+    /// counter only ever moves forward.
+    pub fn apply(&mut self, edits: &[Edit]) -> EditResult {
+        let result = editor::apply(&self.requirements, Some(self.next_key), edits);
+        self.adopt(&result);
+        result
+    }
+
+    /// Opens the requirement sheet on the visible row `key`, or — with
+    /// `None` — on a new chip of the ordinary or blanket section under a key
+    /// claimed now, which a cancelled sheet simply leaves unused.
+    pub fn open_sheet(&mut self, key: Option<u64>, blanket: bool) -> Draft {
+        let key = key.unwrap_or_else(|| self.claim_key());
+        let resin = self.resin();
+        editor::open(
+            &self.requirements,
+            Some(key),
+            blanket,
+            resin.as_ref(),
+            false,
+            false,
+        )
+    }
+
+    /// Saves a requirement sheet onto the rows as they are now — they may
+    /// have moved while it was open — together with what the sheet made of
+    /// the query's Arcane Resin.
+    ///
+    /// # Errors
+    ///
+    /// Returns why the editor refused the draft, in the order to show the
+    /// reasons; nothing is stored then.
+    pub fn save(&mut self, draft: &Draft) -> Result<EditResult, Vec<String>> {
+        match editor::save(draft, &self.requirements, Some(self.next_key)) {
+            SaveResult::Saved { result, resin } => {
+                self.adopt(&result);
+                match resin {
+                    ResinOutcome::Unchanged => {}
+                    ResinOutcome::Set(resin) => self.set_resin(Some(resin)),
+                    ResinOutcome::Clear => self.set_resin(None),
+                }
+                Ok(result)
+            }
+            SaveResult::Refused { form, .. } => Err(form.errors),
+        }
+    }
+
+    /// Takes an editor answer's rows, when they changed, and its key counter.
+    fn adopt(&mut self, result: &EditResult) {
+        if result.changed {
+            self.requirements.clone_from(&result.rows);
+        }
+        self.next_key = self.next_key.max(result.next_key);
     }
 
     /// The state as an engine query exactly as the user left it, without
@@ -381,7 +262,11 @@ impl AppState {
             arcane_resin_filter: self.arcane_resin_filter,
             arcane_resin_auto: self.arcane_resin_auto,
             arcane_resin: self.arcane_resin,
-            requirements: self.requirements.iter().map(|r| r.to_core()).collect(),
+            requirements: self
+                .requirements
+                .iter()
+                .map(|row| row.requirement)
+                .collect(),
             max_depth: self.max_depth,
             challenges: self.challenges,
             require_blacksmith: self.require_blacksmith,
@@ -404,175 +289,6 @@ impl AppState {
         query.validate().map_err(|error| error.to_string())?;
         Ok(query)
     }
-
-    #[must_use]
-    pub fn requirement(&self, key: u64) -> Option<&UiRequirement> {
-        self.requirements.iter().find(|r| r.key == key)
-    }
-
-    /// The board's collapsed view of the requirement list: one entry per
-    /// chip or either/or cluster, with a stack's copies folded away.
-    #[must_use]
-    pub fn board(&self) -> Vec<BoardItem> {
-        relations::board_items(&self.requirements)
-    }
-
-    /// How many entries the board shows — what the pane counts as
-    /// requirements once alternatives and stacks collapse.
-    #[must_use]
-    pub fn board_count(&self) -> usize {
-        relations::board_count(&self.requirements)
-    }
-
-    #[must_use]
-    pub fn row_index(&self, key: u64) -> Option<usize> {
-        self.requirements.iter().position(|row| row.key == key)
-    }
-
-    /// The board entry the row `key` belongs to.
-    #[must_use]
-    pub fn board_item(&self, key: u64) -> Option<BoardItem> {
-        relations::item_of_key(&self.requirements, key)
-    }
-
-    /// The stack shape the editor needs for the row `key`.
-    #[must_use]
-    pub fn stack_shape(&self, key: u64) -> StackShape {
-        self.board_item(key)
-            .map_or_else(StackShape::lone, |item| StackShape {
-                count: item.stack_count(),
-                total: item.total,
-                copy_depth: relations::copy_depth_of(&self.requirements, &item),
-                in_cluster: item.cluster.is_some(),
-            })
-    }
-
-    /// Stores the editor's result: the row's own fields plus the stack shape
-    /// it asked for. A row whose key is not on the board is a new chip.
-    pub fn apply_edit(
-        &mut self,
-        result: UiRequirement,
-        count: usize,
-        total: Option<u8>,
-        copy_depth: Option<u8>,
-    ) {
-        let index = self.row_index(result.key);
-        self.requirements = relations::apply_edit(
-            &self.requirements,
-            index,
-            result,
-            count,
-            total,
-            copy_depth,
-            &mut self.next_key,
-        );
-    }
-
-    /// Makes the row `source` an either/or alternative of the row `target`.
-    pub fn join(&mut self, source: u64, target: u64) {
-        let (Some(source), Some(target)) = (self.row_index(source), self.row_index(target)) else {
-            return;
-        };
-        self.requirements = relations::join_alternatives(&self.requirements, source, target);
-    }
-
-    /// Pulls the row `key` out of its cluster, back onto the board alone.
-    pub fn detach(&mut self, key: u64) {
-        let Some(index) = self.row_index(key) else {
-            return;
-        };
-        self.requirements = relations::detach(&self.requirements, index);
-    }
-
-    /// Deletes what the row `key` stands for: a cluster member on its own, a
-    /// lone chip together with the hidden copies of its stack.
-    pub fn remove(&mut self, key: u64) {
-        let Some(index) = self.row_index(key) else {
-            return;
-        };
-        let Some(item) = self.board_item(key) else {
-            return;
-        };
-        self.requirements = if item.cluster.is_some() {
-            relations::remove_member(&self.requirements, index)
-        } else {
-            relations::remove_item(&self.requirements, &item)
-        };
-    }
-
-    /// Whether the entry holding the row `key` can ask for more than one
-    /// item; a cluster spanning two categories cannot.
-    #[must_use]
-    pub fn can_stack(&self, key: u64) -> bool {
-        self.board_item(key)
-            .is_some_and(|item| relations::can_stack(&self.requirements, &item))
-    }
-
-    /// Sets how many items the entry holding the row `key` asks for.
-    pub fn set_stack_count(&mut self, key: u64, count: usize) {
-        let Some(item) = self.board_item(key) else {
-            return;
-        };
-        self.requirements =
-            relations::set_stack_count(&self.requirements, &item, count, &mut self.next_key);
-    }
-
-    /// Sets or clears the combined level of the entry holding the row `key`.
-    pub fn set_stack_total(&mut self, key: u64, total: Option<u8>) {
-        let Some(item) = self.board_item(key) else {
-            return;
-        };
-        self.requirements = relations::set_stack_total(&self.requirements, &item, total);
-    }
-
-    /// Checks that `draft` would leave the whole query valid once stored
-    /// with [`Self::apply_edit`], for the editor to report before saving.
-    ///
-    /// # Errors
-    ///
-    /// Returns the human-readable message.
-    pub fn validate_draft(
-        &self,
-        draft: &UiRequirement,
-        count: usize,
-        total: Option<u8>,
-        copy_depth: Option<u8>,
-    ) -> Result<(), String> {
-        draft
-            .to_core()
-            .validate()
-            .map_err(|error| error.to_string())?;
-        let mut preview = self.clone();
-        preview.apply_edit(*draft, count, total, copy_depth);
-        preview
-            .unvalidated_query()
-            .validate()
-            .map_err(|error| error.to_string())
-    }
-}
-
-/// What the editor needs to know about the chip's stack.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct StackShape {
-    pub count: usize,
-    pub total: Option<u8>,
-    /// The floor limit the extra copies share, when they carry one.
-    pub copy_depth: Option<u8>,
-    /// A cluster member's stack belongs to the cluster, not the editor.
-    pub in_cluster: bool,
-}
-
-impl StackShape {
-    /// The shape of a chip that is not on the board yet: one item, no stack.
-    #[must_use]
-    pub const fn lone() -> Self {
-        Self {
-            count: 1,
-            total: None,
-            copy_depth: None,
-            in_cluster: false,
-        }
-    }
 }
 
 pub const fn kind_choice_label(choice: KindChoice) -> &'static str {
@@ -593,21 +309,6 @@ pub const fn kind_choice_singular(choice: KindChoice) -> &'static str {
         (ItemKind::Weapon, None) => "weapon",
         (ItemKind::Weapon, Some(WeaponCategory::Melee)) => "melee weapon",
         (ItemKind::Weapon, Some(WeaponCategory::Thrown)) => "thrown weapon",
-        (ItemKind::Armor, _) => "armor",
-        (ItemKind::Wand, _) => "wand",
-        (ItemKind::Ring, _) => "ring",
-        (ItemKind::Trinket, _) => "trinket",
-        (ItemKind::Artifact, _) => "artifact",
-    }
-}
-
-/// The board chip's wildcard name: shorter than the editor's, because the
-/// chip already shows the family's icon beside it.
-pub const fn chip_family(choice: KindChoice) -> &'static str {
-    match choice {
-        (ItemKind::Weapon, None) => "weapon",
-        (ItemKind::Weapon, Some(WeaponCategory::Melee)) => "melee",
-        (ItemKind::Weapon, Some(WeaponCategory::Thrown)) => "thrown",
         (ItemKind::Armor, _) => "armor",
         (ItemKind::Wand, _) => "wand",
         (ItemKind::Ring, _) => "ring",
@@ -785,16 +486,53 @@ pub const ALL_CHALLENGES: &[ChallengeInfo] = &[
 #[cfg(test)]
 mod tests {
     use shpd_seedfinder_core::catalog::{ItemId, ItemKind};
-    use shpd_seedfinder_core::query::{TierRequirement, UpgradeRequirement};
+    use shpd_seedfinder_core::editor::{self, BoardView, Draft, Edit, ItemView, Row};
+    use shpd_seedfinder_core::query::{Requirement, TierRequirement, UpgradeRequirement};
     use shpd_seedfinder_core::quests::{
         BlacksmithQuestType, GhostQuestType, ImpQuestType, QuestSummary, ScheduledQuest,
         WandmakerQuestType,
     };
 
     use super::{
-        AppState, QuestRow, UiRequirement, blacksmith_quest_label, floor_limit_skip_target,
-        ghost_quest_label, imp_target_label, quest_rows, source_label, wandmaker_quest_label,
+        AppState, QuestRow, blacksmith_quest_label, ghost_quest_label, imp_target_label,
+        quest_rows, source_label, wandmaker_quest_label,
     };
+
+    fn row(key: u64, requirement: Requirement) -> Row {
+        Row { key, requirement }
+    }
+
+    fn board(state: &AppState) -> BoardView {
+        editor::board_view(&state.requirements, state.resin().as_ref())
+    }
+
+    /// The board entry showing the row `key`.
+    fn entry(state: &AppState, key: u64) -> ItemView {
+        board(state)
+            .items
+            .into_iter()
+            .find(|item| item.members.contains(&key))
+            .expect("the row is on the board")
+    }
+
+    /// A sheet opened on `key` (or a new chip) and filled in the way the
+    /// requirement dialog fills it: the requirement its controls describe,
+    /// with the stack it asks for.
+    fn sheet(
+        state: &mut AppState,
+        key: Option<u64>,
+        requirement: Requirement,
+        (count, total, copy_depth): (u8, Option<u8>, Option<u8>),
+    ) -> Draft {
+        let opened = state.open_sheet(key, requirement.blanket);
+        Draft {
+            requirement,
+            count,
+            total,
+            copy_depth,
+            ..opened
+        }
+    }
 
     #[test]
     fn blankets_survive_queries_links_and_persistence() {
@@ -812,7 +550,7 @@ mod tests {
             state
                 .requirements
                 .iter()
-                .map(|r| r.blanket)
+                .map(|row| row.requirement.blanket)
                 .collect::<Vec<_>>(),
             [false, false, false, true]
         );
@@ -831,25 +569,40 @@ mod tests {
         ]}"#,
         )
         .unwrap();
-        let mut state = AppState::from_query(&query);
-        assert_eq!(state.board_count(), 3);
-        assert!(!state.can_stack(2));
-        state.set_stack_count(2, 3);
+        let mut state = AppState::load(&query);
+        assert_eq!(board(&state).items.len(), 3);
+        assert!(!entry(&state, 2).stack.can_grow);
+        assert!(!state.apply(&[Edit::SetCount { key: 2, count: 3 }]).changed);
         assert_eq!(state.requirements.len(), 3);
-        state.join(1, 2);
-        assert_eq!(state.board_count(), 3);
-        state.join(2, 3);
-        assert_eq!(state.board_count(), 2);
+        // An ordinary chip never joins a blanket.
+        assert!(
+            !state
+                .apply(&[Edit::Join {
+                    source: 1,
+                    target: 2
+                }])
+                .changed
+        );
+        assert_eq!(board(&state).items.len(), 3);
+        assert!(
+            state
+                .apply(&[Edit::Join {
+                    source: 2,
+                    target: 3
+                }])
+                .changed
+        );
+        assert_eq!(board(&state).counts.blanket, 1);
         assert!(
             state
                 .requirements
                 .iter()
-                .all(|r| r.identity_group.is_none())
+                .all(|row| row.requirement.identity_group.is_none())
         );
         assert!(state.to_query().is_ok());
-        state.detach(2);
-        assert_eq!(state.board_count(), 3);
-        state.requirements.retain(|r| r.blanket);
+        state.apply(&[Edit::Detach { key: 2 }]);
+        assert_eq!(board(&state).items.len(), 3);
+        state.requirements.retain(|row| row.requirement.blanket);
         assert!(state.to_query().is_err());
     }
 
@@ -864,14 +617,16 @@ mod tests {
         )
         .unwrap();
         let state = AppState {
-            requirements: vec![UiRequirement {
-                kind: ItemKind::Artifact,
-                item: Some(ItemId::SandalsOfNature),
-                upgrade: UpgradeRequirement::Exact(5),
-                source: Some(ItemSource::ImpReward),
-                max_depth: Some(19),
-                ..UiRequirement::new(1)
-            }],
+            requirements: vec![row(
+                1,
+                Requirement {
+                    item: Some(ItemId::SandalsOfNature),
+                    upgrade: UpgradeRequirement::Exact(5),
+                    source: Some(ItemSource::ImpReward),
+                    max_depth: Some(19),
+                    ..Requirement::any(ItemKind::Artifact)
+                },
+            )],
             ..AppState::default()
         };
         let query = state.to_query().unwrap();
@@ -898,38 +653,47 @@ mod tests {
         let mut state = AppState {
             requirements: [ItemId::SandalsOfNature, ItemId::HornOfPlenty]
                 .into_iter()
-                .enumerate()
-                .map(|(index, id)| UiRequirement {
-                    kind: ItemKind::Artifact,
-                    item: Some(id),
-                    upgrade: UpgradeRequirement::Exact(5),
-                    source: Some(ItemSource::ImpReward),
-                    max_depth: Some(19),
-                    require_uncursed: true,
-                    alternative_group: Some(1),
-                    ..UiRequirement::new(index as u64 + 1)
+                .zip(1..)
+                .map(|(id, key)| {
+                    row(
+                        key,
+                        Requirement {
+                            item: Some(id),
+                            upgrade: UpgradeRequirement::Exact(5),
+                            source: Some(ItemSource::ImpReward),
+                            max_depth: Some(19),
+                            require_uncursed: true,
+                            alternative_group: Some(1),
+                            ..Requirement::any(ItemKind::Artifact)
+                        },
+                    )
                 })
                 .collect(),
             ..AppState::default()
         };
         assert!(super::ALL_KIND_CHOICES.contains(&(ItemKind::Artifact, None)));
-        assert_eq!(state.requirements[0].title(), "Sandals of Nature");
-        assert!(state.requirements[0].subtitle().contains("exactly +5"));
-        assert!(state.requirements[0].subtitle().contains("floors 1"));
+        let chip = &entry(&state, 1).chips[0];
+        assert_eq!(chip.title, "Sandals of Nature");
+        assert!(chip.details.contains(&"exactly +5".to_owned()));
+        assert!(chip.details.contains(&"floors 1–19".to_owned()));
         let query = state.to_query().unwrap();
         let decoded = deep_link::decode_text(&deep_link::encode_link(&query).unwrap()).unwrap();
         assert_eq!(AppState::from_query(&decoded).to_query().unwrap(), query);
         assert_eq!(query.slot_count(), 1);
-        assert!(!state.can_stack(1));
-        state.set_stack_count(1, 2);
+        // Artifacts are unique finds: neither the cluster nor one alone stacks.
+        assert!(!entry(&state, 1).stack.can_grow);
+        state.apply(&[Edit::SetCount { key: 1, count: 2 }]);
         assert_eq!(state.requirements.len(), 2);
-        state.detach(1);
-        assert!(!state.can_stack(1));
-        state.set_stack_count(1, 2);
+        state.apply(&[Edit::Detach { key: 1 }]);
+        assert!(!entry(&state, 1).stack.can_grow);
+        state.apply(&[Edit::SetCount { key: 1, count: 2 }]);
         assert_eq!(state.requirements.len(), 2);
-        state.requirements[0].item = None;
-        assert_eq!(state.requirements[0].title(), "Artifact");
-        assert_eq!(state.requirements[0].chip_name(), "Artifact");
+        state.requirements[0].requirement.item = None;
+        let chip = &entry(&state, state.requirements[0].key).chips[0];
+        assert_eq!(
+            (chip.name.as_str(), chip.title.as_str()),
+            ("Artifact", "Artifact")
+        );
         assert!(state.to_query().is_err());
     }
 
@@ -938,18 +702,23 @@ mod tests {
         let state = AppState {
             requirements: [ItemId::MimicTooth, ItemId::RatSkull]
                 .into_iter()
-                .enumerate()
-                .map(|(index, id)| UiRequirement {
-                    kind: ItemKind::Trinket,
-                    item: Some(id),
-                    alternative_group: Some(1),
-                    ..UiRequirement::new(index as u64 + 1)
+                .zip(1..)
+                .map(|(id, key)| {
+                    row(
+                        key,
+                        Requirement {
+                            item: Some(id),
+                            alternative_group: Some(1),
+                            ..Requirement::any(ItemKind::Trinket)
+                        },
+                    )
                 })
                 .collect(),
             ..AppState::default()
         };
-        assert_eq!(state.requirements[0].title(), "Mimic Tooth");
-        assert_eq!(state.requirements[0].subtitle(), "");
+        let chip = &entry(&state, 1).chips[0];
+        assert_eq!(chip.title, "Mimic Tooth");
+        assert!(chip.details.is_empty());
         let query = state.to_query().unwrap();
         assert_eq!(AppState::from_query(&query).to_query().unwrap(), query);
         assert_eq!(
@@ -962,17 +731,17 @@ mod tests {
     #[test]
     fn selected_trinket_survives_query_document_round_trips() {
         let mut state = AppState::default();
-        state.requirements.push(UiRequirement {
-            kind: ItemKind::Trinket,
-            item: Some(ItemId::MimicTooth),
-            select_trinket: true,
-            trinket_transmutations: 0,
-            artifact_transmutations: 0,
-            ..UiRequirement::new(1)
-        });
+        state.requirements.push(row(
+            1,
+            Requirement {
+                item: Some(ItemId::MimicTooth),
+                select_trinket: true,
+                ..Requirement::any(ItemKind::Trinket)
+            },
+        ));
         let query = state.to_query().unwrap();
         assert!(query.requirements[0].select_trinket);
-        assert_eq!(state.requirements[0].subtitle(), "choose at +3");
+        assert_eq!(entry(&state, 1).chips[0].details, ["choose at +3"]);
         assert_eq!(AppState::from_query(&query).to_query().unwrap(), query);
         let document = shpd_seedfinder_core::json_query::encode(&query);
         let decoded = shpd_seedfinder_core::json_query::decode(&document.to_string()).unwrap();
@@ -985,12 +754,13 @@ mod tests {
             deep_link, json_query, probability::estimate_match_probability,
         };
         let query = json_query::decode(r#"{"arcane_resin":"auto","arcane_resin_filter":{"include_mage_wand":true},"requirements":[{"item":"wand_frost","exclude_resin":true},{"item":"wand_frost"},{"item":"wand_frost"}],"floor_requirements":[{"depth":7,"feeling":"dark"}]}"#).unwrap();
-        let state = AppState::from_query(&query);
+        let state = AppState::load(&query);
         assert_eq!(state.to_query().unwrap(), query);
-        assert!(state.requirements[0].exclude_resin);
+        assert!(state.requirements[0].requirement.exclude_resin);
         assert!(state.arcane_resin_filter.include_mage_wand);
-        assert_eq!(state.board().len(), 1);
-        assert_eq!(state.board()[0].stack_count(), 3);
+        let view = board(&state);
+        assert_eq!(view.items.len(), 1);
+        assert_eq!(view.items[0].stack.count, 3);
         assert_eq!(
             deep_link::decode(&deep_link::encode(&query).unwrap()).unwrap(),
             query
@@ -1009,17 +779,23 @@ mod tests {
     #[test]
     fn auto_resin_and_blankets_survive_editor_and_share_round_trips() {
         let query = shpd_seedfinder_core::json_query::decode(r#"{"arcane_resin":"auto","requirements":[{"item":"wand_lightning","upgrade":2},{"kind":"wand","upgrade":2,"blanket":true}]}"#).unwrap();
-        let state = AppState::from_query(&query);
+        let state = AppState::load(&query);
         assert!(state.needs_resin());
-        assert_eq!(state.resin_label(), "Auto");
+        let resin = board(&state).resin.expect("the query asks for resin");
+        assert_eq!(resin.tags[0].text, "Auto");
         assert_eq!(state.to_query().unwrap(), query);
         let link = shpd_seedfinder_core::deep_link::encode(&state.to_query().unwrap()).unwrap();
         let restored = shpd_seedfinder_core::deep_link::decode(&link).unwrap();
         assert_eq!(AppState::from_query(&restored).to_query().unwrap(), query);
         let mut removed = state;
-        removed.arcane_resin_auto = false;
+        removed.set_resin(None);
         assert!(!removed.needs_resin());
+        assert!(removed.resin().is_none());
         assert!(!removed.to_query().unwrap().needs_resin());
+        // The editor's resin condition sets the query's back as it was.
+        let mut restored = removed.clone();
+        restored.set_resin(AppState::load(&query).resin());
+        assert_eq!(restored.to_query().unwrap(), query);
     }
 
     #[test]
@@ -1040,72 +816,6 @@ mod tests {
                 .unwrap()
                 .auto_apply_trinket
         );
-    }
-
-    #[test]
-    fn single_upward_steps_skip_forward_and_everything_else_snaps_down() {
-        // Spinning up from the floor below an empty boss floor lands above it.
-        assert_eq!(floor_limit_skip_target(4, 5), 6);
-        assert_eq!(floor_limit_skip_target(9, 10), 11);
-        assert_eq!(floor_limit_skip_target(14, 15), 16);
-        // Spinning down lands on the equivalent floor below.
-        assert_eq!(floor_limit_skip_target(6, 5), 4);
-        assert_eq!(floor_limit_skip_target(11, 10), 9);
-        assert_eq!(floor_limit_skip_target(16, 15), 14);
-        // Typed jumps snap down: "10" means the first 10 floors (≡ 9), never 11.
-        assert_eq!(floor_limit_skip_target(4, 10), 9);
-        assert_eq!(floor_limit_skip_target(24, 15), 14);
-        assert_eq!(floor_limit_skip_target(4, 15), 14);
-        assert_eq!(floor_limit_skip_target(20, 5), 4);
-        // Non-boss floors pass through untouched.
-        assert_eq!(floor_limit_skip_target(4, 6), 6);
-        assert_eq!(floor_limit_skip_target(24, 1), 1);
-        assert_eq!(floor_limit_skip_target(1, 24), 24);
-    }
-
-    #[test]
-    fn labels_describe_wildcards_and_predicates() {
-        let mut requirement = UiRequirement::new(1);
-        assert_eq!(requirement.title(), "Any weapon");
-        assert_eq!(requirement.chip_name(), "Any weapon");
-        assert_eq!(requirement.subtitle(), "any upgrade");
-
-        requirement.tier = TierRequirement::AtLeast(4);
-        requirement.upgrade = UpgradeRequirement::Exact(2);
-        requirement.identity_group = Some(2);
-        requirement.max_depth = Some(9);
-        requirement.require_uncursed = true;
-        assert_eq!(requirement.title(), "Any Tier 4+ weapon");
-        // The chip keeps the tier out of the name: it rides beside it as a tag.
-        assert_eq!(requirement.chip_name(), "Any weapon");
-        assert_eq!(requirement.subtitle(), "exactly +2 · uncursed · floors 1–9");
-
-        requirement.tier = TierRequirement::AtMost(3);
-        assert_eq!(requirement.title(), "Any Tier 3 or lower weapon");
-
-        requirement.item = Some(ItemId::Greatsword);
-        assert_eq!(requirement.title(), "Greatsword");
-        assert_eq!(requirement.chip_name(), "Greatsword");
-    }
-
-    #[test]
-    fn weapon_category_narrows_labels_and_the_core_query() {
-        use shpd_seedfinder_core::catalog::WeaponCategory;
-
-        let mut requirement = UiRequirement::new(1);
-        requirement.weapon_category = Some(WeaponCategory::Thrown);
-        assert_eq!(requirement.title(), "Any thrown weapon");
-        requirement.tier = TierRequirement::Exact(5);
-        assert_eq!(requirement.title(), "Any Tier 5 thrown weapon");
-        assert_eq!(
-            requirement.to_core().weapon_category,
-            Some(WeaponCategory::Thrown)
-        );
-        assert!(requirement.to_core().validate().is_ok());
-
-        requirement.weapon_category = Some(WeaponCategory::Melee);
-        requirement.tier = TierRequirement::Any;
-        assert_eq!(requirement.title(), "Any melee weapon");
     }
 
     #[test]
@@ -1222,7 +932,9 @@ mod tests {
     fn wandmaker_quest_survives_the_query_round_trip() {
         let mut state = AppState::default();
         let key = state.claim_key();
-        state.requirements.push(UiRequirement::new(key));
+        state
+            .requirements
+            .push(row(key, Requirement::any(ItemKind::Weapon)));
         assert_eq!(state.to_query().unwrap().wandmaker_quest, None);
 
         state.wandmaker_quest = Some(WandmakerQuestType::Rotberry);
@@ -1236,32 +948,32 @@ mod tests {
 
     #[test]
     fn share_links_round_trip_the_whole_editor_state() {
-        use shpd_seedfinder_core::catalog::{ItemKind, WeaponCategory};
+        use shpd_seedfinder_core::catalog::WeaponCategory;
         use shpd_seedfinder_core::challenges::Challenges;
         use shpd_seedfinder_core::deep_link;
 
         let mut state = AppState::default();
         let key = state.claim_key();
-        state.requirements.push(UiRequirement {
-            weapon_category: Some(WeaponCategory::Melee),
-            tier: TierRequirement::AtLeast(4),
-            upgrade: UpgradeRequirement::Exact(2),
-            require_uncursed: true,
-            select_trinket: false,
-            trinket_transmutations: 0,
-            artifact_transmutations: 0,
-            blanket: false,
-            exclude_resin: false,
-            max_depth: Some(9),
-            ..UiRequirement::new(key)
-        });
+        state.requirements.push(row(
+            key,
+            Requirement {
+                weapon_category: Some(WeaponCategory::Melee),
+                tier: TierRequirement::AtLeast(4),
+                upgrade: UpgradeRequirement::Exact(2),
+                require_uncursed: true,
+                max_depth: Some(9),
+                ..Requirement::any(ItemKind::Weapon)
+            },
+        ));
         let key = state.claim_key();
-        state.requirements.push(UiRequirement {
-            kind: ItemKind::Ring,
-            item: Some(ItemId::RingTenacity),
-            identity_group: Some(2),
-            ..UiRequirement::new(key)
-        });
+        state.requirements.push(row(
+            key,
+            Requirement {
+                item: Some(ItemId::RingTenacity),
+                identity_group: Some(2),
+                ..Requirement::any(ItemKind::Ring)
+            },
+        ));
         state.max_depth = 13;
         state.require_blacksmith = true;
         state.wandmaker_quest = Some(WandmakerQuestType::ElementalEmbers);
@@ -1277,6 +989,11 @@ mod tests {
         // query, so copying the link again shares the same search.
         let restored = AppState::from_query(&decoded);
         assert_eq!(restored.to_query().unwrap(), query);
+        // Loading it into the editor drops the stack label one ring cannot
+        // use, and changes nothing the search reads.
+        let loaded = AppState::load(&decoded);
+        assert_eq!(loaded.requirements[1].requirement.identity_group, None);
+        assert_eq!(loaded.to_query().unwrap().slot_count(), query.slot_count());
 
         // The custom-scheme form the desktop handler receives decodes too.
         let code = link.strip_prefix(deep_link::WEB_LINK_PREFIX).unwrap();
@@ -1294,28 +1011,31 @@ mod tests {
         // three, and +5 is the ceiling weapons alone reach.
         let mut state = AppState::default();
         let key = state.claim_key();
-        state.requirements.push(UiRequirement {
-            upgrade: UpgradeRequirement::Exact(5),
-            effect: EffectRequirement::OneOf(
-                EffectSet::from_effects([
-                    Effect::Weapon(WeaponEffect::Blazing),
-                    Effect::Weapon(WeaponEffect::Crystal),
-                ])
-                .unwrap(),
-            ),
-            ..UiRequirement::new(key)
-        });
+        state.requirements.push(row(
+            key,
+            Requirement {
+                upgrade: UpgradeRequirement::Exact(5),
+                effect: EffectRequirement::OneOf(
+                    EffectSet::from_effects([
+                        Effect::Weapon(WeaponEffect::Blazing),
+                        Effect::Weapon(WeaponEffect::Crystal),
+                    ])
+                    .unwrap(),
+                ),
+                ..Requirement::any(ItemKind::Weapon)
+            },
+        ));
 
         let query = state.to_query().unwrap();
         let link = deep_link::encode_link(&query).unwrap();
         let decoded = deep_link::decode_text(&link).unwrap();
         assert_eq!(decoded, query);
 
-        let restored = AppState::from_query(&decoded);
+        let restored = AppState::load(&decoded);
         assert_eq!(restored.to_query().unwrap(), query);
         assert_eq!(
-            restored.requirements[0].subtitle(),
-            "exactly +5 \u{b7} Blazing or Crystal"
+            entry(&restored, 1).chips[0].details,
+            ["exactly +5", "effect: Blazing/Crystal"]
         );
     }
 
@@ -1323,7 +1043,9 @@ mod tests {
     fn query_drops_blacksmith_requirement_at_depth_fourteen() {
         let mut state = AppState::default();
         let key = state.claim_key();
-        state.requirements.push(UiRequirement::new(key));
+        state
+            .requirements
+            .push(row(key, Requirement::any(ItemKind::Weapon)));
         state.require_blacksmith = true;
         state.max_depth = 14;
         assert!(!state.to_query().unwrap().require_blacksmith);
@@ -1332,170 +1054,253 @@ mod tests {
     }
 
     #[test]
-    fn labels_describe_effect_sets_and_predicates() {
-        use shpd_seedfinder_core::catalog::{ArmorEffect, Effect, WeaponEffect};
-        use shpd_seedfinder_core::query::{EffectRequirement, EffectSet};
-
-        let mut requirement = UiRequirement::new(1);
-        requirement.effect = EffectRequirement::exactly(Effect::Weapon(WeaponEffect::Blazing));
-        assert_eq!(requirement.subtitle(), "any upgrade · Blazing");
-        assert_eq!(
-            requirement.pinned_effect(),
-            Some(Effect::Weapon(WeaponEffect::Blazing))
-        );
-
-        requirement.effect = EffectRequirement::OneOf(
-            EffectSet::from_effects([
-                Effect::Weapon(WeaponEffect::Projecting),
-                Effect::Weapon(WeaponEffect::Blocking),
-            ])
-            .unwrap(),
-        );
-        // Catalog order, not selection order.
-        assert_eq!(
-            requirement.subtitle(),
-            "any upgrade · Blocking or Projecting"
-        );
-        assert_eq!(requirement.pinned_effect(), None);
-
-        requirement.kind = ItemKind::Armor;
-        requirement.effect =
-            EffectRequirement::OneOf(EffectSet::enchantments(ItemKind::Armor).unwrap());
-        requirement.require_uncursed = true;
-        assert_eq!(
-            requirement.subtitle(),
-            "any upgrade · any enchantment · uncursed"
-        );
-
-        requirement.effect = EffectRequirement::exactly(Effect::Armor(ArmorEffect::Stone));
-        requirement.require_uncursed = false;
-        requirement.upgrade = UpgradeRequirement::AtLeast(1);
-        requirement.max_depth = Some(4);
-        assert_eq!(requirement.subtitle(), "+1 or higher · Stone · floors 1–4");
-    }
-
-    #[test]
     fn the_board_collapses_alternatives_and_stacks_into_one_entry_each() {
         let mut state = AppState::default();
         let spear = state.claim_key();
-        state.requirements.push(UiRequirement {
-            item: Some(ItemId::Spear),
-            upgrade: UpgradeRequirement::Exact(3),
-            ..UiRequirement::new(spear)
-        });
+        state.requirements.push(row(
+            spear,
+            Requirement {
+                item: Some(ItemId::Spear),
+                upgrade: UpgradeRequirement::Exact(3),
+                ..Requirement::any(ItemKind::Weapon)
+            },
+        ));
         let ring = state.claim_key();
-        state.requirements.push(UiRequirement {
-            kind: ItemKind::Ring,
-            ..UiRequirement::new(ring)
-        });
-        assert_eq!(state.board_count(), 2);
+        state
+            .requirements
+            .push(row(ring, Requirement::any(ItemKind::Ring)));
+        assert_eq!(board(&state).items.len(), 2);
 
         // Dropping the ring on the spear makes one either/or entry, and one
-        // slot for the engine.
-        state.join(ring, spear);
-        assert_eq!(state.board_count(), 1);
-        let item = state.board_item(spear).unwrap();
-        assert_eq!(item.members.len(), 2);
-        assert!(item.cluster.is_some());
+        // slot for the engine; the editor follows the ring.
+        let joined = state.apply(&[Edit::Join {
+            source: ring,
+            target: spear,
+        }]);
+        assert!(joined.changed);
+        assert_eq!(joined.focus, Some(ring));
+        assert_eq!(board(&state).items.len(), 1);
+        let item = entry(&state, spear);
+        assert_eq!(item.members, [spear, ring]);
+        assert_eq!(item.label.as_deref(), Some("Any of 2"));
         assert_eq!(state.unvalidated_query().slot_count(), 1);
 
         // A cluster spanning two categories cannot anchor a stack: a copy
         // would have to name a kind, and "spear or ring" names none.
-        state.set_stack_count(spear, 2);
+        assert!(
+            !state
+                .apply(&[Edit::SetCount {
+                    key: spear,
+                    count: 2
+                }])
+                .changed
+        );
         assert_eq!(state.requirements.len(), 2);
-        assert_eq!(state.board_count(), 1);
-        assert_eq!(state.board_item(spear).unwrap().stack_count(), 1);
-        assert!(!state.can_stack(spear));
+        assert!(!entry(&state, spear).stack.can_grow);
 
         // Pulling the ring back out leaves a plain spear chip, which can.
-        state.detach(ring);
-        assert_eq!(state.board_count(), 2);
-        assert!(state.can_stack(spear));
-        state.set_stack_count(spear, 2);
+        state.apply(&[Edit::Detach { key: ring }]);
+        assert_eq!(board(&state).items.len(), 2);
+        assert!(entry(&state, spear).stack.can_grow);
+        let grown = state.apply(&[Edit::SetCount {
+            key: spear,
+            count: 2,
+        }]);
         assert_eq!(state.requirements.len(), 3);
-        assert_eq!(state.board_item(spear).unwrap().stack_count(), 2);
-        assert_eq!(state.board_item(ring).unwrap().stack_count(), 1);
+        // The copy took the next key in line.
+        assert_eq!(state.requirements[1].key, 3);
+        assert_eq!(grown.next_key, 4);
+        assert_eq!(state.claim_key(), 4);
+        assert_eq!(entry(&state, spear).stack.count, 2);
+        assert_eq!(entry(&state, ring).stack.count, 1);
         assert!(
             state
                 .requirements
                 .iter()
-                .all(|r| r.identity_group.is_none())
+                .all(|row| row.requirement.identity_group.is_none())
         );
         assert!(state.to_query().is_ok());
 
         // Removing the spear takes its hidden copy with it.
-        state.remove(spear);
+        state.apply(&[Edit::Remove { key: spear }]);
         assert_eq!(state.requirements.len(), 1);
         assert_eq!(state.requirements[0].key, ring);
     }
 
     #[test]
-    fn a_combined_level_stack_is_built_and_checked_through_the_editor() {
+    fn an_edit_that_changes_nothing_leaves_the_rows_alone() {
         let mut state = AppState::default();
         let key = state.claim_key();
-        let ring = UiRequirement {
-            kind: ItemKind::Ring,
+        state
+            .requirements
+            .push(row(key, Requirement::any(ItemKind::Wand)));
+        let before = state.requirements.clone();
+        // A lone chip has no cluster to leave, and an unknown key is nothing.
+        for edit in [Edit::Detach { key }, Edit::Remove { key: 99 }] {
+            let result = state.apply(&[edit]);
+            assert!(!result.changed);
+            assert!(result.refused.is_none());
+            assert_eq!(state.requirements, before);
+        }
+    }
+
+    #[test]
+    fn a_combined_level_stack_is_built_and_checked_through_the_editor() {
+        let mut state = AppState::default();
+        let ring = Requirement {
             item: Some(ItemId::RingMight),
-            ..UiRequirement::new(key)
+            ..Requirement::any(ItemKind::Ring)
         };
-        state.apply_edit(ring, 2, Some(4), None);
+        let draft = sheet(&mut state, None, ring, (2, Some(4), None));
+        let saved = state.save(&draft).unwrap();
+        let key = draft.key.unwrap();
+        assert_eq!(saved.focus, Some(key));
         assert_eq!(state.requirements.len(), 2);
         assert!(
-            state
-                .requirements
-                .iter()
-                .all(|r| r.level_sum.map(|sum| sum.minimum_total) == Some(4))
+            state.requirements.iter().all(|row| row
+                .requirement
+                .level_sum
+                .map(|sum| sum.minimum_total)
+                == Some(4))
         );
-        assert_eq!(state.board_count(), 1);
-        let shape = state.stack_shape(key);
-        assert_eq!(shape.count, 2);
-        assert_eq!(shape.total, Some(4));
-        assert!(!shape.in_cluster);
+        let item = entry(&state, key);
+        assert_eq!((item.stack.count, item.stack.total), (2, Some(4)));
+        assert!(!item.chips[0].in_cluster);
         assert!(state.to_query().is_ok());
 
         // A ring reaches +4 (five levels), but only one per world — the Imp
         // vault's prize; every other ring stops at +2 (three levels). Two
         // rings therefore reach eight levels together, three eleven.
-        assert!(state.validate_draft(&ring, 2, Some(8), None).is_ok());
-        assert_eq!(
-            state.validate_draft(&ring, 2, Some(9), None).unwrap_err(),
-            "combined level group A needs 9 levels but its items can reach at most 8"
-        );
-        assert!(state.validate_draft(&ring, 3, Some(11), None).is_ok());
-        assert_eq!(
-            state.validate_draft(&ring, 3, Some(12), None).unwrap_err(),
-            "combined level group A needs 12 levels but its items can reach at most 11"
-        );
+        assert_eq!(item.stack.level_capacity, 8);
+        state.apply(&[Edit::SetCount { key, count: 3 }]);
+        assert_eq!(entry(&state, key).stack.level_capacity, 11);
+        state.apply(&[Edit::SetCount { key, count: 2 }]);
 
-        // The badge lowers the total without going through the editor.
-        state.set_stack_total(key, Some(3));
-        assert_eq!(state.board_item(key).unwrap().total, Some(3));
+        // The badge lowers the total without going through the sheet, and
+        // never past what the stack can reach.
+        state.apply(&[Edit::SetTotal {
+            key,
+            total: Some(3),
+        }]);
+        assert_eq!(entry(&state, key).stack.total, Some(3));
+        state.apply(&[Edit::SetTotal {
+            key,
+            total: Some(9),
+        }]);
+        assert_eq!(entry(&state, key).stack.total, Some(8));
+        assert_eq!(
+            entry(&state, key).badges.total.unwrap().text,
+            "\u{3a3} \u{2265} 8"
+        );
 
         // Giving up on counting levels returns the stack to plain repeats.
-        state.set_stack_total(key, None);
-        assert!(state.requirements.iter().all(|r| r.level_sum.is_none()));
-        assert_eq!(state.board_item(key).unwrap().stack_count(), 2);
+        state.apply(&[Edit::ToggleLevels { key }]);
+        assert!(
+            state
+                .requirements
+                .iter()
+                .all(|row| row.requirement.level_sum.is_none())
+        );
+        assert_eq!(entry(&state, key).stack.count, 2);
         assert!(state.to_query().is_ok());
+        // …and the menu turns it back on at one level per item.
+        state.apply(&[Edit::ToggleLevels { key }]);
+        assert_eq!(entry(&state, key).stack.total, Some(2));
     }
 
     #[test]
     fn a_stack_of_copies_carries_its_own_floor_limit() {
         let mut state = AppState::default();
-        let key = state.claim_key();
-        let armor = UiRequirement {
-            kind: ItemKind::Armor,
+        let armor = Requirement {
             upgrade: UpgradeRequirement::Exact(3),
             max_depth: Some(4),
-            ..UiRequirement::new(key)
+            ..Requirement::any(ItemKind::Armor)
         };
-        state.apply_edit(armor, 2, None, Some(9));
-        let shape = state.stack_shape(key);
-        assert_eq!(shape.count, 2);
-        assert_eq!(shape.copy_depth, Some(9));
+        let draft = sheet(&mut state, None, armor, (2, None, Some(9)));
+        state.save(&draft).unwrap();
+        let item = entry(&state, draft.key.unwrap());
+        assert_eq!(item.stack.count, 2);
+        assert_eq!(item.stack.copy_depth, Some(9));
         // The named +3 armor keeps its own floor; the copy keeps the other.
-        assert_eq!(state.requirements[0].max_depth, Some(4));
-        assert_eq!(state.requirements[1].max_depth, Some(9));
+        assert_eq!(state.requirements[0].requirement.max_depth, Some(4));
+        assert_eq!(state.requirements[1].requirement.max_depth, Some(9));
         assert!(state.to_query().is_ok());
+
+        // Saving the chip as it stands gives the rows back untouched.
+        let before = state.requirements.clone();
+        let again = state.open_sheet(Some(item.members[0]), false);
+        let unchanged = state.save(&again).unwrap();
+        assert!(!unchanged.changed);
+        assert_eq!(unchanged.focus, Some(item.members[0]));
+        assert_eq!(state.requirements, before);
+    }
+
+    #[test]
+    fn a_new_sheet_saves_under_its_key_and_a_blanket_follows_the_first_row() {
+        let mut state = AppState::default();
+        let wand = Requirement {
+            item: Some(ItemId::WandFrost),
+            ..Requirement::any(ItemKind::Wand)
+        };
+        let draft = sheet(&mut state, None, wand, (1, None, None));
+        state.save(&draft).unwrap();
+        assert_eq!(state.requirements[0].key, draft.key.unwrap());
+
+        // A new blanket starts from the kind the ordinary rows ask for, and
+        // cancelling a sheet costs only a key.
+        let blanket = state.open_sheet(None, true);
+        assert!(blanket.blanket);
+        assert_eq!(blanket.requirement.kind, ItemKind::Wand);
+        let result = state.save(&blanket).unwrap();
+        assert_eq!(state.requirements.len(), 2);
+        assert!(state.requirements[1].requirement.blanket);
+        assert_eq!(state.requirements[1].key, blanket.key.unwrap());
+        assert!(result.next_key > blanket.key.unwrap());
+    }
+
+    #[test]
+    fn the_editor_refuses_a_sheet_that_would_break_the_list() {
+        let mut state = AppState::default();
+        let tooth = Requirement {
+            item: Some(ItemId::MimicTooth),
+            ..Requirement::any(ItemKind::Trinket)
+        };
+        let first = sheet(&mut state, None, tooth, (1, None, None));
+        state.save(&first).unwrap();
+        let duplicate = sheet(&mut state, None, tooth, (1, None, None));
+        assert_eq!(
+            state.save(&duplicate).unwrap_err(),
+            [editor::DUPLICATE_TRINKET]
+        );
+        assert_eq!(state.requirements.len(), 1);
+
+        // A stacked cluster of wands cannot take a ring: its copies would
+        // have to name a kind.
+        let mut state = AppState::default();
+        for _ in 0..2 {
+            let key = state.claim_key();
+            state.requirements.push(row(
+                key,
+                Requirement {
+                    alternative_group: Some(1),
+                    ..Requirement::any(ItemKind::Wand)
+                },
+            ));
+        }
+        state.apply(&[Edit::SetCount { key: 1, count: 2 }]);
+        assert_eq!(entry(&state, 1).stack.count, 2);
+        let before = state.requirements.clone();
+        let ring = Requirement {
+            alternative_group: Some(1),
+            ..Requirement::any(ItemKind::Ring)
+        };
+        let draft = sheet(&mut state, Some(2), ring, (1, None, None));
+        assert!(draft.in_cluster);
+        assert_eq!(
+            state.save(&draft).unwrap_err(),
+            ["Copies can only be grouped with the same item type."]
+        );
+        assert_eq!(state.requirements, before);
     }
 }
 

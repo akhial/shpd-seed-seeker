@@ -11,27 +11,6 @@ use shpd_seedfinder_core::query::{ArcaneResinFilter, MAX_SEARCH_DEPTH};
 
 use crate::state::{AppState, source_label};
 
-pub fn summary(filter: ArcaneResinFilter) -> String {
-    let mut parts = vec![
-        if filter.uncursed {
-            "uncursed wands"
-        } else {
-            "any wands"
-        }
-        .to_owned(),
-    ];
-    if let Some(depth) = filter.max_depth {
-        parts.push(format!("≤ floor {depth}"));
-    }
-    if let Some(source) = filter.source {
-        parts.push(source_label(source).to_owned());
-    }
-    if filter.include_mage_wand {
-        parts.push("Mage +2".to_owned());
-    }
-    parts.join(" · ")
-}
-
 #[allow(clippy::too_many_lines)] // Declarative dialog assembly.
 pub fn present(
     parent: &adw::ApplicationWindow,

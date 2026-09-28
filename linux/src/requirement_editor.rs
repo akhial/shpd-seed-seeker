@@ -10,18 +10,17 @@ use shpd_seedfinder_core::catalog::{
     ALL_ARMOR_EFFECTS, ALL_WEAPON_EFFECTS, EXTRA_UPGRADE_TIER, Effect, ITEMS, ItemDefinition,
     ItemId, ItemKind, MAX_GENERATED_UPGRADE, MAX_STANDARD_RING_UPGRADE, item,
 };
+use shpd_seedfinder_core::editor::{Draft, Origin, STACK_MAX};
 use shpd_seedfinder_core::main_world::normalize_floor_limit;
 use shpd_seedfinder_core::model::ItemSource;
 use shpd_seedfinder_core::query::{
     BOUNDED_TIER_MAX, BOUNDED_TIER_MIN, EXACT_TIER_MAX, EXACT_TIER_MIN, EffectRequirement,
-    EffectSet, MAX_SEARCH_DEPTH, TierRequirement, UpgradeRequirement,
+    EffectSet, MAX_SEARCH_DEPTH, Requirement, TierRequirement, UpgradeRequirement,
 };
 
 use crate::query_pane::skip_empty_boss_floors;
-use crate::relations::STACK_MAX;
 use crate::state::{
-    ALL_KIND_CHOICES, AppState, KindChoice, StackShape, UiRequirement, kind_choice_label,
-    kind_choice_singular, source_label,
+    ALL_KIND_CHOICES, KindChoice, kind_choice_label, kind_choice_singular, source_label,
 };
 
 /// Positions of the effect picker's modes.
@@ -71,34 +70,28 @@ struct Editor {
     floor_switch: adw::SwitchRow,
     floor_value: adw::SpinRow,
     updating: Cell<bool>,
-    key: u64,
-    blanket: bool,
-    /// The alternative group the row belongs to, kept so a saved member stays
-    /// in its cluster.
-    alternative_group: Option<u8>,
-    /// A cluster member's stack belongs to the cluster, so that section is
-    /// hidden for one.
-    in_cluster: bool,
-    /// The query the row is edited within, for cross-row validation.
-    context: AppState,
+    /// The sheet as the shared editor opened it: the row, its section, its
+    /// stack, and whether it is a cluster member, whose stack belongs to the
+    /// cluster and so is hidden here.
+    opened: Draft,
 }
 
-/// Presents the editor over `parent`. `context` is the query the row lives in
-/// and `stack` the shape of the board entry it anchors; `on_finish` receives
-/// the edited requirement with the stack it asked for — how many items, their
-/// combined level, and the floor limit of the extra copies — when the user
-/// confirms, and cancelling never calls it.
+/// Presents the editor over `parent` on `draft`, a sheet the shared editor
+/// opened. When the user confirms, `on_save` receives the draft with the
+/// requirement and stack the controls describe — how many items, their
+/// combined level, and the floor limit of the extra copies — and saves it, or
+/// returns why the editor refused it, which the dialog then shows. Cancelling
+/// never calls it.
 pub fn present(
     parent: &adw::ApplicationWindow,
-    context: &AppState,
-    requirement: &UiRequirement,
-    stack: StackShape,
-    is_new: bool,
-    on_finish: impl Fn(UiRequirement, usize, Option<u8>, Option<u8>) + 'static,
+    draft: Draft,
+    on_save: impl Fn(&Draft) -> Result<(), Vec<String>> + 'static,
 ) {
-    let editor = Rc::new(build(context.clone(), requirement, stack));
+    let is_new = draft.origin == Origin::New;
+    let blanket = draft.blanket;
+    let editor = Rc::new(build(draft));
     connect(&editor);
-    restore(&editor, requirement, stack);
+    restore(&editor);
 
     let header = adw::HeaderBar::builder()
         .show_start_title_buttons(false)
@@ -114,7 +107,7 @@ pub fn present(
     for group in groups(&editor) {
         page.add(&group);
     }
-    if is_new && !requirement.blanket {
+    if is_new && !blanket {
         let resin = adw::ActionRow::builder()
             .title("Arcane Resin")
             .subtitle("Require resin from surplus wands")
@@ -146,7 +139,7 @@ pub fn present(
     toolbar_view.add_top_bar(&editor.banner);
     toolbar_view.set_content(Some(&page));
 
-    editor.dialog.set_title(if requirement.blanket {
+    editor.dialog.set_title(if blanket {
         if is_new {
             "New Blanket Requirement"
         } else {
@@ -169,11 +162,13 @@ pub fn present(
     confirm.connect_clicked({
         let editor = Rc::clone(&editor);
         move |_| {
-            let (result, count, total, copy_depth) = collect(&editor);
-            match check(&editor, &result, count, total, copy_depth) {
+            let saved = check(&editor).and_then(|()| {
+                on_save(&collect(&editor))
+                    .map_err(|errors| errors.into_iter().next().unwrap_or_default())
+            });
+            match saved {
                 Ok(()) => {
                     editor.dialog.close();
-                    on_finish(result, count, total, copy_depth);
                 }
                 Err(message) => {
                     editor.banner.set_title(&message);
@@ -186,7 +181,7 @@ pub fn present(
 }
 
 #[allow(clippy::too_many_lines)] // Widget assembly is declarative and linear.
-fn build(context: AppState, requirement: &UiRequirement, stack: StackShape) -> Editor {
+fn build(opened: Draft) -> Editor {
     let effect_list = gtk::ListBox::builder()
         .css_classes(["boxed-list"])
         .selection_mode(gtk::SelectionMode::None)
@@ -299,18 +294,13 @@ fn build(context: AppState, requirement: &UiRequirement, stack: StackShape) -> E
             f64::from(MAX_SEARCH_DEPTH),
         ),
         updating: Cell::new(false),
-        key: requirement.key,
-        blanket: requirement.blanket,
-        alternative_group: requirement.alternative_group,
-        in_cluster: stack.in_cluster,
-        context,
+        opened,
     }
 }
 
 /// The stack spinner's upper bound as the adjustment wants it.
-#[allow(clippy::cast_precision_loss)] // STACK_MAX is 3.
 fn stack_maximum() -> f64 {
-    STACK_MAX as f64
+    f64::from(STACK_MAX)
 }
 
 fn groups(editor: &Rc<Editor>) -> Vec<adw::PreferencesGroup> {
@@ -465,11 +455,12 @@ fn hook<W>(editor: Rc<Editor>, handler: fn(&Rc<Editor>)) -> impl Fn(&W) {
     }
 }
 
-fn restore(editor: &Rc<Editor>, requirement: &UiRequirement, stack: StackShape) {
+fn restore(editor: &Rc<Editor>) {
+    let requirement = &editor.opened.requirement;
     editor.updating.set(true);
     let kind_index = ALL_KIND_CHOICES
         .iter()
-        .position(|choice| *choice == requirement.kind_choice())
+        .position(|choice| *choice == (requirement.kind, requirement.weapon_category))
         .unwrap_or(0);
     editor
         .category
@@ -525,14 +516,14 @@ fn restore(editor: &Rc<Editor>, requirement: &UiRequirement, stack: StackShape) 
     editor
         .source_row
         .set_selected(u32::try_from(source_index).unwrap_or(0));
-    #[allow(clippy::cast_precision_loss)] // The count is 1..=STACK_MAX.
-    let count = stack.count.clamp(1, STACK_MAX) as f64;
-    editor.count_row.set_value(count);
-    if let Some(total) = stack.total {
+    editor
+        .count_row
+        .set_value(f64::from(editor.opened.count.clamp(1, STACK_MAX)));
+    if let Some(total) = editor.opened.total {
         editor.levels_switch.set_active(true);
         editor.levels_value.set_value(f64::from(total));
     }
-    if let Some(depth) = stack.copy_depth {
+    if let Some(depth) = editor.opened.copy_depth {
         editor.copy_floor_switch.set_active(true);
         editor
             .copy_floor_value
@@ -549,9 +540,11 @@ fn restore(editor: &Rc<Editor>, requirement: &UiRequirement, stack: StackShape) 
     editor.updating.set(false);
 }
 
-/// The editor's result: the row itself, then the stack it asks for — how
-/// many items, their combined level, and the floor limit of the extra copies.
-fn collect(editor: &Rc<Editor>) -> (UiRequirement, usize, Option<u8>, Option<u8>) {
+/// The sheet the controls describe: the requirement itself, then the stack
+/// it asks for — how many items, their combined level, and the floor limit
+/// of the extra copies — over the sheet the editor opened.
+fn collect(editor: &Rc<Editor>) -> Draft {
+    let blanket = editor.opened.blanket;
     let (kind, weapon_category) = selected_choice(editor);
     let item = selected_item(editor);
     let tier = selected_tier(editor);
@@ -569,8 +562,7 @@ fn collect(editor: &Rc<Editor>) -> (UiRequirement, usize, Option<u8>, Option<u8>
         .then(|| normalize_floor_limit(editor.floor_value.value().round() as u8));
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     // The spinner is bounded to 1–13.
-    let requirement = UiRequirement {
-        key: editor.key,
+    let requirement = Requirement {
         kind,
         weapon_category,
         item,
@@ -578,11 +570,9 @@ fn collect(editor: &Rc<Editor>) -> (UiRequirement, usize, Option<u8>, Option<u8>
         upgrade,
         effect: selected_effect(editor),
         require_uncursed: kind != ItemKind::Trinket && editor.uncursed.is_active(),
-        blanket: editor.blanket,
-        exclude_resin: !editor.blanket
-            && kind == ItemKind::Wand
-            && editor.exclude_resin.is_active(),
-        select_trinket: !editor.blanket
+        blanket,
+        exclude_resin: !blanket && kind == ItemKind::Wand && editor.exclude_resin.is_active(),
+        select_trinket: !blanket
             && kind == ItemKind::Trinket
             && item.is_some()
             && !editor.allow_transmutations.is_active()
@@ -610,11 +600,11 @@ fn collect(editor: &Rc<Editor>) -> (UiRequirement, usize, Option<u8>, Option<u8>
             0
         },
         source,
-        // The stack's own encoding carries these; the board rebuilds them
-        // from the count and total this returns.
+        // The stack's own encoding carries these; the editor rebuilds them
+        // from the count and total, and keeps the row in its cluster.
         identity_group: None,
         max_depth,
-        alternative_group: editor.alternative_group,
+        alternative_group: editor.opened.requirement.alternative_group,
         level_sum: None,
     };
     let count = selected_count(editor);
@@ -622,32 +612,19 @@ fn collect(editor: &Rc<Editor>) -> (UiRequirement, usize, Option<u8>, Option<u8>
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let copy_depth = (count > 1 && total.is_none() && editor.copy_floor_switch.is_active())
         .then(|| normalize_floor_limit(editor.copy_floor_value.value().round() as u8));
-    (requirement, count, total, copy_depth)
+    Draft {
+        requirement,
+        count,
+        total,
+        copy_depth,
+        ..editor.opened.clone()
+    }
 }
 
-/// The editor's own checks before the engine's: the specific-effect list
-/// needs a selection, and the whole query must stay valid with `result`
-/// stored.
-fn check(
-    editor: &Rc<Editor>,
-    result: &UiRequirement,
-    count: usize,
-    total: Option<u8>,
-    copy_depth: Option<u8>,
-) -> Result<(), String> {
-    if !result.blanket
-        && result.kind == ItemKind::Trinket
-        && editor
-            .context
-            .requirements
-            .iter()
-            .any(|r| r.key != result.key && !r.blanket && r.item == result.item)
-    {
-        return Err(
-            "This trinket is already required. Each trinket appears only once in the deck."
-                .to_owned(),
-        );
-    }
+/// The dialog's own check before the editor's: the specific-effect list needs
+/// a selection. Everything else — the requirement's own problems, a trinket
+/// already required, what the save would break — the editor says on saving.
+fn check(editor: &Rc<Editor>) -> Result<(), String> {
     if enchantable(selected_kind(editor))
         && editor.effect_mode.selected() == EFFECT_SPECIFIC
         && checked_effects(editor).is_empty()
@@ -658,9 +635,7 @@ fn check(
             "Choose at least one enchantment or curse".to_owned()
         });
     }
-    editor
-        .context
-        .validate_draft(result, count, total, copy_depth)
+    Ok(())
 }
 
 fn selected_choice(editor: &Rc<Editor>) -> KindChoice {
@@ -786,9 +761,10 @@ fn checked_effects(editor: &Rc<Editor>) -> Vec<Effect> {
 
 /// How many items the row asks for; a cluster member leaves its stack to the
 /// cluster and always speaks for one.
-fn selected_count(editor: &Rc<Editor>) -> usize {
-    if editor.blanket
-        || editor.in_cluster
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // Clamped to 1..=3.
+fn selected_count(editor: &Rc<Editor>) -> u8 {
+    if editor.opened.blanket
+        || editor.opened.in_cluster
         || matches!(
             selected_kind(editor),
             ItemKind::Trinket | ItemKind::Artifact
@@ -796,9 +772,11 @@ fn selected_count(editor: &Rc<Editor>) -> usize {
     {
         return 1;
     }
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    let count = editor.count_row.value().round().max(1.0) as usize;
-    count.clamp(1, STACK_MAX)
+    editor
+        .count_row
+        .value()
+        .round()
+        .clamp(1.0, f64::from(STACK_MAX)) as u8
 }
 
 /// Whether the row is a stack of a named ring whose levels count together —
@@ -806,8 +784,8 @@ fn selected_count(editor: &Rc<Editor>) -> usize {
 /// meaningfully across rings: a ring's effect scales with its level, so a +0
 /// and a +1 together grant what one +2 does.
 fn countable_levels(editor: &Rc<Editor>) -> bool {
-    !editor.blanket
-        && !editor.in_cluster
+    !editor.opened.blanket
+        && !editor.opened.in_cluster
         && selected_kind(editor) == ItemKind::Ring
         && selected_item(editor).is_some()
         && selected_count(editor) > 1
@@ -824,7 +802,7 @@ fn selected_total(editor: &Rc<Editor>) -> u8 {
 /// generated world levels at most one ring, the Imp vault's prize, past
 /// [`MAX_STANDARD_RING_UPGRADE`].
 fn levels_capacity(editor: &Rc<Editor>) -> u8 {
-    let count = u8::try_from(selected_count(editor)).unwrap_or(1).max(1);
+    let count = selected_count(editor).max(1);
     let per_item = selected_upgrade_ceiling(editor) + 1;
     let generated = (MAX_GENERATED_UPGRADE + 1)
         .saturating_add((count - 1).saturating_mul(MAX_STANDARD_RING_UPGRADE + 1));
@@ -1042,7 +1020,9 @@ fn set_minimum_upgrade(editor: &Rc<Editor>, upgrade: u8) {
 fn refresh_visibility(editor: &Rc<Editor>) {
     let kind = selected_kind(editor);
     editor.select_trinket.set_visible(
-        !editor.blanket && kind == ItemKind::Trinket && !editor.allow_transmutations.is_active(),
+        !editor.opened.blanket
+            && kind == ItemKind::Trinket
+            && !editor.allow_transmutations.is_active(),
     );
     editor
         .allow_transmutations
@@ -1065,7 +1045,7 @@ fn refresh_visibility(editor: &Rc<Editor>) {
     }
     editor
         .exclude_resin
-        .set_visible(!editor.blanket && kind == ItemKind::Wand);
+        .set_visible(!editor.opened.blanket && kind == ItemKind::Wand);
     if kind != ItemKind::Wand {
         editor.exclude_resin.set_active(false);
     }
@@ -1100,14 +1080,14 @@ fn refresh_visibility(editor: &Rc<Editor>) {
     // levels together when they are copies of one named item. A combined
     // level speaks for the whole stack, so the per-item upgrade steps aside.
     let counting_levels = countable_levels(editor);
-    let stacked = !editor.in_cluster && selected_count(editor) > 1;
+    let stacked = !editor.opened.in_cluster && selected_count(editor) > 1;
     editor
         .upgrade_group
         .set_visible(!counting_levels && !matches!(kind, ItemKind::Trinket | ItemKind::Artifact));
     editor.details_group.set_visible(kind != ItemKind::Trinket);
     editor.count_group.set_visible(
-        !editor.blanket
-            && !editor.in_cluster
+        !editor.opened.blanket
+            && !editor.opened.in_cluster
             && !matches!(kind, ItemKind::Trinket | ItemKind::Artifact),
     );
     editor

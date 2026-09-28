@@ -6,6 +6,7 @@
 static GLOBAL_ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 mod application;
+mod board;
 mod challenges_dialog;
 mod config;
 mod detail_pane;
@@ -18,7 +19,6 @@ mod persist;
 mod presets;
 mod presets_dialog;
 mod query_pane;
-mod relations;
 mod requirement_editor;
 mod resin_editor;
 mod result_navigation;

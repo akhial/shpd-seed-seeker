@@ -4,26 +4,22 @@
 //! action.
 
 use std::cell::{Cell, RefCell};
-use std::fmt::Write as _;
 use std::rc::Rc;
 
 use adw::prelude::*;
 use gtk::{cairo, gdk, gio, glib, pango};
 
-use shpd_seedfinder_core::catalog::{MAX_GENERATED_UPGRADE, MAX_STANDARD_RING_UPGRADE};
+use shpd_seedfinder_core::editor::{
+    self, BoardView, ChipView, Edit, EffectBadge, ItemView, ResinChip, Tag, TagStyle,
+};
 use shpd_seedfinder_core::feasibility::Quest;
 use shpd_seedfinder_core::main_world::normalize_floor_limit;
-use shpd_seedfinder_core::query::{
-    EffectRequirement, EffectSet, MAX_SEARCH_DEPTH, TierRequirement, UpgradeRequirement,
-};
+use shpd_seedfinder_core::query::MAX_SEARCH_DEPTH;
 use shpd_seedfinder_core::quests::WandmakerQuestType;
 use shpd_seedfinder_session::available_workers;
 
-use crate::relations::{BoardItem, STACK_MAX};
-use crate::state::{
-    AppState, FARMING_FLOORS, UiRequirement, effect_label, floor_limit_skip_target,
-    is_farming_requirement, wandmaker_quest_label,
-};
+use crate::board::{self, BoardCache, Dragged, DropAnswer, Landing};
+use crate::state::{AppState, FARMING_FLOORS, is_farming_requirement, wandmaker_quest_label};
 use crate::{glow, sprites};
 
 /// Makes a floor-limit spin row skip the empty boss floors (5, 10, 15):
@@ -41,7 +37,7 @@ pub fn skip_empty_boss_floors(row: &adw::SpinRow) {
             .get()
             .round()
             .clamp(0.0, f64::from(MAX_SEARCH_DEPTH)) as u8;
-        let target = floor_limit_skip_target(anchor, requested);
+        let target = editor::skip_boss_floor(anchor, requested);
         if target != requested {
             // The corrected value re-enters this handler and, being a real
             // floor, records itself as the new anchor.
@@ -58,27 +54,11 @@ pub fn skip_empty_boss_floors(row: &adw::SpinRow) {
 pub enum BoardAction {
     ToggleFarmingFloor(u8),
     RemoveFloorRequirement(u8),
-    /// Open the editor on the row.
-    Edit(u64),
-    /// Make `source` an either/or alternative of `target`.
-    Join {
-        source: u64,
-        target: u64,
-    },
-    /// Pull the row out of its cluster.
-    Detach(u64),
-    /// Delete the row: a cluster member alone, a lone chip with its stack.
-    Remove(u64),
-    /// Ask the row's board entry for `count` items.
-    Count {
-        key: u64,
-        count: usize,
-    },
-    /// Set or clear the entry's combined level.
-    Total {
-        key: u64,
-        total: Option<u8>,
-    },
+    /// Open the requirement sheet on the row.
+    Open(u64),
+    /// A board edit — a drop, a menu choice, a badge stepper — for the
+    /// shared editor to apply or refuse.
+    Edit(Edit),
 }
 
 /// What the window does with one board gesture.
@@ -114,6 +94,10 @@ pub struct QueryPane {
     /// never rebuilds the board out from under the pointer.
     stack_target: Cell<Option<(u64, StackField)>>,
     stack_opened_on: Cell<f64>,
+    /// The board view the chips were drawn from, folded once per list.
+    board_view: RefCell<BoardCache>,
+    /// The chip in flight, as the drop targets under it read it.
+    dragging: RefCell<Option<Dragged>>,
     farming_buttons: Vec<(u8, gtk::ToggleButton)>,
     other_floors: gtk::Box,
     rooms_expander: adw::ExpanderRow,
@@ -401,6 +385,8 @@ impl QueryPane {
             stack_spin,
             stack_target: Cell::new(None),
             stack_opened_on: Cell::new(1.0),
+            board_view: RefCell::new(BoardCache::default()),
+            dragging: RefCell::new(None),
             farming_buttons,
             other_floors,
             rooms_expander,
@@ -429,16 +415,12 @@ impl QueryPane {
             let pane = Rc::clone(&pane);
             move |_| pane.commit_stack()
         });
-        // Dropping a cluster member on the board's own background — anywhere
-        // no chip sits — pulls it out of its cluster.
-        for board in [&pane.board, &pane.blanket_board] {
-            board.add_controller(pane.drop_target(move |pane, key| {
-                pane.emit(BoardAction::Detach(key));
-            }));
+        // Dropping a cluster member on its section's own background —
+        // anywhere no chip sits — pulls it out of its cluster.
+        for (blanket, board) in [(false, &pane.board), (true, &pane.blanket_board)] {
+            board.add_controller(pane.drop_target(Landing::Board { blanket }));
         }
-        remove_zone.add_controller(pane.drop_target(move |pane, key| {
-            pane.emit(BoardAction::Remove(key));
-        }));
+        remove_zone.add_controller(pane.drop_target(Landing::Remove));
 
         remove_zone.add_controller(
             pane.typed_drop_target(String::static_type(), |pane, value| {
@@ -636,23 +618,22 @@ impl QueryPane {
         // with the drag it was carrying — goes with it, so the bin is put
         // away here rather than waiting for a drag that may never end.
         self.remove_revealer.set_reveal_child(false);
-        let all_items = state.board();
+        self.dragging.replace(None);
+        let view = self
+            .board_view
+            .borrow_mut()
+            .view(&state.requirements, state.resin());
         for (blanket, board) in [(false, &self.board), (true, &self.blanket_board)] {
             board.remove_all();
-            let items: Vec<_> = all_items
-                .iter()
-                .filter(|item| state.requirements[item.anchor()].blanket == blanket)
-                .cloned()
-                .collect();
             if blanket {
                 self.blanket_expander
-                    .set_title(&format!("Blanket Requirements ({})", items.len()));
+                    .set_title(&format!("Blanket Requirements ({})", view.counts.blanket));
             } else {
                 self.requirements_group.set_title(&requirements_title(
-                    items.len() + usize::from(state.needs_resin()),
+                    view.counts.ordinary + usize::from(view.resin.is_some()),
                 ));
             }
-            if !blanket && state.board_count() == 0 && !state.needs_resin() {
+            if !blanket && view.items.is_empty() && view.resin.is_none() {
                 board.append(
                     &gtk::Label::builder()
                         .label("Nothing yet — add the item you are hunting for")
@@ -660,15 +641,15 @@ impl QueryPane {
                         .build(),
                 );
             }
-            for item in &items {
+            for item in view.items.iter().filter(|item| item.blanket == blanket) {
                 if item.cluster.is_some() {
-                    board.append(&self.cluster(state, item, &items));
+                    board.append(&self.cluster(item));
                 } else {
-                    board.append(&self.chip(state, item.anchor(), item, &items, false));
+                    board.append(&self.chip(item, &item.chips[0], false));
                 }
             }
-            if !blanket && state.needs_resin() {
-                board.append(&self.resin_chip(state));
+            if !blanket && let Some(resin) = &view.resin {
+                board.append(&self.resin_chip(resin));
             }
             let add = gtk::Button::builder()
                 .child(
@@ -693,55 +674,45 @@ impl QueryPane {
         }
     }
 
-    fn resin_chip(self: &Rc<Self>, state: &AppState) -> gtk::Widget {
-        let detail = format!(
-            "{} Arcane Resin\n{}",
-            state.resin_label(),
-            crate::resin_editor::summary(state.arcane_resin_filter),
-        );
+    fn resin_chip(self: &Rc<Self>, resin: &ResinChip) -> gtk::Widget {
         let chip = gtk::Box::builder()
             .spacing(6)
             .css_classes(["chip"])
             .focusable(true)
             .accessible_role(gtk::AccessibleRole::Button)
-            .tooltip_text(&detail)
+            .tooltip_text(board::resin_tooltip(resin))
             .build();
-        chip.update_property(&[gtk::accessible::Property::Label(&detail)]);
+        chip.update_property(&[gtk::accessible::Property::Label(&resin.description)]);
         chip.append(&sprites::arcane_resin_image());
-        chip.append(&gtk::Label::new(Some("Arcane Resin")));
-        chip.append(&chip_tag(&state.resin_label(), "chip-tag-up"));
-        if let Some(depth) = state.arcane_resin_filter.max_depth {
-            chip.append(&chip_tag(&format!("F≤{depth}"), "chip-tag-plain"));
+        chip.append(&gtk::Label::new(Some(&resin.name)));
+        for (position, tag) in resin.tags.iter().enumerate() {
+            let label = chip_tag(tag);
+            // The amount leads, and says what "Auto" comes to.
+            if position == 0 {
+                label.set_tooltip_text(resin.amount_tooltip.as_deref());
+            }
+            chip.append(&label);
         }
-        if state.arcane_resin_filter.include_mage_wand {
-            chip.append(&chip_tag("Mage +2", "chip-tag-soft"));
+        if resin.uncursed {
+            chip.append(&uncursed_mark());
         }
-        if state.arcane_resin_filter.uncursed {
-            chip.append(&chip_tag("\u{2713}", "chip-tag-soft"));
-        }
-        let menu = gio::Menu::new();
-        menu.append(Some("Edit…"), Some("win.edit-resin"));
-        let removal = gio::Menu::new();
-        removal.append(Some("Remove"), Some("win.remove-resin"));
-        menu.append_section(None, &removal);
-        self.wire_chip(&chip, None, 1, &menu);
+        self.wire_chip(&chip, None);
         chip.upcast()
     }
 
     /// One either/or cluster: its members share a dashed capsule, with the
     /// stack badges at the trailing edge, where they speak for the whole
     /// capsule rather than for any one member.
-    fn cluster(
-        self: &Rc<Self>,
-        state: &AppState,
-        item: &BoardItem,
-        items: &[BoardItem],
-    ) -> gtk::Widget {
+    fn cluster(self: &Rc<Self>, item: &ItemView) -> gtk::Widget {
         let capsule = gtk::Box::builder()
             .spacing(2)
             .css_classes(["cluster"])
+            .accessible_role(gtk::AccessibleRole::Group)
             .build();
-        for (position, index) in item.members.iter().enumerate() {
+        if let Some(label) = &item.label {
+            capsule.update_property(&[gtk::accessible::Property::Label(label)]);
+        }
+        for (position, chip) in item.chips.iter().enumerate() {
             if position > 0 {
                 capsule.append(
                     &gtk::Label::builder()
@@ -750,99 +721,70 @@ impl QueryPane {
                         .build(),
                 );
             }
-            capsule.append(&self.chip(state, *index, item, items, true));
+            capsule.append(&self.chip(item, chip, true));
         }
-        for badge in self.badges(state, item) {
+        for badge in self.badges(item) {
             capsule.append(&badge);
         }
-        let key = state.requirements[item.anchor()].key;
-        capsule.add_controller(self.drop_target(move |pane, source| {
-            pane.emit(BoardAction::Join {
-                source,
-                target: key,
-            });
-        }));
+        // The capsule around the chips stands for the whole cluster.
+        capsule.add_controller(self.drop_target(Landing::Row(item.members[0])));
         capsule.upcast()
     }
 
     /// One requirement as a chip: its sprite, its name, and the tiny tags that
-    /// qualify it. A chip standing on its own also carries the badges of its
-    /// stack; inside a cluster those belong to the capsule.
-    fn chip(
-        self: &Rc<Self>,
-        state: &AppState,
-        index: usize,
-        item: &BoardItem,
-        items: &[BoardItem],
-        in_cluster: bool,
-    ) -> gtk::Widget {
-        let requirement = &state.requirements[index];
-        let chip = gtk::Box::builder()
+    /// qualify it, all as the shared editor words them. A chip standing on its
+    /// own also carries the badges of its stack; inside a cluster those belong
+    /// to the capsule.
+    fn chip(self: &Rc<Self>, item: &ItemView, chip: &ChipView, in_cluster: bool) -> gtk::Widget {
+        let widget = gtk::Box::builder()
             .spacing(6)
             .css_classes(["chip"])
             .focusable(true)
             .accessible_role(gtk::AccessibleRole::Button)
-            .tooltip_text(chip_tooltip(state, index, item))
+            .tooltip_text(board::chip_tooltip(chip))
             .build();
-        if requirement.to_core().validate().is_err() {
-            chip.add_css_class("chip-error");
+        widget.update_property(&[gtk::accessible::Property::Label(&chip.description)]);
+        if let Some(problem) = &chip.problem {
+            widget.add_css_class("chip-error");
+            widget.update_property(&[gtk::accessible::Property::Description(problem)]);
         }
-        chip.append(&requirement_prefix(requirement));
-        chip.append(
+        widget.append(&chip_prefix(chip));
+        widget.append(
             &gtk::Label::builder()
-                .label(requirement.chip_name())
+                .label(&chip.name)
                 .ellipsize(pango::EllipsizeMode::End)
                 .max_width_chars(18)
                 .build(),
         );
-        for (text, class) in chip_tags(requirement) {
-            chip.append(&chip_tag(&text, class));
+        for tag in &chip.tags {
+            widget.append(&chip_tag(tag));
         }
-        if let Some(badge) = effect_badge(requirement) {
-            chip.append(&badge);
+        if let Some(badge) = chip
+            .effect
+            .as_ref()
+            .and_then(|effect| effect_badge(chip, effect))
+        {
+            widget.append(&badge);
         }
-        if requirement.exclude_resin {
-            chip.append(&chip_tag("No resin", "chip-tag-plain"));
+        for tag in &chip.trailing_tags {
+            widget.append(&chip_tag(tag));
         }
-        if requirement.require_uncursed {
-            chip.append(
-                &gtk::Label::builder()
-                    .label("\u{2713}")
-                    .tooltip_text("Uncursed")
-                    .css_classes(["chip-tag", "chip-tag-soft"])
-                    .build(),
-            );
+        if chip.uncursed {
+            widget.append(&uncursed_mark());
         }
         if !in_cluster {
-            for badge in self.badges(state, item) {
-                chip.append(&badge);
+            for badge in self.badges(item) {
+                widget.append(&badge);
             }
         }
-        let key = requirement.key;
-        self.wire_chip(
-            &chip,
-            Some(key),
-            item.stack_count(),
-            &Self::chip_menu(state, index, item, items),
-        );
-        chip.add_controller(self.drop_target(move |pane, source| {
-            pane.emit(BoardAction::Join {
-                source,
-                target: key,
-            });
-        }));
-        chip.upcast()
+        self.wire_chip(&widget, Some(chip.key));
+        widget.add_controller(self.drop_target(Landing::Row(chip.key)));
+        widget.upcast()
     }
 
     /// The gestures every chip answers to: activate to edit, drag onto another
     /// chip for an either/or, the context menu for the same in words.
-    fn wire_chip(
-        self: &Rc<Self>,
-        chip: &gtk::Box,
-        key: Option<u64>,
-        count: usize,
-        menu: &gio::Menu,
-    ) {
+    fn wire_chip(self: &Rc<Self>, chip: &gtk::Box, key: Option<u64>) {
         let click = gtk::GestureClick::builder()
             .button(gdk::BUTTON_PRIMARY)
             .build();
@@ -860,11 +802,10 @@ impl QueryPane {
             .build();
         secondary.connect_pressed({
             let pane = Rc::clone(self);
-            let menu = menu.clone();
             move |gesture, _, _, _| {
                 gesture.set_state(gtk::EventSequenceState::Claimed);
                 if let Some(chip) = gesture.widget() {
-                    pane.show_menu(&chip, &menu, key, count);
+                    pane.show_menu(&chip, key);
                 }
             }
         });
@@ -873,11 +814,10 @@ impl QueryPane {
         let long_press = gtk::GestureLongPress::new();
         long_press.connect_pressed({
             let pane = Rc::clone(self);
-            let menu = menu.clone();
             move |gesture, _, _| {
                 gesture.set_state(gtk::EventSequenceState::Claimed);
                 if let Some(chip) = gesture.widget() {
-                    pane.show_menu(&chip, &menu, key, count);
+                    pane.show_menu(&chip, key);
                 }
             }
         });
@@ -886,14 +826,13 @@ impl QueryPane {
         let keys = gtk::EventControllerKey::new();
         keys.connect_key_pressed({
             let pane = Rc::clone(self);
-            let menu = menu.clone();
             move |controller, keyval, _, modifiers| {
                 let context_key = keyval == gdk::Key::Menu
                     || (keyval == gdk::Key::F10
                         && modifiers.contains(gdk::ModifierType::SHIFT_MASK));
                 if context_key {
                     if let Some(chip) = controller.widget() {
-                        pane.show_menu(&chip, &menu, key, count);
+                        pane.show_menu(&chip, key);
                     }
                 } else if matches!(
                     keyval,
@@ -927,6 +866,14 @@ impl QueryPane {
                 if let Some(widget) = source.widget() {
                     widget.add_css_class("chip-dragging");
                 }
+                // Where the chip may land is read once, off the board it was
+                // drawn on, so hovering asks the editor nothing.
+                let dragged = key.and_then(|key| {
+                    let view = pane.board_view.borrow().current()?;
+                    let (item, chip) = board::find_chip(&view, key)?;
+                    Some(Dragged::new(item, chip))
+                });
+                pane.dragging.replace(dragged);
                 pane.remove_revealer.set_reveal_child(true);
             }
         });
@@ -936,6 +883,7 @@ impl QueryPane {
                 if let Some(widget) = source.widget() {
                     widget.remove_css_class("chip-dragging");
                 }
+                pane.dragging.replace(None);
                 pane.remove_revealer.set_reveal_child(false);
             }
         });
@@ -944,7 +892,7 @@ impl QueryPane {
 
     fn edit_chip(&self, key: Option<u64>) {
         if let Some(key) = key {
-            self.emit(BoardAction::Edit(key));
+            self.emit(BoardAction::Open(key));
         } else {
             let _ = WidgetExt::activate_action(&self.page, "win.edit-resin", None);
         }
@@ -952,21 +900,80 @@ impl QueryPane {
 
     fn remove_chip(&self, key: Option<u64>) {
         if let Some(key) = key {
-            self.emit(BoardAction::Remove(key));
+            self.emit(BoardAction::Edit(Edit::Remove { key }));
         } else {
             let _ = WidgetExt::activate_action(&self.page, "win.remove-resin", None);
         }
     }
 
-    /// A drop zone for a chip in flight, lit while the pointer is over it.
-    fn drop_target(self: &Rc<Self>, dropped: impl Fn(&Rc<Self>, u64) + 'static) -> gtk::DropTarget {
-        self.typed_drop_target(u64::static_type(), move |pane, value| {
-            let Ok(source) = value.get::<u64>() else {
-                return false;
+    /// What releasing the chip in flight on `landing` would do.
+    fn drop_answer(&self, landing: Landing) -> DropAnswer {
+        self.dragging
+            .borrow()
+            .as_ref()
+            .map_or(DropAnswer::Ignore, |dragged| dragged.drop_answer(landing))
+    }
+
+    /// A drop zone for a chip in flight. It lights up while a release there
+    /// would change the board, is marked as refusing where the editor turns
+    /// the join down — a release then says why — and stays dark elsewhere.
+    ///
+    /// Drag events bubble from the widget under the pointer to its ancestors
+    /// until one takes the drop. A chip or a cluster's capsule therefore
+    /// keeps even a drop it ignores, so releasing a chip on itself or on its
+    /// own cluster never falls through to the board behind, where a cluster
+    /// member would leave its cluster.
+    fn drop_target(self: &Rc<Self>, landing: Landing) -> gtk::DropTarget {
+        let target = gtk::DropTarget::new(u64::static_type(), gdk::DragAction::MOVE);
+        target.connect_enter({
+            let pane = Rc::clone(self);
+            move |target, _, _| pane.hover(target, landing)
+        });
+        target.connect_motion({
+            let pane = Rc::clone(self);
+            move |target, _, _| pane.hover(target, landing)
+        });
+        target.connect_leave(unmark);
+        let pane = Rc::clone(self);
+        target.connect_drop(move |target, value, _, _| {
+            unmark(target);
+            let answer = match value.get::<u64>() {
+                Ok(source)
+                    if pane
+                        .dragging
+                        .borrow()
+                        .as_ref()
+                        .is_some_and(|dragged| dragged.key == source) =>
+                {
+                    pane.drop_answer(landing)
+                }
+                _ => DropAnswer::Ignore,
             };
-            dropped(pane, source);
-            true
-        })
+            match answer.edit() {
+                Some(edit) => {
+                    pane.emit(BoardAction::Edit(edit));
+                    true
+                }
+                None => keeps_ignored_drops(landing),
+            }
+        });
+        target
+    }
+
+    /// Marks a drop target by what a release on it would do.
+    fn hover(&self, target: &gtk::DropTarget, landing: Landing) -> gdk::DragAction {
+        let answer = self.drop_answer(landing);
+        unmark(target);
+        let mark = match answer {
+            DropAnswer::Accept(_) => "drop-target",
+            DropAnswer::Refuse(_) => "drop-refused",
+            DropAnswer::Ignore if keeps_ignored_drops(landing) => return gdk::DragAction::MOVE,
+            DropAnswer::Ignore => return gdk::DragAction::empty(),
+        };
+        if let Some(widget) = target.widget() {
+            widget.add_css_class(mark);
+        }
+        gdk::DragAction::MOVE
     }
 
     fn typed_drop_target(
@@ -998,30 +1005,20 @@ impl QueryPane {
 
     /// The badges of one board entry: how many items it asks for, and the
     /// combined level they reach together.
-    fn badges(self: &Rc<Self>, state: &AppState, item: &BoardItem) -> Vec<gtk::Widget> {
-        let key = state.requirements[item.anchor()].key;
-        let count = item.stack_count();
+    fn badges(self: &Rc<Self>, item: &ItemView) -> Vec<gtk::Widget> {
+        let key = item.members[0];
+        let stack = &item.stack;
         let mut badges: Vec<gtk::Widget> = Vec::new();
-        if count > 1 || item.total.is_some() {
-            let label = if item.total.is_some() {
-                format!("\u{2264}{count}")
-            } else {
-                format!("\u{d7}{count}")
-            };
+        if let Some(badge) = &item.badges.count {
             let button = gtk::Button::builder()
-                .label(label)
+                .label(&badge.text)
                 .css_classes(["stack-badge"])
                 .valign(gtk::Align::Center)
-                .tooltip_text(if item.total.is_some() {
-                    format!("Up to {count} items")
-                } else {
-                    format!("{count} of the same kind")
-                })
+                .tooltip_text(&badge.tooltip)
                 .build();
             button.connect_clicked({
                 let pane = Rc::clone(self);
-                #[allow(clippy::cast_precision_loss)] // At most STACK_MAX.
-                let count = count as f64;
+                let (count, limit) = (f64::from(stack.count), f64::from(board::count_limit(stack)));
                 move |button| {
                     pane.open_stack_popover(
                         button,
@@ -1029,31 +1026,30 @@ impl QueryPane {
                         StackField::Count,
                         "How many",
                         count,
-                        stack_maximum(),
+                        limit,
                     );
                 }
             });
             badges.push(button.upcast());
         }
-        if let Some(total) = item.total {
+        if let Some(badge) = &item.badges.total {
             let button = gtk::Button::builder()
-                .label(format!("\u{3a3} \u{2265} {total}"))
+                .label(&badge.text)
                 .css_classes(["stack-badge", "stack-badge-total"])
                 .valign(gtk::Align::Center)
-                .tooltip_text(format!(
-                    "Levels add to at least {total} (a +0 item counts 1)"
-                ))
+                .tooltip_text(&badge.tooltip)
                 .build();
-            let capacity = f64::from(levels_capacity(state, item));
             button.connect_clicked({
                 let pane = Rc::clone(self);
+                let total = f64::from(stack.total.unwrap_or(stack.default_total));
+                let capacity = f64::from(stack.level_capacity);
                 move |button| {
                     pane.open_stack_popover(
                         button,
                         key,
                         StackField::Total,
                         "Combined level",
-                        f64::from(total),
+                        total,
                         capacity,
                     );
                 }
@@ -1095,30 +1091,42 @@ impl QueryPane {
             return;
         }
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        match field {
-            StackField::Count => self.emit(BoardAction::Count {
+        let value = value.clamp(1.0, f64::from(u8::MAX)) as u8;
+        self.emit(BoardAction::Edit(match field {
+            StackField::Count => Edit::SetCount { key, count: value },
+            StackField::Total => Edit::SetTotal {
                 key,
-                count: value.max(1.0) as usize,
-            }),
-            StackField::Total => self.emit(BoardAction::Total {
-                key,
-                total: Some(value.max(1.0) as u8),
-            }),
+                total: Some(value),
+            },
+        }));
+    }
+
+    /// Follows the editor's key repairs in the one piece of board state that
+    /// outlives a rebuild: the row the stack popover is editing.
+    pub fn follow_rekeyed(&self, rekeyed: &[(u64, u64)]) {
+        if let Some((key, field)) = self.stack_target.get()
+            && let Some(&(_, new)) = rekeyed.iter().find(|&&(old, _)| old == key)
+        {
+            self.stack_target.set(Some((new, field)));
         }
     }
 
-    fn show_menu(
-        self: &Rc<Self>,
-        chip: &gtk::Widget,
-        menu: &gio::Menu,
-        key: Option<u64>,
-        count: usize,
-    ) {
-        if let Some(key) = key {
-            self.count_action
-                .set_state(&(key, count as u64).to_variant());
-        }
-        self.menu.set_menu_model(Some(menu));
+    fn show_menu(self: &Rc<Self>, chip: &gtk::Widget, key: Option<u64>) {
+        let menu = match key {
+            None => resin_menu(),
+            Some(key) => {
+                let Some(view) = self.board_view.borrow().current() else {
+                    return;
+                };
+                let Some((item, entry)) = board::find_chip(&view, key) else {
+                    return;
+                };
+                self.count_action
+                    .set_state(&(key, u64::from(item.stack.count)).to_variant());
+                Self::chip_menu(&view, item, entry)
+            }
+        };
+        self.menu.set_menu_model(Some(&menu));
         self.point_at(self.menu.upcast_ref(), chip);
         self.menu.popup();
     }
@@ -1137,61 +1145,42 @@ impl QueryPane {
     }
 
     /// The chip's context menu: every gesture of the board said in words, for
-    /// the keyboard, for touch, and for anyone who would rather not drag.
-    fn chip_menu(
-        state: &AppState,
-        index: usize,
-        item: &BoardItem,
-        items: &[BoardItem],
-    ) -> gio::Menu {
-        let key = state.requirements[index].key;
-        let anchor = state.requirements[item.anchor()];
+    /// the keyboard, for touch, and for anyone who would rather not drag. What
+    /// it offers is what the editor says the chip and its entry can do.
+    fn chip_menu(view: &BoardView, item: &ItemView, chip: &ChipView) -> gio::Menu {
+        let key = chip.key;
         let menu = gio::Menu::new();
         let first = gio::Menu::new();
         first.append_item(&menu_item("_Edit…", "board.edit", &key.to_variant()));
-        // Either/or with every other entry on the board, named as it reads.
+        // Either/or with every other entry of the section, named as it reads.
         let peers = gio::Menu::new();
-        for other in items {
-            if other.key == item.key {
-                continue;
-            }
-            let target = state.requirements[other.anchor()].key;
-            let name = if other.cluster.is_some() {
-                other
-                    .members
-                    .iter()
-                    .map(|member| state.requirements[*member].chip_name())
-                    .collect::<Vec<_>>()
-                    .join(" or ")
-            } else {
-                state.requirements[other.anchor()].chip_name()
-            };
-            peers.append_item(&menu_item(&name, "board.join", &(key, target).to_variant()));
+        for choice in board::join_choices(view, chip) {
+            peers.append_item(&menu_item(
+                &choice.label,
+                "board.join",
+                &(key, choice.target).to_variant(),
+            ));
         }
         if peers.n_items() > 0 {
             first.append_submenu(Some("_Either/or with…"), &peers);
         }
         menu.append_section(None, &first);
 
-        // A cluster spanning two categories cannot anchor a stack, so it is
-        // not offered one.
-        if state.can_stack(key) {
+        if item.stack.can_change_count {
             let counts = gio::Menu::new();
-            for count in 1..=u64::try_from(STACK_MAX).unwrap_or(3) {
+            for count in 1..=board::count_limit(&item.stack) {
                 counts.append_item(&menu_item(
                     &count.to_string(),
                     "board.count",
-                    &(key, count).to_variant(),
+                    &(key, u64::from(count)).to_variant(),
                 ));
             }
             menu.append_section(Some("How many"), &counts);
         }
-
-        // Only a lone chip naming one item can count its copies' levels.
-        if item.cluster.is_none() && anchor.item.is_some() && item.stack_count() > 1 {
+        if item.stack.can_count_levels {
             let levels = gio::Menu::new();
             levels.append_item(&menu_item(
-                if item.total.is_some() {
+                if item.stack.total.is_some() {
                     "Stop counting _levels"
                 } else {
                     "Count _levels together"
@@ -1201,7 +1190,7 @@ impl QueryPane {
             ));
             menu.append_section(None, &levels);
         }
-        if item.cluster.is_some() {
+        if chip.can_detach {
             let alone = gio::Menu::new();
             alone.append_item(&menu_item("On its _own", "board.detach", &key.to_variant()));
             menu.append_section(None, &alone);
@@ -1216,9 +1205,10 @@ impl QueryPane {
     fn board_actions(self: &Rc<Self>) -> gio::SimpleActionGroup {
         let group = gio::SimpleActionGroup::new();
         for (name, action) in [
-            ("edit", BoardAction::Edit as fn(u64) -> BoardAction),
-            ("detach", BoardAction::Detach),
-            ("remove", BoardAction::Remove),
+            ("edit", BoardAction::Open as fn(u64) -> BoardAction),
+            ("detach", |key| BoardAction::Edit(Edit::Detach { key })),
+            ("remove", |key| BoardAction::Edit(Edit::Remove { key })),
+            ("total", |key| BoardAction::Edit(Edit::ToggleLevels { key })),
         ] {
             let entry = gio::SimpleAction::new(name, Some(glib::VariantTy::UINT64));
             entry.connect_activate({
@@ -1236,7 +1226,7 @@ impl QueryPane {
             let pane = Rc::clone(self);
             move |_, target| {
                 if let Some((source, target)) = target.and_then(glib::Variant::get::<(u64, u64)>) {
-                    pane.emit(BoardAction::Join { source, target });
+                    pane.emit(BoardAction::Edit(Edit::Join { source, target }));
                 }
             }
         });
@@ -1251,23 +1241,13 @@ impl QueryPane {
                     return;
                 };
                 action.set_state(&(key, count).to_variant());
-                pane.emit(BoardAction::Count {
+                pane.emit(BoardAction::Edit(Edit::SetCount {
                     key,
-                    count: usize::try_from(count).unwrap_or(1),
-                });
+                    count: u8::try_from(count).unwrap_or(u8::MAX),
+                }));
             }
         });
         group.add_action(&count);
-        let total = gio::SimpleAction::new("total", Some(glib::VariantTy::UINT64));
-        total.connect_activate({
-            let pane = Rc::clone(self);
-            move |_, target| {
-                if let Some(key) = target.and_then(glib::Variant::get::<u64>) {
-                    pane.emit(BoardAction::Total { key, total: None });
-                }
-            }
-        });
-        group.add_action(&total);
         group
     }
 
@@ -1289,10 +1269,19 @@ impl QueryPane {
     }
 }
 
-/// The stack spinner's upper bound as an adjustment wants it.
-#[allow(clippy::cast_precision_loss)] // STACK_MAX is 3.
-fn stack_maximum() -> f64 {
-    STACK_MAX as f64
+/// Whether a drop target keeps a drop it ignores rather than letting it fall
+/// through to the board behind (see [`QueryPane::drop_target`]): chips and
+/// capsules do; the empty board and the bin have nothing behind them.
+const fn keeps_ignored_drops(landing: Landing) -> bool {
+    matches!(landing, Landing::Row(_))
+}
+
+/// Clears what [`QueryPane::hover`] marked a drop target with.
+fn unmark(target: &gtk::DropTarget) {
+    if let Some(widget) = target.widget() {
+        widget.remove_css_class("drop-target");
+        widget.remove_css_class("drop-refused");
+    }
 }
 
 /// The variant type of the actions that name a row and a number together.
@@ -1309,83 +1298,49 @@ fn menu_item(label: &str, action: &str, target: &glib::Variant) -> gio::MenuItem
     entry
 }
 
-/// The most levels a combined-level stack could reach: each item counts its
-/// upgrade plus one, and its members may carry any upgrade — but a generated
-/// world levels at most one ring, the Imp vault's prize, past
-/// [`MAX_STANDARD_RING_UPGRADE`].
-fn levels_capacity(state: &AppState, item: &BoardItem) -> u8 {
-    let anchor = state.requirements[item.anchor()];
-    let count = u8::try_from(item.stack_count()).unwrap_or(1).max(1);
-    let per_item = anchor.to_core().upgrade_ceiling() + 1;
-    let generated = (MAX_GENERATED_UPGRADE + 1)
-        .saturating_add((count - 1).saturating_mul(MAX_STANDARD_RING_UPGRADE + 1));
-    count.saturating_mul(per_item).min(generated).max(1)
+/// The resin chip's context menu.
+fn resin_menu() -> gio::Menu {
+    let menu = gio::Menu::new();
+    menu.append(Some("Edit…"), Some("win.edit-resin"));
+    let removal = gio::Menu::new();
+    removal.append(Some("Remove"), Some("win.remove-resin"));
+    menu.append_section(None, &removal);
+    menu
 }
 
-fn chip_tag(text: &str, class: &str) -> gtk::Label {
+/// One qualifier beside a chip's name, tinted as the editor styles it.
+fn chip_tag(tag: &Tag) -> gtk::Label {
+    let class = match tag.style {
+        TagStyle::Plain => "chip-tag-plain",
+        TagStyle::Upgrade => "chip-tag-up",
+    };
     gtk::Label::builder()
-        .label(text)
+        .label(&tag.text)
         .css_classes(["chip-tag", class])
         .build()
 }
 
-/// The tiny qualifiers beside a chip's name: tier, upgrade, floor. A named
-/// item pins its own tier, so only a wildcard shows one.
-fn chip_tags(requirement: &UiRequirement) -> Vec<(String, &'static str)> {
-    let mut tags = Vec::new();
-    if requirement
-        .trinket_transmutations
-        .max(requirement.artifact_transmutations)
-        > 0
-    {
-        tags.push((
-            format!(
-                "Transmute ≤{}",
-                requirement
-                    .trinket_transmutations
-                    .max(requirement.artifact_transmutations)
-            ),
-            "chip-tag-plain",
-        ));
-    }
-    if requirement.item.is_none() {
-        match requirement.tier {
-            TierRequirement::Any => {}
-            TierRequirement::Exact(tier) => tags.push((format!("T{tier}"), "chip-tag-plain")),
-            TierRequirement::AtLeast(tier) => tags.push((format!("T{tier}+"), "chip-tag-plain")),
-            TierRequirement::AtMost(tier) => {
-                tags.push((format!("T\u{2264}{tier}"), "chip-tag-plain"));
-            }
-        }
-    }
-    match requirement.upgrade {
-        UpgradeRequirement::Any => {}
-        UpgradeRequirement::Exact(upgrade) => tags.push((format!("+{upgrade}"), "chip-tag-up")),
-        UpgradeRequirement::AtLeast(upgrade) => {
-            tags.push((format!("+{upgrade}\u{2191}"), "chip-tag-up"));
-        }
-    }
-    if let Some(depth) = requirement.max_depth {
-        tags.push((format!("F\u{2264}{depth}"), "chip-tag-plain"));
-    }
-    tags
+/// The check mark of a chip that rules out cursed items.
+fn uncursed_mark() -> gtk::Label {
+    gtk::Label::builder()
+        .label("\u{2713}")
+        .tooltip_text("Uncursed")
+        .css_classes(["chip-tag", "chip-tag-soft"])
+        .build()
 }
 
 /// The effect badge, for what a pulsing sprite cannot say on its own: several
 /// effects at once, "any enchantment", which settles on no colour, or an
 /// effect on a wildcard chip, whose category silhouette stays grayscale.
-fn effect_badge(requirement: &UiRequirement) -> Option<gtk::Widget> {
-    let EffectRequirement::OneOf(set) = requirement.effect else {
-        return None;
-    };
-    let label = effect_label(requirement.effect)?;
+fn effect_badge(chip: &ChipView, effect: &EffectBadge) -> Option<gtk::Widget> {
+    let label = &effect.label;
     // "Any enchantment" settles on no colour of its own, so it wears them all.
-    if EffectSet::enchantments(set.family()) == Some(set) {
-        return Some(effect_dot(None, &label));
+    if effect.any_enchantment {
+        return Some(effect_dot(None, label));
     }
-    if set.count() > 1 {
+    if effect.effects.len() > 1 {
         let count = gtk::Label::builder()
-            .label(set.count().to_string())
+            .label(effect.effects.len().to_string())
             .css_classes(["effect-count"])
             .valign(gtk::Align::Center)
             .halign(gtk::Align::Center)
@@ -1394,9 +1349,10 @@ fn effect_badge(requirement: &UiRequirement) -> Option<gtk::Widget> {
             .content_width(22)
             .content_height(22)
             .build();
-        let colors = set
-            .effects()
-            .filter_map(|effect| glow::effect(Some(effect)))
+        let colors = effect
+            .effects
+            .iter()
+            .filter_map(|effect| glow::effect(Some(*effect)))
             .map(glow::Glow::rgb)
             .collect::<Vec<_>>();
         ring.set_draw_func(move |_, context, width, height| {
@@ -1432,21 +1388,24 @@ fn effect_badge(requirement: &UiRequirement) -> Option<gtk::Widget> {
         });
         let badge = gtk::Overlay::builder()
             .child(&ring)
-            .tooltip_text(&label)
+            .tooltip_text(label)
             .valign(gtk::Align::Center)
             .build();
         badge.add_overlay(&count);
-        badge.update_property(&[gtk::accessible::Property::Label(&label)]);
+        badge.update_property(&[gtk::accessible::Property::Label(label)]);
         return Some(badge.upcast());
     }
     // A single effect — enchantment or curse — already pulses on a real
     // sprite, and the tooltip names it; a badge would only say it twice.
     // A wildcard keeps its grayscale silhouette and green question mark, so
     // the dot carries the effect's colour.
-    if requirement.item.is_some() {
+    if chip.item.is_some() {
         return None;
     }
-    Some(effect_dot(glow::effect(set.effects().next()), &label))
+    Some(effect_dot(
+        glow::effect(effect.effects.first().copied()),
+        label,
+    ))
 }
 
 /// The dot standing in for an effect: its glow colour, or the rainbow of "any
@@ -1491,65 +1450,27 @@ fn effect_dot(glow: Option<glow::Glow>, label: &str) -> gtk::Widget {
     area.upcast()
 }
 
-/// Everything the chip is too small to say: what it asks of one item, how it
-/// relates to the chips around it, and why it cannot be searched for.
-fn chip_tooltip(state: &AppState, index: usize, item: &BoardItem) -> String {
-    let requirement = &state.requirements[index];
-    let mut text = requirement.title();
-    let _ = write!(text, "\n{}", requirement.subtitle());
-    if item.cluster.is_some() {
-        let peers: Vec<String> = item
-            .members
-            .iter()
-            .filter(|member| **member != index)
-            .map(|member| state.requirements[*member].chip_name())
-            .collect();
-        let _ = write!(text, "\nor {}", peers.join(", "));
-    }
-    if let Some(total) = item.total {
-        let _ = write!(
-            text,
-            "\n\u{3a3} up to {} \u{2014} levels add to \u{2265} {total}",
-            item.stack_count()
-        );
-    } else if item.stack_count() > 1 {
-        // The chip's own bounds (+3, F≤4) describe one copy, not the extras.
-        let mut depths: Vec<Option<u8>> = item
-            .extras
-            .iter()
-            .map(|extra| state.requirements[*extra].max_depth)
-            .collect();
-        depths.sort_unstable();
-        depths.dedup();
-        let floors = match depths.as_slice() {
-            [Some(depth)] => format!("floors 1\u{2013}{depth}"),
-            [None] => "any floor".to_owned(),
-            _ => "own floor limits".to_owned(),
-        };
-        let _ = write!(
-            text,
-            "\n\u{d7} {} of the same kind \u{2014} the extra copies: any upgrade, {floors}",
-            item.stack_count()
-        );
-    }
-    if let Err(error) = requirement.to_core().validate() {
-        let _ = write!(text, "\n{error}");
-    }
-    text
-}
-
 /// The chip icon for one requirement: the item's real sprite once a concrete
 /// item is pinned, pulsing the enchantment or curse the requirement asks for,
 /// and otherwise a grayscale category sprite beneath a green question mark.
-fn requirement_prefix(requirement: &UiRequirement) -> gtk::Widget {
-    match requirement.item {
+fn chip_prefix(chip: &ChipView) -> gtk::Widget {
+    match chip.item {
         // No seed is in sight here, so rings keep the catalog's own cell for
         // their class rather than any run's gem.
-        Some(item_id) => sprites::item_image(
-            sprites::ItemSprite::from_catalog(shpd_seedfinder_core::catalog::item(item_id)),
-            glow::effect(requirement.pinned_effect()),
-        ),
-        None => sprites::wildcard_image(requirement.kind, requirement.weapon_category),
+        Some(item_id) => {
+            let pinned = chip
+                .effect
+                .as_ref()
+                .and_then(|effect| match effect.effects[..] {
+                    [effect] => Some(effect),
+                    _ => None,
+                });
+            sprites::item_image(
+                sprites::ItemSprite::from_catalog(shpd_seedfinder_core::catalog::item(item_id)),
+                glow::effect(pinned),
+            )
+        }
+        None => sprites::wildcard_image(chip.family, chip.kind.weapon_category()),
     }
 }
 

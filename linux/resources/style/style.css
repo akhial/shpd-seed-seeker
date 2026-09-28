@@ -110,6 +110,14 @@ button.chip.chip-add:hover {
   background-color: alpha(var(--warning-color), 0.12);
 }
 
+/* A chip that refuses the one in flight; the drop says why. */
+.chip.drop-refused,
+.cluster.drop-refused {
+  border-style: solid;
+  border-color: var(--error-color);
+  background-color: alpha(var(--error-color), 0.12);
+}
+
 /* The tiny monospace qualifiers beside a chip's name. */
 .chip-tag {
   padding: 0 4px;

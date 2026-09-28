@@ -3,10 +3,11 @@
 //! Presets bundled with every installation.
 
 use shpd_seedfinder_core::catalog::{ItemId, ItemKind};
+use shpd_seedfinder_core::editor::Row;
 use shpd_seedfinder_core::model::ItemSource;
-use shpd_seedfinder_core::query::{TierRequirement, UpgradeRequirement};
+use shpd_seedfinder_core::query::{Requirement, TierRequirement, UpgradeRequirement};
 
-use crate::state::{AppState, UiRequirement};
+use crate::state::AppState;
 
 /// The floor limit the vault presets carry: floor 19 is the last floor the
 /// Imp — and so the vault holding its levelled prizes — can appear on, so a
@@ -41,12 +42,13 @@ fn wand_bonanza() -> BuiltInPreset {
         (UpgradeRequirement::Exact(2), None),
     ] {
         let key = state.claim_key();
-        state.requirements.push(UiRequirement {
+        state.requirements.push(Row {
             key,
-            kind: ItemKind::Wand,
-            upgrade,
-            max_depth,
-            ..UiRequirement::new(key)
+            requirement: Requirement {
+                upgrade,
+                max_depth,
+                ..Requirement::any(ItemKind::Wand)
+            },
         });
     }
     BuiltInPreset {
@@ -64,12 +66,13 @@ fn staff_21() -> BuiltInPreset {
         (UpgradeRequirement::AtLeast(1), None),
     ] {
         let key = state.claim_key();
-        state.requirements.push(UiRequirement {
+        state.requirements.push(Row {
             key,
-            kind: ItemKind::Wand,
-            upgrade,
-            identity_group,
-            ..UiRequirement::new(key)
+            requirement: Requirement {
+                upgrade,
+                identity_group,
+                ..Requirement::any(ItemKind::Wand)
+            },
         });
     }
     BuiltInPreset {
@@ -89,12 +92,13 @@ fn staff_22() -> BuiltInPreset {
         (UpgradeRequirement::AtLeast(1), None),
     ] {
         let key = state.claim_key();
-        state.requirements.push(UiRequirement {
+        state.requirements.push(Row {
             key,
-            kind: ItemKind::Wand,
-            upgrade,
-            identity_group,
-            ..UiRequirement::new(key)
+            requirement: Requirement {
+                upgrade,
+                identity_group,
+                ..Requirement::any(ItemKind::Wand)
+            },
         });
     }
     state.max_depth = VAULT_FLOOR_LIMIT;
@@ -112,13 +116,14 @@ fn ring_of_wealth_21() -> BuiltInPreset {
         (UpgradeRequirement::Any, None),
     ] {
         let key = state.claim_key();
-        state.requirements.push(UiRequirement {
+        state.requirements.push(Row {
             key,
-            kind: ItemKind::Ring,
-            item: Some(ItemId::RingWealth),
-            upgrade,
-            source,
-            ..UiRequirement::new(key)
+            requirement: Requirement {
+                item: Some(ItemId::RingWealth),
+                upgrade,
+                source,
+                ..Requirement::any(ItemKind::Ring)
+            },
         });
     }
     BuiltInPreset {
@@ -137,13 +142,14 @@ fn tier_4_weapon_26() -> BuiltInPreset {
         (TierRequirement::Any, UpgradeRequirement::Any),
     ] {
         let key = state.claim_key();
-        state.requirements.push(UiRequirement {
+        state.requirements.push(Row {
             key,
-            kind: ItemKind::Weapon,
-            tier,
-            upgrade,
-            identity_group: Some(1),
-            ..UiRequirement::new(key)
+            requirement: Requirement {
+                tier,
+                upgrade,
+                identity_group: Some(1),
+                ..Requirement::any(ItemKind::Weapon)
+            },
         });
     }
     state.max_depth = VAULT_FLOOR_LIMIT;
@@ -171,14 +177,14 @@ mod tests {
                 .state
                 .requirements
                 .iter()
-                .all(|requirement| requirement.kind == ItemKind::Wand)
+                .all(|row| row.requirement.kind == ItemKind::Wand)
         );
         assert_eq!(
             staff
                 .state
                 .requirements
                 .iter()
-                .map(|requirement| requirement.upgrade)
+                .map(|row| row.requirement.upgrade)
                 .collect::<Vec<_>>(),
             [
                 UpgradeRequirement::Exact(3),
@@ -192,7 +198,7 @@ mod tests {
                 .state
                 .requirements
                 .iter()
-                .map(|requirement| requirement.identity_group)
+                .map(|row| row.requirement.identity_group)
                 .collect::<Vec<_>>(),
             [Some(1), Some(1), Some(1), None]
         );
@@ -208,14 +214,14 @@ mod tests {
                 .state
                 .requirements
                 .iter()
-                .all(|requirement| requirement.kind == ItemKind::Wand)
+                .all(|row| row.requirement.kind == ItemKind::Wand)
         );
         assert_eq!(
             staff
                 .state
                 .requirements
                 .iter()
-                .map(|requirement| requirement.upgrade)
+                .map(|row| row.requirement.upgrade)
                 .collect::<Vec<_>>(),
             [
                 UpgradeRequirement::Exact(4),
@@ -229,7 +235,7 @@ mod tests {
                 .state
                 .requirements
                 .iter()
-                .map(|requirement| requirement.identity_group)
+                .map(|row| row.requirement.identity_group)
                 .collect::<Vec<_>>(),
             [Some(1), Some(1), Some(1), None]
         );
@@ -246,15 +252,15 @@ mod tests {
                 .state
                 .requirements
                 .iter()
-                .all(|requirement| requirement.kind == ItemKind::Weapon
-                    && requirement.identity_group == Some(1))
+                .all(|row| row.requirement.kind == ItemKind::Weapon
+                    && row.requirement.identity_group == Some(1))
         );
         assert_eq!(
             weapon
                 .state
                 .requirements
                 .iter()
-                .map(|requirement| (requirement.tier, requirement.upgrade))
+                .map(|row| (row.requirement.tier, row.requirement.upgrade))
                 .collect::<Vec<_>>(),
             [
                 (TierRequirement::Exact(4), UpgradeRequirement::Exact(5)),
@@ -262,6 +268,24 @@ mod tests {
                 (TierRequirement::Any, UpgradeRequirement::Any),
             ]
         );
+    }
+
+    /// A preset loads as the board writes it: the editor finds nothing to
+    /// rewrite, so editing one chip never reshapes the rest.
+    #[test]
+    fn every_preset_is_already_in_the_editors_encoding() {
+        for mut preset in built_in() {
+            let rows = preset.state.requirements.clone();
+            assert!(
+                !preset
+                    .state
+                    .apply(&[shpd_seedfinder_core::editor::Edit::Normalize])
+                    .changed,
+                "{}",
+                preset.name
+            );
+            assert_eq!(preset.state.requirements, rows, "{}", preset.name);
+        }
     }
 
     /// The vault presets sit at the engine's upgrade ceilings, so a preset is
@@ -287,14 +311,14 @@ mod tests {
                 .state
                 .requirements
                 .iter()
-                .all(|requirement| requirement.kind == ItemKind::Wand && requirement.item.is_none())
+                .all(|row| row.requirement.kind == ItemKind::Wand && row.requirement.item.is_none())
         );
         assert_eq!(
             preset
                 .state
                 .requirements
                 .iter()
-                .map(|requirement| requirement.upgrade)
+                .map(|row| row.requirement.upgrade)
                 .collect::<Vec<_>>(),
             [
                 UpgradeRequirement::Exact(3),
@@ -308,7 +332,7 @@ mod tests {
                 .state
                 .requirements
                 .iter()
-                .map(|requirement| requirement.max_depth)
+                .map(|row| row.requirement.max_depth)
                 .collect::<Vec<_>>(),
             [None, Some(4), Some(4), None]
         );
@@ -317,7 +341,7 @@ mod tests {
                 .state
                 .requirements
                 .iter()
-                .all(|requirement| requirement.identity_group.is_none())
+                .all(|row| row.requirement.identity_group.is_none())
         );
     }
 
@@ -329,28 +353,31 @@ mod tests {
             ring.state
                 .requirements
                 .iter()
-                .all(|requirement| requirement.item == Some(ItemId::RingWealth))
+                .all(|row| row.requirement.item == Some(ItemId::RingWealth))
         );
         assert_eq!(
-            ring.state.requirements[0].upgrade,
+            ring.state.requirements[0].requirement.upgrade,
             UpgradeRequirement::Exact(4)
         );
         assert_eq!(
-            ring.state.requirements[0].source,
+            ring.state.requirements[0].requirement.source,
             Some(ItemSource::ImpReward)
         );
         assert_eq!(
             ring.state
                 .requirements
                 .iter()
-                .map(|requirement| requirement.max_depth)
+                .map(|row| row.requirement.max_depth)
                 .collect::<Vec<_>>(),
             [None, None, None]
         );
         assert_eq!(
-            ring.state.requirements[1].upgrade,
+            ring.state.requirements[1].requirement.upgrade,
             UpgradeRequirement::Exact(2)
         );
-        assert_eq!(ring.state.requirements[2].upgrade, UpgradeRequirement::Any);
+        assert_eq!(
+            ring.state.requirements[2].requirement.upgrade,
+            UpgradeRequirement::Any
+        );
     }
 }
