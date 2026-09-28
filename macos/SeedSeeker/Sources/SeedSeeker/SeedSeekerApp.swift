@@ -1180,8 +1180,8 @@ private struct ChipView: View {
             face
                 .contentShape(Rectangle())
                 .onTapGesture { onOpen(chip.key) }
-            if chip.countBadge != nil || chip.totalBadge != nil {
-                StackBadgesView(chip: chip, perform: perform)
+            if badges.count != nil || badges.total != nil {
+                StackBadgesView(chip: chip, badges: badges, perform: perform)
             }
         }
         .padding(.leading, 7).padding(.trailing, 7)
@@ -1211,6 +1211,13 @@ private struct ChipView: View {
         } isTargeted: { isTargeted = $0 }
         .contextMenu { menu }
         .accessibilityLabel(chip.description)
+    }
+
+    /// The badges beside the face: the chip's own, or — while one of its
+    /// items is in flight — what its stack keeps, so the dimmed chip left
+    /// behind already reads as the drop will leave it (a ×3 chip, ×2).
+    private var badges: BoardBadges {
+        chip.shownBadges(lifted: dragging == .item(chip.key))
     }
 
     /// The chip without its badges: sprite, name and qualifiers.
@@ -1394,13 +1401,16 @@ private struct StackBadgesView: View {
     /// The chip — on its own or a cluster member — as this pass of the board
     /// drew it; its key survives every edit the steppers make.
     let chip: BoardChip
+    /// The badges to draw: the chip's own, or those it keeps while one of
+    /// its items is in flight.
+    let badges: BoardBadges
     let perform: ([BoardEdit]) -> BoardRefusal?
     @State private var editingCount = false
     @State private var editingTotal = false
 
     var body: some View {
         HStack(spacing: 3) {
-            if let badge = chip.countBadge {
+            if let badge = badges.count {
                 Button { editingCount = true } label: { badgeView(badge.text) }
                     .buttonStyle(.plain)
                     .help(badge.tooltip)
@@ -1415,7 +1425,7 @@ private struct StackBadgesView: View {
                         .padding(14).frame(width: 200)
                     }
             }
-            if let badge = chip.totalBadge {
+            if let badge = badges.total {
                 Button { editingTotal = true } label: { badgeView(badge.text) }
                     .buttonStyle(.plain)
                     .help(badge.tooltip)

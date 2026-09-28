@@ -237,7 +237,15 @@ struct RequirementsView: View {
     /// the member a count.
     private func memberCountBadge(_ chip: BoardChip) -> BoardBadge? {
         guard chip.inCluster, chip.stack.canChangeCount else { return nil }
-        return chip.countBadge
+        return originBadges(chip).count
+    }
+
+    /// The badges a chip's place on the board shows: its own, or — while
+    /// one of its items is lifted away — what its stack keeps, so the
+    /// dimmed chip left behind already reads as the drop will leave it (a
+    /// ×3 chip, ×2).
+    private func originBadges(_ chip: BoardChip) -> BoardBadges {
+        chip.shownBadges(lifted: lift?.id == "chip-\(chip.key)")
     }
 
     private func resinChip(_ resin: BoardResinChip) -> some View {
@@ -290,7 +298,7 @@ struct RequirementsView: View {
                                              offerResin: true),
                        key: chip.key, source: id)
         } label: {
-            chipContent(chip)
+            chipContent(chip, badges: originBadges(chip))
                 .glassEffect(.regular.tint(chipTint(chip, hovered: hovered)).interactive(), in: .capsule)
                 .glassEffectID(id, in: glass)
                 .glassEffectUnion(id: id, namespace: glass)
@@ -330,9 +338,9 @@ struct RequirementsView: View {
         return chip.inCluster ? AppTheme.seed.opacity(0.04) : .white.opacity(0.015)
     }
 
-    /// A chip's face, with its stack badges unless `badges` is false: a
-    /// lifted chip is one item, whatever its stack, so it shows neither.
-    private func chipContent(_ chip: BoardChip, badges: Bool = true) -> some View {
+    /// A chip's face with the stack `badges` given: those its place shows,
+    /// or none for a lifted chip, which is one item whatever its stack.
+    private func chipContent(_ chip: BoardChip, badges: BoardBadges?) -> some View {
         HStack(spacing: compactChips ? 6 : 8) {
             RequirementsChipSprite(chip: chip, size: compactChips ? 23 : 28)
             Text(chip.name)
@@ -346,8 +354,8 @@ struct RequirementsView: View {
                 if chip.uncursed {
                     uncursedTag
                 }
-                if badges, memberCountBadge(chip) == nil, let badge = chip.countBadge { tag(badge.compactText) }
-                if badges, let badge = chip.totalBadge { tag(badge.compactText) }
+                if memberCountBadge(chip) == nil, let badge = badges?.count { tag(badge.compactText) }
+                if let badge = badges?.total { tag(badge.compactText) }
                 RequirementEffectBadge(effect: chip.effect, isWildcard: chip.item == nil)
                 ForEach(chip.trailingTags, id: \.self) { value in tag(value.text, upgrade: value.isUpgrade) }
             }
@@ -396,7 +404,7 @@ struct RequirementsView: View {
         let lifted = key.flatMap { shown.chip($0) }
         if let lifted {
             // A drag moves one item: the chip alone, without ×N or Σ.
-            interaction.preview = AnyView(chipContent(lifted, badges: false))
+            interaction.preview = AnyView(chipContent(lifted, badges: nil))
         } else if let resin = shown.resin {
             interaction.preview = AnyView(resinContent(resin))
         }
