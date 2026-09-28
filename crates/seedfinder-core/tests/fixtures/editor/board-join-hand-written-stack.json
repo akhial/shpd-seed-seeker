@@ -72,6 +72,21 @@
             ],
             "key": 1,
             "kind": "wand",
+            "lifted": {
+              "description": "Wand of Disintegration, any upgrade",
+              "details": [
+                "any upgrade"
+              ],
+              "effect": null,
+              "family": "wand",
+              "item": "wand_disintegration",
+              "kind": "wand",
+              "name": "Wand of Disintegration",
+              "tags": [],
+              "title": "Wand of Disintegration",
+              "trailing_tags": [],
+              "uncursed": false
+            },
             "name": "Wand of Disintegration",
             "problem": null,
             "refuse": [],
@@ -147,6 +162,7 @@
             ],
             "key": 7,
             "kind": "wand",
+            "lifted": null,
             "name": "Wand of Frost",
             "problem": null,
             "refuse": [],
@@ -197,6 +213,7 @@
             ],
             "key": 3,
             "kind": "wand",
+            "lifted": null,
             "name": "Wand of Disintegration",
             "problem": null,
             "refuse": [],

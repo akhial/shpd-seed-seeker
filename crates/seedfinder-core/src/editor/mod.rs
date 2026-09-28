@@ -80,9 +80,9 @@ pub use board::{
     Refusal, apply, board_items, drop_action, join_candidates,
 };
 pub use chips::{
-    Badge, Badges, BoardView, ChipView, Counts, EffectBadge, ItemView, Relation, RelationGlyph,
-    ResinAmount, ResinChip, ResinState, Tag, TagStyle, board_view, chip_description, chip_details,
-    chip_tags, chip_trailing_tags, effect_badge, resin_chip,
+    Badge, Badges, BoardView, ChipFace, ChipView, Counts, EffectBadge, ItemView, Relation,
+    RelationGlyph, ResinAmount, ResinChip, ResinState, Tag, TagStyle, board_view, chip_description,
+    chip_details, chip_tags, chip_trailing_tags, effect_badge, resin_chip,
 };
 pub use draft::{
     Change, Choice, DRAFT_VERSION, DUPLICATE_TRINKET, Draft, EffectChoice, EffectControl,

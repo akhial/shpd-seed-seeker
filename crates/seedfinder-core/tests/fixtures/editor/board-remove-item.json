@@ -55,6 +55,7 @@
             "join": [],
             "key": 3,
             "kind": "ring",
+            "lifted": null,
             "name": "Any ring",
             "problem": null,
             "refuse": [],

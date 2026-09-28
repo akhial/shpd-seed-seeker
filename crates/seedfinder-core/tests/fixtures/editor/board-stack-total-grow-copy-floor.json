@@ -72,6 +72,28 @@
             "join": [],
             "key": 1,
             "kind": "ring",
+            "lifted": {
+              "description": "Ring of Energy, any upgrade, floors 1–20",
+              "details": [
+                "any upgrade",
+                "floors 1–20"
+              ],
+              "effect": null,
+              "family": "ring",
+              "item": "ring_energy",
+              "kind": "ring",
+              "name": "Ring of Energy",
+              "tags": [
+                {
+                  "style": "plain",
+                  "text": "F≤20",
+                  "tooltip": null
+                }
+              ],
+              "title": "Ring of Energy",
+              "trailing_tags": [],
+              "uncursed": false
+            },
             "name": "Ring of Energy",
             "problem": null,
             "refuse": [],

@@ -78,6 +78,21 @@
             ],
             "key": 1,
             "kind": "wand",
+            "lifted": {
+              "description": "Wand of Frost, any upgrade",
+              "details": [
+                "any upgrade"
+              ],
+              "effect": null,
+              "family": "wand",
+              "item": "wand_frost",
+              "kind": "wand",
+              "name": "Wand of Frost",
+              "tags": [],
+              "title": "Wand of Frost",
+              "trailing_tags": [],
+              "uncursed": false
+            },
             "name": "Wand of Frost",
             "problem": null,
             "refuse": [],
@@ -141,6 +156,21 @@
             ],
             "key": 2,
             "kind": "wand",
+            "lifted": {
+              "description": "Wand of Lightning, any upgrade",
+              "details": [
+                "any upgrade"
+              ],
+              "effect": null,
+              "family": "wand",
+              "item": "wand_lightning",
+              "kind": "wand",
+              "name": "Wand of Lightning",
+              "tags": [],
+              "title": "Wand of Lightning",
+              "trailing_tags": [],
+              "uncursed": false
+            },
             "name": "Wand of Lightning",
             "problem": null,
             "refuse": [],
@@ -198,6 +228,7 @@
             ],
             "key": 5,
             "kind": "wand",
+            "lifted": null,
             "name": "Wand of Disintegration",
             "problem": null,
             "refuse": [],
@@ -268,6 +299,7 @@
             ],
             "key": 4,
             "kind": "wand",
+            "lifted": null,
             "name": "Wand of Disintegration",
             "problem": null,
             "refuse": [],

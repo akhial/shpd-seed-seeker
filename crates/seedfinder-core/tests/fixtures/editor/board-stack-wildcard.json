@@ -53,6 +53,21 @@
             "join": [],
             "key": 1,
             "kind": "wand",
+            "lifted": {
+              "description": "Any wand, any upgrade",
+              "details": [
+                "any upgrade"
+              ],
+              "effect": null,
+              "family": "wand",
+              "item": null,
+              "kind": "wand",
+              "name": "Any wand",
+              "tags": [],
+              "title": "Any wand",
+              "trailing_tags": [],
+              "uncursed": false
+            },
             "name": "Any wand",
             "problem": null,
             "refuse": [],

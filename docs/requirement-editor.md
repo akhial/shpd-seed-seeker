@@ -157,8 +157,8 @@ name of the query format (`"locked_chest"`).
 | Edit | Effect |
 | --- | --- |
 | `{"type": "normalize"}` | Rewrites the list into its canonical encoding, its labels in range among it (see [Labels](#labels)). See [When to normalize](#when-to-normalize). |
-| `{"type": "join", "source": K, "target": K}` | Makes one item of `source` an either/or alternative of `target` (any member of a chip or cluster); the item moves after the cluster's last member. A source with copies stays where it is, with its constraints and one item fewer — as `remove_one` leaves it — and a bare copy of it joins: the chip's item (or its kind, for a wildcard stack) with that copy's floor limit and nothing else. A source without copies joins itself. A stacked lone target keeps its stack as a member of the new cluster; a target cluster's members keep theirs, and the item joins as a ×1 member. `focus` names the item that joined. See [Joins](#joins). |
-| `{"type": "detach", "key": K}` | Takes one item of a cluster member out on its own. A member with copies stays in the cluster in its place, with its constraints and one item fewer, and a bare copy of it leaves, right after it, folding into an alike lone chip before it; a ×1 member leaves the cluster itself, and a cluster of one dissolves into a chip. `focus` names the item that left (or the chip it folded into). |
+| `{"type": "join", "source": K, "target": K}` | Makes one item of `source` an either/or alternative of `target` (any member of a chip or cluster); the item moves after the cluster's last member. A source with copies stays where it is, with its constraints and one item fewer — as `remove_one` leaves it — and a bare copy of it joins: the chip's item (or its kind, for a wildcard stack) with that copy's floor limit and nothing else — the chip's `lifted` face. A source without copies joins itself. A stacked lone target keeps its stack as a member of the new cluster; a target cluster's members keep theirs, and the item joins as a ×1 member. `focus` names the item that joined. See [Joins](#joins). |
+| `{"type": "detach", "key": K}` | Takes one item of a cluster member out on its own. A member with copies stays in the cluster in its place, with its constraints and one item fewer, and a bare copy of it leaves — the chip's `lifted` face — right after it, folding into an alike lone chip before it; a ×1 member leaves the cluster itself, and a cluster of one dissolves into a chip. `focus` names the item that left (or the chip it folded into). |
 | `{"type": "remove", "key": K}` | Removes the chip with its whole stack: a cluster member with its own copies (a stack it shares with other members stays with them), or a lone chip's whole entry. The chip menu's "Remove". |
 | `{"type": "remove_one", "key": K}` | Removes one item of the chip — what a drag onto the remove target sends: a member ×N becomes ×(N−1), a ×1 member leaves its cluster (removed), a lone stack ×N becomes ×(N−1) (a combined level capped at what the rest can reach, or dropped at one ring), and a lone chip without copies is removed. |
 | `{"type": "remove_item", "key": K}` | Removes the whole entry holding `K`: every member and every hidden copy. |
@@ -219,8 +219,8 @@ for a wildcard stack, with its own floor limit and nothing else: no
 upgrade, tier, effect, uncursed filter, source, resin exclusion, stack label
 or combined level. The chip stays where it is with its requirements, one
 item fewer. A chip without copies moves whole. The picked-up chip (a drag
-ghost, a lifted chip, a pick-mode or keyboard "moving" chip) shows that one
-item, without badges.
+ghost, a lifted chip, a pick-mode or keyboard "moving" chip) draws that item
+— the chip's `lifted` face, else its own — without badges.
 
 - **The source gives up one item.** A lone chip keeps its requirements and
   the rest of its stack, one item fewer, as if its count had been stepped
@@ -391,26 +391,43 @@ candidates still answer for the list as written, and agree with the edit.
 | `problem` | The row's own first problem, else the first problem between rows blaming it; a chip also speaks for its own hidden copies (every member sharing a stack for the copies they share). |
 | `badges` | The badges the chip shows at rest: `count` when it asks for more than one item, `total` when it counts levels; each `{"text", "compact_text", "tooltip"}` (`×3` / `3 of the same kind`; `Σ ≥ 5`, compact `Σ≥5`, `Levels add to at least 5 (a +0 item counts 1)`), else `null`. A cluster member's badges are its own and are drawn on its chip, inside the cluster's outline. |
 | `remaining_badges` | The badges the chip keeps while one item is lifted away — what a drag's origin shows: `{"count", "total"}` like `badges`, the chip's own stack one item fewer, with the combined level a `remove_one` of the chip leaves, so it agrees with every drop (each moves that one item, a bare copy, leaving the chip its requirements). One copy fewer: Ring of Energy +4 ×3 leaves `×2`, a ×2 chip `{"count": null, "total": null}`; a combined level is capped at what the rest can reach, and dropped when one ring is left; a member leaves its own stack one fewer (Frost of `{Frost ×2 \| Disintegration}` leaves both `null`), and one sharing its stack with alike members leaves what `remove_one` leaves it (Frost of `{Frost ×3 \| Disintegration ×3}` leaves `×2`); the count is the chip's own even where a `remove_one` would fold what is left into another chip, which only a list never normalized allows (a Mace stacked with a bare copy, beside a lone Mace, leaves both `null`: a join onto the lone Mace leaves that one Mace apart); a `remove_one` refused for want of a stack label leaves `badges`. `null` when the chip has no copies (`copies` is empty): the whole chip leaves, as Disintegration does. |
+| `lifted` | The FACE of the item a drag of the chip carries: when the chip has copies, a bare copy of it — the chip's item (`Ring of Energy` for Ring of Energy +4 ×3), or its kind for a wildcard stack (`Any wand` for Any wand +3 ×2), with the floor limit of the copy it is (`Mace` `F≤9`) and nothing else, so its `details` read `any upgrade`. It is the face the item has once it lands: the new member after a join, the lone chip after a detach. `null` when the chip has no copies (`copies` is empty): the chip itself moves, and draws its own face. |
 | `copies` | The keys of the hidden copies behind the chip's badge, in list order; members whose stacks are alike share theirs. |
 | `stack` | What the chip's count, combined-level and copy-floor steppers offer: `count`, `max` (3), `can_grow`, `can_change_count`, `count_max` (the count stepper's upper bound: `max` while the chip can grow, else its `count`, which it may only shed copies from; never above `max`), `total`, `can_count_levels` (a lone named ring stack only), `level_capacity`, `default_total`, `copy_depth`, `can_set_copy_depth`, `count_text` (`×2`, or `≤2` while counting levels — present even at ×1 for steppers), `total_text` (`Σ ≥ 5`, `Σ ≥ 0` without a total). |
 | `in_cluster`, `can_detach` | A cluster member, which "On its own" (`detach`) applies to. |
 | `join` | The visible rows this chip may join, in list order — what "Either/or with…" menus, pick mode, accessibility actions and drag hover read. |
 | `refuse` | The visible rows a join onto is refused, each `{"key", "reason", "message"}`, for hover feedback. |
 
+**FACE**, what a chip shows of one item — the fields a CHIP carries for its
+own row, and `lifted` for the item a drag of it carries: `{"name", "title",
+"item", "kind", "family", "tags", "trailing_tags", "effect", "uncursed",
+"details", "description"}`, each as in CHIP. It has no key, badges,
+relations or state: it is drawn, never edited.
+
 Drops are decided from the chips: onto a row or cluster, `join` it when the
 target is in `join`, show the message when it is in `refuse`, else do
 nothing; onto the empty board of the chip's own section, `detach` a cluster
 member (`can_detach`) and leave a lone chip where it is; onto the remove
 target, `remove_one`. Every drag moves one item — for a chip with copies a
-bare copy of it, the chip keeping its requirements — so the chip being
-dragged is drawn as that one item, without badges. Where an app draws the
-moving item apart from its origin, the origin — still a dimmed placeholder
-— shows the chip's `remaining_badges` while one item is lifted away (`null`
-keeps the placeholder as it was), and its `badges` again once the drag ends
-or is cancelled; a chip that is both at once (pick mode, a keyboard move)
-keeps the one-item look. A detach or a `remove_one` that needs a stack label
-when none is free is refused like a join; the typed `drop_action` answers
-it, the envelope's `refused` says so after the fact.
+bare copy of it, the chip keeping its requirements — and apps draw it so:
+
+- **The moving chip** — a drag icon or lifted chip following the pointer,
+  and a chip that is both the origin and the moving item in place (pick
+  mode, a keyboard move) — draws `lifted`, else the chip's own face, always
+  without badges. Ring of Energy +4 ×3 lifts a plain `Ring of Energy`: only
+  the chip it came from reads `+4`.
+- **The origin placeholder**, where an app draws the moving item apart from
+  its origin, stays dimmed and draws the chip's own face with its
+  `remaining_badges` while one item is lifted away (`null` keeps the
+  placeholder as it was), and its `badges` again once the drag ends or is
+  cancelled.
+- **Announcements and accessible names** that name the item being moved
+  ("Moving …", a drag caption read aloud, a pick-mode prompt) use the
+  lifted face's `description` or `title`, else the chip's own.
+
+A detach or a `remove_one` that needs a stack label when none is free is
+refused like a join; the typed `drop_action` answers it, the envelope's
+`refused` says so after the fact.
 
 **RESIN_CHIP**: `{"name": "Arcane Resin", "tags", "uncursed", "tooltip",
 "details", "description"}` — tags `Auto` or `≥N`, then `Mage +2`, then
@@ -562,7 +579,7 @@ explains.
 | --- | --- |
 | `v`, `mode` (`new` \| `edit`), `origin` (`{"type": "new"}`, `{"type": "row", "key": K}`, `{"type": "resin"}`), `blanket`, `in_cluster`, `resin_picked` | What the dialog chrome — title and button labels, which apps own — derives from. |
 | `title` | The sheet header's title: the requirement's (`Any Tier 3+ melee weapon`, `Rat Skull`), or `Arcane Resin` while the resin is picked. Unlike `preview` it is there while the draft has errors; the sprite follows `item` and `kind`. |
-| `preview` | The CHIP a save would produce, with its stack and badges (key 0, no copy keys, no remaining badges, no join candidates), or `null` while there are errors or the resin is picked. |
+| `preview` | The CHIP a save would produce, with its stack and badges (key 0, no copy keys, no remaining badges, no lifted face, no join candidates), or `null` while there are errors or the resin is picked. |
 | `category`, `kind`, `weapon_type`, `item`, `source` | Pickers: `{"visible", "value", "options"}`. `item` lists the wildcard (`Any melee weapon`) unless the family always names one, `Arcane Resin` when offered, then the items — weapons grouped `Tier 2`…`Tier 5`. |
 | `tier`, `upgrade` | `{"visible", "mode", "modes", "value_visible", "value", "min", "max", "value_label"}` (`Tier 3 or higher`, `+2 or higher`); `value_visible` says the value slider shows: the control does, in a mode other than `any`. |
 | `effect` | `{"visible", "label", "mode", "modes", "choices_visible", "choices", "groups", "caption"}`; `label` is the section's (`Enchantment`, `Glyph` on armor), `choices_visible` says the "Specific…" grid shows (the control does, in mode `specific`), each choice `{"value", "label", "group": "enchantment" \| "curse", "selected"}`, curses listed only while the item may be cursed. |
@@ -635,7 +652,7 @@ project:
 | --- | --- |
 | `Row { key, requirement }`, `MAX_KEY`, `STACK_MAX` | Rows and their bounds. |
 | `apply(rows, next_key, edits) -> EditResult`, `Edit`, `EditResult`, `Refusal` | Board edits with key repair, no-op and refusal semantics as above. |
-| `board_view(rows, resin) -> BoardView` and its views (`ItemView`, `ChipView`, `StackView`, `Badges`, `Tag`, `EffectBadge`, `Relation`, `Counts`, `ResinChip`) | Everything a board draws. |
+| `board_view(rows, resin) -> BoardView` and its views (`ItemView`, `ChipView`, `ChipFace`, `StackView`, `Badges`, `Tag`, `EffectBadge`, `Relation`, `Counts`, `ResinChip`) | Everything a board draws. `ChipView::lifted` is the `ChipFace` a drag of the chip carries (`None` without copies); `ChipView::face()` is the chip's own face, and `ChipView::moving_face()` the one a moving chip draws — `lifted`, else its own. `ChipFace::of(requirement, counting_levels)` builds a face. |
 | `board_items`, `BoardItem`, `ChipStack`, `ItemKey`, `join_candidates`, `drop_action`, `DropTarget`, `DropAction` | The fold itself — every entry's members, each with its `ChipStack` (its copies and combined level) — and the drop policy (`DropAction::RemoveOne` for the remove target). |
 | `problems(rows)`, `row_problems(requirement)`, `Problem`, `ProblemScope` | The problem list. |
 | `open`, `change`, `form`, `save`, `Draft`, `Change`, `Form`, `SaveResult`, `ResinOutcome`, `ResinState`, `ResinAmount` | The sheet. |
@@ -655,6 +672,7 @@ decided once.
 | Joining a stack | One item moves (drag, pick mode, menu and accessibility alike): a bare copy — the chip's item or kind, with the floor limit of the copy `remove_one` would take, and nothing else — while the chip stays where it is with its requirements, one item fewer; a chip without copies moves whole. A stacked lone target keeps its stack as a member; a target cluster's members keep theirs, and the item joins as ×1. See [Joins](#joins). |
 | A combined level losing a ring to a join | A plain ring joins; the chip keeps counting, capped at what its rest can still reach, or stops when one ring is left. A counting target keeps its count as a member's stack and drops its Σ. |
 | Detach, and a member dragged out of a group | One item moves: a bare copy, while the member stays in the group in its place with its requirements, one item fewer; a ×1 member leaves itself, and a group of one dissolves into a chip. |
+| The moving chip | Draws the chip's `lifted` face (the bare copy a drag carries), else its own, without badges; the origin draws its own face with `remaining_badges`; announcements name the lifted face. Ring of Energy +4 ×3 lifts `Ring of Energy`, and only the origin reads `+4`. |
 | Remove | The remove target takes one item (`remove_one`); the chip menu's "Remove" takes the chip with its whole stack (`remove`). |
 | A member stepped down to ×1 | Drops its stack label, so it uses none of the four and none reaches a saved or shared query. |
 | Counting levels on or off | The anchor and every copy keep their own floor limits, on the board and through the sheet (which saves the copy floor its hidden control holds); a counting stack grown on the board gives the new copies the copies' floor; the popover names the copies' floors while they differ from the anchor's. |
@@ -740,12 +758,13 @@ These are the core's own choices:
 `crates/seedfinder-core/tests/fixtures/editor/*.json` pins representative
 request/response pairs for both envelopes: the board tour, the four stack
 encodings, a member's own stack and alike member stacks drawn as each
-member ×N, the remaining badges of a stack, joins (a bare copy moving out
-of a stack, the reported list and its round trip, onto a stacked chip, a
-stacked cluster and a combined level, a combined level losing a ring, a
-member moving one item, across categories, a hand-written stack, refused
-for want of a label), detaches (a member alone, a bare copy of a member's
-stack) and removals (one member, a
+member ×N, the lifted face and remaining badges of a stack, joins (a bare
+copy moving out of a stack — Ring of Energy +4 ×3 onto Disintegration and
+its round trip — the reported list and its round trip, onto a stacked
+chip, a stacked cluster and a combined level, a combined level losing a
+ring, a member moving one item, across categories, a hand-written stack,
+refused for want of a label), detaches (a member alone, a bare copy of a
+member's stack, with and without constraints) and removals (one member, a
 whole stack, one item of a member's stack and of a lone combined level),
 copy floors, combined levels (their copies' floors kept both ways and
 given to new copies), a member stepped down to ×1, saves (new and

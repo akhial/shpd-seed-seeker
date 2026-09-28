@@ -60,6 +60,21 @@
             "join": [],
             "key": 1,
             "kind": "ring",
+            "lifted": {
+              "description": "Ring of Might, any upgrade",
+              "details": [
+                "any upgrade"
+              ],
+              "effect": null,
+              "family": "ring",
+              "item": "ring_might",
+              "kind": "ring",
+              "name": "Ring of Might",
+              "tags": [],
+              "title": "Ring of Might",
+              "trailing_tags": [],
+              "uncursed": false
+            },
             "name": "Ring of Might",
             "problem": null,
             "refuse": [],

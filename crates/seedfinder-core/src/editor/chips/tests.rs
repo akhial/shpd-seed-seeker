@@ -932,6 +932,180 @@ fn a_lifted_member_leaves_its_stack_as_remove_one_does() {
 
 // --- problems on the board ----------------------------------------------------------
 
+/// The face a drag of the chip `key` lifts: its name and tag texts, and
+/// its description.
+fn lifted_of(rows: &[Row], key: u64) -> Option<(String, Vec<String>, String)> {
+    let lifted = chip(&view(rows), key).lifted.clone()?;
+    let tags = texts(&lifted.tags).into_iter().map(str::to_owned).collect();
+    Some((lifted.name, tags, lifted.description))
+}
+
+fn lifted_face(name: &str, tags: &[&str], description: &str) -> (String, Vec<String>, String) {
+    (
+        name.to_owned(),
+        tags.iter().map(|&tag| tag.to_owned()).collect(),
+        description.to_owned(),
+    )
+}
+
+#[test]
+#[allow(clippy::too_many_lines)] // Every kind of stack, each lifted once.
+fn a_drag_lifts_a_bare_copy_and_leaves_the_chip_its_constraints() {
+    // The reported case: Ring of Energy +4 ×3 lifts a bare Ring of Energy —
+    // the +4 stays on the chip, which shows it at rest and on its origin.
+    let energy = Requirement {
+        upgrade: UpgradeRequirement::Exact(4),
+        ..named(0, ItemId::RingEnergy).requirement
+    };
+    let three = edited(&[], &[saved(energy, 3, None)]);
+    let board = view(&three);
+    let rings = chip(&board, 1);
+    assert_eq!(texts(&rings.tags), ["+4"]);
+    assert_eq!(
+        lifted_of(&three, 1),
+        Some(lifted_face(
+            "Ring of Energy",
+            &[],
+            "Ring of Energy, any upgrade"
+        ))
+    );
+    let lifted = rings.lifted.clone().expect("a stack lifts a copy");
+    assert_eq!(rings.moving_face(), lifted);
+    assert_eq!(lifted.effect, None);
+    assert!(!lifted.uncursed);
+    assert_eq!(lifted.item, Some(ItemId::RingEnergy));
+    // Joined onto Disintegration, that copy is the new member, and the chip
+    // stays Ring of Energy +4 ×2.
+    let mut rows = three.clone();
+    rows.push(named(9, ItemId::WandDisintegration));
+    let result = apply(
+        &rows,
+        None,
+        &[Edit::Join {
+            source: 1,
+            target: 9,
+        }],
+    );
+    let after = view(&result.rows);
+    let member = chip(&after, result.focus.expect("the joined copy"));
+    assert!(member.in_cluster);
+    assert_eq!(member.face(), lifted);
+    let left = chip(&after, 1);
+    assert_eq!(texts(&left.tags), ["+4"]);
+    assert_eq!(Some(left.badges.clone()), rings.remaining_badges);
+
+    // A chip without copies moves itself: no lifted face.
+    let lone = edited(&[], &[saved(energy, 1, None)]);
+    let chip_one = chip(&view(&lone), 1).clone();
+    assert_eq!(chip_one.lifted, None);
+    assert_eq!(chip_one.moving_face(), chip_one.face());
+
+    // A member of `{Frost +2 ×2 | Disintegration}` lifts a bare Frost.
+    let frost = [
+        with(named(1, ItemId::WandFrost), |r| {
+            r.upgrade = UpgradeRequirement::Exact(2);
+            r.alternative_group = Some(1);
+            r.identity_group = Some(1);
+        }),
+        with(named(2, ItemId::WandDisintegration), |r| {
+            r.alternative_group = Some(1);
+        }),
+        with(row(3, ItemKind::Wand), |r| r.identity_group = Some(1)),
+    ];
+    assert_eq!(
+        lifted_of(&frost, 1),
+        Some(lifted_face(
+            "Wand of Frost",
+            &[],
+            "Wand of Frost, any upgrade"
+        ))
+    );
+    assert_eq!(lifted_of(&frost, 2), None);
+
+    // A wildcard stack lifts its kind; a copy's own floor limit comes too.
+    let wildcard = edited(
+        &[],
+        &[saved(
+            Requirement {
+                upgrade: UpgradeRequirement::Exact(3),
+                ..Requirement::any(ItemKind::Wand)
+            },
+            2,
+            Some(9),
+        )],
+    );
+    assert_eq!(
+        lifted_of(&wildcard, 1),
+        Some(lifted_face(
+            "Any wand",
+            &["F≤9"],
+            "Any wand, any upgrade, floors 1–9"
+        ))
+    );
+    let melee = edited(
+        &[],
+        &[saved(
+            Requirement {
+                weapon_category: Some(WeaponCategory::Melee),
+                tier: TierRequirement::Exact(3),
+                ..Requirement::any(ItemKind::Weapon)
+            },
+            2,
+            None,
+        )],
+    );
+    assert_eq!(
+        lifted_of(&melee, 1),
+        Some(lifted_face(
+            "Any melee",
+            &[],
+            "Any melee weapon, any upgrade"
+        ))
+    );
+
+    // A combined level's ring lifts a plain ring, however it counts.
+    let counted = edited(
+        &[],
+        &[Edit::Save {
+            key: None,
+            requirement: named(0, ItemId::RingEnergy).requirement,
+            count: 3,
+            total: Some(11),
+            copy_depth: None,
+        }],
+    );
+    assert_eq!(chip(&view(&counted), 1).stack.total, Some(11));
+    assert_eq!(
+        lifted_of(&counted, 1),
+        Some(lifted_face(
+            "Ring of Energy",
+            &[],
+            "Ring of Energy, any upgrade"
+        ))
+    );
+
+    // Members sharing their stack each lift their own item.
+    let shared = [
+        with(named(1, ItemId::WandFrost), |r| {
+            r.alternative_group = Some(1);
+            r.identity_group = Some(1);
+        }),
+        with(named(2, ItemId::WandDisintegration), |r| {
+            r.alternative_group = Some(1);
+            r.identity_group = Some(1);
+        }),
+        with(row(3, ItemKind::Wand), |r| r.identity_group = Some(1)),
+    ];
+    assert_eq!(
+        lifted_of(&shared, 2),
+        Some(lifted_face(
+            "Wand of Disintegration",
+            &[],
+            "Wand of Disintegration, any upgrade"
+        ))
+    );
+}
+
 #[test]
 fn a_hidden_copys_problem_shows_on_its_entry_and_its_anchor() {
     // A hand-written repeat past the last floor folds into the spear's stack.
@@ -1628,4 +1802,84 @@ fn every_drop_leaves_what_a_removal_of_one_item_leaves() {
         }
     }
     assert!(compared > 256, "{compared} drops compared");
+}
+
+#[test]
+fn a_drag_carries_the_item_its_lifted_face_shows() {
+    // Generated lists, valid rows or not, as given or after a random edit,
+    // their cluster members often stacked (1,024 cases): a chip with copies
+    // lifts a face, one without none; the face is the item's that lands —
+    // the new member after every join its chip offers, the lone chip after
+    // a detach where it folds into no other chip.
+    let mut rng = Rng::new(0x0011_f7ed_face);
+    let (mut joins, mut detaches) = (0, 0);
+    for case in 0..1024 {
+        let mut rows = mixed_rows(&mut rng);
+        if case % 2 == 1 {
+            let edit = random_edit(&mut rng, &rows);
+            rows = apply(&rows, None, &[edit]).rows;
+        }
+        let members: Vec<u64> = view(&rows)
+            .items
+            .iter()
+            .filter(|item| item.cluster.is_some())
+            .flat_map(|item| item.members.clone())
+            .collect();
+        for key in members {
+            if rng.chance(75) {
+                let count = rng.range(2, STACK_MAX);
+                rows = apply(&rows, None, &[Edit::SetCount { key, count }]).rows;
+            }
+        }
+        let context = format!("case {case}: {rows:?}");
+        let board = view(&rows);
+        let before = visible(&board);
+        for chip in board.items.iter().flat_map(|item| &item.chips) {
+            assert_eq!(chip.lifted.is_none(), chip.copies.is_empty(), "{context}");
+            assert_eq!(
+                chip.moving_face(),
+                chip.lifted.clone().unwrap_or_else(|| chip.face()),
+                "{context}"
+            );
+            let Some(lifted) = &chip.lifted else {
+                continue;
+            };
+            let context = format!("{}: {context}", chip.key);
+            let landed = |edit: Edit| {
+                let result = apply(&rows, None, &[edit]);
+                let focus = result.focus.filter(|_| result.refused.is_none())?;
+                let after = view(&result.rows);
+                after
+                    .items
+                    .iter()
+                    .flat_map(|item| &item.chips)
+                    .find(|chip| chip.key == focus)
+                    .map(ChipView::face)
+            };
+            for &target in &chip.join {
+                let face = landed(Edit::Join {
+                    source: chip.key,
+                    target,
+                })
+                .expect("the joined item shows");
+                joins += 1;
+                assert_eq!(&face, lifted, "onto {target}: {context}");
+            }
+            if chip.can_detach {
+                let result = apply(&rows, None, &[Edit::Detach { key: chip.key }]);
+                if result.refused.is_some() || result.focus.is_some_and(|key| before.contains(&key))
+                {
+                    continue;
+                }
+                detaches += 1;
+                let face = landed(Edit::Detach { key: chip.key }).expect("the item shows");
+                assert_eq!(&face, lifted, "detached: {context}");
+            }
+        }
+    }
+    assert!(joins > 1000, "{joins} joins compared");
+    assert!(
+        detaches > 100,
+        "{joins} joins, {detaches} detaches compared"
+    );
 }

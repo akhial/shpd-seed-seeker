@@ -64,6 +64,21 @@
             ],
             "key": 5,
             "kind": "wand",
+            "lifted": {
+              "description": "Any wand, any upgrade",
+              "details": [
+                "any upgrade"
+              ],
+              "effect": null,
+              "family": "wand",
+              "item": null,
+              "kind": "wand",
+              "name": "Any wand",
+              "tags": [],
+              "title": "Any wand",
+              "trailing_tags": [],
+              "uncursed": false
+            },
             "name": "Any wand",
             "problem": null,
             "refuse": [],
@@ -133,6 +148,7 @@
             ],
             "key": 4,
             "kind": "ring",
+            "lifted": null,
             "name": "Any ring",
             "problem": null,
             "refuse": [],
@@ -183,6 +199,7 @@
             ],
             "key": 6,
             "kind": "armor",
+            "lifted": null,
             "name": "Any armor",
             "problem": null,
             "refuse": [],

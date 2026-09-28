@@ -1,32 +1,32 @@
 {
-  "about": "A +2 Spear ×2 dragged onto a Tier 3 weapon: a drag carries a bare copy, so a plain Spear joins, and the +2 Spear stays behind on its own.",
+  "about": "Frost +2 out of {Frost +2 ×2 | Disintegration}: a bare Wand of Frost leaves — the chip's lifted face — and the member keeps its +2 in the group at ×1: {Frost +2 | Disintegration} and Frost.",
   "envelope": "requirement_board",
   "request": {
     "edits": [
       {
-        "source": 1,
-        "target": 3,
-        "type": "join"
+        "key": 1,
+        "type": "detach"
       }
     ],
     "rows": [
       {
-        "item": "spear",
+        "alternative_group": 1,
+        "identity_group": 1,
+        "item": "wand_frost",
         "key": 1,
-        "kind": "weapon",
+        "kind": "wand",
         "upgrade": 2
       },
       {
-        "item": "spear",
+        "alternative_group": 1,
+        "item": "wand_disintegration",
         "key": 2,
-        "kind": "weapon"
+        "kind": "wand"
       },
       {
+        "identity_group": 1,
         "key": 3,
-        "kind": "weapon",
-        "tier": {
-          "exact": 3
-        }
+        "kind": "wand"
       }
     ]
   },
@@ -36,7 +36,7 @@
       "blanket": 0,
       "ordinary": 2
     },
-    "focus": 2,
+    "focus": 3,
     "items": [
       {
         "blanket": false,
@@ -46,27 +46,31 @@
               "count": null,
               "total": null
             },
-            "can_detach": false,
+            "can_detach": true,
             "copies": [],
-            "description": "Spear, exactly +2",
+            "description": "Wand of Frost, exactly +2",
             "details": [
               "exactly +2"
             ],
             "effect": null,
-            "family": "weapon",
-            "in_cluster": false,
-            "item": "spear",
+            "family": "wand",
+            "in_cluster": true,
+            "item": "wand_frost",
             "join": [
-              3,
-              2
+              3
             ],
             "key": 1,
-            "kind": "weapon",
+            "kind": "wand",
             "lifted": null,
-            "name": "Spear",
+            "name": "Wand of Frost",
             "problem": null,
             "refuse": [],
-            "relations": [],
+            "relations": [
+              {
+                "glyph": "or",
+                "text": "Wand of Disintegration"
+              }
+            ],
             "remaining_badges": null,
             "stack": {
               "can_change_count": true,
@@ -90,78 +94,7 @@
                 "tooltip": null
               }
             ],
-            "title": "Spear",
-            "trailing_tags": [],
-            "uncursed": false
-          }
-        ],
-        "cluster": null,
-        "extras": [],
-        "id": "r1",
-        "label": null,
-        "members": [
-          1
-        ],
-        "name": "Spear",
-        "problem": null
-      },
-      {
-        "blanket": false,
-        "chips": [
-          {
-            "badges": {
-              "count": null,
-              "total": null
-            },
-            "can_detach": true,
-            "copies": [],
-            "description": "Any Tier 3 weapon, any upgrade",
-            "details": [
-              "any upgrade"
-            ],
-            "effect": null,
-            "family": "weapon",
-            "in_cluster": true,
-            "item": null,
-            "join": [
-              1
-            ],
-            "key": 3,
-            "kind": "weapon",
-            "lifted": null,
-            "name": "Any weapon",
-            "problem": null,
-            "refuse": [],
-            "relations": [
-              {
-                "glyph": "or",
-                "text": "Spear"
-              }
-            ],
-            "remaining_badges": null,
-            "stack": {
-              "can_change_count": true,
-              "can_count_levels": false,
-              "can_grow": true,
-              "can_set_copy_depth": false,
-              "copy_depth": null,
-              "count": 1,
-              "count_max": 3,
-              "count_text": "×1",
-              "default_total": 1,
-              "level_capacity": 5,
-              "max": 3,
-              "total": null,
-              "total_text": "Σ ≥ 0"
-            },
-            "tags": [
-              {
-                "style": "plain",
-                "text": "T3",
-                "tooltip": null
-              }
-            ],
-            "title": "Any Tier 3 weapon",
+            "title": "Wand of Frost",
             "trailing_tags": [],
             "uncursed": false
           },
@@ -172,27 +105,27 @@
             },
             "can_detach": true,
             "copies": [],
-            "description": "Spear, any upgrade",
+            "description": "Wand of Disintegration, any upgrade",
             "details": [
               "any upgrade"
             ],
             "effect": null,
-            "family": "weapon",
+            "family": "wand",
             "in_cluster": true,
-            "item": "spear",
+            "item": "wand_disintegration",
             "join": [
-              1
+              3
             ],
             "key": 2,
-            "kind": "weapon",
+            "kind": "wand",
             "lifted": null,
-            "name": "Spear",
+            "name": "Wand of Disintegration",
             "problem": null,
             "refuse": [],
             "relations": [
               {
                 "glyph": "or",
-                "text": "Any weapon"
+                "text": "Wand of Frost"
               }
             ],
             "remaining_badges": null,
@@ -212,7 +145,7 @@
               "total_text": "Σ ≥ 0"
             },
             "tags": [],
-            "title": "Spear",
+            "title": "Wand of Disintegration",
             "trailing_tags": [],
             "uncursed": false
           }
@@ -222,10 +155,71 @@
         "id": "c1",
         "label": "Any of 2",
         "members": [
-          3,
+          1,
           2
         ],
-        "name": "Any weapon or Spear",
+        "name": "Wand of Frost or Wand of Disintegration",
+        "problem": null
+      },
+      {
+        "blanket": false,
+        "chips": [
+          {
+            "badges": {
+              "count": null,
+              "total": null
+            },
+            "can_detach": false,
+            "copies": [],
+            "description": "Wand of Frost, any upgrade",
+            "details": [
+              "any upgrade"
+            ],
+            "effect": null,
+            "family": "wand",
+            "in_cluster": false,
+            "item": "wand_frost",
+            "join": [
+              1,
+              2
+            ],
+            "key": 3,
+            "kind": "wand",
+            "lifted": null,
+            "name": "Wand of Frost",
+            "problem": null,
+            "refuse": [],
+            "relations": [],
+            "remaining_badges": null,
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 3,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 5,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [],
+            "title": "Wand of Frost",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [],
+        "id": "r3",
+        "label": null,
+        "members": [
+          3
+        ],
+        "name": "Wand of Frost",
         "problem": null
       }
     ],
@@ -236,24 +230,22 @@
     "resin": null,
     "rows": [
       {
-        "item": "spear",
+        "alternative_group": 1,
+        "item": "wand_frost",
         "key": 1,
-        "kind": "weapon",
+        "kind": "wand",
         "upgrade": 2
       },
       {
-        "alternative_group": 1,
+        "item": "wand_frost",
         "key": 3,
-        "kind": "weapon",
-        "tier": {
-          "exact": 3
-        }
+        "kind": "wand"
       },
       {
         "alternative_group": 1,
-        "item": "spear",
+        "item": "wand_disintegration",
         "key": 2,
-        "kind": "weapon"
+        "kind": "wand"
       }
     ]
   }

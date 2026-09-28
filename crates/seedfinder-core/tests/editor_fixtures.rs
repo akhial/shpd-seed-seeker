@@ -381,6 +381,50 @@ fn board_fixtures(fixtures: &mut Fixtures) {
         }),
     );
     fixtures.add(
+        "board-join-bare-copy",
+        "The reported drag: Ring of Energy +4 ×3 dropped on Wand of Disintegration. The item a drag carries is the chip's lifted face, a bare Ring of Energy — the copy remove_one takes — so {Disintegration | Ring of Energy} forms and the chip stays Ring of Energy +4 ×2.",
+        Board,
+        &json!({
+            "rows": [
+                {"key": 1, "kind": "ring", "item": "ring_energy", "upgrade": 4},
+                {"key": 2, "kind": "ring", "item": "ring_energy"},
+                {"key": 3, "kind": "ring", "item": "ring_energy"},
+                {"key": 4, "kind": "wand", "item": "wand_disintegration"},
+            ],
+            "edits": [{"type": "join", "source": 1, "target": 4}],
+        }),
+    );
+    fixtures.add(
+        "board-join-bare-copy-round-trip",
+        "The same join, then the joined Ring of Energy (key 3) detached: it folds back into Ring of Energy +4 ×3, and Disintegration is alone again.",
+        Board,
+        &json!({
+            "rows": [
+                {"key": 1, "kind": "ring", "item": "ring_energy", "upgrade": 4},
+                {"key": 2, "kind": "ring", "item": "ring_energy"},
+                {"key": 3, "kind": "ring", "item": "ring_energy"},
+                {"key": 4, "kind": "wand", "item": "wand_disintegration"},
+            ],
+            "edits": [
+                {"type": "join", "source": 1, "target": 4},
+                {"type": "detach", "key": 3},
+            ],
+        }),
+    );
+    fixtures.add(
+        "board-detach-bare-copy",
+        "Frost +2 out of {Frost +2 ×2 | Disintegration}: a bare Wand of Frost leaves — the chip's lifted face — and the member keeps its +2 in the group at ×1: {Frost +2 | Disintegration} and Frost.",
+        Board,
+        &json!({
+            "rows": [
+                {"key": 1, "kind": "wand", "item": "wand_frost", "upgrade": 2, "alternative_group": 1, "identity_group": 1},
+                {"key": 2, "kind": "wand", "item": "wand_disintegration", "alternative_group": 1},
+                {"key": 3, "kind": "wand", "identity_group": 1},
+            ],
+            "edits": [{"type": "detach", "key": 1}],
+        }),
+    );
+    fixtures.add(
         "board-remove-one-member",
         "One item of the +2 Frost ×3 in {Frost +2 ×3 | Disintegration} dropped on the remove target: Frost steps down to ×2, keeping its upgrade and its label.",
         Board,
@@ -409,7 +453,7 @@ fn board_fixtures(fixtures: &mut Fixtures) {
     );
     fixtures.add(
         "board-remaining-badges",
-        "A Ring of Energy +4 ×3 at rest: while one ring is dragged away, its origin shows remaining_badges, the ×2 a remove_one would leave.",
+        "A Ring of Energy +4 ×3 at rest: a drag of it carries lifted, a bare Ring of Energy, while its origin shows remaining_badges, the +4 ×2 a remove_one would leave.",
         Board,
         &json!({
             "rows": [

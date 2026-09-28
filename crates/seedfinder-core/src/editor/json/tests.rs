@@ -324,6 +324,47 @@ fn the_board_envelope_says_what_the_typed_editor_says() {
 }
 
 #[test]
+fn a_chip_lifts_the_face_of_the_bare_copy_a_drag_carries() {
+    // The FACE fields, in a lifted face and in the chip of the item itself.
+    const FACE: [&str; 11] = [
+        "name",
+        "title",
+        "item",
+        "kind",
+        "family",
+        "tags",
+        "trailing_tags",
+        "effect",
+        "uncursed",
+        "details",
+        "description",
+    ];
+    let chip = |request: &Value| board_json(request)["items"][0]["chips"][0].clone();
+    let stack = chip(&json!({"rows": [
+        {"key": 1, "kind": "ring", "item": "ring_energy", "upgrade": 4, "uncursed": true},
+        {"key": 2, "kind": "ring", "item": "ring_energy", "max_depth": 9},
+        {"key": 3, "kind": "ring", "item": "ring_energy", "max_depth": 9},
+    ]}));
+    let lifted = stack["lifted"].as_object().expect("a stack lifts a copy");
+    assert_eq!(
+        lifted.keys().map(String::as_str).collect::<BTreeSet<_>>(),
+        FACE.into_iter().collect()
+    );
+    let copy = chip(&json!({"rows": [
+        {"key": 1, "kind": "ring", "item": "ring_energy", "max_depth": 9},
+    ]}));
+    for field in FACE {
+        assert_eq!(lifted[field], copy[field], "{field}");
+    }
+    assert_eq!(
+        lifted["description"],
+        "Ring of Energy, any upgrade, floors 1–9"
+    );
+    assert_eq!(stack["tags"][0]["text"], "+4");
+    assert_eq!(copy["lifted"], Value::Null);
+}
+
+#[test]
 fn a_request_without_edits_echoes_its_rows() {
     let rows = [
         exact(named(1, ItemId::RingMight), 2),

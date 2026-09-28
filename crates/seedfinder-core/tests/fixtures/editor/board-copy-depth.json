@@ -58,6 +58,28 @@
             "join": [],
             "key": 1,
             "kind": "ring",
+            "lifted": {
+              "description": "Ring of Might, any upgrade, floors 1–9",
+              "details": [
+                "any upgrade",
+                "floors 1–9"
+              ],
+              "effect": null,
+              "family": "ring",
+              "item": "ring_might",
+              "kind": "ring",
+              "name": "Ring of Might",
+              "tags": [
+                {
+                  "style": "plain",
+                  "text": "F≤9",
+                  "tooltip": null
+                }
+              ],
+              "title": "Ring of Might",
+              "trailing_tags": [],
+              "uncursed": false
+            },
             "name": "Ring of Might",
             "problem": null,
             "refuse": [],

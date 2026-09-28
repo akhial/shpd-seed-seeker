@@ -1656,6 +1656,7 @@ fn preview(attempt: &Attempt) -> Option<ChipView> {
     chip.key = 0;
     chip.copies.clear();
     chip.remaining_badges = None;
+    chip.lifted = None;
     chip.join.clear();
     chip.refuse.clear();
     Some(chip)

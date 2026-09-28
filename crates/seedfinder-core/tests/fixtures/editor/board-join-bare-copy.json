@@ -1,32 +1,35 @@
 {
-  "about": "A +2 Spear ×2 dragged onto a Tier 3 weapon: a drag carries a bare copy, so a plain Spear joins, and the +2 Spear stays behind on its own.",
+  "about": "The reported drag: Ring of Energy +4 ×3 dropped on Wand of Disintegration. The item a drag carries is the chip's lifted face, a bare Ring of Energy — the copy remove_one takes — so {Disintegration | Ring of Energy} forms and the chip stays Ring of Energy +4 ×2.",
   "envelope": "requirement_board",
   "request": {
     "edits": [
       {
         "source": 1,
-        "target": 3,
+        "target": 4,
         "type": "join"
       }
     ],
     "rows": [
       {
-        "item": "spear",
+        "item": "ring_energy",
         "key": 1,
-        "kind": "weapon",
-        "upgrade": 2
+        "kind": "ring",
+        "upgrade": 4
       },
       {
-        "item": "spear",
+        "item": "ring_energy",
         "key": 2,
-        "kind": "weapon"
+        "kind": "ring"
       },
       {
+        "item": "ring_energy",
         "key": 3,
-        "kind": "weapon",
-        "tier": {
-          "exact": 3
-        }
+        "kind": "ring"
+      },
+      {
+        "item": "wand_disintegration",
+        "key": 4,
+        "kind": "wand"
       }
     ]
   },
@@ -36,49 +39,77 @@
       "blanket": 0,
       "ordinary": 2
     },
-    "focus": 2,
+    "focus": 3,
     "items": [
       {
         "blanket": false,
         "chips": [
           {
             "badges": {
-              "count": null,
+              "count": {
+                "compact_text": "×2",
+                "text": "×2",
+                "tooltip": "2 of the same kind"
+              },
               "total": null
             },
             "can_detach": false,
-            "copies": [],
-            "description": "Spear, exactly +2",
-            "details": [
-              "exactly +2"
-            ],
-            "effect": null,
-            "family": "weapon",
-            "in_cluster": false,
-            "item": "spear",
-            "join": [
-              3,
+            "copies": [
               2
             ],
+            "description": "Ring of Energy, exactly +4",
+            "details": [
+              "exactly +4"
+            ],
+            "effect": null,
+            "family": "ring",
+            "in_cluster": false,
+            "item": "ring_energy",
+            "join": [
+              4,
+              3
+            ],
             "key": 1,
-            "kind": "weapon",
-            "lifted": null,
-            "name": "Spear",
+            "kind": "ring",
+            "lifted": {
+              "description": "Ring of Energy, any upgrade",
+              "details": [
+                "any upgrade"
+              ],
+              "effect": null,
+              "family": "ring",
+              "item": "ring_energy",
+              "kind": "ring",
+              "name": "Ring of Energy",
+              "tags": [],
+              "title": "Ring of Energy",
+              "trailing_tags": [],
+              "uncursed": false
+            },
+            "name": "Ring of Energy",
             "problem": null,
             "refuse": [],
-            "relations": [],
-            "remaining_badges": null,
+            "relations": [
+              {
+                "glyph": "times",
+                "text": "2 of the same kind — the extra copies: any upgrade, any floor"
+              }
+            ],
+            "remaining_badges": {
+              "count": null,
+              "total": null
+            },
             "stack": {
               "can_change_count": true,
-              "can_count_levels": false,
+              "can_count_levels": true,
               "can_grow": true,
-              "can_set_copy_depth": false,
+              "can_set_copy_depth": true,
               "copy_depth": null,
-              "count": 1,
+              "count": 2,
               "count_max": 3,
-              "count_text": "×1",
-              "default_total": 1,
-              "level_capacity": 5,
+              "count_text": "×2",
+              "default_total": 2,
+              "level_capacity": 8,
               "max": 3,
               "total": null,
               "total_text": "Σ ≥ 0"
@@ -86,23 +117,25 @@
             "tags": [
               {
                 "style": "upgrade",
-                "text": "+2",
+                "text": "+4",
                 "tooltip": null
               }
             ],
-            "title": "Spear",
+            "title": "Ring of Energy",
             "trailing_tags": [],
             "uncursed": false
           }
         ],
         "cluster": null,
-        "extras": [],
+        "extras": [
+          2
+        ],
         "id": "r1",
         "label": null,
         "members": [
           1
         ],
-        "name": "Spear",
+        "name": "Ring of Energy",
         "problem": null
       },
       {
@@ -115,84 +148,27 @@
             },
             "can_detach": true,
             "copies": [],
-            "description": "Any Tier 3 weapon, any upgrade",
+            "description": "Wand of Disintegration, any upgrade",
             "details": [
               "any upgrade"
             ],
             "effect": null,
-            "family": "weapon",
+            "family": "wand",
             "in_cluster": true,
-            "item": null,
+            "item": "wand_disintegration",
             "join": [
               1
             ],
-            "key": 3,
-            "kind": "weapon",
+            "key": 4,
+            "kind": "wand",
             "lifted": null,
-            "name": "Any weapon",
+            "name": "Wand of Disintegration",
             "problem": null,
             "refuse": [],
             "relations": [
               {
                 "glyph": "or",
-                "text": "Spear"
-              }
-            ],
-            "remaining_badges": null,
-            "stack": {
-              "can_change_count": true,
-              "can_count_levels": false,
-              "can_grow": true,
-              "can_set_copy_depth": false,
-              "copy_depth": null,
-              "count": 1,
-              "count_max": 3,
-              "count_text": "×1",
-              "default_total": 1,
-              "level_capacity": 5,
-              "max": 3,
-              "total": null,
-              "total_text": "Σ ≥ 0"
-            },
-            "tags": [
-              {
-                "style": "plain",
-                "text": "T3",
-                "tooltip": null
-              }
-            ],
-            "title": "Any Tier 3 weapon",
-            "trailing_tags": [],
-            "uncursed": false
-          },
-          {
-            "badges": {
-              "count": null,
-              "total": null
-            },
-            "can_detach": true,
-            "copies": [],
-            "description": "Spear, any upgrade",
-            "details": [
-              "any upgrade"
-            ],
-            "effect": null,
-            "family": "weapon",
-            "in_cluster": true,
-            "item": "spear",
-            "join": [
-              1
-            ],
-            "key": 2,
-            "kind": "weapon",
-            "lifted": null,
-            "name": "Spear",
-            "problem": null,
-            "refuse": [],
-            "relations": [
-              {
-                "glyph": "or",
-                "text": "Any weapon"
+                "text": "Ring of Energy"
               }
             ],
             "remaining_badges": null,
@@ -212,7 +188,58 @@
               "total_text": "Σ ≥ 0"
             },
             "tags": [],
-            "title": "Spear",
+            "title": "Wand of Disintegration",
+            "trailing_tags": [],
+            "uncursed": false
+          },
+          {
+            "badges": {
+              "count": null,
+              "total": null
+            },
+            "can_detach": true,
+            "copies": [],
+            "description": "Ring of Energy, any upgrade",
+            "details": [
+              "any upgrade"
+            ],
+            "effect": null,
+            "family": "ring",
+            "in_cluster": true,
+            "item": "ring_energy",
+            "join": [
+              1
+            ],
+            "key": 3,
+            "kind": "ring",
+            "lifted": null,
+            "name": "Ring of Energy",
+            "problem": null,
+            "refuse": [],
+            "relations": [
+              {
+                "glyph": "or",
+                "text": "Wand of Disintegration"
+              }
+            ],
+            "remaining_badges": null,
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 3,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 5,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [],
+            "title": "Ring of Energy",
             "trailing_tags": [],
             "uncursed": false
           }
@@ -222,38 +249,41 @@
         "id": "c1",
         "label": "Any of 2",
         "members": [
-          3,
-          2
+          4,
+          3
         ],
-        "name": "Any weapon or Spear",
+        "name": "Wand of Disintegration or Ring of Energy",
         "problem": null
       }
     ],
-    "next_key": 4,
+    "next_key": 5,
     "problems": [],
     "refused": null,
     "rekeyed": [],
     "resin": null,
     "rows": [
       {
-        "item": "spear",
+        "item": "ring_energy",
         "key": 1,
-        "kind": "weapon",
-        "upgrade": 2
+        "kind": "ring",
+        "upgrade": 4
       },
       {
-        "alternative_group": 1,
-        "key": 3,
-        "kind": "weapon",
-        "tier": {
-          "exact": 3
-        }
-      },
-      {
-        "alternative_group": 1,
-        "item": "spear",
+        "item": "ring_energy",
         "key": 2,
-        "kind": "weapon"
+        "kind": "ring"
+      },
+      {
+        "alternative_group": 1,
+        "item": "wand_disintegration",
+        "key": 4,
+        "kind": "wand"
+      },
+      {
+        "alternative_group": 1,
+        "item": "ring_energy",
+        "key": 3,
+        "kind": "ring"
       }
     ]
   }

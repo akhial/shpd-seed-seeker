@@ -653,6 +653,7 @@
         "join": [],
         "key": 0,
         "kind": "melee_weapon",
+        "lifted": null,
         "name": "Any melee",
         "problem": null,
         "refuse": [],

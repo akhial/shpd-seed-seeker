@@ -73,6 +73,21 @@
             ],
             "key": 1,
             "kind": "ring",
+            "lifted": {
+              "description": "Ring of Might, any upgrade",
+              "details": [
+                "any upgrade"
+              ],
+              "effect": null,
+              "family": "ring",
+              "item": "ring_might",
+              "kind": "ring",
+              "name": "Ring of Might",
+              "tags": [],
+              "title": "Ring of Might",
+              "trailing_tags": [],
+              "uncursed": false
+            },
             "name": "Ring of Might",
             "problem": "A stack must share one combined level.",
             "refuse": [],
@@ -143,6 +158,7 @@
             ],
             "key": 2,
             "kind": "wand",
+            "lifted": null,
             "name": "Any wand",
             "problem": "Requirement floor must be 1 through 24.",
             "refuse": [],
@@ -206,6 +222,7 @@
             "join": [],
             "key": 4,
             "kind": "armor",
+            "lifted": null,
             "name": "Any armor",
             "problem": "A blanket requirement cannot request extra copies, combined levels, or trinket selection.",
             "refuse": [],

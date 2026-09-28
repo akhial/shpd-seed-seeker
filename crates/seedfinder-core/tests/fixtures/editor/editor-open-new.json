@@ -731,6 +731,7 @@
         "join": [],
         "key": 0,
         "kind": "weapon",
+        "lifted": null,
         "name": "Any weapon",
         "problem": null,
         "refuse": [],

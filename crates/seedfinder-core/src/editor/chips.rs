@@ -24,7 +24,7 @@ use crate::query::{
 use super::Row;
 use super::board::{
     BoardItem, ChipStack, Edit, HeldLabels, ItemKey, JoinCandidates, Refusal, apply_holding,
-    board_items, join_candidates_holding,
+    board_items, join_candidates_holding, lifted,
 };
 use super::labels::{
     ARCANE_RESIN, CopyFloors, EXCLUDED_FROM_RESIN, KindName, NO_RESIN, RESIN_AUTO,
@@ -175,6 +175,54 @@ pub struct Relation {
     pub text: String,
 }
 
+/// What a chip shows of one item: everything drawn on it but its badges,
+/// relations and state — the fields [`ChipView`] carries for its own row,
+/// and [`ChipView::lifted`] for the item a drag of it carries.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ChipFace {
+    /// The short name beside the sprite: the item, or `Any melee`.
+    pub name: String,
+    /// The full title: the item, or `Any Tier 3+ melee weapon`.
+    pub title: String,
+    pub item: Option<ItemId>,
+    pub kind: KindName,
+    pub family: ItemKind,
+    /// Qualifiers after the name, before the effect cue ([`chip_tags`]).
+    pub tags: Vec<Tag>,
+    /// Qualifiers after the effect cue ([`chip_trailing_tags`]).
+    pub trailing_tags: Vec<Tag>,
+    pub effect: Option<EffectBadge>,
+    /// Whether cursed items are ruled out (drawn as a check mark).
+    pub uncursed: bool,
+    /// What the item is asked for, as parts ([`chip_details`]).
+    pub details: Vec<String>,
+    /// The accessibility label: the title, then the details.
+    pub description: String,
+}
+
+impl ChipFace {
+    /// The face of a chip asking for `requirement`; `counting_levels` when
+    /// its stack counts levels, whose total speaks for the upgrades.
+    #[must_use]
+    pub fn of(requirement: &Requirement, counting_levels: bool) -> Self {
+        let title = requirement_title(requirement);
+        let details = chip_details(requirement, counting_levels);
+        Self {
+            name: requirement_name(requirement).to_owned(),
+            description: chip_description(&title, &details),
+            title,
+            item: requirement.item,
+            kind: KindName::of_requirement(requirement),
+            family: requirement.kind,
+            tags: chip_tags(requirement),
+            trailing_tags: chip_trailing_tags(requirement),
+            effect: effect_badge(requirement),
+            uncursed: requirement.require_uncursed,
+            details,
+        }
+    }
+}
+
 /// One chip: a visible row, alone or as a cluster member.
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[allow(clippy::struct_excessive_bools)] // Independent facts about one chip.
@@ -209,6 +257,13 @@ pub struct ChipView {
     /// [`super::Edit::RemoveOne`] of that item leaves. `None` when the chip
     /// has no copies: the whole chip leaves.
     pub remaining_badges: Option<Badges>,
+    /// The face of the item a drag of the chip carries, when it has copies:
+    /// a bare copy of it — its item, or its kind for a wildcard stack, with
+    /// that copy's floor limit — which [`super::Edit::Join`] and
+    /// [`super::Edit::Detach`] move while the chip keeps its constraints.
+    /// `None` when the chip has no copies: the chip itself moves. The
+    /// moving chip draws [`ChipView::moving_face`].
+    pub lifted: Option<ChipFace>,
     /// The keys of the hidden copies behind the chip's badge. Members whose
     /// stacks are alike share theirs.
     pub copies: Vec<u64>,
@@ -228,6 +283,33 @@ pub struct ChipView {
     pub join: Vec<u64>,
     /// The visible rows a join onto is refused, with the reason to show.
     pub refuse: Vec<(u64, Refusal)>,
+}
+
+impl ChipView {
+    /// The chip's own face: its name, title, tags, effect cue and details.
+    #[must_use]
+    pub fn face(&self) -> ChipFace {
+        ChipFace {
+            name: self.name.clone(),
+            title: self.title.clone(),
+            item: self.item,
+            kind: self.kind,
+            family: self.family,
+            tags: self.tags.clone(),
+            trailing_tags: self.trailing_tags.clone(),
+            effect: self.effect.clone(),
+            uncursed: self.uncursed,
+            details: self.details.clone(),
+            description: self.description.clone(),
+        }
+    }
+
+    /// The face a drag's moving chip draws, without badges: the item it
+    /// carries ([`ChipView::lifted`]), else the chip's own.
+    #[must_use]
+    pub fn moving_face(&self) -> ChipFace {
+        self.lifted.clone().unwrap_or_else(|| self.face())
+    }
 }
 
 /// The query's Arcane Resin condition, as the resin chip and the
@@ -675,25 +757,36 @@ fn chip_view(
     held: &HeldLabels,
 ) -> ChipView {
     let row = &rows[stack.index];
-    let requirement = &row.requirement;
-    let title = requirement_title(requirement);
-    let details = chip_details(requirement, stack.total.is_some());
+    let ChipFace {
+        name,
+        title,
+        item: item_id,
+        kind,
+        family,
+        tags,
+        trailing_tags,
+        effect,
+        uncursed,
+        details,
+        description,
+    } = ChipFace::of(&row.requirement, stack.total.is_some());
     ChipView {
         key: row.key,
-        name: requirement_name(requirement).to_owned(),
-        description: chip_description(&title, &details),
+        name,
         title,
-        item: requirement.item,
-        kind: KindName::of_requirement(requirement),
-        family: requirement.kind,
-        tags: chip_tags(requirement),
-        trailing_tags: chip_trailing_tags(requirement),
-        effect: effect_badge(requirement),
-        uncursed: requirement.require_uncursed,
+        item: item_id,
+        kind,
+        family,
+        tags,
+        trailing_tags,
+        effect,
+        uncursed,
         details,
+        description,
         relations: relations(rows, item, stack),
         badges: badges(stack),
         remaining_badges: remaining_badges(rows, stack, held),
+        lifted: lifted(rows, row.key).map(|carried| ChipFace::of(&carried, false)),
         copies: stack.copies.iter().map(|&copy| rows[copy].key).collect(),
         stack: stack_view(rows, stack),
         problem,

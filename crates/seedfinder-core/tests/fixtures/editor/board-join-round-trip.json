@@ -106,6 +106,21 @@
             ],
             "key": 1,
             "kind": "wand",
+            "lifted": {
+              "description": "Wand of Disintegration, any upgrade",
+              "details": [
+                "any upgrade"
+              ],
+              "effect": null,
+              "family": "wand",
+              "item": "wand_disintegration",
+              "kind": "wand",
+              "name": "Wand of Disintegration",
+              "tags": [],
+              "title": "Wand of Disintegration",
+              "trailing_tags": [],
+              "uncursed": false
+            },
             "name": "Wand of Disintegration",
             "problem": null,
             "refuse": [],
@@ -179,6 +194,7 @@
             ],
             "key": 2,
             "kind": "wand",
+            "lifted": null,
             "name": "Wand of Lightning",
             "problem": null,
             "refuse": [],
@@ -249,6 +265,28 @@
             ],
             "key": 3,
             "kind": "ring",
+            "lifted": {
+              "description": "Ring of Energy, any upgrade, floors 1–20",
+              "details": [
+                "any upgrade",
+                "floors 1–20"
+              ],
+              "effect": null,
+              "family": "ring",
+              "item": "ring_energy",
+              "kind": "ring",
+              "name": "Ring of Energy",
+              "tags": [
+                {
+                  "style": "plain",
+                  "text": "F≤20",
+                  "tooltip": null
+                }
+              ],
+              "title": "Ring of Energy",
+              "trailing_tags": [],
+              "uncursed": false
+            },
             "name": "Ring of Energy",
             "problem": null,
             "refuse": [],
@@ -333,6 +371,7 @@
             ],
             "key": 6,
             "kind": "armor",
+            "lifted": null,
             "name": "Plate Armor",
             "problem": null,
             "refuse": [],
@@ -402,6 +441,7 @@
             ],
             "key": 7,
             "kind": "wand",
+            "lifted": null,
             "name": "Wand of Frost",
             "problem": null,
             "refuse": [],
@@ -465,6 +505,7 @@
             ],
             "key": 8,
             "kind": "wand",
+            "lifted": null,
             "name": "Any wand",
             "problem": null,
             "refuse": [],

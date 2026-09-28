@@ -1,5 +1,5 @@
 {
-  "about": "A Ring of Energy +4 ×3 at rest: while one ring is dragged away, its origin shows remaining_badges, the ×2 a remove_one would leave.",
+  "about": "A Ring of Energy +4 ×3 at rest: a drag of it carries lifted, a bare Ring of Energy, while its origin shows remaining_badges, the +4 ×2 a remove_one would leave.",
   "envelope": "requirement_board",
   "request": {
     "rows": [
@@ -57,6 +57,21 @@
             "join": [],
             "key": 1,
             "kind": "ring",
+            "lifted": {
+              "description": "Ring of Energy, any upgrade",
+              "details": [
+                "any upgrade"
+              ],
+              "effect": null,
+              "family": "ring",
+              "item": "ring_energy",
+              "kind": "ring",
+              "name": "Ring of Energy",
+              "tags": [],
+              "title": "Ring of Energy",
+              "trailing_tags": [],
+              "uncursed": false
+            },
             "name": "Ring of Energy",
             "problem": null,
             "refuse": [],

@@ -50,12 +50,13 @@ use super::draft::save_holding;
 use super::labels::{count_text, total_text};
 use super::problems::Unread;
 use super::{
-    Badge, Badges, BoardView, Change, ChipView, Choice, Draft, Edit, EffectBadge, EffectChoice,
-    EffectControl, EffectGroup, EffectMode, FloorToggle, Form, FormMode, ItemChoice, ItemView,
-    KindName, ModeRange, Opt, Origin, Problem, ProblemScope, RangeToggle, Refusal, Relation,
-    RelationGlyph, ResinAmount, ResinChip, ResinControl, ResinDraft, ResinOutcome, ResinState, Row,
-    STACK_MAX, SaveResult, StackControl, StackView, Tag, TagStyle, TierMode, Toggle, UpgradeMode,
-    change, compact_alternative_labels, form, next_key, open, redirects, repair_keys,
+    Badge, Badges, BoardView, Change, ChipFace, ChipView, Choice, Draft, Edit, EffectBadge,
+    EffectChoice, EffectControl, EffectGroup, EffectMode, FloorToggle, Form, FormMode, ItemChoice,
+    ItemView, KindName, ModeRange, Opt, Origin, Problem, ProblemScope, RangeToggle, Refusal,
+    Relation, RelationGlyph, ResinAmount, ResinChip, ResinControl, ResinDraft, ResinOutcome,
+    ResinState, Row, STACK_MAX, SaveResult, StackControl, StackView, Tag, TagStyle, TierMode,
+    Toggle, UpgradeMode, change, compact_alternative_labels, form, next_key, open, redirects,
+    repair_keys,
 };
 
 /// The chip name of a row the codec could not read.
@@ -1669,6 +1670,7 @@ fn chip_value(chip: &ChipView) -> Value {
         relations,
         badges,
         remaining_badges,
+        lifted,
         copies,
         stack,
         description,
@@ -1722,12 +1724,44 @@ fn chip_value(chip: &ChipView) -> Value {
             "remaining_badges",
             remaining_badges.as_ref().map_or(Value::Null, badges_value),
         ),
+        ("lifted", lifted.as_ref().map_or(Value::Null, face_value)),
         ("copies", copies.as_slice().into()),
         ("stack", stack_value(stack)),
         ("in_cluster", (*in_cluster).into()),
         ("can_detach", (*can_detach).into()),
         ("join", join.as_slice().into()),
         ("refuse", refuse),
+    ])
+}
+
+/// A FACE: what a chip shows of one item, the fields a CHIP carries for
+/// its own row.
+fn face_value(face: &ChipFace) -> Value {
+    let ChipFace {
+        name,
+        title,
+        item: item_id,
+        kind,
+        family,
+        tags: leading,
+        trailing_tags,
+        effect,
+        uncursed,
+        details,
+        description,
+    } = face;
+    object(vec![
+        ("name", name.as_str().into()),
+        ("title", title.as_str().into()),
+        ("item", item_value(*item_id)),
+        ("kind", kind.name().into()),
+        ("family", kind_name(*family).into()),
+        ("tags", tags(leading)),
+        ("trailing_tags", tags(trailing_tags)),
+        ("effect", effect.as_ref().map_or(Value::Null, effect_value)),
+        ("uncursed", (*uncursed).into()),
+        ("details", details.as_slice().into()),
+        ("description", description.as_str().into()),
     ])
 }
 
@@ -1808,6 +1842,7 @@ fn unreadable_item(raw: &Raw) -> Value {
             object(vec![("count", Value::Null), ("total", Value::Null)]),
         ),
         ("remaining_badges", Value::Null),
+        ("lifted", Value::Null),
         ("copies", none()),
         ("stack", stack),
         ("in_cluster", false.into()),

@@ -1603,6 +1603,34 @@ const fn unlabelled_chip(requirement: Requirement) -> Requirement {
     }
 }
 
+/// The requirement of the item a drag of the visible row `key` carries, as
+/// [`Edit::Join`] and [`Edit::Detach`] move it ([`lift`]): a bare copy of
+/// the chip, or `None` when the chip has no copies and moves itself.
+///
+/// The edits read the list in its canonical encoding, and so does this. A
+/// chip only a list never normalized gives copies may have none there, or
+/// fold into another chip's stack; the row itself then moves, which this
+/// names too.
+pub(crate) fn lifted(rows: &[Row], key: u64) -> Option<Requirement> {
+    let written = Board::new(rows);
+    let index = index_of(rows, key)?;
+    if written.stack(index)?.copies.is_empty() {
+        return None;
+    }
+    let next = canonical(rows);
+    let board = Board::new(&next);
+    let Some((index, item)) = board.member(&next, key) else {
+        return Some(unlabelled_chip(rows[index].requirement));
+    };
+    let chip = &next[index].requirement;
+    Some(
+        match item.stack(index).and_then(|stack| stack.copies.last()) {
+            Some(&last) => carried_copy(chip, &next[last].requirement),
+            None => unlabelled_chip(*chip),
+        },
+    )
+}
+
 /// Takes one item off the chip at `index` of `item`, as [`Edit::RemoveOne`]
 /// does: its last copy. A member's stack is restacked one fewer
 /// ([`restack_member`]); a lone stack's last copy goes, its combined level
@@ -1963,7 +1991,7 @@ fn joined(
         }
     }
     // The target's rows changed in place only, so the source is found again
-    // on them.
+    // on them, and lifts the item [`lifted`] names.
     let (mut next, moved) = match lift(next, source_key, keys, held) {
         Ok(lifted) => lifted,
         Err(refusal) => return (Step::Refused(refusal), source_key),

@@ -56,6 +56,7 @@
             ],
             "key": 1,
             "kind": "wand",
+            "lifted": null,
             "name": "Any wand",
             "problem": null,
             "refuse": [],
@@ -121,6 +122,28 @@
             ],
             "key": 5,
             "kind": "thrown_weapon",
+            "lifted": {
+              "description": "Any thrown weapon, any upgrade, floors 1–6",
+              "details": [
+                "any upgrade",
+                "floors 1–6"
+              ],
+              "effect": null,
+              "family": "weapon",
+              "item": null,
+              "kind": "thrown_weapon",
+              "name": "Any thrown",
+              "tags": [
+                {
+                  "style": "plain",
+                  "text": "F≤6",
+                  "tooltip": null
+                }
+              ],
+              "title": "Any thrown weapon",
+              "trailing_tags": [],
+              "uncursed": false
+            },
             "name": "Any thrown",
             "problem": null,
             "refuse": [],

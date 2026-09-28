@@ -76,6 +76,21 @@
             ],
             "key": 1,
             "kind": "wand",
+            "lifted": {
+              "description": "Any wand, any upgrade",
+              "details": [
+                "any upgrade"
+              ],
+              "effect": null,
+              "family": "wand",
+              "item": null,
+              "kind": "wand",
+              "name": "Any wand",
+              "tags": [],
+              "title": "Any wand",
+              "trailing_tags": [],
+              "uncursed": false
+            },
             "name": "Any wand",
             "problem": null,
             "refuse": [],
@@ -159,6 +174,21 @@
             ],
             "key": 3,
             "kind": "ring",
+            "lifted": {
+              "description": "Ring of Might, any upgrade",
+              "details": [
+                "any upgrade"
+              ],
+              "effect": null,
+              "family": "ring",
+              "item": "ring_might",
+              "kind": "ring",
+              "name": "Ring of Might",
+              "tags": [],
+              "title": "Ring of Might",
+              "trailing_tags": [],
+              "uncursed": false
+            },
             "name": "Ring of Might",
             "problem": null,
             "refuse": [],

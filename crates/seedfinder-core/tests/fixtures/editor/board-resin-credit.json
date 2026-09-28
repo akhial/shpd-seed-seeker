@@ -48,6 +48,7 @@
             "join": [],
             "key": 1,
             "kind": "wand",
+            "lifted": null,
             "name": "Wand of Frost",
             "problem": null,
             "refuse": [],

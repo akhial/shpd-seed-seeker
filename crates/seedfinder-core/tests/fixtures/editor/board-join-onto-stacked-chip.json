@@ -62,6 +62,21 @@
             "join": [],
             "key": 1,
             "kind": "wand",
+            "lifted": {
+              "description": "Wand of Frost, any upgrade",
+              "details": [
+                "any upgrade"
+              ],
+              "effect": null,
+              "family": "wand",
+              "item": "wand_frost",
+              "kind": "wand",
+              "name": "Wand of Frost",
+              "tags": [],
+              "title": "Wand of Frost",
+              "trailing_tags": [],
+              "uncursed": false
+            },
             "name": "Wand of Frost",
             "problem": null,
             "refuse": [],
@@ -117,6 +132,7 @@
             "join": [],
             "key": 3,
             "kind": "wand",
+            "lifted": null,
             "name": "Wand of Disintegration",
             "problem": null,
             "refuse": [],

@@ -84,6 +84,21 @@
             ],
             "key": 1,
             "kind": "ring",
+            "lifted": {
+              "description": "Ring of Energy, any upgrade",
+              "details": [
+                "any upgrade"
+              ],
+              "effect": null,
+              "family": "ring",
+              "item": "ring_energy",
+              "kind": "ring",
+              "name": "Ring of Energy",
+              "tags": [],
+              "title": "Ring of Energy",
+              "trailing_tags": [],
+              "uncursed": false
+            },
             "name": "Ring of Energy",
             "problem": null,
             "refuse": [],
@@ -153,6 +168,7 @@
             ],
             "key": 4,
             "kind": "ring",
+            "lifted": null,
             "name": "Ring of Might",
             "problem": null,
             "refuse": [],
@@ -203,6 +219,7 @@
             ],
             "key": 3,
             "kind": "ring",
+            "lifted": null,
             "name": "Ring of Energy",
             "problem": null,
             "refuse": [],

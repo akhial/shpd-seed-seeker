@@ -411,6 +411,7 @@
         "join": [],
         "key": 0,
         "kind": "ring",
+        "lifted": null,
         "name": "Ring of Might",
         "problem": null,
         "refuse": [],

@@ -39,6 +39,7 @@
             "join": [],
             "key": 1,
             "kind": "wand",
+            "lifted": null,
             "name": "Any wand",
             "problem": null,
             "refuse": [],

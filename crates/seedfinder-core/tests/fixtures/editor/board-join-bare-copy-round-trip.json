@@ -1,28 +1,38 @@
 {
-  "about": "A wand dropped on a +2 Ring of Might ×2 (#190 refused it): the ring keeps its stack as a member, its plain repeat now a bare ring copy under a label of its own — two Rings of Might, or the wand.",
+  "about": "The same join, then the joined Ring of Energy (key 3) detached: it folds back into Ring of Energy +4 ×3, and Disintegration is alone again.",
   "envelope": "requirement_board",
   "request": {
     "edits": [
       {
-        "source": 3,
-        "target": 1,
+        "source": 1,
+        "target": 4,
         "type": "join"
+      },
+      {
+        "key": 3,
+        "type": "detach"
       }
     ],
     "rows": [
       {
-        "item": "ring_might",
+        "item": "ring_energy",
         "key": 1,
         "kind": "ring",
-        "upgrade": 2
+        "upgrade": 4
       },
       {
-        "item": "ring_might",
+        "item": "ring_energy",
         "key": 2,
         "kind": "ring"
       },
       {
+        "item": "ring_energy",
         "key": 3,
+        "kind": "ring"
+      },
+      {
+        "item": "wand_disintegration",
+        "key": 4,
         "kind": "wand"
       }
     ]
@@ -31,9 +41,9 @@
     "changed": true,
     "counts": {
       "blanket": 0,
-      "ordinary": 1
+      "ordinary": 2
     },
-    "focus": 3,
+    "focus": 1,
     "items": [
       {
         "blanket": false,
@@ -41,70 +51,73 @@
           {
             "badges": {
               "count": {
+                "compact_text": "×3",
+                "text": "×3",
+                "tooltip": "3 of the same kind"
+              },
+              "total": null
+            },
+            "can_detach": false,
+            "copies": [
+              2,
+              3
+            ],
+            "description": "Ring of Energy, exactly +4",
+            "details": [
+              "exactly +4"
+            ],
+            "effect": null,
+            "family": "ring",
+            "in_cluster": false,
+            "item": "ring_energy",
+            "join": [
+              4
+            ],
+            "key": 1,
+            "kind": "ring",
+            "lifted": {
+              "description": "Ring of Energy, any upgrade",
+              "details": [
+                "any upgrade"
+              ],
+              "effect": null,
+              "family": "ring",
+              "item": "ring_energy",
+              "kind": "ring",
+              "name": "Ring of Energy",
+              "tags": [],
+              "title": "Ring of Energy",
+              "trailing_tags": [],
+              "uncursed": false
+            },
+            "name": "Ring of Energy",
+            "problem": null,
+            "refuse": [],
+            "relations": [
+              {
+                "glyph": "times",
+                "text": "3 of the same kind — the extra copies: any upgrade, any floor"
+              }
+            ],
+            "remaining_badges": {
+              "count": {
                 "compact_text": "×2",
                 "text": "×2",
                 "tooltip": "2 of the same kind"
               },
               "total": null
             },
-            "can_detach": true,
-            "copies": [
-              2
-            ],
-            "description": "Ring of Might, exactly +2",
-            "details": [
-              "exactly +2"
-            ],
-            "effect": null,
-            "family": "ring",
-            "in_cluster": true,
-            "item": "ring_might",
-            "join": [],
-            "key": 1,
-            "kind": "ring",
-            "lifted": {
-              "description": "Ring of Might, any upgrade",
-              "details": [
-                "any upgrade"
-              ],
-              "effect": null,
-              "family": "ring",
-              "item": "ring_might",
-              "kind": "ring",
-              "name": "Ring of Might",
-              "tags": [],
-              "title": "Ring of Might",
-              "trailing_tags": [],
-              "uncursed": false
-            },
-            "name": "Ring of Might",
-            "problem": null,
-            "refuse": [],
-            "relations": [
-              {
-                "glyph": "or",
-                "text": "Any wand"
-              },
-              {
-                "glyph": "times",
-                "text": "2 of the same kind — the extra copies: any upgrade, any floor"
-              }
-            ],
-            "remaining_badges": {
-              "count": null,
-              "total": null
-            },
             "stack": {
               "can_change_count": true,
-              "can_count_levels": false,
+              "can_count_levels": true,
               "can_grow": true,
               "can_set_copy_depth": true,
               "copy_depth": null,
-              "count": 2,
+              "count": 3,
               "count_max": 3,
-              "count_text": "×2",
-              "default_total": 2,
-              "level_capacity": 8,
+              "count_text": "×3",
+              "default_total": 3,
+              "level_capacity": 11,
               "max": 3,
               "total": null,
               "total_text": "Σ ≥ 0"
@@ -112,42 +125,56 @@
             "tags": [
               {
                 "style": "upgrade",
-                "text": "+2",
+                "text": "+4",
                 "tooltip": null
               }
             ],
-            "title": "Ring of Might",
+            "title": "Ring of Energy",
             "trailing_tags": [],
             "uncursed": false
-          },
+          }
+        ],
+        "cluster": null,
+        "extras": [
+          2,
+          3
+        ],
+        "id": "r1",
+        "label": null,
+        "members": [
+          1
+        ],
+        "name": "Ring of Energy",
+        "problem": null
+      },
+      {
+        "blanket": false,
+        "chips": [
           {
             "badges": {
               "count": null,
               "total": null
             },
-            "can_detach": true,
+            "can_detach": false,
             "copies": [],
-            "description": "Any wand, any upgrade",
+            "description": "Wand of Disintegration, any upgrade",
             "details": [
               "any upgrade"
             ],
             "effect": null,
             "family": "wand",
-            "in_cluster": true,
-            "item": null,
-            "join": [],
-            "key": 3,
+            "in_cluster": false,
+            "item": "wand_disintegration",
+            "join": [
+              1
+            ],
+            "key": 4,
             "kind": "wand",
             "lifted": null,
-            "name": "Any wand",
+            "name": "Wand of Disintegration",
             "problem": null,
             "refuse": [],
-            "relations": [
-              {
-                "glyph": "or",
-                "text": "Ring of Might"
-              }
-            ],
+            "relations": [],
             "remaining_badges": null,
             "stack": {
               "can_change_count": true,
@@ -165,47 +192,47 @@
               "total_text": "Σ ≥ 0"
             },
             "tags": [],
-            "title": "Any wand",
+            "title": "Wand of Disintegration",
             "trailing_tags": [],
             "uncursed": false
           }
         ],
-        "cluster": 1,
-        "extras": [
-          2
-        ],
-        "id": "c1",
-        "label": "Any of 2",
+        "cluster": null,
+        "extras": [],
+        "id": "r4",
+        "label": null,
         "members": [
-          1,
-          3
+          4
         ],
-        "name": "Ring of Might or Any wand",
+        "name": "Wand of Disintegration",
         "problem": null
       }
     ],
-    "next_key": 4,
+    "next_key": 5,
     "problems": [],
     "refused": null,
     "rekeyed": [],
     "resin": null,
     "rows": [
       {
-        "alternative_group": 1,
-        "identity_group": 1,
-        "item": "ring_might",
+        "item": "ring_energy",
         "key": 1,
         "kind": "ring",
-        "upgrade": 2
+        "upgrade": 4
       },
       {
-        "alternative_group": 1,
-        "key": 3,
+        "item": "ring_energy",
+        "key": 2,
+        "kind": "ring"
+      },
+      {
+        "item": "wand_disintegration",
+        "key": 4,
         "kind": "wand"
       },
       {
-        "identity_group": 1,
-        "key": 2,
+        "item": "ring_energy",
+        "key": 3,
         "kind": "ring"
       }
     ]
