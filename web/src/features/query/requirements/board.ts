@@ -63,12 +63,13 @@ const boardFields = ({ requirements, arcaneResin, arcaneResinFilter }: BoardQuer
  * requirements or the resin, however many readers (both board sections, the
  * header counts, the Start and Share gate) ask for it in between.
  *
- * The contract asks apps to send `normalize` once when a list is loaded or
- * imported; the web deliberately does not. Its store hydrates (saved query,
- * share link, preset) before the editor module may be ready, and a
- * normalized list would stop matching its preset's fingerprint and resuming
- * a cancelled search. Every fold, edit and save accepts any encoding, so the
- * only effect is that the first real edit may re-encode rows it did not touch.
+ * The board draws a list as it is. Only a share link is normalized when it
+ * comes in (`normalizedQuery`); a list the web restores must keep matching
+ * a stored copy of itself (docs/requirement-editor.md, "When to normalize"):
+ * the saved query resumes its search, and an applied preset or imported
+ * results file must keep matching the preset's fingerprint or the results'
+ * own query. Every fold, edit and save accepts any encoding, the problems
+ * still gate Start and Share, and the first real edit normalizes the list.
  */
 export function requirementBoardOf(query: BoardQuery): EditorAnswer<BoardResponse> {
   if (drawn && sameBoard(drawn.query, query)) return drawn.answer;
@@ -108,6 +109,19 @@ export function editBoard(query: BoardQuery, edits: BoardEdit[]): EditorAnswer<B
   // The answer already draws the edited rows, so the next render reuses it.
   drawn = { query: { ...boardFields(query), requirements }, answer };
   return { ok: true, value: { requirements, changed, refused, rekeyed } };
+}
+
+/**
+ * A query imported from a share link, its requirements in the editor's
+ * canonical encoding, as the contract asks of an imported list. The query
+ * comes back as it was when nothing needed rewriting, or when the editor
+ * cannot read it — the board then says why.
+ */
+export function normalizedQuery<Query extends BoardQuery>(query: Query): Query {
+  const answer = editBoard(query, [{ type: "normalize" }]);
+  return answer.ok && answer.value.changed
+    ? { ...query, requirements: answer.value.requirements }
+    : query;
 }
 
 /** A key as the core renumbered it, or the key itself. */

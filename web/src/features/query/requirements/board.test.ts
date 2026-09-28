@@ -3,7 +3,8 @@ import { join } from "node:path";
 import { describe, expect, it } from "vite-plus/test";
 import type { BoardResponse, QueryState } from "../../../engine/types";
 import { fromQueryJson, requirementFromRow, requirementToRow, toQueryJson } from "../query";
-import { editBoard, requirementBoardOf } from "./board";
+import { builtInPresets } from "../../../app/store";
+import { editBoard, normalizedQuery, requirementBoardOf } from "./board";
 
 // The core's golden answers, whose rows the web's codec must read back.
 const fixtures = join(
@@ -29,6 +30,26 @@ describe("the requirement board bridge", () => {
         response.rows,
       );
     }
+  });
+
+  it("normalizes an imported list, and leaves a canonical one as it was", () => {
+    // A lone either/or alternative and a stack labelled out of range.
+    const imported = fromQueryJson(
+      '{"max_depth":12,"requirements":[{"any_of":[{"kind":"wand","item":"wand_frost"}]},{"kind":"ring","identity_group":7},{"kind":"ring","identity_group":7}]}',
+    );
+    expect(boardOf(imported).problems).not.toEqual([]);
+    const normalized = normalizedQuery(imported);
+    expect(normalized.maxDepth).toBe(12);
+    expect(JSON.parse(toQueryJson(normalized)).requirements).toEqual([
+      { kind: "wand", item: "wand_frost" },
+      { kind: "ring", identity_group: 1 },
+      { kind: "ring", identity_group: 1 },
+    ]);
+    expect(boardOf(normalized).problems).toEqual([]);
+    expect(normalizedQuery(normalized)).toBe(normalized);
+    // The presets a restored list must keep matching are canonical already.
+    for (const preset of builtInPresets)
+      expect(normalizedQuery(preset.query), preset.name).toBe(preset.query);
   });
 
   it("draws both boards once per change of the requirements", () => {

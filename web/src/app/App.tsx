@@ -5,6 +5,7 @@ import { validateQuery } from "../features/query/validation";
 import { resultPosition, stepResult } from "../features/results/scout-nav";
 import { SearchCoordinator, scoutSeed, searchStore } from "../features/search/coordinator";
 import { hasShareCode, withoutFragment } from "../features/query/share-link";
+import { normalizedQuery } from "../features/query/requirements/board";
 import { itemArt } from "../shared/sprites/sprites";
 import { queryStore, workerCountStore } from "./store";
 import {
@@ -75,7 +76,9 @@ export default function App() {
           if (searchStore.state.state === "running") {
             throw new Error("a search is running — stop it first");
           }
-          queryStore.setState(() => fromQueryJson(json));
+          // A list from elsewhere comes in canonical, as the editor writes it.
+          const shared = normalizedQuery(fromQueryJson(json));
+          queryStore.setState(() => shared);
         })
         .catch((error: unknown) => {
           if (active) setShareNotice(error instanceof Error ? error.message : String(error));
