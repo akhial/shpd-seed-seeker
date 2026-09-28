@@ -23,6 +23,7 @@ mod requirement_editor;
 mod resin_editor;
 mod result_navigation;
 mod results_pane;
+mod sheet;
 mod sprites;
 mod state;
 mod update;

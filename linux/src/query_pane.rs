@@ -26,7 +26,7 @@ use crate::{glow, sprites};
 /// spinning up from 4 lands on 6, spinning down from 6 lands on 4, and typed
 /// values snap down (10 means the first 10 floors, ≡ 9), since those floors
 /// add no searchable items and are useless as limits.
-pub fn skip_empty_boss_floors(row: &adw::SpinRow) {
+fn skip_empty_boss_floors(row: &adw::SpinRow) {
     let previous = Cell::new(row.value());
     row.connect_value_notify(move |row| {
         let value = row.value();

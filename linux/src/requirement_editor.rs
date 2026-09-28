@@ -1,54 +1,37 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 //! Modal editor for one item requirement.
+//!
+//! The shared editor holds the sheet ([`Sheet`]) and says everything it
+//! shows: which controls, their choices, ranges and words, and why a save
+//! may not go through. The dialog draws that form, sends each control the
+//! user moves back as a [`Change`], and draws the answer.
 
-use std::cell::{Cell, RefCell};
+use std::cell::{Cell, Ref, RefCell};
 use std::rc::Rc;
 
 use adw::prelude::*;
-use shpd_seedfinder_core::catalog::{
-    ALL_ARMOR_EFFECTS, ALL_WEAPON_EFFECTS, EXTRA_UPGRADE_TIER, Effect, ITEMS, ItemDefinition,
-    ItemId, ItemKind, MAX_GENERATED_UPGRADE, MAX_STANDARD_RING_UPGRADE, item,
-};
-use shpd_seedfinder_core::editor::{Draft, Origin, STACK_MAX};
-use shpd_seedfinder_core::main_world::normalize_floor_limit;
-use shpd_seedfinder_core::model::ItemSource;
-use shpd_seedfinder_core::query::{
-    BOUNDED_TIER_MAX, BOUNDED_TIER_MIN, EXACT_TIER_MAX, EXACT_TIER_MIN, EffectRequirement,
-    EffectSet, MAX_SEARCH_DEPTH, Requirement, TierRequirement, UpgradeRequirement,
+use shpd_seedfinder_core::catalog::Effect;
+use shpd_seedfinder_core::editor::{
+    Change, Draft, EffectControl, EffectGroup, EffectMode, FloorToggle, Form, FormMode, ItemChoice,
+    ModeRange, Opt, RangeToggle, SaveResult, TierMode, Toggle, UpgradeMode,
 };
 
-use crate::query_pane::skip_empty_boss_floors;
-use crate::state::{
-    ALL_KIND_CHOICES, KindChoice, kind_choice_label, kind_choice_singular, source_label,
-};
-
-/// Positions of the effect picker's modes.
-const EFFECT_ANY: u32 = 0;
-const EFFECT_ANY_ENCHANTMENT: u32 = 1;
-const EFFECT_SPECIFIC: u32 = 2;
-
-/// One checkbox of the specific-effect list.
-struct EffectCheck {
-    effect: Effect,
-    row: adw::ActionRow,
-    check: gtk::CheckButton,
-}
+use crate::sheet::{self, Sheet};
 
 struct Editor {
     dialog: adw::Dialog,
+    heading: adw::WindowTitle,
     banner: adw::Banner,
     category: adw::ComboRow,
     item_row: adw::ComboRow,
-    items: RefCell<Vec<Option<ItemId>>>,
+    /// The item picker's choices, in the order its model lists them.
+    items: RefCell<Vec<ItemChoice>>,
     tier_row: adw::ComboRow,
-    exact_tier: adw::SpinRow,
-    bounded_tier: adw::ComboRow,
-    upgrade_row: adw::ComboRow,
-    exact_upgrade: adw::SpinRow,
-    minimum_upgrade: adw::ComboRow,
-    ring_minimum_upgrade: adw::SpinRow,
+    tier_value: adw::SpinRow,
     upgrade_group: adw::PreferencesGroup,
+    upgrade_row: adw::ComboRow,
+    upgrade_value: adw::SpinRow,
     count_group: adw::PreferencesGroup,
     count_row: adw::SpinRow,
     copy_floor_switch: adw::SwitchRow,
@@ -57,45 +40,70 @@ struct Editor {
     levels_value: adw::SpinRow,
     effect_mode_group: adw::PreferencesGroup,
     effect_mode: adw::ComboRow,
-    effect_group: adw::PreferencesGroup,
-    effect_list: gtk::ListBox,
-    effect_checks: RefCell<Vec<EffectCheck>>,
+    /// The "Specific…" grid, one list per heading: enchantments (or
+    /// glyphs), then curses.
+    effect_lists: [(EffectGroup, adw::PreferencesGroup, gtk::ListBox); 2],
+    effect_checks: RefCell<Vec<(Effect, gtk::CheckButton)>>,
     details_group: adw::PreferencesGroup,
     uncursed: adw::SwitchRow,
     exclude_resin: adw::SwitchRow,
     select_trinket: adw::SwitchRow,
     allow_transmutations: adw::SwitchRow,
-    trinket_transmutations: adw::SpinRow,
+    transmutations: adw::SpinRow,
     source_row: adw::ComboRow,
     floor_switch: adw::SwitchRow,
     floor_value: adw::SpinRow,
+    resin_group: adw::PreferencesGroup,
+    resin_row: adw::ActionRow,
     updating: Cell<bool>,
-    /// The sheet as the shared editor opened it: the row, its section, its
-    /// stack, and whether it is a cluster member, whose stack belongs to the
-    /// cluster and so is hidden here.
-    opened: Draft,
+    sheet: RefCell<Sheet>,
+    /// The form the controls show, so a redraw rebuilds only the lists that
+    /// changed: rebuilding the item list would reset its search, and the
+    /// effect grid would lose the focused check box.
+    shown: RefCell<Option<Form>>,
+}
+
+impl Editor {
+    fn form(&self) -> Ref<'_, Form> {
+        Ref::map(self.sheet.borrow(), Sheet::form)
+    }
 }
 
 /// Presents the editor over `parent` on `draft`, a sheet the shared editor
-/// opened. When the user confirms, `on_save` receives the draft with the
-/// requirement and stack the controls describe — how many items, their
-/// combined level, and the floor limit of the extra copies — and saves it, or
-/// returns why the editor refused it, which the dialog then shows. Cancelling
-/// never calls it.
+/// opened. When the user confirms, `on_save` saves the draft and answers
+/// with the editor's result; a refused save keeps the dialog open on the
+/// editor's reasons. Cancelling never calls it. Where the editor offers
+/// Arcane Resin in place of a new wand, the dialog leads to the resin dialog
+/// instead.
 pub fn present(
     parent: &adw::ApplicationWindow,
     draft: Draft,
-    on_save: impl Fn(&Draft) -> Result<(), Vec<String>> + 'static,
+    on_save: impl Fn(&Draft) -> SaveResult + 'static,
 ) {
-    let is_new = draft.origin == Origin::New;
-    let blanket = draft.blanket;
-    let editor = Rc::new(build(draft));
+    let sheet = Sheet::new(draft);
+    let is_new = sheet.form().mode == FormMode::New;
+    let blanket = sheet.form().blanket;
+    let editor = Rc::new(build(sheet));
+    apply_form(&editor);
     connect(&editor);
-    restore(&editor);
 
+    let title = if blanket {
+        if is_new {
+            "New Blanket Requirement"
+        } else {
+            "Edit Blanket Requirement"
+        }
+    } else if is_new {
+        "New Requirement"
+    } else {
+        "Edit Requirement"
+    };
+    editor.dialog.set_title(title);
+    editor.heading.set_title(title);
     let header = adw::HeaderBar::builder()
         .show_start_title_buttons(false)
         .show_end_title_buttons(false)
+        .title_widget(&editor.heading)
         .build();
     let cancel = gtk::Button::with_label("Cancel");
     let confirm = gtk::Button::with_label(if is_new { "Add" } else { "Save" });
@@ -107,49 +115,18 @@ pub fn present(
     for group in groups(&editor) {
         page.add(&group);
     }
-    if is_new && !blanket {
-        let resin = adw::ActionRow::builder()
-            .title("Arcane Resin")
-            .subtitle("Require resin from surplus wands")
-            .activatable(true)
-            .visible(selected_kind(&editor) == ItemKind::Wand)
-            .build();
-        let group = adw::PreferencesGroup::new();
-        group.add(&resin);
-        page.add(&group);
-        editor.category.connect_selected_notify({
-            let editor = Rc::clone(&editor);
-            let group = group.clone();
-            move |_| group.set_visible(selected_kind(&editor) == ItemKind::Wand)
-        });
-        group.set_visible(selected_kind(&editor) == ItemKind::Wand);
-        // The group follows the category; its action row stays visible within it.
-        resin.set_visible(true);
-        resin.connect_activated({
-            let dialog = editor.dialog.clone();
-            let parent = parent.clone();
-            move |_| {
-                dialog.close();
-                let _ = WidgetExt::activate_action(&parent, "win.edit-resin", None);
-            }
-        });
-    }
+    editor.resin_row.connect_activated({
+        let dialog = editor.dialog.clone();
+        let parent = parent.clone();
+        move |_| {
+            dialog.close();
+            let _ = WidgetExt::activate_action(&parent, "win.edit-resin", None);
+        }
+    });
     let toolbar_view = adw::ToolbarView::new();
     toolbar_view.add_top_bar(&header);
     toolbar_view.add_top_bar(&editor.banner);
     toolbar_view.set_content(Some(&page));
-
-    editor.dialog.set_title(if blanket {
-        if is_new {
-            "New Blanket Requirement"
-        } else {
-            "Edit Blanket Requirement"
-        }
-    } else if is_new {
-        "New Requirement"
-    } else {
-        "Edit Requirement"
-    });
     editor.dialog.set_child(Some(&toolbar_view));
     editor.dialog.set_default_widget(Some(&confirm));
 
@@ -162,15 +139,15 @@ pub fn present(
     confirm.connect_clicked({
         let editor = Rc::clone(&editor);
         move |_| {
-            let saved = check(&editor).and_then(|()| {
-                on_save(&collect(&editor))
-                    .map_err(|errors| errors.into_iter().next().unwrap_or_default())
-            });
-            match saved {
-                Ok(()) => {
+            let draft = editor.sheet.borrow().draft().clone();
+            match on_save(&draft) {
+                SaveResult::Saved { .. } => {
                     editor.dialog.close();
                 }
-                Err(message) => {
+                SaveResult::Refused { draft, form } => {
+                    let message = form.errors.first().cloned().unwrap_or_default();
+                    editor.sheet.borrow_mut().refused(draft, form);
+                    apply_form(&editor);
                     editor.banner.set_title(&message);
                     editor.banner.set_revealed(true);
                 }
@@ -181,58 +158,40 @@ pub fn present(
 }
 
 #[allow(clippy::too_many_lines)] // Widget assembly is declarative and linear.
-fn build(opened: Draft) -> Editor {
-    let effect_list = gtk::ListBox::builder()
-        .css_classes(["boxed-list"])
-        .selection_mode(gtk::SelectionMode::None)
+fn build(sheet: Sheet) -> Editor {
+    let effect_list = |group| {
+        let list = gtk::ListBox::builder()
+            .css_classes(["boxed-list"])
+            .selection_mode(gtk::SelectionMode::None)
+            .build();
+        let preferences = adw::PreferencesGroup::new();
+        preferences.add(&list);
+        (group, preferences, list)
+    };
+    let resin_row = adw::ActionRow::builder()
+        .title("Arcane Resin")
+        .subtitle("Require resin from surplus wands")
+        .activatable(true)
         .build();
-    let effect_group = adw::PreferencesGroup::builder()
-        .title("Enchantments")
-        .description("The item must carry one of the checked effects.")
-        .build();
-    effect_group.add(&effect_list);
+    let resin_group = adw::PreferencesGroup::new();
+    resin_group.add(&resin_row);
     Editor {
         dialog: adw::Dialog::builder()
             .content_width(460)
             .content_height(700)
             .build(),
+        heading: adw::WindowTitle::new("", ""),
         banner: adw::Banner::new(""),
-        category: combo_row(
-            "Category",
-            &ALL_KIND_CHOICES
-                .iter()
-                .map(|choice| kind_choice_label(*choice))
-                .collect::<Vec<_>>(),
-        ),
+        category: combo_row("Category"),
         item_row: searchable_combo_row("Item"),
-        items: RefCell::new(vec![None]),
-        tier_row: combo_row("Tier", &["Any tier", "Exactly", "At least", "At most"]),
-        exact_tier: spin_row(
-            "Exact tier",
-            f64::from(EXACT_TIER_MIN),
-            f64::from(EXACT_TIER_MIN),
-            f64::from(EXACT_TIER_MAX),
-        ),
-        bounded_tier: combo_row("Minimum tier", &borrowed(&bounded_tier_labels())),
-        upgrade_row: combo_row("Upgrade", &["Any", "Exactly", "At least"]),
-        // The upgrade controls open on the widest ceiling of any family —
-        // weapons' — and `normalize_upgrades` narrows them to the selected
-        // category's own as soon as the editor restores the requirement. The
-        // ring spin is only ever shown for rings, so it takes their ceiling.
-        exact_upgrade: spin_row("Exactly", 1.0, 1.0, f64::from(widest_upgrade())),
-        minimum_upgrade: combo_row(
-            "Minimum upgrade",
-            &borrowed(&minimum_upgrade_labels(widest_upgrade())),
-        ),
-        ring_minimum_upgrade: spin_row(
-            "Minimum upgrade",
-            1.0,
-            1.0,
-            f64::from(ItemKind::Ring.maximum_search_upgrade() - 1),
-        ),
+        items: RefCell::new(Vec::new()),
+        tier_row: combo_row("Tier"),
+        tier_value: spin_row(""),
         upgrade_group: adw::PreferencesGroup::builder()
             .title("Upgrade Level")
             .build(),
+        upgrade_row: combo_row("Upgrade"),
+        upgrade_value: spin_row(""),
         count_group: adw::PreferencesGroup::builder()
             .title("Total Item Count")
             .description(
@@ -240,67 +199,39 @@ fn build(opened: Draft) -> Editor {
                  blacksmith. The extra copies carry no constraints of their own.",
             )
             .build(),
-        count_row: spin_row("How many", 1.0, 1.0, stack_maximum()),
-        copy_floor_switch: adw::SwitchRow::builder()
-            .title("Limit the extra copies to a floor")
-            .build(),
-        copy_floor_value: spin_row(
-            "Copies within first … floors",
-            4.0,
-            1.0,
-            f64::from(MAX_SEARCH_DEPTH),
-        ),
+        count_row: spin_row("How many"),
+        copy_floor_switch: adw::SwitchRow::new(),
+        copy_floor_value: spin_row(""),
         levels_switch: adw::SwitchRow::builder()
-            .title("Count levels together")
             .subtitle("Any upgrade on each, as long as they add up")
             .build(),
-        // One ring's levels: its upgrade plus one. `refresh_levels_range`
-        // widens this to the whole stack's capacity.
-        levels_value: spin_row("Levels reach", 1.0, 1.0, one_ring_levels()),
-        effect_mode_group: adw::PreferencesGroup::builder()
-            .title("Enchantment")
-            .build(),
-        effect_mode: combo_row("Enchantment", &["Any", "Any enchantment", "Specific…"]),
-        effect_group,
-        effect_list,
+        levels_value: spin_row(""),
+        effect_mode_group: adw::PreferencesGroup::new(),
+        effect_mode: combo_row(""),
+        effect_lists: [
+            effect_list(EffectGroup::Enchantment),
+            effect_list(EffectGroup::Curse),
+        ],
         effect_checks: RefCell::new(Vec::new()),
         details_group: adw::PreferencesGroup::builder().title("Details").build(),
         exclude_resin: adw::SwitchRow::builder()
-            .title("Exclude from Auto resin")
             .subtitle("Keep this wand without budgeting resin to upgrade it. Useful for imbuing: resin upgrades do not transfer to the staff. Extra copies are reserved for reforging and never need Auto resin.")
             .build(),
-        uncursed: adw::SwitchRow::builder().title("Require uncursed").build(),
-        allow_transmutations: adw::SwitchRow::builder().title("Allow transmutations")
-            .subtitle("Includes the initial offers. AutoTrinket can use a helpful starting trinket. Scroll availability and effects after transmuting are not simulated.").build(),
-        trinket_transmutations: spin_row("At most … transmutations", 1.0, 1.0, 13.0),
+        uncursed: adw::SwitchRow::new(),
+        allow_transmutations: adw::SwitchRow::new(),
+        transmutations: spin_row(""),
         select_trinket: adw::SwitchRow::builder()
-            .title("Choose matching trinket at +3")
             .subtitle("Starts after the first brewing opportunity. Multiple offered matches use no trinket.")
             .build(),
-        source_row: combo_row(
-            "Source",
-            &std::iter::once("Any")
-                .chain(ItemSource::ALL.iter().map(|source| source_label(*source)))
-                .collect::<Vec<_>>(),
-        ),
-        floor_switch: adw::SwitchRow::builder()
-            .title("Limit to a floor")
-            .subtitle("Require this item within the first floors only")
-            .build(),
-        floor_value: spin_row(
-            "Within first … floors",
-            4.0,
-            1.0,
-            f64::from(MAX_SEARCH_DEPTH),
-        ),
+        source_row: combo_row("Source"),
+        floor_switch: adw::SwitchRow::new(),
+        floor_value: spin_row(""),
+        resin_group,
+        resin_row,
         updating: Cell::new(false),
-        opened,
+        sheet: RefCell::new(sheet),
+        shown: RefCell::new(None),
     }
-}
-
-/// The stack spinner's upper bound as the adjustment wants it.
-fn stack_maximum() -> f64 {
-    f64::from(STACK_MAX)
 }
 
 fn groups(editor: &Rc<Editor>) -> Vec<adw::PreferencesGroup> {
@@ -308,16 +239,13 @@ fn groups(editor: &Rc<Editor>) -> Vec<adw::PreferencesGroup> {
     item_group.add(&editor.category);
     item_group.add(&editor.item_row);
     item_group.add(&editor.allow_transmutations);
-    item_group.add(&editor.trinket_transmutations);
+    item_group.add(&editor.transmutations);
     item_group.add(&editor.select_trinket);
     item_group.add(&editor.tier_row);
-    item_group.add(&editor.exact_tier);
-    item_group.add(&editor.bounded_tier);
+    item_group.add(&editor.tier_value);
 
     editor.upgrade_group.add(&editor.upgrade_row);
-    editor.upgrade_group.add(&editor.exact_upgrade);
-    editor.upgrade_group.add(&editor.minimum_upgrade);
-    editor.upgrade_group.add(&editor.ring_minimum_upgrade);
+    editor.upgrade_group.add(&editor.upgrade_value);
 
     editor.count_group.add(&editor.count_row);
     editor.count_group.add(&editor.copy_floor_switch);
@@ -334,818 +262,387 @@ fn groups(editor: &Rc<Editor>) -> Vec<adw::PreferencesGroup> {
     details_group.add(&editor.floor_switch);
     details_group.add(&editor.floor_value);
 
-    vec![
+    let mut groups = vec![
         item_group,
         editor.upgrade_group.clone(),
         editor.count_group.clone(),
         editor.effect_mode_group.clone(),
-        editor.effect_group.clone(),
-        details_group,
-    ]
+    ];
+    groups.extend(
+        editor
+            .effect_lists
+            .iter()
+            .map(|(_, preferences, _)| preferences.clone()),
+    );
+    groups.push(details_group);
+    groups.push(editor.resin_group.clone());
+    groups
 }
 
+/// Sends every control's moves to the editor as the change it names.
+#[allow(clippy::too_many_lines)] // One handler per control.
 fn connect(editor: &Rc<Editor>) {
     editor
         .category
-        .connect_selected_notify(hook(Rc::clone(editor), |editor| {
-            // Keep selections that remain valid under the new category (for
-            // example, switching Weapon to Thrown with a shuriken pinned);
-            // anything absent from the repopulated lists falls back to Any.
-            populate_items(editor, selected_item(editor));
-            populate_effects(editor, selected_effect(editor));
-            editor.tier_row.set_selected(0);
-            normalize_upgrades(editor);
-            refresh_levels_range(editor);
-            refresh_visibility(editor);
+        .connect_selected_notify(hook(editor, |editor, row: &adw::ComboRow| {
+            sheet::chosen(&editor.form().kind.options, row.selected())
+                .map(|kind| Change::SetKind(kind.family(), kind.weapon_category()))
         }));
     editor
         .item_row
-        .connect_selected_notify(hook(Rc::clone(editor), |editor| {
-            if selected_item(editor).is_some() {
-                editor.tier_row.set_selected(0);
-            } else {
-                // Only a named item can count its levels together.
-                editor.levels_switch.set_active(false);
-            }
-            // The item's own tier decides how far its upgrade reaches.
-            normalize_upgrades(editor);
-            refresh_levels_range(editor);
-            refresh_visibility(editor);
+        .connect_selected_notify(hook(editor, |editor, row: &adw::ComboRow| {
+            let items = editor.items.borrow();
+            let choice = items.get(usize::try_from(row.selected()).ok()?)?;
+            Some(Change::SetItem(*choice))
         }));
     editor
         .tier_row
-        .connect_selected_notify(hook(Rc::clone(editor), |editor| {
-            normalize_upgrades(editor);
-            refresh_levels_range(editor);
-            refresh_visibility(editor);
+        .connect_selected_notify(hook(editor, |editor, row: &adw::ComboRow| {
+            sheet::chosen(&editor.form().tier.modes, row.selected()).map(Change::SetTierMode)
         }));
     editor
-        .exact_tier
-        .connect_value_notify(hook(Rc::clone(editor), |editor| {
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-            let tier = editor.exact_tier.value().round() as u8;
-            editor
-                .bounded_tier
-                .set_selected(u32::from(tier.clamp(3, 4) - 3));
-            normalize_upgrades(editor);
-            refresh_levels_range(editor);
-        }));
-    editor
-        .bounded_tier
-        .connect_selected_notify(hook(Rc::clone(editor), |editor| {
-            editor
-                .exact_tier
-                .set_value(f64::from(editor.bounded_tier.selected() + 3));
-            normalize_upgrades(editor);
-            refresh_levels_range(editor);
+        .tier_value
+        .connect_value_notify(hook(editor, |_, row: &adw::SpinRow| {
+            Some(Change::SetTier(sheet::spin_value(row.value())))
         }));
     editor
         .upgrade_row
-        .connect_selected_notify(hook(Rc::clone(editor), |editor| {
-            normalize_upgrades(editor);
-            refresh_levels_range(editor);
-            refresh_visibility(editor);
+        .connect_selected_notify(hook(editor, |editor, row: &adw::ComboRow| {
+            sheet::chosen(&editor.form().upgrade.modes, row.selected()).map(Change::SetUpgradeMode)
+        }));
+    editor
+        .upgrade_value
+        .connect_value_notify(hook(editor, |_, row: &adw::SpinRow| {
+            Some(Change::SetUpgrade(sheet::spin_value(row.value())))
         }));
     editor
         .count_row
-        .connect_value_notify(hook(Rc::clone(editor), |editor| {
-            if selected_count(editor) < 2 {
-                editor.levels_switch.set_active(false);
-                editor.copy_floor_switch.set_active(false);
-            }
-            refresh_levels_range(editor);
-            refresh_visibility(editor);
+        .connect_value_notify(hook(editor, |_, row: &adw::SpinRow| {
+            Some(Change::SetCount(sheet::spin_value(row.value())))
         }));
-    for row in [&editor.levels_switch, &editor.copy_floor_switch] {
-        row.connect_active_notify(hook(Rc::clone(editor), |editor| {
-            refresh_levels_range(editor);
-            refresh_visibility(editor);
+    editor
+        .copy_floor_switch
+        .connect_active_notify(hook(editor, |_, row: &adw::SwitchRow| {
+            Some(Change::SetCopyDepthEnabled(row.is_active()))
         }));
-    }
+    editor
+        .copy_floor_value
+        .connect_value_notify(hook(editor, |_, row: &adw::SpinRow| {
+            Some(Change::SetCopyDepth(sheet::spin_value(row.value())))
+        }));
+    editor
+        .levels_switch
+        .connect_active_notify(hook(editor, |_, row: &adw::SwitchRow| {
+            Some(Change::SetCountLevels(row.is_active()))
+        }));
     editor
         .levels_value
-        .connect_value_notify(hook(Rc::clone(editor), refresh_levels_range));
+        .connect_value_notify(hook(editor, |_, row: &adw::SpinRow| {
+            Some(Change::SetTotal(sheet::spin_value(row.value())))
+        }));
     editor
         .effect_mode
-        .connect_selected_notify(hook(Rc::clone(editor), refresh_visibility));
+        .connect_selected_notify(hook(editor, |editor, row: &adw::ComboRow| {
+            sheet::chosen(&editor.form().effect.modes, row.selected()).map(Change::SetEffectMode)
+        }));
     editor
         .uncursed
-        .connect_active_notify(hook(Rc::clone(editor), apply_curse_visibility));
+        .connect_active_notify(hook(editor, |_, row: &adw::SwitchRow| {
+            Some(Change::SetUncursed(row.is_active()))
+        }));
     editor
-        .floor_switch
-        .connect_active_notify(hook(Rc::clone(editor), refresh_visibility));
+        .exclude_resin
+        .connect_active_notify(hook(editor, |_, row: &adw::SwitchRow| {
+            Some(Change::SetExcludeResin(row.is_active()))
+        }));
+    editor
+        .select_trinket
+        .connect_active_notify(hook(editor, |_, row: &adw::SwitchRow| {
+            Some(Change::SetSelectTrinket(row.is_active()))
+        }));
     editor
         .allow_transmutations
-        .connect_active_notify(hook(Rc::clone(editor), refresh_visibility));
-    skip_empty_boss_floors(&editor.floor_value);
-    skip_empty_boss_floors(&editor.copy_floor_value);
+        .connect_active_notify(hook(editor, |_, row: &adw::SwitchRow| {
+            Some(Change::SetTransmutationsEnabled(row.is_active()))
+        }));
+    editor
+        .transmutations
+        .connect_value_notify(hook(editor, |_, row: &adw::SpinRow| {
+            Some(Change::SetTransmutations(sheet::spin_value(row.value())))
+        }));
+    editor
+        .source_row
+        .connect_selected_notify(hook(editor, |editor, row: &adw::ComboRow| {
+            sheet::chosen(&editor.form().source.options, row.selected()).map(Change::SetSource)
+        }));
+    editor
+        .floor_switch
+        .connect_active_notify(hook(editor, |_, row: &adw::SwitchRow| {
+            Some(Change::SetFloorLimitEnabled(row.is_active()))
+        }));
+    // The editor steps a floor limit over the empty boss floors, so the
+    // spinner sends every value it lands on and shows where the editor put it.
+    editor
+        .floor_value
+        .connect_value_notify(hook(editor, |_, row: &adw::SpinRow| {
+            Some(Change::SetFloorLimit(sheet::spin_value(row.value())))
+        }));
 }
 
-/// Wraps a handler so programmatic updates never re-enter it. Any edit also
-/// retires the validation message of the previous save attempt.
-fn hook<W>(editor: Rc<Editor>, handler: fn(&Rc<Editor>)) -> impl Fn(&W) {
-    move |_| {
+/// Wraps a control's handler: the change it reads from the control goes to
+/// the editor, and the dialog redraws the answer — which also puts back a
+/// control the editor did not follow. Programmatic updates never re-enter,
+/// and any edit retires the message of the previous save attempt.
+fn hook<W>(
+    editor: &Rc<Editor>,
+    read: impl Fn(&Editor, &W) -> Option<Change> + 'static,
+) -> impl Fn(&W) + 'static {
+    let editor = Rc::clone(editor);
+    move |widget| {
         if editor.updating.get() {
             return;
         }
-        editor.updating.set(true);
         editor.banner.set_revealed(false);
-        handler(&editor);
-        editor.updating.set(false);
+        if let Some(change) = read(&editor, widget) {
+            editor.sheet.borrow_mut().change(&change);
+        }
+        apply_form(&editor);
     }
 }
 
-fn restore(editor: &Rc<Editor>) {
-    let requirement = &editor.opened.requirement;
+/// Draws the editor's current form: every control's visibility, value,
+/// range and words, the choices of every picker, and the header's subtitle.
+fn apply_form(editor: &Rc<Editor>) {
+    let form = editor.form().clone();
+    let before = editor.shown.replace(Some(form.clone()));
+    let before = before.as_ref();
     editor.updating.set(true);
-    let kind_index = ALL_KIND_CHOICES
-        .iter()
-        .position(|choice| *choice == (requirement.kind, requirement.weapon_category))
-        .unwrap_or(0);
-    editor
-        .category
-        .set_selected(u32::try_from(kind_index).unwrap_or(0));
-    editor.uncursed.set_active(requirement.require_uncursed);
-    editor.exclude_resin.set_active(requirement.exclude_resin);
-    editor.select_trinket.set_active(requirement.select_trinket);
-    editor.allow_transmutations.set_active(
-        requirement.trinket_transmutations > 0 || requirement.artifact_transmutations > 0,
+    editor.heading.set_subtitle(&form.title);
+
+    fill(
+        &editor.category,
+        before.map(|before| &before.kind.options[..]),
+        &form.kind.options,
     );
-    editor.trinket_transmutations.set_value(f64::from(
-        requirement
-            .trinket_transmutations
-            .max(requirement.artifact_transmutations)
-            .max(1),
-    ));
-    populate_items(editor, requirement.item);
-    populate_effects(editor, requirement.effect);
-    normalize_upgrades(editor);
-    match requirement.tier {
-        TierRequirement::Any => editor.tier_row.set_selected(0),
-        TierRequirement::Exact(tier) => {
-            editor.tier_row.set_selected(1);
-            set_tier_value(editor, tier);
-        }
-        TierRequirement::AtLeast(tier) => {
-            editor.tier_row.set_selected(2);
-            set_tier_value(editor, tier);
-        }
-        TierRequirement::AtMost(tier) => {
-            editor.tier_row.set_selected(3);
-            set_tier_value(editor, tier);
-        }
+    select(
+        &editor.category,
+        sheet::position(&form.kind.options, &form.kind.value),
+    );
+    if before.is_none_or(|before| before.item.options != form.item.options) {
+        let (choices, labels): (Vec<ItemChoice>, Vec<String>) =
+            sheet::item_options(&form).into_iter().unzip();
+        set_model(&editor.item_row, &labels);
+        editor.items.replace(choices);
     }
-    match requirement.upgrade {
-        UpgradeRequirement::Any => editor.upgrade_row.set_selected(0),
-        UpgradeRequirement::Exact(upgrade) => {
-            editor.upgrade_row.set_selected(1);
-            let maximum = selected_upgrade_ceiling(editor).max(1);
-            editor
-                .exact_upgrade
-                .set_value(f64::from(upgrade.clamp(1, maximum)));
-        }
-        UpgradeRequirement::AtLeast(upgrade) => {
-            editor.upgrade_row.set_selected(2);
-            set_minimum_upgrade(editor, upgrade);
-        }
-    }
-    let source_index = requirement
-        .source
-        .and_then(|source| ItemSource::ALL.iter().position(|other| *other == source))
-        .map_or(0, |index| index + 1);
+    let item = editor
+        .items
+        .borrow()
+        .iter()
+        .position(|choice| *choice == form.item.value)
+        .and_then(|index| u32::try_from(index).ok());
+    select(&editor.item_row, item);
     editor
-        .source_row
-        .set_selected(u32::try_from(source_index).unwrap_or(0));
-    editor
-        .count_row
-        .set_value(f64::from(editor.opened.count.clamp(1, STACK_MAX)));
-    if let Some(total) = editor.opened.total {
-        editor.levels_switch.set_active(true);
-        editor.levels_value.set_value(f64::from(total));
-    }
-    if let Some(depth) = editor.opened.copy_depth {
-        editor.copy_floor_switch.set_active(true);
-        editor
-            .copy_floor_value
-            .set_value(f64::from(normalize_floor_limit(depth)));
-    }
-    refresh_levels_range(editor);
-    if let Some(depth) = requirement.max_depth {
-        editor.floor_switch.set_active(true);
-        editor
-            .floor_value
-            .set_value(f64::from(normalize_floor_limit(depth)));
-    }
-    refresh_visibility(editor);
+        .item_row
+        .set_title(sheet::named_kind(&form).unwrap_or("Item"));
+    editor.resin_group.set_visible(sheet::offers_resin(&form));
+    range_toggle(
+        &editor.allow_transmutations,
+        &editor.transmutations,
+        &form.transmutations,
+    );
+    toggle(&editor.select_trinket, &form.select_trinket);
+    mode_range(
+        &editor.tier_row,
+        &editor.tier_value,
+        before.map(|before| &before.tier),
+        (&form.tier, TierMode::Any),
+    );
+
+    editor.upgrade_group.set_visible(form.upgrade.visible);
+    mode_range(
+        &editor.upgrade_row,
+        &editor.upgrade_value,
+        before.map(|before| &before.upgrade),
+        (&form.upgrade, UpgradeMode::Any),
+    );
+
+    let stack = &form.stack;
+    editor.count_group.set_visible(stack.visible);
+    set_range(&editor.count_row, stack.count, stack.min, stack.max);
+    floor_toggle(
+        &editor.copy_floor_switch,
+        &editor.copy_floor_value,
+        &stack.copy_depth,
+    );
+    range_toggle(
+        &editor.levels_switch,
+        &editor.levels_value,
+        &stack.count_levels,
+    );
+
+    apply_effects(editor, before.map(|before| &before.effect), &form.effect);
+
+    toggle(&editor.exclude_resin, &form.exclude_resin);
+    toggle(&editor.uncursed, &form.uncursed);
+    editor.source_row.set_visible(form.source.visible);
+    fill(
+        &editor.source_row,
+        before.map(|before| &before.source.options[..]),
+        &form.source.options,
+    );
+    select(
+        &editor.source_row,
+        sheet::position(&form.source.options, &form.source.value),
+    );
+    floor_toggle(&editor.floor_switch, &editor.floor_value, &form.floor_limit);
+    editor.details_group.set_visible(
+        form.exclude_resin.visible
+            || form.uncursed.visible
+            || form.source.visible
+            || form.floor_limit.visible,
+    );
     editor.updating.set(false);
 }
 
-/// The sheet the controls describe: the requirement itself, then the stack
-/// it asks for — how many items, their combined level, and the floor limit
-/// of the extra copies — over the sheet the editor opened.
-fn collect(editor: &Rc<Editor>) -> Draft {
-    let blanket = editor.opened.blanket;
-    let (kind, weapon_category) = selected_choice(editor);
-    let item = selected_item(editor);
-    let tier = selected_tier(editor);
-    let upgrade = selected_upgrade(editor);
-    let source = match if kind == ItemKind::Trinket {
-        0
-    } else {
-        editor.source_row.selected()
-    } {
-        0 => None,
-        index => ItemSource::ALL.get(index as usize - 1).copied(),
-    };
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    let max_depth = (kind != ItemKind::Trinket && editor.floor_switch.is_active())
-        .then(|| normalize_floor_limit(editor.floor_value.value().round() as u8));
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    // The spinner is bounded to 1–13.
-    let requirement = Requirement {
-        kind,
-        weapon_category,
-        item,
-        tier,
-        upgrade,
-        effect: selected_effect(editor),
-        require_uncursed: kind != ItemKind::Trinket && editor.uncursed.is_active(),
-        blanket,
-        exclude_resin: !blanket && kind == ItemKind::Wand && editor.exclude_resin.is_active(),
-        select_trinket: !blanket
-            && kind == ItemKind::Trinket
-            && item.is_some()
-            && !editor.allow_transmutations.is_active()
-            && editor.select_trinket.is_active(),
-        trinket_transmutations: if kind == ItemKind::Trinket
-            && editor.allow_transmutations.is_active()
-        {
-            editor
-                .trinket_transmutations
-                .value()
-                .round()
-                .clamp(1.0, 13.0) as u8
-        } else {
-            0
-        },
-        artifact_transmutations: if kind == ItemKind::Artifact
-            && editor.allow_transmutations.is_active()
-        {
-            editor
-                .trinket_transmutations
-                .value()
-                .round()
-                .clamp(1.0, 10.0) as u8
-        } else {
-            0
-        },
-        source,
-        // The stack's own encoding carries these; the editor rebuilds them
-        // from the count and total, and keeps the row in its cluster.
-        identity_group: None,
-        max_depth,
-        alternative_group: editor.opened.requirement.alternative_group,
-        level_sum: None,
-    };
-    let count = selected_count(editor);
-    let total = countable_levels(editor).then(|| selected_total(editor));
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    let copy_depth = (count > 1 && total.is_none() && editor.copy_floor_switch.is_active())
-        .then(|| normalize_floor_limit(editor.copy_floor_value.value().round() as u8));
-    Draft {
-        requirement,
-        count,
-        total,
-        copy_depth,
-        ..editor.opened.clone()
-    }
-}
-
-/// The dialog's own check before the editor's: the specific-effect list needs
-/// a selection. Everything else — the requirement's own problems, a trinket
-/// already required, what the save would break — the editor says on saving.
-fn check(editor: &Rc<Editor>) -> Result<(), String> {
-    if enchantable(selected_kind(editor))
-        && editor.effect_mode.selected() == EFFECT_SPECIFIC
-        && checked_effects(editor).is_empty()
-    {
-        return Err(if selected_kind(editor) == ItemKind::Armor {
-            "Choose at least one glyph or curse".to_owned()
-        } else {
-            "Choose at least one enchantment or curse".to_owned()
-        });
-    }
-    Ok(())
-}
-
-fn selected_choice(editor: &Rc<Editor>) -> KindChoice {
-    ALL_KIND_CHOICES
-        .get(editor.category.selected() as usize)
-        .copied()
-        .unwrap_or((ItemKind::Weapon, None))
-}
-
-fn selected_kind(editor: &Rc<Editor>) -> ItemKind {
-    selected_choice(editor).0
-}
-
-const fn enchantable(kind: ItemKind) -> bool {
-    matches!(kind, ItemKind::Weapon | ItemKind::Armor)
-}
-
-fn selected_item(editor: &Rc<Editor>) -> Option<ItemId> {
-    editor
-        .items
-        .borrow()
-        .get(editor.item_row.selected() as usize)
-        .copied()
-        .flatten()
-}
-
-/// The tier predicate the pickers currently describe. A named item carries
-/// its own tier, so the filter only applies to wildcard equipment.
-fn selected_tier(editor: &Rc<Editor>) -> TierRequirement {
-    let kind = selected_kind(editor);
-    if selected_item(editor).is_some() || !matches!(kind, ItemKind::Weapon | ItemKind::Armor) {
-        return TierRequirement::Any;
-    }
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    let exact_tier = editor.exact_tier.value().round() as u8;
-    let bounded_tier = u8::try_from(editor.bounded_tier.selected())
-        .map_or(BOUNDED_TIER_MIN, |offset| {
-            BOUNDED_TIER_MIN.saturating_add(offset)
-        });
-    match editor.tier_row.selected() {
-        1 => TierRequirement::Exact(exact_tier),
-        2 => TierRequirement::AtLeast(bounded_tier),
-        3 => TierRequirement::AtMost(bounded_tier),
-        _ => TierRequirement::Any,
-    }
-}
-
-/// The highest upgrade the current selection may name. Weapons only reach
-/// their extra upgrades at tier 4; tierless artifacts retain their +5 ceiling.
-fn selected_upgrade_ceiling(editor: &Rc<Editor>) -> u8 {
-    let ceiling = selected_kind(editor).maximum_search_upgrade();
-    if selected_kind(editor) != ItemKind::Weapon || ceiling <= MAX_GENERATED_UPGRADE {
-        return ceiling;
-    }
-    let reaches_the_extra_tier = match selected_item(editor) {
-        Some(id) => item(id).tier == Some(EXTRA_UPGRADE_TIER),
-        None => selected_tier(editor).matches(Some(EXTRA_UPGRADE_TIER)),
-    };
-    if reaches_the_extra_tier {
-        ceiling
-    } else {
-        MAX_GENERATED_UPGRADE
-    }
-}
-
-fn selected_upgrade(editor: &Rc<Editor>) -> UpgradeRequirement {
-    if matches!(
-        selected_kind(editor),
-        ItemKind::Trinket | ItemKind::Artifact
-    ) {
-        return UpgradeRequirement::Any;
-    }
-    let kind = selected_kind(editor);
-    match editor.upgrade_row.selected() {
-        1 => {
-            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-            let value = editor.exact_upgrade.value().round() as u8;
-            UpgradeRequirement::Exact(value)
+/// The effect filter: its mode, and the "Specific…" grid under the
+/// editor's headings, rebuilt only when the effects it lists change.
+fn apply_effects(editor: &Rc<Editor>, before: Option<&EffectControl>, effect: &EffectControl) {
+    let heading = sheet::effect_heading(effect, EffectGroup::Enchantment).unwrap_or_default();
+    editor.effect_mode_group.set_visible(effect.visible);
+    editor.effect_mode_group.set_title(heading);
+    editor.effect_mode.set_title(heading);
+    fill(
+        &editor.effect_mode,
+        before.map(|before| &before.modes[..]),
+        &effect.modes,
+    );
+    select(
+        &editor.effect_mode,
+        sheet::position(&effect.modes, &effect.mode),
+    );
+    if before.is_none_or(|before| !sheet::same_effects(before, effect)) {
+        let mut checks = Vec::new();
+        for (group, _, list) in &editor.effect_lists {
+            list.remove_all();
+            for choice in sheet::effect_choices(effect, *group) {
+                let check = gtk::CheckButton::builder()
+                    .valign(gtk::Align::Center)
+                    .build();
+                let row = adw::ActionRow::builder()
+                    .title(&choice.label)
+                    .activatable_widget(&check)
+                    .build();
+                row.add_prefix(&check);
+                let value = choice.value;
+                check.connect_toggled(hook(editor, move |_, _: &gtk::CheckButton| {
+                    Some(Change::ToggleEffect(value))
+                }));
+                list.append(&row);
+                checks.push((value, check));
+            }
         }
-        2 => {
-            let value = if kind == ItemKind::Ring {
-                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                let value = editor.ring_minimum_upgrade.value().round() as u8;
-                value
-            } else {
-                u8::try_from(editor.minimum_upgrade.selected() + 1).unwrap_or(1)
-            };
-            UpgradeRequirement::AtLeast(value)
-        }
-        _ => UpgradeRequirement::Any,
+        editor.effect_checks.replace(checks);
+    }
+    for (value, check) in editor.effect_checks.borrow().iter() {
+        check.set_active(
+            effect
+                .choices
+                .iter()
+                .any(|choice| choice.value == *value && choice.selected),
+        );
+    }
+    let specific = effect.visible && effect.mode == EffectMode::Specific;
+    for (group, preferences, _) in &editor.effect_lists {
+        let heading = sheet::effect_heading(effect, *group);
+        preferences.set_visible(specific && heading.is_some());
+        preferences.set_title(heading.unwrap_or_default());
+    }
+    editor.effect_lists[0]
+        .1
+        .set_description(Some(effect.caption.as_str()));
+}
+
+/// A check box from the editor's toggle.
+fn toggle(row: &adw::SwitchRow, control: &Toggle) {
+    row.set_visible(control.visible);
+    row.set_title(&control.label);
+    row.set_active(control.value);
+}
+
+/// A mode picker and the spinner of its value, shown while the mode names
+/// one rather than `any`.
+fn mode_range<M: PartialEq>(
+    row: &adw::ComboRow,
+    spin: &adw::SpinRow,
+    before: Option<&ModeRange<M>>,
+    (control, any): (&ModeRange<M>, M),
+) {
+    row.set_visible(control.visible);
+    fill(row, before.map(|before| &before.modes[..]), &control.modes);
+    select(row, sheet::position(&control.modes, &control.mode));
+    spin.set_visible(control.visible && control.mode != any);
+    set_range(spin, control.value, control.min, control.max);
+    spin.set_title(&control.value_label);
+}
+
+/// A switch and the spinner it turns on.
+fn range_toggle(switch: &adw::SwitchRow, spin: &adw::SpinRow, control: &RangeToggle) {
+    switch.set_visible(control.visible);
+    switch.set_title(&control.label);
+    if let Some(caption) = &control.caption {
+        switch.set_subtitle(caption);
+    }
+    switch.set_active(control.enabled);
+    spin.set_visible(control.visible && control.enabled);
+    set_range(spin, control.value, control.min, control.max);
+    spin.set_title(&control.value_label);
+}
+
+/// A floor-limit switch and its spinner, which runs over the editor's
+/// floors.
+fn floor_toggle(switch: &adw::SwitchRow, spin: &adw::SpinRow, control: &FloorToggle) {
+    switch.set_visible(control.visible);
+    switch.set_title(&control.label);
+    switch.set_active(control.enabled);
+    spin.set_visible(control.visible && control.enabled);
+    let (first, last) = sheet::floor_range(control);
+    set_range(spin, control.value, first, last);
+    spin.set_title(&control.value_label);
+}
+
+/// Sets a spinner's bounds and value at once, so the value is never
+/// clamped to the bounds it is leaving.
+fn set_range(spin: &adw::SpinRow, value: u8, min: u8, max: u8) {
+    spin.adjustment().configure(
+        f64::from(value),
+        f64::from(min),
+        f64::from(max),
+        1.0,
+        1.0,
+        0.0,
+    );
+}
+
+/// Refills a combo row when the editor's choices differ from those it
+/// shows.
+fn fill<T: PartialEq>(row: &adw::ComboRow, before: Option<&[Opt<T>]>, options: &[Opt<T>]) {
+    if before.is_none_or(|before| before != options) {
+        let labels: Vec<String> = options.iter().map(|option| option.label.clone()).collect();
+        set_model(row, &labels);
     }
 }
 
-/// The effect predicate the picker currently describes. Wands and rings
-/// carry no effects; an empty specific selection reads as the wildcard and
-/// is refused by [`check`] instead.
-fn selected_effect(editor: &Rc<Editor>) -> EffectRequirement {
-    let kind = selected_kind(editor);
-    if !enchantable(kind) {
-        return EffectRequirement::Any;
-    }
-    match editor.effect_mode.selected() {
-        EFFECT_ANY_ENCHANTMENT => {
-            EffectSet::enchantments(kind).map_or(EffectRequirement::Any, EffectRequirement::OneOf)
-        }
-        EFFECT_SPECIFIC => EffectSet::from_effects(checked_effects(editor))
-            .map_or(EffectRequirement::Any, EffectRequirement::OneOf),
-        _ => EffectRequirement::Any,
-    }
-}
-
-/// The checked effects of the specific list, skipping curses hidden by the
-/// uncursed switch.
-fn checked_effects(editor: &Rc<Editor>) -> Vec<Effect> {
-    editor
-        .effect_checks
-        .borrow()
-        .iter()
-        .filter(|entry| entry.row.is_visible() && entry.check.is_active())
-        .map(|entry| entry.effect)
-        .collect()
-}
-
-/// How many items the row asks for; a cluster member leaves its stack to the
-/// cluster and always speaks for one.
-#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)] // Clamped to 1..=3.
-fn selected_count(editor: &Rc<Editor>) -> u8 {
-    if editor.opened.blanket
-        || editor.opened.in_cluster
-        || matches!(
-            selected_kind(editor),
-            ItemKind::Trinket | ItemKind::Artifact
-        )
-    {
-        return 1;
-    }
-    editor
-        .count_row
-        .value()
-        .round()
-        .clamp(1.0, f64::from(STACK_MAX)) as u8
-}
-
-/// Whether the row is a stack of a named ring whose levels count together —
-/// the only shape a combined level can describe. Levels only combine
-/// meaningfully across rings: a ring's effect scales with its level, so a +0
-/// and a +1 together grant what one +2 does.
-fn countable_levels(editor: &Rc<Editor>) -> bool {
-    !editor.opened.blanket
-        && !editor.opened.in_cluster
-        && selected_kind(editor) == ItemKind::Ring
-        && selected_item(editor).is_some()
-        && selected_count(editor) > 1
-        && editor.levels_switch.is_active()
-}
-
-#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-fn selected_total(editor: &Rc<Editor>) -> u8 {
-    editor.levels_value.value().round().max(1.0) as u8
-}
-
-/// The most levels the stack could reach: every item counts its upgrade plus
-/// one, and a member of a combined-level stack may carry any upgrade — but a
-/// generated world levels at most one ring, the Imp vault's prize, past
-/// [`MAX_STANDARD_RING_UPGRADE`].
-fn levels_capacity(editor: &Rc<Editor>) -> u8 {
-    let count = selected_count(editor).max(1);
-    let per_item = selected_upgrade_ceiling(editor) + 1;
-    let generated = (MAX_GENERATED_UPGRADE + 1)
-        .saturating_add((count - 1).saturating_mul(MAX_STANDARD_RING_UPGRADE + 1));
-    count.saturating_mul(per_item).min(generated).max(1)
-}
-
-fn set_tier_value(editor: &Rc<Editor>, tier: u8) {
-    editor.exact_tier.set_value(f64::from(tier));
-    editor
-        .bounded_tier
-        .set_selected(u32::from(tier.clamp(3, 4) - 3));
-}
-
-/// Items offered for one category choice. Tier-1 equipment is starting gear
-/// and never spawns in the dungeon, so it is not searchable; tipped darts are
-/// guaranteed shop stock (and can be tipped by hand), so nobody searches for
-/// them either.
-fn searchable_items(choice: KindChoice) -> Vec<&'static ItemDefinition> {
-    let (kind, weapon_category) = choice;
-    let mut items: Vec<_> = ITEMS
-        .iter()
-        .filter(|definition| {
-            definition.kind == kind
-                && definition.tier != Some(1)
-                && !definition.id.is_tipped_dart()
-                && definition.id != ItemId::TrinketCatalyst
-                && weapon_category
-                    .is_none_or(|category| definition.weapon_category() == Some(category))
-        })
-        .collect();
-    if matches!(kind, ItemKind::Weapon | ItemKind::Armor) {
-        items.sort_by_key(|definition| definition.tier);
-    }
-    items
-}
-
-fn populate_items(editor: &Rc<Editor>, selection: Option<ItemId>) {
-    let choice = selected_choice(editor);
-    let named_only = matches!(choice.0, ItemKind::Trinket | ItemKind::Artifact);
-    editor.item_row.set_title(if named_only {
-        kind_choice_label(choice)
-    } else {
-        "Item"
-    });
-    let mut ids = if named_only { vec![] } else { vec![None] };
-    let mut labels = if named_only {
-        vec![]
-    } else {
-        vec![format!("Any {}", kind_choice_singular(choice))]
-    };
-    for definition in searchable_items(choice) {
-        ids.push(Some(definition.id));
-        labels.push(match definition.tier {
-            Some(tier) => format!("{} · Tier {tier}", definition.name),
-            None => definition.name.to_owned(),
-        });
-    }
-    let selected = selection
-        .and_then(|wanted| ids.iter().position(|id| *id == Some(wanted)))
-        .unwrap_or(0);
-    editor.items.replace(ids);
+fn set_model(row: &adw::ComboRow, labels: &[String]) {
     let labels: Vec<&str> = labels.iter().map(String::as_str).collect();
-    editor
-        .item_row
-        .set_model(Some(&gtk::StringList::new(&labels)));
-    editor
-        .item_row
-        .set_selected(u32::try_from(selected).unwrap_or(0));
+    row.set_model(Some(&gtk::StringList::new(&labels)));
 }
 
-/// Rebuilds the effect picker for the selected category and restores
-/// `selection` onto it: a set of another family falls back to Any.
-fn populate_effects(editor: &Rc<Editor>, selection: EffectRequirement) {
-    let kind = selected_kind(editor);
-    let (mode_title, list_title) = if kind == ItemKind::Armor {
-        ("Glyph", "Glyphs")
-    } else {
-        ("Enchantment", "Enchantments")
-    };
-    editor.effect_mode_group.set_title(mode_title);
-    editor.effect_mode.set_title(mode_title);
-    editor.effect_group.set_title(list_title);
-    editor.effect_list.remove_all();
-
-    let family: Vec<Effect> = match kind {
-        ItemKind::Weapon => ALL_WEAPON_EFFECTS
-            .iter()
-            .map(|effect| Effect::Weapon(*effect))
-            .collect(),
-        ItemKind::Armor => ALL_ARMOR_EFFECTS
-            .iter()
-            .map(|effect| Effect::Armor(*effect))
-            .collect(),
-        ItemKind::Wand | ItemKind::Ring | ItemKind::Trinket | ItemKind::Artifact => Vec::new(),
-    };
-    let selected_set = match selection {
-        EffectRequirement::OneOf(set) if set.family() == kind => Some(set),
-        _ => None,
-    };
-    let checks: Vec<EffectCheck> = family
-        .into_iter()
-        .map(|effect| {
-            let check = gtk::CheckButton::builder()
-                .active(selected_set.is_some_and(|set| set.contains(effect)))
-                .valign(gtk::Align::Center)
-                .build();
-            let row = adw::ActionRow::builder()
-                .title(effect_label(effect.wire_name(), effect.is_curse()))
-                .activatable_widget(&check)
-                .build();
-            row.add_prefix(&check);
-            check.connect_toggled({
-                let banner = editor.banner.clone();
-                move |_| banner.set_revealed(false)
-            });
-            editor.effect_list.append(&row);
-            EffectCheck { effect, row, check }
-        })
-        .collect();
-    editor.effect_checks.replace(checks);
-    apply_curse_visibility(editor);
-
-    let mode = match selected_set {
-        None => EFFECT_ANY,
-        Some(set) if EffectSet::enchantments(kind) == Some(set) => EFFECT_ANY_ENCHANTMENT,
-        Some(_) => EFFECT_SPECIFIC,
-    };
-    editor.effect_mode.set_selected(mode);
+fn select(row: &adw::ComboRow, position: Option<u32>) {
+    row.set_selected(position.unwrap_or(gtk::INVALID_LIST_POSITION));
 }
 
-/// Hides (and unchecks) the curse rows while the item must be uncursed.
-fn apply_curse_visibility(editor: &Rc<Editor>) {
-    let hide_curses = editor.uncursed.is_active();
-    for entry in editor.effect_checks.borrow().iter() {
-        if !entry.effect.is_curse() {
-            continue;
-        }
-        entry.row.set_visible(!hide_curses);
-        if hide_curses {
-            entry.check.set_active(false);
-        }
-    }
-}
-
-fn effect_label(name: &str, is_curse: bool) -> String {
-    if is_curse {
-        format!("{name} · curse")
-    } else {
-        name.to_owned()
-    }
-}
-
-fn normalize_upgrades(editor: &Rc<Editor>) {
-    if selected_kind(editor) == ItemKind::Trinket {
-        editor.upgrade_row.set_selected(0);
-        return;
-    }
-    let maximum_upgrade = selected_upgrade_ceiling(editor);
-    let maximum = f64::from(maximum_upgrade);
-    let adjustment = editor.exact_upgrade.adjustment();
-    adjustment.set_lower(1.0);
-    adjustment.set_upper(maximum);
-    editor
-        .exact_upgrade
-        .set_value(editor.exact_upgrade.value().clamp(1.0, maximum));
-    let minimum = u8::try_from(editor.minimum_upgrade.selected() + 1).unwrap_or(1);
-    populate_minimum_upgrades(editor, minimum);
-    let ring_adjustment = editor.ring_minimum_upgrade.adjustment();
-    ring_adjustment.set_lower(1.0);
-    ring_adjustment.set_upper(f64::from(maximum_upgrade - 1));
-    editor.ring_minimum_upgrade.set_value(
-        editor
-            .ring_minimum_upgrade
-            .value()
-            .clamp(1.0, f64::from(maximum_upgrade - 1)),
-    );
-}
-
-/// Bounds the combined level by what the stack could carry together, and
-/// spells the value out the way the chip's badge reads it.
-fn refresh_levels_range(editor: &Rc<Editor>) {
-    let capacity = levels_capacity(editor);
-    let adjustment = editor.levels_value.adjustment();
-    adjustment.set_lower(1.0);
-    adjustment.set_upper(f64::from(capacity));
-    editor
-        .levels_value
-        .set_value(editor.levels_value.value().clamp(1.0, f64::from(capacity)));
-    editor.levels_value.set_subtitle(&format!(
-        "\u{2265} {} across up to {}",
-        selected_total(editor),
-        selected_count(editor)
-    ));
-}
-
-fn populate_minimum_upgrades(editor: &Rc<Editor>, selection: u8) {
-    let maximum = selected_upgrade_ceiling(editor).max(2);
-    let labels = minimum_upgrade_labels(maximum);
-    editor
-        .minimum_upgrade
-        .set_model(Some(&gtk::StringList::new(&borrowed(&labels))));
-    editor
-        .minimum_upgrade
-        .set_selected(u32::from(selection.clamp(1, maximum - 1) - 1));
-}
-
-fn set_minimum_upgrade(editor: &Rc<Editor>, upgrade: u8) {
-    populate_minimum_upgrades(editor, upgrade);
-    let maximum = selected_upgrade_ceiling(editor).max(2);
-    editor
-        .ring_minimum_upgrade
-        .set_value(f64::from(upgrade.clamp(1, maximum - 1)));
-}
-
-fn refresh_visibility(editor: &Rc<Editor>) {
-    let kind = selected_kind(editor);
-    editor.select_trinket.set_visible(
-        !editor.opened.blanket
-            && kind == ItemKind::Trinket
-            && !editor.allow_transmutations.is_active(),
-    );
-    editor
-        .allow_transmutations
-        .set_visible(matches!(kind, ItemKind::Trinket | ItemKind::Artifact));
-    editor.trinket_transmutations.set_visible(
-        matches!(kind, ItemKind::Trinket | ItemKind::Artifact)
-            && editor.allow_transmutations.is_active(),
-    );
-    editor
-        .trinket_transmutations
-        .adjustment()
-        .set_upper(if kind == ItemKind::Artifact {
-            10.0
-        } else {
-            13.0
-        });
-    editor.allow_transmutations.set_subtitle(if kind == ItemKind::Artifact { "Includes natural finds or transforms an obtainable artifact using the remaining deck at the floor limit. Source and curse filters apply to the starting artifact. Scroll availability and later generation changes are not simulated." } else { "Includes the initial offers. AutoTrinket can use a helpful starting trinket. Scroll availability and effects after transmuting are not simulated." });
-    if editor.allow_transmutations.is_active() {
-        editor.select_trinket.set_active(false);
-    }
-    editor
-        .exclude_resin
-        .set_visible(!editor.opened.blanket && kind == ItemKind::Wand);
-    if kind != ItemKind::Wand {
-        editor.exclude_resin.set_active(false);
-    }
-    if kind != ItemKind::Trinket {
-        editor.allow_transmutations.set_active(false);
-        editor.select_trinket.set_active(false);
-    }
-    let wildcard_equipment = selected_item(editor).is_none() && enchantable(kind);
-    let tier_mode = editor.tier_row.selected();
-    editor.tier_row.set_visible(wildcard_equipment);
-    editor
-        .exact_tier
-        .set_visible(wildcard_equipment && tier_mode == 1);
-    editor
-        .bounded_tier
-        .set_visible(wildcard_equipment && matches!(tier_mode, 2 | 3));
-    editor.bounded_tier.set_title(if tier_mode == 2 {
-        "Minimum tier"
-    } else {
-        "Maximum tier"
-    });
-    editor
-        .exact_upgrade
-        .set_visible(editor.upgrade_row.selected() == 1);
-    editor
-        .minimum_upgrade
-        .set_visible(editor.upgrade_row.selected() == 2 && kind != ItemKind::Ring);
-    editor
-        .ring_minimum_upgrade
-        .set_visible(editor.upgrade_row.selected() == 2 && kind == ItemKind::Ring);
-    // A stack of two or more may bound its extra copies, or count their
-    // levels together when they are copies of one named item. A combined
-    // level speaks for the whole stack, so the per-item upgrade steps aside.
-    let counting_levels = countable_levels(editor);
-    let stacked = !editor.opened.in_cluster && selected_count(editor) > 1;
-    editor
-        .upgrade_group
-        .set_visible(!counting_levels && !matches!(kind, ItemKind::Trinket | ItemKind::Artifact));
-    editor.details_group.set_visible(kind != ItemKind::Trinket);
-    editor.count_group.set_visible(
-        !editor.opened.blanket
-            && !editor.opened.in_cluster
-            && !matches!(kind, ItemKind::Trinket | ItemKind::Artifact),
-    );
-    editor
-        .copy_floor_switch
-        .set_visible(stacked && !counting_levels);
-    editor
-        .copy_floor_value
-        .set_visible(stacked && !counting_levels && editor.copy_floor_switch.is_active());
-    editor
-        .levels_switch
-        .set_visible(stacked && kind == ItemKind::Ring && selected_item(editor).is_some());
-    editor.levels_value.set_visible(counting_levels);
-    editor.effect_mode_group.set_visible(enchantable(kind));
-    editor
-        .effect_group
-        .set_visible(enchantable(kind) && editor.effect_mode.selected() == EFFECT_SPECIFIC);
-    editor
-        .floor_value
-        .set_visible(editor.floor_switch.is_active());
-}
-
-/// The tier labels of the at-least/at-most picker, one per tier the engine
-/// accepts as a bound.
-fn bounded_tier_labels() -> Vec<String> {
-    (BOUNDED_TIER_MIN..=BOUNDED_TIER_MAX)
-        .map(|tier| format!("Tier {tier}"))
-        .collect()
-}
-
-/// The highest upgrade any family can be asked for: weapons reach furthest,
-/// on the Imp's vault prizes.
-fn widest_upgrade() -> u8 {
-    ItemKind::Weapon.maximum_search_upgrade()
-}
-
-/// One ring's levels — its upgrade plus one — the combined-level spin row's
-/// opening upper bound.
-fn one_ring_levels() -> f64 {
-    f64::from(MAX_GENERATED_UPGRADE + 1)
-}
-
-/// The "+N or higher" options for a family: every upgrade below its ceiling,
-/// since asking for at least the ceiling is what "Exactly" already says.
-fn minimum_upgrade_labels(maximum: u8) -> Vec<String> {
-    (1..maximum)
-        .map(|upgrade| format!("+{upgrade} or higher"))
-        .collect()
-}
-
-fn borrowed(labels: &[String]) -> Vec<&str> {
-    labels.iter().map(String::as_str).collect()
-}
-
-fn combo_row(title: &str, options: &[&str]) -> adw::ComboRow {
-    adw::ComboRow::builder()
-        .title(title)
-        .model(&gtk::StringList::new(options))
-        .build()
+fn combo_row(title: &str) -> adw::ComboRow {
+    adw::ComboRow::builder().title(title).build()
 }
 
 fn searchable_combo_row(title: &str) -> adw::ComboRow {
@@ -1159,46 +656,9 @@ fn searchable_combo_row(title: &str) -> adw::ComboRow {
     row
 }
 
-fn spin_row(title: &str, value: f64, lower: f64, upper: f64) -> adw::SpinRow {
+fn spin_row(title: &str) -> adw::SpinRow {
     adw::SpinRow::builder()
         .title(title)
-        .adjustment(&gtk::Adjustment::new(value, lower, upper, 1.0, 1.0, 0.0))
+        .adjustment(&gtk::Adjustment::new(1.0, 1.0, 1.0, 1.0, 1.0, 0.0))
         .build()
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn artifact_picker_contains_all_eleven_spawnable_items() {
-        let definitions = searchable_items((ItemKind::Artifact, None));
-        assert_eq!(definitions.len(), 11);
-        assert!(
-            definitions
-                .iter()
-                .all(|definition| definition.tier.is_none())
-        );
-        assert!(
-            definitions
-                .iter()
-                .any(|definition| definition.id == ItemId::SandalsOfNature)
-        );
-    }
-
-    #[test]
-    fn trinket_picker_contains_only_the_seventeen_named_choices() {
-        let definitions = searchable_items((ItemKind::Trinket, None));
-        assert_eq!(definitions.len(), 17);
-        assert!(
-            definitions
-                .iter()
-                .all(|definition| definition.id != ItemId::TrinketCatalyst)
-        );
-        assert!(
-            definitions
-                .iter()
-                .any(|definition| definition.name == "Mimic Tooth")
-        );
-    }
 }

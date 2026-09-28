@@ -28,23 +28,6 @@ pub fn is_farming_requirement(floor: &FloorRequirement) -> bool {
         && floor.any_rooms.contains(&RoomType::SecretGarden)
 }
 
-/// One entry in the requirement editor's category picker: an item family,
-/// optionally narrowed to one weapon class.
-pub type KindChoice = (ItemKind, Option<WeaponCategory>);
-
-/// Every user-facing category choice, in presentation order. A plain weapon
-/// requirement keeps matching melee and thrown weapons alike.
-pub const ALL_KIND_CHOICES: &[KindChoice] = &[
-    (ItemKind::Weapon, None),
-    (ItemKind::Weapon, Some(WeaponCategory::Melee)),
-    (ItemKind::Weapon, Some(WeaponCategory::Thrown)),
-    (ItemKind::Armor, None),
-    (ItemKind::Wand, None),
-    (ItemKind::Ring, None),
-    (ItemKind::Trinket, None),
-    (ItemKind::Artifact, None),
-];
-
 /// The whole persisted query state shared by all panes.
 #[derive(Clone, Debug)]
 #[allow(clippy::struct_excessive_bools)] // Mirrors independent engine query options.
@@ -206,8 +189,11 @@ impl AppState {
 
     /// Opens the requirement sheet on the visible row `key`, or — with
     /// `None` — on a new chip of the ordinary or blanket section under a key
-    /// claimed now, which a cancelled sheet simply leaves unused.
+    /// claimed now, which a cancelled sheet simply leaves unused. A new
+    /// ordinary wand may be Arcane Resin instead; the sheet offers it as a
+    /// way into the resin dialog.
     pub fn open_sheet(&mut self, key: Option<u64>, blanket: bool) -> Draft {
+        let offer_resin = key.is_none();
         let key = key.unwrap_or_else(|| self.claim_key());
         let resin = self.resin();
         editor::open(
@@ -215,32 +201,25 @@ impl AppState {
             Some(key),
             blanket,
             resin.as_ref(),
-            false,
+            offer_resin,
             false,
         )
     }
 
-    /// Saves a requirement sheet onto the rows as they are now — they may
-    /// have moved while it was open — together with what the sheet made of
-    /// the query's Arcane Resin.
-    ///
-    /// # Errors
-    ///
-    /// Returns why the editor refused the draft, in the order to show the
-    /// reasons; nothing is stored then.
-    pub fn save(&mut self, draft: &Draft) -> Result<EditResult, Vec<String>> {
-        match editor::save(draft, &self.requirements, Some(self.next_key)) {
-            SaveResult::Saved { result, resin } => {
-                self.adopt(&result);
-                match resin {
-                    ResinOutcome::Unchanged => {}
-                    ResinOutcome::Set(resin) => self.set_resin(Some(resin)),
-                    ResinOutcome::Clear => self.set_resin(None),
-                }
-                Ok(result)
+    /// Saves a sheet onto the rows as they are now — they may have moved
+    /// while it was open — together with what it made of the query's Arcane
+    /// Resin. A refused save stores nothing; its form says why.
+    pub fn save(&mut self, draft: &Draft) -> SaveResult {
+        let saved = editor::save(draft, &self.requirements, Some(self.next_key));
+        if let SaveResult::Saved { result, resin } = &saved {
+            self.adopt(result);
+            match *resin {
+                ResinOutcome::Unchanged => {}
+                ResinOutcome::Set(resin) => self.set_resin(Some(resin)),
+                ResinOutcome::Clear => self.set_resin(None),
             }
-            SaveResult::Refused { form, .. } => Err(form.errors),
         }
+        saved
     }
 
     /// Takes an editor answer's rows, when they changed, and its key counter.
@@ -305,32 +284,6 @@ impl AppState {
         }
         query.validate().map_err(|error| error.to_string())?;
         Ok(query)
-    }
-}
-
-pub const fn kind_choice_label(choice: KindChoice) -> &'static str {
-    match choice {
-        (ItemKind::Weapon, None) => "Weapon",
-        (ItemKind::Weapon, Some(WeaponCategory::Melee)) => "Melee weapon",
-        (ItemKind::Weapon, Some(WeaponCategory::Thrown)) => "Thrown weapon",
-        (ItemKind::Armor, _) => "Armor",
-        (ItemKind::Wand, _) => "Wand",
-        (ItemKind::Ring, _) => "Ring",
-        (ItemKind::Trinket, _) => "Trinket",
-        (ItemKind::Artifact, _) => "Artifact",
-    }
-}
-
-pub const fn kind_choice_singular(choice: KindChoice) -> &'static str {
-    match choice {
-        (ItemKind::Weapon, None) => "weapon",
-        (ItemKind::Weapon, Some(WeaponCategory::Melee)) => "melee weapon",
-        (ItemKind::Weapon, Some(WeaponCategory::Thrown)) => "thrown weapon",
-        (ItemKind::Armor, _) => "armor",
-        (ItemKind::Wand, _) => "wand",
-        (ItemKind::Ring, _) => "ring",
-        (ItemKind::Trinket, _) => "trinket",
-        (ItemKind::Artifact, _) => "artifact",
     }
 }
 
@@ -503,7 +456,10 @@ pub const ALL_CHALLENGES: &[ChallengeInfo] = &[
 #[cfg(test)]
 mod tests {
     use shpd_seedfinder_core::catalog::{ItemId, ItemKind};
-    use shpd_seedfinder_core::editor::{self, BoardView, Draft, Edit, ItemView, Row};
+    use shpd_seedfinder_core::editor::{
+        self, BoardView, Change, Draft, Edit, EditResult, ItemChoice, ItemView, Row, SaveResult,
+        UpgradeMode,
+    };
     use shpd_seedfinder_core::query::{Requirement, TierRequirement, UpgradeRequirement};
     use shpd_seedfinder_core::quests::{
         BlacksmithQuestType, GhostQuestType, ImpQuestType, QuestSummary, ScheduledQuest,
@@ -532,22 +488,27 @@ mod tests {
             .expect("the row is on the board")
     }
 
-    /// A sheet opened on `key` (or a new chip) and filled in the way the
-    /// requirement dialog fills it: the requirement its controls describe,
-    /// with the stack it asks for.
-    fn sheet(
-        state: &mut AppState,
-        key: Option<u64>,
-        requirement: Requirement,
-        (count, total, copy_depth): (u8, Option<u8>, Option<u8>),
-    ) -> Draft {
-        let opened = state.open_sheet(key, requirement.blanket);
-        Draft {
-            requirement,
-            count,
-            total,
-            copy_depth,
-            ..opened
+    /// A sheet opened on `key` (or a new chip), its controls moved the way
+    /// the requirement dialog moves them.
+    fn sheet(state: &mut AppState, key: Option<u64>, changes: &[Change]) -> Draft {
+        changes
+            .iter()
+            .fold(state.open_sheet(key, false), |draft, change| {
+                editor::change(&draft, change)
+            })
+    }
+
+    fn saved(saved: SaveResult) -> EditResult {
+        match saved {
+            SaveResult::Saved { result, .. } => result,
+            SaveResult::Refused { form, .. } => panic!("refused: {:?}", form.errors),
+        }
+    }
+
+    fn refused(saved: SaveResult) -> Vec<String> {
+        match saved {
+            SaveResult::Saved { .. } => panic!("the save went through"),
+            SaveResult::Refused { form, .. } => form.errors,
         }
     }
 
@@ -691,7 +652,6 @@ mod tests {
                 .collect(),
             ..AppState::default()
         };
-        assert!(super::ALL_KIND_CHOICES.contains(&(ItemKind::Artifact, None)));
         let chip = &entry(&state, 1).chips[0];
         assert_eq!(chip.title, "Sandals of Nature");
         assert!(chip.details.contains(&"exactly +5".to_owned()));
@@ -745,7 +705,6 @@ mod tests {
             query.requirements[0].alternative_group,
             query.requirements[1].alternative_group
         );
-        assert!(super::ALL_KIND_CHOICES.contains(&(ItemKind::Trinket, None)));
     }
 
     #[test]
@@ -1198,14 +1157,20 @@ mod tests {
     #[test]
     fn a_combined_level_stack_is_built_and_checked_through_the_editor() {
         let mut state = AppState::default();
-        let ring = Requirement {
-            item: Some(ItemId::RingMight),
-            ..Requirement::any(ItemKind::Ring)
-        };
-        let draft = sheet(&mut state, None, ring, (2, Some(4), None));
-        let saved = state.save(&draft).unwrap();
+        let draft = sheet(
+            &mut state,
+            None,
+            &[
+                Change::SetKind(ItemKind::Ring, None),
+                Change::SetItem(ItemChoice::Item(ItemId::RingMight)),
+                Change::SetCount(2),
+                Change::SetCountLevels(true),
+                Change::SetTotal(4),
+            ],
+        );
+        let result = saved(state.save(&draft));
         let key = draft.key.unwrap();
-        assert_eq!(saved.focus, Some(key));
+        assert_eq!(result.focus, Some(key));
         assert_eq!(state.requirements.len(), 2);
         assert!(
             state.requirements.iter().all(|row| row
@@ -1262,13 +1227,20 @@ mod tests {
     #[test]
     fn a_stack_of_copies_carries_its_own_floor_limit() {
         let mut state = AppState::default();
-        let armor = Requirement {
-            upgrade: UpgradeRequirement::Exact(3),
-            max_depth: Some(4),
-            ..Requirement::any(ItemKind::Armor)
-        };
-        let draft = sheet(&mut state, None, armor, (2, None, Some(9)));
-        state.save(&draft).unwrap();
+        let draft = sheet(
+            &mut state,
+            None,
+            &[
+                Change::SetKind(ItemKind::Armor, None),
+                Change::SetUpgradeMode(UpgradeMode::Exact),
+                Change::SetUpgrade(3),
+                Change::SetFloorLimitEnabled(true),
+                Change::SetCount(2),
+                Change::SetCopyDepthEnabled(true),
+                Change::SetCopyDepth(9),
+            ],
+        );
+        saved(state.save(&draft));
         let item = entry(&state, draft.key.unwrap());
         assert_eq!(item.stack.count, 2);
         assert_eq!(item.stack.copy_depth, Some(9));
@@ -1280,7 +1252,7 @@ mod tests {
         // Saving the chip as it stands gives the rows back untouched.
         let before = state.requirements.clone();
         let again = state.open_sheet(Some(item.members[0]), false);
-        let unchanged = state.save(&again).unwrap();
+        let unchanged = saved(state.save(&again));
         assert!(!unchanged.changed);
         assert_eq!(unchanged.focus, Some(item.members[0]));
         assert_eq!(state.requirements, before);
@@ -1289,12 +1261,15 @@ mod tests {
     #[test]
     fn a_new_sheet_saves_under_its_key_and_a_blanket_follows_the_first_row() {
         let mut state = AppState::default();
-        let wand = Requirement {
-            item: Some(ItemId::WandFrost),
-            ..Requirement::any(ItemKind::Wand)
-        };
-        let draft = sheet(&mut state, None, wand, (1, None, None));
-        state.save(&draft).unwrap();
+        let draft = sheet(
+            &mut state,
+            None,
+            &[
+                Change::SetKind(ItemKind::Wand, None),
+                Change::SetItem(ItemChoice::Item(ItemId::WandFrost)),
+            ],
+        );
+        saved(state.save(&draft));
         assert_eq!(state.requirements[0].key, draft.key.unwrap());
 
         // A new blanket starts from the kind the ordinary rows ask for, and
@@ -1302,7 +1277,7 @@ mod tests {
         let blanket = state.open_sheet(None, true);
         assert!(blanket.blanket);
         assert_eq!(blanket.requirement.kind, ItemKind::Wand);
-        let result = state.save(&blanket).unwrap();
+        let result = saved(state.save(&blanket));
         assert_eq!(state.requirements.len(), 2);
         assert!(state.requirements[1].requirement.blanket);
         assert_eq!(state.requirements[1].key, blanket.key.unwrap());
@@ -1312,17 +1287,14 @@ mod tests {
     #[test]
     fn the_editor_refuses_a_sheet_that_would_break_the_list() {
         let mut state = AppState::default();
-        let tooth = Requirement {
-            item: Some(ItemId::MimicTooth),
-            ..Requirement::any(ItemKind::Trinket)
-        };
-        let first = sheet(&mut state, None, tooth, (1, None, None));
-        state.save(&first).unwrap();
-        let duplicate = sheet(&mut state, None, tooth, (1, None, None));
-        assert_eq!(
-            state.save(&duplicate).unwrap_err(),
-            [editor::DUPLICATE_TRINKET]
-        );
+        let tooth = [
+            Change::SetKind(ItemKind::Trinket, None),
+            Change::SetItem(ItemChoice::Item(ItemId::MimicTooth)),
+        ];
+        let first = sheet(&mut state, None, &tooth);
+        saved(state.save(&first));
+        let duplicate = sheet(&mut state, None, &tooth);
+        assert_eq!(refused(state.save(&duplicate)), [editor::DUPLICATE_TRINKET]);
         assert_eq!(state.requirements.len(), 1);
 
         // A stacked cluster of wands cannot take a ring: its copies would
@@ -1341,14 +1313,14 @@ mod tests {
         state.apply(&[Edit::SetCount { key: 1, count: 2 }]);
         assert_eq!(entry(&state, 1).stack.count, 2);
         let before = state.requirements.clone();
-        let ring = Requirement {
-            alternative_group: Some(1),
-            ..Requirement::any(ItemKind::Ring)
-        };
-        let draft = sheet(&mut state, Some(2), ring, (1, None, None));
+        let draft = sheet(
+            &mut state,
+            Some(2),
+            &[Change::SetKind(ItemKind::Ring, None)],
+        );
         assert!(draft.in_cluster);
         assert_eq!(
-            state.save(&draft).unwrap_err(),
+            refused(state.save(&draft)),
             ["Copies can only be grouped with the same item type."]
         );
         assert_eq!(state.requirements, before);

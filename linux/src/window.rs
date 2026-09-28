@@ -11,7 +11,7 @@ use adw::prelude::*;
 use gtk::{gdk, gio, glib};
 
 use shpd_seedfinder_core::deep_link;
-use shpd_seedfinder_core::editor::Draft;
+use shpd_seedfinder_core::editor::{Draft, ResinOutcome, SaveResult};
 use shpd_seedfinder_core::results_export;
 use shpd_seedfinder_session::MAX_RESULTS;
 
@@ -135,10 +135,14 @@ pub fn present(app: &adw::Application) {
             let query = Rc::clone(&query);
             let refresh_all = Rc::clone(&refresh_all);
             requirement_editor::present(&window, draft, move |draft| {
-                let saved = state.borrow_mut().save(draft)?;
-                query.follow_rekeyed(&saved.rekeyed);
-                refresh_all();
-                Ok(())
+                let saved = state.borrow_mut().save(draft);
+                if let SaveResult::Saved { result, resin } = &saved {
+                    query.follow_rekeyed(&result.rekeyed);
+                    if result.changed || *resin != ResinOutcome::Unchanged {
+                        refresh_all();
+                    }
+                }
+                saved
             });
         }
     });
