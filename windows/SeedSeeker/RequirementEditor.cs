@@ -60,6 +60,7 @@ public sealed record JoinRefusal(long Key, string Reason, string Message);
 /// <param name="CountBadge">The <c>×N</c> badge, when the chip asks for more than one item.</param>
 /// <param name="TotalBadge">The <c>Σ ≥ T</c> badge, when the chip counts levels together.</param>
 /// <param name="RemainingBadges">The badges the chip keeps while one item is lifted away; null when it has no copies, so the whole chip leaves.</param>
+/// <param name="Lifted">The face of the item a drag of the chip carries: a bare copy of it — its item, or its kind for a wildcard stack, with that copy's floor limit and nothing else — so Ring of Energy +4 ×3 lifts a plain Ring of Energy; null when it has no copies, and the chip itself moves.</param>
 /// <param name="Copies">The hidden copies' keys behind the chip's badge; members whose stacks are alike share theirs.</param>
 /// <param name="CanDetach">Whether "On its own" applies: the chip is a cluster member.</param>
 /// <param name="Join">The visible rows this chip may join, in list order.</param>
@@ -67,15 +68,20 @@ public sealed record JoinRefusal(long Key, string Reason, string Message);
 public sealed record BoardChip(long Key, string Name, string Title, string? Item, ItemKind? Kind,
     IReadOnlyList<ChipTag> Tags, IReadOnlyList<ChipTag> TrailingTags, ChipEffect? Effect, bool Uncursed,
     IReadOnlyList<string> Details, IReadOnlyList<ChipRelation> Relations, string Description, string? Problem,
-    BoardBadge? CountBadge, BoardBadge? TotalBadge, BoardBadges? RemainingBadges, IReadOnlyList<long> Copies, BoardStack Stack,
+    BoardBadge? CountBadge, BoardBadge? TotalBadge, BoardBadges? RemainingBadges, ChipFace? Lifted, IReadOnlyList<long> Copies, BoardStack Stack,
     bool InCluster, bool CanDetach, IReadOnlyList<long> Join, IReadOnlyList<JoinRefusal> Refuse)
 {
+    /// <summary>The chip's own face: what it shows of its own row.</summary>
+    public ChipFace Face => new(Name, Title, Item, Kind, Tags, TrailingTags, Effect, Uncursed, Details, Description);
+
     /// <summary>
-    /// The chip as a drag picks it up: every drag moves one item, so the
-    /// chip that rides under the pointer is that one item — its name and
-    /// tags, without its <c>×N</c> or <c>Σ</c> badges.
+    /// The face of the chip as a drag moves it: every drag moves one item,
+    /// so what rides under the pointer is that item — a bare copy of a
+    /// stacked chip (<see cref="Lifted"/>), which keeps its requirements at
+    /// its origin, else the chip itself — drawn without badges, and named by
+    /// its description.
     /// </summary>
-    public BoardChip Lifted => this with { CountBadge = null, TotalBadge = null };
+    public ChipFace MovingFace => Lifted ?? Face;
 
     /// <summary>
     /// The chip as a drag leaves it at its origin: its stack one item fewer,
@@ -92,6 +98,17 @@ public sealed record BoardChip(long Key, string Name, string Title, string? Item
         .Concat(Relations.Select(relation => $"{relation.Glyph switch { RelationGlyph.Or => "or", RelationGlyph.Sum => "Σ", _ => "×" }} {relation.Text}"))
         .Append(Problem).OfType<string>());
 }
+
+/// <summary>
+/// What a chip shows of one item (the FACE of docs/requirement-editor.md):
+/// the fields a <see cref="BoardChip"/> carries for its own row, and its
+/// <see cref="BoardChip.Lifted"/> for the item a drag of it carries. It has
+/// no key, badges, relations or state: it is drawn, never edited. The window
+/// draws no <c>family</c>, so it reads none.
+/// </summary>
+public sealed record ChipFace(string Name, string Title, string? Item, ItemKind? Kind,
+    IReadOnlyList<ChipTag> Tags, IReadOnlyList<ChipTag> TrailingTags, ChipEffect? Effect, bool Uncursed,
+    IReadOnlyList<string> Details, string Description);
 
 /// <summary>
 /// What a chip's count and combined-level steppers offer: how many items it
@@ -254,7 +271,8 @@ public sealed class BoardEdit
     /// Makes one item of <paramref name="source"/> an either/or alternative of
     /// <paramref name="target"/>, any member of a chip or cluster: a stacked
     /// source stays where it was with its requirements, one item fewer, and a
-    /// bare copy of it joins; a stacked target keeps its stack as a member.
+    /// bare copy of it joins (its <see cref="BoardChip.Lifted"/> face); a
+    /// stacked target keeps its stack as a member.
     /// </summary>
     public static BoardEdit Join(long source, long target) => new("join", new() { ["source"] = source, ["target"] = target });
     /// <summary>
@@ -416,23 +434,32 @@ public sealed class BoardEditor
         [.. entry["chips"]!.AsArray().Select(chip => Chip(chip!))], (string?)entry["problem"]);
 
     /// <summary>One CHIP of an answer: a visible row, or the chip a sheet would save.</summary>
-    internal static BoardChip Chip(JsonNode chip) => new(
-        (long)chip["key"]!, (string)chip["name"]!, (string)chip["title"]!, (string?)chip["item"],
-        ResultsExport.KindNamed((string?)chip["kind"]), Tags(chip["tags"]), Tags(chip["trailing_tags"]),
-        chip["effect"] is JsonObject effect
+    internal static BoardChip Chip(JsonNode chip)
+    {
+        var face = Face(chip);
+        return new((long)chip["key"]!, face.Name, face.Title, face.Item, face.Kind, face.Tags, face.TrailingTags, face.Effect,
+            face.Uncursed, face.Details,
+            [.. chip["relations"]!.AsArray().Select(relation => new ChipRelation(
+                (string)relation!["glyph"]! switch { "or" => RelationGlyph.Or, "sum" => RelationGlyph.Sum, _ => RelationGlyph.Times },
+                (string)relation["text"]!))],
+            face.Description, (string?)chip["problem"],
+            Badge(chip["badges"]!["count"]), Badge(chip["badges"]!["total"]),
+            chip["remaining_badges"] is JsonObject rest ? new(Badge(rest["count"]), Badge(rest["total"])) : null,
+            chip["lifted"] is JsonObject lifted ? Face(lifted) : null,
+            Keys(chip["copies"]), Stack(chip["stack"]!),
+            (bool)chip["in_cluster"]!, (bool)chip["can_detach"]!,
+            Keys(chip["join"]),
+            [.. chip["refuse"]!.AsArray().Select(refusal => new JoinRefusal((long)refusal!["key"]!, (string)refusal["reason"]!, (string)refusal["message"]!))]);
+    }
+
+    /// <summary>A FACE: a CHIP's own face fields, or its <c>lifted</c> face.</summary>
+    private static ChipFace Face(JsonNode face) => new(
+        (string)face["name"]!, (string)face["title"]!, (string?)face["item"],
+        ResultsExport.KindNamed((string?)face["kind"]), Tags(face["tags"]), Tags(face["trailing_tags"]),
+        face["effect"] is JsonObject effect
             ? new((string)effect["label"]!, Strings(effect["effects"]), (bool)effect["any_enchantment"]!, (bool)effect["curses_only"]!)
             : null,
-        (bool)chip["uncursed"]!, Strings(chip["details"]),
-        [.. chip["relations"]!.AsArray().Select(relation => new ChipRelation(
-            (string)relation!["glyph"]! switch { "or" => RelationGlyph.Or, "sum" => RelationGlyph.Sum, _ => RelationGlyph.Times },
-            (string)relation["text"]!))],
-        (string)chip["description"]!, (string?)chip["problem"],
-        Badge(chip["badges"]!["count"]), Badge(chip["badges"]!["total"]),
-        chip["remaining_badges"] is JsonObject rest ? new(Badge(rest["count"]), Badge(rest["total"])) : null,
-        Keys(chip["copies"]), Stack(chip["stack"]!),
-        (bool)chip["in_cluster"]!, (bool)chip["can_detach"]!,
-        Keys(chip["join"]),
-        [.. chip["refuse"]!.AsArray().Select(refusal => new JoinRefusal((long)refusal!["key"]!, (string)refusal["reason"]!, (string)refusal["message"]!))]);
+        (bool)face["uncursed"]!, Strings(face["details"]), (string)face["description"]!);
 
     /// <summary>A chip's STACK: what its count, combined-level and copy-floor steppers offer.</summary>
     private static BoardStack Stack(JsonNode stack) => new((int)stack["count"]!, (int)stack["max"]!, (bool)stack["can_grow"]!,

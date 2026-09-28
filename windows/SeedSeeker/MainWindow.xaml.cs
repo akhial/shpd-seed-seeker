@@ -411,12 +411,13 @@ public sealed partial class MainWindow : Window
     // Every requirement is a chip: drop one chip onto another for an either/or
     // cluster, drag a chip out of its cluster onto the empty board to make it
     // standalone again, drop it on the zone below to take one item off it.
-    // Every drag moves one item: a stacked chip gives up one copy and keeps
-    // the rest, and the ghost is that one item, without badges, while the
-    // chip it left, dimmed, shows the badges the rest keeps. Everything
-    // else is a property of the chip itself, a cluster member's as much as a
-    // lone chip's — a stack badge (×N / ≤N) for "more of the same kind", and
-    // a Σ badge for a lone ring stack counting its levels together.
+    // Every drag moves one item: a stacked chip keeps its requirements and
+    // one item fewer, and the ghost is the bare copy it gives up (its lifted
+    // face), without badges, while the chip it left, dimmed, shows the badges
+    // the rest keeps. Everything else is a property of the chip itself, a
+    // cluster member's as much as a lone chip's — a stack badge (×N / ≤N) for
+    // "more of the same kind", and a Σ badge for a lone ring stack counting
+    // its levels together.
     // What the board holds, what every chip and badge says and what each
     // gesture writes back are the shared editor's (BoardEditor); the board is
     // redrawn from its answer on every change.
@@ -505,21 +506,28 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// A chip's face: the sprite with its glow, the name, the qualifiers, and
-    /// the chip's own stack badges — a cluster member's too, inside the
-    /// cluster's outline. The drag ghost draws the lifted chip, which has none,
-    /// and the chip it leaves from draws the badges the rest keeps.
+    /// A chip's face with the chip's own stack badges — a cluster member's
+    /// too, inside the cluster's outline. The chip a drag leaves from draws
+    /// the badges the rest keeps (<see cref="BoardChip.LeftBehind"/>).
     /// </summary>
-    private StackPanel ChipContent(BoardChip view)
+    private StackPanel ChipContent(BoardChip view) => ChipContent(view.Face, view);
+
+    /// <summary>
+    /// A face (<see cref="ChipFace"/>): the sprite with its glow, the name and
+    /// the qualifiers, then the stack badges of <paramref name="stacked"/>
+    /// when given. The drag ghost draws the face of the item it moves, which
+    /// has none.
+    /// </summary>
+    private StackPanel ChipContent(ChipFace face, BoardChip? stacked = null)
     {
         var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
-        content.Children.Add(ChipArt(view));
-        content.Children.Add(ChipName(view));
-        foreach (var tag in view.Tags) content.Children.Add(ChipTagPill(tag));
-        if (EffectBadge(view) is UIElement effect) content.Children.Add(effect);
-        foreach (var tag in view.TrailingTags) content.Children.Add(ChipTagPill(tag));
-        if (view.Uncursed) content.Children.Add(UncursedTag());
-        foreach (var badge in StackBadges(view)) content.Children.Add(badge);
+        content.Children.Add(ChipArt(face));
+        content.Children.Add(ChipName(face));
+        foreach (var tag in face.Tags) content.Children.Add(ChipTagPill(tag));
+        if (EffectBadge(face) is UIElement effect) content.Children.Add(effect);
+        foreach (var tag in face.TrailingTags) content.Children.Add(ChipTagPill(tag));
+        if (face.Uncursed) content.Children.Add(UncursedTag());
+        if (stacked is not null) foreach (var badge in StackBadges(stacked)) content.Children.Add(badge);
         return content;
     }
 
@@ -582,7 +590,7 @@ public sealed partial class MainWindow : Window
     /// A requirement names no seed, so a ring here keeps its class's catalog
     /// cell rather than any run's gem.
     /// </summary>
-    private static Grid ChipArt(BoardChip chip)
+    private static Grid ChipArt(ChipFace chip)
     {
         var art = new Grid { Width = 18, Height = 18, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, -2, 0) };
         if (chip.Item is string id && ItemCatalog.Find(id) is { } item)
@@ -595,7 +603,7 @@ public sealed partial class MainWindow : Window
         return art;
     }
 
-    private static TextBlock ChipName(BoardChip chip) =>
+    private static TextBlock ChipName(ChipFace chip) =>
         new() { Text = chip.Name, FontSize = 13, FontWeight = FontWeights.SemiBold, MaxWidth = 150, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
 
     /// <summary>
@@ -680,7 +688,7 @@ public sealed partial class MainWindow : Window
     /// effect — enchantment or curse — needs no badge of its own: the sprite is
     /// already pulsing that very colour, and the tooltip names it.
     /// </summary>
-    private static UIElement? EffectBadge(BoardChip chip) => chip.Effect switch
+    private static UIElement? EffectBadge(ChipFace chip) => chip.Effect switch
     {
         { AnyEnchantment: true } => Dot(Rainbow()),
         { Effects.Count: > 1 } effect => new EffectCountView(effect.Effects, effect.Label),
@@ -899,8 +907,9 @@ public sealed partial class MainWindow : Window
         if (current.Key == ArcaneResinKey ? boardView.Resin is null : chip is null) { press = null; return; }
         current.Dragging = true; dragClickGuard = true;
         current.Chip.Opacity = 0.35;
-        // The origin shows what stays once the one item has gone: its stack
-        // one fewer (BoardChip.LeftBehind). A chip that leaves whole stays as it was.
+        // The origin shows what stays once the one item has gone: the chip's
+        // own face, requirements and all, its stack one fewer
+        // (BoardChip.LeftBehind). A chip that leaves whole stays as it was.
         if (chip?.LeftBehind is { } left) { current.RestContent = current.Chip.Content; current.Chip.Content = ChipContent(left); }
         RemoveZone.Visibility = Visibility.Visible;
         foreach (var target in dropTargets)
@@ -1059,11 +1068,18 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// The chip's likeness that follows the pointer: the one item the drag
-    /// moves (<see cref="BoardChip.Lifted"/>) — its sprite, name and tags,
-    /// without its ×N or Σ badges — on a solid ground with a shadow, and a
-    /// pill for the drop's caption.
+    /// moves (<see cref="BoardChip.MovingFace"/>) — a stack's bare copy, else
+    /// the chip itself; its sprite, name and tags, never a ×N or Σ badge — on
+    /// a solid ground with a shadow, and a pill for the drop's caption. It is
+    /// named for that item too: Ring of Energy +4 ×3 lifts a plain Ring of
+    /// Energy, and only the chip it came from reads +4.
     /// </summary>
-    private Border GhostChip(BoardChip chip) => GhostChip(ChipContent(chip.Lifted));
+    private Border GhostChip(BoardChip chip)
+    {
+        var ghost = GhostChip(ChipContent(chip.MovingFace));
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(ghost, chip.MovingFace.Description);
+        return ghost;
+    }
 
     private Border GhostChip(StackPanel content)
     {

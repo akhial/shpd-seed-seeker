@@ -49,6 +49,10 @@ public sealed class RequirementBoardTests
         return answer;
     }
 
+    /// <summary>The board of a fixture request's rows, before its edits: what the window drew when the drag began.</summary>
+    private static BoardView RowsBoard(JsonNode request) =>
+        BoardEditor.Answer(NativeEngine.RequirementBoard(new JsonObject { ["rows"] = request["rows"]!.DeepClone() }.ToJsonString())).View;
+
     private static long KeyOf(QuerySettings query, string id) => query.Requirements.First(requirement => requirement.Item?.Id == id).Key;
 
     [Fact]
@@ -79,11 +83,16 @@ public sealed class RequirementBoardTests
             }
             var failure = Record.Exception(() =>
             {
-                // A chip with no copies leaves whole: nothing stays behind.
+                // A chip with no copies leaves whole: nothing stays behind,
+                // and the chip itself moves; a stack lifts a bare copy.
                 if (board)
                 {
                     foreach (var chip in BoardEditor.Answer(answer).View.Entries.SelectMany(entry => entry.Chips))
+                    {
                         Assert.Equal(chip.Copies.Count == 0, chip.RemainingBadges is null);
+                        Assert.Equal(chip.Copies.Count == 0, chip.Lifted is null);
+                        Assert.Equal(chip.Lifted ?? chip.Face, chip.MovingFace);
+                    }
                     return;
                 }
                 var sheet = BoardEditor.Parse(answer);
@@ -560,28 +569,125 @@ public sealed class RequirementBoardTests
     }
 
     [Fact]
-    public void TheLiftedChipIsTheOneItemADragMoves()
+    public void TheGhostDrawsTheBareCopyADragCarries()
     {
-        // The ghost draws the lifted chip: its name and tags, without the
-        // stack's ×N or Σ, whether the chip is a lone stack or a member's.
+        // The ghost draws the moving face: a stack's lifted bare copy — its
+        // item, without the chip's +2, its ×N or Σ — while the chip keeps
+        // its own face; a chip of one item moves itself.
         var editor = new BoardEditor();
-        var query = Loaded(editor, Named("ring_might", UpgradeMatch.Exactly, 2));
-        var key = KeyOf(query, "ring_might");
-        Apply(editor, query, BoardEdit.SetCount(key, 3), BoardEdit.ToggleLevels(key));
-        var chip = editor.View(query).ChipOf(key)!;
-        Assert.NotNull(chip.CountBadge);
-        Assert.NotNull(chip.TotalBadge);
-        var lifted = chip.Lifted;
-        Assert.Null(lifted.CountBadge);
-        Assert.Null(lifted.TotalBadge);
-        Assert.Equal((chip.Key, chip.Name, chip.Title), (lifted.Key, lifted.Name, lifted.Title));
-        Assert.Equal(chip.Tags, lifted.Tags);
-        Assert.Equal(chip.Stack, lifted.Stack);
+        var query = Loaded(editor, Named("ring_might", UpgradeMatch.Exactly, 2), Named("wand_frost", UpgradeMatch.Exactly, 2));
+        var (might, frost) = (KeyOf(query, "ring_might"), KeyOf(query, "wand_frost"));
+        Apply(editor, query, BoardEdit.SetCount(might, 3));
+        var chip = editor.View(query).ChipOf(might)!;
+        Assert.Equal("×3", chip.CountBadge!.Text);
+        Assert.Equal("Ring of Might", chip.Face.Name);
+        Assert.Equal([new ChipTag("+2", TagStyle.Upgrade)], chip.Face.Tags);
+        var lifted = chip.Lifted!;
+        Assert.Same(lifted, chip.MovingFace);
+        Assert.Equal(("Ring of Might", "Ring of Might", "ring_might", (ItemKind?)ItemKind.Ring), (lifted.Name, lifted.Title, lifted.Item, lifted.Kind));
+        Assert.Empty(lifted.Tags);
+        Assert.Equal(["any upgrade"], lifted.Details);
+        Assert.Equal("Ring of Might, any upgrade", lifted.Description);
 
+        // Counting levels together, the stack still lifts one plain ring.
+        Apply(editor, query, BoardEdit.ToggleLevels(might));
+        chip = editor.View(query).ChipOf(might)!;
+        Assert.NotNull(chip.TotalBadge);
+        Assert.Equivalent(lifted, chip.MovingFace, strict: true);
+
+        var single = editor.View(query).ChipOf(frost)!;
+        Assert.Null(single.Lifted);
+        Assert.Equal(single.Face, single.MovingFace);
+        Assert.Equal([new ChipTag("+2", TagStyle.Upgrade)], single.MovingFace.Tags);
+
+        // A wildcard member's stack lifts its kind, bare: Any wand, not +3.
         var member = BoardEditor.Answer(Fixture("board-stack-member")["response"]!.ToJsonString()).View.ChipOf(1)!;
         Assert.Equal(("Any wand", "×2"), (member.Name, member.CountBadge!.Text));
-        Assert.Equal([new ChipTag("+3", TagStyle.Upgrade)], member.Lifted.Tags);
-        Assert.Null(member.Lifted.CountBadge);
+        Assert.Equal([new ChipTag("+3", TagStyle.Upgrade)], member.Tags);
+        Assert.Equal(("Any wand", null, (ItemKind?)ItemKind.Wand), (member.MovingFace.Name, member.MovingFace.Item, member.MovingFace.Kind));
+        Assert.Empty(member.MovingFace.Tags);
+    }
+
+    [Fact]
+    public void TheReportedRingJoinsAsABareCopyAndFoldsBack()
+    {
+        // Ring of Energy +4 ×3 onto Disintegration: a plain Ring of Energy
+        // joins, and Ring of Energy +4 ×2 stays — as the ghost and the dimmed
+        // origin showed while it was dragged.
+        var editor = new BoardEditor();
+        var query = Loaded(editor, Named("ring_energy", UpgradeMatch.Exactly, 4), Named("wand_disintegration"));
+        var (ring, disintegration) = (KeyOf(query, "ring_energy"), KeyOf(query, "wand_disintegration"));
+        Apply(editor, query, BoardEdit.SetCount(ring, 3));
+        var before = editor.View(query).ChipOf(ring)!;
+        Assert.Equal(("×3", "×2"), (before.CountBadge!.Text, before.RemainingBadges!.Count!.Text));
+        Assert.Equal(("Ring of Energy", "Ring of Energy, any upgrade"), (before.MovingFace.Name, before.MovingFace.Description));
+        Assert.Empty(before.MovingFace.Tags);
+
+        Assert.Equal(DropEffect.Join, editor.View(query).Drop(ring, DropKind.Chip, disintegration).Effect);
+        var joined = Apply(editor, query, BoardEdit.Join(ring, disintegration));
+        var moved = joined.Focus!.Value;
+        Assert.NotEqual(ring, moved);
+        var cluster = joined.View.EntryOf(moved)!;
+        Assert.Equal([disintegration, moved], cluster.Members);
+        Assert.Equivalent(before.Lifted, joined.View.ChipOf(moved)!.Face, strict: true);
+        var stayed = joined.View.ChipOf(ring)!;
+        Assert.False(stayed.InCluster);
+        Assert.Equal([new ChipTag("+4", TagStyle.Upgrade)], stayed.Tags);
+        Assert.Equal(before.RemainingBadges, new BoardBadges(stayed.CountBadge, stayed.TotalBadge));
+
+        // Dragged back out, it folds into the ring it came from: +4 ×3 again.
+        var detached = Apply(editor, query, BoardEdit.Detach(moved));
+        Assert.Equal(ring, detached.Focus);
+        Assert.All(detached.View.Entries, entry => Assert.Null(entry.Cluster));
+        var back = detached.View.ChipOf(ring)!;
+        Assert.Equal("×3", back.CountBadge!.Text);
+        Assert.Equal([new ChipTag("+4", TagStyle.Upgrade)], back.Tags);
+        Assert.Equal(["Ring of Energy", "Wand of Disintegration"], detached.View.Entries.Select(entry => entry.Name));
+
+        // {Frost +2 ×2 | Disintegration}: Frost dragged out leaves a plain
+        // Wand of Frost on its own, and Frost +2 stays in the cluster.
+        var frost = RowsBoard(Fixture("board-detach-bare-copy")["request"]!).ChipOf(1)!;
+        Assert.Equal(("Wand of Frost", "×2", true), (frost.Name, frost.CountBadge!.Text, frost.InCluster));
+        Assert.Equal([new ChipTag("+2", TagStyle.Upgrade)], frost.Tags);
+        Assert.Empty(frost.MovingFace.Tags);
+        var left = BoardEditor.Answer(Fixture("board-detach-bare-copy")["response"]!.ToJsonString());
+        Assert.Equivalent(frost.Lifted, left.View.ChipOf(left.Focus!.Value)!.Face, strict: true);
+        Assert.False(left.View.ChipOf(left.Focus!.Value)!.InCluster);
+        var member = left.View.ChipOf(1)!;
+        Assert.Equal((true, (BoardBadge?)null), (member.InCluster, member.CountBadge));
+        Assert.Equal([new ChipTag("+2", TagStyle.Upgrade)], member.Tags);
+    }
+
+    [Fact]
+    public void EveryJoinOrDetachFixtureLandsTheFaceItsDragLifted()
+    {
+        // Each golden join or detach, dragged from the board of its rows: a
+        // stacked source keeps its face with the badges its origin showed,
+        // and the item that lands wears the lifted face the ghost drew,
+        // unless a detach folds it into an alike chip.
+        var checkedLanding = 0;
+        foreach (var file in Directory.GetFiles(FixtureDirectory(), "board-*.json"))
+        {
+            var fixture = JsonNode.Parse(File.ReadAllText(file))!.AsObject();
+            if (fixture["request"] is not JsonObject request || request["edits"] is not JsonArray { Count: 1 } edits) continue;
+            var edit = edits[0]!;
+            var type = (string)edit["type"]!;
+            if (type is not ("join" or "detach")) continue;
+            var source = (long)(edit["source"] ?? edit["key"])!;
+            var name = Path.GetFileName(file);
+            var before = RowsBoard(request).ChipOf(source)!;
+            var after = BoardEditor.Answer(fixture["response"]!.ToJsonString());
+            if (before.Lifted is not { } lifted || after.Refused is not null) continue;
+            var stayed = after.View.ChipOf(source)!;
+            Assert.True(before.Face.Name == stayed.Name && before.Face.Tags.SequenceEqual(stayed.Tags), $"{name}: the source changed its face");
+            Assert.True(before.RemainingBadges == new BoardBadges(stayed.CountBadge, stayed.TotalBadge), $"{name}: the origin showed other badges");
+            var landed = after.View.ChipOf(after.Focus!.Value)!;
+            if (type == "detach" && landed.Copies.Count > 0) continue;
+            Assert.NotEqual(source, after.Focus);
+            Assert.Equivalent(lifted, landed.Face, strict: true);
+            checkedLanding++;
+        }
+        Assert.True(checkedLanding >= 5, "too few golden drags lift a bare copy");
     }
 
     [Fact]
