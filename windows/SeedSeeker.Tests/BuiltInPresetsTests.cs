@@ -56,8 +56,9 @@ public sealed class BuiltInPresetsTests
         // folds the plain copies into one ×3 chip.
         var query = preset.Query.Clone();
         var item = Assert.Single(new BoardEditor().View(query).Entries);
-        Assert.Equal(3, item.Stack.Count);
-        Assert.Equal("×3", item.CountBadge!.Text);
+        var chip = Assert.Single(item.Chips);
+        Assert.Equal(3, chip.Stack.Count);
+        Assert.Equal("×3", chip.CountBadge!.Text);
         Assert.Null(item.Problem);
     }
 }

@@ -36,7 +36,7 @@ public sealed class ArcaneResinTests
         Assert.True(query.ArcaneResinFilter.IncludeMageWand);
         Assert.Equal(new[] { true, false, false }, query.Requirements.Select(r => r.ExcludeResin));
         var editor = new BoardEditor();
-        Assert.Equal(3, Assert.Single(editor.View(query).Entries).Stack.Count);
+        Assert.Equal(3, Assert.Single(Assert.Single(editor.View(query).Entries).Chips).Stack.Count);
         Assert.Null(editor.Problem(query));
         var document = ResultsExport.EncodeQueryDocument(query);
         foreach (var restored in new[] {

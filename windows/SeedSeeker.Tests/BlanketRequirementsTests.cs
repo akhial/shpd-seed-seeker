@@ -46,7 +46,7 @@ public sealed class BlanketRequirementsTests
         var board = editor.View(query);
         Assert.Equal(3, board.Entries.Count);
         Assert.Equal(new BoardCounts(1, 2), board.Counts);
-        Assert.False(board.EntryOf(first)!.Stack.CanGrow);
+        Assert.False(board.ChipOf(first)!.Stack.CanGrow);
         Assert.False(editor.Edit(query, BoardEdit.SetCount(first, 3)).Changed);
         // An ordinary chip joins nothing in the blanket section.
         Assert.DoesNotContain(first, board.ChipOf(ordinary)!.Join);

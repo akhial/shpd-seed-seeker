@@ -77,8 +77,8 @@ public sealed class ArtifactTests
         var query = new QuerySettings { Requirements = [Sandals()] };
         editor.Load(query);
         var item = Assert.Single(editor.View(query).Entries);
-        Assert.False(item.Stack.CanGrow);
-        Assert.False(item.Stack.CanChangeCount);
+        Assert.False(item.Chips[0].Stack.CanGrow);
+        Assert.False(item.Chips[0].Stack.CanChangeCount);
         Assert.False(editor.Edit(query, BoardEdit.SetCount(item.Members[0], 3)).Changed);
         // The same artifact twice is two finds, never a stack of copies.
         var plain = new ItemRequirement { Kind = ItemKind.Artifact, Item = ItemCatalog.Find("dried_rose") };

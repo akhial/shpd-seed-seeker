@@ -43,7 +43,10 @@ public sealed record ChipRelation(RelationGlyph Glyph, string Text);
 public sealed record JoinRefusal(long Key, string Reason, string Message);
 
 /// <summary>
-/// One visible row: a lone chip, or one member of a cluster.
+/// One visible row: a lone chip, or one member of a cluster, with its own
+/// stack. Every badge and stepper is a chip's: a cluster member's stack is its
+/// own, drawn on its chip inside the cluster's outline, and nothing is drawn
+/// or counted for the cluster as a whole.
 /// </summary>
 /// <param name="Name">The short name beside the sprite: the item, or <c>Any melee</c>.</param>
 /// <param name="Title">The full title the detail leads with: the item, or <c>Any Tier 3+ melee weapon</c>.</param>
@@ -54,12 +57,16 @@ public sealed record JoinRefusal(long Key, string Reason, string Message);
 /// <param name="Details">What the chip asks of its item, as the parts of one line.</param>
 /// <param name="Description">The accessibility label: the title, then the details.</param>
 /// <param name="Problem">The row's own first problem, else the first problem between rows that blames it.</param>
+/// <param name="CountBadge">The <c>×N</c> badge, when the chip asks for more than one item.</param>
+/// <param name="TotalBadge">The <c>Σ ≥ T</c> badge, when the chip counts levels together.</param>
+/// <param name="Copies">The hidden copies' keys behind the chip's badge; members whose stacks are alike share theirs.</param>
 /// <param name="CanDetach">Whether "On its own" applies: the chip is a cluster member.</param>
 /// <param name="Join">The visible rows this chip may join, in list order.</param>
 /// <param name="Refuse">The visible rows a join onto is refused, with the reason.</param>
 public sealed record BoardChip(long Key, string Name, string Title, string? Item, ItemKind? Kind,
     IReadOnlyList<ChipTag> Tags, IReadOnlyList<ChipTag> TrailingTags, ChipEffect? Effect, bool Uncursed,
     IReadOnlyList<string> Details, IReadOnlyList<ChipRelation> Relations, string Description, string? Problem,
+    BoardBadge? CountBadge, BoardBadge? TotalBadge, IReadOnlyList<long> Copies, BoardStack Stack,
     bool InCluster, bool CanDetach, IReadOnlyList<long> Join, IReadOnlyList<JoinRefusal> Refuse)
 {
     /// <summary>
@@ -72,9 +79,10 @@ public sealed record BoardChip(long Key, string Name, string Title, string? Item
 }
 
 /// <summary>
-/// What an entry's count and combined-level steppers offer: how many items it
-/// asks for, whether that may grow or change, its combined level and the
-/// highest one its items can reach, and the floor limit of its hidden copies.
+/// What a chip's count and combined-level steppers offer: how many items it
+/// asks for, whether that may grow or change, its combined level (a lone ring
+/// stack's only) and the highest one its items can reach, and the floor limit
+/// of its hidden copies.
 /// </summary>
 /// <param name="CountMax">The count stepper's upper bound: <paramref name="Max"/> while the entry can grow, else its count.</param>
 public sealed record BoardStack(int Count, int Max, bool CanGrow, bool CanChangeCount, int CountMax, int? Total, bool CanCountLevels,
@@ -84,20 +92,18 @@ public sealed record BoardStack(int Count, int Max, bool CanGrow, bool CanChange
 public sealed record BoardBadge(string Text, string CompactText, string Tooltip);
 
 /// <summary>
-/// One board entry: a chip, or an either/or cluster of chips, with its stack.
+/// One board entry: a chip, or an either/or cluster of chips. The entry has
+/// no badge or stepper of its own: they are its chips'.
 /// </summary>
 /// <param name="Id">Stable while the entry survives an edit: <c>r17</c> for a chip, <c>c3</c> for a cluster.</param>
 /// <param name="Cluster">The alternative group of a cluster of two or more; null for a chip.</param>
 /// <param name="Label">A cluster's caption, <c>Any of 2</c>.</param>
 /// <param name="Name">What a menu calls the entry: a chip's name, or a cluster's (<c>Spear or Mace</c>).</param>
 /// <param name="Members">The visible rows' keys: one for a chip, every member of a cluster.</param>
-/// <param name="Extras">The hidden copies' keys behind the stack badge.</param>
-/// <param name="CountBadge">The <c>×N</c> badge, when the entry asks for more than one item.</param>
-/// <param name="TotalBadge">The <c>Σ ≥ T</c> badge, when the entry counts levels together.</param>
+/// <param name="Extras">Every hidden copy's key behind any of its chips' badges, each once.</param>
 /// <param name="Problem">The first problem touching any member or hidden copy.</param>
 public sealed record BoardEntry(string Id, bool Blanket, int? Cluster, string? Label, string Name, IReadOnlyList<long> Members,
-    IReadOnlyList<long> Extras, BoardStack Stack, BoardBadge? CountBadge, BoardBadge? TotalBadge,
-    IReadOnlyList<BoardChip> Chips, string? Problem);
+    IReadOnlyList<long> Extras, IReadOnlyList<BoardChip> Chips, string? Problem);
 
 public enum ProblemScope { Row, Group, List }
 
@@ -225,13 +231,16 @@ public sealed class BoardEdit
     public static BoardEdit Normalize() => new("normalize");
     /// <summary>Makes <paramref name="source"/> an either/or alternative of <paramref name="target"/>, any member of a chip or cluster.</summary>
     public static BoardEdit Join(long source, long target) => new("join", new() { ["source"] = source, ["target"] = target });
-    /// <summary>Takes a cluster member out on its own; it leaves the cluster's stack behind.</summary>
+    /// <summary>Takes a cluster member out on its own; the rest of its stack stays in the cluster.</summary>
     public static BoardEdit Detach(long key) => new("detach", new() { ["key"] = key });
-    /// <summary>Removes a cluster member, or a chip's whole entry with its hidden copies.</summary>
+    /// <summary>
+    /// Removes the chip with its whole stack: a cluster member with its own
+    /// copies, or a lone chip's whole entry.
+    /// </summary>
     public static BoardEdit Remove(long key) => new("remove", new() { ["key"] = key });
-    /// <summary>How many items the entry holding <paramref name="key"/> asks for.</summary>
+    /// <summary>How many items the chip <paramref name="key"/> asks for: a lone chip's stack, or a cluster member's own.</summary>
     public static BoardEdit SetCount(long key, int count) => new("set_count", new() { ["key"] = key, ["count"] = Byte(count) });
-    /// <summary>Sets or clears the combined level of the stack holding <paramref name="key"/>.</summary>
+    /// <summary>Sets or clears the combined level of the lone ring stack <paramref name="key"/>.</summary>
     public static BoardEdit SetTotal(long key, int? total) => new("set_total", new() { ["key"] = key, ["total"] = Byte(total) });
     /// <summary>Turns counting levels together on, at the stack's default total, or off.</summary>
     public static BoardEdit ToggleLevels(long key) => new("toggle_levels", new() { ["key"] = key });
@@ -367,18 +376,9 @@ public sealed class BoardEditor
     }
 
     /// <summary>One ITEM of the answer: a board entry.</summary>
-    private static BoardEntry Entry(JsonNode entry)
-    {
-        var stack = entry["stack"]!;
-        return new((string)entry["id"]!, (bool)entry["blanket"]!, (int?)entry["cluster"], (string?)entry["label"],
-            (string)entry["name"]!, Keys(entry["members"]), Keys(entry["extras"]),
-            new((int)stack["count"]!, (int)stack["max"]!, (bool)stack["can_grow"]!, (bool)stack["can_change_count"]!,
-                (int)stack["count_max"]!, (int?)stack["total"], (bool)stack["can_count_levels"]!, (int)stack["level_capacity"]!,
-                (int)stack["default_total"]!, (int?)stack["copy_depth"], (bool)stack["can_set_copy_depth"]!,
-                (string)stack["count_text"]!, (string)stack["total_text"]!),
-            Badge(entry["badges"]!["count"]), Badge(entry["badges"]!["total"]),
-            [.. entry["chips"]!.AsArray().Select(chip => Chip(chip!))], (string?)entry["problem"]);
-    }
+    private static BoardEntry Entry(JsonNode entry) => new((string)entry["id"]!, (bool)entry["blanket"]!, (int?)entry["cluster"],
+        (string?)entry["label"], (string)entry["name"]!, Keys(entry["members"]), Keys(entry["extras"]),
+        [.. entry["chips"]!.AsArray().Select(chip => Chip(chip!))], (string?)entry["problem"]);
 
     /// <summary>One CHIP of an answer: a visible row, or the chip a sheet would save.</summary>
     internal static BoardChip Chip(JsonNode chip) => new(
@@ -391,9 +391,17 @@ public sealed class BoardEditor
         [.. chip["relations"]!.AsArray().Select(relation => new ChipRelation(
             (string)relation!["glyph"]! switch { "or" => RelationGlyph.Or, "sum" => RelationGlyph.Sum, _ => RelationGlyph.Times },
             (string)relation["text"]!))],
-        (string)chip["description"]!, (string?)chip["problem"], (bool)chip["in_cluster"]!, (bool)chip["can_detach"]!,
+        (string)chip["description"]!, (string?)chip["problem"],
+        Badge(chip["badges"]!["count"]), Badge(chip["badges"]!["total"]), Keys(chip["copies"]), Stack(chip["stack"]!),
+        (bool)chip["in_cluster"]!, (bool)chip["can_detach"]!,
         Keys(chip["join"]),
         [.. chip["refuse"]!.AsArray().Select(refusal => new JoinRefusal((long)refusal!["key"]!, (string)refusal["reason"]!, (string)refusal["message"]!))]);
+
+    /// <summary>A chip's STACK: what its count, combined-level and copy-floor steppers offer.</summary>
+    private static BoardStack Stack(JsonNode stack) => new((int)stack["count"]!, (int)stack["max"]!, (bool)stack["can_grow"]!,
+        (bool)stack["can_change_count"]!, (int)stack["count_max"]!, (int?)stack["total"], (bool)stack["can_count_levels"]!,
+        (int)stack["level_capacity"]!, (int)stack["default_total"]!, (int?)stack["copy_depth"], (bool)stack["can_set_copy_depth"]!,
+        (string)stack["count_text"]!, (string)stack["total_text"]!);
 
     private static ResinChip Resin(JsonObject resin) => new(
         (string)resin["name"]!, Tags(resin["tags"]), (bool)resin["uncursed"]!, (string?)resin["tooltip"],

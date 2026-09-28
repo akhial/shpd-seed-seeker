@@ -313,8 +313,8 @@ public sealed class RequirementSheetTests
         Assert.Equal(3, query.Requirements.Count);
         var spear = query.Requirements.Single(row => row.Key == saved.Focus);
         Assert.Equal(("spear", UpgradeMatch.Exactly, 3, "Blazing"), (spear.Item?.Id, spear.UpgradeMatch, spear.Upgrade, spear.Modifier));
-        var entry = new BoardEditor().View(query).EntryOf(spear.Key)!;
-        Assert.Equal((2, (int?)6), (entry.Stack.Count, entry.Stack.CopyDepth));
+        var chip = new BoardEditor().View(query).ChipOf(spear.Key)!;
+        Assert.Equal((2, (int?)6), (chip.Stack.Count, chip.Stack.CopyDepth));
         Assert.True(query.Requirements.Select(row => row.Key).Distinct().Count() == 3);
 
         // Reopened, the chip shows what was saved; saved as it is, it changes nothing.

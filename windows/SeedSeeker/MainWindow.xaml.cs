@@ -386,7 +386,10 @@ public sealed partial class MainWindow : Window
     private Task EditChip(long key) => EditRequirement(() => RequirementSheet.Open(query, key));
     /// <summary>Opens the query's Arcane Resin in the sheet.</summary>
     private Task EditArcaneResin() => EditRequirement(() => RequirementSheet.Open(query, null, openResin: true));
-    /// <summary>Deletes the chip keyed <paramref name="key"/>: a whole board entry with its hidden copies, or one member of a cluster.</summary>
+    /// <summary>
+    /// Deletes the chip keyed <paramref name="key"/> with its whole stack: a
+    /// lone chip's whole entry, or a cluster member with its own copies.
+    /// </summary>
     private void RemoveChip(long key) => EditBoard(BoardEdit.Remove(key));
     /// <summary>
     /// Runs <paramref name="edits"/> through the shared editor's board and
@@ -409,9 +412,10 @@ public sealed partial class MainWindow : Window
     // ---- the requirement board ----------------------------------------------
     // Every requirement is a chip: drop one chip onto another for an either/or
     // cluster, drag a chip out of its cluster onto the empty board to make it
-    // standalone again, drop it on the zone below to remove it. Everything else
-    // is a property of the chip itself — a stack badge (×N / ≤N) for "more of
-    // the same kind", and a Σ badge for a stack counting its levels together.
+    // standalone again, drop it on the zone below to remove it. Everything
+    // else is a property of the chip itself, a cluster member's as much as a lone
+    // chip's — a stack badge (×N / ≤N) for "more of the same kind", and a Σ
+    // badge for a lone ring stack counting its levels together.
     // What the board holds, what every chip and badge says and what each
     // gesture writes back are the shared editor's (BoardEditor); the board is
     // redrawn from its answer on every change.
@@ -480,7 +484,7 @@ public sealed partial class MainWindow : Window
         foreach (var entry in boardView.Entries)
         {
             var board = entry.Blanket ? BlanketBoard : RequirementBoard;
-            if (entry.Cluster is null) board.Children.Add(Chip(entry, entry.Chips[0]));
+            if (entry.Cluster is null) board.Children.Add(Chip(entry.Chips[0]));
             else board.Children.Add(Cluster(entry));
         }
         if (query.NeedsResin && boardView.Resin is { } resin) RequirementBoard.Children.Add(ArcaneResinChip(resin));
@@ -489,11 +493,25 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// One chip: the sprite with its glow, the name, the qualifiers, and — for
-    /// a lone chip — its stack badges. The capsule drags, opens the editor when
-    /// clicked, and carries the chip's detail as its tooltip.
+    /// One chip, lone or a cluster member: its face (<see cref="ChipContent"/>)
+    /// in a capsule that drags, opens the editor when clicked, and carries the
+    /// chip's detail as its tooltip.
     /// </summary>
-    private Button Chip(BoardEntry entry, BoardChip view)
+    private Button Chip(BoardChip view)
+    {
+        var chip = RequirementChip(ChipContent(view), view.Key, ChipMenu(view), view.Problem);
+        ToolTipService.SetToolTip(chip, new TextBlock { Text = view.Detail, TextWrapping = TextWrapping.Wrap, MaxWidth = 280 });
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(chip, view.Description);
+        dropTargets.Add(new DropTarget(DropKind.Chip, chip, view.Key));
+        return chip;
+    }
+
+    /// <summary>
+    /// A chip's face: the sprite with its glow, the name, the qualifiers, and
+    /// the chip's own stack badges — a cluster member's too, inside the
+    /// cluster's outline.
+    /// </summary>
+    private StackPanel ChipContent(BoardChip view)
     {
         var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
         content.Children.Add(ChipArt(view));
@@ -502,13 +520,8 @@ public sealed partial class MainWindow : Window
         if (EffectBadge(view) is UIElement effect) content.Children.Add(effect);
         foreach (var tag in view.TrailingTags) content.Children.Add(ChipTagPill(tag));
         if (view.Uncursed) content.Children.Add(ChipTagPill("\u2713", SuccessInk, SuccessFill));
-        // A cluster's badges belong to its capsule, not to any one member.
-        if (entry.Cluster is null) foreach (var badge in StackBadges(entry)) content.Children.Add(badge);
-        var chip = RequirementChip(content, view.Key, ChipMenu(entry, view), view.Problem);
-        ToolTipService.SetToolTip(chip, new TextBlock { Text = view.Detail, TextWrapping = TextWrapping.Wrap, MaxWidth = 280 });
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(chip, view.Description);
-        dropTargets.Add(new DropTarget(DropKind.Chip, chip, view.Key));
-        return chip;
+        foreach (var badge in StackBadges(view)) content.Children.Add(badge);
+        return content;
     }
 
     // Item keys are positive; the query-wide resin requirement has no item row.
@@ -587,9 +600,9 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// An either/or cluster: its members share one dashed capsule, with "or"
-    /// between them and the stack badges at the trailing edge. Problems show
-    /// on the members' own chips — the anchor's also speaks for the copies
-    /// the stack folds away — so the capsule itself never flags one.
+    /// between them. Each member draws its own stack badges; the capsule has
+    /// none. Problems show on the members' own chips — each also speaks for
+    /// the copies its stack folds away — so the capsule itself never flags one.
     /// </summary>
     private Grid Cluster(BoardEntry entry)
     {
@@ -597,9 +610,8 @@ public sealed partial class MainWindow : Window
         for (var position = 0; position < entry.Chips.Count; position++)
         {
             if (position > 0) row.Children.Add(new TextBlock { Text = "or", FontFamily = Mono, FontSize = 11, FontWeight = FontWeights.Bold, Foreground = CautionInk, Margin = new Thickness(4, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center });
-            row.Children.Add(Chip(entry, entry.Chips[position]));
+            row.Children.Add(Chip(entry.Chips[position]));
         }
-        foreach (var badge in StackBadges(entry)) { badge.Margin = new Thickness(3, 0, 3, 0); row.Children.Add(badge); }
         var anchor = entry.Members[0];
         var capsule = new Grid { Tag = anchor, VerticalAlignment = VerticalAlignment.Center };
         capsule.Children.Add(DashedCapsule(20, CautionInk, CautionFill));
@@ -695,22 +707,22 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// The stack badges of one board entry: how many items it asks for and,
-    /// when it counts levels, the total they reach. Each opens a flyout that
-    /// adjusts it; the edit lands when the flyout closes, so the board is
-    /// rebuilt once rather than under the pointer.
+    /// The stack badges of one chip: how many items it asks for and, when it
+    /// counts levels, the total they reach. Each opens a flyout that adjusts
+    /// the chip's own stack; the edit lands when the flyout closes, so the
+    /// board is rebuilt once rather than under the pointer.
     /// </summary>
-    private List<Button> StackBadges(BoardEntry entry)
+    private List<Button> StackBadges(BoardChip chip)
     {
         var badges = new List<Button>();
-        var anchor = entry.Members[0];
-        var stack = entry.Stack;
-        if (entry.CountBadge is { } count)
+        var key = chip.Key;
+        var stack = chip.Stack;
+        if (chip.CountBadge is { } count)
             badges.Add(StackBadge(count, SuccessInk, SuccessFill, "How many", stack.Count, 1, stack.CountMax,
-                value => EditBoard(BoardEdit.SetCount(anchor, value))));
-        if (entry.TotalBadge is { } total && stack.Total is int current)
+                value => EditBoard(BoardEdit.SetCount(key, value))));
+        if (chip.TotalBadge is { } total && stack.Total is int current)
             badges.Add(StackBadge(total, CautionInk, CautionFill, "Combined level", current, 1, Math.Max(1, stack.LevelCapacity),
-                value => EditBoard(BoardEdit.SetTotal(anchor, value))));
+                value => EditBoard(BoardEdit.SetTotal(key, value))));
         return badges;
     }
 
@@ -730,8 +742,12 @@ public sealed partial class MainWindow : Window
         return button;
     }
 
-    /// <summary>The chip's menu: every gesture of the board said in words, for the keyboard and for touch.</summary>
-    private MenuFlyout ChipMenu(BoardEntry entry, BoardChip chip)
+    /// <summary>
+    /// The chip's menu: every gesture of the board said in words, for the
+    /// keyboard and for touch. "How many" is the chip's own stack, a cluster
+    /// member's as much as a lone chip's.
+    /// </summary>
+    private MenuFlyout ChipMenu(BoardChip chip)
     {
         var key = chip.Key;
         var menu = new MenuFlyout();
@@ -748,7 +764,7 @@ public sealed partial class MainWindow : Window
             join.Items.Add(choice);
         }
         if (join.Items.Count > 0) menu.Items.Add(join);
-        var stack = entry.Stack;
+        var stack = chip.Stack;
         if (stack.CanChangeCount)
         {
             menu.Items.Add(new MenuFlyoutSeparator());

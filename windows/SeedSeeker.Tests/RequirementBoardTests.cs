@@ -11,7 +11,8 @@ namespace SeedSeeker.Tests;
 /// reads into the typed board, rows cross the row codec unchanged, the board
 /// is asked once per list, and the edits the window sends — joins, refusals,
 /// counts, combined levels, removals — come back through the real engine as
-/// the window adopts them.
+/// the window adopts them. Stacks are per chip: a cluster member's badge and
+/// count are its own.
 /// </summary>
 public sealed class RequirementBoardTests
 {
@@ -113,25 +114,27 @@ public sealed class RequirementBoardTests
         Assert.Empty(board.Problems);
         Assert.Null(board.Problem);
 
-        // A ×3 stack of plain repeats: one chip, two hidden copies, a count badge.
+        // A ×3 stack of plain repeats: one chip with two hidden copies and its count badge.
         var rings = board.Entries[0];
         Assert.Equal([1L], rings.Members);
         Assert.Equal([2L, 3L], rings.Extras);
-        Assert.Equal(new BoardBadge("×3", "×3", "3 of the same kind"), rings.CountBadge);
-        Assert.Null(rings.TotalBadge);
-        Assert.Equal(3, rings.Stack.Count);
-        Assert.Equal(3, rings.Stack.CountMax);
-        Assert.True(rings.Stack.CanCountLevels);
-        Assert.Equal(11, rings.Stack.LevelCapacity);
         var ring = Assert.Single(rings.Chips);
+        Assert.Equal(new BoardBadge("×3", "×3", "3 of the same kind"), ring.CountBadge);
+        Assert.Null(ring.TotalBadge);
+        Assert.Equal([2L, 3L], ring.Copies);
+        Assert.Equal(3, ring.Stack.Count);
+        Assert.Equal(3, ring.Stack.CountMax);
+        Assert.True(ring.Stack.CanCountLevels);
+        Assert.Equal(11, ring.Stack.LevelCapacity);
         Assert.Equal("Ring of Might", ring.Name);
         Assert.Equal("ring_might", ring.Item);
         Assert.Equal(ItemKind.Ring, ring.Kind);
         Assert.Equal([new ChipTag("+2", TagStyle.Upgrade)], ring.Tags);
         Assert.Equal([new ChipRelation(RelationGlyph.Times, "3 of the same kind — the extra copies: any upgrade, any floor")], ring.Relations);
         Assert.Equal("Ring of Might\nexactly +2\n× 3 of the same kind — the extra copies: any upgrade, any floor", ring.Detail);
-        Assert.Empty(ring.Join);
-        Assert.All(ring.Refuse, refusal => Assert.Equal("mixed_category_stack", refusal.Reason));
+        // Every copy keeps its own chip's kind, so a stack joins any category (#190's refusal is lifted).
+        Assert.Equal([4L, 5, 6, 7], ring.Join);
+        Assert.Empty(ring.Refuse);
 
         // A narrowed wildcard: its kind draws the sprite, its qualifiers are tags in order.
         var melee = Assert.Single(board.Entries[1].Chips);
@@ -148,15 +151,18 @@ public sealed class RequirementBoardTests
         Assert.Equal((int?)1, cluster.Cluster);
         Assert.Equal("Any of 2", cluster.Label);
         Assert.All(cluster.Chips, chip => Assert.True(chip.InCluster && chip.CanDetach));
+        // Members without stacks of their own show no badge; the cluster has none to show.
+        Assert.All(cluster.Chips, chip => Assert.Equal((null, null, 1), (chip.CountBadge, chip.TotalBadge, chip.Stack.Count)));
+        Assert.Empty(cluster.Extras);
         Assert.Equal([new ChipTag("No resin")], cluster.Chips[1].TrailingTags);
         Assert.Equal("Any wand\nexactly +3 · excluded from Auto resin\nor Wand of Fireblast", cluster.Chips[1].Detail);
         Assert.Equal(board.Entries[2], board.EntryOf(6));
         Assert.Equal(cluster.Chips[1], board.ChipOf(6));
         // "Either/or with…" offers the cluster once, under its name, however many of its members a chip may join.
-        Assert.Equal([5L, 6, 7], board.ChipOf(4)!.Join);
-        Assert.Equal([("Wand of Fireblast or Any wand", 5L), ("Rat Skull", 7L)], board.JoinChoices(4));
-        Assert.Equal([("Any melee", 4L), ("Rat Skull", 7L)], board.JoinChoices(6));
-        Assert.Empty(board.JoinChoices(1));
+        Assert.Equal([1L, 5, 6, 7], board.ChipOf(4)!.Join);
+        Assert.Equal([("Ring of Might", 1L), ("Wand of Fireblast or Any wand", 5L), ("Rat Skull", 7L)], board.JoinChoices(4));
+        Assert.Equal([("Ring of Might", 1L), ("Any melee", 4L), ("Rat Skull", 7L)], board.JoinChoices(6));
+        Assert.Equal([("Any melee", 4L), ("Wand of Fireblast or Any wand", 5L), ("Rat Skull", 7L)], board.JoinChoices(1));
         Assert.Empty(board.JoinChoices(2));
         // A hidden copy has no chip of its own.
         Assert.Null(board.ChipOf(2));
@@ -166,8 +172,8 @@ public sealed class RequirementBoardTests
         Assert.True(board.Entries[4].Blanket);
         Assert.Equal(["Viscosity", "Brimstone"], armor.Effect!.Effects);
         Assert.Equal("effect: Viscosity/Brimstone", armor.Effect.Label);
-        Assert.False(board.Entries[4].Stack.CanChangeCount);
-        Assert.Equal(1, board.Entries[4].Stack.CountMax);
+        Assert.False(armor.Stack.CanChangeCount);
+        Assert.Equal(1, armor.Stack.CountMax);
 
         var resin = board.Resin!;
         Assert.Equal("Arcane Resin", resin.Name);
@@ -195,7 +201,7 @@ public sealed class RequirementBoardTests
         var refused = BoardEditor.Answer(Fixture("board-join-refused")["response"]!.ToJsonString());
         Assert.False(refused.Changed);
         Assert.Null(refused.Rows);
-        Assert.Equal(new BoardRefusal("mixed_category_stack", "Copies can only be grouped with the same item type."), refused.Refused);
+        Assert.Equal(new BoardRefusal("no_free_group", "Every group label is in use. Remove a stack or a combined level first."), refused.Refused);
 
         var repaired = BoardEditor.Answer(Fixture("board-key-repair")["response"]!.ToJsonString());
         Assert.Equal([(0L, 5L), (4L, 6L)], repaired.Rekeyed);
@@ -233,8 +239,8 @@ public sealed class RequirementBoardTests
             var response = JsonNode.Parse(File.ReadAllText(file))!["response"]!;
             foreach (var row in response["rows"] as JsonArray ?? [])
             {
-                // The one row the catalog cannot read is the fixture's point.
-                if ((string?)row!["item"] == "wand_of_wonders") continue;
+                // The rows the catalog cannot read are those fixtures' point.
+                if ((string?)row!["item"] is "wand_of_wonders" or "ring_of_wonders") continue;
                 Assert.True(JsonNode.DeepEquals(row, ResultsExport.EncodeRow(ResultsExport.DecodeRow(row.AsObject()))), $"{Path.GetFileName(file)}: {row.ToJsonString()}");
                 compared++;
             }
@@ -311,20 +317,44 @@ public sealed class RequirementBoardTests
     }
 
     [Fact]
-    public void TheCountStepperRunsToTheLimitOrOnlyDown()
+    public void EveryChipStepsItsOwnCount()
     {
         var editor = new BoardEditor();
         var spear = Named("spear"); spear.AlternativeGroup = 1; spear.IdentityGroup = 1;
         var query = Loaded(editor, Named("mace"), spear, new() { Kind = ItemKind.Ring, AlternativeGroup = 1 }, new() { Kind = ItemKind.Weapon, IdentityGroup = 1 });
         var board = editor.View(query);
-        var maces = board.EntryOf(KeyOf(query, "mace"))!.Stack;
+        var maces = board.ChipOf(KeyOf(query, "mace"))!.Stack;
         Assert.True(maces.CanGrow);
         Assert.Equal((1, 3, 3), (maces.Count, maces.CountMax, maces.Max));
-        // A cluster spanning two categories names no kind to copy: it only sheds the copies it has.
-        var mixed = board.EntryOf(KeyOf(query, "spear"))!.Stack;
-        Assert.False(mixed.CanGrow);
-        Assert.True(mixed.CanChangeCount);
-        Assert.Equal((2, 2), (mixed.Count, mixed.CountMax));
+        // A label on one member is that member's own stack — two Spears, or
+        // any ring — and its copy keeps the Spear's kind, so a cluster
+        // spanning categories grows like any chip.
+        var spears = board.ChipOf(KeyOf(query, "spear"))!;
+        var ring = board.EntryOf(spears.Key)!.Chips[1];
+        Assert.Equal(("×2", 2, 3, true), (spears.CountBadge!.Text, spears.Stack.Count, spears.Stack.CountMax, spears.Stack.CanGrow));
+        Assert.Equal([query.Requirements[3].Key], spears.Copies);
+        Assert.Equal(((BoardBadge?)null, 1, 3), (ring.CountBadge, ring.Stack.Count, ring.Stack.CountMax));
+        Assert.False(spears.Stack.CanCountLevels);
+
+        // The other member grows beside it under a label of its own; the Spears keep theirs.
+        var grown = Apply(editor, query, BoardEdit.SetCount(ring.Key, 2));
+        Assert.Equal(ring.Key, grown.Focus);
+        Assert.Equal(["×2", "×2"], grown.View.EntryOf(ring.Key)!.Chips.Select(chip => chip.CountBadge!.Text));
+        var labels = query.Requirements.Where(row => row.AlternativeGroup is not null).Select(row => row.IdentityGroup).ToList();
+        Assert.Equal(2, labels.OfType<int>().Distinct().Count());
+    }
+
+    [Fact]
+    public void MembersSharingALabelEachShowTheStack()
+    {
+        // One label on Frost and Disintegration: two of the same wand,
+        // whichever matched. Each shows ×2 over the one copy they share;
+        // Lightning, unlabelled, shows nothing, and neither does the cluster.
+        var board = BoardEditor.Answer(Fixture("board-cluster-alike-stacks")["response"]!.ToJsonString()).View;
+        var cluster = Assert.Single(board.Entries);
+        Assert.Equal([4L], cluster.Extras);
+        Assert.Equal(new string?[] { "×2", "×2", null }, cluster.Chips.Select(chip => chip.CountBadge?.Text));
+        Assert.Equal([[4L], [4L], []], cluster.Chips.Select(chip => chip.Copies.ToArray()));
     }
 
     [Fact]
@@ -345,7 +375,7 @@ public sealed class RequirementBoardTests
         Assert.True(grown.Changed);
         Assert.Same(grown.View, editor.View(query));
         Assert.Equal(asked + 1, editor.Requests);
-        Assert.Equal(3, editor.View(query).EntryOf(KeyOf(query, "ring_might"))!.Stack.Count);
+        Assert.Equal(3, editor.View(query).ChipOf(KeyOf(query, "ring_might"))!.Stack.Count);
 
         // An edit that does nothing leaves the rows unwritten.
         var rows = query.Requirements;
@@ -386,18 +416,17 @@ public sealed class RequirementBoardTests
         Assert.Contains("any_of", ResultsExport.EncodeQueryDocument(query));
         Assert.Equal(3, query.SlotCount);
 
-        // A stacked cluster refuses a member of another category, and says why.
+        // A member's stack is its own, and a cluster holding one takes a
+        // member of another category: every copy keeps its own chip's kind
+        // (#190 refused this join).
         Apply(editor, query, BoardEdit.SetCount(spear, 2));
         var board = editor.View(query);
-        Assert.Equal(2, board.EntryOf(spear)!.Stack.Count);
-        Assert.Contains(board.ChipOf(wand)!.Refuse, refusal => refusal.Key == spear);
-        var drop = board.Drop(wand, DropKind.Cluster, spear);
-        Assert.Equal(DropEffect.Refused, drop.Effect);
-        var rows = query.Requirements;
-        var refused = Apply(editor, query, BoardEdit.Join(wand, spear));
-        Assert.Equal("mixed_category_stack", refused.Refused!.Reason);
-        Assert.Equal(drop.Message, refused.Refused.Message);
-        Assert.Same(rows, query.Requirements);
+        Assert.Equal((2, 1), (board.ChipOf(spear)!.Stack.Count, board.ChipOf(mace)!.Stack.Count));
+        Assert.Equal(DropEffect.Join, board.Drop(wand, DropKind.Cluster, spear).Effect);
+        Apply(editor, query, BoardEdit.Join(wand, spear));
+        board = editor.View(query);
+        Assert.Equal([spear, mace, wand], board.EntryOf(spear)!.Members);
+        Assert.Equal(["×2", null, null], board.EntryOf(spear)!.Chips.Select(chip => chip.CountBadge?.Text));
 
         // A cluster member leaves on its own; removing a chip takes its copies.
         Apply(editor, query, BoardEdit.Detach(mace));
@@ -411,6 +440,25 @@ public sealed class RequirementBoardTests
     }
 
     [Fact]
+    public void AJoinWithNoLabelFreeIsRefusedAndSaysWhy()
+    {
+        // Four stacks hold every label; Disintegration onto Frost ×2 would
+        // need a fifth for the Frosts, which stay a stack as a member.
+        var editor = new BoardEditor();
+        var request = Fixture("board-join-refused")["request"]!;
+        var query = new QuerySettings { Requirements = new(request["rows"]!.AsArray().Select(row => ResultsExport.DecodeRow(row!.AsObject()))) };
+        var board = editor.View(query);
+        Assert.Contains(board.ChipOf(11)!.Refuse, refusal => refusal.Key == 9 && refusal.Reason == "no_free_group");
+        var drop = board.Drop(11, DropKind.Chip, 9);
+        Assert.Equal(DropEffect.Refused, drop.Effect);
+        var rows = query.Requirements;
+        var refused = Apply(editor, query, BoardEdit.Join(11, 9));
+        Assert.Equal("no_free_group", refused.Refused!.Reason);
+        Assert.Equal(drop.Message, refused.Refused.Message);
+        Assert.Same(rows, query.Requirements);
+    }
+
+    [Fact]
     public void CombinedLevelsAreCountedAndClearedThroughTheEngine()
     {
         var editor = new BoardEditor();
@@ -421,21 +469,21 @@ public sealed class RequirementBoardTests
         // "Count levels together" starts at the item count, within the rings' capacity.
         var counting = Apply(editor, query, BoardEdit.ToggleLevels(ring));
         Assert.True(counting.Changed);
-        var stack = counting.View.EntryOf(ring)!.Stack;
+        var stack = counting.View.ChipOf(ring)!.Stack;
         Assert.Equal((2, (int?)2, "≤2"), (stack.DefaultTotal, stack.Total, stack.CountText));
         Assert.Equal(new LevelSum(1, 2), query.Requirements[0].LevelSum);
 
         // The Σ badge's flyout sets the total, and clearing it stops counting.
         var total = Apply(editor, query, BoardEdit.SetTotal(ring, 5));
-        Assert.Equal(5, total.View.EntryOf(ring)!.Stack.Total);
-        Assert.Equal(new BoardBadge("Σ ≥ 5", "Σ≥5", "Levels add to at least 5 (a +0 item counts 1)"), total.View.EntryOf(ring)!.TotalBadge);
+        Assert.Equal(5, total.View.ChipOf(ring)!.Stack.Total);
+        Assert.Equal(new BoardBadge("Σ ≥ 5", "Σ≥5", "Levels add to at least 5 (a +0 item counts 1)"), total.View.ChipOf(ring)!.TotalBadge);
         Assert.All(query.Requirements, row => Assert.Equal(new LevelSum(1, 5), row.LevelSum));
         var cleared = Apply(editor, query, BoardEdit.SetTotal(ring, null));
         Assert.True(cleared.Changed);
-        var entry = cleared.View.EntryOf(ring)!;
-        Assert.Null(entry.Stack.Total);
-        Assert.Null(entry.TotalBadge);
-        Assert.Equal("×2", entry.CountBadge!.Text);
+        var chip = cleared.View.ChipOf(ring)!;
+        Assert.Null(chip.Stack.Total);
+        Assert.Null(chip.TotalBadge);
+        Assert.Equal("×2", chip.CountBadge!.Text);
         Assert.All(query.Requirements, row => Assert.Null(row.LevelSum));
 
         // Turned on and off again, the list is as it was, and nothing is written back.
@@ -500,26 +548,33 @@ public sealed class RequirementBoardTests
         // A combined level speaks for the upgrades, so the chip's own says nothing.
         Apply(editor, query, BoardEdit.SetCount(ring, 3), BoardEdit.SetTotal(ring, 5));
         Assert.Equal("Ring of Might\nΣ up to 3 — levels add to ≥ 5", editor.View(query).ChipOf(ring)!.Detail);
-        Assert.Equal("≤3", editor.View(query).EntryOf(ring)!.CountBadge!.Text);
+        Assert.Equal("≤3", editor.View(query).ChipOf(ring)!.CountBadge!.Text);
         // A cluster member names its peers.
         Apply(editor, query, BoardEdit.Join(shuriken, spear));
         Assert.Equal("Spear\nany upgrade\nor Shuriken", editor.View(query).ChipOf(spear)!.Detail);
     }
 
     [Fact]
-    public void ACopyAClusterFoldsAwaySpeaksThroughItsAnchorsChip()
+    public void ACopyAClusterFoldsAwaySpeaksThroughTheChipsItBelongsTo()
     {
-        // The window flags problems on chips alone: the anchor's chip carries
-        // its hidden copies' problems, so a cluster's capsule never has to.
+        // The window flags problems on chips alone: a chip carries its own
+        // hidden copies' problems, so a cluster's capsule never has to.
         var editor = new BoardEditor();
         var fireblast = Named("wand_fireblast"); fireblast.AlternativeGroup = 1; fireblast.IdentityGroup = 1;
-        var query = Loaded(editor, fireblast, new() { Kind = ItemKind.Wand, AlternativeGroup = 1, IdentityGroup = 1 },
-            new() { Kind = ItemKind.Wand, IdentityGroup = 1, MaximumDepth = 30 });
+        var copy = new ItemRequirement { Kind = ItemKind.Wand, IdentityGroup = 1, MaximumDepth = 30 };
+        // Both members carry the label: the copy is both chips', each drawn ×2.
+        var query = Loaded(editor, fireblast, new() { Kind = ItemKind.Wand, AlternativeGroup = 1, IdentityGroup = 1 }, copy);
         var entry = Assert.Single(editor.View(query).Entries);
         Assert.Equal([query.Requirements[2].Key], entry.Extras);
         Assert.Equal("Requirement floor must be 1 through 24.", entry.Problem);
+        Assert.All(entry.Chips, chip => Assert.Equal((entry.Problem, "×2"), (chip.Problem, chip.CountBadge!.Text)));
+        // Fireblast alone carries it: the copy is Fireblast's, and only its chip is flagged.
+        query = Loaded(editor, fireblast.Clone(), new() { Kind = ItemKind.Wand, AlternativeGroup = 1 }, copy.Clone());
+        entry = Assert.Single(editor.View(query).Entries);
         Assert.Equal(entry.Problem, entry.Chips[0].Problem);
+        Assert.Equal([query.Requirements[2].Key], entry.Chips[0].Copies);
         Assert.Null(entry.Chips[1].Problem);
+        Assert.Null(entry.Chips[1].CountBadge);
     }
 
     [Fact]
