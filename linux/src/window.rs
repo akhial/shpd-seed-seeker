@@ -150,6 +150,7 @@ pub fn present(app: &adw::Application) {
         }
     });
     let edit_requirement: Rc<dyn Fn(Draft)> = Rc::new({
+        let state = Rc::clone(&state);
         let query = Rc::clone(&query);
         let save_sheet = Rc::clone(&save_sheet);
         let edit_resin = Rc::clone(&edit_resin);
@@ -170,9 +171,16 @@ pub fn present(app: &adw::Application) {
                         saved
                     }
                 },
+                // The sheet's Arcane Resin row leads to the query's resin as
+                // the resin chip does, so the dialog edits (and offers to
+                // remove) a resin the query already asks for.
                 {
+                    let state = Rc::clone(&state);
                     let edit_resin = Rc::clone(&edit_resin);
-                    move |draft| edit_resin(draft)
+                    move || {
+                        let draft = state.borrow().open_resin();
+                        edit_resin(draft);
+                    }
                 },
             );
             let query = Rc::clone(&query);

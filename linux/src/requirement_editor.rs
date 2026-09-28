@@ -73,13 +73,14 @@ impl Editor {
 /// opened. When the user confirms, `on_save` saves the draft and answers
 /// with the editor's result; a refused save keeps the dialog open on the
 /// editor's reasons. Where the editor offers Arcane Resin in place of a new
-/// wand, the dialog hands `on_resin` the draft with the resin picked and
-/// closes. Cancelling calls neither.
+/// wand, the dialog's Arcane Resin row closes it and calls `on_resin`, which
+/// opens the query's one resin condition — to edit it when the query has
+/// one, as the resin chip does, else to add it. Cancelling calls neither.
 pub fn present(
     parent: &adw::ApplicationWindow,
     draft: Draft,
     on_save: impl Fn(&Draft) -> SaveResult + 'static,
-    on_resin: impl Fn(Draft) + 'static,
+    on_resin: impl Fn() + 'static,
 ) -> adw::Dialog {
     let sheet = Sheet::new(draft);
     let is_new = sheet.form().mode == FormMode::New;
@@ -117,15 +118,10 @@ pub fn present(
         page.add(&group);
     }
     editor.resin_row.connect_activated({
-        let editor = Rc::clone(&editor);
+        let dialog = editor.dialog.clone();
         move |_| {
-            let draft = {
-                let mut sheet = editor.sheet.borrow_mut();
-                sheet.change(&Change::SetItem(ItemChoice::ArcaneResin));
-                sheet.draft().clone()
-            };
-            editor.dialog.close();
-            on_resin(draft);
+            dialog.close();
+            on_resin();
         }
     });
     let toolbar_view = adw::ToolbarView::new();

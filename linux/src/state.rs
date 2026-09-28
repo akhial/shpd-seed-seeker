@@ -1315,17 +1315,10 @@ mod tests {
             },
         ));
         let before = state.requirements.clone();
-        // A new wand chip may be the query's resin instead: the sheet hands
-        // its draft to the resin dialog, which saves the resin alone.
-        let draft = sheet(
-            &mut state,
-            None,
-            &[
-                Change::SetKind(ItemKind::Wand, None),
-                Change::SetItem(ItemChoice::ArcaneResin),
-                Change::SetResinAuto(true),
-            ],
-        );
+        // A new wand chip may be the query's resin instead: the sheet's
+        // Arcane Resin row opens the query's resin, and the resin dialog
+        // saves the resin alone.
+        let draft = editor::change(&state.open_resin(), &Change::SetResinAuto(true));
         assert!(editor::form(&draft).resin_picked);
         assert!(!saved(state.save(&draft)).changed);
         assert_eq!(state.requirements, before);

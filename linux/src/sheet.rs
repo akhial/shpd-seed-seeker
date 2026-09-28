@@ -802,6 +802,26 @@ mod tests {
     }
 
     #[test]
+    fn the_arcane_resin_row_opens_the_querys_resin() {
+        // A new wand sheet offers Arcane Resin as a row of its own, which
+        // opens the query's resin as the resin chip does: to add one while
+        // the query has none…
+        let mut state = AppState::default();
+        let wand = filled(&mut state, &[Change::SetKind(ItemKind::Wand, None)]);
+        assert_eq!(resin_choice(wand.form()), Some(labels::ARCANE_RESIN));
+        let form = Sheet::new(state.open_resin()).form().clone();
+        assert_eq!((form.mode, form.origin), (FormMode::New, Origin::New));
+
+        // …and to edit the one it has, with Save and Remove, seeded from it.
+        state.arcane_resin = 4;
+        let wand = filled(&mut state, &[Change::SetKind(ItemKind::Wand, None)]);
+        assert_eq!(resin_choice(wand.form()), Some(labels::ARCANE_RESIN));
+        let form = Sheet::new(state.open_resin()).form().clone();
+        assert_eq!((form.mode, form.origin), (FormMode::Edit, Origin::Resin));
+        assert_eq!(form.resin.amount, Some(4.0));
+    }
+
+    #[test]
     fn floor_spinners_step_over_the_empty_boss_floors_through_the_editor() {
         let mut state = AppState::default();
         let mut sheet = filled(&mut state, &[Change::SetFloorLimitEnabled(true)]);

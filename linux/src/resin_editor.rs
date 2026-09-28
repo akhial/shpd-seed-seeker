@@ -2,12 +2,11 @@
 
 //! Arcane Resin is one query-wide requirement, separate from item OR groups.
 //!
-//! The shared editor holds it as a sheet with Arcane Resin picked: the resin
-//! chip opens one on the query's condition, and a new wand's sheet hands its
-//! own over when the user asks for resin instead. The dialog draws the
-//! sheet's resin section and donor filters, sends each control the user
-//! moves back as a [`Change`], and saves the sheet, which sets the query's
-//! resin.
+//! The shared editor holds it as a sheet with Arcane Resin picked, opened on
+//! the query's condition — from the resin chip, or from a new wand sheet's
+//! Arcane Resin row. The dialog draws the sheet's resin section and donor
+//! filters, sends each control the user moves back as a [`Change`], and
+//! saves the sheet, which sets the query's resin.
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -34,9 +33,9 @@ struct Editor {
 
 /// Presents the resin dialog over `parent` on `draft`, a sheet with Arcane
 /// Resin picked. A sheet the editor opened on the query's resin edits it,
-/// and offers to remove it; any other adds the resin. When the user
-/// confirms, `on_save` saves the draft and answers with the editor's result;
-/// a refused save keeps the dialog open on the editor's reason.
+/// and offers to remove it; on a query without resin it adds one. When the
+/// user confirms, `on_save` saves the draft and answers with the editor's
+/// result; a refused save keeps the dialog open on the editor's reason.
 #[allow(clippy::too_many_lines)] // Declarative dialog assembly.
 pub fn present(
     parent: &adw::ApplicationWindow,
