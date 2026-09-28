@@ -781,7 +781,9 @@ impl QueryPane {
         });
         chip.add_controller(secondary);
 
-        let long_press = gtk::GestureLongPress::new();
+        // Touch's secondary click. A mouse has its own, and holding the
+        // button a moment before a drag must not open the menu instead.
+        let long_press = gtk::GestureLongPress::builder().touch_only(true).build();
         long_press.connect_pressed({
             let pane = Rc::clone(self);
             move |gesture, _, _| {
