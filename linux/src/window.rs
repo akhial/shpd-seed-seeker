@@ -724,6 +724,26 @@ pub fn present(app: &adw::Application) {
     });
     window.add_action(&focus_seed_action);
 
+    let show_results_action = gio::SimpleAction::new("show-results", None);
+    show_results_action.connect_activate({
+        let inner_split = inner_split.clone();
+        let outer_split = outer_split.clone();
+        move |_, _| {
+            outer_split.set_show_content(true);
+            inner_split.set_show_content(false);
+        }
+    });
+    window.add_action(&show_results_action);
+    // Each way on appears only while its split view hides the page it leads to.
+    outer_split
+        .bind_property("collapsed", &query.results_button, "visible")
+        .sync_create()
+        .build();
+    inner_split
+        .bind_property("collapsed", &results.seed_button, "visible")
+        .sync_create()
+        .build();
+
     let shortcuts_action = gio::SimpleAction::new("shortcuts", None);
     shortcuts_action.connect_activate({
         let window = window.clone();

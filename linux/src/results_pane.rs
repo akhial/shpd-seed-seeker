@@ -94,6 +94,8 @@ struct PendingRefine {
 pub struct ResultsPane {
     recipes: RefCell<HashMap<String, SeedRecipe>>,
     pub page: adw::NavigationPage,
+    /// Opens the seed page while the window is too narrow to show it.
+    pub seed_button: gtk::Button,
     title: adw::WindowTitle,
     stack: gtk::Stack,
     message_page: adw::StatusPage,
@@ -186,6 +188,16 @@ impl ResultsPane {
             .tooltip_text("Clear Results")
             .action_name("win.clear-results")
             .build();
+        // Collapsed to a single page, results hide the seed page, which is
+        // otherwise only reached by picking a result; the window shows this
+        // only then.
+        let seed_button = gtk::Button::builder()
+            .icon_name("mark-location-symbolic")
+            .tooltip_text("Scout a Seed")
+            .action_name("win.focus-seed")
+            .visible(false)
+            .build();
+        header_bar.pack_end(&seed_button);
         header_bar.pack_end(&export_button);
         header_bar.pack_end(&import_button);
         header_bar.pack_end(&clear_button);
@@ -201,6 +213,7 @@ impl ResultsPane {
 
         let pane = Rc::new(Self {
             page: nav_page,
+            seed_button,
             title,
             stack,
             message_page,

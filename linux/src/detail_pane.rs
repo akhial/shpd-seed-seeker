@@ -49,6 +49,7 @@ pub struct DetailPane {
     scroller: gtk::ScrolledWindow,
     dock: gtk::Fixed,
     shortcuts: gtk::Box,
+    nav: gtk::Box,
     nav_hint: gtk::Label,
     nav_position: gtk::Label,
     offers: RefCell<Option<gtk::Box>>,
@@ -239,6 +240,9 @@ impl DetailPane {
         let toolbar_view = adw::ToolbarView::new();
         toolbar_view.add_top_bar(&header_bar);
         toolbar_view.add_top_bar(&entry_clamp);
+        // Browsing and the trinket dock only mean something once a seed
+        // is scouted.
+        nav.set_visible(false);
         toolbar_view.add_top_bar(&nav);
         toolbar_view.set_content(Some(&stack));
 
@@ -262,6 +266,7 @@ impl DetailPane {
             scroller: manifest_scroller,
             dock,
             shortcuts,
+            nav,
             nav_hint,
             nav_position,
             offers: RefCell::new(None),
@@ -536,9 +541,11 @@ impl DetailPane {
             self.stack.set_visible_child_name("empty");
             self.copy_button.set_visible(false);
             self.info_button.set_visible(false);
+            self.nav.set_visible(false);
             return;
         };
         self.stack.set_visible_child_name("manifest");
+        self.nav.set_visible(true);
         self.copy_button.set_visible(true);
         self.info_button.set_visible(true);
 

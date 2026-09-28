@@ -66,6 +66,8 @@ type BoardHandler = Box<dyn Fn(BoardAction)>;
 
 pub struct QueryPane {
     pub page: adw::NavigationPage,
+    /// Opens the results page while the window is too narrow to show it.
+    pub results_button: gtk::Button,
     requirements_group: adw::PreferencesGroup,
     /// Holds the board and the drop-to-remove zone, and parents the popovers
     /// so a rebuild of the chips cannot pull them out from under the pointer.
@@ -348,7 +350,17 @@ impl QueryPane {
             .primary(true)
             .tooltip_text("Main Menu")
             .build();
+        // Collapsed to a single page, the query has no other way on to the
+        // results and the seed than starting a search; the window shows this
+        // only then.
+        let results_button = gtk::Button::builder()
+            .icon_name("view-list-ordered-symbolic")
+            .tooltip_text("Results")
+            .action_name("win.show-results")
+            .visible(false)
+            .build();
         let header_bar = adw::HeaderBar::new();
+        header_bar.pack_start(&results_button);
         header_bar.pack_end(&menu_button);
 
         let toolbar_view = adw::ToolbarView::new();
@@ -364,6 +376,7 @@ impl QueryPane {
 
         let pane = Rc::new(Self {
             page: nav_page,
+            results_button,
             requirements_group,
             board_root,
             board,
