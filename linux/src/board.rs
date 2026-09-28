@@ -232,6 +232,19 @@ pub fn stack_badges(chip: &ChipView) -> Vec<StackBadge<'_>> {
     count.into_iter().chain(total).collect()
 }
 
+/// The badges `chip` shows where it was picked up from while one of its
+/// items is lifted away: the stack as the editor says the bin would leave
+/// it, one copy fewer and its Σ capped or dropped — the chip's own
+/// `remaining_badges`, which may be none at all. `None` when the chip has
+/// no copies and leaves whole, so its origin stays as it was.
+#[must_use]
+pub fn left_behind(chip: &ChipView) -> Option<Vec<(StackField, &Badge)>> {
+    let badges = chip.remaining_badges.as_ref()?;
+    let count = badges.count.iter().map(|badge| (StackField::Count, badge));
+    let total = badges.total.iter().map(|badge| (StackField::Total, badge));
+    Some(count.chain(total).collect())
+}
+
 /// One choice of a chip's "Either/or with…" menu: a board entry of the
 /// chip's section, named as the board reads it, and the row a join names.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -314,7 +327,7 @@ mod tests {
 
     use super::{
         BoardCache, Dragged, DropAnswer, Landing, StackField, chip_tooltip, find_chip, follow_key,
-        join_choices, resin_tooltip, stack_badges, tag_class,
+        join_choices, left_behind, resin_tooltip, stack_badges, tag_class,
     };
     use crate::fixtures::{
         Fixture, decode_requirement, decode_resin, decode_row, decode_rows, encode_row, fixtures,
@@ -981,6 +994,92 @@ mod tests {
                 (StackField::Total, "\u{3a3} \u{2265} 4", 4, 8)
             ]
         );
+    }
+
+    /// What `chip`'s origin shows while one of its items is lifted away.
+    fn shown_left_behind(chip: &ChipView) -> Option<Vec<(StackField, &str)>> {
+        left_behind(chip).map(|badges| {
+            badges
+                .into_iter()
+                .map(|(field, badge)| (field, badge.text.as_str()))
+                .collect()
+        })
+    }
+
+    #[test]
+    fn a_lifted_item_leaves_its_stack_one_item_fewer() {
+        // Ring of Energy +4 ×3 leaves ×2 behind, and ×2 leaves one ring,
+        // which wears no badge.
+        let energy = |count: u64| -> Vec<Row> {
+            (1..=count)
+                .map(|key| Row {
+                    key,
+                    requirement: Requirement {
+                        item: Some(ItemId::RingEnergy),
+                        upgrade: if key == 1 {
+                            UpgradeRequirement::Exact(4)
+                        } else {
+                            UpgradeRequirement::Any
+                        },
+                        ..Requirement::any(ItemKind::Ring)
+                    },
+                })
+                .collect()
+        };
+        let view = editor::board_view(&energy(3), None);
+        let (_, chip) = find_chip(&view, 1).unwrap();
+        assert_eq!(shown_badges(chip), [(StackField::Count, "\u{d7}3", 3, 3)]);
+        assert_eq!(
+            shown_left_behind(chip),
+            Some(vec![(StackField::Count, "\u{d7}2")])
+        );
+        let view = editor::board_view(&energy(2), None);
+        let (_, chip) = find_chip(&view, 1).unwrap();
+        assert_eq!(shown_left_behind(chip), Some(Vec::new()));
+
+        // A combined level the rest cannot reach is capped at what it can.
+        let mut rings = vec![
+            ring(1, UpgradeRequirement::Any),
+            ring(2, UpgradeRequirement::Any),
+            ring(3, UpgradeRequirement::Any),
+        ];
+        for row in &mut rings {
+            row.requirement.level_sum = Some(LevelSum {
+                group: 1,
+                minimum_total: 11,
+            });
+        }
+        let view = editor::board_view(&rings, None);
+        let (_, chip) = find_chip(&view, 1).unwrap();
+        assert_eq!(
+            shown_left_behind(chip),
+            Some(vec![
+                (StackField::Count, "\u{2264}2"),
+                (StackField::Total, "\u{3a3} \u{2265} 8")
+            ])
+        );
+
+        // In {Frost ×2 | Disintegration} a lifted Frost leaves one Frost,
+        // while Disintegration has no copies and leaves whole.
+        let mut cluster = vec![
+            wand(1, ItemId::WandFrost),
+            wand(2, ItemId::WandDisintegration),
+            any(3, ItemKind::Wand),
+        ];
+        for (key, row) in (1..).zip(&mut cluster) {
+            if key != 2 {
+                row.requirement.identity_group = Some(1);
+            }
+            if key != 3 {
+                row.requirement.alternative_group = Some(1);
+            }
+        }
+        let view = editor::board_view(&cluster, None);
+        let (_, frost) = find_chip(&view, 1).unwrap();
+        let (_, disintegration) = find_chip(&view, 2).unwrap();
+        assert_eq!(shown_badges(frost), [(StackField::Count, "\u{d7}2", 2, 3)]);
+        assert_eq!(shown_left_behind(frost), Some(Vec::new()));
+        assert_eq!(shown_left_behind(disintegration), None);
     }
 
     #[test]

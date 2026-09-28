@@ -16,7 +16,7 @@ push/pop navigation as the window narrows, down to a fully single-pane phone-siz
   floor limit, Wandmaker quest, and blacksmith scope controls. Dropping one chip
   on another makes an either/or cluster; dragging a member back onto the board pulls it out
   again. Every drag moves one item, so a stacked chip gives up one copy and keeps the rest,
-  and the bin takes one item. Each chip's badges, a cluster member's too, say how many items
+  which its dimmed chip shows while the item is in flight, and the bin takes one item. Each chip's badges, a cluster member's too, say how many items
   of its kind it asks for and what combined upgrade level they reach. A chip opens in a dialog with category, item, tier, upgrade,
   enchantment/glyph, source, total item count, and per-item floor limit predicates.
   Artifacts require a named selection, support per-item floor limits, and

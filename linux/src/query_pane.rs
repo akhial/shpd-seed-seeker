@@ -10,7 +10,7 @@ use adw::prelude::*;
 use gtk::{cairo, gdk, gio, glib, pango};
 
 use shpd_seedfinder_core::editor::{
-    self, BoardView, ChipView, Edit, EffectBadge, ItemView, ResinChip, Tag,
+    self, Badge, BoardView, ChipView, Edit, EffectBadge, ItemView, ResinChip, Tag,
 };
 use shpd_seedfinder_core::feasibility::Quest;
 use shpd_seedfinder_core::main_world::normalize_floor_limit;
@@ -851,19 +851,27 @@ impl QueryPane {
         drag.connect_drag_begin({
             let pane = Rc::clone(self);
             move |source, drag| {
-                if let Some(widget) = source.widget() {
+                let origin = source.widget().and_downcast::<gtk::Box>();
+                if let Some(widget) = &origin {
                     widget.add_css_class("chip-dragging");
                 }
                 // Where the chip may land is read once, off the board it was
                 // drawn on, so hovering asks the editor nothing.
                 let dragged = key.and_then(|key| pane.board_view.borrow().pick_up(key));
                 // A drag moves one item: the chip in flight is its face
-                // alone, without the badges of the stack it leaves behind.
+                // alone, and the dimmed chip it leaves shows the badges of
+                // the stack without it, until the drag ends. A chip that
+                // leaves whole keeps its own.
                 if let Some(key) = key
                     && let Some(view) = pane.board_view.borrow().current()
                     && let Some((_, chip)) = board::find_chip(&view, key)
                 {
                     gtk::DragIcon::for_drag(drag).set_child(Some(&chip_face(chip)));
+                    if let Some(widget) = &origin
+                        && let Some(left) = board::left_behind(chip)
+                    {
+                        lift_badges(widget, &left);
+                    }
                 }
                 pane.dragging.replace(dragged);
                 pane.remove_revealer.set_reveal_child(true);
@@ -872,8 +880,9 @@ impl QueryPane {
         drag.connect_drag_end({
             let pane = Rc::clone(self);
             move |source, _, _| {
-                if let Some(widget) = source.widget() {
+                if let Some(widget) = source.widget().and_downcast::<gtk::Box>() {
                     widget.remove_css_class("chip-dragging");
+                    settle_badges(&widget);
                 }
                 pane.dragging.replace(None);
                 pane.remove_revealer.set_reveal_child(false);
@@ -1005,16 +1014,7 @@ impl QueryPane {
         board::stack_badges(chip)
             .into_iter()
             .map(|shown| {
-                let classes: &[&str] = match shown.field {
-                    StackField::Count => &["stack-badge"],
-                    StackField::Total => &["stack-badge", "stack-badge-total"],
-                };
-                let button = gtk::Button::builder()
-                    .label(&shown.badge.text)
-                    .css_classes(classes)
-                    .valign(gtk::Align::Center)
-                    .tooltip_text(&shown.badge.tooltip)
-                    .build();
+                let button = badge_button(shown.field, shown.badge);
                 button.connect_clicked({
                     let pane = Rc::clone(self);
                     let (field, value, maximum) = (shown.field, shown.value, shown.maximum);
@@ -1350,6 +1350,56 @@ fn chip_face(chip: &ChipView) -> gtk::Box {
         widget.append(&uncursed_mark());
     }
     widget
+}
+
+/// One ×N or Σ badge as a chip wears it, a button that opens its stepper
+/// once the board wires it.
+fn badge_button(field: StackField, badge: &Badge) -> gtk::Button {
+    let classes: &[&str] = match field {
+        StackField::Count => &["stack-badge"],
+        StackField::Total => &["stack-badge", "stack-badge-total"],
+    };
+    gtk::Button::builder()
+        .label(&badge.text)
+        .css_classes(classes)
+        .valign(gtk::Align::Center)
+        .tooltip_text(&badge.tooltip)
+        .build()
+}
+
+/// Shows on the chip `chip`, whose item is in flight, the badges its stack
+/// keeps without that item (`board::left_behind`) in place of its own. They
+/// are only a picture of what stays: nothing under the pointer, and gone
+/// again at [`settle_badges`].
+fn lift_badges(chip: &gtk::Box, left: &[(StackField, &Badge)]) {
+    let mut child = chip.first_child();
+    while let Some(widget) = child {
+        child = widget.next_sibling();
+        if widget.has_css_class("stack-badge") {
+            widget.set_visible(false);
+        }
+    }
+    for &(field, badge) in left {
+        let button = badge_button(field, badge);
+        button.add_css_class("stack-badge-left");
+        button.set_can_target(false);
+        button.set_focusable(false);
+        chip.append(&button);
+    }
+}
+
+/// Gives a chip back its own badges once the drag that lifted one of its
+/// items ends, dropped or cancelled.
+fn settle_badges(chip: &gtk::Box) {
+    let mut child = chip.first_child();
+    while let Some(widget) = child {
+        child = widget.next_sibling();
+        if widget.has_css_class("stack-badge-left") {
+            chip.remove(&widget);
+        } else if widget.has_css_class("stack-badge") {
+            widget.set_visible(true);
+        }
+    }
 }
 
 /// One qualifier beside a chip's name, tinted as the editor styles it, with
