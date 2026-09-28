@@ -154,7 +154,7 @@ name of the query format (`"locked_chest"`).
 | Edit | Effect |
 | --- | --- |
 | `{"type": "normalize"}` | Rewrites the list into its canonical encoding, its labels in range among it (see [Labels](#labels)). See [When to normalize](#when-to-normalize). |
-| `{"type": "join", "source": K, "target": K}` | Makes `source` an either/or alternative of `target` (any member of a chip or cluster). The source moves after the cluster's last member. |
+| `{"type": "join", "source": K, "target": K}` | Makes `source` an either/or alternative of `target` (any member of a chip or cluster). The source moves after the cluster's last member. One item moves: a stacked lone chip — source or target — joins alone and its other copies stay behind as their own entry, one fewer; a target cluster keeps its stack; a source leaving a cluster leaves that cluster's stack behind. See [Joins](#joins). |
 | `{"type": "detach", "key": K}` | Takes a cluster member out on its own. It leaves the cluster's stack behind. |
 | `{"type": "remove", "key": K}` | Removes a cluster member, or a chip's whole entry. |
 | `{"type": "remove_item", "key": K}` | Removes the whole entry holding `K`: members and hidden copies. |
@@ -173,6 +173,44 @@ A `save` of a cluster member follows the join rules: moving it into a
 category the rest of its cluster does not share is refused with
 `mixed_category_stack` when the cluster is a stack, and clears the
 cluster's leftover stack labels when it is not.
+
+### Joins
+
+A join — a drag, pick mode, a menu's "Either/or with…", an accessibility
+action — always sends the one `join` edit, and a join moves **one item**:
+
+- **A stacked lone chip joins alone.** The chip the user dragged, or
+  dropped onto — the stack's anchor, with its own constraints — joins the
+  group; its hidden copies stay behind as an entry of their own with one
+  item fewer, keeping their own floor limits, as if the count had been
+  stepped down by one around the anchor. Wand of Disintegration ×2 onto
+  Wand of Frost gives `(Frost or Disintegration)` and `Disintegration`;
+  ×3 leaves `Disintegration ×2`; `Any wand +3 ×2` leaves `Any wand`;
+  Disintegration onto Frost ×2 gives `(Frost or Disintegration)` and
+  `Frost`. A stack's count never becomes the group's: a group's count is
+  "N items that are all the same item, whichever alternative matched",
+  which says something else.
+- **A group keeps its own stack.** Dropped onto a cluster, the source joins
+  it under its stack label, and the cluster keeps its ×N and its copies:
+  Disintegration ×2 onto `(Frost or Lightning) ×2` gives `(Frost or
+  Lightning or Disintegration) ×2` and `Disintegration`.
+- **A member leaving a group leaves the group's count behind**, as
+  `detach` does: the member moves alone and without a stack label. Frost
+  +2 of `(Frost +2 or Disintegration) ×2` dragged onto Any wand +3 gives
+  `Disintegration ×2` and `(Any wand +3 or Frost +2)`.
+- **A combined level stays behind.** A joined ring drops its combined
+  level; the rings its stack leaves behind keep counting, their total
+  capped at what they can still reach, or stop when only one is left — the
+  sheet's rule for a count stepped down. Ring of Energy ×3 `Σ ≥ 11` joined
+  onto Ring of Might leaves `Ring of Energy ≤2 Σ ≥ 8`.
+- A join across categories where either entry is a stack is refused with
+  `mixed_category_stack` (#190); one of two unstacked entries clears any
+  leftover stack labels and deletes nothing.
+
+A join adds and removes no row, never orphans a copy (every entry but the
+two joined asks for what it did), never leaves a stack or combined-level
+label on an entry without copies, and writes a canonical list. Detaching
+the joined chip again folds it back with the copies it left behind.
 
 ### No-op and refused edits
 
@@ -244,7 +282,7 @@ canonical — a cluster of one, repeats a stack would fold, a stack labelled
 | `members` | The visible rows' keys: one for a chip, every member of a cluster. |
 | `extras` | The hidden copies' keys behind the stack badge. |
 | `stack` | What the count and combined-level steppers offer: `count`, `max` (3), `can_grow`, `can_change_count`, `count_max` (the count stepper's upper bound: `max` while the entry can grow, else its `count`, which it may only shed copies from; never above `max`), `total`, `can_count_levels`, `level_capacity`, `default_total`, `copy_depth`, `can_set_copy_depth`, `count_text` (`×2`, or `≤2` while counting levels — present even at ×1 for steppers), `total_text` (`Σ ≥ 5`, `Σ ≥ 0` without a total). |
-| `badges` | The badges shown at rest: `count` when the entry asks for more than one item, `total` when it counts levels; each `{"text", "compact_text", "tooltip"}` (`×3` / `3 of the same kind`; `Σ ≥ 5`, compact `Σ≥5`, `Levels add to at least 5 (a +0 item counts 1)`), else `null`. |
+| `badges` | The badges shown at rest: `count` when the entry asks for more than one item, `total` when it counts levels; each `{"text", "compact_text", "tooltip"}` (`×3` / `3 of the same kind`; `Σ ≥ 5`, compact `Σ≥5`, `Levels add to at least 5 (a +0 item counts 1)`), else `null`. A cluster's badges are the whole group's and are drawn outside its outline (see [Settled behaviour](#settled-behaviour)). |
 | `chips` | One CHIP per member. |
 | `problem` | The first problem touching any member or hidden copy, so a problem on a folded-away copy still shows. |
 
@@ -512,14 +550,17 @@ decided once.
 | Topic | Behaviour |
 | --- | --- |
 | Joining across categories with a stack | Refused: `Copies can only be grouped with the same item type.` |
-| Plain copies traded on a join | Only the joined chip's own copies become identity copies. |
+| Joining a stack | One item moves (drag, pick mode, menu and accessibility alike): a stacked lone chip, source or target, joins alone and its other copies stay behind as their own entry, one fewer, with their own floor limits; a target cluster keeps its ×N, copies and label; the source never brings its stack along, and a stack's count never becomes a group's. See [Joins](#joins). |
+| A combined level losing a ring to a join | The rings left behind keep counting, capped at what they can still reach, or stop when one is left. |
+| Detach, and a member dragged out of a group | The member leaves alone and without a stack label; the group keeps its ×N (a group of one left with copies becomes that chip's stack). |
 | Joining across categories without a stack | Leftover identity labels are cleared; nothing is deleted. |
+| A group stepped down to ×1 | Drops its stack label, so it uses none of the four and none reaches a saved or shared query. |
+| Counting levels on or off | The anchor and every copy keep their own floor limits, on the board and through the sheet (which saves the copy floor its hidden control holds); the popover names the copies' floors while they differ from the anchor's. |
+| Group badges | A cluster's ×N and Σ badges belong to the whole group and are drawn **outside** its dashed outline, right after its trailing edge — never inline after the last member, which reads as "this last item ×N". A lone chip's badges stay inside the chip. The outline and its badges wrap as one unit; on a narrow board the outline leaves room for its badge rather than pushing the badge onto a line of its own. |
 | A stacked cluster member saved into another category | Refused like the join; without a stack, leftover labels are cleared. |
 | Drop on the empty board | Detaches cluster members only; a lone chip stays. |
 | Combined level on a blanket | Refused. |
 | A cluster's stack label | Never spread onto trinket, artifact or blanket members. |
-| A group stepped down to ×1 | Drops its stack label, so it uses none of the four and none reaches a saved or shared query. |
-| Counting levels on or off | The anchor and every copy keep their own floor limits, on the board and through the sheet (which saves the copy floor its hidden control holds); the popover names the copies' floors while they differ from the anchor's. |
 | Copy contents | Built from defaults; plain copies keep the melee/thrown narrowing; resin exclusion, blanket, trinket selection and transmutations are never copied. |
 | Key lookup | Visible members only, never hidden copies. |
 | Labels out of range | Moved onto free labels in range by `normalize` and every edit that changes the rows; never merged to fit. |
@@ -555,18 +596,6 @@ decided once.
 
 ### Known limitations
 
-The apps shared these behaviours before the move, and the core keeps them
-for now:
-
-- Joining a stacked chip onto a stacked cluster of the same category takes
-  the chip's stack label for the whole cluster; the cluster's old copies
-  lose theirs and become a standalone wildcard chip.
-- Joining a stack that counts levels leaves its other members behind as a
-  chip of their own.
-- Joining a stack-labelled cluster member onto a chip of the same category
-  can leave two constrained members in one stack, which the problem list
-  reports.
-
 These are the core's own choices:
 
 - The sheet has no control for an artifact's upgrade or a trinket's source,
@@ -591,6 +620,9 @@ These are the core's own choices:
 - The copy floor has no help text; the one Android and iOS drew ("A floor
   limit is where an item lies, not what it is, so the copies keep their
   own.") is gone until the floor toggle carries a caption.
+- The board's count stepper leaves a combined level a stack stepped down
+  can no longer reach as it was, and the problem list reports it; the
+  sheet's stepper and a join cap it.
 - The copy floor of a stack counting levels cannot be edited until it
   stops counting; the sheet keeps it, hidden, and the popover names it.
 
@@ -598,9 +630,11 @@ These are the core's own choices:
 
 `crates/seedfinder-core/tests/fixtures/editor/*.json` pins representative
 request/response pairs for both envelopes: the board tour, the four stack
-encodings, joins (traded, refused), detach and removals, copy floors,
-combined levels (their copies' floors kept both ways), a group stepped
-down to ×1, saves (new and unchanged), problems, key repair, label
+encodings, joins (one copy moving out of a stack, the reported list and
+its round trip, onto a stacked chip and a stacked cluster, a combined
+level and a group member leaving, refused), detach and removals, copy
+floors, combined levels (their copies' floors kept both ways), a group
+stepped down to ×1, saves (new and unchanged), problems, key repair, label
 compaction and labels moved into range, unreadable rows, the sheet's
 open/change/save flow, an untouched save and one that repairs its row, the
 resin flows (a query with resin and one without, and the resin chip saved

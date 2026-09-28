@@ -1,5 +1,5 @@
 {
-  "about": "A Spear stack joined to a wildcard weapon: its plain repeats become identity copies the cluster shares.",
+  "about": "A wildcard weapon dropped on a Spear stack joins just the +2 Spear; the plain repeat stays behind as a Spear of its own.",
   "envelope": "requirement_board",
   "request": {
     "edits": [
@@ -34,17 +34,13 @@
     "changed": true,
     "counts": {
       "blanket": 0,
-      "ordinary": 1
+      "ordinary": 2
     },
     "focus": 3,
     "items": [
       {
         "badges": {
-          "count": {
-            "compact_text": "×2",
-            "text": "×2",
-            "tooltip": "2 of the same kind"
-          },
+          "count": null,
           "total": null
         },
         "blanket": false,
@@ -59,7 +55,9 @@
             "family": "weapon",
             "in_cluster": true,
             "item": "spear",
-            "join": [],
+            "join": [
+              2
+            ],
             "key": 1,
             "kind": "weapon",
             "name": "Spear",
@@ -69,10 +67,6 @@
               {
                 "glyph": "or",
                 "text": "Any weapon"
-              },
-              {
-                "glyph": "times",
-                "text": "2 of the same kind — the extra copies: any upgrade, any floor"
               }
             ],
             "tags": [
@@ -96,7 +90,9 @@
             "family": "weapon",
             "in_cluster": true,
             "item": null,
-            "join": [],
+            "join": [
+              2
+            ],
             "key": 3,
             "kind": "weapon",
             "name": "Any weapon",
@@ -106,10 +102,6 @@
               {
                 "glyph": "or",
                 "text": "Spear"
-              },
-              {
-                "glyph": "times",
-                "text": "2 of the same kind — the extra copies: any upgrade, any floor"
               }
             ],
             "tags": [
@@ -125,9 +117,7 @@
           }
         ],
         "cluster": 1,
-        "extras": [
-          2
-        ],
+        "extras": [],
         "id": "c1",
         "label": "Any of 2",
         "members": [
@@ -140,13 +130,71 @@
           "can_change_count": true,
           "can_count_levels": false,
           "can_grow": true,
-          "can_set_copy_depth": true,
+          "can_set_copy_depth": false,
           "copy_depth": null,
-          "count": 2,
+          "count": 1,
           "count_max": 3,
-          "count_text": "×2",
-          "default_total": 2,
-          "level_capacity": 8,
+          "count_text": "×1",
+          "default_total": 1,
+          "level_capacity": 5,
+          "max": 3,
+          "total": null,
+          "total_text": "Σ ≥ 0"
+        }
+      },
+      {
+        "badges": {
+          "count": null,
+          "total": null
+        },
+        "blanket": false,
+        "chips": [
+          {
+            "can_detach": false,
+            "description": "Spear, any upgrade",
+            "details": [
+              "any upgrade"
+            ],
+            "effect": null,
+            "family": "weapon",
+            "in_cluster": false,
+            "item": "spear",
+            "join": [
+              1,
+              3
+            ],
+            "key": 2,
+            "kind": "weapon",
+            "name": "Spear",
+            "problem": null,
+            "refuse": [],
+            "relations": [],
+            "tags": [],
+            "title": "Spear",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [],
+        "id": "r2",
+        "label": null,
+        "members": [
+          2
+        ],
+        "name": "Spear",
+        "problem": null,
+        "stack": {
+          "can_change_count": true,
+          "can_count_levels": false,
+          "can_grow": true,
+          "can_set_copy_depth": false,
+          "copy_depth": null,
+          "count": 1,
+          "count_max": 3,
+          "count_text": "×1",
+          "default_total": 1,
+          "level_capacity": 5,
           "max": 3,
           "total": null,
           "total_text": "Σ ≥ 0"
@@ -161,7 +209,6 @@
     "rows": [
       {
         "alternative_group": 1,
-        "identity_group": 1,
         "item": "spear",
         "key": 1,
         "kind": "weapon",
@@ -169,7 +216,6 @@
       },
       {
         "alternative_group": 1,
-        "identity_group": 1,
         "key": 3,
         "kind": "weapon",
         "tier": {
@@ -177,7 +223,7 @@
         }
       },
       {
-        "identity_group": 1,
+        "item": "spear",
         "key": 2,
         "kind": "weapon"
       }

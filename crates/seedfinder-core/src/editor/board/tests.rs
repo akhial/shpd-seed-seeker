@@ -7,18 +7,22 @@
 //! Windows `QueryRelationshipsTests.cs`; Linux `relations.rs` — deduplicated
 //! and expressed in keys. Where the older suites pinned the pre-#190 join
 //! (a stack following its chip into a cluster of another category), the
-//! cases pin #190's refusal instead and say so.
+//! cases pin #190's refusal instead and say so; where they pinned a stack
+//! following its chip into a cluster at all, the cases pin the one-item
+//! join instead: the chip joins alone and its copies stay behind.
 
 use super::super::testing::{
-    Rng, assert_emittable, named, query, random_edit, random_rows, requirements, row, validate,
-    with,
+    Rng, assert_emittable, named, query, random_edit, random_requirement, random_rows,
+    requirements, row, validate, with,
 };
 use super::*;
 use crate::catalog::{ItemId, ItemKind, WeaponCategory};
 use crate::editor::{
     STACK_MAX, can_change_count, can_count_levels, can_grow, copy_depth, level_capacity, problems,
 };
-use crate::query::{LevelSum, QueryError, Requirement, TierRequirement, UpgradeRequirement};
+use crate::query::{
+    LevelSum, QueryError, Requirement, SumGroup, TierRequirement, UpgradeRequirement,
+};
 
 fn keys(rows: &[Row]) -> Vec<u64> {
     rows.iter().map(|row| row.key).collect()
@@ -215,8 +219,8 @@ fn dropping_a_chip_on_another_makes_one_slot_placed_after_the_target() {
 
 /// The web suite joined a combined-level pair onto a shuriken. Under #190
 /// that mixed-category join of a stack is refused; within one category the
-/// join still drops the level sum — and, canonically until the follow-up,
-/// leaves the other member behind as a chip of its own.
+/// joined ring drops the level sum and its other member stays behind — a
+/// chip of its own, since a combined level of one says nothing.
 #[test]
 fn joining_a_combined_level_stack_drops_its_total_and_leaving_a_pair_dissolves_it() {
     let pair = [
@@ -481,12 +485,17 @@ fn an_either_or_cluster_anchors_a_stack_and_every_member_carries_the_label() {
     assert_eq!(validate(&wands), Ok(()));
 }
 
+/// A join moves one item. The web, and the core after it, traded a stacked
+/// target's plain repeats for bare copies the whole cluster shared, which
+/// turned "two Spears, and a Mace" into "two of the same item, Spear or
+/// Mace"; the stacked chip now joins alone and its repeat stays behind.
 #[test]
-fn a_plain_repeat_stack_trades_its_copies_for_labels_when_it_joins_a_cluster() {
+fn a_stacked_chip_joins_alone_and_leaves_its_copies_behind() {
     let base = edited(
         &[named(1, ItemId::Spear), named(2, ItemId::Mace)],
         &[Edit::SetCount { key: 1, count: 2 }],
     );
+    assert_eq!(keys(&base), [1, 3, 2]);
     let next = edited(
         &base,
         &[Edit::Join {
@@ -494,18 +503,14 @@ fn a_plain_repeat_stack_trades_its_copies_for_labels_when_it_joins_a_cluster() {
             target: 1,
         }],
     );
-    // The copy is now a bare weapon tied to the whole cluster.
-    let copies: Vec<&Row> = next
-        .iter()
-        .filter(|row| row.requirement.item.is_none())
-        .collect();
-    assert_eq!(copies.len(), 1);
-    assert!(copies[0].requirement.identity_group.is_some());
+    assert_eq!(keys(&next), [1, 2, 3]);
+    assert_eq!(next[2], named(3, ItemId::Spear));
     assert!(
         next.iter()
-            .filter(|row| row.requirement.alternative_group.is_some())
-            .all(|row| row.requirement.identity_group == copies[0].requirement.identity_group)
+            .all(|row| row.requirement.identity_group.is_none())
     );
+    assert_eq!(members(&next), [vec![0, 1], vec![2]]);
+    assert_eq!(counts(&next), [1, 1]);
     assert_eq!(validate(&next), Ok(()));
 
     // The same holds for rings, with the counted chip as the source.
@@ -522,8 +527,10 @@ fn a_plain_repeat_stack_trades_its_copies_for_labels_when_it_joins_a_cluster() {
             },
         ],
     );
+    assert_eq!(keys(&rings), [10, 9, 1]);
+    assert_eq!(rings[0], named(10, ItemId::RingMight));
+    assert_eq!(counts(&rings), [1, 1]);
     assert_eq!(validate(&rings), Ok(()));
-    assert_eq!(counts(&rings), [2]);
 }
 
 /// Android #190: a stack cannot follow its chip into a cluster spanning
@@ -578,7 +585,7 @@ fn dropping_armor_on_a_counted_ring_does_not_split_off_its_copies() {
 }
 
 /// Android #190: another chip may name the same ring with its own stack;
-/// joining one chip trades only the repeats of its own entry.
+/// joining one chip touches nothing of the other's.
 #[test]
 fn joining_a_ring_only_takes_the_copies_belonging_to_that_chip() {
     let counted = {
@@ -611,8 +618,10 @@ fn joining_a_ring_only_takes_the_copies_belonging_to_that_chip() {
     }
 }
 
+/// Dropping a ring on a counted ring joins just that ring; its copies stay
+/// behind as their own stack, floor limit and all.
 #[test]
-fn dropping_another_ring_on_a_counted_ring_keeps_its_copies_and_their_floor_limit() {
+fn dropping_a_ring_on_a_counted_ring_joins_one_and_leaves_its_copies_with_their_floor() {
     let mut counted = edited(
         &[],
         &[saved(
@@ -630,27 +639,24 @@ fn dropping_another_ring_on_a_counted_ring_keeps_its_copies_and_their_floor_limi
             target: 1,
         }],
     );
+    assert_eq!(keys(&joined), [1, 9, 2, 3]);
     let board = board_items(&joined);
-    assert_eq!(board.len(), 1);
-    let item = &board[0];
+    assert_eq!(board.len(), 2);
+    let (cluster, left) = (&board[0], &board[1]);
+    assert_eq!((cluster.members.clone(), cluster.count()), (vec![0, 1], 1));
     assert_eq!(
-        item.members
-            .iter()
-            .map(|&index| joined[index].key)
-            .collect::<Vec<_>>(),
-        [1, 9]
-    );
-    assert_eq!(item.count(), 3);
-    assert_eq!(
-        item.extras
-            .iter()
-            .map(|&index| joined[index].requirement.max_depth)
-            .collect::<Vec<_>>(),
-        [Some(9), Some(9)]
-    );
-    assert_eq!(
-        joined[item.anchor()].requirement.upgrade,
+        joined[cluster.anchor()].requirement.upgrade,
         UpgradeRequirement::Exact(4)
+    );
+    assert_eq!(
+        (left.members.clone(), left.extras.clone()),
+        (vec![2], vec![3])
+    );
+    assert_eq!(copy_depth(&joined, left), Some(9));
+    assert!(
+        joined[2..]
+            .iter()
+            .all(|row| { row.requirement == floor(named(0, ItemId::RingEnergy), 9).requirement })
     );
     assert_eq!(validate(&joined), Ok(()));
 }
@@ -1560,8 +1566,8 @@ fn editing_away_the_limit_clears_it_from_every_copy() {
 }
 
 #[test]
-fn the_copies_keep_their_floor_when_the_stack_follows_its_chip_into_a_cluster() {
-    let mut rows = edited(&[], &[saved(ring(None), 2, None, Some(7))]);
+fn the_copies_keep_their_floor_when_their_chip_joins_a_cluster_without_them() {
+    let mut rows = edited(&[], &[saved(ring(None), 3, None, Some(7))]);
     rows.push(named(9, ItemId::RingHaste));
     let joined = edited(
         &rows,
@@ -1570,11 +1576,11 @@ fn the_copies_keep_their_floor_when_the_stack_follows_its_chip_into_a_cluster() 
             target: 9,
         }],
     );
-    let copy = joined
-        .iter()
-        .find(|row| row.requirement.item.is_none())
-        .expect("the repeat became a bare copy");
-    assert_eq!(copy.requirement.max_depth, Some(7));
+    assert_eq!(keys(&joined), [2, 3, 9, 1]);
+    let left = entry(&joined, 2);
+    assert_eq!((left.cluster, left.count()), (None, 2));
+    assert_eq!(copy_depth(&joined, &left), Some(7));
+    assert_eq!(joined[0].requirement.max_depth, Some(7));
     assert_eq!(validate(&joined), Ok(()));
 }
 
@@ -2180,6 +2186,624 @@ fn the_focus_follows_a_row_that_normalizing_folds_away() {
     assert!(entry(&result.rows, 3).extras.contains(&1));
     assert_eq!(result.focus, Some(2));
     assert_emittable(&result.rows, "folded focus");
+}
+
+// --- a join moves one item ------------------------------------------------
+
+/// The reported list: Disintegration ×2 dragged onto Frost moved the whole
+/// stack into the group, whose count became Disintegration's second copy —
+/// "two of the same wand, Frost or Disintegration". One Disintegration now
+/// joins; the other stays behind, and detaching the joined one folds the
+/// two back together.
+#[test]
+fn a_stacked_chip_dragged_onto_a_chip_joins_one_copy_and_detaching_it_folds_back() {
+    let rows = [
+        named(1, ItemId::WandDisintegration),
+        named(2, ItemId::WandLightning),
+        exact(named(3, ItemId::RingEnergy), 4),
+        floor(named(4, ItemId::RingEnergy), 20),
+        floor(named(5, ItemId::RingEnergy), 20),
+        exact(named(6, ItemId::PlateArmor), 3),
+        named(7, ItemId::WandFrost),
+        exact(row(8, ItemKind::Wand), 3),
+        named(20, ItemId::WandDisintegration),
+    ];
+    assert_eq!(counts(&rows), [2, 1, 3, 1, 1, 1]);
+    let result = run(
+        &rows,
+        &[Edit::Join {
+            source: 1,
+            target: 7,
+        }],
+    );
+    assert_eq!(result.focus, Some(1));
+    assert_eq!(keys(&result.rows), [2, 3, 4, 5, 6, 7, 1, 8, 20]);
+    assert_eq!(
+        shape(&result.rows)[5..],
+        [
+            (7, Some(1), None, None),
+            (1, Some(1), None, None),
+            (8, None, None, None),
+            (20, None, None, None),
+        ]
+    );
+    assert_eq!(result.rows[8], rows[8]);
+    assert_eq!(counts(&result.rows), [1, 3, 1, 1, 1, 1]);
+    assert_eq!(validate(&result.rows), Ok(()));
+
+    let detached = run(&result.rows, &[Edit::Detach { key: 1 }]);
+    assert_eq!(detached.focus, Some(1));
+    assert_eq!(keys(&detached.rows), [2, 3, 4, 5, 6, 7, 1, 8, 20]);
+    assert!(
+        detached
+            .rows
+            .iter()
+            .all(|row| row.requirement.alternative_group.is_none())
+    );
+    let disintegration = entry(&detached.rows, 1);
+    assert_eq!(disintegration.count(), 2);
+    assert_eq!(detached.rows[disintegration.extras[0]].key, 20);
+    assert_eq!(counts(&detached.rows), [1, 3, 1, 1, 2, 1]);
+
+    // The same round trip with the stack first: the detached chip folds into
+    // the copy it left behind.
+    let pair = [
+        named(1, ItemId::WandDisintegration),
+        named(2, ItemId::WandDisintegration),
+        named(3, ItemId::WandFrost),
+    ];
+    let joined = edited(
+        &pair,
+        &[Edit::Join {
+            source: 1,
+            target: 3,
+        }],
+    );
+    assert_eq!(keys(&joined), [2, 3, 1]);
+    assert_eq!(counts(&joined), [1, 1]);
+    let back = edited(&joined, &[Edit::Detach { key: 1 }]);
+    assert_eq!(keys(&back), [2, 3, 1]);
+    assert_eq!(
+        requirements(&back),
+        requirements(&[pair[1], pair[2], pair[0]])
+    );
+    assert_eq!(counts(&back), [2, 1]);
+}
+
+#[test]
+fn every_kind_of_stack_leaves_its_other_copies_behind_when_its_chip_joins() {
+    // Three Disintegrations: two stay behind as a stack of their own.
+    let three = [
+        named(1, ItemId::WandFrost),
+        named(2, ItemId::WandDisintegration),
+        floor(named(3, ItemId::WandDisintegration), 9),
+        floor(named(4, ItemId::WandDisintegration), 9),
+    ];
+    let joined = edited(
+        &three,
+        &[Edit::Join {
+            source: 2,
+            target: 1,
+        }],
+    );
+    assert_eq!(keys(&joined), [1, 2, 3, 4]);
+    assert_eq!(joined[2..], three[2..]);
+    assert_eq!(members(&joined), [vec![0, 1], vec![2]]);
+    assert_eq!(counts(&joined), [1, 2]);
+    assert_eq!(copy_depth(&joined, &entry(&joined, 3)), Some(9));
+
+    // A wildcard stack: the constrained anchor joins, a bare wand stays.
+    let wildcard = edited(
+        &[
+            named(1, ItemId::WandFrost),
+            exact(row(2, ItemKind::Wand), 3),
+        ],
+        &[Edit::SetCount { key: 2, count: 2 }],
+    );
+    assert_eq!(
+        shape(&wildcard),
+        [
+            (1, None, None, None),
+            (2, None, Some(1), None),
+            (3, None, Some(1), None)
+        ]
+    );
+    let joined = edited(
+        &wildcard,
+        &[Edit::Join {
+            source: 2,
+            target: 1,
+        }],
+    );
+    assert_eq!(
+        shape(&joined),
+        [
+            (1, Some(1), None, None),
+            (2, Some(1), None, None),
+            (3, None, None, None)
+        ]
+    );
+    assert_eq!(joined[1].requirement.upgrade, UpgradeRequirement::Exact(3));
+    assert_eq!(joined[2].requirement, Requirement::any(ItemKind::Wand));
+    assert_eq!(counts(&joined), [1, 1]);
+
+    // Three of a wildcard: the two left behind stay one stack.
+    let wildcard = edited(&wildcard, &[Edit::SetCount { key: 2, count: 3 }]);
+    let joined = edited(
+        &wildcard,
+        &[Edit::Join {
+            source: 2,
+            target: 1,
+        }],
+    );
+    assert_eq!(counts(&joined), [1, 2]);
+    assert_eq!(validate(&joined), Ok(()));
+
+    // Rings within floor 20: the +4 joins Might, the copies keep floor 20.
+    let rings = [
+        exact(named(1, ItemId::RingEnergy), 4),
+        floor(named(2, ItemId::RingEnergy), 20),
+        floor(named(3, ItemId::RingEnergy), 20),
+        named(4, ItemId::RingMight),
+    ];
+    let joined = edited(
+        &rings,
+        &[Edit::Join {
+            source: 1,
+            target: 4,
+        }],
+    );
+    assert_eq!(keys(&joined), [2, 3, 4, 1]);
+    assert_eq!(joined[..2], rings[1..3]);
+    let left = entry(&joined, 2);
+    assert_eq!((left.count(), copy_depth(&joined, &left)), (2, Some(20)));
+    assert_eq!(joined[3].requirement.upgrade, UpgradeRequirement::Exact(4));
+    assert_eq!(counts(&joined), [2, 1]);
+    assert_eq!(validate(&joined), Ok(()));
+}
+
+/// Dropping onto a stacked lone chip joins just that chip, and dropping onto
+/// a stacked cluster joins the cluster, which keeps its count and labels —
+/// the core used to hand the cluster the source's count and orphan the
+/// cluster's own copy as a stray "Any wand".
+#[test]
+fn a_drop_onto_a_stack_joins_one_chip_or_the_whole_cluster() {
+    let frosts = [
+        named(1, ItemId::WandFrost),
+        named(2, ItemId::WandFrost),
+        named(3, ItemId::WandDisintegration),
+    ];
+    let joined = edited(
+        &frosts,
+        &[Edit::Join {
+            source: 3,
+            target: 1,
+        }],
+    );
+    assert_eq!(keys(&joined), [1, 3, 2]);
+    assert_eq!(
+        shape(&joined),
+        [
+            (1, Some(1), None, None),
+            (3, Some(1), None, None),
+            (2, None, None, None)
+        ]
+    );
+    assert_eq!(joined[2], frosts[1]);
+    assert_eq!(counts(&joined), [1, 1]);
+
+    let cluster = [
+        member(named(1, ItemId::WandFrost), 1, Some(1)),
+        member(named(2, ItemId::WandLightning), 1, Some(1)),
+        bare_wand(3, 1),
+        named(4, ItemId::WandDisintegration),
+        named(5, ItemId::WandDisintegration),
+    ];
+    assert_eq!(counts(&cluster), [2, 2]);
+    assert_eq!(
+        drop_action(&cluster, 4, DropTarget::Cluster(1)),
+        DropAction::Join { target: 1 }
+    );
+    for target in [1, 2] {
+        let result = run(&cluster, &[Edit::Join { source: 4, target }]);
+        assert_eq!(result.focus, Some(4));
+        assert_eq!(
+            shape(&result.rows),
+            [
+                (1, Some(1), Some(1), None),
+                (2, Some(1), Some(1), None),
+                (4, Some(1), Some(1), None),
+                (3, None, Some(1), None),
+                (5, None, None, None),
+            ]
+        );
+        assert_eq!(result.rows[3], cluster[2]);
+        assert_eq!(result.rows[4], cluster[4]);
+        let group = entry(&result.rows, 1);
+        assert_eq!((group.members.len(), group.count()), (3, 2));
+        assert_eq!(counts(&result.rows), [2, 1]);
+        assert_eq!(validate(&result.rows), Ok(()));
+    }
+}
+
+/// A combined-level stack losing a ring to a join, as source or target:
+/// the rings left behind keep the combined level, capped at what they can
+/// still reach, or drop it when only one is left.
+#[test]
+fn a_combined_level_stack_losing_a_ring_to_a_join_keeps_what_its_rest_can_reach() {
+    let energy = |key, total| sum(named(key, ItemId::RingEnergy), 1, total);
+    let might = named(4, ItemId::RingMight);
+    for (total, kept) in [(11, 8), (6, 6)] {
+        let rows = [energy(1, total), energy(2, total), energy(3, total), might];
+        assert_eq!(level_capacity(&rows, &entry(&rows, 1)), 11);
+        for (source, target) in [(1, 4), (4, 1)] {
+            let result = run(&rows, &[Edit::Join { source, target }]);
+            let context = format!("Σ ≥ {total}, {source} onto {target}");
+            assert_eq!(result.refused, None, "{context}");
+            let left = entry(&result.rows, 2);
+            assert_eq!((left.count(), left.total), (2, Some(kept)), "{context}");
+            let joined = result.rows[index_of(&result.rows, 1).unwrap()].requirement;
+            assert_eq!(
+                joined,
+                Requirement {
+                    alternative_group: Some(1),
+                    ..named(0, ItemId::RingEnergy).requirement
+                },
+                "{context}"
+            );
+            assert_eq!(counts(&result.rows).iter().sum::<usize>(), 3, "{context}");
+            assert!(problems(&result.rows).is_empty(), "{context}");
+        }
+    }
+    // A pair leaves one ring, which drops the combined level.
+    let pair = [energy(1, 4), energy(2, 4), might];
+    for (source, target) in [(1, 4), (4, 1)] {
+        let joined = edited(&pair, &[Edit::Join { source, target }]);
+        assert!(joined.iter().all(|row| row.requirement.level_sum.is_none()));
+        assert_eq!(
+            joined[index_of(&joined, 2).unwrap()],
+            named(2, ItemId::RingEnergy)
+        );
+        assert_eq!(counts(&joined), [1, 1]);
+    }
+}
+
+/// A member leaving a stacked cluster — detached, or dragged onto another
+/// chip — leaves the cluster's count with the cluster, and every label
+/// comes out clean.
+#[test]
+fn a_member_leaving_a_stacked_cluster_leaves_its_count_behind() {
+    let cluster = [
+        member(named(1, ItemId::WandFrost), 1, Some(1)),
+        member(named(2, ItemId::WandDisintegration), 1, Some(1)),
+        bare_wand(3, 1),
+    ];
+    let detached = edited(&cluster, &[Edit::Detach { key: 2 }]);
+    assert_eq!(
+        detached,
+        [
+            named(1, ItemId::WandFrost),
+            named(2, ItemId::WandDisintegration),
+            named(3, ItemId::WandFrost),
+        ]
+    );
+    assert_eq!(counts(&detached), [2, 1]);
+
+    let frost = [
+        member(exact(named(1, ItemId::WandFrost), 2), 1, Some(1)),
+        cluster[1],
+        cluster[2],
+        exact(row(7, ItemKind::Wand), 3),
+    ];
+    let result = run(
+        &frost,
+        &[Edit::Join {
+            source: 1,
+            target: 7,
+        }],
+    );
+    assert_eq!(result.focus, Some(1));
+    assert_eq!(
+        shape(&result.rows),
+        [
+            (2, None, None, None),
+            (3, None, None, None),
+            (7, Some(2), None, None),
+            (1, Some(2), None, None),
+        ]
+    );
+    assert_eq!(result.rows[1], named(3, ItemId::WandDisintegration));
+    assert_eq!(counts(&result.rows), [2, 1]);
+    assert!(problems(&result.rows).is_empty());
+}
+
+/// What a canonical list asks for, entry by entry, blind to where rows sit
+/// and to which chip a plain repeat folds into: each row of a named chip's
+/// plain stack on its own, a wildcard or combined-level stack as its rows
+/// together (with its total), a cluster as its members and its copies. Rows
+/// are read without their labels, as `Debug` text so they sort.
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+struct Demand {
+    cluster: bool,
+    members: Vec<String>,
+    copies: Vec<String>,
+    total: Option<u8>,
+}
+
+impl Demand {
+    fn texts(requirements: &[Requirement]) -> Vec<String> {
+        let mut texts: Vec<String> = requirements
+            .iter()
+            .map(|requirement| {
+                format!(
+                    "{:?}",
+                    Requirement {
+                        identity_group: None,
+                        alternative_group: None,
+                        level_sum: None,
+                        ..*requirement
+                    }
+                )
+            })
+            .collect();
+        texts.sort();
+        texts
+    }
+
+    /// A lone chip's stack of `rows` (anchor included).
+    fn lone(rows: &[Requirement], total: Option<u8>) -> Self {
+        Self {
+            cluster: false,
+            members: Self::texts(rows),
+            copies: Vec::new(),
+            total,
+        }
+    }
+
+    fn cluster(members: &[Requirement], copies: &[Requirement]) -> Self {
+        Self {
+            cluster: true,
+            members: Self::texts(members),
+            copies: Self::texts(copies),
+            total: None,
+        }
+    }
+}
+
+fn requirements_at(rows: &[Row], indices: &[usize]) -> Vec<Requirement> {
+    indices
+        .iter()
+        .map(|&index| rows[index].requirement)
+        .collect()
+}
+
+/// The demands of one board entry.
+fn item_demands(rows: &[Row], item: &BoardItem) -> Vec<Demand> {
+    let all: Vec<usize> = item.members.iter().chain(&item.extras).copied().collect();
+    if item.cluster.is_some() {
+        return vec![Demand::cluster(
+            &requirements_at(rows, &item.members),
+            &requirements_at(rows, &item.extras),
+        )];
+    }
+    if item.total.is_none() && rows[item.anchor()].requirement.item.is_some() {
+        return all
+            .iter()
+            .map(|&index| Demand::lone(&[rows[index].requirement], None))
+            .collect();
+    }
+    vec![Demand::lone(&requirements_at(rows, &all), item.total)]
+}
+
+fn demands(rows: &[Row]) -> Vec<Demand> {
+    let mut all: Vec<Demand> = board_items(rows)
+        .iter()
+        .flat_map(|item| item_demands(rows, item))
+        .collect();
+    all.sort();
+    all
+}
+
+/// What a join of the visible row `source` onto the visible row `target` of
+/// a canonical list should leave it asking for: the two in one cluster —
+/// the target's, with its copies, or a new one — while a lone stacked
+/// chip's other copies stay behind (a combined level capped at what they
+/// can still reach), a source leaving a cluster leaves the rest of it,
+/// count included, and every other entry asks for what it asked for.
+fn joined_demands(rows: &[Row], source: usize, target: usize) -> Vec<Demand> {
+    let items = board_items(rows);
+    let owner = |index: usize| {
+        items
+            .iter()
+            .position(|item| item.members.contains(&index))
+            .expect("a visible row")
+    };
+    let (from, onto) = (owner(source), owner(target));
+    let mut expected: Vec<Demand> = items
+        .iter()
+        .enumerate()
+        .filter(|&(position, _)| position != from && position != onto)
+        .flat_map(|(_, item)| item_demands(rows, item))
+        .collect();
+    for (index, item) in [(source, &items[from]), (target, &items[onto])] {
+        let copies = requirements_at(rows, &item.extras);
+        if item.cluster.is_some() {
+            if index != source {
+                continue;
+            }
+            let others: Vec<Requirement> = item
+                .members
+                .iter()
+                .filter(|&&member| member != index)
+                .map(|&member| rows[member].requirement)
+                .collect();
+            if others.len() > 1 {
+                expected.push(Demand::cluster(&others, &copies));
+            } else if others[0].item.is_some() {
+                // One named member left: its copies become plain repeats.
+                expected.push(Demand::lone(&others, None));
+                expected.extend(
+                    copies
+                        .iter()
+                        .map(|copy| Demand::lone(&[plain_copy(&others[0], copy.max_depth)], None)),
+                );
+            } else {
+                let all: Vec<Requirement> = others.iter().chain(&copies).copied().collect();
+                expected.push(Demand::lone(&all, None));
+            }
+            continue;
+        }
+        if item.total.is_none() && rows[index].requirement.item.is_some() {
+            expected.extend(copies.iter().map(|copy| Demand::lone(&[*copy], None)));
+        } else if !copies.is_empty() {
+            let reach = SumGroup {
+                members: u16::try_from(copies.len()).expect("a short stack"),
+                minimum_total: 0,
+                capacity: copies
+                    .iter()
+                    .map(|copy| u16::from(copy.maximum_level()))
+                    .sum(),
+            }
+            .attainable_capacity();
+            let total = item
+                .total
+                .filter(|_| copies.len() > 1)
+                .map(|total| total.min(u8::try_from(reach).unwrap_or(u8::MAX)));
+            expected.push(Demand::lone(&copies, total));
+        }
+    }
+    let (mut members, copies) = if items[onto].cluster.is_some() {
+        (
+            requirements_at(rows, &items[onto].members),
+            requirements_at(rows, &items[onto].extras),
+        )
+    } else {
+        (vec![rows[target].requirement], Vec::new())
+    };
+    members.push(rows[source].requirement);
+    expected.push(Demand::cluster(&members, &copies));
+    expected.sort();
+    expected
+}
+
+/// A canonical list the board's own edits built: a few random rows, then
+/// counts, joins, combined levels and copy floors.
+fn random_board(rng: &mut Rng) -> Vec<Row> {
+    let mut rows: Vec<Row> = (1..=u64::from(rng.range(2, 6)))
+        .map(|key| Row {
+            key,
+            requirement: random_requirement(rng),
+        })
+        .collect();
+    for _ in 0..rng.range(1, 6) {
+        let key = |rng: &mut Rng, rows: &[Row]| rows[rng.below(rows.len())].key;
+        let picked = key(rng, &rows);
+        let edit = match rng.below(6) {
+            0 | 1 => Edit::SetCount {
+                key: picked,
+                count: rng.range(2, STACK_MAX),
+            },
+            2 | 3 => Edit::Join {
+                source: picked,
+                target: key(rng, &rows),
+            },
+            4 => Edit::ToggleLevels { key: picked },
+            _ => Edit::SetCopyDepth {
+                key: picked,
+                max_depth: Some(rng.range(1, 24)),
+            },
+        };
+        rows = run(&rows, &[edit]).rows;
+    }
+    rows
+}
+
+/// Canonical valid lists built by board edits, each joined every way its
+/// visible rows allow (1,024 lists, per the test budget): a join adds and
+/// removes no row; every entry but the two joined asks for what it did, a
+/// stacked chip's other copies stay behind and a cluster keeps its count —
+/// no copy is orphaned; no entry without copies keeps a stack or
+/// combined-level label; and the result is valid and canonical.
+#[test]
+fn a_join_moves_one_item_and_leaves_every_copy_where_it_belongs() {
+    let mut rng = Rng::new(0x0a1e_c0de_d15a_2026);
+    let mut joins = 0;
+    for case in 0..1024 {
+        let rows = random_board(&mut rng);
+        if validate(&rows).is_err() {
+            continue;
+        }
+        assert!(
+            !run(&rows, &[Edit::Normalize]).changed,
+            "case {case}: {rows:?}"
+        );
+        let visible: Vec<usize> = board_items(&rows)
+            .into_iter()
+            .flat_map(|item| item.members)
+            .collect();
+        for &source in &visible {
+            for &target in &visible {
+                let (source_key, target_key) = (rows[source].key, rows[target].key);
+                let result = run(
+                    &rows,
+                    &[Edit::Join {
+                        source: source_key,
+                        target: target_key,
+                    }],
+                );
+                let context = format!("case {case}: {source_key} onto {target_key} of {rows:?}");
+                match drop_action(&rows, source_key, DropTarget::Row(target_key)) {
+                    DropAction::Join { .. } => {}
+                    DropAction::Refuse(refusal) => {
+                        assert_eq!(result.refused, Some(refusal), "{context}");
+                        assert_eq!(result.rows, rows, "{context}");
+                        continue;
+                    }
+                    _ => {
+                        assert!(!result.changed, "{context}");
+                        continue;
+                    }
+                }
+                joins += 1;
+                let after = &result.rows;
+                let context = format!("{context} → {after:?}");
+                let mut before_keys = keys(&rows);
+                let mut after_keys = keys(after);
+                before_keys.sort_unstable();
+                after_keys.sort_unstable();
+                assert_eq!(after_keys, before_keys, "{context}");
+                assert_eq!(
+                    demands(after),
+                    joined_demands(&rows, source, target),
+                    "{context}"
+                );
+                let joined = entry(after, source_key);
+                assert!(joined.cluster.is_some(), "{context}");
+                assert!(
+                    joined
+                        .members
+                        .contains(&index_of(after, target_key).unwrap()),
+                    "{context}"
+                );
+                for item in board_items(after) {
+                    if item.extras.is_empty() {
+                        assert!(
+                            item.members.iter().all(|&index| {
+                                let requirement = after[index].requirement;
+                                requirement.identity_group.is_none()
+                                    && requirement.level_sum.is_none()
+                            }),
+                            "{context}"
+                        );
+                    }
+                }
+                assert_eq!(validate(after), Ok(()), "{context}");
+                assert_emittable(after, &context);
+                assert!(!run(after, &[Edit::Normalize]).changed, "{context}");
+            }
+        }
+    }
+    assert!(joins > 2000, "only {joins} joins");
 }
 
 // --- the edit sequence --------------------------------------------------

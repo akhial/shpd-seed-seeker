@@ -2,8 +2,9 @@
 //! board gesture or a requirement-sheet save writes back.
 //!
 //! The fold and the edits follow the web design's `relations.ts`, with the
-//! join policy Android settled on in #190 and the fixes listed on the
-//! individual edits. Every effective edit ends in [`normalize`], so a deleted
+//! join policy Android settled on in #190, a join that moves one item
+//! rather than a whole stack, and the fixes listed on the individual
+//! edits. Every effective edit ends in [`normalize`], so a deleted
 //! anchor can never leave stale groups behind.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
@@ -617,9 +618,10 @@ fn without(rows: &[Row], doomed: &[usize]) -> Vec<Row> {
 /// Why an edit changed nothing although it could have.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum Refusal {
-    /// A join would put a stack into a cluster spanning categories. A copy
-    /// has to name the kind it copies, and "spear or wand" names none, so
-    /// the join is refused rather than splitting off or deleting copies.
+    /// A join across categories where either entry is a stack (Android
+    /// #190). A copy has to name the kind it copies, and "spear or wand"
+    /// names none, so such a join is refused outright rather than reshaping
+    /// either stack.
     MixedCategoryStack,
     /// A blanket requirement cannot count levels together.
     BlanketTotal,
@@ -663,7 +665,9 @@ pub enum Edit {
     /// it too.
     Normalize,
     /// Makes `source` an either/or alternative of `target` (any member of a
-    /// chip or cluster).
+    /// chip or cluster). One item moves: a stacked lone chip, source or
+    /// target, leaves its copies behind as an entry of their own, and a
+    /// cluster's stack stays with the cluster.
     Join { source: u64, target: u64 },
     /// Pulls a cluster member out of its cluster; it leaves the cluster's
     /// stack behind.
@@ -1288,16 +1292,26 @@ impl JoinRules {
 /// The chip at `source` becomes an either/or alternative of the chip at
 /// `target`, and moves after the cluster's last member.
 ///
-/// A combined level cannot travel into a cluster and is dropped from both.
-/// Within one category a plain-repeat stack keeps its copies by trading its
-/// *own* entry's repeats for bare copies under an identity label, which the
-/// cluster's members then share (another chip may name the same item with
-/// its own stack; its repeats stay put). A mixed-category join of two
-/// uncounted chips clears any leftover identity labels and deletes nothing;
-/// one involving a stack is refused (Android #190).
+/// A join moves one item. A lone chip that is a stack joins alone — its
+/// anchor, with its own constraints — and its hidden copies stay behind as
+/// an entry of their own, one item fewer, with their own floor limits: as if
+/// its count had been stepped down around the anchor. That holds for the
+/// target as much as the source, so a drop onto a stacked chip joins just
+/// that chip. A cluster's stack stays with the cluster: a target cluster
+/// keeps its count, which the source joins under, and a source leaving a
+/// cluster leaves that cluster's count behind, as a detach does.
+///
+/// A combined level cannot travel into a cluster. The members a joined
+/// anchor leaves behind keep it, capped at what they can still reach, or
+/// drop it when only one is left — the sheet's rule for a stack stepped
+/// down.
+///
+/// A mixed-category join of two uncounted entries clears any leftover
+/// identity labels and deletes nothing; one involving a stack is refused
+/// (Android #190).
 fn join(rows: &[Row], source_key: u64, target_key: u64, held: &HeldLabels) -> Outcome {
     let rules = JoinRules::new(rows, Board::new(rows), &held.alternative);
-    let (Some((source, _)), Some((target, _))) = (
+    let (Some((source, source_item)), Some((target, target_item))) = (
         rules.board.member(rows, source_key),
         rules.board.member(rows, target_key),
     ) else {
@@ -1320,48 +1334,61 @@ fn join(rows: &[Row], source_key: u64, target_key: u64, held: &HeldLabels) -> Ou
         .iter()
         .all(|&index| rows[index].requirement.kind == first_kind);
     let mut next = rows.to_vec();
-    if one_category {
-        // Trade plain repeats for identity copies so the stack survives.
-        for index in [source, target] {
-            let anchor = next[index].requirement;
-            let Some(item_id) = anchor.item else {
-                continue;
-            };
-            if anchor.blanket || anchor.identity_group.is_some() {
-                continue;
-            }
-            let copies: Vec<usize> = rules.board.member_of[index]
-                .map(|position| rules.board.items[position].extras.clone())
-                .unwrap_or_default()
-                .into_iter()
-                .filter(|&copy| is_plain_item_copy(&next[copy].requirement, item_id))
-                .collect();
-            if copies.is_empty() {
-                continue;
-            }
-            let used = taken(
-                next.iter().map(|row| row.requirement.identity_group),
-                &held.identity,
-            );
-            let Some(label) = free_group(&used, MAX_IDENTITY_GROUP) else {
-                continue;
-            };
-            next[index].requirement.identity_group = Some(label);
-            for copy in copies {
-                next[copy].requirement =
-                    bare_copy(&anchor, label, next[copy].requirement.max_depth);
-            }
-        }
-    } else {
+    if !one_category {
         // Stacks were refused above, so only leftover labels remain.
         clear_identity_labels(&mut next, &members);
     }
-    for index in [source, target] {
-        next[index].requirement.alternative_group = Some(group);
-        next[index].requirement.level_sum = None;
+    let mut sums = Vec::new();
+    for (index, item) in [(source, source_item), (target, target_item)] {
+        let requirement = &mut next[index].requirement;
+        // The row leaves its own stack: a lone chip's copies, or the count
+        // of the cluster the source leaves. A target cluster's label stays
+        // on its other members, and normalizing spreads it to the source.
+        if index == source || item.cluster.is_none() {
+            requirement.identity_group = None;
+        }
+        if let Some(sum) = requirement.level_sum.take() {
+            sums.push(sum.group);
+        }
+        requirement.alternative_group = Some(group);
+    }
+    for sum in sums {
+        cap_level_sum(&mut next, sum);
     }
     let moved = move_after(next, source, |row| row.alternative_group == Some(group));
     Outcome::rows(moved, Some(source_key))
+}
+
+/// Caps the total of the combined level labelled `group` at what its
+/// members can still reach, once one of them has left it. A group left
+/// with one member dissolves when the rows are normalized.
+fn cap_level_sum(rows: &mut [Row], group: u8) {
+    let members: Vec<usize> = (0..rows.len())
+        .filter(|&index| {
+            rows[index]
+                .requirement
+                .level_sum
+                .is_some_and(|sum| sum.group == group)
+        })
+        .collect();
+    let [anchor, ref extras @ ..] = members[..] else {
+        return;
+    };
+    let item = BoardItem {
+        members: vec![anchor],
+        cluster: None,
+        extras: extras.to_vec(),
+        total: rows[anchor]
+            .requirement
+            .level_sum
+            .map(|sum| sum.minimum_total),
+    };
+    let most = level_capacity(rows, &item).max(1);
+    for &index in &members {
+        if let Some(sum) = &mut rows[index].requirement.level_sum {
+            sum.minimum_total = sum.minimum_total.min(most);
+        }
+    }
 }
 
 /// Clears every identity label the rows at `members` hold, wherever it
