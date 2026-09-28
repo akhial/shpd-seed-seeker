@@ -454,21 +454,19 @@ public sealed record SheetChoice<T>(bool Visible, T Value, IReadOnlyList<SheetOp
 
 /// <summary>
 /// A filter with a mode and a value — the tier, the upgrade: the modes its
-/// picker offers, and its value slider's range and words (<c>Tier 3 or
-/// higher</c>, <c>+2</c>). The value is always within Min…Max, even while the
-/// mode is "any" and the slider hidden.
+/// picker offers, whether its value slider shows, and the slider's range and
+/// words (<c>Tier 3 or higher</c>, <c>+2</c>). The value is always within
+/// Min…Max, even while the mode is "any" and the slider hidden.
 /// </summary>
-public sealed record SheetModeRange(bool Visible, string Mode, IReadOnlyList<SheetOption<string>> Modes, int Value, int Min, int Max, string ValueLabel)
+public sealed record SheetModeRange(bool Visible, string Mode, IReadOnlyList<SheetOption<string>> Modes, bool ValueVisible,
+    int Value, int Min, int Max, string ValueLabel)
 {
     /// <summary>The mode picker.</summary>
     public SheetChoice<string> Picker => new(Visible, Mode, Modes);
-
-    /// <summary>Whether the value slider shows: the filter shows and names a value.</summary>
-    public bool ShowsValue => Visible && Mode != "any";
 }
 
-/// <summary>A check box.</summary>
-public sealed record SheetToggle(bool Visible, bool Value, string Label);
+/// <summary>A check box, and the help text under it whenever it shows (null for none).</summary>
+public sealed record SheetToggle(bool Visible, bool Value, string Label, string? Caption = null);
 
 /// <summary>
 /// A switch with a floor slider — the item's floor limit, the copies', the
@@ -486,8 +484,13 @@ public sealed record SheetFloor(bool Visible, bool Enabled, int Value, IReadOnly
     public bool ShowsValue => Visible && Enabled;
 }
 
-/// <summary>A switch with a stepper — the transmutations, the combined level — whose value is always within Min…Max.</summary>
-public sealed record SheetStepper(bool Visible, bool Enabled, int Value, int Min, int Max, string Label, string? Caption, string ValueLabel)
+/// <summary>
+/// A switch with a stepper — the transmutations, the combined level — whose
+/// value is always within Min…Max, and its help text, shown while
+/// <see cref="CaptionVisible"/>.
+/// </summary>
+public sealed record SheetStepper(bool Visible, bool Enabled, int Value, int Min, int Max, string Label, string? Caption,
+    bool CaptionVisible, string ValueLabel)
 {
     public bool ShowsValue => Visible && Enabled;
 }
@@ -496,18 +499,17 @@ public sealed record SheetStepper(bool Visible, bool Enabled, int Value, int Min
 public sealed record SheetEffectChoice(string Value, string Label, bool Curse, bool Selected);
 
 /// <summary>
-/// The effect filter of a weapon or armor: its mode, and the grid of effects
-/// "Specific…" ticks from — curses listed only while the item may be cursed —
-/// under their headings, with what the ticked ones mean.
+/// The effect filter of a weapon or armor: its section's label
+/// (<c>Enchantment</c>, <c>Glyph</c>), its mode, and the grid of effects
+/// "Specific…" ticks from — shown while <see cref="ChoicesVisible"/>, curses
+/// listed only while the item may be cursed — under their headings, with what
+/// the ticked ones mean.
 /// </summary>
-public sealed record SheetEffect(bool Visible, string Mode, IReadOnlyList<SheetOption<string>> Modes,
+public sealed record SheetEffect(bool Visible, string Label, string Mode, IReadOnlyList<SheetOption<string>> Modes, bool ChoicesVisible,
     IReadOnlyList<SheetEffectChoice> Choices, IReadOnlyList<SheetOption<string>> Groups, string Caption)
 {
     /// <summary>The mode picker: Any, Any enchantment (Any glyph), Specific….</summary>
     public SheetChoice<string> Picker => new(Visible, Mode, Modes);
-
-    /// <summary>Whether the grid shows: the filter shows and ticks specific effects.</summary>
-    public bool ShowsChoices => Visible && Mode == "specific";
 
     /// <summary>The heading over the enchantments (<c>Glyphs</c> on armor) or the curses; null when the grid lists none.</summary>
     public string? Heading(bool curse) => Groups.FirstOrDefault(group => group.Value == (curse ? "curse" : "enchantment"))?.Label;
@@ -517,16 +519,26 @@ public sealed record SheetEffect(bool Visible, string Mode, IReadOnlyList<SheetO
         && other.Choices.Select(choice => (choice.Value, choice.Label, choice.Curse)).SequenceEqual(Choices.Select(choice => (choice.Value, choice.Label, choice.Curse)));
 }
 
-/// <summary>The stack section: how many items the chip asks for, the copies' floor limit, and the combined level.</summary>
-public sealed record SheetStack(bool Visible, int Count, int Min, int Max, string ValueLabel, SheetFloor CopyDepth, SheetStepper CountLevels);
+/// <summary>
+/// The stack section: how many items the chip asks for (<see cref="Label"/>
+/// its stepper's), the copies' floor limit, and the combined level.
+/// </summary>
+public sealed record SheetStack(bool Visible, string Label, int Count, int Min, int Max, string ValueLabel, SheetFloor CopyDepth, SheetStepper CountLevels);
 
 /// <summary>
-/// The Arcane Resin section, shown while the resin is the picked item: the
-/// amount as typed (null for an empty field) or Auto, and the Mage's wand
-/// credit. The donors' uncursed, source and floor filters are the sheet's own
-/// controls meanwhile.
+/// The Arcane Resin section, shown while the resin is the picked item: its
+/// label, which the amount field takes too; the Amount/Auto choice; what Auto
+/// means (<see cref="Caption"/>, shown in the amount field's place); the
+/// amount as typed (null for an empty field) and the amounts that save; and
+/// the Mage's wand credit. The donors' uncursed, source and floor filters are
+/// the sheet's own controls meanwhile.
 /// </summary>
-public sealed record SheetResin(bool Visible, bool Auto, double? Amount, bool IncludeMageWand);
+public sealed record SheetResin(bool Visible, string Label, bool Auto, IReadOnlyList<SheetOption<bool>> Modes, string Caption,
+    double? Amount, int Min, int Max, SheetToggle IncludeMageWand)
+{
+    /// <summary>The Amount/Auto picker.</summary>
+    public SheetChoice<bool> Picker => new(Visible, Auto, Modes);
+}
 
 /// <summary>What a sheet was opened on: a new chip, a row on the board, or the query's Arcane Resin.</summary>
 public enum SheetOrigin { New, Row, Resin }
@@ -540,7 +552,7 @@ public enum SheetOrigin { New, Row, Resin }
 /// </summary>
 public sealed record SheetForm
 {
-    /// <summary>The sheet adds a chip rather than editing one.</summary>
+    /// <summary>The sheet adds a chip, or resin the query has none of, rather than editing one.</summary>
     public required bool IsNew { get; init; }
     public required SheetOrigin Origin { get; init; }
     /// <summary>The row the sheet was opened on, for <see cref="SheetOrigin.Row"/>.</summary>
@@ -636,7 +648,8 @@ public sealed record ResinCondition(bool Auto, int Amount, ArcaneResinFilter Fil
 /// chip saved as it was is never written back.</param>
 /// <param name="Rekeyed">Keys the editor repaired, old to new.</param>
 /// <param name="Focus">The row of the chip the save landed in, to return to; null when the sheet saved the resin.</param>
-/// <param name="Resin">The query's new resin condition, when Arcane Resin was the picked item.</param>
+/// <param name="Resin">The query's new resin condition, when Arcane Resin was the picked item and the save
+/// sets it; null leaves the query's resin as it is, as the resin chip's sheet saved untouched does.</param>
 /// <param name="ClearResin">The resin chip was saved as a requirement: the query drops its resin.</param>
 public sealed record SheetSave(IReadOnlyList<ItemRequirement>? Rows, long NextKey, IReadOnlyList<(long Old, long New)> Rekeyed,
     long? Focus, ResinCondition? Resin, bool ClearResin)
@@ -746,7 +759,8 @@ public sealed class RequirementSheet
             Item = Choice(form["item"]!, value => (string?)value),
             Tier = ModeRange(form["tier"]!),
             Upgrade = ModeRange(form["upgrade"]!),
-            Effect = new((bool)effect["visible"]!, (string)effect["mode"]!, Options(effect["modes"], Word),
+            Effect = new((bool)effect["visible"]!, (string)effect["label"]!, (string)effect["mode"]!, Options(effect["modes"], Word),
+                (bool)effect["choices_visible"]!,
                 [.. effect["choices"]!.AsArray().Select(choice => new SheetEffectChoice((string)choice!["value"]!, (string)choice["label"]!,
                     (string?)choice["group"] == "curse", (bool)choice["selected"]!))],
                 Options(effect["groups"], Word), (string)effect["caption"]!),
@@ -756,9 +770,10 @@ public sealed class RequirementSheet
             ExcludeResin = Toggle(form["exclude_resin"]!),
             Transmutations = Stepper(form["transmutations"]!),
             SelectTrinket = Toggle(form["select_trinket"]!),
-            Stack = new((bool)stack["visible"]!, (int)stack["count"]!, (int)stack["min"]!, (int)stack["max"]!, (string)stack["value_label"]!,
+            Stack = new((bool)stack["visible"]!, (string)stack["label"]!, (int)stack["count"]!, (int)stack["min"]!, (int)stack["max"]!, (string)stack["value_label"]!,
                 Floor(stack["copy_depth"]!), Stepper(stack["count_levels"]!)),
-            Resin = new((bool)resin["visible"]!, (bool)resin["auto"]!, (double?)resin["amount"], (bool)resin["include_mage_wand"]!),
+            Resin = new((bool)resin["visible"]!, (string)resin["label"]!, (bool)resin["auto"]!, Options(resin["modes"], value => (bool)value!),
+                (string)resin["caption"]!, (double?)resin["amount"], (int)resin["min"]!, (int)resin["max"]!, Toggle(resin["include_mage_wand"]!)),
             Errors = BoardEditor.Strings(form["errors"]),
             CanSave = (bool)form["can_save"]!,
         };
@@ -774,15 +789,18 @@ public sealed class RequirementSheet
             (string?)option["group"], (bool?)option["hidden"] ?? false))];
 
     private static SheetModeRange ModeRange(JsonNode control) => new((bool)control["visible"]!, (string)control["mode"]!,
-        Options(control["modes"], Word), (int)control["value"]!, (int)control["min"]!, (int)control["max"]!, (string)control["value_label"]!);
+        Options(control["modes"], Word), (bool)control["value_visible"]!, (int)control["value"]!, (int)control["min"]!, (int)control["max"]!,
+        (string)control["value_label"]!);
 
-    private static SheetToggle Toggle(JsonNode control) => new((bool)control["visible"]!, (bool)control["value"]!, (string)control["label"]!);
+    private static SheetToggle Toggle(JsonNode control) =>
+        new((bool)control["visible"]!, (bool)control["value"]!, (string)control["label"]!, (string?)control["caption"]);
 
     private static SheetFloor Floor(JsonNode control) => new((bool)control["visible"]!, (bool)control["enabled"]!, (int)control["value"]!,
         Options(control["options"], value => (int)value!), (string)control["label"]!, (string)control["value_label"]!);
 
     private static SheetStepper Stepper(JsonNode control) => new((bool)control["visible"]!, (bool)control["enabled"]!, (int)control["value"]!,
-        (int)control["min"]!, (int)control["max"]!, (string)control["label"]!, (string?)control["caption"], (string)control["value_label"]!);
+        (int)control["min"]!, (int)control["max"]!, (string)control["label"]!, (string?)control["caption"], (bool)control["caption_visible"]!,
+        (string)control["value_label"]!);
 
     /// <summary>A RESIN the editor saved.</summary>
     private static ResinCondition Resin(JsonObject resin)

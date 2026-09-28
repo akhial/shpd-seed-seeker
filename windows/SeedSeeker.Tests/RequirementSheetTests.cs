@@ -55,15 +55,19 @@ public sealed class RequirementSheetTests
         // A named ring has no tier, and the combined level speaks for its upgrade.
         Assert.False(form.Tier.Visible);
         Assert.False(form.Upgrade.Visible);
-        Assert.False(form.Upgrade.ShowsValue);
+        Assert.False(form.Upgrade.ValueVisible);
         Assert.False(form.Effect.Visible);
 
         var stack = form.Stack;
         Assert.True(stack.Visible);
+        Assert.Equal("Total item count", stack.Label);
         Assert.Equal((2, 1, 3, "×2"), (stack.Count, stack.Min, stack.Max, stack.ValueLabel));
         Assert.True(stack.CountLevels.ShowsValue);
         Assert.Equal((3, 1, 8, "≥ 3 across up to 2"), (stack.CountLevels.Value, stack.CountLevels.Min, stack.CountLevels.Max, stack.CountLevels.ValueLabel));
         Assert.Equal("Count levels together", stack.CountLevels.Label);
+        // The combined level's help explains its switch, so it shows with the switch.
+        Assert.Equal("Each item counts its upgrade plus one, and spare items may go unused.", stack.CountLevels.Caption);
+        Assert.True(stack.CountLevels.CaptionVisible);
         Assert.False(stack.CopyDepth.Visible);
 
         // A floor slider runs over the floors that hold items, and sits on its value.
@@ -76,6 +80,7 @@ public sealed class RequirementSheetTests
         Assert.Equal((1, 6, 24), (floor.At(-3), floor.At(4.4), floor.At(99)));
         Assert.Equal(("Limit this item to a floor", "Within first 4 floors"), (floor.Label, floor.ValueLabel));
         Assert.Equal("Require uncursed", form.Uncursed.Label);
+        Assert.Null(form.Uncursed.Caption);
         Assert.Null(form.Source.Value);
         Assert.Equal(0, form.Source.Selected);
         Assert.Contains(form.Source.Options, option => option is { Value: "locked_chest", Label: "Locked chest" });
@@ -96,22 +101,26 @@ public sealed class RequirementSheetTests
         Assert.Equal("Any weapon", fresh.Item.Options[0].Label);
         Assert.Equal("Tier 2", fresh.Item.Options[1].Group);
         Assert.True(fresh.Tier.Visible);
-        Assert.False(fresh.Tier.ShowsValue);
+        Assert.False(fresh.Tier.ValueVisible);
         Assert.Equal(["Any", "Exactly", "At least", "At most"], fresh.Tier.Modes.Select(mode => mode.Label));
         Assert.Equal(0, fresh.Tier.Picker.Selected);
         Assert.False(fresh.Tier.Picker.SameOptions(fresh.Upgrade.Picker));
         Assert.Equal((3, 2, 5, "Tier 3"), (fresh.Tier.Value, fresh.Tier.Min, fresh.Tier.Max, fresh.Tier.ValueLabel));
         Assert.True(fresh.Effect.Visible);
-        Assert.False(fresh.Effect.ShowsChoices);
+        Assert.Equal("Enchantment", fresh.Effect.Label);
+        Assert.False(fresh.Effect.ChoicesVisible);
         Assert.Equal("Enchantments", fresh.Effect.Heading(curse: false));
         Assert.Equal("Curses", fresh.Effect.Heading(curse: true));
         Assert.Contains(fresh.Effect.Choices, choice => choice.Curse);
 
         var ticked = FormOf("editor-change-effect");
-        Assert.True(ticked.Effect.ShowsChoices);
+        Assert.True(ticked.Effect.ChoicesVisible);
         Assert.Equal(["Blazing"], ticked.Effect.Choices.Where(choice => choice.Selected).Select(choice => choice.Value));
         Assert.Equal("Matches any one of 1 effect.", ticked.Effect.Caption);
         Assert.True(ticked.Effect.SameChoices(fresh.Effect));
+
+        // A hidden count-levels switch hides its help with it.
+        Assert.False(fresh.Stack.CountLevels.CaptionVisible);
 
         var copies = FormOf("editor-change-count");
         Assert.True(copies.Stack.CopyDepth.ShowsValue);
@@ -142,7 +151,8 @@ public sealed class RequirementSheetTests
         Assert.Equal("Arcane Resin", form.Title);
         Assert.Equal("arcane_resin", form.Item.Value);
         Assert.Equal("Arcane Resin", form.Item.Options[form.Item.Selected].Label);
-        Assert.Equal(new SheetResin(true, true, 2, true), form.Resin);
+        Assert.Equal((true, true, (double?)2), (form.Resin.Visible, form.Resin.Auto, form.Resin.Amount));
+        Assert.True(form.Resin.IncludeMageWand.Value);
         Assert.Equal("Require uncursed wands", form.Uncursed.Label);
         Assert.False(form.Uncursed.Value);
         Assert.Equal("chest", form.Source.Value);
@@ -154,6 +164,72 @@ public sealed class RequirementSheetTests
         Assert.Null(empty.Resin.Amount);
         Assert.Equal(["Enter an amount from 1 to 65535."], empty.Errors);
         Assert.False(empty.CanSave);
+    }
+
+    [Fact]
+    public void TheResinSectionIsWordedAndBoundedByTheForm()
+    {
+        var resin = FormOf("editor-resin-mage-wand").Resin;
+        Assert.True(resin.Visible);
+        Assert.Equal("Minimum resin", resin.Label);
+        Assert.Equal([(false, "Amount"), (true, "Auto")], resin.Modes.Select(mode => (mode.Value, mode.Label)));
+        Assert.False(resin.Auto);
+        Assert.Equal((0, true), (resin.Picker.Selected, resin.Picker.Visible));
+        Assert.Equal("Upgrade each kept wand to +3. Excluded wands and extra copies reserved for reforging need no resin.", resin.Caption);
+        Assert.Equal(((double?)2, 1, 65535), (resin.Amount, resin.Min, resin.Max));
+        Assert.Equal(new SheetToggle(true, true, "Include Mage’s starting wand",
+            "Add 2 resin from the Magic Missile wand recovered with Wand Preservation when imbuing another wand. The preserved wand is +0, regardless of the staff’s level."),
+            resin.IncludeMageWand);
+        // Auto is the second choice, and the picker sits on it.
+        Assert.Equal(1, FormOf("editor-resin-open").Resin.Picker.Selected);
+        // Outside the resin, the section and its Mage box are hidden but still worded.
+        var ring = FormOf("editor-open-row").Resin;
+        Assert.False(ring.Visible || ring.IncludeMageWand.Visible);
+        Assert.Equal("Minimum resin", ring.Label);
+
+        // The bounds are the query format's, which the amount error names.
+        var sheet = RequirementSheet.Open(Loaded(), null, openResin: true);
+        sheet.Change(SheetChange.SetResinAmount(sheet.Form.Resin.Max + 1));
+        Assert.Equal([$"Enter an amount from {sheet.Form.Resin.Min} to {sheet.Form.Resin.Max}."], sheet.Form.Errors);
+        sheet.Change(SheetChange.SetResinAmount(sheet.Form.Resin.Max));
+        Assert.True(sheet.Form.CanSave);
+        sheet.Change(SheetChange.SetResinAuto(true));
+        Assert.True(sheet.Form.Resin.Auto);
+        Assert.Equal(1, sheet.Form.Resin.Picker.Selected);
+    }
+
+    [Fact]
+    public void CheckBoxesCarryTheirHelpAndSwitchesSayWhenTheirsShows()
+    {
+        var sheet = RequirementSheet.Open(Loaded(), null);
+        sheet.Change(SheetChange.SetKind("wand"));
+        var exclude = sheet.Form.ExcludeResin;
+        Assert.True(exclude.Visible);
+        Assert.Equal("Exclude from Auto resin", exclude.Label);
+        Assert.Equal("Keep this wand without budgeting resin to upgrade it. Useful for imbuing: resin upgrades do not transfer to the staff. Extra copies are reserved for reforging and never need Auto resin.", exclude.Caption);
+
+        sheet.Change(SheetChange.SetKind("trinket"));
+        var select = sheet.Form.SelectTrinket;
+        Assert.True(select.Visible);
+        Assert.Equal("Applies after the first brewing opportunity. If several alternatives are offered, no trinket is chosen.", select.Caption);
+        Assert.False(sheet.Form.ExcludeResin.Visible);
+        // The transmutation limit's help describes the limit, so it shows while the switch is on.
+        var transmutations = sheet.Form.Transmutations;
+        Assert.True(transmutations.Visible && !transmutations.Enabled);
+        Assert.NotNull(transmutations.Caption);
+        Assert.False(transmutations.CaptionVisible);
+        sheet.Change(SheetChange.SetTransmutationsEnabled(true));
+        Assert.True(sheet.Form.Transmutations.CaptionVisible);
+
+        // Armor's effect section is its glyph, a weapon's its enchantment.
+        sheet.Change(SheetChange.SetKind("armor"));
+        Assert.Equal("Glyph", sheet.Form.Effect.Label);
+        Assert.False(sheet.Form.Effect.ChoicesVisible);
+        sheet.Change(SheetChange.SetEffectMode("specific"));
+        Assert.True(sheet.Form.Effect.ChoicesVisible);
+        Assert.Equal("Glyphs", sheet.Form.Effect.Heading(curse: false));
+        sheet.Change(SheetChange.SetKind("weapon"));
+        Assert.Equal("Enchantment", sheet.Form.Effect.Label);
     }
 
     /// <summary>The sheet's bounds are the ones the engine publishes, which no local copy has to follow.</summary>
@@ -203,7 +279,7 @@ public sealed class RequirementSheetTests
 
         sheet.Change(SheetChange.SetKind("melee_weapon"));
         sheet.Change(SheetChange.SetTierMode("at_least"));
-        Assert.True(sheet.Form.Tier.ShowsValue);
+        Assert.True(sheet.Form.Tier.ValueVisible);
         Assert.Equal((3, 3, 4), (sheet.Form.Tier.Value, sheet.Form.Tier.Min, sheet.Form.Tier.Max));
         sheet.Change(SheetChange.SetTier(4));
         Assert.Equal("Tier 4 or higher", sheet.Form.Tier.ValueLabel);
@@ -296,7 +372,7 @@ public sealed class RequirementSheetTests
         Assert.Equal("Arcane Resin", sheet.Form.Item.Options[1].Label);
         sheet.Change(SheetChange.SetItem("arcane_resin"));
         Assert.True(sheet.Form.ResinPicked);
-        Assert.Equal(new SheetResin(true, false, 2, false), sheet.Form.Resin);
+        Assert.Equal((true, false, (double?)2, false), (sheet.Form.Resin.Visible, sheet.Form.Resin.Auto, sheet.Form.Resin.Amount, sheet.Form.Resin.IncludeMageWand.Value));
         // An emptied amount cannot save; the typed one can.
         sheet.Change(SheetChange.SetResinAmount(double.NaN));
         Assert.Equal(["Enter an amount from 1 to 65535."], sheet.Form.Errors);
@@ -330,15 +406,24 @@ public sealed class RequirementSheetTests
         query.ArcaneResinFilter = new(false, 9, null, true);
         var sheet = RequirementSheet.Open(query, null, openResin: true);
         Assert.Equal(SheetOrigin.Resin, sheet.Form.Origin);
-        Assert.Equal(new SheetResin(true, true, 2, true), sheet.Form.Resin);
+        Assert.False(sheet.Form.IsNew);
+        Assert.Equal((true, true, true), (sheet.Form.Resin.Visible, sheet.Form.Resin.Auto, sheet.Form.Resin.IncludeMageWand.Value));
         Assert.False(sheet.Form.Uncursed.Value);
         Assert.True(sheet.Form.FloorLimit.ShowsValue);
         Assert.Equal(9, sheet.Form.FloorLimit.Value);
 
-        // Saved as it opened, the resin stays as it was.
+        // Saved as it opened, the resin is left as it is.
         var kept = RequirementSheet.Open(query, null, openResin: true).Save(query)!;
-        Assert.Equal(new ResinCondition(true, 0, new(false, 9, null, true)), kept.Resin);
+        Assert.Null(kept.Resin);
+        Assert.False(kept.ClearResin);
         Assert.False(kept.ApplyTo(query));
+        // Even on an empty boss floor, which the floor slider cannot hold.
+        query.ArcaneResinFilter = query.ArcaneResinFilter with { MaximumDepth = 5 };
+        var boss = RequirementSheet.Open(query, null, openResin: true);
+        Assert.Equal(4, boss.Form.FloorLimit.Value);
+        Assert.Null(boss.Save(query)!.Resin);
+        Assert.Equal(5, query.ArcaneResinFilter.MaximumDepth);
+        query.ArcaneResinFilter = query.ArcaneResinFilter with { MaximumDepth = 9 };
 
         // Saved as a wand, the chip joins the board and the resin goes.
         sheet.Change(SheetChange.SetItem("wand_frost"));
@@ -350,6 +435,25 @@ public sealed class RequirementSheetTests
         Assert.False(query.NeedsResin);
         Assert.Equal(new ArcaneResinFilter(), query.ArcaneResinFilter);
         Assert.Equal("wand_frost", query.Requirements.Single(row => row.Key == saved.Focus).Item?.Id);
+    }
+
+    [Fact]
+    public void AResinSheetOnAQueryWithoutResinAddsOne()
+    {
+        var pinned = FormOf("editor-resin-open-new");
+        Assert.Equal((true, SheetOrigin.New, true), (pinned.IsNew, pinned.Origin, pinned.ResinPicked));
+
+        var query = Loaded(Named("rat_skull"));
+        var sheet = RequirementSheet.Open(query, null, openResin: true);
+        // The dialog says Add and offers no Remove.
+        Assert.True(sheet.Form.IsNew);
+        Assert.Equal(SheetOrigin.New, sheet.Form.Origin);
+        Assert.Equal("Arcane Resin", sheet.Form.Title);
+        var saved = sheet.Save(query)!;
+        Assert.Equal(new ResinCondition(false, 2, new ArcaneResinFilter()), saved.Resin);
+        Assert.True(saved.ApplyTo(query));
+        Assert.True(query.NeedsResin);
+        Assert.Single(query.Requirements);
     }
 
     [Fact]

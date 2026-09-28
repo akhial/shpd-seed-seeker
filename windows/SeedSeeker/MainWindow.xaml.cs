@@ -1085,38 +1085,38 @@ public sealed partial class MainWindow : Window
         var effectGrid = new StackPanel { Spacing = 4 }; effectGrid.Children.Add(enchantmentHeading); effectGrid.Children.Add(enchantmentPanel); effectGrid.Children.Add(curseSection); effectGrid.Children.Add(effectCaption);
         // The Arcane Resin section; its donors' uncursed, source and floor
         // filters are the sheet's own controls, which the form words for it.
-        var resinMode = Combo(["Amount", "Auto"], 0);
-        var resinAmount = Number("Minimum resin", double.NaN, 1, 65535);
-        var resinExplanation = new TextBlock { Text = "Upgrade each kept wand to +3. Excluded wands and extra copies reserved for reforging need no resin.", TextWrapping = TextWrapping.Wrap };
-        var mageWand = new CheckBox { Content = "Include Mage’s starting wand" };
-        var mageHelp = new TextBlock { Text = "Add 2 resin from the Magic Missile wand recovered with Wand Preservation when imbuing another wand. The preserved wand is +0, regardless of the staff’s level.", TextWrapping = TextWrapping.Wrap };
+        var resinLabel = new TextBlock(); var resinMode = Picker();
+        var resinAmountLabel = new TextBlock(); var resinAmount = new NumberBox { SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact };
+        var resinExplanation = Help();
+        var mageWand = new CheckBox(); var mageHelp = Help();
         var allowTransmutations = new CheckBox();
         var transmutations = ValueSlider();
-        var transmutationCaption = new TextBlock { TextWrapping = TextWrapping.Wrap };
-        var selectTrinket = new CheckBox();
-        var excludeResin = new CheckBox();
-        var resinHelp = new TextBlock { Text = "Keep this wand without budgeting resin to upgrade it. Useful for imbuing: resin upgrades do not transfer to the staff. Extra copies are reserved for reforging and never need Auto resin.", TextWrapping = TextWrapping.Wrap };
-        var uncursed = new CheckBox();
+        var transmutationCaption = Help();
+        var selectTrinket = new CheckBox(); var selectHelp = Help();
+        var excludeResin = new CheckBox(); var resinHelp = Help();
+        var uncursed = new CheckBox(); var uncursedHelp = Help();
         var source = Picker();
         var floorToggle = ToggleRow(out var floorRow, out var floorLabel);
         var floorLabels = new OptionLabelConverter(); var floor = FloorChoice(floorLabels);
         // How many items of this kind the chip asks for, the floor its extra
         // copies share, and the combined level they count towards.
-        var count = Number("Total item count", 1, 1, 1);
-        count.SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline;
+        var countLabel = new TextBlock();
+        var count = new NumberBox { Value = 1, Minimum = 1, Maximum = 1, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline };
         var copyDepthToggle = new CheckBox();
         var copyDepthLabels = new OptionLabelConverter(); var copyDepth = FloorChoice(copyDepthLabels);
-        var totalToggle = new CheckBox();
+        var totalToggle = new CheckBox(); var totalCaption = Help();
         var total = ValueSlider();
         var errors = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = DangerInk };
         // Each setting is a two-column row, label leading and control trailing,
         // grouped into cards under the macOS editor's section titles. A row
         // mirrors its control's visibility and a section its rows', so the
-        // binding below toggles only controls.
-        Grid Row(string label, Control control)
+        // binding below toggles only controls. The pickers' headings are the
+        // dialog's own; a FormRow's label is the form's, set on every redraw.
+        Grid Row(string label, Control control) => FormRow(new TextBlock { Text = label }, control);
+        Grid FormRow(TextBlock text, Control control)
         {
             if (control is NumberBox numberBox) numberBox.Header = null;
-            var text = new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap };
+            text.VerticalAlignment = VerticalAlignment.Center; text.TextWrapping = TextWrapping.Wrap;
             var row = new Grid { ColumnSpacing = 12, Visibility = control.Visibility };
             row.ColumnDefinitions.Add(new ColumnDefinition()); row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             control.MinWidth = 210; Grid.SetColumn(control, 1);
@@ -1136,17 +1136,26 @@ public sealed partial class MainWindow : Window
             Sync();
             return section;
         }
+        // The effect section is titled as the form words it: Enchantment, or Glyph on armor.
+        var effectTitle = SectionTitle("");
         var content = new StackPanel { Spacing = 16, Padding = new Thickness(2, 4, 2, 4) };
         foreach (var section in new UIElement[] {
             Section(SectionTitle("Item"), Row("Category", kind), Row("Item", item), Row("Tier", tierMode), tier),
-            Section(null, Row("Minimum resin", resinMode), Row("Amount", resinAmount), resinExplanation, mageWand, mageHelp),
+            Section(null, FormRow(resinLabel, resinMode), FormRow(resinAmountLabel, resinAmount), resinExplanation, mageWand, mageHelp),
             Section(SectionTitle("Upgrade level"), Row("Predicate", upgradeMode), upgrade),
-            Section(SectionTitle("Effect"), Row("Effect", effectMode), effectGrid),
-            Section(null, allowTransmutations, transmutations, transmutationCaption, selectTrinket, excludeResin, resinHelp, uncursed, Row("Source", source), floorRow, floor),
-            Section(SectionTitle("Stack"), Row("Total item count", count), copyDepthToggle, copyDepth, totalToggle, total), errors }) content.Children.Add(section);
+            Section(effectTitle, Row("Effect", effectMode), effectGrid),
+            Section(null, allowTransmutations, transmutations, transmutationCaption, selectTrinket, selectHelp, excludeResin, resinHelp, uncursed, uncursedHelp, Row("Source", source), floorRow, floor),
+            Section(SectionTitle("Stack"), FormRow(countLabel, count), copyDepthToggle, copyDepth, totalToggle, totalCaption, total), errors }) content.Children.Add(section);
         var dialog = new ContentDialog { XamlRoot = Content.XamlRoot, CloseButtonText = "Cancel", DefaultButton = ContentDialogButton.Primary, Content = VerticalScrollView(content, 510, 460) };
 
         static Visibility Shown(bool visible) => visible ? Visibility.Visible : Visibility.Collapsed;
+        static TextBlock Help() => new() { TextWrapping = TextWrapping.Wrap };
+        // A check box, and its help text under it whenever the box shows.
+        static void Tick(CheckBox box, TextBlock help, SheetToggle toggle)
+        {
+            box.Content = toggle.Label; box.IsChecked = toggle.Value; box.Visibility = Shown(toggle.Visible);
+            help.Text = toggle.Caption ?? ""; help.Visibility = Shown(toggle.Visible && toggle.Caption is not null);
+        }
         // Refills a picker only when its choices changed: refilling resets
         // the selection, which would read as a pick.
         static void Fill<T>(ComboBox combo, SheetChoice<T> choice, SheetChoice<T>? drawn)
@@ -1182,10 +1191,11 @@ public sealed partial class MainWindow : Window
                 Fill(kind, form.Kind, drawn?.Kind);
                 Fill(item, form.Item, drawn?.Item);
                 Fill(tierMode, form.Tier.Picker, drawn?.Tier.Picker);
-                SetRange(tier, form.Tier.Min, form.Tier.Max, form.Tier.Value, form.Tier.ValueLabel); tier.Visibility = Shown(form.Tier.ShowsValue);
+                SetRange(tier, form.Tier.Min, form.Tier.Max, form.Tier.Value, form.Tier.ValueLabel); tier.Visibility = Shown(form.Tier.ValueVisible);
                 Fill(upgradeMode, form.Upgrade.Picker, drawn?.Upgrade.Picker);
-                SetRange(upgrade, form.Upgrade.Min, form.Upgrade.Max, form.Upgrade.Value, form.Upgrade.ValueLabel); upgrade.Visibility = Shown(form.Upgrade.ShowsValue);
+                SetRange(upgrade, form.Upgrade.Min, form.Upgrade.Max, form.Upgrade.Value, form.Upgrade.ValueLabel); upgrade.Visibility = Shown(form.Upgrade.ValueVisible);
                 var effect = form.Effect;
+                effectTitle.Text = effect.Label;
                 Fill(effectMode, effect.Picker, drawn?.Effect.Picker);
                 if (!effect.SameChoices(drawn?.Effect))
                 {
@@ -1203,30 +1213,33 @@ public sealed partial class MainWindow : Window
                 curseHeading.Text = effect.Heading(curse: true) ?? "";
                 curseSection.Visibility = Shown(effect.Heading(curse: true) is not null);
                 effectCaption.Text = effect.Caption;
-                effectGrid.Visibility = Shown(effect.ShowsChoices);
+                effectGrid.Visibility = Shown(effect.ChoicesVisible);
                 var resin = form.Resin;
-                resinMode.Visibility = mageWand.Visibility = mageHelp.Visibility = Shown(resin.Visible);
-                resinMode.SelectedIndex = resin.Auto ? 1 : 0;
+                resinLabel.Text = resinAmountLabel.Text = resin.Label;
+                Fill(resinMode, resin.Picker, drawn?.Resin.Picker);
+                // The amount, or in its place what Auto means.
+                resinAmount.Minimum = resin.Min; resinAmount.Maximum = resin.Max; resinAmount.Value = resin.Amount ?? double.NaN;
                 resinAmount.Visibility = Shown(resin.Visible && !resin.Auto);
-                resinAmount.Value = resin.Amount ?? double.NaN;
-                resinExplanation.Visibility = Shown(resin.Visible && resin.Auto);
-                mageWand.IsChecked = resin.IncludeMageWand;
+                resinExplanation.Text = resin.Caption; resinExplanation.Visibility = Shown(resin.Visible && resin.Auto);
+                Tick(mageWand, mageHelp, resin.IncludeMageWand);
                 var transmuting = form.Transmutations;
                 allowTransmutations.Content = transmuting.Label; allowTransmutations.IsChecked = transmuting.Enabled; allowTransmutations.Visibility = Shown(transmuting.Visible);
                 SetRange(transmutations, transmuting.Min, transmuting.Max, transmuting.Value, transmuting.ValueLabel); transmutations.Visibility = Shown(transmuting.ShowsValue);
-                transmutationCaption.Text = transmuting.Caption ?? ""; transmutationCaption.Visibility = Shown(transmuting.ShowsValue && transmuting.Caption is not null);
-                selectTrinket.Content = form.SelectTrinket.Label; selectTrinket.IsChecked = form.SelectTrinket.Value; selectTrinket.Visibility = Shown(form.SelectTrinket.Visible);
-                excludeResin.Content = form.ExcludeResin.Label; excludeResin.IsChecked = form.ExcludeResin.Value; excludeResin.Visibility = resinHelp.Visibility = Shown(form.ExcludeResin.Visible);
-                uncursed.Content = form.Uncursed.Label; uncursed.IsChecked = form.Uncursed.Value; uncursed.Visibility = Shown(form.Uncursed.Visible);
+                transmutationCaption.Text = transmuting.Caption ?? ""; transmutationCaption.Visibility = Shown(transmuting.CaptionVisible && transmuting.Caption is not null);
+                Tick(selectTrinket, selectHelp, form.SelectTrinket);
+                Tick(excludeResin, resinHelp, form.ExcludeResin);
+                Tick(uncursed, uncursedHelp, form.Uncursed);
                 Fill(source, form.Source, drawn?.Source);
                 floorLabel.Text = form.FloorLimit.Label; floorToggle.IsOn = form.FloorLimit.Enabled; floorRow.Visibility = Shown(form.FloorLimit.Visible);
                 Floor(floor, floorLabels, form.FloorLimit);
                 var stack = form.Stack;
+                countLabel.Text = stack.Label;
                 count.Minimum = stack.Min; count.Maximum = stack.Max; count.Value = stack.Count; count.Visibility = Shown(stack.Visible);
                 copyDepthToggle.Content = stack.CopyDepth.Label; copyDepthToggle.IsChecked = stack.CopyDepth.Enabled; copyDepthToggle.Visibility = Shown(stack.CopyDepth.Visible);
                 Floor(copyDepth, copyDepthLabels, stack.CopyDepth);
                 var levels = stack.CountLevels;
                 totalToggle.Content = levels.Label; totalToggle.IsChecked = levels.Enabled; totalToggle.Visibility = Shown(levels.Visible);
+                totalCaption.Text = levels.Caption ?? ""; totalCaption.Visibility = Shown(levels.CaptionVisible && levels.Caption is not null);
                 SetRange(total, levels.Min, levels.Max, levels.Value, levels.ValueLabel); total.Visibility = Shown(levels.ShowsValue);
                 errors.Text = string.Join("\n", form.Errors); errors.Visibility = Shown(form.Errors.Count > 0);
                 drawn = form;
@@ -1258,7 +1271,7 @@ public sealed partial class MainWindow : Window
         Pick(upgradeMode, form => form.Upgrade.Picker, SheetChange.SetUpgradeMode);
         Step(upgrade, value => SheetChange.SetUpgrade((int)Math.Round(value)));
         Pick(effectMode, form => form.Effect.Picker, SheetChange.SetEffectMode);
-        resinMode.SelectionChanged += (_, _) => { if (resinMode.SelectedIndex >= 0) Send(SheetChange.SetResinAuto(resinMode.SelectedIndex == 1)); };
+        Pick(resinMode, form => form.Resin.Picker, SheetChange.SetResinAuto);
         resinAmount.ValueChanged += (_, args) => Send(SheetChange.SetResinAmount(args.NewValue));
         Check(mageWand, SheetChange.SetIncludeMageWand);
         Check(allowTransmutations, SheetChange.SetTransmutationsEnabled);
@@ -1301,8 +1314,6 @@ public sealed partial class MainWindow : Window
     {
         StepFrequency = 1, TickFrequency = 1, HorizontalAlignment = HorizontalAlignment.Stretch, ThumbToolTipValueConverter = labels,
     };
-    private static ComboBox Combo(IEnumerable<string> values, int selected) { var c = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch }; foreach (var v in values) c.Items.Add(v); c.SelectedIndex = selected; return c; }
-    private static NumberBox Number(string header, double value, double min, double max) => new() { Header = header, Value = value, Minimum = min, Maximum = max, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact };
     private static ToggleSwitch ToggleRow(out Grid row, out TextBlock label)
     {
         var toggle = new ToggleSwitch { MinWidth = 0, Width = 44, OnContent = "", OffContent = "", Margin = new Thickness(0, -6, 0, -6), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };

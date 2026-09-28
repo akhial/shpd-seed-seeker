@@ -47,6 +47,27 @@ public sealed class ArtifactTests
     }
 
     [Fact]
+    public void AnArtifactsUpgradeSurvivesItsSheet()
+    {
+        // No control shows an artifact's upgrade; the sheet keeps it all the same.
+        var query = new QuerySettings { Requirements = [Sandals()] };
+        new BoardEditor().Load(query);
+        var key = query.Requirements[0].Key;
+        var untouched = RequirementSheet.Open(query, key).Save(query)!;
+        Assert.Null(untouched.Rows);
+        Assert.False(untouched.ApplyTo(query));
+
+        var sheet = RequirementSheet.Open(query, key);
+        Assert.False(sheet.Form.Upgrade.Visible);
+        sheet.Change(SheetChange.SetTransmutationsEnabled(true));
+        var saved = sheet.Save(query)!;
+        Assert.True(saved.ApplyTo(query));
+        var sandals = Assert.Single(query.Requirements);
+        Assert.Equal((UpgradeMatch.Exactly, 5, 1), (sandals.UpgradeMatch, sandals.Upgrade, sandals.ArtifactTransmutations));
+        Assert.Equal((ScoutItemSource.ImpReward, (int?)19, true), (sandals.Source, sandals.MaximumDepth, sandals.RequireUncursed));
+    }
+
+    [Fact]
     public void ArtifactsCannotBeWildcardsOrStacks()
     {
         var editor = new BoardEditor();
