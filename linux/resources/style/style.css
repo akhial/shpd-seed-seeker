@@ -144,8 +144,9 @@ button.chip.chip-add:hover {
   font-weight: bold;
 }
 
-/* Stack badges: how many items the entry asks for (×N, or ≤N once their
-   levels count together), and the total those levels reach (Σ ≥ T). */
+/* Stack badges, on each chip — a lone chip or a cluster member — never on a
+   cluster: how many items the chip asks for (×N, or ≤N once their levels
+   count together), and the total those levels reach (Σ ≥ T). */
 button.stack-badge {
   min-height: 18px;
   min-width: 0;

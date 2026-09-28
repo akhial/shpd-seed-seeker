@@ -15,7 +15,8 @@ use std::fmt::Write as _;
 use std::rc::Rc;
 
 use shpd_seedfinder_core::editor::{
-    self, BoardView, ChipView, Edit, ItemView, RelationGlyph, ResinChip, ResinState, Row, TagStyle,
+    self, Badge, BoardView, ChipView, Edit, ItemView, RelationGlyph, ResinChip, ResinState, Row,
+    TagStyle,
 };
 
 /// The board view of the rows last shown. The pane redraws the board on
@@ -168,6 +169,48 @@ impl Dragged {
     }
 }
 
+/// Which of a chip's numbers a badge shows and its stepper edits.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum StackField {
+    /// How many items the chip asks for.
+    Count,
+    /// The combined level its items reach together.
+    Total,
+}
+
+/// One badge a chip wears at rest, and the stepper it opens: the number it
+/// edits, where the stepper starts and how far it goes.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct StackBadge<'a> {
+    pub field: StackField,
+    pub badge: &'a Badge,
+    pub value: u8,
+    pub maximum: u8,
+}
+
+/// The badges `chip` wears on the board: its own ×N (or ≤N) and Σ, as the
+/// editor words them. Every badge and stepper belongs to a chip — a lone
+/// chip or a cluster member alike, each member of a cluster with its own
+/// stack — and nothing is drawn for a cluster as a whole. A chip in flight
+/// carries one item and wears none.
+#[must_use]
+pub fn stack_badges(chip: &ChipView) -> Vec<StackBadge<'_>> {
+    let stack = &chip.stack;
+    let count = chip.badges.count.as_ref().map(|badge| StackBadge {
+        field: StackField::Count,
+        badge,
+        value: stack.count,
+        maximum: stack.count_max,
+    });
+    let total = chip.badges.total.as_ref().map(|badge| StackBadge {
+        field: StackField::Total,
+        badge,
+        value: stack.total.unwrap_or(stack.default_total),
+        maximum: stack.level_capacity,
+    });
+    count.into_iter().chain(total).collect()
+}
+
 /// One choice of a chip's "Either/or with…" menu: a board entry of the
 /// chip's section, named as the board reads it, and the row a join names.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -244,11 +287,13 @@ mod tests {
         self, BoardView, ChipView, Edit, EditResult, ItemView, ResinAmount, ResinState, Row,
         TagStyle, labels,
     };
-    use shpd_seedfinder_core::query::{ArcaneResinFilter, Requirement, UpgradeRequirement};
+    use shpd_seedfinder_core::query::{
+        ArcaneResinFilter, LevelSum, Requirement, UpgradeRequirement,
+    };
 
     use super::{
-        BoardCache, Dragged, DropAnswer, Landing, chip_tooltip, find_chip, follow_key,
-        join_choices, resin_tooltip, tag_class,
+        BoardCache, Dragged, DropAnswer, Landing, StackField, chip_tooltip, find_chip, follow_key,
+        join_choices, resin_tooltip, stack_badges, tag_class,
     };
     use crate::fixtures::{
         Fixture, decode_requirement, decode_resin, decode_row, decode_rows, encode_row, fixtures,
@@ -271,6 +316,7 @@ mod tests {
             },
             "detach" => Edit::Detach { key: key("key") },
             "remove" => Edit::Remove { key: key("key") },
+            "remove_one" => Edit::RemoveOne { key: key("key") },
             "remove_item" => Edit::RemoveItem { key: key("key") },
             "set_count" => Edit::SetCount {
                 key: key("key"),
@@ -355,45 +401,6 @@ mod tests {
         assert_eq!(item.extras, keys(&expected["extras"]), "{name}");
         assert_eq!(json!(item.label), expected["label"], "{name}: label");
         assert_eq!(json!(item.problem), expected["problem"], "{name}");
-        let stack = &item.stack;
-        let shown = json!({
-            "count": stack.count,
-            "can_grow": stack.can_grow,
-            "can_change_count": stack.can_change_count,
-            "count_max": stack.count_max,
-            "can_count_levels": stack.can_count_levels,
-            "level_capacity": stack.level_capacity,
-            "default_total": stack.default_total,
-            "total": stack.total,
-        });
-        let expected_stack = &expected["stack"];
-        let wanted = json!({
-            "count": expected_stack["count"],
-            "can_grow": expected_stack["can_grow"],
-            "can_change_count": expected_stack["can_change_count"],
-            "count_max": expected_stack["count_max"],
-            "can_count_levels": expected_stack["can_count_levels"],
-            "level_capacity": expected_stack["level_capacity"],
-            "default_total": expected_stack["default_total"],
-            "total": expected_stack["total"],
-        });
-        assert_eq!(shown, wanted, "{name}: stack");
-        for (badge, expected) in [
-            (&item.badges.count, &expected["badges"]["count"]),
-            (&item.badges.total, &expected["badges"]["total"]),
-        ] {
-            assert_eq!(
-                badge
-                    .as_ref()
-                    .map_or(Value::Null, |badge| json!([badge.text, badge.tooltip])),
-                if expected.is_null() {
-                    Value::Null
-                } else {
-                    json!([expected["text"], expected["tooltip"]])
-                },
-                "{name}: badge"
-            );
-        }
         let chips = expected["chips"].as_array().unwrap();
         assert_eq!(item.chips.len(), chips.len(), "{name}: chips");
         for (chip, expected) in item.chips.iter().zip(chips) {
@@ -424,6 +431,40 @@ mod tests {
             "{name}: effect"
         );
         assert_eq!(chip.uncursed, expected["uncursed"], "{name}");
+        assert_eq!(chip.in_cluster, expected["in_cluster"], "{name}");
+        // Every badge and stepper belongs to a chip, a cluster member's too.
+        for (badge, expected) in [
+            (&chip.badges.count, &expected["badges"]["count"]),
+            (&chip.badges.total, &expected["badges"]["total"]),
+        ] {
+            assert_eq!(
+                badge.as_ref().map_or(Value::Null, |badge| json!({
+                    "text": badge.text,
+                    "compact_text": badge.compact_text,
+                    "tooltip": badge.tooltip,
+                })),
+                *expected,
+                "{name}: badge"
+            );
+        }
+        assert_eq!(chip.copies, keys(&expected["copies"]), "{name}: copies");
+        let stack = &chip.stack;
+        let shown = json!({
+            "count": stack.count,
+            "max": stack.max,
+            "can_grow": stack.can_grow,
+            "can_change_count": stack.can_change_count,
+            "count_max": stack.count_max,
+            "total": stack.total,
+            "can_count_levels": stack.can_count_levels,
+            "level_capacity": stack.level_capacity,
+            "default_total": stack.default_total,
+            "copy_depth": stack.copy_depth,
+            "can_set_copy_depth": stack.can_set_copy_depth,
+            "count_text": stack.count_text,
+            "total_text": stack.total_text,
+        });
+        assert_eq!(shown, expected["stack"], "{name}: stack");
         assert_eq!(chip.can_detach, expected["can_detach"], "{name}");
         assert_eq!(chip.join, keys(&expected["join"]), "{name}: join");
         let refused: Vec<Value> = chip
@@ -438,11 +479,13 @@ mod tests {
 
     #[test]
     fn the_typed_editor_gives_the_golden_board_answers_through_the_app_codec() {
+        let replayed = fixtures("requirement_board");
+        assert_eq!(replayed.len(), 39);
         for Fixture {
             name,
             request,
             response,
-        } in fixtures("requirement_board")
+        } in replayed
         {
             let rows = decode_rows(&request["rows"]);
             let edits: Vec<Edit> = request["edits"]
@@ -546,11 +589,12 @@ mod tests {
             Dragged::new(item, chip)
         };
 
-        // The stacked ring cannot join the wand; the wand may join the ring.
+        // A drag moves one item, so the stacked ring may join the wand — one
+        // ring goes, the other stays — and the wand may join the ring.
         let ring_chip = picked(1);
         assert_eq!(
             ring_chip.drop_answer(Landing::Row(3)),
-            DropAnswer::Refuse(Edit::Join {
+            DropAnswer::Accept(Edit::Join {
                 source: 1,
                 target: 3
             })
@@ -591,26 +635,80 @@ mod tests {
         assert_eq!(member.drop_answer(Landing::Row(4)), DropAnswer::Ignore);
     }
 
+    /// Wildcard stacks labelled `labels`, keyed from `first_key` on: each
+    /// a +1 anchor and one plain copy, as a list holds a stack of a kind.
+    fn stacks(first_key: u64, labels: std::ops::RangeInclusive<u8>) -> Vec<Row> {
+        let kinds = [
+            ItemKind::Wand,
+            ItemKind::Armor,
+            ItemKind::Ring,
+            ItemKind::Weapon,
+        ];
+        let mut key = first_key;
+        let mut rows = Vec::new();
+        for label in labels {
+            let kind = kinds[usize::from(label) % kinds.len()];
+            for upgrade in [UpgradeRequirement::Exact(1), UpgradeRequirement::Any] {
+                let mut row = any(key, kind);
+                row.requirement.upgrade = upgrade;
+                row.requirement.identity_group = Some(label);
+                rows.push(row);
+                key += 1;
+            }
+        }
+        rows
+    }
+
+    fn wand(key: u64, item: ItemId) -> Row {
+        Row {
+            key,
+            requirement: Requirement {
+                item: Some(item),
+                ..Requirement::any(ItemKind::Wand)
+            },
+        }
+    }
+
     #[test]
     fn a_refused_drop_is_said_by_the_editor() {
+        // Every stack label is in use. Frost ×2 would keep its stack as a
+        // member of the either/or Disintegration makes with it, and that
+        // member stack needs a label of its own.
         let mut state = AppState::default();
-        state.requirements = vec![
-            ring(1, UpgradeRequirement::Exact(2)),
-            ring(2, UpgradeRequirement::Any),
-            any(3, ItemKind::Wand),
-        ];
+        state.requirements = stacks(1, 1..=4);
+        state.requirements.extend([
+            wand(9, ItemId::WandFrost),
+            wand(10, ItemId::WandFrost),
+            wand(11, ItemId::WandDisintegration),
+        ]);
         let view = editor::board_view(&state.requirements, None);
-        let (item, chip) = find_chip(&view, 1).unwrap();
-        let edit = Dragged::new(item, chip)
-            .drop_answer(Landing::Row(3))
-            .edit()
-            .unwrap();
+        let picked = |key| {
+            let (item, chip) = find_chip(&view, key).unwrap();
+            Dragged::new(item, chip)
+        };
+        let answer = picked(11).drop_answer(Landing::Row(9));
+        assert_eq!(
+            answer,
+            DropAnswer::Refuse(Edit::Join {
+                source: 11,
+                target: 9
+            })
+        );
+        // One Frost dragged onto Disintegration leaves a plain Frost behind
+        // and joins as a plain member: no label needed.
+        assert_eq!(
+            picked(9).drop_answer(Landing::Row(11)),
+            DropAnswer::Accept(Edit::Join {
+                source: 9,
+                target: 11
+            })
+        );
         let before = state.requirements.clone();
-        let result = state.apply(&[edit]);
+        let result = state.apply(&[answer.edit().unwrap()]);
         assert!(!result.changed);
         assert_eq!(
             result.refused.unwrap().to_string(),
-            "Copies can only be grouped with the same item type."
+            "Every group label is in use. Remove a stack or a combined level first."
         );
         assert_eq!(state.requirements, before);
     }
@@ -689,22 +787,98 @@ mod tests {
             ring(2, UpgradeRequirement::Any),
         ];
         let view = editor::board_view(&rows, None);
-        let (item, chip) = find_chip(&view, 1).unwrap();
-        assert_eq!(item.stack.count_max, 3);
+        let (_, chip) = find_chip(&view, 1).unwrap();
+        assert_eq!(chip.stack.count_max, 3);
         assert_eq!(
             chip_tooltip(chip),
             "Ring of Might\nexactly +2\n× 2 of the same kind — the extra copies: any upgrade, any floor"
         );
-        // A cluster spanning two families sheds copies but grows none.
+        // In a cluster spanning two families every member still has its own
+        // stack, of its own kind: the wand may grow while the ring does not.
         let mut cluster = vec![any(1, ItemKind::Wand), any(2, ItemKind::Ring)];
         for row in &mut cluster {
             row.requirement.alternative_group = Some(1);
         }
         let view = editor::board_view(&cluster, None);
-        let (item, chip) = find_chip(&view, 1).unwrap();
-        assert!(!item.stack.can_grow);
-        assert_eq!(item.stack.count_max, 1);
+        let (_, chip) = find_chip(&view, 1).unwrap();
+        assert!(chip.stack.can_grow);
+        assert_eq!(chip.stack.count_max, 3);
         assert_eq!(chip_tooltip(chip), "Any wand\nany upgrade\nor Any ring");
+        let grown = editor::apply(&cluster, None, &[Edit::SetCount { key: 1, count: 2 }]);
+        let view = editor::board_view(&grown.rows, None);
+        let (_, wand) = find_chip(&view, 1).unwrap();
+        let (_, ring) = find_chip(&view, 2).unwrap();
+        assert_eq!((wand.stack.count, ring.stack.count), (2, 1));
+        assert!(ring.badges.count.is_none());
+        assert_eq!(
+            chip_tooltip(wand),
+            "Any wand\nany upgrade\nor Any ring\n× 2 of the same kind — the extra copies: any upgrade, any floor"
+        );
+    }
+
+    /// {Frost ×2 | Disintegration ×2}: both members share label 1.
+    fn alike_members() -> Vec<Row> {
+        let mut rows = vec![
+            wand(1, ItemId::WandFrost),
+            wand(2, ItemId::WandDisintegration),
+            any(3, ItemKind::Wand),
+        ];
+        for (index, row) in rows.iter_mut().enumerate() {
+            row.requirement.identity_group = Some(1);
+            if index < 2 {
+                row.requirement.alternative_group = Some(1);
+            }
+        }
+        rows
+    }
+
+    /// What `chip`'s badges show and their steppers edit.
+    fn shown_badges(chip: &ChipView) -> Vec<(StackField, &str, u8, u8)> {
+        stack_badges(chip)
+            .into_iter()
+            .map(|shown| {
+                (
+                    shown.field,
+                    shown.badge.text.as_str(),
+                    shown.value,
+                    shown.maximum,
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn every_chip_wears_its_own_stack() {
+        // Members alike each wear ×2; the cluster itself wears nothing.
+        let view = editor::board_view(&alike_members(), None);
+        assert_eq!(view.items.len(), 1);
+        for key in [1, 2] {
+            let (_, member) = find_chip(&view, key).unwrap();
+            assert_eq!(shown_badges(member), [(StackField::Count, "\u{d7}2", 2, 3)]);
+            assert_eq!(member.copies, [3]);
+        }
+
+        // A lone ring stack counting levels wears ≤2 and Σ ≥ 4; the Σ
+        // stepper starts at the total and stops at what two rings reach.
+        let mut rings = vec![
+            ring(1, UpgradeRequirement::Any),
+            ring(2, UpgradeRequirement::Any),
+        ];
+        for row in &mut rings {
+            row.requirement.level_sum = Some(LevelSum {
+                group: 1,
+                minimum_total: 4,
+            });
+        }
+        let view = editor::board_view(&rings, None);
+        let (_, chip) = find_chip(&view, 1).unwrap();
+        assert_eq!(
+            shown_badges(chip),
+            [
+                (StackField::Count, "\u{2264}2", 2, 3),
+                (StackField::Total, "\u{3a3} \u{2265} 4", 4, 8)
+            ]
+        );
     }
 
     #[test]

@@ -18,7 +18,7 @@ use shpd_seedfinder_core::query::MAX_SEARCH_DEPTH;
 use shpd_seedfinder_core::quests::WandmakerQuestType;
 use shpd_seedfinder_session::available_workers;
 
-use crate::board::{self, BoardCache, Dragged, DropAnswer, Landing};
+use crate::board::{self, BoardCache, Dragged, DropAnswer, Landing, StackField};
 use crate::state::{AppState, FARMING_FLOORS, is_farming_requirement, wandmaker_quest_label};
 use crate::{glow, sprites};
 
@@ -63,13 +63,6 @@ pub enum BoardAction {
 
 /// What the window does with one board gesture.
 type BoardHandler = Box<dyn Fn(BoardAction)>;
-
-/// Which number the stack popover is editing.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum StackField {
-    Count,
-    Total,
-}
 
 pub struct QueryPane {
     pub page: adw::NavigationPage,
@@ -650,7 +643,7 @@ impl QueryPane {
                 if item.cluster.is_some() {
                     board.append(&self.cluster(item));
                 } else {
-                    board.append(&self.chip(item, &item.chips[0], false));
+                    board.append(&self.chip(&item.chips[0]));
                 }
             }
             if !blanket && let Some(resin) = &view.resin {
@@ -700,9 +693,8 @@ impl QueryPane {
         chip.upcast()
     }
 
-    /// One either/or cluster: its members share a dashed capsule, with the
-    /// stack badges at the trailing edge, where they speak for the whole
-    /// capsule rather than for any one member.
+    /// One either/or cluster: its members share a dashed capsule. Each member
+    /// wears its own stack's badges; the capsule wears none.
     fn cluster(self: &Rc<Self>, item: &ItemView) -> gtk::Widget {
         let capsule = gtk::Box::builder()
             .spacing(2)
@@ -721,61 +713,19 @@ impl QueryPane {
                         .build(),
                 );
             }
-            capsule.append(&self.chip(item, chip, true));
-        }
-        for badge in self.badges(item) {
-            capsule.append(&badge);
+            capsule.append(&self.chip(chip));
         }
         // The capsule around the chips stands for the whole cluster.
         capsule.add_controller(self.drop_target(Landing::Row(item.members[0])));
         capsule.upcast()
     }
 
-    /// One requirement as a chip: its sprite, its name, and the tiny tags that
-    /// qualify it, all as the shared editor words them. A chip standing on its
-    /// own also carries the badges of its stack; inside a cluster those belong
-    /// to the capsule.
-    fn chip(self: &Rc<Self>, item: &ItemView, chip: &ChipView, in_cluster: bool) -> gtk::Widget {
-        let widget = gtk::Box::builder()
-            .spacing(6)
-            .css_classes(["chip"])
-            .focusable(true)
-            .accessible_role(gtk::AccessibleRole::Button)
-            .tooltip_text(board::chip_tooltip(chip))
-            .build();
-        widget.update_property(&[gtk::accessible::Property::Label(&chip.description)]);
-        if let Some(problem) = &chip.problem {
-            widget.add_css_class("chip-error");
-            widget.update_property(&[gtk::accessible::Property::Description(problem)]);
-        }
-        widget.append(&chip_prefix(chip));
-        widget.append(
-            &gtk::Label::builder()
-                .label(&chip.name)
-                .ellipsize(pango::EllipsizeMode::End)
-                .max_width_chars(18)
-                .build(),
-        );
-        for tag in &chip.tags {
-            widget.append(&chip_tag(tag));
-        }
-        if let Some(badge) = chip
-            .effect
-            .as_ref()
-            .and_then(|effect| effect_badge(chip, effect))
-        {
+    /// One requirement as a chip: its face, then the badges of its own stack,
+    /// alone or as a cluster member.
+    fn chip(self: &Rc<Self>, chip: &ChipView) -> gtk::Widget {
+        let widget = chip_face(chip);
+        for badge in self.badges(chip) {
             widget.append(&badge);
-        }
-        for tag in &chip.trailing_tags {
-            widget.append(&chip_tag(tag));
-        }
-        if chip.uncursed {
-            widget.append(&uncursed_mark());
-        }
-        if !in_cluster {
-            for badge in self.badges(item) {
-                widget.append(&badge);
-            }
         }
         self.wire_chip(&widget, Some(chip.key));
         widget.add_controller(self.drop_target(Landing::Row(chip.key)));
@@ -1006,60 +956,44 @@ impl QueryPane {
         target
     }
 
-    /// The badges of one board entry: how many items it asks for, and the
-    /// combined level they reach together.
-    fn badges(self: &Rc<Self>, item: &ItemView) -> Vec<gtk::Widget> {
-        let key = item.members[0];
-        let stack = &item.stack;
-        let mut badges: Vec<gtk::Widget> = Vec::new();
-        if let Some(badge) = &item.badges.count {
-            let button = gtk::Button::builder()
-                .label(&badge.text)
-                .css_classes(["stack-badge"])
-                .valign(gtk::Align::Center)
-                .tooltip_text(&badge.tooltip)
-                .build();
-            button.connect_clicked({
-                let pane = Rc::clone(self);
-                let (count, limit) = (f64::from(stack.count), f64::from(stack.count_max));
-                move |button| {
-                    pane.open_stack_popover(
-                        button,
-                        key,
-                        StackField::Count,
-                        "How many",
-                        count,
-                        limit,
-                    );
-                }
-            });
-            badges.push(button.upcast());
-        }
-        if let Some(badge) = &item.badges.total {
-            let button = gtk::Button::builder()
-                .label(&badge.text)
-                .css_classes(["stack-badge", "stack-badge-total"])
-                .valign(gtk::Align::Center)
-                .tooltip_text(&badge.tooltip)
-                .build();
-            button.connect_clicked({
-                let pane = Rc::clone(self);
-                let total = f64::from(stack.total.unwrap_or(stack.default_total));
-                let capacity = f64::from(stack.level_capacity);
-                move |button| {
-                    pane.open_stack_popover(
-                        button,
-                        key,
-                        StackField::Total,
-                        "Combined level",
-                        total,
-                        capacity,
-                    );
-                }
-            });
-            badges.push(button.upcast());
-        }
-        badges
+    /// The badges of one chip's own stack: how many items it asks for, and
+    /// the combined level they reach together. Each opens its stepper.
+    fn badges(self: &Rc<Self>, chip: &ChipView) -> Vec<gtk::Widget> {
+        let key = chip.key;
+        board::stack_badges(chip)
+            .into_iter()
+            .map(|shown| {
+                let classes: &[&str] = match shown.field {
+                    StackField::Count => &["stack-badge"],
+                    StackField::Total => &["stack-badge", "stack-badge-total"],
+                };
+                let button = gtk::Button::builder()
+                    .label(&shown.badge.text)
+                    .css_classes(classes)
+                    .valign(gtk::Align::Center)
+                    .tooltip_text(&shown.badge.tooltip)
+                    .build();
+                button.connect_clicked({
+                    let pane = Rc::clone(self);
+                    let (field, value, maximum) = (shown.field, shown.value, shown.maximum);
+                    move |button| {
+                        let title = match field {
+                            StackField::Count => "How many",
+                            StackField::Total => "Combined level",
+                        };
+                        pane.open_stack_popover(
+                            button,
+                            key,
+                            field,
+                            title,
+                            f64::from(value),
+                            f64::from(maximum),
+                        );
+                    }
+                });
+                button.upcast()
+            })
+            .collect()
     }
 
     fn open_stack_popover(
@@ -1141,12 +1075,12 @@ impl QueryPane {
                 let Some(view) = self.board_view.borrow().current() else {
                     return;
                 };
-                let Some((item, entry)) = board::find_chip(&view, key) else {
+                let Some((_, entry)) = board::find_chip(&view, key) else {
                     return;
                 };
                 self.count_action
-                    .set_state(&(key, u64::from(item.stack.count)).to_variant());
-                Self::chip_menu(&view, item, entry)
+                    .set_state(&(key, u64::from(entry.stack.count)).to_variant());
+                Self::chip_menu(&view, entry)
             }
         };
         self.menu.set_menu_model(Some(&menu));
@@ -1169,8 +1103,9 @@ impl QueryPane {
 
     /// The chip's context menu: every gesture of the board said in words, for
     /// the keyboard, for touch, and for anyone who would rather not drag. What
-    /// it offers is what the editor says the chip and its entry can do.
-    fn chip_menu(view: &BoardView, item: &ItemView, chip: &ChipView) -> gio::Menu {
+    /// it offers is what the editor says the chip and its own stack can do —
+    /// a cluster member's "How many" counts that member.
+    fn chip_menu(view: &BoardView, chip: &ChipView) -> gio::Menu {
         let key = chip.key;
         let menu = gio::Menu::new();
         let first = gio::Menu::new();
@@ -1189,9 +1124,9 @@ impl QueryPane {
         }
         menu.append_section(None, &first);
 
-        if item.stack.can_change_count {
+        if chip.stack.can_change_count {
             let counts = gio::Menu::new();
-            for count in 1..=item.stack.count_max {
+            for count in 1..=chip.stack.count_max {
                 counts.append_item(&menu_item(
                     &count.to_string(),
                     "board.count",
@@ -1200,10 +1135,10 @@ impl QueryPane {
             }
             menu.append_section(Some("How many"), &counts);
         }
-        if item.stack.can_count_levels {
+        if chip.stack.can_count_levels {
             let levels = gio::Menu::new();
             levels.append_item(&menu_item(
-                if item.stack.total.is_some() {
+                if chip.stack.total.is_some() {
                     "Stop counting _levels"
                 } else {
                     "Count _levels together"
@@ -1333,6 +1268,49 @@ fn resin_menu() -> gio::Menu {
 
 /// One qualifier beside a chip's name, tinted as the editor styles it, with
 /// its own hover text where the editor explains it ("Auto", "Mage +2").
+/// A requirement chip's face: its sprite, its name, and the tiny tags that
+/// qualify it, all as the shared editor words them — everything but the
+/// badges of its stack, which the board adds.
+fn chip_face(chip: &ChipView) -> gtk::Box {
+    let widget = gtk::Box::builder()
+        .spacing(6)
+        .css_classes(["chip"])
+        .focusable(true)
+        .accessible_role(gtk::AccessibleRole::Button)
+        .tooltip_text(board::chip_tooltip(chip))
+        .build();
+    widget.update_property(&[gtk::accessible::Property::Label(&chip.description)]);
+    if let Some(problem) = &chip.problem {
+        widget.add_css_class("chip-error");
+        widget.update_property(&[gtk::accessible::Property::Description(problem)]);
+    }
+    widget.append(&chip_prefix(chip));
+    widget.append(
+        &gtk::Label::builder()
+            .label(&chip.name)
+            .ellipsize(pango::EllipsizeMode::End)
+            .max_width_chars(18)
+            .build(),
+    );
+    for tag in &chip.tags {
+        widget.append(&chip_tag(tag));
+    }
+    if let Some(badge) = chip
+        .effect
+        .as_ref()
+        .and_then(|effect| effect_badge(chip, effect))
+    {
+        widget.append(&badge);
+    }
+    for tag in &chip.trailing_tags {
+        widget.append(&chip_tag(tag));
+    }
+    if chip.uncursed {
+        widget.append(&uncursed_mark());
+    }
+    widget
+}
+
 fn chip_tag(tag: &Tag) -> gtk::Label {
     let label = gtk::Label::builder()
         .label(&tag.text)

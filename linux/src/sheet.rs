@@ -580,7 +580,7 @@ mod tests {
     #[test]
     fn the_typed_sheet_gives_the_golden_sheet_answers_through_the_app_codec() {
         let replayed = fixtures("requirement_editor");
-        assert_eq!(replayed.len(), 18);
+        assert_eq!(replayed.len(), 20);
         for Fixture {
             name,
             request,

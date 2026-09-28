@@ -447,8 +447,8 @@ pub const ALL_CHALLENGES: &[ChallengeInfo] = &[
 mod tests {
     use shpd_seedfinder_core::catalog::{ItemId, ItemKind};
     use shpd_seedfinder_core::editor::{
-        self, BoardView, Change, Draft, Edit, EditResult, FormMode, ItemChoice, ItemView, Origin,
-        ResinOutcome, Row, SaveResult, UpgradeMode,
+        self, BoardView, Change, ChipView, Draft, Edit, EditResult, FormMode, ItemChoice, ItemView,
+        Origin, ResinOutcome, Row, SaveResult, UpgradeMode,
     };
     use shpd_seedfinder_core::query::{Requirement, TierRequirement, UpgradeRequirement};
     use shpd_seedfinder_core::quests::{
@@ -476,6 +476,15 @@ mod tests {
             .into_iter()
             .find(|item| item.members.contains(&key))
             .expect("the row is on the board")
+    }
+
+    /// The chip showing the row `key`, with its own stack and badges.
+    fn chip(state: &AppState, key: u64) -> ChipView {
+        entry(state, key)
+            .chips
+            .into_iter()
+            .find(|chip| chip.key == key)
+            .expect("the row has a chip")
     }
 
     /// A sheet opened on `key` (or a new chip), its controls moved the way
@@ -539,7 +548,7 @@ mod tests {
         .unwrap();
         let mut state = AppState::load(&query);
         assert_eq!(board(&state).items.len(), 3);
-        assert!(!entry(&state, 2).stack.can_grow);
+        assert!(!chip(&state, 2).stack.can_grow);
         assert!(!state.apply(&[Edit::SetCount { key: 2, count: 3 }]).changed);
         assert_eq!(state.requirements.len(), 3);
         // An ordinary chip never joins a blanket.
@@ -642,20 +651,20 @@ mod tests {
                 .collect(),
             ..AppState::default()
         };
-        let chip = &entry(&state, 1).chips[0];
-        assert_eq!(chip.title, "Sandals of Nature");
-        assert!(chip.details.contains(&"exactly +5".to_owned()));
-        assert!(chip.details.contains(&"floors 1–19".to_owned()));
+        let sandals = chip(&state, 1);
+        assert_eq!(sandals.title, "Sandals of Nature");
+        assert!(sandals.details.contains(&"exactly +5".to_owned()));
+        assert!(sandals.details.contains(&"floors 1–19".to_owned()));
         let query = state.to_query().unwrap();
         let decoded = deep_link::decode_text(&deep_link::encode_link(&query).unwrap()).unwrap();
         assert_eq!(AppState::from_query(&decoded).to_query().unwrap(), query);
         assert_eq!(query.slot_count(), 1);
         // Artifacts are unique finds: neither the cluster nor one alone stacks.
-        assert!(!entry(&state, 1).stack.can_grow);
+        assert!(!chip(&state, 1).stack.can_grow);
         state.apply(&[Edit::SetCount { key: 1, count: 2 }]);
         assert_eq!(state.requirements.len(), 2);
         state.apply(&[Edit::Detach { key: 1 }]);
-        assert!(!entry(&state, 1).stack.can_grow);
+        assert!(!chip(&state, 1).stack.can_grow);
         state.apply(&[Edit::SetCount { key: 1, count: 2 }]);
         assert_eq!(state.requirements.len(), 2);
         state.requirements[0].requirement.item = None;
@@ -729,7 +738,7 @@ mod tests {
         assert!(state.arcane_resin_filter.include_mage_wand);
         let view = board(&state);
         assert_eq!(view.items.len(), 1);
-        assert_eq!(view.items[0].stack.count, 3);
+        assert_eq!(view.items[0].chips[0].stack.count, 3);
         assert_eq!(
             deep_link::decode(&deep_link::encode(&query).unwrap()).unwrap(),
             query
@@ -1072,34 +1081,35 @@ mod tests {
         assert_eq!(item.label.as_deref(), Some("Any of 2"));
         assert_eq!(state.unvalidated_query().slot_count(), 1);
 
-        // A cluster spanning two categories cannot anchor a stack: a copy
-        // would have to name a kind, and "spear or ring" names none.
-        assert!(
-            !state
-                .apply(&[Edit::SetCount {
-                    key: spear,
-                    count: 2
-                }])
-                .changed
-        );
-        assert_eq!(state.requirements.len(), 2);
-        assert!(!entry(&state, spear).stack.can_grow);
-
-        // Pulling the ring back out leaves a plain spear chip, which can.
-        state.apply(&[Edit::Detach { key: ring }]);
-        assert_eq!(board(&state).items.len(), 2);
-        assert!(entry(&state, spear).stack.can_grow);
+        // Every member carries its own stack, even across categories: the
+        // spear's copy is a spear, asked for only when the spear fills the
+        // slot, and the ring stays one ring.
         let grown = state.apply(&[Edit::SetCount {
             key: spear,
             count: 2,
         }]);
+        assert!(grown.changed);
+        assert_eq!(grown.focus, Some(spear));
         assert_eq!(state.requirements.len(), 3);
         // The copy took the next key in line.
-        assert_eq!(state.requirements[1].key, 3);
+        assert_eq!(chip(&state, spear).copies, [3]);
         assert_eq!(grown.next_key, 4);
         assert_eq!(state.claim_key(), 4);
-        assert_eq!(entry(&state, spear).stack.count, 2);
-        assert_eq!(entry(&state, ring).stack.count, 1);
+        assert_eq!(chip(&state, spear).stack.count, 2);
+        assert_eq!(
+            chip(&state, spear).badges.count.map(|badge| badge.text),
+            Some("\u{d7}2".to_owned())
+        );
+        assert_eq!(chip(&state, ring).stack.count, 1);
+        assert!(chip(&state, ring).badges.count.is_none());
+        assert!(state.to_query().is_ok());
+
+        // Pulling the ring back out leaves the spear stack a plain chip,
+        // written as plain repeats.
+        state.apply(&[Edit::Detach { key: ring }]);
+        assert_eq!(board(&state).items.len(), 2);
+        assert_eq!(chip(&state, spear).stack.count, 2);
+        assert!(!chip(&state, spear).in_cluster);
         assert!(
             state
                 .requirements
@@ -1156,9 +1166,9 @@ mod tests {
                 .map(|sum| sum.minimum_total)
                 == Some(4))
         );
-        let item = entry(&state, key);
+        let item = chip(&state, key);
         assert_eq!((item.stack.count, item.stack.total), (2, Some(4)));
-        assert!(!item.chips[0].in_cluster);
+        assert!(!item.in_cluster);
         assert!(state.to_query().is_ok());
 
         // A ring reaches +4 (five levels), but only one per world — the Imp
@@ -1166,7 +1176,7 @@ mod tests {
         // rings therefore reach eight levels together, three eleven.
         assert_eq!(item.stack.level_capacity, 8);
         state.apply(&[Edit::SetCount { key, count: 3 }]);
-        assert_eq!(entry(&state, key).stack.level_capacity, 11);
+        assert_eq!(chip(&state, key).stack.level_capacity, 11);
         state.apply(&[Edit::SetCount { key, count: 2 }]);
 
         // The badge lowers the total without going through the sheet, and
@@ -1175,14 +1185,14 @@ mod tests {
             key,
             total: Some(3),
         }]);
-        assert_eq!(entry(&state, key).stack.total, Some(3));
+        assert_eq!(chip(&state, key).stack.total, Some(3));
         state.apply(&[Edit::SetTotal {
             key,
             total: Some(9),
         }]);
-        assert_eq!(entry(&state, key).stack.total, Some(8));
+        assert_eq!(chip(&state, key).stack.total, Some(8));
         assert_eq!(
-            entry(&state, key).badges.total.unwrap().text,
+            chip(&state, key).badges.total.unwrap().text,
             "\u{3a3} \u{2265} 8"
         );
 
@@ -1194,11 +1204,11 @@ mod tests {
                 .iter()
                 .all(|row| row.requirement.level_sum.is_none())
         );
-        assert_eq!(entry(&state, key).stack.count, 2);
+        assert_eq!(chip(&state, key).stack.count, 2);
         assert!(state.to_query().is_ok());
         // …and the menu turns it back on at one level per item.
         state.apply(&[Edit::ToggleLevels { key }]);
-        assert_eq!(entry(&state, key).stack.total, Some(2));
+        assert_eq!(chip(&state, key).stack.total, Some(2));
     }
 
     #[test]
@@ -1218,7 +1228,7 @@ mod tests {
             ],
         );
         saved(state.save(&draft));
-        let item = entry(&state, draft.key.unwrap());
+        let item = chip(&state, draft.key.unwrap());
         assert_eq!(item.stack.count, 2);
         assert_eq!(item.stack.copy_depth, Some(9));
         // The named +3 armor keeps its own floor; the copy keeps the other.
@@ -1228,10 +1238,10 @@ mod tests {
 
         // Saving the chip as it stands gives the rows back untouched.
         let before = state.requirements.clone();
-        let again = state.open_sheet(Some(item.members[0]), false);
+        let again = state.open_sheet(Some(item.key), false);
         let unchanged = saved(state.save(&again));
         assert!(!unchanged.changed);
-        assert_eq!(unchanged.focus, Some(item.members[0]));
+        assert_eq!(unchanged.focus, Some(item.key));
         assert_eq!(state.requirements, before);
     }
 
@@ -1273,9 +1283,12 @@ mod tests {
         let duplicate = sheet(&mut state, None, &tooth);
         assert_eq!(refused(state.save(&duplicate)), [editor::DUPLICATE_TRINKET]);
         assert_eq!(state.requirements.len(), 1);
+    }
 
-        // A stacked cluster of wands cannot take a ring: its copies would
-        // have to name a kind.
+    #[test]
+    fn a_member_saved_into_another_category_keeps_its_own_stack() {
+        // {Any wand ×2 | Any wand}: each member's copies are its own kind, so
+        // a member may change category without the stack refusing it.
         let mut state = AppState::default();
         for _ in 0..2 {
             let key = state.claim_key();
@@ -1288,19 +1301,40 @@ mod tests {
             ));
         }
         state.apply(&[Edit::SetCount { key: 1, count: 2 }]);
-        assert_eq!(entry(&state, 1).stack.count, 2);
-        let before = state.requirements.clone();
+        assert_eq!(chip(&state, 1).stack.count, 2);
+        assert_eq!(chip(&state, 2).stack.count, 1);
+        let copy = chip(&state, 1).copies[0];
+        let kind_of = |state: &AppState, key: u64| {
+            state
+                .requirements
+                .iter()
+                .find(|row| row.key == key)
+                .map(|row| row.requirement.kind)
+        };
+
+        // The plain member becomes a ring; the wand keeps its wand copy.
         let draft = sheet(
             &mut state,
             Some(2),
             &[Change::SetKind(ItemKind::Ring, None)],
         );
         assert!(draft.in_cluster);
-        assert_eq!(
-            refused(state.save(&draft)),
-            ["Copies can only be grouped with the same item type."]
+        assert!(saved(state.save(&draft)).changed);
+        assert_eq!(chip(&state, 2).family, ItemKind::Ring);
+        assert_eq!(chip(&state, 1).stack.count, 2);
+        assert_eq!(kind_of(&state, copy), Some(ItemKind::Wand));
+
+        // The stacked member becomes armor, and its copy with it.
+        let draft = sheet(
+            &mut state,
+            Some(1),
+            &[Change::SetKind(ItemKind::Armor, None)],
         );
-        assert_eq!(state.requirements, before);
+        assert!(saved(state.save(&draft)).changed);
+        assert_eq!(chip(&state, 1).stack.count, 2);
+        let copy = chip(&state, 1).copies[0];
+        assert_eq!(kind_of(&state, copy), Some(ItemKind::Armor));
+        assert!(state.to_query().is_ok());
     }
 
     #[test]
