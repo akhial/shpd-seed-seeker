@@ -529,11 +529,18 @@ fn editor_fixtures(fixtures: &mut Fixtures) {
         Editor,
         &json!({"op": "save", "draft": untouched["draft"], "rows": sandals}),
     );
-    fixtures.add(
+    let added = fixtures.add(
         "editor-resin-open-new",
         "A resin sheet on a query without resin adds one: a new sheet with Arcane Resin picked.",
         Editor,
         &json!({"op": "open", "rows": [], "open_resin": true}),
+    );
+    fixtures.add(
+        "editor-resin-mage-wand",
+        "The Mage's starting wand counted in the resin section, which words its choice, its amount's bounds and its switch.",
+        Editor,
+        &json!({"op": "change", "draft": added["draft"],
+               "change": {"type": "set_include_mage_wand", "value": true}}),
     );
     fixtures.add(
         "editor-error-draft",

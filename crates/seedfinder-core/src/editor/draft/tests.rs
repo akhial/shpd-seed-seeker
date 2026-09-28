@@ -1542,6 +1542,201 @@ fn each_family_shows_its_own_controls() {
     assert_eq!(resin.preview, None);
 }
 
+/// The words the platforms kept beside the form, now the form's: the
+/// help texts under check boxes, the section labels, the resin section and
+/// its bounds — each the wording most platforms shared.
+#[test]
+fn the_form_words_every_control_the_platforms_worded_themselves() {
+    let wand = form(&after(
+        &new_sheet(&[]),
+        &[Change::SetCategory(ItemKind::Wand)],
+    ));
+    assert_eq!(
+        wand.exclude_resin.caption.as_deref(),
+        Some(
+            "Keep this wand without budgeting resin to upgrade it. Useful for imbuing: resin \
+             upgrades do not transfer to the staff. Extra copies are reserved for reforging and \
+             never need Auto resin."
+        )
+    );
+    assert_eq!(wand.uncursed.caption, None);
+    assert_eq!(wand.stack.label, "Total item count");
+    let trinket = form(&after(
+        &new_sheet(&[]),
+        &[Change::SetCategory(ItemKind::Trinket)],
+    ));
+    assert_eq!(
+        trinket.select_trinket.caption.as_deref(),
+        Some(
+            "Applies after the first brewing opportunity. If several alternatives are offered, \
+             no trinket is chosen."
+        )
+    );
+    let rings = form(&after(
+        &new_sheet(&[]),
+        &[
+            Change::SetCategory(ItemKind::Ring),
+            Change::SetItem(ItemChoice::Item(ItemId::RingMight)),
+            Change::SetCount(2),
+        ],
+    ));
+    assert!(rings.stack.count_levels.visible);
+    assert_eq!(
+        rings.stack.count_levels.caption.as_deref(),
+        Some("Each item counts its upgrade plus one, and spare items may go unused.")
+    );
+    // The effect section is titled for its family.
+    let weapon = form(&new_sheet(&[]));
+    assert_eq!(weapon.effect.label, "Enchantment");
+    let armor = form(&after(
+        &new_sheet(&[]),
+        &[Change::SetCategory(ItemKind::Armor)],
+    ));
+    assert_eq!(armor.effect.label, "Glyph");
+
+    let resin = form(&after(
+        &new_sheet(&[]),
+        &[
+            Change::SetCategory(ItemKind::Wand),
+            Change::SetItem(ItemChoice::ArcaneResin),
+        ],
+    ));
+    let control = &resin.resin;
+    assert_eq!(control.label, "Minimum resin");
+    assert_eq!(
+        control
+            .modes
+            .iter()
+            .map(|mode| (mode.value, mode.label.as_str()))
+            .collect::<Vec<_>>(),
+        [(false, "Amount"), (true, "Auto")]
+    );
+    assert_eq!(
+        control.caption,
+        "Upgrade each kept wand to +3. Excluded wands and extra copies reserved for reforging \
+         need no resin."
+    );
+    assert_eq!((control.min, control.max), (1, 65_535));
+    assert_eq!(
+        control.include_mage_wand,
+        Toggle {
+            visible: true,
+            value: false,
+            label: "Include Mage’s starting wand".to_owned(),
+            caption: Some(
+                "Add 2 resin from the Magic Missile wand recovered with Wand Preservation when \
+                 imbuing another wand. The preserved wand is +0, regardless of the staff’s level."
+                    .to_owned()
+            ),
+        }
+    );
+    let credited = form(&after(
+        &new_sheet(&[]),
+        &[
+            Change::SetCategory(ItemKind::Wand),
+            Change::SetItem(ItemChoice::ArcaneResin),
+            Change::SetIncludeMageWand(true),
+        ],
+    ));
+    assert!(credited.resin.include_mage_wand.value);
+    // The draft's amount error names the very bounds the form carries.
+    assert_eq!(
+        RESIN_AMOUNT_RANGE,
+        format!("Enter an amount from {} to {}.", control.min, control.max)
+    );
+}
+
+/// Which part of a control shows follows from the form alone: the value
+/// slider of a mode picker outside "any", the effect grid in "Specific…".
+#[test]
+fn the_form_says_when_a_value_or_the_effect_grid_shows() {
+    let any = form(&new_sheet(&[]));
+    assert!(any.tier.visible && !any.tier.value_visible);
+    assert!(any.upgrade.visible && !any.upgrade.value_visible);
+    assert!(any.effect.visible && !any.effect.choices_visible);
+    let bounded = form(&after(
+        &new_sheet(&[]),
+        &[
+            Change::SetTierMode(TierMode::AtLeast),
+            Change::SetUpgradeMode(UpgradeMode::Exact),
+            Change::SetEffectMode(EffectMode::Specific),
+        ],
+    ));
+    assert!(bounded.tier.value_visible && bounded.upgrade.value_visible);
+    assert!(bounded.effect.choices_visible);
+    let enchanted = form(&after(
+        &new_sheet(&[]),
+        &[Change::SetEffectMode(EffectMode::AnyEnchantment)],
+    ));
+    assert!(!enchanted.effect.choices_visible);
+    // A hidden control shows no part of itself.
+    let named = form(&after(
+        &new_sheet(&[]),
+        &[
+            Change::SetTierMode(TierMode::Exact),
+            Change::SetItem(ItemChoice::Item(ItemId::Spear)),
+        ],
+    ));
+    assert!(!named.tier.visible && !named.tier.value_visible);
+    let wand = form(&after(
+        &new_sheet(&[]),
+        &[
+            Change::SetEffectMode(EffectMode::Specific),
+            Change::SetCategory(ItemKind::Wand),
+        ],
+    ));
+    assert!(!wand.effect.visible && !wand.effect.choices_visible);
+}
+
+/// iOS draws its cluster "How many" sheet's copy floor from a sheet opened
+/// on a member: the form hides the stack there — it is the cluster's — but
+/// fills it all, as it fills every hidden control.
+#[test]
+fn a_hidden_copy_floor_is_filled_for_a_cluster_member() {
+    let rows = apply(
+        &[
+            named(1, ItemId::Spear),
+            named(2, ItemId::Mace),
+            named(3, ItemId::Sword),
+        ],
+        None,
+        &[
+            Edit::Join {
+                source: 2,
+                target: 1,
+            },
+            Edit::SetCount { key: 1, count: 2 },
+            Edit::SetCopyDepth {
+                key: 1,
+                max_depth: Some(6),
+            },
+        ],
+    )
+    .rows;
+    let member = form(&sheet(&rows, 2));
+    assert!(member.in_cluster && !member.stack.visible);
+    let floor = &member.stack.copy_depth;
+    assert!(!floor.visible && floor.enabled);
+    assert_eq!(floor.label, "Limit the extra copies to a floor");
+    assert_eq!(floor.value, 6);
+    assert_eq!(floor.value_label, "Copies within first 6 floors");
+    assert_eq!(floor.options.len(), 21);
+    assert!(
+        !floor
+            .options
+            .iter()
+            .any(|option| option.value % 5 == 0 && option.value < 20)
+    );
+    // Without a copy floor yet it starts where the switch turns on.
+    let unlimited = form(&sheet(&rows[..2], 2));
+    let floor = &unlimited.stack.copy_depth;
+    assert!(!floor.enabled);
+    assert_eq!(
+        (floor.value, floor.value_label.as_str()),
+        (4, "Copies within first 4 floors")
+    );
+}
+
 /// Windows `ItemCatalogTests` and Linux's picker tests: the fresh pickers
 /// leave out tier-1 gear, tipped darts and the catalyst; there are 17
 /// trinkets and 11 artifacts; weapons are grouped by tier.
@@ -2529,11 +2724,97 @@ fn assert_in_range(form: &Form, sheet: bool, context: &str) {
     let savable = form.can_save && !form.resin_picked;
     assert!(form.preview.is_none() || savable, "{context}");
     assert!(!sheet || form.preview.is_some() == savable, "{context}");
+    assert_filled(form, context);
     // The header's title is always there, and on a sheet opened from a list
     // it names the chip the preview shows.
     assert_eq!(form.resin_picked, form.title == ARCANE_RESIN, "{context}");
     if sheet && let Some(preview) = &form.preview {
         assert_eq!(preview.title, form.title, "{context}");
+    }
+}
+
+/// Every control carries all its words, shown or hidden — its label, its
+/// options, its value in words, the help texts the form gives — and says
+/// which of its parts show only while it shows.
+fn assert_filled(form: &Form, context: &str) {
+    for toggle in [
+        &form.uncursed,
+        &form.exclude_resin,
+        &form.select_trinket,
+        &form.resin.include_mage_wand,
+    ] {
+        assert!(!toggle.label.is_empty(), "{context}");
+        assert!(
+            toggle
+                .caption
+                .as_ref()
+                .is_none_or(|caption| !caption.is_empty())
+        );
+    }
+    for (caption, name) in [
+        (&form.exclude_resin.caption, "exclude_resin"),
+        (&form.select_trinket.caption, "select_trinket"),
+        (&form.resin.include_mage_wand.caption, "include_mage_wand"),
+        (&form.transmutations.caption, "transmutations"),
+        (&form.stack.count_levels.caption, "count_levels"),
+    ] {
+        assert!(caption.is_some(), "{name}: {context}");
+    }
+    for floor in [&form.floor_limit, &form.stack.copy_depth] {
+        assert!(!floor.label.is_empty(), "{context}");
+        assert_eq!(floor.options.len(), 21, "{context}");
+        assert!(
+            floor.value_label.contains(&floor.value.to_string()),
+            "{context}"
+        );
+    }
+    for (label, value_label) in [
+        (&form.transmutations.label, &form.transmutations.value_label),
+        (
+            &form.stack.count_levels.label,
+            &form.stack.count_levels.value_label,
+        ),
+        (&form.stack.label, &form.stack.value_label),
+    ] {
+        assert!(!label.is_empty() && !value_label.is_empty(), "{context}");
+    }
+    assert!(!form.tier.value_label.is_empty() && !form.upgrade.value_label.is_empty());
+    assert_eq!(form.tier.modes.len(), 4, "{context}");
+    assert_eq!(form.upgrade.modes.len(), 3, "{context}");
+    assert_eq!(
+        form.tier.value_visible,
+        form.tier.visible && form.tier.mode != TierMode::Any,
+        "{context}"
+    );
+    assert_eq!(
+        form.upgrade.value_visible,
+        form.upgrade.visible && form.upgrade.mode != UpgradeMode::Any,
+        "{context}"
+    );
+    assert!(!form.effect.label.is_empty() && !form.effect.caption.is_empty());
+    assert_eq!(form.effect.modes.len(), 3, "{context}");
+    assert_eq!(
+        form.effect.choices_visible,
+        form.effect.visible && form.effect.mode == EffectMode::Specific,
+        "{context}"
+    );
+    assert!(form.effect.choices.is_empty() || !form.effect.groups.is_empty());
+    let resin = &form.resin;
+    assert!(
+        !resin.label.is_empty() && !resin.caption.is_empty(),
+        "{context}"
+    );
+    assert_eq!(resin.modes.len(), 2, "{context}");
+    assert!(resin.min <= resin.max, "{context}");
+    assert_eq!(resin.include_mage_wand.visible, resin.visible, "{context}");
+    for picker in [
+        form.category.options.len(),
+        form.kind.options.len(),
+        form.weapon_type.options.len(),
+        form.item.options.len(),
+        form.source.options.len(),
+    ] {
+        assert!(picker > 0, "{context}");
     }
 }
 

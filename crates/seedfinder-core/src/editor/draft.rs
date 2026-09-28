@@ -34,17 +34,18 @@ use crate::catalog::{
 use crate::main_world::{EMPTY_BOSS_FLOORS, normalize_floor_limit};
 use crate::model::ItemSource;
 use crate::query::{
-    ArcaneResinFilter, BOUNDED_TIER_MAX, BOUNDED_TIER_MIN, EXACT_TIER_MAX, EXACT_TIER_MIN,
-    EffectRequirement, EffectSet, MAX_SEARCH_DEPTH, Requirement, TierRequirement,
-    UpgradeRequirement,
+    ARCANE_RESIN_MAX, ARCANE_RESIN_MIN, ArcaneResinFilter, BOUNDED_TIER_MAX, BOUNDED_TIER_MIN,
+    EXACT_TIER_MAX, EXACT_TIER_MIN, EffectRequirement, EffectSet, MAX_SEARCH_DEPTH, Requirement,
+    TierRequirement, UpgradeRequirement,
 };
 use crate::trinkets::TRANSMUTATION_COUNT as TRINKET_TRANSMUTATIONS;
 
 use super::board::{BoardItem, Edit, EditResult, HeldLabels, apply_holding, board_items};
 use super::chips::{ChipView, ResinAmount, ResinState, board_view};
 use super::labels::{
-    ARCANE_RESIN, KindName, category_label, count_text, requirement_title, weapon_type_label,
-    wildcard_label,
+    ARCANE_RESIN, KindName, RESIN_AMOUNT, RESIN_AUTO, RESIN_AUTO_CAPTION, RESIN_MAGE_WAND,
+    RESIN_MAGE_WAND_CAPTION, RESIN_MINIMUM, category_label, count_text, requirement_title,
+    weapon_type_label, wildcard_label,
 };
 use super::problems::{problems, row_problems};
 use super::stack::{level_capacity, stack_view};
@@ -61,7 +62,9 @@ pub const DUPLICATE_TRINKET: &str =
     "This trinket is already required. Each trinket appears only once in the deck.";
 
 /// The draft error of a resin amount that is not a whole number in range —
-/// including an empty field, which the platforms send as no amount.
+/// including an empty field, which the platforms send as no amount. The
+/// range is the query format's ([`ARCANE_RESIN_MIN`], [`ARCANE_RESIN_MAX`]),
+/// and so the form's (`ResinControl::min`, `ResinControl::max`).
 pub const RESIN_AMOUNT_RANGE: &str = "Enter an amount from 1 to 65535.";
 
 /// The tier a tier slider starts from before one was chosen (web default).
@@ -251,6 +254,15 @@ impl EffectGroup {
     }
 }
 
+/// The effect section's label, as every platform titled it: `Enchantment`,
+/// or `Glyph` on armor.
+const fn effect_section_label(family: ItemKind) -> &'static str {
+    match family {
+        ItemKind::Armor => "Glyph",
+        _ => "Enchantment",
+    }
+}
+
 /// The resin section's values. They live apart from the wand draft: picking
 /// Arcane Resin and going back to a wand leaves the wand as it was, and the
 /// resin filter starts from the query's own rather than from whatever the
@@ -319,14 +331,16 @@ impl ResinDraft {
     }
 }
 
-/// `amount` as a resin amount, when it is a whole number from 1 to 65535.
+/// `amount` as a resin amount, when it is a whole number the query format
+/// holds ([`ARCANE_RESIN_MIN`] to [`ARCANE_RESIN_MAX`]).
 #[allow(
     clippy::float_cmp, // An exact whole-number test is the point.
     clippy::cast_possible_truncation, // Range-checked just before.
     clippy::cast_sign_loss
 )]
 fn whole_amount(amount: f64) -> Option<u16> {
-    ((1.0..=f64::from(u16::MAX)).contains(&amount) && amount.trunc() == amount)
+    ((f64::from(ARCANE_RESIN_MIN)..=f64::from(ARCANE_RESIN_MAX)).contains(&amount)
+        && amount.trunc() == amount)
         .then_some(amount as u16)
 }
 
@@ -462,6 +476,8 @@ pub struct Toggle {
     pub visible: bool,
     pub value: bool,
     pub label: String,
+    /// The help text under the check box, where it needs one.
+    pub caption: Option<String>,
 }
 
 /// A mode picker with a value slider (tier, upgrade). The value is always
@@ -471,10 +487,15 @@ pub struct ModeRange<M> {
     pub visible: bool,
     pub mode: M,
     pub modes: Vec<Opt<M>>,
+    /// Whether the value slider shows: the control does, in a mode other
+    /// than "any".
+    pub value_visible: bool,
     pub value: u8,
     pub min: u8,
     pub max: u8,
-    /// The value in words: `Tier 3 or higher`, `+2`.
+    /// The value alone in words — `Tier 3 or higher`, `+2` — which a slider
+    /// shows beside it; the slider keeps a fixed accessible name of the
+    /// app's own.
     pub value_label: String,
 }
 
@@ -491,9 +512,13 @@ pub struct EffectChoice {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EffectControl {
     pub visible: bool,
+    /// The section's label: `Enchantment`, or `Glyph` on armor.
+    pub label: String,
     pub mode: EffectMode,
     /// Any, Any enchantment (Any glyph), Specific….
     pub modes: Vec<Opt<EffectMode>>,
+    /// Whether the "Specific…" grid shows: the control does, in that mode.
+    pub choices_visible: bool,
     /// The family's effects in catalog order, enchantments first; curses
     /// only while the item may be cursed.
     pub choices: Vec<EffectChoice>,
@@ -512,7 +537,9 @@ pub struct FloorToggle {
     pub value: u8,
     pub options: Vec<Opt<u8>>,
     pub label: String,
-    /// `Within first 4 floors`.
+    /// The whole reading, not the value alone: `Within first 4 floors`,
+    /// `Copies within first 4 floors`. The slider keeps a fixed accessible
+    /// name of the app's own.
     pub value_label: String,
 }
 
@@ -535,6 +562,8 @@ pub struct RangeToggle {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct StackControl {
     pub visible: bool,
+    /// The section's label: `Total item count`.
+    pub label: String,
     pub count: u8,
     pub min: u8,
     pub max: u8,
@@ -545,13 +574,26 @@ pub struct StackControl {
 }
 
 /// The Arcane Resin section.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ResinControl {
     pub visible: bool,
+    /// The section's label, `Minimum resin`, which the amount field takes
+    /// too.
+    pub label: String,
     pub auto: bool,
+    /// The Amount/Auto choice, each valued as `auto` is: `Amount`, `Auto`.
+    pub modes: Vec<Opt<bool>>,
+    /// What Auto means, shown in the amount field's place while `auto` is
+    /// on.
+    pub caption: String,
     /// The amount as typed, shown while `auto` is off.
     pub amount: Option<f64>,
-    pub include_mage_wand: bool,
+    /// The amounts that save: the query format's fixed resin minimum,
+    /// [`ARCANE_RESIN_MIN`] to [`ARCANE_RESIN_MAX`].
+    pub min: u16,
+    pub max: u16,
+    /// Counting the starting Magic Missile of a Mage run.
+    pub include_mage_wand: Toggle,
 }
 
 /// Everything the sheet shows for a draft.
@@ -1706,6 +1748,7 @@ fn form_of(draft: &Draft, attempt: &Attempt) -> Form {
                 "Require uncursed"
             }
             .to_owned(),
+            caption: None,
         },
         source: Choice {
             visible: shown.details,
@@ -1741,20 +1784,26 @@ fn form_of(draft: &Draft, attempt: &Attempt) -> Form {
             visible: shown.exclude_resin,
             value: requirement.exclude_resin,
             label: "Exclude from Auto resin".to_owned(),
+            caption: Some(
+                "Keep this wand without budgeting resin to upgrade it. Useful for imbuing: resin \
+                 upgrades do not transfer to the staff. Extra copies are reserved for reforging \
+                 and never need Auto resin."
+                    .to_owned(),
+            ),
         },
         transmutations: transmutations_control(draft, &shown),
         select_trinket: Toggle {
             visible: shown.select_trinket,
             value: requirement.select_trinket,
             label: "Choose matching trinket at +3".to_owned(),
+            caption: Some(
+                "Applies after the first brewing opportunity. If several alternatives are \
+                 offered, no trinket is chosen."
+                    .to_owned(),
+            ),
         },
         stack: stack_control(draft, &shown),
-        resin: ResinControl {
-            visible: shown.resin,
-            auto: draft.resin.auto,
-            amount: draft.resin.amount,
-            include_mage_wand: draft.resin.include_mage_wand,
-        },
+        resin: resin_control(draft, &shown),
         can_save: attempt.errors.is_empty(),
         errors: attempt.errors.clone(),
     }
@@ -1797,6 +1846,27 @@ fn item_options(draft: &Draft) -> Vec<Opt<ItemChoice>> {
     options
 }
 
+/// The Arcane Resin section, in the words every platform's resin sheet
+/// shared.
+fn resin_control(draft: &Draft, shown: &Shown) -> ResinControl {
+    ResinControl {
+        visible: shown.resin,
+        label: RESIN_MINIMUM.to_owned(),
+        auto: draft.resin.auto,
+        modes: vec![Opt::new(false, RESIN_AMOUNT), Opt::new(true, RESIN_AUTO)],
+        caption: RESIN_AUTO_CAPTION.to_owned(),
+        amount: draft.resin.amount,
+        min: ARCANE_RESIN_MIN,
+        max: ARCANE_RESIN_MAX,
+        include_mage_wand: Toggle {
+            visible: shown.resin,
+            value: draft.resin.include_mage_wand,
+            label: RESIN_MAGE_WAND.to_owned(),
+            caption: Some(RESIN_MAGE_WAND_CAPTION.to_owned()),
+        },
+    }
+}
+
 fn tier_control(draft: &Draft, shown: &Shown) -> ModeRange<TierMode> {
     let mode = TierMode::of(draft.requirement.tier);
     let (min, max) = mode.range();
@@ -1814,6 +1884,7 @@ fn tier_control(draft: &Draft, shown: &Shown) -> ModeRange<TierMode> {
             .into_iter()
             .map(|mode| Opt::new(mode, mode.label()))
             .collect(),
+        value_visible: shown.tier && mode != TierMode::Any,
         value,
         min,
         max,
@@ -1846,6 +1917,7 @@ fn upgrade_control(draft: &Draft, shown: &Shown) -> ModeRange<UpgradeMode> {
             .into_iter()
             .map(|mode| Opt::new(mode, mode.label()))
             .collect(),
+        value_visible: shown.upgrade && mode != UpgradeMode::Any,
         value,
         min: 1,
         max,
@@ -1894,13 +1966,16 @@ fn effect_control(draft: &Draft, shown: &Shown) -> EffectControl {
         }
     }
     let ticked = choices.iter().filter(|choice| choice.selected).count();
+    let mode = effect_mode_of(requirement, draft.effect_mode);
     EffectControl {
         visible: shown.effect,
-        mode: effect_mode_of(requirement, draft.effect_mode),
+        label: effect_section_label(family).to_owned(),
+        mode,
         modes: EffectMode::ALL
             .into_iter()
             .map(|mode| Opt::new(mode, mode.label(family)))
             .collect(),
+        choices_visible: shown.effect && mode == EffectMode::Specific,
         choices,
         groups,
         caption: match ticked {
@@ -1974,6 +2049,7 @@ fn stack_control(draft: &Draft, shown: &Shown) -> StackControl {
         .clamp(1, most);
     StackControl {
         visible: shown.stack,
+        label: "Total item count".to_owned(),
         count,
         min: 1,
         max: STACK_MAX,
@@ -1992,7 +2068,9 @@ fn stack_control(draft: &Draft, shown: &Shown) -> StackControl {
             min: 1,
             max: most,
             label: "Count levels together".to_owned(),
-            caption: None,
+            caption: Some(
+                "Each item counts its upgrade plus one, and spare items may go unused.".to_owned(),
+            ),
             value_label: format!("≥ {total} across up to {count}"),
         },
     }

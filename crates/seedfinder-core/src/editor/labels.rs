@@ -131,6 +131,26 @@ pub const RESIN_AUTO: &str = "Auto";
 pub const RESIN_AUTO_TOOLTIP: &str =
     "Enough resin to upgrade kept wands to +3, excluding No resin wands and reforge copies";
 
+/// What Auto means, under the sheet's Amount/Auto choice while Auto is on
+/// — the words every platform's resin sheet shared.
+pub const RESIN_AUTO_CAPTION: &str = "Upgrade each kept wand to +3. Excluded wands and extra copies \
+                                      reserved for reforging need no resin.";
+
+/// The resin sheet's section label, which its amount field takes too.
+pub const RESIN_MINIMUM: &str = "Minimum resin";
+
+/// The sheet's choice of a fixed resin amount, beside [`RESIN_AUTO`].
+pub const RESIN_AMOUNT: &str = "Amount";
+
+/// The resin sheet's switch for the starting Magic Missile's credit.
+pub const RESIN_MAGE_WAND: &str = "Include Mage’s starting wand";
+
+/// What counting the Mage's starting wand means, under its switch.
+pub const RESIN_MAGE_WAND_CAPTION: &str = "Add 2 resin from the Magic Missile wand recovered \
+                                           with Wand Preservation when imbuing another wand. \
+                                           The preserved wand is +0, regardless of the staff’s \
+                                           level.";
+
 /// The resin chip's tag for the starting Magic Missile's credit.
 pub const RESIN_MAGE_TAG: &str = "Mage +2";
 

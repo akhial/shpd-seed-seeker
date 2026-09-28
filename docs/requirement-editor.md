@@ -363,11 +363,24 @@ cluster — changes nothing. Values are clamped into range; floor sliders
 step over the empty boss floors (a single step up onto 5, 10 or 15
 continues to 6, 11 or 16; every other move snaps down).
 
-**FORM** is everything the sheet shows. Every numeric control carries
-`min ≤ value ≤ max`, even while hidden, and every picker option is
-`{"value", "label", "group", "hidden"}` — `hidden` marks a choice offered
-only because the draft already names it (a tier-1 item from an imported
-query).
+**FORM** is everything the sheet shows, words included: section labels,
+help texts, the resin section's choice and bounds. Every control is filled
+whether it shows or not — its label, its options, its value in words, its
+help text — so an app may read a hidden one (iOS draws its cluster "How
+many" sheet's copy floor from the hidden `stack.copy_depth` of a sheet
+opened on a member). Every numeric control carries `min ≤ value ≤ max`,
+even while hidden, and every picker option is `{"value", "label", "group",
+"hidden"}` — `hidden` marks a choice offered only because the draft already
+names it (a tier-1 item from an imported query).
+
+A range control carries its current value's label alone, not one per value:
+apps draw it as a slider or a stepper, not as a labelled menu. A mode
+picker's `value_label` is the value (`Tier 3 or higher`, `+2 or higher`),
+which an app shows beside the slider; a floor toggle's is the whole reading
+(`Within first 4 floors`, `Copies within first 4 floors`), as is a range
+toggle's (`At most 3`, `≥ 5 across up to 2`). Either way the slider keeps a
+fixed accessible name of the app's own (the web's `Within first`) and reads
+its value out through `value_label`.
 
 | Field | Meaning |
 | --- | --- |
@@ -375,13 +388,13 @@ query).
 | `title` | The sheet header's title: the requirement's (`Any Tier 3+ melee weapon`, `Rat Skull`), or `Arcane Resin` while the resin is picked. Unlike `preview` it is there while the draft has errors; the sprite follows `item` and `kind`. |
 | `preview` | The CHIP a save would produce (key 0, no join candidates), or `null` while there are errors or the resin is picked. |
 | `category`, `kind`, `weapon_type`, `item`, `source` | Pickers: `{"visible", "value", "options"}`. `item` lists the wildcard (`Any melee weapon`) unless the family always names one, `Arcane Resin` when offered, then the items — weapons grouped `Tier 2`…`Tier 5`. |
-| `tier`, `upgrade` | `{"visible", "mode", "modes", "value", "min", "max", "value_label"}` (`Tier 3 or higher`, `+2 or higher`). |
-| `effect` | `{"visible", "mode", "modes", "choices", "groups", "caption"}`; each choice `{"value", "label", "group": "enchantment" \| "curse", "selected"}`, curses listed only while the item may be cursed. |
-| `uncursed`, `exclude_resin`, `select_trinket` | Check boxes: `{"visible", "value", "label"}`. |
+| `tier`, `upgrade` | `{"visible", "mode", "modes", "value_visible", "value", "min", "max", "value_label"}` (`Tier 3 or higher`, `+2 or higher`); `value_visible` says the value slider shows: the control does, in a mode other than `any`. |
+| `effect` | `{"visible", "label", "mode", "modes", "choices_visible", "choices", "groups", "caption"}`; `label` is the section's (`Enchantment`, `Glyph` on armor), `choices_visible` says the "Specific…" grid shows (the control does, in mode `specific`), each choice `{"value", "label", "group": "enchantment" \| "curse", "selected"}`, curses listed only while the item may be cursed. |
+| `uncursed`, `exclude_resin`, `select_trinket` | Check boxes: `{"visible", "value", "label", "caption"}`, `caption` the help text under the box or `null`. `exclude_resin` and `select_trinket` have one (`Keep this wand without budgeting resin to upgrade it. …`, `Applies after the first brewing opportunity. …`). |
 | `floor_limit` | `{"visible", "enabled", "value", "options", "label", "value_label"}`; options skip the empty boss floors. |
 | `transmutations` | `{"visible", "enabled", "value", "min", "max", "label", "caption", "value_label"}`. |
-| `stack` | `{"visible", "count", "min", "max", "value_label", "copy_depth", "count_levels"}`, with `copy_depth` a floor toggle and `count_levels` a range toggle (`≥ 5 across up to 2`). |
-| `resin` | `{"visible", "auto", "amount", "include_mage_wand"}`, `amount` the number as typed. |
+| `stack` | `{"visible", "label", "count", "min", "max", "value_label", "copy_depth", "count_levels"}`: `label` `Total item count`, `copy_depth` a floor toggle, `count_levels` a range toggle (`≥ 5 across up to 2`, caption `Each item counts its upgrade plus one, and spare items may go unused.`). |
+| `resin` | `{"visible", "label", "auto", "modes", "caption", "amount", "min", "max", "include_mage_wand"}`: `label` `Minimum resin`, which the amount field takes too; `modes` the Amount/Auto choice, each option valued as `auto` is (`false` `Amount`, `true` `Auto`); `caption` what Auto means, shown in the amount field's place while `auto` is on; `amount` the number as typed; `min`, `max` the amounts that save, the query format's 1–65535; `include_mage_wand` a check box (`Include Mage’s starting wand`, with its help text). |
 | `errors`, `can_save` | Why the draft cannot be saved, in the order to show them. |
 
 The sheet keeps every field of the row, shown or not. It re-encodes only
@@ -489,7 +502,7 @@ decided once.
 | Artifact transmutations | Supported, 1–10. |
 | Save guard | A save that newly breaks the list around the saved row is refused. |
 | Resin section | Seeded from the query's resin (uncursed donors by default), kept apart from the wand draft. |
-| Dialog chrome | App-owned. |
+| Dialog chrome | App-owned: sheet titles and button labels. Section labels, help texts and the resin section's words are the form's. |
 | Chip problems | The row's own, then cross-row blame; hidden copies surface on their entry. |
 
 ### Known limitations
@@ -509,6 +522,16 @@ for now:
 - Joining a stack-labelled cluster member onto a chip of the same category
   can leave two constrained members in one stack, which the problem list
   reports.
+
+Two more are the core's own choices:
+
+- The sheet has no control for an artifact's upgrade or a trinket's source,
+  floor limit and uncursed filter — no app ever offered one. It keeps them,
+  and a category switch resets them, but they cannot be edited on their
+  own.
+- A hand-written list with more than four stacks (or combined levels) keeps
+  the labels of those no label is left for, and they block Start and Share
+  until a stack goes.
 
 ## Golden fixtures
 

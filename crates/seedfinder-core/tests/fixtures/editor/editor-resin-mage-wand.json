@@ -1,13 +1,16 @@
 {
-  "about": "A resin sheet on a query without resin adds one: a new sheet with Arcane Resin picked.",
+  "about": "The Mage's starting wand counted in the resin section, which words its choice, its amount's bounds and its switch.",
   "envelope": "requirement_editor",
   "request": {
-    "op": "open",
-    "open_resin": true,
-    "rows": []
+    "change": {
+      "type": "set_include_mage_wand",
+      "value": true
+    },
+    "draft": "{\"blanket\":false,\"copy_depth\":null,\"copy_depth_memory\":4,\"count\":1,\"effect_mode\":\"any\",\"floor_limit_memory\":4,\"in_cluster\":false,\"key\":null,\"offer_resin\":true,\"origin\":{\"type\":\"new\"},\"requirement\":{\"kind\":\"wand\"},\"resin\":{\"amount\":2.0,\"auto\":false,\"include_mage_wand\":false,\"max_depth\":null,\"source\":null,\"uncursed\":true},\"resin_picked\":true,\"rows\":[],\"taken_trinkets\":[],\"tier_value\":3,\"total\":null,\"transmutations_memory\":1,\"upgrade_value\":1,\"v\":1}",
+    "op": "change"
   },
   "response": {
-    "draft": "{\"blanket\":false,\"copy_depth\":null,\"copy_depth_memory\":4,\"count\":1,\"effect_mode\":\"any\",\"floor_limit_memory\":4,\"in_cluster\":false,\"key\":null,\"offer_resin\":true,\"origin\":{\"type\":\"new\"},\"requirement\":{\"kind\":\"wand\"},\"resin\":{\"amount\":2.0,\"auto\":false,\"include_mage_wand\":false,\"max_depth\":null,\"source\":null,\"uncursed\":true},\"resin_picked\":true,\"rows\":[],\"taken_trinkets\":[],\"tier_value\":3,\"total\":null,\"transmutations_memory\":1,\"upgrade_value\":1,\"v\":1}",
+    "draft": "{\"blanket\":false,\"copy_depth\":null,\"copy_depth_memory\":4,\"count\":1,\"effect_mode\":\"any\",\"floor_limit_memory\":4,\"in_cluster\":false,\"key\":null,\"offer_resin\":true,\"origin\":{\"type\":\"new\"},\"requirement\":{\"kind\":\"wand\"},\"resin\":{\"amount\":2.0,\"auto\":false,\"include_mage_wand\":true,\"max_depth\":null,\"source\":null,\"uncursed\":true},\"resin_picked\":true,\"rows\":[],\"taken_trinkets\":[],\"tier_value\":3,\"total\":null,\"transmutations_memory\":1,\"upgrade_value\":1,\"v\":1}",
     "form": {
       "blanket": false,
       "can_save": true,
@@ -387,7 +390,7 @@
         "include_mage_wand": {
           "caption": "Add 2 resin from the Magic Missile wand recovered with Wand Preservation when imbuing another wand. The preserved wand is +0, regardless of the staff’s level.",
           "label": "Include Mage’s starting wand",
-          "value": false,
+          "value": true,
           "visible": true
         },
         "label": "Minimum resin",

@@ -42,7 +42,7 @@ use crate::json_query::{
     FileItemKind, FileItemSource, FileRequirement, convert_requirement, requirement_object,
 };
 use crate::model::{ItemSource, source_name};
-use crate::query::{ArcaneResinFilter, Requirement};
+use crate::query::{ARCANE_RESIN_MAX, ARCANE_RESIN_MIN, ArcaneResinFilter, Requirement};
 
 use super::board::{HeldLabels, apply_holding};
 use super::chips::board_view_beside;
@@ -1231,10 +1231,13 @@ impl WireResin {
             value => value
                 .as_u64()
                 .and_then(|amount| u16::try_from(amount).ok())
-                .filter(|&amount| amount > 0)
+                .filter(|&amount| amount >= ARCANE_RESIN_MIN)
                 .map(ResinAmount::AtLeast)
                 .ok_or_else(|| {
-                    Failure::new("resin amount must be a whole number from 1 to 65535, or \"auto\"")
+                    Failure::new(format!(
+                        "resin amount must be a whole number from {ARCANE_RESIN_MIN} to \
+                         {ARCANE_RESIN_MAX}, or \"auto\""
+                    ))
                 })?,
         };
         Ok(ResinState {
@@ -1835,6 +1838,7 @@ fn mode_range<M>(control: &ModeRange<M>, mode_name: impl Fn(&M) -> Value) -> Val
         visible,
         mode,
         modes,
+        value_visible,
         value,
         min,
         max,
@@ -1847,6 +1851,7 @@ fn mode_range<M>(control: &ModeRange<M>, mode_name: impl Fn(&M) -> Value) -> Val
             "modes",
             modes.iter().map(|option| opt(option, &mode_name)).collect(),
         ),
+        ("value_visible", (*value_visible).into()),
         ("value", (*value).into()),
         ("min", (*min).into()),
         ("max", (*max).into()),
@@ -1859,11 +1864,13 @@ fn toggle(control: &Toggle) -> Value {
         visible,
         value,
         label,
+        caption,
     } = control;
     object(vec![
         ("visible", (*visible).into()),
         ("value", (*value).into()),
         ("label", label.as_str().into()),
+        ("caption", caption.as_deref().into()),
     ])
 }
 
@@ -1918,8 +1925,10 @@ fn range_toggle(control: &RangeToggle) -> Value {
 fn effect_control(control: &EffectControl) -> Value {
     let EffectControl {
         visible,
+        label,
         mode,
         modes,
+        choices_visible,
         choices,
         groups,
         caption,
@@ -1944,6 +1953,7 @@ fn effect_control(control: &EffectControl) -> Value {
         .collect();
     object(vec![
         ("visible", (*visible).into()),
+        ("label", label.as_str().into()),
         ("mode", effect_mode_name(*mode).into()),
         (
             "modes",
@@ -1952,6 +1962,7 @@ fn effect_control(control: &EffectControl) -> Value {
                 .map(|option| opt(option, |mode| effect_mode_name(*mode).into()))
                 .collect(),
         ),
+        ("choices_visible", (*choices_visible).into()),
         ("choices", choices),
         (
             "groups",
@@ -1967,6 +1978,7 @@ fn effect_control(control: &EffectControl) -> Value {
 fn stack_control(control: &StackControl) -> Value {
     let StackControl {
         visible,
+        label,
         count,
         min,
         max,
@@ -1976,6 +1988,7 @@ fn stack_control(control: &StackControl) -> Value {
     } = control;
     object(vec![
         ("visible", (*visible).into()),
+        ("label", label.as_str().into()),
         ("count", (*count).into()),
         ("min", (*min).into()),
         ("max", (*max).into()),
@@ -1988,15 +2001,31 @@ fn stack_control(control: &StackControl) -> Value {
 fn resin_control(control: &ResinControl) -> Value {
     let ResinControl {
         visible,
+        label,
         auto,
+        modes,
+        caption,
         amount,
+        min,
+        max,
         include_mage_wand,
     } = control;
     object(vec![
         ("visible", (*visible).into()),
+        ("label", label.as_str().into()),
         ("auto", (*auto).into()),
+        (
+            "modes",
+            modes
+                .iter()
+                .map(|option| opt(option, |auto| Value::from(*auto)))
+                .collect(),
+        ),
+        ("caption", caption.as_str().into()),
         ("amount", (*amount).into()),
-        ("include_mage_wand", (*include_mage_wand).into()),
+        ("min", (*min).into()),
+        ("max", (*max).into()),
+        ("include_mage_wand", toggle(include_mage_wand)),
     ])
 }
 

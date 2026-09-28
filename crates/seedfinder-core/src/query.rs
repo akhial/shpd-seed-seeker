@@ -53,6 +53,12 @@ pub const RESERVED_GROUP: u8 = 0;
 /// renumber them on read.
 pub const MAX_LEVEL_SUM_GROUP: u8 = 4;
 
+/// Smallest fixed Arcane Resin minimum a query asks for; zero means no
+/// fixed resin condition ([`SearchQuery::arcane_resin`]).
+pub const ARCANE_RESIN_MIN: u16 = 1;
+/// Largest fixed Arcane Resin minimum: the query format's 16-bit field.
+pub const ARCANE_RESIN_MAX: u16 = u16::MAX;
+
 /// Upgrade predicate attached to one item requirement.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum UpgradeRequirement {

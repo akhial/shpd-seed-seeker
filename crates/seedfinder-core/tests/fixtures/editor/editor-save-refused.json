@@ -66,7 +66,9 @@
       "effect": {
         "caption": "Tick the effects the item may carry; none ticked means any.",
         "choices": [],
+        "choices_visible": false,
         "groups": [],
+        "label": "Enchantment",
         "mode": "any",
         "modes": [
           {
@@ -94,6 +96,7 @@
         "This trinket is already required. Each trinket appears only once in the deck."
       ],
       "exclude_resin": {
+        "caption": "Keep this wand without budgeting resin to upgrade it. Useful for imbuing: resin upgrades do not transfer to the staff. Extra copies are reserved for reforging and never need Auto resin.",
         "label": "Exclude from Auto resin",
         "value": false,
         "visible": false
@@ -404,11 +407,35 @@
       "resin": {
         "amount": 2.0,
         "auto": false,
-        "include_mage_wand": false,
+        "caption": "Upgrade each kept wand to +3. Excluded wands and extra copies reserved for reforging need no resin.",
+        "include_mage_wand": {
+          "caption": "Add 2 resin from the Magic Missile wand recovered with Wand Preservation when imbuing another wand. The preserved wand is +0, regardless of the staff’s level.",
+          "label": "Include Mage’s starting wand",
+          "value": false,
+          "visible": false
+        },
+        "label": "Minimum resin",
+        "max": 65535,
+        "min": 1,
+        "modes": [
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Amount",
+            "value": false
+          },
+          {
+            "group": null,
+            "hidden": false,
+            "label": "Auto",
+            "value": true
+          }
+        ],
         "visible": false
       },
       "resin_picked": false,
       "select_trinket": {
+        "caption": "Applies after the first brewing opportunity. If several alternatives are offered, no trinket is chosen.",
         "label": "Choose matching trinket at +3",
         "value": false,
         "visible": true
@@ -671,7 +698,7 @@
         },
         "count": 1,
         "count_levels": {
-          "caption": null,
+          "caption": "Each item counts its upgrade plus one, and spare items may go unused.",
           "enabled": false,
           "label": "Count levels together",
           "max": 1,
@@ -680,6 +707,7 @@
           "value_label": "≥ 1 across up to 1",
           "visible": false
         },
+        "label": "Total item count",
         "max": 3,
         "min": 1,
         "value_label": "×1",
@@ -717,6 +745,7 @@
         ],
         "value": 3,
         "value_label": "Tier 3",
+        "value_visible": false,
         "visible": false
       },
       "title": "Rat Skull",
@@ -731,6 +760,7 @@
         "visible": true
       },
       "uncursed": {
+        "caption": null,
         "label": "Require uncursed",
         "value": false,
         "visible": false
@@ -761,6 +791,7 @@
         ],
         "value": 1,
         "value_label": "+1",
+        "value_visible": false,
         "visible": false
       },
       "v": 1,
