@@ -288,39 +288,40 @@ final class RequirementEditorTests: XCTestCase {
                        "Every group label is in use. Remove a stack or a combined level first.")
     }
 
-    /// A drag moves one item. A joined stack leaves the rest behind, and a
-    /// member dragged back out folds into it again: Disintegration ×2 and
-    /// Frost, joined, are {Frost | Disintegration} and Disintegration, and
-    /// detached, Frost and Disintegration ×2 once more.
+    /// A drag moves one item: a bare copy of a stack, which keeps the rest
+    /// where it is, and folds back into it when dragged out again:
+    /// Disintegration ×2 and Frost, joined, are Disintegration and {Frost |
+    /// Disintegration}, and detached, Disintegration ×2 and Frost once more.
     func testAJoinAndADetachMoveOneItem() throws {
         let rows = [try requirement(1, item: "wand_disintegration"), try requirement(2, item: "wand_disintegration"),
                     try requirement(3, item: "wand_frost")]
         let joined = try XCTUnwrap(RequirementBoard.apply([.join(source: 1, target: 3)], to: rows))
         XCTAssertTrue(joined.changed)
-        XCTAssertEqual(joined.focus, 1)
-        XCTAssertEqual(joined.rows.map(\.key), [2, 3, 1])
-        XCTAssertEqual(joined.items.map(\.id), ["r2", "c1"])
-        XCTAssertNil(joined.chip(2)?.countBadge, "the Disintegration left behind is one fewer")
-        XCTAssertEqual(joined.item(holding: 1)?.members, [3, 1])
-        let back = try XCTUnwrap(RequirementBoard.apply([.detach(1)], to: joined.rows))
+        XCTAssertEqual(joined.focus, 2, "the copy moved, not the chip")
+        XCTAssertEqual(joined.rows.map(\.key), [1, 3, 2])
+        XCTAssertEqual(joined.items.map(\.id), ["r1", "c1"])
+        XCTAssertNil(joined.chip(1)?.countBadge, "the Disintegration left behind is one fewer")
+        XCTAssertEqual(joined.item(holding: 2)?.members, [3, 2])
+        let back = try XCTUnwrap(RequirementBoard.apply([.detach(2)], to: joined.rows))
         XCTAssertTrue(back.changed)
-        XCTAssertEqual(back.rows.map(\.key), [2, 3, 1])
+        XCTAssertEqual(back.focus, 1, "it folds back into the chip it came from")
+        XCTAssertEqual(back.rows.map(\.key), [1, 3, 2])
         XCTAssertEqual(back.rows.map(\.alternativeGroup), [nil, nil, nil])
-        XCTAssertEqual(back.items.map(\.id), ["r2", "r3"])
-        XCTAssertEqual(back.chip(2)?.countBadge?.text, "×2")
-        XCTAssertEqual(back.chip(2)?.copies, [1])
+        XCTAssertEqual(back.items.map(\.id), ["r1", "r3"])
+        XCTAssertEqual(back.chip(1)?.countBadge?.text, "×2")
+        XCTAssertEqual(back.chip(1)?.copies, [2])
 
-        // Frost out of {Frost ×2 | Disintegration}: one Frost leaves, and the
-        // group keeps a Frost in its place.
+        // Frost out of {Frost ×2 | Disintegration}: a bare Frost leaves, and
+        // the member stays in the group, one item fewer.
         let member = [try requirement(1, item: "wand_frost", alternativeGroup: 1, identityGroup: 1),
                       try requirement(2, item: "wand_disintegration", alternativeGroup: 1),
                       try requirement(3, kind: .wand, identityGroup: 1)]
         XCTAssertEqual(RequirementBoard.of(member).chip(1)?.countBadge?.text, "×2")
         let detached = try XCTUnwrap(RequirementBoard.apply([.detach(1)], to: member))
-        XCTAssertEqual(detached.focus, 1)
-        XCTAssertEqual(detached.rows.map(\.key), [3, 1, 2])
-        XCTAssertEqual(detached.item(holding: 1)?.id, "r1")
-        XCTAssertEqual(detached.item(holding: 3)?.members, [3, 2])
+        XCTAssertEqual(detached.focus, 3)
+        XCTAssertEqual(detached.rows.map(\.key), [1, 3, 2])
+        XCTAssertEqual(detached.item(holding: 3)?.id, "r3")
+        XCTAssertEqual(detached.item(holding: 1)?.members, [1, 2])
         XCTAssertTrue(detached.items.allSatisfy { $0.chips.allSatisfy { $0.countBadge == nil } })
         XCTAssertNoThrow(try SearchRequest(requirements: detached.rows))
     }
