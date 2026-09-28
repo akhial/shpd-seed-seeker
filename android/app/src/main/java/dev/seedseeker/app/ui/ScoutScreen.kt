@@ -735,11 +735,12 @@ internal fun ScoutItemCard(
             "Route group ${scoutGroupLetter(scoutItem.accessibility.group)} · access changes with room choices"
     }
 
+    val shape = MaterialTheme.shapes.small
     Card(
         modifier = modifier.fillMaxWidth().alpha(if (dimmed) 0.45f else 1f)
             // A quiet green (or resin violet) edge marks a match; the chip says the rest.
-            .then(if (matches) Modifier.border(1.dp, matchEdge.copy(alpha = 0.45f), MaterialTheme.shapes.large) else Modifier),
-        shape = MaterialTheme.shapes.large,
+            .then(if (matches) Modifier.border(1.dp, matchEdge.copy(alpha = 0.45f), shape) else Modifier),
+        shape = shape,
         colors = CardDefaults.cardColors(
             containerColor = if (matches) {
                 MaterialTheme.colorScheme.surfaceContainerHighest
@@ -982,7 +983,7 @@ private fun TrinketCatalystCard(
     val ordered = deck.take(4).ifEmpty { choices.map { it.value.item } }
     Card(
         modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp).onGloballyPositioned { cardCoordinates = it },
-        shape = MaterialTheme.shapes.large,
+        shape = MaterialTheme.shapes.small,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
     ) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -1084,7 +1085,7 @@ private fun ArtifactDeckRow(world: ScoutWorld, matches: ScoutMatches?) {
     val targets = matches?.transmutedArtifacts.orEmpty().mapNotNull { (depth, index) ->
         world.artifactDecks.entries.lastOrNull { it.key <= depth }?.value?.getOrNull(index)?.id
     }.toSet()
-    Card(Modifier.fillMaxWidth().padding(vertical = 4.dp), shape = MaterialTheme.shapes.large,
+    Card(Modifier.fillMaxWidth().padding(vertical = 4.dp), shape = MaterialTheme.shapes.small,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
         Text("Artifact deck", modifier = Modifier.padding(start = 16.dp, top = 10.dp),
             style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
