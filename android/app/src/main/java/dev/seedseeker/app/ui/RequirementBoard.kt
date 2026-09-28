@@ -12,6 +12,8 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.offset
 import androidx.compose.material3.ripple
@@ -46,10 +48,16 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TooltipAnchorPosition
+import androidx.compose.material3.TooltipBox
+import androidx.compose.material3.TooltipDefaults
+import androidx.compose.material3.rememberTooltipState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
@@ -94,6 +102,7 @@ import dev.seedseeker.app.model.BoardView
 import dev.seedseeker.app.model.ChipView
 import dev.seedseeker.app.model.EffectView
 import dev.seedseeker.app.model.ResinChipView
+import dev.seedseeker.app.model.TagStyle
 import dev.seedseeker.app.model.TagView
 import dev.seedseeker.app.ui.theme.SpdGreen
 import dev.seedseeker.app.ui.theme.SpdUpgrade
@@ -1073,38 +1082,74 @@ private fun Modifier.dashedOutline(
     )
 }
 
-/** How a qualifier badge is tinted. */
-private enum class TagTone { QUALIFIER, UPGRADE }
-
 /** The qualifier badges beside a chip's name, in the order given. */
 @Composable
 private fun ChipTags(tags: List<TagView>) {
     tags.forEach { tag ->
         Spacer(Modifier.width(5.dp))
-        ChipTag(text = tag.text, tone = if (tag.upgrade) TagTone.UPGRADE else TagTone.QUALIFIER)
+        ChipTag(tag)
     }
 }
 
+/**
+ * One qualifier badge, tinted by its style: an upgrade in the upgrade colour,
+ * everything else — the resin a chip credits (`≥4`, `Auto`, `Mage +2`)
+ * included, as the resin chip has always drawn them here — in the qualifier
+ * tint. A tag with a tooltip of its own shows it while a mouse rests on it;
+ * touch keeps the long press for picking the chip up.
+ */
 @Composable
-private fun ChipTag(text: String, tone: TagTone) {
-    val container = when (tone) {
-        TagTone.QUALIFIER -> MaterialTheme.colorScheme.tertiaryContainer
-        TagTone.UPGRADE -> SpdUpgrade.copy(alpha = 0.12f)
+private fun ChipTag(tag: TagView) {
+    val container = when (tag.style) {
+        TagStyle.UPGRADE -> SpdUpgrade.copy(alpha = 0.12f)
+        TagStyle.PLAIN, TagStyle.CREDIT -> MaterialTheme.colorScheme.tertiaryContainer
     }
-    val content = when (tone) {
-        TagTone.QUALIFIER -> MaterialTheme.colorScheme.onTertiaryContainer
-        TagTone.UPGRADE -> SpdUpgrade
+    val content = when (tag.style) {
+        TagStyle.UPGRADE -> SpdUpgrade
+        TagStyle.PLAIN, TagStyle.CREDIT -> MaterialTheme.colorScheme.onTertiaryContainer
     }
     val padding = LocalChipMetrics.current.tagPadding
-    Surface(shape = RoundedCornerShape(6.dp), color = container) {
-        Text(
-            text,
-            modifier = Modifier.padding(horizontal = padding, vertical = padding - 4.dp),
-            style = chipLabelStyle,
-            fontFamily = FontFamily.Monospace,
-            fontWeight = FontWeight.SemiBold,
-            color = content,
-        )
+    HoverTooltip(tag.tooltip) { modifier ->
+        Surface(shape = RoundedCornerShape(6.dp), color = container, modifier = modifier) {
+            Text(
+                tag.text,
+                modifier = Modifier.padding(horizontal = padding, vertical = padding - 4.dp),
+                style = chipLabelStyle,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.SemiBold,
+                color = content,
+            )
+        }
+    }
+}
+
+/**
+ * [content], with [tooltip] shown above it while a mouse hovers it; just
+ * [content] without one. The tooltip takes no touch input, so a long press
+ * still reaches the chip underneath, and adds nothing to what TalkBack
+ * reads: the chip's description already says it.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun HoverTooltip(tooltip: String?, content: @Composable (Modifier) -> Unit) {
+    if (tooltip == null) {
+        content(Modifier)
+        return
+    }
+    val hover = remember { MutableInteractionSource() }
+    val hovered by hover.collectIsHoveredAsState()
+    val state = rememberTooltipState(isPersistent = true)
+    LaunchedEffect(hovered) {
+        // Leaving cancels the show, which dismisses the tooltip.
+        if (hovered) state.show()
+    }
+    TooltipBox(
+        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
+        tooltip = { PlainTooltip { Text(tooltip) } },
+        state = state,
+        enableUserInput = false,
+    ) {
+        content(Modifier.hoverable(hover))
     }
 }
 

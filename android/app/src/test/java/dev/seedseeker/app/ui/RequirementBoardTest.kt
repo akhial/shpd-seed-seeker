@@ -145,6 +145,23 @@ class RequirementBoardTest {
         resin().assertDoesNotExist()
     }
 
+    @Test fun aResinTagShowsItsOwnHoverTextToAMouse() {
+        amount.value = 0
+        automatic.value = true
+        show()
+        val explanation = "Enough resin to upgrade kept wands to +3, excluding No resin wands and reforge copies"
+        val auto = compose.onNodeWithText("Auto", useUnmergedTree = true)
+        compose.onNodeWithText(explanation).assertDoesNotExist()
+        auto.performMouseInput { enter(center) }
+        compose.onNodeWithText(explanation).assertIsDisplayed()
+        auto.performMouseInput { exit(center) }
+        compose.onNodeWithText(explanation).assertDoesNotExist()
+        // A touch keeps the long press for picking the chip up, and shows nothing.
+        pickUp(compose.onNodeWithText("Auto", useUnmergedTree = true))
+        compose.onNodeWithText(explanation).assertDoesNotExist()
+        release()
+    }
+
     @Test fun resinCanBeRemovedByDraggingButCannotJoinAnItemGroup() {
         show()
         pickUp(resin())

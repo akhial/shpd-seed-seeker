@@ -705,16 +705,17 @@ internal fun milestoneOf(count: Int): Int =
     listOf(1, 5, 10, 25, 50, 100, 250, 500, 1_000).count { count >= it }
 
 /**
- * What the board asks for, in a line: each slot by name, its alternatives
- * joined by "or", then the Arcane Resin chip by its amount tag (`Auto`,
- * `≥6`) and name — all in the requirement editor's words.
+ * What the board asks for, in a line: each slot by its entry name (its
+ * alternatives joined by "or"), then the Arcane Resin chip by its amount tag
+ * (`Auto`, `≥6`, always its first) and name — all in the requirement
+ * editor's words.
  */
 internal fun requirementsSummaryText(board: BoardView): String =
     (
         board.items.map { item ->
             buildString {
                 if (item.blanket) append("Blanket: ")
-                append(item.chips.joinToString(" or ") { it.name })
+                append(item.name)
                 item.countBadge?.let { append(" ${it.text}") }
             }
         } + listOfNotNull(board.resin?.let { resin -> listOfNotNull(resin.tags.firstOrNull()?.text, resin.name).joinToString(" ") })

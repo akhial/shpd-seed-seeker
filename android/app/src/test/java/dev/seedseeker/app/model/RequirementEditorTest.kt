@@ -70,13 +70,15 @@ class RequirementEditorTest {
         val (rings, melee, wands, skull, armor) = board.items
 
         assertEquals(listOf(1L), rings.members)
+        assertEquals("Ring of Might", rings.name)
         assertEquals(3, rings.count)
+        assertEquals(3, rings.countMax)
         assertEquals(BadgeView("×3", "×3", "3 of the same kind"), rings.countBadge)
         assertNull(rings.totalBadge)
         val might = rings.chips.single()
         assertEquals("Ring of Might", might.name)
         assertEquals(find("ring_might"), might.item)
-        assertEquals(listOf(TagView("+2", upgrade = true)), might.tags)
+        assertEquals(listOf(TagView("+2", TagStyle.UPGRADE)), might.tags)
         assertEquals(setOf(4L, 5L, 6L, 7L), might.refuse.keys)
         assertEquals("Copies can only be grouped with the same item type.", might.refuse.getValue(4))
         assertTrue(might.join.isEmpty())
@@ -86,7 +88,7 @@ class RequirementEditorTest {
         assertNull(anyMelee.item)
         assertEquals(ItemKind.MELEE_WEAPON, anyMelee.kind)
         assertEquals(
-            listOf(TagView("T3+", upgrade = false), TagView("+2↑", upgrade = true), TagView("F≤9", upgrade = false)),
+            listOf(TagView("T3+"), TagView("+2↑", TagStyle.UPGRADE), TagView("F≤9")),
             anyMelee.tags,
         )
         assertTrue(anyMelee.effect!!.anyEnchantment)
@@ -96,12 +98,16 @@ class RequirementEditorTest {
         assertEquals("Any Tier 3+ melee weapon, +2 or higher, any enchantment, uncursed, floors 1–9", anyMelee.description)
 
         assertEquals(1, wands.cluster)
+        // A menu or the collapsed summary names a cluster by its members' names.
+        assertEquals("Wand of Fireblast or Any wand", wands.name)
         assertEquals(listOf(5L, 6L), wands.members)
         assertTrue(wands.chips.all { it.canDetach })
-        assertEquals(listOf(TagView("No resin", upgrade = false)), wands.chips[1].trailingTags)
+        assertEquals(listOf(TagView("No resin")), wands.chips[1].trailingTags)
 
         assertEquals(find("rat_skull"), skull.chips.single().item)
-        assertEquals(listOf(TagView("Transmute ≤3", upgrade = false)), skull.chips.single().tags)
+        assertEquals(listOf(TagView("Transmute ≤3")), skull.chips.single().tags)
+        // A trinket cannot grow, so its count stepper runs only to what it asks for.
+        assertEquals(1, skull.countMax)
 
         assertTrue(armor.blanket)
         assertEquals(listOf("Viscosity", "Brimstone"), armor.chips.single().effect!!.effects)
@@ -109,9 +115,45 @@ class RequirementEditorTest {
 
         val resin = board.resin!!
         assertEquals("Arcane Resin", resin.name)
-        assertEquals(listOf("Auto", "Mage +2"), resin.tags.map { it.text })
+        // The resin the chip counts is a credit, each with its own hover text.
+        assertEquals(
+            listOf(
+                TagView("Auto", TagStyle.CREDIT, "Enough resin to upgrade kept wands to +3, excluding No resin wands and reforge copies"),
+                TagView("Mage +2", TagStyle.CREDIT, "Starting Magic Missile contributes 2 resin"),
+            ),
+            resin.tags,
+        )
         assertTrue(resin.uncursed)
         assertTrue(resin.description.startsWith("Arcane Resin, Auto"))
+    }
+
+    @Test fun theResinChipsCreditIsStyledApartFromItsDonorFilter() {
+        val resin = BoardView.decode(fixture("board-resin-credit").getJSONObject("response")).resin!!
+        assertEquals(
+            listOf(
+                TagView("≥4", TagStyle.CREDIT),
+                TagView("Mage +2", TagStyle.CREDIT, "Starting Magic Missile contributes 2 resin"),
+                TagView("F≤9"),
+            ),
+            resin.tags,
+        )
+        // A style this build does not know reads as a plain qualifier.
+        val unknown = JSONObject(fixture("board-resin-credit").getJSONObject("response").toString())
+        unknown.getJSONObject("resin").getJSONArray("tags").getJSONObject(0).put("style", "sparkle")
+        assertEquals(TagView("≥4"), BoardView.decode(unknown).resin!!.tags.first())
+    }
+
+    @Test fun anEntryThatCannotGrowOnlyShedsCopies() {
+        val might = find("ring_might")
+        // A blanket may not stack: it asks for one item and no more.
+        val rows = listOf(
+            ItemRequirement(1, might, 1),
+            ItemRequirement(2, might, 0, upgradeMatch = UpgradeMatch.ANY),
+            ItemRequirement(3, null, 0, kind = ItemKind.WAND, upgradeMatch = UpgradeMatch.ANY, blanket = true),
+        )
+        val (stack, blanket) = RequirementEditor.view(rows).items
+        assertEquals(2 to 3, stack.count to stack.countMax)
+        assertEquals(1 to 1, blanket.count to blanket.countMax)
     }
 
     @Test fun problemsDecodeInOrderWithTheRowsTheyBlame() {

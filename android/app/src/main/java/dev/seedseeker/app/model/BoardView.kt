@@ -57,8 +57,10 @@ data class BoardView(
             return BoardItemView(
                 blanket = item.getBoolean("blanket"),
                 cluster = item.intOrNull("cluster"),
+                name = item.getString("name"),
                 members = item.getJSONArray("members").longs(),
                 count = stack.getInt("count"),
+                countMax = stack.getInt("count_max"),
                 total = stack.intOrNull("total"),
                 copyDepth = stack.intOrNull("copy_depth"),
                 countBadge = badges.objectOrNull("count")?.let(::decodeBadge),
@@ -95,7 +97,12 @@ data class BoardView(
             refuse = chip.getJSONArray("refuse").objects().associate { it.getLong("key") to it.getString("message") },
         )
 
-        private fun decodeTag(tag: JSONObject) = TagView(tag.getString("text"), upgrade = tag.getString("style") == "upgrade")
+        private fun decodeTag(tag: JSONObject) = TagView(
+            text = tag.getString("text"),
+            // A style this build does not know reads as a plain qualifier.
+            style = TagStyle.entries.firstOrNull { it.name.lowercase() == tag.getString("style") } ?: TagStyle.PLAIN,
+            tooltip = tag.stringOrNull("tooltip"),
+        )
     }
 }
 
@@ -105,10 +112,14 @@ data class BoardItemView(
     val blanket: Boolean,
     /** The cluster's alternative label; null for a lone chip. */
     val cluster: Int?,
+    /** What a menu or a summary calls the entry: a chip's name, or its members' joined by "or". */
+    val name: String,
     /** The visible rows' keys, the anchor first. */
     val members: List<Long>,
     /** How many items the entry asks for, its hidden copies included. */
     val count: Int,
+    /** The most a count stepper may ask for: the stack's limit while it can grow, else [count]. */
+    val countMax: Int,
     /** The combined level the stack's items reach together, when it counts levels. */
     val total: Int?,
     /** The floor limit the stack's hidden copies keep to. */
@@ -162,8 +173,14 @@ data class ChipView(
     val refuse: Map<Long, String>,
 )
 
-/** A qualifier beside a chip's name; [upgrade] marks an upgrade's own tint. */
-data class TagView(val text: String, val upgrade: Boolean)
+/**
+ * A qualifier beside a chip's name, tinted by its [style], with [tooltip] its
+ * own hover text (the resin chip's `Auto` and `Mage +2`), null for none.
+ */
+data class TagView(val text: String, val style: TagStyle = TagStyle.PLAIN, val tooltip: String? = null)
+
+/** How a tag reads: a plain qualifier, an upgrade, or resin a chip counts toward its amount. */
+enum class TagStyle { PLAIN, UPGRADE, CREDIT }
 
 /**
  * The effect cue: [label] in words (`any enchantment`, `effect: A/B`), and
