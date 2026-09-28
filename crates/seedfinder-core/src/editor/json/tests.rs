@@ -12,7 +12,8 @@ use super::super::testing::{
     Rng, mixed_rows, named, random_change, random_edit, random_resin, random_rows, row, with,
 };
 use super::super::{
-    Change, DRAFT_VERSION, Edit, MAX_KEY, RESIN_AMOUNT_RANGE, Row, apply, board_view, open,
+    Change, DRAFT_VERSION, Edit, MAX_KEY, NO_ORDINARY_REQUIREMENT, RESIN_AMOUNT_RANGE, Row, apply,
+    board_view, open,
 };
 use super::*;
 use crate::catalog::{ItemId, ItemKind};
@@ -505,6 +506,165 @@ fn unreadable_rows_are_carried_through_and_only_removed() {
     let saved = editor_json(&json!({"op": "save", "draft": draft, "rows": rows}));
     assert_eq!(keys_of(&saved["saved"]["rows"]), [1, 9, 3, 10], "{saved}");
     assert_eq!(saved["saved"]["rows"][1], unknown);
+    // A sheet opened on a row that has since become unreadable cannot save
+    // onto it; the error names the key, as opening it would.
+    let readable = json!([
+        write_row(&row(1, ItemKind::Wand)),
+        write_row(&row(9, ItemKind::Ring))
+    ]);
+    let opened = editor_json(&json!({"op": "open", "rows": readable, "key": 9}));
+    let saved = editor_json(&json!({"op": "save", "draft": opened["draft"], "rows": rows}));
+    assert_eq!(saved, json!({"error": message, "key": 9}));
+}
+
+/// An unreadable row is a row of the list: the list-level problem counts it
+/// in its section, as `counts` does, rather than judging the readable rows
+/// alone.
+#[test]
+fn unreadable_rows_count_towards_the_list_level_problem() {
+    let list_problem = json!({"message": NO_ORDINARY_REQUIREMENT, "keys": [], "scope": "list"});
+    let has_list_problem = |response: &Value| {
+        response["problems"]
+            .as_array()
+            .unwrap()
+            .contains(&list_problem)
+    };
+    let unknown = json!({"key": 1, "kind": "wand", "item": "wand_of_wonders"});
+    let blanket = write_row(&with(row(2, ItemKind::Wand), |r| r.blanket = true));
+    let response = board_json(&json!({"rows": [unknown, blanket]}));
+    assert_eq!(response["counts"], json!({"ordinary": 1, "blanket": 1}));
+    assert!(!has_list_problem(&response), "{response}");
+    // Removing the unreadable ordinary row leaves the blankets alone.
+    let response = board_json(&json!({
+        "rows": [unknown, blanket],
+        "edits": [{"type": "remove", "key": 1}],
+    }));
+    assert_eq!(response["counts"], json!({"ordinary": 0, "blanket": 1}));
+    assert!(has_list_problem(&response), "{response}");
+    // An unreadable blanket alone is a blanket without an ordinary row.
+    let unknown_blanket =
+        json!({"key": 1, "kind": "wand", "item": "wand_of_wonders", "blanket": true});
+    let response = board_json(&json!({"rows": [unknown_blanket]}));
+    assert_eq!(response["counts"], json!({"ordinary": 0, "blanket": 1}));
+    assert!(has_list_problem(&response), "{response}");
+    let response = board_json(&json!({"rows": []}));
+    assert_eq!(response["problems"], json!([]));
+}
+
+/// The group labels an unreadable row holds are its own: a new cluster,
+/// stack or combined level never takes one — a board edit or a sheet save
+/// would otherwise tie the rows it made to a row no one can see into — and
+/// label compaction relabels it with the cluster it was written in.
+#[test]
+fn an_unreadable_rows_group_labels_are_never_handed_out() {
+    let label = |response: &Value, key: u64, field: &str| -> Value {
+        let row = response["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|row| row["key"] == json!(key))
+            .expect("the row is there");
+        match field {
+            "level_sum" => row["level_sum"]["group"].clone(),
+            field => row[field].clone(),
+        }
+    };
+
+    let rows = json!([
+        write_row(&row(1, ItemKind::Wand)),
+        write_row(&row(2, ItemKind::Ring)),
+        {"key": 3, "kind": "wand", "item": "wand_of_wonders", "alternative_group": 1},
+    ]);
+    let joined = board_json(&json!({
+        "rows": rows,
+        "edits": [{"type": "join", "source": 1, "target": 2}],
+    }));
+    assert_eq!(label(&joined, 1, "alternative_group"), json!(2), "{joined}");
+    assert_eq!(label(&joined, 2, "alternative_group"), json!(2));
+    assert_eq!(label(&joined, 3, "alternative_group"), json!(1));
+
+    let unknown_stack =
+        json!({"key": 3, "kind": "wand", "item": "wand_of_wonders", "identity_group": 1});
+    let rows = json!([write_row(&exact(row(1, ItemKind::Wand), 3)), unknown_stack]);
+    let stacked = board_json(&json!({
+        "rows": rows,
+        "edits": [{"type": "set_count", "key": 1, "count": 2}],
+    }));
+    assert_eq!(label(&stacked, 1, "identity_group"), json!(2), "{stacked}");
+    assert_eq!(label(&stacked, 4, "identity_group"), json!(2));
+    assert!(stacked["rows"].as_array().unwrap().contains(&unknown_stack));
+    // The sheet's save holds them too.
+    let opened = editor_json(&json!({"op": "open", "rows": rows, "key": 1}));
+    let draft = changed_draft(
+        &opened["draft"],
+        &[json!({"type": "set_count", "value": 2})],
+    );
+    let saved = editor_json(&json!({"op": "save", "draft": draft, "rows": rows}));
+    assert_eq!(
+        label(&saved["saved"], 1, "identity_group"),
+        json!(2),
+        "{saved}"
+    );
+
+    let rows = json!([
+        write_row(&named(1, ItemId::RingMight)),
+        write_row(&named(2, ItemId::RingMight)),
+        {"key": 3, "kind": "ring", "item": "ring_of_nothing", "level_sum": {"group": 1, "at_least": 3}},
+    ]);
+    let counted = board_json(&json!({
+        "rows": rows,
+        "edits": [{"type": "toggle_levels", "key": 1}],
+    }));
+    assert_eq!(label(&counted, 1, "level_sum"), json!(2), "{counted}");
+    assert_eq!(label(&counted, 2, "level_sum"), json!(2));
+    assert_eq!(label(&counted, 3, "level_sum"), json!(1));
+
+    // Wide labels compact with the unreadable row's among them.
+    let wide = |key: u64| json!({"key": key, "kind": "wand", "alternative_group": 300});
+    let rows = json!([
+        wide(1),
+        wide(2),
+        {"key": 3, "kind": "wand", "item": "wand_of_wonders", "alternative_group": 300},
+        {"key": 4, "kind": "wand", "item": "wand_of_wonders", "alternative_group": 7},
+    ]);
+    let compacted = board_json(&json!({"rows": rows}));
+    assert_eq!(compacted["changed"], json!(true));
+    let labels: Vec<&Value> = compacted["rows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|row| &row["alternative_group"])
+        .collect();
+    assert_eq!(labels, [&json!(1), &json!(1), &json!(1), &json!(2)]);
+    assert_eq!(compacted["items"][0]["members"], json!([1, 2]));
+}
+
+/// Platform encoders write an unset nullable property as `null`
+/// (System.Text.Json by default, kotlinx with explicit nulls): every
+/// optional request field takes `null` for its default.
+#[test]
+fn optional_request_fields_may_be_null() {
+    let response = board_json(&json!({"rows": [], "next_key": null, "edits": null, "resin": null}));
+    assert_eq!(response["rows"], json!([]), "{response}");
+    let defaults = board_json(&json!({"rows": [], "resin": {"amount": 2}}))["resin"].clone();
+    assert_eq!(defaults["uncursed"], json!(true));
+    for filter in [
+        json!(null),
+        json!({"uncursed": null, "max_depth": null, "source": null, "include_mage_wand": null}),
+    ] {
+        let response = board_json(&json!({"rows": [], "resin": {"amount": 2, "filter": filter}}));
+        assert_eq!(response["resin"], defaults, "{filter}");
+    }
+    let plain = editor_json(&json!({"op": "open", "rows": []}));
+    let nulls = editor_json(&json!({
+        "op": "open", "rows": [], "key": null, "blanket": null, "resin": null,
+        "offer_resin": null, "open_resin": null,
+    }));
+    assert_eq!(nulls, plain);
+    let saved = editor_json(&json!({
+        "op": "save", "draft": plain["draft"], "rows": [], "next_key": null,
+    }));
+    assert_eq!(keys_of(&saved["saved"]["rows"]), [1], "{saved}");
 }
 
 #[test]
@@ -544,6 +704,10 @@ fn bad_requests_answer_an_error() {
         (
             r#"{"rows":[],"edits":[{"type":"remove","key":1,"extra":2}]}"#,
             "extra",
+        ),
+        (
+            r#"{"rows":[],"edits":[{"type":"normalize","bogus":1}]}"#,
+            "bogus",
         ),
         (
             r#"{"rows":[],"edits":[{"type":"set_count","key":1,"count":300}]}"#,
@@ -865,7 +1029,8 @@ fn wild_rows(rng: &mut Rng) -> (Vec<Value>, Vec<Value>) {
 }
 
 /// Every row an envelope writes reads back, or is an unreadable row it was
-/// sent, verbatim but for its key; and keys stay unique and in range.
+/// sent, verbatim but for its key and — when wide labels were compacted —
+/// its alternative label; and keys stay unique and in range.
 fn assert_rows_sound(rows: &Value, unreadable: &[Value], context: &str) {
     let rows = rows.as_array().expect("rows");
     let keys: BTreeSet<u64> = rows.iter().filter_map(|row| row["key"].as_u64()).collect();
@@ -879,14 +1044,17 @@ fn assert_rows_sound(rows: &Value, unreadable: &[Value], context: &str) {
         if read_row(object).is_ok() {
             continue;
         }
-        let mut sent = object.clone();
-        sent.remove("key");
+        let unlabelled = |object: &Map<String, Value>| {
+            let mut object = object.clone();
+            object.remove("key");
+            object.remove("alternative_group");
+            object
+        };
+        let sent = unlabelled(object);
         assert!(
-            unreadable.iter().any(|value| {
-                let mut value = value.as_object().unwrap().clone();
-                value.remove("key");
-                value == sent
-            }),
+            unreadable
+                .iter()
+                .any(|value| unlabelled(value.as_object().unwrap()) == sent),
             "{row} was never sent: {context}"
         );
     }

@@ -48,8 +48,11 @@ query encoder writes one entry of `requirements` — plus two fields:
 
 Rows are read with the query document's own reader, so a row and a document
 entry never disagree on a field, and are written back in its canonical
-spelling (defaults omitted, effects in catalog order). A request's rows come
-back byte-identical when the app wrote them with the canonical encoder.
+spelling (defaults omitted, effects in catalog order). A row no edit
+touched comes back as the same requirement, but not necessarily as the same
+bytes — the fields, `key` among them, may come in another order, and so may
+the effects an app listed — so compare rows as JSON values, or rely on
+`changed`.
 
 ### Keys
 
@@ -95,7 +98,12 @@ and has `kind` and `family` `null`, and its reason is the entry's, the
 chip's and the problem list's problem. It takes part in no relationship: no
 chip can join it, and it joins nothing. Only `remove` and `remove_item`
 apply to it; any other edit naming it does nothing, and the sheet refuses to
-open it. Keys the editor mints never land on an unreadable row's key.
+open it or save onto it. Its key and group labels stay its own: keys the
+editor mints never land on an unreadable row's key, and no new cluster,
+stack or combined level takes a label it holds (when wide labels are
+compacted, its alternative label is relabelled with the others). It is a
+row of its section all the same: `counts` counts it, and so does the
+list-level problem.
 
 A row that is not an object, or has no integer `key`, fails the request —
 nothing could name it.
@@ -109,8 +117,9 @@ nothing could name it.
 ```
 
 `rows` is required; `next_key`, `edits` (default none) and `resin` (the
-query's Arcane Resin condition, default `null`) are optional. Unknown fields
-are errors.
+query's Arcane Resin condition, default `null`) are optional, and `null`
+means the same as leaving one out. Unknown fields are errors, in an edit
+too.
 
 **RESIN** is the query's Arcane Resin condition:
 
@@ -118,9 +127,10 @@ are errors.
 {"amount": 4, "filter": {"uncursed": true, "max_depth": 14, "source": null, "include_mage_wand": false}}
 ```
 
-`amount` is 1–65535 or `"auto"`. `filter` may be left out; its fields
-default to uncursed donors, no floor limit, any source and no Magic Missile
-credit. `source` is a source name of the query format (`"locked_chest"`).
+`amount` is 1–65535 or `"auto"`. `filter` may be left out or `null`, and so
+may each of its fields; they default to uncursed donors, no floor limit, any
+source and no Magic Missile credit. `source` is a source name of the query
+format (`"locked_chest"`).
 
 **EDIT**, applied in order:
 
@@ -138,7 +148,14 @@ credit. `source` is a source name of the query format (`"locked_chest"`).
 | `{"type": "save", "key": K \| null, "requirement": ROW_WITHOUT_KEY, "count": n, "total": n \| null, "copy_depth": n \| null}` | Stores a requirement with its stack's shape. `null`, or a key not in the list, appends a new row. The sheet's `save` sends this for you. |
 
 Keys name **visible** rows — a chip, or one member of a cluster — never a
-stack's hidden copies; an edit naming an unknown key changes nothing.
+stack's hidden copies; an edit naming an unknown key changes nothing. Every
+row of any list, a hand-written one included, is a member or a hidden copy
+of exactly one board entry, so every row can be seen and removed.
+
+A `save` of a cluster member follows the join rules: moving it into a
+category the rest of its cluster does not share is refused with
+`mixed_category_stack` when the cluster is a stack, and clears the
+cluster's leftover stack labels when it is not.
 
 ### No-op and refused edits
 
@@ -146,8 +163,10 @@ stack's hidden copies; an edit naming an unknown key changes nothing.
   false`, and does not normalize: the same row, the row's own cluster, a
   row of the other section, an unknown key, `detach` on a chip that is not
   in a cluster, a count, total or copy floor that is already so. A request
-  without edits returns the rows verbatim after key repair. Apps write the
-  rows back only when `changed` is true.
+  without edits returns the rows verbatim after key repair. `changed`
+  compares the final rows with the request's, so edits that undo each other
+  within one request change nothing. Apps write the rows back only when
+  `changed` is true.
 - A refused edit stops the sequence (earlier edits stay applied) and says
   why in `refused`:
 
@@ -171,8 +190,8 @@ stack's hidden copies; an edit naming an unknown key changes nothing.
 | Field | Meaning |
 | --- | --- |
 | `rows` | The list after the edits. |
-| `changed` | Whether the rows differ from the request's (a key repair counts). |
-| `focus` | The row to follow — scroll to, highlight, announce: the joined source, the detached row, the anchor of the entry an edit reshaped or a save landed in. `null` after removals and for requests without effective edits. Always a visible row. |
+| `changed` | Whether the rows differ from the request's (a key repair or a label compaction counts). |
+| `focus` | The row to follow — scroll to, highlight, announce: the joined source, the detached row, the anchor of the entry an edit reshaped or a save landed in, as the last edit that applied left it. A save names its entry even when it stored what was already there (`changed: false`), so a closing sheet can return to its chip. `null` after a removal and when no edit applied. Always a visible row. |
 | `refused` | `{"reason", "message"}` of a refused edit, else `null`. |
 | `items` | The board's entries in list order, both sections together; split them by `blanket`. |
 | `counts` | How many entries each section shows (clusters and stacks count once). |
@@ -221,10 +240,12 @@ member (`can_detach`) and leave a lone chip where it is; onto the remove
 target, `remove`.
 
 **RESIN_CHIP**: `{"name": "Arcane Resin", "tags", "uncursed", "tooltip",
-"details", "description"}` — tags `Auto` or `≥N`, `Mage +2`, `F≤N`; the
-tooltip explains Auto (`Enough resin to upgrade kept wands to +3, excluding
-No resin wands and reforge copies`) and names the donors' source, one per
-line, or is `null`.
+"amount_tooltip", "details", "description"}` — tags `Auto` or `≥N`, then
+`Mage +2`, `F≤N`; `tooltip` is the chip's hover text, the donors' source
+(`Locked chest`), or `null` for any source; `amount_tooltip` is the amount
+tag's, which explains Auto (`Enough resin to upgrade kept wands to +3,
+excluding No resin wands and reforge copies`), or `null` for a fixed
+amount.
 
 ### Problems
 
@@ -259,9 +280,12 @@ requests:
   row will take); `blanket` picks the new chip's section; `resin` is the
   query's current resin condition, which seeds the resin section;
   `offer_resin` offers Arcane Resin among the wands; `open_resin` opens the
-  query's resin chip. Everything but `rows` defaults to `null`/`false`.
+  query's resin chip. Everything but `rows` defaults to `null`/`false`, and
+  `null` means the default.
 - `change` — applies one control the user moved.
-- `save` — saves the draft onto `rows`, the list as it is now.
+- `save` — saves the draft onto `rows`, the list as it is now. When the row
+  the sheet was opened on has since become a hidden copy of another chip,
+  the save adds a new chip rather than vanishing into the copy.
 
 Open and change answer `{"draft": DRAFT, "form": FORM}`. A save answers
 
@@ -307,6 +331,7 @@ query).
 | Field | Meaning |
 | --- | --- |
 | `v`, `mode` (`new` \| `edit`), `origin` (`{"type": "new"}`, `{"type": "row", "key": K}`, `{"type": "resin"}`), `blanket`, `in_cluster`, `resin_picked` | What the dialog chrome — title and button labels, which apps own — derives from. |
+| `title` | The sheet header's title: the requirement's (`Any Tier 3+ melee weapon`, `Rat Skull`), or `Arcane Resin` while the resin is picked. Unlike `preview` it is there while the draft has errors; the sprite follows `item` and `kind`. |
 | `preview` | The CHIP a save would produce (key 0, no join candidates), or `null` while there are errors or the resin is picked. |
 | `category`, `kind`, `weapon_type`, `item`, `source` | Pickers: `{"visible", "value", "options"}`. `item` lists the wildcard (`Any melee weapon`) unless the family always names one, `Arcane Resin` when offered, then the items — weapons grouped `Tier 2`…`Tier 5`. |
 | `tier`, `upgrade` | `{"visible", "mode", "modes", "value", "min", "max", "value_label"}` (`Tier 3 or higher`, `+2 or higher`). |
@@ -337,14 +362,14 @@ requirement that cannot be read, a draft of another version — is answered
 {"error": "edit 1: unknown item 'wand_of_wonders'"}
 ```
 
-plus `"key": K` when the sheet was asked to open an unreadable row. A draft
-that cannot be read means the app reopens the sheet from its rows. The
-bindings keep that shape: the C ABI returns `0` with the error document (and
-`-1` only for a null pointer or bytes that are not UTF-8, `-2` if the editor
-panics); JNI answers the error document for unreadable bytes too and throws
-`IllegalStateException` only if the editor panics; WebAssembly returns the
-string (a panic there traps the module, which is why every request is
-answered rather than refused).
+plus `"key": K` when the row the sheet was asked to open, or to save onto,
+cannot be read. A draft that cannot be read means the app reopens the sheet
+from its rows. The bindings keep that shape: the C ABI returns `0` with the
+error document (and `-1` only for a null pointer or bytes that are not
+UTF-8, `-2` if the editor panics); JNI answers the error document for
+unreadable bytes too and throws `IllegalStateException` only if the editor
+panics; WebAssembly returns the string (a panic there traps the module,
+which is why every request is answered rather than refused).
 
 ## Engine limits
 
@@ -381,6 +406,7 @@ decided once.
 | Joining across categories with a stack | Refused: `Copies can only be grouped with the same item type.` |
 | Plain copies traded on a join | Only the joined chip's own copies become identity copies. |
 | Joining across categories without a stack | Leftover identity labels are cleared; nothing is deleted. |
+| A stacked cluster member saved into another category | Refused like the join; without a stack, leftover labels are cleared. |
 | Drop on the empty board | Detaches cluster members only; a lone chip stays. |
 | Combined level on a blanket | Refused. |
 | A cluster's stack label | Never spread onto trinket, artifact or blanket members. |

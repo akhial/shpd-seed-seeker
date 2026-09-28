@@ -727,6 +727,7 @@
         "value_label": "Tier 3",
         "visible": false
       },
+      "title": "Ring of Might",
       "transmutations": {
         "caption": "Matches an initial offer or any of the next 1 trinket. AutoTrinket can use a helpful starting trinket while your target waits in the deck. Scroll availability and effects after transmuting are not simulated.",
         "enabled": false,

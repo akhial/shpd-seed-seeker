@@ -270,8 +270,20 @@ pub(crate) struct IndexedProblem {
     pub(crate) scope: ProblemScope,
 }
 
-/// [`problems`], by row index.
-pub(crate) fn indexed_problems(rows: &[Row]) -> Vec<IndexedProblem> {
+/// The board sections that hold rows a problem list is not given — the
+/// unreadable rows the JSON envelopes carry through beside the rows they
+/// read. They take part in no check between rows, but they are rows of the
+/// list: one of them in the ordinary section means the list does not hold
+/// blankets alone, and a list of nothing else still holds rows.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub(crate) struct Unread {
+    pub(crate) ordinary: bool,
+    pub(crate) blanket: bool,
+}
+
+/// [`problems`], by row index, for a list that also holds the `unread`
+/// rows.
+pub(crate) fn indexed_problems(rows: &[Row], unread: Unread) -> Vec<IndexedProblem> {
     let mut found = Vec::new();
     for (index, row) in rows.iter().enumerate() {
         for message in row_problems(&row.requirement) {
@@ -290,7 +302,9 @@ pub(crate) fn indexed_problems(rows: &[Row]) -> Vec<IndexedProblem> {
             scope: ProblemScope::Group,
         });
     }
-    if !rows.is_empty() && rows.iter().all(|row| row.requirement.blanket) {
+    let any = !rows.is_empty() || unread.ordinary || unread.blanket;
+    let ordinary = unread.ordinary || rows.iter().any(|row| !row.requirement.blanket);
+    if any && !ordinary {
         found.push(IndexedProblem {
             message: NO_ORDINARY_REQUIREMENT.to_owned(),
             rows: Vec::new(),
@@ -326,7 +340,7 @@ pub(crate) fn keyed(rows: &[Row], found: Vec<IndexedProblem>) -> Vec<Problem> {
 /// N being the first key's 1-based position in the list.
 #[must_use]
 pub fn problems(rows: &[Row]) -> Vec<Problem> {
-    keyed(rows, indexed_problems(rows))
+    keyed(rows, indexed_problems(rows, Unread::default()))
 }
 
 #[cfg(test)]

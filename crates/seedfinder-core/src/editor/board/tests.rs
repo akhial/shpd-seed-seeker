@@ -1263,6 +1263,13 @@ fn an_edit_that_folds_into_an_earlier_chip_keeps_it_and_ignores_its_count() {
 /// trinket or artifact, and normalizing spread the cluster's stack label
 /// onto it — a row Android's model refuses to construct, so the app
 /// crashed. The label now never spreads onto a row that cannot stack.
+///
+/// Critic M4 and #190: a member of a *stacked* cluster that becomes a
+/// trinket or artifact would leave a cluster spanning categories with a
+/// stack — the state a join refuses, and one the engine reads as "the
+/// member, or the trinket plus any copy" — so that save is refused the same
+/// way. A blanket member keeps its family, stays in the cluster (the
+/// problem list reports the mixed sections) and never takes the label.
 #[test]
 fn a_cluster_label_never_spreads_onto_a_trinket_artifact_or_blanket() {
     let stacked = edited(
@@ -1280,27 +1287,89 @@ fn a_cluster_label_never_spreads_onto_a_trinket_artifact_or_blanket() {
             .iter()
             .all(|row| row.requirement.identity_group == Some(1))
     );
+    let trinkets = [
+        named(0, ItemId::HornOfPlenty).requirement,
+        named(0, ItemId::MimicTooth).requirement,
+    ];
+    for requirement in trinkets {
+        let result = run(&stacked, &[resaved(1, requirement, 1, None, None)]);
+        assert_eq!(result.refused, Some(Refusal::MixedCategoryStack));
+        assert_eq!(result.rows, stacked);
+        assert!(!result.changed);
+        // Just as a drag of that item onto the cluster is refused.
+        let beside: Vec<Row> = stacked
+            .iter()
+            .copied()
+            .chain([Row {
+                key: 9,
+                requirement,
+            }])
+            .collect();
+        assert_eq!(
+            drop_action(&beside, 9, DropTarget::Row(2)),
+            DropAction::Refuse(Refusal::MixedCategoryStack)
+        );
+    }
     let blanket_wand = Requirement {
         blanket: true,
         ..Requirement::any(ItemKind::Wand)
     };
-    for requirement in [
-        named(0, ItemId::HornOfPlenty).requirement,
-        named(0, ItemId::MimicTooth).requirement,
-        blanket_wand,
-    ] {
-        let result = run(&stacked, &[resaved(1, requirement, 1, None, None)]);
-        assert_emittable(&result.rows, "a member became unstackable");
-        let member = result.rows[index_of(&result.rows, 1).unwrap()].requirement;
-        assert_eq!(member.identity_group, None);
-        assert!(member.alternative_group.is_some());
-        // The stack stays with the member that can carry it.
-        let fireblast = result.rows[index_of(&result.rows, 2).unwrap()].requirement;
-        assert_eq!(fireblast.identity_group, Some(1));
-        // Saving that member unchanged keeps the stack together.
-        let again = run(&result.rows, &[resaved(2, fireblast, 1, None, None)]);
-        assert!(!again.changed, "{:?}", again.rows);
+    let result = run(&stacked, &[resaved(1, blanket_wand, 1, None, None)]);
+    assert_emittable(&result.rows, "a member became a blanket");
+    let member = result.rows[index_of(&result.rows, 1).unwrap()].requirement;
+    assert_eq!(member.identity_group, None);
+    assert!(member.alternative_group.is_some());
+    // The stack stays with the member that can carry it.
+    let fireblast = result.rows[index_of(&result.rows, 2).unwrap()].requirement;
+    assert_eq!(fireblast.identity_group, Some(1));
+    // Saving that member unchanged keeps the stack together.
+    let again = run(&result.rows, &[resaved(2, fireblast, 1, None, None)]);
+    assert!(!again.changed, "{:?}", again.rows);
+
+    // Shrunk to ×1, the cluster keeps its stack label (M2). A member that
+    // becomes a trinket or artifact then follows the uncounted join rule:
+    // the leftover labels are cleared, nothing is deleted, and nothing
+    // spreads onto it.
+    let shrunk = edited(&stacked, &[Edit::SetCount { key: 2, count: 1 }]);
+    assert_eq!(counts(&shrunk), [1]);
+    assert!(
+        shrunk
+            .iter()
+            .all(|row| row.requirement.identity_group == Some(1))
+    );
+    for requirement in trinkets {
+        let result = run(&shrunk, &[resaved(1, requirement, 1, None, None)]);
+        assert_eq!(result.refused, None);
+        assert_emittable(&result.rows, "an uncounted member became unstackable");
+        assert_eq!(keys(&result.rows), keys(&shrunk));
+        assert!(
+            result
+                .rows
+                .iter()
+                .all(|row| row.requirement.identity_group.is_none()
+                    && row.requirement.alternative_group.is_some())
+        );
     }
+
+    // A hand-written cluster holding a trinket and a stack label: normalizing
+    // spreads the label onto the wand members only.
+    let written = [
+        with(named(1, ItemId::MimicTooth), |r| {
+            r.alternative_group = Some(1);
+        }),
+        with(named(2, ItemId::WandFireblast), |r| {
+            r.alternative_group = Some(1);
+            r.identity_group = Some(1);
+        }),
+        with(row(3, ItemKind::Wand), |r| r.alternative_group = Some(1)),
+        with(row(4, ItemKind::Wand), |r| r.identity_group = Some(1)),
+    ];
+    let normalized = edited(&written, &[Edit::Normalize]);
+    let labels: Vec<Option<u8>> = normalized
+        .iter()
+        .map(|row| row.requirement.identity_group)
+        .collect();
+    assert_eq!(labels, [None, Some(1), Some(1), Some(1)]);
 }
 
 #[test]
@@ -1787,6 +1856,98 @@ fn a_row_in_a_combined_level_and_a_stack_folds_once() {
     assert_emittable(&result.rows, "a doubly folded row");
 }
 
+/// Every row of `rows` is a member or a hidden copy of exactly one entry.
+fn assert_every_row_shown(rows: &[Row], context: &str) {
+    let mut claims = vec![0_usize; rows.len()];
+    for item in board_items(rows) {
+        for &index in item.members.iter().chain(&item.extras) {
+            claims[index] += 1;
+        }
+    }
+    assert!(
+        claims.iter().all(|&claims| claims == 1),
+        "claims {claims:?}: {context}"
+    );
+}
+
+/// A hand-written list can anchor a stack on a combined level's copy, or a
+/// combined level on a stack's bare copy. The web folded the other group's
+/// rows into an entry that never formed, so they showed nowhere, no removal
+/// reached them and their problems blamed no chip. A stack whose anchor a
+/// combined level folded now leaves its copies on the board, and a combined
+/// level's anchor never folds into a stack.
+#[test]
+fn a_stack_and_a_combined_level_never_fold_a_row_out_of_sight() {
+    // The stack's anchor is a copy of the combined level.
+    let rows = [
+        sum(named(1, ItemId::RingMight), 1, 2),
+        with(sum(named(2, ItemId::RingMight), 1, 2), |r| {
+            r.identity_group = Some(2);
+        }),
+        with(row(3, ItemKind::Ring), |r| r.identity_group = Some(2)),
+    ];
+    assert_eq!(validate(&rows), Ok(()));
+    assert_every_row_shown(&rows, "a stack anchored on a combined-level copy");
+    let board = board_items(&rows);
+    assert_eq!(board.len(), 2);
+    assert_eq!(
+        (&board[0].members, &board[0].extras, board[0].total),
+        (&vec![0], &vec![1], Some(2))
+    );
+    assert_eq!(board[1].members, [2]);
+    let removed = run(&rows, &[Edit::Remove { key: 3 }]);
+    assert!(removed.changed);
+    assert_eq!(keys(&removed.rows), [1, 2]);
+    let whole = run(&rows, &[Edit::RemoveItem { key: 1 }]);
+    assert_eq!(keys(&whole.rows), [3]);
+
+    // The same, the stack's constrained member after the combined level's
+    // anchor (the fuzz case the envelope review found).
+    let rows = [
+        with(row(3, ItemKind::Ring), |r| r.identity_group = Some(2)),
+        sum(named(4, ItemId::RingHaste), 1, 3),
+        with(sum(named(5, ItemId::RingHaste), 1, 3), |r| {
+            r.identity_group = Some(2);
+        }),
+    ];
+    assert_eq!(validate(&rows), Ok(()));
+    assert_every_row_shown(&rows, "a stack anchored on a later combined-level copy");
+    assert_eq!(members(&rows), [vec![0], vec![1]]);
+    assert!(run(&rows, &[Edit::Remove { key: 3 }]).changed);
+
+    // The combined level's anchor is a bare copy of a stack: it stays a chip
+    // carrying its own copies.
+    let rows = [
+        with(named(1, ItemId::RingMight), |r| r.identity_group = Some(1)),
+        with(sum(row(2, ItemKind::Ring), 1, 2), |r| {
+            r.identity_group = Some(1);
+        }),
+        sum(row(3, ItemKind::Ring), 1, 2),
+    ];
+    assert_eq!(validate(&rows), Ok(()));
+    assert_every_row_shown(&rows, "a combined level anchored on a stack copy");
+    let board = board_items(&rows);
+    assert_eq!(board.len(), 2);
+    assert_eq!(board[0].members, [0]);
+    assert_eq!(
+        (&board[1].members, &board[1].extras, board[1].total),
+        (&vec![1], &vec![2], Some(2))
+    );
+    // Normalizing keeps the combined level rather than turning its anchor
+    // into a plain repeat of the named ring, which would drop it.
+    let normalized = run(&rows, &[Edit::Normalize]);
+    assert!(!normalized.changed, "{:?}", normalized.rows);
+    assert!(
+        normalized
+            .rows
+            .iter()
+            .skip(1)
+            .all(|row| row.requirement.level_sum.is_some())
+    );
+    let removed = run(&rows, &[Edit::RemoveItem { key: 2 }]);
+    assert_eq!(keys(&removed.rows), [1]);
+}
+
 // --- the drop policy and join candidates ----------------------------------
 
 /// Linux detached on every background drop, which split a lone chip's
@@ -2007,6 +2168,35 @@ fn a_no_op_edit_returns_the_rows_verbatim_without_normalizing() {
     assert!(!run(&normalized.rows, &[Edit::Normalize]).changed);
 }
 
+/// `changed` compares the final rows with the request's, so edits that
+/// undo each other within one request report no change — Android writes the
+/// rows back only when it is set. The focus stays where the last edit that
+/// applied left it, as an unchanged save names its chip.
+#[test]
+fn edits_that_undo_each_other_change_nothing() {
+    let rows = [named(1, ItemId::WandFrost)];
+    let there_and_back = [
+        Edit::SetCount { key: 1, count: 2 },
+        Edit::SetCount { key: 1, count: 1 },
+    ];
+    let result = run(&rows, &there_and_back);
+    assert_eq!(result.rows, rows);
+    assert!(!result.changed);
+    assert_eq!((result.focus, result.refused), (Some(1), None));
+    assert_eq!(result.next_key, 2);
+
+    let unchanged = run(&rows, &[resaved(1, rows[0].requirement, 1, None, None)]);
+    assert_eq!(unchanged.rows, rows);
+    assert_eq!((unchanged.changed, unchanged.focus), (false, Some(1)));
+
+    // Only a key repair makes such a request a change.
+    let broken = [Row { key: 0, ..rows[0] }];
+    let repaired = run(&broken, &there_and_back);
+    assert!(repaired.changed);
+    assert_eq!(repaired.rekeyed, [(0, 1)]);
+    assert_eq!(repaired.rows, rows);
+}
+
 #[test]
 fn broken_keys_are_repaired_and_the_edits_follow_the_repair() {
     let rows = [
@@ -2205,9 +2395,10 @@ fn the_four_stack_shapes_match_the_web_documents() {
 // --- properties ---------------------------------------------------------
 
 /// Random valid rows × random edit sequences (1,024 cases, per the test
-/// budget): nothing panics, every emitted list keeps the §3 invariant, a
-/// no-op or a refusal returns the rows verbatim, the focus names a visible
-/// row, a sequence equals its edits applied one by one, and edits are
+/// budget): nothing panics, every emitted list keeps the §3 invariant and
+/// shows every row, `changed` says exactly whether the rows differ, a no-op
+/// or a refusal returns the rows verbatim, the focus names a visible row, a
+/// sequence equals its edits applied one by one, and edits are
 /// deterministic.
 #[test]
 fn random_edits_on_valid_rows_keep_every_row_emittable() {
@@ -2215,6 +2406,7 @@ fn random_edits_on_valid_rows_keep_every_row_emittable() {
     for case in 0..1024 {
         let rows = random_rows(&mut rng);
         assert_emittable(&rows, "the generator");
+        assert_every_row_shown(&rows, "the generator");
         let edits: Vec<Edit> = (0..rng.range(1, 4))
             .map(|_| random_edit(&mut rng, &rows))
             .collect();
@@ -2222,14 +2414,13 @@ fn random_edits_on_valid_rows_keep_every_row_emittable() {
         let result = apply(&rows, hint, &edits);
         let context = format!("case {case}: {rows:?} {edits:?}");
         assert_emittable(&result.rows, &context);
+        assert_every_row_shown(&result.rows, &context);
         assert!(result.rekeyed.is_empty(), "{context}");
         assert!(
             result.next_key > result.rows.iter().map(|row| row.key).max().unwrap_or(0),
             "{context}"
         );
-        if !result.changed {
-            assert_eq!(result.rows, rows, "{context}");
-        }
+        assert_eq!(result.changed, result.rows != rows, "{context}");
         assert_eq!(apply(&rows, hint, &edits), result, "{context}");
 
         // One edit at a time: each step keeps the invariant, a refusal or a
@@ -2306,8 +2497,10 @@ fn random_edits_on_valid_rows_keep_every_row_emittable() {
 }
 
 /// Arbitrary rows — invalid ones, broken keys, labels past four, rows in two
-/// folds at once — never make an edit panic, and the keys always come back
-/// unique and in range (1,024 cases).
+/// folds at once — never make an edit panic, the board shows every row
+/// before and after, `changed` says exactly whether the rows differ or keys
+/// were repaired, and the keys always come back unique and in range (1,024
+/// cases).
 #[test]
 fn random_edits_on_arbitrary_rows_never_panic() {
     let mut rng = Rng::new(0xbad_f00d_dead_beef);
@@ -2340,14 +2533,18 @@ fn random_edits_on_arbitrary_rows_never_panic() {
         unique.sort_unstable();
         unique.dedup();
         let context = format!("case {case}: {rows:?} {edits:?}");
+        assert_every_row_shown(&rows, &context);
+        assert_every_row_shown(&result.rows, &context);
         assert_eq!(unique.len(), result.rows.len(), "{context}");
         assert!(
             result.rows.iter().all(|row| super::is_valid_key(row.key)),
             "{context}"
         );
-        if !result.changed {
-            assert_eq!(keys(&result.rows), keys(&rows), "{context}");
-        }
+        assert_eq!(
+            result.changed,
+            !result.rekeyed.is_empty() || result.rows != rows,
+            "{context}"
+        );
         let _ = join_candidates(&result.rows, &board_items(&result.rows));
     }
 }

@@ -10,7 +10,8 @@ use super::super::testing::{Rng, mixed_rows, named, random_edit, row, with};
 use super::super::{Edit, apply, board_items, join_candidates, problems, stack_view};
 use super::*;
 use crate::catalog::{ArmorEffect, WeaponCategory, WeaponEffect};
-use crate::query::TierRequirement;
+use crate::model::ItemSource;
+use crate::query::{LevelSum, TierRequirement};
 
 fn view(rows: &[Row]) -> BoardView {
     board_view(rows, None)
@@ -656,6 +657,39 @@ fn a_hidden_copys_problem_shows_on_its_entry_and_its_anchor() {
     assert_eq!(board.items[0].problem.as_deref(), Some(upgrade));
 }
 
+/// A hand-written combined level anchored on a bare copy of a named ring's
+/// stack: the web folded the anchor into the stack and lost its copies, so
+/// a copy's problem showed on no chip. The combined level stays a chip of
+/// its own, and its copy's problem shows there.
+#[test]
+fn a_combined_levels_copies_speak_through_its_chip_beside_a_stack() {
+    let sum = Some(LevelSum {
+        group: 1,
+        minimum_total: 2,
+    });
+    let rows = [
+        with(named(1, ItemId::RingMight), |r| r.identity_group = Some(1)),
+        with(row(2, ItemKind::Ring), |r| {
+            r.identity_group = Some(1);
+            r.level_sum = sum;
+        }),
+        with(row(3, ItemKind::Ring), |r| {
+            r.level_sum = sum;
+            r.max_depth = Some(40);
+        }),
+    ];
+    let board = view(&rows);
+    assert_eq!(board.items.len(), 2);
+    assert_eq!(board.items[1].members, [2]);
+    assert_eq!(board.items[1].extras, [3]);
+    assert_eq!(board.items[1].stack.total, Some(2));
+    let floor = "Requirement floor must be 1 through 24.";
+    assert_eq!(board.problems[0].keys, [3]);
+    assert_eq!(board.items[1].problem.as_deref(), Some(floor));
+    assert_eq!(chip(&board, 2).problem.as_deref(), Some(floor));
+    assert_eq!(board.items[0].problem, None);
+}
+
 #[test]
 fn a_clusters_copies_speak_through_its_first_member_only() {
     let rows = [
@@ -870,7 +904,8 @@ fn the_resin_chip_tags_the_amount_and_describes_the_donors() {
             name: "Arcane Resin".to_owned(),
             tags: vec![Tag::plain("Auto")],
             uncursed: true,
-            tooltip: Some(
+            tooltip: None,
+            amount_tooltip: Some(
                 "Enough resin to upgrade kept wands to +3, excluding No resin wands and reforge \
                  copies"
                     .to_owned()
@@ -893,6 +928,7 @@ fn the_resin_chip_tags_the_amount_and_describes_the_donors() {
     assert_eq!(texts(&chip.tags), ["≥12", "Mage +2", "F≤9"]);
     assert!(!chip.uncursed);
     assert_eq!(chip.tooltip.as_deref(), Some("Locked chest"));
+    assert_eq!(chip.amount_tooltip, None);
     assert_eq!(
         chip.details,
         [
@@ -908,23 +944,27 @@ fn the_resin_chip_tags_the_amount_and_describes_the_donors() {
         "Arcane Resin, at least 12, starting Magic Missile contributes 2 resin, any wands, \
          Locked chest, floors 1–9"
     );
-    // Auto and a source: the chip's hover text says both, a line each.
+    // Auto and a source: the source is the chip's hover text and Auto's
+    // explanation the amount tag's, each on its own — a platform never
+    // splits an English string to lay them out as the web does.
     let both = resin_chip(&ResinState {
         amount: ResinAmount::Auto,
         ..fixed
     });
+    assert_eq!(both.tooltip.as_deref(), Some("Locked chest"));
+    assert_eq!(texts(&both.tags)[0], "Auto");
     assert_eq!(
-        both.tooltip.as_deref(),
+        both.amount_tooltip.as_deref(),
         Some(
             "Enough resin to upgrade kept wands to +3, excluding No resin wands and reforge \
-             copies\nLocked chest"
+             copies"
         )
     );
     let plain = resin_chip(&ResinState {
         amount: ResinAmount::AtLeast(3),
         filter: ArcaneResinFilter::default(),
     });
-    assert_eq!(plain.tooltip, None);
+    assert_eq!((plain.tooltip, plain.amount_tooltip), (None, None));
 }
 
 // --- kinds ------------------------------------------------------------------------------
@@ -988,6 +1028,15 @@ fn the_board_view_agrees_with_the_fold_the_problems_and_the_candidates() {
         let candidates = join_candidates(&rows, &items);
         let found = problems(&rows);
         assert_eq!(board.problems, found, "{context}");
+        // The board shows every row, so every problem naming a row shows on
+        // the entry holding it.
+        for key in found.iter().flat_map(|problem| &problem.keys) {
+            assert!(
+                board.items.iter().any(|view| view.problem.is_some()
+                    && (view.members.contains(key) || view.extras.contains(key))),
+                "{context}"
+            );
+        }
         assert_eq!(board.items.len(), items.len(), "{context}");
         assert_eq!(
             board.counts.ordinary + board.counts.blanket,

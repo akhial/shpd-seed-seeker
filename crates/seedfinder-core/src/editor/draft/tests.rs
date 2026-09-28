@@ -17,7 +17,8 @@ use super::super::testing::{
     random_requirement, random_resin, random_rows, row, validate, with,
 };
 use super::super::{
-    Edit, EditResult, NO_ORDINARY_REQUIREMENT, Refusal, apply, board_items, problems, row_problems,
+    DropAction, DropTarget, Edit, EditResult, NO_ORDINARY_REQUIREMENT, Refusal, apply, board_items,
+    drop_action, problems, row_problems,
 };
 use super::*;
 use crate::catalog::{WeaponEffect, item};
@@ -565,12 +566,11 @@ fn a_key_not_in_the_list_opens_a_new_chip_that_saves_under_it() {
     assert_eq!(resin, ResinOutcome::Unchanged);
 }
 
-/// A hand-written list can fold a row into an entry that is itself folded
-/// away: a combined-level member whose anchor is a bare copy of a stack.
-/// No chip shows it, so no sheet edits it; a platform naming it gets a new
-/// chip, and the save adds one instead of vanishing into the hidden row.
+/// A hand-written list can put a row in a stack and a combined level at
+/// once. The board still shows every row, so every key opens a chip: a
+/// combined level's copy opens its anchor, which is no longer folded away.
 #[test]
-fn a_row_no_board_entry_shows_opens_a_new_chip() {
+fn every_row_of_a_hand_written_list_opens_its_chip() {
     let sum = |total| {
         Some(LevelSum {
             group: 3,
@@ -589,15 +589,43 @@ fn a_row_no_board_entry_shows_opens_a_new_chip() {
         with(row(3, ItemKind::Ring), |r| r.identity_group = Some(3)),
         with(named(4, ItemId::RingElements), |r| r.level_sum = sum(6)),
     ];
-    assert!(
-        board_items(&rows)
-            .iter()
-            .all(|entry| !entry.members.contains(&3) && !entry.extras.contains(&3))
+    for (key, opens) in [(1, 1), (2, 2), (3, 1), (4, 2)] {
+        let draft = open(&rows, Some(key), false, None, false, false);
+        assert_eq!(
+            (draft.origin, draft.key),
+            (Origin::Row(opens), Some(opens)),
+            "{key}"
+        );
+    }
+}
+
+/// The sheet saves onto the list as it is now. When the row it was opened
+/// on has since become a hidden copy of another chip, the save adds a chip
+/// rather than vanishing into the copy and reporting success.
+#[test]
+fn a_save_onto_a_row_since_folded_away_adds_a_chip() {
+    let opened = [
+        named(1, ItemId::Spear),
+        with(named(2, ItemId::Mace), |r| {
+            r.upgrade = UpgradeRequirement::Exact(2);
+        }),
+    ];
+    let draft = after(&sheet(&opened, 2), &[Change::SetUpgrade(3)]);
+    assert!(form(&draft).can_save);
+    let now = [named(1, ItemId::Spear), named(2, ItemId::Spear)];
+    assert_eq!(counts(&now), [2]);
+    let SaveResult::Saved { result, .. } = save(&draft, &now, None) else {
+        panic!("the save goes through");
+    };
+    assert!(result.changed);
+    assert_eq!(keys(&result.rows), [1, 2, 3]);
+    assert_eq!(result.rows[..2], now);
+    assert_eq!(result.rows[2].requirement.item, Some(ItemId::Mace));
+    assert_eq!(
+        result.rows[2].requirement.upgrade,
+        UpgradeRequirement::Exact(3)
     );
-    let draft = open(&rows, Some(4), false, None, false, false);
-    assert_eq!((draft.origin, draft.key), (Origin::New, None));
-    assert!(form(&draft).preview.is_some());
-    assert_eq!(keys(&saved(&draft).0.rows), [1, 2, 3, 4, 5]);
+    assert_eq!(result.focus, Some(3));
 }
 
 // --- changes -------------------------------------------------------------
@@ -1912,7 +1940,9 @@ fn a_trinket_another_ordinary_row_names_is_a_duplicate() {
 
 /// Critic M4: a cluster member of a stack edited into another category
 /// broke the stack on every platform but Linux, whose whole-query check
-/// refused it. The guard refuses it everywhere.
+/// refused it. The save now follows the join rule (#190) and is refused
+/// everywhere — trinkets and artifacts too, although no label is spread onto
+/// them and so no problem would have blamed the row.
 #[test]
 fn the_save_guard_refuses_a_save_that_breaks_a_stack() {
     let rows = written(&[
@@ -1925,19 +1955,26 @@ fn the_save_guard_refuses_a_save_that_breaks_a_stack() {
         Edit::SetCount { key: 1, count: 2 },
     ]);
     assert_eq!(counts(&rows), [2]);
-    let draft = after(&sheet(&rows, 2), &[Change::SetCategory(ItemKind::Wand)]);
-    let control = form(&draft);
-    assert_eq!(
-        control.errors,
-        ["The copies of a stack must share its category."]
-    );
-    assert!(!control.can_save);
-    assert_eq!(control.preview, None);
-    let SaveResult::Refused { draft: kept, form } = save(&draft, &rows, None) else {
-        panic!("the save is refused");
-    };
-    assert_eq!(kept.rows, rows);
-    assert_eq!(form, control);
+    let mixed = Refusal::MixedCategoryStack.to_string();
+    for changes in [
+        &[Change::SetCategory(ItemKind::Wand)][..],
+        &[
+            Change::SetCategory(ItemKind::Trinket),
+            Change::SetItem(ItemChoice::Item(ItemId::MimicTooth)),
+        ],
+        &[Change::SetCategory(ItemKind::Artifact)],
+    ] {
+        let draft = after(&sheet(&rows, 2), changes);
+        let control = form(&draft);
+        assert_eq!(control.errors, std::slice::from_ref(&mixed), "{changes:?}");
+        assert!(!control.can_save);
+        assert_eq!(control.preview, None);
+        let SaveResult::Refused { draft: kept, form } = save(&draft, &rows, None) else {
+            panic!("the save is refused: {changes:?}");
+        };
+        assert_eq!(kept.rows, rows);
+        assert_eq!(form, control);
+    }
     // Another weapon is fine, and so is a lone chip changing category.
     assert!(form_can_save(&after(
         &sheet(&rows, 2),
@@ -1946,6 +1983,52 @@ fn the_save_guard_refuses_a_save_that_breaks_a_stack() {
     let lone = written(&[add(named_requirement(ItemId::Mace), 2, None, None)]);
     let wand = after(&sheet(&lone, 1), &[Change::SetCategory(ItemKind::Wand)]);
     assert_eq!(stored(&wand).len(), 2);
+}
+
+/// A cluster shrunk to ×1 keeps its stack label (M2). Moving a member into
+/// another category then saves as a drag of that item onto the cluster
+/// would: the leftover labels are cleared and nothing is deleted — the sheet
+/// used to refuse it with a message about copies the board did not show.
+#[test]
+fn a_member_of_a_cluster_shrunk_to_one_changes_category_like_a_join() {
+    let rows = written(&[
+        add(named_requirement(ItemId::Spear), 1, None, None),
+        add(named_requirement(ItemId::Mace), 1, None, None),
+        Edit::Join {
+            source: 2,
+            target: 1,
+        },
+        Edit::SetCount { key: 1, count: 2 },
+        Edit::SetCount { key: 1, count: 1 },
+    ]);
+    assert_eq!(counts(&rows), [1]);
+    assert!(
+        rows.iter()
+            .all(|row| row.requirement.identity_group.is_some())
+    );
+    let wand = [Row {
+        key: 9,
+        requirement: named_requirement(ItemId::WandFrost),
+    }];
+    let beside: Vec<Row> = rows.iter().copied().chain(wand).collect();
+    assert_eq!(
+        drop_action(&beside, 9, DropTarget::Row(1)),
+        DropAction::Join { target: 1 }
+    );
+    for changes in [
+        &[Change::SetCategory(ItemKind::Wand)][..],
+        &[Change::SetCategory(ItemKind::Trinket)],
+    ] {
+        let draft = after(&sheet(&rows, 2), changes);
+        assert!(form(&draft).can_save, "{:?}", form(&draft).errors);
+        let (result, _) = saved(&draft);
+        assert_eq!(keys(&result.rows), keys(&rows));
+        assert_emittable(&result.rows, "a member left its category");
+        assert!(result.rows.iter().all(|row| {
+            row.requirement.identity_group.is_none() && row.requirement.alternative_group.is_some()
+        }));
+        assert!(problems(&result.rows).is_empty());
+    }
 }
 
 fn form_can_save(draft: &Draft) -> bool {
@@ -2307,6 +2390,59 @@ fn assert_in_range(form: &Form, sheet: bool, context: &str) {
     let savable = form.can_save && !form.resin_picked;
     assert!(form.preview.is_none() || savable, "{context}");
     assert!(!sheet || form.preview.is_some() == savable, "{context}");
+    // The header's title is always there, and on a sheet opened from a list
+    // it names the chip the preview shows.
+    assert_eq!(form.resin_picked, form.title == ARCANE_RESIN, "{context}");
+    if sheet && let Some(preview) = &form.preview {
+        assert_eq!(preview.title, form.title, "{context}");
+    }
+}
+
+/// The sheet's header reads `form.title`, which — unlike the preview — is
+/// there while the draft cannot be saved and while the resin is picked, so
+/// no platform rebuilds a tier-worded title of its own.
+#[test]
+fn the_form_titles_the_sheet_even_while_it_cannot_save() {
+    let draft = after(
+        &new_sheet(&[]),
+        &[
+            Change::SetWeaponType(MELEE),
+            Change::SetTierMode(TierMode::AtLeast),
+            Change::SetTier(3),
+        ],
+    );
+    let control = form(&draft);
+    assert_eq!(control.title, "Any Tier 3+ melee weapon");
+    assert_eq!(
+        control.preview.as_ref().map(|chip| chip.title.as_str()),
+        Some("Any Tier 3+ melee weapon")
+    );
+
+    let rows = [named(1, ItemId::RatSkull)];
+    let duplicate = after(
+        &new_sheet(&rows),
+        &[
+            Change::SetCategory(ItemKind::Trinket),
+            Change::SetItem(ItemChoice::Item(ItemId::RatSkull)),
+        ],
+    );
+    let control = form(&duplicate);
+    assert_eq!(control.errors, [DUPLICATE_TRINKET]);
+    assert_eq!(control.preview, None);
+    assert_eq!(control.title, "Rat Skull");
+
+    let resin = after(
+        &new_sheet(&[]),
+        &[
+            Change::SetCategory(ItemKind::Wand),
+            Change::SetItem(ItemChoice::ArcaneResin),
+            Change::SetResinAmount(None),
+        ],
+    );
+    let control = form(&resin);
+    assert!(control.resin_picked);
+    assert_eq!(control.errors, [RESIN_AMOUNT_RANGE]);
+    assert_eq!(control.title, ARCANE_RESIN);
 }
 
 /// Random valid rows × random sheets × random changes (1,024 cases): every

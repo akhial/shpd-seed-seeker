@@ -17,7 +17,6 @@
 use std::collections::BTreeSet;
 
 use crate::catalog::{Effect, ItemId, ItemKind};
-use crate::model::ItemSource;
 use crate::query::{
     ArcaneResinFilter, EffectRequirement, EffectSet, Requirement, UpgradeRequirement,
 };
@@ -32,7 +31,7 @@ use super::labels::{
     total_text, total_tooltip, transmutations_detail, transmutations_tag, upgrade_detail,
     upgrade_tag,
 };
-use super::problems::{IndexedProblem, Problem, ProblemScope, indexed_problems, keyed};
+use super::problems::{IndexedProblem, Problem, ProblemScope, Unread, indexed_problems, keyed};
 use super::stack::{StackView, stack_view};
 
 /// Everything a board render needs, from one fold of the list.
@@ -232,9 +231,12 @@ pub struct ResinChip {
     pub tags: Vec<Tag>,
     /// Whether donor wands must be uncursed (drawn as a check mark).
     pub uncursed: bool,
-    /// The chip's hover text: what Auto means, then the donors' source —
-    /// the one filter no tag shows. `None` when there is neither.
+    /// The chip's hover text: the donors' source, the one filter no tag
+    /// shows. `None` for any source.
     pub tooltip: Option<String>,
+    /// The amount tag's hover text — the first tag — which says what `Auto`
+    /// means. `None` for a fixed amount.
+    pub amount_tooltip: Option<String>,
     /// The filter in words, like a chip's details.
     pub details: Vec<String>,
     /// The accessibility label: the name, then the details.
@@ -436,13 +438,6 @@ pub fn resin_chip(resin: &ResinState) -> ResinChip {
     if let Some(depth) = filter.max_depth {
         tags.push(Tag::plain(floor_tag(depth)));
     }
-    let tooltip: Vec<&str> = [
-        (resin.amount == ResinAmount::Auto).then_some(RESIN_AUTO_TOOLTIP),
-        filter.source.map(ItemSource::label),
-    ]
-    .into_iter()
-    .flatten()
-    .collect();
     let mut details = vec![amount_detail];
     if filter.include_mage_wand {
         details.push(RESIN_MAGE_DETAIL.to_owned());
@@ -465,7 +460,8 @@ pub fn resin_chip(resin: &ResinState) -> ResinChip {
         name: ARCANE_RESIN.to_owned(),
         tags,
         uncursed: filter.uncursed,
-        tooltip: (!tooltip.is_empty()).then(|| tooltip.join("\n")),
+        tooltip: filter.source.map(|source| source.label().to_owned()),
+        amount_tooltip: (resin.amount == ResinAmount::Auto).then(|| RESIN_AUTO_TOOLTIP.to_owned()),
         description: chip_description(ARCANE_RESIN, &details),
         details,
     }
@@ -516,9 +512,19 @@ impl<'a> Blame<'a> {
 /// load ([`super::Edit::Normalize`]).
 #[must_use]
 pub fn board_view(rows: &[Row], resin: Option<&ResinState>) -> BoardView {
+    board_view_beside(rows, resin, Unread::default())
+}
+
+/// [`board_view`] of a list that also holds rows the editor cannot read,
+/// in the `unread` sections: they count towards the list-level problem.
+pub(crate) fn board_view_beside(
+    rows: &[Row],
+    resin: Option<&ResinState>,
+    unread: Unread,
+) -> BoardView {
     let items = board_items(rows);
     let candidates = join_candidates(rows, &items);
-    let found = indexed_problems(rows);
+    let found = indexed_problems(rows, unread);
     let blame = Blame::new(rows.len(), &found);
     let mut counts = Counts::default();
     let views = items

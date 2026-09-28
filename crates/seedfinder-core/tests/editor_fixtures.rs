@@ -110,7 +110,7 @@ fn board_fixtures(fixtures: &mut Fixtures) {
     );
     fixtures.add(
         "board-tour",
-        "Every kind of entry, with the Auto resin chip; no edits, so the rows come back as sent.",
+        "Every kind of entry, with the Auto resin chip; no edits, so the rows come back unchanged, in canonical spelling.",
         Board,
         &json!({
             "rows": tour(),

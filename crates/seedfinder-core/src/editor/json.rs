@@ -18,7 +18,9 @@
 //!   can name an item a later catalog renamed. Such a row is carried through
 //!   verbatim, shown as an `Unknown requirement` chip with the reason, left
 //!   out of every relationship and removable — rather than failing the whole
-//!   board and blanking both sections.
+//!   board and blanking both sections. Its key and group labels stay its
+//!   own: the editor mints neither a key nor a label it holds, and it counts
+//!   towards the list-level problem.
 //! - *Wide alternative labels.* Android numbers groups with unbounded
 //!   integers; labels past 255 are compacted
 //!   ([`super::compact_alternative_labels`]).
@@ -42,15 +44,18 @@ use crate::json_query::{
 use crate::model::{ItemSource, source_name};
 use crate::query::{ArcaneResinFilter, Requirement};
 
+use super::board::{HeldLabels, apply_holding};
+use super::chips::board_view_beside;
+use super::draft::save_holding;
 use super::labels::{count_text, total_text};
+use super::problems::Unread;
 use super::{
     Badge, Badges, BoardView, Change, ChipView, Choice, Draft, Edit, EffectBadge, EffectChoice,
     EffectControl, EffectGroup, EffectMode, FloorToggle, Form, FormMode, ItemChoice, ItemView,
     KindName, ModeRange, Opt, Origin, Problem, ProblemScope, RangeToggle, Refusal, Relation,
     RelationGlyph, ResinAmount, ResinChip, ResinControl, ResinDraft, ResinOutcome, ResinState, Row,
     STACK_MAX, SaveResult, StackControl, StackView, Tag, TagStyle, TierMode, Toggle, UpgradeMode,
-    apply, board_view, change, compact_alternative_labels, form, next_key, open, redirects,
-    repair_keys, save,
+    change, compact_alternative_labels, form, next_key, open, redirects, repair_keys,
 };
 
 /// The chip name of a row the codec could not read.
@@ -77,7 +82,8 @@ pub fn requirement_board(request: &str) -> String {
 /// `{"saved": {...}}`, or the draft and form again when the draft cannot be
 /// saved. Never panics on bad input; a request it cannot read — including a
 /// draft of another version — answers `{"error": message}`, plus `"key"`
-/// when the sheet was asked to open a row that cannot be read.
+/// when the row the sheet was asked to open, or to save onto, cannot be
+/// read.
 #[must_use]
 pub fn requirement_editor(request: &str) -> String {
     respond(editor(request))
@@ -155,6 +161,59 @@ impl Raw {
     fn blanket(&self) -> bool {
         self.object.get("blanket") == Some(&Value::Bool(true))
     }
+
+    /// The group labels the row holds — alternative, identity, combined
+    /// level — read loosely: `None` for one that is missing or no label at
+    /// all. The row takes part in no relationship, but the labels it holds
+    /// are not free for the editor to hand out.
+    fn labels(&self) -> [Option<u8>; 3] {
+        let label = |value: Option<&Value>| {
+            value
+                .and_then(Value::as_u64)
+                .and_then(|label| u8::try_from(label).ok())
+        };
+        [
+            label(self.object.get("alternative_group")),
+            label(self.object.get("identity_group")),
+            label(
+                self.object
+                    .get("level_sum")
+                    .and_then(|sum| sum.get("group")),
+            ),
+        ]
+    }
+}
+
+/// The group labels held by the unreadable rows among `entries` that
+/// `live` says are still in the list.
+fn held_labels(entries: &[Entry], live: impl Fn(u64) -> bool) -> HeldLabels {
+    let mut held = HeldLabels::default();
+    for entry in entries {
+        if let Entry::Raw(raw) = entry
+            && live(raw.key)
+        {
+            let [alternative, identity, level_sum] = raw.labels();
+            held.alternative.extend(alternative);
+            held.identity.extend(identity);
+            held.level_sum.extend(level_sum);
+        }
+    }
+    held
+}
+
+/// The sections the unreadable rows among `entries` sit in.
+fn unread(entries: &[Entry]) -> Unread {
+    let mut unread = Unread::default();
+    for entry in entries {
+        if let Entry::Raw(raw) = entry {
+            if raw.blanket() {
+                unread.blanket = true;
+            } else {
+                unread.ordinary = true;
+            }
+        }
+    }
+    unread
 }
 
 impl Entry {
@@ -177,7 +236,8 @@ impl Entry {
 /// a whole number, fails the request — nothing could name it; a row whose
 /// requirement cannot be read is kept as a [`Raw`] row. Alternative labels
 /// are read as the platform sent them and compacted into `u8` labels when
-/// any passes 255; the flag says whether that happened.
+/// any passes 255 — an unreadable row's among them, so it keeps to the
+/// cluster it was written in; the flag says whether that happened.
 fn read_rows(values: Vec<Value>) -> Result<(Vec<Entry>, bool), Failure> {
     let mut entries = Vec::with_capacity(values.len());
     let mut labels: Vec<Option<u64>> = Vec::with_capacity(values.len());
@@ -199,7 +259,7 @@ fn read_rows(values: Vec<Value>) -> Result<(Vec<Entry>, bool), Failure> {
                 entries.push(Entry::Row(Row { key, requirement }));
             }
             Err(error) => {
-                labels.push(None);
+                labels.push(object.get("alternative_group").and_then(Value::as_u64));
                 entries.push(Entry::Raw(Raw {
                     key,
                     object,
@@ -208,10 +268,19 @@ fn read_rows(values: Vec<Value>) -> Result<(Vec<Entry>, bool), Failure> {
             }
         }
     }
-    let (labels, relabelled) = compact_alternative_labels(&labels);
-    for (entry, label) in entries.iter_mut().zip(labels) {
-        if let Entry::Row(row) = entry {
-            row.requirement.alternative_group = label;
+    let (compacted, relabelled) = compact_alternative_labels(&labels);
+    for ((entry, label), sent) in entries.iter_mut().zip(compacted).zip(labels) {
+        match entry {
+            Entry::Row(row) => row.requirement.alternative_group = label,
+            // An unreadable row is rewritten only when the labels were.
+            Entry::Raw(raw) if relabelled && sent.is_some() => {
+                let field = "alternative_group".to_owned();
+                match label {
+                    Some(label) => raw.object.insert(field, label.into()),
+                    None => raw.object.remove(&field),
+                };
+            }
+            Entry::Raw(_) => {}
         }
     }
     Ok((entries, relabelled))
@@ -405,23 +474,36 @@ fn next_key_of(entries: &[Entry], hint: Option<u64>) -> u64 {
 
 // --- the board envelope ----------------------------------------------------
 
+/// Reads an optional field, taking `null` for its default as a missing field
+/// is: platform encoders (System.Text.Json, kotlinx with explicit nulls)
+/// write an unset nullable property as `null`.
+fn nullable<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Default + Deserialize<'de>,
+{
+    Option::<T>::deserialize(deserializer).map(Option::unwrap_or_default)
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct BoardRequest {
     rows: Vec<Value>,
     #[serde(default)]
     next_key: Option<u64>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "nullable")]
     edits: Vec<WireEdit>,
     #[serde(default)]
     resin: Option<WireResin>,
 }
 
-/// One EDIT: `{"type": "set_count", "key": 3, "count": 2}`.
+/// One EDIT: `{"type": "set_count", "key": 3, "count": 2}`. Every variant is
+/// a struct, even one without fields: serde refuses unknown fields only
+/// there, and a stray field is a platform bug worth an error.
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 enum WireEdit {
-    Normalize,
+    Normalize {},
     Join {
         source: u64,
         target: u64,
@@ -462,7 +544,7 @@ enum WireEdit {
 impl WireEdit {
     fn edit(self) -> Result<Edit, String> {
         Ok(match self {
-            Self::Normalize => Edit::Normalize,
+            Self::Normalize {} => Edit::Normalize,
             Self::Join { source, target } => Edit::Join { source, target },
             Self::Detach { key } => Edit::Detach { key },
             Self::Remove { key } => Edit::Remove { key },
@@ -511,7 +593,7 @@ fn board(request: &str) -> Result<Value, Failure> {
     let mut merged = merge(&entries, run.rows, &run.unreadable);
     rekeyed.extend(separate(&mut merged));
     let rows = typed(&merged);
-    let view = board_view(&rows, resin.as_ref());
+    let view = board_view_beside(&rows, resin.as_ref(), unread(&merged));
     Ok(object(vec![
         ("rows", merged.iter().map(write_entry).collect()),
         ("next_key", next_key_of(&merged, hint).into()),
@@ -530,21 +612,27 @@ fn board(request: &str) -> Result<Value, Failure> {
 }
 
 /// A board request's edits in progress. Edits on readable rows run through
-/// [`apply`] in batches; an edit naming an unreadable row is a removal of it
-/// or nothing, since the row takes part in no relationship.
-struct Run {
+/// [`super::apply`] in batches; an edit naming an unreadable row is a
+/// removal of it or nothing, since the row takes part in no relationship.
+struct Run<'a> {
+    entries: &'a [Entry],
     rows: Vec<Row>,
     /// The unreadable rows still in the list.
     unreadable: BTreeSet<u64>,
     hint: Option<u64>,
+    /// Whether the list differs from the request's. A batch reports its own
+    /// net change, and batches are split only by an unreadable row's
+    /// removal, itself a change — so this says what one [`super::apply`]
+    /// of the whole request would.
     changed: bool,
     focus: Option<u64>,
     refused: Option<Refusal>,
 }
 
-impl Run {
-    fn new(entries: &[Entry], hint: Option<u64>) -> Self {
+impl<'a> Run<'a> {
+    fn new(entries: &'a [Entry], hint: Option<u64>) -> Self {
         Self {
+            entries,
             rows: typed(entries),
             unreadable: entries
                 .iter()
@@ -559,7 +647,8 @@ impl Run {
     }
 
     /// Runs `edits` in order: a list without unreadable rows is one
-    /// [`apply`], so the envelope answers exactly as the typed call would.
+    /// [`super::apply`], so the envelope answers exactly as the typed call
+    /// would.
     fn edits(&mut self, edits: &[Edit]) {
         let mut batch = Vec::new();
         for &edit in edits {
@@ -585,7 +674,8 @@ impl Run {
             batch.clear();
             return;
         }
-        let result = apply(&self.rows, self.hint, batch);
+        let held = held_labels(self.entries, |key| self.unreadable.contains(&key));
+        let result = apply_holding(&self.rows, self.hint, batch, &held);
         batch.clear();
         // An edit that did nothing leaves the focus of the one before it.
         if result.changed || result.focus.is_some() {
@@ -729,13 +819,13 @@ enum EditorRequest {
         rows: Vec<Value>,
         #[serde(default)]
         key: Option<u64>,
-        #[serde(default)]
+        #[serde(default, deserialize_with = "nullable")]
         blanket: bool,
         #[serde(default)]
         resin: Option<WireResin>,
-        #[serde(default)]
+        #[serde(default, deserialize_with = "nullable")]
         offer_resin: bool,
-        #[serde(default)]
+        #[serde(default, deserialize_with = "nullable")]
         open_resin: bool,
     },
     Change {
@@ -819,7 +909,13 @@ fn save_sheet(draft: &Draft, rows: Vec<Value>, hint: Option<u64>) -> Result<Valu
     if let Some(key) = draft.key {
         refuse_unreadable(&entries, key)?;
     }
-    match save(&draft, &typed(&entries), readable_hint(&entries, hint)) {
+    let held = held_labels(&entries, |_| true);
+    match save_holding(
+        &draft,
+        &typed(&entries),
+        readable_hint(&entries, hint),
+        &held,
+    ) {
         SaveResult::Saved { result, resin } => {
             let live: BTreeSet<u64> = entries
                 .iter()
@@ -1109,36 +1205,23 @@ const fn effect_group_name(group: EffectGroup) -> &'static str {
 #[serde(deny_unknown_fields)]
 struct WireResin {
     amount: Value,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "nullable")]
     filter: WireResinFilter,
 }
 
-#[derive(Deserialize)]
+/// The resin filter; a field left out or `null` takes the engine's default,
+/// uncursed donors included.
+#[derive(Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct WireResinFilter {
-    #[serde(default = "uncursed_by_default")]
-    uncursed: bool,
+    #[serde(default)]
+    uncursed: Option<bool>,
     #[serde(default)]
     max_depth: Option<u8>,
     #[serde(default)]
     source: Option<FileItemSource>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "nullable")]
     include_mage_wand: bool,
-}
-
-const fn uncursed_by_default() -> bool {
-    true
-}
-
-impl Default for WireResinFilter {
-    fn default() -> Self {
-        Self {
-            uncursed: true,
-            max_depth: None,
-            source: None,
-            include_mage_wand: false,
-        }
-    }
 }
 
 impl WireResin {
@@ -1158,7 +1241,7 @@ impl WireResin {
             amount,
             filter: ArcaneResinFilter {
                 include_mage_wand: self.filter.include_mage_wand,
-                uncursed: self.filter.uncursed,
+                uncursed: self.filter.uncursed.unwrap_or(true),
                 max_depth: self.filter.max_depth,
                 source: self.filter.source.map(ItemSource::from),
             },
@@ -1225,9 +1308,9 @@ struct WireDraft {
 #[derive(Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 enum WireOrigin {
-    New,
+    New {},
     Row { key: u64 },
-    Resin,
+    Resin {},
 }
 
 #[derive(Deserialize)]
@@ -1279,9 +1362,9 @@ fn read_draft(text: &str) -> Result<Draft, Failure> {
     Ok(Draft {
         v: wire.v,
         origin: match wire.origin {
-            WireOrigin::New => Origin::New,
+            WireOrigin::New {} => Origin::New,
             WireOrigin::Row { key } => Origin::Row(key),
-            WireOrigin::Resin => Origin::Resin,
+            WireOrigin::Resin {} => Origin::Resin,
         },
         key: wire.key,
         requirement: Requirement {
@@ -1631,6 +1714,7 @@ fn resin_chip(chip: &ResinChip) -> Value {
         tags: leading,
         uncursed,
         tooltip,
+        amount_tooltip,
         details,
         description,
     } = chip;
@@ -1639,6 +1723,7 @@ fn resin_chip(chip: &ResinChip) -> Value {
         ("tags", tags(leading)),
         ("uncursed", (*uncursed).into()),
         ("tooltip", tooltip.as_deref().into()),
+        ("amount_tooltip", amount_tooltip.as_deref().into()),
         ("details", details.as_slice().into()),
         ("description", description.as_str().into()),
     ])
@@ -1911,6 +1996,7 @@ fn form_value(form: &Form) -> Value {
         blanket,
         in_cluster,
         resin_picked,
+        title,
         preview,
         category,
         kind,
@@ -1941,6 +2027,7 @@ fn form_value(form: &Form) -> Value {
         ("blanket", (*blanket).into()),
         ("in_cluster", (*in_cluster).into()),
         ("resin_picked", (*resin_picked).into()),
+        ("title", title.as_str().into()),
         ("preview", preview.as_ref().map_or(Value::Null, chip_value)),
         (
             "category",

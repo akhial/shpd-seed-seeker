@@ -40,10 +40,11 @@ use crate::query::{
 };
 use crate::trinkets::TRANSMUTATION_COUNT as TRINKET_TRANSMUTATIONS;
 
-use super::board::{BoardItem, Edit, EditResult, apply, board_items};
+use super::board::{BoardItem, Edit, EditResult, HeldLabels, apply_holding, board_items};
 use super::chips::{ChipView, ResinAmount, ResinState, board_view};
 use super::labels::{
-    ARCANE_RESIN, KindName, category_label, count_text, weapon_type_label, wildcard_label,
+    ARCANE_RESIN, KindName, category_label, count_text, requirement_title, weapon_type_label,
+    wildcard_label,
 };
 use super::problems::{problems, row_problems};
 use super::stack::{level_capacity, stack_view};
@@ -564,6 +565,12 @@ pub struct Form {
     pub blanket: bool,
     pub in_cluster: bool,
     pub resin_picked: bool,
+    /// What the sheet is about, for its header: the requirement's title
+    /// (`Any Tier 3+ melee weapon`, the item's name), or `Arcane Resin`
+    /// while the resin is picked. Unlike `preview` it is there while the
+    /// draft has errors, so the header never loses its subtitle; the sprite
+    /// follows `item` and `kind`.
+    pub title: String,
     /// The chip a save would put on the board (key 0, no join candidates),
     /// or `None` while there are errors or the sheet edits the resin.
     pub preview: Option<ChipView>,
@@ -818,8 +825,7 @@ fn opened_row(rows: &[Row], key: u64) -> Option<(usize, BoardItem)> {
 /// - Otherwise on a new chip: any weapon, or — for a blanket — the kind of
 ///   the first ordinary row, melee/thrown narrowing included, since a
 ///   blanket constrains the items the ordinary rows reserve. A key not in
-///   the list is kept for the new row (Linux claims keys up front); a key
-///   of a row no board entry shows is dropped.
+///   the list is kept for the new row (Linux claims keys up front).
 ///
 /// The resin section starts from `resin`, the query's current condition,
 /// or amount 2 with uncursed donors; it is kept however the item changes.
@@ -878,9 +884,9 @@ pub fn open(
         draft.total = stack.total.map(|total| total.clamp(1, most));
         draft.copy_depth = stack.copy_depth.map(floor_value);
     } else {
-        // A key the board shows nowhere — a hand-written list can fold a row
-        // into an entry that is itself folded away — has no chip to edit; a
-        // save must not vanish into it, so the sheet adds a new chip.
+        // The board shows every row, so a key in the list always opens
+        // above. Should one ever not, it has no chip to edit, and a save must
+        // not vanish into it: the sheet adds a new chip.
         if key.is_some_and(|key| rows.iter().any(|row| row.key == key)) {
             draft.key = None;
         }
@@ -1375,7 +1381,12 @@ struct Attempt {
 /// category, say, which every platform but Linux used to store. Problems
 /// the list already had, or that blame other rows only (an unrelated invalid
 /// row, a first blanket before any ordinary row), never block the save.
-fn attempt(draft: &Draft, hint: Option<u64>) -> Attempt {
+///
+/// The rows may have changed since the sheet opened. When the draft's row
+/// has since become a hidden copy of another chip, the save adds a new chip
+/// instead — as [`open`] does for a key the board shows nowhere — rather
+/// than vanishing into the copy.
+fn attempt(draft: &Draft, hint: Option<u64>, held: &HeldLabels) -> Attempt {
     let (rows, rekeyed) = repair_keys(&draft.rows, hint);
     // Keys the repair gave up (zero, out of range) follow their row.
     let resolve = |key: u64| {
@@ -1402,7 +1413,7 @@ fn attempt(draft: &Draft, hint: Option<u64>) -> Attempt {
             Origin::New | Origin::Resin => Vec::new(),
         };
         return Attempt {
-            result: adopt(apply(&rows, hint, &edits)),
+            result: adopt(apply_holding(&rows, hint, &edits, held)),
             saved: None,
             errors,
         };
@@ -1423,7 +1434,7 @@ fn attempt(draft: &Draft, hint: Option<u64>) -> Attempt {
     let key = draft
         .key
         .map(resolve)
-        .filter(|&key| is_valid_key(key))
+        .filter(|&key| is_valid_key(key) && !folded_away(&rows, key))
         .unwrap_or_else(|| mint_key(&rows, hint));
     let shown = Shown::of(draft);
     let edit = Edit::Save {
@@ -1433,7 +1444,7 @@ fn attempt(draft: &Draft, hint: Option<u64>) -> Attempt {
         total: draft.total.filter(|_| shown.counting),
         copy_depth: draft.copy_depth.filter(|_| shown.copy_depth),
     };
-    let result = apply(&rows, hint, &[edit]);
+    let result = apply_holding(&rows, hint, &[edit], held);
     if let Some(refusal) = result.refused {
         errors.push(refusal.to_string());
     } else {
@@ -1453,6 +1464,18 @@ fn attempt(draft: &Draft, hint: Option<u64>) -> Attempt {
         saved: Some(key),
         errors,
     }
+}
+
+/// Whether the row with `key` is in `rows` as a hidden copy — no board
+/// entry's member — which has no sheet of its own.
+fn folded_away(rows: &[Row], key: u64) -> bool {
+    rows.iter()
+        .position(|row| row.key == key)
+        .is_some_and(|index| {
+            !board_items(rows)
+                .iter()
+                .any(|entry| entry.members.contains(&index))
+        })
 }
 
 /// The chip the attempt put on the board, as the sheet previews it: the
@@ -1486,7 +1509,7 @@ fn preview(attempt: &Attempt) -> Option<ChipView> {
 /// opened on.
 #[must_use]
 pub fn form(draft: &Draft) -> Form {
-    form_of(draft, &attempt(draft, None))
+    form_of(draft, &attempt(draft, None, &HeldLabels::default()))
 }
 
 /// Saves the draft onto `rows`, the list as it is now (the sheet may have
@@ -1498,12 +1521,23 @@ pub fn form(draft: &Draft) -> Form {
 /// the query's resin. A draft with errors is refused with its form.
 #[must_use]
 pub fn save(draft: &Draft, rows: &[Row], next_key: Option<u64>) -> SaveResult {
+    save_holding(draft, rows, next_key, &HeldLabels::default())
+}
+
+/// [`save`] onto a list beside rows the editor cannot read, whose group
+/// labels the save may not take (see [`HeldLabels`]).
+pub(crate) fn save_holding(
+    draft: &Draft,
+    rows: &[Row],
+    next_key: Option<u64>,
+    held: &HeldLabels,
+) -> SaveResult {
     let draft = Draft {
         taken_trinkets: taken_trinkets(rows, draft.key),
         rows: rows.to_vec(),
         ..draft.clone()
     };
-    let attempt = attempt(&draft, next_key);
+    let attempt = attempt(&draft, next_key, held);
     if !attempt.errors.is_empty() {
         let form = form_of(&draft, &attempt);
         return SaveResult::Refused { draft, form };
@@ -1554,6 +1588,11 @@ fn form_of(draft: &Draft, attempt: &Attempt) -> Form {
         blanket: draft.blanket,
         in_cluster: draft.in_cluster,
         resin_picked: shown.resin,
+        title: if shown.resin {
+            ARCANE_RESIN.to_owned()
+        } else {
+            requirement_title(&saved_requirement(draft))
+        },
         preview: preview(attempt),
         category: Choice {
             visible: true,

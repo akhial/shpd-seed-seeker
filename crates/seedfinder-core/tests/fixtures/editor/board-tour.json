@@ -1,5 +1,5 @@
 {
-  "about": "Every kind of entry, with the Auto resin chip; no edits, so the rows come back as sent.",
+  "about": "Every kind of entry, with the Auto resin chip; no edits, so the rows come back unchanged, in canonical spelling.",
   "envelope": "requirement_board",
   "request": {
     "resin": {
@@ -531,6 +531,7 @@
     "refused": null,
     "rekeyed": [],
     "resin": {
+      "amount_tooltip": "Enough resin to upgrade kept wands to +3, excluding No resin wands and reforge copies",
       "description": "Arcane Resin, Auto, starting Magic Missile contributes 2 resin, uncursed wands, Heap",
       "details": [
         "Auto",
@@ -549,7 +550,7 @@
           "text": "Mage +2"
         }
       ],
-      "tooltip": "Enough resin to upgrade kept wands to +3, excluding No resin wands and reforge copies\nHeap",
+      "tooltip": "Heap",
       "uncursed": true
     },
     "rows": [
