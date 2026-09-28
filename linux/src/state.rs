@@ -9,7 +9,7 @@ use shpd_seedfinder_core::editor::{
 };
 use shpd_seedfinder_core::feasibility::Quest;
 use shpd_seedfinder_core::model::ItemSource;
-use shpd_seedfinder_core::query::{ArcaneResinFilter, SearchQuery};
+use shpd_seedfinder_core::query::{ArcaneResinFilter, QueryError, SearchQuery};
 use shpd_seedfinder_core::quests::{
     BlacksmithQuestType, GhostQuestType, ImpQuestType, QuestSummary, WandmakerQuestType,
 };
@@ -277,6 +277,11 @@ impl AppState {
 
     /// Builds the validated engine query for the current state.
     ///
+    /// The query's own settings are checked first — the floor limit, the
+    /// floor requirements, whether it asks for anything at all — in the
+    /// engine's words. What is wrong with the rows is the shared editor's to
+    /// say, in the words its chips show.
+    ///
     /// # Errors
     ///
     /// Returns the human-readable validation message.
@@ -286,6 +291,18 @@ impl AppState {
         // quest is certain, so the filter would exclude nothing.
         query.require_blacksmith =
             self.require_blacksmith && self.max_depth < Quest::Blacksmith.window().1;
+        match query.validate() {
+            Err(error @ (QueryError::InvalidDepth | QueryError::InvalidFloorRequirement)) => {
+                return Err(error.to_string());
+            }
+            Err(error @ QueryError::Empty) if self.requirements.is_empty() => {
+                return Err(error.to_string());
+            }
+            _ => {}
+        }
+        if let Some(problem) = editor::problems(&self.requirements).into_iter().next() {
+            return Err(problem.message);
+        }
         query.validate().map_err(|error| error.to_string())?;
         Ok(query)
     }
@@ -603,7 +620,10 @@ mod tests {
         state.apply(&[Edit::Detach { key: 2 }]);
         assert_eq!(board(&state).items.len(), 3);
         state.requirements.retain(|row| row.requirement.blanket);
-        assert!(state.to_query().is_err());
+        assert_eq!(
+            state.to_query().unwrap_err(),
+            "Add at least one ordinary requirement."
+        );
     }
 
     #[test]
@@ -694,7 +714,7 @@ mod tests {
             (chip.name.as_str(), chip.title.as_str()),
             ("Artifact", "Artifact")
         );
-        assert!(state.to_query().is_err());
+        assert_eq!(state.to_query().unwrap_err(), "Select an artifact.");
     }
 
     #[test]
@@ -1051,6 +1071,37 @@ mod tests {
         assert!(!state.to_query().unwrap().require_blacksmith);
         state.max_depth = 13;
         assert!(state.to_query().unwrap().require_blacksmith);
+    }
+
+    #[test]
+    fn start_checks_the_query_first_then_the_rows_in_the_editors_words() {
+        use shpd_seedfinder_core::floor_filters::FloorRequirement;
+        use shpd_seedfinder_core::query::QueryError;
+
+        let mut state = AppState::default();
+        assert_eq!(state.to_query().unwrap_err(), QueryError::Empty.to_string());
+        // A wand cannot filter by tier; the chip and the gate say so alike.
+        state.requirements.push(row(
+            1,
+            Requirement {
+                tier: TierRequirement::Exact(3),
+                ..Requirement::any(ItemKind::Wand)
+            },
+        ));
+        let message = "Tier filters require a wildcard weapon or armor.";
+        assert_eq!(state.to_query().unwrap_err(), message);
+        assert_eq!(entry(&state, 1).chips[0].problem.as_deref(), Some(message));
+        // The query's own settings come before any row.
+        state.floor_requirements.push(FloorRequirement {
+            depth: 5,
+            feeling: None,
+            rooms: Vec::new(),
+            any_rooms: Vec::new(),
+        });
+        assert_eq!(
+            state.to_query().unwrap_err(),
+            QueryError::InvalidFloorRequirement.to_string()
+        );
     }
 
     #[test]
