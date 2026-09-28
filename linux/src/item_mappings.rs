@@ -69,7 +69,7 @@ pub fn present(parent: &impl IsA<gtk::Widget>, seed: DungeonSeed) -> adw::Dialog
             &gtk::Label::builder()
                 .label(title)
                 .xalign(0.0)
-                .css_classes(["heading"])
+                .css_classes(["heading", "spd-heading"])
                 .build(),
         );
         let gap = ARTWORK.slot_gap * 3;

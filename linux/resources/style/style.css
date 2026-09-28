@@ -1,5 +1,49 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
+/* ---------- Palette ----------
+ *
+ * The web app's colours (web/src/app/styles.css `:root`), which are Shattered
+ * Pixel Dungeon's own: slate surfaces, the game's yellow for tags and
+ * headings, its green for primary actions, the brighter upgrade green for
+ * +N, teal for enchantments and a soft red for curses. Like the web and
+ * Android apps, Seed Seeker prefers the dark style; a system that asks for
+ * light gets the same hues, darkened to read on Adwaita's light surfaces.
+ * These are those light counterparts; style-dark.css holds the web's own
+ * values and is loaded on top while the style is dark.
+ */
+:root {
+  --accent-bg-color: #3f9a3c;
+  --accent-fg-color: #ffffff;
+  --accent-color: #2f7a2c;
+  --upgrade-color: #2b8a1e;
+  --enchant-color: #1d7a70;
+  --curse-color: var(--error-color);
+  --secret-color: #7a4fc2;
+  --spd-yellow-color: #8a6d00;
+  --sewers-color: #1f8a5c;
+  --prison-color: #3d6ea8;
+  --caves-color: #9a5f22;
+  --city-color: #7d4fa8;
+  --halls-color: #b03a3a;
+}
+
+/* The upgrade green of +N, wherever an upgrade is written. */
+.upgrade {
+  color: var(--upgrade-color);
+}
+
+/* Section headings in the game's yellow, as the web writes them. */
+.spd-heading {
+  color: var(--spd-yellow-color);
+}
+
+/* Each region names itself in its own colour, as on the web. */
+.region-sewers { color: var(--sewers-color); }
+.region-prison { color: var(--prison-color); }
+.region-caves { color: var(--caves-color); }
+.region-city { color: var(--city-color); }
+.region-halls { color: var(--halls-color); }
+
 /* Seed codes are always monospace, everywhere they appear. */
 .seed-code,
 row.seed-row .title {
@@ -35,8 +79,21 @@ entry.seed-entry {
   color: var(--error-color);
 }
 
-.tag.accent {
-  color: var(--accent-color);
+.tag.upgrade {
+  color: var(--upgrade-color);
+}
+
+.tag.enchant {
+  color: var(--enchant-color);
+}
+
+.tag.curse {
+  color: var(--curse-color);
+}
+
+/* Items tucked behind a hidden door: violet, "arcane" and hidden. */
+.tag.secret {
+  color: var(--secret-color);
 }
 
 .tag.warning {
@@ -67,15 +124,9 @@ entry.seed-entry {
 /* A wand consumed for Arcane Resin: a purple match led by the resin sprite. */
 .tag.resin-match {
   padding: 0 8px 0 4px;
-  color: #8e5ad6;
+  color: var(--secret-color);
   border-color: rgba(140, 100, 220, 0.4);
   background: rgba(140, 100, 220, 0.14);
-}
-
-@media (prefers-color-scheme: dark) {
-  .tag.resin-match {
-    color: #c9a6f5;
-  }
 }
 
 /* Rows kept for the match are tinted, and their names weighted, so a
@@ -96,7 +147,7 @@ row.item-matched label.title {
 
 /* 14/18 of the 24px sprite box, matching the web wildcard mark. */
 .wildcard-mark {
-  color: #83fc64;
+  color: var(--upgrade-color);
   font-size: 18.6667px;
   font-weight: 600;
   text-shadow: 0 1px 2px var(--window-bg-color);
@@ -186,13 +237,17 @@ button.stack-badge {
   background-color: alpha(var(--warning-color), 0.15);
 }
 
-/* An upgrade is the one number a reforge changes, so it is tinted apart;
-   so is the resin the resin chip counts, apart from its donor filters. */
-.chip-tag.chip-tag-up,
-.chip-tag.chip-tag-credit,
+/* An upgrade, the one number a reforge changes, takes the upgrade green;
+   the uncursed check the softer match green. The resin chip's credit tags
+   stay amber, as the web draws them. */
 .chip-tag.chip-tag-soft {
   color: var(--success-color);
   background-color: alpha(var(--success-color), 0.14);
+}
+
+.chip-tag.chip-tag-up {
+  color: var(--upgrade-color);
+  background-color: alpha(var(--upgrade-color), 0.12);
 }
 
 /* A check mark is a glyph, not a number: the text face draws it legibly. */

@@ -47,7 +47,11 @@ fn main() -> glib::ExitCode {
         .resource_base_path(RESOURCE_BASE_PATH)
         .flags(gio::ApplicationFlags::HANDLES_OPEN)
         .build();
-    app.connect_startup(|_| load_stylesheet());
+    app.connect_startup(|_| {
+        // Dark like the web and Android apps, unless the system asks for light.
+        adw::StyleManager::default().set_color_scheme(adw::ColorScheme::PreferDark);
+        load_stylesheet();
+    });
     application::configure(&app);
     app.connect_activate(window::present);
     // A seedseeker:// share link arrives here as a `gio::File`, at cold start
@@ -71,13 +75,33 @@ fn main() -> glib::ExitCode {
 }
 
 fn load_stylesheet() {
+    let Some(display) = gtk::gdk::Display::default() else {
+        return;
+    };
     let provider = gtk::CssProvider::new();
     provider.load_from_resource(&format!("{RESOURCE_BASE_PATH}/style/style.css"));
-    if let Some(display) = gtk::gdk::Display::default() {
-        gtk::style_context_add_provider_for_display(
-            &display,
-            &provider,
-            gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
-        );
-    }
+    gtk::style_context_add_provider_for_display(
+        &display,
+        &provider,
+        gtk::STYLE_PROVIDER_PRIORITY_APPLICATION,
+    );
+    // The web's palette lies over the dark style only. GTK's
+    // prefers-color-scheme media query does not follow libadwaita's
+    // color scheme, so the style manager switches the sheet in and out.
+    let dark = gtk::CssProvider::new();
+    dark.load_from_resource(&format!("{RESOURCE_BASE_PATH}/style/style-dark.css"));
+    let follow = move |manager: &adw::StyleManager| {
+        if manager.is_dark() {
+            gtk::style_context_add_provider_for_display(
+                &display,
+                &dark,
+                gtk::STYLE_PROVIDER_PRIORITY_APPLICATION + 1,
+            );
+        } else {
+            gtk::style_context_remove_provider_for_display(&display, &dark);
+        }
+    };
+    let manager = adw::StyleManager::default();
+    follow(&manager);
+    manager.connect_dark_notify(follow);
 }

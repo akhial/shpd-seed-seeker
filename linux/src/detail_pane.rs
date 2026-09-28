@@ -706,7 +706,7 @@ impl DetailPane {
             labels.append(
                 &gtk::Label::builder()
                     .label(region(*depth))
-                    .css_classes(["dim-label"])
+                    .css_classes([region_class(*depth)])
                     .build(),
             );
             if let Some(quest) = quests.iter().find(|quest| quest.depth == *depth) {
@@ -904,6 +904,17 @@ impl DetailPane {
     }
 }
 
+/// The style class that tints a region's name in its own colour.
+const fn region_class(depth: u8) -> &'static str {
+    match depth {
+        0..=5 => "region-sewers",
+        6..=10 => "region-prison",
+        11..=15 => "region-caves",
+        16..=20 => "region-city",
+        _ => "region-halls",
+    }
+}
+
 /// The editor's requirements as an engine query for
 /// [`scout_matches`], which reads only the requirements, the floor limit and
 /// the blacksmith-reward exclusion. Unlike [`AppState::to_query`] this never
@@ -1095,7 +1106,7 @@ fn item_row(world_item: &WorldItem, gems: RingGems, matched: RowMatch) -> adw::A
     ));
 
     if world_item.displayed_upgrade() > 0 {
-        let upgrade = tag(&format!("+{}", world_item.displayed_upgrade()), "success");
+        let upgrade = tag(&format!("+{}", world_item.displayed_upgrade()), "upgrade");
         upgrade.add_css_class("tag-numeric");
         row.add_suffix(&upgrade);
     }
@@ -1106,14 +1117,14 @@ fn item_row(world_item: &WorldItem, gems: RingGems, matched: RowMatch) -> adw::A
         };
         row.add_suffix(&tag(
             effect.wire_name(),
-            if cursed_effect { "error" } else { "accent" },
+            if cursed_effect { "curse" } else { "enchant" },
         ));
     }
     if world_item.cursed {
-        row.add_suffix(&tag("Cursed", "error"));
+        row.add_suffix(&tag("Cursed", "curse"));
     }
     if world_item.secret {
-        let badge = tag("Secret", "warning");
+        let badge = tag("Secret", "secret");
         badge.set_tooltip_text(Some("Hidden in a secret room — search to reveal it"));
         row.add_suffix(&badge);
     }

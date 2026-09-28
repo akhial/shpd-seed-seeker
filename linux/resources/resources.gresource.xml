@@ -17,6 +17,7 @@
     -->
     <file preprocess="xml-stripblanks">icons/scalable/actions/clear-results-symbolic.svg</file>
     <file>style/style.css</file>
+    <file>style/style-dark.css</file>
 
     <!--
       Shattered Pixel Dungeon item and floor feeling artwork, GPL-3.0-or-later. These are

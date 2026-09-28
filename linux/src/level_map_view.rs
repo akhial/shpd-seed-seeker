@@ -975,9 +975,9 @@ fn item_card(tip: MapItemTooltip) -> gtk::Box {
         let quantity = item.quantity;
         title.connect_realize(move |title| {
             let mut markup = if let Some(upgrade) = upgrade {
-                title.add_css_class("success");
+                title.add_css_class("upgrade");
                 let color = title.color();
-                title.remove_css_class("success");
+                title.remove_css_class("upgrade");
                 let color = format!(
                     "#{:02x}{:02x}{:02x}",
                     (color.red() * 255.0).round() as u8,
@@ -1007,7 +1007,7 @@ fn item_card(tip: MapItemTooltip) -> gtk::Box {
             modifiers.append(
                 &gtk::Label::builder()
                     .label(label)
-                    .css_classes(["tag", "error"])
+                    .css_classes(["tag", "curse"])
                     .build(),
             );
             body.append(&modifiers);
