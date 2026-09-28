@@ -1061,6 +1061,7 @@ fn set_count(
     let template = if item.total.is_some() && anchor.level_sum.is_some() {
         Requirement {
             alternative_group: None,
+            max_depth: inherited,
             ..anchor
         }
     } else if item.cluster.is_none() && anchor.item.is_some() {

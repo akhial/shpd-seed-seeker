@@ -395,6 +395,20 @@ fn board_fixtures(fixtures: &mut Fixtures) {
         }),
     );
     fixtures.add(
+        "board-stack-total-grow-copy-floor",
+        "A counting Ring of Energy stack within floor 9 whose copy lies within floor 20, grown to three: the new copy takes the copies' floor 20.",
+        Board,
+        &json!({
+            "rows": [
+                {"key": 1, "kind": "ring", "item": "ring_energy", "max_depth": 9,
+                 "level_sum": {"group": 1, "at_least": 3}},
+                {"key": 2, "kind": "ring", "item": "ring_energy", "max_depth": 20,
+                 "level_sum": {"group": 1, "at_least": 3}},
+            ],
+            "edits": [{"type": "set_count", "key": 1, "count": 3}],
+        }),
+    );
+    fixtures.add(
         "board-cluster-count-one",
         "(Frost or Disintegration) ×2 stepped down to ×1: the group drops its stack label.",
         Board,

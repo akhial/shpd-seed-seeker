@@ -1068,6 +1068,37 @@ fn counting_levels_keeps_the_copies_own_floor_limit_both_ways() {
     assert_eq!(round, open);
 }
 
+/// A counting stack grown from the board adds copies with the copies' floor
+/// limit, not the anchor's, as the sheet does: the anchor's floor is its
+/// own placement.
+#[test]
+fn growing_a_counting_stack_gives_new_copies_the_copies_floor() {
+    let counting = [
+        floor(sum(named(1, ItemId::RingEnergy), 1, 3), 9),
+        floor(sum(named(2, ItemId::RingEnergy), 1, 3), 20),
+    ];
+    let grown = edited(&counting, &[Edit::SetCount { key: 1, count: 3 }]);
+    assert_eq!(keys(&grown), [1, 2, 3]);
+    assert_eq!(grown[2].requirement, counting[1].requirement);
+
+    let rows = [
+        floor(named(1, ItemId::RingEnergy), 9),
+        floor(named(2, ItemId::RingEnergy), 20),
+    ];
+    let round = edited(
+        &rows,
+        &[
+            Edit::ToggleLevels { key: 1 },
+            Edit::SetCount { key: 1, count: 3 },
+            Edit::ToggleLevels { key: 1 },
+        ],
+    );
+    assert_eq!(
+        round,
+        [rows[0], rows[1], floor(named(3, ItemId::RingEnergy), 20)]
+    );
+}
+
 // --- the editor round trip ----------------------------------------------
 
 #[test]

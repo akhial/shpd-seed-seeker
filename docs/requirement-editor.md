@@ -158,7 +158,7 @@ name of the query format (`"locked_chest"`).
 | `{"type": "detach", "key": K}` | Takes a cluster member out on its own. It leaves the cluster's stack behind. |
 | `{"type": "remove", "key": K}` | Removes a cluster member, or a chip's whole entry. |
 | `{"type": "remove_item", "key": K}` | Removes the whole entry holding `K`: members and hidden copies. |
-| `{"type": "set_count", "key": K, "count": n}` | How many items the entry asks for, clamped to 1–3. |
+| `{"type": "set_count", "key": K, "count": n}` | How many items the entry asks for, clamped to 1–3. New copies take the floor limit the existing copies carry, not the anchor's. |
 | `{"type": "set_total", "key": K, "total": n \| null}` | Sets or clears the stack's combined level, clamped to 1–`level_capacity`. |
 | `{"type": "toggle_levels", "key": K}` | Turns counting levels on (at `default_total`) or off. The anchor and every copy keep their own floor limits both ways. |
 | `{"type": "set_copy_depth", "key": K, "max_depth": n \| null}` | Sets or clears the floor limit of the stack's hidden copies; an empty boss floor snaps to the floor below. |
@@ -563,7 +563,7 @@ decided once.
 | Detach, and a member dragged out of a group | The member leaves alone and without a stack label; the group keeps its ×N (a group of one left with copies becomes that chip's stack). |
 | Joining across categories without a stack | Leftover identity labels are cleared; nothing is deleted. |
 | A group stepped down to ×1 | Drops its stack label, so it uses none of the four and none reaches a saved or shared query. |
-| Counting levels on or off | The anchor and every copy keep their own floor limits, on the board and through the sheet (which saves the copy floor its hidden control holds); the popover names the copies' floors while they differ from the anchor's. |
+| Counting levels on or off | The anchor and every copy keep their own floor limits, on the board and through the sheet (which saves the copy floor its hidden control holds); a counting stack grown on the board gives the new copies the copies' floor; the popover names the copies' floors while they differ from the anchor's. |
 | Group badges | A cluster's ×N and Σ badges belong to the whole group and are drawn **outside** its dashed outline, right after its trailing edge — never inline after the last member, which reads as "this last item ×N". A lone chip's badges stay inside the chip. The outline and its badges wrap as one unit; on a narrow board the outline leaves room for its badge rather than pushing the badge onto a line of its own. |
 | A stacked cluster member saved into another category | Refused like the join; without a stack, leftover labels are cleared. |
 | Drop on the empty board | Detaches cluster members only; a lone chip stays. |
@@ -642,11 +642,12 @@ encodings, joins (one copy moving out of a stack, the reported list and
 its round trip, onto a stacked chip and a stacked cluster, a combined
 level, a group member leaving and a hand-written stack, refused), detach
 and removals, copy floors, combined levels (their copies' floors kept both
-ways), a group stepped down to ×1, saves (new and unchanged), problems,
-key repair, label compaction and labels moved into range, unreadable rows,
-the sheet's open/change/save flow, an untouched save and one that repairs
-its row, the resin flows (a query with resin and one without, and the
-resin chip saved untouched), and the error envelopes. Each file is
+ways and given to new copies), a group stepped down to ×1, saves (new and
+unchanged), problems, key repair, label compaction and labels moved into
+range, unreadable rows, the sheet's open/change/save flow, an untouched
+save and one that repairs its row, the resin flows (a query with resin and
+one without, and the resin chip saved untouched), and the error envelopes.
+Each file is
 
 ```json
 {"about": "...", "envelope": "requirement_board", "request": {...}, "response": {...}}
