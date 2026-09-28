@@ -161,8 +161,7 @@ impl ResinSupply {
                             .arcane_resin_filter
                             .source
                             .is_none_or(|source| candidate.source == source)
-                        && (!query.exclude_blacksmith_rewards
-                            || candidate.source != ItemSource::BlacksmithReward)
+                        && !query.excludes_item(candidate)
                 })
                 // Generated wands have no applied resin bonus. Count only
                 // their generated upgrades, with no hero talent bonuses.

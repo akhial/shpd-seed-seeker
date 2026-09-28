@@ -190,6 +190,9 @@ struct ScoutItemOutput {
     matched: bool,
     /// Matched as a surplus wand consumed for Arcane Resin.
     resin_donor: bool,
+    /// Forbidden to every slot by the query (a Blacksmith reward under
+    /// `exclude_blacksmith_rewards`), so never matched.
+    excluded: bool,
 }
 
 #[derive(Serialize)]
@@ -647,22 +650,11 @@ fn scout_impl(request_json: &str) -> Result<String, String> {
     let total_requirements = marks.as_ref().map_or(0, |marks| marks.total_requirements);
     let transmuted = marks.as_ref().map(|marks| marks.transmuted_trinkets);
     let artifact_decks = artifact_deck_outputs(&world, marks.as_ref());
-    let (matched, resin_donors) = marks.map_or_else(
-        || {
-            (
-                vec![false; world.items.len()],
-                vec![false; world.items.len()],
-            )
-        },
-        |marks| (marks.matched, marks.resin_donors),
-    );
     let items = world
         .items
         .iter()
-        .zip(matched.into_iter().zip(resin_donors))
-        .map(|(world_item, (matched, resin_donor))| {
-            scout_item_output(world_item, matched, resin_donor)
-        })
+        .enumerate()
+        .map(|(index, world_item)| scout_item_output(world_item, marks.as_ref(), index))
         .collect();
     Ok(to_json(&ScoutOutput {
         item_mappings: shpd_seedfinder_core::item_mappings::item_mappings(seed),
@@ -747,7 +739,14 @@ fn scout_quest_outputs(quests: QuestSummary) -> Vec<ScoutQuestOutput> {
     output
 }
 
-fn scout_item_output(world_item: &WorldItem, matched: bool, resin_donor: bool) -> ScoutItemOutput {
+/// The scout output of `world_item`, the `index`th item of the world `marks`
+/// (when a query was given) describe.
+fn scout_item_output(
+    world_item: &WorldItem,
+    marks: Option<&shpd_seedfinder_core::query::ScoutMatches>,
+    index: usize,
+) -> ScoutItemOutput {
+    let flag = |flags: &[bool]| flags.get(index).copied().unwrap_or(false);
     let definition = item(world_item.item);
     ScoutItemOutput {
         id: definition.stable_id,
@@ -761,8 +760,9 @@ fn scout_item_output(world_item: &WorldItem, matched: bool, resin_donor: bool) -
         depth: world_item.depth,
         source: item_source_name(world_item.source),
         accessibility: accessibility_output(world_item.accessibility),
-        matched,
-        resin_donor,
+        matched: marks.is_some_and(|marks| flag(&marks.matched)),
+        resin_donor: marks.is_some_and(|marks| flag(&marks.resin_donors)),
+        excluded: marks.is_some_and(|marks| flag(&marks.excluded)),
     }
 }
 
@@ -1400,6 +1400,39 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(matched.len(), 1);
         assert_eq!(matched[0]["id"], definition.stable_id);
+    }
+
+    #[test]
+    fn scout_items_flag_excluded_smith_rewards() {
+        let output = |exclude: bool| -> Value {
+            let request = json!({
+                "seed": "AAAAAAAAA",
+                "query": {
+                    "exclude_blacksmith_rewards": exclude,
+                    "requirements": [{"kind": "weapon"}]
+                }
+            });
+            serde_json::from_str(&scout_impl(&request.to_string()).unwrap()).unwrap()
+        };
+        let excluded = output(true);
+        let items = excluded["items"].as_array().unwrap();
+        assert!(
+            items
+                .iter()
+                .any(|item| item["source"] == "blacksmith_reward")
+        );
+        for item in items {
+            assert_eq!(item["excluded"], item["source"] == "blacksmith_reward");
+            assert!(item["excluded"] == false || item["matched"] == false);
+        }
+        let allowed = output(false);
+        assert!(
+            allowed["items"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|item| item["excluded"] == false)
+        );
     }
 
     #[test]

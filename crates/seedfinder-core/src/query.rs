@@ -571,6 +571,17 @@ impl SearchQuery {
         self.arcane_resin_auto || self.arcane_resin > 0
     }
 
+    /// Whether the query forbids every slot, and the Arcane Resin supply, to
+    /// use `candidate`: today exactly the Blacksmith's rewards while
+    /// `exclude_blacksmith_rewards` is on. Floor limits are not part of it.
+    /// The matcher's slot candidates, its resin supply and [`scout_matches`]
+    /// share this test, so Scout's `excluded` flags cannot drift from what
+    /// the search refuses.
+    #[must_use]
+    pub fn excludes_item(&self, candidate: &WorldItem) -> bool {
+        self.exclude_blacksmith_rewards && candidate.source == ItemSource::BlacksmithReward
+    }
+
     /// Player-supplied resin, independent of generated donor filters.
     pub(crate) const fn resin_credit(&self) -> u16 {
         if self.arcane_resin_filter.include_mage_wand {
@@ -1003,8 +1014,7 @@ impl<'query> Assignment<'query> {
                     let candidate = &items[index];
                     if candidate.depth <= query.max_depth
                         && candidate.depth <= requirement.max_depth.unwrap_or(query.max_depth)
-                        && (!query.exclude_blacksmith_rewards
-                            || candidate.source != ItemSource::BlacksmithReward)
+                        && !query.excludes_item(candidate)
                         && let Some(identity) = predicate.matching_identity(candidate)
                     {
                         candidates.push((
@@ -1209,6 +1219,11 @@ pub struct ScoutMatches {
     /// One flag per world item, set for the matched items the selection
     /// consumes as Arcane Resin donors rather than keeping for a slot.
     pub resin_donors: Vec<bool>,
+    /// One flag per world item, set for the items the query forbids every
+    /// slot to use ([`SearchQuery::excludes_item`]): today the Blacksmith's
+    /// rewards while `exclude_blacksmith_rewards` is on. An excluded item is
+    /// never matched.
+    pub excluded: Vec<bool>,
     /// Matches for transmutations 1–13, separate from generated world item indices.
     pub transmuted_trinkets: [bool; crate::trinkets::TRANSMUTATION_COUNT as usize],
     /// Matched remaining-deck outcomes (floor, zero-based position).
@@ -1285,9 +1300,15 @@ pub fn scout_matches(world: &GeneratedWorld, query: &SearchQuery) -> ScoutMatche
             transmuted_trinkets[index - matched.len()] = true;
         }
     }
+    let excluded = world
+        .items
+        .iter()
+        .map(|item| query.excludes_item(item))
+        .collect();
     ScoutMatches {
         matched,
         resin_donors,
+        excluded,
         transmuted_trinkets,
         transmuted_artifacts,
         matched_requirements: search.best_conditions
@@ -3072,8 +3093,61 @@ mod tests {
 
         // Excluding Smith rewards drops the shallow copy for the deep one.
         query.requirements[0].max_depth = None;
+        assert_eq!(scout_matches(&world, &query).excluded, vec![false, false]);
         query.exclude_blacksmith_rewards = true;
-        assert_eq!(scout_matches(&world, &query).matched_indices(), vec![1]);
+        let marks = scout_matches(&world, &query);
+        assert_eq!(marks.matched_indices(), vec![1]);
+        assert_eq!(marks.excluded, vec![true, false]);
+    }
+
+    #[test]
+    fn scout_flags_the_smith_rewards_a_query_excludes() {
+        let world = crate::main_world::generate_main_world(DungeonSeed::MIN, 14).unwrap();
+        let smith: Vec<bool> = world
+            .items
+            .iter()
+            .map(|item| item.source == ItemSource::BlacksmithReward)
+            .collect();
+        assert!(
+            smith.contains(&true),
+            "the seed's Blacksmith offers rewards"
+        );
+        // One requirement for each reward, so each could fill a slot.
+        let mut query = scout_query(
+            world
+                .items
+                .iter()
+                .zip(&smith)
+                .filter(|&(_, &reward)| reward)
+                .map(|(item, _)| requirement(item.item))
+                .collect(),
+        );
+        query.max_depth = 14;
+        let allowed = scout_matches(&world, &query);
+        assert_eq!(allowed.excluded, vec![false; world.items.len()]);
+        assert!(
+            allowed
+                .matched
+                .iter()
+                .zip(&smith)
+                .any(|(&matched, &reward)| matched && reward),
+            "a reward serves its own requirement while rewards are allowed"
+        );
+
+        query.exclude_blacksmith_rewards = true;
+        let excluded = scout_matches(&world, &query);
+        assert_eq!(excluded.excluded, smith);
+        assert!(
+            excluded
+                .matched
+                .iter()
+                .zip(&excluded.excluded)
+                .all(|(&matched, &excluded)| !(matched && excluded))
+        );
+        // The flags are the matcher's own exclusion.
+        for (item, &flag) in world.items.iter().zip(&excluded.excluded) {
+            assert_eq!(query.excludes_item(item), flag);
+        }
     }
 
     #[test]
