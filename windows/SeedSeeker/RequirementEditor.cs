@@ -588,6 +588,17 @@ public sealed record SheetForm
     /// <summary>Why the draft cannot be saved, in the order to show them.</summary>
     public required IReadOnlyList<string> Errors { get; init; }
     public required bool CanSave { get; init; }
+
+    /// <summary>
+    /// Whether the sheet edits the resin <paramref name="query"/> already asks
+    /// for, so the dialog says Save and offers Remove: the resin chip's sheet,
+    /// or Arcane Resin picked on a new sheet while the query has resin. The
+    /// editor answers the second as new, though the section starts from that
+    /// resin and its save replaces it; main's resin dialog, which a new
+    /// requirement's Arcane Resin button opened, said Save and Remove there.
+    /// </summary>
+    public bool EditsQueryResin(QuerySettings query) =>
+        Origin == SheetOrigin.Resin || (Origin == SheetOrigin.New && ResinPicked && query.NeedsResin);
 }
 
 /// <summary>One control the user moved (the CHANGE of docs/requirement-editor.md); its value is the form's own.</summary>

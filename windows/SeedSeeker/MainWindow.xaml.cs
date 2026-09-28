@@ -1184,9 +1184,10 @@ public sealed partial class MainWindow : Window
             try
             {
                 dialog.Title = form.ResinPicked ? "Arcane Resin" : $"{(form.IsNew ? "New" : "Edit")} {(form.Blanket ? "Blanket " : "")}Requirement";
-                dialog.PrimaryButtonText = form.IsNew ? "Add" : "Save";
                 // Removing the resin clears the query's own condition, which is the window's.
-                dialog.SecondaryButtonText = form.Origin == SheetOrigin.Resin ? "Remove" : "";
+                var editsResin = form.EditsQueryResin(query);
+                dialog.PrimaryButtonText = form.IsNew && !editsResin ? "Add" : "Save";
+                dialog.SecondaryButtonText = editsResin ? "Remove" : "";
                 dialog.IsPrimaryButtonEnabled = form.CanSave;
                 Fill(kind, form.Kind, drawn?.Kind);
                 Fill(item, form.Item, drawn?.Item);

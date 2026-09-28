@@ -457,6 +457,39 @@ public sealed class RequirementSheetTests
     }
 
     [Fact]
+    public void ArcaneResinPickedOnANewSheetEditsTheResinTheQueryHas()
+    {
+        // Without resin, picking it adds it: Add, and nothing to remove.
+        var bare = Loaded(new ItemRequirement { Kind = ItemKind.Wand });
+        var adding = RequirementSheet.Open(bare, null, offerResin: true);
+        adding.Change(SheetChange.SetKind("wand"));
+        adding.Change(SheetChange.SetItem("arcane_resin"));
+        Assert.True(adding.Form.IsNew && adding.Form.ResinPicked);
+        Assert.False(adding.Form.EditsQueryResin(bare));
+
+        // With resin, the editor answers a new sheet all the same, but the
+        // section starts from the query's resin and the save replaces it.
+        var query = Loaded(new ItemRequirement { Kind = ItemKind.Wand });
+        query.ArcaneResin = 6;
+        query.ArcaneResinFilter = new(true, 9, null, false);
+        var sheet = RequirementSheet.Open(query, null, offerResin: true);
+        sheet.Change(SheetChange.SetKind("wand"));
+        Assert.False(sheet.Form.EditsQueryResin(query));
+        sheet.Change(SheetChange.SetItem("arcane_resin"));
+        Assert.Equal((true, SheetOrigin.New, true), (sheet.Form.IsNew, sheet.Form.Origin, sheet.Form.ResinPicked));
+        Assert.True(sheet.Form.EditsQueryResin(query));
+        Assert.Equal((double?)6, sheet.Form.Resin.Amount);
+        Assert.Equal(new ResinCondition(false, 6, query.ArcaneResinFilter), sheet.Save(query)!.Resin);
+        // A wand picked instead is a new requirement again.
+        sheet.Change(SheetChange.SetItem("wand_frost"));
+        Assert.False(sheet.Form.EditsQueryResin(query));
+
+        // The resin chip's sheet edits it; a requirement's does not.
+        Assert.True(RequirementSheet.Open(query, null, openResin: true).Form.EditsQueryResin(query));
+        Assert.False(RequirementSheet.Open(query, query.Requirements[0].Key).Form.EditsQueryResin(query));
+    }
+
+    [Fact]
     public void AWandChipTurnedIntoResinLeavesTheBoard()
     {
         var query = Loaded(new ItemRequirement { Kind = ItemKind.Wand }, Named("rat_skull"));
