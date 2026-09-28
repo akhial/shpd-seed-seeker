@@ -336,6 +336,16 @@ button.mapping-tile {
   box-shadow: none;
 }
 
+/* The dungeon floor sits in a rounded frame, inline and expanded. */
+.map-frame {
+  border-radius: 12px;
+}
+
+/* Expanded into its dialog, the map keeps the dialog's margins. */
+.map-expanded {
+  margin: 0 12px 12px;
+}
+
 /* Item inspection follows the active Adwaita palette and tooltip shape. */
 tooltip.map-item-tooltip {
   background-color: var(--popover-bg-color);

@@ -18,7 +18,7 @@ use adw::prelude::*;
 use gtk::{gdk, glib};
 use shpd_seedfinder_core::catalog::{ItemId, item};
 use shpd_seedfinder_core::challenges::Challenges;
-use shpd_seedfinder_core::level_map::{self, LevelMap};
+use shpd_seedfinder_core::level_map::{self, LevelMap, MapItemTooltip};
 use shpd_seedfinder_core::seed::DungeonSeed;
 use shpd_seedfinder_core::trinkets::trinket_order;
 
@@ -76,6 +76,7 @@ pub struct FloorMapView {
     status: gtk::Label,
     retry: gtk::Button,
     title: gtk::Label,
+    toolbar: gtk::Box,
     branches: gtk::Box,
     secrets_button: gtk::ToggleButton,
     previous: gtk::Button,
@@ -99,6 +100,8 @@ pub struct FloorMapView {
     start: Cell<Instant>,
     elapsed: Cell<u64>,
     dialog: RefCell<Option<adw::Dialog>>,
+    /// The item card a click pinned, until it is dismissed.
+    inspected: RefCell<Option<gtk::Popover>>,
     on_trinket: RefCell<Rc<dyn Fn(ItemId)>>,
     on_close: RefCell<Option<Rc<dyn Fn()>>>,
 }
@@ -129,7 +132,9 @@ impl FloorMapView {
         toolbar.append(&title);
         toolbar.append(&previous);
         toolbar.append(&next);
-        toolbar.append(&expand);
+        // Inline, the floor's own heading already names the map, so the
+        // title row only shows in the expanded dialog.
+        toolbar.set_visible(false);
         content.append(&toolbar);
         let trinkets = gtk::Box::builder()
             .orientation(gtk::Orientation::Horizontal)
@@ -158,6 +163,7 @@ impl FloorMapView {
         controls.append(&minus);
         controls.append(&plus);
         controls.append(&fit);
+        controls.append(&expand);
         content.append(&controls);
         let area = gtk::DrawingArea::builder()
             .content_height(350)
@@ -185,6 +191,8 @@ impl FloorMapView {
         let stack = gtk::Stack::builder()
             .vexpand(true)
             .height_request(350)
+            .overflow(gtk::Overflow::Hidden)
+            .css_classes(["map-frame"])
             .build();
         stack.add_named(&area, Some("map"));
         stack.add_named(&status_box, Some("status"));
@@ -197,6 +205,7 @@ impl FloorMapView {
             status,
             retry,
             title,
+            toolbar,
             branches,
             secrets_button,
             previous,
@@ -220,6 +229,7 @@ impl FloorMapView {
             start: Cell::new(Instant::now()),
             elapsed: Cell::new(0),
             dialog: RefCell::new(None),
+            inspected: RefCell::new(None),
             on_trinket: RefCell::new(Rc::new(on_trinket)),
             on_close: RefCell::new(None),
         });
@@ -261,154 +271,59 @@ impl FloorMapView {
                 let Some(view) = weak.upgrade() else {
                     return false;
                 };
-                if view.dragging.get() {
+                if view.dragging.get() || view.inspected.borrow().is_some() {
                     return false;
                 }
-                let map = view.map.borrow();
-                let Some(map) = map.as_ref() else {
-                    return false;
-                };
-                let w = f64::from(view.area.width());
-                let h = f64::from(view.area.height());
-                let scale = (w / f64::from(map.width * 16)).min(h / f64::from(map.height * 16))
-                    * view.zoom.get();
-                if scale <= 0.0 {
-                    return false;
-                }
-                let (pan_x, pan_y) =
-                    view.constrain_pan(view.area.width(), view.area.height(), scale, map);
                 let (x, y) = if keyboard {
+                    let (w, h) = (f64::from(view.area.width()), f64::from(view.area.height()));
                     view.pointer
                         .get()
                         .map_or((w / 2.0, h / 2.0), |(x, y)| (x + w / 2.0, y + h / 2.0))
                 } else {
                     (f64::from(x), f64::from(y))
                 };
-                let map_x = (x - w / 2.0 - pan_x) / scale + f64::from(map.width * 8);
-                let map_y = (y - h / 2.0 - pan_y) / scale + f64::from(map.height * 8);
-                let Some(tip) = map.item_tooltips().into_iter().find(|tip| {
-                    let [bx, by, bw, bh] = tip.bounds;
-                    let left =
-                        (i32::try_from(tip.cell).expect("map cell fits i32") % map.width) * 16 + bx;
-                    let top =
-                        (i32::try_from(tip.cell).expect("map cell fits i32") / map.width) * 16 + by;
-                    (view.secrets.get() || !tip.hidden)
-                        && map_x >= f64::from(left)
-                        && map_y >= f64::from(top)
-                        && map_x < f64::from(left + bw)
-                        && map_y < f64::from(top + bh)
-                }) else {
+                let Some((tip, area)) = view.item_at(x, y) else {
                     return false;
                 };
-                let [bx, by, bw, bh] = tip.bounds;
-                let left =
-                    (i32::try_from(tip.cell).expect("map cell fits i32") % map.width) * 16 + bx;
-                let top =
-                    (i32::try_from(tip.cell).expect("map cell fits i32") / map.width) * 16 + by;
-                let body = gtk::Box::new(gtk::Orientation::Vertical, 12);
-                // Scope the semantic colors to this native tooltip window.
+                let body = item_card(tip);
+                // Scope the semantic colors to this native tooltip. Its
+                // surface is a GtkNative, not a GtkWindow.
                 body.connect_realize(|body| {
-                    if let Some(root) = body.root().and_downcast::<gtk::Window>() {
-                        root.add_css_class("map-item-tooltip");
+                    if let Some(native) = body.native() {
+                        native.add_css_class("map-item-tooltip");
                     }
                 });
                 body.connect_unrealize(|body| {
-                    if let Some(root) = body.root().and_downcast::<gtk::Window>() {
-                        root.remove_css_class("map-item-tooltip");
+                    if let Some(native) = body.native() {
+                        native.remove_css_class("map-item-tooltip");
                     }
                 });
-                if !tip.label.is_empty() {
-                    body.append(
-                        &gtk::Label::builder()
-                            .label(&tip.label)
-                            .xalign(0.0)
-                            .css_classes(["dim-label", "caption"])
-                            .build(),
-                    );
-                }
-                for item in tip.items {
-                    let heading = gtk::Box::new(gtk::Orientation::Horizontal, 10);
-                    heading.append(&sprites::map_item_image(
-                        item.image, item.icon, item.glow, 32,
-                    ));
-                    let title = gtk::Label::builder()
-                        .label(&item.name)
-                        .xalign(0.0)
-                        .wrap(true)
-                        .max_width_chars(34)
-                        .valign(gtk::Align::Center)
-                        .css_classes(["map-item-title"])
-                        .build();
-                    let name = item.name;
-                    let upgrade = item.upgrade.filter(|&level| level > 0);
-                    let quantity = item.quantity;
-                    title.connect_realize(move |title| {
-                        let mut markup = if let Some(upgrade) = upgrade {
-                            title.add_css_class("success");
-                            let color = title.color();
-                            title.remove_css_class("success");
-                            let color = format!("#{:02x}{:02x}{:02x}",
-                                (color.red() * 255.0).round() as u8,
-                                (color.green() * 255.0).round() as u8,
-                                (color.blue() * 255.0).round() as u8);
-                            let split = name.rfind(' ').map_or(0, |index| index + 1);
-                            // Pango keeps the final word and inline upgrade on the same line.
-                            format!("{}<span allow_breaks=\"false\">{}\u{00a0}<span font_family=\"monospace\" size=\"75%\" foreground=\"{color}\" background=\"{color}\" background_alpha=\"15%\">\u{00a0}+{upgrade}\u{00a0}</span></span>",
-                                glib::markup_escape_text(&name[..split]),
-                                glib::markup_escape_text(&name[split..]))
-                        } else {
-                            glib::markup_escape_text(&name).to_string()
-                        };
-                        if quantity > 1 {
-                            let _ = write!(markup, "\u{00a0}×{quantity}");
-                        }
-                        title.set_markup(&markup);
-                    });
-                    heading.append(&title);
-                    body.append(&heading);
-                    let modifiers = gtk::Box::new(gtk::Orientation::Horizontal, 6);
-                    if item.cursed || item.curse.is_some() {
-                        let label = if item.cursed { "Cursed" } else { "Curse" };
-                        modifiers.append(
-                            &gtk::Label::builder()
-                                .label(label)
-                                .css_classes(["tag", "error"])
-                                .build(),
-                        );
-                    }
-                    if modifiers.first_child().is_some() {
-                        body.append(&modifiers);
-                    }
-                    if !item.deterministic {
-                        body.append(
-                            &gtk::Label::builder()
-                                .label("Varies with play")
-                                .xalign(0.0)
-                                .css_classes(["dim-label", "caption"])
-                                .build(),
-                        );
-                    }
-                    if !item.description.is_empty() {
-                        body.append(
-                            &gtk::Label::builder()
-                                .label(item.description)
-                                .xalign(0.0)
-                                .wrap(true)
-                                .max_width_chars(42)
-                                .build(),
-                        );
-                    }
-                }
                 tooltip.set_custom(Some(&body));
-                tooltip.set_tip_area(&gdk::Rectangle::new(
-                    (w / 2.0 + pan_x + f64::from(left - map.width * 8) * scale).floor() as i32,
-                    (h / 2.0 + pan_y + f64::from(top - map.height * 8) * scale).floor() as i32,
-                    (f64::from(bw) * scale).ceil() as i32,
-                    (f64::from(bh) * scale).ceil() as i32,
-                ));
+                tooltip.set_tip_area(&area);
                 true
             }
         });
+        // A click (or tap, where there is no hover) pins the same card in a
+        // popover until it is dismissed.
+        let click = gtk::GestureClick::builder()
+            .button(gdk::BUTTON_PRIMARY)
+            .build();
+        click.connect_released({
+            let weak = Rc::downgrade(&view);
+            move |gesture, presses, x, y| {
+                let Some(view) = weak.upgrade() else {
+                    return;
+                };
+                if presses != 1 {
+                    return;
+                }
+                if let Some((tip, area)) = view.item_at(x, y) {
+                    gesture.set_state(gtk::EventSequenceState::Claimed);
+                    view.inspect(tip, &area);
+                }
+            }
+        });
+        view.area.add_controller(click);
         view.area.add_tick_callback({
             let weak = Rc::downgrade(&view);
             move |area, _| {
@@ -655,6 +570,80 @@ impl FloorMapView {
     fn hide_item(&self) {
         self.area.set_has_tooltip(false);
         self.area.set_has_tooltip(true);
+        if let Some(popover) = self.inspected.take() {
+            popover.popdown();
+        }
+    }
+
+    /// The item under `(x, y)` in the map area, with the rectangle its sprite
+    /// covers there.
+    fn item_at(&self, x: f64, y: f64) -> Option<(MapItemTooltip, gdk::Rectangle)> {
+        let map = self.map.borrow();
+        let map = map.as_ref()?;
+        let w = f64::from(self.area.width());
+        let h = f64::from(self.area.height());
+        let scale =
+            (w / f64::from(map.width * 16)).min(h / f64::from(map.height * 16)) * self.zoom.get();
+        if scale <= 0.0 {
+            return None;
+        }
+        let (pan_x, pan_y) = self.constrain_pan(self.area.width(), self.area.height(), scale, map);
+        let map_x = (x - w / 2.0 - pan_x) / scale + f64::from(map.width * 8);
+        let map_y = (y - h / 2.0 - pan_y) / scale + f64::from(map.height * 8);
+        let origin = |tip: &MapItemTooltip| {
+            let cell = i32::try_from(tip.cell).expect("map cell fits i32");
+            let [bx, by, _, _] = tip.bounds;
+            ((cell % map.width) * 16 + bx, (cell / map.width) * 16 + by)
+        };
+        let tip = map.item_tooltips().into_iter().find(|tip| {
+            let (left, top) = origin(tip);
+            let [_, _, bw, bh] = tip.bounds;
+            (self.secrets.get() || !tip.hidden)
+                && map_x >= f64::from(left)
+                && map_y >= f64::from(top)
+                && map_x < f64::from(left + bw)
+                && map_y < f64::from(top + bh)
+        })?;
+        let (left, top) = origin(&tip);
+        let [_, _, bw, bh] = tip.bounds;
+        let area = gdk::Rectangle::new(
+            (w / 2.0 + pan_x + f64::from(left - map.width * 8) * scale).floor() as i32,
+            (h / 2.0 + pan_y + f64::from(top - map.height * 8) * scale).floor() as i32,
+            (f64::from(bw) * scale).ceil() as i32,
+            (f64::from(bh) * scale).ceil() as i32,
+        );
+        Some((tip, area))
+    }
+
+    /// Pins an item's card in a popover pointing at its sprite.
+    fn inspect(self: &Rc<Self>, tip: MapItemTooltip, area: &gdk::Rectangle) {
+        self.hide_item();
+        let body = item_card(tip);
+        body.set_margin_start(4);
+        body.set_margin_end(4);
+        body.set_margin_top(4);
+        body.set_margin_bottom(4);
+        let popover = gtk::Popover::builder()
+            .child(&body)
+            .pointing_to(area)
+            .position(gtk::PositionType::Top)
+            .build();
+        popover.set_parent(&self.area);
+        popover.connect_closed({
+            let weak = Rc::downgrade(self);
+            move |popover| {
+                if let Some(view) = weak.upgrade()
+                    && view.inspected.borrow().as_ref() == Some(popover)
+                {
+                    view.inspected.replace(None);
+                }
+                // Unparent once the closing animation has run.
+                let popover = popover.clone();
+                glib::idle_add_local_once(move || popover.unparent());
+            }
+        });
+        self.inspected.replace(Some(popover.clone()));
+        popover.popup();
     }
 
     fn zoom_at(&self, factor: f64, anchor: (f64, f64)) {
@@ -718,7 +707,7 @@ impl FloorMapView {
                     24,
                 ))
                 .tooltip_text(item(*id).name)
-                .css_classes(["flat"])
+                .css_classes(["flat", "trinket-shortcut"])
                 .build();
             button.update_property(&[gtk::accessible::Property::Label(item(*id).name)]);
             button.connect_clicked({
@@ -904,7 +893,7 @@ impl FloorMapView {
             return;
         }
         let dialog = adw::Dialog::builder()
-            .title("Floor map")
+            .title("Floor Map")
             .content_width(1100)
             .content_height(800)
             .build();
@@ -914,9 +903,11 @@ impl FloorMapView {
         toolbar.set_content(Some(&self.content));
         dialog.set_child(Some(&toolbar));
         self.expand.set_visible(false);
+        self.toolbar.set_visible(true);
         self.previous.set_visible(true);
         self.next.set_visible(true);
         self.trinkets.set_visible(true);
+        self.content.add_css_class("map-expanded");
         dialog.connect_closed({
             let weak = Rc::downgrade(self);
             move |_| {
@@ -924,6 +915,8 @@ impl FloorMapView {
                     toolbar.set_content(gtk::Widget::NONE);
                     view.widget.append(&view.content);
                     view.expand.set_visible(true);
+                    view.content.remove_css_class("map-expanded");
+                    view.toolbar.set_visible(false);
                     view.previous.set_visible(false);
                     view.next.set_visible(false);
                     view.trinkets.set_visible(false);
@@ -948,6 +941,98 @@ impl FloorMapView {
             dialog.close();
         }
     }
+}
+
+/// An item's card, as its tooltip and its pinned popover show it: where it
+/// lies, then each item there with its sprite, name, upgrade, curse and the
+/// game's own description.
+fn item_card(tip: MapItemTooltip) -> gtk::Box {
+    let body = gtk::Box::new(gtk::Orientation::Vertical, 12);
+    if !tip.label.is_empty() {
+        body.append(
+            &gtk::Label::builder()
+                .label(&tip.label)
+                .xalign(0.0)
+                .css_classes(["dim-label", "caption"])
+                .build(),
+        );
+    }
+    for item in tip.items {
+        let heading = gtk::Box::new(gtk::Orientation::Horizontal, 10);
+        heading.append(&sprites::map_item_image(
+            item.image, item.icon, item.glow, 32,
+        ));
+        let title = gtk::Label::builder()
+            .label(&item.name)
+            .xalign(0.0)
+            .wrap(true)
+            .max_width_chars(34)
+            .valign(gtk::Align::Center)
+            .css_classes(["map-item-title"])
+            .build();
+        let name = item.name;
+        let upgrade = item.upgrade.filter(|&level| level > 0);
+        let quantity = item.quantity;
+        title.connect_realize(move |title| {
+            let mut markup = if let Some(upgrade) = upgrade {
+                title.add_css_class("success");
+                let color = title.color();
+                title.remove_css_class("success");
+                let color = format!(
+                    "#{:02x}{:02x}{:02x}",
+                    (color.red() * 255.0).round() as u8,
+                    (color.green() * 255.0).round() as u8,
+                    (color.blue() * 255.0).round() as u8
+                );
+                let split = name.rfind(' ').map_or(0, |index| index + 1);
+                // Pango keeps the final word and inline upgrade on the same line.
+                format!(
+                    "{}<span allow_breaks=\"false\">{}\u{00a0}<span font_family=\"monospace\" size=\"75%\" foreground=\"{color}\" background=\"{color}\" background_alpha=\"15%\">\u{00a0}+{upgrade}\u{00a0}</span></span>",
+                    glib::markup_escape_text(&name[..split]),
+                    glib::markup_escape_text(&name[split..])
+                )
+            } else {
+                glib::markup_escape_text(&name).to_string()
+            };
+            if quantity > 1 {
+                let _ = write!(markup, "\u{00a0}×{quantity}");
+            }
+            title.set_markup(&markup);
+        });
+        heading.append(&title);
+        body.append(&heading);
+        if item.cursed || item.curse.is_some() {
+            let label = if item.cursed { "Cursed" } else { "Curse" };
+            let modifiers = gtk::Box::new(gtk::Orientation::Horizontal, 6);
+            modifiers.append(
+                &gtk::Label::builder()
+                    .label(label)
+                    .css_classes(["tag", "error"])
+                    .build(),
+            );
+            body.append(&modifiers);
+        }
+        if !item.deterministic {
+            body.append(
+                &gtk::Label::builder()
+                    .label("Varies with play")
+                    .xalign(0.0)
+                    .css_classes(["dim-label", "caption"])
+                    .build(),
+            );
+        }
+        if !item.description.is_empty() {
+            body.append(
+                &gtk::Label::builder()
+                    .label(item.description)
+                    .xalign(0.0)
+                    .wrap(true)
+                    .max_width_chars(42)
+                    .build(),
+            );
+        }
+    }
+    body
 }
 
 fn button(icon: &str, label: &str) -> gtk::Button {

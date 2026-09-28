@@ -60,6 +60,9 @@ pub struct DetailPane {
     trinket_override: Cell<TrinketOverride>,
     world_challenges: Cell<Challenges>,
     open_map: RefCell<Option<(u8, Rc<FloorMapView>)>>,
+    /// The floor whose map was just opened, to scroll into view once the
+    /// rebuilt manifest is laid out.
+    reveal: Cell<Option<u8>>,
     updating: Cell<bool>,
     toasts: adw::ToastOverlay,
     on_scout: RefCell<Option<Box<dyn Fn()>>>,
@@ -270,6 +273,7 @@ impl DetailPane {
             trinket_override: Cell::new(TrinketOverride::Automatic),
             world_challenges: Cell::new(Challenges::NONE),
             open_map: RefCell::new(None),
+            reveal: Cell::new(None),
             updating: Cell::new(false),
             toasts: toasts.clone(),
             on_scout: RefCell::new(None),
@@ -781,6 +785,7 @@ impl DetailPane {
                             }
                         });
                         pane.open_map.replace(Some((depth, view)));
+                        pane.reveal.set(Some(depth));
                     }
                     pane.render(&state);
                     if closing {
@@ -870,6 +875,20 @@ impl DetailPane {
                 let adjustment = pane.scroller.vadjustment();
                 let offset = offset.max(-bounds.height() + 1.0);
                 adjustment.set_value(adjustment.value() + f64::from(bounds.y() - offset));
+            }
+            // A map just opened below the fold scrolls up into view, as far as
+            // it takes to show it whole but never past its floor's heading.
+            if let Some(depth) = pane.reveal.take()
+                && let Some((_, section)) = pane.sections.borrow().iter().find(|(d, _)| *d == depth)
+                && let Some(content) = pane.manifest_box.parent()
+                && let Some(bounds) = section.compute_bounds(&content)
+            {
+                let adjustment = pane.scroller.vadjustment();
+                let top = f64::from(bounds.y());
+                let bottom = top + f64::from(bounds.height());
+                if bottom > adjustment.value() + adjustment.page_size() {
+                    adjustment.set_value(top.min(bottom - adjustment.page_size()));
+                }
             }
             pane.update_dock();
             gtk::glib::ControlFlow::Break
