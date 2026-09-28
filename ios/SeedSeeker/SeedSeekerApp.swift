@@ -81,9 +81,12 @@ final class AppModel {
 
     var request: SearchRequest? { try? query.searchRequest() }
     var validationMessage: String? { AndroidCopy.validationMessage(for: query) }
+    /// Search starts once the query builds and nothing — a query setting or
+    /// a problem the shared core finds with the requirements — stands in the way.
+    var canSearch: Bool { request != nil && validationMessage == nil }
 
     func search() {
-        guard let request else { return }
+        guard canSearch, let request else { return }
         importNotice = nil
         controller.start(request, workers: defaults.integer(forKey: WorkerPersistence.defaultsKey))
         backgroundSearch.start()
@@ -100,7 +103,7 @@ final class AppModel {
 
     func share() {
         do { sharedLink = SharePayload(text: try DeepLink.encodeLink(for: query)) }
-        catch { showError(AndroidCopy.shareError(error), title: "Shared search") }
+        catch { showError(validationMessage ?? AndroidCopy.shareError(error), title: "Shared search") }
     }
 
     func open(_ url: URL) {

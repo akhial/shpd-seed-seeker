@@ -414,7 +414,11 @@ private struct ContentView: View {
                 linkCopied = false
             }
         } catch {
-            transferError = (error as? LocalizedError)?.errorDescription
+            // A list the shared core finds a problem with says which, in its
+            // words, rather than the link encoder's blanket refusal.
+            let resin = BoardResin(amount: arcaneResin, auto: arcaneResinAuto, filter: arcaneResinFilter)
+            transferError = RequirementBoard.of(requirements, resin: resin).problems.first?.message
+                ?? (error as? LocalizedError)?.errorDescription
                 ?? "The current query could not be turned into a link."
         }
     }
@@ -654,7 +658,8 @@ private struct QueryView: View {
             // finished run refines it automatically; explicit filtering is also available.
             Button {
                 if controller.isRunning { controller.cancel() }
-                else if let request = builtRequest, let document = try? QueryDocument.encode(request),
+                else if let request = builtRequest, board.problems.isEmpty,
+                        let document = try? QueryDocument.encode(request),
                         (try? QueryAnalysis.impossibilityReason(document)) == nil {
                     controller.start(request, workers: workers)
                 }
@@ -663,7 +668,7 @@ private struct QueryView: View {
                       systemImage: controller.isRunning ? "stop.fill" : "play.fill")
                     .frame(maxWidth: .infinity).padding(.vertical, 5)
             }.buttonStyle(.borderedProminent).tint(controller.isRunning ? .red : .accentColor)
-                .disabled((builtRequest == nil || impossible) && !controller.isRunning).keyboardShortcut(.return, modifiers: .command)
+                .disabled((builtRequest == nil || impossible || !board.problems.isEmpty) && !controller.isRunning).keyboardShortcut(.return, modifiers: .command)
                 .padding()
         }
         .navigationTitle("Query")
@@ -720,12 +725,29 @@ private struct QueryView: View {
                 set: { workerCount = WorkerPersistence.clamp(Int($0.rounded()), ceiling: workerCeiling) })
     }
 
-    /// Why the query cannot be searched as it stands (a combined-level
-    /// group that no longer adds up, say), or nil when it can.
+    /// Why the query cannot be searched as it stands, or nil when it can:
+    /// the query's own settings first, then the first problem the shared
+    /// core finds with the requirements (a combined-level group that no
+    /// longer adds up, say).
     private var requestError: String? {
         guard !requirements.isEmpty || !floorRequirements.isEmpty || (arcaneResinAuto || arcaneResin > 0) else { return nil }
-        do { _ = try buildRequest(); return nil } catch {
-            return (error as? LocalizedError)?.errorDescription ?? "The query cannot be searched"
+        var failure: Error?
+        do { _ = try buildRequest() } catch { failure = error }
+        if let setting = failure as? ModelValidationError, isQuerySetting(setting) {
+            return setting.errorDescription
+        }
+        if let problem = board.problems.first { return problem.message }
+        return failure.map { ($0 as? LocalizedError)?.errorDescription ?? "The query cannot be searched" }
+    }
+
+    /// Whether a request error is about the query's own settings — resin,
+    /// depth, challenges, floors, an empty query — rather than about the
+    /// requirements, which the shared core words and blames.
+    private func isQuerySetting(_ failure: ModelValidationError) -> Bool {
+        switch failure {
+        case .arcaneResin, .maximumDepth, .challenges, .floorRequirements: true
+        case .emptyRequirements: requirements.isEmpty
+        default: false
         }
     }
 

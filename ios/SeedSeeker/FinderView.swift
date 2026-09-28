@@ -289,8 +289,8 @@ struct FinderView: View {
                             .glassEffectTransition(.matchedGeometry)
                     }
                     .buttonStyle(.plain)
-                    .disabled(model.request == nil)
-                    .opacity(model.request == nil ? 0.45 : 1)
+                    .disabled(!model.canSearch)
+                    .opacity(model.canSearch ? 1 : 0.45)
                 }
             }
             .frame(maxWidth: 680)
