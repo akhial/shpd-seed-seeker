@@ -1283,8 +1283,6 @@ fn resin_menu() -> gio::Menu {
     menu
 }
 
-/// One qualifier beside a chip's name, tinted as the editor styles it, with
-/// its own hover text where the editor explains it ("Auto", "Mage +2").
 /// A requirement chip's face: its sprite, its name, and the tiny tags that
 /// qualify it, all as the shared editor words them — everything but the
 /// badges of its stack. The board adds those; a chip in flight is its face
@@ -1329,6 +1327,8 @@ fn chip_face(chip: &ChipView) -> gtk::Box {
     widget
 }
 
+/// One qualifier beside a chip's name, tinted as the editor styles it, with
+/// its own hover text where the editor explains it ("Auto", "Mage +2").
 fn chip_tag(tag: &Tag) -> gtk::Label {
     let label = gtk::Label::builder()
         .label(&tag.text)
