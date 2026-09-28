@@ -2,10 +2,10 @@ import SwiftUI
 import SeedSeekerKit
 
 /// The requirement sheet. Every control is drawn from the shared core's
-/// form — whether it shows, what it offers, its bounds and its words — and
-/// each move is one change sent to the core, whose answer is the form drawn
-/// next. The sheet keeps what is its own: the two pages, the glass, the
-/// title and buttons, and the help text under a few controls.
+/// form — whether it shows, what it offers, its bounds, its words and its
+/// help text — and each move is one change sent to the core, whose answer is
+/// the form drawn next. The sheet keeps what is its own: the two pages, the
+/// glass, the title and buttons, and the headings of its pickers.
 struct RequirementsEditor: View {
     @Environment(\.dismiss) private var dismiss
     /// Hands the sheet over to the resin sheet once Arcane Resin is picked.
@@ -181,7 +181,7 @@ struct RequirementsEditor: View {
                 if form.excludeResin.visible {
                     VStack(alignment: .leading, spacing: 8) {
                         Toggle(form.excludeResin.label, isOn: flag(form.excludeResin.value) { .excludeResin($0) })
-                        explanation("Keep this wand without budgeting resin to upgrade it. Useful for imbuing: resin upgrades do not transfer to the staff. Extra copies are reserved for reforging and never need Auto resin.")
+                        explanation(form.excludeResin.caption)
                     }
                 }
                 if form.stack.visible { stackControls }
@@ -198,19 +198,17 @@ struct RequirementsEditor: View {
                 Toggle(form.transmutations.label,
                        isOn: flag(form.transmutations.enabled) { .transmutationsEnabled($0) })
                 if form.transmutations.enabled {
+                    // The value in words is the whole reading (`At most 3`).
                     Stepper(value: number(form.transmutations.value) { .transmutations($0) },
                             in: form.transmutations.range) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Maximum transmutations")
-                            Text(form.transmutations.valueLabel).foregroundStyle(.tint)
-                        }
+                        Text(form.transmutations.valueLabel).foregroundStyle(.tint)
                     }
-                    if let caption = form.transmutations.caption { explanation(caption) }
                 }
+                if form.transmutations.captionVisible { explanation(form.transmutations.caption) }
             }
             if form.selectTrinket.visible {
                 Toggle(form.selectTrinket.label, isOn: flag(form.selectTrinket.value) { .selectTrinket($0) })
-                explanation("Applies after the first brewing opportunity. If several alternatives are offered, no trinket is chosen.")
+                explanation(form.selectTrinket.caption)
             }
         }
     }
@@ -220,7 +218,7 @@ struct RequirementsEditor: View {
             heading("Tier")
             RequirementSegmentedControl(title: "Tier", options: form.tier.modes.map { ($0.value ?? "", $0.label) },
                                         selection: pick(form.tier.mode) { .tierMode($0) })
-            if form.tier.hasValue { valueSlider(form.tier) { .tier($0) } }
+            if form.tier.valueVisible { valueSlider(form.tier) { .tier($0) } }
         }
     }
 
@@ -229,7 +227,7 @@ struct RequirementsEditor: View {
             heading("Upgrade")
             RequirementSegmentedControl(title: "Upgrade", options: form.upgrade.modes.map { ($0.value ?? "", $0.label) },
                                         selection: pick(form.upgrade.mode) { .upgradeMode($0) })
-            if form.upgrade.hasValue { valueSlider(form.upgrade, isUpgrade: true) { .upgrade($0) } }
+            if form.upgrade.valueVisible { valueSlider(form.upgrade, isUpgrade: true) { .upgrade($0) } }
         }
     }
 
@@ -247,10 +245,11 @@ struct RequirementsEditor: View {
 
     private var effectControls: some View {
         VStack(alignment: .leading, spacing: 10) {
-            heading("Effect")
-            RequirementSegmentedControl(title: "Effect", options: form.effect.modes.map { ($0.value ?? "", $0.label) },
+            heading(form.effect.label)
+            RequirementSegmentedControl(title: form.effect.label,
+                                        options: form.effect.modes.map { ($0.value ?? "", $0.label) },
                                         selection: pick(form.effect.mode) { .effectMode($0) })
-            if form.effect.isSpecific {
+            if form.effect.choicesVisible {
                 ForEach(form.effect.groups) { group in
                     effectGrid(heading: group.label, choices: form.effect.choices(in: group.value))
                 }
@@ -318,6 +317,7 @@ struct RequirementsEditor: View {
         VStack(alignment: .leading, spacing: 16) {
             if form.uncursed.visible {
                 Toggle(form.uncursed.label, isOn: flag(form.uncursed.value) { .uncursed($0) })
+                explanation(form.uncursed.caption)
             }
             if form.source.visible {
                 RequirementSourceSelector(options: form.source.options,
@@ -334,21 +334,24 @@ struct RequirementsEditor: View {
     private var stackControls: some View {
         VStack(alignment: .leading, spacing: 14) {
             Stepper(value: number(form.stack.count) { .count($0) }, in: form.stack.range) {
-                HStack { heading("How many"); Spacer(); Text(form.stack.valueLabel).foregroundStyle(.tint) }
+                HStack { heading(form.stack.label); Spacer(); Text(form.stack.valueLabel).foregroundStyle(.tint) }
             }
             if form.stack.copyDepth.visible {
                 RequirementsFloorControl(control: form.stack.copyDepth,
                                          enabled: flag(form.stack.copyDepth.enabled) { .copyDepthEnabled($0) },
                                          floor: number(form.stack.copyDepth.value) { .copyDepth($0) })
-                explanation("A floor limit is where an item lies, not what it is, so the copies keep their own.")
             }
             if form.stack.countLevels.visible {
                 Toggle(form.stack.countLevels.label, isOn: flag(form.stack.countLevels.enabled) { .countLevels($0) })
-                explanation("Each item counts its upgrade plus one, and spare items may go unused.")
+                if form.stack.countLevels.captionVisible { explanation(form.stack.countLevels.caption) }
                 if form.stack.countLevels.enabled {
-                    valueRow("Levels together", form.stack.countLevels.valueLabel)
+                    // The value in words is the whole reading (`≥ 5 across up to 2`).
+                    HStack {
+                        Spacer()
+                        Text(form.stack.countLevels.valueLabel).font(.subheadline).foregroundStyle(.tint)
+                    }
                     if form.stack.countLevels.isAdjustable {
-                        RequirementGraduatedSlider(title: "Combined level",
+                        RequirementGraduatedSlider(title: form.stack.countLevels.label,
                                                    value: slider(form.stack.countLevels.value) { .total($0) },
                                                    bounds: Double(form.stack.countLevels.min)...Double(form.stack.countLevels.max))
                             .accessibilityValue(form.stack.countLevels.valueLabel)
@@ -363,7 +366,7 @@ struct RequirementsEditor: View {
             if saveDraft() { action() }
         } label: {
             HStack(spacing: 12) {
-                Text("How many").foregroundStyle(.primary)
+                Text(form.stack.label).foregroundStyle(.primary)
                 Spacer(minLength: 8)
                 Text(form.stack.valueLabel).foregroundStyle(.secondary)
                 Image(systemName: "chevron.right")
@@ -492,7 +495,12 @@ struct RequirementsEditor: View {
     }
 
     private func heading(_ value: String) -> some View { Text(value).font(.subheadline.weight(.semibold)) }
-    private func explanation(_ value: String) -> some View { Text(value).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }
+    /// A help text of the form's, under what it explains; nothing for none.
+    @ViewBuilder private func explanation(_ value: String?) -> some View {
+        if let value {
+            Text(value).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        }
+    }
     private func valueRow(_ title: String, _ value: String, isUpgrade: Bool = false) -> some View {
         HStack {
             Text(title)

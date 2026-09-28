@@ -3,12 +3,14 @@ import SeedSeekerKit
 
 /// The Arcane Resin sheet: a requirement sheet with the resin picked, opened
 /// on the query's resin chip or handed over from a wand's item page. Its
-/// controls are the shared core's resin section and donor filter.
+/// controls and their words are the shared core's resin section and donor
+/// filter; whether it adds or saves is the core's mode, and it offers Remove
+/// only when opened on the resin chip.
 struct RequirementsResinEditor: View {
-    let hasRequirement: Bool
     /// Saves the sheet; answers the sheet to keep showing when the core
     /// refused the save, its errors saying why.
     let onSave: (RequirementSheet) -> RequirementSheet?
+    /// Removes the query's resin.
     let onRemove: () -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -17,10 +19,9 @@ struct RequirementsResinEditor: View {
     /// The amount as typed; the core is sent whatever number it holds.
     @State private var minimum: String
 
-    init(sheet: RequirementSheet, hasRequirement: Bool,
+    init(sheet: RequirementSheet,
          onSave: @escaping (RequirementSheet) -> RequirementSheet?,
          onRemove: @escaping () -> Void) {
-        self.hasRequirement = hasRequirement
         self.onSave = onSave
         self.onRemove = onRemove
         _sheet = State(initialValue: sheet)
@@ -36,25 +37,27 @@ struct RequirementsResinEditor: View {
                     HStack(spacing: 14) {
                         ItemSpriteView(item: CatalogItem(id: "arcane_resin", name: "Arcane Resin",
                                                         kind: .wand, spriteIndex: 317), pointSize: 44)
-                        RequirementSegmentedControl(title: "Minimum resin",
-                                                    options: [(false, "Amount"), (true, "Auto")],
+                        RequirementSegmentedControl(title: form.resin.label,
+                                                    options: form.resin.modes.map { ($0.value, $0.label) },
                                                     selection: flag(form.resin.auto) { .resinAuto($0) })
                     }
 
                     if form.resin.auto {
-                        Text("Upgrade each kept wand to +3. Excluded wands and extra copies reserved for reforging need no resin.")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+                        if let explanation = form.resin.caption {
+                            Text(explanation)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                        }
                     } else {
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Minimum resin")
+                            Text(form.resin.label)
                                 .font(.subheadline.weight(.semibold))
-                            TextField("Minimum resin", text: $minimum)
+                            TextField(form.resin.label, text: $minimum)
                                 .keyboardType(.numberPad)
                                 .font(.body.monospacedDigit())
                                 .padding(.horizontal, 16).padding(.vertical, 14)
                                 .glassEffect(.regular, in: .rect(cornerRadius: 18))
-                                .accessibilityLabel("Minimum resin")
+                                .accessibilityLabel(form.resin.label)
                                 .onChange(of: minimum) { _, text in
                                     send(.resinAmount(Double(text.trimmingCharacters(in: .whitespaces))))
                                 }
@@ -81,15 +84,19 @@ struct RequirementsResinEditor: View {
                                                   selection: pickOptional(form.source.value) { .source($0) })
                     }
 
-                    Toggle(isOn: flag(form.resin.includeMageWand) { .includeMageWand($0) }) {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text("Include Mage’s starting wand")
-                            Text("Adds 2 resin from Magic Missile. Assumes you recover it with Wand Preservation and dismantle it after imbuing.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                    if form.resin.includeMageWand.visible {
+                        Toggle(isOn: flag(form.resin.includeMageWand.value) { .includeMageWand($0) }) {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(form.resin.includeMageWand.label)
+                                if let caption = form.resin.includeMageWand.caption {
+                                    Text(caption)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
                         }
+                        .accessibilityLabel(form.resin.includeMageWand.label)
                     }
-                    .accessibilityLabel("Include Mage’s starting wand")
                 }
                 .padding(20)
             }
@@ -97,7 +104,7 @@ struct RequirementsResinEditor: View {
             .safeAreaBar(edge: .bottom, spacing: 0) {
                 GlassEffectContainer(spacing: 18) {
                     HStack(spacing: 12) {
-                        if hasRequirement {
+                        if form.origin == .resin {
                             Button(role: .destructive) {
                                 onRemove()
                                 dismiss()
@@ -117,7 +124,7 @@ struct RequirementsResinEditor: View {
                             if let refused = onSave(sheet) { sheet = refused } else { dismiss() }
                         } label: {
                             HStack(spacing: 9) {
-                                Text(hasRequirement ? "Save" : "Add")
+                                Text(form.mode == .new ? "Add" : "Save")
                                 Image(systemName: "checkmark").font(.subheadline.weight(.semibold))
                             }
                             .font(.headline)
@@ -136,7 +143,7 @@ struct RequirementsResinEditor: View {
                 .padding(.bottom, 10)
             }
             .scrollEdgeEffectStyle(.soft, for: .vertical)
-            .navigationTitle("Arcane Resin")
+            .navigationTitle(form.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } }

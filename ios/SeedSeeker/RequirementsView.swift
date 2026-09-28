@@ -125,14 +125,13 @@ struct RequirementsView: View {
         }
         .sheet(item: $resinEditor) { presentation in
             RequirementsResinEditor(sheet: presentation.sheet,
-                                    hasRequirement: query.arcaneResinAuto || query.arcaneResin > 0,
                                     onSave: { save($0) }, onRemove: removeResin)
                 .navigationTransition(.zoom(sourceID: presentation.source, in: sheetZoom))
         }
         .sheet(item: $stackKey) { presentation in
             if let item = snapshot.item(holding: presentation.id) {
                 RequirementsStackEditor(key: presentation.id, stack: item.stack,
-                                        copyFloor: presentation.copyFloor) { edit in
+                                        control: presentation.control) { edit in
                     editStack(presentation.id, edit)
                 }
                 .navigationTransition(.zoom(sourceID: presentation.source, in: sheetZoom))
@@ -527,25 +526,26 @@ struct RequirementsView: View {
     /// Opens a cluster's "How many" sheet on its anchor `key`.
     private func showStack(_ key: Int64, source: String) {
         stackKey = RequirementsStackPresentation(id: key, source: source,
-                                                 copyFloor: copyFloor(of: key, in: requirements))
+                                                 control: stackControl(of: key, in: requirements))
     }
 
     /// Runs one edit of the cluster's "How many" sheet on the board as it is
     /// made, and answers what the sheet shows next: why the core refused it,
-    /// and the copies' floor control after it.
-    private func editStack(_ key: Int64, _ edit: BoardEdit) -> (refusal: String?, copyFloor: SheetFloorToggle?) {
+    /// and the stack section's words and copy floor after it.
+    private func editStack(_ key: Int64, _ edit: BoardEdit) -> (refusal: String?, control: SheetStack?) {
         let result = apply([edit])
         if result?.refusal != nil { UINotificationFeedbackGenerator().notificationOccurred(.warning) }
-        return (result?.refusal?.message, copyFloor(of: key, in: result?.rows ?? requirements))
+        return (result?.refusal?.message, stackControl(of: key, in: result?.rows ?? requirements))
     }
 
-    /// The copies' floor control as the shared core words it for the chip's
-    /// own sheet: its switch, the floors it stops at and the floor it turns
-    /// on at. A cluster member's sheet hides it — the stack is the cluster's,
-    /// and the "How many" sheet edits it on the board — but the core fills
-    /// it in all the same.
-    private func copyFloor(of key: Int64, in rows: [ItemRequirement]) -> SheetFloorToggle? {
-        RequirementSheet.open(rows: rows, key: key)?.form.stack.copyDepth
+    /// The stack section as the shared core words it for the chip's own
+    /// sheet: the count's label, and the copies' floor control — its switch,
+    /// the floors it stops at and the floor it turns on at. A cluster
+    /// member's sheet hides the section — the stack is the cluster's, and the
+    /// "How many" sheet edits it on the board — but the core fills it in all
+    /// the same.
+    private func stackControl(of key: Int64, in rows: [ItemRequirement]) -> SheetStack? {
+        RequirementSheet.open(rows: rows, key: key)?.form.stack
     }
 
     /// Shows a sheet the shared core opened as the chip or "Add" was tapped,
@@ -680,8 +680,8 @@ private struct RequirementsResinPresentation: Identifiable {
 private struct RequirementsStackPresentation: Identifiable {
     let id: Int64
     let source: String
-    /// The copies' floor control as the sheet opens.
-    let copyFloor: SheetFloorToggle?
+    /// The stack section's words and copy floor as the sheet opens.
+    let control: SheetStack?
 }
 
 /// A board chip's sprite: the item with its effects' glows, or the
@@ -771,11 +771,12 @@ private struct RequirementsStackEditor: View {
     let key: Int64
     /// The cluster's stack as the board draws it now.
     let stack: BoardStack
-    /// The copies' floor control, in the shared core's words.
-    @State var copyFloor: SheetFloorToggle?
-    /// Runs one edit; answers why the core refused it, and the copies' floor
-    /// control after it.
-    let onEdit: (BoardEdit) -> (refusal: String?, copyFloor: SheetFloorToggle?)
+    /// The stack section — the count's label and the copies' floor control —
+    /// in the shared core's words.
+    @State var control: SheetStack?
+    /// Runs one edit; answers why the core refused it, and the stack
+    /// section after it.
+    let onEdit: (BoardEdit) -> (refusal: String?, control: SheetStack?)
     /// Why the core refused the last edit.
     @State private var refusal: String?
 
@@ -784,17 +785,19 @@ private struct RequirementsStackEditor: View {
             Form {
                 Section {
                     Stepper(value: countBinding, in: stack.countRange) {
-                        HStack { Text("How many"); Spacer(); Text(stack.countText).foregroundStyle(.tint) }
+                        HStack {
+                            if let label = control?.label { Text(label) }
+                            Spacer()
+                            Text(stack.countText).foregroundStyle(.tint)
+                        }
                     }
                 } footer: {
                     if let refusal { Text(refusal).foregroundStyle(.orange) }
                 }
-                if stack.canSetCopyDepth, let copyFloor {
+                if stack.canSetCopyDepth, let copyFloor = control?.copyDepth {
                     Section {
                         RequirementsFloorControl(control: copyFloor, enabled: copyFloorEnabled(copyFloor),
                                                  floor: copyFloorValue(copyFloor))
-                    } footer: {
-                        Text("A floor limit is where an item lies, not what it is, so the copies keep their own.")
                     }
                 }
             }
@@ -830,6 +833,6 @@ private struct RequirementsStackEditor: View {
     private func run(_ edit: BoardEdit) {
         let answer = onEdit(edit)
         refusal = answer.refusal
-        copyFloor = answer.copyFloor
+        control = answer.control
     }
 }

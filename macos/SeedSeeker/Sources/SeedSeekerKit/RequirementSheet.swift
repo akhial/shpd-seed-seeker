@@ -24,9 +24,10 @@ public struct RequirementSheet: Hashable, Sendable {
 
     /// Opens the sheet on `rows`, the list as it stands: on the visible row
     /// `key`, on a new chip in the section `blanket` picks when `key` is nil,
-    /// or on the query's resin condition with `openResin`. `resin` is the
-    /// query's condition, which seeds the resin section; `offerResin` offers
-    /// Arcane Resin among the wands. Nil when the core cannot open it.
+    /// or on the query's resin condition with `openResin` — a new sheet with
+    /// Arcane Resin picked when `resin` is nil. `resin` is the query's
+    /// condition, which seeds the resin section; `offerResin` offers Arcane
+    /// Resin among the wands. Nil when the core cannot open it.
     public static func open(rows: [ItemRequirement], key: Int64? = nil, blanket: Bool = false,
                             resin: BoardResin? = nil, offerResin: Bool = false,
                             openResin: Bool = false) -> RequirementSheet? {
@@ -125,7 +126,8 @@ public struct SheetSaved: Sendable {
 
 /// What a save does to the query's Arcane Resin condition.
 public enum SheetResinOutcome: Hashable, Sendable {
-    /// The sheet was about an item.
+    /// The sheet was about an item, or the resin chip's sheet was saved
+    /// untouched: the query keeps its resin as it is.
     case unchanged
     /// Arcane Resin was the picked item: the query asks for this condition.
     case set(BoardResin)
@@ -400,14 +402,15 @@ public struct SheetModeRange: Hashable, Sendable {
     public let visible: Bool
     public let mode: String
     public let modes: [SheetOption]
+    /// Whether the value slider shows: the control does, in a mode that
+    /// takes a value.
+    public let valueVisible: Bool
     public let value: Int
     public let min: Int
     public let max: Int
     /// The value in words: `Tier 3 or higher`, `+2`.
     public let valueLabel: String
 
-    /// Whether the mode takes a value at all.
-    public var hasValue: Bool { mode != "any" }
     /// The chosen mode's own word (`At least`).
     public var modeLabel: String { modes.first(where: { $0.value == mode })?.label ?? "" }
     /// Whether the slider has anywhere to go.
@@ -418,6 +421,7 @@ public struct SheetModeRange: Hashable, Sendable {
         visible = jsonFlag(object["visible"])
         mode = jsonString(object["mode"]) ?? "any"
         modes = jsonObjects(object["modes"]).compactMap { SheetOption(json: $0) }
+        valueVisible = jsonFlag(object["value_visible"])
         let min = jsonInt(object["min"]) ?? 0
         self.value = jsonInt(object["value"]) ?? min
         self.min = min
@@ -449,9 +453,13 @@ public struct SheetEffectChoice: Hashable, Identifiable, Sendable {
 /// The effect filter of a weapon or armor.
 public struct SheetEffect: Hashable, Sendable {
     public let visible: Bool
+    /// The section's label: `Enchantment`, or `Glyph` on armor.
+    public let label: String
     public let mode: String
     /// Any, Any enchantment (Any glyph), Specific….
     public let modes: [SheetOption]
+    /// Whether the "Specific…" grid of effects, and its caption, show.
+    public let choicesVisible: Bool
     /// The family's effects in catalog order; curses only while the item
     /// may be cursed.
     public let choices: [SheetEffectChoice]
@@ -459,9 +467,6 @@ public struct SheetEffect: Hashable, Sendable {
     public let groups: [SheetOption]
     /// What the ticked effects mean.
     public let caption: String
-
-    /// Whether the grid of effects shows.
-    public var isSpecific: Bool { mode == "specific" }
 
     /// The choices under one heading of ``groups``.
     public func choices(in group: String?) -> [SheetEffectChoice] {
@@ -471,8 +476,10 @@ public struct SheetEffect: Hashable, Sendable {
     init(json value: Any?) {
         let object = value as? [String: Any] ?? [:]
         visible = jsonFlag(object["visible"])
+        label = jsonString(object["label"]) ?? ""
         mode = jsonString(object["mode"]) ?? "any"
         modes = jsonObjects(object["modes"]).compactMap { SheetOption(json: $0) }
+        choicesVisible = jsonFlag(object["choices_visible"])
         choices = jsonObjects(object["choices"]).compactMap { SheetEffectChoice(json: $0) }
         groups = jsonObjects(object["groups"]).compactMap { SheetOption(json: $0) }
         caption = jsonString(object["caption"]) ?? ""
@@ -484,12 +491,15 @@ public struct SheetToggle: Hashable, Sendable {
     public let visible: Bool
     public let value: Bool
     public let label: String
+    /// The help text under the box, shown whenever the box is; nil for none.
+    public let caption: String?
 
     init(json value: Any?) {
         let object = value as? [String: Any] ?? [:]
         visible = jsonFlag(object["visible"])
         self.value = jsonFlag(object["value"])
         label = jsonString(object["label"]) ?? ""
+        caption = jsonString(object["caption"])
     }
 }
 
@@ -538,6 +548,11 @@ public struct SheetRangeToggle: Hashable, Sendable {
     public let max: Int
     public let label: String
     public let caption: String?
+    /// Whether ``caption`` shows: while the transmutation limit is on, which
+    /// it describes; whenever the combined level's switch shows, which it
+    /// explains.
+    public let captionVisible: Bool
+    /// The whole reading: `At most 3`, `≥ 5 across up to 2`.
     public let valueLabel: String
 
     public var range: ClosedRange<Int> { min...max }
@@ -553,6 +568,7 @@ public struct SheetRangeToggle: Hashable, Sendable {
         max = Swift.max(min, jsonInt(object["max"]) ?? min)
         label = jsonString(object["label"]) ?? ""
         caption = jsonString(object["caption"])
+        captionVisible = jsonFlag(object["caption_visible"])
         valueLabel = jsonString(object["value_label"]) ?? ""
     }
 }
@@ -561,6 +577,9 @@ public struct SheetRangeToggle: Hashable, Sendable {
 /// combined level.
 public struct SheetStack: Hashable, Sendable {
     public let visible: Bool
+    /// The section's label, which its count stepper goes by: `Total item
+    /// count`.
+    public let label: String
     public let count: Int
     public let min: Int
     public let max: Int
@@ -574,6 +593,7 @@ public struct SheetStack: Hashable, Sendable {
     init(json value: Any?) {
         let object = value as? [String: Any] ?? [:]
         visible = jsonFlag(object["visible"])
+        label = jsonString(object["label"]) ?? ""
         let min = jsonInt(object["min"]) ?? 1
         count = jsonInt(object["count"]) ?? min
         self.min = min
@@ -588,10 +608,23 @@ public struct SheetStack: Hashable, Sendable {
 /// filter is edited through the form's uncursed, source and floor controls.
 public struct SheetResin: Hashable, Sendable {
     public let visible: Bool
+    /// The section's label, which the amount field takes too: `Minimum
+    /// resin`.
+    public let label: String
     public let auto: Bool
+    /// The Amount/Auto choice, each option valued as ``auto`` is.
+    public let modes: [SheetFlagOption]
+    /// What Auto means, shown in the amount field's place while ``auto``.
+    public let caption: String?
     /// The amount as typed, nil for an empty field.
     public let amount: Double?
-    public let includeMageWand: Bool
+    /// The amounts that save.
+    public let min: Int
+    public let max: Int
+    /// Whether the Mage's starting wand counts, with its help text.
+    public let includeMageWand: SheetToggle
+
+    public var range: ClosedRange<Int> { min...max }
 
     /// The amount when it is a whole number, for a stepper.
     public var wholeAmount: Int? {
@@ -609,8 +642,29 @@ public struct SheetResin: Hashable, Sendable {
     init(json value: Any?) {
         let object = value as? [String: Any] ?? [:]
         visible = jsonFlag(object["visible"])
+        label = jsonString(object["label"]) ?? ""
         auto = jsonFlag(object["auto"])
+        modes = jsonObjects(object["modes"]).compactMap { SheetFlagOption(json: $0) }
+        caption = jsonString(object["caption"])
         amount = jsonNumber(object["amount"])
-        includeMageWand = jsonFlag(object["include_mage_wand"])
+        let min = jsonInt(object["min"]) ?? 1
+        self.min = min
+        max = Swift.max(min, jsonInt(object["max"]) ?? min)
+        includeMageWand = SheetToggle(json: object["include_mage_wand"])
+    }
+}
+
+/// One choice of a true-or-false picker (the resin's Amount/Auto).
+public struct SheetFlagOption: Hashable, Identifiable, Sendable {
+    /// What the picker's change sends back.
+    public let value: Bool
+    public let label: String
+
+    public var id: Bool { value }
+
+    init?(json object: [String: Any]) {
+        guard let value = jsonBool(object["value"]), let label = jsonString(object["label"]) else { return nil }
+        self.value = value
+        self.label = label
     }
 }

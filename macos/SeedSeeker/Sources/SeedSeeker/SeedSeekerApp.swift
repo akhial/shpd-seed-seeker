@@ -1562,10 +1562,10 @@ private struct WideSegmentedPicker<Tag: Hashable>: NSViewRepresentable {
 
 /**
  The requirement sheet. Every control is drawn from the shared core's form —
- whether it shows, what it offers, its bounds and its words — and each move
- is one change sent to the core, whose answer is the form drawn next. The
- sheet keeps what is its own: the layout, the dialog's title and buttons,
- and the help text under a few controls.
+ whether it shows, what it offers, its bounds, its words and its help text —
+ and each move is one change sent to the core, whose answer is the form
+ drawn next. The sheet keeps what is its own: the layout, the dialog's title
+ and buttons, and the headings of its pickers.
  */
 private struct RequirementEditor: View {
     /// The sheet as the core last answered it.
@@ -1627,7 +1627,7 @@ private struct RequirementEditor: View {
     /// The sheet is as tall as what its category shows.
     private var height: CGFloat {
         if form.resinPicked { return 520 }
-        if form.category.value == "trinket" { return 300 }
+        if form.category.value == "trinket" { return 340 }
         return form.effect.visible ? 660 : 580
     }
 
@@ -1666,6 +1666,7 @@ private struct RequirementEditor: View {
             if form.transmutations.visible { transmutationControls }
             if form.selectTrinket.visible {
                 Toggle(form.selectTrinket.label, isOn: flag(form.selectTrinket.value) { .selectTrinket($0) })
+                caption(form.selectTrinket.caption)
             }
             if form.tier.visible {
                 Picker("Tier", selection: pick(form.tier.mode) { .tierMode($0) }) {
@@ -1674,7 +1675,7 @@ private struct RequirementEditor: View {
                     }
                 }
                 .pickerStyle(.segmented)
-                if form.tier.hasValue { valueSlider(form.tier) { .tier($0) } }
+                if form.tier.valueVisible { valueSlider(form.tier) { .tier($0) } }
             }
         }
     }
@@ -1699,15 +1700,19 @@ private struct RequirementEditor: View {
         Toggle(form.transmutations.label,
                isOn: flag(form.transmutations.enabled) { .transmutationsEnabled($0) })
         if form.transmutations.enabled {
+            // The value in words is the whole reading (`At most 3`).
             Stepper(value: number(form.transmutations.value) { .transmutations($0) },
                     in: form.transmutations.range) {
-                LabeledContent("Transmutations") {
-                    Text(form.transmutations.valueLabel).monospacedDigit().foregroundStyle(.secondary)
-                }
+                Text(form.transmutations.valueLabel).monospacedDigit().foregroundStyle(.secondary)
             }
-            if let caption = form.transmutations.caption {
-                Text(caption).font(.caption).foregroundStyle(.secondary)
-            }
+        }
+        if form.transmutations.captionVisible { caption(form.transmutations.caption) }
+    }
+
+    /// A help text of the form's, under what it explains.
+    @ViewBuilder private func caption(_ text: String?) -> some View {
+        if let text {
+            Text(text).font(.caption).foregroundStyle(.secondary)
         }
     }
 
@@ -1729,28 +1734,31 @@ private struct RequirementEditor: View {
     /// filter is the placement section's while the resin is picked.
     private var resinSection: some View {
         Section {
-            Picker("Minimum resin", selection: flag(form.resin.auto) { .resinAuto($0) }) {
-                Text("Amount").tag(false)
-                Text("Auto").tag(true)
+            // The section's label names both the Amount/Auto choice and the
+            // amount itself.
+            Picker(form.resin.label, selection: flag(form.resin.auto) { .resinAuto($0) }) {
+                ForEach(form.resin.modes) { option in
+                    Text(option.label).tag(option.value)
+                }
             }.pickerStyle(.segmented)
             if form.resin.auto {
-                Text("Upgrade each kept wand to +3. Excluded wands and extra copies reserved for reforging need no resin.")
-                    .foregroundStyle(.secondary)
+                if let explanation = form.resin.caption {
+                    Text(explanation).foregroundStyle(.secondary)
+                }
             } else {
-                // The form gives the amount but no bounds; the stepper keeps
-                // to the amounts the query format holds.
-                Stepper(value: number(form.resin.wholeAmount ?? 1) { .resinAmount(Double($0)) },
-                        in: 1...65_535) {
-                    LabeledContent("Minimum resin") {
+                Stepper(value: number(form.resin.wholeAmount ?? form.resin.min) { .resinAmount(Double($0)) },
+                        in: form.resin.range) {
+                    LabeledContent(form.resin.label) {
                         Text(form.resin.amountText).monospacedDigit().foregroundStyle(.secondary)
                     }
                 }
             }
-            Toggle("Include Mage’s starting wand",
-                   isOn: flag(form.resin.includeMageWand) { .includeMageWand($0) })
-                .toggleStyle(.checkbox)
-            Text("Add 2 resin from the Magic Missile wand recovered with Wand Preservation when imbuing another wand. The preserved wand is +0, regardless of the staff’s level.")
-                .font(.caption).foregroundStyle(.secondary)
+            if form.resin.includeMageWand.visible {
+                Toggle(form.resin.includeMageWand.label,
+                       isOn: flag(form.resin.includeMageWand.value) { .includeMageWand($0) })
+                    .toggleStyle(.checkbox)
+                caption(form.resin.includeMageWand.caption)
+            }
         }
     }
 
@@ -1764,16 +1772,15 @@ private struct RequirementEditor: View {
                 }
             }
             .pickerStyle(.segmented)
-            if form.upgrade.hasValue { valueSlider(form.upgrade) { .upgrade($0) } }
+            if form.upgrade.valueVisible { valueSlider(form.upgrade) { .upgrade($0) } }
         }
     }
 
     private var stackSection: some View {
-        Section("Total item count") {
+        Section(form.stack.label) {
+            // The section's label is the count's; the stepper reads `×2`.
             Stepper(value: number(form.stack.count) { .count($0) }, in: form.stack.range) {
-                LabeledContent("How many") {
-                    Text(form.stack.valueLabel).monospacedDigit().foregroundStyle(.secondary)
-                }
+                Text(form.stack.valueLabel).monospacedDigit().foregroundStyle(.secondary)
             }
             // The chip's own floor limit describes one copy; the extras are
             // placed by a bound of their own.
@@ -1784,31 +1791,30 @@ private struct RequirementEditor: View {
             if form.stack.countLevels.visible {
                 Toggle(form.stack.countLevels.label,
                        isOn: flag(form.stack.countLevels.enabled) { .countLevels($0) })
+                // The help explains the switch, so it shows beside it on or off.
+                if form.stack.countLevels.captionVisible { caption(form.stack.countLevels.caption) }
                 if form.stack.countLevels.enabled {
-                    LabeledContent("Levels reach") {
-                        Text(form.stack.countLevels.valueLabel)
-                            .monospacedDigit().foregroundStyle(.secondary)
-                    }
+                    // The value in words is the whole reading (`≥ 5 across up to 2`).
+                    Text(form.stack.countLevels.valueLabel).monospacedDigit().foregroundStyle(.secondary)
                     if form.stack.countLevels.isAdjustable {
                         Slider(value: slider(form.stack.countLevels.value) { .total($0) },
                                in: Double(form.stack.countLevels.min)...Double(form.stack.countLevels.max),
                                step: 1)
+                            .accessibilityValue(Text(form.stack.countLevels.valueLabel))
                     }
-                    Text("Each item counts its upgrade plus one; any subset reaching the total satisfies it.")
-                        .font(.caption).foregroundStyle(.secondary)
                 }
             }
         }
     }
 
     private var effectSection: some View {
-        Section("Effect") {
+        Section(form.effect.label) {
             WideSegmentedPicker(
                 options: form.effect.modes.map { ($0.label, $0.value ?? "") },
                 selection: pick(form.effect.mode) { .effectMode($0) },
-                accessibilityLabel: "Effect")
+                accessibilityLabel: form.effect.label)
                 .frame(maxWidth: .infinity)
-            if form.effect.isSpecific {
+            if form.effect.choicesVisible {
                 ForEach(form.effect.groups) { group in
                     effectGrid(group.label, choices: form.effect.choices(in: group.value))
                 }
@@ -1836,12 +1842,12 @@ private struct RequirementEditor: View {
             if form.excludeResin.visible {
                 Toggle(form.excludeResin.label, isOn: flag(form.excludeResin.value) { .excludeResin($0) })
                     .toggleStyle(.checkbox)
-                Text("Keep this wand without budgeting resin to upgrade it. Useful for imbuing: resin upgrades do not transfer to the staff. Extra copies are reserved for reforging and never need Auto resin.")
-                    .font(.caption).foregroundStyle(.secondary)
+                caption(form.excludeResin.caption)
             }
             if form.uncursed.visible {
                 Toggle(form.uncursed.label, isOn: flag(form.uncursed.value) { .uncursed($0) })
                     .toggleStyle(.checkbox)
+                caption(form.uncursed.caption)
             }
             if form.source.visible {
                 Picker("Source", selection: pickOptional(form.source.value) { .source($0) }) {

@@ -88,6 +88,7 @@ final class RequirementSheetTests: XCTestCase {
         // A stack counting its levels speaks for their upgrades.
         XCTAssertFalse(form.upgrade.visible)
         XCTAssertTrue(form.stack.visible)
+        XCTAssertEqual(form.stack.label, "Total item count")
         XCTAssertEqual(form.stack.count, 2)
         XCTAssertEqual(form.stack.range, 1...3)
         XCTAssertEqual(form.stack.valueLabel, "×2")
@@ -99,7 +100,9 @@ final class RequirementSheetTests: XCTestCase {
         XCTAssertEqual(levels.range, 1...8)
         XCTAssertTrue(levels.isAdjustable)
         XCTAssertEqual(levels.valueLabel, "≥ 3 across up to 2")
-        XCTAssertNil(levels.caption)
+        XCTAssertEqual(levels.label, "Count levels together")
+        XCTAssertEqual(levels.caption, "Each item counts its upgrade plus one, and spare items may go unused.")
+        XCTAssertTrue(levels.captionVisible)
         // Floor sliders stop at the floors the core offers, past the empty
         // boss floors.
         XCTAssertTrue(form.floorLimit.visible)
@@ -116,6 +119,7 @@ final class RequirementSheetTests: XCTestCase {
         XCTAssertEqual(form.source.options.first?.label, "Any")
         XCTAssertEqual(form.source.options.first(where: { $0.value == "locked_chest" })?.label, "Locked chest")
         XCTAssertEqual(form.uncursed.label, "Require uncursed")
+        XCTAssertNil(form.uncursed.caption)
         XCTAssertFalse(form.resin.visible)
         XCTAssertTrue(form.errors.isEmpty)
         XCTAssertTrue(form.canSave)
@@ -143,10 +147,11 @@ final class RequirementSheetTests: XCTestCase {
         XCTAssertEqual(form.weaponType.options.map(\.value), ["any", "melee", "thrown"])
         XCTAssertTrue(form.upgrade.visible)
         XCTAssertEqual(form.upgrade.mode, "any")
-        XCTAssertFalse(form.upgrade.hasValue)
+        XCTAssertFalse(form.upgrade.valueVisible)
         XCTAssertEqual(form.upgrade.modes.map(\.label), ["Any", "Exactly", "At least"])
         XCTAssertTrue(form.effect.visible)
-        XCTAssertFalse(form.effect.isSpecific)
+        XCTAssertEqual(form.effect.label, "Enchantment")
+        XCTAssertFalse(form.effect.choicesVisible)
         XCTAssertEqual(form.effect.modes.map(\.label), ["Any", "Any enchantment", "Specific…"])
         XCTAssertTrue(form.stack.visible)
         XCTAssertEqual(form.stack.valueLabel, "×1")
@@ -155,7 +160,7 @@ final class RequirementSheetTests: XCTestCase {
     /// The effect grid, a copy floor and a refused save read as drawn.
     func testEffectsCopyFloorsAndErrorsRead() throws {
         let effect = try fixtureForm("editor-change-effect").effect
-        XCTAssertTrue(effect.isSpecific)
+        XCTAssertTrue(effect.choicesVisible)
         XCTAssertEqual(effect.groups.map(\.label), ["Enchantments", "Curses"])
         XCTAssertEqual(effect.choices(in: "enchantment").first?.value, "Blazing")
         XCTAssertEqual(effect.choices.filter(\.selected).map(\.value), ["Blazing"])
@@ -191,8 +196,18 @@ final class RequirementSheetTests: XCTestCase {
         XCTAssertEqual(form.item.value, RequirementSheet.arcaneResin)
         XCTAssertEqual(form.item.selected?.isArcaneResin, true)
         XCTAssertTrue(form.resin.visible)
+        XCTAssertEqual(form.resin.label, "Minimum resin")
         XCTAssertTrue(form.resin.auto)
-        XCTAssertTrue(form.resin.includeMageWand)
+        XCTAssertEqual(form.resin.modes.map(\.value), [false, true])
+        XCTAssertEqual(form.resin.modes.map(\.label), ["Amount", "Auto"])
+        XCTAssertEqual(form.resin.caption,
+                       "Upgrade each kept wand to +3. Excluded wands and extra copies reserved for reforging need no resin.")
+        XCTAssertEqual(form.resin.range, 1...65_535)
+        XCTAssertTrue(form.resin.includeMageWand.visible)
+        XCTAssertTrue(form.resin.includeMageWand.value)
+        XCTAssertEqual(form.resin.includeMageWand.label, "Include Mage’s starting wand")
+        XCTAssertEqual(form.resin.includeMageWand.caption,
+                       "Add 2 resin from the Magic Missile wand recovered with Wand Preservation when imbuing another wand. The preserved wand is +0, regardless of the staff’s level.")
         XCTAssertEqual(form.resin.amount, 2)
         XCTAssertEqual(form.resin.wholeAmount, 2)
         XCTAssertEqual(form.resin.amountText, "2")
@@ -393,7 +408,7 @@ final class RequirementSheetTests: XCTestCase {
         let opened = try XCTUnwrap(RequirementSheet.open(rows: rows, resin: resin, openResin: true))
         XCTAssertEqual(opened.form.origin, .resin)
         XCTAssertTrue(opened.form.resin.auto)
-        XCTAssertTrue(opened.form.resin.includeMageWand)
+        XCTAssertTrue(opened.form.resin.includeMageWand.value)
         let frost = try moved(opened, [.item("wand_frost")])
         XCTAssertFalse(frost.form.resinPicked)
         XCTAssertEqual(frost.form.title, "Wand of Frost")
@@ -402,6 +417,123 @@ final class RequirementSheetTests: XCTestCase {
         XCTAssertEqual(saved.rows.last?.item?.id, "wand_frost")
         XCTAssertEqual(saved.focus, 3)
         XCTAssertEqual(saved.resin, .clear)
+    }
+
+    /// The form words what the dialogs used to word themselves — help texts,
+    /// section labels — and says when a slider, the effect grid or a help
+    /// text shows.
+    func testTheFormWordsItsSectionsAndSaysWhatShows() throws {
+        let opened = try XCTUnwrap(RequirementSheet.open(rows: []))
+        XCTAssertFalse(opened.form.tier.valueVisible)
+        XCTAssertEqual(opened.form.stack.label, "Total item count")
+        let tier = try moved(opened, [.tierMode("at_least")]).form.tier
+        XCTAssertTrue(tier.valueVisible)
+        XCTAssertEqual(tier.valueLabel, "Tier 3 or higher")
+        XCTAssertTrue(try moved(opened, [.upgradeMode("exact")]).form.upgrade.valueVisible)
+
+        let armor = try moved(opened, [.category("armor")]).form.effect
+        XCTAssertEqual(armor.label, "Glyph")
+        XCTAssertFalse(armor.choicesVisible)
+        XCTAssertTrue(try moved(opened, [.category("armor"), .effectMode("specific")]).form.effect.choicesVisible)
+
+        let wand = try moved(opened, [.category("wand")]).form.excludeResin
+        XCTAssertTrue(wand.visible)
+        XCTAssertEqual(wand.label, "Exclude from Auto resin")
+        XCTAssertEqual(wand.caption, "Keep this wand without budgeting resin to upgrade it. Useful for imbuing: resin upgrades do not transfer to the staff. Extra copies are reserved for reforging and never need Auto resin.")
+
+        // The transmutation limit's help describes the limit, so it shows
+        // only while the limit is on.
+        let trinket = try moved(opened, [.category("trinket"), .item("rat_skull")])
+        XCTAssertTrue(trinket.form.selectTrinket.visible)
+        XCTAssertEqual(trinket.form.selectTrinket.caption,
+                       "Applies after the first brewing opportunity. If several alternatives are offered, no trinket is chosen.")
+        XCTAssertTrue(trinket.form.transmutations.visible)
+        XCTAssertFalse(trinket.form.transmutations.captionVisible)
+        XCTAssertNotNil(trinket.form.transmutations.caption)
+        let limited = try moved(trinket, [.transmutationsEnabled(true)]).form.transmutations
+        XCTAssertTrue(limited.captionVisible)
+        XCTAssertEqual(limited.valueLabel, "At most 1")
+
+        // The combined level's help explains its switch, so it shows while
+        // the switch is off too.
+        let rings = try moved(opened, [.category("ring"), .item("ring_might"), .count(2)]).form.stack.countLevels
+        XCTAssertTrue(rings.visible)
+        XCTAssertFalse(rings.enabled)
+        XCTAssertTrue(rings.captionVisible)
+        XCTAssertEqual(rings.caption, "Each item counts its upgrade plus one, and spare items may go unused.")
+    }
+
+    /// A resin sheet opened on a query without resin adds one: Add, and no
+    /// Remove, as a new sheet's chrome is.
+    func testAResinSheetOnAQueryWithoutResinIsNew() throws {
+        let fixture = try fixtureForm("editor-resin-open-new")
+        XCTAssertEqual(fixture.mode, .new)
+        XCTAssertEqual(fixture.origin, .new)
+        XCTAssertTrue(fixture.resinPicked)
+
+        let rows = [try requirement(1, item: "wand_frost")]
+        let fresh = try XCTUnwrap(RequirementSheet.open(rows: rows, openResin: true))
+        XCTAssertEqual(fresh.form.mode, .new)
+        XCTAssertEqual(fresh.form.origin, .new)
+        XCTAssertTrue(fresh.form.resinPicked)
+        XCTAssertEqual(fresh.form.title, "Arcane Resin")
+        XCTAssertFalse(fresh.form.resin.includeMageWand.value)
+        let resin = try XCTUnwrap(BoardResin(amount: 4, auto: false, filter: ArcaneResinFilter()))
+        let existing = try XCTUnwrap(RequirementSheet.open(rows: rows, resin: resin, openResin: true))
+        XCTAssertEqual(existing.form.mode, .edit)
+        XCTAssertEqual(existing.form.origin, .resin)
+    }
+
+    /// The resin chip saved untouched leaves the query's resin as it is —
+    /// a donor floor on an empty boss floor included, which the slider
+    /// shows as the floor below — while a changed one sets it.
+    func testAnUntouchedResinSheetLeavesTheQuerysResin() throws {
+        let saved = try XCTUnwrap(try response("editor-resin-save-untouched")["saved"] as? [String: Any])
+        XCTAssertEqual(try XCTUnwrap(SheetSaved(json: saved, sent: [])).resin, .unchanged)
+
+        let rows = [try requirement(1, item: "wand_frost")]
+        let resin = try XCTUnwrap(BoardResin(amount: 4, auto: false, filter: ArcaneResinFilter(
+            uncursed: true, maximumDepth: 5, source: .lockedChest, includeMageWand: true)))
+        let opened = try XCTUnwrap(RequirementSheet.open(rows: rows, resin: resin, openResin: true))
+        XCTAssertEqual(opened.form.floorLimit.value, 4)
+        let untouched = try landed(opened.save(onto: rows))
+        XCTAssertFalse(untouched.changed)
+        XCTAssertEqual(untouched.rows, rows)
+        XCTAssertEqual(untouched.resin, .unchanged)
+        let flipped = try landed(try moved(opened, [.resinAuto(true), .resinAuto(false)]).save(onto: rows))
+        XCTAssertEqual(flipped.resin, .unchanged)
+
+        let more = try landed(try moved(opened, [.resinAmount(6)]).save(onto: rows))
+        XCTAssertEqual(more.resin, .set(try XCTUnwrap(BoardResin(amount: 6, auto: false, filter: ArcaneResinFilter(
+            uncursed: true, maximumDepth: 4, source: .lockedChest, includeMageWand: true)))))
+    }
+
+    /// An artifact's upgrade has no control on the sheet, yet a save keeps
+    /// it: untouched, the rows come back as they were; changed, it stays.
+    func testASaveKeepsWhatTheSheetCannotShow() throws {
+        let sandals = try XCTUnwrap(ItemCatalog.findById("sandals_of_nature"))
+        let rows = [try ItemRequirement(key: 1, item: sandals, upgrade: 5, kind: .artifact,
+                                        upgradeMatch: .exactly, maximumDepth: 19)]
+        let opened = try XCTUnwrap(RequirementSheet.open(rows: rows, key: 1))
+        XCTAssertFalse(opened.form.upgrade.visible)
+        let untouched = try landed(opened.save(onto: rows))
+        XCTAssertFalse(untouched.changed)
+        XCTAssertEqual(untouched.rows, rows)
+        XCTAssertEqual(untouched.focus, 1)
+
+        let refloored = try landed(try moved(opened, [.floorLimit(14)]).save(onto: rows))
+        XCTAssertTrue(refloored.changed)
+        XCTAssertEqual(refloored.rows.first?.upgrade, 5)
+        XCTAssertEqual(refloored.rows.first?.upgradeMatch, .exactly)
+        XCTAssertEqual(refloored.rows.first?.maximumDepth, 14)
+
+        // A hand-written row the sheet had to repair as it opened is written
+        // back repaired even untouched.
+        let repaired = try XCTUnwrap(try response("editor-save-untouched-repairs")["saved"] as? [String: Any])
+        let answer = try XCTUnwrap(SheetSaved(json: repaired, sent: []))
+        XCTAssertTrue(answer.changed)
+        XCTAssertEqual(answer.rows.map(\.key), [1, 2])
+        XCTAssertEqual(answer.rows.map(\.excludeResin), [false, false])
     }
 
     /// A draft the core cannot read — one from another version — is no
