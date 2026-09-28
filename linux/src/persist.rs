@@ -214,12 +214,12 @@ mod tests {
     use shpd_seedfinder_core::catalog::{Effect, ItemId, ItemKind, WeaponCategory, WeaponEffect};
     use shpd_seedfinder_core::challenges::Challenges;
     use shpd_seedfinder_core::editor::{self, Row};
-    use shpd_seedfinder_core::json_query;
     use shpd_seedfinder_core::model::ItemSource;
     use shpd_seedfinder_core::query::{
         EffectRequirement, Requirement, TierRequirement, UpgradeRequirement,
     };
     use shpd_seedfinder_core::quests::WandmakerQuestType;
+    use shpd_seedfinder_core::{deep_link, json_query};
 
     use super::{
         SavedPreset, clamp_workers, decode_presets, decode_state, decode_workers, save_document,
@@ -567,6 +567,9 @@ mod tests {
             .to_query()
             .expect("a hand-edited stack still searches");
         assert_eq!(query.requirements.len(), 4);
+        // Copy Link shares it too: a share link holds labels up to 4 only.
+        let link = deep_link::encode_link(&query).expect("a hand-edited stack still shares");
+        assert_eq!(deep_link::decode_text(&link), Ok(query.clone()));
 
         // A preset holding the list loads the same way.
         let presets =
