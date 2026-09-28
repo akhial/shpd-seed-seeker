@@ -370,8 +370,29 @@ public struct BoardStack: Hashable, Sendable {
     }
 }
 
-/// A badge at rest: its text, the compact form narrow layouts use, and what
-/// it means.
+/// A chip's two stack badges, either of which may be absent.
+public struct BoardBadges: Hashable, Sendable {
+    /// `×3`, or `≤3` while the stack counts levels.
+    public let count: BoardBadge?
+    /// `Σ ≥ 5`.
+    public let total: BoardBadge?
+
+    init(count: BoardBadge?, total: BoardBadge?) {
+        self.count = count
+        self.total = total
+    }
+
+    /// Nil for anything but an object — `null` included; an unreadable
+    /// badge inside one is simply absent.
+    init?(json value: Any?) {
+        guard let object = value as? [String: Any] else { return nil }
+        count = BoardBadge(json: object["count"])
+        total = BoardBadge(json: object["total"])
+    }
+}
+
+/// One badge: its text, the compact form narrow layouts use, and what it
+/// means.
 public struct BoardBadge: Hashable, Sendable {
     public let text: String
     public let compactText: String
@@ -419,8 +440,14 @@ public struct BoardChip: Hashable, Identifiable, Sendable {
     /// more than one item, the combined level (`Σ ≥ 5`) when it counts
     /// levels. A cluster member's are its own; a picked-up chip shows
     /// neither, since a drag moves one item.
-    public let countBadge: BoardBadge?
-    public let totalBadge: BoardBadge?
+    public let badges: BoardBadges
+    public var countBadge: BoardBadge? { badges.count }
+    public var totalBadge: BoardBadge? { badges.total }
+    /// The badges the chip keeps while one of its items is lifted away —
+    /// what a drag's origin shows: the ones a remove-one leaves (Ring of
+    /// Energy +4 ×3 keeps `×2`). Nil when the chip has no copies, so the
+    /// whole chip leaves.
+    public let remainingBadges: BoardBadges?
     /// The hidden copies behind the chip's count badge. Members whose stacks
     /// are alike share theirs.
     public let copies: [Int64]
@@ -435,6 +462,13 @@ public struct BoardChip: Hashable, Identifiable, Sendable {
     public let refuse: [JoinRefusal]
 
     public var id: Int64 { key }
+
+    /// The badges the chip's place on the board shows: ``remainingBadges``
+    /// while one of its items is `lifted` away, else ``badges``. A chip
+    /// with no remaining badges keeps its own, as it always has.
+    public func shownBadges(lifted: Bool) -> BoardBadges {
+        lifted ? remainingBadges ?? badges : badges
+    }
 
     /// Why joining this chip onto `target` is refused, if it is.
     public func refusal(onto target: Int64) -> JoinRefusal? {
@@ -460,9 +494,8 @@ public struct BoardChip: Hashable, Identifiable, Sendable {
         relations = jsonObjects(object["relations"]).compactMap(ChipRelation.init(json:))
         description = jsonString(object["description"]) ?? title
         problem = jsonString(object["problem"])
-        let badges = object["badges"] as? [String: Any] ?? [:]
-        countBadge = BoardBadge(json: badges["count"])
-        totalBadge = BoardBadge(json: badges["total"])
+        badges = BoardBadges(json: object["badges"]) ?? BoardBadges(count: nil, total: nil)
+        remainingBadges = BoardBadges(json: object["remaining_badges"])
         copies = jsonKeys(object["copies"])
         stack = BoardStack(json: object["stack"])
         inCluster = jsonFlag(object["in_cluster"])

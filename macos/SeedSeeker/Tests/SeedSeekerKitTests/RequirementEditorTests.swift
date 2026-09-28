@@ -363,6 +363,56 @@ final class RequirementEditorTests: XCTestCase {
         XCTAssertEqual(nothing.rows, lone)
     }
 
+    /// While one item is lifted away its chip's place shows what the stack
+    /// keeps — the badges a remove-one leaves — and a chip with no copies,
+    /// which leaves whole, keeps its own.
+    func testALiftedItemLeavesItsStackOneItemFewer() throws {
+        // Ring of Energy +4 ×3 keeps ×2.
+        let board = try XCTUnwrap(RequirementBoard.decode(try response("board-remaining-badges"), sent: []))
+        let energy = try XCTUnwrap(board.chip(1))
+        XCTAssertEqual(energy.countBadge?.text, "×3")
+        XCTAssertEqual(energy.remainingBadges?.count?.text, "×2")
+        XCTAssertEqual(energy.remainingBadges?.count?.compactText, "×2")
+        XCTAssertEqual(energy.remainingBadges?.count?.tooltip, "2 of the same kind")
+        XCTAssertNil(energy.remainingBadges?.total)
+        XCTAssertEqual(energy.shownBadges(lifted: true).count?.text, "×2")
+        XCTAssertEqual(energy.shownBadges(lifted: false), energy.badges)
+
+        // A ×2 chip keeps no badge at all.
+        let pair = [try requirement(1, item: "wand_frost"), try requirement(2, item: "wand_frost")]
+        XCTAssertEqual(RequirementBoard.of(pair).chip(1)?.remainingBadges, BoardBadges(count: nil, total: nil))
+
+        // {Frost ×2 | Disintegration}: Frost keeps what a remove-one leaves
+        // it, and Disintegration, with no copies, keeps its own.
+        let member = [try requirement(1, item: "wand_frost", alternativeGroup: 1, identityGroup: 1),
+                      try requirement(2, item: "wand_disintegration", alternativeGroup: 1),
+                      try requirement(3, kind: .wand, identityGroup: 1)]
+        let cluster = RequirementBoard.of(member)
+        let frost = try XCTUnwrap(cluster.chip(1))
+        XCTAssertEqual(frost.remainingBadges, BoardBadges(count: nil, total: nil))
+        let one = try XCTUnwrap(RequirementBoard.apply([.removeOne(1)], to: member))
+        XCTAssertEqual(one.chip(one.focus ?? 1)?.badges, frost.remainingBadges)
+        let disintegration = try XCTUnwrap(cluster.chip(2))
+        XCTAssertEqual(disintegration.copies, [])
+        XCTAssertNil(disintegration.remainingBadges)
+        XCTAssertEqual(disintegration.shownBadges(lifted: true), disintegration.badges)
+
+        // Read defensively: missing, null or not an object, there are none;
+        // an unreadable badge inside is simply absent.
+        let spear: [String: Any] = ["key": NSNumber(value: 1), "name": "Spear"]
+        XCTAssertNil(try XCTUnwrap(BoardChip(json: spear)).remainingBadges)
+        let odds: [Any] = [NSNull(), "×2", NSNumber(value: 2)]
+        for odd in odds {
+            var chip = spear
+            chip["remaining_badges"] = odd
+            XCTAssertNil(try XCTUnwrap(BoardChip(json: chip)).remainingBadges)
+        }
+        var unreadable = spear
+        unreadable["remaining_badges"] = ["count": ["compact_text": "×2"], "total": "Σ ≥ 3"] as [String: Any]
+        XCTAssertEqual(try XCTUnwrap(BoardChip(json: unreadable)).remainingBadges,
+                       BoardBadges(count: nil, total: nil))
+    }
+
     /// Stack edits in one request run in order, and a member's stack is its
     /// own: Spear grows to ×3 while Mace stays one item.
     func testStackEditsRunInOrder() throws {
