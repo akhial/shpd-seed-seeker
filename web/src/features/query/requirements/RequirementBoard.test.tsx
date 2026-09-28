@@ -7,7 +7,8 @@ import { queryStore } from "../../../app/store";
 import type { ItemSource } from "../../../engine/types";
 import { QueryPanel } from "../QueryPanel";
 import { QueryPanelBoundary } from "../QueryPanelBoundary";
-import { requirementEditor } from "../../../engine/editor";
+import { requirementBoard, requirementEditor } from "../../../engine/editor";
+import { RequirementBoard } from "./RequirementBoard";
 
 // The real envelope answers every request; one test makes it fail.
 vi.mock("../../../engine/editor", async (importOriginal) => {
@@ -133,6 +134,68 @@ it("steps a stack from its menu, which follows the stack's fresh count", async (
   await click("ΣCount levels together");
   expect(badges("Ring of Might")).toEqual(["≤3", "Σ ≥ 3"]);
   expect(host.textContent).toContain("1 requirement");
+});
+
+it("bounds both count steppers by the core's count_max", async () => {
+  const answer = requirementBoard({
+    rows: [
+      { key: 1, kind: "ring", item: "ring_might" },
+      { key: 2, kind: "ring", item: "ring_might" },
+    ],
+  });
+  if (!answer.ok) throw new Error(answer.error);
+  const [item] = answer.value.items;
+  expect(item.stack).toMatchObject({ count: 2, max: 3, can_grow: true, count_max: 3 });
+  const draw = (count_max: number) =>
+    act(async () =>
+      root.render(
+        <RequirementBoard
+          items={[{ ...item, stack: { ...item.stack, count_max } }]}
+          onEdits={() => ({ notice: null, rekeyed: [] })}
+          onEdit={() => null}
+          onAdd={() => {}}
+        />,
+      ),
+    );
+  await draw(3);
+  await openMenu("Ring of Might");
+  expect(button("One more")!.disabled).toBe(false);
+  // A stack that may only shed copies: the core bounds it at its count.
+  await draw(2);
+  expect(button("One more")!.disabled).toBe(true);
+  await click("×2");
+  const inline = host.querySelector<HTMLElement>('.d1-stack-edit[aria-label="How many"]')!;
+  expect(inline.querySelector<HTMLButtonElement>('[aria-label="One more"]')!.disabled).toBe(true);
+});
+
+it("styles the resin chip's credit apart from its filter, each tag with the core's hover text", async () => {
+  await render(
+    '{"arcane_resin":"auto","arcane_resin_filter":{"include_mage_wand":true,"max_depth":9},"requirements":[{"kind":"wand","item":"wand_frost","upgrade":3}]}',
+  );
+  const tags = (within: Element) =>
+    [...within.querySelectorAll<HTMLElement>(".d1-chip-tag:not(.d1-chip-tag-soft)")].map((tag) => ({
+      text: tag.textContent,
+      className: tag.className,
+      title: tag.getAttribute("title"),
+    }));
+  expect(tags(host.querySelector(".d1-resin-chip")!)).toEqual([
+    {
+      text: "Auto",
+      className: "d1-chip-tag d1-chip-tag-credit",
+      title:
+        "Enough resin to upgrade kept wands to +3, excluding No resin wands and reforge copies",
+    },
+    {
+      text: "Mage +2",
+      className: "d1-chip-tag d1-chip-tag-credit",
+      title: "Starting Magic Missile contributes 2 resin",
+    },
+    { text: "F≤9", className: "d1-chip-tag", title: null },
+  ]);
+  // A requirement chip's tags carry no hover text of their own.
+  expect(tags(chip("Wand of Frost"))).toEqual([
+    { text: "+3", className: "d1-chip-tag d1-chip-tag-up", title: null },
+  ]);
 });
 
 it("steps a combined level down to off and back on at the core's default", async () => {

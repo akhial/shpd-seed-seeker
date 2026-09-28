@@ -58,12 +58,20 @@ function ChipSprite({ chip, glows }: { chip: ChipView; glows?: Glow[] }) {
   );
 }
 
+/**
+ * A tag's look by its style. The resin a chip counts (`credit`) keeps the
+ * plain tag's amber, as the web always drew the resin chip's amount and
+ * `Mage +2`; its own class leaves room to tint it apart.
+ */
+const TAG_CLASS: Record<ChipTag["style"], string> = {
+  plain: "d1-chip-tag",
+  upgrade: "d1-chip-tag d1-chip-tag-up",
+  credit: "d1-chip-tag d1-chip-tag-credit",
+};
+
 function Tags({ tags }: { tags: ChipTag[] }) {
   return tags.map((tag) => (
-    <span
-      key={tag.text}
-      className={tag.style === "upgrade" ? "d1-chip-tag d1-chip-tag-up" : "d1-chip-tag"}
-    >
+    <span key={tag.text} className={TAG_CLASS[tag.style]} title={tag.tooltip ?? undefined}>
       {tag.text}
     </span>
   ));
@@ -493,7 +501,7 @@ export function RequirementBoard({
             <button
               type="button"
               aria-label="One more"
-              disabled={!stack.can_grow || stack.count >= stack.max}
+              disabled={stack.count >= stack.count_max}
               onClick={() => edit({ type: "set_count", key, count: stack.count + 1 })}
             >
               +
@@ -757,27 +765,20 @@ export function RequirementBoard({
   );
 }
 
-/** The resin chip's face; the drag ghost shows only its amount. */
+/**
+ * The resin chip's face; the drag ghost shows only its amount, which the core
+ * always puts first.
+ */
 function ResinChipBody({ chip, amountOnly }: { chip: ResinChipView; amountOnly?: boolean }) {
-  const [amount, ...rest] = chip.tags;
   return (
     <>
       <Sprite art={itemArt(ARCANE_RESIN_SPRITE)} size={18} />
       <span className="d1-chip-name">{chip.name}</span>
-      {amount && (
-        <span className="d1-chip-tag" title={chip.amount_tooltip ?? undefined}>
-          {amount.text}
+      <Tags tags={amountOnly ? chip.tags.slice(0, 1) : chip.tags} />
+      {!amountOnly && chip.uncursed && (
+        <span className="d1-chip-tag d1-chip-tag-soft" title="Uncursed wands">
+          <CheckIcon size={12} />
         </span>
-      )}
-      {!amountOnly && (
-        <>
-          <Tags tags={rest} />
-          {chip.uncursed && (
-            <span className="d1-chip-tag d1-chip-tag-soft" title="Uncursed wands">
-              <CheckIcon size={12} />
-            </span>
-          )}
-        </>
       )}
     </>
   );
@@ -869,7 +870,7 @@ function ChipMenu({
               <button
                 type="button"
                 aria-label="One more"
-                disabled={!stack.can_grow || stack.count >= stack.max}
+                disabled={stack.count >= stack.count_max}
                 onClick={() => onCount(stack.count + 1)}
               >
                 +

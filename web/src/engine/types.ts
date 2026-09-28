@@ -215,10 +215,16 @@ export interface BoardRefusal {
   message: string;
 }
 
-/** A qualifier beside a chip's name; the upgrade is tinted apart from the rest. */
+/**
+ * A qualifier beside a chip's name. The upgrade is tinted apart from the rest,
+ * and on the resin chip so is the resin it counts (`credit`: the amount and
+ * `Mage +2`) from the donor filter.
+ */
 export interface ChipTag {
   text: string;
-  style: "plain" | "upgrade";
+  style: "plain" | "upgrade" | "credit";
+  /** The tag's own hover text; only the resin chip's `Auto` and `Mage +2` have one. */
+  tooltip: string | null;
 }
 
 /** A stack (×N / ≤N) or combined-level (Σ) badge at rest. */
@@ -234,6 +240,8 @@ export interface StackView {
   max: number;
   can_grow: boolean;
   can_change_count: boolean;
+  /** The count stepper's upper bound: `max` while the entry can grow, else its count. */
+  count_max: number;
   total: number | null;
   can_count_levels: boolean;
   level_capacity: number;
@@ -281,6 +289,8 @@ export interface BoardItemView {
   blanket: boolean;
   cluster: number | null;
   label: string | null;
+  /** The entry's name where a menu names it: a chip's name, or its members' joined with ` or `. */
+  name: string;
   members: number[];
   extras: number[];
   stack: StackView;
@@ -293,9 +303,8 @@ export interface ResinChipView {
   name: string;
   tags: ChipTag[];
   uncursed: boolean;
+  /** The chip's hover text: the donors' source, the one filter no tag shows. */
   tooltip: string | null;
-  /** The amount tag's (the first tag's) hover text, explaining Auto. */
-  amount_tooltip: string | null;
   details: string[];
   description: string;
 }
