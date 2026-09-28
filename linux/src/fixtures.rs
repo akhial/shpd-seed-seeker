@@ -37,9 +37,12 @@ macro_rules! golden {
 
 // The error fixtures and those with unreadable rows are left out: the typed
 // API has no text to misread, and a Linux list holds only readable rows.
+// The key-repair fixture is replayed with its wide label narrowed
+// ([`narrowed`]).
 golden![
     "board-tour",
     "board-empty",
+    "board-key-repair",
     "board-join-refused",
     "board-join-trades-copies",
     "board-detach",
@@ -77,7 +80,7 @@ pub fn fixtures(envelope: &str) -> Vec<Fixture> {
         .iter()
         .map(|&(name, text)| {
             let document: Value = serde_json::from_str(text).expect("fixtures are JSON");
-            (name, document)
+            (name, narrowed(name, document))
         })
         .filter(|(_, document)| document["envelope"] == envelope)
         .map(|(name, document)| Fixture {
@@ -86,6 +89,22 @@ pub fn fixtures(envelope: &str) -> Vec<Fixture> {
             response: document["response"].clone(),
         })
         .collect()
+}
+
+/// A fixture as a Linux list can hold it. A row keeps its alternative label
+/// in a byte, and the key-repair fixture labels its cluster 300 — only
+/// Android numbers clusters that high — for the editor to compact to 1. It
+/// is replayed labelled 1 already, so it still pins the key repair, and its
+/// golden answer holds as it is.
+fn narrowed(name: &str, mut document: Value) -> Value {
+    if name == "board-key-repair" {
+        for row in document["request"]["rows"].as_array_mut().unwrap() {
+            if row["alternative_group"] == 300 {
+                row["alternative_group"] = json!(1);
+            }
+        }
+    }
+    document
 }
 
 /// One requirement through the app's own codec: the canonical query

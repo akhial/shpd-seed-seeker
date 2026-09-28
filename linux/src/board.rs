@@ -58,6 +58,21 @@ impl BoardCache {
     }
 }
 
+/// Where a key the board holds on to — the row an open stack stepper edits —
+/// went when the editor repaired the list's keys. Only a key no row could
+/// keep, zero or past [`editor::MAX_KEY`], moves, to its row's new key; the
+/// first row holding a duplicated key keeps it, so a valid key stays put.
+#[must_use]
+pub fn follow_key(key: u64, rekeyed: &[(u64, u64)]) -> u64 {
+    if (1..=editor::MAX_KEY).contains(&key) {
+        return key;
+    }
+    rekeyed
+        .iter()
+        .find(|&&(old, _)| old == key)
+        .map_or(key, |&(_, new)| new)
+}
+
 /// The board entry showing the visible row `key`, and that row's chip.
 #[must_use]
 pub fn find_chip(view: &BoardView, key: u64) -> Option<(&ItemView, &ChipView)> {
@@ -232,7 +247,7 @@ mod tests {
     use shpd_seedfinder_core::query::{ArcaneResinFilter, Requirement, UpgradeRequirement};
 
     use super::{
-        BoardCache, Dragged, DropAnswer, Landing, chip_tooltip, count_limit, find_chip,
+        BoardCache, Dragged, DropAnswer, Landing, chip_tooltip, count_limit, find_chip, follow_key,
         join_choices, resin_tooltip,
     };
     use crate::fixtures::{
@@ -288,6 +303,11 @@ mod tests {
         assert_eq!(Value::Array(rows), response["rows"], "{name}: rows");
         assert_eq!(result.changed, response["changed"], "{name}: changed");
         assert_eq!(result.next_key, response["next_key"], "{name}: next_key");
+        assert_eq!(
+            json!(result.rekeyed),
+            response["rekeyed"],
+            "{name}: rekeyed"
+        );
         assert_eq!(json!(result.focus), response["focus"], "{name}: focus");
         let refused = result.refused.map_or(
             Value::Null,
@@ -588,6 +608,32 @@ mod tests {
             "Copies can only be grouped with the same item type."
         );
         assert_eq!(state.requirements, before);
+    }
+
+    #[test]
+    fn repaired_keys_are_adopted_and_followed() {
+        // Linux keys every list 1…n, but the editor repairs any other list
+        // alike: a zero key and a later duplicate take fresh keys, the first
+        // row holding a key keeps it, and an edit naming the zero key follows
+        // its row.
+        let mut state = AppState::default();
+        state.requirements = vec![
+            any(0, ItemKind::Wand),
+            any(4, ItemKind::Ring),
+            any(4, ItemKind::Armor),
+        ];
+        let result = state.apply(&[Edit::SetCount { key: 0, count: 2 }]);
+        assert!(result.changed);
+        assert_eq!(result.rekeyed, [(0, 5), (4, 6)]);
+        assert_eq!(result.focus, Some(5));
+        let keys: Vec<u64> = state.requirements.iter().map(|row| row.key).collect();
+        assert_eq!(keys, [5, 7, 4, 6]);
+        assert_eq!(state.claim_key(), 8);
+        // A stepper left open on the zero key follows its row; one on the
+        // row that kept key 4 stays there, not on the duplicate now keyed 6.
+        assert_eq!(follow_key(0, &result.rekeyed), 5);
+        assert_eq!(follow_key(4, &result.rekeyed), 4);
+        assert_eq!(follow_key(9, &result.rekeyed), 9);
     }
 
     #[test]

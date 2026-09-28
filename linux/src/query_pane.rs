@@ -1112,10 +1112,9 @@ impl QueryPane {
     /// Follows the editor's key repairs in the one piece of board state that
     /// outlives a rebuild: the row the stack popover is editing.
     pub fn follow_rekeyed(&self, rekeyed: &[(u64, u64)]) {
-        if let Some((key, field)) = self.stack_target.get()
-            && let Some(&(_, new)) = rekeyed.iter().find(|&&(old, _)| old == key)
-        {
-            self.stack_target.set(Some((new, field)));
+        if let Some((key, field)) = self.stack_target.get() {
+            self.stack_target
+                .set(Some((board::follow_key(key, rekeyed), field)));
         }
     }
 
