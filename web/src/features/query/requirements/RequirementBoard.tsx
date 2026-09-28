@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   CSSProperties,
   KeyboardEvent as ReactKeyboardEvent,
+  MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent,
   ReactNode,
 } from "react";
@@ -159,7 +160,8 @@ interface DragState {
 }
 
 interface MenuState {
-  key: number;
+  /** The chip the menu belongs to; the resin chip's menu only edits and removes. */
+  key: DragSource;
   x: number;
   y: number;
 }
@@ -235,7 +237,11 @@ export function RequirementBoard({
     setNotice(report.notice);
     if (report.rekeyed.length === 0) return;
     const { rekeyed } = report;
-    setMenu((current) => current && { ...current, key: rekey(current.key, rekeyed) });
+    setMenu(
+      (current) =>
+        current &&
+        (current.key === "resin" ? current : { ...current, key: rekey(current.key, rekeyed) }),
+    );
     setHoveredState((current) => current && { ...current, key: rekey(current.key, rekeyed) });
     setStepper(
       (current) =>
@@ -319,12 +325,14 @@ export function RequirementBoard({
     if (key === "resin") suppressResinClick.current = false;
     event.currentTarget.setPointerCapture(event.pointerId);
     const timer =
-      event.pointerType === "mouse" || key === "resin"
+      event.pointerType === "mouse"
         ? undefined
         : window.setTimeout(() => {
             const press = pressRef.current;
             if (!press || press.dragging) return;
             pressRef.current = null;
+            // The resin chip is a button: the release must not also open its sheet.
+            if (key === "resin") suppressResinClick.current = true;
             setMenu({ key, x: press.x, y: press.y });
           }, LONG_PRESS_MS);
     pressRef.current = { key, x: event.clientX, y: event.clientY, timer, dragging: false };
@@ -352,9 +360,15 @@ export function RequirementBoard({
     });
   };
 
-  const editChip = (key: number) => {
+  const editChip = (key: DragSource) => {
+    if (key === "resin") resin?.onEdit();
     // The core refuses to open a row it cannot read, and says why.
-    if (chips.has(key)) setNotice(onEdit(key));
+    else if (chips.has(key)) setNotice(onEdit(key));
+  };
+
+  const removeChip = (key: DragSource) => {
+    if (key === "resin") resin?.onRemove();
+    else edit({ type: "remove", key });
   };
 
   /** Completes pick mode on `key`: the menu's and the keyboard's way to drop. */
@@ -375,7 +389,7 @@ export function RequirementBoard({
         completeDrop({ ...state, over: targetAt(event.clientX, event.clientY, state.source) });
       return;
     }
-    // The resin edit button handles its native click, including keyboard activation.
+    // The resin chip is a button and handles its native click, including keyboard activation.
     if (press.key === "resin") return;
     if (pick) pickChip(pick.source, press.key);
     else editChip(press.key);
@@ -404,14 +418,16 @@ export function RequirementBoard({
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const onChipKeyDown = (key: number) => (event: ReactKeyboardEvent<HTMLElement>) => {
+  const onChipKeyDown = (key: DragSource) => (event: ReactKeyboardEvent<HTMLElement>) => {
     if (event.key === "Enter" || event.key === " ") {
+      // The resin chip is a button; its native click opens its sheet.
+      if (key === "resin") return;
       event.preventDefault();
       if (pick) pickChip(pick.source, key);
       else editChip(key);
     } else if (event.key === "Delete" || event.key === "Backspace") {
       event.preventDefault();
-      edit({ type: "remove", key });
+      removeChip(key);
     } else if (
       event.key === "ContextMenu" ||
       (event.shiftKey && event.key === "F10") ||
@@ -421,6 +437,11 @@ export function RequirementBoard({
       const rect = event.currentTarget.getBoundingClientRect();
       setMenu({ key, x: rect.left, y: rect.bottom });
     }
+  };
+
+  const onChipContextMenu = (key: DragSource) => (event: ReactMouseEvent<HTMLElement>) => {
+    event.preventDefault();
+    setMenu({ key, x: event.clientX, y: event.clientY });
   };
 
   // ---- rendering ---------------------------------------------------------------
@@ -469,10 +490,7 @@ export function RequirementBoard({
         onPointerUp={onChipPointerUp}
         onPointerCancel={onChipPointerCancel}
         onKeyDown={onChipKeyDown(chip.key)}
-        onContextMenu={(event) => {
-          event.preventDefault();
-          setMenu({ key: chip.key, x: event.clientX, y: event.clientY });
-        }}
+        onContextMenu={onChipContextMenu(chip.key)}
         onMouseEnter={(event) => setHovered(chip.key, event.currentTarget)}
         onMouseLeave={() => {
           if (hoveredKey === chip.key) setHovered(null);
@@ -635,7 +653,9 @@ export function RequirementBoard({
 
   const dragSource = drag && drag.source !== "resin" ? chips.get(drag.source)?.chip : undefined;
   const draggingResin = drag?.source === "resin" && resin;
-  const menuEntry = menu ? chips.get(menu.key) : undefined;
+  const menuEntry = menu && menu.key !== "resin" ? chips.get(menu.key) : undefined;
+  // The resin chip's menu has no requirement chip to draw from.
+  const menuOnResin = menu?.key === "resin" && resin !== undefined;
   const hoveredChip = hovered ? chips.get(hovered.key)?.chip : undefined;
   const statusLine =
     hoverAction?.type === "refuse"
@@ -660,44 +680,27 @@ export function RequirementBoard({
       >
         {items.map(renderItem)}
         {resin && (
-          <div
+          <button
+            type="button"
             className={`d1-chip d1-resin-chip${draggingResin ? " d1-chip-dragging" : ""}`}
             data-drop="resin"
+            aria-label="Edit Arcane Resin"
+            title={resin.chip.tooltip ?? undefined}
+            onPointerDown={onChipPointerDown("resin")}
+            onPointerMove={onChipPointerMove}
+            onPointerUp={onChipPointerUp}
+            onPointerCancel={onChipPointerCancel}
+            onClick={(event) => {
+              const suppressed = suppressResinClick.current && event.detail > 0;
+              suppressResinClick.current = false;
+              if (suppressed) return;
+              resin.onEdit();
+            }}
+            onKeyDown={onChipKeyDown("resin")}
+            onContextMenu={onChipContextMenu("resin")}
           >
-            <button
-              type="button"
-              className="d1-resin-edit"
-              aria-label="Edit Arcane Resin"
-              title={resin.chip.tooltip ?? undefined}
-              onPointerDown={onChipPointerDown("resin")}
-              onPointerMove={onChipPointerMove}
-              onPointerUp={onChipPointerUp}
-              onPointerCancel={onChipPointerCancel}
-              onClick={(event) => {
-                const suppressed = suppressResinClick.current && event.detail > 0;
-                suppressResinClick.current = false;
-                if (suppressed) return;
-                resin.onEdit();
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Delete" || event.key === "Backspace") {
-                  event.preventDefault();
-                  resin.onRemove();
-                }
-              }}
-            >
-              <ResinChipBody chip={resin.chip} />
-            </button>
-            <button
-              type="button"
-              className="d1-resin-remove"
-              aria-label="Remove Arcane Resin"
-              data-no-drag
-              onClick={resin.onRemove}
-            >
-              <XIcon size={12} />
-            </button>
-          </div>
+            <ResinChipBody chip={resin.chip} />
+          </button>
         )}
         <button
           type="button"
@@ -746,31 +749,31 @@ export function RequirementBoard({
           )}
         </div>
       )}
-      {menu && menuEntry && (
+      {menu && (menuEntry || menuOnResin) && (
         <ChipMenu
           state={menu}
-          chip={menuEntry.chip}
+          chip={menuEntry?.chip ?? null}
           onClose={() => setMenu(null)}
           onEdit={() => {
             setMenu(null);
             editChip(menu.key);
           }}
-          onPick={() => {
+          onPick={(key) => {
             setMenu(null);
-            setPick({ source: menu.key });
+            setPick({ source: key });
           }}
-          onCount={(count) => edit({ type: "set_count", key: menu.key, count })}
-          onTotal={() => {
+          onCount={(key, count) => edit({ type: "set_count", key, count })}
+          onTotal={(key) => {
             setMenu(null);
-            edit({ type: "toggle_levels", key: menu.key });
+            edit({ type: "toggle_levels", key });
           }}
-          onDetach={() => {
+          onDetach={(key) => {
             setMenu(null);
-            edit({ type: "detach", key: menu.key });
+            edit({ type: "detach", key });
           }}
           onRemove={() => {
             setMenu(null);
-            edit({ type: "remove", key: menu.key });
+            removeChip(menu.key);
           }}
         />
       )}
@@ -814,7 +817,11 @@ function ChipPopover({ chip, style }: { chip: ChipView; style: CSSProperties }) 
   );
 }
 
-/** The chip's context menu: the gestures as words, for keyboard and touch. */
+/**
+ * The chip's context menu: the gestures as words, for keyboard and touch. The
+ * resin chip (`chip` null) is edited and removed like any chip, but stacks,
+ * joins and detaches nothing.
+ */
 function ChipMenu({
   state,
   chip,
@@ -827,13 +834,13 @@ function ChipMenu({
   onRemove,
 }: {
   state: MenuState;
-  chip: ChipView;
+  chip: ChipView | null;
   onClose: () => void;
   onEdit: () => void;
-  onPick: () => void;
-  onCount: (count: number) => void;
-  onTotal: () => void;
-  onDetach: () => void;
+  onPick: (key: number) => void;
+  onCount: (key: number, count: number) => void;
+  onTotal: (key: number) => void;
+  onDetach: (key: number) => void;
   onRemove: () => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -847,21 +854,21 @@ function ChipMenu({
   }, [onClose]);
   const left = Math.min(state.x, window.innerWidth - 230);
   const top = Math.min(state.y, window.innerHeight - 260);
-  const { stack } = chip;
+  const stack = chip?.stack;
   return (
     <div ref={ref} className="d1-chip-menu" role="menu" style={{ left, top }}>
       {/* A chip without a kind is a row the core cannot read, which only Remove applies to. */}
-      {chip.kind !== null && (
+      {chip?.kind !== null && (
         <button type="button" role="menuitem" onClick={onEdit}>
           Edit…
         </button>
       )}
-      {chip.join.length > 0 && (
-        <button type="button" role="menuitem" onClick={onPick}>
+      {chip && chip.join.length > 0 && (
+        <button type="button" role="menuitem" onClick={() => onPick(chip.key)}>
           <b>or</b>Either/or with…
         </button>
       )}
-      {stack.can_change_count && (
+      {chip && stack?.can_change_count && (
         <>
           <span className="d1-chip-menu-rule" />
           <div className="d1-chip-menu-stepper" role="group" aria-label="How many">
@@ -873,7 +880,7 @@ function ChipMenu({
                 type="button"
                 aria-label="One fewer"
                 disabled={stack.count <= 1}
-                onClick={() => onCount(stack.count - 1)}
+                onClick={() => onCount(chip.key, stack.count - 1)}
               >
                 −
               </button>
@@ -882,7 +889,7 @@ function ChipMenu({
                 type="button"
                 aria-label="One more"
                 disabled={stack.count >= stack.count_max}
-                onClick={() => onCount(stack.count + 1)}
+                onClick={() => onCount(chip.key, stack.count + 1)}
               >
                 +
               </button>
@@ -890,16 +897,16 @@ function ChipMenu({
           </div>
         </>
       )}
-      {stack.can_count_levels && (
-        <button type="button" role="menuitem" onClick={onTotal}>
+      {chip && stack?.can_count_levels && (
+        <button type="button" role="menuitem" onClick={() => onTotal(chip.key)}>
           <b>Σ</b>
           {stack.total === null ? "Count levels together" : "Stop counting levels"}
         </button>
       )}
-      {chip.can_detach && (
+      {chip?.can_detach && (
         <>
           <span className="d1-chip-menu-rule" />
-          <button type="button" role="menuitem" onClick={onDetach}>
+          <button type="button" role="menuitem" onClick={() => onDetach(chip.key)}>
             On its own
           </button>
         </>

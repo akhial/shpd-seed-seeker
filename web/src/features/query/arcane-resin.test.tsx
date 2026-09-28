@@ -278,7 +278,8 @@ describe("Arcane Resin", () => {
     );
     expect(html).toContain("Arcane Resin");
     expect(html).toContain('aria-label="Edit Arcane Resin"');
-    expect(html).toContain('aria-label="Remove Arcane Resin"');
+    // Resin is removed through its chip menu, like every chip.
+    expect(html).not.toContain('aria-label="Remove Arcane Resin"');
     expect(html).toContain("≥6");
     expect(html).toContain("1 requirement");
     expect(html).not.toContain("arcane-resin-help");
