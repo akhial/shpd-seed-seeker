@@ -16,14 +16,18 @@ struct FinderView: View {
         model.query.board.ordinaryCount
             + (model.query.arcaneResinAuto || model.query.arcaneResin > 0 ? 1 : 0)
     }
+    /// Each entry under the name the core gives it, and the resin chip as
+    /// its amount tag — always its first — and its name.
     private var requirementsSummary: String {
-        var parts = model.query.board.items.map { item in
-            (item.blanket ? "Blanket: " : "")
-                + item.chips.map(\.title).joined(separator: " or ")
+        let board = model.query.board
+        var parts = board.items.map { item in
+            (item.blanket ? "Blanket: " : "") + item.name
                 + (item.countBadge.map { " \($0.compactText)" } ?? "")
         }
-        if model.query.arcaneResinAuto { parts.append("Auto Arcane Resin") }
-        else if model.query.arcaneResin > 0 { parts.append("≥\(model.query.arcaneResin) Arcane Resin") }
+        if let resin = board.resin {
+            let amount = resin.tags.first.map { "\($0.text) " } ?? ""
+            parts.append(amount + resin.name)
+        }
         return parts.joined(separator: " · ")
     }
     private var resultTitle: String {

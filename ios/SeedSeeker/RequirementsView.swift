@@ -261,6 +261,9 @@ struct RequirementsView: View {
             Text(resin.name)
                 .font(compactChips ? .caption.weight(.medium) : .subheadline.weight(.medium))
                 .lineLimit(1).minimumScaleFactor(0.85).layoutPriority(-1)
+            // The resin it counts (style credit) keeps the seed tint iOS has
+            // always drawn every resin tag in. Tags have no hover here; what
+            // "Mage +2" means is in the description VoiceOver reads.
             ForEach(resin.tags, id: \.self) { value in tag(value.text, upgrade: value.isUpgrade) }
             if resin.uncursed {
                 uncursedTag

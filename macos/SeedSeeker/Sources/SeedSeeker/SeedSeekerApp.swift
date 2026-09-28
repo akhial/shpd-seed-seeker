@@ -1193,9 +1193,9 @@ private struct ChipView: View {
                     .font(.system(size: 12, weight: .semibold))
                     .lineLimit(1).truncationMode(.tail)
                     .frame(maxWidth: 150, alignment: .leading)
-                ForEach(chip.tags, id: \.self) { tag in tagView(tag) }
+                ForEach(chip.tags, id: \.self) { tag in RequirementTagView(tag: tag) }
                 effectBadge
-                ForEach(chip.trailingTags, id: \.self) { tag in tagView(tag) }
+                ForEach(chip.trailingTags, id: \.self) { tag in RequirementTagView(tag: tag) }
                 if chip.uncursed {
                     Text("✓")
                         .font(.system(size: 11, weight: .semibold, design: .monospaced))
@@ -1229,17 +1229,6 @@ private struct ChipView: View {
         } isTargeted: { isTargeted = $0 }
         .contextMenu { menu }
         .accessibilityLabel(chip.description)
-    }
-
-    private func tagView(_ tag: ChipTag) -> some View {
-        Text(tag.text)
-            .font(.system(size: 11, weight: .semibold, design: .monospaced))
-            .lineLimit(1)
-            .fixedSize(horizontal: true, vertical: false)
-            .foregroundStyle(tag.isUpgrade ? Color.shatteredGreen : Color.shatteredYellow)
-            .padding(.horizontal, 4)
-            .background((tag.isUpgrade ? Color.shatteredGreen : Color.shatteredYellow).opacity(0.13),
-                        in: RoundedRectangle(cornerRadius: 4))
     }
 
     private var borderColour: Color {
@@ -1338,12 +1327,12 @@ private struct ChipView: View {
         Button("Remove", role: .destructive) { _ = perform([.remove(chip.key)]) }
     }
 
-    /// The board entries this chip may join, named as the menu lists them;
-    /// choosing one joins its first member the core offers.
+    /// The board entries this chip may join, under the names the core gives
+    /// them; choosing one joins its first member the core offers.
     private var joinTargets: [ChipTarget] {
         board.items.compactMap { entry in
             guard let target = entry.members.first(where: { chip.join.contains($0) }) else { return nil }
-            return ChipTarget(id: target, label: entry.chips.map(\.name).joined(separator: " or "))
+            return ChipTarget(id: target, label: entry.name)
         }
     }
 }
@@ -1352,6 +1341,40 @@ private struct ChipView: View {
 private struct ChipTarget: Identifiable {
     let id: Int64
     let label: String
+}
+
+/// A qualifier beside a chip's name — an item chip's or the resin chip's —
+/// tinted by the core's style: the upgrade green, the resin the resin chip
+/// counts mint (its amount and "Mage +2"), a filter yellow. A tag with hover
+/// text of its own shows it over the chip's.
+struct RequirementTagView: View {
+    let tag: ChipTag
+
+    var body: some View {
+        if let tooltip = tag.tooltip {
+            label.help(tooltip)
+        } else {
+            label
+        }
+    }
+
+    private var label: some View {
+        Text(tag.text)
+            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+            .foregroundStyle(colour)
+            .padding(.horizontal, 4)
+            .background(colour.opacity(0.13), in: RoundedRectangle(cornerRadius: 4))
+    }
+
+    private var colour: Color {
+        switch tag.style {
+        case .upgrade: return .shatteredGreen
+        case .credit: return .shatteredMint
+        case .plain: return .shatteredYellow
+        }
+    }
 }
 
 /// The stack badges: how many of the chip (×N, or ≤N once the levels are being

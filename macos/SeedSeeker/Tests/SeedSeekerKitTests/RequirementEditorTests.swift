@@ -90,6 +90,7 @@ final class RequirementEditorTests: XCTestCase {
         XCTAssertEqual(rings.stack.count, 3)
         XCTAssertTrue(rings.stack.canCountLevels)
         XCTAssertEqual(rings.stack.levelCapacity, 11)
+        XCTAssertEqual(rings.stack.countMax, 3)
         XCTAssertEqual(rings.stack.countRange, 1...3)
         XCTAssertNil(board.item(holding: 2), "a hidden copy is no visible row")
         let might = try XCTUnwrap(rings.chips.first)
@@ -97,6 +98,8 @@ final class RequirementEditorTests: XCTestCase {
         XCTAssertEqual(might.kind, .ring)
         XCTAssertEqual(might.tags.map(\.text), ["+2"])
         XCTAssertEqual(might.tags.map(\.isUpgrade), [true])
+        XCTAssertEqual(might.tags.map(\.style), [.upgrade])
+        XCTAssertEqual(might.tags.map(\.tooltip), [nil], "a chip's tags have no hover text of their own")
         XCTAssertEqual(might.relations.map(\.glyph), [.times])
         XCTAssertEqual(might.refusal(onto: 5)?.reason, "mixed_category_stack")
 
@@ -119,6 +122,10 @@ final class RequirementEditorTests: XCTestCase {
         let cluster = board.items[2]
         XCTAssertEqual(cluster.cluster, 1)
         XCTAssertEqual(cluster.label, "Any of 2")
+        // Menus name each entry as the core does: a chip's name, a cluster's
+        // members' names joined.
+        XCTAssertEqual(board.items.map(\.name),
+                       ["Ring of Might", "Any melee", "Wand of Fireblast or Any wand", "Rat Skull", "Any armor"])
         XCTAssertEqual(cluster.anchor, 5)
         XCTAssertEqual(board.item(holding: 6)?.id, "c1")
         let excluded = try XCTUnwrap(board.chip(6))
@@ -130,16 +137,44 @@ final class RequirementEditorTests: XCTestCase {
 
         // A trinket never stacks; a blanket lists its effects in catalog order.
         XCTAssertFalse(board.items[3].stack.canChangeCount)
+        XCTAssertEqual(board.items[3].stack.countMax, 1)
+        XCTAssertEqual(board.items[3].stack.countRange, 1...1)
         XCTAssertEqual(board.chip(7)?.tags.map(\.text), ["Transmute ≤3"])
         XCTAssertTrue(board.items[4].blanket)
         XCTAssertEqual(board.chip(8)?.effect?.effects, ["Viscosity", "Brimstone"])
 
+        // The resin chip's tags are the resin it counts, each explaining
+        // itself on hover.
         let resin = try XCTUnwrap(board.resin)
         XCTAssertEqual(resin.name, "Arcane Resin")
         XCTAssertEqual(resin.tags.map(\.text), ["Auto", "Mage +2"])
+        XCTAssertEqual(resin.tags.map(\.style), [.credit, .credit])
+        XCTAssertEqual(resin.tags.map(\.tooltip), [
+            "Enough resin to upgrade kept wands to +3, excluding No resin wands and reforge copies",
+            "Starting Magic Missile contributes 2 resin",
+        ])
         XCTAssertEqual(resin.tooltip, "Heap")
         XCTAssertTrue(resin.uncursed)
-        XCTAssertNotNil(resin.amountTooltip)
+    }
+
+    /// A fixed amount's tag has no hover text; the donor floor is a plain
+    /// filter beside the credit, and the source is the chip's own hover text.
+    func testTheResinChipsCreditIsTintedApartFromItsFilter() throws {
+        let board = try XCTUnwrap(RequirementBoard.decode(try response("board-resin-credit"), sent: []))
+        let resin = try XCTUnwrap(board.resin)
+        XCTAssertEqual(resin.tags.map(\.text), ["≥4", "Mage +2", "F≤9"])
+        XCTAssertEqual(resin.tags.map(\.style), [.credit, .credit, .plain])
+        XCTAssertEqual(resin.tags.map(\.isCredit), [true, true, false])
+        XCTAssertEqual(resin.tags.map(\.tooltip), [nil, "Starting Magic Missile contributes 2 resin", nil])
+        XCTAssertEqual(resin.tooltip, "Locked chest")
+        XCTAssertEqual(resin.details.last, "floors 1–9")
+
+        // A style this build does not know reads as plain rather than
+        // dropping the tag.
+        let unknown = try XCTUnwrap(ChipTag(json: ["text": "≥4", "style": "sparkle", "tooltip": NSNull()]))
+        XCTAssertEqual(unknown.style, .plain)
+        XCTAssertNil(unknown.tooltip)
+        XCTAssertEqual(ChipTag(json: ["text": "+2"])?.style, .plain)
     }
 
     /// Problems name the rows they blame; refusals and key repairs read too.
@@ -229,6 +264,28 @@ final class RequirementEditorTests: XCTestCase {
         XCTAssertEqual(shrunk.item(holding: 1)?.stack.count, 1)
     }
 
+    /// A stack a hand-written list gives a mixed cluster cannot grow: its
+    /// count stepper runs only down from its count, as the core bounds it.
+    func testAStackThatCannotGrowOnlySheds() throws {
+        let spear = try XCTUnwrap(ItemCatalog.findById("spear"))
+        let rows = [
+            try ItemRequirement(key: 1, item: spear, upgrade: 0, kind: .weapon, upgradeMatch: .any,
+                                identityGroup: 1, alternativeGroup: 1),
+            try ItemRequirement(key: 2, item: nil, upgrade: 0, kind: .wand, upgradeMatch: .any,
+                                identityGroup: 1, alternativeGroup: 1),
+            try ItemRequirement(key: 3, item: nil, upgrade: 0, kind: .weapon, upgradeMatch: .any,
+                                identityGroup: 1),
+        ]
+        let cluster = try XCTUnwrap(RequirementBoard.of(rows).item(holding: 1))
+        XCTAssertEqual(cluster.name, "Spear or Any wand")
+        XCTAssertFalse(cluster.stack.canGrow)
+        XCTAssertTrue(cluster.stack.canChangeCount)
+        XCTAssertEqual(cluster.stack.count, 2)
+        XCTAssertEqual(cluster.stack.max, 3)
+        XCTAssertEqual(cluster.stack.countMax, 2)
+        XCTAssertEqual(cluster.stack.countRange, 1...2)
+    }
+
     /// A count the board offers can still be refused when every group label
     /// is in use; the menus and steppers show the message, and nothing changes.
     func testACountWithNoFreeGroupIsRefused() throws {
@@ -315,9 +372,14 @@ final class RequirementEditorTests: XCTestCase {
         let query = SavedQuery(arcaneResin: 4, arcaneResinFilter: ArcaneResinFilter(maximumDepth: 9, source: .lockedChest))
         let chip = try XCTUnwrap(query.board.resin)
         XCTAssertEqual(chip.tags.map(\.text), ["≥4", "F≤9"])
+        XCTAssertEqual(chip.tags.map(\.style), [.credit, .plain])
+        XCTAssertNil(chip.tags.first?.tooltip, "a fixed amount needs no explaining")
         XCTAssertEqual(chip.tooltip, "Locked chest")
-        XCTAssertNil(chip.amountTooltip)
         XCTAssertNil(SavedQuery().board.resin)
+        let auto = try XCTUnwrap(SavedQuery(arcaneResinAuto: true).board.resin)
+        XCTAssertEqual(auto.tags.first?.text, "Auto")
+        XCTAssertEqual(auto.tags.first?.tooltip,
+                       "Enough resin to upgrade kept wands to +3, excluding No resin wands and reforge copies")
     }
 
     // MARK: - Keys

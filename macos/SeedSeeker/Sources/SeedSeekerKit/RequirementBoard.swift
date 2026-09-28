@@ -53,10 +53,11 @@ public struct BoardResin: Hashable, Sendable {
     public let amount: Int
     public let filter: ArcaneResinFilter
 
-    /// The condition, or nil when the query asks for no resin (or for an
-    /// amount the query-level check already refuses).
+    /// The condition, or nil when the query asks for no resin: no Auto and
+    /// no amount. The amount's bounds are the query's own (its model keeps
+    /// to the format's) and the sheet's, which the core words.
     public init?(amount: Int, auto: Bool, filter: ArcaneResinFilter) {
-        guard auto || (1...65_535).contains(amount), filter.isValid else { return nil }
+        guard auto || amount > 0, filter.isValid else { return nil }
         self.auto = auto; self.amount = amount; self.filter = filter
     }
 
@@ -269,6 +270,9 @@ public struct BoardItem: Hashable, Identifiable, Sendable {
     public let cluster: Int?
     /// The cluster's caption (`Any of 3`).
     public let label: String?
+    /// The entry's name where a menu names it ("Either/or with…"): a chip's
+    /// name, or a cluster's members' names joined (`Spear or Mace`).
+    public let name: String
     /// The visible rows: one for a chip, every member of a cluster.
     public let members: [Int64]
     /// The hidden copies behind the stack badge.
@@ -296,6 +300,7 @@ public struct BoardItem: Hashable, Identifiable, Sendable {
         blanket = jsonFlag(object["blanket"])
         cluster = jsonInt(object["cluster"])
         label = jsonString(object["label"])
+        name = jsonString(object["name"]) ?? chips[0].name
         self.members = members
         extras = jsonKeys(object["extras"])
         self.stack = stack
@@ -310,13 +315,16 @@ public struct BoardItem: Hashable, Identifiable, Sendable {
 public struct BoardStack: Hashable, Sendable {
     /// How many items the entry asks for, its anchor included.
     public let count: Int
-    /// The count stepper's upper bound.
+    /// The most items any stack may ask for.
     public let max: Int
     /// Whether the entry can grow a stack at all.
     public let canGrow: Bool
     /// Whether the count stepper is live: the entry can grow, or it has
     /// copies to shed.
     public let canChangeCount: Bool
+    /// The count stepper's upper bound: ``max`` while the entry can grow,
+    /// else its count, which it may only shed copies from.
+    public let countMax: Int
     /// The combined level, when the stack counts levels.
     public let total: Int?
     /// Whether "count levels together" applies (or can be turned off).
@@ -333,11 +341,8 @@ public struct BoardStack: Hashable, Sendable {
     /// `Σ ≥ 5`.
     public let totalText: String
 
-    /// The counts the stepper offers, read off ``canGrow`` and ``max`` as
-    /// every app reads them (the web disables its increment on
-    /// `!can_grow || count >= max`): up to ``max`` while the entry can grow,
-    /// else only down from its count.
-    public var countRange: ClosedRange<Int> { 1...Swift.max(1, canGrow ? max : count) }
+    /// The counts the stepper offers: one up to the core's ``countMax``.
+    public var countRange: ClosedRange<Int> { 1...Swift.max(1, countMax) }
     /// The totals the combined-level stepper offers.
     public var totalRange: ClosedRange<Int> { 1...Swift.max(1, levelCapacity) }
 
@@ -347,6 +352,8 @@ public struct BoardStack: Hashable, Sendable {
         max = jsonInt(object["max"]) ?? count
         canGrow = jsonFlag(object["can_grow"])
         canChangeCount = jsonFlag(object["can_change_count"])
+        // Missing, the stepper may only shed copies: never more than asked.
+        countMax = jsonInt(object["count_max"]) ?? count
         total = jsonInt(object["total"])
         canCountLevels = jsonFlag(object["can_count_levels"])
         levelCapacity = jsonInt(object["level_capacity"]) ?? 1
@@ -444,15 +451,33 @@ public struct BoardChip: Hashable, Identifiable, Sendable {
     }
 }
 
-/// A qualifier beside a chip's name; the upgrade is tinted apart from the rest.
+/// A qualifier beside a chip's name, tinted by its ``style``.
 public struct ChipTag: Hashable, Sendable {
+    public enum Style: String, Hashable, Sendable {
+        /// A filter: the tier, a floor, `No resin`.
+        case plain
+        /// The upgrade (`+3`, `+3↑`).
+        case upgrade
+        /// Resin the resin chip counts: its amount and `Mage +2`, tinted
+        /// apart from its donor filter.
+        case credit
+    }
+
     public let text: String
-    public let isUpgrade: Bool
+    public let style: Style
+    /// The tag's own hover text (what Auto means, where `Mage +2` comes
+    /// from), or nil; a chip's tags have none.
+    public let tooltip: String?
+
+    public var isUpgrade: Bool { style == .upgrade }
+    public var isCredit: Bool { style == .credit }
 
     init?(json object: [String: Any]) {
         guard let text = jsonString(object["text"]) else { return nil }
         self.text = text
-        isUpgrade = (jsonString(object["style"]) ?? "") == "upgrade"
+        // A style this build does not know is drawn plain.
+        style = jsonString(object["style"]).flatMap(Style.init(rawValue:)) ?? .plain
+        tooltip = jsonString(object["tooltip"])
     }
 }
 
@@ -518,13 +543,12 @@ public struct JoinRefusal: Hashable, Sendable {
 /// the items, which joins and stacks nothing.
 public struct BoardResinChip: Hashable, Sendable {
     public let name: String
-    /// `Auto` or `≥N`, then `Mage +2`, `F≤N`.
+    /// `Auto` or `≥N` — always there, always first — then `Mage +2`, both
+    /// styled ``ChipTag/Style/credit`` with their own tooltips, then `F≤N`.
     public let tags: [ChipTag]
     public let uncursed: Bool
-    /// The donors' source, or nil for any source.
+    /// The chip's hover text: the donors' source, or nil for any source.
     public let tooltip: String?
-    /// What the Auto amount means, or nil for a fixed amount.
-    public let amountTooltip: String?
     public let details: [String]
     /// The accessibility label.
     public let description: String
@@ -535,7 +559,6 @@ public struct BoardResinChip: Hashable, Sendable {
         tags = jsonObjects(object["tags"]).compactMap(ChipTag.init(json:))
         uncursed = jsonFlag(object["uncursed"])
         tooltip = jsonString(object["tooltip"])
-        amountTooltip = jsonString(object["amount_tooltip"])
         details = jsonStrings(object["details"])
         description = jsonString(object["description"]) ?? name
     }
@@ -574,6 +597,13 @@ func jsonKey(_ value: Any?) -> Int64? {
 
 func jsonFlag(_ value: Any?) -> Bool {
     guard let number = value as? NSNumber, jsonIsBoolean(number) else { return false }
+    return number.boolValue
+}
+
+/// A true or false that is a value rather than a flag (an option's value):
+/// nil unless the answer holds JSON's true or false.
+func jsonBool(_ value: Any?) -> Bool? {
+    guard let number = value as? NSNumber, jsonIsBoolean(number) else { return nil }
     return number.boolValue
 }
 

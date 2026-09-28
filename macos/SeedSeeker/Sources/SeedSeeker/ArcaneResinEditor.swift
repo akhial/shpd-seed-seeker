@@ -23,7 +23,9 @@ struct ArcaneResinChip: View {
             ItemSpriteView(item: arcaneResinItem, pointSize: 16)
             Text(chip.name)
                 .font(.system(size: 12, weight: .semibold)).lineLimit(1)
-            ForEach(chip.tags, id: \.self) { tag in tagView(tag.text, color: .shatteredYellow) }
+            // The resin it counts is tinted apart from its donor filter, and
+            // Auto and "Mage +2" explain themselves on hover.
+            ForEach(chip.tags, id: \.self) { tag in RequirementTagView(tag: tag) }
             if chip.uncursed { tagView("✓", color: .shatteredMint) }
         }
         .padding(.horizontal, 7)
@@ -54,11 +56,10 @@ struct ArcaneResinChip: View {
         .accessibilityAction { onEdit() }
     }
 
-    /// The chip's name and details, then what the Auto amount means.
+    /// The chip's name and details; its tags carry their own hover text.
     private var helpText: String {
         var lines = [chip.name]
         if !chip.details.isEmpty { lines.append(chip.details.joined(separator: " · ")) }
-        if let amount = chip.amountTooltip { lines.append(amount) }
         return lines.joined(separator: "\n")
     }
 
