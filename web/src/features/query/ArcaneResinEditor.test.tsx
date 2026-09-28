@@ -140,13 +140,11 @@ it("selects Auto, preserves filters, and restores the mode when editing", async 
   await click("Auto");
   expect(host.querySelector('input[aria-label="Minimum resin"]')).toBeNull();
   expect(host.querySelector(".d1-modal")!.textContent).toContain("each kept wand to +3");
-  await toggle("Require uncursed wands");
+  expect(checkbox("Require uncursed wands").checked).toBe(true);
   await toggle("Limit wands to a floor");
   await click("Add Requirement");
-  expect(toQueryDocument(queryStore.state)).toMatchObject({
-    arcane_resin: "auto",
-    arcane_resin_filter: { max_depth: 4 },
-  });
+  expect(toQueryDocument(queryStore.state)).toMatchObject({ arcane_resin: "auto" });
+  expect(toQueryDocument(queryStore.state).arcane_resin_filter).toEqual({ max_depth: 4 });
   expect(host.querySelector(".d1-resin-chip")!.textContent).toContain("Auto");
   expect(host.querySelector(".d1-resin-chip")!.textContent).not.toContain("≥");
   expect(host.textContent).toContain("1 requirement");

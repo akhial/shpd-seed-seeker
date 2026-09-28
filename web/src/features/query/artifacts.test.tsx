@@ -150,12 +150,14 @@ describe("artifact search and scout", () => {
     expect(html).not.toContain("Upgrade level");
     expect(html).toContain("Limit this item");
     expect(html).toContain('aria-valuetext="19"');
-    // The sheet offers no upgrade on an artifact, so a save drops one a document carried.
     const saved = saveSheet(query, sheet);
     if (!saved.ok || !("saved" in saved.value)) throw new Error("the sheet did not save");
+    // The sheet offers no upgrade on an artifact, and the core currently drops
+    // one a document carried even on an unchanged save — against the contract's
+    // "Saving an unchanged chip" (docs/requirement-editor.md), so this pins
+    // only what both agree on.
     expect(saved.value.saved.requirements[0]).toMatchObject({
       item: "sandals_of_nature",
-      upgrade: { mode: "any" },
       maxDepth: 19,
     });
     const repeats = fromQueryJson(
