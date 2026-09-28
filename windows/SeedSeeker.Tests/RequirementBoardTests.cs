@@ -326,8 +326,9 @@ public sealed class RequirementBoardTests
         Assert.Equal(drop.Message, refused.Refused.Message);
         Assert.Same(rows, query.Requirements);
 
-        // The editor dialog's save: a new chip is appended with a fresh key; an
-        // unchanged save names its chip and changes nothing.
+        // The board's save edit, which a sheet's save runs: a new chip is
+        // appended with a fresh key; an unchanged save names its chip and
+        // changes nothing.
         var added = Apply(editor, query, BoardEdit.Save(null, new() { Kind = ItemKind.Armor, UpgradeMatch = UpgradeMatch.Exactly, Upgrade = 3 }, 2, null, 9));
         var armor = added.Focus!.Value;
         Assert.DoesNotContain(armor, rows.Select(row => row.Key));

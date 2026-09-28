@@ -4,11 +4,13 @@ using Xunit;
 namespace SeedSeeker.Tests;
 
 /// <summary>
-/// The app keeps local copies of the engine's scalar constants so the editor
-/// needs nothing from the engine to open. This is the one place they meet the
-/// engine: every local is asserted against the <c>engine_info</c> document
-/// the linked engine publishes, so a change on either side fails here rather
-/// than as an editor offering a query the search refuses.
+/// The app keeps local copies of a few engine constants — the floor limit,
+/// the result cap, the challenges, the quest windows — for the controls it
+/// draws itself. This is the one place they meet the engine: every local is
+/// asserted against the <c>engine_info</c> document the linked engine
+/// publishes, so a change on either side fails here rather than as a control
+/// offering a query the search refuses. The requirement editor keeps no such
+/// copies: its bounds come with the shared editor's forms.
 /// </summary>
 public sealed class EngineConstantsTests
 {
@@ -21,50 +23,7 @@ public sealed class EngineConstantsTests
     public void QueryBoundsMatchTheEngine()
     {
         Assert.Equal(SearchLimits.MaxDepth, Limit("maxDepth"));
-        Assert.Equal(SearchLimits.ExactTierMin, Limit("exactTierMin"));
-        Assert.Equal(SearchLimits.ExactTierMax, Limit("exactTierMax"));
-        Assert.Equal(SearchLimits.BoundedTierMin, Limit("boundedTierMin"));
-        Assert.Equal(SearchLimits.BoundedTierMax, Limit("boundedTierMax"));
-        Assert.Equal(SearchLimits.IdentityGroupMax, Limit("identityGroupMax"));
-        Assert.Equal(SearchLimits.LevelSumGroupMax, Limit("levelSumGroupMax"));
-        Assert.Equal(SearchLimits.StackMax, Limit("stackMax"));
-        Assert.Equal(SearchLimits.MaxUpgradeDefault, Limit("maxUpgradeDefault"));
-        Assert.Equal(SearchLimits.MaxUpgradeRing, Limit("maxUpgradeRing"));
-        Assert.Equal(SearchLimits.MaxUpgradeRingStandard, Limit("maxUpgradeRingStandard"));
-        Assert.Equal(SearchLimits.MaxUpgradeWeapon, Limit("maxUpgradeWeapon"));
-        // The families route to the right maximum, narrowed weapon kinds included.
-        Assert.Equal(Limit("maxUpgradeRing"), ItemKind.Ring.MaximumSearchUpgrade());
-        foreach (var kind in new[] { ItemKind.Weapon, ItemKind.MeleeWeapon, ItemKind.ThrownWeapon })
-            Assert.Equal(Limit("maxUpgradeWeapon"), kind.MaximumSearchUpgrade());
-        foreach (var kind in new[] { ItemKind.Armor, ItemKind.Wand })
-            Assert.Equal(Limit("maxUpgradeDefault"), kind.MaximumSearchUpgrade());
-        // Every family's ceiling is the engine's own, keyed by the document's name for it.
-        foreach (var (name, kind) in new[] {
-            ("weapon", ItemKind.Weapon), ("armor", ItemKind.Armor), ("wand", ItemKind.Wand), ("ring", ItemKind.Ring), ("artifact", ItemKind.Artifact) })
-            Assert.Equal((int)((JsonObject)Limits["maxUpgradeByKind"]!)[name]!, kind.MaximumSearchUpgrade());
-        Assert.Equal(SearchLimits.MaxUpgradeAnyTier, Limit("maxUpgradeAnyTier"));
-        Assert.Equal(SearchLimits.ExtraUpgradeTier, Limit("extraUpgradeTier"));
         Assert.Equal(SearchLimits.MaxDepth, new QuerySettings().MaximumDepth);
-    }
-
-    /// <summary>
-    /// Only a tier-4 weapon is levelled past the shared ceiling, so a
-    /// requirement that rules that tier out loses the top of its range.
-    /// </summary>
-    [Fact]
-    public void TopWeaponUpgradeNeedsTheTierThatReachesIt()
-    {
-        var ceiling = Limit("maxUpgradeWeapon");
-        var capped = Limit("maxUpgradeAnyTier");
-        var extraTier = Limit("extraUpgradeTier");
-        Assert.Equal(ceiling, ItemKind.Weapon.MaximumSearchUpgrade(null, TierMatch.Any, 0));
-        Assert.Equal(ceiling, ItemKind.Weapon.MaximumSearchUpgrade(null, TierMatch.Exactly, extraTier));
-        Assert.Equal(capped, ItemKind.Weapon.MaximumSearchUpgrade(null, TierMatch.Exactly, 5));
-        Assert.Equal(capped, ItemKind.Weapon.MaximumSearchUpgrade(null, TierMatch.AtMost, 3));
-        Assert.Equal(ceiling, ItemKind.Weapon.MaximumSearchUpgrade(ItemCatalog.Find("battle_axe"), TierMatch.Any, 0));
-        Assert.Equal(ceiling, ItemKind.ThrownWeapon.MaximumSearchUpgrade(ItemCatalog.Find("javelin"), TierMatch.Any, 0));
-        Assert.Equal(capped, ItemKind.Weapon.MaximumSearchUpgrade(ItemCatalog.Find("sword"), TierMatch.Any, 0));
-        Assert.Equal(capped, ItemKind.Armor.MaximumSearchUpgrade(null, TierMatch.Exactly, extraTier));
     }
 
     [Fact]

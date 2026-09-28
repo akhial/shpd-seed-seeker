@@ -31,6 +31,15 @@ public sealed class FloorLimitIndexConverter : IValueConverter
     public object ConvertBack(object value, Type targetType, object parameter, string language) => throw new NotSupportedException();
 }
 
+/// <summary>Renders an option slider's raw index as the option's label, for the thumb tooltip; the labels are the requirement sheet's.</summary>
+public sealed class OptionLabelConverter : IValueConverter
+{
+    public IReadOnlyList<string> Labels { get; set; } = [];
+    public object Convert(object value, Type targetType, object parameter, string language) =>
+        Labels.Count == 0 ? "" : Labels[Math.Clamp((int)Math.Round((double)value), 0, Labels.Count - 1)];
+    public object ConvertBack(object value, Type targetType, object parameter, string language) => throw new NotSupportedException();
+}
+
 public sealed partial record SeedResult
 {
     public Visibility TrinketVisibility => SelectedTrinket is null ? Visibility.Collapsed : Visibility.Visible;

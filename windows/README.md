@@ -61,8 +61,9 @@ files, and version 9 share links preserve blankets.
 
 ## Arcane Resin
 
-Choose **Arcane Resin** when adding a Wand requirement. Set a minimum amount or
-choose **Auto** to find enough resin to upgrade each kept wand to +3.
+Choose **Arcane Resin** in the item list when adding a Wand requirement, or
+click the resin chip to edit it. Set a minimum amount or choose **Auto** to
+find enough resin to upgrade each kept wand to +3.
 Extra stack copies are reserved for Blacksmith reforging: they need no resin
 upgrades and cannot also be consumed as resin donors.
 In a wand’s editor, **Exclude from Auto resin** keeps that wand reserved without

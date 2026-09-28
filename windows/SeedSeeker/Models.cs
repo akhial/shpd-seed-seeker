@@ -21,105 +21,19 @@ public static class ItemKindExtensions
     /// <summary>The broad item family; catalog items always carry the family.</summary>
     public static ItemKind Family(this ItemKind kind) =>
         kind is ItemKind.MeleeWeapon or ItemKind.ThrownWeapon ? ItemKind.Weapon : kind;
-
-    /// <summary>The weapon class this kind restricts to, or null when unrestricted.</summary>
-    public static WeaponClass? WeaponClass(this ItemKind kind) => kind switch
-    {
-        ItemKind.MeleeWeapon => SeedSeeker.WeaponClass.Melee,
-        ItemKind.ThrownWeapon => SeedSeeker.WeaponClass.Thrown,
-        _ => null,
-    };
-
-    /// <summary>Families that require a concrete item instead of a wildcard.</summary>
-    public static bool RequiresNamedItem(this ItemKind kind) => kind is ItemKind.Trinket or ItemKind.Artifact;
-
-    /// <summary>Whether a catalog item can satisfy a requirement of this kind.</summary>
-    public static bool Accepts(this ItemKind kind, CatalogItem item) =>
-        item.Kind == kind.Family() && (kind.WeaponClass() is not { } weaponClass || item.Class == weaponClass);
-
-    /// <summary>The highest upgrade a search may name for this family, at the tier that reaches it.</summary>
-    public static int MaximumSearchUpgrade(this ItemKind kind) => kind.Family() switch
-    {
-        ItemKind.Weapon => SearchLimits.MaxUpgradeWeapon,
-        ItemKind.Ring => SearchLimits.MaxUpgradeRing,
-        ItemKind.Trinket => 0,
-        ItemKind.Artifact => SearchLimits.MaxUpgradeArtifact,
-        _ => SearchLimits.MaxUpgradeDefault,
-    };
-
-    /// <summary>
-    /// The highest upgrade a requirement may name once its item and tier
-    /// filter are known: only a tier-<see cref="SearchLimits.ExtraUpgradeTier"/>
-    /// weapon is levelled past <see cref="SearchLimits.MaxUpgradeAnyTier"/>.
-    /// </summary>
-    public static int MaximumSearchUpgrade(this ItemKind kind, CatalogItem? item, TierMatch tierMatch, int tier)
-    {
-        var ceiling = kind.MaximumSearchUpgrade();
-        if (kind.Family() != ItemKind.Weapon || ceiling <= SearchLimits.MaxUpgradeAnyTier) return ceiling;
-        var reachesExtraTier = item is not null
-            ? item.Tier == SearchLimits.ExtraUpgradeTier
-            : tierMatch switch
-            {
-                TierMatch.Exactly => tier == SearchLimits.ExtraUpgradeTier,
-                TierMatch.AtLeast => tier <= SearchLimits.ExtraUpgradeTier,
-                TierMatch.AtMost => tier >= SearchLimits.ExtraUpgradeTier,
-                _ => true,
-            };
-        return reachesExtraTier ? ceiling : SearchLimits.MaxUpgradeAnyTier;
-    }
 }
 
 /// <summary>
-/// Local copies of the engine's query bounds and session limits
-/// (<c>crates/seedfinder-core/src/engine_info.rs</c>). They stay constants so
-/// the editor needs nothing from the engine to open; EngineConstantsTests
-/// asserts each of them against the engine's <c>engine_info</c> document.
+/// Local copies of the engine's floor and session limits the window keeps to
+/// (<c>crates/seedfinder-core/src/engine_info.rs</c>); EngineConstantsTests
+/// asserts each of them against the engine's <c>engine_info</c> document. The
+/// requirement editor's own bounds are the shared editor's, which its forms
+/// carry.
 /// </summary>
 public static class SearchLimits
 {
     /// <summary>Deepest floor a search may cover.</summary>
     public const int MaxDepth = 24;
-    /// <summary>Tiers an "exactly tier N" requirement may name (tier 1 is starting gear).</summary>
-    public const int ExactTierMin = 2;
-    public const int ExactTierMax = 5;
-    /// <summary>Tiers an "at least / at most tier N" requirement may name.</summary>
-    public const int BoundedTierMin = 3;
-    public const int BoundedTierMax = 4;
-    /// <summary>Highest same-item group number (groups run 1..this, shown as A..D).</summary>
-    public const int IdentityGroupMax = 4;
-    /// <summary>How many items of one kind a single board chip may ask for.</summary>
-    public const int StackMax = 3;
-    /// <summary>Highest combined-level group number (groups run 1..this, shown as A..D).</summary>
-    public const int LevelSumGroupMax = 4;
-    /// <summary>
-    /// Highest upgrade a search may name, for everything but weapons. v4.0.0's
-    /// Imp vault sets the ceilings: its final-room options reach +4 on plate
-    /// armor, wands and rings.
-    /// </summary>
-    public const int MaxUpgradeDefault = 4;
-    /// <summary>Highest upgrade a ring requirement may name.</summary>
-    public const int MaxUpgradeRing = 4;
-    /// <summary>Artifact upgrade transferred by the Imp vault.</summary>
-    public const int MaxUpgradeArtifact = 5;
-    /// <summary>
-    /// Highest upgrade every ring but one can carry in a single world: ring
-    /// drops roll +0..+2, and the only source beyond that — the Imp vault's
-    /// final-room prize — appears once per run.
-    /// </summary>
-    public const int MaxUpgradeRingStandard = 2;
-    /// <summary>Highest upgrade a weapon requirement may name; the vault reaches +5 on a tier-4 weapon.</summary>
-    public const int MaxUpgradeWeapon = 5;
-    /// <summary>Highest upgrade the generator puts on any item, whatever its tier.</summary>
-    public const int MaxUpgradeAnyTier = 4;
-    /// <summary>
-    /// The one weapon tier levelled past <see cref="MaxUpgradeAnyTier"/>, a
-    /// v4.0.0-BETA-3 quirk: the Imp's vault lays out one tier-4 and one tier-5
-    /// weapon and rolls the tier-4 one at +3..+5 while the tier-5 one stops at
-    /// +4, so a +5 exists only on a tier-4 weapon, melee or thrown. When
-    /// upstream levels the two ranges this goes away and every family caps at
-    /// <see cref="MaxUpgradeAnyTier"/>.
-    /// </summary>
-    public const int ExtraUpgradeTier = 4;
     /// <summary>How many results one run lists, and one import restores.</summary>
     public const int ResultCap = 1024;
 }
@@ -191,8 +105,6 @@ public static partial class KindStyle
 
 public static class Labels
 {
-    public static string Kind(ItemKind value) => value switch { ItemKind.Weapon => "Weapons", ItemKind.Armor => "Armor", ItemKind.Wand => "Wands", ItemKind.MeleeWeapon => "Melee weapons", ItemKind.ThrownWeapon => "Thrown weapons", ItemKind.Trinket => "Trinket", ItemKind.Artifact => "Artifacts", _ => "Rings" };
-    public static string Singular(ItemKind value) => Kind(value).TrimEnd('s').ToLowerInvariant();
     public static string Source(ScoutItemSource value) => value switch
     {
         ScoutItemSource.LockedChest => "Locked chest", ScoutItemSource.CrystalChest => "Crystal chest",
@@ -233,14 +145,6 @@ public sealed class EffectFilter
     /// </summary>
     public bool IsEveryEnchantmentOf(ItemKind kind) =>
         !AnyEnchantment && Effects.Count > 0 && Effects.ToHashSet().SetEquals(ItemCatalog.EnchantmentsOf(kind));
-
-    /// <summary>The filter with the curse-type effects removed.</summary>
-    public EffectFilter WithoutCurses(ItemKind kind) =>
-        AnyEnchantment ? Enchantment() : OneOf(Effects.Where(effect => !ItemCatalog.IsCurse(kind, effect)));
-
-    /// <summary>Whether every listed effect is a curse (never true for "any" or "any enchantment").</summary>
-    public bool IsCursesOnly(ItemKind kind) =>
-        !AnyEnchantment && Effects.Count > 0 && Effects.All(effect => ItemCatalog.IsCurse(kind, effect));
 
     public EffectFilter Clone() => new() { AnyEnchantment = AnyEnchantment, Effects = [.. Effects] };
 }
@@ -300,31 +204,12 @@ public sealed partial class ItemRequirement
     /// <summary>Combined-level group membership; never set on an alternative.</summary>
     public LevelSum? LevelSum { get; set; }
     [JsonIgnore] public string Glyph => KindStyle.Glyph(Kind);
-    /// <summary>The highest upgrade this requirement may name, its item and tier filter included.</summary>
-    [JsonIgnore] public int UpgradeCeiling => Kind.MaximumSearchUpgrade(Item, TierMatch, Tier);
     public ItemRequirement Clone()
     {
         var copy = (ItemRequirement)MemberwiseClone();
         copy.Effect = Effect.Clone();
         return copy;
     }
-}
-
-/// <summary>
-/// What the requirement editor dialog is given — and hands back — about a
-/// chip's stack: how many items it asks for, the combined level across them
-/// when one is set, and the floor limit its extra copies share. A cluster
-/// member's stack belongs to the cluster, so its editor shows none of this.
-/// The board's save (<see cref="BoardEdit.Save"/>) writes the shape.
-/// </summary>
-public sealed record StackShape(int Count, int? Total, int? CopyDepth, bool InCluster)
-{
-    /// <summary>The stack of a chip that asks for a single item.</summary>
-    public static StackShape Lone { get; } = new(1, null, null, false);
-
-    /// <summary>The stack <paramref name="chip"/> stands in, as the board draws it.</summary>
-    public static StackShape Of(BoardEntry entry, BoardChip chip) =>
-        new(entry.Stack.Count, entry.Stack.Total, entry.Stack.CopyDepth, chip.InCluster);
 }
 
 /// <summary>
@@ -358,16 +243,6 @@ public static class QueryRelationships
 
     /// <summary>How many slots the query has — what the engine counts as one requirement each.</summary>
     public static int SlotCount(IEnumerable<ItemRequirement> requirements) => Slots(requirements).Count;
-
-    /// <summary>
-    /// The most levels a stack of <paramref name="count"/> rings can reach
-    /// together: one ring at the vault ceiling, every other at the standard
-    /// roll, each counting its upgrade plus one. The requirement editor
-    /// dialog holds its combined-level slider to it; the board's own steppers
-    /// read the editor's <see cref="BoardStack.LevelCapacity"/>.
-    /// </summary>
-    public static int RingStackCapacity(int count) =>
-        SearchLimits.MaxUpgradeRing + 1 + (count - 1) * (SearchLimits.MaxUpgradeRingStandard + 1);
 
     /// <summary>
     /// The first problem of the query's own settings — its Arcane Resin
@@ -414,18 +289,6 @@ public static class FloorLimits
         var exact = Array.IndexOf(Options, floor);
         return exact >= 0 ? exact : Math.Max(0, Array.FindLastIndex(Options, option => option <= floor));
     }
-
-    /// <summary>
-    /// Where a floor-limit control lands when the user moves it onto an empty boss floor.
-    /// A single upward step (spin button, arrow key) continues to the next real floor; every
-    /// other move — single steps down and typed jumps in either direction — snaps to the
-    /// equivalent floor below, matching <see cref="Normalize"/>. Typing "10" therefore means
-    /// "first 10 floors" (≡ 9), never 11.
-    /// </summary>
-    public static int SkipTarget(int previous, int requested) =>
-        !EmptyBossFloors.Contains(requested) ? requested
-        : requested == previous + 1 ? requested + 1
-        : requested - 1;
 }
 
 /// <summary>
@@ -785,37 +648,9 @@ public static class ItemCatalog
     public static IReadOnlyList<string> ArmorCurses => Catalog.Modifiers.ArmorCurses;
     private static Root Load() =>
         JsonSerializer.Deserialize<Root>(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Assets", "catalog-v4.0.0.json")), new JsonSerializerOptions { PropertyNameCaseInsensitive = true })!;
-    /// <summary>
-    /// Whether picking an item fresh may offer it. Tier-1 items are hidden:
-    /// they are the starting gear, never worth searching for. Tipped darts are
-    /// hidden too: every shop stocks them and any dart can be tipped by hand,
-    /// so nobody searches for them — though a scouted world still lists the
-    /// ones it rolled. The engine's catalog keeps the <c>_dart</c> suffix
-    /// unambiguous (the plain dart has no entry), and its wasm cross-check
-    /// test pins the suffix to the tipped set.
-    /// </summary>
-    private static bool Searchable(CatalogItem item) =>
-        item.Tier != 1 && !item.Id.EndsWith("_dart", StringComparison.Ordinal);
-
-    /// <summary>The items offered when picking one fresh; see <see cref="Searchable"/>.</summary>
-    public static IEnumerable<CatalogItem> For(ItemKind kind) => All.Where(x => kind.Accepts(x) && Searchable(x));
-
-    /// <summary>
-    /// The items a requirement editor lists for <paramref name="kind"/>: the
-    /// fresh-pick list, plus <paramref name="current"/> when the requirement
-    /// being edited already names an item that list hides. Imports and share
-    /// links resolve items through the whole catalog, so a requirement can name
-    /// a tier-1 item or tipped dart the picker would otherwise be unable to
-    /// show — and saving it unchanged would silently swap it for whichever
-    /// item took its slot. The order stays the catalog's.
-    /// </summary>
-    public static IReadOnlyList<CatalogItem> EditorItems(ItemKind kind, CatalogItem? current) =>
-        [.. All.Where(x => kind.Accepts(x) && (Searchable(x) || x.Id == current?.Id))];
     public static CatalogItem? Find(string id) => All.FirstOrDefault(x => x.Id == id);
     public static IEnumerable<string> Modifiers(ItemKind kind) => kind.Family() switch { ItemKind.Weapon => Enchantments.Concat(WeaponCurses), ItemKind.Armor => Glyphs.Concat(ArmorCurses), _ => [] };
     /// <summary>The family's non-curse effects: what "any enchantment" stands for.</summary>
     public static IReadOnlyList<string> EnchantmentsOf(ItemKind kind) => kind.Family() switch { ItemKind.Weapon => Enchantments, ItemKind.Armor => Glyphs, _ => [] };
-    /// <summary>The family's curse-type effects.</summary>
-    public static IReadOnlyList<string> CursesOf(ItemKind kind) => kind.Family() switch { ItemKind.Weapon => WeaponCurses, ItemKind.Armor => ArmorCurses, _ => [] };
     public static bool IsCurse(ItemKind kind, string effect) => (kind.Family() == ItemKind.Weapon ? WeaponCurses : ArmorCurses).Contains(effect);
 }

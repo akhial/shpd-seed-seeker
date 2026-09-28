@@ -42,7 +42,6 @@ public sealed class QueryRelationshipsTests
         Assert.Null(requirement.Modifier);
         Assert.True(EffectFilter.OneOf(ItemCatalog.Enchantments).IsEveryEnchantmentOf(ItemKind.ThrownWeapon));
         Assert.False(EffectFilter.OneOf(ItemCatalog.Enchantments).IsEveryEnchantmentOf(ItemKind.Armor));
-        Assert.Equal(["Blazing"], EffectFilter.OneOf(["Blazing", "Annoying"]).WithoutCurses(ItemKind.Weapon).Effects);
     }
 
     [Fact]

@@ -372,24 +372,20 @@ public sealed partial class MainWindow : Window
         SaveSettings();
     }
 
+    /// <summary>
+    /// Opens the sheet on a new chip of the ordinary or blanket section. A
+    /// new ordinary sheet offers Arcane Resin among the wands, as the way to
+    /// add the query's resin.
+    /// </summary>
     private async void AddRequirement_Click(object sender, RoutedEventArgs e)
     {
         var blanket = sender is FrameworkElement { Tag: true };
-        var kind = blanket ? query.Requirements.FirstOrDefault(r => !r.Blanket)?.Kind ?? ItemKind.Weapon : ItemKind.Weapon;
-        var requirement = new ItemRequirement { Kind = kind, Blanket = blanket, UpgradeMatch = UpgradeMatch.Any };
-        if (await EditRequirement(requirement, StackShape.Lone, blanket ? "New Blanket Requirement" : "New Requirement", "Add") is not { } stack) return;
-        EditBoard(BoardEdit.Save(null, requirement, stack.Count, stack.Total, stack.CopyDepth));
+        await EditRequirement(() => RequirementSheet.Open(query, null, blanket, offerResin: true));
     }
-    /// <summary>Opens the chip keyed <paramref name="key"/> in the editor; what it settles on is saved through the board (<see cref="BoardEdit.Save"/>).</summary>
-    private async Task EditChip(long key)
-    {
-        // A row the shared editor cannot read has no sheet: it can only be removed.
-        if (boardView.EntryOf(key) is not { } entry || boardView.ChipOf(key) is not { Kind: not null } chip
-            || query.Requirements.FirstOrDefault(requirement => requirement.Key == key) is not { } requirement) return;
-        var copy = requirement.Clone();
-        if (await EditRequirement(copy, StackShape.Of(entry, chip), copy.Blanket ? "Edit Blanket Requirement" : "Edit Requirement", "Save") is not { } stack) return;
-        EditBoard(BoardEdit.Save(key, copy, stack.Count, stack.Total, stack.CopyDepth));
-    }
+    /// <summary>Opens the chip keyed <paramref name="key"/> in the sheet.</summary>
+    private Task EditChip(long key) => EditRequirement(() => RequirementSheet.Open(query, key));
+    /// <summary>Opens the query's Arcane Resin in the sheet.</summary>
+    private Task EditArcaneResin() => EditRequirement(() => RequirementSheet.Open(query, null, openResin: true));
     /// <summary>Deletes the chip keyed <paramref name="key"/>: a whole board entry with its hidden copies, or one member of a cluster.</summary>
     private void RemoveChip(long key) => EditBoard(BoardEdit.Remove(key));
     /// <summary>
@@ -1048,109 +1044,72 @@ public sealed partial class MainWindow : Window
         };
     }
 
-    private async Task EditArcaneResin()
+    /// <summary>
+    /// The requirement sheet: a dialog drawn from the shared editor's form
+    /// (<see cref="RequirementSheet"/>). Every control shows, offers, ranges
+    /// and words what the form says; moving one sends the change, and the
+    /// dialog is redrawn from the form that comes back, so it holds no rule of
+    /// its own. Adding a chip, editing one and the query's Arcane Resin all
+    /// open here: the resin is an item of the wand list, and while it is
+    /// picked its section stands in for the wand's controls. The title and
+    /// buttons are the dialog's own, read from what the sheet is about.
+    /// </summary>
+    /// <param name="open">Opens the sheet; a row the editor cannot read has none, and says why.</param>
+    private async Task EditRequirement(Func<RequirementSheet> open)
     {
-        var mode = Combo(new[] { "Amount", "Auto" }, query.ArcaneResinAuto ? 1 : 0);
-        mode.Header = "Minimum resin";
-        var explanation = new TextBlock { Text = "Upgrade each kept wand to +3. Excluded wands and extra copies reserved for reforging need no resin.", TextWrapping = TextWrapping.Wrap };
-        var amount = Number("Minimum resin", query.ArcaneResin > 0 ? query.ArcaneResin : 2, 1, 65535);
-        var mageWand = new CheckBox { Content = "Include Mage’s starting wand", IsChecked = query.ArcaneResinFilter.IncludeMageWand };
-        var mageHelp = new TextBlock { Text = "Add 2 resin from the Magic Missile wand recovered with Wand Preservation when imbuing another wand. The preserved wand is +0, regardless of the staff’s level.", TextWrapping = TextWrapping.Wrap };
-        var uncursed = new CheckBox { Content = "Require uncursed wands", IsChecked = query.ArcaneResinFilter.Uncursed };
-        var depth = Combo(new[] { "Search limit" }.Concat(Enumerable.Range(1, SearchLimits.MaxDepth).Select(x => $"Floor {x}")), query.ArcaneResinFilter.MaximumDepth ?? 0);
-        var source = Combo(new[] { "Any source" }.Concat(Enum.GetValues<ScoutItemSource>().Select(Labels.Source)), query.ArcaneResinFilter.Source is { } selected ? (int)selected + 1 : 0);
-        var content = new StackPanel { Spacing = 16 };
-        content.Children.Add(mode); content.Children.Add(explanation);
-        content.Children.Add(amount); content.Children.Add(mageWand); content.Children.Add(mageHelp); content.Children.Add(uncursed);
-        content.Children.Add(new TextBlock { Text = "Wand floor limit" }); content.Children.Add(depth);
-        content.Children.Add(new TextBlock { Text = "Wand source" }); content.Children.Add(source);
-        var dialog = new ContentDialog { XamlRoot = Content.XamlRoot, Title = "Arcane Resin", PrimaryButtonText = query.NeedsResin ? "Save" : "Add", CloseButtonText = "Cancel", SecondaryButtonText = query.NeedsResin ? "Remove" : "", DefaultButton = ContentDialogButton.Primary, Content = VerticalScrollView(content, 440, 460) };
-        bool ValidAmount() => mode.SelectedIndex == 1 || (double.IsFinite(amount.Value) && amount.Value == Math.Truncate(amount.Value) && amount.Value is >= 1 and <= 65535);
-        void UpdateMode()
-        {
-            amount.Visibility = mode.SelectedIndex == 0 ? Visibility.Visible : Visibility.Collapsed;
-            explanation.Visibility = mode.SelectedIndex == 1 ? Visibility.Visible : Visibility.Collapsed;
-            dialog.IsPrimaryButtonEnabled = ValidAmount();
-        }
-        mode.SelectionChanged += (_, _) => UpdateMode();
-        UpdateMode();
-        amount.ValueChanged += (_, _) => dialog.IsPrimaryButtonEnabled = ValidAmount();
-        dialog.PrimaryButtonClick += (_, args) => { if (!ValidAmount()) args.Cancel = true; };
-        var result = await dialog.ShowAsync();
-        if (result == ContentDialogResult.None) return;
-        query.ArcaneResinAuto = result != ContentDialogResult.Secondary && mode.SelectedIndex == 1;
-        query.ArcaneResin = result == ContentDialogResult.Secondary || query.ArcaneResinAuto ? 0 : (int)amount.Value;
-        query.ArcaneResinFilter = result == ContentDialogResult.Secondary ? new() : new(
-            uncursed.IsChecked == true, depth.SelectedIndex == 0 ? null : depth.SelectedIndex,
-            source.SelectedIndex == 0 ? null : (ScoutItemSource)(source.SelectedIndex - 1), mageWand.IsChecked == true);
-        SaveSettings(); RefreshQuery();
-    }
-
-    /// <param name="r">The requirement edited in place; left as it was when the dialog is cancelled.</param>
-    /// <param name="stack">The chip's stack as it stands; a cluster member's belongs to the cluster, so its section stays hidden.</param>
-    /// <returns>The stack the editor settled on, or null when the dialog was cancelled.</returns>
-    private async Task<StackShape?> EditRequirement(ItemRequirement r, StackShape stack, string title, string accept)
-    {
-        var kind = Combo(Enum.GetValues<ItemKind>().Select(Labels.Kind), (int)r.Kind);
-        var item = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch };
-        var resin = new Button { Content = "Arcane Resin", Visibility = Visibility.Collapsed };
-        // The list the combo is filled from, so saving reads back the very
-        // entries it offered — including an imported tier-1 item the fresh-pick
-        // list hides.
-        var itemChoices = new List<CatalogItem>();
-        var tierMatch = Combo(["Any tier", "Exactly", "At least", "At most"], (int)r.TierMatch); var selectedTier = r.Tier is >= SearchLimits.ExactTierMin and <= SearchLimits.ExactTierMax ? r.Tier : SearchLimits.ExactTierMin; var tier = Number("Tier", selectedTier, SearchLimits.ExactTierMin, SearchLimits.ExactTierMax); var tierBound = Combo(Enumerable.Range(SearchLimits.BoundedTierMin, SearchLimits.BoundedTierMax - SearchLimits.BoundedTierMin + 1).Select(value => $"Tier {value}"), Math.Clamp(selectedTier, SearchLimits.BoundedTierMin, SearchLimits.BoundedTierMax) - SearchLimits.BoundedTierMin);
-        var maximumUpgrade = Math.Max(2, r.UpgradeCeiling); var selectedMinimumUpgrade = Math.Clamp(r.Upgrade, 1, maximumUpgrade - 1);
-        var upgradeMatch = Combo(["Any", "Exactly", "At least"], (int)r.UpgradeMatch); var upgrade = Number("Upgrade level", Math.Clamp(r.Upgrade, 1, maximumUpgrade), 1, maximumUpgrade); var upgradeBound = Combo(Enumerable.Range(1, maximumUpgrade - 1).Select(value => $"+{value} or higher"), selectedMinimumUpgrade - 1);
-        // Effect: any / any enchantment / a specific set picked from a per-family
-        // checkbox grid (enchantments or glyphs, then curses).
-        var effectMode = Combo(["Any", "Any enchantment", "Specific\u2026"], r.Effect.AnyEnchantment ? 1 : r.Effect.IsAny ? 0 : 2);
-        var effectBoxes = new List<(string Name, bool Curse, CheckBox Box)>();
-        var enchantmentLabel = new TextBlock { Style = (Style)Application.Current.Resources["Caption"] };
+        RequirementSheet sheet;
+        try { sheet = open(); }
+        catch (RequirementEditorException error) { await ShowTransferMessage(error.Message); return; }
+        // Raised while a form is copied into the controls: the events that
+        // raises are the dialog's own echo, never a change to send.
+        var binding = false;
+        // The form the controls were last drawn from, so a picker or the
+        // effect grid is refilled only when its choices changed.
+        SheetForm? drawn = null;
+        var kind = Picker(); var item = Picker();
+        var tierMode = Picker(); var tier = ValueSlider();
+        var upgradeMode = Picker(); var upgrade = ValueSlider();
+        // Effect: any / any enchantment / a specific set ticked from the
+        // family's grid (enchantments or glyphs, then curses).
+        var effectMode = Picker();
+        var effectBoxes = new List<CheckBox>();
+        var enchantmentHeading = new TextBlock { Style = (Style)Application.Current.Resources["Caption"] };
         var enchantmentPanel = new WrapPanel { Spacing = 4 };
-        var curseSection = new StackPanel { Spacing = 4 };
+        var curseHeading = new TextBlock { Style = (Style)Application.Current.Resources["Caption"] };
         var cursePanel = new WrapPanel { Spacing = 4 };
-        curseSection.Children.Add(new TextBlock { Text = "Curses", Style = (Style)Application.Current.Resources["Caption"] }); curseSection.Children.Add(cursePanel);
-        var effectGrid = new StackPanel { Spacing = 4 }; effectGrid.Children.Add(enchantmentLabel); effectGrid.Children.Add(enchantmentPanel); effectGrid.Children.Add(curseSection);
-        var selectTrinket = new CheckBox { Content = "Choose matching trinket at +3", IsChecked = r.SelectTrinket };
-        var allowTransmutations = new CheckBox { Content = "Allow transmutations", IsChecked = r.TrinketTransmutations > 0 || r.ArtifactTransmutations > 0 };
-        var transmutations = Number("Maximum transmutations", Math.Clamp(Math.Max(r.TrinketTransmutations, r.ArtifactTransmutations), 1, 13), 1, 13);
-        transmutations.SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline;
-        var transmutationHelp = new TextBlock { Text = "Includes the initial offers. AutoTrinket can use a helpful starting trinket. Scroll availability and effects after transmuting are not simulated.", TextWrapping = TextWrapping.Wrap };
-        var excludeResin = new CheckBox { Content = "Exclude from Auto resin", IsChecked = r.ExcludeResin };
+        var curseSection = new StackPanel { Spacing = 4 }; curseSection.Children.Add(curseHeading); curseSection.Children.Add(cursePanel);
+        var effectCaption = new TextBlock { TextWrapping = TextWrapping.Wrap, Style = (Style)Application.Current.Resources["Caption"] };
+        var effectGrid = new StackPanel { Spacing = 4 }; effectGrid.Children.Add(enchantmentHeading); effectGrid.Children.Add(enchantmentPanel); effectGrid.Children.Add(curseSection); effectGrid.Children.Add(effectCaption);
+        // The Arcane Resin section; its donors' uncursed, source and floor
+        // filters are the sheet's own controls, which the form words for it.
+        var resinMode = Combo(["Amount", "Auto"], 0);
+        var resinAmount = Number("Minimum resin", double.NaN, 1, 65535);
+        var resinExplanation = new TextBlock { Text = "Upgrade each kept wand to +3. Excluded wands and extra copies reserved for reforging need no resin.", TextWrapping = TextWrapping.Wrap };
+        var mageWand = new CheckBox { Content = "Include Mage’s starting wand" };
+        var mageHelp = new TextBlock { Text = "Add 2 resin from the Magic Missile wand recovered with Wand Preservation when imbuing another wand. The preserved wand is +0, regardless of the staff’s level.", TextWrapping = TextWrapping.Wrap };
+        var allowTransmutations = new CheckBox();
+        var transmutations = ValueSlider();
+        var transmutationCaption = new TextBlock { TextWrapping = TextWrapping.Wrap };
+        var selectTrinket = new CheckBox();
+        var excludeResin = new CheckBox();
         var resinHelp = new TextBlock { Text = "Keep this wand without budgeting resin to upgrade it. Useful for imbuing: resin upgrades do not transfer to the staff. Extra copies are reserved for reforging and never need Auto resin.", TextWrapping = TextWrapping.Wrap };
-        var uncursed = new CheckBox { Content = "Require uncursed", IsChecked = r.RequireUncursed };
-        var source = Combo(new[] { "Any source" }.Concat(Enum.GetValues<ScoutItemSource>().Select(Labels.Source)), r.Source is null ? 0 : (int)r.Source + 1);
-        // How many items of this kind the chip asks for. The relationships
-        // themselves — the either/or clusters and the identity labels behind a
-        // stack — belong to the board, which the shared editor writes; the
-        // editor only names the shape.
-        var count = Number("Total item count", Math.Clamp(stack.Count, 1, SearchLimits.StackMax), 1, SearchLimits.StackMax);
-        count.SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline; count.Visibility = stack.InCluster ? Visibility.Collapsed : Visibility.Visible;
-        // A stack's extra copies constrain nothing of their own, but a floor
-        // limit is a placement bound rather than an item property, so they may
-        // carry one of those.
-        var copyDepthToggle = new CheckBox { Content = "Limit the extra copies to a floor", IsChecked = stack.CopyDepth is not null };
-        var copyDepth = FloorChoice(stack.CopyDepth ?? 4);
-        // A combined level: the stack's items count their levels (upgrade plus
-        // one each) towards one total, which any subset of them may reach.
-        var totalToggle = new CheckBox { Content = "Count levels together", IsChecked = stack.Total is not null };
-        var total = new Slider { Minimum = 1, Maximum = 1, StepFrequency = 1, TickFrequency = 1, Value = stack.Total ?? 1, HorizontalAlignment = HorizontalAlignment.Stretch };
-        var depthToggle = ToggleRow("Limit this item to a floor", r.MaximumDepth is not null, out var depthRow); var depth = Number("Within first floors", FloorLimits.Normalize(r.MaximumDepth ?? 4), 1, SearchLimits.MaxDepth);
-        // Empty boss floors (5, 10, 15) are useless limits: a single upward spin skips to the
-        // next real floor, while typed values snap down (10 means the first 10 floors, ≡ 9).
-        depth.ValueChanged += (box, args) =>
-        {
-            if (double.IsNaN(args.NewValue)) return;
-            var requested = (int)args.NewValue;
-            var previous = double.IsNaN(args.OldValue) ? requested : (int)args.OldValue;
-            var target = FloorLimits.SkipTarget(previous, requested);
-            if (target != requested) box.Value = target;
-        };
+        var uncursed = new CheckBox();
+        var source = Picker();
+        var floorToggle = ToggleRow(out var floorRow, out var floorLabel);
+        var floorLabels = new OptionLabelConverter(); var floor = FloorChoice(floorLabels);
+        // How many items of this kind the chip asks for, the floor its extra
+        // copies share, and the combined level they count towards.
+        var count = Number("Total item count", 1, 1, 1);
+        count.SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline;
+        var copyDepthToggle = new CheckBox();
+        var copyDepthLabels = new OptionLabelConverter(); var copyDepth = FloorChoice(copyDepthLabels);
+        var totalToggle = new CheckBox();
+        var total = ValueSlider();
+        var errors = new TextBlock { TextWrapping = TextWrapping.Wrap, Foreground = DangerInk };
         // Each setting is a two-column row, label leading and control trailing,
         // grouped into cards under the macOS editor's section titles. A row
         // mirrors its control's visibility and a section its rows', so the
-        // Sync methods below keep toggling only controls.
-        var rowLabels = new Dictionary<FrameworkElement, TextBlock>();
+        // binding below toggles only controls.
         Grid Row(string label, Control control)
         {
             if (control is NumberBox numberBox) numberBox.Header = null;
@@ -1159,11 +1118,9 @@ public sealed partial class MainWindow : Window
             row.ColumnDefinitions.Add(new ColumnDefinition()); row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             control.MinWidth = 210; Grid.SetColumn(control, 1);
             row.Children.Add(text); row.Children.Add(control);
-            rowLabels[control] = text;
             control.RegisterPropertyChangedCallback(UIElement.VisibilityProperty, (_, _) => row.Visibility = control.Visibility);
             return row;
         }
-        void Relabel(FrameworkElement control, string label) { if (rowLabels.TryGetValue(control, out var text)) text.Text = label; }
         TextBlock SectionTitle(string title) => new() { Text = title, Style = (Style)Application.Current.Resources["BodyStrongTextBlockStyle"], Margin = new Thickness(1, 0, 0, 8) };
         StackPanel Section(TextBlock? title, params UIElement[] rows)
         {
@@ -1176,204 +1133,178 @@ public sealed partial class MainWindow : Window
             Sync();
             return section;
         }
-        var transmutationLimit = Row("At most", transmutations);
-        var effectTitle = SectionTitle("Enchantment");
         var content = new StackPanel { Spacing = 16, Padding = new Thickness(2, 4, 2, 4) };
         foreach (var section in new UIElement[] {
-            Section(SectionTitle("Item"), Row("Category", kind), Row("Item", item), resin, Row("Tier", tierMatch), Row("Exact tier", tier), Row("Minimum tier", tierBound)),
-            Section(SectionTitle("Upgrade level"), Row("Predicate", upgradeMatch), Row("Upgrade level", upgrade), Row("Minimum upgrade", upgradeBound)),
-            Section(effectTitle, Row("Effect", effectMode), effectGrid),
-            Section(null, allowTransmutations, transmutationLimit, transmutationHelp, selectTrinket, excludeResin, resinHelp, uncursed, Row("Source", source), depthRow, Row("Within first floors", depth)),
-            Section(SectionTitle("Stack"), Row("Total item count", count), copyDepthToggle, copyDepth, totalToggle, total) }) content.Children.Add(section);
-        allowTransmutations.Checked += (_, _) => { selectTrinket.IsChecked = false; SyncVisibility(); };
-        allowTransmutations.Unchecked += (_, _) => SyncVisibility();
-        void NormalizeTier()
+            Section(SectionTitle("Item"), Row("Category", kind), Row("Item", item), Row("Tier", tierMode), tier),
+            Section(null, Row("Minimum resin", resinMode), Row("Amount", resinAmount), resinExplanation, mageWand, mageHelp),
+            Section(SectionTitle("Upgrade level"), Row("Predicate", upgradeMode), upgrade),
+            Section(SectionTitle("Effect"), Row("Effect", effectMode), effectGrid),
+            Section(null, allowTransmutations, transmutations, transmutationCaption, selectTrinket, excludeResin, resinHelp, uncursed, Row("Source", source), floorRow, floor),
+            Section(SectionTitle("Stack"), Row("Total item count", count), copyDepthToggle, copyDepth, totalToggle, total), errors }) content.Children.Add(section);
+        var dialog = new ContentDialog { XamlRoot = Content.XamlRoot, CloseButtonText = "Cancel", DefaultButton = ContentDialogButton.Primary, Content = VerticalScrollView(content, 510, 460) };
+
+        static Visibility Shown(bool visible) => visible ? Visibility.Visible : Visibility.Collapsed;
+        // Refills a picker only when its choices changed: refilling resets
+        // the selection, which would read as a pick.
+        static void Fill<T>(ComboBox combo, SheetChoice<T> choice, SheetChoice<T>? drawn)
         {
-            var predicate = (TierMatch)Math.Max(0, tierMatch.SelectedIndex);
-            selectedTier = predicate is TierMatch.AtLeast or TierMatch.AtMost ? Math.Clamp(selectedTier, SearchLimits.BoundedTierMin, SearchLimits.BoundedTierMax) : Math.Clamp(selectedTier, SearchLimits.ExactTierMin, SearchLimits.ExactTierMax);
-            tier.Value = selectedTier; tierBound.SelectedIndex = Math.Clamp(selectedTier, SearchLimits.BoundedTierMin, SearchLimits.BoundedTierMax) - SearchLimits.BoundedTierMin;
+            combo.Visibility = Shown(choice.Visible);
+            if (!choice.SameOptions(drawn)) { combo.Items.Clear(); foreach (var option in choice.Options) combo.Items.Add(option.Label); }
+            combo.SelectedIndex = choice.Selected;
         }
-        void SyncVisibility()
+        // Minimum and Maximum before Value, widening first, so the slider
+        // never coerces the value against a stale bound.
+        static void SetRange(Slider slider, int minimum, int maximum, int value, string header)
         {
-            var k = (ItemKind)Math.Max(0, kind.SelectedIndex); var trinket = k == ItemKind.Trinket; var generic = item.SelectedIndex == 0 && k.Family() is ItemKind.Weapon or ItemKind.Armor;
-            resin.Visibility = !r.Blanket && k == ItemKind.Wand && accept == "Add" ? Visibility.Visible : Visibility.Collapsed;
-            excludeResin.Visibility = resinHelp.Visibility = k == ItemKind.Wand && !r.Blanket ? Visibility.Visible : Visibility.Collapsed;
-            allowTransmutations.Visibility = trinket || k == ItemKind.Artifact ? Visibility.Visible : Visibility.Collapsed;
-            transmutationLimit.Visibility = transmutationHelp.Visibility = (trinket || k == ItemKind.Artifact) && allowTransmutations.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
-            transmutations.Maximum = k == ItemKind.Artifact ? 10 : 13;
-            transmutationHelp.Text = k == ItemKind.Artifact
-                ? "Includes natural finds or transforms an obtainable artifact using the remaining deck at the floor limit. Source and curse filters apply to the starting artifact. Scroll availability and later generation changes are not simulated."
-                : "Includes the initial offers. AutoTrinket can use a helpful starting trinket. Scroll availability and effects after transmuting are not simulated.";
-            selectTrinket.Visibility = !r.Blanket && trinket && allowTransmutations.IsChecked != true ? Visibility.Visible : Visibility.Collapsed;
-            var predicate = (TierMatch)Math.Max(0, tierMatch.SelectedIndex); var ranged = predicate is TierMatch.AtLeast or TierMatch.AtMost;
-            tierMatch.Visibility = generic ? Visibility.Visible : Visibility.Collapsed;
-            tier.Visibility = generic && predicate == TierMatch.Exactly ? Visibility.Visible : Visibility.Collapsed;
-            tierBound.Visibility = generic && ranged ? Visibility.Visible : Visibility.Collapsed;
-            uncursed.Visibility = source.Visibility = depthRow.Visibility = trinket ? Visibility.Collapsed : Visibility.Visible;
-            depth.Visibility = !trinket && depthToggle.IsOn ? Visibility.Visible : Visibility.Collapsed;
-            Relabel(item, k.RequiresNamedItem() ? Labels.Kind(k).TrimEnd('s') : "Item");
-            Relabel(tierBound, predicate == TierMatch.AtLeast ? "Minimum tier" : "Maximum tier");
-            // A stack that counts its levels together has identical any-upgrade
-            // members, so the upgrade predicate has nothing left to say.
-            var counting = CountingLevels();
-            var upgradePredicate = (UpgradeMatch)Math.Max(0, upgradeMatch.SelectedIndex); var ringMinimum = k == ItemKind.Ring && upgradePredicate == UpgradeMatch.AtLeast;
-            upgradeMatch.Visibility = counting || k.RequiresNamedItem() ? Visibility.Collapsed : Visibility.Visible;
-            upgrade.Visibility = !k.RequiresNamedItem() && !counting && (upgradePredicate == UpgradeMatch.Exactly || ringMinimum) ? Visibility.Visible : Visibility.Collapsed;
-            Relabel(upgrade, ringMinimum ? "Minimum upgrade" : "Upgrade level");
-            upgradeBound.Visibility = !k.RequiresNamedItem() && !counting && upgradePredicate == UpgradeMatch.AtLeast && !ringMinimum ? Visibility.Visible : Visibility.Collapsed;
+            if (minimum > slider.Maximum) { slider.Maximum = maximum; slider.Minimum = minimum; }
+            else { slider.Minimum = minimum; slider.Maximum = maximum; }
+            slider.Value = value; slider.Header = header;
         }
-        // How many items the stack asks for; a half-typed box reads as one.
-        int Counted() => double.IsNaN(count.Value) ? 1 : Math.Clamp((int)count.Value, 1, SearchLimits.StackMax);
-        bool CountingLevels() => totalToggle.Visibility == Visibility.Visible && totalToggle.IsChecked == true;
-        // The stack section: "how many" is a property of every lone chip, while
-        // a floor limit for the extra copies and a combined level are the two
-        // shapes a stack of more than one can take — the second only for a
-        // concrete ring, whose copies are the same item over again.
-        void SyncStack()
+        static void Floor(Slider slider, OptionLabelConverter labels, SheetFloor control)
         {
-            var namedOnly = ((ItemKind)Math.Max(0, kind.SelectedIndex)).RequiresNamedItem();
-            count.Visibility = r.Blanket || namedOnly || stack.InCluster ? Visibility.Collapsed : Visibility.Visible;
-            var many = !r.Blanket && !namedOnly && !stack.InCluster && Counted() > 1;
-            // A combined level is a property of a concrete stack of two or more
-            // — and of rings only, whose effects scale with their level.
-            var ring = ((ItemKind)Math.Max(0, kind.SelectedIndex)).Family() == ItemKind.Ring;
-            totalToggle.Visibility = many && item.SelectedIndex > 0 && ring ? Visibility.Visible : Visibility.Collapsed;
-            var counting = CountingLevels();
-            total.Visibility = counting ? Visibility.Visible : Visibility.Collapsed;
-            copyDepthToggle.Visibility = many && !counting ? Visibility.Visible : Visibility.Collapsed;
-            copyDepth.Visibility = copyDepthToggle.Visibility == Visibility.Visible && copyDepthToggle.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
-            // Never a total the stack cannot reach: each ring counts its upgrade
-            // plus one, and a world levels only one ring past the standard roll.
-            if (counting)
+            labels.Labels = [.. control.Options.Select(option => option.Label)];
+            SetRange(slider, 0, control.Options.Count - 1, control.Selected, control.ValueLabel);
+            slider.Visibility = Shown(control.ShowsValue);
+        }
+        void Bind(SheetForm form)
+        {
+            binding = true;
+            try
             {
-                total.Maximum = Math.Max(1, QueryRelationships.RingStackCapacity(Counted()));
-                total.Value = Math.Clamp(double.IsNaN(total.Value) ? 1 : total.Value, 1, total.Maximum);
-            }
-            total.Header = $"Levels reach \u2265 {(int)total.Value} across up to {Counted()}";
-            copyDepth.Header = $"Copies within first {FloorOf(copyDepth)} floor{(FloorOf(copyDepth) == 1 ? "" : "s")}";
-            SyncVisibility();
-        }
-        // Only a tier-4 weapon reaches the top of the weapon range, so naming
-        // an item or narrowing the tier can lower the ceiling under the value
-        // already picked.
-        void NormalizeUpgrade()
-        {
-            var k = (ItemKind)Math.Max(0, kind.SelectedIndex);
-            var chosenIndex = item.SelectedIndex - (k.RequiresNamedItem() ? 0 : 1);
-            var chosen = chosenIndex >= 0 && chosenIndex < itemChoices.Count ? itemChoices[chosenIndex] : null;
-            maximumUpgrade = Math.Max(2, k.MaximumSearchUpgrade(chosen, (TierMatch)Math.Max(0, tierMatch.SelectedIndex), selectedTier));
-            var atLeast = upgradeMatch.SelectedIndex == (int)UpgradeMatch.AtLeast;
-            upgrade.Maximum = atLeast ? maximumUpgrade - 1 : maximumUpgrade;
-            upgrade.Value = Math.Clamp(double.IsNaN(upgrade.Value) ? 1 : upgrade.Value, 1, upgrade.Maximum);
-            selectedMinimumUpgrade = Math.Clamp(selectedMinimumUpgrade, 1, maximumUpgrade - 1);
-            upgradeBound.Items.Clear(); foreach (var value in Enumerable.Range(1, maximumUpgrade - 1)) upgradeBound.Items.Add($"+{value} or higher"); upgradeBound.SelectedIndex = selectedMinimumUpgrade - 1;
-        }
-        // Curses are hidden — and dropped from the selection — while the item
-        // must be uncursed; the grid itself shows only for "Specific".
-        void SyncEffects()
-        {
-            effectGrid.Visibility = effectMode.Visibility == Visibility.Visible && effectMode.SelectedIndex == 2 ? Visibility.Visible : Visibility.Collapsed;
-            var hideCurses = uncursed.IsChecked == true;
-            curseSection.Visibility = hideCurses ? Visibility.Collapsed : Visibility.Visible;
-            if (hideCurses) foreach (var (_, curse, box) in effectBoxes) if (curse) box.IsChecked = false;
-        }
-        void PopulateEffects(IReadOnlyCollection<string> selected)
-        {
-            var k = (ItemKind)Math.Max(0, kind.SelectedIndex);
-            effectBoxes.Clear(); enchantmentPanel.Children.Clear(); cursePanel.Children.Clear();
-            foreach (var (names, curse, panel) in new[] { (ItemCatalog.EnchantmentsOf(k), false, enchantmentPanel), (ItemCatalog.CursesOf(k), true, cursePanel) })
-                foreach (var name in names)
+                dialog.Title = form.ResinPicked ? "Arcane Resin" : $"{(form.IsNew ? "New" : "Edit")} {(form.Blanket ? "Blanket " : "")}Requirement";
+                dialog.PrimaryButtonText = form.IsNew ? "Add" : "Save";
+                // Removing the resin clears the query's own condition, which is the window's.
+                dialog.SecondaryButtonText = form.Origin == SheetOrigin.Resin ? "Remove" : "";
+                dialog.IsPrimaryButtonEnabled = form.CanSave;
+                Fill(kind, form.Kind, drawn?.Kind);
+                Fill(item, form.Item, drawn?.Item);
+                Fill(tierMode, form.Tier.Picker, drawn?.Tier.Picker);
+                SetRange(tier, form.Tier.Min, form.Tier.Max, form.Tier.Value, form.Tier.ValueLabel); tier.Visibility = Shown(form.Tier.ShowsValue);
+                Fill(upgradeMode, form.Upgrade.Picker, drawn?.Upgrade.Picker);
+                SetRange(upgrade, form.Upgrade.Min, form.Upgrade.Max, form.Upgrade.Value, form.Upgrade.ValueLabel); upgrade.Visibility = Shown(form.Upgrade.ShowsValue);
+                var effect = form.Effect;
+                Fill(effectMode, effect.Picker, drawn?.Effect.Picker);
+                if (!effect.SameChoices(drawn?.Effect))
                 {
-                    var box = new CheckBox { Content = name, IsChecked = selected.Contains(name), MinWidth = 0, Margin = new Thickness(0, 0, 8, 0) };
-                    effectBoxes.Add((name, curse, box)); panel.Children.Add(box);
+                    effectBoxes.Clear(); enchantmentPanel.Children.Clear(); cursePanel.Children.Clear();
+                    foreach (var choice in effect.Choices)
+                    {
+                        var name = choice.Value;
+                        var box = new CheckBox { Content = choice.Label, MinWidth = 0, Margin = new Thickness(0, 0, 8, 0) };
+                        box.Checked += (_, _) => Send(SheetChange.ToggleEffect(name)); box.Unchecked += (_, _) => Send(SheetChange.ToggleEffect(name));
+                        effectBoxes.Add(box); (choice.Curse ? cursePanel : enchantmentPanel).Children.Add(box);
+                    }
                 }
-            enchantmentLabel.Text = k.Family() == ItemKind.Armor ? "Glyphs" : "Enchantments"; effectTitle.Text = k.Family() == ItemKind.Armor ? "Glyph" : "Enchantment";
-            effectMode.Visibility = k.Family() is ItemKind.Weapon or ItemKind.Armor ? Visibility.Visible : Visibility.Collapsed;
-            SyncEffects();
+                for (var index = 0; index < effectBoxes.Count; index++) effectBoxes[index].IsChecked = effect.Choices[index].Selected;
+                enchantmentHeading.Text = effect.Heading(curse: false) ?? "";
+                curseHeading.Text = effect.Heading(curse: true) ?? "";
+                curseSection.Visibility = Shown(effect.Heading(curse: true) is not null);
+                effectCaption.Text = effect.Caption;
+                effectGrid.Visibility = Shown(effect.ShowsChoices);
+                var resin = form.Resin;
+                resinMode.Visibility = mageWand.Visibility = mageHelp.Visibility = Shown(resin.Visible);
+                resinMode.SelectedIndex = resin.Auto ? 1 : 0;
+                resinAmount.Visibility = Shown(resin.Visible && !resin.Auto);
+                resinAmount.Value = resin.Amount ?? double.NaN;
+                resinExplanation.Visibility = Shown(resin.Visible && resin.Auto);
+                mageWand.IsChecked = resin.IncludeMageWand;
+                var transmuting = form.Transmutations;
+                allowTransmutations.Content = transmuting.Label; allowTransmutations.IsChecked = transmuting.Enabled; allowTransmutations.Visibility = Shown(transmuting.Visible);
+                SetRange(transmutations, transmuting.Min, transmuting.Max, transmuting.Value, transmuting.ValueLabel); transmutations.Visibility = Shown(transmuting.ShowsValue);
+                transmutationCaption.Text = transmuting.Caption ?? ""; transmutationCaption.Visibility = Shown(transmuting.ShowsValue && transmuting.Caption is not null);
+                selectTrinket.Content = form.SelectTrinket.Label; selectTrinket.IsChecked = form.SelectTrinket.Value; selectTrinket.Visibility = Shown(form.SelectTrinket.Visible);
+                excludeResin.Content = form.ExcludeResin.Label; excludeResin.IsChecked = form.ExcludeResin.Value; excludeResin.Visibility = resinHelp.Visibility = Shown(form.ExcludeResin.Visible);
+                uncursed.Content = form.Uncursed.Label; uncursed.IsChecked = form.Uncursed.Value; uncursed.Visibility = Shown(form.Uncursed.Visible);
+                Fill(source, form.Source, drawn?.Source);
+                floorLabel.Text = form.FloorLimit.Label; floorToggle.IsOn = form.FloorLimit.Enabled; floorRow.Visibility = Shown(form.FloorLimit.Visible);
+                Floor(floor, floorLabels, form.FloorLimit);
+                var stack = form.Stack;
+                count.Minimum = stack.Min; count.Maximum = stack.Max; count.Value = stack.Count; count.Visibility = Shown(stack.Visible);
+                copyDepthToggle.Content = stack.CopyDepth.Label; copyDepthToggle.IsChecked = stack.CopyDepth.Enabled; copyDepthToggle.Visibility = Shown(stack.CopyDepth.Visible);
+                Floor(copyDepth, copyDepthLabels, stack.CopyDepth);
+                var levels = stack.CountLevels;
+                totalToggle.Content = levels.Label; totalToggle.IsChecked = levels.Enabled; totalToggle.Visibility = Shown(levels.Visible);
+                SetRange(total, levels.Min, levels.Max, levels.Value, levels.ValueLabel); total.Visibility = Shown(levels.ShowsValue);
+                errors.Text = string.Join("\n", form.Errors); errors.Visibility = Shown(form.Errors.Count > 0);
+                drawn = form;
+            }
+            finally { binding = false; }
         }
-        void Populate()
+        // One control the user moved: the editor applies it, and the dialog
+        // shows whatever it answers — a change it cannot take puts the
+        // control back.
+        void Send(SheetChange change)
         {
-            var k = (ItemKind)Math.Max(0, kind.SelectedIndex); var oldId = r.Item?.Id; itemChoices.Clear(); itemChoices.AddRange(ItemCatalog.EditorItems(k, r.Item)); item.Items.Clear(); if (!k.RequiresNamedItem()) item.Items.Add($"Any {Labels.Singular(k)}"); foreach (var value in itemChoices) item.Items.Add(value.Name); item.SelectedIndex = Math.Max(0, itemChoices.FindIndex(x => x.Id == oldId) + (k.RequiresNamedItem() ? 0 : 1));
-            PopulateEffects(r.Effect.Effects);
-            NormalizeUpgrade(); SyncStack();
+            if (binding) return;
+            try { sheet.Change(change); } catch (RequirementEditorException) { }
+            Bind(sheet.Form);
         }
-        kind.SelectionChanged += (_, _) => { r.Item = null; r.Effect = EffectFilter.Any(); effectMode.SelectedIndex = 0; Populate(); }; item.SelectionChanged += (_, _) => { NormalizeUpgrade(); SyncStack(); }; tier.ValueChanged += (_, _) => { if (!double.IsNaN(tier.Value)) selectedTier = (int)tier.Value; NormalizeUpgrade(); }; tierBound.SelectionChanged += (_, _) => { if (tierBound.SelectedIndex >= 0) selectedTier = tierBound.SelectedIndex + SearchLimits.BoundedTierMin; NormalizeUpgrade(); }; tierMatch.SelectionChanged += (_, _) => { NormalizeTier(); NormalizeUpgrade(); SyncVisibility(); }; upgradeMatch.SelectionChanged += (_, _) => { NormalizeUpgrade(); SyncVisibility(); }; upgradeBound.SelectionChanged += (_, _) => { if (upgradeBound.SelectedIndex >= 0) selectedMinimumUpgrade = upgradeBound.SelectedIndex + 1; }; effectMode.SelectionChanged += (_, _) => SyncEffects(); uncursed.Checked += (_, _) => SyncEffects(); uncursed.Unchecked += (_, _) => SyncEffects(); depthToggle.Toggled += (_, _) => depth.Visibility = depthToggle.IsOn ? Visibility.Visible : Visibility.Collapsed;
-        count.ValueChanged += (_, _) => SyncStack(); totalToggle.Checked += (_, _) => SyncStack(); totalToggle.Unchecked += (_, _) => SyncStack(); copyDepthToggle.Checked += (_, _) => SyncStack(); copyDepthToggle.Unchecked += (_, _) => SyncStack();
-        total.ValueChanged += (_, _) => total.Header = $"Levels reach \u2265 {(int)total.Value} across up to {Counted()}";
-        copyDepth.ValueChanged += (_, _) => copyDepth.Header = $"Copies within first {FloorOf(copyDepth)} floor{(FloorOf(copyDepth) == 1 ? "" : "s")}";
-        Populate(); NormalizeTier(); SyncStack();
-        var dialog = new ContentDialog { XamlRoot = Content.XamlRoot, Title = title, PrimaryButtonText = accept, CloseButtonText = "Cancel", DefaultButton = ContentDialogButton.Primary, Content = VerticalScrollView(content, 510, 460) };
-        var duplicateError = new TextBlock { Text = "This trinket is already required. Each trinket appears only once in the deck.", TextWrapping = TextWrapping.Wrap, Visibility = Visibility.Collapsed };
-        content.Children.Add(duplicateError);
+        void Pick<T>(ComboBox combo, Func<SheetForm, SheetChoice<T>> choice, Func<T, SheetChange> change) =>
+            combo.SelectionChanged += (_, _) => { if (!binding && combo.SelectedIndex >= 0) Send(change(choice(sheet.Form).Options[combo.SelectedIndex].Value)); };
+        void Check(CheckBox box, Func<bool, SheetChange> change)
+        {
+            box.Checked += (_, _) => Send(change(true));
+            box.Unchecked += (_, _) => Send(change(false));
+        }
+        void Step(Slider slider, Func<double, SheetChange> change) =>
+            slider.ValueChanged += (_, args) => { if (!binding) Send(change(args.NewValue)); };
+        Pick(kind, form => form.Kind, SheetChange.SetKind);
+        Pick(item, form => form.Item, SheetChange.SetItem);
+        Pick(tierMode, form => form.Tier.Picker, SheetChange.SetTierMode);
+        Step(tier, value => SheetChange.SetTier((int)Math.Round(value)));
+        Pick(upgradeMode, form => form.Upgrade.Picker, SheetChange.SetUpgradeMode);
+        Step(upgrade, value => SheetChange.SetUpgrade((int)Math.Round(value)));
+        Pick(effectMode, form => form.Effect.Picker, SheetChange.SetEffectMode);
+        resinMode.SelectionChanged += (_, _) => { if (resinMode.SelectedIndex >= 0) Send(SheetChange.SetResinAuto(resinMode.SelectedIndex == 1)); };
+        resinAmount.ValueChanged += (_, args) => Send(SheetChange.SetResinAmount(args.NewValue));
+        Check(mageWand, SheetChange.SetIncludeMageWand);
+        Check(allowTransmutations, SheetChange.SetTransmutationsEnabled);
+        Step(transmutations, value => SheetChange.SetTransmutations((int)Math.Round(value)));
+        Check(selectTrinket, SheetChange.SetSelectTrinket);
+        Check(excludeResin, SheetChange.SetExcludeResin);
+        Check(uncursed, SheetChange.SetUncursed);
+        Pick(source, form => form.Source, SheetChange.SetSource);
+        floorToggle.Toggled += (_, _) => Send(SheetChange.SetFloorLimitEnabled(floorToggle.IsOn));
+        Step(floor, position => SheetChange.SetFloorLimit(sheet.Form.FloorLimit.At(position)));
+        // A half-typed box sends nothing; it shows the count again.
+        count.ValueChanged += (_, args) => { if (binding) return; if (double.IsNaN(args.NewValue)) Bind(sheet.Form); else Send(SheetChange.SetCount((int)args.NewValue)); };
+        Check(copyDepthToggle, SheetChange.SetCopyDepthEnabled);
+        Step(copyDepth, position => SheetChange.SetCopyDepth(sheet.Form.Stack.CopyDepth.At(position)));
+        Check(totalToggle, SheetChange.SetCountLevels);
+        Step(total, value => SheetChange.SetTotal((int)Math.Round(value)));
+        Bind(sheet.Form);
+
+        SheetSave? saved = null;
         dialog.PrimaryButtonClick += (_, args) =>
         {
-            var selected = (ItemKind)kind.SelectedIndex == ItemKind.Trinket
-                ? itemChoices.ElementAtOrDefault(Math.Max(0, item.SelectedIndex)) : null;
-            var duplicate = !r.Blanket && selected is not null && query.Requirements.Any(other =>
-                other.Key != r.Key && !other.Blanket && other.Item?.Id == selected.Id);
-            duplicateError.Visibility = duplicate ? Visibility.Visible : Visibility.Collapsed;
-            args.Cancel = duplicate;
+            // The editor saves onto the list as it stands, or says why not
+            // and the dialog stays open on its reasons.
+            try { saved = sheet.Save(query); }
+            catch (RequirementEditorException error) { errors.Text = error.Message; errors.Visibility = Visibility.Visible; args.Cancel = true; return; }
+            if (saved is null) { Bind(sheet.Form); args.Cancel = true; }
         };
-        var resinRequested = false;
-        resin.Click += (_, _) => { resinRequested = true; dialog.Hide(); };
         var result = await dialog.ShowAsync();
-        if (resinRequested) { await EditArcaneResin(); return null; }
-        if (result != ContentDialogResult.Primary) return null;
-        r.Kind = (ItemKind)kind.SelectedIndex; r.Item = r.Kind.RequiresNamedItem() ? itemChoices[Math.Max(0, item.SelectedIndex)] : item.SelectedIndex > 0 ? itemChoices[item.SelectedIndex - 1] : null; r.TierMatch = r.Item is null && r.Kind.Family() is ItemKind.Weapon or ItemKind.Armor ? (TierMatch)tierMatch.SelectedIndex : TierMatch.Any; r.Tier = r.TierMatch == TierMatch.Any ? 0 : selectedTier;
-        r.UpgradeMatch = (UpgradeMatch)upgradeMatch.SelectedIndex; r.Upgrade = r.UpgradeMatch switch { UpgradeMatch.Any => 0, UpgradeMatch.Exactly => (int)upgrade.Value, UpgradeMatch.AtLeast when r.Kind == ItemKind.Ring => (int)upgrade.Value, UpgradeMatch.AtLeast => selectedMinimumUpgrade, _ => 0 };
-        r.RequireUncursed = uncursed.IsChecked == true;
-        r.TrinketTransmutations = r.Kind == ItemKind.Trinket && allowTransmutations.IsChecked == true ? Math.Clamp((int)transmutations.Value, 1, 13) : 0;
-        r.ArtifactTransmutations = r.Kind == ItemKind.Artifact && allowTransmutations.IsChecked == true ? Math.Clamp((int)transmutations.Value, 1, 10) : 0;
-        r.SelectTrinket = !r.Blanket && r.Kind == ItemKind.Trinket && r.TrinketTransmutations == 0 && selectTrinket.IsChecked == true;
-        r.ExcludeResin = !r.Blanket && r.Kind == ItemKind.Wand && excludeResin.IsChecked == true;
-        // One checked effect is a single name, as before effect sets existed; an empty "Specific" means any.
-        r.Effect = effectMode.Visibility != Visibility.Visible ? EffectFilter.Any() : effectMode.SelectedIndex switch
-        {
-            1 => EffectFilter.Enchantment(),
-            2 => EffectFilter.OneOf(effectBoxes.Where(entry => entry.Box.IsChecked == true && (!entry.Curse || !r.RequireUncursed)).Select(entry => entry.Name)),
-            _ => EffectFilter.Any(),
-        };
-        r.Source = source.SelectedIndex == 0 ? null : (ScoutItemSource)(source.SelectedIndex - 1);
-        r.MaximumDepth = depthToggle.IsOn ? FloorLimits.Normalize(Math.Clamp((int)depth.Value, 1, SearchLimits.MaxDepth)) : null;
-        // The identity label and the combined level themselves are the stack's
-        // encoding, which the board's save writes from the shape returned here.
-        if (r.Kind == ItemKind.Trinket)
-        {
-            r.Source = null; r.MaximumDepth = null; r.RequireUncursed = false;
-            r.UpgradeMatch = UpgradeMatch.Any; r.Upgrade = 0; r.Effect = EffectFilter.Any();
-            r.IdentityGroup = null; r.LevelSum = null;
-            return new StackShape(1, null, null, stack.InCluster);
-        }
-        if (r.Kind == ItemKind.Artifact)
-        {
-            r.UpgradeMatch = UpgradeMatch.Any; r.Upgrade = 0;
-            r.IdentityGroup = null; r.LevelSum = null;
-            return new StackShape(1, null, null, stack.InCluster);
-        }
-        var settled = CountingLevels();
-        return new StackShape(
-            r.Blanket || stack.InCluster ? 1 : Counted(),
-            settled ? (int)total.Value : null,
-            !stack.InCluster && !settled && Counted() > 1 && copyDepthToggle.IsChecked == true ? FloorOf(copyDepth) : null,
-            stack.InCluster);
+        if (result == ContentDialogResult.Secondary) { RemoveArcaneResin(); return; }
+        if (result != ContentDialogResult.Primary || saved is null) return;
+        if (saved.ApplyTo(query)) { RefreshQuery(); SaveSettings(); }
+        // Back to the chip the save landed in, as the board now draws it.
+        if (saved.Focus is long focus) dropTargets.FirstOrDefault(target => target.Kind == DropKind.Chip && target.Key == focus)?.Element.Focus(FocusState.Programmatic);
     }
-    /// <summary>A floor picker indexing <see cref="FloorLimits.Options"/>, like the sidebar's own slider.</summary>
-    private static Slider FloorChoice(int floor) => new()
+    private static ComboBox Picker() => new() { HorizontalAlignment = HorizontalAlignment.Stretch };
+    /// <summary>A stepper drawn as a slider, its value in words as its header.</summary>
+    private static Slider ValueSlider() => new() { StepFrequency = 1, TickFrequency = 1, HorizontalAlignment = HorizontalAlignment.Stretch };
+    /// <summary>A floor picker over a sheet's floor options, the slider sitting on an option's position, like the sidebar's own.</summary>
+    private static Slider FloorChoice(OptionLabelConverter labels) => new()
     {
-        Minimum = 0, Maximum = FloorLimits.Options.Length - 1, StepFrequency = 1, TickFrequency = 1,
-        Value = FloorLimits.IndexOf(floor), HorizontalAlignment = HorizontalAlignment.Stretch,
-        ThumbToolTipValueConverter = new FloorLimitIndexConverter(),
+        StepFrequency = 1, TickFrequency = 1, HorizontalAlignment = HorizontalAlignment.Stretch, ThumbToolTipValueConverter = labels,
     };
-    /// <summary>The floor a <see cref="FloorChoice"/> slider currently names.</summary>
-    private static int FloorOf(Slider slider) =>
-        FloorLimits.Options[Math.Clamp((int)Math.Round(slider.Value), 0, FloorLimits.Options.Length - 1)];
     private static ComboBox Combo(IEnumerable<string> values, int selected) { var c = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch }; foreach (var v in values) c.Items.Add(v); c.SelectedIndex = selected; return c; }
     private static NumberBox Number(string header, double value, double min, double max) => new() { Header = header, Value = value, Minimum = min, Maximum = max, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact };
-    private static ToggleSwitch ToggleRow(string label, bool isOn, out Grid row)
+    private static ToggleSwitch ToggleRow(out Grid row, out TextBlock label)
     {
-        var toggle = new ToggleSwitch { IsOn = isOn, MinWidth = 0, Width = 44, OnContent = "", OffContent = "", Margin = new Thickness(0, -6, 0, -6), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
+        var toggle = new ToggleSwitch { MinWidth = 0, Width = 44, OnContent = "", OffContent = "", Margin = new Thickness(0, -6, 0, -6), VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Right };
         row = new Grid { ColumnSpacing = 12 }; row.ColumnDefinitions.Add(new ColumnDefinition()); row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        var text = new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center }; Grid.SetColumn(toggle, 1); row.Children.Add(text); row.Children.Add(toggle);
+        label = new TextBlock { VerticalAlignment = VerticalAlignment.Center }; Grid.SetColumn(toggle, 1); row.Children.Add(label); row.Children.Add(toggle);
         return toggle;
     }
 

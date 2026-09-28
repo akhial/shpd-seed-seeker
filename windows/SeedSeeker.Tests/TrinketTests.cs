@@ -50,7 +50,7 @@ public sealed class TrinketTests
     [Fact]
     public void CatalogContainsSeventeenNamedTrinkets()
     {
-        var items = ItemCatalog.For(ItemKind.Trinket).ToList();
+        var items = ItemCatalog.All.Where(item => item.Kind == ItemKind.Trinket).ToList();
         Assert.Equal(17, items.Count);
         Assert.Equal(17, items.Select(x => x.Id).Distinct().Count());
         Assert.All(items, item => Assert.InRange(item.SpriteIndex, 272, 288));
@@ -95,7 +95,8 @@ public sealed class TrinketTests
         Assert.All(decoded.Requirements, item => Assert.Equal(ItemKind.Trinket, item.Kind));
         Assert.NotNull(decoded.Requirements[0].AlternativeGroup);
         Assert.Equal(decoded.Requirements[0].AlternativeGroup, decoded.Requirements[1].AlternativeGroup);
-        Assert.Equal(0, ItemKind.Trinket.MaximumSearchUpgrade());
+        // A trinket is never searched by upgrade, so its sheet has no upgrade control.
+        Assert.False(RequirementSheet.Open(query, query.Requirements[0].Key).Form.Upgrade.Visible);
     }
 
     [Fact]
@@ -142,7 +143,7 @@ public sealed class TrinketTests
     [Fact]
     public void SelectedPacketsPreserveFeelingsAndValidateTheSelection()
     {
-        var deck = ItemCatalog.For(ItemKind.Trinket).ToList();
+        var deck = ItemCatalog.All.Where(item => item.Kind == ItemKind.Trinket).ToList();
         byte[] Packet(string selected)
         {
             var writer = new Writer();

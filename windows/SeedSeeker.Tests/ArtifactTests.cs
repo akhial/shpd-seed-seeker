@@ -8,7 +8,7 @@ public sealed class ArtifactTests
     [Fact]
     public void ScoutArtifactsShowRoundedGameLevels()
     {
-        foreach (var item in ItemCatalog.For(ItemKind.Artifact))
+        foreach (var item in ItemCatalog.All.Where(item => item.Kind == ItemKind.Artifact))
         {
             var expected = item.Id switch { "sandals_of_nature" => 7,
                 "ethereal_chains" or "timekeepers_hourglass" => 6, _ => 5 };
@@ -29,16 +29,21 @@ public sealed class ArtifactTests
     [Fact]
     public void ArtifactCatalogAndEditorBoundsMatchNamedArtifacts()
     {
-        var items = ItemCatalog.For(ItemKind.Artifact).ToList();
+        var items = ItemCatalog.All.Where(item => item.Kind == ItemKind.Artifact).ToList();
         Assert.Equal(11, items.Count);
         Assert.Equal(11, items.Select(item => item.Id).Distinct().Count());
         Assert.All(items, item => Assert.Null(item.Tier));
-        Assert.True(ItemKind.Artifact.RequiresNamedItem());
-        Assert.Equal(5, Sandals().UpgradeCeiling);
         Assert.Empty(ItemCatalog.Modifiers(ItemKind.Artifact));
         var query = new QuerySettings { Requirements = [Sandals()] };
         var chip = new BoardEditor().View(query).Entries.Single().Chips.Single();
         Assert.Equal(["exactly +5", "uncursed", "Imp reward", "floors 1–19"], chip.Details);
+        // The sheet always names one of them, never stacks one, and allows up to ten transmutations.
+        var sheet = RequirementSheet.Open(query, chip.Key).Form;
+        Assert.Equal(items.Select(item => item.Id).Order(), sheet.Item.Options.Select(option => option.Value!).Order());
+        Assert.Equal("sandals_of_nature", sheet.Item.Value);
+        Assert.False(sheet.Stack.Visible);
+        Assert.True(sheet.Transmutations.Visible);
+        Assert.Equal(10, sheet.Transmutations.Max);
     }
 
     [Fact]
