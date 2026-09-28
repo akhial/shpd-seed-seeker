@@ -10,7 +10,7 @@ use adw::prelude::*;
 use gtk::{cairo, gdk, gio, glib, pango};
 
 use shpd_seedfinder_core::editor::{
-    self, BoardView, ChipView, Edit, EffectBadge, ItemView, ResinChip, Tag, TagStyle,
+    self, BoardView, ChipView, Edit, EffectBadge, ItemView, ResinChip, Tag,
 };
 use shpd_seedfinder_core::feasibility::Quest;
 use shpd_seedfinder_core::main_world::normalize_floor_limit;
@@ -690,13 +690,8 @@ impl QueryPane {
         chip.update_property(&[gtk::accessible::Property::Label(&resin.description)]);
         chip.append(&sprites::arcane_resin_image());
         chip.append(&gtk::Label::new(Some(&resin.name)));
-        for (position, tag) in resin.tags.iter().enumerate() {
-            let label = chip_tag(tag);
-            // The amount leads, and says what "Auto" comes to.
-            if position == 0 {
-                label.set_tooltip_text(resin.amount_tooltip.as_deref());
-            }
-            chip.append(&label);
+        for tag in &resin.tags {
+            chip.append(&chip_tag(tag));
         }
         if resin.uncursed {
             chip.append(&uncursed_mark());
@@ -1026,7 +1021,7 @@ impl QueryPane {
                 .build();
             button.connect_clicked({
                 let pane = Rc::clone(self);
-                let (count, limit) = (f64::from(stack.count), f64::from(board::count_limit(stack)));
+                let (count, limit) = (f64::from(stack.count), f64::from(stack.count_max));
                 move |button| {
                     pane.open_stack_popover(
                         button,
@@ -1196,7 +1191,7 @@ impl QueryPane {
 
         if item.stack.can_change_count {
             let counts = gio::Menu::new();
-            for count in 1..=board::count_limit(&item.stack) {
+            for count in 1..=item.stack.count_max {
                 counts.append_item(&menu_item(
                     &count.to_string(),
                     "board.count",
@@ -1336,16 +1331,15 @@ fn resin_menu() -> gio::Menu {
     menu
 }
 
-/// One qualifier beside a chip's name, tinted as the editor styles it.
+/// One qualifier beside a chip's name, tinted as the editor styles it, with
+/// its own hover text where the editor explains it ("Auto", "Mage +2").
 fn chip_tag(tag: &Tag) -> gtk::Label {
-    let class = match tag.style {
-        TagStyle::Plain => "chip-tag-plain",
-        TagStyle::Upgrade => "chip-tag-up",
-    };
-    gtk::Label::builder()
+    let label = gtk::Label::builder()
         .label(&tag.text)
-        .css_classes(["chip-tag", class])
-        .build()
+        .css_classes(["chip-tag", board::tag_class(tag.style)])
+        .build();
+    label.set_tooltip_text(tag.tooltip.as_deref());
+    label
 }
 
 /// The check mark of a chip that rules out cursed items.

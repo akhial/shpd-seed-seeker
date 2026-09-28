@@ -13,7 +13,7 @@
 
 use shpd_seedfinder_core::editor::{
     self, Change, Draft, EffectChoice, EffectControl, EffectGroup, FloorToggle, Form, ItemChoice,
-    Opt,
+    Opt, RangeToggle,
 };
 
 /// An open sheet: the editor's draft, which the dialog never edits itself,
@@ -81,7 +81,7 @@ pub fn chosen<T: Copy>(options: &[Opt<T>], selected: u32) -> Option<T> {
 /// editor offers, a weapon beside its tier (`Spear · Tier 2`). Arcane Resin,
 /// which the editor offers among the wands, is no item here: the sheet
 /// shows it as a row of its own that opens the resin dialog
-/// ([`offers_resin`]).
+/// ([`resin_choice`]).
 #[must_use]
 pub fn item_options(form: &Form) -> Vec<(ItemChoice, String)> {
     form.item
@@ -98,13 +98,15 @@ pub fn item_options(form: &Form) -> Vec<(ItemChoice, String)> {
         .collect()
 }
 
-/// Whether the editor offers Arcane Resin in place of the item.
+/// The editor's name for Arcane Resin, while it offers the resin in place
+/// of the item.
 #[must_use]
-pub fn offers_resin(form: &Form) -> bool {
+pub fn resin_choice(form: &Form) -> Option<&str> {
     form.item
         .options
         .iter()
-        .any(|option| option.value == ItemChoice::ArcaneResin)
+        .find(|option| option.value == ItemChoice::ArcaneResin)
+        .map(|option| option.label.as_str())
 }
 
 /// The kind the item picker always names one of — a trinket, an artifact,
@@ -162,6 +164,18 @@ pub fn same_effects(before: &EffectControl, after: &EffectControl) -> bool {
     before.groups == after.groups && layout(before) == layout(after)
 }
 
+/// The help text a range toggle's switch shows now, empty for none: the
+/// transmutation limit's while the switch is on, the combined level's
+/// whenever the switch shows — as the editor's `caption_visible` says.
+#[must_use]
+pub fn range_caption(control: &RangeToggle) -> &str {
+    control
+        .caption
+        .as_deref()
+        .filter(|_| control.caption_visible)
+        .unwrap_or_default()
+}
+
 /// The floors a floor switch's spinner runs between: its first and last
 /// choice. The editor steps over the empty boss floors in between.
 #[must_use]
@@ -199,7 +213,7 @@ mod tests {
 
     use super::{
         Sheet, chosen, effect_choices, effect_heading, floor_range, item_options, named_kind,
-        offers_resin, position, same_effects, spin_value,
+        position, resin_choice, same_effects, spin_value,
     };
     use crate::fixtures::{
         Fixture, decode_labelled, decode_resin, decode_rows, encode_resin, encode_row, fixtures,
@@ -275,6 +289,7 @@ mod tests {
                 max_depth: small(&resin["max_depth"]),
                 source: resin["source"].as_str().map(source_named),
             },
+            query_resin: decode_resin(&draft["query_resin"]),
             rows: decode_rows(&draft["rows"]),
         }
     }
@@ -342,6 +357,7 @@ mod tests {
             "visible": control.visible,
             "mode": name(control.mode),
             "modes": control.modes.iter().map(|option| opt(option, |mode| name(*mode).into())).collect::<Vec<_>>(),
+            "value_visible": control.value_visible,
             "value": control.value,
             "min": control.min,
             "max": control.max,
@@ -350,7 +366,12 @@ mod tests {
     }
 
     fn toggle(control: &Toggle) -> Value {
-        json!({ "visible": control.visible, "value": control.value, "label": control.label })
+        json!({
+            "visible": control.visible,
+            "value": control.value,
+            "label": control.label,
+            "caption": control.caption,
+        })
     }
 
     fn floor_toggle(control: &FloorToggle) -> Value {
@@ -373,6 +394,7 @@ mod tests {
             "max": control.max,
             "label": control.label,
             "caption": control.caption,
+            "caption_visible": control.caption_visible,
             "value_label": control.value_label,
         })
     }
@@ -460,8 +482,10 @@ mod tests {
             "upgrade": mode_range(&form.upgrade, upgrade_mode),
             "effect": {
                 "visible": effect.visible,
+                "label": effect.label,
                 "mode": effect_mode_name(effect.mode),
                 "modes": effect.modes.iter().map(|option| opt(option, |mode| effect_mode_name(*mode).into())).collect::<Vec<_>>(),
+                "choices_visible": effect.choices_visible,
                 "choices": effect.choices.iter().map(|choice| json!({
                     "value": choice.value.wire_name(),
                     "label": choice.label,
@@ -479,6 +503,7 @@ mod tests {
             "select_trinket": toggle(&form.select_trinket),
             "stack": {
                 "visible": form.stack.visible,
+                "label": form.stack.label,
                 "count": form.stack.count,
                 "min": form.stack.min,
                 "max": form.stack.max,
@@ -488,9 +513,14 @@ mod tests {
             },
             "resin": {
                 "visible": form.resin.visible,
+                "label": form.resin.label,
                 "auto": form.resin.auto,
+                "modes": form.resin.modes.iter().map(|option| opt(option, |auto| (*auto).into())).collect::<Vec<_>>(),
+                "caption": form.resin.caption,
                 "amount": form.resin.amount,
-                "include_mage_wand": form.resin.include_mage_wand,
+                "min": form.resin.min,
+                "max": form.resin.max,
+                "include_mage_wand": toggle(&form.resin.include_mage_wand),
             },
             "errors": form.errors,
             "can_save": form.can_save,
@@ -622,12 +652,12 @@ mod tests {
             ItemChoice::Item(ItemId::Spear),
             "Spear \u{b7} Tier 2".to_owned()
         )));
-        assert!(!offers_resin(form));
+        assert_eq!(resin_choice(form), None);
         assert_eq!(named_kind(form), None);
 
         // A new wand sheet offers Arcane Resin, but as its own row.
         let sheet = filled(&mut state, &[Change::SetKind(ItemKind::Wand, None)]);
-        assert!(offers_resin(sheet.form()));
+        assert_eq!(resin_choice(sheet.form()), Some("Arcane Resin"));
         assert!(
             item_options(sheet.form())
                 .iter()

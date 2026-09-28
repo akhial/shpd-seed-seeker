@@ -13,8 +13,8 @@ use std::rc::Rc;
 use adw::prelude::*;
 use shpd_seedfinder_core::catalog::Effect;
 use shpd_seedfinder_core::editor::{
-    Change, Draft, EffectControl, EffectGroup, EffectMode, FloorToggle, Form, FormMode, ItemChoice,
-    ModeRange, Opt, RangeToggle, SaveResult, TierMode, Toggle, UpgradeMode,
+    Change, Draft, EffectControl, EffectGroup, FloorToggle, Form, FormMode, ItemChoice, ModeRange,
+    Opt, RangeToggle, SaveResult, Toggle,
 };
 
 use crate::sheet::{self, Sheet};
@@ -175,7 +175,6 @@ fn build(sheet: Sheet) -> Editor {
         (group, preferences, list)
     };
     let resin_row = adw::ActionRow::builder()
-        .title("Arcane Resin")
         .subtitle("Require resin from surplus wands")
         .activatable(true)
         .build();
@@ -198,19 +197,11 @@ fn build(sheet: Sheet) -> Editor {
             .build(),
         upgrade_row: combo_row("Upgrade"),
         upgrade_value: spin_row(""),
-        count_group: adw::PreferencesGroup::builder()
-            .title("Total Item Count")
-            .description(
-                "Ask for more than one item of this kind — reforge fodder for the \
-                 blacksmith. The extra copies carry no constraints of their own.",
-            )
-            .build(),
+        count_group: adw::PreferencesGroup::new(),
         count_row: spin_row("How many"),
         copy_floor_switch: adw::SwitchRow::new(),
         copy_floor_value: spin_row(""),
-        levels_switch: adw::SwitchRow::builder()
-            .subtitle("Any upgrade on each, as long as they add up")
-            .build(),
+        levels_switch: adw::SwitchRow::new(),
         levels_value: spin_row(""),
         effect_mode_group: adw::PreferencesGroup::new(),
         effect_mode: combo_row(""),
@@ -220,15 +211,11 @@ fn build(sheet: Sheet) -> Editor {
         ],
         effect_checks: RefCell::new(Vec::new()),
         details_group: adw::PreferencesGroup::builder().title("Details").build(),
-        exclude_resin: adw::SwitchRow::builder()
-            .subtitle("Keep this wand without budgeting resin to upgrade it. Useful for imbuing: resin upgrades do not transfer to the staff. Extra copies are reserved for reforging and never need Auto resin.")
-            .build(),
+        exclude_resin: adw::SwitchRow::new(),
         uncursed: adw::SwitchRow::new(),
         allow_transmutations: adw::SwitchRow::new(),
         transmutations: spin_row(""),
-        select_trinket: adw::SwitchRow::builder()
-            .subtitle("Starts after the first brewing opportunity. Multiple offered matches use no trinket.")
-            .build(),
+        select_trinket: adw::SwitchRow::new(),
         source_row: combo_row("Source"),
         floor_switch: adw::SwitchRow::new(),
         floor_value: spin_row(""),
@@ -450,7 +437,11 @@ fn apply_form(editor: &Rc<Editor>) {
     editor
         .item_row
         .set_title(sheet::named_kind(&form).unwrap_or("Item"));
-    editor.resin_group.set_visible(sheet::offers_resin(&form));
+    let resin = sheet::resin_choice(&form);
+    editor.resin_group.set_visible(resin.is_some());
+    if let Some(resin) = resin {
+        editor.resin_row.set_title(resin);
+    }
     range_toggle(
         &editor.allow_transmutations,
         &editor.transmutations,
@@ -461,7 +452,7 @@ fn apply_form(editor: &Rc<Editor>) {
         &editor.tier_row,
         &editor.tier_value,
         before.map(|before| &before.tier),
-        (&form.tier, TierMode::Any),
+        &form.tier,
     );
 
     editor.upgrade_group.set_visible(form.upgrade.visible);
@@ -469,11 +460,12 @@ fn apply_form(editor: &Rc<Editor>) {
         &editor.upgrade_row,
         &editor.upgrade_value,
         before.map(|before| &before.upgrade),
-        (&form.upgrade, UpgradeMode::Any),
+        &form.upgrade,
     );
 
     let stack = &form.stack;
     editor.count_group.set_visible(stack.visible);
+    editor.count_group.set_title(&stack.label);
     set_range(&editor.count_row, stack.count, stack.min, stack.max);
     floor_toggle(
         &editor.copy_floor_switch,
@@ -510,13 +502,13 @@ fn apply_form(editor: &Rc<Editor>) {
     editor.updating.set(false);
 }
 
-/// The effect filter: its mode, and the "Specific…" grid under the
-/// editor's headings, rebuilt only when the effects it lists change.
+/// The effect filter: its mode under the section's label, and the
+/// "Specific…" grid under the editor's headings, rebuilt only when the
+/// effects it lists change.
 fn apply_effects(editor: &Rc<Editor>, before: Option<&EffectControl>, effect: &EffectControl) {
-    let heading = sheet::effect_heading(effect, EffectGroup::Enchantment).unwrap_or_default();
     editor.effect_mode_group.set_visible(effect.visible);
-    editor.effect_mode_group.set_title(heading);
-    editor.effect_mode.set_title(heading);
+    editor.effect_mode_group.set_title(&effect.label);
+    editor.effect_mode.set_title(&effect.label);
     fill(
         &editor.effect_mode,
         before.map(|before| &before.modes[..]),
@@ -557,10 +549,9 @@ fn apply_effects(editor: &Rc<Editor>, before: Option<&EffectControl>, effect: &E
                 .any(|choice| choice.value == *value && choice.selected),
         );
     }
-    let specific = effect.visible && effect.mode == EffectMode::Specific;
     for (group, preferences, _) in &editor.effect_lists {
         let heading = sheet::effect_heading(effect, *group);
-        preferences.set_visible(specific && heading.is_some());
+        preferences.set_visible(effect.choices_visible && heading.is_some());
         preferences.set_title(heading.unwrap_or_default());
     }
     editor.effect_lists[0]
@@ -568,36 +559,36 @@ fn apply_effects(editor: &Rc<Editor>, before: Option<&EffectControl>, effect: &E
         .set_description(Some(effect.caption.as_str()));
 }
 
-/// A check box from the editor's toggle.
-fn toggle(row: &adw::SwitchRow, control: &Toggle) {
+/// A check box from the editor's toggle, its help text under it.
+pub(crate) fn toggle(row: &adw::SwitchRow, control: &Toggle) {
     row.set_visible(control.visible);
     row.set_title(&control.label);
+    row.set_subtitle(control.caption.as_deref().unwrap_or_default());
     row.set_active(control.value);
 }
 
-/// A mode picker and the spinner of its value, shown while the mode names
-/// one rather than `any`.
+/// A mode picker and the spinner of its value, shown while the editor says
+/// the value shows.
 fn mode_range<M: PartialEq>(
     row: &adw::ComboRow,
     spin: &adw::SpinRow,
     before: Option<&ModeRange<M>>,
-    (control, any): (&ModeRange<M>, M),
+    control: &ModeRange<M>,
 ) {
     row.set_visible(control.visible);
     fill(row, before.map(|before| &before.modes[..]), &control.modes);
     select(row, sheet::position(&control.modes, &control.mode));
-    spin.set_visible(control.visible && control.mode != any);
+    spin.set_visible(control.value_visible);
     set_range(spin, control.value, control.min, control.max);
     spin.set_title(&control.value_label);
 }
 
-/// A switch and the spinner it turns on.
+/// A switch, with its help text while the editor shows it, and the spinner
+/// it turns on.
 fn range_toggle(switch: &adw::SwitchRow, spin: &adw::SpinRow, control: &RangeToggle) {
     switch.set_visible(control.visible);
     switch.set_title(&control.label);
-    if let Some(caption) = &control.caption {
-        switch.set_subtitle(caption);
-    }
+    switch.set_subtitle(sheet::range_caption(control));
     switch.set_active(control.enabled);
     spin.set_visible(control.visible && control.enabled);
     set_range(spin, control.value, control.min, control.max);
@@ -606,7 +597,7 @@ fn range_toggle(switch: &adw::SwitchRow, spin: &adw::SpinRow, control: &RangeTog
 
 /// A floor-limit switch and its spinner, which runs over the editor's
 /// floors.
-fn floor_toggle(switch: &adw::SwitchRow, spin: &adw::SpinRow, control: &FloorToggle) {
+pub(crate) fn floor_toggle(switch: &adw::SwitchRow, spin: &adw::SpinRow, control: &FloorToggle) {
     switch.set_visible(control.visible);
     switch.set_title(&control.label);
     switch.set_active(control.enabled);

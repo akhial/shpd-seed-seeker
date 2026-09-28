@@ -13,8 +13,9 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use adw::prelude::*;
-use shpd_seedfinder_core::editor::{Change, Draft, SaveResult, labels};
+use shpd_seedfinder_core::editor::{Change, Draft, FormMode, Opt, SaveResult};
 
+use crate::requirement_editor::{floor_toggle, toggle};
 use crate::sheet::{self, Sheet};
 
 struct Editor {
@@ -32,46 +33,33 @@ struct Editor {
 }
 
 /// Presents the resin dialog over `parent` on `draft`, a sheet with Arcane
-/// Resin picked. `existing` says whether the query asks for resin already,
-/// which the dialog offers to remove. When the user confirms, `on_save`
-/// saves the draft and answers with the editor's result; a refused save
-/// keeps the dialog open on the editor's reason.
+/// Resin picked. A sheet the editor opened on the query's resin edits it,
+/// and offers to remove it; any other adds the resin. When the user
+/// confirms, `on_save` saves the draft and answers with the editor's result;
+/// a refused save keeps the dialog open on the editor's reason.
 #[allow(clippy::too_many_lines)] // Declarative dialog assembly.
 pub fn present(
     parent: &adw::ApplicationWindow,
     draft: Draft,
-    existing: bool,
     on_save: impl Fn(&Draft) -> SaveResult + 'static,
 ) {
     let sheet = Sheet::new(draft);
-    let title = sheet.form().title.clone();
+    let form = sheet.form();
+    let title = form.title.clone();
+    let existing = form.mode == FormMode::Edit;
     let editor = Rc::new(Editor {
         banner: adw::Banner::new(""),
         mode: adw::ComboRow::builder()
-            .title("Minimum resin")
-            .model(&gtk::StringList::new(&["Amount", labels::RESIN_AUTO]))
+            .model(&string_list(&form.resin.modes))
             .build(),
-        explanation: adw::ActionRow::builder()
-            .title(labels::RESIN_AUTO_TOOLTIP)
-            .build(),
+        explanation: adw::ActionRow::new(),
         amount: adw::SpinRow::builder()
-            .title("Minimum resin")
             .numeric(true)
             .snap_to_ticks(true)
             .update_policy(gtk::SpinButtonUpdatePolicy::IfValid)
-            .adjustment(&gtk::Adjustment::new(
-                1.0,
-                1.0,
-                f64::from(u16::MAX),
-                1.0,
-                10.0,
-                0.0,
-            ))
+            .adjustment(&gtk::Adjustment::new(1.0, 1.0, 1.0, 1.0, 10.0, 0.0))
             .build(),
-        mage_wand: adw::SwitchRow::builder()
-            .title("Include Mage’s starting wand")
-            .subtitle("Add 2 resin from the Magic Missile wand recovered with Wand Preservation when imbuing another wand. The preserved wand is +0, regardless of the staff’s level.")
-            .build(),
+        mage_wand: adw::SwitchRow::new(),
         uncursed: adw::SwitchRow::new(),
         limited: adw::SwitchRow::new(),
         depth: adw::SpinRow::builder()
@@ -79,15 +67,7 @@ pub fn present(
             .build(),
         source: adw::ComboRow::builder()
             .title("Wand source")
-            .model(&gtk::StringList::new(
-                &sheet
-                    .form()
-                    .source
-                    .options
-                    .iter()
-                    .map(|option| option.label.as_str())
-                    .collect::<Vec<_>>(),
-            ))
+            .model(&string_list(&form.source.options))
             .build(),
         updating: Cell::new(false),
         sheet: RefCell::new(sheet),
@@ -172,12 +152,19 @@ pub fn present(
     dialog.present(Some(parent));
 }
 
+/// A combo row's model: the labels of the editor's options, in order.
+fn string_list<T>(options: &[Opt<T>]) -> gtk::StringList {
+    let labels: Vec<&str> = options.iter().map(|option| option.label.as_str()).collect();
+    gtk::StringList::new(&labels)
+}
+
 /// Sends every control's moves to the editor as the change it names.
 fn connect(editor: &Rc<Editor>) {
     editor
         .mode
-        .connect_selected_notify(hook(editor, |_, row: &adw::ComboRow| {
-            Some(Change::SetResinAuto(row.selected() == 1))
+        .connect_selected_notify(hook(editor, |editor, row: &adw::ComboRow| {
+            sheet::chosen(&editor.sheet.borrow().form().resin.modes, row.selected())
+                .map(Change::SetResinAuto)
         }));
     editor
         .amount
@@ -232,35 +219,31 @@ fn hook<W>(
     }
 }
 
-/// Draws the sheet's resin section and donor filters.
+/// Draws the sheet's resin section and donor filters, in the editor's
+/// words: the Amount/Auto choice under the section's label, what Auto means
+/// in the amount field's place while it is on, the amounts that save.
 fn apply_form(editor: &Editor) {
     let sheet = editor.sheet.borrow();
     let form = sheet.form();
     editor.updating.set(true);
     let resin = &form.resin;
-    editor.mode.set_selected(u32::from(resin.auto));
+    editor.mode.set_title(&resin.label);
+    editor.mode.set_selected(
+        sheet::position(&resin.modes, &resin.auto).unwrap_or(gtk::INVALID_LIST_POSITION),
+    );
+    editor.explanation.set_title(&resin.caption);
     editor.explanation.set_visible(resin.auto);
+    editor.amount.set_title(&resin.label);
     editor.amount.set_visible(!resin.auto);
+    let bounds = editor.amount.adjustment();
+    bounds.set_lower(f64::from(resin.min));
+    bounds.set_upper(f64::from(resin.max));
     if let Some(amount) = resin.amount {
         editor.amount.set_value(amount);
     }
-    editor.mage_wand.set_active(resin.include_mage_wand);
-    editor.uncursed.set_title(&form.uncursed.label);
-    editor.uncursed.set_active(form.uncursed.value);
-    let floor = &form.floor_limit;
-    editor.limited.set_title(&floor.label);
-    editor.limited.set_active(floor.enabled);
-    editor.depth.set_visible(floor.enabled);
-    let (first, last) = sheet::floor_range(floor);
-    editor.depth.adjustment().configure(
-        f64::from(floor.value),
-        f64::from(first),
-        f64::from(last),
-        1.0,
-        1.0,
-        0.0,
-    );
-    editor.depth.set_title(&floor.value_label);
+    toggle(&editor.mage_wand, &resin.include_mage_wand);
+    toggle(&editor.uncursed, &form.uncursed);
+    floor_toggle(&editor.limited, &editor.depth, &form.floor_limit);
     editor.source.set_selected(
         sheet::position(&form.source.options, &form.source.value)
             .unwrap_or(gtk::INVALID_LIST_POSITION),

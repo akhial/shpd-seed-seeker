@@ -129,8 +129,10 @@ button.chip.chip-add:hover {
   background-color: alpha(currentColor, 0.15);
 }
 
-/* An upgrade is the one number a reforge changes, so it is tinted apart. */
+/* An upgrade is the one number a reforge changes, so it is tinted apart;
+   so is the resin the resin chip counts, apart from its donor filters. */
 .chip-tag.chip-tag-up,
+.chip-tag.chip-tag-credit,
 .chip-tag.chip-tag-soft {
   color: var(--success-color);
 }

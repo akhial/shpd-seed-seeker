@@ -142,13 +142,11 @@ pub fn present(app: &adw::Application) {
         }
     });
     let edit_resin: Rc<dyn Fn(Draft)> = Rc::new({
-        let state = Rc::clone(&state);
         let save_sheet = Rc::clone(&save_sheet);
         let window = window.clone();
         move |draft| {
-            let existing = state.borrow().needs_resin();
             let save_sheet = Rc::clone(&save_sheet);
-            resin_editor::present(&window, draft, existing, move |draft| save_sheet(draft));
+            resin_editor::present(&window, draft, move |draft| save_sheet(draft));
         }
     });
     let edit_requirement: Rc<dyn Fn(Draft)> = Rc::new({

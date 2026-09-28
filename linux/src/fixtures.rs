@@ -207,14 +207,16 @@ pub fn keys(value: &Value) -> Vec<u64> {
         .collect()
 }
 
+/// Tags as the envelope writes them: text, style and hover text.
 pub fn tags(tags: &[Tag]) -> Value {
     tags.iter()
         .map(|tag| {
             let style = match tag.style {
                 TagStyle::Plain => "plain",
                 TagStyle::Upgrade => "upgrade",
+                TagStyle::Credit => "credit",
             };
-            json!({ "text": tag.text, "style": style })
+            json!({ "text": tag.text, "style": style, "tooltip": tag.tooltip })
         })
         .collect()
 }

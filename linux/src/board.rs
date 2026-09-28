@@ -15,7 +15,7 @@ use std::fmt::Write as _;
 use std::rc::Rc;
 
 use shpd_seedfinder_core::editor::{
-    self, BoardView, ChipView, Edit, ItemView, RelationGlyph, ResinChip, ResinState, Row, StackView,
+    self, BoardView, ChipView, Edit, ItemView, RelationGlyph, ResinChip, ResinState, Row, TagStyle,
 };
 
 /// The board view of the rows last shown. The pane redraws the board on
@@ -178,7 +178,7 @@ pub struct JoinChoice {
 
 /// The "Either/or with…" choices of `chip`, one per board entry the editor
 /// lets it join or refuses it — choosing a refused one says why — in board
-/// order, a cluster named by its members (`Spear or Mace`).
+/// order, each under the entry's name (`Spear or Mace` for a cluster).
 #[must_use]
 pub fn join_choices(view: &BoardView, chip: &ChipView) -> Vec<JoinChoice> {
     view.items
@@ -187,23 +187,22 @@ pub fn join_choices(view: &BoardView, chip: &ChipView) -> Vec<JoinChoice> {
             let target = item.members.iter().copied().find(|key| {
                 chip.join.contains(key) || chip.refuse.iter().any(|(refused, _)| refused == key)
             })?;
-            let names: Vec<&str> = item.chips.iter().map(|chip| chip.name.as_str()).collect();
             Some(JoinChoice {
                 target,
-                label: names.join(" or "),
+                label: item.name.clone(),
             })
         })
         .collect()
 }
 
-/// The most items the count stepper and the "How many" menu offer: the
-/// stack's bound while the entry can grow, else only the copies it may shed.
+/// The style class a chip's tag is tinted with: upgrades and the resin the
+/// resin chip counts in the success colour, apart from the plain filters.
 #[must_use]
-pub const fn count_limit(stack: &StackView) -> u8 {
-    if stack.can_grow {
-        stack.max
-    } else {
-        stack.count
+pub const fn tag_class(style: TagStyle) -> &'static str {
+    match style {
+        TagStyle::Plain => "chip-tag-plain",
+        TagStyle::Upgrade => "chip-tag-up",
+        TagStyle::Credit => "chip-tag-credit",
     }
 }
 
@@ -247,7 +246,7 @@ mod tests {
     use shpd_seedfinder_core::query::{ArcaneResinFilter, Requirement, UpgradeRequirement};
 
     use super::{
-        BoardCache, Dragged, DropAnswer, Landing, chip_tooltip, count_limit, find_chip, follow_key,
+        BoardCache, Dragged, DropAnswer, Landing, chip_tooltip, find_chip, follow_key,
         join_choices, resin_tooltip,
     };
     use crate::fixtures::{
@@ -334,19 +333,22 @@ mod tests {
             assert_item_matches(name, item, expected);
         }
         let resin = view.resin.as_ref().map_or(Value::Null, |resin| {
-            json!([resin.name, resin.description, tags(&resin.tags)])
+            json!({
+                "name": resin.name,
+                "tags": tags(&resin.tags),
+                "uncursed": resin.uncursed,
+                "tooltip": resin.tooltip,
+                "details": resin.details,
+                "description": resin.description,
+            })
         });
-        let expected = &response["resin"];
-        let expected = if expected.is_null() {
-            Value::Null
-        } else {
-            json!([expected["name"], expected["description"], expected["tags"]])
-        };
-        assert_eq!(resin, expected, "{name}: resin");
+        // Every field of the resin chip, its tags' styles and tooltips too.
+        assert_eq!(&resin, &response["resin"], "{name}: resin");
     }
 
     fn assert_item_matches(name: &str, item: &ItemView, expected: &Value) {
         assert_eq!(item.id.to_string(), expected["id"], "{name}: id");
+        assert_eq!(item.name, expected["name"], "{name}: entry name");
         assert_eq!(item.blanket, expected["blanket"], "{name}");
         assert_eq!(item.members, keys(&expected["members"]), "{name}");
         assert_eq!(item.extras, keys(&expected["extras"]), "{name}");
@@ -357,6 +359,7 @@ mod tests {
             "count": stack.count,
             "can_grow": stack.can_grow,
             "can_change_count": stack.can_change_count,
+            "count_max": stack.count_max,
             "can_count_levels": stack.can_count_levels,
             "level_capacity": stack.level_capacity,
             "default_total": stack.default_total,
@@ -367,6 +370,7 @@ mod tests {
             "count": expected_stack["count"],
             "can_grow": expected_stack["can_grow"],
             "can_change_count": expected_stack["can_change_count"],
+            "count_max": expected_stack["count_max"],
             "can_count_levels": expected_stack["can_count_levels"],
             "level_capacity": expected_stack["level_capacity"],
             "default_total": expected_stack["default_total"],
@@ -685,7 +689,7 @@ mod tests {
         ];
         let view = editor::board_view(&rows, None);
         let (item, chip) = find_chip(&view, 1).unwrap();
-        assert_eq!(count_limit(&item.stack), 3);
+        assert_eq!(item.stack.count_max, 3);
         assert_eq!(
             chip_tooltip(chip),
             "Ring of Might\nexactly +2\n× 2 of the same kind — the extra copies: any upgrade, any floor"
@@ -698,7 +702,7 @@ mod tests {
         let view = editor::board_view(&cluster, None);
         let (item, chip) = find_chip(&view, 1).unwrap();
         assert!(!item.stack.can_grow);
-        assert_eq!(count_limit(&item.stack), 1);
+        assert_eq!(item.stack.count_max, 1);
         assert_eq!(chip_tooltip(chip), "Any wand\nany upgrade\nor Any ring");
     }
 }
