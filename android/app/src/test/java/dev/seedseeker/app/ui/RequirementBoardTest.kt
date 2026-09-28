@@ -111,6 +111,16 @@ class RequirementBoardTest {
         compose.onRoot().performTouchInput { moveTo(target, delayMillis = 100) }
     }
 
+    /**
+     * Lets the chip in hand go in the board's top margin, clear of every chip
+     * and of the bin, which opens at the board's bottom.
+     */
+    private fun letGoOnTheOpenBoard() {
+        val open = compose.onRoot().fetchSemanticsNode().boundsInRoot.let { Offset(it.center.x, it.top + 4f) }
+        compose.onRoot().performTouchInput { moveTo(open, delayMillis = 100) }
+        release()
+    }
+
     private fun release() {
         compose.onRoot().performTouchInput { up() }
         compose.onNodeWithText("Drop to remove").assertDoesNotExist()
@@ -334,6 +344,37 @@ class RequirementBoardTest {
         compose.onNodeWithText("×2", useUnmergedTree = true).assertDoesNotExist()
     }
 
+    @Test fun theBinTakesOneItemOfAStack() {
+        requirements.value = memberStack
+        amount.value = 0
+        show()
+        val frostChip = compose.onNodeWithContentDescription("Wand of Frost,", substring = true)
+
+        // {Frost ×2 | Disintegration} → {Frost | Disintegration}.
+        pickUp(frostChip)
+        dropOn(compose.onNodeWithText("Drop to remove"))
+        compose.onNodeWithText("×2").assertDoesNotExist()
+        compose.onNodeWithText("or").assertIsDisplayed()
+        compose.runOnIdle { assertEquals(listOf(1L, 2L), requirements.value.map { it.key }) }
+
+        // A member of one leaves, and the cluster of one is a lone chip.
+        pickUp(frostChip)
+        dropOn(compose.onNodeWithText("Drop to remove"))
+        compose.onNodeWithText("or").assertDoesNotExist()
+        compose.runOnIdle { assertEquals(listOf(disintegration), requirements.value.map { it.item }) }
+
+        // A lone stack sheds one item at a time.
+        compose.runOnIdle { requirements.value = edited(emptyList(), BoardEdit.Save(null, ItemRequirement(0, frost, 2), 2, null, null)) }
+        badgeOn("Wand of Frost", "×2").assertIsDisplayed()
+        pickUp(frostChip)
+        dropOn(compose.onNodeWithText("Drop to remove"))
+        compose.onNodeWithText("×2").assertDoesNotExist()
+        frostChip.assertIsDisplayed()
+        pickUp(frostChip)
+        dropOn(compose.onNodeWithText("Drop to remove"))
+        frostChip.assertDoesNotExist()
+    }
+
     @Test fun aMemberLeavesItsCapsuleOnlyWhenLetGoOnTheOpenBoard() {
         requirements.value = edited(original, BoardEdit.Join(source = 1, target = 2))
         amount.value = 0
@@ -346,11 +387,27 @@ class RequirementBoardTest {
         compose.onNodeWithText("or").assertIsDisplayed()
 
         pickUp(firstWand())
-        val open = compose.onRoot().fetchSemanticsNode().boundsInRoot.let { Offset(it.center.x, it.bottom - 40f) }
-        compose.onRoot().performTouchInput { moveTo(open, delayMillis = 100) }
-        release()
-        compose.runOnIdle { assertTrue(requirements.value.all { it.alternativeGroup == null }) }
+        letGoOnTheOpenBoard()
+        compose.runOnIdle {
+            assertTrue(requirements.value.all { it.alternativeGroup == null })
+            assertEquals(2, requirements.value.size)
+        }
         compose.onNodeWithText("or").assertDoesNotExist()
+    }
+
+    @Test fun aMemberLetGoOnTheOpenBoardTakesOneItemOut() {
+        requirements.value = memberStack
+        amount.value = 0
+        show()
+        pickUp(compose.onNodeWithContentDescription("Wand of Frost,", substring = true))
+        letGoOnTheOpenBoard()
+        // {Frost ×2 | Disintegration} → {Frost | Disintegration} + Frost.
+        compose.runOnIdle {
+            val (cluster, lone) = RequirementEditor.view(requirements.value).items
+            assertEquals(listOf("Wand of Frost" to 1, "Wand of Disintegration" to 1), cluster.chips.map { it.name to it.stack.count })
+            assertEquals("Wand of Frost" to 1, lone.chips.single().let { it.name to it.stack.count })
+        }
+        compose.onNodeWithText("×2").assertDoesNotExist()
     }
 
     @Test fun aChipTheEditorFindsAProblemWithSaysWhatItIs() {

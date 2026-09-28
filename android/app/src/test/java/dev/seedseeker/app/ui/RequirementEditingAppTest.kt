@@ -85,6 +85,27 @@ class RequirementEditingAppTest {
         compose.runOnIdle { assertEquals(listOf("wand_frost"), items()) }
     }
 
+    /** The sheet's Remove is the chip's: a member goes with its own copies, where the board's bin takes one. */
+    @Test fun theSheetRemovesAMemberWithItsWholeStack() {
+        val any = ItemRequirement(3, null, 0, kind = ItemKind.WAND, upgradeMatch = UpgradeMatch.ANY, identityGroup = 1)
+        show(
+            PresetQuery(
+                listOf(
+                    ItemRequirement(1, ItemCatalog.findById("wand_frost")!!, 0, upgradeMatch = UpgradeMatch.ANY, alternativeGroup = 1, identityGroup = 1),
+                    ItemRequirement(2, ItemCatalog.findById("wand_disintegration")!!, 0, upgradeMatch = UpgradeMatch.ANY, alternativeGroup = 1),
+                    any, any.copy(key = 4),
+                ),
+            ),
+        )
+        compose.onNodeWithContentDescription("Show requirements").performClick()
+        compose.onNode(hasText("×3") and hasAnyAncestor(hasContentDescription("Wand of Frost,", substring = true))).assertIsDisplayed()
+        compose.onNodeWithContentDescription("Wand of Frost,", substring = true).performClick()
+        compose.onNodeWithText("Edit alternative").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Remove alternative").performClick()
+        compose.onNodeWithText("Edit alternative").assertDoesNotExist()
+        compose.runOnIdle { assertEquals(listOf("wand_disintegration"), items()) }
+    }
+
     private val frost = ItemRequirement(1, ItemCatalog.findById("wand_frost")!!, 2)
     private fun resinChip() = compose.onNodeWithContentDescription("Arcane Resin,", substring = true)
     private fun inSheet(text: String) = compose.onNode(hasText(text) and hasAnyAncestor(isDialog()))

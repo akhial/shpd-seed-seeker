@@ -341,6 +341,30 @@ class RequirementEditorTest {
         assertEquals(disintegration.refuse.getValue(9), refused.refused)
     }
 
+    /** The bin's `remove_one` takes one item; the chip's Remove takes its whole stack. */
+    @Test fun removingOneItemLeavesTheRestOfItsStack() {
+        val frost = find("wand_frost")
+        val rows = listOf(
+            ItemRequirement(1, frost, 0, upgradeMatch = UpgradeMatch.ANY, alternativeGroup = 1, identityGroup = 1),
+            ItemRequirement(2, find("wand_disintegration"), 0, upgradeMatch = UpgradeMatch.ANY, alternativeGroup = 1),
+            ItemRequirement(3, null, 0, kind = ItemKind.WAND, upgradeMatch = UpgradeMatch.ANY, identityGroup = 1),
+            ItemRequirement(4, null, 0, kind = ItemKind.WAND, upgradeMatch = UpgradeMatch.ANY, identityGroup = 1),
+        )
+        assertEquals(mapOf("type" to "remove_one", "key" to 1L), canonical(BoardEdit.RemoveOne(1).json()))
+        // {Frost ×3 | Disintegration}: one Frost goes, two stay.
+        val one = RequirementEditor.board(rows, listOf(BoardEdit.RemoveOne(1)))
+        assertEquals(1L, one.focus)
+        assertEquals(listOf(2, 1), one.board.items.single().chips.map { it.stack.count })
+        // The ×1 member leaves, and a cluster of one is a lone Frost ×3.
+        val member = RequirementEditor.board(rows, listOf(BoardEdit.RemoveOne(2)))
+        assertNull(member.focus)
+        assertNull(member.board.items.single().cluster)
+        assertEquals(3, member.board.items.single().chips.single().stack.count)
+        // The chip's Remove takes Frost with its copies.
+        val whole = RequirementEditor.board(rows, listOf(BoardEdit.Remove(1)))
+        assertEquals(listOf(2L), whole.rows!!.map { it.key })
+    }
+
     @Test fun savingKeepsAnUnchangedStackAndAppendsANewChip() {
         val might = ItemRequirement(0, find("ring_might"), 2)
         val stacked = RequirementEditor.board(
@@ -391,7 +415,7 @@ class RequirementEditorTest {
             ItemRequirement(4, find("wand_frost"), 2, alternativeGroup = 1),
         )
         val edits = listOf(
-            BoardEdit.Normalize, BoardEdit.Join(1, 3), BoardEdit.Detach(3), BoardEdit.Remove(4), BoardEdit.RemoveItem(1),
+            BoardEdit.Normalize, BoardEdit.Join(1, 3), BoardEdit.Detach(3), BoardEdit.Remove(4), BoardEdit.RemoveOne(1), BoardEdit.RemoveItem(1),
             BoardEdit.SetCount(1, 3), BoardEdit.SetTotal(1, 4), BoardEdit.SetTotal(1, null), BoardEdit.ToggleLevels(1),
             BoardEdit.SetCopyDepth(1, 10), BoardEdit.SetCopyDepth(1, null),
             BoardEdit.Save(1, rows[0], count = 2, total = 3, copyDepth = null), BoardEdit.Save(null, rows[3], 1, null, null),

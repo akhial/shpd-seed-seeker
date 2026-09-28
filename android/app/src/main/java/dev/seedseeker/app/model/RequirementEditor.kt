@@ -182,19 +182,31 @@ sealed interface BoardEdit {
         override fun json() = edit("normalize")
     }
 
-    /** Makes [source] an either/or alternative of [target], any member of a chip or cluster. */
+    /**
+     * Makes one item of [source] an either/or alternative of [target], any
+     * member of a chip or cluster; the rest of [source]'s stack stays where
+     * it was, and [target] keeps its own.
+     */
     data class Join(val source: Long, val target: Long) : BoardEdit {
         override fun json() = edit("join").put("source", source).put("target", target)
     }
 
-    /** Takes a cluster member out on its own, leaving the cluster's stack behind. */
+    /** Takes one item of a cluster member out on its own; the rest of its stack stays in the cluster. */
     data class Detach(val key: Long) : BoardEdit {
         override fun json() = edit("detach").put("key", key)
     }
 
-    /** Removes a cluster member, or a lone chip's whole entry. */
+    /** Removes a chip with its whole stack: a cluster member with its own copies, or a lone chip's whole entry. */
     data class Remove(val key: Long) : BoardEdit {
         override fun json() = edit("remove").put("key", key)
+    }
+
+    /**
+     * Removes one item of the chip [key]: a stack of N keeps N − 1, and a
+     * chip of one leaves the board.
+     */
+    data class RemoveOne(val key: Long) : BoardEdit {
+        override fun json() = edit("remove_one").put("key", key)
     }
 
     /** Removes the whole entry holding [key]: its members and hidden copies. */
@@ -202,12 +214,12 @@ sealed interface BoardEdit {
         override fun json() = edit("remove_item").put("key", key)
     }
 
-    /** How many items the entry asks for. */
+    /** How many items the chip [key] asks for. */
     data class SetCount(val key: Long, val count: Int) : BoardEdit {
         override fun json() = edit("set_count").put("key", key).put("count", count)
     }
 
-    /** Sets or clears the combined level the stack's items reach together. */
+    /** Sets or clears the combined level a lone ring stack's items reach together. */
     data class SetTotal(val key: Long, val total: Int?) : BoardEdit {
         override fun json() = edit("set_total").put("key", key).put("total", total ?: JSONObject.NULL)
     }
@@ -217,7 +229,7 @@ sealed interface BoardEdit {
         override fun json() = edit("toggle_levels").put("key", key)
     }
 
-    /** Sets or clears the floor limit of the stack's hidden copies. */
+    /** Sets or clears the floor limit of the chip [key]'s hidden copies. */
     data class SetCopyDepth(val key: Long, val maximumDepth: Int?) : BoardEdit {
         override fun json() = edit("set_copy_depth").put("key", key).put("max_depth", maximumDepth ?: JSONObject.NULL)
     }

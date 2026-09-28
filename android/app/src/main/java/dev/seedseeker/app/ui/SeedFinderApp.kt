@@ -963,8 +963,9 @@ internal fun SeedFinderApp(
                     adopt(saved)
                     requirementSheet = null
                 },
-                // As from the board's drop zone: a lone chip goes with its
-                // copies, a member leaves the cluster and its stack behind.
+                // The chip with its whole stack: a lone chip's entry, or a
+                // member with its own copies. The board's drop zone instead
+                // takes the one item in hand.
                 onRemove = sheet.form.rowKey?.let { key ->
                     {
                         editRequirements(BoardEdit.Remove(key))

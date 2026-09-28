@@ -121,6 +121,8 @@ import dev.seedseeker.app.ui.theme.SpdYellow
  *   its own (`{Frost ×2 | Disintegration}`: two Frosts, or one
  *   Disintegration), and the capsule none — so both are set in the editor a
  *   tap opens, never by a drag.
+ * - A drag moves one item: the chip in hand is drawn alone, without its
+ *   badges, and a stacked chip it leaves keeps the rest of its stack.
  *
  * Entries flow like words: a chip sits beside the last one when it fits and
  * starts a new line when it does not. A capsule flows the same way inside its
@@ -130,7 +132,8 @@ import dev.seedseeker.app.ui.theme.SpdYellow
  * it actually asks for are never the part that goes.
  *
  * Removal is a drop rather than a target to hit — the board opens a zone under
- * itself while a chip is held — with the editor a tap opens as the other way.
+ * itself while a chip is held, which takes the one item in hand — with the
+ * editor a tap opens as the other way, which removes the chip with its stack.
  *
  * What the chips say, which drops a chip takes, and what a drop writes back
  * are the requirement editor's: [board] is its answer for the whole list, of
@@ -265,13 +268,13 @@ fun RequirementBoard(
                                         // A rejected drop is not a drag out of
                                         // a capsule: keep the original group.
                                         is DropTarget.Refused -> Unit
-                                        // A lone chip goes with its copies; a member
-                                        // leaves the cluster and its stack behind.
+                                        // The bin takes the one item in hand: a stack
+                                        // keeps the rest, a chip of one goes.
                                         DropTarget.Remove -> {
                                             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            onChange(BoardEdit.Remove(source.key))
+                                            onChange(BoardEdit.RemoveOne(source.key))
                                         }
-                                        // Let go on the open board: a member leaves its capsule.
+                                        // Let go on the open board: one item of a member leaves its capsule.
                                         DropTarget.Board -> if (source.canDetach) onChange(BoardEdit.Detach(source.key))
                                         null -> Unit
                                     }
