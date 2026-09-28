@@ -6,7 +6,7 @@
 //! Linux's `state.rs` label tests, in the shared wording: "Any Tier 3+
 //! weapon" titles, "effect: A/B" sets, "any glyph" on armor.
 
-use super::super::testing::{Rng, mixed_rows, named, random_edit, row, with};
+use super::super::testing::{Rng, mixed_rows, named, random_edit, random_rows, row, with};
 use super::super::{Edit, STACK_MAX, apply, board_items, join_candidates, problems, stack_view};
 use super::*;
 use crate::catalog::{ArmorEffect, WeaponCategory, WeaponEffect};
@@ -776,7 +776,9 @@ fn a_lifted_item_leaves_its_stack_one_item_fewer() {
     assert_eq!(chip(&view(&one), 1).remaining_badges, None);
 
     // A Mace stacked with a bare copy, beside a lone Mace: once the copy
-    // goes, the rest is a plain repeat of the lone one, whose ×2 it shows.
+    // goes, the rest is a plain repeat a removal folds into the lone one,
+    // making it ×2. The origin still shows one Mace, not that ×2: joined
+    // onto the lone Mace, the one left stays apart.
     let maces = [
         named(1, ItemId::Mace),
         with(named(2, ItemId::Mace), |r| r.identity_group = Some(1)),
@@ -787,11 +789,26 @@ fn a_lifted_item_leaves_its_stack_one_item_fewer() {
     assert_eq!(chip(&board, 2).copies, [3]);
     let rest = edited(&maces, &[Edit::RemoveOne { key: 2 }]);
     assert_eq!(entry(&view(&rest), 2).members, [1]);
-    assert_eq!(chip(&board, 2).remaining_badges, Some(badges_of(&rest, 1)));
     assert_eq!(
         badges_of(&rest, 1).count.map(|badge| badge.text),
         Some("×2".to_owned())
     );
+    assert_eq!(chip(&board, 2).remaining_badges, Some(Badges::default()));
+    let joined = edited(
+        &maces,
+        &[Edit::Join {
+            source: 2,
+            target: 1,
+        }],
+    );
+    let left = view(&joined);
+    let apart = left
+        .items
+        .iter()
+        .find(|item| item.cluster.is_none())
+        .expect("the Mace left behind");
+    assert_eq!(apart.chips.len(), 1);
+    assert_eq!(apart.chips[0].badges, Badges::default());
 }
 
 #[test]
@@ -1428,12 +1445,16 @@ fn the_board_view_agrees_with_the_fold_the_problems_and_the_candidates() {
 }
 
 #[test]
-fn every_chip_leaves_behind_the_badges_remove_one_leaves() {
+fn every_chip_leaves_behind_one_item_fewer() {
     // Generated lists, valid rows or not, as given or after a random edit
     // (1,024 cases): a chip without copies leaves whole; any other leaves
-    // the badges of the chip a removal of one item focuses — itself, or
-    // the chip whose stack the rest folds into.
+    // its own stack one item fewer — its count down by one, a combined
+    // level no higher and gone at one ring. Where a removal of that item
+    // folds no chip into another — which a list never normalized, a
+    // combined level dropped at one ring or a stack freed below its limit
+    // may do — those are the very badges it leaves on the chip.
     let mut rng = Rng::new(0x9_0057_ba5e);
+    let mut compared = 0;
     for case in 0..1024 {
         let mut rows = mixed_rows(&mut rng);
         if case % 2 == 1 {
@@ -1441,22 +1462,161 @@ fn every_chip_leaves_behind_the_badges_remove_one_leaves() {
             rows = apply(&rows, None, &[edit]).rows;
         }
         let context = format!("case {case}: {rows:?}");
-        for lifted in view(&rows).items.iter().flat_map(|item| &item.chips) {
+        let board = view(&rows);
+        for lifted in board.items.iter().flat_map(|item| &item.chips) {
             assert_eq!(
                 lifted.remaining_badges.is_none(),
                 lifted.copies.is_empty(),
                 "{context}"
             );
-            if let Some(remaining) = &lifted.remaining_badges {
-                let rest = apply(&rows, None, &[Edit::RemoveOne { key: lifted.key }]);
-                let focus = rest.focus.unwrap_or(lifted.key);
-                assert_eq!(
-                    remaining,
-                    &chip(&view(&rest.rows), focus).badges,
-                    "{}: {context}",
-                    lifted.key
-                );
+            let Some(remaining) = &lifted.remaining_badges else {
+                continue;
+            };
+            let context = format!("{}: {context}", lifted.key);
+            let rest = apply(&rows, None, &[Edit::RemoveOne { key: lifted.key }]);
+            if rest.refused.is_some() {
+                assert_eq!(remaining, &lifted.badges, "{context}");
+                continue;
+            }
+            let count = lifted.stack.count - 1;
+            assert_eq!(
+                remaining.count.as_ref().map(|badge| badge.text.clone()),
+                (count > 1).then(|| count_text(count, remaining.total.is_some())),
+                "{context}"
+            );
+            if let Some(left) = &remaining.total {
+                assert!(count > 1, "{context}");
+                let was = lifted.badges.total.as_ref().expect("a combined level");
+                assert!(level(left) <= level(was), "{context}");
+            }
+            if visible(&view(&rest.rows)) == visible(&board) {
+                compared += 1;
+                assert_eq!(remaining, &badges_of(&rest.rows, lifted.key), "{context}");
             }
         }
     }
+    assert!(compared > 128, "{compared} chips compared");
+}
+
+/// The total a `Σ ≥ T` badge asks for.
+fn level(badge: &Badge) -> u8 {
+    let total = badge.text.rsplit(' ').next().expect("Σ ≥ T");
+    total.parse().expect("a total")
+}
+
+/// Every chip's key, ascending.
+fn visible(board: &BoardView) -> Vec<u64> {
+    let mut keys: Vec<u64> = board
+        .items
+        .iter()
+        .flat_map(|item| &item.chips)
+        .map(|chip| chip.key)
+        .collect();
+    keys.sort_unstable();
+    keys
+}
+
+/// Each entry's badges, keys aside: its section, then each chip's count and
+/// combined level, sorted so that order does not count. Names are left out:
+/// a join moves a stack's anchor, whose narrowing its plain repeats lack —
+/// and whose kind, in a hand-written list, its copies may not share.
+fn faces(board: &BoardView) -> Vec<(bool, Vec<[Option<String>; 2]>)> {
+    let text = |badge: &Option<Badge>| badge.as_ref().map(|badge| badge.text.clone());
+    let mut faces: Vec<_> = board
+        .items
+        .iter()
+        .map(|item| {
+            let mut chips: Vec<_> = item
+                .chips
+                .iter()
+                .map(|chip| [text(&chip.badges.count), text(&chip.badges.total)])
+                .collect();
+            chips.sort();
+            (item.blanket, chips)
+        })
+        .collect();
+    faces.sort();
+    faces
+}
+
+/// How many chips [`faces`] holds.
+fn chips(faces: &[(bool, Vec<[Option<String>; 2]>)]) -> usize {
+    faces.iter().map(|(_, chips)| chips.len()).sum()
+}
+
+#[test]
+fn every_drop_leaves_what_a_removal_of_one_item_leaves() {
+    // Every drag moves one item, so a join onto any candidate and a detach
+    // leave the rest of the board as a removal of that one item does: after
+    // a join, everything but the target's entry, which the item joined;
+    // after a detach, everything once the item that left is taken away
+    // (1,024 generated lists, normalized or edited; those with a problem —
+    // a stack spanning kinds or sections — are skipped). A drop or removal
+    // that folds a chip into another is not compared: the other may leave
+    // the two apart.
+    let mut rng = Rng::new(0xd_20b5);
+    let mut compared = 0;
+    for case in 0..1024 {
+        let mut rows = random_rows(&mut rng);
+        let edit = if case % 2 == 1 {
+            random_edit(&mut rng, &rows)
+        } else {
+            Edit::Normalize
+        };
+        rows = apply(&rows, None, &[edit]).rows;
+        if !problems(&rows).is_empty() {
+            continue;
+        }
+        let context = format!("case {case}: {rows:?}");
+        let board = view(&rows);
+        for lifted in board.items.iter().flat_map(|item| &item.chips) {
+            let key = lifted.key;
+            let removed = apply(&rows, None, &[Edit::RemoveOne { key }]);
+            if removed.refused.is_some() || visible(&view(&removed.rows)) != visible(&board) {
+                continue;
+            }
+            for &target in &lifted.join {
+                let joined = apply(
+                    &rows,
+                    None,
+                    &[Edit::Join {
+                        source: key,
+                        target,
+                    }],
+                );
+                if joined.refused.is_some() || !joined.changed {
+                    continue;
+                }
+                let without = |rows: &[Row]| {
+                    let rows = apply(rows, None, &[Edit::RemoveItem { key: target }]).rows;
+                    faces(&view(&rows))
+                };
+                let (joined, removed) = (without(&joined.rows), without(&removed.rows));
+                if chips(&joined) == chips(&removed) {
+                    compared += 1;
+                    assert_eq!(joined, removed, "{key} onto {target}: {context}");
+                }
+            }
+            if lifted.can_detach {
+                let detached = apply(&rows, None, &[Edit::Detach { key }]);
+                if detached.refused.is_some() || !detached.changed {
+                    continue;
+                }
+                let left = view(&detached.rows);
+                let landed = left
+                    .items
+                    .iter()
+                    .flat_map(|item| &item.chips)
+                    .find(|chip| chip.key == key || chip.copies.contains(&key))
+                    .expect("the detached item shows");
+                let taken = apply(&detached.rows, None, &[Edit::RemoveOne { key: landed.key }]);
+                let (taken, removed) = (faces(&view(&taken.rows)), faces(&view(&removed.rows)));
+                if chips(&taken) == chips(&removed) {
+                    compared += 1;
+                    assert_eq!(taken, removed, "{key} detached: {context}");
+                }
+            }
+        }
+    }
+    assert!(compared > 256, "{compared} drops compared");
 }

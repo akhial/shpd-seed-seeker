@@ -204,9 +204,10 @@ pub struct ChipView {
     /// The badges the chip shows at rest.
     pub badges: Badges,
     /// The badges the chip keeps while one of its items is lifted away —
-    /// what its drag origin shows: those [`super::Edit::RemoveOne`] of that
-    /// item leaves on the chip it focuses, since every drag moves exactly
-    /// one. `None` when the chip has no copies: the whole chip leaves.
+    /// what its drag origin shows, since every drag moves exactly one: the
+    /// chip's own stack one item fewer, with the combined level
+    /// [`super::Edit::RemoveOne`] of that item leaves. `None` when the chip
+    /// has no copies: the whole chip leaves.
     pub remaining_badges: Option<Badges>,
     /// The keys of the hidden copies behind the chip's badge. Members whose
     /// stacks are alike share theirs.
@@ -451,32 +452,39 @@ fn badges(stack: &ChipStack) -> Badges {
 }
 
 /// The badges the chip of `stack` keeps while one of its items is lifted
-/// away ([`ChipView::remaining_badges`]): the ones [`Edit::RemoveOne`] of
-/// that item, beside the `held` labels, leaves on the chip it focuses — the
-/// chip itself, or the chip whose stack the rest folded into (a lone
-/// `Mace` beside a `Mace` stacked with a bare copy takes that stack's last
-/// Mace as its repeat). Running the very edit keeps the two from
-/// disagreeing on a combined level capped or dropped, or on a member whose
-/// stack is shared. A refused removal leaves the badges as they are. `None`
-/// when the chip has no copies: the whole chip leaves.
+/// away ([`ChipView::remaining_badges`]): its own stack one item fewer,
+/// with the combined level [`Edit::RemoveOne`] of that item, beside the
+/// `held` labels, leaves it — capped at what the rest can reach, dropped at
+/// one ring — so the two agree. The count is the chip's own even where the
+/// removal would fold what is left into another chip, which only a list
+/// never normalized allows (a `Mace` stacked with a bare copy, beside a
+/// lone `Mace`): a join onto that lone Mace leaves the rest apart. A
+/// refused removal leaves the badges as they are. `None` when the chip has
+/// no copies: the whole chip leaves.
 fn remaining_badges(rows: &[Row], stack: &ChipStack, held: &HeldLabels) -> Option<Badges> {
     if stack.copies.is_empty() {
         return None;
     }
     let key = rows[stack.index].key;
     let result = apply_holding(rows, None, &[Edit::RemoveOne { key }], held);
-    let focus = result.focus.unwrap_or(key);
-    let left = result
-        .rows
-        .iter()
-        .position(|row| row.key == focus)
-        .and_then(|index| {
+    if result.refused.is_some() {
+        return Some(badges(stack));
+    }
+    let mut rest = stack.clone();
+    rest.copies.pop();
+    rest.total = if rest.copies.is_empty() {
+        None
+    } else {
+        let left = result.rows.iter().position(|row| row.key == key);
+        left.and_then(|index| {
             board_items(&result.rows)
                 .iter()
                 .find_map(|item| item.stack(index))
-                .map(badges)
-        });
-    Some(left.unwrap_or_else(|| badges(stack)))
+                .map(|left| left.total)
+        })
+        .unwrap_or(stack.total)
+    };
+    Some(badges(&rest))
 }
 
 /// The resin chip for the query's resin condition.
