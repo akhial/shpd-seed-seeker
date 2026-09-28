@@ -1778,10 +1778,13 @@ private struct RequirementEditor: View {
 
     private var stackSection: some View {
         Section(form.stack.label) {
-            // The section's label is the count's; the stepper reads `×2`.
+            // The section's label is the count's; the stepper reads `×2`,
+            // and VoiceOver hears it under the section's label.
             Stepper(value: number(form.stack.count) { .count($0) }, in: form.stack.range) {
                 Text(form.stack.valueLabel).monospacedDigit().foregroundStyle(.secondary)
             }
+            .accessibilityLabel(Text(form.stack.label))
+            .accessibilityValue(Text(form.stack.valueLabel))
             // The chip's own floor limit describes one copy; the extras are
             // placed by a bound of their own.
             if form.stack.copyDepth.visible {
