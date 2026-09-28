@@ -36,32 +36,41 @@ public sealed class ArtifactTests
         Assert.True(ItemKind.Artifact.RequiresNamedItem());
         Assert.Equal(5, Sandals().UpgradeCeiling);
         Assert.Empty(ItemCatalog.Modifiers(ItemKind.Artifact));
-        Assert.Contains("+5", Sandals().Description);
-        Assert.Contains("by floor 19", Sandals().Description);
+        var query = new QuerySettings { Requirements = [Sandals()] };
+        var chip = new BoardEditor().View(query).Entries.Single().Chips.Single();
+        Assert.Equal(["exactly +5", "uncursed", "Imp reward", "floors 1–19"], chip.Details);
     }
 
     [Fact]
     public void ArtifactsCannotBeWildcardsOrStacks()
     {
+        var editor = new BoardEditor();
         var unnamed = new QuerySettings { Requirements = [new() { Kind = ItemKind.Artifact }] };
-        Assert.Equal("Choose a named artifact.", QueryRelationships.Validate(unnamed));
+        Assert.Equal("Select an artifact.", editor.Problem(unnamed));
         Assert.Null(NativeEngine.TryEncodeShareLink(ResultsExport.EncodeQueryDocument(unnamed)));
         var query = new QuerySettings { Requirements = [Sandals()] };
-        var item = Assert.Single(QueryRelationships.BoardItems(query.Requirements));
-        Assert.False(QueryRelationships.CanStack(query.Requirements, item));
-        Assert.Single(QueryRelationships.SetStackCount(query.Requirements, item, 3));
+        editor.Load(query);
+        var item = Assert.Single(editor.View(query).Entries);
+        Assert.False(item.Stack.CanGrow);
+        Assert.False(item.Stack.CanChangeCount);
+        Assert.False(editor.Edit(query, BoardEdit.SetCount(item.Members[0], 3)).Changed);
+        // The same artifact twice is two finds, never a stack of copies.
         var plain = new ItemRequirement { Kind = ItemKind.Artifact, Item = ItemCatalog.Find("dried_rose") };
-        var repeated = new[] { plain, plain.Clone(), Sandals() };
-        Assert.Equal(3, QueryRelationships.BoardItems(repeated).Count);
-        var joined = QueryRelationships.JoinAlternatives(repeated, 0, 2);
-        Assert.All(joined, requirement => Assert.Null(requirement.IdentityGroup));
+        var repeated = new QuerySettings { Requirements = [plain, plain.Clone(), Sandals()] };
+        editor.Load(repeated);
+        Assert.Equal(3, editor.View(repeated).Entries.Count);
+        var joined = editor.Edit(repeated, BoardEdit.Join(repeated.Requirements[0].Key, repeated.Requirements[2].Key));
+        Assert.All(joined.Rows!, requirement => Assert.Null(requirement.IdentityGroup));
     }
 
     [Fact]
     public void ArtifactConstraintsAndAlternativesSurviveDocumentsLinksAndSettings()
     {
         var alternative = new ItemRequirement { Kind = ItemKind.Artifact, Item = ItemCatalog.Find("dried_rose"), MaximumDepth = 9 };
-        var query = new QuerySettings { Requirements = new(QueryRelationships.JoinAlternatives([Sandals(), alternative], 1, 0)) };
+        var query = new QuerySettings { Requirements = [Sandals(), alternative] };
+        var editor = new BoardEditor();
+        editor.Load(query);
+        query.Requirements = new(editor.Edit(query, BoardEdit.Join(query.Requirements[1].Key, query.Requirements[0].Key)).Rows!);
         var document = ResultsExport.EncodeQueryDocument(query);
         Assert.Contains("\"kind\":\"artifact\"", document);
         var link = NativeEngine.TryEncodeShareLink(document);

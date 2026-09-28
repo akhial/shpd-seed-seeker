@@ -243,12 +243,6 @@ public sealed class EffectFilter
         !AnyEnchantment && Effects.Count > 0 && Effects.All(effect => ItemCatalog.IsCurse(kind, effect));
 
     public EffectFilter Clone() => new() { AnyEnchantment = AnyEnchantment, Effects = [.. Effects] };
-
-    /// <summary>Summary text for a requirement row, or null when there is nothing to say.</summary>
-    public string? Describe() => AnyEnchantment ? "any enchantment"
-        : Effects.Count == 0 ? null
-        : Effects.Count == 1 ? Effects[0]
-        : $"effect: {string.Join("/", Effects)}";
 }
 
 /// <summary>
@@ -263,7 +257,13 @@ public sealed record LevelSum(int Group, int AtLeast);
 
 public sealed partial class ItemRequirement
 {
-    public long Key { get; set; } = Random.Shared.NextInt64(1, long.MaxValue);
+    /// <summary>
+    /// The row's name on the requirement board, stable across its edits. A
+    /// loaded or imported list is keyed 1…n (<see cref="BoardEditor.Load"/>)
+    /// and the shared editor keys the rows it adds; 0 until then. Keys are
+    /// the board's own and never part of a query document.
+    /// </summary>
+    public long Key { get; set; }
     public CatalogItem? Item { get; set; }
     public int Upgrade { get; set; }
     /// <summary>
@@ -300,76 +300,8 @@ public sealed partial class ItemRequirement
     /// <summary>Combined-level group membership; never set on an alternative.</summary>
     public LevelSum? LevelSum { get; set; }
     [JsonIgnore] public string Glyph => KindStyle.Glyph(Kind);
-    /// <summary>
-    /// Row-major index into the upstream item atlas, or -1 for a wildcard.
-    /// A requirement names no seed, so a ring keeps its class's catalog cell:
-    /// there is no run here whose gems could say otherwise.
-    /// </summary>
-    [JsonIgnore] public int SpriteIndex => Item?.SpriteIndex ?? -1;
-    /// <summary>The ring glyph drawn over the sprite, or -1 when there is none.</summary>
-    [JsonIgnore] public int TypeIconIndex => Item?.TypeIconIndex ?? -1;
-    [JsonIgnore] public string Title => Item?.Name ?? (Kind.RequiresNamedItem() ? Labels.Kind(Kind) : (TierMatch switch { TierMatch.Exactly => $"Any Tier {Tier} {Labels.Singular(Kind)}", TierMatch.AtLeast => $"Any Tier {Tier}+ {Labels.Singular(Kind)}", TierMatch.AtMost => $"Any Tier {Tier} or lower {Labels.Singular(Kind)}", _ => $"Any {Labels.Singular(Kind)}" }));
-    [JsonIgnore] public string Description
-    {
-        get
-        {
-            if (Kind == ItemKind.Trinket) return TrinketTransmutations > 0 ? $"Transmute ≤{TrinketTransmutations}" : SelectTrinket ? "choose at +3" : "";
-            var parts = new List<string> { UpgradeMatch switch { UpgradeMatch.Exactly => $"+{Upgrade} exactly", UpgradeMatch.AtLeast => $"+{Upgrade} or higher", _ => "Any upgrade" } };
-            if (ArtifactTransmutations > 0) parts.Add($"Transmute ≤{ArtifactTransmutations}");
-            if (Effect.Describe() is string effect) parts.Add(effect); if (RequireUncursed) parts.Add("uncursed"); if (Source is not null) parts.Add(Labels.Source(Source.Value));
-            if (ExcludeResin) parts.Add("excluded from Auto resin");
-            if (IdentityGroup is not null) parts.Add("same-kind stack");
-            if (LevelSum is { } sum) parts.Add($"levels \u2265 {sum.AtLeast} together");
-            if (MaximumDepth is int d) parts.Add($"by floor {d}");
-            return string.Join(" \u2022 ", parts);
-        }
-    }
-    /// <summary>The short name a chip shows: the item, or its wildcard family.</summary>
-    [JsonIgnore] public string ShortTitle => Item?.Name ?? (Kind switch
-    {
-        ItemKind.MeleeWeapon => "Any melee", ItemKind.ThrownWeapon => "Any thrown", ItemKind.Trinket => "Trinket", ItemKind.Artifact => "Artifact", _ => $"Any {Labels.Singular(Kind)}",
-    });
-    /// <summary>The tiny qualifiers beside a chip's name: tier (wildcards only), upgrade, floor.</summary>
-    [JsonIgnore] public IReadOnlyList<ChipTag> Tags
-    {
-        get
-        {
-            var tags = new List<ChipTag>();
-            if (TrinketTransmutations > 0) tags.Add(new($"Transmute ≤{TrinketTransmutations}"));
-            if (ArtifactTransmutations > 0) tags.Add(new($"Transmute ≤{ArtifactTransmutations}"));
-            if (Kind == ItemKind.Trinket && SelectTrinket) tags.Add(new("choose at +3"));
-            if (Item is null && TierMatch == TierMatch.Exactly) tags.Add(new($"T{Tier}"));
-            if (Item is null && TierMatch == TierMatch.AtLeast) tags.Add(new($"T{Tier}+"));
-            if (Item is null && TierMatch == TierMatch.AtMost) tags.Add(new($"T\u2264{Tier}"));
-            if (UpgradeMatch == UpgradeMatch.Exactly) tags.Add(new($"+{Upgrade}", true));
-            if (UpgradeMatch == UpgradeMatch.AtLeast) tags.Add(new($"+{Upgrade}\u2191", true));
-            if (MaximumDepth is int depth) tags.Add(new($"F\u2264{depth}"));
-            if (ExcludeResin) tags.Add(new("No resin"));
-            return tags;
-        }
-    }
-    /// <summary>
-    /// The highest upgrade an item satisfying this requirement can carry. The
-    /// engine's own rule: an exact upgrade counts as itself, anything else as
-    /// the family cap.
-    /// </summary>
-    [JsonIgnore] public int MaximumUpgrade => UpgradeMatch == UpgradeMatch.Exactly ? Upgrade : UpgradeCeiling;
     /// <summary>The highest upgrade this requirement may name, its item and tier filter included.</summary>
     [JsonIgnore] public int UpgradeCeiling => Kind.MaximumSearchUpgrade(Item, TierMatch, Tier);
-    /// <summary>
-    /// The most <em>levels</em> this requirement can contribute to a combined
-    /// total: its highest upgrade plus one, since every matched item counts itself.
-    /// </summary>
-    [JsonIgnore] public int MaximumLevel => MaximumUpgrade + 1;
-    /// <summary>
-    /// Whether this constrains nothing beyond its category — the shape a
-    /// same-item group's extra copies take. A narrowed weapon kind is a
-    /// constraint; a per-item floor limit is a placement bound, not an item
-    /// property, and does not count.
-    /// </summary>
-    [JsonIgnore] public bool IsBare =>
-        Item is null && Kind == Kind.Family() && TierMatch == TierMatch.Any && UpgradeMatch == UpgradeMatch.Any
-        && Effect.IsAny && !RequireUncursed && !ExcludeResin && Source is null;
     public ItemRequirement Clone()
     {
         var copy = (ItemRequirement)MemberwiseClone();
@@ -378,75 +310,37 @@ public sealed partial class ItemRequirement
     }
 }
 
-/// <summary>One board entry: a chip, or an either/or cluster of chips.</summary>
-public sealed class BoardItem
-{
-    /// <summary>Stable identity of the entry, for the badges' flyouts.</summary>
-    public string Key { get; init; } = "";
-    /// <summary>Visible requirement indices: one for a chip, all members for a cluster.</summary>
-    public IReadOnlyList<int> Members { get; init; } = [];
-    /// <summary>The cluster's alternative group, when this is a cluster.</summary>
-    public int? Cluster { get; init; }
-    /// <summary>Hidden copy indices behind the stack badge, in requirement order.</summary>
-    public IReadOnlyList<int> Extras { get; init; } = [];
-    /// <summary>The stack's combined level, when one is set.</summary>
-    public int? Total { get; init; }
-    /// <summary>How many items this asks for: its anchor plus the hidden copies.</summary>
-    public int StackCount => 1 + Extras.Count;
-    /// <summary>The requirement the badges and the editor act on.</summary>
-    public int Anchor => Members[0];
-}
-
 /// <summary>
-/// What the editor needs to know — and hands back — about a chip's stack: how
-/// many items it asks for, the combined level across them when one is set, and
-/// the floor limit its extra copies share. A cluster member's stack belongs to
-/// the cluster, so its editor shows none of this.
+/// What the requirement editor dialog is given — and hands back — about a
+/// chip's stack: how many items it asks for, the combined level across them
+/// when one is set, and the floor limit its extra copies share. A cluster
+/// member's stack belongs to the cluster, so its editor shows none of this.
+/// The board's save (<see cref="BoardEdit.Save"/>) writes the shape.
 /// </summary>
 public sealed record StackShape(int Count, int? Total, int? CopyDepth, bool InCluster)
 {
     /// <summary>The stack of a chip that asks for a single item.</summary>
     public static StackShape Lone { get; } = new(1, null, null, false);
 
-    /// <summary>The stack of the board entry <paramref name="item"/>.</summary>
-    public static StackShape Of(IEnumerable<ItemRequirement> requirements, BoardItem item) =>
-        new(item.StackCount, item.Total, QueryRelationships.CopyDepthOf(requirements, item), item.Cluster is not null);
+    /// <summary>The stack <paramref name="chip"/> stands in, as the board draws it.</summary>
+    public static StackShape Of(BoardEntry entry, BoardChip chip) =>
+        new(entry.Stack.Count, entry.Stack.Total, entry.Stack.CopyDepth, chip.InCluster);
 }
 
 /// <summary>
-/// The structure between requirements — either/or clusters, same-item stacks
-/// and combined-level groups — and the edits that keep it consistent. Ported
-/// from the web design's <c>relations.ts</c> so every platform writes the same
-/// documents; pure list manipulation, so SeedSeeker.Tests covers it and the
-/// window only wires it to chips.
-///
-/// Two ideas cover all three relationship kinds of the model:
-///
-/// <list type="bullet">
-/// <item>an <em>either/or cluster</em> is several requirements sharing an
-/// <see cref="ItemRequirement.AlternativeGroup"/>: one slot, any member fills it;</item>
-/// <item>a <em>stack</em> is a chip (or a whole cluster) asking for more than one
-/// item of the same kind — the blacksmith's reforge fodder. Its extra copies
-/// never carry their own constraints. A stack of a concrete item encodes as
-/// plain repeated requirements; a wildcard or cluster stack encodes as bare
-/// copies tied to the anchor with an <see cref="ItemRequirement.IdentityGroup"/>;
-/// a stack with a <em>combined level</em> encodes as identical members sharing a
-/// <see cref="SeedSeeker.LevelSum"/> (each matched item counts upgrade+1 towards
-/// the total, and members are optional, so "up to N items reaching T levels").</item>
-/// </list>
-///
-/// Every edit returns a new list; the requirements themselves are copied rather
-/// than mutated, and a copy keeps its <see cref="ItemRequirement.Key"/>, so the
-/// board can follow an entry across an edit. The slot rule mirrors the engine's
-/// <c>SearchQuery::slots</c>: a slot sits at its first member's position and
-/// holds every member in requirement order.
+/// The query's slots and its own checks. The structure between requirements —
+/// either/or clusters, stacks, combined levels — is the shared editor's
+/// (<see cref="BoardEditor"/>), which folds, edits, words and checks the list;
+/// what stays here is how the document and the scout count slots, and the
+/// problems of the query's own settings, which the board does not own.
 /// </summary>
 public static class QueryRelationships
 {
-    /// <summary>"A".."D" for a 1-based group number.</summary>
-    public static string GroupLabel(int group) => ((char)('A' + group - 1)).ToString();
-
-    /// <summary>The requirements grouped into slots, in slot order.</summary>
+    /// <summary>
+    /// The requirements grouped into slots, in slot order: a slot sits at its
+    /// first member's position and holds every member in requirement order,
+    /// as the engine's <c>SearchQuery::slots</c> has it.
+    /// </summary>
     public static List<List<ItemRequirement>> Slots(IEnumerable<ItemRequirement> requirements)
     {
         var slots = new List<List<ItemRequirement>>(); var slotOfGroup = new Dictionary<int, List<ItemRequirement>>();
@@ -465,517 +359,23 @@ public static class QueryRelationships
     /// <summary>How many slots the query has — what the engine counts as one requirement each.</summary>
     public static int SlotCount(IEnumerable<ItemRequirement> requirements) => Slots(requirements).Count;
 
-    /// <summary>The members of combined-level group <paramref name="group"/>.</summary>
-    public static IEnumerable<ItemRequirement> SumMembers(IEnumerable<ItemRequirement> requirements, int group) =>
-        requirements.Where(requirement => requirement.LevelSum?.Group == group);
-
-    /// <summary>
-    /// The highest level total the members of <paramref name="group"/> can
-    /// reach together: each one's own ceiling, bounded by what a world
-    /// generates — <see cref="RingStackCapacity"/>.
-    /// </summary>
-    public static int SumCapacity(IEnumerable<ItemRequirement> requirements, int group)
-    {
-        var members = SumMembers(requirements, group).ToList();
-        return Math.Min(members.Sum(member => member.MaximumLevel), RingStackCapacity(members.Count));
-    }
-
-    // ---- the board's collapsed view -----------------------------------------
-
-    /// <summary>One entry under construction, before its members are all known.</summary>
-    private sealed class Building
-    {
-        public string Key = "";
-        public List<int> Members = [];
-        public int? Cluster;
-        public List<int> Extras = [];
-        public int? Total;
-    }
-
-    /// <summary>A copy of <paramref name="requirement"/> with <paramref name="change"/> applied; the key stays.</summary>
-    private static ItemRequirement With(ItemRequirement requirement, Action<ItemRequirement> change)
-    {
-        var copy = requirement.Clone(); change(copy); return copy;
-    }
-
-    /// <summary>
-    /// Whether <paramref name="copy"/> is the plain repeat of the named
-    /// <paramref name="item"/>. A floor limit is a placement bound, not an item
-    /// property, so a repeat that carries only one still folds into its stack.
-    /// </summary>
-    private static bool IsPlainItemCopy(ItemRequirement copy, CatalogItem item) =>
-        !copy.Blanket && !copy.Kind.RequiresNamedItem() && copy.Item?.Id == item.Id && copy.TierMatch == TierMatch.Any && copy.UpgradeMatch == UpgradeMatch.Any
-        && copy.Effect.IsAny && !copy.RequireUncursed && !copy.ExcludeResin && copy.Source is null
-        && copy.IdentityGroup is null && copy.AlternativeGroup is null && copy.LevelSum is null;
-
-    /// <summary>
-    /// The bare copy a stack of <paramref name="anchor"/>'s kind grows by; it may
-    /// carry its own floor limit, the one bound that is a placement, not an item
-    /// property. The broad family, never a narrowed weapon class: a copy that
-    /// named one would count as a second constrained member of the stack.
-    /// </summary>
-    private static ItemRequirement BareCopy(ItemRequirement anchor, int identityGroup, int? maximumDepth, long? key = null)
-    {
-        var copy = new ItemRequirement { Kind = anchor.Kind.Family(), IdentityGroup = identityGroup, MaximumDepth = maximumDepth };
-        if (key is long value) copy.Key = value;
-        return copy;
-    }
-
-    /// <summary>The plain repeat a concrete stack of <paramref name="anchor"/>'s item grows by.</summary>
-    private static ItemRequirement PlainCopy(ItemRequirement anchor, int? maximumDepth, long? key = null)
-    {
-        var copy = new ItemRequirement { Kind = anchor.Kind, Item = anchor.Item, MaximumDepth = maximumDepth };
-        if (key is long value) copy.Key = value;
-        return copy;
-    }
-
-    /// <summary>The indices of every group, keyed by group number, in first-appearance order.</summary>
-    private static Dictionary<int, List<int>> GroupIndices(IReadOnlyList<ItemRequirement> requirements, Func<ItemRequirement, int?> group)
-    {
-        var groups = new Dictionary<int, List<int>>();
-        for (var index = 0; index < requirements.Count; index++)
-            if (group(requirements[index]) is int number)
-            {
-                if (!groups.TryGetValue(number, out var members)) groups[number] = members = [];
-                members.Add(index);
-            }
-        return groups;
-    }
-
-    /// <summary>How many requirements each group holds.</summary>
-    private static Dictionary<int, int> Counts(IEnumerable<ItemRequirement> requirements, Func<ItemRequirement, int?> group)
-    {
-        var counts = new Dictionary<int, int>();
-        foreach (var requirement in requirements)
-            if (group(requirement) is int number) counts[number] = counts.GetValueOrDefault(number) + 1;
-        return counts;
-    }
-
-    /// <summary>
-    /// The board's collapsed view of the flat requirement list: clusters group
-    /// alternatives, and a stack's copies fold into their anchor's badge.
-    /// </summary>
-    public static List<BoardItem> BoardItems(IEnumerable<ItemRequirement> source)
-    {
-        var requirements = source.ToList();
-        var hidden = new HashSet<int>();
-
-        // Combined-level groups: the first member anchors, the rest fold away.
-        var sumAnchors = new Dictionary<int, (int Anchor, List<int> Extras, int Total)>();
-        for (var index = 0; index < requirements.Count; index++)
-        {
-            if (requirements[index].LevelSum is not { } sum) continue;
-            if (sumAnchors.TryGetValue(sum.Group, out var existing)) existing.Extras.Add(index);
-            else sumAnchors[sum.Group] = (index, [], sum.AtLeast);
-        }
-        foreach (var group in sumAnchors.Values) hidden.UnionWith(group.Extras);
-
-        // Identity stacks: bare copies fold into the constrained unit (or the
-        // first member when every member is bare). Groups with two constrained
-        // units cannot collapse; Validate reports them.
-        var identityExtras = new Dictionary<int, List<int>>();
-        foreach (var members in GroupIndices(requirements, requirement => requirement.IdentityGroup).Values)
-        {
-            var constrained = members.Where(index => !requirements[index].IsBare).ToList();
-            var units = constrained
-                .Select(index => requirements[index].AlternativeGroup is int alternative ? $"alt:{alternative}" : $"req:{index}")
-                .Distinct().Count();
-            if (units > 1) continue;
-            var anchor = constrained.Count > 0 ? constrained[0] : members[0];
-            // A cluster anchor labels every member; fold only the lone bare copies.
-            var extras = members.Where(index => index != anchor && requirements[index].AlternativeGroup is null && requirements[index].IsBare).ToList();
-            if (extras.Count == 0) continue;
-            identityExtras[anchor] = extras; hidden.UnionWith(extras);
-        }
-
-        // Walk the list building chips and clusters, folding plain item repeats
-        // into the nearest earlier chip naming the same item.
-        var items = new List<Building>(); var clusters = new Dictionary<int, Building>(); var chipByItem = new Dictionary<string, Building>();
-        void Attach(Building entry, int anchorIndex)
-        {
-            if (requirements[anchorIndex].LevelSum is { } sum && sumAnchors.TryGetValue(sum.Group, out var group) && group.Anchor == anchorIndex)
-            {
-                entry.Extras.AddRange(group.Extras); entry.Total = group.Total;
-            }
-            if (identityExtras.TryGetValue(anchorIndex, out var extras)) entry.Extras.AddRange(extras);
-        }
-        for (var index = 0; index < requirements.Count; index++)
-        {
-            if (hidden.Contains(index)) continue;
-            var requirement = requirements[index];
-            if (requirement.AlternativeGroup is int cluster)
-            {
-                if (clusters.TryGetValue(cluster, out var existing)) { existing.Members.Add(index); Attach(existing, index); continue; }
-                var made = new Building { Key = $"alt:{cluster}", Members = [index], Cluster = cluster };
-                clusters[cluster] = made; Attach(made, index); items.Add(made); continue;
-            }
-            // A plain repeat of an earlier chip's item folds into that chip.
-            if (requirement.Item is { } repeated && IsPlainItemCopy(requirement, repeated)
-                && chipByItem.TryGetValue(repeated.Id, out var earlier) && earlier.Total is null && earlier.Extras.Count + 1 < SearchLimits.StackMax)
-            {
-                earlier.Extras.Add(index); continue;
-            }
-            var chip = new Building { Key = $"req:{index}", Members = [index] };
-            Attach(chip, index);
-            if (!requirement.Blanket && requirement.Item is { } named && requirement.LevelSum is null) chipByItem[named.Id] = chip;
-            items.Add(chip);
-        }
-        // Single-member clusters render as chips.
-        return items.Select(entry => new BoardItem
-        {
-            Key = entry.Key, Members = entry.Members, Extras = entry.Extras, Total = entry.Total,
-            Cluster = entry.Members.Count > 1 ? entry.Cluster : null,
-        }).ToList();
-    }
-
-    /// <summary>The number of visible board entries, for the pane's header count.</summary>
-    public static int BoardCount(IEnumerable<ItemRequirement> requirements) => BoardItems(requirements).Count;
-
-    /// <summary>The board entry holding requirement <paramref name="index"/>, or null.</summary>
-    public static BoardItem? ItemOf(IEnumerable<ItemRequirement> requirements, int index) =>
-        BoardItems(requirements).FirstOrDefault(entry => entry.Members.Contains(index));
-
-    // ---- edits ---------------------------------------------------------------
-
-    private static int? FreeGroup(IEnumerable<int?> used, int max)
-    {
-        var taken = used.ToHashSet();
-        for (var group = 1; group <= max; group++) if (!taken.Contains(group)) return group;
-        return null;
-    }
-
-    private static int NextAlternativeGroup(IEnumerable<ItemRequirement> requirements) =>
-        requirements.Aggregate(0, (highest, requirement) => Math.Max(highest, requirement.AlternativeGroup ?? 0)) + 1;
-
-    /// <summary>
-    /// Rewrites the list into its canonical stack encoding and drops every group
-    /// that no longer says anything:
-    ///
-    /// <list type="bullet">
-    /// <item>a lone alternative, a lone identity label and a lone level-sum member dissolve;</item>
-    /// <item>a labelled cluster labels every one of its members;</item>
-    /// <item>a stack anchored on a lone concrete chip carries plain repeats, not identity labels.</item>
-    /// </list>
-    ///
-    /// Every operation funnels through this, so a deleted anchor can never leave
-    /// stale groups behind.
-    /// </summary>
-    public static List<ItemRequirement> Normalize(IEnumerable<ItemRequirement> source)
-    {
-        var next = source.ToList();
-        // A cluster that holds an identity label spreads it to all its members.
-        var clusterLabel = new Dictionary<int, int>();
-        foreach (var requirement in next)
-            if (requirement.AlternativeGroup is int cluster && requirement.IdentityGroup is int label) clusterLabel[cluster] = label;
-        for (var index = 0; index < next.Count; index++)
-            if (next[index].AlternativeGroup is int cluster && clusterLabel.TryGetValue(cluster, out var label) && next[index].IdentityGroup != label)
-                next[index] = With(next[index], copy => copy.IdentityGroup = label);
-        // A stack anchored on a lone concrete chip encodes as plain repeats.
-        foreach (var members in GroupIndices(next, requirement => requirement.IdentityGroup).Values)
-        {
-            var constrained = members.Where(index => !next[index].IsBare).ToList();
-            if (constrained.Count != 1) continue;
-            var anchorIndex = constrained[0]; var anchor = next[anchorIndex];
-            if (anchor.Item is null || anchor.AlternativeGroup is not null) continue;
-            foreach (var index in members)
-                next[index] = index == anchorIndex
-                    ? With(anchor, copy => copy.IdentityGroup = null)
-                    : PlainCopy(anchor, next[index].MaximumDepth, next[index].Key);
-        }
-        // Groups of one say nothing.
-        var alternatives = Counts(next, requirement => requirement.AlternativeGroup);
-        var identities = Counts(next, requirement => requirement.IdentityGroup);
-        var sums = Counts(next, requirement => requirement.LevelSum?.Group);
-        for (var index = 0; index < next.Count; index++)
-        {
-            var requirement = next[index];
-            if (requirement.AlternativeGroup is int alternative && alternatives.GetValueOrDefault(alternative) < 2) requirement = With(requirement, copy => copy.AlternativeGroup = null);
-            if (requirement.IdentityGroup is int identity && identities.GetValueOrDefault(identity) < 2) requirement = With(requirement, copy => copy.IdentityGroup = null);
-            if (requirement.LevelSum is { } sum && sums.GetValueOrDefault(sum.Group) < 2) requirement = With(requirement, copy => copy.LevelSum = null);
-            next[index] = requirement;
-        }
-        return next;
-    }
-
-    /// <summary>Moves the requirement at <paramref name="from"/> after the last one matching <paramref name="after"/>.</summary>
-    private static List<ItemRequirement> MoveAfter(List<ItemRequirement> requirements, int from, Func<ItemRequirement, bool> after)
-    {
-        var moving = requirements[from];
-        var rest = requirements.Where((_, index) => index != from).ToList();
-        rest.Insert(rest.FindLastIndex(requirement => after(requirement)) + 1, moving);
-        return rest;
-    }
-
-    /// <summary>
-    /// The chip at <paramref name="source"/> becomes an either/or alternative of
-    /// the chip at <paramref name="target"/>. A combined level cannot travel into
-    /// a cluster and is dropped; a plain-repeat stack keeps its copies by trading
-    /// them for identity labels, which the cluster's members then share. Across
-    /// categories the stacks let go instead: a cluster of two categories names no
-    /// kind for a copy to name, so the labelled copies are dropped.
-    /// </summary>
-    public static List<ItemRequirement> JoinAlternatives(IEnumerable<ItemRequirement> requirements, int source, int target)
-    {
-        var next = requirements.ToList();
-        if (source == target || next[source].Blanket != next[target].Blanket) return next;
-        var group = next[target].AlternativeGroup ?? NextAlternativeGroup(next);
-        if (next[source].AlternativeGroup == group) return next;
-        // A copy has to name the kind it copies, so only a cluster that stays
-        // within one category can anchor a stack. When the join would mix
-        // categories the repeats simply stay the standalone chips they encode as.
-        var clusterMembers = Enumerable.Range(0, next.Count)
-            .Where(index => index == source || index == target || next[index].AlternativeGroup == group).ToList();
-        var oneCategory = clusterMembers.Select(index => next[index].Kind.Family()).Distinct().Count() == 1;
-        var sourceKey = next[source].Key; var targetKey = next[target].Key;
-        if (oneCategory)
-        {
-            // Trade plain repeats for identity copies so the stack survives the move.
-            foreach (var index in new[] { source, target })
-            {
-                var anchor = next[index];
-                if (anchor.Blanket || anchor.Item is not { } named || anchor.IdentityGroup is not null) continue;
-                var copies = Enumerable.Range(0, next.Count).Where(other => other != index && IsPlainItemCopy(next[other], named)).ToList();
-                if (copies.Count == 0) continue;
-                if (FreeGroup(next.Select(requirement => requirement.IdentityGroup), SearchLimits.IdentityGroupMax) is not int label) continue;
-                next[index] = With(anchor, copy => copy.IdentityGroup = label);
-                foreach (var other in copies) next[other] = BareCopy(anchor, label, next[other].MaximumDepth, next[other].Key);
-            }
-        }
-        else
-        {
-            // The stacks let go: a copy tied to a member by a label is dropped,
-            // and a plain repeat stays the standalone chip it already encodes as.
-            // The chip's badge falls back to one, the visible half of this.
-            var labels = clusterMembers.Select(index => next[index].IdentityGroup).OfType<int>().ToHashSet();
-            var keys = clusterMembers.Select(index => next[index].Key).ToHashSet();
-            bool Labelled(ItemRequirement requirement) => requirement.IdentityGroup is int label && labels.Contains(label);
-            next = next.Where(requirement => keys.Contains(requirement.Key) || !Labelled(requirement)).ToList();
-            for (var index = 0; index < next.Count; index++)
-                if (Labelled(next[index])) next[index] = With(next[index], copy => copy.IdentityGroup = null);
-        }
-        // The dropped copies moved the pair, so both are found again by key.
-        var movedSource = next.FindIndex(requirement => requirement.Key == sourceKey);
-        var movedTarget = next.FindIndex(requirement => requirement.Key == targetKey);
-        for (var index = 0; index < next.Count; index++)
-            if (index == movedSource || index == movedTarget)
-                next[index] = With(next[index], copy => { copy.AlternativeGroup = group; copy.LevelSum = null; });
-        return Normalize(MoveAfter(next, movedSource, requirement => requirement.AlternativeGroup == group));
-    }
-
-    /// <summary>
-    /// Whether the board entry <paramref name="item"/> can carry a stack. A copy
-    /// has to name the kind it copies, and a cluster spanning two categories —
-    /// "spear or wand" — names none, so such a cluster is offered no stack and
-    /// cannot grow one.
-    /// </summary>
-    public static bool CanStack(IEnumerable<ItemRequirement> requirements, BoardItem item)
-    {
-        var next = requirements.ToList();
-        var family = next[item.Anchor].Kind.Family();
-        return !next[item.Anchor].Blanket && !family.RequiresNamedItem() && item.Members.All(index => next[index].Kind.Family() == family);
-    }
-
-    /// <summary>Pulls the chip at <paramref name="index"/> out of its cluster; it leaves its stack behind.</summary>
-    public static List<ItemRequirement> Detach(IEnumerable<ItemRequirement> requirements, int index)
-    {
-        var next = requirements.ToList();
-        next[index] = With(next[index], copy => { copy.AlternativeGroup = null; copy.IdentityGroup = null; });
-        return Normalize(next);
-    }
-
-    /// <summary>Deletes a whole board entry: its members and its hidden copies.</summary>
-    public static List<ItemRequirement> RemoveItem(IEnumerable<ItemRequirement> requirements, BoardItem item)
-    {
-        var doomed = item.Members.Concat(item.Extras).ToHashSet();
-        return Normalize(requirements.Where((_, index) => !doomed.Contains(index)));
-    }
-
-    /// <summary>Deletes one cluster member; the cluster and its stack live on without it.</summary>
-    public static List<ItemRequirement> RemoveMember(IEnumerable<ItemRequirement> requirements, int index) =>
-        Normalize(requirements.Where((_, other) => other != index));
-
-    /// <summary>
-    /// Sets how many items the board entry <paramref name="item"/> asks for. An
-    /// entry that <see cref="CanStack"/> refuses can still shrink, never grow.
-    /// </summary>
-    public static List<ItemRequirement> SetStackCount(IEnumerable<ItemRequirement> requirements, BoardItem item, int count)
-    {
-        var next = requirements.ToList();
-        var wanted = Math.Clamp(count, 1, SearchLimits.StackMax) - 1;
-        if (wanted == item.Extras.Count) return next;
-        if (wanted < item.Extras.Count)
-        {
-            var doomed = item.Extras.Skip(wanted).ToHashSet();
-            return Normalize(next.Where((_, index) => !doomed.Contains(index)));
-        }
-        if (!CanStack(next, item)) return next;
-        var anchor = next[item.Anchor];
-        var added = wanted - item.Extras.Count;
-        // New copies keep to the floor limit the existing copies already carry.
-        var inherited = item.Extras.Count > 0 ? next[item.Extras[0]].MaximumDepth : null;
-        Func<ItemRequirement> copy;
-        if (item.Total is not null && anchor.LevelSum is not null)
-            copy = () => { var member = anchor.Clone(); member.Key = Random.Shared.NextInt64(1, long.MaxValue); return member; };
-        else if (item.Cluster is null && anchor.Item is not null) copy = () => PlainCopy(anchor, inherited);
-        else
-        {
-            if ((anchor.IdentityGroup ?? FreeGroup(next.Select(requirement => requirement.IdentityGroup), SearchLimits.IdentityGroupMax)) is not int label) return next;
-            foreach (var index in item.Members) next[index] = With(next[index], member => member.IdentityGroup = label);
-            copy = () => BareCopy(anchor, label, inherited);
-        }
-        var insertAt = item.Members.Concat(item.Extras).Max() + 1;
-        next.InsertRange(insertAt, Enumerable.Range(0, added).Select(_ => copy()));
-        return Normalize(next);
-    }
-
-    /// <summary>
-    /// The floor limit the stack's extra copies share (the first copy's, when a
-    /// hand-written document gave them different ones).
-    /// </summary>
-    public static int? CopyDepthOf(IEnumerable<ItemRequirement> requirements, BoardItem item) =>
-        item.Extras.Count > 0 ? requirements.ElementAt(item.Extras[0]).MaximumDepth : null;
-
-    /// <summary>
-    /// Sets or clears the floor limit of the stack's extra copies. The anchor
-    /// keeps its own limit: "the +3 one before floor 4, the rest wherever" and
-    /// "…the rest before floor 10" are both sayable. A combined-level stack has
-    /// identical members and no lone copies to bound.
-    /// </summary>
-    public static List<ItemRequirement> SetCopyDepth(IEnumerable<ItemRequirement> requirements, BoardItem item, int? maximumDepth)
-    {
-        var next = requirements.ToList();
-        if (item.Total is not null) return next;
-        foreach (var index in item.Extras) next[index] = With(next[index], copy => copy.MaximumDepth = maximumDepth);
-        return Normalize(next);
-    }
-
-    /// <summary>
-    /// Sets or clears the stack's combined level. Only a lone concrete ring
-    /// chip can count levels — a ring's effect scales with its level, so a +0
-    /// and a +1 together grant what one +2 does, and no other family adds up
-    /// that way; with a total the whole stack becomes identical optional
-    /// members ("up to N items reaching T levels"), without one it returns to an
-    /// anchor with plain repeats ("exactly N of the item").
-    /// </summary>
-    public static List<ItemRequirement> SetStackTotal(IEnumerable<ItemRequirement> requirements, BoardItem item, int? total)
-    {
-        var next = requirements.ToList();
-        var anchor = next[item.Anchor];
-        if (anchor.Blanket || item.Cluster is not null || anchor.Item is null) return next;
-        var indices = item.Extras.Prepend(item.Anchor).ToList();
-        if (total is not int atLeast)
-        {
-            foreach (var index in indices)
-                next[index] = index == item.Anchor
-                    ? With(anchor, copy => copy.LevelSum = null)
-                    : PlainCopy(anchor, null, next[index].Key);
-            return Normalize(next);
-        }
-        // Only rings count levels together; clearing a total above never needs
-        // this check, so stale non-ring sums can still be dissolved.
-        if (anchor.Kind.Family() != ItemKind.Ring) return next;
-        if ((anchor.LevelSum?.Group ?? FreeGroup(next.Select(requirement => requirement.LevelSum?.Group), SearchLimits.LevelSumGroupMax)) is not int group) return next;
-        foreach (var index in indices)
-        {
-            var key = next[index].Key;
-            next[index] = With(anchor, copy =>
-            {
-                copy.Key = key; copy.Upgrade = 0; copy.UpgradeMatch = UpgradeMatch.Any;
-                copy.IdentityGroup = null; copy.LevelSum = new(group, atLeast);
-            });
-        }
-        return Normalize(next);
-    }
-
     /// <summary>
     /// The most levels a stack of <paramref name="count"/> rings can reach
     /// together: one ring at the vault ceiling, every other at the standard
-    /// roll, each counting its upgrade plus one. Only rings count levels
-    /// together, so this is the capacity every combined level is held to.
+    /// roll, each counting its upgrade plus one. The requirement editor
+    /// dialog holds its combined-level slider to it; the board's own steppers
+    /// read the editor's <see cref="BoardStack.LevelCapacity"/>.
     /// </summary>
     public static int RingStackCapacity(int count) =>
         SearchLimits.MaxUpgradeRing + 1 + (count - 1) * (SearchLimits.MaxUpgradeRingStandard + 1);
 
     /// <summary>
-    /// Applies the editor's result: the anchor's own fields plus the stack's
-    /// shape. <paramref name="index"/> is the edited anchor, or null for a new
-    /// chip. Editing a cluster member leaves the stack's count and total to the
-    /// cluster.
-    /// </summary>
-    public static List<ItemRequirement> ApplyEdit(IEnumerable<ItemRequirement> requirements, int? index, ItemRequirement requirement, int count, int? total, int? copyDepth = null)
-    {
-        var current = requirements.ToList();
-        List<ItemRequirement> next; long anchorKey;
-        if (index is not int at)
-        {
-            var added = requirement.Clone(); anchorKey = added.Key;
-            next = [.. current, added];
-        }
-        else
-        {
-            var edited = current[at]; anchorKey = edited.Key;
-            // The copies belonged to the chip as it was, and the edit may have
-            // changed the very kind they copy — so the stack comes down here and
-            // is rebuilt below from the count and total the editor returned. A
-            // cluster member leaves its stack to the cluster and keeps its copies.
-            var doomed = new HashSet<int>();
-            if (edited.AlternativeGroup is null && ItemOf(current, at) is { } owner) doomed.UnionWith(owner.Extras);
-            var replacement = requirement.Clone();
-            replacement.Key = anchorKey; replacement.AlternativeGroup = edited.AlternativeGroup;
-            current[at] = replacement;
-            next = current.Where((_, other) => !doomed.Contains(other)).ToList();
-        }
-        next = Normalize(next);
-        var anchorIndex = next.FindIndex(entry => entry.Key == anchorKey);
-        if (anchorIndex < 0 || next[anchorIndex].AlternativeGroup is not null) return next;
-        if (ItemOf(next, anchorIndex) is not { } item) return next;
-        if (item.Total is not null && total is null)
-        {
-            next = SetStackTotal(next, item, null);
-            item = ItemOf(next, anchorIndex) ?? item;
-        }
-        next = SetStackCount(next, item, count);
-        if (ItemOf(next, anchorIndex) is not { } refreshed) return next;
-        return total is int atLeast ? SetStackTotal(next, refreshed, atLeast) : SetCopyDepth(next, refreshed, copyDepth);
-    }
-
-    /// <summary>
-    /// The chip's hover detail: its title, what it asks of one item, the
-    /// relationships it stands in, and the problem the engine would reject it
-    /// for. One line each, as the web board's popover has them.
-    /// </summary>
-    public static string ChipDetail(IReadOnlyList<ItemRequirement> requirements, int index, BoardItem? item, string? problem)
-    {
-        var requirement = requirements[index];
-        var lines = new List<string> { requirement.Title };
-        var facts = new List<string>();
-        if (requirement.UpgradeMatch == UpgradeMatch.Exactly) facts.Add($"exactly +{requirement.Upgrade}");
-        else if (requirement.UpgradeMatch == UpgradeMatch.AtLeast) facts.Add($"+{requirement.Upgrade} or higher");
-        // A combined level speaks for the stack's upgrades, so the chip's own says nothing.
-        else if (item?.Total is null) facts.Add("any upgrade");
-        if (requirement.Effect.Describe() is string effect) facts.Add(effect);
-        if (requirement.RequireUncursed) facts.Add("uncursed");
-        if (requirement.Source is ScoutItemSource source) facts.Add(Labels.Source(source));
-        if (requirement.MaximumDepth is int depth) facts.Add($"floors 1\u2013{depth}");
-        if (facts.Count > 0) lines.Add(string.Join(" \u00b7 ", facts));
-        if (requirement.AlternativeGroup is int cluster)
-            lines.Add($"or {string.Join(", ", requirements.Where((other, position) => position != index && other.AlternativeGroup == cluster).Select(other => other.ShortTitle))}");
-        if (item is { Total: int total }) lines.Add($"\u03a3 up to {item.StackCount} \u2014 levels add to \u2265 {total}");
-        else if (item is not null && item.StackCount > 1)
-        {
-            // The chip's own bounds (+3, floors 1–4) describe one copy, not the extras.
-            var depths = item.Extras.Select(extra => requirements[extra].MaximumDepth).Distinct().ToList();
-            var floors = depths.Count > 1 ? "own floor limits" : depths[0] is int only ? $"floors 1\u2013{only}" : "any floor";
-            lines.Add($"\u00d7 {item.StackCount} of the same kind \u2014 the extra copies: any upgrade, {floors}");
-        }
-        if (problem is not null) lines.Add(problem);
-        return string.Join("\n", lines);
-    }
-
-    /// <summary>
-    /// The first problem the engine would reject the query for, as a message
-    /// naming the offending group or item, or null when it is sound. The engine
-    /// only reports a generic rejection over the FFI, so this runs first.
+    /// The first problem of the query's own settings — its Arcane Resin
+    /// condition and its floor requirements — or null when they are sound.
+    /// The requirement list's problems are the board's
+    /// (<see cref="BoardView.Problems"/>; <see cref="BoardEditor.Problem"/>
+    /// asks both). The engine only reports a generic rejection over the FFI,
+    /// so this runs first.
     /// </summary>
     public static string? Validate(QuerySettings query)
     {
@@ -987,69 +387,6 @@ public static class QueryRelationships
             return "Each floor can have only one requirement.";
         if (query.FloorRequirements.FirstOrDefault(floor => floor.Depth > query.MaximumDepth) is { } outside)
             return $"Floor {outside.Depth} exceeds the floor limit of {query.MaximumDepth}.";
-        var requirements = query.Requirements;
-        if (requirements.Any(r => r.ExcludeResin && (r.Kind != ItemKind.Wand || r.Blanket)))
-            return "Only an ordinary wand can exclude Auto resin.";
-        if (requirements.Count > 0 && requirements.All(r => r.Blanket))
-            return "Add at least one ordinary requirement.";
-        if (requirements.Where(r => r.AlternativeGroup is not null).GroupBy(r => r.AlternativeGroup)
-            .Any(group => group.Select(r => r.Blanket).Distinct().Count() > 1))
-            return "An either/or group cannot mix ordinary and blanket requirements.";
-        if (requirements.Any(r => r.Blanket && (r.IdentityGroup is not null || r.LevelSum is not null || r.SelectTrinket)))
-            return "A blanket cannot request extra copies, combined levels, or trinket selection.";
-        foreach (var requirement in requirements)
-        {
-            if (requirement.ArtifactTransmutations is < 0 or > 10 || (requirement.ArtifactTransmutations > 0 && (requirement.Kind != ItemKind.Artifact || requirement.Item is null)))
-                return "Artifact transmutations must be 0–10 on a named artifact.";
-            if (requirement.TrinketTransmutations is < 0 or > 13 ||
-                (requirement.TrinketTransmutations > 0 && (requirement.Kind != ItemKind.Trinket || requirement.Item is null || requirement.SelectTrinket)))
-                return "Transmutations must be 0–13 on a named trinket without manual selection.";
-            var family = requirement.Kind.Family();
-            if (family.RequiresNamedItem() && requirement.Item is null)
-                return $"Choose a named {Labels.Singular(family)}.";
-            if (family.RequiresNamedItem() && requirement.IdentityGroup is not null)
-                return $"{requirement.Title} cannot form a same-item stack.";
-            if (!requirement.Effect.IsAny && family is not (ItemKind.Weapon or ItemKind.Armor))
-                return $"{requirement.Title} cannot require an effect: {Labels.Kind(requirement.Kind).ToLowerInvariant()} carry none.";
-            if (requirement.RequireUncursed && requirement.Effect.IsCursesOnly(requirement.Kind))
-                return $"{requirement.Title} requires uncursed but only lists curses.";
-            if (requirement.LevelSum is { } sum)
-            {
-                // Levels only combine meaningfully across rings — a ring's effect
-                // scales with its level, so a +0 and a +1 together grant what one
-                // +2 does. No other family adds up that way.
-                if (family != ItemKind.Ring)
-                    return $"{requirement.Title} cannot count levels together: only rings can.";
-                if (requirement.AlternativeGroup is not null)
-                    return $"{requirement.Title} is an alternative, so it cannot be in combined level group {GroupLabel(sum.Group)}.";
-                if (sum.Group < 1 || sum.Group > SearchLimits.LevelSumGroupMax || sum.AtLeast < 1)
-                    return $"{requirement.Title} has an invalid combined level group.";
-            }
-        }
-        // A same-item group is a stack: one anchor unit — a lone requirement, or
-        // the members of one alternative group — may constrain the item it binds
-        // to; every other member is a plain copy of the same category.
-        foreach (var group in requirements.Select(requirement => requirement.IdentityGroup).OfType<int>().Distinct().Order())
-        {
-            var members = requirements.Where(requirement => requirement.IdentityGroup == group).ToList();
-            if (members.Select(member => member.Kind.Family()).Distinct().Count() > 1)
-                return $"Same-item group {GroupLabel(group)} mixes different categories.";
-            var units = members.Where(member => !member.IsBare)
-                .Select(member => member.AlternativeGroup is int alternative ? $"alternative {alternative}" : $"requirement {member.Key}")
-                .Distinct().Count();
-            if (units > 1)
-                return $"Same-item group {GroupLabel(group)} can describe one item (or one set of alternatives); its other members must be plain.";
-        }
-        // Combined-level groups: one shared, reachable total, counted in levels
-        // (upgrade plus one per item).
-        foreach (var group in requirements.Select(requirement => requirement.LevelSum?.Group).OfType<int>().Distinct().Order())
-        {
-            var totals = SumMembers(requirements, group).Select(member => member.LevelSum!.AtLeast).Distinct().ToList();
-            if (totals.Count > 1) return $"Combined level group {GroupLabel(group)} has members that disagree on the total.";
-            var capacity = SumCapacity(requirements, group);
-            if (totals[0] > capacity)
-                return $"Combined level group {GroupLabel(group)} needs {totals[0]} levels but its items can reach at most {capacity}.";
-        }
         return null;
     }
 }
@@ -1145,12 +482,6 @@ public sealed record ArcaneResinFilter(bool Uncursed = true, int? MaximumDepth =
 {
     public bool IsValid => (MaximumDepth is null or >= 1 and <= SearchLimits.MaxDepth) &&
         (Source is null || Enum.IsDefined(Source.Value));
-    public string Summary => string.Join(" · ", new[] {
-        Uncursed ? "uncursed wands" : "any wands",
-        MaximumDepth is int depth ? $"≤ floor {depth}" : null,
-        Source is ScoutItemSource source ? Labels.Source(source) : null,
-        IncludeMageWand ? "Mage +2" : null,
-    }.OfType<string>());
 }
 
 public sealed record FloorRequirement

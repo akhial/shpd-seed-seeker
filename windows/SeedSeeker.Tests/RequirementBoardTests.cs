@@ -371,6 +371,22 @@ public sealed class RequirementBoardTests
     }
 
     [Fact]
+    public void TheStartGateAsksTheQueryFirstThenTheBoard()
+    {
+        var editor = new BoardEditor();
+        var query = Loaded(editor, new ItemRequirement { Kind = ItemKind.Wand, Blanket = true });
+        Assert.Equal("Add at least one ordinary requirement.", editor.Problem(query));
+        query.ArcaneResin = 70_000;
+        Assert.Equal("Arcane Resin must be 0..65535, with a valid wand floor and source.", editor.Problem(query));
+        // The resin chip still draws while the amount is out of range.
+        Assert.NotNull(editor.View(query).Resin);
+        // A requirement's own problem is the board's wording, and its chip's.
+        query = Loaded(editor, new ItemRequirement { Kind = ItemKind.Artifact });
+        Assert.Equal("Select an artifact.", editor.Problem(query));
+        Assert.Equal(editor.Problem(query), editor.View(query).Entries[0].Chips[0].Problem);
+    }
+
+    [Fact]
     public void TheChipDetailReadsTheStackAndTheRelationsAroundIt()
     {
         var editor = new BoardEditor();

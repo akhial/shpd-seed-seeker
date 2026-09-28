@@ -21,13 +21,6 @@ public sealed partial class ItemRequirement
     [JsonIgnore] public Visibility SpriteVisibility => Item is null ? Visibility.Collapsed : Visibility.Visible;
     /// <summary>The generic glyph shows only where there is genuinely no concrete item.</summary>
     [JsonIgnore] public Visibility FallbackVisibility => Item is null ? Visibility.Visible : Visibility.Collapsed;
-    /// <summary>
-    /// Glow for the pinned enchantment or curse, with the bare-effect-name semantics
-    /// of the web's <c>effectGlow</c>: an unrecognised effect is a curse and glows
-    /// black. There is nothing to tint without a sprite, so wildcards never glow.
-    /// </summary>
-    [JsonIgnore] public Windows.UI.Color GlowColor => ItemGlow.ForEffect(Modifier)?.Color ?? default;
-    [JsonIgnore] public double GlowPeriod => Item is null ? 0 : ItemGlow.ForEffect(Modifier)?.Period ?? 0;
 }
 
 /// <summary>Renders a floor slider's raw index as the floor it selects, for the thumb tooltip.</summary>

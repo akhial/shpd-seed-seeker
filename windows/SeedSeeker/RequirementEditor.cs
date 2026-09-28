@@ -289,6 +289,12 @@ public sealed class BoardEditor
         if (Edit(query, BoardEdit.Normalize()).Rows is { } rows) query.Requirements = new(rows);
     }
 
+    /// <summary>
+    /// Why <paramref name="query"/> cannot be searched or shared, or null: the
+    /// query's own settings first, then the first problem of its list.
+    /// </summary>
+    public string? Problem(QuerySettings query) => QueryRelationships.Validate(query) ?? View(query).Problem;
+
     /// <summary>Keeps <paramref name="answer"/>'s board as the board of the list it leaves.</summary>
     private void Remember(QuerySettings query, BoardAnswer answer)
     {

@@ -35,8 +35,9 @@ public sealed class ArcaneResinTests
         var query = ResultsExport.DecodeQueryDocument("""{"arcane_resin":"auto","arcane_resin_filter":{"include_mage_wand":true},"requirements":[{"item":"wand_frost","exclude_resin":true},{"item":"wand_frost"},{"item":"wand_frost"}],"floor_requirements":[{"depth":7,"feeling":"dark"}]}""");
         Assert.True(query.ArcaneResinFilter.IncludeMageWand);
         Assert.Equal(new[] { true, false, false }, query.Requirements.Select(r => r.ExcludeResin));
-        Assert.Equal(3, Assert.Single(QueryRelationships.BoardItems(query.Requirements)).StackCount);
-        Assert.Null(QueryRelationships.Validate(query));
+        var editor = new BoardEditor();
+        Assert.Equal(3, Assert.Single(editor.View(query).Entries).Stack.Count);
+        Assert.Null(editor.Problem(query));
         var document = ResultsExport.EncodeQueryDocument(query);
         foreach (var restored in new[] {
             query.Clone(), JsonSerializer.Deserialize<QuerySettings>(JsonSerializer.Serialize(query))!,
@@ -50,9 +51,9 @@ public sealed class ArcaneResinTests
         Assert.Equal(plain.Status().Probability, search.Status().Probability, 12);
         Assert.False(JsonSerializer.Deserialize<ArcaneResinFilter>("""{"Uncursed":true}""")!.IncludeMageWand);
         query.Requirements = new([new ItemRequirement { Kind = ItemKind.Ring, ExcludeResin = true }]);
-        Assert.NotNull(QueryRelationships.Validate(query));
+        Assert.Equal("Only an ordinary wand can exclude Auto resin.", editor.Problem(query));
         query.Requirements[0].Kind = ItemKind.Wand; query.Requirements[0].Blanket = true;
-        Assert.NotNull(QueryRelationships.Validate(query));
+        Assert.Equal("Only an ordinary wand can exclude Auto resin.", editor.Problem(query));
     }
 
     [Fact]
@@ -103,7 +104,7 @@ public sealed class ArcaneResinTests
         Assert.True(search.Status().Probability > 0);
         Assert.Equal(directSearch.Status().Probability, search.Status().Probability, 12);
         query.Requirements = new(query.Requirements.Where(r => r.Blanket));
-        Assert.NotNull(QueryRelationships.Validate(query));
+        Assert.Equal("Add at least one ordinary requirement.", new BoardEditor().Problem(query));
     }
 
 }

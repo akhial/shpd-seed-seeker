@@ -209,11 +209,23 @@ public sealed partial class MainWindow : Window
         query.MaximumDepth = FloorLimits.Normalize(query.MaximumDepth);
         foreach (var requirement in query.Requirements)
             if (requirement.MaximumDepth is int depth) requirement.MaximumDepth = FloorLimits.Normalize(depth);
+        LoadRequirements(query);
         AutoTrinketToggle.IsOn = query.AutoApplyTrinket;
         FloorSlider.Value = FloorLimits.IndexOf(query.MaximumDepth); RequireBlacksmith.IsOn = query.RequireBlacksmith; ExcludeRewards.IsOn = query.ExcludeBlacksmithRewards;
         WandmakerQuestPicker.ItemsSource = WandmakerQuests.All.Select(WandmakerQuests.Label).ToList();
         WandmakerQuestPicker.SelectedIndex = Array.IndexOf(WandmakerQuests.All, query.WandmakerQuest);
         restoring = false;
+    }
+    /// <summary>
+    /// Takes in a requirement list that was just loaded or imported: keyed
+    /// afresh and put in the shared editor's canonical encoding
+    /// (<see cref="BoardEditor.Load"/>). A list the editor cannot read at all
+    /// is dropped, as an unreadable settings file is, rather than left to fail
+    /// every redraw.
+    /// </summary>
+    private void LoadRequirements(QuerySettings loaded)
+    {
+        try { boardEditor.Load(loaded); } catch { loaded.Requirements = []; }
     }
     private void SaveSettings() { if (restoring) return; Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!); File.WriteAllText(SettingsPath, JsonSerializer.Serialize(query, new JsonSerializerOptions { WriteIndented = true })); }
     /// <summary>
@@ -267,6 +279,7 @@ public sealed partial class MainWindow : Window
         query.MaximumDepth = FloorLimits.Normalize(query.MaximumDepth);
         foreach (var requirement in query.Requirements)
             if (requirement.MaximumDepth is int depth) requirement.MaximumDepth = FloorLimits.Normalize(depth);
+        LoadRequirements(query);
         AutoTrinketToggle.IsOn = query.AutoApplyTrinket;
         FloorSlider.Value = FloorLimits.IndexOf(query.MaximumDepth); RequireBlacksmith.IsOn = query.RequireBlacksmith;
         ExcludeRewards.IsOn = query.ExcludeBlacksmithRewards;
@@ -296,7 +309,7 @@ public sealed partial class MainWindow : Window
     private void RefreshQuery()
     {
         BuildFarmingFloors();
-        BuildBoard(); NoRequirements.Visibility = !query.Requirements.Any(r => !r.Blanket) && !query.NeedsResin && query.FloorRequirements.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+        BuildBoard(); NoRequirements.Visibility = boardView.Counts.Ordinary == 0 && !query.NeedsResin && query.FloorRequirements.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         FloorLabel.Text = $"first {query.MaximumDepth} floor{(query.MaximumDepth == 1 ? "" : "s")}"; RequireBlacksmith.IsEnabled = query.MaximumDepth < ScoutQuests.Window(QuestGiver.Blacksmith).Last; StartButton.IsEnabled = search is not null || (!busy && query.HasRequirements); CopyLinkButton.IsEnabled = !searchRunning && query.HasRequirements;
         var count = BitOperations.PopCount((uint)query.Challenges); ChallengeSummary.Text = count == 0 ? "None" : $"{count} enabled";
     }
@@ -365,24 +378,30 @@ public sealed partial class MainWindow : Window
         var kind = blanket ? query.Requirements.FirstOrDefault(r => !r.Blanket)?.Kind ?? ItemKind.Weapon : ItemKind.Weapon;
         var requirement = new ItemRequirement { Kind = kind, Blanket = blanket, UpgradeMatch = UpgradeMatch.Any };
         if (await EditRequirement(requirement, StackShape.Lone, blanket ? "New Blanket Requirement" : "New Requirement", "Add") is not { } stack) return;
-        SetRequirements(QueryRelationships.ApplyEdit(query.Requirements, null, requirement, stack.Count, stack.Total, stack.CopyDepth));
+        EditBoard(BoardEdit.Save(null, requirement, stack.Count, stack.Total, stack.CopyDepth));
     }
-    /// <summary>Opens the chip at <paramref name="index"/> in the editor; the stack it reports comes back through <see cref="QueryRelationships.ApplyEdit"/>.</summary>
-    private async Task EditChip(int index)
+    /// <summary>Opens the chip keyed <paramref name="key"/> in the editor; what it settles on is saved through the board (<see cref="BoardEdit.Save"/>).</summary>
+    private async Task EditChip(long key)
     {
-        if (index < 0 || index >= query.Requirements.Count) return;
-        var shape = QueryRelationships.ItemOf(query.Requirements, index) is { } item ? StackShape.Of(query.Requirements, item) : StackShape.Lone;
-        var copy = query.Requirements[index].Clone();
-        if (await EditRequirement(copy, shape, copy.Blanket ? "Edit Blanket Requirement" : "Edit Requirement", "Save") is not { } stack) return;
-        SetRequirements(QueryRelationships.ApplyEdit(query.Requirements, index, copy, stack.Count, stack.Total, stack.CopyDepth));
+        // A row the shared editor cannot read has no sheet: it can only be removed.
+        if (boardView.EntryOf(key) is not { } entry || boardView.ChipOf(key) is not { Kind: not null } chip
+            || query.Requirements.FirstOrDefault(requirement => requirement.Key == key) is not { } requirement) return;
+        var copy = requirement.Clone();
+        if (await EditRequirement(copy, StackShape.Of(entry, chip), copy.Blanket ? "Edit Blanket Requirement" : "Edit Requirement", "Save") is not { } stack) return;
+        EditBoard(BoardEdit.Save(key, copy, stack.Count, stack.Total, stack.CopyDepth));
     }
-    /// <summary>Deletes the chip at <paramref name="index"/>: a whole board entry with its hidden copies, or one member of a cluster.</summary>
-    private void RemoveChip(int index)
+    /// <summary>Deletes the chip keyed <paramref name="key"/>: a whole board entry with its hidden copies, or one member of a cluster.</summary>
+    private void RemoveChip(long key) => EditBoard(BoardEdit.Remove(key));
+    /// <summary>
+    /// Runs <paramref name="edits"/> through the shared editor's board and
+    /// adopts the rows it answers with — only when they changed, so an edit
+    /// that does nothing neither redraws nor saves. A refused edit says why.
+    /// </summary>
+    private void EditBoard(params BoardEdit[] edits)
     {
-        if (QueryRelationships.ItemOf(query.Requirements, index) is not { } item) return;
-        SetRequirements(item.Cluster is null
-            ? QueryRelationships.RemoveItem(query.Requirements, item)
-            : QueryRelationships.RemoveMember(query.Requirements, index));
+        var answer = boardEditor.Edit(query, edits);
+        if (answer.Rows is { } rows) SetRequirements(rows);
+        if (answer.Refused is { } refused) _ = ShowTransferMessage(refused.Message);
     }
     /// <summary>Adopts an edited requirement list, then redraws and saves.</summary>
     private void SetRequirements(IEnumerable<ItemRequirement> requirements)
@@ -397,7 +416,9 @@ public sealed partial class MainWindow : Window
     // standalone again, drop it on the zone below to remove it. Everything else
     // is a property of the chip itself — a stack badge (×N / ≤N) for "more of
     // the same kind", and a Σ badge for a stack counting its levels together.
-    // The board is rebuilt from QueryRelationships.BoardItems on every change.
+    // What the board holds, what every chip and badge says and what each
+    // gesture writes back are the shared editor's (BoardEditor); the board is
+    // redrawn from its answer on every change.
     //
     // The drag is the board's own, driven by pointer events the way the web
     // board's is, not the system's. A chip is a Button, and ButtonBase takes
@@ -425,16 +446,16 @@ public sealed partial class MainWindow : Window
     /// dealt with, whichever order the chip's Click and Root's release run in.
     /// </summary>
     private bool dragClickGuard;
-    private enum DropKind { Chip, Cluster, Board, Remove }
     /// <param name="Key">The chip's key, or a cluster's anchor key.</param>
-    private sealed record DropTarget(DropKind Kind, FrameworkElement Element, long Key = 0);
+    /// <param name="Blanket">For a board, whether it is the blanket section's.</param>
+    private sealed record DropTarget(DropKind Kind, FrameworkElement Element, long Key = 0, bool Blanket = false);
     /// <summary>The board's drop targets, every chip before the capsule around it, so the hit test finds the member first.</summary>
     private readonly List<DropTarget> dropTargets = [];
     /// <summary>The ghost chip riding under the pointer, its caption pill, and the target lit beneath it.</summary>
     private Border? ghost; private Border? ghostCaption; private TextBlock? ghostCaptionText;
     private DropTarget? litTarget; private Action? unlight;
-    /// <summary>Chip tooltips taken away for the drag, so none opens over the ghost.</summary>
-    private readonly List<(Button Chip, object Tip)> suspendedToolTips = [];
+    /// <summary>Chip and capsule tooltips taken away for the drag, so none opens over the ghost.</summary>
+    private readonly List<(FrameworkElement Target, object Tip)> suspendedToolTips = [];
 
     private static Brush ChipFill => ThemeBrush("CardBackgroundFillColorSecondaryBrush", Microsoft.UI.Colors.Transparent);
     private static Brush ChipEdge => ThemeBrush("CardStrokeColorDefaultBrush", Microsoft.UI.Colors.Gray);
@@ -445,19 +466,10 @@ public sealed partial class MainWindow : Window
     private static Brush SuccessFill => ThemeBrush("SystemFillColorSuccessBackgroundBrush", Microsoft.UI.Colors.Transparent);
     private static FontFamily Mono => new("Cascadia Mono, Consolas");
 
-    /// <summary>The index of the requirement carrying <paramref name="key"/>, or -1.</summary>
-    private int IndexOfKey(long key)
-    {
-        for (var index = 0; index < query.Requirements.Count; index++) if (query.Requirements[index].Key == key) return index;
-        return -1;
-    }
-
-    /// <summary>Where the chip keyed <paramref name="key"/> stands now: its index and its board entry.</summary>
-    private (int Index, BoardItem? Item) Locate(long key)
-    {
-        var index = IndexOfKey(key);
-        return (index, index < 0 ? null : QueryRelationships.ItemOf(query.Requirements, index));
-    }
+    /// <summary>The shared editor's board, asked once per requirement list.</summary>
+    private readonly BoardEditor boardEditor = new();
+    /// <summary>The board as last drawn: what every chip, menu and drop reads until the next redraw.</summary>
+    private BoardView boardView = BoardView.Empty;
 
     /// <summary>
     /// Rebuilds the board: a chip per visible requirement, the members of a
@@ -467,21 +479,15 @@ public sealed partial class MainWindow : Window
     {
         CancelDrag();
         RequirementBoard.Children.Clear(); BlanketBoard.Children.Clear(); dropTargets.Clear();
-        BlanketHeader.Text = $"Blanket Requirements ({QueryRelationships.BoardCount(query.Requirements.Where(r => r.Blanket))})";
-        var requirements = query.Requirements.ToList();
-        foreach (var item in QueryRelationships.BoardItems(requirements))
+        boardView = boardEditor.View(query);
+        BlanketHeader.Text = $"Blanket Requirements ({boardView.Counts.Blanket})";
+        foreach (var entry in boardView.Entries)
         {
-            // The whole entry is validated at once, so a stack's total is
-            // weighed against every member that helps reach it.
-            var board = requirements[item.Anchor].Blanket ? BlanketBoard : RequirementBoard;
-            var problem = requirements[item.Anchor].Blanket ? null : QueryRelationships.Validate(new QuerySettings
-            {
-                Requirements = new(item.Members.Concat(item.Extras).Select(index => requirements[index])),
-            });
-            if (item.Cluster is null) board.Children.Add(Chip(requirements, item, item.Anchor, problem));
-            else board.Children.Add(Cluster(requirements, item, problem));
+            var board = entry.Blanket ? BlanketBoard : RequirementBoard;
+            if (entry.Cluster is null) board.Children.Add(Chip(entry, entry.Chips[0]));
+            else board.Children.Add(Cluster(entry));
         }
-        if (query.NeedsResin) RequirementBoard.Children.Add(ArcaneResinChip());
+        if (query.NeedsResin && boardView.Resin is { } resin) RequirementBoard.Children.Add(ArcaneResinChip(resin));
         RequirementBoard.Children.Add(AddChip());
         BlanketBoard.Children.Add(AddChip(blanket: true));
     }
@@ -489,23 +495,23 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// One chip: the sprite with its glow, the name, the qualifiers, and — for
     /// a lone chip — its stack badges. The capsule drags, opens the editor when
-    /// clicked, and carries the entry's detail as its tooltip.
+    /// clicked, and carries the chip's detail as its tooltip.
     /// </summary>
-    private Button Chip(IReadOnlyList<ItemRequirement> requirements, BoardItem item, int index, string? problem)
+    private Button Chip(BoardEntry entry, BoardChip view)
     {
-        var requirement = requirements[index];
         var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
-        content.Children.Add(ChipArt(requirement));
-        content.Children.Add(ChipName(requirement));
-        foreach (var tag in requirement.Tags)
-            content.Children.Add(ChipTagPill(tag.Text, tag.Upgrade ? SuccessInk : CautionInk, tag.Upgrade ? SuccessFill : CautionFill));
-        if (EffectBadge(requirement) is UIElement effect) content.Children.Add(effect);
-        if (requirement.RequireUncursed) content.Children.Add(ChipTagPill("\u2713", SuccessInk, SuccessFill));
+        content.Children.Add(ChipArt(view));
+        content.Children.Add(ChipName(view));
+        foreach (var tag in view.Tags) content.Children.Add(ChipTagPill(tag));
+        if (EffectBadge(view) is UIElement effect) content.Children.Add(effect);
+        foreach (var tag in view.TrailingTags) content.Children.Add(ChipTagPill(tag));
+        if (view.Uncursed) content.Children.Add(ChipTagPill("\u2713", SuccessInk, SuccessFill));
         // A cluster's badges belong to its capsule, not to any one member.
-        if (item.Cluster is null) foreach (var badge in StackBadges(requirements, item)) content.Children.Add(badge);
-        var chip = RequirementChip(content, requirement.Key, ChipMenu(requirements, item, index), problem);
-        ToolTipService.SetToolTip(chip, new TextBlock { Text = QueryRelationships.ChipDetail(requirements, index, item, problem), TextWrapping = TextWrapping.Wrap, MaxWidth = 280 });
-        dropTargets.Add(new DropTarget(DropKind.Chip, chip, requirement.Key));
+        if (entry.Cluster is null) foreach (var badge in StackBadges(entry)) content.Children.Add(badge);
+        var chip = RequirementChip(content, view.Key, ChipMenu(entry, view), view.Problem);
+        ToolTipService.SetToolTip(chip, new TextBlock { Text = view.Detail, TextWrapping = TextWrapping.Wrap, MaxWidth = 280 });
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(chip, view.Description);
+        dropTargets.Add(new DropTarget(DropKind.Chip, chip, view.Key));
         return chip;
     }
 
@@ -530,19 +536,23 @@ public sealed partial class MainWindow : Window
         return chip;
     }
 
-    private StackPanel ArcaneResinContent()
+    private StackPanel ArcaneResinContent(ResinChip resin)
     {
         var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
         content.Children.Add(new SpriteView { SpriteIndex = 317, SpriteSize = 20, VerticalAlignment = VerticalAlignment.Center });
-        content.Children.Add(new TextBlock { Text = "Arcane Resin", FontSize = 13, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
-        content.Children.Add(ChipTagPill(query.ArcaneResinAuto ? "Auto" : $"≥{query.ArcaneResin}", SuccessInk, SuccessFill));
-        if (query.ArcaneResinFilter.MaximumDepth is int depth) content.Children.Add(ChipTagPill($"F≤{depth}", CautionInk, CautionFill));
-        if (query.ArcaneResinFilter.IncludeMageWand) content.Children.Add(ChipTagPill("Mage +2", SuccessInk, SuccessFill));
-        if (query.ArcaneResinFilter.Uncursed) content.Children.Add(ChipTagPill("\u2713", SuccessInk, SuccessFill));
+        content.Children.Add(new TextBlock { Text = resin.Name, FontSize = 13, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+        for (var index = 0; index < resin.Tags.Count; index++)
+        {
+            var tag = ChipTagPill(resin.Tags[index]);
+            // The first tag is the amount, and "Auto" says what it means.
+            if (index == 0 && resin.AmountTooltip is string meaning) ToolTipService.SetToolTip(tag, meaning);
+            content.Children.Add(tag);
+        }
+        if (resin.Uncursed) content.Children.Add(ChipTagPill("\u2713", SuccessInk, SuccessFill));
         return content;
     }
 
-    private Button ArcaneResinChip()
+    private Button ArcaneResinChip(ResinChip resin)
     {
         var menu = new MenuFlyout();
         var edit = new MenuFlyoutItem { Text = "Edit\u2026" };
@@ -550,10 +560,9 @@ public sealed partial class MainWindow : Window
         var remove = new MenuFlyoutItem { Text = "Remove", Icon = new FontIcon { Glyph = "" } };
         remove.Click += (_, _) => RemoveArcaneResin();
         menu.Items.Add(edit); menu.Items.Add(new MenuFlyoutSeparator()); menu.Items.Add(remove);
-        var chip = RequirementChip(ArcaneResinContent(), ArcaneResinKey, menu);
-        var detail = $"{(query.ArcaneResinAuto ? "Auto" : $"≥{query.ArcaneResin}")} Arcane Resin\n{query.ArcaneResinFilter.Summary}";
-        ToolTipService.SetToolTip(chip, new TextBlock { Text = detail, TextWrapping = TextWrapping.Wrap, MaxWidth = 280 });
-        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(chip, detail);
+        var chip = RequirementChip(ArcaneResinContent(resin), ArcaneResinKey, menu);
+        ToolTipService.SetToolTip(chip, new TextBlock { Text = resin.Detail, TextWrapping = TextWrapping.Wrap, MaxWidth = 280 });
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(chip, resin.Description);
         dropTargets.Add(new DropTarget(DropKind.Chip, chip, ArcaneResinKey));
         return chip;
     }
@@ -565,36 +574,48 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// The real item sprite when one is pinned; a grayscale category sprite and
-    /// green question mark for wildcards. A requirement names no seed,
-    /// so a ring here keeps its class's catalog cell rather than any run's gem.
+    /// The real item sprite when one is pinned, pulsing the one effect it asks
+    /// for; a grayscale category sprite and green question mark for wildcards.
+    /// A requirement names no seed, so a ring here keeps its class's catalog
+    /// cell rather than any run's gem.
     /// </summary>
-    private static Grid ChipArt(ItemRequirement requirement)
+    private static Grid ChipArt(BoardChip chip)
     {
         var art = new Grid { Width = 18, Height = 18, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, -2, 0) };
-        if (requirement.Item is null) art.Children.Add(new WildcardSpriteView(requirement.Kind));
-        else art.Children.Add(new SpriteView { SpriteIndex = requirement.SpriteIndex, TypeIconIndex = requirement.TypeIconIndex, SpriteSize = 18, GlowColor = requirement.GlowColor, GlowPeriod = requirement.GlowPeriod });
+        if (chip.Item is string id && ItemCatalog.Find(id) is { } item)
+        {
+            // An unknown effect name is a curse and glows black, as the web's effectGlow has it.
+            var glow = chip.Effect is { AnyEnchantment: false, Effects: [var effect] } ? ItemGlow.ForEffect(effect) : null;
+            art.Children.Add(new SpriteView { SpriteIndex = item.SpriteIndex, TypeIconIndex = item.TypeIconIndex ?? -1, SpriteSize = 18, GlowColor = glow?.Color ?? default, GlowPeriod = glow?.Period ?? 0 });
+        }
+        else art.Children.Add(new WildcardSpriteView(chip.Kind ?? ItemKind.Weapon));
         return art;
     }
 
-    private static TextBlock ChipName(ItemRequirement requirement) =>
-        new() { Text = requirement.ShortTitle, FontSize = 13, FontWeight = FontWeights.SemiBold, MaxWidth = 150, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
+    private static TextBlock ChipName(BoardChip chip) =>
+        new() { Text = chip.Name, FontSize = 13, FontWeight = FontWeights.SemiBold, MaxWidth = 150, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
 
-    /// <summary>An either/or cluster: its members share one dashed capsule, with "or" between them and the stack badges at the trailing edge.</summary>
-    private Grid Cluster(IReadOnlyList<ItemRequirement> requirements, BoardItem item, string? problem)
+    /// <summary>
+    /// An either/or cluster: its members share one dashed capsule, with "or"
+    /// between them and the stack badges at the trailing edge. A problem on a
+    /// copy the stack folds away, which no member speaks for, marks the capsule.
+    /// </summary>
+    private Grid Cluster(BoardEntry entry)
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, Margin = new Thickness(4, 3, 4, 3), VerticalAlignment = VerticalAlignment.Center };
-        for (var position = 0; position < item.Members.Count; position++)
+        for (var position = 0; position < entry.Chips.Count; position++)
         {
             if (position > 0) row.Children.Add(new TextBlock { Text = "or", FontFamily = Mono, FontSize = 11, FontWeight = FontWeights.Bold, Foreground = CautionInk, Margin = new Thickness(4, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center });
-            row.Children.Add(Chip(requirements, item, item.Members[position], problem));
+            row.Children.Add(Chip(entry, entry.Chips[position]));
         }
-        foreach (var badge in StackBadges(requirements, item)) { badge.Margin = new Thickness(3, 0, 3, 0); row.Children.Add(badge); }
-        var capsule = new Grid { Tag = requirements[item.Anchor].Key, VerticalAlignment = VerticalAlignment.Center };
-        capsule.Children.Add(DashedCapsule(20, CautionInk, CautionFill));
+        foreach (var badge in StackBadges(entry)) { badge.Margin = new Thickness(3, 0, 3, 0); row.Children.Add(badge); }
+        var anchor = entry.Members[0];
+        var capsule = new Grid { Tag = anchor, VerticalAlignment = VerticalAlignment.Center };
+        capsule.Children.Add(DashedCapsule(20, entry.Problem is null ? CautionInk : DangerInk, CautionFill));
         capsule.Children.Add(row);
+        if (entry.Problem is string problem) ToolTipService.SetToolTip(capsule, problem);
         // After its members, which Chip() has already listed.
-        dropTargets.Add(new DropTarget(DropKind.Cluster, capsule, requirements[item.Anchor].Key));
+        dropTargets.Add(new DropTarget(DropKind.Cluster, capsule, anchor));
         return capsule;
     }
 
@@ -630,19 +651,22 @@ public sealed partial class MainWindow : Window
         Child = new TextBlock { Text = text, FontFamily = Mono, FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = ink },
     };
 
+    /// <summary>A chip tag as a pill: the upgrade green, every other qualifier amber.</summary>
+    private static Border ChipTagPill(ChipTag tag) =>
+        ChipTagPill(tag.Text, tag.Upgrade ? SuccessInk : CautionInk, tag.Upgrade ? SuccessFill : CautionFill);
+
     /// <summary>
     /// What a single pulse cannot say: several effects at once, shown as their
     /// count, and "any enchantment", which settles on no colour. A single
     /// effect — enchantment or curse — needs no badge of its own: the sprite is
     /// already pulsing that very colour, and the tooltip names it.
     /// </summary>
-    private static UIElement? EffectBadge(ItemRequirement requirement)
+    private static UIElement? EffectBadge(BoardChip chip) => chip.Effect switch
     {
-        if (requirement.Effect.AnyEnchantment) return Dot(Rainbow());
-        return requirement.Effect.Effects.Count > 1
-            ? new EffectCountView(requirement.Effect.Effects)
-            : null;
-    }
+        { AnyEnchantment: true } => Dot(Rainbow()),
+        { Effects.Count: > 1 } effect => new EffectCountView(effect.Effects, effect.Label),
+        _ => null,
+    };
 
     private static Microsoft.UI.Xaml.Shapes.Ellipse Dot(Brush fill) => new()
     {
@@ -677,105 +701,84 @@ public sealed partial class MainWindow : Window
     /// adjusts it; the edit lands when the flyout closes, so the board is
     /// rebuilt once rather than under the pointer.
     /// </summary>
-    private List<Button> StackBadges(IReadOnlyList<ItemRequirement> requirements, BoardItem item)
+    private List<Button> StackBadges(BoardEntry entry)
     {
         var badges = new List<Button>();
-        var anchorKey = requirements[item.Anchor].Key;
-        // The same rule as the menu's: an entry that cannot copy its kind may
-        // only shrink. Only a hand-written document brings it a badge at all.
-        var ceiling = QueryRelationships.CanStack(requirements, item) ? SearchLimits.StackMax : item.StackCount;
-        if (item.StackCount > 1)
-            badges.Add(StackBadge(item.Total is null ? $"\u00d7{item.StackCount}" : $"\u2264{item.StackCount}", SuccessInk, SuccessFill,
-                "How many", item.StackCount, 1, ceiling,
-                value => { if (Locate(anchorKey).Item is { } entry) SetRequirements(QueryRelationships.SetStackCount(query.Requirements, entry, value)); }));
-        if (item.Total is int total)
-        {
-            // Never a total the stack cannot reach: each ring counts its upgrade
-            // plus one, and a world levels only one ring past the standard roll.
-            var capacity = QueryRelationships.RingStackCapacity(item.StackCount);
-            badges.Add(StackBadge($"\u03a3 \u2265 {total}", CautionInk, CautionFill,
-                "Combined level", total, 1, Math.Max(1, capacity),
-                value => { if (Locate(anchorKey).Item is { } entry) SetRequirements(QueryRelationships.SetStackTotal(query.Requirements, entry, value)); }));
-        }
+        var anchor = entry.Members[0];
+        var stack = entry.Stack;
+        if (entry.CountBadge is { } count)
+            badges.Add(StackBadge(count, SuccessInk, SuccessFill, "How many", stack.Count, 1, stack.CountMaximum,
+                value => EditBoard(BoardEdit.SetCount(anchor, value))));
+        if (entry.TotalBadge is { } total && stack.Total is int current)
+            badges.Add(StackBadge(total, CautionInk, CautionFill, "Combined level", current, 1, Math.Max(1, stack.LevelCapacity),
+                value => EditBoard(BoardEdit.SetTotal(anchor, value))));
         return badges;
     }
 
-    private static Button StackBadge(string text, Brush ink, Brush fill, string header, int value, int minimum, int maximum, Action<int> apply)
+    private static Button StackBadge(BoardBadge badge, Brush ink, Brush fill, string header, int value, int minimum, int maximum, Action<int> apply)
     {
         var box = new NumberBox { Header = header, Value = value, Minimum = minimum, Maximum = maximum, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline, Width = 180 };
         var flyout = new Flyout { Content = box };
         flyout.Closed += (_, _) => { if (!double.IsNaN(box.Value) && (int)box.Value != value) apply(Math.Clamp((int)box.Value, minimum, maximum)); };
-        return new Button
+        var button = new Button
         {
-            Content = new TextBlock { Text = text, FontFamily = Mono, FontSize = 11, FontWeight = FontWeights.Bold, Foreground = ink },
+            Content = new TextBlock { Text = badge.Text, FontFamily = Mono, FontSize = 11, FontWeight = FontWeights.Bold, Foreground = ink },
             Background = fill, BorderThickness = new Thickness(0), CornerRadius = new CornerRadius(9),
             Padding = new Thickness(6, 0, 6, 0), MinWidth = 0, MinHeight = 0, Height = 18,
             VerticalAlignment = VerticalAlignment.Center, Flyout = flyout,
         };
+        ToolTipService.SetToolTip(button, badge.Tooltip);
+        return button;
     }
 
     /// <summary>The chip's menu: every gesture of the board said in words, for the keyboard and for touch.</summary>
-    private MenuFlyout ChipMenu(IReadOnlyList<ItemRequirement> requirements, BoardItem item, int index)
+    private MenuFlyout ChipMenu(BoardEntry entry, BoardChip chip)
     {
-        var key = requirements[index].Key;
+        var key = chip.Key;
         var menu = new MenuFlyout();
         var edit = new MenuFlyoutItem { Text = "Edit\u2026" };
-        edit.Click += async (_, _) => await EditChip(IndexOfKey(key));
+        edit.Click += async (_, _) => await EditChip(key);
         menu.Items.Add(edit);
-        // "Either/or with…" names the other chips, the menu's way of saying the
-        // drop a pointer would make.
+        // "Either/or with…" names the chips this one may join, the menu's way
+        // of saying the drop a pointer would make.
         var join = new MenuFlyoutSubItem { Text = "Either/or with\u2026" };
-        foreach (var other in QueryRelationships.BoardItems(requirements).Where(entry => !entry.Members.Contains(index) && requirements[entry.Anchor].Blanket == requirements[index].Blanket).SelectMany(entry => entry.Members))
+        foreach (var target in chip.Join)
         {
-            var targetKey = requirements[other].Key;
-            var choice = new MenuFlyoutItem { Text = requirements[other].ShortTitle };
-            choice.Click += (_, _) =>
-            {
-                var source = IndexOfKey(key); var onto = IndexOfKey(targetKey);
-                if (source >= 0 && onto >= 0) SetRequirements(QueryRelationships.JoinAlternatives(query.Requirements, source, onto));
-            };
+            var choice = new MenuFlyoutItem { Text = boardView.ChipOf(target)?.Name ?? "" };
+            choice.Click += (_, _) => EditBoard(BoardEdit.Join(key, target));
             join.Items.Add(choice);
         }
         if (join.Items.Count > 0) menu.Items.Add(join);
-        // A cluster spanning two categories names no kind to copy, so it is
-        // offered no stack at all.
-        if (QueryRelationships.CanStack(requirements, item))
+        var stack = entry.Stack;
+        if (stack.CanChangeCount)
         {
             menu.Items.Add(new MenuFlyoutSeparator());
             var howMany = new MenuFlyoutSubItem { Text = "How many" };
-            for (var wanted = 1; wanted <= SearchLimits.StackMax; wanted++)
+            for (var wanted = 1; wanted <= stack.CountMaximum; wanted++)
             {
                 var count = wanted;
-                var choice = new RadioMenuFlyoutItem { Text = count.ToString(), GroupName = $"stack:{key}", IsChecked = count == item.StackCount };
-                choice.Click += (_, _) => { if (Locate(key).Item is { } entry) SetRequirements(QueryRelationships.SetStackCount(query.Requirements, entry, count)); };
+                var choice = new RadioMenuFlyoutItem { Text = count.ToString(), GroupName = $"stack:{key}", IsChecked = count == stack.Count };
+                choice.Click += (_, _) => EditBoard(BoardEdit.SetCount(key, count));
                 howMany.Items.Add(choice);
             }
             menu.Items.Add(howMany);
         }
-        // Only a lone chip naming one ring can count levels: its copies are the
-        // same item over again, and a ring's effect scales with its level, so
-        // their upgrades add up to something. No other family's do.
-        if (item.Cluster is null && requirements[item.Anchor].Item is not null
-            && requirements[item.Anchor].Kind.Family() == ItemKind.Ring && item.StackCount > 1)
+        if (stack.CanCountLevels)
         {
-            var levels = new MenuFlyoutItem { Text = item.Total is null ? "Count levels together" : "Stop counting levels" };
-            levels.Click += (_, _) =>
-            {
-                if (Locate(key).Item is not { } entry) return;
-                SetRequirements(QueryRelationships.SetStackTotal(query.Requirements, entry, entry.Total is null ? Math.Max(1, entry.StackCount) : null));
-            };
+            var levels = new MenuFlyoutItem { Text = stack.Total is null ? "Count levels together" : "Stop counting levels" };
+            levels.Click += (_, _) => EditBoard(BoardEdit.ToggleLevels(key));
             menu.Items.Add(levels);
         }
-        if (item.Cluster is not null)
+        if (chip.CanDetach)
         {
             menu.Items.Add(new MenuFlyoutSeparator());
             var detach = new MenuFlyoutItem { Text = "On its own" };
-            detach.Click += (_, _) => { var at = IndexOfKey(key); if (at >= 0) SetRequirements(QueryRelationships.Detach(query.Requirements, at)); };
+            detach.Click += (_, _) => EditBoard(BoardEdit.Detach(key));
             menu.Items.Add(detach);
         }
         menu.Items.Add(new MenuFlyoutSeparator());
         var remove = new MenuFlyoutItem { Text = "Remove", Icon = new FontIcon { Glyph = "" } };
-        remove.Click += (_, _) => RemoveChip(IndexOfKey(key));
+        remove.Click += (_, _) => RemoveChip(key);
         menu.Items.Add(remove);
         return menu;
     }
@@ -785,7 +788,7 @@ public sealed partial class MainWindow : Window
         if (dragClickGuard) return;
         if ((sender as FrameworkElement)?.Tag is not long key) return;
         if (key == ArcaneResinKey) await EditArcaneResin();
-        else await EditChip(IndexOfKey(key));
+        else await EditChip(key);
     }
 
     private void Chip_KeyDown(object sender, KeyRoutedEventArgs e)
@@ -793,9 +796,8 @@ public sealed partial class MainWindow : Window
         if (e.Key is not (VirtualKey.Delete or VirtualKey.Back)) return;
         if ((sender as FrameworkElement)?.Tag is not long key) return;
         if (key == ArcaneResinKey) { e.Handled = true; RemoveArcaneResin(); return; }
-        var index = IndexOfKey(key);
-        if (index < 0) return;
-        e.Handled = true; RemoveChip(index);
+        if (boardView.ChipOf(key) is null) return;
+        e.Handled = true; RemoveChip(key);
     }
 
     // ---- the drag ----
@@ -864,14 +866,14 @@ public sealed partial class MainWindow : Window
 
     private void BeginDrag(ChipPress current)
     {
-        var index = IndexOfKey(current.Key);
-        if (index < 0 && current.Key != ArcaneResinKey) { press = null; return; }
+        var chip = boardView.ChipOf(current.Key);
+        if (current.Key == ArcaneResinKey ? boardView.Resin is null : chip is null) { press = null; return; }
         current.Dragging = true; dragClickGuard = true;
         current.Chip.Opacity = 0.35;
         RemoveZone.Visibility = Visibility.Visible;
         foreach (var target in dropTargets)
-            if (target.Element is Button chip && ToolTipService.GetToolTip(chip) is { } tip) { suspendedToolTips.Add((chip, tip)); ToolTipService.SetToolTip(chip, null); }
-        ghost = current.Key == ArcaneResinKey ? GhostChip(ArcaneResinContent()) : GhostChip(query.Requirements[index]);
+            if (ToolTipService.GetToolTip(target.Element) is { } tip) { suspendedToolTips.Add((target.Element, tip)); ToolTipService.SetToolTip(target.Element, null); }
+        ghost = chip is null ? GhostChip(ArcaneResinContent(boardView.Resin!)) : GhostChip(chip);
         DragLayer.Children.Add(ghost);
     }
 
@@ -879,13 +881,15 @@ public sealed partial class MainWindow : Window
     {
         if (press is not { Dragging: true } current || ghost is null || ghostCaption is null || ghostCaptionText is null) return;
         var target = TargetAt(position);
-        var caption = DropCaption(current.Key, target);
-        Light(caption is null ? null : target);
+        var drop = DropOf(current.Key, target);
+        var caption = DropCaption(drop);
+        // A refused join says why over its target, which stays unlit.
+        Light(drop.Effect is DropEffect.None or DropEffect.Refused ? null : target);
         ghostCaption.Visibility = caption is null ? Visibility.Collapsed : Visibility.Visible;
         if (caption is not null && target is not null)
         {
             ghostCaptionText.Text = caption;
-            ghostCaption.Background = target.Kind switch
+            ghostCaption.Background = drop.Effect == DropEffect.Refused ? DangerInk : target.Kind switch
             {
                 DropKind.Remove => DangerInk,
                 DropKind.Board => ThemeBrush("AccentFillColorDefaultBrush", Microsoft.UI.Colors.DodgerBlue),
@@ -923,7 +927,7 @@ public sealed partial class MainWindow : Window
         current.Chip.Opacity = 1;
         RemoveZone.Visibility = Visibility.Collapsed;
         if (ghost is not null) { DragLayer.Children.Remove(ghost); ghost = null; ghostCaption = null; ghostCaptionText = null; }
-        foreach (var (chip, tip) in suspendedToolTips) ToolTipService.SetToolTip(chip, tip);
+        foreach (var (element, tip) in suspendedToolTips) ToolTipService.SetToolTip(element, tip);
         suspendedToolTips.Clear();
     }
 
@@ -932,7 +936,7 @@ public sealed partial class MainWindow : Window
     {
         foreach (var target in dropTargets) if (Contains(target.Element, position)) return target;
         if (Contains(RemoveZone, position)) return new DropTarget(DropKind.Remove, RemoveZone);
-        if (Contains(BlanketBoard, position)) return new DropTarget(DropKind.Board, BlanketBoard);
+        if (Contains(BlanketBoard, position)) return new DropTarget(DropKind.Board, BlanketBoard, Blanket: true);
         if (Contains(RequirementBoard, position)) return new DropTarget(DropKind.Board, RequirementBoard);
         return null;
     }
@@ -943,34 +947,37 @@ public sealed partial class MainWindow : Window
         return element.TransformToVisual(Root).TransformBounds(new Rect(0, 0, element.ActualWidth, element.ActualHeight)).Contains(position);
     }
 
-    /// <summary>What dropping the chip keyed <paramref name="key"/> on <paramref name="target"/> would do, as the ghost's caption; null when nothing.</summary>
-    private string? DropCaption(long key, DropTarget? target)
+    /// <summary>
+    /// What dropping the chip keyed <paramref name="key"/> on
+    /// <paramref name="target"/> would do, as the board's chips say
+    /// (<see cref="BoardView.Drop"/>); the resin chip only goes to the remove zone.
+    /// </summary>
+    private BoardDrop DropOf(long key, DropTarget? target)
     {
-        if (key == ArcaneResinKey) return query.NeedsResin && target?.Kind == DropKind.Remove ? "remove" : null;
-        var source = IndexOfKey(key);
-        if (source < 0 || target is null) return null;
-        switch (target.Kind)
-        {
-            case DropKind.Chip or DropKind.Cluster:
-                // Joining a cluster the chip is in already changes nothing.
-                var onto = IndexOfKey(target.Key);
-                if (onto < 0 || onto == source) return null;
-                return query.Requirements[source].AlternativeGroup is int group && query.Requirements[onto].AlternativeGroup == group ? null : "or";
-            case DropKind.Remove: return "remove";
-            default: return query.Requirements[source].AlternativeGroup is null ? null : "on its own";
-        }
+        if (target is null) return BoardDrop.None;
+        if (key == ArcaneResinKey) return query.NeedsResin && target.Kind == DropKind.Remove ? new(DropEffect.Remove) : BoardDrop.None;
+        return boardView.Drop(key, target.Kind, target.Key, target.Blanket);
     }
+
+    /// <summary>The ghost's caption for <paramref name="drop"/>: the gesture's name, or why it is refused; null when nothing happens.</summary>
+    private static string? DropCaption(BoardDrop drop) => drop.Effect switch
+    {
+        DropEffect.Join => "or",
+        DropEffect.Detach => "on its own",
+        DropEffect.Remove => "remove",
+        DropEffect.Refused => drop.Message,
+        _ => null,
+    };
 
     private void CompleteDrop(long key, DropTarget? target)
     {
-        if (target is null || DropCaption(key, target) is null) return;
-        if (key == ArcaneResinKey) { RemoveArcaneResin(); return; }
-        var source = IndexOfKey(key);
-        switch (target.Kind)
+        var drop = DropOf(key, target);
+        if (key == ArcaneResinKey) { if (drop.Effect == DropEffect.Remove) RemoveArcaneResin(); return; }
+        switch (drop.Effect)
         {
-            case DropKind.Chip or DropKind.Cluster: SetRequirements(QueryRelationships.JoinAlternatives(query.Requirements, source, IndexOfKey(target.Key))); break;
-            case DropKind.Remove: RemoveChip(source); break;
-            default: SetRequirements(QueryRelationships.Detach(query.Requirements, source)); break;
+            case DropEffect.Join: EditBoard(BoardEdit.Join(key, target!.Key)); break;
+            case DropEffect.Detach: EditBoard(BoardEdit.Detach(key)); break;
+            case DropEffect.Remove: RemoveChip(key); break;
         }
     }
 
@@ -1018,11 +1025,11 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>The chip's likeness that follows the pointer: its sprite and name on a solid ground with a shadow, and a pill for the drop's caption.</summary>
-    private Border GhostChip(ItemRequirement requirement)
+    private Border GhostChip(BoardChip chip)
     {
         var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
-        content.Children.Add(ChipArt(requirement));
-        content.Children.Add(ChipName(requirement));
+        content.Children.Add(ChipArt(chip));
+        content.Children.Add(ChipName(chip));
         return GhostChip(content);
     }
 
@@ -1115,8 +1122,8 @@ public sealed partial class MainWindow : Window
         var source = Combo(new[] { "Any source" }.Concat(Enum.GetValues<ScoutItemSource>().Select(Labels.Source)), r.Source is null ? 0 : (int)r.Source + 1);
         // How many items of this kind the chip asks for. The relationships
         // themselves — the either/or clusters and the identity labels behind a
-        // stack — belong to the board, which writes them through
-        // QueryRelationships; the editor only names the shape.
+        // stack — belong to the board, which the shared editor writes; the
+        // editor only names the shape.
         var count = Number("Total item count", Math.Clamp(stack.Count, 1, SearchLimits.StackMax), 1, SearchLimits.StackMax);
         count.SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline; count.Visibility = stack.InCluster ? Visibility.Collapsed : Visibility.Visible;
         // A stack's extra copies constrain nothing of their own, but a floor
@@ -1329,7 +1336,7 @@ public sealed partial class MainWindow : Window
         r.Source = source.SelectedIndex == 0 ? null : (ScoutItemSource)(source.SelectedIndex - 1);
         r.MaximumDepth = depthToggle.IsOn ? FloorLimits.Normalize(Math.Clamp((int)depth.Value, 1, SearchLimits.MaxDepth)) : null;
         // The identity label and the combined level themselves are the stack's
-        // encoding, which ApplyEdit writes from the shape returned here.
+        // encoding, which the board's save writes from the shape returned here.
         if (r.Kind == ItemKind.Trinket)
         {
             r.Source = null; r.MaximumDepth = null; r.RequireUncursed = false;
@@ -1586,7 +1593,7 @@ public sealed partial class MainWindow : Window
         // The engine only reports a generic rejection over the FFI, so the
         // relationship rules are checked here first, with a message that
         // names the offending group.
-        if (QueryRelationships.Validate(query) is string problem) { await ShowTransferMessage(problem); return; }
+        if (boardEditor.Problem(query) is string problem) { await ShowTransferMessage(problem); return; }
         if (NativeEngine.ImpossibilityReason(query) is string reason)
         {
             SearchStatus.Text = $"Impossible query. {reason}";
@@ -1844,7 +1851,7 @@ public sealed partial class MainWindow : Window
 
     private async void CopyLink_Click(object sender, RoutedEventArgs e)
     {
-        if (QueryRelationships.Validate(query) is string problem) { await ShowTransferMessage(problem); return; }
+        if (boardEditor.Problem(query) is string problem) { await ShowTransferMessage(problem); return; }
         if (NativeEngine.TryEncodeShareLink(ResultsExport.EncodeQueryDocument(query)) is not string link)
         {
             await ShowTransferMessage("This query could not be encoded into a link.");

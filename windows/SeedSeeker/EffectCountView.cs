@@ -16,14 +16,14 @@ internal sealed class EffectCountView : Grid
     private readonly Color[] colors;
     private readonly Image ring = new() { Stretch = Stretch.Fill };
     private XamlRoot? root;
-    public EffectCountView(IReadOnlyList<string> effects)
+    /// <param name="label">The filter in words, as the chip's detail names it.</param>
+    public EffectCountView(IReadOnlyList<string> effects, string label)
     {
         colors = effects.Select(effect => ItemGlow.ForEffect(effect)!.Color).ToArray();
         Width = Height = 18; VerticalAlignment = VerticalAlignment.Center;
         Children.Add(ring);
         Children.Add(new TextBlock { Text = effects.Count.ToString(), FontSize = 10, FontWeight = FontWeights.Bold,
             HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center });
-        var label = $"{effects.Count} effects: {string.Join(", ", effects)}";
         ToolTipService.SetToolTip(this, label); AutomationProperties.SetName(this, label);
         Loaded += (_, _) => { root = XamlRoot; if (root is not null) root.Changed += RootChanged; Draw(); };
         Unloaded += (_, _) => { if (root is not null) root.Changed -= RootChanged; root = null; };

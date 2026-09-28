@@ -21,7 +21,7 @@ public sealed class TrinketTests
         Assert.Equal(1, marks.MatchedRequirements);
         Assert.Empty(marks.Matched);
         Assert.Equal(new[] { 10 }, marks.TransmutedTrinkets);
-        Assert.Contains(query.Requirements[0].Tags, tag => tag.Text == "Transmute ≤11");
+        Assert.Contains(new BoardEditor().View(query).Entries[0].Chips[0].Tags, tag => tag.Text == "Transmute ≤11");
     }
 
     [Fact]
@@ -75,17 +75,20 @@ public sealed class TrinketTests
         Assert.Equal(1, matches.TotalRequirements);
         Assert.Equal(1, matches.MatchedRequirements);
         Assert.Contains(matches.Matched, index => world.Items[index].Item.Id == "mimic_tooth");
-        Assert.Equal("", query.Requirements[0].Description);
+        // A plain trinket asks nothing of its item beyond being that trinket.
+        Assert.All(new BoardEditor().View(query).Entries.Single().Chips, chip => Assert.Empty(chip.Details));
     }
 
     [Fact]
     public void TrinketsJoinAlternativesAndRoundTripDocuments()
     {
-        var requirements = QueryRelationships.JoinAlternatives([
+        var query = new QuerySettings { Requirements = [
             new() { Kind = ItemKind.Trinket, Item = ItemCatalog.Find("mimic_tooth") },
             new() { Kind = ItemKind.Trinket, Item = ItemCatalog.Find("rat_skull") },
-        ], 1, 0);
-        var query = new QuerySettings { Requirements = new(requirements) };
+        ] };
+        var editor = new BoardEditor();
+        editor.Load(query);
+        query.Requirements = new(editor.Edit(query, BoardEdit.Join(query.Requirements[1].Key, query.Requirements[0].Key)).Rows!);
         var json = ResultsExport.EncodeQueryDocument(query);
         var decoded = ResultsExport.DecodeQueryDocument(json);
         Assert.Equal(2, decoded.Requirements.Count);
@@ -115,7 +118,7 @@ public sealed class TrinketTests
         var decoded = ResultsExport.DecodeQueryDocument(ResultsExport.EncodeQueryDocument(query));
         Assert.True(decoded.Requirements[0].SelectTrinket);
         Assert.True(decoded.Clone().Requirements[0].SelectTrinket);
-        Assert.Equal("choose at +3", decoded.Requirements[0].Description);
+        Assert.Equal(["choose at +3"], new BoardEditor().View(decoded).Entries[0].Chips[0].Details);
         var engine = new NativeEngine();
         var auto = engine.Scout("AAA-AAA-AAA", 0, decoded);
         Assert.Equal("mimic_tooth", auto.SelectedTrinket);

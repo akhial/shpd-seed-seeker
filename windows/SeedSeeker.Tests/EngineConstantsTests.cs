@@ -27,6 +27,7 @@ public sealed class EngineConstantsTests
         Assert.Equal(SearchLimits.BoundedTierMax, Limit("boundedTierMax"));
         Assert.Equal(SearchLimits.IdentityGroupMax, Limit("identityGroupMax"));
         Assert.Equal(SearchLimits.LevelSumGroupMax, Limit("levelSumGroupMax"));
+        Assert.Equal(SearchLimits.StackMax, Limit("stackMax"));
         Assert.Equal(SearchLimits.MaxUpgradeDefault, Limit("maxUpgradeDefault"));
         Assert.Equal(SearchLimits.MaxUpgradeRing, Limit("maxUpgradeRing"));
         Assert.Equal(SearchLimits.MaxUpgradeRingStandard, Limit("maxUpgradeRingStandard"));
