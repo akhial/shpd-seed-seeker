@@ -427,4 +427,29 @@ public sealed class RequirementBoardTests
         Assert.Equal(entry.Problem, entry.Chips[0].Problem);
         Assert.Null(entry.Chips[1].Problem);
     }
+
+    [Fact]
+    public void TheResinChipDrawsTheQuerysResin()
+    {
+        var editor = new BoardEditor();
+        var query = Loaded(editor, new ItemRequirement { Kind = ItemKind.Wand });
+        Assert.Null(editor.View(query).Resin);
+        query.ArcaneResin = 4;
+        query.ArcaneResinFilter = new(true, 9, ScoutItemSource.LockedChest, true);
+        var resin = editor.View(query).Resin!;
+        Assert.Equal([new ChipTag("≥4"), new ChipTag("Mage +2"), new ChipTag("F≤9")], resin.Tags);
+        Assert.Equal("Locked chest", resin.Tooltip);
+        Assert.Null(resin.AmountTooltip);
+        Assert.Equal("Arcane Resin\nat least 4 · starting Magic Missile contributes 2 resin · uncursed wands · Locked chest · floors 1–9", resin.Detail);
+        // The amount and the Mage's wand are what the resin credits; the donors' floor is not.
+        Assert.Equal(2, resin.CreditTags(query.ArcaneResinFilter.IncludeMageWand));
+
+        query.ArcaneResinAuto = true;
+        query.ArcaneResinFilter = query.ArcaneResinFilter with { IncludeMageWand = false, Source = null };
+        resin = editor.View(query).Resin!;
+        Assert.Equal([new ChipTag("Auto"), new ChipTag("F≤9")], resin.Tags);
+        Assert.Null(resin.Tooltip);
+        Assert.NotNull(resin.AmountTooltip);
+        Assert.Equal(1, resin.CreditTags(query.ArcaneResinFilter.IncludeMageWand));
+    }
 }

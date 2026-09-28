@@ -111,6 +111,15 @@ public sealed record ResinChip(string Name, IReadOnlyList<ChipTag> Tags, bool Un
 {
     /// <summary>The chip's hover detail, laid out like a requirement chip's.</summary>
     public string Detail => Details.Count > 0 ? $"{Name}\n{string.Join(" · ", Details)}" : Name;
+
+    /// <summary>
+    /// How many leading tags say what the resin credits — the amount, then
+    /// <c>Mage +2</c> when the query counts the Mage's wand
+    /// (<paramref name="includeMageWand"/>) — which the window tints apart
+    /// from the donors' floor. The editor marks every resin tag plain, so
+    /// their documented order is what tells them apart.
+    /// </summary>
+    public int CreditTags(bool includeMageWand) => Math.Min(Tags.Count, includeMageWand ? 2 : 1);
 }
 
 /// <summary>How many entries each board section shows, a cluster or a stack counting once.</summary>

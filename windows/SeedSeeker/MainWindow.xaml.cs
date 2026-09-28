@@ -537,9 +537,11 @@ public sealed partial class MainWindow : Window
         var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
         content.Children.Add(new SpriteView { SpriteIndex = 317, SpriteSize = 20, VerticalAlignment = VerticalAlignment.Center });
         content.Children.Add(new TextBlock { Text = resin.Name, FontSize = 13, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+        // The amount and the Mage's wand are green, the donors' floor amber.
+        var credits = resin.CreditTags(query.ArcaneResinFilter.IncludeMageWand);
         for (var index = 0; index < resin.Tags.Count; index++)
         {
-            var tag = ChipTagPill(resin.Tags[index]);
+            var tag = index < credits ? ChipTagPill(resin.Tags[index].Text, SuccessInk, SuccessFill) : ChipTagPill(resin.Tags[index]);
             // The first tag is the amount, and "Auto" says what it means.
             if (index == 0 && resin.AmountTooltip is string meaning) ToolTipService.SetToolTip(tag, meaning);
             content.Children.Add(tag);
