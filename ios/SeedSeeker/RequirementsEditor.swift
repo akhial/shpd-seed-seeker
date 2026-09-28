@@ -413,7 +413,7 @@ struct RequirementsEditor: View {
     private var requirementPreview: some View {
         HStack(spacing: 12) {
             if let preview = form.preview {
-                RequirementsChipSprite(chip: preview, size: 36)
+                RequirementsChipSprite(face: preview.face, size: 36)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(preview.title).font(.subheadline.weight(.semibold))
                     if !preview.details.isEmpty {

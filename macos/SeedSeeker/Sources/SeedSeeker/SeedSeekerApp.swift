@@ -1177,7 +1177,7 @@ private struct ChipView: View {
 
     var body: some View {
         HStack(spacing: 5) {
-            face
+            faceView(chip.face)
                 .contentShape(Rectangle())
                 .onTapGesture { onOpen(chip.key) }
             if badges.count != nil || badges.total != nil {
@@ -1198,9 +1198,10 @@ private struct ChipView: View {
             dragging = .item(chip.key)
             return NSItemProvider(object: NSString(string: "\(chip.key)"))
         } preview: {
-            // A drag moves one item, so what is lifted is the chip alone:
-            // no ×N, no Σ.
-            face
+            // A drag moves one item — for a chip with copies a bare copy of
+            // it, the chip keeping its requirements — so what is lifted is
+            // that item's face alone: no ×N, no Σ.
+            faceView(chip.movingFace)
                 .padding(.horizontal, 7)
                 .frame(height: 30)
                 .background(Color(nsColor: .controlBackgroundColor), in: Capsule())
@@ -1220,25 +1221,26 @@ private struct ChipView: View {
         chip.shownBadges(lifted: dragging == .item(chip.key))
     }
 
-    /// The chip without its badges: sprite, name and qualifiers.
-    private var face: some View {
+    /// A face without badges — sprite, name and qualifiers: the chip's own
+    /// on the board, the item it lifts in a drag preview.
+    private func faceView(_ face: ChipFace) -> some View {
         HStack(spacing: 5) {
             // No seed here: a chip names an item class the search is to
             // look for, so its ring keeps the catalog's own cell.
-            if let catalogItem = chip.catalogItem {
+            if let catalogItem = face.catalogItem {
                 ItemSpriteView(item: catalogItem,
-                               glow: effectGlow(chip.effect?.glowNames.first), pointSize: 16)
-            } else if let kind = chip.kind {
+                               glow: effectGlow(face.effect?.glowNames.first), pointSize: 16)
+            } else if let kind = face.kind {
                 WildcardSpriteView(kind: kind)
             }
-            Text(chip.name)
+            Text(face.name)
                 .font(.system(size: 12, weight: .semibold))
                 .lineLimit(1).truncationMode(.tail)
                 .frame(maxWidth: 150, alignment: .leading)
-            ForEach(chip.tags, id: \.self) { tag in RequirementTagView(tag: tag) }
-            effectBadge
-            ForEach(chip.trailingTags, id: \.self) { tag in RequirementTagView(tag: tag) }
-            if chip.uncursed {
+            ForEach(face.tags, id: \.self) { tag in RequirementTagView(tag: tag) }
+            effectBadge(face.effect)
+            ForEach(face.trailingTags, id: \.self) { tag in RequirementTagView(tag: tag) }
+            if face.uncursed {
                 Text("✓")
                     .font(.system(size: 11, weight: .semibold, design: .monospaced))
                     .foregroundStyle(Color.shatteredMint)
@@ -1262,8 +1264,8 @@ private struct ChipView: View {
     /// pulsing that very colour — black, for a curse — and the tooltip names
     /// it. What is left for a badge is what one pulse cannot say: several
     /// effects at once, or "any enchantment", which settles on no colour.
-    @ViewBuilder private var effectBadge: some View {
-        if let effect = chip.effect {
+    @ViewBuilder private func effectBadge(_ effect: ChipEffect?) -> some View {
+        if let effect {
             if effect.anyEnchantment {
                 Circle()
                     .fill(AngularGradient(colors: Self.spectrum, center: .center))

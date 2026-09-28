@@ -298,7 +298,7 @@ struct RequirementsView: View {
                                              offerResin: true),
                        key: chip.key, source: id)
         } label: {
-            chipContent(chip, badges: originBadges(chip))
+            chipContent(chip.face, badges: originBadges(chip), countBeside: memberCountBadge(chip) != nil)
                 .glassEffect(.regular.tint(chipTint(chip, hovered: hovered)).interactive(), in: .capsule)
                 .glassEffectID(id, in: glass)
                 .glassEffectUnion(id: id, namespace: glass)
@@ -338,26 +338,28 @@ struct RequirementsView: View {
         return chip.inCluster ? AppTheme.seed.opacity(0.04) : .white.opacity(0.015)
     }
 
-    /// A chip's face with the stack `badges` given: those its place shows,
-    /// or none for a lifted chip, which is one item whatever its stack.
-    private func chipContent(_ chip: BoardChip, badges: BoardBadges?) -> some View {
+    /// A face with the stack `badges` given: a chip's own with those its
+    /// place shows, or the item a lift carries with none, since it is one
+    /// item whatever its stack. A member whose ×N stands `countBeside` it,
+    /// as a button, shows only its Σ inline.
+    private func chipContent(_ face: ChipFace, badges: BoardBadges?, countBeside: Bool = false) -> some View {
         HStack(spacing: compactChips ? 6 : 8) {
-            RequirementsChipSprite(chip: chip, size: compactChips ? 23 : 28)
-            Text(chip.name)
+            RequirementsChipSprite(face: face, size: compactChips ? 23 : 28)
+            Text(face.name)
                 .font(compactChips ? .caption.weight(.medium) : .subheadline.weight(.medium))
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
                 .layoutPriority(-1)
                 .foregroundStyle(.primary)
             HStack(spacing: 4) {
-                ForEach(chip.tags, id: \.self) { value in tag(value.text, upgrade: value.isUpgrade) }
-                if chip.uncursed {
+                ForEach(face.tags, id: \.self) { value in tag(value.text, upgrade: value.isUpgrade) }
+                if face.uncursed {
                     uncursedTag
                 }
-                if memberCountBadge(chip) == nil, let badge = badges?.count { tag(badge.compactText) }
+                if !countBeside, let badge = badges?.count { tag(badge.compactText) }
                 if let badge = badges?.total { tag(badge.compactText) }
-                RequirementEffectBadge(effect: chip.effect, isWildcard: chip.item == nil)
-                ForEach(chip.trailingTags, id: \.self) { value in tag(value.text, upgrade: value.isUpgrade) }
+                RequirementEffectBadge(effect: face.effect, isWildcard: face.item == nil)
+                ForEach(face.trailingTags, id: \.self) { value in tag(value.text, upgrade: value.isUpgrade) }
             }
             .fixedSize(horizontal: true, vertical: false)
         }
@@ -403,8 +405,10 @@ struct RequirementsView: View {
         // rather than on every frame of the drag.
         let lifted = key.flatMap { shown.chip($0) }
         if let lifted {
-            // A drag moves one item: the chip alone, without ×N or Σ.
-            interaction.preview = AnyView(chipContent(lifted, badges: nil))
+            // A drag moves one item — for a chip with copies a bare copy of
+            // it, the chip keeping its requirements — so what follows the
+            // finger is that item's face, without ×N or Σ.
+            interaction.preview = AnyView(chipContent(lifted.movingFace, badges: nil))
         } else if let resin = shown.resin {
             interaction.preview = AnyView(resinContent(resin))
         }
@@ -705,13 +709,13 @@ private struct RequirementsStackPresentation: Identifiable {
 /// A board chip's sprite: the item with its effects' glows, or the
 /// wildcard's family silhouette.
 struct RequirementsChipSprite: View {
-    let chip: BoardChip
+    let face: ChipFace
     var size: Int = 32
     var body: some View {
         Group {
-            if let item = chip.catalogItem {
-                ItemSpriteView(item: item, glows: chipGlows(chip.effect), pointSize: size)
-            } else if let kind = chip.kind {
+            if let item = face.catalogItem {
+                ItemSpriteView(item: item, glows: chipGlows(face.effect), pointSize: size)
+            } else if let kind = face.kind {
                 WildcardSpriteView(kind: kind, pointSize: size)
             }
         }
