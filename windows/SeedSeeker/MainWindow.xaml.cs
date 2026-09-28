@@ -537,15 +537,7 @@ public sealed partial class MainWindow : Window
         var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
         content.Children.Add(new SpriteView { SpriteIndex = 317, SpriteSize = 20, VerticalAlignment = VerticalAlignment.Center });
         content.Children.Add(new TextBlock { Text = resin.Name, FontSize = 13, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
-        // The amount and the Mage's wand are green, the donors' floor amber.
-        var credits = resin.CreditTags(query.ArcaneResinFilter.IncludeMageWand);
-        for (var index = 0; index < resin.Tags.Count; index++)
-        {
-            var tag = index < credits ? ChipTagPill(resin.Tags[index].Text, SuccessInk, SuccessFill) : ChipTagPill(resin.Tags[index]);
-            // The first tag is the amount, and "Auto" says what it means.
-            if (index == 0 && resin.AmountTooltip is string meaning) ToolTipService.SetToolTip(tag, meaning);
-            content.Children.Add(tag);
-        }
+        foreach (var tag in resin.Tags) content.Children.Add(ChipTagPill(tag));
         if (resin.Uncursed) content.Children.Add(ChipTagPill("\u2713", SuccessInk, SuccessFill));
         return content;
     }
@@ -649,9 +641,18 @@ public sealed partial class MainWindow : Window
         Child = new TextBlock { Text = text, FontFamily = Mono, FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = ink },
     };
 
-    /// <summary>A chip tag as a pill: the upgrade green, every other qualifier amber.</summary>
-    private static Border ChipTagPill(ChipTag tag) =>
-        ChipTagPill(tag.Text, tag.Upgrade ? SuccessInk : CautionInk, tag.Upgrade ? SuccessFill : CautionFill);
+    /// <summary>
+    /// A chip tag as a pill: the upgrade, and the resin the resin chip counts,
+    /// green; every other qualifier amber. A tag that explains itself
+    /// (<c>Auto</c>, <c>Mage +2</c>) carries its own tooltip.
+    /// </summary>
+    private static Border ChipTagPill(ChipTag tag)
+    {
+        var green = tag.Style is TagStyle.Upgrade or TagStyle.Credit;
+        var pill = ChipTagPill(tag.Text, green ? SuccessInk : CautionInk, green ? SuccessFill : CautionFill);
+        if (tag.Tooltip is string tooltip) ToolTipService.SetToolTip(pill, tooltip);
+        return pill;
+    }
 
     /// <summary>
     /// What a single pulse cannot say: several effects at once, shown as their
@@ -705,7 +706,7 @@ public sealed partial class MainWindow : Window
         var anchor = entry.Members[0];
         var stack = entry.Stack;
         if (entry.CountBadge is { } count)
-            badges.Add(StackBadge(count, SuccessInk, SuccessFill, "How many", stack.Count, 1, stack.CountMaximum,
+            badges.Add(StackBadge(count, SuccessInk, SuccessFill, "How many", stack.Count, 1, stack.CountMax,
                 value => EditBoard(BoardEdit.SetCount(anchor, value))));
         if (entry.TotalBadge is { } total && stack.Total is int current)
             badges.Add(StackBadge(total, CautionInk, CautionFill, "Combined level", current, 1, Math.Max(1, stack.LevelCapacity),
@@ -737,12 +738,12 @@ public sealed partial class MainWindow : Window
         var edit = new MenuFlyoutItem { Text = "Edit\u2026" };
         edit.Click += async (_, _) => await EditChip(key);
         menu.Items.Add(edit);
-        // "Either/or with…" names the chips this one may join, the menu's way
-        // of saying the drop a pointer would make.
+        // "Either/or with…" names the entries this chip may join, a cluster
+        // once, the menu's way of saying the drop a pointer would make.
         var join = new MenuFlyoutSubItem { Text = "Either/or with\u2026" };
-        foreach (var target in chip.Join)
+        foreach (var (name, target) in boardView.JoinChoices(key))
         {
-            var choice = new MenuFlyoutItem { Text = boardView.ChipOf(target)?.Name ?? "" };
+            var choice = new MenuFlyoutItem { Text = name };
             choice.Click += (_, _) => EditBoard(BoardEdit.Join(key, target));
             join.Items.Add(choice);
         }
@@ -752,7 +753,7 @@ public sealed partial class MainWindow : Window
         {
             menu.Items.Add(new MenuFlyoutSeparator());
             var howMany = new MenuFlyoutSubItem { Text = "How many" };
-            for (var wanted = 1; wanted <= stack.CountMaximum; wanted++)
+            for (var wanted = 1; wanted <= stack.CountMax; wanted++)
             {
                 var count = wanted;
                 var choice = new RadioMenuFlyoutItem { Text = count.ToString(), GroupName = $"stack:{key}", IsChecked = count == stack.Count };

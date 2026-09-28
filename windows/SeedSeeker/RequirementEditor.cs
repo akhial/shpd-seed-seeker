@@ -20,8 +20,11 @@ public sealed class RequirementEditorException(string message, long? key = null)
     public long? Key { get; } = key;
 }
 
-/// <summary>A tiny qualifier beside a chip's name; the upgrade is tinted apart from the rest.</summary>
-public sealed record ChipTag(string Text, bool Upgrade = false);
+/// <summary>How a tag is tinted: a plain qualifier, the upgrade, or resin the chip counts (the resin chip's amount and <c>Mage +2</c>).</summary>
+public enum TagStyle { Plain, Upgrade, Credit }
+
+/// <summary>A tiny qualifier beside a chip's name, tinted by its style, with its own hover text when it has one.</summary>
+public sealed record ChipTag(string Text, TagStyle Style = TagStyle.Plain, string? Tooltip = null);
 
 /// <summary>
 /// A chip's effect filter: its words (<c>any enchantment</c>, one effect's
@@ -73,12 +76,9 @@ public sealed record BoardChip(long Key, string Name, string Title, string? Item
 /// asks for, whether that may grow or change, its combined level and the
 /// highest one its items can reach, and the floor limit of its hidden copies.
 /// </summary>
-public sealed record BoardStack(int Count, int Max, bool CanGrow, bool CanChangeCount, int? Total, bool CanCountLevels,
-    int LevelCapacity, int DefaultTotal, int? CopyDepth, bool CanSetCopyDepth, string CountText, string TotalText)
-{
-    /// <summary>The count stepper's upper bound: an entry that cannot grow may only shed copies.</summary>
-    public int CountMaximum => CanGrow ? Max : Count;
-}
+/// <param name="CountMax">The count stepper's upper bound: <paramref name="Max"/> while the entry can grow, else its count.</param>
+public sealed record BoardStack(int Count, int Max, bool CanGrow, bool CanChangeCount, int CountMax, int? Total, bool CanCountLevels,
+    int LevelCapacity, int DefaultTotal, int? CopyDepth, bool CanSetCopyDepth, string CountText, string TotalText);
 
 /// <summary>A badge's words at rest: <c>×3</c> or <c>Σ ≥ 5</c>, and what it means.</summary>
 public sealed record BoardBadge(string Text, string CompactText, string Tooltip);
@@ -89,12 +89,13 @@ public sealed record BoardBadge(string Text, string CompactText, string Tooltip)
 /// <param name="Id">Stable while the entry survives an edit: <c>r17</c> for a chip, <c>c3</c> for a cluster.</param>
 /// <param name="Cluster">The alternative group of a cluster of two or more; null for a chip.</param>
 /// <param name="Label">A cluster's caption, <c>Any of 2</c>.</param>
+/// <param name="Name">What a menu calls the entry: a chip's name, or a cluster's (<c>Spear or Mace</c>).</param>
 /// <param name="Members">The visible rows' keys: one for a chip, every member of a cluster.</param>
 /// <param name="Extras">The hidden copies' keys behind the stack badge.</param>
 /// <param name="CountBadge">The <c>×N</c> badge, when the entry asks for more than one item.</param>
 /// <param name="TotalBadge">The <c>Σ ≥ T</c> badge, when the entry counts levels together.</param>
 /// <param name="Problem">The first problem touching any member or hidden copy.</param>
-public sealed record BoardEntry(string Id, bool Blanket, int? Cluster, string? Label, IReadOnlyList<long> Members,
+public sealed record BoardEntry(string Id, bool Blanket, int? Cluster, string? Label, string Name, IReadOnlyList<long> Members,
     IReadOnlyList<long> Extras, BoardStack Stack, BoardBadge? CountBadge, BoardBadge? TotalBadge,
     IReadOnlyList<BoardChip> Chips, string? Problem);
 
@@ -103,23 +104,17 @@ public enum ProblemScope { Row, Group, List }
 /// <summary>One thing the list must fix before it can be searched, and the rows it blames.</summary>
 public sealed record BoardProblem(string Message, IReadOnlyList<long> Keys, ProblemScope Scope);
 
-/// <summary>The Arcane Resin chip: <c>Auto</c> or <c>≥N</c>, <c>Mage +2</c>, <c>F≤N</c>, and the donors in words.</summary>
+/// <summary>
+/// The Arcane Resin chip: <c>Auto</c> or <c>≥N</c> and <c>Mage +2</c>, the
+/// resin it counts (styled <see cref="TagStyle.Credit"/>, each explaining
+/// itself where it needs to), then the donors' <c>F≤N</c>; and the donors in words.
+/// </summary>
 /// <param name="Tooltip">The donors' source, the one filter no tag shows; null for any source.</param>
-/// <param name="AmountTooltip">What the first tag, <c>Auto</c>, means; null for a fixed amount.</param>
-public sealed record ResinChip(string Name, IReadOnlyList<ChipTag> Tags, bool Uncursed, string? Tooltip, string? AmountTooltip,
+public sealed record ResinChip(string Name, IReadOnlyList<ChipTag> Tags, bool Uncursed, string? Tooltip,
     IReadOnlyList<string> Details, string Description)
 {
     /// <summary>The chip's hover detail, laid out like a requirement chip's.</summary>
     public string Detail => Details.Count > 0 ? $"{Name}\n{string.Join(" · ", Details)}" : Name;
-
-    /// <summary>
-    /// How many leading tags say what the resin credits — the amount, then
-    /// <c>Mage +2</c> when the query counts the Mage's wand
-    /// (<paramref name="includeMageWand"/>) — which the window tints apart
-    /// from the donors' floor. The editor marks every resin tag plain, so
-    /// their documented order is what tells them apart.
-    /// </summary>
-    public int CreditTags(bool includeMageWand) => Math.Min(Tags.Count, includeMageWand ? 2 : 1);
 }
 
 /// <summary>How many entries each board section shows, a cluster or a stack counting once.</summary>
@@ -163,6 +158,16 @@ public sealed class BoardView(IReadOnlyList<BoardEntry> entries, BoardCounts cou
 
     /// <summary>The entry the visible row <paramref name="key"/> belongs to.</summary>
     public BoardEntry? EntryOf(long key) => chips.TryGetValue(key, out var pair) ? pair.Entry : null;
+
+    /// <summary>
+    /// What "Either/or with…" offers the chip keyed <paramref name="key"/>:
+    /// each entry it may join once, in list order, under the entry's name, with
+    /// the member a join names — any member joins the whole cluster.
+    /// </summary>
+    public IReadOnlyList<(string Name, long Target)> JoinChoices(long key) => ChipOf(key) is { } chip
+        ? [.. chip.Join.Select(target => (Entry: EntryOf(target), Target: target)).Where(choice => choice.Entry is not null)
+            .GroupBy(choice => choice.Entry!.Id).Select(group => (group.First().Entry!.Name, group.First().Target))]
+        : [];
 
     /// <summary>
     /// What dropping the chip keyed <paramref name="source"/> does, decided
@@ -366,9 +371,9 @@ public sealed class BoardEditor
     {
         var stack = entry["stack"]!;
         return new((string)entry["id"]!, (bool)entry["blanket"]!, (int?)entry["cluster"], (string?)entry["label"],
-            Keys(entry["members"]), Keys(entry["extras"]),
+            (string)entry["name"]!, Keys(entry["members"]), Keys(entry["extras"]),
             new((int)stack["count"]!, (int)stack["max"]!, (bool)stack["can_grow"]!, (bool)stack["can_change_count"]!,
-                (int?)stack["total"], (bool)stack["can_count_levels"]!, (int)stack["level_capacity"]!,
+                (int)stack["count_max"]!, (int?)stack["total"], (bool)stack["can_count_levels"]!, (int)stack["level_capacity"]!,
                 (int)stack["default_total"]!, (int?)stack["copy_depth"], (bool)stack["can_set_copy_depth"]!,
                 (string)stack["count_text"]!, (string)stack["total_text"]!),
             Badge(entry["badges"]!["count"]), Badge(entry["badges"]!["total"]),
@@ -392,14 +397,16 @@ public sealed class BoardEditor
 
     private static ResinChip Resin(JsonObject resin) => new(
         (string)resin["name"]!, Tags(resin["tags"]), (bool)resin["uncursed"]!, (string?)resin["tooltip"],
-        (string?)resin["amount_tooltip"], Strings(resin["details"]), (string)resin["description"]!);
+        Strings(resin["details"]), (string)resin["description"]!);
 
     private static BoardBadge? Badge(JsonNode? badge) => badge is JsonObject
         ? new((string)badge["text"]!, (string)badge["compact_text"]!, (string)badge["tooltip"]!)
         : null;
 
     private static IReadOnlyList<ChipTag> Tags(JsonNode? tags) =>
-        [.. (tags as JsonArray ?? []).Select(tag => new ChipTag((string)tag!["text"]!, (string?)tag["style"] == "upgrade"))];
+        [.. (tags as JsonArray ?? []).Select(tag => new ChipTag((string)tag!["text"]!,
+            (string?)tag["style"] switch { "upgrade" => TagStyle.Upgrade, "credit" => TagStyle.Credit, _ => TagStyle.Plain },
+            (string?)tag["tooltip"]))];
 
     private static IReadOnlyList<long> Keys(JsonNode? keys) => [.. (keys as JsonArray ?? []).Select(key => (long)key!)];
 

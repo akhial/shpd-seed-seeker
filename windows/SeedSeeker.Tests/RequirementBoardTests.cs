@@ -80,6 +80,8 @@ public sealed class RequirementBoardTests
         var board = answer.View;
         Assert.Equal(new BoardCounts(4, 1), board.Counts);
         Assert.Equal(["r1", "r4", "c1", "r7", "r8"], board.Entries.Select(item => item.Id));
+        // What a menu calls each entry: a chip's name, a cluster's members' names.
+        Assert.Equal(["Ring of Might", "Any melee", "Wand of Fireblast or Any wand", "Rat Skull", "Any armor"], board.Entries.Select(item => item.Name));
         Assert.Empty(board.Problems);
         Assert.Null(board.Problem);
 
@@ -90,14 +92,14 @@ public sealed class RequirementBoardTests
         Assert.Equal(new BoardBadge("×3", "×3", "3 of the same kind"), rings.CountBadge);
         Assert.Null(rings.TotalBadge);
         Assert.Equal(3, rings.Stack.Count);
-        Assert.Equal(3, rings.Stack.CountMaximum);
+        Assert.Equal(3, rings.Stack.CountMax);
         Assert.True(rings.Stack.CanCountLevels);
         Assert.Equal(11, rings.Stack.LevelCapacity);
         var ring = Assert.Single(rings.Chips);
         Assert.Equal("Ring of Might", ring.Name);
         Assert.Equal("ring_might", ring.Item);
         Assert.Equal(ItemKind.Ring, ring.Kind);
-        Assert.Equal([new ChipTag("+2", Upgrade: true)], ring.Tags);
+        Assert.Equal([new ChipTag("+2", TagStyle.Upgrade)], ring.Tags);
         Assert.Equal([new ChipRelation(RelationGlyph.Times, "3 of the same kind — the extra copies: any upgrade, any floor")], ring.Relations);
         Assert.Equal("Ring of Might\nexactly +2\n× 3 of the same kind — the extra copies: any upgrade, any floor", ring.Detail);
         Assert.Empty(ring.Join);
@@ -106,7 +108,7 @@ public sealed class RequirementBoardTests
         // A narrowed wildcard: its kind draws the sprite, its qualifiers are tags in order.
         var melee = Assert.Single(board.Entries[1].Chips);
         Assert.Equal(("Any melee", "Any Tier 3+ melee weapon", (string?)null, (ItemKind?)ItemKind.MeleeWeapon), (melee.Name, melee.Title, melee.Item, melee.Kind));
-        Assert.Equal([new ChipTag("T3+"), new ChipTag("+2↑", true), new ChipTag("F≤9")], melee.Tags);
+        Assert.Equal([new ChipTag("T3+"), new ChipTag("+2↑", TagStyle.Upgrade), new ChipTag("F≤9")], melee.Tags);
         Assert.True(melee.Uncursed);
         Assert.True(melee.Effect!.AnyEnchantment);
         Assert.Equal("any enchantment", melee.Effect.Label);
@@ -122,6 +124,12 @@ public sealed class RequirementBoardTests
         Assert.Equal("Any wand\nexactly +3 · excluded from Auto resin\nor Wand of Fireblast", cluster.Chips[1].Detail);
         Assert.Equal(board.Entries[2], board.EntryOf(6));
         Assert.Equal(cluster.Chips[1], board.ChipOf(6));
+        // "Either/or with…" offers the cluster once, under its name, however many of its members a chip may join.
+        Assert.Equal([5L, 6, 7], board.ChipOf(4)!.Join);
+        Assert.Equal([("Wand of Fireblast or Any wand", 5L), ("Rat Skull", 7L)], board.JoinChoices(4));
+        Assert.Equal([("Any melee", 4L), ("Rat Skull", 7L)], board.JoinChoices(6));
+        Assert.Empty(board.JoinChoices(1));
+        Assert.Empty(board.JoinChoices(2));
         // A hidden copy has no chip of its own.
         Assert.Null(board.ChipOf(2));
         Assert.Null(board.EntryOf(2));
@@ -131,13 +139,16 @@ public sealed class RequirementBoardTests
         Assert.Equal(["Viscosity", "Brimstone"], armor.Effect!.Effects);
         Assert.Equal("effect: Viscosity/Brimstone", armor.Effect.Label);
         Assert.False(board.Entries[4].Stack.CanChangeCount);
+        Assert.Equal(1, board.Entries[4].Stack.CountMax);
 
         var resin = board.Resin!;
         Assert.Equal("Arcane Resin", resin.Name);
-        Assert.Equal([new ChipTag("Auto"), new ChipTag("Mage +2")], resin.Tags);
+        // The resin the chip counts is a credit, and each tag that needs it explains itself.
+        Assert.Equal([
+            new ChipTag("Auto", TagStyle.Credit, "Enough resin to upgrade kept wands to +3, excluding No resin wands and reforge copies"),
+            new ChipTag("Mage +2", TagStyle.Credit, "Starting Magic Missile contributes 2 resin")], resin.Tags);
         Assert.True(resin.Uncursed);
         Assert.Equal("Heap", resin.Tooltip);
-        Assert.NotNull(resin.AmountTooltip);
         Assert.Equal("Arcane Resin\nAuto · starting Magic Missile contributes 2 resin · uncursed wands · Heap", resin.Detail);
     }
 
@@ -255,6 +266,40 @@ public sealed class RequirementBoardTests
     }
 
     [Fact]
+    public void LoadingMovesStackAndCombinedLevelLabelsIntoRange()
+    {
+        // A hand-written document may label a stack 7 or a combined level 9;
+        // the portable formats stop at 4, so the list could not be searched or shared.
+        var query = ResultsExport.DecodeQueryDocument("""
+            {"requirements":[{"kind":"wand","upgrade":3,"identity_group":7},{"kind":"wand","identity_group":7},
+            {"kind":"ring","item":"ring_might","level_sum":{"group":9,"at_least":3}},{"kind":"ring","item":"ring_might","level_sum":{"group":9,"at_least":3}}]}
+            """);
+        var editor = new BoardEditor();
+        editor.Load(query);
+        Assert.Equal(new int?[] { 1, 1, null, null }, query.Requirements.Select(requirement => requirement.IdentityGroup));
+        Assert.Equal(new LevelSum?[] { null, null, new(1, 3), new(1, 3) }, query.Requirements.Select(requirement => requirement.LevelSum));
+        Assert.Null(editor.Problem(query));
+        Assert.NotNull(NativeEngine.TryEncodeShareLink(ResultsExport.EncodeQueryDocument(query)));
+    }
+
+    [Fact]
+    public void TheCountStepperRunsToTheLimitOrOnlyDown()
+    {
+        var editor = new BoardEditor();
+        var spear = Named("spear"); spear.AlternativeGroup = 1; spear.IdentityGroup = 1;
+        var query = Loaded(editor, Named("mace"), spear, new() { Kind = ItemKind.Ring, AlternativeGroup = 1 }, new() { Kind = ItemKind.Weapon, IdentityGroup = 1 });
+        var board = editor.View(query);
+        var maces = board.EntryOf(KeyOf(query, "mace"))!.Stack;
+        Assert.True(maces.CanGrow);
+        Assert.Equal((1, 3, 3), (maces.Count, maces.CountMax, maces.Max));
+        // A cluster spanning two categories names no kind to copy: it only sheds the copies it has.
+        var mixed = board.EntryOf(KeyOf(query, "spear"))!.Stack;
+        Assert.False(mixed.CanGrow);
+        Assert.True(mixed.CanChangeCount);
+        Assert.Equal((2, 2), (mixed.Count, mixed.CountMax));
+    }
+
+    [Fact]
     public void TheBoardIsAskedOncePerRequirementList()
     {
         var editor = new BoardEditor();
@@ -284,7 +329,7 @@ public sealed class RequirementBoardTests
         // The resin chip is part of the board, so a resin change asks again.
         query.ArcaneResin = 4;
         var withResin = editor.View(query);
-        Assert.Equal([new ChipTag("≥4")], withResin.Resin!.Tags);
+        Assert.Equal([new ChipTag("≥4", TagStyle.Credit)], withResin.Resin!.Tags);
         Assert.Equal(asked + 3, editor.Requests);
     }
 
@@ -458,19 +503,26 @@ public sealed class RequirementBoardTests
         query.ArcaneResin = 4;
         query.ArcaneResinFilter = new(true, 9, ScoutItemSource.LockedChest, true);
         var resin = editor.View(query).Resin!;
-        Assert.Equal([new ChipTag("≥4"), new ChipTag("Mage +2"), new ChipTag("F≤9")], resin.Tags);
+        // The amount and the Mage's wand are what the resin counts, tinted
+        // apart from the donors' floor; a fixed amount needs no explaining.
+        Assert.Equal([
+            new ChipTag("≥4", TagStyle.Credit),
+            new ChipTag("Mage +2", TagStyle.Credit, "Starting Magic Missile contributes 2 resin"),
+            new ChipTag("F≤9")], resin.Tags);
         Assert.Equal("Locked chest", resin.Tooltip);
-        Assert.Null(resin.AmountTooltip);
         Assert.Equal("Arcane Resin\nat least 4 · starting Magic Missile contributes 2 resin · uncursed wands · Locked chest · floors 1–9", resin.Detail);
-        // The amount and the Mage's wand are what the resin credits; the donors' floor is not.
-        Assert.Equal(2, resin.CreditTags(query.ArcaneResinFilter.IncludeMageWand));
+        // The same chip as the fixture pins for this resin.
+        var pinned = BoardEditor.Answer(Fixture("board-resin-credit")["response"]!.ToJsonString()).View.Resin!;
+        Assert.Equal(pinned.Tags, resin.Tags);
+        Assert.Equal((pinned.Tooltip, pinned.Description), (resin.Tooltip, resin.Description));
+        Assert.Equal(pinned.Details, resin.Details);
 
         query.ArcaneResinAuto = true;
         query.ArcaneResinFilter = query.ArcaneResinFilter with { IncludeMageWand = false, Source = null };
         resin = editor.View(query).Resin!;
-        Assert.Equal([new ChipTag("Auto"), new ChipTag("F≤9")], resin.Tags);
+        Assert.Equal([
+            new ChipTag("Auto", TagStyle.Credit, "Enough resin to upgrade kept wands to +3, excluding No resin wands and reforge copies"),
+            new ChipTag("F≤9")], resin.Tags);
         Assert.Null(resin.Tooltip);
-        Assert.NotNull(resin.AmountTooltip);
-        Assert.Equal(1, resin.CreditTags(query.ArcaneResinFilter.IncludeMageWand));
     }
 }
