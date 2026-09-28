@@ -47,7 +47,7 @@ use super::labels::{
     RESIN_MAGE_WAND_CAPTION, RESIN_MINIMUM, category_label, count_text, requirement_title,
     weapon_type_label, wildcard_label,
 };
-use super::problems::{problems, row_problems};
+use super::problems::{Problem, problems, row_problems};
 use super::stack::{level_capacity, stack_view};
 use super::{Row, STACK_MAX, is_valid_key, mint_key, repair_keys, skip_boss_floor};
 
@@ -392,6 +392,9 @@ pub struct Draft {
     /// Arcane Resin is the picked item: the sheet edits [`Draft::resin`].
     pub resin_picked: bool,
     pub resin: ResinDraft,
+    /// The query's resin condition the sheet was opened with, which a resin
+    /// sheet saved untouched leaves as it is.
+    pub query_resin: Option<ResinState>,
     /// The rows the sheet was opened on: the save guard runs the save on
     /// them to find what it would break.
     pub rows: Vec<Row>,
@@ -553,7 +556,12 @@ pub struct RangeToggle {
     pub min: u8,
     pub max: u8,
     pub label: String,
+    /// The help text under the control.
     pub caption: Option<String>,
+    /// Whether the caption shows: while the switch is on for a caption
+    /// that explains the limit (transmutations), whenever the control
+    /// shows for one that explains the switch (the combined level).
+    pub caption_visible: bool,
     pub value_label: String,
 }
 
@@ -644,7 +652,8 @@ pub struct Form {
 /// What saving the query's Arcane Resin condition comes to.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ResinOutcome {
-    /// The sheet was not about resin.
+    /// The query's resin stays as it is: the sheet was not about resin, or
+    /// saved the query's resin untouched.
     Unchanged,
     /// Arcane Resin was the picked item: the query asks for this.
     Set(ResinState),
@@ -784,20 +793,43 @@ fn clamp_upgrade(requirement: &mut Requirement) {
 /// and uncursed filter, an artifact's upgrade. The sheet has no control for
 /// them, but the engine searches them, so a save that dropped them would
 /// quietly change a query the user only meant to adjust.
+///
+/// What the row's family or section cannot carry goes, as a category switch
+/// drops it: a hand-written list's tier on a named item, effect off weapons
+/// and armor, resin exclusion off an ordinary wand, trinket selection off an
+/// ordinary trinket, another family's transmutations or melee/thrown
+/// narrowing. The sheet hides those controls, so it could neither show such
+/// a field nor clear it, and every save would be refused for it.
 fn editable(mut requirement: Requirement) -> Requirement {
     requirement.identity_group = None;
     requirement.level_sum = None;
     requirement.max_depth = requirement.max_depth.map(floor_value);
-    match requirement.kind {
-        ItemKind::Artifact => {
-            requirement.item = requirement.item.or_else(|| first_item(ItemKind::Artifact));
-        }
-        ItemKind::Trinket => {
-            requirement.item = requirement.item.or_else(|| first_item(ItemKind::Trinket));
-            requirement.tier = TierRequirement::Any;
-            requirement.effect = EffectRequirement::Any;
-        }
-        _ => {}
+    let family = requirement.kind;
+    if names_one(family) {
+        requirement.item = requirement.item.or_else(|| first_item(family));
+    }
+    if requirement.item.is_some() || !matches!(family, ItemKind::Weapon | ItemKind::Armor) {
+        requirement.tier = TierRequirement::Any;
+    }
+    if let EffectRequirement::OneOf(set) = requirement.effect
+        && set.family() != family
+    {
+        requirement.effect = EffectRequirement::Any;
+    }
+    if family != ItemKind::Weapon {
+        requirement.weapon_category = None;
+    }
+    if family != ItemKind::Wand || requirement.blanket {
+        requirement.exclude_resin = false;
+    }
+    if family != ItemKind::Trinket || requirement.blanket {
+        requirement.select_trinket = false;
+    }
+    if family != ItemKind::Trinket {
+        requirement.trinket_transmutations = 0;
+    }
+    if family != ItemKind::Artifact {
+        requirement.artifact_transmutations = 0;
     }
     let ceiling = requirement.upgrade_ceiling();
     requirement.upgrade = match requirement.upgrade {
@@ -908,6 +940,7 @@ pub fn open(
         taken_trinkets: Vec::new(),
         resin_picked: open_resin,
         resin: ResinDraft::seeded(resin),
+        query_resin: resin.copied(),
         rows: rows.to_vec(),
     };
     if open_resin {
@@ -1490,18 +1523,22 @@ fn attempt(draft: &Draft, hint: Option<u64>, held: &HeldLabels) -> Attempt {
         .map(resolve)
         .filter(|&key| is_valid_key(key) && !folded_away(&rows, key))
         .unwrap_or_else(|| mint_key(&rows, hint));
-    let result = if stores_nothing(draft, &rows, key) {
-        // Nothing to write; the sheet still returns to its chip.
+    let before = problems(&rows);
+    let saved = apply_holding(&rows, hint, &[save_edit(draft, key)], held);
+    let result = if stores_nothing(draft, &rows, key)
+        && (saved.refused.is_some() || !repairs(&before, &problems(&saved.rows)))
+    {
+        // Nothing to write and nothing to repair; the sheet still returns to
+        // its chip.
         let mut result = apply_holding(&rows, hint, &[], held);
         result.focus = anchor_of(&rows, key);
         result
     } else {
-        apply_holding(&rows, hint, &[save_edit(draft, key)], held)
+        saved
     };
     if let Some(refusal) = result.refused {
         errors.push(refusal.to_string());
     } else {
-        let before = problems(&rows);
         for problem in problems(&result.rows) {
             let caused = problem.keys.contains(&key)
                 && !before
@@ -1540,6 +1577,11 @@ fn save_edit(draft: &Draft, key: u64) -> Edit {
 /// empty boss floor, a combined level beyond reach, copies with floors of
 /// their own — and a list no one changed stays the list a platform stored
 /// (Android's refine plan and the web's preset match compare it whole).
+///
+/// A row a hand-written list got wrong is the exception: where the save
+/// [`repairs`] the list — a floor beyond the dungeon, a field the row's
+/// family or section cannot carry — it writes, as a save that changed
+/// something would.
 fn stores_nothing(draft: &Draft, rows: &[Row], key: u64) -> bool {
     matches!(draft.origin, Origin::Row(_))
         && rows.iter().any(|row| row.key == key)
@@ -1547,6 +1589,26 @@ fn stores_nothing(draft: &Draft, rows: &[Row], key: u64) -> bool {
             &open(rows, Some(key), draft.blanket, None, false, false),
             key,
         ) == save_edit(draft, key)
+}
+
+/// Whether a list with the problems `after` is a repair of one with the
+/// problems `before`: one of them is gone and none is new. A problem is the
+/// same whatever order its keys come in, since a save may move a stack's
+/// copies.
+fn repairs(before: &[Problem], after: &[Problem]) -> bool {
+    let same = |one: &Problem, other: &Problem| {
+        let sorted = |keys: &[u64]| {
+            let mut keys = keys.to_vec();
+            keys.sort_unstable();
+            keys
+        };
+        one.message == other.message
+            && one.scope == other.scope
+            && sorted(&one.keys) == sorted(&other.keys)
+    };
+    let within = |problem: &Problem, list: &[Problem]| list.iter().any(|old| same(old, problem));
+    after.iter().all(|problem| within(problem, before))
+        && before.iter().any(|problem| !within(problem, after))
 }
 
 /// The anchor of the board entry holding the row `key`.
@@ -1610,8 +1672,9 @@ pub fn form(draft: &Draft) -> Form {
 /// combined level is on, a copy floor only while it shows — or, with
 /// Arcane Resin picked, the query's resin condition, removing the wand chip
 /// the sheet was opened on. Saving the resin chip as a requirement clears
-/// the query's resin. A sheet saved untouched writes nothing: the rows come
-/// back as they were, even where they hold what no control can show. A
+/// the query's resin. A sheet saved untouched writes nothing: the rows —
+/// or the query's resin — come back as they were, even where they hold what
+/// no control can show, unless the save repairs a problem the row had. A
 /// draft with errors is refused with its form.
 #[must_use]
 pub fn save(draft: &Draft, rows: &[Row], next_key: Option<u64>) -> SaveResult {
@@ -1637,10 +1700,10 @@ pub(crate) fn save_holding(
         return SaveResult::Refused { draft, form };
     }
     let resin = if picks_resin(&draft) {
-        draft
-            .resin
-            .state()
-            .map_or(ResinOutcome::Unchanged, ResinOutcome::Set)
+        match draft.resin.state() {
+            Some(state) if !keeps_query_resin(&draft, &state) => ResinOutcome::Set(state),
+            _ => ResinOutcome::Unchanged,
+        }
     } else if draft.origin == Origin::Resin {
         ResinOutcome::Clear
     } else {
@@ -1650,6 +1713,23 @@ pub(crate) fn save_holding(
         result: attempt.result,
         resin,
     }
+}
+
+/// Whether the resin chip's sheet saves the query's resin untouched: it
+/// would store `state`, which is what the sheet opened on the query's resin
+/// would store. Such a save leaves the resin as it is, so it keeps what the
+/// floor slider cannot hold — a limit on an empty boss floor, which the
+/// engine reads as the floor below anyway. A limit beyond the dungeon, which
+/// the query format refuses, is repaired instead.
+fn keeps_query_resin(draft: &Draft, state: &ResinState) -> bool {
+    draft.origin == Origin::Resin
+        && draft.query_resin.is_some_and(|query| {
+            query
+                .filter
+                .max_depth
+                .is_none_or(|depth| (1..=MAX_SEARCH_DEPTH).contains(&depth))
+                && ResinDraft::seeded(Some(&query)).state() == Some(*state)
+        })
 }
 
 /// The floors a floor slider offers: 1–24 without the empty boss floors.
@@ -2036,6 +2116,7 @@ fn transmutations_control(draft: &Draft, shown: &Shown) -> RangeToggle {
         max,
         label: "Allow transmutations".to_owned(),
         caption: Some(caption),
+        caption_visible: shown.transmutations && current > 0,
         value_label: format!("At most {value}"),
     }
 }
@@ -2071,6 +2152,7 @@ fn stack_control(draft: &Draft, shown: &Shown) -> StackControl {
             caption: Some(
                 "Each item counts its upgrade plus one, and spare items may go unused.".to_owned(),
             ),
+            caption_visible: shown.count_levels,
             value_label: format!("≥ {total} across up to {count}"),
         },
     }

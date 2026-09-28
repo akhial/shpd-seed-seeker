@@ -89,8 +89,9 @@ the effects an app listed — so compare rows as JSON values, or rely on
   unreadable row included — uses, in first-appearance order, so distinct
   groups stay distinct. A list with more stacks (or combined levels) than
   labels leaves the groups no label is left for as they were, and the
-  problem list reports them (`A stack group must be 1 through 4.`): groups
-  are never merged to fit.
+  problem list reports them (`A stack group must be 1 through 4.`, `A
+  combined-level group must be 1 through 4.`): groups are never merged to
+  fit.
 - Whatever an edit or a save writes from rows that each pass the engine's
   requirement validation is itself valid: every row passes validation,
   keeps its stack and combined-level labels in 1–4 (unless the list holds
@@ -257,7 +258,7 @@ canonical — a cluster of one, repeats a stack would fold, a stack labelled
 | `uncursed` | Cursed items are ruled out (drawn as a check mark). |
 | `details` | The popover's detail line as parts: `within 3 transmutations`, `choose at +3`, the upgrade (`exactly +3`, `+3 or higher`, `any upgrade` — left out while counting levels and on trinkets and artifacts), the effect, `uncursed`, `excluded from Auto resin`, the source (`Locked chest`), `floors 1–9`. |
 | `relations` | The popover's relation lines, each `{"glyph": "or" \| "sum" \| "times", "text"}`: the cluster's other members, `up to 2 — levels add to ≥ 5`, `3 of the same kind — the extra copies: any upgrade, floors 1–4`. |
-| `description` | The accessibility label: the title, then the details. |
+| `description` | The accessibility label: the title, then the details. It leaves out the relation lines and the badges, which the apps draw as nodes of their own with their own words (the cluster's `label`, each badge's `tooltip`); an app whose chip is one accessibility node appends `relations` itself. |
 | `problem` | The row's own first problem, else the first problem between rows blaming it; the anchor also speaks for its hidden copies. |
 | `in_cluster`, `can_detach` | A cluster member, which "On its own" (`detach`) applies to. |
 | `join` | The visible rows this chip may join, in list order — what "Either/or with…" menus, pick mode, accessibility actions and drag hover read. |
@@ -271,11 +272,13 @@ target, `remove`.
 
 **RESIN_CHIP**: `{"name": "Arcane Resin", "tags", "uncursed", "tooltip",
 "details", "description"}` — tags `Auto` or `≥N`, then `Mage +2`, then
-`F≤N`. The first two are the resin the chip counts, style `credit`, which
-apps tint apart from the donor filter `F≤N` (`plain`); the amount tag's
-`tooltip` explains Auto (`Enough resin to upgrade kept wands to +3,
-excluding No resin wands and reforge copies`, `null` for a fixed amount),
-and `Mage +2`'s says where it comes from (`Starting Magic Missile
+`F≤N`. The amount tag is always there and always first, so a summary may
+read `tags[0].text` (Android's collapsed header: `Auto Arcane Resin`, `≥4
+Arcane Resin`). The first two are the resin the chip counts, style
+`credit`, which apps tint apart from the donor filter `F≤N` (`plain`); the
+amount tag's `tooltip` explains Auto (`Enough resin to upgrade kept wands
+to +3, excluding No resin wands and reforge copies`, `null` for a fixed
+amount), and `Mage +2`'s says where it comes from (`Starting Magic Missile
 contributes 2 resin`). The chip's own `tooltip` is its hover text: the
 donors' source (`Locked chest`), the one filter no tag shows, or `null` for
 any source.
@@ -326,7 +329,19 @@ requests:
   would — writes nothing: the rows come back as they were, `changed:
   false`, with `focus` on the chip, even where the row holds what no control
   can show ("+0 or higher", a floor limit on an empty boss floor, a combined
-  level out of reach).
+  level out of reach, copies with floor limits of their own). The resin
+  chip's sheet saved untouched likewise answers `resin: null`, so the
+  query's resin keeps a floor limit on an empty boss floor. Two exceptions:
+  - a save that **repairs** the list — takes a problem away and adds none
+    (a hand-written floor limit beyond the dungeon, a field the row's family
+    or section cannot carry, which the sheet opened without) — writes the
+    repaired row, and a resin floor limit beyond the dungeon is saved back
+    into it;
+  - an untouched sheet is refused, as any save is, while its draft has
+    errors: a problem of the row's that a control the sheet shows can fix
+    (an item of another category, an uncursed curse), or a trinket the list
+    already names twice (`This trinket is already required. …` — the one
+    place a duplicate trinket is explained, since the board reports none).
 
 Open and change answer `{"draft": DRAFT, "form": FORM}`. A save answers
 
@@ -339,7 +354,8 @@ or, when the draft cannot be saved, `{"draft", "form"}` again with the
 reasons in `form.errors`. `resin` is `{"set": RESIN}` when Arcane Resin was
 the picked item (the wand chip the sheet was opened on is removed from the
 rows), `{"clear": true}` when the resin chip was saved as a requirement, and
-`null` otherwise.
+`null` otherwise — the query's resin stays as it is, which includes the
+resin chip saved untouched.
 
 **CHANGE** is `{"type": ..., "value": ...}`, `value` one type per change:
 
@@ -363,24 +379,38 @@ cluster — changes nothing. Values are clamped into range; floor sliders
 step over the empty boss floors (a single step up onto 5, 10 or 15
 continues to 6, 11 or 16; every other move snaps down).
 
-**FORM** is everything the sheet shows, words included: section labels,
-help texts, the resin section's choice and bounds. Every control is filled
-whether it shows or not — its label, its options, its value in words, its
-help text — so an app may read a hidden one (iOS draws its cluster "How
-many" sheet's copy floor from the hidden `stack.copy_depth` of a sheet
-opened on a member). Every numeric control carries `min ≤ value ≤ max`,
-even while hidden, and every picker option is `{"value", "label", "group",
-"hidden"}` — `hidden` marks a choice offered only because the draft already
-names it (a tier-1 item from an imported query).
+**FORM** is everything the sheet shows, words included: every option,
+value and error, the labels of the check boxes, switches and steppers, the
+section labels of the effect, the stack and the resin, the help texts, and
+the resin section's choice and bounds. The headings above the pickers and
+the mode pickers (`Category`, `Item`, `Tier`, `Upgrade`, `Source`) and a
+slider's accessible name are dialog chrome, the app's own like the sheet's
+title and buttons. Every control is filled whether it shows or not — its
+label, its options, its value in words, its help text — so an app may read
+a hidden one (iOS draws its cluster "How many" sheet's copy floor from the
+hidden `stack.copy_depth` of a sheet opened on a member). Every numeric
+control carries `min ≤ value ≤ max`, even while hidden, and every picker
+option is `{"value", "label", "group", "hidden"}` — `hidden` marks a choice
+offered only because the draft already names it (a tier-1 item from an
+imported query).
 
 A range control carries its current value's label alone, not one per value:
 apps draw it as a slider or a stepper, not as a labelled menu. A mode
 picker's `value_label` is the value (`Tier 3 or higher`, `+2 or higher`),
 which an app shows beside the slider; a floor toggle's is the whole reading
 (`Within first 4 floors`, `Copies within first 4 floors`), as is a range
-toggle's (`At most 3`, `≥ 5 across up to 2`). Either way the slider keeps a
-fixed accessible name of the app's own (the web's `Within first`) and reads
-its value out through `value_label`.
+toggle's (`At most 3`, `≥ 5 across up to 2`). The slider's accessible name
+is the app's — fixed (the web's `Within first`) or following the mode (the
+web's `Minimum tier`, Android's `At least`) — and it reads its value out
+through `value_label`.
+
+A help text shows with what it explains: a check box's `caption` under the
+box whenever the box shows; the effect's under the "Specific…" grid
+(`choices_visible`); the resin section's in the amount field's place while
+`auto` is on; a range toggle's while its `caption_visible` is set — while
+the switch is on for the transmutation limit, which it describes, and
+whenever the control shows for the combined level, whose switch it
+explains.
 
 | Field | Meaning |
 | --- | --- |
@@ -392,16 +422,22 @@ its value out through `value_label`.
 | `effect` | `{"visible", "label", "mode", "modes", "choices_visible", "choices", "groups", "caption"}`; `label` is the section's (`Enchantment`, `Glyph` on armor), `choices_visible` says the "Specific…" grid shows (the control does, in mode `specific`), each choice `{"value", "label", "group": "enchantment" \| "curse", "selected"}`, curses listed only while the item may be cursed. |
 | `uncursed`, `exclude_resin`, `select_trinket` | Check boxes: `{"visible", "value", "label", "caption"}`, `caption` the help text under the box or `null`. `exclude_resin` and `select_trinket` have one (`Keep this wand without budgeting resin to upgrade it. …`, `Applies after the first brewing opportunity. …`). |
 | `floor_limit` | `{"visible", "enabled", "value", "options", "label", "value_label"}`; options skip the empty boss floors. |
-| `transmutations` | `{"visible", "enabled", "value", "min", "max", "label", "caption", "value_label"}`. |
-| `stack` | `{"visible", "label", "count", "min", "max", "value_label", "copy_depth", "count_levels"}`: `label` `Total item count`, `copy_depth` a floor toggle, `count_levels` a range toggle (`≥ 5 across up to 2`, caption `Each item counts its upgrade plus one, and spare items may go unused.`). |
+| `transmutations` | A range toggle: `{"visible", "enabled", "value", "min", "max", "label", "caption", "caption_visible", "value_label"}`; the stepper shows while `enabled`, the caption while `caption_visible`. |
+| `stack` | `{"visible", "label", "count", "min", "max", "value_label", "copy_depth", "count_levels"}`: `label` `Total item count`, `copy_depth` a floor toggle, `count_levels` a range toggle (`≥ 5 across up to 2`, caption `Each item counts its upgrade plus one, and spare items may go unused.`, shown whenever the toggle is). The section has no caption: only Linux ever gave it one. |
 | `resin` | `{"visible", "label", "auto", "modes", "caption", "amount", "min", "max", "include_mage_wand"}`: `label` `Minimum resin`, which the amount field takes too; `modes` the Amount/Auto choice, each option valued as `auto` is (`false` `Amount`, `true` `Auto`); `caption` what Auto means, shown in the amount field's place while `auto` is on; `amount` the number as typed; `min`, `max` the amounts that save, the query format's 1–65535; `include_mage_wand` a check box (`Include Mage’s starting wand`, with its help text). |
 | `errors`, `can_save` | Why the draft cannot be saved, in the order to show them. |
 
 The sheet keeps every field of the row, shown or not. It re-encodes only
 what its controls cannot hold — a stored "+0 or higher" opens as any
 upgrade, "+max or higher" as exactly +max, a floor limit on an empty boss
-floor as the floor below, a total out of reach as the stack's capacity —
-and drops only what the family cannot carry (a trinket's tier or effect).
+floor as the floor below (one beyond the dungeon as floor 24), a total out
+of reach as the stack's capacity, hidden copies with floor limits of their
+own as the first copy's (one copy floor for them all) — and drops only
+what the row's family or section cannot carry, under a control the sheet
+hides for it: a trinket's tier or effect, a tier on a named item, an
+effect off weapons and armor or of the other family, resin exclusion off
+an ordinary wand, trinket selection off an ordinary trinket, another
+family's transmutations or melee/thrown narrowing.
 Fields no control shows are kept through every save: an artifact's upgrade
 (the query format accepts +1…+5 — the city vault transfers +5 into its
 artifact — but no app ever offered a control for it) and a trinket's
@@ -478,8 +514,9 @@ decided once.
 | Copy contents | Built from defaults; plain copies keep the melee/thrown narrowing; resin exclusion, blanket, trinket selection and transmutations are never copied. |
 | Key lookup | Visible members only, never hidden copies. |
 | Labels out of range | Moved onto free labels in range by `normalize` and every edit that changes the rows; never merged to fit. |
-| Saving an unchanged chip | Writes nothing: identical rows, the same copy keys, `changed: false`, even for values no control can show. |
+| Saving an unchanged chip | Writes nothing: identical rows, the same copy keys, `changed: false`, even for values no control can show; the resin chip answers `resin: null`. A save that repairs a hand-written row's problem writes the repair. |
 | Fields the sheet does not show | Kept through every save (an artifact's upgrade; a trinket's source, floor limit and uncursed filter); a category switch resets them. |
+| Fields a row cannot carry | A hand-written field the row's family or section cannot carry, under a control the sheet hides (a blanket wand's resin exclusion), is dropped on open, so the sheet can save the row. |
 | New rows | Appended; sections are never reordered. |
 | Wildcard chip names | `Any melee`, `Any thrown`. |
 | Titles | `Any Tier 3 weapon`, `Any Tier 3+ weapon`, `Any Tier 3 or lower weapon`. |
@@ -502,7 +539,8 @@ decided once.
 | Artifact transmutations | Supported, 1–10. |
 | Save guard | A save that newly breaks the list around the saved row is refused. |
 | Resin section | Seeded from the query's resin (uncursed donors by default), kept apart from the wand draft. |
-| Dialog chrome | App-owned: sheet titles and button labels. Section labels, help texts and the resin section's words are the form's. |
+| Dialog chrome | App-owned: sheet titles, button labels, the headings of the pickers and mode pickers, slider accessible names. The labels of check boxes, switches and steppers, the effect, stack and resin section labels, the help texts and the resin section's words are the form's. |
+| Help texts | A check box's always under it; the transmutation limit's while it is on; the combined level's beside its switch (`caption_visible`). |
 | Chip problems | The row's own, then cross-row blame; hidden copies surface on their entry. |
 
 ### Known limitations
@@ -523,7 +561,7 @@ for now:
   can leave two constrained members in one stack, which the problem list
   reports.
 
-Two more are the core's own choices:
+These are the core's own choices:
 
 - The sheet has no control for an artifact's upgrade or a trinket's source,
   floor limit and uncursed filter — no app ever offered one. It keeps them,
@@ -532,6 +570,14 @@ Two more are the core's own choices:
 - A hand-written list with more than four stacks (or combined levels) keeps
   the labels of those no label is left for, and they block Start and Share
   until a stack goes.
+- An untouched save repairs a hand-written problem only where the board's
+  `save` rewrites the row. One it reads as the entry's own shape — a lone
+  blanket carrying a stack label, a stack whose copies disagree on the
+  combined level — stays unless the row needs rewriting anyway;
+  `normalize` repairs the first, a save that changes the stack the second.
+- The board reports no duplicate trinket; only the sheet does, as an
+  error, so an untouched sheet on either of two rows naming one trinket
+  cannot be saved.
 
 ## Golden fixtures
 
@@ -540,8 +586,9 @@ request/response pairs for both envelopes: the board tour, the four stack
 encodings, joins (traded, refused), detach and removals, copy floors,
 combined levels, saves (new and unchanged), problems, key repair, label
 compaction and labels moved into range, unreadable rows, the sheet's
-open/change/save flow and an untouched save, the resin flows (a query with
-resin and one without), and the error envelopes. Each file is
+open/change/save flow, an untouched save and one that repairs its row, the
+resin flows (a query with resin and one without, and the resin chip saved
+untouched), and the error envelopes. Each file is
 
 ```json
 {"about": "...", "envelope": "requirement_board", "request": {...}, "response": {...}}
@@ -556,8 +603,8 @@ the answers.
 The core test `tests/editor_fixtures.rs` regenerates every pair and fails
 when a file drifts; it also opens a sheet on every row the fixtures send
 and checks that saving it untouched answers what the board answers for the
-rows alone. After a deliberate change, review the answers and rewrite the
-files:
+rows alone, or repairs them. After a deliberate change, review the answers
+and rewrite the files:
 
 ```sh
 UPDATE_EDITOR_FIXTURES=1 cargo test -p shpd-seedfinder-core --test editor_fixtures

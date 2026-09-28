@@ -6,11 +6,11 @@
       "type": "toggle_effect",
       "value": "Blazing"
     },
-    "draft": "{\"blanket\":false,\"copy_depth\":null,\"copy_depth_memory\":4,\"count\":1,\"effect_mode\":\"specific\",\"floor_limit_memory\":4,\"in_cluster\":false,\"key\":null,\"offer_resin\":true,\"origin\":{\"type\":\"new\"},\"requirement\":{\"item\":\"spear\",\"kind\":\"weapon\"},\"resin\":{\"amount\":2.0,\"auto\":false,\"include_mage_wand\":false,\"max_depth\":null,\"source\":null,\"uncursed\":true},\"resin_picked\":false,\"rows\":[{\"key\":1,\"kind\":\"wand\"},{\"item\":\"rat_skull\",\"key\":2,\"kind\":\"trinket\"}],\"taken_trinkets\":[\"rat_skull\"],\"tier_value\":3,\"total\":null,\"transmutations_memory\":1,\"upgrade_value\":1,\"v\":1}",
+    "draft": "{\"blanket\":false,\"copy_depth\":null,\"copy_depth_memory\":4,\"count\":1,\"effect_mode\":\"specific\",\"floor_limit_memory\":4,\"in_cluster\":false,\"key\":null,\"offer_resin\":true,\"origin\":{\"type\":\"new\"},\"query_resin\":null,\"requirement\":{\"item\":\"spear\",\"kind\":\"weapon\"},\"resin\":{\"amount\":2.0,\"auto\":false,\"include_mage_wand\":false,\"max_depth\":null,\"source\":null,\"uncursed\":true},\"resin_picked\":false,\"rows\":[{\"key\":1,\"kind\":\"wand\"},{\"item\":\"rat_skull\",\"key\":2,\"kind\":\"trinket\"}],\"taken_trinkets\":[\"rat_skull\"],\"tier_value\":3,\"total\":null,\"transmutations_memory\":1,\"upgrade_value\":1,\"v\":1}",
     "op": "change"
   },
   "response": {
-    "draft": "{\"blanket\":false,\"copy_depth\":null,\"copy_depth_memory\":4,\"count\":1,\"effect_mode\":\"specific\",\"floor_limit_memory\":4,\"in_cluster\":false,\"key\":null,\"offer_resin\":true,\"origin\":{\"type\":\"new\"},\"requirement\":{\"effect\":\"Blazing\",\"item\":\"spear\",\"kind\":\"weapon\"},\"resin\":{\"amount\":2.0,\"auto\":false,\"include_mage_wand\":false,\"max_depth\":null,\"source\":null,\"uncursed\":true},\"resin_picked\":false,\"rows\":[{\"key\":1,\"kind\":\"wand\"},{\"item\":\"rat_skull\",\"key\":2,\"kind\":\"trinket\"}],\"taken_trinkets\":[\"rat_skull\"],\"tier_value\":3,\"total\":null,\"transmutations_memory\":1,\"upgrade_value\":1,\"v\":1}",
+    "draft": "{\"blanket\":false,\"copy_depth\":null,\"copy_depth_memory\":4,\"count\":1,\"effect_mode\":\"specific\",\"floor_limit_memory\":4,\"in_cluster\":false,\"key\":null,\"offer_resin\":true,\"origin\":{\"type\":\"new\"},\"query_resin\":null,\"requirement\":{\"effect\":\"Blazing\",\"item\":\"spear\",\"kind\":\"weapon\"},\"resin\":{\"amount\":2.0,\"auto\":false,\"include_mage_wand\":false,\"max_depth\":null,\"source\":null,\"uncursed\":true},\"resin_picked\":false,\"rows\":[{\"key\":1,\"kind\":\"wand\"},{\"item\":\"rat_skull\",\"key\":2,\"kind\":\"trinket\"}],\"taken_trinkets\":[\"rat_skull\"],\"tier_value\":3,\"total\":null,\"transmutations_memory\":1,\"upgrade_value\":1,\"v\":1}",
     "form": {
       "blanket": false,
       "can_save": true,
@@ -1027,6 +1027,7 @@
         "count": 1,
         "count_levels": {
           "caption": "Each item counts its upgrade plus one, and spare items may go unused.",
+          "caption_visible": false,
           "enabled": false,
           "label": "Count levels together",
           "max": 5,
@@ -1079,6 +1080,7 @@
       "title": "Spear",
       "transmutations": {
         "caption": "Matches an initial offer or any of the next 1 trinket. AutoTrinket can use a helpful starting trinket while your target waits in the deck. Scroll availability and effects after transmuting are not simulated.",
+        "caption_visible": false,
         "enabled": false,
         "label": "Allow transmutations",
         "max": 13,

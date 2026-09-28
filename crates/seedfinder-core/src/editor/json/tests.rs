@@ -928,6 +928,10 @@ fn resin_flows_through_the_envelope() {
     assert_eq!(opened["form"]["resin"]["auto"], json!(true));
     assert_eq!(opened["form"]["uncursed"]["value"], json!(false));
     assert_eq!(opened["form"]["floor_limit"]["value"], json!(9));
+    // Saved untouched, it leaves the query's resin as it is.
+    let untouched = editor_json(&json!({"op": "save", "draft": opened["draft"], "rows": rows}));
+    assert_eq!(untouched["saved"]["resin"], Value::Null);
+    assert_eq!(untouched["saved"]["changed"], json!(false));
     let draft = changed_draft(
         &opened["draft"],
         &[json!({"type": "set_item", "value": "wand_frost"})],

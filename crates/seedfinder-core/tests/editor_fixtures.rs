@@ -529,6 +529,30 @@ fn editor_fixtures(fixtures: &mut Fixtures) {
         Editor,
         &json!({"op": "save", "draft": untouched["draft"], "rows": sandals}),
     );
+    let wrong = json!([
+        {"key": 1, "kind": "ring"},
+        {"key": 2, "kind": "wand", "blanket": true, "exclude_resin": true},
+    ]);
+    let repaired = fixtures_open(Editor, &json!({"op": "open", "rows": wrong, "key": 2}));
+    fixtures.add(
+        "editor-save-untouched-repairs",
+        "A hand-written blanket wand excluded from Auto resin, which only an ordinary wand can be: the sheet opens without the exclusion, and saved untouched it writes the repaired row.",
+        Editor,
+        &json!({"op": "save", "draft": repaired["draft"], "rows": wrong}),
+    );
+    let resin_rows = json!([{"key": 1, "kind": "wand", "item": "wand_frost"}]);
+    let kept = fixtures_open(
+        Editor,
+        &json!({"op": "open", "rows": resin_rows, "open_resin": true,
+               "resin": {"amount": 4, "filter": {"uncursed": true, "max_depth": 5,
+                         "source": "locked_chest", "include_mage_wand": true}}}),
+    );
+    fixtures.add(
+        "editor-resin-save-untouched",
+        "The resin chip saved untouched leaves the query's resin as it is (resin null), floor 5 included, which the floor slider shows as 4.",
+        Editor,
+        &json!({"op": "save", "draft": kept["draft"], "rows": resin_rows}),
+    );
     let added = fixtures.add(
         "editor-resin-open-new",
         "A resin sheet on a query without resin adds one: a new sheet with Arcane Resin picked.",
@@ -659,7 +683,8 @@ fn the_envelopes_answer_the_golden_fixtures() {
 /// Every row the fixtures send — hand-written lists, key repairs, problems
 /// and all — opens into a sheet that, saved untouched onto the same rows,
 /// answers what the board answers for those rows alone: a sheet no one
-/// changed writes nothing of its own. Rows that cannot be opened (an
+/// changed writes nothing of its own — unless it repairs the list, taking
+/// a problem away and adding none. Rows that cannot be opened (an
 /// unreadable one) are left out, and the one refusal an untouched sheet may
 /// meet is a duplicate trinket the list already holds.
 #[test]
@@ -683,7 +708,7 @@ fn every_fixture_row_saves_back_untouched() {
             lists.insert(rows.to_string());
         }
     }
-    let mut saved = 0;
+    let (mut saved, mut repaired) = (0, 0);
     for list in &lists {
         let rows: Value = serde_json::from_str(list).expect("rows are JSON");
         let board = Envelope::Board.call(&json!({"rows": rows}));
@@ -704,8 +729,22 @@ fn every_fixture_row_saves_back_untouched() {
                 .call(&json!({"op": "save", "draft": opened["draft"], "rows": rows}));
             let context = format!("{list} at {key}: {answer}");
             match answer.get("saved") {
+                Some(result) if result["rows"] != board["rows"] => {
+                    let after = Envelope::Board.call(&json!({"rows": result["rows"]}));
+                    let problems = |board: &Value| -> BTreeSet<String> {
+                        board["problems"]
+                            .as_array()
+                            .unwrap()
+                            .iter()
+                            .map(Value::to_string)
+                            .collect()
+                    };
+                    let (before, after) = (problems(&board), problems(&after));
+                    assert!(after.is_subset(&before) && after != before, "{context}");
+                    assert_eq!(result["changed"], json!(true), "{context}");
+                    repaired += 1;
+                }
                 Some(result) => {
-                    assert_eq!(result["rows"], board["rows"], "{context}");
                     assert_eq!(result["changed"], board["changed"], "{context}");
                     assert_eq!(result["resin"], Value::Null, "{context}");
                     saved += 1;
@@ -720,7 +759,7 @@ fn every_fixture_row_saves_back_untouched() {
             }
         }
     }
-    assert!(saved > 0);
+    assert!(saved > 0 && repaired > 0);
 }
 
 /// The files replay: every stored request, sent as a platform would send

@@ -656,6 +656,70 @@ fn fields_the_sheet_does_not_show_survive_its_saves() {
     );
 }
 
+/// A hand-written row can carry what its family or section cannot — a
+/// blanket wand excluded from resin, a trinket selection on a ring, a tier
+/// on a named item — under a control the sheet hides for it. The sheet
+/// opens it without the field, so it neither shows an error the user could
+/// not act on nor refuses every save; and since the save repairs the row,
+/// an untouched sheet writes it, as it does a floor beyond the dungeon.
+#[test]
+fn an_untouched_sheet_repairs_what_its_row_got_wrong() {
+    let ordinary = row(1, ItemKind::Ring);
+    let cases = [
+        with(row(2, ItemKind::Wand), |r| {
+            r.blanket = true;
+            r.exclude_resin = true;
+        }),
+        with(row(2, ItemKind::Ring), |r| r.exclude_resin = true),
+        with(row(2, ItemKind::Ring), |r| r.select_trinket = true),
+        with(named(2, ItemId::RatSkull), |r| {
+            r.blanket = true;
+            r.select_trinket = true;
+        }),
+        with(row(2, ItemKind::Wand), |r| r.trinket_transmutations = 2),
+        with(named(2, ItemId::RatSkull), |r| {
+            r.artifact_transmutations = 2;
+        }),
+        with(row(2, ItemKind::Ring), |r| {
+            r.weapon_category = Some(WeaponCategory::Melee);
+        }),
+        with(named(2, ItemId::Spear), |r| {
+            r.tier = TierRequirement::Exact(3);
+        }),
+        with(row(2, ItemKind::Wand), |r| {
+            r.effect = EffectRequirement::OneOf(
+                EffectSet::from_effects([Effect::Weapon(WeaponEffect::Blazing)]).unwrap(),
+            );
+        }),
+        with(row(2, ItemKind::Armor), |r| {
+            r.effect = EffectRequirement::OneOf(
+                EffectSet::from_effects([Effect::Weapon(WeaponEffect::Blazing)]).unwrap(),
+            );
+        }),
+        with(row(2, ItemKind::Wand), |r| r.max_depth = Some(30)),
+    ];
+    for wrong in cases {
+        let context = format!("{:?}", wrong.requirement);
+        assert!(!row_problems(&wrong.requirement).is_empty(), "{context}");
+        let rows = [ordinary, wrong];
+        let draft = sheet(&rows, 2);
+        let control = form(&draft);
+        assert!(control.errors.is_empty(), "{context}: {:?}", control.errors);
+        let (result, _) = saved(&draft);
+        assert!(result.changed, "{context}");
+        assert_eq!(result.rows[0], ordinary, "{context}");
+        assert_eq!(result.focus, Some(2), "{context}");
+        assert_eq!(problems(&result.rows), [], "{context}");
+    }
+    // A problem the save cannot repair leaves the untouched save a no-op.
+    let rows = [
+        ordinary,
+        with(row(2, ItemKind::Wand), |r| r.max_depth = Some(30)),
+    ];
+    let (result, _) = saved(&sheet(&rows, 1));
+    assert_eq!((result.changed, result.rows), (false, rows.to_vec()));
+}
+
 #[test]
 fn a_key_not_in_the_list_opens_a_new_chip_that_saves_under_it() {
     // Linux claims a key before the sheet opens.
@@ -1688,6 +1752,38 @@ fn the_form_says_when_a_value_or_the_effect_grid_shows() {
     assert!(!wand.effect.visible && !wand.effect.choices_visible);
 }
 
+/// The review's finding: a range toggle's caption meant two things — the
+/// transmutation limit explained, which the platforms showed only while the
+/// switch was on, and the combined level's switch explained, which Android,
+/// iOS and Linux showed beside the switch. `caption_visible` says which.
+#[test]
+fn a_range_toggles_caption_shows_with_what_it_explains() {
+    let trinket = after(&new_sheet(&[]), &[Change::SetCategory(ItemKind::Trinket)]);
+    let off = form(&trinket).transmutations;
+    assert!(off.visible && !off.enabled && off.caption.is_some());
+    assert!(!off.caption_visible);
+    let on = form(&after(&trinket, &[Change::SetTransmutationsEnabled(true)])).transmutations;
+    assert!(on.enabled && on.caption_visible);
+
+    let rings = after(
+        &new_sheet(&[]),
+        &[
+            Change::SetCategory(ItemKind::Ring),
+            Change::SetItem(ItemChoice::Item(ItemId::RingMight)),
+            Change::SetCount(2),
+        ],
+    );
+    let off = form(&rings).stack.count_levels;
+    assert!(off.visible && !off.enabled && off.caption_visible);
+    let on = form(&after(&rings, &[Change::SetCountLevels(true)]))
+        .stack
+        .count_levels;
+    assert!(on.enabled && on.caption_visible);
+    // Hidden, neither shows.
+    assert!(!form(&new_sheet(&[])).stack.count_levels.caption_visible);
+    assert!(!form(&new_sheet(&[])).transmutations.caption_visible);
+}
+
 /// iOS draws its cluster "How many" sheet's copy floor from a sheet opened
 /// on a member: the form hides the stack there — it is the cluster's — but
 /// fills it all, as it fills every hidden control.
@@ -2079,6 +2175,100 @@ fn a_resin_sheet_on_a_query_without_resin_adds_one() {
         (control.mode, control.origin),
         (FormMode::Edit, Origin::Resin)
     );
+}
+
+/// The review's probe: the resin chip's sheet saved untouched answered a
+/// `Set` whose floor limit 5 had become 4, which Android adopted. The
+/// sheet keeps the query's resin it opened on, and a save that would store
+/// what an untouched sheet stores leaves the resin as it is — a fixed
+/// amount and Auto alike, however the controls moved in between. A floor
+/// beyond the dungeon is repaired instead, and any real change saves.
+#[test]
+fn an_untouched_resin_sheet_leaves_the_querys_resin() {
+    let rows = [row(1, ItemKind::Ring)];
+    let resin = ResinState {
+        amount: ResinAmount::AtLeast(4),
+        filter: ArcaneResinFilter {
+            include_mage_wand: true,
+            uncursed: true,
+            max_depth: Some(5),
+            source: Some(ItemSource::LockedChest),
+        },
+    };
+    let draft = open(&rows, None, false, Some(&resin), false, true);
+    assert_eq!(draft.query_resin, Some(resin));
+    let (result, outcome) = saved(&draft);
+    assert_eq!(outcome, ResinOutcome::Unchanged);
+    assert_eq!((result.changed, result.rows), (false, rows.to_vec()));
+    let moved = after(
+        &draft,
+        &[
+            Change::SetResinAuto(true),
+            Change::SetResinAuto(false),
+            Change::SetIncludeMageWand(false),
+            Change::SetIncludeMageWand(true),
+        ],
+    );
+    assert_eq!(saved(&moved).1, ResinOutcome::Unchanged);
+    let changed = after(&draft, &[Change::SetResinAmount(Some(5.0))]);
+    let floor_four = ArcaneResinFilter {
+        max_depth: Some(4),
+        ..resin.filter
+    };
+    assert_eq!(
+        saved(&changed).1,
+        ResinOutcome::Set(ResinState {
+            amount: ResinAmount::AtLeast(5),
+            filter: floor_four,
+        })
+    );
+    let auto = ResinState {
+        amount: ResinAmount::Auto,
+        ..resin
+    };
+    let draft = open(&rows, None, false, Some(&auto), false, true);
+    assert_eq!(saved(&draft).1, ResinOutcome::Unchanged);
+    assert_eq!(
+        saved(&after(&draft, &[Change::SetResinAuto(false)])).1,
+        ResinOutcome::Set(ResinState {
+            amount: ResinAmount::AtLeast(2),
+            filter: floor_four,
+        })
+    );
+
+    let deep = ResinState {
+        filter: ArcaneResinFilter {
+            max_depth: Some(30),
+            ..resin.filter
+        },
+        ..resin
+    };
+    let draft = open(&rows, None, false, Some(&deep), false, true);
+    assert_eq!(
+        saved(&draft).1,
+        ResinOutcome::Set(ResinState {
+            filter: ArcaneResinFilter {
+                max_depth: Some(MAX_SEARCH_DEPTH),
+                ..resin.filter
+            },
+            ..resin
+        })
+    );
+    // A wand chip turned into the very same resin still replaces the chip.
+    let draft = after(
+        &open(
+            &[row(1, ItemKind::Wand)],
+            Some(1),
+            false,
+            Some(&resin),
+            true,
+            false,
+        ),
+        &[Change::SetItem(ItemChoice::ArcaneResin)],
+    );
+    let (result, outcome) = saved(&draft);
+    assert!(matches!(outcome, ResinOutcome::Set(_)));
+    assert!(result.rows.is_empty());
 }
 
 /// Web "selects Auto, preserves filters, and restores the mode when
@@ -2751,6 +2941,12 @@ fn assert_filled(form: &Form, context: &str) {
                 .is_none_or(|caption| !caption.is_empty())
         );
     }
+    for range in [&form.transmutations, &form.stack.count_levels] {
+        assert!(
+            !range.caption_visible || (range.visible && range.caption.is_some()),
+            "{context}"
+        );
+    }
     for (caption, name) in [
         (&form.exclude_resin.caption, "exclude_resin"),
         (&form.select_trinket.caption, "select_trinket"),
@@ -2907,14 +3103,20 @@ fn random_changes_keep_the_form_in_range_and_every_save_emittable() {
             SaveResult::Saved { result, resin } => {
                 assert!(shown.can_save, "{context}");
                 assert_emittable(&result.rows, &context);
-                if let ResinOutcome::Set(state) = resin {
-                    assert!(shown.resin_picked, "{context}");
-                    assert!(
-                        !matches!(state.amount, ResinAmount::AtLeast(0)),
-                        "{context}"
-                    );
-                } else {
-                    assert!(result.focus.is_some(), "{context}");
+                match resin {
+                    ResinOutcome::Set(state) => {
+                        assert!(shown.resin_picked, "{context}");
+                        assert!(
+                            !matches!(state.amount, ResinAmount::AtLeast(0)),
+                            "{context}"
+                        );
+                    }
+                    // The resin chip's sheet saved untouched.
+                    ResinOutcome::Unchanged if shown.resin_picked => {
+                        assert_eq!(draft.origin, Origin::Resin, "{context}");
+                        assert!(!result.changed, "{context}");
+                    }
+                    _ => assert!(result.focus.is_some(), "{context}"),
                 }
             }
             SaveResult::Refused { draft: kept, form } => {
@@ -2971,11 +3173,13 @@ fn as_the_sheet_holds_it(requirement: Requirement) -> Requirement {
 /// Opens a sheet on every row of `rows` — chips, cluster members, blankets,
 /// the anchors of stacks and their hidden copies — and saves it untouched:
 /// the rows come back identical, `changed: false`, and the focus on the
-/// chip. The sheet holds every field of the row but for the re-encodings of
-/// [`as_the_sheet_holds_it`], so a save that changes something else drops
-/// nothing. The one refusal an untouched sheet may meet is a duplicate
-/// trinket the list already holds.
+/// chip. The sheet holds every field of a row without problems of its own
+/// but for the re-encodings of [`as_the_sheet_holds_it`], so a save that
+/// changes something else drops nothing. A list with problems may instead
+/// be repaired — a problem goes and none comes — and the one refusal an
+/// untouched sheet may meet is a duplicate trinket the list already holds.
 fn assert_untouched_saves_change_nothing(rows: &[Row], context: &str) {
+    let before = problems(rows);
     let entries = board_items(rows);
     for (index, row) in rows.iter().enumerate() {
         let context = format!("{context} at {}", row.key);
@@ -2990,17 +3194,26 @@ fn assert_untouched_saves_change_nothing(rows: &[Row], context: &str) {
         };
         let draft = open(rows, Some(row.key), false, None, true, false);
         assert_eq!(draft.origin, Origin::Row(rows[shown].key), "{context}");
-        assert_eq!(
-            saved_requirement(&draft),
-            as_the_sheet_holds_it(rows[shown].requirement),
-            "{context}"
-        );
+        if row_problems(&rows[shown].requirement).is_empty() {
+            assert_eq!(
+                saved_requirement(&draft),
+                as_the_sheet_holds_it(rows[shown].requirement),
+                "{context}"
+            );
+        }
         match save(&draft, rows, None) {
             SaveResult::Saved { result, resin } => {
-                assert!(!result.changed, "{context} → {:?}", result.rows);
+                assert_eq!(resin, ResinOutcome::Unchanged, "{context}");
+                if result.changed {
+                    assert!(
+                        repairs(&before, &problems(&result.rows)),
+                        "{context} → {:?}",
+                        result.rows
+                    );
+                    continue;
+                }
                 assert_eq!(result.rows, rows, "{context}");
                 assert_eq!(result.focus, Some(rows[entry.anchor()].key), "{context}");
-                assert_eq!(resin, ResinOutcome::Unchanged, "{context}");
             }
             SaveResult::Refused { form, .. } => {
                 assert_eq!(form.errors, [DUPLICATE_TRINKET], "{context}");

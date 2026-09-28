@@ -1305,6 +1305,7 @@ struct WireDraft {
     taken_trinkets: Vec<String>,
     resin_picked: bool,
     resin: WireResinDraft,
+    query_resin: Option<WireResin>,
     rows: Vec<Value>,
 }
 
@@ -1353,6 +1354,11 @@ fn read_draft(text: &str) -> Result<Draft, Failure> {
             Entry::Raw(raw) => Err(unreadable(raw.message)),
         })
         .collect::<Result<Vec<_>, _>>()?;
+    let query_resin = wire
+        .query_resin
+        .map(WireResin::state)
+        .transpose()
+        .map_err(|failure| unreadable(failure.message))?;
     let taken_trinkets = wire
         .taken_trinkets
         .iter()
@@ -1396,6 +1402,7 @@ fn read_draft(text: &str) -> Result<Draft, Failure> {
             max_depth: wire.resin.max_depth,
             source: wire.resin.source.map(ItemSource::from),
         },
+        query_resin,
         rows,
     })
 }
@@ -1422,6 +1429,7 @@ fn write_draft(draft: &Draft) -> String {
         taken_trinkets,
         resin_picked,
         resin,
+        query_resin,
         rows,
     } = draft;
     let ResinDraft {
@@ -1470,6 +1478,10 @@ fn write_draft(draft: &Draft) -> String {
                 ("max_depth", (*max_depth).into()),
                 ("source", source_value(*source)),
             ]),
+        ),
+        (
+            "query_resin",
+            query_resin.as_ref().map_or(Value::Null, resin_value),
         ),
         ("rows", rows.iter().map(write_row).collect()),
     ])
@@ -1908,6 +1920,7 @@ fn range_toggle(control: &RangeToggle) -> Value {
         max,
         label,
         caption,
+        caption_visible,
         value_label,
     } = control;
     object(vec![
@@ -1918,6 +1931,7 @@ fn range_toggle(control: &RangeToggle) -> Value {
         ("max", (*max).into()),
         ("label", label.as_str().into()),
         ("caption", caption.as_deref().into()),
+        ("caption_visible", (*caption_visible).into()),
         ("value_label", value_label.as_str().into()),
     ])
 }

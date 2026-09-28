@@ -15,7 +15,7 @@
     ]
   },
   "response": {
-    "draft": "{\"blanket\":true,\"copy_depth\":null,\"copy_depth_memory\":4,\"count\":1,\"effect_mode\":\"any\",\"floor_limit_memory\":4,\"in_cluster\":false,\"key\":null,\"offer_resin\":false,\"origin\":{\"type\":\"new\"},\"requirement\":{\"blanket\":true,\"kind\":\"melee_weapon\"},\"resin\":{\"amount\":2.0,\"auto\":false,\"include_mage_wand\":false,\"max_depth\":null,\"source\":null,\"uncursed\":true},\"resin_picked\":false,\"rows\":[{\"key\":1,\"kind\":\"melee_weapon\",\"tier\":{\"exact\":4}}],\"taken_trinkets\":[],\"tier_value\":3,\"total\":null,\"transmutations_memory\":1,\"upgrade_value\":1,\"v\":1}",
+    "draft": "{\"blanket\":true,\"copy_depth\":null,\"copy_depth_memory\":4,\"count\":1,\"effect_mode\":\"any\",\"floor_limit_memory\":4,\"in_cluster\":false,\"key\":null,\"offer_resin\":false,\"origin\":{\"type\":\"new\"},\"query_resin\":null,\"requirement\":{\"blanket\":true,\"kind\":\"melee_weapon\"},\"resin\":{\"amount\":2.0,\"auto\":false,\"include_mage_wand\":false,\"max_depth\":null,\"source\":null,\"uncursed\":true},\"resin_picked\":false,\"rows\":[{\"key\":1,\"kind\":\"melee_weapon\",\"tier\":{\"exact\":4}}],\"taken_trinkets\":[],\"tier_value\":3,\"total\":null,\"transmutations_memory\":1,\"upgrade_value\":1,\"v\":1}",
     "form": {
       "blanket": true,
       "can_save": true,
@@ -952,6 +952,7 @@
         "count": 1,
         "count_levels": {
           "caption": "Each item counts its upgrade plus one, and spare items may go unused.",
+          "caption_visible": false,
           "enabled": false,
           "label": "Count levels together",
           "max": 5,
@@ -1004,6 +1005,7 @@
       "title": "Any melee weapon",
       "transmutations": {
         "caption": "Matches an initial offer or any of the next 1 trinket. AutoTrinket can use a helpful starting trinket while your target waits in the deck. Scroll availability and effects after transmuting are not simulated.",
+        "caption_visible": false,
         "enabled": false,
         "label": "Allow transmutations",
         "max": 13,

@@ -6,11 +6,11 @@
       "type": "set_resin_amount",
       "value": null
     },
-    "draft": "{\"blanket\":false,\"copy_depth\":null,\"copy_depth_memory\":4,\"count\":1,\"effect_mode\":\"any\",\"floor_limit_memory\":4,\"in_cluster\":false,\"key\":null,\"offer_resin\":true,\"origin\":{\"type\":\"resin\"},\"requirement\":{\"kind\":\"wand\"},\"resin\":{\"amount\":2.0,\"auto\":false,\"include_mage_wand\":true,\"max_depth\":null,\"source\":\"chest\",\"uncursed\":false},\"resin_picked\":true,\"rows\":[{\"key\":1,\"kind\":\"wand\"},{\"item\":\"rat_skull\",\"key\":2,\"kind\":\"trinket\"}],\"taken_trinkets\":[\"rat_skull\"],\"tier_value\":3,\"total\":null,\"transmutations_memory\":1,\"upgrade_value\":1,\"v\":1}",
+    "draft": "{\"blanket\":false,\"copy_depth\":null,\"copy_depth_memory\":4,\"count\":1,\"effect_mode\":\"any\",\"floor_limit_memory\":4,\"in_cluster\":false,\"key\":null,\"offer_resin\":true,\"origin\":{\"type\":\"resin\"},\"query_resin\":{\"amount\":\"auto\",\"filter\":{\"include_mage_wand\":true,\"max_depth\":null,\"source\":\"chest\",\"uncursed\":false}},\"requirement\":{\"kind\":\"wand\"},\"resin\":{\"amount\":2.0,\"auto\":false,\"include_mage_wand\":true,\"max_depth\":null,\"source\":\"chest\",\"uncursed\":false},\"resin_picked\":true,\"rows\":[{\"key\":1,\"kind\":\"wand\"},{\"item\":\"rat_skull\",\"key\":2,\"kind\":\"trinket\"}],\"taken_trinkets\":[\"rat_skull\"],\"tier_value\":3,\"total\":null,\"transmutations_memory\":1,\"upgrade_value\":1,\"v\":1}",
     "op": "change"
   },
   "response": {
-    "draft": "{\"blanket\":false,\"copy_depth\":null,\"copy_depth_memory\":4,\"count\":1,\"effect_mode\":\"any\",\"floor_limit_memory\":4,\"in_cluster\":false,\"key\":null,\"offer_resin\":true,\"origin\":{\"type\":\"resin\"},\"requirement\":{\"kind\":\"wand\"},\"resin\":{\"amount\":null,\"auto\":false,\"include_mage_wand\":true,\"max_depth\":null,\"source\":\"chest\",\"uncursed\":false},\"resin_picked\":true,\"rows\":[{\"key\":1,\"kind\":\"wand\"},{\"item\":\"rat_skull\",\"key\":2,\"kind\":\"trinket\"}],\"taken_trinkets\":[\"rat_skull\"],\"tier_value\":3,\"total\":null,\"transmutations_memory\":1,\"upgrade_value\":1,\"v\":1}",
+    "draft": "{\"blanket\":false,\"copy_depth\":null,\"copy_depth_memory\":4,\"count\":1,\"effect_mode\":\"any\",\"floor_limit_memory\":4,\"in_cluster\":false,\"key\":null,\"offer_resin\":true,\"origin\":{\"type\":\"resin\"},\"query_resin\":{\"amount\":\"auto\",\"filter\":{\"include_mage_wand\":true,\"max_depth\":null,\"source\":\"chest\",\"uncursed\":false}},\"requirement\":{\"kind\":\"wand\"},\"resin\":{\"amount\":null,\"auto\":false,\"include_mage_wand\":true,\"max_depth\":null,\"source\":\"chest\",\"uncursed\":false},\"resin_picked\":true,\"rows\":[{\"key\":1,\"kind\":\"wand\"},{\"item\":\"rat_skull\",\"key\":2,\"kind\":\"trinket\"}],\"taken_trinkets\":[\"rat_skull\"],\"tier_value\":3,\"total\":null,\"transmutations_memory\":1,\"upgrade_value\":1,\"v\":1}",
     "form": {
       "blanket": false,
       "can_save": false,
@@ -680,6 +680,7 @@
         "count": 1,
         "count_levels": {
           "caption": "Each item counts its upgrade plus one, and spare items may go unused.",
+          "caption_visible": false,
           "enabled": false,
           "label": "Count levels together",
           "max": 5,
@@ -732,6 +733,7 @@
       "title": "Arcane Resin",
       "transmutations": {
         "caption": "Matches an initial offer or any of the next 1 trinket. AutoTrinket can use a helpful starting trinket while your target waits in the deck. Scroll availability and effects after transmuting are not simulated.",
+        "caption_visible": false,
         "enabled": false,
         "label": "Allow transmutations",
         "max": 13,

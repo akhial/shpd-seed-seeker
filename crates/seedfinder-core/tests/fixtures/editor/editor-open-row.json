@@ -26,7 +26,7 @@
     ]
   },
   "response": {
-    "draft": "{\"blanket\":false,\"copy_depth\":null,\"copy_depth_memory\":4,\"count\":2,\"effect_mode\":\"any\",\"floor_limit_memory\":4,\"in_cluster\":false,\"key\":1,\"offer_resin\":false,\"origin\":{\"key\":1,\"type\":\"row\"},\"requirement\":{\"item\":\"ring_might\",\"kind\":\"ring\"},\"resin\":{\"amount\":2.0,\"auto\":false,\"include_mage_wand\":false,\"max_depth\":null,\"source\":null,\"uncursed\":true},\"resin_picked\":false,\"rows\":[{\"item\":\"ring_might\",\"key\":1,\"kind\":\"ring\",\"level_sum\":{\"at_least\":3,\"group\":1}},{\"item\":\"ring_might\",\"key\":2,\"kind\":\"ring\",\"level_sum\":{\"at_least\":3,\"group\":1}}],\"taken_trinkets\":[],\"tier_value\":3,\"total\":3,\"transmutations_memory\":1,\"upgrade_value\":1,\"v\":1}",
+    "draft": "{\"blanket\":false,\"copy_depth\":null,\"copy_depth_memory\":4,\"count\":2,\"effect_mode\":\"any\",\"floor_limit_memory\":4,\"in_cluster\":false,\"key\":1,\"offer_resin\":false,\"origin\":{\"key\":1,\"type\":\"row\"},\"query_resin\":null,\"requirement\":{\"item\":\"ring_might\",\"kind\":\"ring\"},\"resin\":{\"amount\":2.0,\"auto\":false,\"include_mage_wand\":false,\"max_depth\":null,\"source\":null,\"uncursed\":true},\"resin_picked\":false,\"rows\":[{\"item\":\"ring_might\",\"key\":1,\"kind\":\"ring\",\"level_sum\":{\"at_least\":3,\"group\":1}},{\"item\":\"ring_might\",\"key\":2,\"kind\":\"ring\",\"level_sum\":{\"at_least\":3,\"group\":1}}],\"taken_trinkets\":[],\"tier_value\":3,\"total\":3,\"transmutations_memory\":1,\"upgrade_value\":1,\"v\":1}",
     "form": {
       "blanket": false,
       "can_save": true,
@@ -707,6 +707,7 @@
         "count": 2,
         "count_levels": {
           "caption": "Each item counts its upgrade plus one, and spare items may go unused.",
+          "caption_visible": true,
           "enabled": true,
           "label": "Count levels together",
           "max": 8,
@@ -759,6 +760,7 @@
       "title": "Ring of Might",
       "transmutations": {
         "caption": "Matches an initial offer or any of the next 1 trinket. AutoTrinket can use a helpful starting trinket while your target waits in the deck. Scroll availability and effects after transmuting are not simulated.",
+        "caption_visible": false,
         "enabled": false,
         "label": "Allow transmutations",
         "max": 13,

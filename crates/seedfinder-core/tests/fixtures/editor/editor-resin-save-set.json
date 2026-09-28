@@ -2,7 +2,7 @@
   "about": "Saving Arcane Resin sets the query's resin and removes the wand chip the sheet was opened on.",
   "envelope": "requirement_editor",
   "request": {
-    "draft": "{\"blanket\":false,\"copy_depth\":null,\"copy_depth_memory\":4,\"count\":1,\"effect_mode\":\"any\",\"floor_limit_memory\":4,\"in_cluster\":false,\"key\":1,\"offer_resin\":true,\"origin\":{\"key\":1,\"type\":\"row\"},\"requirement\":{\"kind\":\"wand\"},\"resin\":{\"amount\":4.0,\"auto\":false,\"include_mage_wand\":false,\"max_depth\":14,\"source\":null,\"uncursed\":true},\"resin_picked\":true,\"rows\":[{\"key\":1,\"kind\":\"wand\"},{\"item\":\"rat_skull\",\"key\":2,\"kind\":\"trinket\"}],\"taken_trinkets\":[\"rat_skull\"],\"tier_value\":3,\"total\":null,\"transmutations_memory\":1,\"upgrade_value\":1,\"v\":1}",
+    "draft": "{\"blanket\":false,\"copy_depth\":null,\"copy_depth_memory\":4,\"count\":1,\"effect_mode\":\"any\",\"floor_limit_memory\":4,\"in_cluster\":false,\"key\":1,\"offer_resin\":true,\"origin\":{\"key\":1,\"type\":\"row\"},\"query_resin\":{\"amount\":4,\"filter\":{\"include_mage_wand\":false,\"max_depth\":14,\"source\":null,\"uncursed\":true}},\"requirement\":{\"kind\":\"wand\"},\"resin\":{\"amount\":4.0,\"auto\":false,\"include_mage_wand\":false,\"max_depth\":14,\"source\":null,\"uncursed\":true},\"resin_picked\":true,\"rows\":[{\"key\":1,\"kind\":\"wand\"},{\"item\":\"rat_skull\",\"key\":2,\"kind\":\"trinket\"}],\"taken_trinkets\":[\"rat_skull\"],\"tier_value\":3,\"total\":null,\"transmutations_memory\":1,\"upgrade_value\":1,\"v\":1}",
     "op": "save",
     "rows": [
       {
