@@ -253,6 +253,33 @@ public sealed class RequirementSheetTests
     }
 
     [Fact]
+    public void AMembersSheetStepsItsOwnStack()
+    {
+        // A cluster member's sheet shows the stack section — the member's own
+        // count and copy floor, never a combined level — and its preview
+        // carries the member's own badge.
+        var pinned = FormOf("editor-open-member");
+        Assert.True(pinned.InCluster && pinned.Stack.Visible);
+        Assert.False(pinned.Stack.CountLevels.Visible);
+        Assert.Equal((2, "×2"), (pinned.Stack.Count, pinned.Preview!.CountBadge!.Text));
+        Assert.Empty(pinned.Preview.Copies);
+
+        var editor = new BoardEditor();
+        var query = Loaded(Named("wand_frost"), Named("wand_disintegration"));
+        var (frost, disintegration) = (query.Requirements[0].Key, query.Requirements[1].Key);
+        if (editor.Edit(query, BoardEdit.Join(disintegration, frost)).Rows is { } rows) query.Requirements = new(rows);
+        var sheet = RequirementSheet.Open(query, frost);
+        Assert.True(sheet.Form.InCluster && sheet.Form.Stack.Visible);
+        sheet.Change(SheetChange.SetCount(2));
+        var saved = sheet.Save(query)!;
+        Assert.Equal(frost, saved.Focus);
+        Assert.True(saved.ApplyTo(query));
+        // Two Frosts, or one Disintegration.
+        var cluster = Assert.Single(editor.View(query).Entries);
+        Assert.Equal(["×2", null], cluster.Chips.Select(chip => chip.CountBadge?.Text));
+    }
+
+    [Fact]
     public void ChangesAreWrittenAsTheEnvelopeReadsThem()
     {
         Assert.Equal("""{"type":"set_item","value":null}""", SheetChange.SetItem(null).ToString());
