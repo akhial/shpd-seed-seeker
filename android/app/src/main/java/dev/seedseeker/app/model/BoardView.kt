@@ -70,9 +70,10 @@ data class BoardView(
         private fun decodeBadge(badge: JSONObject) =
             BadgeView(badge.getString("text"), badge.getString("compact_text"), badge.getString("tooltip"))
 
-        private fun decodeChip(chip: JSONObject) = ChipView(
+        internal fun decodeChip(chip: JSONObject) = ChipView(
             key = chip.getLong("key"),
             name = chip.getString("name"),
+            title = chip.getString("title"),
             item = chip.stringOrNull("item")?.let(ItemCatalog::findById),
             kind = chip.stringOrNull("kind")?.let { kind -> ItemKind.entries.firstOrNull { it.name.lowercase() == kind } },
             tags = chip.getJSONArray("tags").objects().map(::decodeTag),
@@ -85,6 +86,8 @@ data class BoardView(
                 )
             },
             uncursed = chip.getBoolean("uncursed"),
+            details = chip.getJSONArray("details").let { details -> List(details.length(), details::getString) },
+            relations = chip.getJSONArray("relations").objects().map { it.getString("text") },
             description = chip.getString("description"),
             problem = chip.stringOrNull("problem"),
             canDetach = chip.getBoolean("can_detach"),
@@ -129,6 +132,8 @@ data class ChipView(
     val key: Long,
     /** The short name beside the sprite: the item, or the wildcard (`Any melee`). */
     val name: String,
+    /** The full title: the item, or the wildcard with its tier (`Any Tier 3+ melee weapon`). */
+    val title: String,
     /** The item the sprite draws; null for a wildcard. */
     val item: CatalogItem?,
     /** The kind a wildcard's sprite stands for; null only for a row the editor could not read. */
@@ -141,6 +146,10 @@ data class ChipView(
     val effect: EffectView?,
     /** Whether cursed items are ruled out. */
     val uncursed: Boolean,
+    /** The chip's qualifiers in words (`+3 or higher`, `Locked chest`, `floors 1–9`), in order. */
+    val details: List<String>,
+    /** How the chip relates to the rest of its entry, a line each (`up to 2 — levels add to ≥ 5`). */
+    val relations: List<String>,
     /** What a screen reader says for the chip: its title, then its details. */
     val description: String,
     /** The first problem the chip carries, its hidden copies' included. */
@@ -168,12 +177,12 @@ data class RequirementProblem(val message: String, val keys: List<Long>)
 /** The Arcane Resin chip: its name, tags (`Auto` or `≥N`, `Mage +2`, `F≤N`), and what a screen reader says. */
 data class ResinChipView(val name: String, val tags: List<TagView>, val uncursed: Boolean, val description: String)
 
-private fun JSONArray.objects(): List<JSONObject> = List(length(), this::getJSONObject)
+internal fun JSONArray.objects(): List<JSONObject> = List(length(), this::getJSONObject)
 
 private fun JSONArray.longs(): List<Long> = List(length(), this::getLong)
 
-private fun JSONObject.objectOrNull(name: String): JSONObject? = if (isNull(name)) null else getJSONObject(name)
+internal fun JSONObject.objectOrNull(name: String): JSONObject? = if (isNull(name)) null else getJSONObject(name)
 
-private fun JSONObject.stringOrNull(name: String): String? = if (isNull(name)) null else getString(name)
+internal fun JSONObject.stringOrNull(name: String): String? = if (isNull(name)) null else getString(name)
 
 private fun JSONObject.intOrNull(name: String): Int? = if (isNull(name)) null else getInt(name)

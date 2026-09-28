@@ -8,6 +8,7 @@ import java.io.File
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
@@ -297,6 +298,162 @@ class RequirementEditorTest {
             val requirements = preset.query.requirements
             assertEquals(preset.name, requirements.mapIndexed { index, it -> it.copy(key = 1L + index) }, RequirementEditor.loaded(requirements, 1))
         }
+    }
+
+    @Test fun theSheetFormDecodesEveryControl() {
+        val sheet = EditorSheet.decode(fixture("editor-open-row").getJSONObject("response"))
+        val form = sheet.form
+        assertFalse(form.adding)
+        assertEquals(1L, form.rowKey)
+        assertEquals("Ring of Might", form.title)
+        assertEquals(ItemKind.RING, form.kind)
+        assertEquals("ring", form.category.value)
+        assertEquals(listOf("Weapon", "Armor", "Wand", "Ring", "Trinket", "Artifact"), form.category.options.map { it.label })
+        assertEquals("ring_might", form.item.value)
+        assertEquals(SheetOption<String?>(null, "Any ring", null, hidden = false), form.item.options.first())
+        // Counting levels speaks for the rings' upgrades; a named ring has no tier.
+        assertFalse(form.upgrade.visible)
+        assertFalse(form.tier.visible)
+        assertNull(form.source.value)
+        assertEquals("Any", form.source.label)
+        assertEquals((1..24).filterNot { it in setOf(5, 10, 15) }, form.floorLimit.options.map { it.value })
+        assertEquals(SheetFloors(true, false, 4, form.floorLimit.options, "Limit this item to a floor", "Within first 4 floors"), form.floorLimit)
+        assertEquals(2, form.stack.count)
+        assertEquals("×2", form.stack.valueLabel)
+        assertEquals(SheetStepper(true, true, 3, 1, 8, "Count levels together", null, "≥ 3 across up to 2"), form.stack.countLevels)
+        assertFalse(form.stack.copyDepth.visible)
+        assertEquals(listOf("up to 2 — levels add to ≥ 3"), form.preview!!.relations)
+        assertTrue(form.canSave)
+        // A sheet survives saved state as the editor's two strings.
+        assertEquals(form, EditorSheet(sheet.draft, sheet.formJson).form)
+
+        val effect = EditorSheet.decode(fixture("editor-change-effect").getJSONObject("response")).form.effect
+        assertEquals("specific", effect.mode)
+        assertEquals(listOf("enchantment", "curse"), effect.groups.map { it.value })
+        assertEquals(listOf("Blazing"), effect.choices.filter { it.selected }.map { it.value })
+
+        val resin = EditorSheet.decode(fixture("editor-resin-amount-invalid").getJSONObject("response")).form
+        assertTrue(resin.resinPicked)
+        assertNull(resin.rowKey)
+        assertEquals(SheetResin(visible = true, auto = false, amount = null, includeMageWand = true), resin.resin)
+        assertEquals(listOf("Enter an amount from 1 to 65535."), resin.errors)
+        assertFalse(resin.canSave)
+        assertNull(resin.preview)
+    }
+
+    /** The fixture's save request, sent again through [RequirementEditor.save]. */
+    private fun replaySave(name: String): SheetSave {
+        val request = fixture(name).getJSONObject("request")
+        return RequirementEditor.save(
+            request.getString("draft"),
+            RequirementEditor.decodeRows(request.getJSONArray("rows")),
+            if (request.isNull("next_key")) null else request.getLong("next_key"),
+        )
+    }
+
+    @Test fun savesDecodeTheirRowsAndTheQueryResin() {
+        val saved = replaySave("editor-save") as SheetSave.Saved
+        assertEquals(listOf(1L, 2L, 3L, 4L), saved.rows!!.map { it.key })
+        assertEquals(listOf(find("spear"), find("spear")), saved.rows!!.drop(2).map { it.item })
+        assertEquals(6, saved.rows!!.last().maximumDepth)
+        assertEquals(3L, saved.focus)
+        assertEquals(5L, saved.nextKey)
+        assertNull(saved.resin)
+
+        val set = replaySave("editor-resin-save-set") as SheetSave.Saved
+        assertEquals(listOf(2L), set.rows!!.map { it.key })
+        assertEquals(SavedResin.Set(ResinCondition(4, auto = false, ArcaneResinFilter(maximumDepth = 14))), set.resin)
+        assertNull(set.focus)
+
+        val clear = replaySave("editor-resin-save-clear") as SheetSave.Saved
+        assertEquals(SavedResin.Clear, clear.resin)
+        assertEquals(find("wand_frost"), clear.rows!!.last().item)
+
+        val refused = replaySave("editor-save-refused") as SheetSave.Refused
+        assertEquals(
+            listOf("This trinket is already required. Each trinket appears only once in the deck."),
+            refused.sheet.form.errors,
+        )
+        assertFalse(refused.sheet.form.canSave)
+    }
+
+    @Test fun aSheetOpensChangesAndSavesThroughTheEngine() {
+        val frost = ItemRequirement(1, find("wand_frost"), 2)
+        var sheet = RequirementEditor.open(listOf(frost), offerResin = true)
+        assertTrue(sheet.form.adding)
+        assertEquals("Any weapon", sheet.form.title)
+        val changes = listOf(
+            SheetChange.category("ring"), SheetChange.item("ring_might"), SheetChange.count(2),
+            SheetChange.countLevels(true), SheetChange.total(5),
+        )
+        for (change in changes) sheet = RequirementEditor.change(sheet.draft, change)
+        assertEquals("≥ 5 across up to 2", sheet.form.stack.countLevels.valueLabel)
+        val saved = RequirementEditor.save(sheet.draft, listOf(frost), nextKey = 10) as SheetSave.Saved
+        val rings = saved.rows!!.drop(1)
+        assertEquals(listOf(10L, 11L), rings.map { it.key })
+        assertEquals(listOf(LevelSum(1, 5), LevelSum(1, 5)), rings.map { it.levelSum })
+        assertEquals(10L, saved.focus)
+        assertEquals(12L, saved.nextKey)
+
+        // Reopened and saved as it is, the stack changes nothing, so a refine can resume.
+        val reopened = RequirementEditor.open(saved.rows!!, key = 10)
+        assertEquals(2, reopened.form.stack.count)
+        assertTrue(reopened.form.stack.countLevels.enabled)
+        val unchanged = RequirementEditor.save(reopened.draft, saved.rows!!) as SheetSave.Saved
+        assertNull(unchanged.rows)
+        assertEquals(10L, unchanged.focus)
+    }
+
+    @Test fun aStackedClusterMemberTurnedTrinketCannotBeSaved() {
+        val spear = ItemRequirement(0, find("spear"), 2)
+        val stacked = RequirementEditor.board(
+            emptyList(), listOf(BoardEdit.Save(null, spear, count = 2, total = null, copyDepth = null)), nextKey = 1,
+        ).rows!! + ItemRequirement(3, find("mace"), 2)
+        val cluster = RequirementEditor.board(stacked, listOf(BoardEdit.Join(source = 3, target = 1))).rows!!
+        val opened = RequirementEditor.open(cluster, key = 3)
+        assertTrue(opened.form.inCluster)
+        assertFalse(opened.form.stack.visible)
+
+        val trinket = RequirementEditor.change(opened.draft, SheetChange.category("trinket"))
+        assertEquals(listOf("Copies can only be grouped with the same item type."), trinket.form.errors)
+        assertFalse(trinket.form.canSave)
+        val refused = RequirementEditor.save(trinket.draft, cluster) as SheetSave.Refused
+        assertEquals(trinket.form.errors, refused.sheet.form.errors)
+    }
+
+    @Test fun everyItemTheSheetOffersHasATile() {
+        val sheet = RequirementEditor.open(emptyList(), offerResin = true)
+        for (family in sheet.form.category.options.map { it.value }) {
+            val options = RequirementEditor.change(sheet.draft, SheetChange.category(family)).form.item.options
+            val items = options.mapNotNull { it.value }.filter { it != SheetChange.ARCANE_RESIN }
+            assertTrue(family, items.isNotEmpty())
+            assertEquals(family, emptyList<String>(), items.filter { ItemCatalog.findById(it) == null })
+        }
+    }
+
+    @Test fun everyChangeIsReadByTheEditor() {
+        val sheet = RequirementEditor.open(listOf(ItemRequirement(1, find("wand_frost"), 2)), key = 1, offerResin = true)
+        val changes = listOf(
+            SheetChange.category("weapon"), SheetChange.weaponType("melee"), SheetChange.item(null),
+            SheetChange.item("spear"), SheetChange.tierMode("at_least"), SheetChange.tier(4),
+            SheetChange.upgradeMode("at_least"), SheetChange.upgrade(2), SheetChange.effectMode("specific"),
+            SheetChange.toggleEffect("Blazing"), SheetChange.uncursed(true), SheetChange.source("locked_chest"),
+            SheetChange.source(null), SheetChange.floorLimitEnabled(true), SheetChange.floorLimit(6),
+            SheetChange.excludeResin(true), SheetChange.transmutationsEnabled(true), SheetChange.transmutations(3),
+            SheetChange.selectTrinket(true), SheetChange.count(3), SheetChange.copyDepthEnabled(true),
+            SheetChange.copyDepth(9), SheetChange.countLevels(true), SheetChange.total(4),
+            SheetChange.item(SheetChange.ARCANE_RESIN), SheetChange.resinAuto(true), SheetChange.resinAmount(4.0),
+            SheetChange.resinAmount(null), SheetChange.resinAmount(Double.NaN), SheetChange.includeMageWand(true),
+        )
+        for (change in changes) RequirementEditor.change(sheet.draft, change)
+        // Floor 5 is an empty boss floor: a step up from floor 4 lands on 6.
+        val floored = listOf(SheetChange.floorLimitEnabled(true), SheetChange.floorLimit(5))
+            .fold(sheet) { open, change -> RequirementEditor.change(open.draft, change) }
+        assertEquals(6, floored.form.floorLimit.value)
+        val failure = assertThrows(IllegalStateException::class.java) {
+            RequirementEditor.change("{\"v\":99}", SheetChange.uncursed(true))
+        }
+        assertTrue(failure.message!!.startsWith("The draft cannot be read"))
     }
 
     @Test fun theBoardOfAnEditIsKeptForTheListItProduced() {

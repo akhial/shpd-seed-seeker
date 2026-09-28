@@ -6,14 +6,14 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * The requirement board's rules, all of them the shared core's
+ * The requirement editor's rules, all of them the shared core's
  * (`crates/seedfinder-core/src/editor/`, specified in
  * `docs/requirement-editor.md`) and reached through [JniBindings]: how the
  * flat requirement list folds into chips, either/or clusters and stacks,
- * what a drop or a save writes back, what every chip says, and what is wrong
- * with the list. What remains here is the mapping between the app's
- * requirement list and the editor's rows, the same boundary convention
- * [ResultsExport] keeps for query documents.
+ * what a drop or a save writes back, what every chip and every sheet control
+ * says and offers, and what is wrong with the list. What remains here is the
+ * mapping between the app's requirement list and the editor's rows, the same
+ * boundary convention [ResultsExport] keeps for query documents.
  *
  * A row is one requirement object of the canonical query document, written
  * and read by [ResultsExport], plus the requirement's [ItemRequirement.key]
@@ -61,6 +61,73 @@ object RequirementEditor {
         return runCatching { board(keyed, listOf(BoardEdit.Normalize)).rows }.getOrNull() ?: keyed
     }
 
+    /**
+     * Opens the requirement sheet on the visible row [key] of [rows], or on a
+     * new chip of the [blanket] section when [key] is null. [resin] is the
+     * query's condition, which seeds the sheet's resin section; [offerResin]
+     * offers Arcane Resin among the wands, and [openResin] opens the sheet on
+     * the query's resin itself.
+     *
+     * @throws IllegalStateException when the editor cannot open it.
+     */
+    fun open(
+        rows: List<ItemRequirement>,
+        key: Long? = null,
+        blanket: Boolean = false,
+        resin: ResinCondition? = null,
+        offerResin: Boolean = false,
+        openResin: Boolean = false,
+    ): EditorSheet {
+        val request = JSONObject().apply {
+            put("op", "open")
+            put("rows", encodeRows(rows))
+            key?.let { put("key", it) }
+            put("blanket", blanket)
+            resin?.let { put("resin", it.json()) }
+            put("offer_resin", offerResin)
+            put("open_resin", openResin)
+        }
+        return EditorSheet.decode(sheetAnswer(request))
+    }
+
+    /**
+     * The sheet after the user moved one control of [draft].
+     *
+     * @throws IllegalStateException when the editor cannot read the draft.
+     */
+    fun change(draft: String, change: SheetChange): EditorSheet =
+        EditorSheet.decode(sheetAnswer(JSONObject().put("op", "change").put("draft", draft).put("change", change.json())))
+
+    /**
+     * Saves [draft] onto [rows], the list as it is now; a new row takes its
+     * key from [nextKey] on, when given.
+     *
+     * @throws IllegalStateException when the editor cannot read the request,
+     *   or answers with a row this app cannot hold.
+     */
+    fun save(draft: String, rows: List<ItemRequirement>, nextKey: Long? = null): SheetSave {
+        val request = JSONObject().apply {
+            put("op", "save")
+            put("draft", draft)
+            put("rows", encodeRows(rows))
+            nextKey?.let { put("next_key", it) }
+        }
+        val answer = sheetAnswer(request)
+        val saved = answer.objectOrNull("saved") ?: return SheetSave.Refused(EditorSheet.decode(answer))
+        return SheetSave.Saved(
+            rows = changedRows(saved),
+            nextKey = saved.getLong("next_key"),
+            rekeyed = rekeyed(saved),
+            focus = if (saved.isNull("focus")) null else saved.getLong("focus"),
+            resin = saved.objectOrNull("resin")?.let { resin ->
+                resin.objectOrNull("set")?.let { SavedResin.Set(ResinCondition.decode(it)) } ?: SavedResin.Clear
+            },
+        )
+    }
+
+    private fun sheetAnswer(request: JSONObject): JSONObject =
+        answer(JniBindings.requirementEditor(request.toString().toByteArray()))
+
     /** The editor's answer, or its `{"error"}` as an exception. */
     internal fun answer(bytes: ByteArray): JSONObject {
         val answer = JSONObject(String(bytes, Charsets.UTF_8))
@@ -75,6 +142,24 @@ object RequirementEditor {
             put("key", requirement.key)
             requirement.alternativeGroup?.let { put("alternative_group", it) }
         }
+
+    /**
+     * The rows of an answer that changed them, null when it changed nothing.
+     * The core only writes rows every platform model can hold; one this app
+     * cannot is a bug to report, never a list to adopt.
+     */
+    internal fun changedRows(answer: JSONObject): List<ItemRequirement>? {
+        if (!answer.getBoolean("changed")) return null
+        return runCatching { decodeRows(answer.getJSONArray("rows")) }.getOrElse {
+            throw IllegalStateException("The requirement editor answered a row this app cannot hold: ${it.message}", it)
+        }
+    }
+
+    /** The keys an answer repaired, old to new. */
+    internal fun rekeyed(answer: JSONObject): Map<Long, Long> {
+        val pairs = answer.getJSONArray("rekeyed")
+        return (0 until pairs.length()).associate { index -> pairs.getJSONArray(index).let { it.getLong(0) to it.getLong(1) } }
+    }
 
     /** @throws IllegalArgumentException for a row [ItemRequirement] cannot hold. */
     internal fun decodeRows(rows: JSONArray): List<ItemRequirement> = List(rows.length()) { index ->
@@ -176,32 +261,18 @@ data class BoardAnswer(
     val board: BoardView,
 ) {
     companion object {
-        internal fun decode(answer: JSONObject): BoardAnswer {
-            // The core only writes rows every platform model can hold; one
-            // this app cannot is a bug to report, never a list to adopt.
-            val rows = if (answer.getBoolean("changed")) {
-                runCatching { RequirementEditor.decodeRows(answer.getJSONArray("rows")) }.getOrElse {
-                    throw IllegalStateException("The requirement editor answered a row this app cannot hold: ${it.message}", it)
-                }
-            } else {
-                null
-            }
-            val rekeyed = answer.getJSONArray("rekeyed")
-            return BoardAnswer(
-                rows = rows,
-                nextKey = answer.getLong("next_key"),
-                rekeyed = (0 until rekeyed.length()).associate { index ->
-                    rekeyed.getJSONArray(index).let { it.getLong(0) to it.getLong(1) }
-                },
-                focus = if (answer.isNull("focus")) null else answer.getLong("focus"),
-                refused = if (answer.isNull("refused")) null else answer.getJSONObject("refused").getString("message"),
-                board = BoardView.decode(answer),
-            )
-        }
+        internal fun decode(answer: JSONObject) = BoardAnswer(
+            rows = RequirementEditor.changedRows(answer),
+            nextKey = answer.getLong("next_key"),
+            rekeyed = RequirementEditor.rekeyed(answer),
+            focus = if (answer.isNull("focus")) null else answer.getLong("focus"),
+            refused = if (answer.isNull("refused")) null else answer.getJSONObject("refused").getString("message"),
+            board = BoardView.decode(answer),
+        )
     }
 }
 
-/** The query's Arcane Resin condition, which the board's resin chip describes. */
+/** The query's Arcane Resin condition, which the board's resin chip describes and a sheet's resin section edits. */
 data class ResinCondition(val amount: Int, val auto: Boolean, val filter: ArcaneResinFilter) {
     internal fun json(): JSONObject = JSONObject().apply {
         put("amount", if (auto) "auto" else amount)
@@ -220,6 +291,22 @@ data class ResinCondition(val amount: Int, val auto: Boolean, val filter: Arcane
         /** The condition of a query asking for [amount] resin, or Auto; null when it asks for none. */
         fun of(amount: Int, auto: Boolean, filter: ArcaneResinFilter): ResinCondition? =
             ResinCondition(amount, auto, filter).takeIf { auto || amount in 1..65535 }
+
+        /** The condition the editor wrote; an Auto one keeps the app's amount of 0. */
+        internal fun decode(value: JSONObject): ResinCondition {
+            val auto = value.get("amount") == "auto"
+            val filter = value.optJSONObject("filter") ?: JSONObject()
+            return ResinCondition(
+                amount = if (auto) 0 else value.getInt("amount"),
+                auto = auto,
+                filter = ArcaneResinFilter(
+                    uncursed = filter.optBoolean("uncursed", true),
+                    maximumDepth = if (filter.isNull("max_depth")) null else filter.getInt("max_depth"),
+                    source = filter.stringOrNull("source")?.let { name -> ScoutItemSource.entries.first { it.name.lowercase() == name } },
+                    includeMageWand = filter.optBoolean("include_mage_wand", false),
+                ),
+            )
+        }
     }
 }
 
