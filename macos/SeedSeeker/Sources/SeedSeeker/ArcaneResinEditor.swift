@@ -8,46 +8,6 @@ enum RequirementChipDrag: Equatable {
     case resin
 }
 
-/// Resin-specific fields inside the requirement editor's existing form.
-struct ArcaneResinFields: View {
-    @Binding var amount: Int
-    @Binding var auto: Bool
-    @Binding var filter: ArcaneResinFilter
-
-    var body: some View {
-        Section {
-            Picker("Minimum resin", selection: $auto) {
-                Text("Amount").tag(false)
-                Text("Auto").tag(true)
-            }.pickerStyle(.segmented)
-            if auto {
-                Text("Upgrade each kept wand to +3. Excluded wands and extra copies reserved for reforging need no resin.")
-                    .foregroundStyle(.secondary)
-            } else {
-                Stepper(value: $amount, in: 1...65535) {
-                    LabeledContent("Minimum resin") {
-                        Text("\(amount)").monospacedDigit().foregroundStyle(.secondary)
-                    }
-                }
-            }
-            Toggle("Include Mage’s starting wand", isOn: $filter.includeMageWand)
-                .toggleStyle(.checkbox)
-            Text("Add 2 resin from the Magic Missile wand recovered with Wand Preservation when imbuing another wand. The preserved wand is +0, regardless of the staff’s level.")
-                .font(.caption).foregroundStyle(.secondary)
-            Toggle("Require uncursed wands", isOn: $filter.uncursed)
-                .toggleStyle(.checkbox)
-            Picker("Wand floor limit", selection: $filter.maximumDepth) {
-                Text("Search limit").tag(Int?.none)
-                ForEach(1...SearchLimits.maxDepth, id: \.self) { depth in Text("Floor \(depth)").tag(Int?.some(depth)) }
-            }
-            Picker("Wand source", selection: $filter.source) {
-                Text("Any source").tag(ScoutItemSource?.none)
-                ForEach(ScoutItemSource.allCases, id: \.self) { source in Text(source.label).tag(ScoutItemSource?.some(source)) }
-            }
-        }
-    }
-}
-
 /// A query-wide requirement: it supports the board's edit and removal gestures,
 /// while item-only relationships (alternatives and stacks) do not apply. Its
 /// words are the shared core's board chip for the query's resin condition.

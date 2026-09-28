@@ -559,33 +559,12 @@ extension Color {
 
 // MARK: - Query sidebar
 
+/// A requirement sheet on screen: the shared core opened it when the chip,
+/// the resin chip or "+ Add" was clicked, so re-rendering the sidebar never
+/// opens it again.
 private struct EditorSession: Identifiable {
     let id = UUID()
-    let requirement: ItemRequirement
-    let isNew: Bool
-    /// The edited row's key, or nil for a new chip.
-    let key: Int64?
-    /// The chip's stack as the board holds it; the editor may reshape it.
-    let stack: StackShape
-    var isResin = false
-}
-
-/// What the editor is told about the chip's stack, and what it hands back.
-private struct StackShape {
-    var count = 1
-    var total: Int?
-    /// The floor limit the extra copies share, when they carry one.
-    var copyDepth: Int?
-    /// A cluster member's stack belongs to the cluster, not to the editor.
-    var inCluster = false
-}
-
-/// The editor's result: the chip's own fields, plus its stack's shape.
-private struct EditorResult {
-    let requirement: ItemRequirement
-    let count: Int
-    let total: Int?
-    let copyDepth: Int?
+    let sheet: RequirementSheet
 }
 
 private struct QueryView: View {
@@ -673,26 +652,7 @@ private struct QueryView: View {
         }
         .navigationTitle("Query")
         .sheet(item: $editor) { session in
-            RequirementEditor(requirement: session.requirement, isNew: session.isNew,
-                              stack: session.stack, isResin: session.isResin,
-                              otherRequirements: requirements.filter { $0.key != session.key },
-                              resinAmount: arcaneResin, resinAuto: arcaneResinAuto, resinFilter: arcaneResinFilter,
-                              onSaveResin: { amount, filter, auto in
-                arcaneResinAuto = auto; arcaneResin = amount; arcaneResinFilter = filter; editor = nil
-            }) { result in
-                // The board writes the chip and its stack: the editor's row
-                // lands through the shared core's `save`, which may refuse
-                // it (a stacked cluster member moved into another category,
-                // say) — then the sheet stays open and says why.
-                if let result,
-                   let refusal = edit([.save(key: session.key, requirement: result.requirement,
-                                             count: result.count, total: result.total,
-                                             copyDepth: result.copyDepth)])?.refusal {
-                    return refusal.message
-                }
-                editor = nil
-                return nil
-            }
+            RequirementEditor(sheet: session.sheet, onCancel: { editor = nil }, onSave: { save($0) })
         }
         .alert("Save Preset", isPresented: $showingSavePreset) {
             TextField("Preset name", text: $presetName)
@@ -959,36 +919,55 @@ private struct QueryView: View {
         }
     }
 
-    /// Opens the editor on the chip of row `key`, telling it the stack the
-    /// chip stands for so the "Total item count" section starts where the
-    /// board is.
+    /// Opens the sheet on the chip of row `key`; the shared core reads the
+    /// chip's stack from the board, so the "Total item count" section starts
+    /// where the board is.
     private func openEditor(_ key: Int64) {
-        guard let requirement = requirements.first(where: { $0.key == key }) else { return }
-        let item = board.item(holding: key)
-        editor = EditorSession(
-            requirement: requirement, isNew: false, key: key,
-            stack: StackShape(count: item?.stack.count ?? 1, total: item?.stack.total,
-                              copyDepth: item?.stack.copyDepth,
-                              inCluster: item?.cluster != nil))
+        showEditor(RequirementSheet.open(rows: requirements, key: key, resin: resin))
     }
 
-    // A new row's key is the board's to mint when it is saved; the draft's
-    // own key is never sent.
+    /// Opens the query's Arcane Resin condition as a sheet with the resin
+    /// picked.
     private func openResinEditor() {
-        if let value = try? ItemRequirement(key: 0, item: nil,
-            upgrade: 0, kind: .wand, upgradeMatch: .any) {
-            editor = EditorSession(requirement: value, isNew: false, key: nil,
-                                   stack: StackShape(), isResin: true)
-        }
+        showEditor(RequirementSheet.open(rows: requirements, resin: resin, openResin: true))
     }
 
+    /// Opens a sheet on a new chip. Arcane Resin is offered among the wands
+    /// of a new ordinary chip, as it always was here.
     private func addRequirement(blanket: Bool = false) {
-        let first = requirements.first(where: { !$0.blanket })
-        let kind: ItemKind = blanket ? first?.kind ?? .weapon : .weapon
-        let item = kind == .trinket || kind == .artifact ? first?.item : nil
-        if let value = try? ItemRequirement(key: 0, item: item,
-            upgrade: 0, kind: kind, upgradeMatch: .any, blanket: blanket) {
-            editor = EditorSession(requirement: value, isNew: true, key: nil, stack: StackShape())
+        showEditor(RequirementSheet.open(rows: requirements, blanket: blanket, resin: resin,
+                                         offerResin: !blanket))
+    }
+
+    private func showEditor(_ sheet: RequirementSheet?) {
+        if let sheet { editor = EditorSession(sheet: sheet) }
+    }
+
+    /// Saves a sheet onto the list as it is now, through the shared core:
+    /// the rows it writes back — only when they changed — and the query's
+    /// resin when the sheet set or cleared it. Answers the sheet to keep
+    /// showing when the core refused the save; its errors say why.
+    private func save(_ sheet: RequirementSheet) -> RequirementSheet? {
+        guard let outcome = sheet.save(onto: requirements) else { return sheet }
+        switch outcome {
+        case .refused(let refused):
+            return refused
+        case .saved(let saved):
+            if saved.changed { requirements = saved.rows }
+            switch saved.resin {
+            case .set(let condition):
+                arcaneResinAuto = condition.auto
+                arcaneResin = condition.amount
+                arcaneResinFilter = condition.filter
+            case .clear:
+                arcaneResin = 0
+                arcaneResinAuto = false
+                arcaneResinFilter = .init()
+            case .unchanged:
+                break
+            }
+            editor = nil
+            return nil
         }
     }
 }
@@ -1480,11 +1459,6 @@ private func relationLine(_ relation: ChipRelation) -> String {
 
 // MARK: - Requirement editor
 
-/// The editor's effect choice: any item, any enchanted item, or a chosen set.
-private enum EffectMode: Hashable {
-    case any, anyEnchantment, specific
-}
-
 /// A segmented control that spends the whole width it is offered.
 ///
 /// SwiftUI's `.segmented` picker sizes itself to its labels and centres what
@@ -1550,464 +1524,361 @@ private struct WideSegmentedPicker<Tag: Hashable>: NSViewRepresentable {
     }
 }
 
+/**
+ The requirement sheet. Every control is drawn from the shared core's form —
+ whether it shows, what it offers, its bounds and its words — and each move
+ is one change sent to the core, whose answer is the form drawn next. The
+ sheet keeps what is its own: the layout, the dialog's title and buttons,
+ and the help text under a few controls.
+ */
 private struct RequirementEditor: View {
-    let original: ItemRequirement
-    let isNew: Bool
-    /// The chip's stack as the board holds it. Its count and combined level
-    /// belong to the whole chip, so a cluster member never sees them.
-    let stack: StackShape
-    /// Hands the result to the board (nil on cancel); answers why the board
-    /// refused it, keeping the sheet open.
-    let onFinish: (EditorResult?) -> String?
-    let editingResin: Bool
-    let onSaveResin: (Int, ArcaneResinFilter, Bool) -> Void
-    let otherRequirements: [ItemRequirement]
-    @State private var resinAmount: Int
-    @State private var resinAuto: Bool
-    @State private var resinFilter: ArcaneResinFilter
-    @State private var kind: ItemKind
-    @State private var itemID: String
-    @State private var tierMatch: TierMatch
-    @State private var tier: Int
-    @State private var match: UpgradeMatch
-    @State private var upgrade: Int
-    @State private var effectMode: EffectMode
-    @State private var selectedEffects: Set<String>
-    @State private var sourceRaw: Int
-    @State private var maximumDepth: Int
-    @State private var requireUncursed: Bool
-    @State private var selectTrinket: Bool
-    @State private var trinketTransmutations: Int
-    @State private var artifactTransmutations: Int
-    @State private var excludeResin: Bool
-    /// How many items the chip asks for, and what its stack's copies carry.
-    @State private var count: Int
-    @State private var total: Int?
-    @State private var copyDepth: Int?
-    @State private var validationMessage: String?
+    /// The sheet as the core last answered it.
+    @State private var sheet: RequirementSheet
+    let onCancel: () -> Void
+    /// Saves the sheet onto the board; answers the sheet to keep showing
+    /// when the core refused the save, its errors saying why.
+    let onSave: (RequirementSheet) -> RequirementSheet?
 
-    init(requirement: ItemRequirement, isNew: Bool, stack: StackShape,
-         isResin: Bool, otherRequirements: [ItemRequirement] = [],
-         resinAmount: Int, resinAuto: Bool, resinFilter: ArcaneResinFilter,
-         onSaveResin: @escaping (Int, ArcaneResinFilter, Bool) -> Void,
-         onFinish: @escaping (EditorResult?) -> String?) {
-        editingResin = isResin
-        self.otherRequirements = otherRequirements
-        self.onSaveResin = onSaveResin
-        _resinAuto = State(initialValue: resinAuto)
-        _resinAmount = State(initialValue: resinAmount > 0 ? resinAmount : 2)
-        _resinFilter = State(initialValue: resinFilter)
-        original = requirement; self.isNew = isNew; self.stack = stack; self.onFinish = onFinish
-        _kind = State(initialValue: requirement.kind); _itemID = State(initialValue: isResin ? arcaneResinItem.id : requirement.item?.id ?? "")
-        _tierMatch = State(initialValue: requirement.tierMatch)
-        _tier = State(initialValue: max(SearchLimits.exactTiers.lowerBound, requirement.tier))
-        _match = State(initialValue: requirement.upgradeMatch)
-        let maximumUpgrade = requirement.maximumUpgrade
-        let initialUpgrade = switch requirement.upgradeMatch {
-        case .any: 0
-        case .exactly: max(1, min(requirement.upgrade, maximumUpgrade))
-        case .atLeast: max(1, min(requirement.upgrade, maximumUpgrade - 1))
-        }
-        _upgrade = State(initialValue: initialUpgrade)
-        let mode: EffectMode = switch requirement.effect {
-        case .any: .any
-        case .anyEnchantment: .anyEnchantment
-        case .oneOf: .specific
-        }
-        _effectMode = State(initialValue: mode)
-        _selectedEffects = State(initialValue: Set(requirement.effect.names))
-        _sourceRaw = State(initialValue: requirement.source.map { $0.rawValue + 1 } ?? 0)
-        _maximumDepth = State(initialValue: requirement.maximumDepth ?? 0)
-        _requireUncursed = State(initialValue: requirement.requireUncursed)
-        _selectTrinket = State(initialValue: requirement.selectTrinket)
-        _trinketTransmutations = State(initialValue: requirement.trinketTransmutations)
-        _artifactTransmutations = State(initialValue: requirement.artifactTransmutations)
-        _excludeResin = State(initialValue: requirement.excludeResin)
-        _count = State(initialValue: stack.count)
-        _total = State(initialValue: stack.total)
-        _copyDepth = State(initialValue: stack.copyDepth)
+    init(sheet: RequirementSheet, onCancel: @escaping () -> Void,
+         onSave: @escaping (RequirementSheet) -> RequirementSheet?) {
+        _sheet = State(initialValue: sheet)
+        self.onCancel = onCancel
+        self.onSave = onSave
     }
 
-    private var isResin: Bool { itemID == arcaneResinItem.id }
+    private var form: SheetForm { sheet.form }
 
     var body: some View {
         VStack(spacing: 0) {
-            Text(original.blanket ? (isNew ? "New Blanket Requirement" : "Edit Blanket Requirement") : (isNew ? "New Requirement" : "Edit Requirement"))
-                .font(.headline).padding(.top, 14).padding(.bottom, 4)
+            Text(title).font(.headline).padding(.top, 14).padding(.bottom, 4)
             Form {
-                Section("Item") {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Category")
-                        WideSegmentedPicker(
-                            options: [ItemKind.weapon, .armor, .wand, .ring, .trinket, .artifact].map { ($0.label, $0) },
-                            selection: Binding(get: { kind.family }, set: { kind = $0 }),
-                            accessibilityLabel: "Category")
-                    }
-                    .frame(maxWidth: .infinity)
-                    .disabled(editingResin)
-                    .onChange(of: kind) { previous, value in
-                        if previous.family != value.family {
-                            itemID = ""; tierMatch = .any; tier = 2; selectTrinket = false; trinketTransmutations = 0; artifactTransmutations = 0; excludeResin = false
-                            effectMode = .any; selectedEffects = []
-                            if value == .trinket || value == .artifact {
-                                itemID = ItemCatalog.forKind(value).first?.id ?? ""
-                                match = .any; upgrade = 0; sourceRaw = 0; maximumDepth = 0
-                                requireUncursed = false; count = 1; total = nil; copyDepth = nil
-                            }
-                            normalizeUpgrade()
-                        } else if let item = ItemCatalog.findById(itemID), !value.accepts(item) {
-                            itemID = ""
-                        }
-                    }
-                    if kind.family == .weapon {
-                        Picker("Weapon type", selection: $kind) {
-                            Text("Any").tag(ItemKind.weapon)
-                            Text("Melee").tag(ItemKind.meleeWeapon)
-                            Text("Thrown").tag(ItemKind.thrownWeapon)
-                        }
-                        .pickerStyle(.segmented)
-                    }
-                    Picker("Item", selection: $itemID) {
-                        if !original.blanket && kind == .wand && (isNew || editingResin) {
-                            Label { Text(arcaneResinItem.name) } icon: {
-                                ItemSpriteIcon(item: arcaneResinItem)
-                            }.tag(arcaneResinItem.id)
-                        }
-                        if kind != .trinket && kind != .artifact { Text("Any \(kind.singularLabel)").tag("") }
-                        if kind.family == .weapon {
-                            // Tier-1 weapons are starting gear and never spawn in the
-                            // dungeon; tipped darts are guaranteed shop stock anyone can
-                            // tip by hand, so nobody searches for either.
-                            ForEach(SearchLimits.exactTiers, id: \.self) { tier in
-                                Section("Tier \(tier)") {
-                                    ForEach(ItemCatalog.forKind(kind)
-                                        .filter { $0.tier == tier && !$0.isTippedDart }) { item in
-                                        Label { Text(item.name) } icon: {
-                                            ItemSpriteIcon(item: item)
-                                        }.tag(item.id)
-                                    }
-                                }
-                            }
-                        } else {
-                            ForEach(ItemCatalog.forKind(kind).filter { $0.tier != 1 }) { item in
-                                Label { Text(item.name) } icon: {
-                                    ItemSpriteIcon(item: item)
-                                }.tag(item.id)
-                            }
-                        }
-                    }
-                    .disabled(editingResin)
-                    .onChange(of: itemID) { _, value in
-                        if value.isEmpty { total = nil } else { tierMatch = .any }
-                        normalizeUpgrade()
-                    }
-                    if kind == .trinket {
-                        Toggle("Allow transmutations", isOn: Binding(get: { trinketTransmutations > 0 }, set: {
-                            trinketTransmutations = $0 ? 1 : 0
-                            if $0 { selectTrinket = false }
-                        }))
-                        if trinketTransmutations > 0 {
-                            Stepper("At most \(trinketTransmutations) transmutations", value: $trinketTransmutations, in: 1...13)
-                            Text("Includes the initial offers. AutoTrinket can use a helpful starting trinket. Scroll availability and effects after transmuting are not simulated.")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                    if kind == .artifact {
-                        Toggle("Allow transmutations", isOn: Binding(get: { artifactTransmutations > 0 }, set: {
-                            artifactTransmutations = $0 ? 1 : 0
-                            if $0 { selectTrinket = false }
-                        }))
-                        if artifactTransmutations > 0 {
-                            Stepper("At most \(artifactTransmutations) transmutations", value: $artifactTransmutations, in: 1...10)
-                            Text("Includes natural finds or transforms an obtainable artifact using the remaining deck at the floor limit. Source and curse filters apply to the starting artifact. Scroll availability and later generation changes are not simulated.")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                    if kind == .trinket && !original.blanket && trinketTransmutations == 0 {
-                        Toggle("Choose matching trinket at +3", isOn: $selectTrinket)
-                    }
-                    if itemID.isEmpty && (kind.family == .weapon || kind.family == .armor) {
-                        Picker("Tier", selection: $tierMatch) {
-                            ForEach(TierMatch.allCases, id: \.self) { Text($0.label).tag($0) }
-                        }
-                        .pickerStyle(.segmented)
-                        .onChange(of: tierMatch) { _, value in
-                            if value == .atLeast || value == .atMost {
-                                tier = max(SearchLimits.boundedTiers.lowerBound, min(tier, SearchLimits.boundedTiers.upperBound))
-                            }
-                            normalizeUpgrade()
-                        }
-                        .onChange(of: tier) { normalizeUpgrade() }
-                        if tierMatch == .exactly {
-                            VStack(alignment: .leading, spacing: 2) {
-                                LabeledContent("Exact tier") {
-                                    Text("Tier \(tier)")
-                                        .monospacedDigit().foregroundStyle(.secondary)
-                                }
-                                Slider(value: intBinding($tier),
-                                       in: Double(SearchLimits.exactTiers.lowerBound)...Double(SearchLimits.exactTiers.upperBound),
-                                       step: 1)
-                            }
-                        } else if tierMatch == .atLeast || tierMatch == .atMost {
-                            Picker(tierMatch == .atLeast ? "Minimum tier" : "Maximum tier",
-                                   selection: $tier) {
-                                ForEach(SearchLimits.boundedTiers, id: \.self) { option in
-                                    Text(tierMatch == .atLeast ? "Tier \(option) or higher" :
-                                        "Tier \(option) or lower").tag(option)
-                                }
-                            }
-                            .pickerStyle(.menu)
-                        }
-                    }
-                }
-                if isResin {
-                    ArcaneResinFields(amount: $resinAmount, auto: $resinAuto, filter: $resinFilter)
-                }
-                // A combined level speaks for the whole stack, so its members
-                // take any upgrade and the per-item choice has nothing to say.
-                if !isResin && kind != .trinket && kind != .artifact && effectiveTotal == nil {
-                    Section("Upgrade level") {
-                        Picker("Predicate", selection: $match) {
-                            ForEach(UpgradeMatch.allCases, id: \.self) { Text($0.label).tag($0) }
-                        }
-                        .pickerStyle(.segmented)
-                        .onChange(of: match) { normalizeUpgrade() }
-                        if match == .exactly {
-                            VStack(alignment: .leading, spacing: 2) {
-                                LabeledContent("Exactly") {
-                                    Text("+\(upgrade)").monospacedDigit().foregroundStyle(.secondary)
-                                }
-                                Slider(value: intBinding($upgrade),
-                                       in: 1...Double(maximumUpgrade), step: 1)
-                            }
-                        } else if match == .atLeast {
-                            if kind == .ring {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    LabeledContent("At least") {
-                                        Text("+\(upgrade)").monospacedDigit().foregroundStyle(.secondary)
-                                    }
-                                    Slider(value: intBinding($upgrade),
-                                           in: 1...Double(maximumUpgrade - 1), step: 1)
-                                }
-                            } else {
-                                Picker("Minimum upgrade", selection: $upgrade) {
-                                    ForEach(1..<maximumUpgrade, id: \.self) { option in
-                                        Text("+\(option) or higher").tag(option)
-                                    }
-                                }
-                                .pickerStyle(.menu)
-                            }
-                        }
-                    }
-                }
-                if !isResin && !original.blanket && kind != .trinket && kind != .artifact && !stack.inCluster {
-                    Section("Total item count") {
-                        Stepper(value: $count, in: 1...SearchLimits.stackMax) {
-                            LabeledContent("How many") {
-                                Text("×\(count)").monospacedDigit().foregroundStyle(.secondary)
-                            }
-                        }
-                        .onChange(of: count) { _, value in
-                            if value < 2 { total = nil }
-                            else if let current = total { total = min(current, totalCapacity) }
-                        }
-                        if count > 1 && effectiveTotal == nil {
-                            // The chip's own floor limit describes one copy; the
-                            // extras are placed by a bound of their own.
-                            Toggle("Limit the extra copies to a floor", isOn: Binding(
-                                get: { copyDepth != nil },
-                                set: { copyDepth = $0 ? 4 : nil }
-                            ))
-                            if let depth = copyDepth {
-                                LabeledContent("Copies within first") {
-                                    Text("\(depth) floors").monospacedDigit().foregroundStyle(.secondary)
-                                }
-                                Slider(value: floorLimitBinding(Binding(
-                                    get: { copyDepth ?? 4 }, set: { copyDepth = $0 })),
-                                       in: 0...Double(FloorLimits.options.count - 1), step: 1)
-                                    .accessibilityValue(Text("\(depth) floors"))
-                            }
-                        }
-                        if totalable {
-                            Toggle("Count levels together", isOn: Binding(
-                                get: { total != nil },
-                                set: { total = $0 ? min(max(count, 1), totalCapacity) : nil }
-                            ))
-                            if let value = total {
-                                LabeledContent("Levels reach") {
-                                    Text("≥ \(value) across up to \(count)")
-                                        .monospacedDigit().foregroundStyle(.secondary)
-                                }
-                                Slider(value: intBinding(Binding(
-                                    get: { min(value, totalCapacity) }, set: { total = $0 })),
-                                       in: 1...Double(max(1, totalCapacity)), step: 1)
-                                Text("Up to \(count) of the item, each counting its upgrade plus "
-                                     + "one; any subset reaching the total satisfies it.")
-                                    .font(.caption).foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                }
-                if !isResin, let label = kind.modifierLabel {
-                    Section(label) {
-                        // Labelled by hand rather than by the Picker: a grouped
-                        // Form pins a labelled control to its trailing column,
-                        // which leaves the segments short of the leading edge
-                        // the effect grids below them start at.
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Effect").font(.caption).foregroundStyle(.secondary)
-                            WideSegmentedPicker(
-                                options: [("Any", EffectMode.any),
-                                          ("Any \(label.lowercased())", .anyEnchantment),
-                                          ("Specific…", .specific)],
-                                selection: $effectMode,
-                                accessibilityLabel: "Effect")
-                        }
-                        .frame(maxWidth: .infinity)
-                        if effectMode == .specific {
-                            effectGrid(kind.family == .weapon ? "Enchantments" : "Glyphs",
-                                       names: kind.family == .weapon ? ItemCatalog.enchantments : ItemCatalog.glyphs)
-                            // Curses cannot be on an uncursed item, so they hide with it.
-                            if !requireUncursed {
-                                effectGrid("Curses", names: ItemCatalog.cursesFor(kind))
-                            }
-                        }
-                    }
-                }
-                if !isResin && kind != .trinket {
-                Section {
-                    if kind == .wand && !original.blanket {
-                        Toggle("Exclude from Auto resin", isOn: $excludeResin).toggleStyle(.checkbox)
-                        Text("Keep this wand without budgeting resin to upgrade it. Useful for imbuing: resin upgrades do not transfer to the staff. Extra copies are reserved for reforging and never need Auto resin.")
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                    Toggle("Require uncursed", isOn: $requireUncursed)
-                        .toggleStyle(.checkbox)
-                        .onChange(of: requireUncursed) { _, value in
-                            if value { selectedEffects.subtract(ItemCatalog.cursesFor(kind)) }
-                        }
-                    Picker("Source", selection: $sourceRaw) {
-                        Text("Any").tag(0)
-                        ForEach(ScoutItemSource.allCases, id: \.rawValue) { Text($0.label).tag($0.rawValue + 1) }
-                    }
-                    Toggle("Limit this item to a floor", isOn: Binding(
-                        get: { maximumDepth != 0 },
-                        set: { maximumDepth = $0 ? 4 : 0 }
-                    ))
-                    if maximumDepth != 0 {
-                        LabeledContent("Within first") {
-                            Text("\(maximumDepth) floors").monospacedDigit().foregroundStyle(.secondary)
-                        }
-                        Slider(value: floorLimitBinding($maximumDepth),
-                               in: 0...Double(FloorLimits.options.count - 1), step: 1)
-                            .accessibilityValue(Text("\(maximumDepth) floors"))
-                    }
-                }
+                itemSection
+                if form.resin.visible { resinSection }
+                if form.upgrade.visible { upgradeSection }
+                if form.stack.visible { stackSection }
+                if form.effect.visible { effectSection }
+                if form.excludeResin.visible || form.uncursed.visible || form.source.visible
+                    || form.floorLimit.visible {
+                    placementSection
                 }
             }
             .formStyle(.grouped)
             Divider()
             HStack {
-                Button("Cancel") { _ = onFinish(nil) }.keyboardShortcut(.cancelAction)
-                if !isResin, let validationMessage {
-                    Text(validationMessage).font(.caption).foregroundStyle(.orange)
+                Button("Cancel", action: onCancel).keyboardShortcut(.cancelAction)
+                if let error = form.errors.first {
+                    Text(error).font(.caption).foregroundStyle(.orange)
                         .lineLimit(2).padding(.leading, 8)
+                        .help(form.errors.joined(separator: "\n"))
                 }
                 Spacer()
-                Button(isNew ? "Add" : "Save") {
-                    if isResin { onSaveResin(resinAuto ? 0 : resinAmount, resinFilter, resinAuto) }
-                    else { save() }
+                Button(form.mode == .new ? "Add" : "Save") {
+                    if let refused = onSave(sheet) { sheet = refused }
                 }
                     .buttonStyle(.borderedProminent).keyboardShortcut(.defaultAction)
+                    .disabled(!form.canSave)
             }.padding(12)
         }
-        .frame(width: 480, height: isResin ? 520 : kind == .trinket ? 300 : kind.modifierLabel == nil ? 580 : 660)
+        .frame(width: 480, height: height)
     }
 
-    /// A combined level is a property of a concrete stack of two or more —
-    /// and of rings only, whose effects scale with their level: it needs an
-    /// item to be N of, and a cluster is one slot, not a stack.
-    private var totalable: Bool {
-        !original.blanket && !stack.inCluster && !itemID.isEmpty && count > 1 && kind.family == .ring
-    }
-    private var effectiveTotal: Int? { totalable ? total : nil }
-    /// The most levels the stack could add up to, its members taking any
-    /// upgrade: one ring at the vault ceiling, every other at the standard
-    /// roll, each counting its upgrade plus one.
-    private var totalCapacity: Int { SearchLimits.ringStackCapacity(count) }
-
-    /// The highest upgrade the draft can name: only a tier-4 weapon is
-    /// levelled past `SearchLimits.maxUpgradeAnyTier`, so naming an item of
-    /// another tier or filtering tier 4 away lowers the ceiling.
-    private var maximumUpgrade: Int {
-        SearchLimits.maximumUpgrade(kind: kind, item: itemID.isEmpty ? nil : ItemCatalog.findById(itemID),
-                                    tier: tier, tierMatch: tierMatch)
+    /// The dialog's own words, from what the sheet was opened on.
+    private var title: String {
+        let noun = form.blanket ? "Blanket Requirement" : "Requirement"
+        return form.mode == .new ? "New \(noun)" : "Edit \(noun)"
     }
 
-    private func effectGrid(_ title: String, names: [String]) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(title).font(.caption).foregroundStyle(.secondary)
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), alignment: .leading), count: 3),
-                      alignment: .leading, spacing: 4) {
-                ForEach(names, id: \.self) { name in
-                    Toggle(name, isOn: Binding(
-                        get: { selectedEffects.contains(name) },
-                        set: { if $0 { selectedEffects.insert(name) } else { selectedEffects.remove(name) } }
-                    )).toggleStyle(.checkbox)
+    /// The sheet is as tall as what its category shows.
+    private var height: CGFloat {
+        if form.resinPicked { return 520 }
+        if form.category.value == "trinket" { return 300 }
+        return form.effect.visible ? 660 : 580
+    }
+
+    private var itemSection: some View {
+        Section("Item") {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Category")
+                WideSegmentedPicker(
+                    options: form.category.options.map { ($0.label, $0.value ?? "") },
+                    selection: pick(form.category.value ?? "") { .category($0) },
+                    accessibilityLabel: "Category")
+            }
+            .frame(maxWidth: .infinity)
+            // The resin chip's sheet stays about the resin.
+            .disabled(form.origin == .resin)
+            if form.weaponType.visible {
+                Picker("Weapon type", selection: pick(form.weaponType.value ?? "") { .weaponType($0) }) {
+                    ForEach(form.weaponType.options) { option in
+                        Text(option.label).tag(option.value ?? "")
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+            Picker("Item", selection: pickOptional(form.item.value) { .item($0) }) {
+                ForEach(form.item.sections) { section in
+                    if let heading = section.title {
+                        Section(heading) {
+                            ForEach(section.options) { option in itemOption(option) }
+                        }
+                    } else {
+                        ForEach(section.options) { option in itemOption(option) }
+                    }
+                }
+            }
+            .disabled(form.origin == .resin)
+            if form.transmutations.visible { transmutationControls }
+            if form.selectTrinket.visible {
+                Toggle(form.selectTrinket.label, isOn: flag(form.selectTrinket.value) { .selectTrinket($0) })
+            }
+            if form.tier.visible {
+                Picker("Tier", selection: pick(form.tier.mode) { .tierMode($0) }) {
+                    ForEach(form.tier.modes) { option in
+                        Text(option.label).tag(option.value ?? "")
+                    }
+                }
+                .pickerStyle(.segmented)
+                if form.tier.hasValue { valueSlider(form.tier) { .tier($0) } }
+            }
+        }
+    }
+
+    /// An item choice, with its sprite where it has one.
+    @ViewBuilder private func itemOption(_ option: SheetOption) -> some View {
+        if let item = spriteItem(option.value) {
+            Label { Text(option.label) } icon: {
+                ItemSpriteIcon(item: item)
+            }.tag(option.value)
+        } else {
+            Text(option.label).tag(option.value)
+        }
+    }
+
+    private func spriteItem(_ value: String?) -> CatalogItem? {
+        guard let value else { return nil }
+        return value == RequirementSheet.arcaneResin ? arcaneResinItem : ItemCatalog.findById(value)
+    }
+
+    @ViewBuilder private var transmutationControls: some View {
+        Toggle(form.transmutations.label,
+               isOn: flag(form.transmutations.enabled) { .transmutationsEnabled($0) })
+        if form.transmutations.enabled {
+            Stepper(value: number(form.transmutations.value) { .transmutations($0) },
+                    in: form.transmutations.range) {
+                LabeledContent("Transmutations") {
+                    Text(form.transmutations.valueLabel).monospacedDigit().foregroundStyle(.secondary)
+                }
+            }
+            if let caption = form.transmutations.caption {
+                Text(caption).font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    /// A mode's value in words, and a slider over the bounds the core gives.
+    private func valueSlider(_ control: SheetModeRange,
+                             _ change: @escaping @Sendable (Int) -> SheetChange) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            LabeledContent(control.modeLabel) {
+                Text(control.valueLabel).monospacedDigit().foregroundStyle(.secondary)
+            }
+            if control.isAdjustable {
+                Slider(value: slider(control.value, change),
+                       in: Double(control.min)...Double(control.max), step: 1)
+            }
+        }
+    }
+
+    /// How much resin, and whether the Mage's wand counts. The donors'
+    /// filter is the placement section's while the resin is picked.
+    private var resinSection: some View {
+        Section {
+            Picker("Minimum resin", selection: flag(form.resin.auto) { .resinAuto($0) }) {
+                Text("Amount").tag(false)
+                Text("Auto").tag(true)
+            }.pickerStyle(.segmented)
+            if form.resin.auto {
+                Text("Upgrade each kept wand to +3. Excluded wands and extra copies reserved for reforging need no resin.")
+                    .foregroundStyle(.secondary)
+            } else {
+                Stepper(value: number(form.resin.wholeAmount ?? 1) { .resinAmount(Double($0)) },
+                        in: 1...65_535) {
+                    LabeledContent("Minimum resin") {
+                        Text(form.resin.amountText).monospacedDigit().foregroundStyle(.secondary)
+                    }
+                }
+            }
+            Toggle("Include Mage’s starting wand",
+                   isOn: flag(form.resin.includeMageWand) { .includeMageWand($0) })
+                .toggleStyle(.checkbox)
+            Text("Add 2 resin from the Magic Missile wand recovered with Wand Preservation when imbuing another wand. The preserved wand is +0, regardless of the staff’s level.")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    /// The core hides the per-item upgrade while a combined level speaks for
+    /// the whole stack.
+    private var upgradeSection: some View {
+        Section("Upgrade level") {
+            Picker("Predicate", selection: pick(form.upgrade.mode) { .upgradeMode($0) }) {
+                ForEach(form.upgrade.modes) { option in
+                    Text(option.label).tag(option.value ?? "")
+                }
+            }
+            .pickerStyle(.segmented)
+            if form.upgrade.hasValue { valueSlider(form.upgrade) { .upgrade($0) } }
+        }
+    }
+
+    private var stackSection: some View {
+        Section("Total item count") {
+            Stepper(value: number(form.stack.count) { .count($0) }, in: form.stack.range) {
+                LabeledContent("How many") {
+                    Text(form.stack.valueLabel).monospacedDigit().foregroundStyle(.secondary)
+                }
+            }
+            // The chip's own floor limit describes one copy; the extras are
+            // placed by a bound of their own.
+            if form.stack.copyDepth.visible {
+                floorControl(form.stack.copyDepth, enable: { .copyDepthEnabled($0) },
+                             move: { .copyDepth($0) })
+            }
+            if form.stack.countLevels.visible {
+                Toggle(form.stack.countLevels.label,
+                       isOn: flag(form.stack.countLevels.enabled) { .countLevels($0) })
+                if form.stack.countLevels.enabled {
+                    LabeledContent("Levels reach") {
+                        Text(form.stack.countLevels.valueLabel)
+                            .monospacedDigit().foregroundStyle(.secondary)
+                    }
+                    if form.stack.countLevels.isAdjustable {
+                        Slider(value: slider(form.stack.countLevels.value) { .total($0) },
+                               in: Double(form.stack.countLevels.min)...Double(form.stack.countLevels.max),
+                               step: 1)
+                    }
+                    Text("Up to \(form.stack.count) of the item, each counting its upgrade plus "
+                         + "one; any subset reaching the total satisfies it.")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
             }
         }
     }
 
-    private func normalizeUpgrade() {
-        if kind == .trinket { match = .any; upgrade = 0; return }
-        switch match {
-        case .any:
-            upgrade = 0
-        case .exactly:
-            upgrade = max(1, min(upgrade, maximumUpgrade))
-        case .atLeast:
-            upgrade = max(1, min(upgrade, maximumUpgrade - 1))
+    private var effectSection: some View {
+        Section("Effect") {
+            WideSegmentedPicker(
+                options: form.effect.modes.map { ($0.label, $0.value ?? "") },
+                selection: pick(form.effect.mode) { .effectMode($0) },
+                accessibilityLabel: "Effect")
+                .frame(maxWidth: .infinity)
+            if form.effect.isSpecific {
+                ForEach(form.effect.groups) { group in
+                    effectGrid(group.label, choices: form.effect.choices(in: group.value))
+                }
+                Text(form.effect.caption).font(.caption).foregroundStyle(.secondary)
+            }
         }
     }
-    private func save() {
-        let item = itemID.isEmpty ? nil : ItemCatalog.findById(itemID)
-        if !original.blanket && kind == .trinket &&
-            otherRequirements.contains(where: { !$0.blanket && $0.item?.id == itemID }) {
-            validationMessage = "This trinket is already required. Each trinket appears only once in the deck."
-            return
+
+    private func effectGrid(_ title: String, choices: [SheetEffectChoice]) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(.caption).foregroundStyle(.secondary)
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), alignment: .leading), count: 3),
+                      alignment: .leading, spacing: 4) {
+                ForEach(choices) { effect in
+                    Toggle(effect.label, isOn: flag(effect.selected) { _ in .toggleEffect(effect.value) })
+                        .toggleStyle(.checkbox)
+                }
+            }
         }
-        let effect: EffectFilter = switch effectMode {
-        case .any: .any
-        case .anyEnchantment: .anyEnchantment
-        case .specific: .oneOf(Array(selectedEffects))
+    }
+
+    /// Where the item lies — or, while the resin is picked, the donor wands.
+    private var placementSection: some View {
+        Section {
+            if form.excludeResin.visible {
+                Toggle(form.excludeResin.label, isOn: flag(form.excludeResin.value) { .excludeResin($0) })
+                    .toggleStyle(.checkbox)
+                Text("Keep this wand without budgeting resin to upgrade it. Useful for imbuing: resin upgrades do not transfer to the staff. Extra copies are reserved for reforging and never need Auto resin.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            if form.uncursed.visible {
+                Toggle(form.uncursed.label, isOn: flag(form.uncursed.value) { .uncursed($0) })
+                    .toggleStyle(.checkbox)
+            }
+            if form.source.visible {
+                Picker("Source", selection: pickOptional(form.source.value) { .source($0) }) {
+                    ForEach(form.source.options) { option in
+                        Text(option.label).tag(option.value)
+                    }
+                }
+            }
+            if form.floorLimit.visible {
+                floorControl(form.floorLimit, enable: { .floorLimitEnabled($0) },
+                             move: { .floorLimit($0) })
+            }
         }
-        if effectMode == .specific && selectedEffects.isEmpty {
-            validationMessage = "Choose at least one \((kind.modifierLabel ?? "effect").lowercased())"
-            return
+    }
+
+    /// A floor limit: the core's switch and, while it is on, a slider over
+    /// the floors it offers.
+    @ViewBuilder
+    private func floorControl(_ control: SheetFloorToggle,
+                              enable: @escaping @Sendable (Bool) -> SheetChange,
+                              move: @escaping @Sendable (Int) -> SheetChange) -> some View {
+        Toggle(control.label, isOn: flag(control.enabled, enable))
+        if control.enabled {
+            Text(control.valueLabel).monospacedDigit().foregroundStyle(.secondary)
+            Slider(value: Binding(get: { Double(control.index) }, set: { position in
+                guard let floor = control.floor(at: Int(position.rounded())),
+                      floor != control.value else { return }
+                send(move(floor))
+            }), in: 0...Double(max(1, control.options.count - 1)), step: 1)
+                .accessibilityValue(Text(control.valueLabel))
         }
-        do {
-            // The relationships are the board's to write: the shared core's
-            // `save` turns the count and total below into the stack's own
-            // encoding, so the row saved here carries no group of its own.
-            let value = try ItemRequirement(key: original.key, item: item, upgrade: kind == .trinket || kind == .artifact ? 0 : upgrade,
-                effect: effect, kind: kind,
-                tier: tierMatch == .any ? 0 : tier, tierMatch: tierMatch, upgradeMatch: kind == .trinket || kind == .artifact ? .any : match,
-                source: kind == .trinket || sourceRaw == 0 ? nil : ScoutItemSource(rawValue: sourceRaw - 1),
-                maximumDepth: kind == .trinket || maximumDepth == 0 ? nil : maximumDepth,
-                requireUncursed: kind != .trinket && requireUncursed,
-                alternativeGroup: original.alternativeGroup,
-                selectTrinket: !original.blanket && kind == .trinket && trinketTransmutations == 0 && selectTrinket,
-                trinketTransmutations: kind == .trinket ? trinketTransmutations : 0, artifactTransmutations: kind == .artifact ? artifactTransmutations : 0, blanket: original.blanket,
-                excludeResin: !original.blanket && kind == .wand && excludeResin)
-            validationMessage = onFinish(EditorResult(
-                requirement: value,
-                count: original.blanket || kind == .trinket || kind == .artifact || stack.inCluster ? 1 : count,
-                total: effectiveTotal,
-                copyDepth: kind == .trinket || kind == .artifact || stack.inCluster || count < 2 || effectiveTotal != nil ? nil : copyDepth))
-        } catch {
-            validationMessage = (error as? LocalizedError)?.errorDescription ?? "The requirement is invalid"
-        }
+    }
+
+    // MARK: Changes
+
+    /// Sends one change; the core's answer is the sheet shown next. A change
+    /// the core cannot apply leaves the sheet as it was.
+    private func send(_ change: SheetChange) {
+        if let next = sheet.changing(change) { sheet = next }
+    }
+
+    // Each control reads the form and sends a change when it moves — none
+    // when it lands on the value shown, since sliders repeat theirs.
+
+    private func flag(_ value: Bool, _ change: @escaping @Sendable (Bool) -> SheetChange) -> Binding<Bool> {
+        Binding(get: { value }, set: { next in
+            if next != value { send(change(next)) }
+        })
+    }
+
+    private func number(_ value: Int, _ change: @escaping @Sendable (Int) -> SheetChange) -> Binding<Int> {
+        Binding(get: { value }, set: { next in
+            if next != value { send(change(next)) }
+        })
+    }
+
+    private func slider(_ value: Int, _ change: @escaping @Sendable (Int) -> SheetChange) -> Binding<Double> {
+        Binding(get: { Double(value) }, set: { next in
+            let rounded = Int(next.rounded())
+            if rounded != value { send(change(rounded)) }
+        })
+    }
+
+    private func pick(_ value: String, _ change: @escaping @Sendable (String) -> SheetChange) -> Binding<String> {
+        Binding(get: { value }, set: { next in
+            if next != value { send(change(next)) }
+        })
+    }
+
+    private func pickOptional(_ value: String?,
+                              _ change: @escaping @Sendable (String?) -> SheetChange) -> Binding<String?> {
+        Binding(get: { value }, set: { next in
+            if next != value { send(change(next)) }
+        })
     }
 }
 
@@ -3035,10 +2906,6 @@ private struct WindowAccessor: NSViewRepresentable {
     func updateNSView(_ view: NSView, context: Context) {
         DispatchQueue.main.async { window = view.window }
     }
-}
-
-private func intBinding(_ value: Binding<Int>) -> Binding<Double> {
-    Binding(get: { Double(value.wrappedValue) }, set: { value.wrappedValue = Int($0.rounded()) })
 }
 
 /// Maps a floor-limit binding onto an index into `FloorLimits.options`, so
