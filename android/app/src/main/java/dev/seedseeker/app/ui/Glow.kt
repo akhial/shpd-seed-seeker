@@ -14,7 +14,6 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import dev.seedseeker.app.catalog.ItemCatalog
-import dev.seedseeker.app.model.EffectFilter
 import dev.seedseeker.app.model.ItemKind
 import kotlin.math.abs
 
@@ -98,16 +97,6 @@ object ItemGlows {
     fun forEffect(effect: String?): Glow? {
         if (effect == null) return null
         return enchantments[effect] ?: curse.takeIf { effect in curses }
-    }
-
-    /**
-     * The glows a requirement's effect filter pulses through, in the filter's
-     * own order — one per named effect. "Any effect" and "any enchantment"
-     * settle on no colour of their own and so glow with none.
-     */
-    fun forFilter(filter: EffectFilter): List<Glow> = when (filter) {
-        EffectFilter.Any, EffectFilter.AnyEnchantment -> emptyList()
-        is EffectFilter.OneOf -> forEffects(filter.names)
     }
 
     /** The glows a list of effect names pulses through, one per name, in its order. */

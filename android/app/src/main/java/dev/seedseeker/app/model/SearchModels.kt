@@ -25,21 +25,11 @@ object SearchLimits {
     /** Highest combined-level group number; groups run 1..this. */
     const val LEVEL_SUM_GROUP_MAX = 4
 
-    /** The most items a stack may ask for, its anchor included. */
-    const val STACK_MAX = 3
-
     /** Highest upgrade a search may name, for everything but weapons. */
     const val MAX_UPGRADE_DEFAULT = 4
 
     /** Highest upgrade a ring requirement may name. */
     const val MAX_UPGRADE_RING = 4
-
-    /**
-     * Highest upgrade every ring but one can carry in a single world: ring
-     * drops roll +0..+2, and the only source beyond that — the Imp vault's
-     * final-room prize — appears once per run.
-     */
-    const val MAX_UPGRADE_RING_STANDARD = 2
 
     /**
      * Highest upgrade a weapon requirement may name. v4.0.0's Imp vault lays
@@ -84,14 +74,6 @@ object SearchLimits {
         }
         return if (reachesExtraTier) ceiling else MAX_UPGRADE_ANY_TIER
     }
-
-    /**
-     * The highest combined level [count] rings can reach together: one ring
-     * at the vault ceiling, every other at the standard roll, each counting
-     * its upgrade plus one.
-     */
-    fun ringStackCapacity(count: Int): Int =
-        (MAX_UPGRADE_RING + 1) + (count - 1) * (MAX_UPGRADE_RING_STANDARD + 1)
 }
 
 enum class ItemKind(
@@ -146,16 +128,7 @@ data class CatalogItem(
     val tier: Int? = null,
     val typeIconIndex: Int? = null,
     val weaponClass: WeaponClass? = null,
-) {
-    /**
-     * Whether this is a tipped dart. Every shop stocks tipped darts and any
-     * dart can be tipped by hand, so the item picker never offers them —
-     * though a scouted world still lists the ones it rolled. The engine's
-     * catalog keeps the `_dart` suffix unambiguous (the plain dart has no
-     * entry), and its wasm cross-check test pins the suffix to the tipped set.
-     */
-    val isTippedDart: Boolean get() = id.endsWith("_dart")
-}
+)
 
 /**
  * Which enchantment, glyph or curse a weapon/armor requirement accepts.
@@ -301,57 +274,6 @@ data class ItemRequirement(
     /** The one effect this requirement pins, for the sprite glow; null for any other filter. */
     val singleEffect: String?
         get() = (effect as? EffectFilter.OneOf)?.names?.singleOrNull()
-
-    /** The highest upgrade this requirement may name, its item and tier filter included. */
-    val upgradeCeiling: Int
-        get() = SearchLimits.maximumUpgrade(kind, item, tierMatch, tier)
-
-    /** Human-readable effect constraint, or null when any effect is accepted. */
-    val effectLabel: String?
-        get() = when (val filter = effect) {
-            EffectFilter.Any -> null
-            EffectFilter.AnyEnchantment -> "any ${kind.modifierLabel?.lowercase() ?: "enchantment"}"
-            is EffectFilter.OneOf -> filter.names.joinToString("/")
-        }
-
-    val description: String
-        get() = if (kind == ItemKind.TRINKET) {
-            "Trinket"
-        } else buildString {
-            append(
-                when (upgradeMatch) {
-                    UpgradeMatch.ANY -> "Any upgrade"
-                    UpgradeMatch.EXACT -> "+$upgrade exactly"
-                    UpgradeMatch.AT_LEAST -> "+$upgrade or higher"
-                },
-            )
-            effectLabel?.let {
-                append(" • ")
-                append(it)
-            }
-            if (requireUncursed) append(" • uncursed")
-            if (excludeResin) append(" • excluded from Auto resin")
-            source?.let {
-                append(" • ")
-                append(it.label)
-            }
-            levelSum?.let {
-                append(" • combined level ≥ ")
-                append(it.atLeast)
-            }
-            maximumDepth?.let {
-                append(" • by floor ")
-                append(it)
-            }
-        }
-
-    val title: String
-        get() = item?.name ?: when (tierMatch) {
-            TierMatch.ANY -> "Any ${kind.singularLabel}"
-            TierMatch.EXACT -> "Any Tier $tier ${kind.singularLabel}"
-            TierMatch.AT_LEAST -> "Any Tier $tier+ ${kind.singularLabel}"
-            TierMatch.AT_MOST -> "Any Tier $tier or lower ${kind.singularLabel}"
-        }
 }
 
 /**
@@ -399,18 +321,9 @@ fun List<ItemRequirement>.validationProblem(arcaneResin: Int = 0, arcaneResinAut
     return null
 }
 
-enum class TierMatch(val label: String) {
-    ANY("Any tier"),
-    EXACT("Exactly"),
-    AT_LEAST("At least"),
-    AT_MOST("At most"),
-}
+enum class TierMatch { ANY, EXACT, AT_LEAST, AT_MOST }
 
-enum class UpgradeMatch(val label: String) {
-    ANY("Any"),
-    EXACT("Exactly"),
-    AT_LEAST("At least"),
-}
+enum class UpgradeMatch { ANY, EXACT, AT_LEAST }
 
 /**
  * Boss floors that generate no searchable items. The engine treats a floor

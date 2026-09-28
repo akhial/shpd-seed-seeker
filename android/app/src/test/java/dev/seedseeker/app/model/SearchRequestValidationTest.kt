@@ -75,7 +75,6 @@ class SearchRequestValidationTest {
         assertThrows(IllegalArgumentException::class.java) {
             ItemRequirement(1, sword, 0, kind = ItemKind.THROWN_WEAPON, upgradeMatch = UpgradeMatch.ANY)
         }
-        assertEquals("Any melee weapon", anyWeapon.copy(kind = ItemKind.MELEE_WEAPON).title)
         // The vault's +5 lands on a tier-4 weapon and nothing else: another
         // tier, another family, and a tier filter that rules tier 4 out all
         // stop at +4.

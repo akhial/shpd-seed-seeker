@@ -50,9 +50,10 @@ class ArtifactRequirementsTest {
             upgrade = 5, upgradeMatch = UpgradeMatch.EXACT,
             source = ScoutItemSource.IMP_REWARD, requireUncursed = true,
         )
-        assertEquals(5, requirement.upgradeCeiling)
-        assertTrue(requirement.description.contains("+5 exactly"))
-        assertTrue(requirement.description.contains("by floor 19"))
+        assertEquals(
+            listOf("exactly +5", "uncursed", "Imp reward", "floors 1–19"),
+            RequirementEditor.view(listOf(requirement)).items.single().chips.single().details,
+        )
         assertThrows(IllegalArgumentException::class.java) { requirement.copy(upgrade = 6) }
         val query = PresetQuery(requirements = listOf(requirement)).normalized()
         assertEquals(query, ResultsExport.decodeQuery(ResultsExport.encodeQuery(query)).normalized())
