@@ -2,19 +2,29 @@ import { readFile } from "node:fs/promises";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeAll, describe, expect, it } from "vite-plus/test";
 import { displayedUpgrade, itemsForKind } from "../../shared/game/catalog";
-import { fromQueryJson, maxUpgradeOf, toQueryDocument, validateRequirement } from "./query";
+import { fromQueryJson, toQueryDocument } from "./query";
 import init, { analyze_query, filter_seeds, scout } from "../../engine/pkg/seedfinder.js";
-import type { BoardEdit, QueryState, ScoutResult } from "../../engine/types";
-import { RequirementEditor, namedItemEditorRequirement } from "./requirements/RequirementEditor";
+import type { BoardEdit, EditorSheet, QueryState, ScoutResult } from "../../engine/types";
+import { RequirementEditor } from "./requirements/RequirementEditor";
 import { ScoutPanel } from "../scout/ScoutPanel";
 import { availableArtifactIds } from "../scout/choices";
 import { editBoard, requirementBoardOf } from "./requirements/board";
+import { openSheet, saveSheet } from "./requirements/sheet";
 
 const boardOf = (query: QueryState) => {
   const answer = requirementBoardOf(query);
   if (!answer.ok) throw new Error(answer.error);
   return answer.value;
 };
+const sheetOn = (query: QueryState, key: number): EditorSheet => {
+  const answer = openSheet(query, { type: "row", key });
+  if (!answer.ok) throw new Error(answer.error);
+  return answer.value;
+};
+const sheetHtml = (sheet: EditorSheet) =>
+  renderToStaticMarkup(
+    <RequirementEditor sheet={sheet} onChange={() => {}} onSave={() => {}} onCancel={() => {}} />,
+  );
 const edited = (query: QueryState, edits: BoardEdit[]): QueryState => {
   const answer = editBoard(query, edits);
   if (!answer.ok) throw new Error(answer.error);
@@ -99,15 +109,7 @@ describe("artifact search and scout", () => {
     expect(html).toContain("Ethereal Chains, matches requirement");
     expect(result.artifactDecks?.find((deck) => deck.depth === 0)?.order).toHaveLength(11);
     expect(html).toContain("Starting artifact deck order");
-    const editor = renderToStaticMarkup(
-      <RequirementEditor
-        requirement={state.requirements[0]}
-        isNew={false}
-        stack={{ count: 1, inCluster: false }}
-        onSave={() => {}}
-        onCancel={() => {}}
-      />,
-    );
+    const editor = sheetHtml(sheetOn(state, 1));
     expect(editor).toContain("Allow transmutations");
     expect(editor).toContain("At most 4");
     for (const count of [-1, 11, 1.5, "1"])
@@ -134,29 +136,28 @@ describe("artifact search and scout", () => {
     expect(displayedUpgrade("ring_of_wealth", 3)).toBe(3);
   });
   it("requires a named artifact and exposes floor limits", () => {
-    const wildcard = fromQueryJson('{"requirements":[{"kind":"artifact"}]}').requirements[0];
-    expect(validateRequirement(wildcard)).toContain("Select an artifact.");
+    const wildcard = fromQueryJson('{"requirements":[{"kind":"artifact"}]}');
+    expect(boardOf(wildcard).items[0].problem).not.toBeNull();
     expect(JSON.parse(analyze_query('{"requirements":[{"kind":"artifact"}]}')).valid).toBe(false);
     expect(itemsForKind("artifact")).toHaveLength(11);
-    const requirement = fromQueryJson(
+    const query = fromQueryJson(
       '{"requirements":[{"item":"sandals_of_nature","upgrade":5,"max_depth":19}]}',
-    ).requirements[0];
-    expect(maxUpgradeOf(requirement)).toBe(5);
-    const html = renderToStaticMarkup(
-      <RequirementEditor
-        requirement={requirement}
-        isNew={false}
-        stack={{ count: 1, inCluster: false }}
-        onSave={() => {}}
-        onCancel={() => {}}
-      />,
     );
+    const sheet = sheetOn(query, 1);
+    const html = sheetHtml(sheet);
     expect(html).not.toContain("Any artifact");
     expect(html).not.toContain("Total item count");
     expect(html).not.toContain("Upgrade level");
-    expect(namedItemEditorRequirement(requirement).upgrade).toEqual({ mode: "any", value: 0 });
     expect(html).toContain("Limit this item");
     expect(html).toContain('aria-valuetext="19"');
+    // The sheet offers no upgrade on an artifact, so a save drops one a document carried.
+    const saved = saveSheet(query, sheet);
+    if (!saved.ok || !("saved" in saved.value)) throw new Error("the sheet did not save");
+    expect(saved.value.saved.requirements[0]).toMatchObject({
+      item: "sandals_of_nature",
+      upgrade: { mode: "any" },
+      maxDepth: 19,
+    });
     const repeats = fromQueryJson(
       '{"requirements":[{"item":"ethereal_chains"},{"item":"ethereal_chains","max_depth":14}]}',
     );

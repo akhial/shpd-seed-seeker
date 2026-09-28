@@ -22,6 +22,8 @@ import type { BoardEdit, QueryState, ScoutResult } from "../../engine/types";
 import { QueryPanel } from "./QueryPanel";
 import { RequirementEditor } from "./requirements/RequirementEditor";
 import { editBoard, requirementBoardOf } from "./requirements/board";
+import { openSheet } from "./requirements/sheet";
+import type { SheetTarget } from "./requirements/sheet";
 
 beforeAll(async () => {
   await init({
@@ -40,6 +42,18 @@ const document = {
   ],
 };
 const state = () => fromQueryJson(JSON.stringify(document));
+const sheetHtml = (query: QueryState, target: SheetTarget) => {
+  const sheet = openSheet(query, target);
+  if (!sheet.ok) throw new Error(sheet.error);
+  return renderToStaticMarkup(
+    <RequirementEditor
+      sheet={sheet.value}
+      onChange={() => {}}
+      onSave={() => {}}
+      onCancel={() => {}}
+    />,
+  );
+};
 
 it("preserves blankets in saved queries, share links, and results files", () => {
   const query = state();
@@ -77,20 +91,17 @@ it("shows a collapsed blanket board with a count and the existing source and upg
     'id="blanket-requirements-help" role="tooltip" class="d1-blanket-help-tooltip" hidden=""',
   );
   expect(html).toContain("Each blanket must match at least one item");
-  const editor = renderToStaticMarkup(
-    <RequirementEditor
-      requirement={query.requirements[3]}
-      isNew
-      stack={{ count: 1, inCluster: false }}
-      onSave={() => {}}
-      onCancel={() => {}}
-    />,
-  );
-  expect(editor).toContain("New Blanket Requirement");
-  expect(editor).toContain("Wandmaker");
+  const editor = sheetHtml(query, { type: "row", key: 4 });
+  expect(editor).toContain("Edit Blanket Requirement");
+  expect(editor).toContain('<option value="wandmaker_reward" selected="">');
   expect(editor).toContain("Upgrade");
   expect(editor).not.toContain("Total item count");
   expect(editor).not.toContain("At least one item used by your ordinary requirements");
+  // A new blanket starts on the kind of the first ordinary requirement.
+  const added = sheetHtml(query, { type: "new", blanket: true });
+  expect(added).toContain("New Blanket Requirement");
+  expect(added).toContain('<p class="d1-mono">Any wand</p>');
+  expect(added).not.toContain("Total item count");
 });
 
 const edited = (query: QueryState, edits: BoardEdit[]): QueryState => {

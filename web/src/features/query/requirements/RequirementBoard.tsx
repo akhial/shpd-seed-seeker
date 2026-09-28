@@ -112,16 +112,6 @@ interface StepperState {
   which: "count" | "total";
 }
 
-/** What the editor needs to know about the chip's stack. */
-export interface StackShape {
-  count: number;
-  total?: number;
-  /** The floor limit the extra copies share, when they carry one. */
-  copyDepth?: number;
-  /** A cluster member's stack belongs to the cluster, not the editor. */
-  inCluster: boolean;
-}
-
 /** What an edit did, as far as the board's own state cares. */
 export interface BoardEditReport {
   /** A refusal or failure to say. */
@@ -140,7 +130,8 @@ export function RequirementBoard({
   /** This section's entries, as the core drew them. */
   items: BoardItemView[];
   onEdits: (edits: BoardEdit[]) => BoardEditReport;
-  onEdit: (key: number, stack: StackShape) => void;
+  /** Opens the sheet on a chip. */
+  onEdit: (key: number) => void;
   onAdd: () => void;
   resin?: {
     chip: ResinChipView;
@@ -309,13 +300,7 @@ export function RequirementBoard({
       setNotice(entry.chip.problem);
       return;
     }
-    const { stack, cluster } = entry.item;
-    onEdit(key, {
-      count: stack.count,
-      total: stack.total ?? undefined,
-      copyDepth: stack.copy_depth ?? undefined,
-      inCluster: cluster !== null,
-    });
+    onEdit(key);
   };
 
   /** Completes pick mode on `key`: the menu's and the keyboard's way to drop. */

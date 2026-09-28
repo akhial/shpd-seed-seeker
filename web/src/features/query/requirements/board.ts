@@ -6,9 +6,8 @@ import type {
   BoardResponse,
   QueryState,
   RequirementState,
-  ResinCondition,
 } from "../../../engine/types";
-import { requirementFromRow, requirementToRow, validArcaneResin } from "../query";
+import { requirementFromRow, requirementToRow, resinCondition } from "../query";
 
 /**
  * The requirement board as the shared core draws it (docs/requirement-editor.md):
@@ -27,23 +26,13 @@ export type BoardQuery = Pick<QueryState, "requirements" | "arcaneResin" | "arca
  */
 let nextKey = 1;
 
-/** The query's Arcane Resin condition, which the board draws as its resin chip. */
-function resinCondition(query: BoardQuery): ResinCondition | null {
-  const amount = query.arcaneResin;
-  if (!amount || !validArcaneResin(amount)) return null;
-  const filter = query.arcaneResinFilter;
-  return {
-    amount,
-    filter: filter
-      ? {
-          uncursed: filter.uncursed,
-          max_depth: filter.maxDepth ?? null,
-          source: filter.source ?? null,
-          include_mage_wand: filter.includeMageWand ?? false,
-        }
-      : null,
-  };
-}
+/** The `next_key` to send with a request that may add rows. */
+export const nextKeyHint = (): number => nextKey;
+
+/** Notes an answer's `next_key`, so later requests keep counting from it. */
+export const noteNextKey = (key: number): void => {
+  nextKey = Math.max(nextKey, key);
+};
 
 function ask(query: BoardQuery, edits: BoardEdit[] = []): EditorAnswer<BoardResponse> {
   const answer = requirementBoard({
@@ -52,7 +41,7 @@ function ask(query: BoardQuery, edits: BoardEdit[] = []): EditorAnswer<BoardResp
     edits,
     resin: resinCondition(query),
   });
-  if (answer.ok) nextKey = Math.max(nextKey, answer.value.next_key);
+  if (answer.ok) noteNextKey(answer.value.next_key);
   return answer;
 }
 

@@ -1,18 +1,28 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 import { itemsForKind } from "../../shared/game/catalog";
-import { fromQueryJson, toQueryDocument, validateRequirement } from "./query";
+import { fromQueryJson, toQueryDocument } from "./query";
 import { validateQuery } from "./validation";
-import type { QueryState, ScoutItem } from "../../engine/types";
+import type { EditorSheet, QueryState, ScoutItem } from "../../engine/types";
 import { CatalystEntry } from "../scout/ScoutPanel";
 import { editBoard, requirementBoardOf } from "./requirements/board";
-import { RequirementEditor, namedItemEditorRequirement } from "./requirements/RequirementEditor";
+import { RequirementEditor } from "./requirements/RequirementEditor";
+import { openSheet, saveSheet } from "./requirements/sheet";
 
 const boardOf = (query: QueryState) => {
   const answer = requirementBoardOf(query);
   if (!answer.ok) throw new Error(answer.error);
   return answer.value;
 };
+const sheetOn = (query: QueryState, key: number): EditorSheet => {
+  const answer = openSheet(query, { type: "row", key });
+  if (!answer.ok) throw new Error(answer.error);
+  return answer.value;
+};
+const sheetHtml = (sheet: EditorSheet) =>
+  renderToStaticMarkup(
+    <RequirementEditor sheet={sheet} onChange={() => {}} onSave={() => {}} onCancel={() => {}} />,
+  );
 
 describe("offered trinket pilot", () => {
   it("round-trips a transmutation limit and includes initial offers", () => {
@@ -26,26 +36,12 @@ describe("offered trinket pilot", () => {
     const chip = boardOf(query).items[0].chips[0];
     expect(chip.details).toContain("within 13 transmutations");
     expect(chip.tags).toContainEqual({ text: "Transmute ≤13", style: "plain" });
-    const html = renderToStaticMarkup(
-      <RequirementEditor
-        requirement={requirement}
-        isNew={false}
-        stack={{ count: 1, inCluster: true }}
-        onSave={() => {}}
-        onCancel={() => {}}
-      />,
-    );
+    const html = sheetHtml(sheetOn(query, requirement.key));
     expect(html).toContain("Allow transmutations");
     expect(html).not.toContain("After transmuting");
     expect(html).toContain("At most 13");
     expect(html).toContain("Matches an initial offer or any of the next 13 trinkets.");
     expect(html).not.toContain("Choose matching trinket at +3");
-    expect(validateRequirement({ ...requirement, selectTrinket: true })).toContain(
-      "Only an initial offer can be chosen at +3.",
-    );
-    expect(validateRequirement({ ...requirement, kind: "weapon", item: "sword" })).toContain(
-      "Only trinkets can require transmutations.",
-    );
     for (const count of [-1, 14, 1.5, "1", null]) {
       expect(() =>
         fromQueryJson(
@@ -181,22 +177,18 @@ describe("offered trinket pilot", () => {
     const query = fromQueryJson(
       '{"requirements":[{"kind":"trinket","source":"locked_chest","max_depth":2}]}',
     );
-    const legacy = query.requirements[0];
-    expect(validateRequirement(legacy)).toContain("Select a trinket.");
     expect(boardOf(query).items[0].chips[0].title).toBe("Trinket");
-    const draft = namedItemEditorRequirement(legacy);
-    expect(draft.item).toBe("rat_skull");
-    expect(draft.source).toBeUndefined();
-    expect(draft.maxDepth).toBeUndefined();
-    const html = renderToStaticMarkup(
-      <RequirementEditor
-        requirement={legacy}
-        isNew={false}
-        stack={{ count: 1, inCluster: false }}
-        onSave={() => {}}
-        onCancel={() => {}}
-      />,
-    );
+    expect(boardOf(query).items[0].problem).not.toBeNull();
+    // The sheet names the first trinket and leaves out the filters a trinket cannot use.
+    const sheet = sheetOn(query, 1);
+    expect(sheet.form.item.value).toBe("rat_skull");
+    const saved = saveSheet(query, sheet);
+    if (!saved.ok || !("saved" in saved.value)) throw new Error("the sheet did not save");
+    const [trinket] = saved.value.saved.requirements;
+    expect(trinket).toMatchObject({ key: 1, kind: "trinket", item: "rat_skull" });
+    expect(trinket.source).toBeUndefined();
+    expect(trinket.maxDepth).toBeUndefined();
+    const html = sheetHtml(sheet);
     expect(html).toContain('<p class="d1-mono">Rat Skull</p>');
     expect(html).toContain("Choose matching trinket at +3");
     expect(html).not.toContain("Any trinket");

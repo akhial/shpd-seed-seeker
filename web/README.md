@@ -50,9 +50,9 @@ import.meta.url)` references together when moving code so Vite can bundle them.
 The WASM build script owns `engine/pkg/`, `engine/editor-pkg/`, `generated/`, and the generated
 runtime assets under `public/`; rerun it after Rust engine changes.
 
-The requirement board's rules and words live in the shared core
+The requirement editor's rules and words, the board's and the sheet's, live in the shared core
 (`docs/requirement-editor.md`): `engine/editor.ts` is the one place that calls its envelopes,
-and `features/query/requirements/board.ts` moves the query's requirements in and out of them.
+and `features/query/requirements/board.ts` and `sheet.ts` move the query in and out of them.
 
 Global styles remain in `app/styles.css`, while map and seed-info styles live
 with their features. The existing CSS selectors and import order are preserved.

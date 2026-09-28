@@ -1,6 +1,6 @@
-import init, { requirement_board } from "./editor-pkg/seedfinder_editor.js";
+import init, { requirement_board, requirement_editor } from "./editor-pkg/seedfinder_editor.js";
 import type { InitInput } from "./editor-pkg/seedfinder_editor.js";
-import type { BoardRequest, BoardResponse } from "./types";
+import type { BoardRequest, BoardResponse, EditorRequest, EditorResponse } from "./types";
 
 // The requirement editor's rules live in the shared core
 // (docs/requirement-editor.md). The web reaches them through this lean module,
@@ -48,4 +48,9 @@ function call<T>(envelope: (request: string) => string, request: unknown): Edito
 /** The board after the request's edits, with everything it draws. */
 export function requirementBoard(request: BoardRequest): EditorAnswer<BoardResponse> {
   return call(requirement_board, request);
+}
+
+/** The requirement sheet: a draft opened, changed or saved. */
+export function requirementEditor(request: EditorRequest): EditorAnswer<EditorResponse> {
+  return call(requirement_editor, request);
 }

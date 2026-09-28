@@ -59,12 +59,17 @@ async function selectItem(value: string) {
   });
 }
 
-async function toggle(name: string) {
+function checkbox(name: string) {
   const label = [...host.querySelectorAll("label")].find(
     (label) => label.textContent?.trim() === name,
-  )!;
-  expect(label).toBeDefined();
-  await act(async () => label.querySelector<HTMLInputElement>("input")!.click());
+  );
+  expect(label, name).toBeDefined();
+  return label!.querySelector<HTMLInputElement>("input")!;
+}
+
+async function toggle(name: string) {
+  const input = checkbox(name);
+  await act(async () => input.click());
 }
 
 it("adds resin from the second wand option, edits its filters, and removes the chip", async () => {
@@ -80,7 +85,8 @@ it("adds resin from the second wand option, edits its filters, and removes the c
   expect(host.querySelector(".d1-modal")!.textContent).not.toContain("Upgrade level");
   expect(host.querySelector(".d1-modal")!.textContent).not.toContain("Total item count");
   expect(host.querySelector('input[aria-label="Minimum resin"]')).not.toBeNull();
-  await toggle("Require uncursed wands");
+  // The resin section starts from the query's resin, uncursed donors by default.
+  expect(checkbox("Require uncursed wands").checked).toBe(true);
   await toggle("Limit wands to a floor");
   await click("Add Requirement");
   expect(toQueryDocument(queryStore.state)).toMatchObject({
@@ -88,6 +94,7 @@ it("adds resin from the second wand option, edits its filters, and removes the c
     arcane_resin: 2,
     arcane_resin_filter: { max_depth: 4 },
   });
+  expect(toQueryDocument(queryStore.state).arcane_resin_filter).toEqual({ max_depth: 4 });
   const chip = host.querySelector(".d1-resin-chip")!;
   expect(chip.textContent).toContain("≥2");
   expect(chip.textContent).toContain("F≤4");

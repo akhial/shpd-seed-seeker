@@ -150,7 +150,8 @@ type SliderRowScale =
 export function SliderRow(
   props: {
     label: string;
-    valueLabel: string;
+    /** The value in words; leave it out when `label` already says it. */
+    valueLabel?: string;
     value: number;
     onChange: (value: number) => void;
     /** Fill the track left of the thumb — for "first N floors" style ranges. */
@@ -169,7 +170,7 @@ export function SliderRow(
     <div className="d1-slider">
       <div className="d1-slider-head">
         <span>{label}</span>
-        <span className="d1-mono d1-slider-value">{valueLabel}</span>
+        {valueLabel !== undefined && <span className="d1-mono d1-slider-value">{valueLabel}</span>}
       </div>
       <input
         type="range"

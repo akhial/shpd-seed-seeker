@@ -18,6 +18,7 @@ import type {
   RequirementEntryDocument,
   RequirementRow,
   RequirementState,
+  ResinCondition,
   TierFilter,
   UpgradeFilter,
   WandmakerQuest,
@@ -514,6 +515,48 @@ export function requirementFromRow(row: RequirementRow): RequirementState {
   return requirementFromDocument(row, row.key, row.alternative_group);
 }
 
+/** A resin donor filter, or none when it asks for nothing beyond uncursed donors. */
+const withoutDefaultFilter = (filter: ArcaneResinFilter): ArcaneResinFilter | undefined =>
+  !filter.uncursed || filter.maxDepth !== undefined || filter.source || filter.includeMageWand
+    ? filter
+    : undefined;
+
+/** The query's Arcane Resin condition as the requirement editor reads it, or `null` without one. */
+export function resinCondition(
+  query: Pick<QueryState, "arcaneResin" | "arcaneResinFilter">,
+): ResinCondition | null {
+  const amount = query.arcaneResin;
+  if (!amount || !validArcaneResin(amount)) return null;
+  const filter = query.arcaneResinFilter;
+  return {
+    amount,
+    filter: filter
+      ? {
+          uncursed: filter.uncursed,
+          max_depth: filter.maxDepth ?? null,
+          source: filter.source ?? null,
+          include_mage_wand: filter.includeMageWand ?? false,
+        }
+      : null,
+  };
+}
+
+/** Reads a resin condition the requirement editor answered with back into query state. */
+export function resinFromCondition({
+  amount,
+  filter,
+}: ResinCondition): Pick<QueryState, "arcaneResin" | "arcaneResinFilter"> {
+  return {
+    arcaneResin: amount,
+    arcaneResinFilter: withoutDefaultFilter({
+      uncursed: filter?.uncursed ?? true,
+      ...(filter?.include_mage_wand ? { includeMageWand: true } : {}),
+      ...(filter?.max_depth != null ? { maxDepth: filter.max_depth } : {}),
+      ...(filter?.source ? { source: filter.source } : {}),
+    }),
+  };
+}
+
 /**
  * Decodes a stored query document. Keys this release no longer writes are
  * ignored rather than rejected, matching the engine's codec: a saved query, a
@@ -547,13 +590,7 @@ export function fromQueryJson(json: string): QueryState {
     };
     const errors = validateArcaneResinFilter(parsed);
     if (errors.length) throw new Error(errors[0]);
-    if (
-      !parsed.uncursed ||
-      parsed.maxDepth !== undefined ||
-      parsed.source ||
-      parsed.includeMageWand
-    )
-      arcaneResinFilter = parsed;
+    arcaneResinFilter = withoutDefaultFilter(parsed);
   }
   return {
     ...(document.arcane_resin ? { arcaneResin: document.arcane_resin } : {}),
