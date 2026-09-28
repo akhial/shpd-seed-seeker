@@ -83,7 +83,9 @@ interface NativeSeedFinder {
  * list; [matchedSlots] of [totalSlots] engine-level requirements (an "any of
  * these" group is one slot) are satisfied. Items serving an incomplete
  * combined-upgrade group are not marked. [resinDonors] is the subset of
- * [items] consumed as Arcane Resin donors.
+ * [items] consumed as Arcane Resin donors. [excluded] indexes the items the
+ * query forbids every slot to use (Smith rewards while they are excluded);
+ * none of them is ever in [items].
  */
 data class ScoutMatches(
     val items: Set<Int>,
@@ -92,6 +94,7 @@ data class ScoutMatches(
     val transmutedTrinkets: Set<Int> = emptySet(),
     val transmutedArtifacts: Set<Pair<Int, Int>> = emptySet(),
     val resinDonors: Set<Int> = emptySet(),
+    val excluded: Set<Int> = emptySet(),
 )
 
 interface NativeSearchSession : AutoCloseable {
@@ -683,6 +686,10 @@ private object ScoutMatchCodec {
             // Older engines predate the key; no donors then.
             resinDonors = envelope.optJSONArray("resinDonors")?.let { donors ->
                 buildSet { for (index in 0 until donors.length()) add(donors.getInt(index)) }
+            }.orEmpty(),
+            // Likewise for exclusions; nothing is excluded then.
+            excluded = envelope.optJSONArray("excluded")?.let { excluded ->
+                buildSet { for (index in 0 until excluded.length()) add(excluded.getInt(index)) }
             }.orEmpty(),
         )
     }

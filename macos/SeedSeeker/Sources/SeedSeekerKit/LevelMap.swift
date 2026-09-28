@@ -295,16 +295,25 @@ public actor LevelMapClient {
 /// Unmatched items in the selected option must stay readable.
 public struct ScoutChoiceStatus: Sendable {
     private let selected: [Int: Int]
-    public init(items: [ScoutItem], matched: Set<Int>) {
+    /// Items the query excludes outright (`ScoutMatches.excluded`).
+    private let excluded: Set<Int>
+    public init(items: [ScoutItem], matched: Set<Int>, excluded: Set<Int> = []) {
         var choices: [Int: Int] = [:]
         for (index, item) in items.enumerated() where matched.contains(index) {
             if case let .choice(group, option) = item.accessibility { choices[group] = option }
         }
         selected = choices
+        self.excluded = excluded
     }
     public func isDimmed(_ accessibility: ScoutAccessibility, matched: Bool) -> Bool {
         guard !matched, case let .choice(group, option) = accessibility, let chosen = selected[group] else { return false }
         return chosen != option
+    }
+    /// Whether Scout draws the item at `index` dimmed: an alternate choice the
+    /// match did not take, or an item the query excludes outright (Smith
+    /// rewards under "Exclude smith rewards"), which is never matched.
+    public func isDimmed(at index: Int, _ accessibility: ScoutAccessibility, matched: Bool) -> Bool {
+        excluded.contains(index) || isDimmed(accessibility, matched: matched)
     }
     /// Scout items contain fixed dungeon loot, never runtime drops or transmutation outcomes.
     public static func availableArtifactIDs(items: [ScoutItem], matched: Set<Int>) -> Set<String> {

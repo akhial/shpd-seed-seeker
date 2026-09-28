@@ -178,4 +178,43 @@ final class LevelMapTests: XCTestCase, @unchecked Sendable {
         XCTAssertFalse(status.isDimmed(.independent, matched: false))
         XCTAssertEqual(ScoutChoiceStatus.letter(2), "C")
     }
+
+    func testExcludedItemsDimLikeAlternateChoices() throws {
+        let item = try XCTUnwrap(ItemCatalog.findById("sword"))
+        let items = [
+            ScoutItem(item: item, depth: 13, upgrade: 0, source: .blacksmithReward, accessibility: .choice(group: 1, option: 0)),
+            ScoutItem(item: item, depth: 13, upgrade: 0, source: .blacksmithReward, accessibility: .choice(group: 1, option: 1)),
+            ScoutItem(item: item, depth: 13, upgrade: 0, source: .heap, accessibility: .independent),
+        ]
+        // Nothing is chosen, so only the exclusion dims the two rewards.
+        let status = ScoutChoiceStatus(items: items, matched: [], excluded: [0, 1])
+        XCTAssertTrue(status.isDimmed(at: 0, items[0].accessibility, matched: false))
+        XCTAssertTrue(status.isDimmed(at: 1, items[1].accessibility, matched: false))
+        XCTAssertFalse(status.isDimmed(at: 2, items[2].accessibility, matched: false))
+        // An alternate choice still dims without any exclusion.
+        let chosen = ScoutChoiceStatus(items: items, matched: [0])
+        XCTAssertFalse(chosen.isDimmed(at: 0, items[0].accessibility, matched: true))
+        XCTAssertTrue(chosen.isDimmed(at: 1, items[1].accessibility, matched: false))
+    }
+
+    func testExcludedSmithRewardsComeFromTheEngineAndAreNeverMatched() async throws {
+        let world = try await ProductionSeedFinderEngine().scoutSeed("AAA-AAA-AAA", challenges: 0)
+        let smith = Set(world.items.indices.filter { world.items[$0].source == .blacksmithReward })
+        XCTAssertFalse(smith.isEmpty)
+        let requirements = [
+            try ItemRequirement(key: 1, item: XCTUnwrap(ItemCatalog.findById("ring_haste")), upgrade: 0, kind: .ring,
+                upgradeMatch: .any),
+        ]
+        let query = try SearchRequest(requirements: requirements, excludeBlacksmithRewards: true, autoApplyTrinket: false)
+        let marks = try ScoutMatches.mark(seed: world.seed, challenges: 0, query: query)
+        XCTAssertEqual(marks.excluded, smith)
+        XCTAssertTrue(marks.matched.isDisjoint(with: smith))
+        let status = ScoutChoiceStatus(items: world.items, matched: marks.matched, excluded: marks.excluded)
+        for index in smith {
+            XCTAssertTrue(status.isDimmed(at: index, world.items[index].accessibility, matched: false))
+        }
+        let allowed = try ScoutMatches.mark(seed: world.seed, challenges: 0,
+            query: SearchRequest(requirements: requirements, autoApplyTrinket: false))
+        XCTAssertTrue(allowed.excluded.isEmpty)
+    }
 }

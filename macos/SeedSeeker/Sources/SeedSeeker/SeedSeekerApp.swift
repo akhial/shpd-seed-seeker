@@ -2637,7 +2637,7 @@ private struct SeedDetailView: View {
         let marks = engineMatches(in: world)
         let matches = marks?.matched ?? []
         let resinDonors = marks?.resinDonors ?? []
-        let choices = ScoutChoiceStatus(items: world.items, matched: matches)
+        let choices = ScoutChoiceStatus(items: world.items, matched: matches, excluded: marks?.excluded ?? [])
         // Slots, not rows: an "any of these" group counts once.
         let matched = marks?.matchedRequirements ?? 0
         let total = marks?.totalRequirements ?? requirements.slotCount
@@ -2687,7 +2687,7 @@ private struct SeedDetailView: View {
                                     ForEach(floorItems, id: \.offset) { entry in
                                         ScoutItemRow(item: entry.element, ringGems: world.ringGems, matches: matches.contains(entry.offset),
                                             resinDonor: resinDonors.contains(entry.offset))
-                                            .opacity(choices.isDimmed(entry.element.accessibility, matched: matches.contains(entry.offset)) ? 0.42 : 1)
+                                            .opacity(choices.isDimmed(at: entry.offset, entry.element.accessibility, matched: matches.contains(entry.offset)) ? 0.42 : 1)
                                             .padding(.vertical, 5)
                                         if entry.offset != floorItems.last?.offset { Divider() }
                                     }

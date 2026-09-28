@@ -18,7 +18,7 @@ import { SeedInfo } from "./seed-info/SeedInfo";
 import { TrinketName, TrinketSprite } from "./trinkets/TrinketArt";
 import { TrinketShortcuts } from "./trinkets/TrinketShortcuts";
 import { useTrinketDock } from "./trinkets/useTrinketDock";
-import { availableArtifactIds, isAlternateScoutChoice, matchedScoutChoices } from "./choices";
+import { availableArtifactIds, isDimmedScoutItem, matchedScoutChoices } from "./choices";
 import "./floor-map-inline.css";
 
 const groupLetter = (group: number) => "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[group % 26];
@@ -401,7 +401,7 @@ export function ScoutPanel({
                     .filter((item) => item.category !== "trinket")
                     .map((item, index) => {
                       const note = accessibilityNote(item);
-                      const dimmed = isAlternateScoutChoice(item, matchedChoices);
+                      const dimmed = isDimmedScoutItem(item, matchedChoices);
                       return (
                         <li
                           className={

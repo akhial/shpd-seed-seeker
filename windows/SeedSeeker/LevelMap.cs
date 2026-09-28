@@ -160,4 +160,9 @@ public static class ScoutChoices
             .GroupBy(x => x.item.AccessibilityGroup).ToDictionary(g => g.Key, g => g.Last().item.AccessibilityValue);
     public static bool Dimmed(ScoutItem item, bool matched, IReadOnlyDictionary<int, ulong> choices) =>
         !matched && item.AccessibilityTag == 1 && choices.TryGetValue(item.AccessibilityGroup, out var option) && option != item.AccessibilityValue;
+    /// <summary>Whether Scout draws the manifest item at <paramref name="index"/> dimmed: an
+    /// alternate choice the match did not take, or an item the query excludes outright (Smith
+    /// rewards under "Exclude smith rewards"), which is never matched.</summary>
+    public static bool Dimmed(ScoutItem item, int index, ScoutMatches matches, IReadOnlyDictionary<int, ulong> choices) =>
+        matches.Excluded.Contains(index) || Dimmed(item, matches.Matched.Contains(index), choices);
 }

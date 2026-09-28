@@ -86,7 +86,14 @@ final class ArcaneResinTests: XCTestCase {
         XCTAssertEqual(legacy.matched, [0, 2])
         XCTAssertTrue(legacy.resinDonors.isEmpty)
         XCTAssertTrue(legacy.transmutedTrinkets.isEmpty)
+        XCTAssertTrue(legacy.excluded.isEmpty)
         XCTAssertThrowsError(try ScoutMatches.decode(Data(#"{"resinDonors":[0]}"#.utf8)))
+    }
+
+    func testScoutMatchesDecodesExcludedItems() throws {
+        let marks = try ScoutMatches.decode(Data(#"{"matched":[2],"excluded":[7,8],"resinDonors":[],"matchedRequirements":1,"totalRequirements":1}"#.utf8))
+        XCTAssertEqual(marks.matched, [2])
+        XCTAssertEqual(marks.excluded, [7, 8])
     }
 
 }

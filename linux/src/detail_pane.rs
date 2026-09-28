@@ -830,11 +830,7 @@ impl DetailPane {
                 } else {
                     let world_item = &world.items[*index];
                     let row = item_row(world_item, gems, RowMatch::of(&marks, *index));
-                    if choice_is_dimmed(
-                        world_item.accessibility,
-                        marks.matched[*index],
-                        &matched_choices,
-                    ) {
+                    if row_is_dimmed(world_item.accessibility, *index, &marks, &matched_choices) {
                         row.set_opacity(0.45);
                     }
                     group.add(&row);
@@ -1104,6 +1100,20 @@ fn choice_is_dimmed(
         && matches!(accessibility,Accessibility::Choice{group,option} if choices.get(&group).is_some_and(|selected|*selected!=option))
 }
 
+/// Whether the manifest dims the world item at `index`: an alternate choice
+/// the match did not take ([`choice_is_dimmed`]), or an item the query
+/// excludes outright (Smith rewards under "Exclude smith rewards"), which is
+/// never matched.
+fn row_is_dimmed(
+    accessibility: Accessibility,
+    index: usize,
+    marks: &ScoutMatches,
+    choices: &BTreeMap<u16, u8>,
+) -> bool {
+    marks.excluded.get(index).copied().unwrap_or(false)
+        || choice_is_dimmed(accessibility, marks.matched[index], choices)
+}
+
 fn tag(label: &str, color: &str) -> gtk::Label {
     gtk::Label::builder()
         .label(label)
@@ -1268,6 +1278,45 @@ mod tests {
         assert_eq!(choice_letter(0), 'A');
         assert_eq!(choice_letter(25), 'Z');
         assert_eq!(choice_letter(26), 'A');
+    }
+
+    #[test]
+    fn excluded_smith_rewards_dim_like_alternate_choices() {
+        use shpd_seedfinder_core::{
+            json_query, main_world::CanonicalMainWorldGenerator, model::ItemSource,
+            query::scout_matches, search::WorldGenerator, seed::DungeonSeed,
+        };
+        let world = CanonicalMainWorldGenerator.generate(DungeonSeed::MIN, 24);
+        let smith: Vec<bool> = world
+            .items
+            .iter()
+            .map(|entry| entry.source == ItemSource::BlacksmithReward)
+            .collect();
+        assert!(
+            smith.contains(&true),
+            "the seed's Blacksmith offers rewards"
+        );
+        let dimmed = |document: &str| -> Vec<bool> {
+            let query = json_query::decode(document).unwrap();
+            let marks = scout_matches(&world, &query);
+            assert!(!marks.matched.iter().zip(&smith).any(|(&m, &s)| m && s));
+            // No chosen options, so only an exclusion can dim a row.
+            (0..world.items.len())
+                .map(|index| {
+                    super::row_is_dimmed(
+                        world.items[index].accessibility,
+                        index,
+                        &marks,
+                        &super::BTreeMap::new(),
+                    )
+                })
+                .collect()
+        };
+        assert_eq!(
+            dimmed(r#"{"exclude_blacksmith_rewards":true,"requirements":[{"item":"ring_haste"}]}"#),
+            smith
+        );
+        assert!(!dimmed(r#"{"requirements":[{"item":"ring_haste"}]}"#).contains(&true));
     }
 
     /// Run under Xvfb with --ignored; normal unit tests need no display.

@@ -1436,6 +1436,8 @@ public sealed record ScoutMatches(IReadOnlySet<int> Matched, int MatchedRequirem
 {
     /// <summary>The matched wands consumed as Arcane Resin donors; always a subset of <see cref="Matched"/>.</summary>
     public IReadOnlySet<int> ResinDonors { get; init; } = new HashSet<int>();
+    /// <summary>The items the query forbids every requirement to use (Smith rewards while they are excluded); never in <see cref="Matched"/>.</summary>
+    public IReadOnlySet<int> Excluded { get; init; } = new HashSet<int>();
     public IReadOnlySet<int> TransmutedTrinkets { get; init; } = new HashSet<int>();
     public IReadOnlySet<(int Depth, int Index)> TransmutedArtifacts { get; init; } = new HashSet<(int, int)>();
 }

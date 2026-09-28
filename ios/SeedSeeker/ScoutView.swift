@@ -354,7 +354,8 @@ struct ScoutView: View {
 
     private func floorContent(_ world: ScoutWorld, depth: Int) -> some View {
         let items = Array(world.items.enumerated()).filter { $0.element.depth == depth }
-        let choices = ScoutChoiceStatus(items: world.items, matched: model.matches?.matched ?? [])
+        let choices = ScoutChoiceStatus(items: world.items, matched: model.matches?.matched ?? [],
+                                        excluded: model.matches?.excluded ?? [])
         let trinkets = items.filter { $0.element.item.kind == .trinket }
         return VStack(spacing: 8) {
             if openMapDepth == depth {
@@ -377,7 +378,7 @@ struct ScoutView: View {
                 let matched = model.matches?.matched.contains(entry.offset) == true
                 ScoutItemCard(item: entry.element, ringGems: world.ringGems, matched: matched,
                               resinDonor: model.matches?.resinDonors.contains(entry.offset) == true,
-                              dimmed: choices.isDimmed(entry.element.accessibility, matched: matched))
+                              dimmed: choices.isDimmed(at: entry.offset, entry.element.accessibility, matched: matched))
             }
         }.padding(.bottom, 8)
     }

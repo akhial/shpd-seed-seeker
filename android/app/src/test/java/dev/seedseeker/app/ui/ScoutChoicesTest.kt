@@ -43,6 +43,32 @@ class ScoutChoicesTest {
         assertFalse(isAlternateScoutChoice(ScoutAccessibility.Independent, false, chosen))
     }
 
+    @Test fun excludedSmithRewardsAreDimmedLikeAlternateChoices() {
+        val engine = dev.seedseeker.app.engine.JniNativeSeedFinder()
+        val world = engine.scoutSeed("AAA-AAA-AAA")
+        val smith = world.items.withIndex().filter { it.value.source == ScoutItemSource.BLACKSMITH_REWARD }.map { it.index }.toSet()
+        assertTrue("the seed's Blacksmith offers rewards", smith.isNotEmpty())
+        val query = dev.seedseeker.app.model.SearchRequest(listOf(
+            dev.seedseeker.app.model.ItemRequirement(key = 1, item = ItemCatalog.findById("ring_haste"), upgrade = 0,
+                upgradeMatch = dev.seedseeker.app.model.UpgradeMatch.ANY),
+        ), excludeBlacksmithRewards = true)
+        val marks = engine.scoutMatches(world.seed, 0, query)
+        assertEquals(smith, marks.excluded)
+        assertTrue(marks.items.none { it in smith })
+        val choices = matchedScoutChoices(world.items, marks.items)
+        world.items.forEachIndexed { index, item ->
+            val alternate = isAlternateScoutChoice(item.accessibility, index in marks.items, choices)
+            assertEquals(index in smith || alternate, isDimmedScoutItem(index, item.accessibility, marks, choices))
+        }
+        // With the option off the same rewards are ordinary rows again.
+        val allowed = engine.scoutMatches(world.seed, 0, query.copy(excludeBlacksmithRewards = false))
+        assertTrue(allowed.excluded.isEmpty())
+        val allowedChoices = matchedScoutChoices(world.items, allowed.items)
+        assertTrue(smith.none { isDimmedScoutItem(it, world.items[it].accessibility, allowed, allowedChoices) })
+        // Before the engine's marks arrive nothing is dimmed.
+        assertFalse(isDimmedScoutItem(smith.first(), world.items[smith.first()].accessibility, null, emptyMap()))
+    }
+
     @Test fun floorsIncludeEmptyMapsAndSupportedBossesWithinTheScoutedPrefix() {
         val item = ScoutItem(item = requireNotNull(ItemCatalog.findById("fishing_spear")), depth = 16,
             upgrade = 0, effect = null, cursed = false,
