@@ -24,7 +24,7 @@ final class ArtifactTests: XCTestCase {
                 kind: .artifact, upgradeMatch: .exactly, source: .impReward,
                 maximumDepth: 19, requireUncursed: true)
             XCTAssertEqual(requirement.maximumUpgrade, 5)
-            XCTAssertFalse([requirement].canStack([requirement].boardItems()[0]))
+            XCTAssertFalse(try XCTUnwrap(RequirementBoard.of([requirement]).items.first).stack.canGrow)
             XCTAssertThrowsError(try ItemRequirement(key: 2, item: item, upgrade: 6,
                 kind: .artifact, upgradeMatch: .exactly))
             XCTAssertThrowsError(try ItemRequirement(key: 2, item: item, upgrade: 0,
@@ -41,12 +41,12 @@ final class ArtifactTests: XCTestCase {
         let second = try ItemRequirement(key: 2, item: item, upgrade: 0,
             kind: .artifact, upgradeMatch: .any, maximumDepth: 14)
         let requirements = [first, second]
-        let board = requirements.boardItems()
-        XCTAssertEqual(board.count, 2)
-        XCTAssertTrue(board.allSatisfy { $0.extras.isEmpty && !requirements.canStack($0) })
-        let joined = requirements.joinAlternatives(source: 0, target: 1)
+        let board = RequirementBoard.of(requirements)
+        XCTAssertEqual(board.items.count, 2)
+        XCTAssertTrue(board.items.allSatisfy { $0.extras.isEmpty && !$0.stack.canGrow })
+        let joined = try XCTUnwrap(RequirementBoard.apply([.join(source: 1, target: 2)], to: requirements)).rows
         XCTAssertEqual(joined.count, 2)
-        XCTAssertEqual(joined.boardCount, 1)
+        XCTAssertEqual(RequirementBoard.of(joined).items.count, 1)
         XCTAssertEqual(joined.slotCount, 1)
         XCTAssertTrue(joined.allSatisfy { $0.item == item && $0.identityGroup == nil })
         XCTAssertNotNil(SavedQuery(requirements: joined).validated())
@@ -61,9 +61,10 @@ final class ArtifactTests: XCTestCase {
         let second = try ItemRequirement(key: 2,
             item: XCTUnwrap(ItemCatalog.findById("ethereal_chains")), upgrade: 0,
             kind: .artifact, upgradeMatch: .any, maximumDepth: 14)
-        let requirements = [first, second].joinAlternatives(source: 0, target: 1)
+        let requirements = try XCTUnwrap(RequirementBoard.apply([.join(source: 1, target: 2)],
+                                                                to: [first, second])).rows
         XCTAssertEqual(requirements.slotCount, 1)
-        XCTAssertFalse(requirements.canStack(requirements.boardItems()[0]))
+        XCTAssertFalse(try XCTUnwrap(RequirementBoard.of(requirements).items.first).stack.canGrow)
         let query = SavedQuery(requirements: requirements)
         let persisted = try JSONDecoder().decode(SavedQuery.self, from: JSONEncoder().encode(query))
         XCTAssertEqual(persisted, query)

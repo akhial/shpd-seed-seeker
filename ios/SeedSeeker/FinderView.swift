@@ -13,15 +13,14 @@ struct FinderView: View {
 
     private var controller: SearchController { model.controller }
     private var requirementCount: Int {
-        model.query.requirements.filter { !$0.blanket }.boardCount
+        model.query.board.ordinaryCount
             + (model.query.arcaneResinAuto || model.query.arcaneResin > 0 ? 1 : 0)
     }
     private var requirementsSummary: String {
-        let requirements = model.query.requirements
-        var parts = requirements.boardItems().map { board in
-            (requirements[board.anchor].blanket ? "Blanket: " : "")
-                + board.members.map { requirements[$0].title }.joined(separator: " or ")
-                + (board.stackCount > 1 ? " ×\(board.stackCount)" : "")
+        var parts = model.query.board.items.map { item in
+            (item.blanket ? "Blanket: " : "")
+                + item.chips.map(\.title).joined(separator: " or ")
+                + (item.countBadge.map { " \($0.compactText)" } ?? "")
         }
         if model.query.arcaneResinAuto { parts.append("Auto Arcane Resin") }
         else if model.query.arcaneResin > 0 { parts.append("≥\(model.query.arcaneResin) Arcane Resin") }

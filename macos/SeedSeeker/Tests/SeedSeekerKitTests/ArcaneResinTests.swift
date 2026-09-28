@@ -30,8 +30,9 @@ final class ArcaneResinTests: XCTestCase {
         let query = try ResultsExport.decodeQuery(JSONSerialization.jsonObject(with: document) as! [String: Any])
         XCTAssertTrue(query.arcaneResinFilter.includeMageWand)
         XCTAssertEqual(query.requirements.map(\.excludeResin), [true, false, false])
-        XCTAssertEqual(query.requirements.boardItems().count, 1)
-        XCTAssertEqual(query.requirements.boardItems()[0].stackCount, 3)
+        let board = RequirementBoard.of(query.requirements)
+        XCTAssertEqual(board.items.count, 1)
+        XCTAssertEqual(board.items.first?.stack.count, 3)
         for restored in [
             try JSONDecoder().decode(SavedQuery.self, from: JSONEncoder().encode(query)),
             try DeepLink.decode(DeepLink.encodeLink(for: query)),

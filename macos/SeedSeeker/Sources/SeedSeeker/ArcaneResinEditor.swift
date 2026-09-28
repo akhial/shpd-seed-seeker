@@ -49,12 +49,10 @@ struct ArcaneResinFields: View {
 }
 
 /// A query-wide requirement: it supports the board's edit and removal gestures,
-/// while item-only relationships (alternatives and stacks) do not apply.
+/// while item-only relationships (alternatives and stacks) do not apply. Its
+/// words are the shared core's board chip for the query's resin condition.
 struct ArcaneResinChip: View {
-    let amount: Int
-    let auto: Bool
-    private var amountLabel: String { auto ? "Auto" : "≥\(amount)" }
-    let filter: ArcaneResinFilter
+    let chip: BoardResinChip
     @Binding var dragging: RequirementChipDrag?
     let onEdit: () -> Void
     let onRemove: () -> Void
@@ -63,12 +61,10 @@ struct ArcaneResinChip: View {
     var body: some View {
         HStack(spacing: 5) {
             ItemSpriteView(item: arcaneResinItem, pointSize: 16)
-            Text(arcaneResinItem.name)
+            Text(chip.name)
                 .font(.system(size: 12, weight: .semibold)).lineLimit(1)
-            tag(amountLabel, color: .shatteredYellow)
-            if filter.includeMageWand { tag("Mage +2", color: .shatteredMint) }
-            if let depth = filter.maximumDepth { tag("F≤\(depth)", color: .shatteredYellow) }
-            if filter.uncursed { tag("✓", color: .shatteredMint) }
+            ForEach(chip.tags, id: \.self) { tag in tagView(tag.text, color: .shatteredYellow) }
+            if chip.uncursed { tagView("✓", color: .shatteredMint) }
         }
         .padding(.horizontal, 7)
         .frame(height: 30)
@@ -78,7 +74,7 @@ struct ArcaneResinChip: View {
         .opacity(dragging == .resin ? 0.35 : 1)
         .contentShape(Capsule())
         .onTapGesture(perform: onEdit)
-        .help("\(amountLabel) Arcane Resin\n\(filter.summary)")
+        .help(helpText)
         .focusable()
         .focused($focused)
         .onKeyPress(.delete) { onRemove(); return .handled }
@@ -93,12 +89,20 @@ struct ArcaneResinChip: View {
             Button("Remove", role: .destructive, action: onRemove)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(amountLabel) Arcane Resin, \(filter.summary)")
+        .accessibilityLabel(chip.description)
         .accessibilityAddTraits(.isButton)
         .accessibilityAction { onEdit() }
     }
 
-    private func tag(_ text: String, color: Color) -> some View {
+    /// The chip's name and details, then what the Auto amount means.
+    private var helpText: String {
+        var lines = [chip.name]
+        if !chip.details.isEmpty { lines.append(chip.details.joined(separator: " · ")) }
+        if let amount = chip.amountTooltip { lines.append(amount) }
+        return lines.joined(separator: "\n")
+    }
+
+    private func tagView(_ text: String, color: Color) -> some View {
         Text(text)
             .font(.system(size: 11, weight: .semibold, design: .monospaced))
             .foregroundStyle(color)

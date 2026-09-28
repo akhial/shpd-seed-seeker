@@ -8,7 +8,9 @@ struct RequirementsEditor: View {
     let blanket: Bool
     let onAddResin: (() -> Void)?
     let onEditGroupQuantity: (() -> Void)?
-    let onSave: (ItemRequirement, Int, Int?, Int?) -> Void
+    /// Hands the draft and its stack to the board; answers why the board
+    /// refused it, keeping the editor open.
+    let onSave: (ItemRequirement, Int, Int?, Int?) -> String?
     let onRemove: (() -> Void)?
 
     @State private var details: Bool
@@ -30,6 +32,8 @@ struct RequirementsEditor: View {
     @State private var stackCount: Int
     @State private var stackTotal: Int?
     @State private var copyDepth: Int?
+    /// Why the board refused the last save.
+    @State private var refusal: String?
     @Namespace private var editorGlass
     @Namespace private var selectorGlass
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -38,7 +42,7 @@ struct RequirementsEditor: View {
          editingCount: Int = 1, editingTotal: Int? = nil, editingCopyDepth: Int? = nil,
          onAddResin: (() -> Void)? = nil,
          onEditGroupQuantity: (() -> Void)? = nil,
-         onSave: @escaping (ItemRequirement, Int, Int?, Int?) -> Void,
+         onSave: @escaping (ItemRequirement, Int, Int?, Int?) -> String?,
          onRemove: (() -> Void)? = nil) {
         self.editing = editing
         self.otherRequirements = otherRequirements
@@ -529,6 +533,9 @@ struct RequirementsEditor: View {
                     Text(draft.description.replacingOccurrences(of: " • ", with: " · "))
                         .font(.caption).foregroundStyle(.secondary)
                         .contentTransition(.numericText())
+                    if let refusal {
+                        Text(refusal).font(.caption).foregroundStyle(.red)
+                    }
                 }
                 .animation(reduceMotion ? nil : .snappy, value: draft.description)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -635,8 +642,8 @@ struct RequirementsEditor: View {
         guard let draft else { return false }
         let total = !blanket && !inAlternative && selectedItem != nil && kind == .ring && stackCount > 1 ? stackTotal : nil
         let copies = !blanket && !inAlternative && stackCount > 1 && total == nil ? copyDepth : nil
-        onSave(draft, !blanket && !namedOnly ? stackCount : 1, total, copies)
-        return true
+        refusal = onSave(draft, !blanket && !namedOnly ? stackCount : 1, total, copies)
+        return refusal == nil
     }
 
     private static func items(for kind: ItemKind) -> [CatalogItem] {

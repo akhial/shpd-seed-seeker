@@ -29,20 +29,26 @@ final class BlanketRequirementsTests: XCTestCase {
         }
     }
 
+    /// Through the shared core's board, as the app edits: a blanket neither
+    /// stacks nor joins an ordinary chip, though blankets join each other.
     func testBlanketsCannotStackOrJoinOrdinaryRequirements() throws {
         let requirements = try [wand(1), wand(2, blanket: true), wand(3, blanket: true)]
-        XCTAssertEqual(requirements.boardCount, 3)
-        XCTAssertFalse(requirements.canStack(requirements.boardItems()[1]))
-        XCTAssertEqual(requirements.setStackCount(requirements.boardItems()[1], 3), requirements)
-        XCTAssertEqual(requirements.joinAlternatives(source: 0, target: 1), requirements)
-        let grouped = requirements.joinAlternatives(source: 1, target: 2)
-        XCTAssertEqual(grouped.boardCount, 2)
+        let board = RequirementBoard.of(requirements)
+        XCTAssertEqual(board.ordinaryCount, 1)
+        XCTAssertEqual(board.blanketCount, 2)
+        XCTAssertFalse(try XCTUnwrap(board.item(holding: 2)).stack.canGrow)
+        XCTAssertEqual(board.chip(1)?.join, [])
+        XCTAssertEqual(RequirementBoard.apply([.setCount(2, 3)], to: requirements)?.changed, false)
+        XCTAssertEqual(RequirementBoard.apply([.join(source: 1, target: 2)], to: requirements)?.changed, false)
+        let grouped = try XCTUnwrap(RequirementBoard.apply([.join(source: 2, target: 3)], to: requirements)).rows
+        XCTAssertEqual(RequirementBoard.of(grouped).blanketCount, 1)
         XCTAssertTrue(grouped.allSatisfy { $0.identityGroup == nil })
         XCTAssertNoThrow(try SearchRequest(requirements: grouped))
         let linked = try DeepLink.decode(DeepLink.encodeLink(for: SavedQuery(requirements: grouped)))
         XCTAssertEqual(linked.requirements.filter(\.blanket).count, 2)
         XCTAssertEqual(linked.requirements.slotCount, 2)
-        XCTAssertEqual(grouped.detach(1).boardCount, 3)
+        let detached = try XCTUnwrap(RequirementBoard.apply([.detach(2)], to: grouped)).rows
+        XCTAssertEqual(RequirementBoard.of(detached).blanketCount, 2)
     }
 
     func testInvalidBlanketsAreRejectedBeforeSearching() throws {

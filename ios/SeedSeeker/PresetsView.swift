@@ -102,7 +102,7 @@ struct PresetsView: View {
 
     private func presetButton(_ preset: QueryPreset) -> some View {
         Button {
-            query = preset.query
+            query = preset.query.loadedForBoard()
             dismiss()
         } label: {
             Text(preset.name)

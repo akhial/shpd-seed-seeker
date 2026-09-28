@@ -67,7 +67,7 @@ final class AppModel {
         controller = SearchController(checkpointURL: support.appendingPathComponent("search.json"))
         backgroundSearch = BackgroundSearch(controller: controller)
         if let saved = defaults.string(forKey: "savedQuery") {
-            query = QueryPersistence.decode(saved)
+            query = QueryPersistence.decode(saved).loadedForBoard()
         } else {
             query = SavedQuery(requirements: [try! ItemRequirement(key: 1,
                 item: ItemCatalog.findById("wand_fireblast"), upgrade: 3, kind: .wand)])
@@ -112,7 +112,7 @@ final class AppModel {
             showError("Stop the search before opening a shared search.", title: "Shared search"); return
         }
         do {
-            query = try DeepLink.decode(url.absoluteString)
+            query = try DeepLink.decode(url.absoluteString).loadedForBoard()
             controller.clearDisplayedResults()
             importNotice = "Loaded shared search"
             tab = .finder
@@ -160,7 +160,7 @@ final class AppModel {
             guard !controller.isRunning else {
                 showError("Stop the search before importing results."); return
             }
-            query = imported.query
+            query = imported.query.loadedForBoard()
             controller.loadImported(seeds: imported.seeds, dropped: imported.dropped,
                                     query: imported.query, trinkets: imported.trinkets)
             var notice = "Imported \(imported.seeds.count) seed\(imported.seeds.count == 1 ? "" : "s") from \(source)"
