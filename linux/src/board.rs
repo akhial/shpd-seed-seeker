@@ -15,8 +15,8 @@ use std::fmt::Write as _;
 use std::rc::Rc;
 
 use shpd_seedfinder_core::editor::{
-    self, Badge, BoardView, ChipView, Edit, ItemView, RelationGlyph, ResinChip, ResinState, Row,
-    TagStyle,
+    self, Badge, BoardView, ChipView, DropAction, DropTarget, Edit, ItemView, RelationGlyph,
+    ResinChip, ResinState, Row, TagStyle,
 };
 
 /// The board view of the rows last shown. The pane redraws the board on
@@ -57,6 +57,14 @@ impl BoardCache {
     pub fn current(&self) -> Option<Rc<BoardView>> {
         self.shown.as_ref().map(|shown| Rc::clone(&shown.view))
     }
+
+    /// The chip showing row `key` on the board last handed out, picked up.
+    #[must_use]
+    pub fn pick_up(&self, key: u64) -> Option<Dragged> {
+        let shown = self.shown.as_ref()?;
+        let (item, chip) = find_chip(&shown.view, key)?;
+        Some(Dragged::new(&shown.rows, item, chip))
+    }
 }
 
 /// Where a key the board holds on to — the row an open stack stepper edits —
@@ -93,7 +101,7 @@ pub enum Landing {
     Row(u64),
     /// On the empty board of one section.
     Board { blanket: bool },
-    /// On the bin.
+    /// On the bin, which takes one item.
     Remove,
 }
 
@@ -102,8 +110,9 @@ pub enum Landing {
 pub enum DropAnswer {
     /// The drop sends this edit; the target lights up.
     Accept(Edit),
-    /// The editor refuses this join. The target is marked as refusing, and
-    /// the drop still sends the join so the editor's refusal is said.
+    /// The editor refuses this join or removal. The target is marked as
+    /// refusing, and the drop still sends the edit so the editor's refusal
+    /// is said.
     Refuse(Edit),
     /// Nothing happens here, and the target does not light up.
     Ignore,
@@ -122,7 +131,8 @@ impl DropAnswer {
 
 /// The chip in flight, as the drop targets under it read it: its row, its
 /// section, and the editor's answers about where it may land — taken once
-/// when the drag begins, so hovering asks the editor nothing.
+/// when the drag begins, so hovering asks the editor nothing. A drag moves
+/// one item: the chip's stack stays behind but for the one copy it carries.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Dragged {
     pub key: u64,
@@ -130,18 +140,24 @@ pub struct Dragged {
     can_detach: bool,
     join: Vec<u64>,
     refuse: Vec<u64>,
+    remove_refused: bool,
 }
 
 impl Dragged {
-    /// The chip `chip` of the board entry `item`, picked up.
+    /// The chip `chip` of the board entry `item`, drawn from `rows`, picked
+    /// up.
     #[must_use]
-    pub fn new(item: &ItemView, chip: &ChipView) -> Self {
+    pub fn new(rows: &[Row], item: &ItemView, chip: &ChipView) -> Self {
         Self {
             key: chip.key,
             blanket: item.blanket,
             can_detach: chip.can_detach,
             join: chip.join.clone(),
             refuse: chip.refuse.iter().map(|&(key, _)| key).collect(),
+            remove_refused: matches!(
+                editor::drop_action(rows, chip.key, DropTarget::Remove),
+                DropAction::Refuse(_)
+            ),
         }
     }
 
@@ -149,7 +165,9 @@ impl Dragged {
     /// the editor lists the row among the chip's joins, and is refused when
     /// it lists it among its refusals; onto the empty board of its own
     /// section a cluster member leaves its cluster while a lone chip stays
-    /// where it is; onto the bin it is removed.
+    /// where it is; onto the bin one item goes — the chip's own row, or one
+    /// copy of its stack — unless the editor has no label left to write the
+    /// rest with.
     #[must_use]
     pub fn drop_answer(&self, landing: Landing) -> DropAnswer {
         let source = self.key;
@@ -163,7 +181,10 @@ impl Dragged {
             Landing::Board { blanket } if self.can_detach && blanket == self.blanket => {
                 DropAnswer::Accept(Edit::Detach { key: source })
             }
-            Landing::Remove => DropAnswer::Accept(Edit::Remove { key: source }),
+            Landing::Remove if self.remove_refused => {
+                DropAnswer::Refuse(Edit::RemoveOne { key: source })
+            }
+            Landing::Remove => DropAnswer::Accept(Edit::RemoveOne { key: source }),
             Landing::Row(_) | Landing::Board { .. } => DropAnswer::Ignore,
         }
     }
@@ -284,8 +305,8 @@ mod tests {
     use serde_json::{Value, json};
     use shpd_seedfinder_core::catalog::{ItemId, ItemKind};
     use shpd_seedfinder_core::editor::{
-        self, BoardView, ChipView, Edit, EditResult, ItemView, ResinAmount, ResinState, Row,
-        TagStyle, labels,
+        self, BoardView, ChipView, Edit, EditResult, ItemView, Refusal, ResinAmount, ResinState,
+        Row, TagStyle, labels,
     };
     use shpd_seedfinder_core::query::{
         ArcaneResinFilter, LevelSum, Requirement, UpgradeRequirement,
@@ -586,7 +607,7 @@ mod tests {
         let view = editor::board_view(&rows, None);
         let picked = |key| {
             let (item, chip) = find_chip(&view, key).unwrap();
-            Dragged::new(item, chip)
+            Dragged::new(&rows, item, chip)
         };
 
         // A drag moves one item, so the stacked ring may join the wand — one
@@ -626,10 +647,10 @@ mod tests {
             wand.drop_answer(Landing::Board { blanket: false }),
             DropAnswer::Ignore
         );
-        // The bin takes anything.
+        // The bin takes one item of anything: one ring of the stack.
         assert_eq!(
             ring_chip.drop_answer(Landing::Remove),
-            DropAnswer::Accept(Edit::Remove { key: 1 })
+            DropAnswer::Accept(Edit::RemoveOne { key: 1 })
         );
         // Its own cluster is no target for a member.
         assert_eq!(member.drop_answer(Landing::Row(4)), DropAnswer::Ignore);
@@ -684,7 +705,7 @@ mod tests {
         let view = editor::board_view(&state.requirements, None);
         let picked = |key| {
             let (item, chip) = find_chip(&view, key).unwrap();
-            Dragged::new(item, chip)
+            Dragged::new(&state.requirements, item, chip)
         };
         let answer = picked(11).drop_answer(Landing::Row(9));
         assert_eq!(
@@ -711,6 +732,80 @@ mod tests {
             "Every group label is in use. Remove a stack or a combined level first."
         );
         assert_eq!(state.requirements, before);
+    }
+
+    #[test]
+    fn the_bin_takes_one_item_or_says_why_it_cannot() {
+        // {Frost ×3 | Disintegration ×3} under label 1, beside three stacks
+        // holding the other labels, and a lone Frost ×2.
+        let mut cluster = [
+            wand(1, ItemId::WandFrost),
+            wand(2, ItemId::WandDisintegration),
+            any(3, ItemKind::Wand),
+            any(4, ItemKind::Wand),
+        ];
+        for (index, row) in cluster.iter_mut().enumerate() {
+            row.requirement.identity_group = Some(1);
+            if index < 2 {
+                row.requirement.alternative_group = Some(1);
+            }
+        }
+        let mut state = AppState::default();
+        state.requirements = cluster.to_vec();
+        state.requirements.extend(stacks(5, 2..=4));
+        state
+            .requirements
+            .extend([wand(11, ItemId::WandFrost), wand(12, ItemId::WandFrost)]);
+        let view = editor::board_view(&state.requirements, None);
+        let (_, frost) = find_chip(&view, 1).unwrap();
+        assert_eq!(frost.badges.count.as_ref().unwrap().text, "×3");
+        let picked = |key| {
+            let (item, chip) = find_chip(&view, key).unwrap();
+            Dragged::new(&state.requirements, item, chip)
+        };
+        let (member, lone) = (picked(1), picked(11));
+        // One Frost less leaves Frost ×2 and Disintegration ×3, two member
+        // stacks no longer alike, and no label is left for the second.
+        let refused = member.drop_answer(Landing::Remove);
+        assert_eq!(refused, DropAnswer::Refuse(Edit::RemoveOne { key: 1 }));
+        let before = state.requirements.clone();
+        let result = state.apply(&[refused.edit().unwrap()]);
+        assert_eq!(result.refused.map(Refusal::name), Some("no_free_group"));
+        assert_eq!(state.requirements, before);
+
+        // The lone Frost ×2 gives up one Frost, not its whole stack.
+        let accepted = lone.drop_answer(Landing::Remove);
+        assert_eq!(accepted, DropAnswer::Accept(Edit::RemoveOne { key: 11 }));
+        assert!(state.apply(&[accepted.edit().unwrap()]).changed);
+        let view = editor::board_view(&state.requirements, None);
+        let (_, frost) = find_chip(&view, 11).unwrap();
+        assert_eq!((frost.stack.count, frost.badges.count.as_ref()), (1, None));
+        assert_eq!(state.requirements.len(), before.len() - 1);
+    }
+
+    #[test]
+    fn a_picked_up_member_carries_one_item() {
+        // Frost picked up out of {Frost ×2 | Disintegration ×2} carries one
+        // Frost: on the bin it takes one copy, and Disintegration keeps its
+        // own two.
+        let rows = alike_members();
+        let mut cache = BoardCache::default();
+        cache.view(&rows, None);
+        let frost = cache.pick_up(1).unwrap();
+        assert!(cache.pick_up(3).is_none(), "a hidden copy has no chip");
+        let edit = frost.drop_answer(Landing::Remove).edit().unwrap();
+        assert_eq!(edit, Edit::RemoveOne { key: 1 });
+        let result = editor::apply(&rows, None, &[edit]);
+        assert!(result.changed);
+        assert_eq!(result.rows.len(), 3);
+        let view = cache.view(&result.rows, None);
+        let (_, frost) = find_chip(&view, 1).unwrap();
+        let (_, disintegration) = find_chip(&view, 2).unwrap();
+        assert!(shown_badges(frost).is_empty());
+        assert_eq!(
+            shown_badges(disintegration),
+            [(StackField::Count, "\u{d7}2", 2, 3)]
+        );
     }
 
     #[test]

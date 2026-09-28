@@ -188,7 +188,7 @@ button.stack-badge:hover {
 }
 
 /* The bin: only shown while a chip is in flight, and the only way a drag can
-   delete one. */
+   delete something — the one item the chip carries. */
 .remove-zone {
   padding: 6px 10px;
   border: 1px dashed var(--error-color);
@@ -200,6 +200,13 @@ button.stack-badge:hover {
   border-style: solid;
   color: var(--error-fg-color);
   background-color: var(--error-bg-color);
+}
+
+/* A bin that cannot take the chip in flight: the rest of its stack would
+   need a label none is left for. The drop says why. */
+.remove-zone.drop-refused {
+  border-style: solid;
+  background-color: alpha(var(--error-color), 0.12);
 }
 
 /* Flat, square trinket choices share the native card palette. */

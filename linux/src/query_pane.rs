@@ -802,12 +802,22 @@ impl QueryPane {
         });
         chip.add_controller(keys);
 
+        chip.add_controller(self.drag_source(key));
+    }
+
+    /// Picking a chip up: the ghost it flies as, where it may land, and the
+    /// bin shown while it is in flight.
+    fn drag_source(self: &Rc<Self>, key: Option<u64>) -> gtk::DragSource {
         let drag = gtk::DragSource::builder()
             .actions(gdk::DragAction::MOVE)
             .build();
         drag.connect_prepare(move |source, _, _| {
             let widget = source.widget()?;
-            source.set_icon(Some(&gtk::WidgetPaintable::new(Some(&widget))), 0, 0);
+            // The resin chip flies as itself; a requirement chip's ghost is
+            // its face alone, set once the drag begins.
+            if key.is_none() {
+                source.set_icon(Some(&gtk::WidgetPaintable::new(Some(&widget))), 0, 0);
+            }
             Some(gdk::ContentProvider::for_value(&key.map_or_else(
                 || "arcane_resin".to_value(),
                 |key| key.to_value(),
@@ -815,17 +825,21 @@ impl QueryPane {
         });
         drag.connect_drag_begin({
             let pane = Rc::clone(self);
-            move |source, _| {
+            move |source, drag| {
                 if let Some(widget) = source.widget() {
                     widget.add_css_class("chip-dragging");
                 }
                 // Where the chip may land is read once, off the board it was
                 // drawn on, so hovering asks the editor nothing.
-                let dragged = key.and_then(|key| {
-                    let view = pane.board_view.borrow().current()?;
-                    let (item, chip) = board::find_chip(&view, key)?;
-                    Some(Dragged::new(item, chip))
-                });
+                let dragged = key.and_then(|key| pane.board_view.borrow().pick_up(key));
+                // A drag moves one item: the chip in flight is its face
+                // alone, without the badges of the stack it leaves behind.
+                if let Some(key) = key
+                    && let Some(view) = pane.board_view.borrow().current()
+                    && let Some((_, chip)) = board::find_chip(&view, key)
+                {
+                    gtk::DragIcon::for_drag(drag).set_child(Some(&chip_face(chip)));
+                }
                 pane.dragging.replace(dragged);
                 pane.remove_revealer.set_reveal_child(true);
             }
@@ -840,7 +854,7 @@ impl QueryPane {
                 pane.remove_revealer.set_reveal_child(false);
             }
         });
-        chip.add_controller(drag);
+        drag
     }
 
     fn edit_chip(&self, key: Option<u64>) {
@@ -851,6 +865,8 @@ impl QueryPane {
         }
     }
 
+    /// The menu's Remove, and Delete on a chip: the chip with its whole
+    /// stack, where the bin takes one item.
     fn remove_chip(&self, key: Option<u64>) {
         if let Some(key) = key {
             self.emit(BoardAction::Edit(Edit::Remove { key }));
@@ -869,7 +885,8 @@ impl QueryPane {
 
     /// A drop zone for a chip in flight. It lights up while a release there
     /// would change the board, is marked as refusing where the editor turns
-    /// the join down — a release then says why — and stays dark elsewhere.
+    /// the join or the removal down — a release then says why — and stays
+    /// dark elsewhere.
     ///
     /// Drag events bubble from the widget under the pointer to its ancestors
     /// until one takes the drop. A chip or a cluster's capsule therefore
@@ -1270,7 +1287,8 @@ fn resin_menu() -> gio::Menu {
 /// its own hover text where the editor explains it ("Auto", "Mage +2").
 /// A requirement chip's face: its sprite, its name, and the tiny tags that
 /// qualify it, all as the shared editor words them — everything but the
-/// badges of its stack, which the board adds.
+/// badges of its stack. The board adds those; a chip in flight is its face
+/// alone, the one item a drag moves.
 fn chip_face(chip: &ChipView) -> gtk::Box {
     let widget = gtk::Box::builder()
         .spacing(6)

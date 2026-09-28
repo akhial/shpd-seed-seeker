@@ -15,8 +15,9 @@ push/pop navigation as the window narrows, down to a fully single-pane phone-siz
 - **Query** (sidebar) builds the search declaratively: a board of requirement chips, plus
   floor limit, Wandmaker quest, and blacksmith scope controls. Dropping one chip
   on another makes an either/or cluster; dragging a member back onto the board pulls it out
-  again; a chip's badges say how many items of its kind it asks for and what combined upgrade
-  level they reach. A chip opens in a dialog with category, item, tier, upgrade,
+  again. Every drag moves one item, so a stacked chip gives up one copy and keeps the rest,
+  and the bin takes one item. Each chip's badges, a cluster member's too, say how many items
+  of its kind it asks for and what combined upgrade level they reach. A chip opens in a dialog with category, item, tier, upgrade,
   enchantment/glyph, source, total item count, and per-item floor limit predicates.
   Artifacts require a named selection, support per-item floor limits, and
   show the Imp vault reward at +5 when scouting. Artifact match probability uses the engine's measured supply model.
