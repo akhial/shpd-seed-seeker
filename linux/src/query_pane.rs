@@ -696,8 +696,11 @@ impl QueryPane {
     /// One either/or cluster: its members share a dashed capsule. Each member
     /// wears its own stack's badges; the capsule wears none.
     fn cluster(self: &Rc<Self>, item: &ItemView) -> gtk::Widget {
-        let capsule = gtk::Box::builder()
-            .spacing(2)
+        // The capsule wraps its members rather than squeezing their names
+        // when the alternatives outgrow the sidebar.
+        let capsule = adw::WrapBox::builder()
+            .child_spacing(2)
+            .line_spacing(4)
             .css_classes(["cluster"])
             .accessible_role(gtk::AccessibleRole::Group)
             .build();
@@ -710,6 +713,7 @@ impl QueryPane {
                     &gtk::Label::builder()
                         .label("or")
                         .css_classes(["cluster-or"])
+                        .valign(gtk::Align::Center)
                         .build(),
                 );
             }
@@ -1333,6 +1337,7 @@ fn chip_tag(tag: &Tag) -> gtk::Label {
     let label = gtk::Label::builder()
         .label(&tag.text)
         .css_classes(["chip-tag", board::tag_class(tag.style)])
+        .valign(gtk::Align::Center)
         .build();
     label.set_tooltip_text(tag.tooltip.as_deref());
     label
@@ -1343,7 +1348,8 @@ fn uncursed_mark() -> gtk::Label {
     gtk::Label::builder()
         .label("\u{2713}")
         .tooltip_text("Uncursed")
-        .css_classes(["chip-tag", "chip-tag-soft"])
+        .css_classes(["chip-tag", "chip-tag-soft", "chip-tag-check"])
+        .valign(gtk::Align::Center)
         .build()
 }
 
