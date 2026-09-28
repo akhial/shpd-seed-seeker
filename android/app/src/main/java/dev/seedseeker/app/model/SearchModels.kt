@@ -79,22 +79,23 @@ object SearchLimits {
 enum class ItemKind(
     val label: String,
     val singularLabel: String,
-    val modifierLabel: String?,
+    /** Whether the family's items carry an enchantment or glyph a requirement may name. */
+    val carriesEffects: Boolean,
     /** The highest upgrade a search may name for this family. */
     val maximumSearchUpgrade: Int,
 ) {
-    WEAPON("Weapons", "weapon", "Enchantment", SearchLimits.MAX_UPGRADE_WEAPON),
-    ARMOR("Armor", "armor", "Glyph", SearchLimits.MAX_UPGRADE_DEFAULT),
-    WAND("Wands", "wand", null, SearchLimits.MAX_UPGRADE_DEFAULT),
-    RING("Rings", "ring", null, SearchLimits.MAX_UPGRADE_RING),
+    WEAPON("Weapons", "weapon", true, SearchLimits.MAX_UPGRADE_WEAPON),
+    ARMOR("Armor", "armor", true, SearchLimits.MAX_UPGRADE_DEFAULT),
+    WAND("Wands", "wand", false, SearchLimits.MAX_UPGRADE_DEFAULT),
+    RING("Rings", "ring", false, SearchLimits.MAX_UPGRADE_RING),
 
     // Wire kind IDs 4 and 5 (the enum ordinal is the wire ID): weapon
     // requirements narrowed to one weapon class. Catalog items always carry
     // the WEAPON family, never a narrowed kind.
-    MELEE_WEAPON("Melee weapons", "melee weapon", "Enchantment", SearchLimits.MAX_UPGRADE_WEAPON),
-    THROWN_WEAPON("Thrown weapons", "thrown weapon", "Enchantment", SearchLimits.MAX_UPGRADE_WEAPON),
-    TRINKET("Trinket", "trinket", null, 0),
-    ARTIFACT("Artifacts", "artifact", null, SearchLimits.MAX_UPGRADE_ARTIFACT),
+    MELEE_WEAPON("Melee weapons", "melee weapon", true, SearchLimits.MAX_UPGRADE_WEAPON),
+    THROWN_WEAPON("Thrown weapons", "thrown weapon", true, SearchLimits.MAX_UPGRADE_WEAPON),
+    TRINKET("Trinket", "trinket", false, 0),
+    ARTIFACT("Artifacts", "artifact", false, SearchLimits.MAX_UPGRADE_ARTIFACT),
     ;
 
     val requiresNamedItem: Boolean get() = this == TRINKET || this == ARTIFACT
@@ -246,7 +247,7 @@ data class ItemRequirement(
         require(validUpgrade) {
             "Upgrade predicate is invalid for ${kind.label}"
         }
-        require(kind.modifierLabel != null || effect == EffectFilter.Any) {
+        require(kind.carriesEffects || effect == EffectFilter.Any) {
             "${kind.label} cannot carry an effect requirement"
         }
         if (effect is EffectFilter.OneOf) {
