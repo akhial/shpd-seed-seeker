@@ -103,7 +103,11 @@ final class AppModel {
 
     func share() {
         do { sharedLink = SharePayload(text: try DeepLink.encodeLink(for: query)) }
-        catch { showError(validationMessage ?? AndroidCopy.shareError(error), title: "Shared search") }
+        catch {
+            // A list the shared core finds a problem with says which, in its
+            // words; anything else keeps the share's own wording.
+            showError(query.board.problems.first?.message ?? AndroidCopy.shareError(error), title: "Shared search")
+        }
     }
 
     func open(_ url: URL) {
