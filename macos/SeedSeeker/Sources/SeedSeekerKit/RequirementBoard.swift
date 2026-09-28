@@ -406,9 +406,11 @@ public struct BoardBadge: Hashable, Sendable {
     }
 }
 
-/// One visible row: a chip on its own, or one member of a cluster.
-public struct BoardChip: Hashable, Identifiable, Sendable {
-    public let key: Int64
+/// What a chip shows of one item — the sprite, name, qualifiers and the
+/// words naming it — with no key, badges or state: drawn, never edited. A
+/// chip's own row has one (``BoardChip/face``), and so does the item a drag
+/// of it carries (``BoardChip/lifted``).
+public struct ChipFace: Hashable, Sendable {
     /// The short name beside the sprite: the item, or `Any melee`.
     public let name: String
     /// The full title a popover or sheet leads with.
@@ -430,10 +432,60 @@ public struct BoardChip: Hashable, Identifiable, Sendable {
     public let uncursed: Bool
     /// The popover's detail line, as parts.
     public let details: [String]
-    /// The popover's relation lines.
-    public let relations: [ChipRelation]
     /// The accessibility label: the title, then the details.
     public let description: String
+
+    /// Nil for anything but an object with a name — `null` included; the
+    /// title stands in for a missing description, the name for a title.
+    init?(json value: Any?) {
+        guard let object = value as? [String: Any], let name = jsonString(object["name"]) else { return nil }
+        let title = jsonString(object["title"]) ?? name
+        let item = jsonString(object["item"])
+        self.name = name
+        self.title = title
+        self.item = item
+        catalogItem = item.flatMap { ItemCatalog.findById($0) }
+        kind = ResultsExport.kind(named: jsonString(object["kind"]))
+        family = ResultsExport.kind(named: jsonString(object["family"]))
+        tags = jsonObjects(object["tags"]).compactMap(ChipTag.init(json:))
+        trailingTags = jsonObjects(object["trailing_tags"]).compactMap(ChipTag.init(json:))
+        effect = ChipEffect(json: object["effect"])
+        uncursed = jsonFlag(object["uncursed"])
+        details = jsonStrings(object["details"])
+        description = jsonString(object["description"]) ?? title
+    }
+}
+
+/// One visible row: a chip on its own, or one member of a cluster.
+public struct BoardChip: Hashable, Identifiable, Sendable {
+    public let key: Int64
+    /// What the chip shows of its own row, requirements and all.
+    public let face: ChipFace
+    /// The face of the item a drag of the chip carries: while it has copies,
+    /// a bare copy of it — its item, or its kind for a wildcard stack, with
+    /// that copy's floor limit and nothing else (Ring of Energy +4 ×3 lifts
+    /// a plain Ring of Energy), the face it has once it lands. Nil when the
+    /// chip has no copies, so the chip itself moves.
+    public let lifted: ChipFace?
+    /// What the moving item draws — a drag preview, a lifted chip under the
+    /// finger — and what words naming it say: ``lifted``, else the chip's
+    /// own ``face``, always without badges.
+    public var movingFace: ChipFace { lifted ?? face }
+
+    public var name: String { face.name }
+    public var title: String { face.title }
+    public var item: String? { face.item }
+    public var catalogItem: CatalogItem? { face.catalogItem }
+    public var kind: ItemKind? { face.kind }
+    public var family: ItemKind? { face.family }
+    public var tags: [ChipTag] { face.tags }
+    public var trailingTags: [ChipTag] { face.trailingTags }
+    public var effect: ChipEffect? { face.effect }
+    public var uncursed: Bool { face.uncursed }
+    public var details: [String] { face.details }
+    public var description: String { face.description }
+    /// The popover's relation lines.
+    public let relations: [ChipRelation]
     /// The row's own first problem, else the first one between rows blaming it.
     public let problem: String?
     /// The badges the chip shows at rest: the count (`×3`) when it asks for
@@ -476,23 +528,13 @@ public struct BoardChip: Hashable, Identifiable, Sendable {
     }
 
     init?(json object: [String: Any]) {
-        guard let key = jsonKey(object["key"]), let name = jsonString(object["name"]) else { return nil }
-        let title = jsonString(object["title"]) ?? name
-        let item = jsonString(object["item"])
+        guard let key = jsonKey(object["key"]), let face = ChipFace(json: object) else { return nil }
         self.key = key
-        self.name = name
-        self.title = title
-        self.item = item
-        catalogItem = item.flatMap { ItemCatalog.findById($0) }
-        kind = ResultsExport.kind(named: jsonString(object["kind"]))
-        family = ResultsExport.kind(named: jsonString(object["family"]))
-        tags = jsonObjects(object["tags"]).compactMap(ChipTag.init(json:))
-        trailingTags = jsonObjects(object["trailing_tags"]).compactMap(ChipTag.init(json:))
-        effect = ChipEffect(json: object["effect"])
-        uncursed = jsonFlag(object["uncursed"])
-        details = jsonStrings(object["details"])
+        self.face = face
+        // Read defensively: missing, null or unreadable, the chip itself
+        // moves.
+        lifted = ChipFace(json: object["lifted"])
         relations = jsonObjects(object["relations"]).compactMap(ChipRelation.init(json:))
-        description = jsonString(object["description"]) ?? title
         problem = jsonString(object["problem"])
         badges = BoardBadges(json: object["badges"]) ?? BoardBadges(count: nil, total: nil)
         remainingBadges = BoardBadges(json: object["remaining_badges"])

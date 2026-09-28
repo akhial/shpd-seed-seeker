@@ -326,6 +326,117 @@ final class RequirementEditorTests: XCTestCase {
         XCTAssertNoThrow(try SearchRequest(requirements: detached.rows))
     }
 
+    /// A chip with copies lifts a bare copy of itself — what a drag carries
+    /// and the moving chip draws — and that is the face the item has once it
+    /// lands; only the chip it came from keeps its requirements. A chip with
+    /// no copies moves itself.
+    func testADragCarriesTheBareCopyItsLiftedFaceShows() throws {
+        // Ring of Energy +4 ×3 lifts a plain Ring of Energy.
+        let rest = try XCTUnwrap(RequirementBoard.decode(try response("board-remaining-badges"), sent: []))
+        let energy = try XCTUnwrap(rest.chip(1))
+        XCTAssertEqual(energy.face.tags.map(\.text), ["+4"])
+        let ring = try XCTUnwrap(energy.lifted)
+        XCTAssertEqual(ring.name, "Ring of Energy")
+        XCTAssertEqual(ring.title, "Ring of Energy")
+        XCTAssertEqual(ring.item, "ring_energy")
+        XCTAssertNotNil(ring.catalogItem)
+        XCTAssertEqual(ring.kind, .ring)
+        XCTAssertEqual(ring.tags, [])
+        XCTAssertEqual(ring.trailingTags, [])
+        XCTAssertNil(ring.effect)
+        XCTAssertFalse(ring.uncursed)
+        XCTAssertEqual(ring.details, ["any upgrade"])
+        XCTAssertEqual(ring.description, "Ring of Energy, any upgrade")
+        XCTAssertEqual(energy.movingFace, ring)
+
+        // Joined onto Disintegration, that ring is the new member, and the
+        // chip stays Ring of Energy +4 ×2.
+        let joined = try XCTUnwrap(RequirementBoard.decode(try response("board-join-bare-copy"), sent: []))
+        XCTAssertEqual(joined.focus, 3)
+        XCTAssertEqual(joined.item(holding: 3)?.members, [4, 3])
+        XCTAssertEqual(joined.chip(3)?.face, ring)
+        XCTAssertNil(joined.chip(3)?.lifted)
+        XCTAssertEqual(joined.chip(1)?.tags.map(\.text), ["+4"])
+        XCTAssertEqual(joined.chip(1)?.countBadge?.text, "×2")
+        XCTAssertEqual(joined.chip(1)?.lifted, ring)
+        // Disintegration has no copies: the chip itself moves.
+        let disintegration = try XCTUnwrap(joined.chip(4))
+        XCTAssertNil(disintegration.lifted)
+        XCTAssertEqual(disintegration.movingFace, disintegration.face)
+        // Detached again, it folds back into Ring of Energy +4 ×3.
+        let back = try XCTUnwrap(RequirementBoard.decode(try response("board-join-bare-copy-round-trip"), sent: []))
+        XCTAssertEqual(back.focus, 1)
+        XCTAssertEqual(back.items.map(\.id), ["r1", "r4"])
+        XCTAssertEqual(back.chip(1)?.countBadge?.text, "×3")
+        XCTAssertEqual(back.chip(1)?.copies, [2, 3])
+
+        // {Frost +2 ×2 | Disintegration}: a bare Wand of Frost leaves, the
+        // member keeping its +2 in the group — the fixture, then the same
+        // drag asked of the linked engine.
+        let detached = try XCTUnwrap(RequirementBoard.decode(try response("board-detach-bare-copy"), sent: []))
+        XCTAssertEqual(detached.focus, 3)
+        XCTAssertEqual(detached.item(holding: 1)?.members, [1, 2])
+        XCTAssertEqual(detached.chip(1)?.tags.map(\.text), ["+2"])
+        XCTAssertEqual(detached.chip(3)?.name, "Wand of Frost")
+        XCTAssertEqual(detached.chip(3)?.tags, [])
+        let member = [try requirement(1, item: "wand_frost", upgrade: 2, upgradeMatch: .exactly,
+                                      alternativeGroup: 1, identityGroup: 1),
+                      try requirement(2, item: "wand_disintegration", alternativeGroup: 1),
+                      try requirement(3, kind: .wand, identityGroup: 1)]
+        let frost = try XCTUnwrap(RequirementBoard.of(member).chip(1))
+        XCTAssertEqual(frost.lifted?.name, "Wand of Frost")
+        XCTAssertEqual(frost.lifted?.tags, [])
+        let out = try XCTUnwrap(RequirementBoard.apply([.detach(1)], to: member))
+        let left = try XCTUnwrap(out.focus)
+        XCTAssertEqual(out.chip(left)?.face, frost.lifted)
+        XCTAssertEqual(out.chip(1)?.tags.map(\.text), ["+2"])
+
+        // A wildcard stack lifts its kind, and a copy with its own floor
+        // limit lifts it too: each is the member the join makes.
+        let wildcard = [try requirement(1, kind: .wand, upgrade: 3, upgradeMatch: .atLeast, identityGroup: 1),
+                        try requirement(2, kind: .wand, identityGroup: 1),
+                        try requirement(5, item: "wand_frost")]
+        let anyWand = try XCTUnwrap(RequirementBoard.of(wildcard).chip(1))
+        XCTAssertEqual(anyWand.lifted?.name, "Any wand")
+        XCTAssertEqual(anyWand.lifted?.tags, [])
+        XCTAssertNil(anyWand.lifted?.item)
+        let wildJoin = try XCTUnwrap(RequirementBoard.apply([.join(source: 1, target: 5)], to: wildcard))
+        XCTAssertEqual(wildJoin.focus, 2)
+        XCTAssertEqual(wildJoin.chip(2)?.face, anyWand.lifted)
+        XCTAssertEqual(wildJoin.chip(1)?.tags.map(\.text), ["+3↑"])
+        let floors = [try requirement(1, item: "mace", upgrade: 2, upgradeMatch: .exactly),
+                      try requirement(2, item: "mace", maximumDepth: 9),
+                      try requirement(5, item: "wand_frost")]
+        let mace = try XCTUnwrap(RequirementBoard.of(floors).chip(1))
+        XCTAssertEqual(mace.lifted?.name, "Mace")
+        XCTAssertEqual(mace.lifted?.tags.map(\.text), ["F≤9"])
+        let maceJoin = try XCTUnwrap(RequirementBoard.apply([.join(source: 1, target: 5)], to: floors))
+        XCTAssertEqual(maceJoin.focus, 2)
+        XCTAssertEqual(maceJoin.chip(2)?.face, mace.lifted)
+        XCTAssertEqual(maceJoin.chip(1)?.tags.map(\.text), ["+2"])
+
+        // Read defensively: missing, null, not an object or nameless, the
+        // chip itself moves; a face missing its words falls back as a
+        // chip's does.
+        let spear: [String: Any] = ["key": NSNumber(value: 1), "name": "Spear"]
+        let plain = try XCTUnwrap(BoardChip(json: spear))
+        XCTAssertNil(plain.lifted)
+        XCTAssertEqual(plain.movingFace, plain.face)
+        let odds: [Any] = [NSNull(), "Spear", NSNumber(value: 1), ["title": "Spear"] as [String: Any]]
+        for odd in odds {
+            var chip = spear
+            chip["lifted"] = odd
+            XCTAssertNil(try XCTUnwrap(BoardChip(json: chip)).lifted)
+        }
+        var bare = spear
+        bare["lifted"] = ["name": "Spear", "tags": "+2"] as [String: Any]
+        let lifted = try XCTUnwrap(try XCTUnwrap(BoardChip(json: bare)).lifted)
+        XCTAssertEqual(lifted.title, "Spear")
+        XCTAssertEqual(lifted.description, "Spear")
+        XCTAssertEqual(lifted.tags, [])
+        XCTAssertNil(lifted.item)
+    }
+
     /// The remove target takes one item; a chip's "Remove" takes the chip
     /// with its whole stack.
     func testTheRemoveTargetTakesOneItem() throws {
