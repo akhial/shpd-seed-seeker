@@ -18,7 +18,6 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
@@ -177,7 +176,6 @@ import dev.seedseeker.app.ui.theme.SpdResin
 import dev.seedseeker.app.ui.theme.SpdResinText
 import dev.seedseeker.app.ui.theme.SpdSecret
 import dev.seedseeker.app.ui.theme.SpdTeal
-import dev.seedseeker.app.ui.theme.SpdUpgrade
 import kotlin.math.abs
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -758,12 +756,14 @@ internal fun ScoutItemCard(
                 measurer.measure(text, style, softWrap = false).size.width
             val stackedBadges = with(density) {
                 val titleWidth = textWidth(scoutItem.item.name, typography.titleMedium)
+                // Each tag: its label, its insets and the gap before it.
                 val upgradeWidth = if (scoutItem.displayedUpgrade != 0) {
-                    textWidth("+${scoutItem.displayedUpgrade}", typography.labelMedium.copy(fontFamily = FontFamily.Monospace)) +
-                        22.dp.roundToPx()
+                    textWidth("+${scoutItem.displayedUpgrade}",
+                        typography.labelMedium.copy(fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold)) +
+                        18.dp.roundToPx()
                 } else 0
-                val curseWidth = if (scoutItem.cursed) textWidth("cursed", typography.labelSmall) + 20.dp.roundToPx() else 0
-                val secretWidth = if (scoutItem.secret) textWidth("secret", typography.labelSmall) + 20.dp.roundToPx() else 0
+                val curseWidth = if (scoutItem.cursed) textWidth("cursed", typography.labelSmall) + 18.dp.roundToPx() else 0
+                val secretWidth = if (scoutItem.secret) textWidth("secret", typography.labelSmall) + 18.dp.roundToPx() else 0
                 val matchWidth = textWidth("match", typography.labelSmall) + 28.dp.roundToPx()
                 val choiceWidth = (scoutItem.accessibility as? ScoutAccessibility.Choice)?.let {
                     textWidth(scoutGroupLetter(it.group).toString(), typography.labelSmall) + 28.dp.roundToPx()
@@ -790,7 +790,7 @@ internal fun ScoutItemCard(
                         ScoutItemTitle(scoutItem.item.name, Modifier.weight(1f, fill = false))
                         if (scoutItem.displayedUpgrade != 0) {
                             Spacer(Modifier.width(8.dp))
-                            ScoutItemUpgrade(scoutItem.displayedUpgrade)
+                            UpgradeTag("+${scoutItem.displayedUpgrade}")
                         }
                         if (!stackedBadges) {
                             if (hasStatusBadges) {
@@ -899,31 +899,15 @@ private fun ScoutItemTitle(name: String, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun ScoutItemUpgrade(upgrade: Int) {
-    Surface(
-        shape = CircleShape,
-        color = SpdUpgrade.copy(alpha = 0.14f),
-    ) {
-        Text(
-            "+$upgrade",
-            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
-            style = MaterialTheme.typography.labelMedium,
-            fontFamily = FontFamily.Monospace,
-            color = SpdUpgrade,
-        )
-    }
-}
-
-@Composable
 private fun ScoutItemBadges(scoutItem: ScoutItem) {
     if (scoutItem.cursed) {
         Surface(
-            shape = CircleShape,
+            shape = TagShape,
             color = SpdDanger.copy(alpha = 0.16f),
         ) {
             Text(
                 "cursed",
-                modifier = Modifier.padding(horizontal = 7.dp, vertical = 1.dp),
+                modifier = Modifier.padding(tagInsets),
                 style = MaterialTheme.typography.labelSmall,
                 color = SpdCurse,
             )
@@ -931,12 +915,12 @@ private fun ScoutItemBadges(scoutItem: ScoutItem) {
     }
     if (scoutItem.secret) {
         Surface(
-            shape = CircleShape,
+            shape = TagShape,
             color = SpdSecret.copy(alpha = 0.16f),
         ) {
             Text(
                 "secret",
-                modifier = Modifier.padding(horizontal = 7.dp, vertical = 1.dp),
+                modifier = Modifier.padding(tagInsets),
                 style = MaterialTheme.typography.labelSmall,
                 color = SpdSecret,
             )
@@ -952,7 +936,7 @@ private fun ScoutItemBadges(scoutItem: ScoutItem) {
 @Composable
 private fun ScoutItemMatchChip(resinDonor: Boolean = false) {
     Surface(
-        shape = CircleShape,
+        shape = TagShape,
         color = if (resinDonor) SpdResin.copy(alpha = 0.14f) else SpdGreen.copy(alpha = 0.16f),
         border = if (resinDonor) androidx.compose.foundation.BorderStroke(1.dp, SpdResin.copy(alpha = 0.40f)) else null,
         modifier = if (resinDonor) {

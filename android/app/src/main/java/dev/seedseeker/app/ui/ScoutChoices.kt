@@ -55,7 +55,7 @@ internal fun scoutGroupLetter(group: Int): Char = ('A'.code + group % 26).toChar
 internal fun ChoiceGroupChip(choice: ScoutAccessibility.Choice) {
     val letter = scoutGroupLetter(choice.group)
     val color = MaterialTheme.colorScheme.onSurfaceVariant
-    Surface(shape = MaterialTheme.shapes.extraSmall, color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    Surface(shape = TagShape, color = MaterialTheme.colorScheme.surfaceContainerHigh,
         modifier = Modifier.semantics(mergeDescendants = true) { contentDescription = "One reward of choice group $letter (option ${choice.option + 1})" }) {
         Row(Modifier.padding(horizontal = 6.dp, vertical = 1.dp), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(4.dp)) {
