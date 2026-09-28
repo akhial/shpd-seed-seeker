@@ -20,7 +20,7 @@ use crate::query_pane::BoardAction;
 use crate::state::AppState;
 use crate::{
     challenges_dialog, detail_pane, persist, presets_dialog, query_pane, requirement_editor,
-    results_pane, update,
+    resin_editor, results_pane, update,
 };
 
 #[allow(clippy::too_many_lines)] // Linear assembly of panes, actions, and wiring.
@@ -123,27 +123,46 @@ pub fn present(app: &adw::Application) {
         }
     });
 
-    // The requirement sheet saves through the shared editor onto the rows
-    // as they are when it closes; a refused save keeps it open with why.
-    let edit_requirement: Rc<dyn Fn(Draft)> = Rc::new({
+    // The sheets save through the shared editor onto the rows as they are
+    // when they close; a refused save keeps its sheet open with why.
+    let save_sheet: Rc<dyn Fn(&Draft) -> SaveResult> = Rc::new({
         let state = Rc::clone(&state);
         let query = Rc::clone(&query);
         let refresh_all = Rc::clone(&refresh_all);
+        move |draft| {
+            let saved = state.borrow_mut().save(draft);
+            if let SaveResult::Saved { result, resin } = &saved {
+                query.follow_rekeyed(&result.rekeyed);
+                if result.changed || *resin != ResinOutcome::Unchanged {
+                    refresh_all();
+                }
+            }
+            saved
+        }
+    });
+    let edit_resin: Rc<dyn Fn(Draft)> = Rc::new({
+        let state = Rc::clone(&state);
+        let save_sheet = Rc::clone(&save_sheet);
         let window = window.clone();
         move |draft| {
-            let state = Rc::clone(&state);
-            let query = Rc::clone(&query);
-            let refresh_all = Rc::clone(&refresh_all);
-            requirement_editor::present(&window, draft, move |draft| {
-                let saved = state.borrow_mut().save(draft);
-                if let SaveResult::Saved { result, resin } = &saved {
-                    query.follow_rekeyed(&result.rekeyed);
-                    if result.changed || *resin != ResinOutcome::Unchanged {
-                        refresh_all();
-                    }
-                }
-                saved
-            });
+            let existing = state.borrow().needs_resin();
+            let save_sheet = Rc::clone(&save_sheet);
+            resin_editor::present(&window, draft, existing, move |draft| save_sheet(draft));
+        }
+    });
+    let edit_requirement: Rc<dyn Fn(Draft)> = Rc::new({
+        let save_sheet = Rc::clone(&save_sheet);
+        let edit_resin = Rc::clone(&edit_resin);
+        let window = window.clone();
+        move |draft| {
+            let save_sheet = Rc::clone(&save_sheet);
+            let edit_resin = Rc::clone(&edit_resin);
+            requirement_editor::present(
+                &window,
+                draft,
+                move |draft| save_sheet(draft),
+                move |draft| edit_resin(draft),
+            );
         }
     });
 
@@ -388,9 +407,11 @@ pub fn present(app: &adw::Application) {
     let resin_action = gio::SimpleAction::new("edit-resin", None);
     resin_action.connect_activate({
         let state = Rc::clone(&state);
-        let refresh_all = Rc::clone(&refresh_all);
-        let window = window.clone();
-        move |_, _| crate::resin_editor::present(&window, &state, &refresh_all)
+        let edit_resin = Rc::clone(&edit_resin);
+        move |_, _| {
+            let draft = state.borrow().open_resin();
+            edit_resin(draft);
+        }
     });
     window.add_action(&resin_action);
     let remove_resin = gio::SimpleAction::new("remove-resin", None);

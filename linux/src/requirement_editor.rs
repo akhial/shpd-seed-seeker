@@ -72,13 +72,14 @@ impl Editor {
 /// Presents the editor over `parent` on `draft`, a sheet the shared editor
 /// opened. When the user confirms, `on_save` saves the draft and answers
 /// with the editor's result; a refused save keeps the dialog open on the
-/// editor's reasons. Cancelling never calls it. Where the editor offers
-/// Arcane Resin in place of a new wand, the dialog leads to the resin dialog
-/// instead.
+/// editor's reasons. Where the editor offers Arcane Resin in place of a new
+/// wand, the dialog hands `on_resin` the draft with the resin picked and
+/// closes. Cancelling calls neither.
 pub fn present(
     parent: &adw::ApplicationWindow,
     draft: Draft,
     on_save: impl Fn(&Draft) -> SaveResult + 'static,
+    on_resin: impl Fn(Draft) + 'static,
 ) {
     let sheet = Sheet::new(draft);
     let is_new = sheet.form().mode == FormMode::New;
@@ -116,11 +117,15 @@ pub fn present(
         page.add(&group);
     }
     editor.resin_row.connect_activated({
-        let dialog = editor.dialog.clone();
-        let parent = parent.clone();
+        let editor = Rc::clone(&editor);
         move |_| {
-            dialog.close();
-            let _ = WidgetExt::activate_action(&parent, "win.edit-resin", None);
+            let draft = {
+                let mut sheet = editor.sheet.borrow_mut();
+                sheet.change(&Change::SetItem(ItemChoice::ArcaneResin));
+                sheet.draft().clone()
+            };
+            editor.dialog.close();
+            on_resin(draft);
         }
     });
     let toolbar_view = adw::ToolbarView::new();

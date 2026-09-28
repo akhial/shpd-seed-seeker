@@ -206,6 +206,20 @@ impl AppState {
         )
     }
 
+    /// Opens the sheet on the query's Arcane Resin condition, as the resin
+    /// dialog edits it.
+    #[must_use]
+    pub fn open_resin(&self) -> Draft {
+        editor::open(
+            &self.requirements,
+            None,
+            false,
+            self.resin().as_ref(),
+            false,
+            true,
+        )
+    }
+
     /// Saves a sheet onto the rows as they are now — they may have moved
     /// while it was open — together with what it made of the query's Arcane
     /// Resin. A refused save stores nothing; its form says why.
@@ -1324,6 +1338,59 @@ mod tests {
             ["Copies can only be grouped with the same item type."]
         );
         assert_eq!(state.requirements, before);
+    }
+
+    #[test]
+    fn arcane_resin_is_set_and_edited_through_the_sheet() {
+        let mut state = AppState::default();
+        let key = state.claim_key();
+        state.requirements.push(row(
+            key,
+            Requirement {
+                item: Some(ItemId::WandFrost),
+                ..Requirement::any(ItemKind::Wand)
+            },
+        ));
+        let before = state.requirements.clone();
+        // A new wand chip may be the query's resin instead: the sheet hands
+        // its draft to the resin dialog, which saves the resin alone.
+        let draft = sheet(
+            &mut state,
+            None,
+            &[
+                Change::SetKind(ItemKind::Wand, None),
+                Change::SetItem(ItemChoice::ArcaneResin),
+                Change::SetResinAuto(true),
+            ],
+        );
+        assert!(editor::form(&draft).resin_picked);
+        assert!(!saved(state.save(&draft)).changed);
+        assert_eq!(state.requirements, before);
+        assert!(state.arcane_resin_auto && state.needs_resin());
+
+        // The resin chip opens on the query's condition; a floor limit
+        // steps over the empty boss floor the way the item's does.
+        let resin = [
+            Change::SetResinAuto(false),
+            Change::SetResinAmount(Some(7.0)),
+            Change::SetFloorLimitEnabled(true),
+            Change::SetFloorLimit(5),
+            Change::SetUncursed(false),
+        ]
+        .iter()
+        .fold(state.open_resin(), |draft, change| {
+            editor::change(&draft, change)
+        });
+        saved(state.save(&resin));
+        assert_eq!((state.arcane_resin_auto, state.arcane_resin), (false, 7));
+        assert_eq!(state.arcane_resin_filter.max_depth, Some(6));
+        assert!(!state.arcane_resin_filter.uncursed);
+        assert_eq!(state.requirements, before);
+
+        // An amount that is no whole number keeps the dialog open.
+        let empty = editor::change(&state.open_resin(), &Change::SetResinAmount(None));
+        assert_eq!(refused(state.save(&empty)), [editor::RESIN_AMOUNT_RANGE]);
+        assert_eq!(state.arcane_resin, 7);
     }
 }
 
