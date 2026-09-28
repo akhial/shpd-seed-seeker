@@ -59,6 +59,8 @@ golden![
     "board-save-unchanged",
     "board-problems",
     "board-problems-blankets-only",
+    "board-normalize-labels",
+    "board-resin-credit",
     "editor-open-new",
     "editor-open-row",
     "editor-open-blanket",
@@ -67,11 +69,16 @@ golden![
     "editor-change-count",
     "editor-save",
     "editor-save-refused",
+    "editor-save-untouched",
+    "editor-save-untouched-repairs",
     "editor-resin-open",
+    "editor-resin-open-new",
     "editor-resin-pick",
+    "editor-resin-mage-wand",
     "editor-resin-amount-invalid",
     "editor-resin-save-set",
     "editor-resin-save-clear",
+    "editor-resin-save-untouched",
 ];
 
 /// The fixtures of one envelope, in the order above.

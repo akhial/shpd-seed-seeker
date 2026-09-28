@@ -242,12 +242,13 @@ mod tests {
     use shpd_seedfinder_core::catalog::{ItemId, ItemKind};
     use shpd_seedfinder_core::editor::{
         self, BoardView, ChipView, Edit, EditResult, ItemView, ResinAmount, ResinState, Row,
+        TagStyle, labels,
     };
     use shpd_seedfinder_core::query::{ArcaneResinFilter, Requirement, UpgradeRequirement};
 
     use super::{
         BoardCache, Dragged, DropAnswer, Landing, chip_tooltip, find_chip, follow_key,
-        join_choices, resin_tooltip,
+        join_choices, resin_tooltip, tag_class,
     };
     use crate::fixtures::{
         Fixture, decode_requirement, decode_resin, decode_row, decode_rows, encode_row, fixtures,
@@ -704,5 +705,60 @@ mod tests {
         assert!(!item.stack.can_grow);
         assert_eq!(item.stack.count_max, 1);
         assert_eq!(chip_tooltip(chip), "Any wand\nany upgrade\nor Any ring");
+    }
+
+    #[test]
+    fn the_resin_chip_tints_its_credit_and_explains_it_on_hover() {
+        let resin = ResinState {
+            amount: ResinAmount::Auto,
+            filter: ArcaneResinFilter {
+                include_mage_wand: true,
+                max_depth: Some(9),
+                ..ArcaneResinFilter::default()
+            },
+        };
+        let view = editor::board_view(&[], Some(&resin));
+        let chip = view.resin.as_ref().unwrap();
+        let drawn: Vec<(&str, &str, Option<&str>)> = chip
+            .tags
+            .iter()
+            .map(|tag| {
+                (
+                    tag.text.as_str(),
+                    tag_class(tag.style),
+                    tag.tooltip.as_deref(),
+                )
+            })
+            .collect();
+        // The resin the chip counts wears the success colour, as Linux drew
+        // the amount and the Mage tag before the shared editor; the donor
+        // floor stays a plain filter.
+        assert_eq!(
+            drawn,
+            [
+                (
+                    labels::RESIN_AUTO,
+                    "chip-tag-credit",
+                    Some(labels::RESIN_AUTO_TOOLTIP)
+                ),
+                (
+                    labels::RESIN_MAGE_TAG,
+                    "chip-tag-credit",
+                    Some(labels::RESIN_MAGE_TOOLTIP)
+                ),
+                ("F\u{2264}9", "chip-tag-plain", None),
+            ]
+        );
+        // A fixed amount needs no explaining; a chip's tags never do.
+        let fixed = ResinState {
+            amount: ResinAmount::AtLeast(4),
+            ..resin
+        };
+        let view = editor::board_view(&[ring(1, UpgradeRequirement::Exact(2))], Some(&fixed));
+        assert_eq!(view.resin.as_ref().unwrap().tags[0].tooltip, None);
+        let (_, ring_chip) = find_chip(&view, 1).unwrap();
+        assert_eq!(ring_chip.tags[0].style, TagStyle::Upgrade);
+        assert_eq!(tag_class(ring_chip.tags[0].style), "chip-tag-up");
+        assert!(ring_chip.tags.iter().all(|tag| tag.tooltip.is_none()));
     }
 }

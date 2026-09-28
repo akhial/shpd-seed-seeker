@@ -447,8 +447,8 @@ pub const ALL_CHALLENGES: &[ChallengeInfo] = &[
 mod tests {
     use shpd_seedfinder_core::catalog::{ItemId, ItemKind};
     use shpd_seedfinder_core::editor::{
-        self, BoardView, Change, Draft, Edit, EditResult, ItemChoice, ItemView, Row, SaveResult,
-        UpgradeMode,
+        self, BoardView, Change, Draft, Edit, EditResult, FormMode, ItemChoice, ItemView, Origin,
+        ResinOutcome, Row, SaveResult, UpgradeMode,
     };
     use shpd_seedfinder_core::query::{Requirement, TierRequirement, UpgradeRequirement};
     use shpd_seedfinder_core::quests::{
@@ -1354,6 +1354,67 @@ mod tests {
         let empty = editor::change(&state.open_resin(), &Change::SetResinAmount(None));
         assert_eq!(refused(state.save(&empty)), [editor::RESIN_AMOUNT_RANGE]);
         assert_eq!(state.arcane_resin, 7);
+    }
+
+    #[test]
+    fn fields_the_sheet_does_not_show_survive_its_saves() {
+        // The city vault's +5 artifact: no control shows an artifact's
+        // upgrade, yet a sheet saved untouched writes nothing, and one that
+        // changes something else keeps it.
+        let mut state = AppState::default();
+        state.requirements.push(row(
+            1,
+            Requirement {
+                item: Some(ItemId::SandalsOfNature),
+                upgrade: UpgradeRequirement::Exact(5),
+                ..Requirement::any(ItemKind::Artifact)
+            },
+        ));
+        let before = state.requirements.clone();
+        let untouched = state.open_sheet(Some(1), false);
+        let result = saved(state.save(&untouched));
+        assert!(!result.changed);
+        assert_eq!(result.focus, Some(1));
+        assert_eq!(state.requirements, before);
+
+        let limited = sheet(&mut state, Some(1), &[Change::SetFloorLimitEnabled(true)]);
+        assert!(saved(state.save(&limited)).changed);
+        let requirement = state.requirements[0].requirement;
+        assert_eq!(requirement.upgrade, UpgradeRequirement::Exact(5));
+        assert_eq!(requirement.max_depth, Some(4));
+    }
+
+    #[test]
+    fn the_resin_dialog_adds_edits_or_leaves_the_querys_resin() {
+        // Without resin the dialog adds one: Add, and nothing to remove.
+        let mut state = AppState::default();
+        let added = state.open_resin();
+        let form = editor::form(&added);
+        assert_eq!((form.mode, form.origin), (FormMode::New, Origin::New));
+        assert!(form.resin_picked);
+        let SaveResult::Saved { resin, result } = state.save(&added) else {
+            panic!("the default amount saves");
+        };
+        assert!(matches!(resin, ResinOutcome::Set(_)) && !result.changed);
+        assert_eq!((state.arcane_resin_auto, state.arcane_resin), (false, 2));
+
+        // With resin it edits the query's: Save, and Remove.
+        assert_eq!(editor::form(&state.open_resin()).mode, FormMode::Edit);
+
+        // Saved untouched it leaves the resin as the query holds it, even a
+        // hand-edited floor limit on an empty boss floor the slider shows as
+        // the floor below, so the window redraws nothing.
+        state.arcane_resin_filter.max_depth = Some(5);
+        let before = state.clone();
+        let untouched = state.open_resin();
+        assert_eq!(editor::form(&untouched).floor_limit.value, 4);
+        let SaveResult::Saved { resin, result } = state.save(&untouched) else {
+            panic!("an untouched resin sheet saves");
+        };
+        assert_eq!(resin, ResinOutcome::Unchanged);
+        assert!(!result.changed);
+        assert_eq!(state.arcane_resin_filter, before.arcane_resin_filter);
+        assert_eq!(state.arcane_resin, before.arcane_resin);
     }
 }
 

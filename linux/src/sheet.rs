@@ -207,13 +207,14 @@ mod tests {
     use shpd_seedfinder_core::editor::{
         self, Change, ChipView, Choice, Draft, EffectGroup, EffectMode, FloorToggle, Form,
         FormMode, ItemChoice, KindName, ModeRange, Opt, Origin, RangeToggle, ResinDraft,
-        ResinOutcome, SaveResult, TierMode, Toggle, UpgradeMode,
+        ResinOutcome, SaveResult, TierMode, Toggle, UpgradeMode, labels,
     };
     use shpd_seedfinder_core::model::{ItemSource, source_name};
+    use shpd_seedfinder_core::query::{ARCANE_RESIN_MAX, ARCANE_RESIN_MIN};
 
     use super::{
         Sheet, chosen, effect_choices, effect_heading, floor_range, item_options, named_kind,
-        position, resin_choice, same_effects, spin_value,
+        position, range_caption, resin_choice, same_effects, spin_value,
     };
     use crate::fixtures::{
         Fixture, decode_labelled, decode_resin, decode_rows, encode_resin, encode_row, fixtures,
@@ -579,7 +580,7 @@ mod tests {
     #[test]
     fn the_typed_sheet_gives_the_golden_sheet_answers_through_the_app_codec() {
         let replayed = fixtures("requirement_editor");
-        assert_eq!(replayed.len(), 13);
+        assert_eq!(replayed.len(), 18);
         for Fixture {
             name,
             request,
@@ -679,6 +680,8 @@ mod tests {
             ],
         );
         let before = sheet.form().effect.clone();
+        // The grid's headings are plural, under the section's own label.
+        assert_eq!(before.label, "Glyph");
         assert_eq!(
             effect_heading(&before, EffectGroup::Enchantment),
             Some("Glyphs")
@@ -698,6 +701,104 @@ mod tests {
         assert!(!same_effects(&ticked, uncursed));
         assert_eq!(effect_heading(uncursed, EffectGroup::Curse), None);
         assert_eq!(effect_choices(uncursed, EffectGroup::Curse).count(), 0);
+    }
+
+    #[test]
+    fn the_form_says_what_shows_and_words_every_section() {
+        let mut state = AppState::default();
+        // A tier's spinner shows once a mode names a tier.
+        let mut sheet = filled(&mut state, &[Change::SetKind(ItemKind::Weapon, None)]);
+        assert!(sheet.form().tier.visible && !sheet.form().tier.value_visible);
+        sheet.change(&Change::SetTierMode(TierMode::AtLeast));
+        assert!(sheet.form().tier.value_visible);
+        assert!(!sheet.form().upgrade.value_visible);
+
+        // The effect section is named for the family, and its grid shows
+        // under "Specific…" alone.
+        let mut sheet = filled(&mut state, &[Change::SetKind(ItemKind::Armor, None)]);
+        assert_eq!(sheet.form().effect.label, "Glyph");
+        assert!(!sheet.form().effect.choices_visible);
+        sheet.change(&Change::SetEffectMode(EffectMode::Specific));
+        assert!(sheet.form().effect.choices_visible);
+        let sheet = filled(&mut state, &[Change::SetKind(ItemKind::Weapon, None)]);
+        assert_eq!(sheet.form().effect.label, "Enchantment");
+
+        // Check boxes carry their help text; the stack its label.
+        let wand = filled(&mut state, &[Change::SetKind(ItemKind::Wand, None)]);
+        let form = wand.form();
+        assert!(form.exclude_resin.visible);
+        assert!(
+            form.exclude_resin
+                .caption
+                .as_deref()
+                .is_some_and(|caption| caption.starts_with("Keep this wand"))
+        );
+        assert_eq!(form.uncursed.caption, None);
+        assert_eq!(form.stack.label, "Total item count");
+
+        // The transmutation limit explains itself only while it is on…
+        let mut trinket = filled(&mut state, &[Change::SetKind(ItemKind::Trinket, None)]);
+        let form = trinket.form();
+        assert!(
+            form.select_trinket
+                .caption
+                .as_deref()
+                .is_some_and(|caption| caption.starts_with("Applies after the first brewing"))
+        );
+        assert!(form.transmutations.visible && !form.transmutations.enabled);
+        assert_eq!(range_caption(&form.transmutations), "");
+        trinket.change(&Change::SetTransmutationsEnabled(true));
+        let transmutations = &trinket.form().transmutations;
+        assert_eq!(
+            Some(range_caption(transmutations)),
+            transmutations.caption.as_deref()
+        );
+        assert!(range_caption(transmutations).starts_with("Matches an initial offer"));
+
+        // …while counting levels is explained beside its switch, on or off.
+        let rings = filled(
+            &mut state,
+            &[
+                Change::SetKind(ItemKind::Ring, None),
+                Change::SetItem(ItemChoice::Item(ItemId::RingMight)),
+                Change::SetCount(2),
+            ],
+        );
+        let levels = &rings.form().stack.count_levels;
+        assert!(levels.visible && !levels.enabled);
+        assert_eq!(
+            range_caption(levels),
+            "Each item counts its upgrade plus one, and spare items may go unused."
+        );
+    }
+
+    #[test]
+    fn the_resin_section_reads_as_the_resin_dialog_draws_it() {
+        let state = AppState::default();
+        let mut sheet = Sheet::new(state.open_resin());
+        let resin = &sheet.form().resin;
+        // The Amount/Auto picker under the section's label, as a combo row
+        // holds it, and the amount field between the amounts that save.
+        assert_eq!(resin.label, labels::RESIN_MINIMUM);
+        let modes: Vec<&str> = resin.modes.iter().map(|mode| mode.label.as_str()).collect();
+        assert_eq!(modes, [labels::RESIN_AMOUNT, labels::RESIN_AUTO]);
+        assert_eq!(position(&resin.modes, &resin.auto), Some(0));
+        assert_eq!((resin.min, resin.max), (ARCANE_RESIN_MIN, ARCANE_RESIN_MAX));
+        let mage = &resin.include_mage_wand;
+        assert!(mage.visible && !mage.value);
+        assert_eq!(mage.label, labels::RESIN_MAGE_WAND);
+        assert_eq!(
+            mage.caption.as_deref(),
+            Some(labels::RESIN_MAGE_WAND_CAPTION)
+        );
+        // Choosing Auto puts what it means in the amount field's place.
+        sheet.change(&Change::SetResinAuto(
+            chosen(&sheet.form().resin.modes, 1).unwrap(),
+        ));
+        let resin = &sheet.form().resin;
+        assert!(resin.auto);
+        assert_eq!(position(&resin.modes, &resin.auto), Some(1));
+        assert_eq!(resin.caption, labels::RESIN_AUTO_CAPTION);
     }
 
     #[test]
