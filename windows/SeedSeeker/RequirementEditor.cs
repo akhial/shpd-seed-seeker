@@ -59,6 +59,7 @@ public sealed record JoinRefusal(long Key, string Reason, string Message);
 /// <param name="Problem">The row's own first problem, else the first problem between rows that blames it.</param>
 /// <param name="CountBadge">The <c>×N</c> badge, when the chip asks for more than one item.</param>
 /// <param name="TotalBadge">The <c>Σ ≥ T</c> badge, when the chip counts levels together.</param>
+/// <param name="RemainingBadges">The badges the chip keeps while one item is lifted away; null when it has no copies, so the whole chip leaves.</param>
 /// <param name="Copies">The hidden copies' keys behind the chip's badge; members whose stacks are alike share theirs.</param>
 /// <param name="CanDetach">Whether "On its own" applies: the chip is a cluster member.</param>
 /// <param name="Join">The visible rows this chip may join, in list order.</param>
@@ -66,7 +67,7 @@ public sealed record JoinRefusal(long Key, string Reason, string Message);
 public sealed record BoardChip(long Key, string Name, string Title, string? Item, ItemKind? Kind,
     IReadOnlyList<ChipTag> Tags, IReadOnlyList<ChipTag> TrailingTags, ChipEffect? Effect, bool Uncursed,
     IReadOnlyList<string> Details, IReadOnlyList<ChipRelation> Relations, string Description, string? Problem,
-    BoardBadge? CountBadge, BoardBadge? TotalBadge, IReadOnlyList<long> Copies, BoardStack Stack,
+    BoardBadge? CountBadge, BoardBadge? TotalBadge, BoardBadges? RemainingBadges, IReadOnlyList<long> Copies, BoardStack Stack,
     bool InCluster, bool CanDetach, IReadOnlyList<long> Join, IReadOnlyList<JoinRefusal> Refuse)
 {
     /// <summary>
@@ -75,6 +76,13 @@ public sealed record BoardChip(long Key, string Name, string Title, string? Item
     /// tags, without its <c>×N</c> or <c>Σ</c> badges.
     /// </summary>
     public BoardChip Lifted => this with { CountBadge = null, TotalBadge = null };
+
+    /// <summary>
+    /// The chip as a drag leaves it at its origin: its stack one item fewer,
+    /// with the badges that rest keeps (<see cref="RemainingBadges"/>); null
+    /// when the whole chip leaves, and the origin stays as it was.
+    /// </summary>
+    public BoardChip? LeftBehind => RemainingBadges is { } rest ? this with { CountBadge = rest.Count, TotalBadge = rest.Total } : null;
 
     /// <summary>
     /// The chip's hover detail: its title, what it asks of one item, the
@@ -97,6 +105,9 @@ public sealed record BoardStack(int Count, int Max, bool CanGrow, bool CanChange
 
 /// <summary>A badge's words at rest: <c>×3</c> or <c>Σ ≥ 5</c>, and what it means.</summary>
 public sealed record BoardBadge(string Text, string CompactText, string Tooltip);
+
+/// <summary>A chip's pair of badges, either of them absent: its <c>×N</c> and its <c>Σ ≥ T</c>.</summary>
+public sealed record BoardBadges(BoardBadge? Count, BoardBadge? Total);
 
 /// <summary>
 /// One board entry: a chip, or an either/or cluster of chips. The entry has
@@ -412,7 +423,9 @@ public sealed class BoardEditor
             (string)relation!["glyph"]! switch { "or" => RelationGlyph.Or, "sum" => RelationGlyph.Sum, _ => RelationGlyph.Times },
             (string)relation["text"]!))],
         (string)chip["description"]!, (string?)chip["problem"],
-        Badge(chip["badges"]!["count"]), Badge(chip["badges"]!["total"]), Keys(chip["copies"]), Stack(chip["stack"]!),
+        Badge(chip["badges"]!["count"]), Badge(chip["badges"]!["total"]),
+        chip["remaining_badges"] is JsonObject rest ? new(Badge(rest["count"]), Badge(rest["total"])) : null,
+        Keys(chip["copies"]), Stack(chip["stack"]!),
         (bool)chip["in_cluster"]!, (bool)chip["can_detach"]!,
         Keys(chip["join"]),
         [.. chip["refuse"]!.AsArray().Select(refusal => new JoinRefusal((long)refusal!["key"]!, (string)refusal["reason"]!, (string)refusal["message"]!))]);

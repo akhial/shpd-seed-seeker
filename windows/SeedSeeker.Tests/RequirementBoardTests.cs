@@ -79,7 +79,13 @@ public sealed class RequirementBoardTests
             }
             var failure = Record.Exception(() =>
             {
-                if (board) { BoardEditor.Answer(answer); return; }
+                // A chip with no copies leaves whole: nothing stays behind.
+                if (board)
+                {
+                    foreach (var chip in BoardEditor.Answer(answer).View.Entries.SelectMany(entry => entry.Chips))
+                        Assert.Equal(chip.Copies.Count == 0, chip.RemainingBadges is null);
+                    return;
+                }
                 var sheet = BoardEditor.Parse(answer);
                 if (sheet["saved"] is JsonObject saved) { RequirementSheet.Saved(saved); return; }
                 // Every numeric control holds its value within its range, and
@@ -571,6 +577,45 @@ public sealed class RequirementBoardTests
         Assert.Equal(("Any wand", "×2"), (member.Name, member.CountBadge!.Text));
         Assert.Equal([new ChipTag("+3", TagStyle.Upgrade)], member.Lifted.Tags);
         Assert.Null(member.Lifted.CountBadge);
+    }
+
+    [Fact]
+    public void TheOriginShowsWhatTheDragLeavesBehind()
+    {
+        // Ring of Energy +4 ×3 lifted: the origin still reads the ring, ×2.
+        var ring = BoardEditor.Answer(Fixture("board-remaining-badges")["response"]!.ToJsonString()).View.ChipOf(1)!;
+        Assert.Equal("×3", ring.CountBadge!.Text);
+        Assert.Equal(new BoardBadges(new BoardBadge("×2", "×2", "2 of the same kind"), null), ring.RemainingBadges);
+        var left = ring.LeftBehind!;
+        Assert.Equal(("×2", (BoardBadge?)null), (left.CountBadge!.Text, left.TotalBadge));
+        Assert.Equal((ring.Key, ring.Name, ring.Stack, ring.Copies), (left.Key, left.Name, left.Stack, left.Copies));
+        Assert.Equal(ring.Tags, left.Tags);
+
+        // {Frost ×2 | Disintegration}: Frost leaves a Frost of one, and
+        // Disintegration, which has no copies, leaves nothing behind.
+        var editor = new BoardEditor();
+        var query = Loaded(editor, Named("wand_frost"), Named("wand_frost"), Named("wand_disintegration"));
+        var (frost, disintegration) = (KeyOf(query, "wand_frost"), KeyOf(query, "wand_disintegration"));
+        var cluster = Apply(editor, query, BoardEdit.Join(disintegration, frost)).View;
+        Assert.Equal(new BoardBadges(null, null), cluster.ChipOf(frost)!.RemainingBadges);
+        Assert.Equal(((BoardBadge?)null, (BoardBadge?)null), (cluster.ChipOf(frost)!.LeftBehind!.CountBadge, cluster.ChipOf(frost)!.LeftBehind!.TotalBadge));
+        Assert.Null(cluster.ChipOf(disintegration)!.RemainingBadges);
+        Assert.Null(cluster.ChipOf(disintegration)!.LeftBehind);
+
+        // A combined level at the rings' capacity: what is left is what the
+        // remove zone leaves, a total the two left can reach.
+        editor = new BoardEditor();
+        query = Loaded(editor, Named("ring_might", UpgradeMatch.Exactly, 2));
+        var might = KeyOf(query, "ring_might");
+        Apply(editor, query, BoardEdit.SetCount(might, 3), BoardEdit.ToggleLevels(might));
+        var capacity = editor.View(query).ChipOf(might)!.Stack.LevelCapacity;
+        var summed = Apply(editor, query, BoardEdit.SetTotal(might, capacity)).View.ChipOf(might)!;
+        Assert.Equal(($"Σ ≥ {capacity}", "≤3"), (summed.TotalBadge!.Text, summed.CountBadge!.Text));
+        var rest = summed.RemainingBadges!;
+        var removed = Apply(editor, query, BoardEdit.RemoveOne(might)).View.ChipOf(might)!;
+        Assert.Equal(new BoardBadges(removed.CountBadge, removed.TotalBadge), rest);
+        Assert.Equal("≤2", rest.Count!.Text);
+        Assert.NotEqual(summed.TotalBadge, rest.Total);
     }
 
     [Fact]
