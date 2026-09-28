@@ -252,12 +252,16 @@ public sealed class BoardEdit
     public static BoardEdit Normalize() => new("normalize");
     /// <summary>
     /// Makes one item of <paramref name="source"/> an either/or alternative of
-    /// <paramref name="target"/>, any member of a chip or cluster: the rest of
-    /// a stacked source stays where it was, and a stacked target keeps its
-    /// stack as a member.
+    /// <paramref name="target"/>, any member of a chip or cluster: a stacked
+    /// source stays where it was with its requirements, one item fewer, and a
+    /// bare copy of it joins; a stacked target keeps its stack as a member.
     /// </summary>
     public static BoardEdit Join(long source, long target) => new("join", new() { ["source"] = source, ["target"] = target });
-    /// <summary>Takes one item of a cluster member out on its own; the rest of its stack stays in the cluster.</summary>
+    /// <summary>
+    /// Takes one item of a cluster member out on its own: a stacked member
+    /// stays in the cluster with its requirements, one item fewer, and a bare
+    /// copy of it leaves, folding into an alike lone chip.
+    /// </summary>
     public static BoardEdit Detach(long key) => new("detach", new() { ["key"] = key });
     /// <summary>
     /// Removes the chip with its whole stack: a cluster member with its own

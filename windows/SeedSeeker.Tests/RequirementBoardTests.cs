@@ -473,19 +473,20 @@ public sealed class RequirementBoardTests
         var copy = query.Requirements.Last(row => row.Item?.Id == "wand_disintegration").Key;
         Assert.Equal("×2", editor.View(query).ChipOf(disintegration)!.CountBadge!.Text);
 
-        // Disintegration ×2 onto Frost: one Disintegration joins, the other stays where it was.
+        // Disintegration ×2 onto Frost: one Disintegration — its last copy —
+        // joins, and the chip stays where it was, one item fewer.
         Assert.Equal(DropEffect.Join, editor.View(query).Drop(disintegration, DropKind.Chip, frost).Effect);
         var joined = Apply(editor, query, BoardEdit.Join(disintegration, frost));
-        Assert.Equal(disintegration, joined.Focus);
+        Assert.Equal(copy, joined.Focus);
         var cluster = Assert.Single(joined.View.Entries, entry => entry.Cluster is not null);
-        Assert.Equal([frost, disintegration], cluster.Members);
+        Assert.Equal([frost, copy], cluster.Members);
         Assert.All(cluster.Chips, chip => Assert.Null(chip.CountBadge));
-        var rest = joined.View.ChipOf(copy)!;
+        var rest = joined.View.ChipOf(disintegration)!;
         Assert.Equal(("Wand of Disintegration", false, (BoardBadge?)null), (rest.Name, rest.InCluster, rest.CountBadge));
 
         // Dragged out onto the board, it comes back as Frost + Disintegration ×2.
-        Assert.Equal(DropEffect.Detach, joined.View.Drop(disintegration, DropKind.Board).Effect);
-        var detached = Apply(editor, query, BoardEdit.Detach(disintegration));
+        Assert.Equal(DropEffect.Detach, joined.View.Drop(copy, DropKind.Board).Effect);
+        var detached = Apply(editor, query, BoardEdit.Detach(copy));
         Assert.All(detached.View.Entries, entry => Assert.Null(entry.Cluster));
         Assert.Equal(["×2", null], detached.View.Entries.Select(entry => entry.Chips[0].CountBadge?.Text));
         Assert.Equal(["Wand of Disintegration", "Wand of Frost"], detached.View.Entries.Select(entry => entry.Name));
@@ -507,11 +508,15 @@ public sealed class RequirementBoardTests
         Assert.Equal(1, query.Requirements.Single(row => row.Key == frost).IdentityGroup);
         Assert.Null(query.Requirements.Single(row => row.Key == disintegration).IdentityGroup);
 
-        // Frost dragged out takes one copy with it: {Frost | Disintegration} and Frost.
+        // Frost dragged out carries one bare copy: the member stays in its
+        // place, one item fewer, and a Frost leaves — {Frost | Disintegration}
+        // and Frost.
+        var copy = cluster.Extras.Single();
         var detached = Apply(editor, query, BoardEdit.Detach(frost));
-        Assert.Equal(frost, detached.Focus);
+        Assert.Equal(copy, detached.Focus);
         Assert.Equal(2, detached.View.Entries.Count);
-        Assert.False(detached.View.ChipOf(frost)!.InCluster);
+        Assert.True(detached.View.ChipOf(frost)!.InCluster);
+        Assert.False(detached.View.ChipOf(copy)!.InCluster);
         var left = Assert.Single(detached.View.Entries, entry => entry.Cluster is not null);
         Assert.Equal(["Wand of Frost", "Wand of Disintegration"], left.Chips.Select(chip => chip.Name));
         Assert.All(detached.View.Entries.SelectMany(entry => entry.Chips), chip => Assert.Null(chip.CountBadge));
