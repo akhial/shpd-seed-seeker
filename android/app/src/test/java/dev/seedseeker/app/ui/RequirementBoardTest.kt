@@ -17,6 +17,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.ComposeTestRule
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
@@ -33,6 +34,7 @@ import dev.seedseeker.app.model.ResinCondition
 import dev.seedseeker.app.model.StackView
 import dev.seedseeker.app.model.UpgradeMatch
 import dev.seedseeker.app.ui.theme.SeedSeekerTheme
+import dev.seedseeker.app.ui.theme.SpdGreen
 import java.io.File
 import org.junit.Assert.*
 import org.junit.Rule
@@ -344,6 +346,47 @@ class RequirementBoardTest {
         compose.onNodeWithText("×2", useUnmergedTree = true).assertDoesNotExist()
     }
 
+    /**
+     * How many pixels where [node] is drawn are the `×N` badge's green, which
+     * no sprite uses. The window is copied whole, since a capture of the node
+     * alone waits for a redraw a held drag never gives it.
+     */
+    private fun badgeGreenPixels(node: SemanticsNodeInteraction): Int {
+        val bounds = node.fetchSemanticsNode().boundsInWindow
+        val window = compose.captureWindow(compose.activity.window)
+        val green = SpdGreen.toArgb()
+        val xs = bounds.left.toInt().coerceAtLeast(0) until bounds.right.toInt().coerceAtMost(window.width)
+        val ys = bounds.top.toInt().coerceAtLeast(0) until bounds.bottom.toInt().coerceAtMost(window.height)
+        return xs.sumOf { x -> ys.count { y -> window.getPixel(x, y) == green } }
+    }
+
+    @Test fun aHeldRingLeavesTheRestOfItsStackBehindUntilTheDragIsCancelled() {
+        requirements.value = edited(
+            emptyList(),
+            BoardEdit.Save(null, ItemRequirement(0, ItemCatalog.findById("ring_energy")!!, 4), count = 3, total = null, copyDepth = null),
+        )
+        amount.value = 0
+        show()
+        val ringChip = compose.onNodeWithContentDescription("Ring of Energy,", substring = true)
+        badgeOn("Ring of Energy", "×3").assertIsDisplayed()
+        assertTrue(badgeGreenPixels(ringChip) > 0)
+
+        // One ring is in hand, so its faded place shows the two that stay.
+        pickUp(ringChip)
+        badgeOn("Ring of Energy", "×2").assertIsDisplayed()
+        compose.onNodeWithText("×3").assertDoesNotExist()
+        // The ring in hand is that one ring, without a badge.
+        assertEquals(0, badgeGreenPixels(compose.onNodeWithTag(HELD_CHIP_TAG)))
+
+        // A cancelled drag puts the ring back: the chip reads ×3 again.
+        compose.onRoot().performTouchInput { cancel() }
+        compose.onNodeWithText("Drop to remove").assertDoesNotExist()
+        compose.onNodeWithTag(HELD_CHIP_TAG).assertDoesNotExist()
+        badgeOn("Ring of Energy", "×3").assertIsDisplayed()
+        compose.onNodeWithText("×2").assertDoesNotExist()
+        compose.runOnIdle { assertEquals(3, requirements.value.size) }
+    }
+
     @Test fun theBinTakesOneItemOfAStack() {
         requirements.value = memberStack
         amount.value = 0
@@ -432,7 +475,8 @@ class RequirementBoardTest {
     }
 }
 
-internal fun ComposeTestRule.captureResinScreenshot(name: String, window: Window) {
+/** What [window] shows once the UI is idle. */
+internal fun ComposeTestRule.captureWindow(window: Window): Bitmap {
     waitForIdle()
     System.setProperty("robolectric.pixelCopyRenderMode", "hardware")
     val bitmap = Bitmap.createBitmap(window.decorView.width, window.decorView.height, Bitmap.Config.ARGB_8888)
@@ -440,6 +484,11 @@ internal fun ComposeTestRule.captureResinScreenshot(name: String, window: Window
     runOnIdle { PixelCopy.request(window, bitmap, { copyResult = it }, Handler(Looper.getMainLooper())) }
     waitUntil { copyResult != null }
     assertEquals(PixelCopy.SUCCESS, copyResult)
+    return bitmap
+}
+
+internal fun ComposeTestRule.captureResinScreenshot(name: String, window: Window) {
+    val bitmap = captureWindow(window)
     val output = File("build/outputs/resin-ui/$name.png")
     output.parentFile?.mkdirs()
     output.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }

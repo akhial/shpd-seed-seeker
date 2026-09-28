@@ -89,6 +89,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -96,6 +97,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.seedseeker.app.model.BadgeView
+import dev.seedseeker.app.model.BadgesView
 import dev.seedseeker.app.model.BoardEdit
 import dev.seedseeker.app.model.BoardItemView
 import dev.seedseeker.app.model.BoardView
@@ -122,7 +124,8 @@ import dev.seedseeker.app.ui.theme.SpdYellow
  *   Disintegration), and the capsule none — so both are set in the editor a
  *   tap opens, never by a drag.
  * - A drag moves one item: the chip in hand is drawn alone, without its
- *   badges, and a stacked chip it leaves keeps the rest of its stack.
+ *   badges, and a stacked chip it leaves keeps the rest of its stack, which
+ *   its faded place shows (`×3` reads `×2` while one ring is in hand).
  *
  * Entries flow like words: a chip sits beside the last one when it fits and
  * starts a new line when it does not. A capsule flows the same way inside its
@@ -324,8 +327,9 @@ fun RequirementBoard(
                 }
             }
             // The chip in hand: a lifted, tilted copy riding under the finger
-            // while its place on the board waits, faded, for it to come back.
-            // It is the one item the drag moves, so it wears no stack badges.
+            // while its place on the board waits, faded, for it to come back,
+            // wearing the badges the rest of its stack keeps. It is the one
+            // item the drag moves, so it wears no stack badges.
             val ghostResin = resin.takeIf { draggingResin }
             if (held != null || ghostResin != null) {
                 val lift = remember { Animatable(0f) }
@@ -354,7 +358,8 @@ fun RequirementBoard(
                             // Stays opaque: a translucent layer renders offscreen at its
                             // unscaled size, which would crop the enlarged capsule's ends.
                         }
-                        .clearAndSetSemantics {},
+                        // Silent to TalkBack, which still reads the chip's own place.
+                        .clearAndSetSemantics { testTag = HELD_CHIP_TAG },
                 ) {
                     if (held != null) {
                         HeldChip(held)
@@ -460,6 +465,9 @@ private val chipLabelStyle: TextStyle
         MaterialTheme.typography.labelMedium
     }
 
+/** The test tag of the chip in hand, which is otherwise silent to the semantics tree. */
+internal const val HELD_CHIP_TAG = "held-chip"
+
 /** How far a capsule's dashed edge stands off the chips inside it. */
 private val CAPSULE_INSET = 5.dp
 
@@ -501,6 +509,7 @@ private fun BoardEntry(
             enabled = enabled,
             dimmed = dragging == chip.key,
             highlighted = hovered == chip.key,
+            badges = boardBadges(chip, dragging),
             modifier = modifier,
             onPlaced = { onPlaced(chip.key, it) },
             onClick = { onEdit(chip.key) },
@@ -570,6 +579,7 @@ private fun BoardEntry(
                     enabled = enabled,
                     dimmed = dragging == chip.key,
                     highlighted = false,
+                    badges = boardBadges(chip, dragging),
                     modifier = Modifier.weight(1f, fill = false),
                     onPlaced = { onPlaced(chip.key, it) },
                     onClick = { onEdit(chip.key) },
@@ -582,6 +592,14 @@ private fun BoardEntry(
         }
     }
 }
+
+/**
+ * The badges [chip] wears on the board: while one of its items is in hand
+ * ([dragging]), the ones the rest of its stack keeps; a chip that leaves
+ * whole keeps its own on its faded place.
+ */
+private fun boardBadges(chip: ChipView, dragging: Long?): BadgesView =
+    chip.remainingBadges.takeIf { dragging == chip.key } ?: chip.badges
 
 /**
  * One item to find: its sprite, its name, and the tiny tags that narrow it. A
@@ -603,8 +621,8 @@ private fun RequirementChip(
     onDrag: (Offset) -> Unit,
     onDragEnd: () -> Unit,
     onDragCancel: () -> Unit,
-    /** Whether the chip wears its stack badges; the one item a drag holds does not. */
-    badges: Boolean = true,
+    /** The stack badges the chip wears; the one item a drag holds wears none. */
+    badges: BadgesView?,
 ) {
     val metrics = LocalChipMetrics.current
     BoardChip(
@@ -637,7 +655,7 @@ private fun RequirementChip(
             Spacer(Modifier.width(5.dp))
             UncursedTag()
         }
-        if (badges) StackBadges(count = chip.countBadge, total = chip.totalBadge, enabled = enabled, onClick = onClick)
+        if (badges != null) StackBadges(count = badges.count, total = badges.total, enabled = enabled, onClick = onClick)
     }
 }
 
@@ -658,7 +676,7 @@ internal fun HeldChip(chip: ChipView) {
         onDrag = {},
         onDragEnd = {},
         onDragCancel = {},
-        badges = false,
+        badges = null,
     )
 }
 
