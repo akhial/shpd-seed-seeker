@@ -61,6 +61,11 @@ data class BoardView(
 
         private fun badges(chip: JSONObject) = chip.getJSONObject("badges")
 
+        private fun decodeBadges(badges: JSONObject) = BadgesView(
+            count = badges.objectOrNull("count")?.let(::decodeBadge),
+            total = badges.objectOrNull("total")?.let(::decodeBadge),
+        )
+
         private fun decodeBadge(badge: JSONObject) =
             BadgeView(badge.getString("text"), badge.getString("compact_text"), badge.getString("tooltip"))
 
@@ -86,6 +91,7 @@ data class BoardView(
             problem = chip.stringOrNull("problem"),
             countBadge = badges(chip).objectOrNull("count")?.let(::decodeBadge),
             totalBadge = badges(chip).objectOrNull("total")?.let(::decodeBadge),
+            remainingBadges = chip.objectOrNull("remaining_badges")?.let(::decodeBadges),
             copies = chip.getJSONArray("copies").longs(),
             stack = chip.getJSONObject("stack").let { stack ->
                 StackView(
@@ -147,6 +153,9 @@ data class StackView(
 /** A stack badge: its text, the shorter text for compact chips, and what it means in words. */
 data class BadgeView(val text: String, val compactText: String, val tooltip: String)
 
+/** A chip's two stack badges, `×N` / `≤N` and `Σ ≥ N`; either may be missing. */
+data class BadgesView(val count: BadgeView?, val total: BadgeView?)
+
 /** One visible row, as its chip draws it. */
 data class ChipView(
     val key: Long,
@@ -178,6 +187,12 @@ data class ChipView(
     val countBadge: BadgeView?,
     /** `Σ ≥ 5`, when the chip's stack counts levels. */
     val totalBadge: BadgeView?,
+    /**
+     * The badges the chip's stack keeps while one of its items is lifted
+     * away (a `×3` leaves `×2`); null when the chip has no [copies], so the
+     * whole chip leaves.
+     */
+    val remainingBadges: BadgesView?,
     /** The hidden copies behind the chip's badge; members whose stacks are alike share theirs. */
     val copies: List<Long>,
     /** The chip's own stack. */
@@ -188,7 +203,10 @@ data class ChipView(
     val join: Set<Long>,
     /** The visible rows a join onto is refused, with the reason in words. */
     val refuse: Map<Long, String>,
-)
+) {
+    /** The badges the chip wears at rest. */
+    val badges: BadgesView get() = BadgesView(countBadge, totalBadge)
+}
 
 /**
  * A qualifier beside a chip's name, tinted by its [style], with [tooltip] its

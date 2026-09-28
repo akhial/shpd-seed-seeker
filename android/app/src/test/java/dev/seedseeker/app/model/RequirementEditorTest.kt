@@ -365,6 +365,23 @@ class RequirementEditorTest {
         assertEquals(listOf(2L), whole.rows!!.map { it.key })
     }
 
+    @Test fun eachChipSaysWhatItsStackKeepsWhileOneItemIsLifted() {
+        val energy = BoardView.decode(fixture("board-remaining-badges").getJSONObject("response")).items.single().chips.single()
+        assertEquals(BadgeView("×3", "×3", "3 of the same kind"), energy.badges.count)
+        assertEquals(BadgesView(BadgeView("×2", "×2", "2 of the same kind"), null), energy.remainingBadges)
+        // {Frost ×2 | Disintegration}: Frost leaves one Frost, and Disintegration leaves whole.
+        val frost = find("wand_frost")
+        val rows = listOf(
+            ItemRequirement(1, frost, 0, upgradeMatch = UpgradeMatch.ANY, alternativeGroup = 1, identityGroup = 1),
+            ItemRequirement(2, find("wand_disintegration"), 0, upgradeMatch = UpgradeMatch.ANY, alternativeGroup = 1),
+            ItemRequirement(3, null, 0, kind = ItemKind.WAND, upgradeMatch = UpgradeMatch.ANY, identityGroup = 1),
+        )
+        assertEquals(
+            listOf(BadgesView(null, null), null),
+            RequirementEditor.view(rows).items.single().chips.map { it.remainingBadges },
+        )
+    }
+
     @Test fun savingKeepsAnUnchangedStackAndAppendsANewChip() {
         val might = ItemRequirement(0, find("ring_might"), 2)
         val stacked = RequirementEditor.board(
