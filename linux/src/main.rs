@@ -10,6 +10,8 @@ mod board;
 mod challenges_dialog;
 mod config;
 mod detail_pane;
+#[cfg(test)]
+mod fixtures;
 mod format;
 mod glow;
 mod item_mappings;

@@ -227,116 +227,19 @@ mod tests {
     use serde_json::{Value, json};
     use shpd_seedfinder_core::catalog::{ItemId, ItemKind};
     use shpd_seedfinder_core::editor::{
-        self, BoardView, ChipView, Edit, EditResult, ItemView, ResinAmount, ResinState, Row, Tag,
-        TagStyle,
+        self, BoardView, ChipView, Edit, EditResult, ItemView, ResinAmount, ResinState, Row,
     };
-    use shpd_seedfinder_core::json_query;
     use shpd_seedfinder_core::query::{ArcaneResinFilter, Requirement, UpgradeRequirement};
 
     use super::{
         BoardCache, Dragged, DropAnswer, Landing, chip_tooltip, count_limit, find_chip,
         join_choices, resin_tooltip,
     };
+    use crate::fixtures::{
+        Fixture, decode_requirement, decode_resin, decode_row, decode_rows, encode_row, fixtures,
+        keys, tags,
+    };
     use crate::state::AppState;
-
-    /// A golden request/response pair of the editor's board envelope.
-    struct Fixture {
-        name: &'static str,
-        request: Value,
-        response: Value,
-    }
-
-    fn fixture(name: &'static str, text: &str) -> Fixture {
-        let document: Value = serde_json::from_str(text).expect("fixtures are JSON");
-        assert_eq!(document["envelope"], "requirement_board", "{name}");
-        Fixture {
-            name,
-            request: document["request"].clone(),
-            response: document["response"].clone(),
-        }
-    }
-
-    /// Board fixtures whose rows every Linux list can hold, replayed through
-    /// the typed API the board calls.
-    fn board_fixtures() -> Vec<Fixture> {
-        macro_rules! golden {
-            ($($name:literal),* $(,)?) => {
-                vec![$(fixture(
-                    $name,
-                    include_str!(concat!(
-                        "../../crates/seedfinder-core/tests/fixtures/editor/",
-                        $name,
-                        ".json"
-                    )),
-                )),*]
-            };
-        }
-        golden![
-            "board-tour",
-            "board-empty",
-            "board-join-refused",
-            "board-join-trades-copies",
-            "board-detach",
-            "board-remove-member",
-            "board-remove-item",
-            "board-stack-concrete",
-            "board-stack-wildcard",
-            "board-stack-cluster",
-            "board-stack-total",
-            "board-copy-depth",
-            "board-toggle-levels",
-            "board-blanket-total-refused",
-            "board-save-new",
-            "board-save-unchanged",
-            "board-problems",
-            "board-problems-blankets-only",
-        ]
-    }
-
-    /// One requirement through the app's own codec: the canonical query
-    /// document it saves, shares and loads.
-    fn decode_requirement(entry: &Value) -> Requirement {
-        let document = json!({ "requirements": [entry] }).to_string();
-        json_query::decode_unvalidated(&document)
-            .expect("fixture rows are readable")
-            .requirements[0]
-    }
-
-    /// A fixture row as the board holds it. The document writes clusters as
-    /// `any_of` entries; a row carries its label instead.
-    fn decode_row(entry: &Value) -> Row {
-        let mut fields = entry.as_object().expect("a row is an object").clone();
-        let key = fields.remove("key").and_then(|key| key.as_u64()).unwrap();
-        let group = fields
-            .remove("alternative_group")
-            .map(|group| u8::try_from(group.as_u64().unwrap()).unwrap());
-        Row {
-            key,
-            requirement: Requirement {
-                alternative_group: group,
-                ..decode_requirement(&Value::Object(fields))
-            },
-        }
-    }
-
-    /// A row as the envelope writes it, from the entry the app's codec
-    /// writes for its requirement.
-    fn encode_row(row: &Row) -> Value {
-        let mut state = AppState::default();
-        state.requirements = vec![Row {
-            key: row.key,
-            requirement: Requirement {
-                alternative_group: None,
-                ..row.requirement
-            },
-        }];
-        let mut entry = json_query::encode(&state.unvalidated_query())["requirements"][0].clone();
-        entry["key"] = json!(row.key);
-        if let Some(group) = row.requirement.alternative_group {
-            entry["alternative_group"] = json!(group);
-        }
-        entry
-    }
 
     fn decode_edit(edit: &Value) -> Edit {
         let key = |field: &str| edit[field].as_u64().unwrap();
@@ -376,42 +279,6 @@ mod tests {
             },
             other => panic!("unknown edit {other}"),
         }
-    }
-
-    fn decode_resin(resin: &Value) -> Option<ResinState> {
-        if resin.is_null() {
-            return None;
-        }
-        let document = json!({
-            "requirements": [],
-            "arcane_resin": resin["amount"],
-            "arcane_resin_filter": resin["filter"],
-        });
-        let state = AppState::from_query(
-            &json_query::decode_unvalidated(&document.to_string()).expect("a resin condition"),
-        );
-        state.resin()
-    }
-
-    fn keys(value: &Value) -> Vec<u64> {
-        value
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|key| key.as_u64().unwrap())
-            .collect()
-    }
-
-    fn tags(tags: &[Tag]) -> Value {
-        tags.iter()
-            .map(|tag| {
-                let style = match tag.style {
-                    TagStyle::Plain => "plain",
-                    TagStyle::Upgrade => "upgrade",
-                };
-                json!({ "text": tag.text, "style": style })
-            })
-            .collect()
     }
 
     /// The typed answer compared with the envelope's golden one, field by
@@ -550,14 +417,9 @@ mod tests {
             name,
             request,
             response,
-        } in board_fixtures()
+        } in fixtures("requirement_board")
         {
-            let rows: Vec<Row> = request["rows"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(decode_row)
-                .collect();
+            let rows = decode_rows(&request["rows"]);
             let edits: Vec<Edit> = request["edits"]
                 .as_array()
                 .map(|edits| edits.iter().map(decode_edit).collect())
@@ -574,7 +436,7 @@ mod tests {
             name,
             request,
             response,
-        } in board_fixtures()
+        } in fixtures("requirement_board")
         {
             // What the editor writes is what the app's codec writes, byte
             // for byte as JSON values…

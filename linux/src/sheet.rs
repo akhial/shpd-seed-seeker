@@ -188,16 +188,413 @@ pub fn spin_value(value: f64) -> u8 {
 
 #[cfg(test)]
 mod tests {
-    use shpd_seedfinder_core::catalog::{ItemId, ItemKind};
+    use serde_json::{Value, json};
+    use shpd_seedfinder_core::catalog::{Effect, ItemId, ItemKind, item, item_by_stable_id};
     use shpd_seedfinder_core::editor::{
-        self, Change, EffectGroup, EffectMode, ItemChoice, KindName, SaveResult,
+        self, Change, ChipView, Choice, Draft, EffectGroup, EffectMode, FloorToggle, Form,
+        FormMode, ItemChoice, KindName, ModeRange, Opt, Origin, RangeToggle, ResinDraft,
+        ResinOutcome, SaveResult, TierMode, Toggle, UpgradeMode,
     };
+    use shpd_seedfinder_core::model::{ItemSource, source_name};
 
     use super::{
         Sheet, chosen, effect_choices, effect_heading, floor_range, item_options, named_kind,
         offers_resin, position, same_effects, spin_value,
     };
+    use crate::fixtures::{
+        Fixture, decode_labelled, decode_resin, decode_rows, encode_resin, encode_row, fixtures,
+        keys, tags,
+    };
     use crate::state::AppState;
+
+    // --- reading the golden requests --------------------------------------
+
+    fn source_named(name: &str) -> ItemSource {
+        *ItemSource::ALL
+            .iter()
+            .find(|&&source| source_name(source) == name)
+            .expect("a known source")
+    }
+
+    fn item_named(name: &str) -> ItemId {
+        item_by_stable_id(name).expect("a known item").id
+    }
+
+    fn small(value: &Value) -> Option<u8> {
+        value.as_u64().map(|value| u8::try_from(value).unwrap())
+    }
+
+    fn effect_mode(name: &str) -> EffectMode {
+        match name {
+            "any" => EffectMode::Any,
+            "any_enchantment" => EffectMode::AnyEnchantment,
+            "specific" => EffectMode::Specific,
+            other => panic!("unknown effect mode {other}"),
+        }
+    }
+
+    /// The opaque draft string an envelope answered, as the typed draft it
+    /// stands for.
+    fn decode_draft(text: &Value) -> Draft {
+        let draft: Value = serde_json::from_str(text.as_str().unwrap()).unwrap();
+        let resin = &draft["resin"];
+        Draft {
+            v: small(&draft["v"]).unwrap(),
+            origin: match draft["origin"]["type"].as_str().unwrap() {
+                "new" => Origin::New,
+                "row" => Origin::Row(draft["origin"]["key"].as_u64().unwrap()),
+                "resin" => Origin::Resin,
+                other => panic!("unknown origin {other}"),
+            },
+            key: draft["key"].as_u64(),
+            requirement: decode_labelled(&draft["requirement"]),
+            tier_value: small(&draft["tier_value"]).unwrap(),
+            upgrade_value: small(&draft["upgrade_value"]).unwrap(),
+            effect_mode: effect_mode(draft["effect_mode"].as_str().unwrap()),
+            count: small(&draft["count"]).unwrap(),
+            total: small(&draft["total"]),
+            copy_depth: small(&draft["copy_depth"]),
+            floor_limit_memory: small(&draft["floor_limit_memory"]).unwrap(),
+            copy_depth_memory: small(&draft["copy_depth_memory"]).unwrap(),
+            transmutations_memory: small(&draft["transmutations_memory"]).unwrap(),
+            in_cluster: draft["in_cluster"].as_bool().unwrap(),
+            blanket: draft["blanket"].as_bool().unwrap(),
+            offer_resin: draft["offer_resin"].as_bool().unwrap(),
+            taken_trinkets: draft["taken_trinkets"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|name| item_named(name.as_str().unwrap()))
+                .collect(),
+            resin_picked: draft["resin_picked"].as_bool().unwrap(),
+            resin: ResinDraft {
+                auto: resin["auto"].as_bool().unwrap(),
+                amount: resin["amount"].as_f64(),
+                include_mage_wand: resin["include_mage_wand"].as_bool().unwrap(),
+                uncursed: resin["uncursed"].as_bool().unwrap(),
+                max_depth: small(&resin["max_depth"]),
+                source: resin["source"].as_str().map(source_named),
+            },
+            rows: decode_rows(&draft["rows"]),
+        }
+    }
+
+    fn decode_change(change: &Value) -> Change {
+        let value = &change["value"];
+        let flag = || value.as_bool().unwrap();
+        let number = || small(value).unwrap();
+        match change["type"].as_str().unwrap() {
+            "set_kind" => {
+                let kind = KindName::ALL
+                    .into_iter()
+                    .find(|kind| kind.name() == value)
+                    .unwrap();
+                Change::SetKind(kind.family(), kind.weapon_category())
+            }
+            "set_item" => Change::SetItem(match value.as_str() {
+                None => ItemChoice::Any,
+                Some("arcane_resin") => ItemChoice::ArcaneResin,
+                Some(name) => ItemChoice::Item(item_named(name)),
+            }),
+            "toggle_effect" => Change::ToggleEffect(
+                [ItemKind::Weapon, ItemKind::Armor]
+                    .into_iter()
+                    .find_map(|kind| Effect::from_wire_name(kind, value.as_str().unwrap()))
+                    .unwrap(),
+            ),
+            "set_uncursed" => Change::SetUncursed(flag()),
+            "set_source" => Change::SetSource(value.as_str().map(source_named)),
+            "set_floor_limit_enabled" => Change::SetFloorLimitEnabled(flag()),
+            "set_floor_limit" => Change::SetFloorLimit(number()),
+            "set_count" => Change::SetCount(number()),
+            "set_copy_depth_enabled" => Change::SetCopyDepthEnabled(flag()),
+            "set_copy_depth" => Change::SetCopyDepth(number()),
+            "set_count_levels" => Change::SetCountLevels(flag()),
+            "set_total" => Change::SetTotal(number()),
+            "set_resin_auto" => Change::SetResinAuto(flag()),
+            "set_resin_amount" => Change::SetResinAmount(value.as_f64()),
+            "set_include_mage_wand" => Change::SetIncludeMageWand(flag()),
+            other => panic!("no Linux control sends {other}"),
+        }
+    }
+
+    // --- writing the typed form as the envelope does -----------------------
+
+    fn opt<T>(option: &Opt<T>, value: impl Fn(&T) -> Value) -> Value {
+        json!({
+            "value": value(&option.value),
+            "label": option.label,
+            "group": option.group,
+            "hidden": option.hidden,
+        })
+    }
+
+    fn choice<T>(control: &Choice<T>, value: impl Fn(&T) -> Value) -> Value {
+        json!({
+            "visible": control.visible,
+            "value": value(&control.value),
+            "options": control.options.iter().map(|option| opt(option, &value)).collect::<Vec<_>>(),
+        })
+    }
+
+    fn mode_range<M: Copy>(control: &ModeRange<M>, name: impl Fn(M) -> &'static str) -> Value {
+        json!({
+            "visible": control.visible,
+            "mode": name(control.mode),
+            "modes": control.modes.iter().map(|option| opt(option, |mode| name(*mode).into())).collect::<Vec<_>>(),
+            "value": control.value,
+            "min": control.min,
+            "max": control.max,
+            "value_label": control.value_label,
+        })
+    }
+
+    fn toggle(control: &Toggle) -> Value {
+        json!({ "visible": control.visible, "value": control.value, "label": control.label })
+    }
+
+    fn floor_toggle(control: &FloorToggle) -> Value {
+        json!({
+            "visible": control.visible,
+            "enabled": control.enabled,
+            "value": control.value,
+            "options": control.options.iter().map(|option| opt(option, |floor| (*floor).into())).collect::<Vec<_>>(),
+            "label": control.label,
+            "value_label": control.value_label,
+        })
+    }
+
+    fn range_toggle(control: &RangeToggle) -> Value {
+        json!({
+            "visible": control.visible,
+            "enabled": control.enabled,
+            "value": control.value,
+            "min": control.min,
+            "max": control.max,
+            "label": control.label,
+            "caption": control.caption,
+            "value_label": control.value_label,
+        })
+    }
+
+    fn item_choice(choice: ItemChoice) -> Value {
+        match choice {
+            ItemChoice::Any => Value::Null,
+            ItemChoice::Item(item_id) => item(item_id).stable_id.into(),
+            ItemChoice::ArcaneResin => "arcane_resin".into(),
+        }
+    }
+
+    const fn tier_mode(mode: TierMode) -> &'static str {
+        match mode {
+            TierMode::Any => "any",
+            TierMode::Exact => "exact",
+            TierMode::AtLeast => "at_least",
+            TierMode::AtMost => "at_most",
+        }
+    }
+
+    const fn upgrade_mode(mode: UpgradeMode) -> &'static str {
+        match mode {
+            UpgradeMode::Any => "any",
+            UpgradeMode::Exact => "exact",
+            UpgradeMode::AtLeast => "at_least",
+        }
+    }
+
+    const fn effect_mode_name(mode: EffectMode) -> &'static str {
+        match mode {
+            EffectMode::Any => "any",
+            EffectMode::AnyEnchantment => "any_enchantment",
+            EffectMode::Specific => "specific",
+        }
+    }
+
+    const fn effect_group(group: EffectGroup) -> &'static str {
+        match group {
+            EffectGroup::Enchantment => "enchantment",
+            EffectGroup::Curse => "curse",
+        }
+    }
+
+    /// The preview chip, by the fields the envelope's chip shares with the
+    /// board's.
+    fn preview(chip: &ChipView) -> Value {
+        json!([
+            chip.key,
+            chip.name,
+            chip.title,
+            tags(&chip.tags),
+            chip.details,
+            chip.description
+        ])
+    }
+
+    fn expected_preview(chip: &Value) -> Value {
+        if chip.is_null() {
+            return Value::Null;
+        }
+        json!([
+            chip["key"],
+            chip["name"],
+            chip["title"],
+            chip["tags"],
+            chip["details"],
+            chip["description"]
+        ])
+    }
+
+    /// Everything the dialogs read of a form, written as the envelope's FORM.
+    fn form_value(form: &Form) -> Value {
+        let effect = &form.effect;
+        json!({
+            "mode": match form.mode { FormMode::New => "new", FormMode::Edit => "edit" },
+            "blanket": form.blanket,
+            "in_cluster": form.in_cluster,
+            "resin_picked": form.resin_picked,
+            "title": form.title,
+            "category": choice(&form.category, |kind| KindName::of(*kind, None).name().into()),
+            "kind": choice(&form.kind, |kind| kind.name().into()),
+            "item": choice(&form.item, |choice| item_choice(*choice)),
+            "tier": mode_range(&form.tier, tier_mode),
+            "upgrade": mode_range(&form.upgrade, upgrade_mode),
+            "effect": {
+                "visible": effect.visible,
+                "mode": effect_mode_name(effect.mode),
+                "modes": effect.modes.iter().map(|option| opt(option, |mode| effect_mode_name(*mode).into())).collect::<Vec<_>>(),
+                "choices": effect.choices.iter().map(|choice| json!({
+                    "value": choice.value.wire_name(),
+                    "label": choice.label,
+                    "group": effect_group(choice.group),
+                    "selected": choice.selected,
+                })).collect::<Vec<_>>(),
+                "groups": effect.groups.iter().map(|option| opt(option, |group| effect_group(*group).into())).collect::<Vec<_>>(),
+                "caption": effect.caption,
+            },
+            "uncursed": toggle(&form.uncursed),
+            "source": choice(&form.source, |source| source.map(source_name).into()),
+            "floor_limit": floor_toggle(&form.floor_limit),
+            "exclude_resin": toggle(&form.exclude_resin),
+            "transmutations": range_toggle(&form.transmutations),
+            "select_trinket": toggle(&form.select_trinket),
+            "stack": {
+                "visible": form.stack.visible,
+                "count": form.stack.count,
+                "min": form.stack.min,
+                "max": form.stack.max,
+                "value_label": form.stack.value_label,
+                "copy_depth": floor_toggle(&form.stack.copy_depth),
+                "count_levels": range_toggle(&form.stack.count_levels),
+            },
+            "resin": {
+                "visible": form.resin.visible,
+                "auto": form.resin.auto,
+                "amount": form.resin.amount,
+                "include_mage_wand": form.resin.include_mage_wand,
+            },
+            "errors": form.errors,
+            "can_save": form.can_save,
+        })
+    }
+
+    fn assert_form_matches(name: &str, form: &Form, expected: &Value) {
+        let shown = form_value(form);
+        for (field, value) in shown.as_object().unwrap() {
+            assert_eq!(value, &expected[field], "{name}: form.{field}");
+        }
+        assert_eq!(
+            form.preview.as_ref().map_or(Value::Null, preview),
+            expected_preview(&expected["preview"]),
+            "{name}: preview"
+        );
+    }
+
+    fn open_request(request: &Value) -> Draft {
+        let flag = |field: &str| request[field].as_bool().unwrap_or(false);
+        editor::open(
+            &decode_rows(&request["rows"]),
+            request["key"].as_u64(),
+            flag("blanket"),
+            decode_resin(&request["resin"]).as_ref(),
+            flag("offer_resin"),
+            flag("open_resin"),
+        )
+    }
+
+    fn assert_saved(name: &str, saved: &SaveResult, expected: &Value) {
+        match saved {
+            SaveResult::Saved { result, resin } => {
+                let expected = &expected["saved"];
+                let rows: Vec<Value> = result.rows.iter().map(encode_row).collect();
+                assert_eq!(Value::Array(rows), expected["rows"], "{name}: rows");
+                assert_eq!(result.next_key, expected["next_key"], "{name}: next_key");
+                assert_eq!(result.changed, expected["changed"], "{name}: changed");
+                assert!(result.rekeyed.is_empty(), "{name}");
+                assert!(keys(&expected["rekeyed"]).is_empty(), "{name}");
+                assert_eq!(json!(result.focus), expected["focus"], "{name}: focus");
+                let resin = match resin {
+                    ResinOutcome::Unchanged => Value::Null,
+                    ResinOutcome::Set(state) => json!({ "set": encode_resin(state) }),
+                    ResinOutcome::Clear => json!({ "clear": true }),
+                };
+                assert_eq!(resin, expected["resin"], "{name}: resin");
+            }
+            SaveResult::Refused { draft, form } => {
+                assert_eq!(*draft, decode_draft(&expected["draft"]), "{name}: draft");
+                assert_form_matches(name, form, &expected["form"]);
+            }
+        }
+    }
+
+    #[test]
+    fn the_typed_sheet_gives_the_golden_sheet_answers_through_the_app_codec() {
+        let replayed = fixtures("requirement_editor");
+        assert_eq!(replayed.len(), 13);
+        for Fixture {
+            name,
+            request,
+            response,
+        } in replayed
+        {
+            match request["op"].as_str().unwrap() {
+                "open" => {
+                    let sheet = Sheet::new(open_request(&request));
+                    assert_eq!(*sheet.draft(), decode_draft(&response["draft"]), "{name}");
+                    assert_form_matches(name, sheet.form(), &response["form"]);
+                }
+                "change" => {
+                    let mut sheet = Sheet::new(decode_draft(&request["draft"]));
+                    sheet.change(&decode_change(&request["change"]));
+                    assert_eq!(*sheet.draft(), decode_draft(&response["draft"]), "{name}");
+                    assert_form_matches(name, sheet.form(), &response["form"]);
+                }
+                "save" => {
+                    let saved = editor::save(
+                        &decode_draft(&request["draft"]),
+                        &decode_rows(&request["rows"]),
+                        request["next_key"].as_u64(),
+                    );
+                    assert_saved(name, &saved, &response);
+                }
+                other => panic!("{name}: unknown op {other}"),
+            }
+        }
+    }
+
+    #[test]
+    fn sheet_rows_survive_the_app_codec() {
+        for Fixture { name, request, .. } in fixtures("requirement_editor") {
+            let rows = if request["rows"].is_null() {
+                decode_draft(&request["draft"]).rows
+            } else {
+                decode_rows(&request["rows"])
+            };
+            for row in rows {
+                let entry = encode_row(&row);
+                assert_eq!(crate::fixtures::decode_row(&entry), row, "{name}");
+            }
+        }
+    }
 
     /// A new ordinary sheet on the rows `state` holds, moved control by
     /// control the way the dialog moves it.
