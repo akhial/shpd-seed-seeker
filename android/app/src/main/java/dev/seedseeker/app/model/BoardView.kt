@@ -69,42 +69,59 @@ data class BoardView(
         private fun decodeBadge(badge: JSONObject) =
             BadgeView(badge.getString("text"), badge.getString("compact_text"), badge.getString("tooltip"))
 
-        internal fun decodeChip(chip: JSONObject) = ChipView(
-            key = chip.getLong("key"),
-            name = chip.getString("name"),
-            title = chip.getString("title"),
-            item = chip.stringOrNull("item")?.let(ItemCatalog::findById),
-            kind = chip.stringOrNull("kind")?.let { kind -> ItemKind.entries.firstOrNull { it.name.lowercase() == kind } },
-            tags = chip.getJSONArray("tags").objects().map(::decodeTag),
-            trailingTags = chip.getJSONArray("trailing_tags").objects().map(::decodeTag),
-            effect = chip.objectOrNull("effect")?.let { effect ->
+        /** The face fields a chip, or the item a drag of it lifts, carries. */
+        private fun decodeFace(face: JSONObject) = ChipFace(
+            name = face.getString("name"),
+            title = face.getString("title"),
+            item = face.stringOrNull("item")?.let(ItemCatalog::findById),
+            kind = face.stringOrNull("kind")?.let { kind -> ItemKind.entries.firstOrNull { it.name.lowercase() == kind } },
+            tags = face.getJSONArray("tags").objects().map(::decodeTag),
+            trailingTags = face.getJSONArray("trailing_tags").objects().map(::decodeTag),
+            effect = face.objectOrNull("effect")?.let { effect ->
                 EffectView(
                     label = effect.getString("label"),
                     effects = effect.getJSONArray("effects").let { names -> List(names.length(), names::getString) },
                     anyEnchantment = effect.getBoolean("any_enchantment"),
                 )
             },
-            uncursed = chip.getBoolean("uncursed"),
-            details = chip.getJSONArray("details").let { details -> List(details.length(), details::getString) },
-            relations = chip.getJSONArray("relations").objects().map { it.getString("text") },
-            description = chip.getString("description"),
-            problem = chip.stringOrNull("problem"),
-            countBadge = badges(chip).objectOrNull("count")?.let(::decodeBadge),
-            totalBadge = badges(chip).objectOrNull("total")?.let(::decodeBadge),
-            remainingBadges = chip.objectOrNull("remaining_badges")?.let(::decodeBadges),
-            copies = chip.getJSONArray("copies").longs(),
-            stack = chip.getJSONObject("stack").let { stack ->
-                StackView(
-                    count = stack.getInt("count"),
-                    countMax = stack.getInt("count_max"),
-                    total = stack.intOrNull("total"),
-                    copyDepth = stack.intOrNull("copy_depth"),
-                )
-            },
-            canDetach = chip.getBoolean("can_detach"),
-            join = chip.getJSONArray("join").longs().toSet(),
-            refuse = chip.getJSONArray("refuse").objects().associate { it.getLong("key") to it.getString("message") },
+            uncursed = face.getBoolean("uncursed"),
+            details = face.getJSONArray("details").let { details -> List(details.length(), details::getString) },
+            description = face.getString("description"),
         )
+
+        internal fun decodeChip(chip: JSONObject) = decodeFace(chip).let { face ->
+            ChipView(
+                key = chip.getLong("key"),
+                name = face.name,
+                title = face.title,
+                item = face.item,
+                kind = face.kind,
+                tags = face.tags,
+                trailingTags = face.trailingTags,
+                effect = face.effect,
+                uncursed = face.uncursed,
+                details = face.details,
+                relations = chip.getJSONArray("relations").objects().map { it.getString("text") },
+                description = face.description,
+                problem = chip.stringOrNull("problem"),
+                countBadge = badges(chip).objectOrNull("count")?.let(::decodeBadge),
+                totalBadge = badges(chip).objectOrNull("total")?.let(::decodeBadge),
+                remainingBadges = chip.objectOrNull("remaining_badges")?.let(::decodeBadges),
+                lifted = chip.objectOrNull("lifted")?.let(::decodeFace),
+                copies = chip.getJSONArray("copies").longs(),
+                stack = chip.getJSONObject("stack").let { stack ->
+                    StackView(
+                        count = stack.getInt("count"),
+                        countMax = stack.getInt("count_max"),
+                        total = stack.intOrNull("total"),
+                        copyDepth = stack.intOrNull("copy_depth"),
+                    )
+                },
+                canDetach = chip.getBoolean("can_detach"),
+                join = chip.getJSONArray("join").longs().toSet(),
+                refuse = chip.getJSONArray("refuse").objects().associate { it.getLong("key") to it.getString("message") },
+            )
+        }
 
         private fun decodeTag(tag: JSONObject) = TagView(
             text = tag.getString("text"),
@@ -156,7 +173,35 @@ data class BadgeView(val text: String, val compactText: String, val tooltip: Str
 /** A chip's two stack badges, `×N` / `≤N` and `Σ ≥ N`; either may be missing. */
 data class BadgesView(val count: BadgeView?, val total: BadgeView?)
 
-/** One visible row, as its chip draws it. */
+/**
+ * What a chip shows of one item: its sprite, name, tags and words. A
+ * [ChipView] carries these for its own row, and [ChipView.lifted] for the
+ * item a drag of it carries.
+ */
+data class ChipFace(
+    /** The short name beside the sprite: the item, or the wildcard (`Any melee`). */
+    val name: String,
+    /** The full title: the item, or the wildcard with its tier (`Any Tier 3+ melee weapon`). */
+    val title: String,
+    /** The item the sprite draws; null for a wildcard. */
+    val item: CatalogItem?,
+    /** The kind a wildcard's sprite stands for; null only for a row the editor could not read. */
+    val kind: ItemKind?,
+    /** The qualifiers after the name, in order. */
+    val tags: List<TagView>,
+    /** The qualifiers after the effect cue (`No resin`). */
+    val trailingTags: List<TagView>,
+    /** The effect the item must carry; null for any effect. */
+    val effect: EffectView?,
+    /** Whether cursed items are ruled out. */
+    val uncursed: Boolean,
+    /** The qualifiers in words (`+3 or higher`, `Locked chest`, `floors 1–9`), in order. */
+    val details: List<String>,
+    /** What a screen reader says for the item: its title, then its details. */
+    val description: String,
+)
+
+/** One visible row, as its chip draws it; its face fields mirror [ChipFace]. */
 data class ChipView(
     val key: Long,
     /** The short name beside the sprite: the item, or the wildcard (`Any melee`). */
@@ -193,6 +238,14 @@ data class ChipView(
      * whole chip leaves.
      */
     val remainingBadges: BadgesView?,
+    /**
+     * The face of the item a drag of the chip carries: a bare copy, the
+     * chip's item (or its kind, for a wildcard stack) with that copy's
+     * floor limit and nothing else (Ring of Energy +4 ×3 lifts a plain
+     * `Ring of Energy`), which is what lands; null when the chip has no
+     * [copies], so the chip itself moves.
+     */
+    val lifted: ChipFace?,
     /** The hidden copies behind the chip's badge; members whose stacks are alike share theirs. */
     val copies: List<Long>,
     /** The chip's own stack. */
@@ -206,6 +259,13 @@ data class ChipView(
 ) {
     /** The badges the chip wears at rest. */
     val badges: BadgesView get() = BadgesView(countBadge, totalBadge)
+
+    /** The chip's own face, which it wears on the board. */
+    val face: ChipFace
+        get() = ChipFace(name, title, item, kind, tags, trailingTags, effect, uncursed, details, description)
+
+    /** The face the item a drag moves wears: [lifted], else the chip's own. */
+    val movingFace: ChipFace get() = lifted ?: face
 }
 
 /**

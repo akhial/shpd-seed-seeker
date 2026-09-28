@@ -382,6 +382,62 @@ class RequirementEditorTest {
         )
     }
 
+    /** A drag carries a bare copy: the chip's `lifted` face, which is what lands. */
+    @Test fun eachChipSaysWhichItemADragOfItLifts() {
+        val join = fixture("board-join-bare-copy")
+        val rows = RequirementEditor.decodeRows(join.getJSONObject("request").getJSONArray("rows"))
+        val (ring, disintegration) = RequirementEditor.view(rows).items.map { it.chips.single() }
+        // Ring of Energy +4 ×3 lifts a plain Ring of Energy, and keeps its +4.
+        assertEquals(listOf(TagView("+4", TagStyle.UPGRADE)), ring.tags)
+        val lifted = ring.lifted!!
+        assertEquals(
+            ChipFace(
+                name = "Ring of Energy", title = "Ring of Energy", item = find("ring_energy"), kind = ItemKind.RING,
+                tags = emptyList(), trailingTags = emptyList(), effect = null, uncursed = false,
+                details = listOf("any upgrade"), description = "Ring of Energy, any upgrade",
+            ),
+            lifted,
+        )
+        assertEquals(lifted, ring.movingFace)
+        // A chip without copies moves itself.
+        assertNull(disintegration.lifted)
+        assertEquals(disintegration.face, disintegration.movingFace)
+        assertEquals("Wand of Disintegration, any upgrade", disintegration.face.description)
+
+        // The join lands that face beside Disintegration, and the chip stays +4 ×2.
+        val joined = RequirementEditor.board(rows, listOf(BoardEdit.Join(source = 1, target = 4)))
+        assertEquals(3L, joined.focus)
+        val (rest, cluster) = joined.board.items
+        assertEquals(listOf(1L) to "×2", rest.members to rest.chips.single().countBadge?.text)
+        assertEquals(ring.tags, rest.chips.single().tags)
+        assertEquals(listOf(4L, 3L), cluster.members)
+        assertEquals(lifted, cluster.chips.last().face)
+        assertEquals(BoardView.decode(join.getJSONObject("response")), joined.board)
+
+        // Detached again, it folds back into the stack: Ring of Energy +4 ×3.
+        val back = RequirementEditor.board(joined.rows!!, listOf(BoardEdit.Detach(3)))
+        assertEquals(1L, back.focus)
+        val (energy, alone) = back.board.items.map { it.chips.single() }
+        assertEquals("Ring of Energy, exactly +4" to "×3", energy.description to energy.countBadge?.text)
+        assertEquals("Wand of Disintegration", alone.name)
+        assertEquals(
+            BoardView.decode(fixture("board-join-bare-copy-round-trip").getJSONObject("response")),
+            back.board,
+        )
+
+        // {Frost +2 ×2 | Disintegration}: the Frost that leaves is a bare one.
+        val detach = fixture("board-detach-bare-copy")
+        val stacked = RequirementEditor.decodeRows(detach.getJSONObject("request").getJSONArray("rows"))
+        val frost = RequirementEditor.view(stacked).itemOf(1)!!.chips.first()
+        assertEquals("Wand of Frost, exactly +2", frost.description)
+        assertEquals("Wand of Frost, any upgrade", frost.lifted?.description)
+        val detached = RequirementEditor.board(stacked, listOf(BoardEdit.Detach(1)))
+        assertEquals(3L, detached.focus)
+        val (kept, out) = detached.board.items
+        assertEquals(listOf("Wand of Frost, exactly +2", "Wand of Disintegration, any upgrade"), kept.chips.map { it.description })
+        assertEquals(frost.lifted, out.chips.single().face)
+    }
+
     @Test fun savingKeepsAnUnchangedStackAndAppendsANewChip() {
         val might = ItemRequirement(0, find("ring_might"), 2)
         val stacked = RequirementEditor.board(
