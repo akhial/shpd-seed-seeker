@@ -1,7 +1,8 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 import { itemsForKind } from "../../shared/game/catalog";
-import { fromQueryJson, toQueryDocument, validateQuery, validateRequirement } from "./query";
+import { fromQueryJson, toQueryDocument, validateRequirement } from "./query";
+import { validateQuery } from "./validation";
 import type { QueryState, ScoutItem } from "../../engine/types";
 import { CatalystEntry } from "../scout/ScoutPanel";
 import { editBoard, requirementBoardOf } from "./requirements/board";

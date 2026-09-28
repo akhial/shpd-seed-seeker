@@ -72,7 +72,7 @@ const boardFields = ({ requirements, arcaneResin, arcaneResinFilter }: BoardQuer
 /**
  * The board of a query. The envelope runs once per change of the
  * requirements or the resin, however many readers (both board sections, the
- * header counts) ask for it in between.
+ * header counts, the Start and Share gate) ask for it in between.
  */
 export function requirementBoardOf(query: BoardQuery): EditorAnswer<BoardResponse> {
   if (drawn && sameBoard(drawn.query, query)) return drawn.answer;

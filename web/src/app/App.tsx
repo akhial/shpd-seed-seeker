@@ -1,11 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useStore } from "@tanstack/react-store";
-import {
-  fromQueryJson,
-  toQueryDocument,
-  toQueryJson,
-  validateQuery,
-} from "../features/query/query";
+import { fromQueryJson, toQueryDocument, toQueryJson } from "../features/query/query";
+import { validateQuery } from "../features/query/validation";
 import { resultPosition, stepResult } from "../features/results/scout-nav";
 import { SearchCoordinator, scoutSeed, searchStore } from "../features/search/coordinator";
 import { hasShareCode, withoutFragment } from "../features/query/share-link";

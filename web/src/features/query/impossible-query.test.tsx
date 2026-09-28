@@ -1,7 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeAll, expect, it } from "vite-plus/test";
-import { defaultQueryState, fromQueryJson, toQueryJson, validateQuery } from "./query";
+import { defaultQueryState, fromQueryJson, toQueryJson } from "./query";
+import { validateQuery } from "./validation";
 import { queryStore } from "../../app/store";
 import init, { analyze_query, SearchSession } from "../../engine/pkg/seedfinder.js";
 import type { AnalysisResult } from "../../engine/types";

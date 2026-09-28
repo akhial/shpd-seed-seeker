@@ -7,8 +7,8 @@ import {
   requirementToDocument,
   toQueryDocument,
   toQueryJson,
-  validateQuery,
 } from "./query";
+import { validateQuery } from "./validation";
 import { decodeResultsFile, encodeResultsFile } from "../results/results-file";
 import { queryStore } from "../../app/store";
 import init, {

@@ -1,4 +1,4 @@
-import { floorRequirementErrors, floorsFromDocument } from "../../shared/game/floor-requirements";
+import { floorsFromDocument } from "../../shared/game/floor-requirements";
 import {
   effectNamesForCategory,
   enchantmentNamesForCategory,
@@ -135,39 +135,6 @@ export const requirementFamily = (
     : requirement.item
       ? getItem(requirement.item)?.type
       : undefined;
-
-/**
- * The most *levels* — upgrade plus one — one requirement can contribute to a
- * combined-level total: an exact upgrade counts as itself, anything else as
- * the family cap.
- */
-export const maxLevelOf = (requirement: RequirementState): number =>
-  (requirement.upgrade.mode === "exact" ? requirement.upgrade.value : maxUpgradeOf(requirement)) +
-  1;
-
-/** The highest combined level a group's members can reach together: each
- * one's own ceiling, bounded by what a world generates —
- * {@link ringStackCapacity}. */
-export const levelSumCapacity = (members: RequirementState[]): number =>
-  Math.min(
-    members.reduce((total, member) => total + maxLevelOf(member), 0),
-    ringStackCapacity(members.length),
-  );
-
-/**
- * Whether a requirement constrains anything beyond its category: a stack's
- * extra copies are exactly the unconstrained requirements. A per-item floor
- * limit is a placement bound, not an item property, and does not count.
- */
-export const isBareRequirement = (requirement: RequirementState): boolean =>
-  requirement.item === undefined &&
-  (requirement.kind === undefined || kindFamily(requirement.kind) === requirement.kind) &&
-  requirement.tier.mode === "any" &&
-  requirement.upgrade.mode === "any" &&
-  requirement.effect === undefined &&
-  !requirement.uncursed &&
-  !requirement.excludeResin &&
-  requirement.source === undefined;
 
 /** True when the effect filter is the "some non-curse effect" shorthand. */
 export const isAnyEnchantment = (effect: EffectFilter | undefined): boolean =>
@@ -604,11 +571,6 @@ export function fromQueryJson(json: string): QueryState {
   };
 }
 
-export interface ValidationResult {
-  valid: boolean;
-  errors: string[];
-}
-
 export function validateRequirement(requirement: RequirementState): string[] {
   const errors: string[] = [];
   const artifactTransmutations = requirement.artifactTransmutations ?? 0;
@@ -726,90 +688,6 @@ export function validateRequirement(requirement: RequirementState): string[] {
   return errors;
 }
 
-export function validateQuery(state: QueryState): ValidationResult {
-  const errors: string[] = floorRequirementErrors(state.floorRequirements ?? [], state.maxDepth);
-  if (!state.requirements.length && !state.arcaneResin && !state.floorRequirements?.length)
-    errors.push("Add at least one requirement.");
-  if (state.arcaneResin !== undefined && !validArcaneResin(state.arcaneResin))
-    errors.push("Arcane Resin must be Auto or a whole number from 0 through 65535.");
-  if (state.arcaneResinFilter) errors.push(...validateArcaneResinFilter(state.arcaneResinFilter));
-  if (
-    state.requirements.length > 0 &&
-    !state.requirements.some((requirement) => !requirement.blanket)
-  )
-    errors.push("Add at least one ordinary requirement.");
-  for (const slot of querySlots(state.requirements)) {
-    if (
-      slot.members.some(
-        (index) =>
-          Boolean(state.requirements[index].blanket) !==
-          Boolean(state.requirements[slot.members[0]].blanket),
-      )
-    )
-      errors.push("An either/or group cannot mix ordinary and blanket requirements.");
-  }
-  if (state.maxDepth < 1 || state.maxDepth > MAX_DEPTH)
-    errors.push(`Maximum floor must be 1 through ${MAX_DEPTH}.`);
-  state.requirements.forEach((requirement, index) => {
-    for (const error of validateRequirement(requirement))
-      errors.push(`Requirement ${index + 1}: ${error}`);
-  });
-  // A stack (identity group) has one anchor unit — a lone requirement or
-  // one alternative group — that may constrain the item it binds to; every
-  // other member is a bare copy of the same category.
-  const identityMembers = new Map<number, number[]>();
-  state.requirements.forEach((requirement, index) => {
-    if (!requirement.identityGroup) return;
-    identityMembers.set(requirement.identityGroup, [
-      ...(identityMembers.get(requirement.identityGroup) ?? []),
-      index,
-    ]);
-  });
-  for (const members of identityMembers.values()) {
-    const families = new Set(members.map((index) => requirementFamily(state.requirements[index])));
-    if (families.size > 1) {
-      errors.push("The copies of a stack must share its category.");
-      continue;
-    }
-    // The constrained members must all live in one unit.
-    const units = new Set(
-      members
-        .filter((index) => !isBareRequirement(state.requirements[index]))
-        .map((index) =>
-          state.requirements[index].alternativeGroup === undefined
-            ? `req:${index}`
-            : `alt:${state.requirements[index].alternativeGroup}`,
-        ),
-    );
-    if (units.size > 1)
-      errors.push("Only one item of a stack can carry constraints; the extra copies are plain.");
-  }
-  // Combined-level groups: one shared, reachable total, counted in levels
-  // (upgrade plus one per item).
-  const sumMembers = new Map<number, RequirementState[]>();
-  for (const requirement of state.requirements) {
-    if (!requirement.levelSum) continue;
-    sumMembers.set(requirement.levelSum.group, [
-      ...(sumMembers.get(requirement.levelSum.group) ?? []),
-      requirement,
-    ]);
-  }
-  for (const members of sumMembers.values()) {
-    const totals = new Set(members.map((member) => member.levelSum?.atLeast));
-    if (totals.size > 1) {
-      errors.push("A stack must share one combined level.");
-      continue;
-    }
-    const needed = members[0].levelSum?.atLeast ?? 0;
-    const capacity = levelSumCapacity(members);
-    if (needed > capacity)
-      errors.push(
-        `A combined level of ${needed} needs more items: these ${members.length} can reach ${capacity}.`,
-      );
-  }
-  return { valid: errors.length === 0, errors };
-}
-
 /** Whether an Arcane Resin amount is Auto or a whole number of resin. */
 export function validArcaneResin(value: unknown): boolean {
   return (
@@ -818,7 +696,8 @@ export function validArcaneResin(value: unknown): boolean {
   );
 }
 
-function validateArcaneResinFilter(filter: ArcaneResinFilter): string[] {
+/** What is wrong with the Arcane Resin donor filter. */
+export function validateArcaneResinFilter(filter: ArcaneResinFilter): string[] {
   const errors: string[] = [];
   if (typeof filter.uncursed !== "boolean") errors.push("Invalid Arcane Resin uncursed filter.");
   if (filter.includeMageWand !== undefined && typeof filter.includeMageWand !== "boolean")

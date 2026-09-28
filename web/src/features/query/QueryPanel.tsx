@@ -19,7 +19,7 @@ import {
   requirementToDocument,
   toQueryJson,
 } from "./query";
-import type { ValidationResult } from "./query";
+import type { ValidationResult } from "./validation";
 import { questVariantLabel } from "../../shared/game/quests";
 import {
   builtInPresets,
@@ -157,9 +157,9 @@ export function QueryPanel({
     savePresets(next);
   };
 
-  // The board of both sections and its header counts read one answer of the
-  // shared core, drawn once per change of the requirements. A failure
-  // surfaces in the query pane's error boundary.
+  // The board of both sections, its header counts and the Start and Share
+  // gate all read one answer of the shared core, drawn once per change of
+  // the requirements. A failure surfaces in the query pane's error boundary.
   const drawn = requirementBoardOf(query);
   if (!drawn.ok) throw new Error(drawn.error);
   const { items, counts, resin: resinChip } = drawn.value;
