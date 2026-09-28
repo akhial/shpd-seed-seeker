@@ -67,6 +67,7 @@
         "members": [
           1
         ],
+        "name": "Ring of Might",
         "problem": null,
         "stack": {
           "can_change_count": true,
@@ -75,6 +76,7 @@
           "can_set_copy_depth": false,
           "copy_depth": null,
           "count": 1,
+          "count_max": 3,
           "count_text": "×1",
           "default_total": 1,
           "level_capacity": 5,
@@ -120,6 +122,7 @@
         "members": [
           2
         ],
+        "name": "Ring of Might",
         "problem": null,
         "stack": {
           "can_change_count": false,
@@ -128,6 +131,7 @@
           "can_set_copy_depth": false,
           "copy_depth": null,
           "count": 1,
+          "count_max": 1,
           "count_text": "×1",
           "default_total": 1,
           "level_capacity": 5,

@@ -76,7 +76,8 @@
             "tags": [
               {
                 "style": "upgrade",
-                "text": "+3"
+                "text": "+3",
+                "tooltip": null
               }
             ],
             "title": "Wand of Fireblast",
@@ -112,7 +113,8 @@
             "tags": [
               {
                 "style": "upgrade",
-                "text": "+3"
+                "text": "+3",
+                "tooltip": null
               }
             ],
             "title": "Any wand",
@@ -131,6 +133,7 @@
           2,
           1
         ],
+        "name": "Wand of Fireblast or Any wand",
         "problem": null,
         "stack": {
           "can_change_count": true,
@@ -139,6 +142,7 @@
           "can_set_copy_depth": true,
           "copy_depth": null,
           "count": 3,
+          "count_max": 3,
           "count_text": "×3",
           "default_total": 3,
           "level_capacity": 11,

@@ -138,7 +138,8 @@
             "tags": [
               {
                 "style": "upgrade",
-                "text": "+2"
+                "text": "+2",
+                "tooltip": null
               }
             ],
             "title": "Ring of Might",
@@ -156,6 +157,7 @@
         "members": [
           1
         ],
+        "name": "Ring of Might",
         "problem": null,
         "stack": {
           "can_change_count": true,
@@ -164,6 +166,7 @@
           "can_set_copy_depth": true,
           "copy_depth": null,
           "count": 3,
+          "count_max": 3,
           "count_text": "×3",
           "default_total": 3,
           "level_capacity": 11,
@@ -235,15 +238,18 @@
             "tags": [
               {
                 "style": "plain",
-                "text": "T3+"
+                "text": "T3+",
+                "tooltip": null
               },
               {
                 "style": "upgrade",
-                "text": "+2↑"
+                "text": "+2↑",
+                "tooltip": null
               },
               {
                 "style": "plain",
-                "text": "F≤9"
+                "text": "F≤9",
+                "tooltip": null
               }
             ],
             "title": "Any Tier 3+ melee weapon",
@@ -258,6 +264,7 @@
         "members": [
           4
         ],
+        "name": "Any melee",
         "problem": null,
         "stack": {
           "can_change_count": true,
@@ -266,6 +273,7 @@
           "can_set_copy_depth": false,
           "copy_depth": null,
           "count": 1,
+          "count_max": 3,
           "count_text": "×1",
           "default_total": 1,
           "level_capacity": 5,
@@ -315,7 +323,8 @@
             "tags": [
               {
                 "style": "upgrade",
-                "text": "+3"
+                "text": "+3",
+                "tooltip": null
               }
             ],
             "title": "Wand of Fireblast",
@@ -357,14 +366,16 @@
             "tags": [
               {
                 "style": "upgrade",
-                "text": "+3"
+                "text": "+3",
+                "tooltip": null
               }
             ],
             "title": "Any wand",
             "trailing_tags": [
               {
                 "style": "plain",
-                "text": "No resin"
+                "text": "No resin",
+                "tooltip": null
               }
             ],
             "uncursed": false
@@ -378,6 +389,7 @@
           5,
           6
         ],
+        "name": "Wand of Fireblast or Any wand",
         "problem": null,
         "stack": {
           "can_change_count": true,
@@ -386,6 +398,7 @@
           "can_set_copy_depth": false,
           "copy_depth": null,
           "count": 1,
+          "count_max": 3,
           "count_text": "×1",
           "default_total": 1,
           "level_capacity": 5,
@@ -431,7 +444,8 @@
             "tags": [
               {
                 "style": "plain",
-                "text": "Transmute ≤3"
+                "text": "Transmute ≤3",
+                "tooltip": null
               }
             ],
             "title": "Rat Skull",
@@ -446,6 +460,7 @@
         "members": [
           7
         ],
+        "name": "Rat Skull",
         "problem": null,
         "stack": {
           "can_change_count": false,
@@ -454,6 +469,7 @@
           "can_set_copy_depth": false,
           "copy_depth": null,
           "count": 1,
+          "count_max": 1,
           "count_text": "×1",
           "default_total": 1,
           "level_capacity": 1,
@@ -509,6 +525,7 @@
         "members": [
           8
         ],
+        "name": "Any armor",
         "problem": null,
         "stack": {
           "can_change_count": false,
@@ -517,6 +534,7 @@
           "can_set_copy_depth": false,
           "copy_depth": null,
           "count": 1,
+          "count_max": 1,
           "count_text": "×1",
           "default_total": 1,
           "level_capacity": 5,
@@ -531,7 +549,6 @@
     "refused": null,
     "rekeyed": [],
     "resin": {
-      "amount_tooltip": "Enough resin to upgrade kept wands to +3, excluding No resin wands and reforge copies",
       "description": "Arcane Resin, Auto, starting Magic Missile contributes 2 resin, uncursed wands, Heap",
       "details": [
         "Auto",
@@ -542,12 +559,14 @@
       "name": "Arcane Resin",
       "tags": [
         {
-          "style": "plain",
-          "text": "Auto"
+          "style": "credit",
+          "text": "Auto",
+          "tooltip": "Enough resin to upgrade kept wands to +3, excluding No resin wands and reforge copies"
         },
         {
-          "style": "plain",
-          "text": "Mage +2"
+          "style": "credit",
+          "text": "Mage +2",
+          "tooltip": "Starting Magic Missile contributes 2 resin"
         }
       ],
       "tooltip": "Heap",

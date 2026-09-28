@@ -89,7 +89,8 @@
             "tags": [
               {
                 "style": "upgrade",
-                "text": "+3"
+                "text": "+3",
+                "tooltip": null
               }
             ],
             "title": "Any wand",
@@ -106,6 +107,7 @@
         "members": [
           1
         ],
+        "name": "Any wand",
         "problem": null,
         "stack": {
           "can_change_count": true,
@@ -114,6 +116,7 @@
           "can_set_copy_depth": true,
           "copy_depth": null,
           "count": 2,
+          "count_max": 3,
           "count_text": "×2",
           "default_total": 2,
           "level_capacity": 8,
@@ -178,6 +181,7 @@
         "members": [
           3
         ],
+        "name": "Ring of Might",
         "problem": null,
         "stack": {
           "can_change_count": true,
@@ -186,6 +190,7 @@
           "can_set_copy_depth": false,
           "copy_depth": null,
           "count": 2,
+          "count_max": 3,
           "count_text": "≤2",
           "default_total": 2,
           "level_capacity": 8,

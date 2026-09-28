@@ -7,7 +7,7 @@
 //! weapon" titles, "effect: A/B" sets, "any glyph" on armor.
 
 use super::super::testing::{Rng, mixed_rows, named, random_edit, row, with};
-use super::super::{Edit, apply, board_items, join_candidates, problems, stack_view};
+use super::super::{Edit, STACK_MAX, apply, board_items, join_candidates, problems, stack_view};
 use super::*;
 use crate::catalog::{ArmorEffect, WeaponCategory, WeaponEffect};
 use crate::model::ItemSource;
@@ -451,6 +451,39 @@ fn a_cluster_is_captioned_and_counted_once() {
     );
     assert!(chip(&board, 2).in_cluster && chip(&board, 2).can_detach);
     assert!(!chip(&board, 4).in_cluster && !chip(&board, 4).can_detach);
+    // Menus name each entry as Linux's and macOS's "Either/or with…" did:
+    // a chip by its name, a cluster by its members'.
+    assert_eq!(board.items[0].name, "Spear or Shuriken or Sword");
+    assert_eq!(board.items[1].name, "Any wand");
+}
+
+/// The count stepper's upper bound, which the web, Windows, Linux and the
+/// Apple apps each worked out from `can_grow`: the stack limit while the
+/// entry can grow, else only down from its count.
+#[test]
+fn the_count_stepper_runs_to_the_limit_or_only_down() {
+    let spears = edited(&[], &[saved(named(0, ItemId::Spear).requirement, 2, None)]);
+    let stack = &view(&spears).items[0].stack;
+    assert!(stack.can_grow);
+    assert_eq!((stack.count, stack.count_max, stack.max), (2, STACK_MAX, 3));
+    // A cluster spanning categories only sheds the copies it has.
+    let mixed = [
+        with(named(1, ItemId::Spear), |r| {
+            r.alternative_group = Some(1);
+            r.identity_group = Some(1);
+        }),
+        with(row(2, ItemKind::Ring), |r| r.alternative_group = Some(1)),
+        with(row(3, ItemKind::Weapon), |r| r.identity_group = Some(1)),
+    ];
+    let stack = &view(&mixed).items[0].stack;
+    assert!(!stack.can_grow && stack.can_change_count);
+    assert_eq!((stack.count, stack.count_max), (2, 2));
+    // A trinket never stacks: its stepper stops at one.
+    let rat = &view(&[named(1, ItemId::RatSkull)]).items[0].stack;
+    assert_eq!(
+        (rat.count, rat.count_max, rat.can_change_count),
+        (1, 1, false)
+    );
 }
 
 // --- Windows ChipDetail ------------------------------------------------------------
@@ -890,9 +923,15 @@ fn the_built_in_staff_preset_reads_as_one_stack_and_one_wand() {
 
 // --- the resin chip -------------------------------------------------------------------
 
+/// The resin chip's tags, as the platforms drew them apart before (Windows
+/// tinted the amount and Mage's credit, macOS and Android the credit): the
+/// resin the chip counts is styled `credit`, the donor floor plain, and
+/// `Auto` and `Mage +2` explain themselves — the web's hover texts.
 #[test]
 fn the_resin_chip_tags_the_amount_and_describes_the_donors() {
     assert_eq!(view(&[]).resin, None);
+    let auto_explained = "Enough resin to upgrade kept wands to +3, excluding No resin wands and \
+                          reforge copies";
     let auto = ResinState {
         amount: ResinAmount::Auto,
         filter: ArcaneResinFilter::default(),
@@ -902,14 +941,13 @@ fn the_resin_chip_tags_the_amount_and_describes_the_donors() {
         board.resin,
         Some(ResinChip {
             name: "Arcane Resin".to_owned(),
-            tags: vec![Tag::plain("Auto")],
+            tags: vec![Tag {
+                text: "Auto".to_owned(),
+                style: TagStyle::Credit,
+                tooltip: Some(auto_explained.to_owned()),
+            }],
             uncursed: true,
             tooltip: None,
-            amount_tooltip: Some(
-                "Enough resin to upgrade kept wands to +3, excluding No resin wands and reforge \
-                 copies"
-                    .to_owned()
-            ),
             details: vec!["Auto".to_owned(), "uncursed wands".to_owned()],
             description: "Arcane Resin, Auto, uncursed wands".to_owned(),
         })
@@ -925,10 +963,24 @@ fn the_resin_chip_tags_the_amount_and_describes_the_donors() {
         },
     };
     let chip = resin_chip(&fixed);
-    assert_eq!(texts(&chip.tags), ["≥12", "Mage +2", "F≤9"]);
+    assert_eq!(
+        chip.tags,
+        [
+            Tag {
+                text: "≥12".to_owned(),
+                style: TagStyle::Credit,
+                tooltip: None,
+            },
+            Tag {
+                text: "Mage +2".to_owned(),
+                style: TagStyle::Credit,
+                tooltip: Some("Starting Magic Missile contributes 2 resin".to_owned()),
+            },
+            Tag::plain("F≤9"),
+        ]
+    );
     assert!(!chip.uncursed);
     assert_eq!(chip.tooltip.as_deref(), Some("Locked chest"));
-    assert_eq!(chip.amount_tooltip, None);
     assert_eq!(
         chip.details,
         [
@@ -952,19 +1004,14 @@ fn the_resin_chip_tags_the_amount_and_describes_the_donors() {
         ..fixed
     });
     assert_eq!(both.tooltip.as_deref(), Some("Locked chest"));
-    assert_eq!(texts(&both.tags)[0], "Auto");
-    assert_eq!(
-        both.amount_tooltip.as_deref(),
-        Some(
-            "Enough resin to upgrade kept wands to +3, excluding No resin wands and reforge \
-             copies"
-        )
-    );
+    assert_eq!(texts(&both.tags), ["Auto", "Mage +2", "F≤9"]);
+    assert_eq!(both.tags[0].tooltip.as_deref(), Some(auto_explained));
     let plain = resin_chip(&ResinState {
         amount: ResinAmount::AtLeast(3),
         filter: ArcaneResinFilter::default(),
     });
-    assert_eq!((plain.tooltip, plain.amount_tooltip), (None, None));
+    assert_eq!(plain.tooltip, None);
+    assert_eq!(plain.tags[0].tooltip, None);
 }
 
 // --- kinds ------------------------------------------------------------------------------
@@ -1052,6 +1099,14 @@ fn the_board_view_agrees_with_the_fold_the_problems_and_the_candidates() {
             assert_eq!(view.cluster, item.cluster, "{context}");
             assert_eq!(view.label.is_some(), item.cluster.is_some(), "{context}");
             assert_eq!(view.stack, stack_view(&rows, item), "{context}");
+            // The stepper never offers a count the edit would clamp away,
+            // and offers growth exactly when the entry can grow.
+            assert!(view.stack.count_max <= view.stack.max, "{context}");
+            assert_eq!(
+                view.stack.count_max > view.stack.count,
+                view.stack.can_grow && view.stack.count < view.stack.max,
+                "{context}"
+            );
             assert_eq!(view.badges.count.is_some(), item.count() > 1, "{context}");
             assert_eq!(
                 view.badges.total.is_some(),

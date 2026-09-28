@@ -119,6 +119,16 @@ fn board_fixtures(fixtures: &mut Fixtures) {
         }),
     );
     fixtures.add(
+        "board-resin-credit",
+        "A fixed resin amount with the Mage's credit and a donor floor: the resin the chip counts is styled credit, Mage +2 explains itself, the floor is a plain filter, and the source is the chip's hover text.",
+        Board,
+        &json!({
+            "rows": [{"key": 1, "kind": "wand", "item": "wand_frost"}],
+            "resin": {"amount": 4, "filter": {"uncursed": true, "max_depth": 9,
+                      "source": "locked_chest", "include_mage_wand": true}},
+        }),
+    );
+    fixtures.add(
         "board-stack-concrete",
         "A +2 Ring of Might grown to three: plain repeats (the first web stack document).",
         Board,

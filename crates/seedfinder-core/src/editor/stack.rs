@@ -35,6 +35,18 @@ pub fn can_change_count<R: AsRef<Requirement>>(rows: &[R], item: &BoardItem) -> 
     can_grow(rows, item) || item.count() > 1
 }
 
+/// The highest count the entry's stepper offers: [`STACK_MAX`] while it
+/// can grow, else its own count, which it may only shed copies from. Never
+/// above [`STACK_MAX`]: a hand-written stack of more items shrinks to it.
+#[must_use]
+pub fn count_max<R: AsRef<Requirement>>(rows: &[R], item: &BoardItem) -> u8 {
+    if can_grow(rows, item) {
+        STACK_MAX
+    } else {
+        u8::try_from(item.count()).unwrap_or(u8::MAX).min(STACK_MAX)
+    }
+}
+
 /// Whether the entry may count its items' levels together: a lone chip of
 /// a named ring with copies, since levels add up across rings alone. A
 /// stack already counting levels reports `true` so it can be turned off.
@@ -120,10 +132,14 @@ pub fn can_set_copy_depth(item: &BoardItem) -> bool {
 pub struct StackView {
     /// How many items the entry asks for, its anchor included.
     pub count: u8,
-    /// The count stepper's upper bound, [`STACK_MAX`].
+    /// The most items one entry may ask for, [`STACK_MAX`].
     pub max: u8,
     pub can_grow: bool,
     pub can_change_count: bool,
+    /// The count stepper's upper bound: `max` while the entry can grow,
+    /// else its own count — a cluster spanning categories may only shed
+    /// copies ([`count_max`]).
+    pub count_max: u8,
     /// The combined level, when the stack counts levels.
     pub total: Option<u8>,
     pub can_count_levels: bool,
@@ -151,6 +167,7 @@ pub fn stack_view<R: AsRef<Requirement>>(rows: &[R], item: &BoardItem) -> StackV
         max: STACK_MAX,
         can_grow: can_grow(rows, item),
         can_change_count: can_change_count(rows, item),
+        count_max: count_max(rows, item),
         total: item.total,
         can_count_levels: can_count_levels(rows, item),
         level_capacity: level_capacity(rows, item),

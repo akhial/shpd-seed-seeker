@@ -127,7 +127,7 @@ pub const ARCANE_RESIN: &str = "Arcane Resin";
 /// The resin chip's word for an amount derived from the kept wands.
 pub const RESIN_AUTO: &str = "Auto";
 
-/// What an Auto resin amount means, for the resin chip's tooltip.
+/// What an Auto resin amount means, for the resin chip's `Auto` tag.
 pub const RESIN_AUTO_TOOLTIP: &str =
     "Enough resin to upgrade kept wands to +3, excluding No resin wands and reforge copies";
 
@@ -136,6 +136,9 @@ pub const RESIN_MAGE_TAG: &str = "Mage +2";
 
 /// The resin detail for the starting Magic Missile's credit.
 pub const RESIN_MAGE_DETAIL: &str = "starting Magic Missile contributes 2 resin";
+
+/// The hover text of the resin chip's `Mage +2` tag.
+pub const RESIN_MAGE_TOOLTIP: &str = "Starting Magic Missile contributes 2 resin";
 
 /// A family as a category picker names it.
 #[must_use]
@@ -383,6 +386,13 @@ pub fn alternatives_label(members: usize) -> String {
     format!("Any of {members}")
 }
 
+/// A board entry's name where a menu or a drag caption names it: its
+/// chip's name, or a cluster's members' names in order, `Spear or Mace`.
+#[must_use]
+pub fn entry_name<'a>(names: impl IntoIterator<Item = &'a str>) -> String {
+    names.into_iter().collect::<Vec<_>>().join(" or ")
+}
+
 /// The combined-level badge where space is tight — the phone boards, whose
 /// chips give up their name before their tags: `Σ≥5`.
 #[must_use]
@@ -528,6 +538,11 @@ mod tests {
         assert_eq!(count_text(2, true), "≤2");
         assert_eq!(total_text(5), "Σ ≥ 5");
         assert_eq!(alternatives_label(3), "Any of 3");
+        assert_eq!(entry_name(["Spear"]), "Spear");
+        assert_eq!(
+            entry_name(["Spear", "Mace", "Any thrown"]),
+            "Spear or Mace or Any thrown"
+        );
     }
 
     #[test]

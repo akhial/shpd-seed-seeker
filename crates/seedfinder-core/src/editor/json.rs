@@ -1531,16 +1531,24 @@ fn problem_value(problem: &Problem) -> Value {
 
 fn tags(tags: &[Tag]) -> Value {
     tags.iter()
-        .map(|Tag { text, style }| {
-            let style = match style {
-                TagStyle::Plain => "plain",
-                TagStyle::Upgrade => "upgrade",
-            };
-            object(vec![
-                ("text", text.as_str().into()),
-                ("style", style.into()),
-            ])
-        })
+        .map(
+            |Tag {
+                 text,
+                 style,
+                 tooltip,
+             }| {
+                let style = match style {
+                    TagStyle::Plain => "plain",
+                    TagStyle::Upgrade => "upgrade",
+                    TagStyle::Credit => "credit",
+                };
+                object(vec![
+                    ("text", text.as_str().into()),
+                    ("style", style.into()),
+                    ("tooltip", tooltip.as_deref().into()),
+                ])
+            },
+        )
         .collect()
 }
 
@@ -1550,6 +1558,7 @@ fn stack_value(stack: &StackView) -> Value {
         max,
         can_grow,
         can_change_count,
+        count_max,
         total,
         can_count_levels,
         level_capacity,
@@ -1564,6 +1573,7 @@ fn stack_value(stack: &StackView) -> Value {
         ("max", (*max).into()),
         ("can_grow", (*can_grow).into()),
         ("can_change_count", (*can_change_count).into()),
+        ("count_max", (*count_max).into()),
         ("total", (*total).into()),
         ("can_count_levels", (*can_count_levels).into()),
         ("level_capacity", (*level_capacity).into()),
@@ -1596,6 +1606,7 @@ fn item_view(view: &ItemView) -> Value {
         blanket,
         cluster,
         label,
+        name,
         members,
         extras,
         stack,
@@ -1608,6 +1619,7 @@ fn item_view(view: &ItemView) -> Value {
         ("blanket", (*blanket).into()),
         ("cluster", (*cluster).into()),
         ("label", label.as_deref().into()),
+        ("name", name.as_str().into()),
         ("members", members.as_slice().into()),
         ("extras", extras.as_slice().into()),
         ("stack", stack_value(stack)),
@@ -1714,7 +1726,6 @@ fn resin_chip(chip: &ResinChip) -> Value {
         tags: leading,
         uncursed,
         tooltip,
-        amount_tooltip,
         details,
         description,
     } = chip;
@@ -1723,7 +1734,6 @@ fn resin_chip(chip: &ResinChip) -> Value {
         ("tags", tags(leading)),
         ("uncursed", (*uncursed).into()),
         ("tooltip", tooltip.as_deref().into()),
-        ("amount_tooltip", amount_tooltip.as_deref().into()),
         ("details", details.as_slice().into()),
         ("description", description.as_str().into()),
     ])
@@ -1739,6 +1749,7 @@ fn unreadable_item(raw: &Raw) -> Value {
         ("max", STACK_MAX.into()),
         ("can_grow", false.into()),
         ("can_change_count", false.into()),
+        ("count_max", 1.into()),
         ("total", Value::Null),
         ("can_count_levels", false.into()),
         ("level_capacity", 1.into()),
@@ -1773,6 +1784,7 @@ fn unreadable_item(raw: &Raw) -> Value {
         ("blanket", raw.blanket().into()),
         ("cluster", Value::Null),
         ("label", Value::Null),
+        ("name", UNKNOWN_REQUIREMENT.into()),
         ("members", vec![raw.key].into()),
         ("extras", none()),
         ("stack", stack),

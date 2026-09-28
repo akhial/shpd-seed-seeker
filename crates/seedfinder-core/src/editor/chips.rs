@@ -25,11 +25,11 @@ use super::Row;
 use super::board::{BoardItem, ItemKey, JoinCandidates, Refusal, board_items, join_candidates};
 use super::labels::{
     ARCANE_RESIN, CopyFloors, EXCLUDED_FROM_RESIN, KindName, NO_RESIN, RESIN_AUTO,
-    RESIN_AUTO_TOOLTIP, RESIN_MAGE_DETAIL, RESIN_MAGE_TAG, SELECT_TRINKET, UNCURSED,
-    alternatives_label, compact_total_text, count_text, count_tooltip, effect_label, floor_detail,
-    floor_tag, level_sum_relation, requirement_name, requirement_title, stack_relation, tier_tag,
-    total_text, total_tooltip, transmutations_detail, transmutations_tag, upgrade_detail,
-    upgrade_tag,
+    RESIN_AUTO_TOOLTIP, RESIN_MAGE_DETAIL, RESIN_MAGE_TAG, RESIN_MAGE_TOOLTIP, SELECT_TRINKET,
+    UNCURSED, alternatives_label, compact_total_text, count_text, count_tooltip, effect_label,
+    entry_name, floor_detail, floor_tag, level_sum_relation, requirement_name, requirement_title,
+    stack_relation, tier_tag, total_text, total_tooltip, transmutations_detail, transmutations_tag,
+    upgrade_detail, upgrade_tag,
 };
 use super::problems::{IndexedProblem, Problem, ProblemScope, Unread, indexed_problems, keyed};
 use super::stack::{StackView, stack_view};
@@ -67,6 +67,10 @@ pub struct ItemView {
     pub cluster: Option<u8>,
     /// A cluster's caption, `Any of N`.
     pub label: Option<String>,
+    /// The entry's name where a menu or a drag caption names it — an
+    /// "Either/or with…" choice: a chip's name, or a cluster's members'
+    /// names joined with ` or ` (`Spear or Mace`).
+    pub name: String,
     /// The visible rows' keys: one for a chip, every member of a cluster.
     pub members: Vec<u64>,
     /// The hidden copies' keys behind the stack badge.
@@ -110,6 +114,9 @@ pub enum TagStyle {
     Plain,
     /// The upgrade, tinted apart from the rest.
     Upgrade,
+    /// The resin the resin chip counts — its amount and the Mage's credit —
+    /// tinted apart from the donor filters.
+    Credit,
 }
 
 /// A qualifier beside a chip's name.
@@ -117,6 +124,9 @@ pub enum TagStyle {
 pub struct Tag {
     pub text: String,
     pub style: TagStyle,
+    /// The tag's own hover text, where the tag needs explaining: what
+    /// `Auto` means, where `Mage +2` comes from. `None` for the rest.
+    pub tooltip: Option<String>,
 }
 
 impl Tag {
@@ -124,6 +134,7 @@ impl Tag {
         Self {
             text: text.into(),
             style: TagStyle::Plain,
+            tooltip: None,
         }
     }
 }
@@ -227,16 +238,15 @@ pub enum ResinAmount {
 pub struct ResinChip {
     /// Always [`ARCANE_RESIN`].
     pub name: String,
-    /// `Auto` or `≥N`, then `Mage +2`, then `F≤N`.
+    /// `Auto` or `≥N` and `Mage +2` — the resin the chip counts, styled
+    /// [`TagStyle::Credit`], `Auto` and `Mage +2` explained in their
+    /// tooltips — then the donor filter `F≤N`.
     pub tags: Vec<Tag>,
     /// Whether donor wands must be uncursed (drawn as a check mark).
     pub uncursed: bool,
     /// The chip's hover text: the donors' source, the one filter no tag
     /// shows. `None` for any source.
     pub tooltip: Option<String>,
-    /// The amount tag's hover text — the first tag — which says what `Auto`
-    /// means. `None` for a fixed amount.
-    pub amount_tooltip: Option<String>,
     /// The filter in words, like a chip's details.
     pub details: Vec<String>,
     /// The accessibility label: the name, then the details.
@@ -267,6 +277,7 @@ pub fn chip_tags(requirement: &Requirement) -> Vec<Tag> {
         tags.push(Tag {
             text: upgrade,
             style: TagStyle::Upgrade,
+            tooltip: None,
         });
     }
     if let Some(depth) = requirement.max_depth {
@@ -431,9 +442,17 @@ pub fn resin_chip(resin: &ResinState) -> ResinChip {
         ResinAmount::Auto => (RESIN_AUTO.to_owned(), RESIN_AUTO.to_owned()),
         ResinAmount::AtLeast(amount) => (format!("≥{amount}"), format!("at least {amount}")),
     };
-    let mut tags = vec![Tag::plain(amount_tag)];
+    let mut tags = vec![Tag {
+        text: amount_tag,
+        style: TagStyle::Credit,
+        tooltip: (resin.amount == ResinAmount::Auto).then(|| RESIN_AUTO_TOOLTIP.to_owned()),
+    }];
     if filter.include_mage_wand {
-        tags.push(Tag::plain(RESIN_MAGE_TAG));
+        tags.push(Tag {
+            text: RESIN_MAGE_TAG.to_owned(),
+            style: TagStyle::Credit,
+            tooltip: Some(RESIN_MAGE_TOOLTIP.to_owned()),
+        });
     }
     if let Some(depth) = filter.max_depth {
         tags.push(Tag::plain(floor_tag(depth)));
@@ -461,7 +480,6 @@ pub fn resin_chip(resin: &ResinState) -> ResinChip {
         tags,
         uncursed: filter.uncursed,
         tooltip: filter.source.map(|source| source.label().to_owned()),
-        amount_tooltip: (resin.amount == ResinAmount::Auto).then(|| RESIN_AUTO_TOOLTIP.to_owned()),
         description: chip_description(ARCANE_RESIN, &details),
         details,
     }
@@ -556,7 +574,7 @@ fn item_view(
     blame: &Blame<'_>,
 ) -> ItemView {
     let keys = |indices: &[usize]| indices.iter().map(|&index| rows[index].key).collect();
-    let chips = item
+    let chips: Vec<ChipView> = item
         .members
         .iter()
         .map(|&index| {
@@ -588,6 +606,7 @@ fn item_view(
         blanket: rows[item.anchor()].requirement.blanket,
         cluster: item.cluster,
         label: item.cluster.map(|_| alternatives_label(item.members.len())),
+        name: entry_name(chips.iter().map(|chip| chip.name.as_str())),
         members: keys(&item.members),
         extras: keys(&item.extras),
         stack: stack_view(rows, item),

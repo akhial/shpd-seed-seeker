@@ -78,7 +78,8 @@
             "tags": [
               {
                 "style": "upgrade",
-                "text": "+2"
+                "text": "+2",
+                "tooltip": null
               }
             ],
             "title": "Spear",
@@ -114,7 +115,8 @@
             "tags": [
               {
                 "style": "plain",
-                "text": "T3"
+                "text": "T3",
+                "tooltip": null
               }
             ],
             "title": "Any Tier 3 weapon",
@@ -132,6 +134,7 @@
           1,
           3
         ],
+        "name": "Spear or Any weapon",
         "problem": null,
         "stack": {
           "can_change_count": true,
@@ -140,6 +143,7 @@
           "can_set_copy_depth": true,
           "copy_depth": null,
           "count": 2,
+          "count_max": 3,
           "count_text": "×2",
           "default_total": 2,
           "level_capacity": 8,

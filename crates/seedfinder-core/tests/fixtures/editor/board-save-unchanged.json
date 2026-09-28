@@ -75,7 +75,8 @@
             "tags": [
               {
                 "style": "upgrade",
-                "text": "+2"
+                "text": "+2",
+                "tooltip": null
               }
             ],
             "title": "Ring of Might",
@@ -92,6 +93,7 @@
         "members": [
           1
         ],
+        "name": "Ring of Might",
         "problem": null,
         "stack": {
           "can_change_count": true,
@@ -100,6 +102,7 @@
           "can_set_copy_depth": true,
           "copy_depth": 9,
           "count": 2,
+          "count_max": 3,
           "count_text": "×2",
           "default_total": 2,
           "level_capacity": 8,

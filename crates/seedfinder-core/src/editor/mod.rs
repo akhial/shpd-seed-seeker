@@ -94,7 +94,7 @@ pub use labels::KindName;
 pub use problems::{NO_ORDINARY_REQUIREMENT, Problem, ProblemScope, problems, row_problems};
 pub use stack::{
     StackView, can_change_count, can_count_levels, can_grow, can_set_copy_depth, copy_depth,
-    default_total, level_capacity, stack_view,
+    count_max, default_total, level_capacity, stack_view,
 };
 
 /// The most items one chip or cluster may ask for, its anchor included.

@@ -234,9 +234,10 @@ canonical — a cluster of one, repeats a stack would fold, a stack labelled
 | `id` | `"r17"` for a chip (its anchor row's key), `"c3"` for a cluster (its label). Stable while the entry survives an edit. |
 | `blanket` | The entry's section. |
 | `cluster`, `label` | A cluster's alternative label and caption (`Any of 3`); `null` for a chip. |
+| `name` | The entry's name where a menu or a drag caption names it — an "Either/or with…" choice: a chip's `name`, or a cluster's members' names joined with ` or ` (`Spear or Mace`). |
 | `members` | The visible rows' keys: one for a chip, every member of a cluster. |
 | `extras` | The hidden copies' keys behind the stack badge. |
-| `stack` | What the count and combined-level steppers offer: `count`, `max` (3), `can_grow`, `can_change_count`, `total`, `can_count_levels`, `level_capacity`, `default_total`, `copy_depth`, `can_set_copy_depth`, `count_text` (`×2`, or `≤2` while counting levels — present even at ×1 for steppers), `total_text` (`Σ ≥ 5`, `Σ ≥ 0` without a total). |
+| `stack` | What the count and combined-level steppers offer: `count`, `max` (3), `can_grow`, `can_change_count`, `count_max` (the count stepper's upper bound: `max` while the entry can grow, else its `count`, which it may only shed copies from; never above `max`), `total`, `can_count_levels`, `level_capacity`, `default_total`, `copy_depth`, `can_set_copy_depth`, `count_text` (`×2`, or `≤2` while counting levels — present even at ×1 for steppers), `total_text` (`Σ ≥ 5`, `Σ ≥ 0` without a total). |
 | `badges` | The badges shown at rest: `count` when the entry asks for more than one item, `total` when it counts levels; each `{"text", "compact_text", "tooltip"}` (`×3` / `3 of the same kind`; `Σ ≥ 5`, compact `Σ≥5`, `Levels add to at least 5 (a +0 item counts 1)`), else `null`. |
 | `chips` | One CHIP per member. |
 | `problem` | The first problem touching any member or hidden copy, so a problem on a folded-away copy still shows. |
@@ -250,7 +251,7 @@ canonical — a cluster of one, repeats a stack would fold, a stack labelled
 | `title` | The full title the popover and sheet lead with: the item, or `Any Tier 3+ melee weapon`. |
 | `item` | The item's stable id, or `null` for a wildcard. |
 | `kind`, `family` | The kind (`melee_weapon`) and family (`weapon`) for the sprite. |
-| `tags` | Qualifiers after the name, in order: `Transmute ≤3` or `choose at +3`, the tier (wildcards only: `T3`, `T3+`, `T≤3`), the upgrade (`+3`, `+3↑`, style `upgrade`), `F≤9`. Each `{"text", "style": "plain" \| "upgrade"}`. |
+| `tags` | Qualifiers after the name, in order: `Transmute ≤3` or `choose at +3`, the tier (wildcards only: `T3`, `T3+`, `T≤3`), the upgrade (`+3`, `+3↑`, style `upgrade`), `F≤9`. Each TAG is `{"text", "style": "plain" \| "upgrade" \| "credit", "tooltip"}`, `tooltip` the tag's own hover text or `null` (a chip's tags have none; see RESIN_CHIP). |
 | `trailing_tags` | Qualifiers after the effect cue: `No resin`. |
 | `effect` | `{"label", "effects", "any_enchantment", "curses_only"}` — `any enchantment` (`any glyph` on armor), one effect's name, or `effect: A/B/C`; `effects` in catalog order, the full set for any enchantment. `null` for any effect. |
 | `uncursed` | Cursed items are ruled out (drawn as a check mark). |
@@ -269,12 +270,15 @@ member (`can_detach`) and leave a lone chip where it is; onto the remove
 target, `remove`.
 
 **RESIN_CHIP**: `{"name": "Arcane Resin", "tags", "uncursed", "tooltip",
-"amount_tooltip", "details", "description"}` — tags `Auto` or `≥N`, then
-`Mage +2`, `F≤N`; `tooltip` is the chip's hover text, the donors' source
-(`Locked chest`), or `null` for any source; `amount_tooltip` is the amount
-tag's, which explains Auto (`Enough resin to upgrade kept wands to +3,
-excluding No resin wands and reforge copies`), or `null` for a fixed
-amount.
+"details", "description"}` — tags `Auto` or `≥N`, then `Mage +2`, then
+`F≤N`. The first two are the resin the chip counts, style `credit`, which
+apps tint apart from the donor filter `F≤N` (`plain`); the amount tag's
+`tooltip` explains Auto (`Enough resin to upgrade kept wands to +3,
+excluding No resin wands and reforge copies`, `null` for a fixed amount),
+and `Mage +2`'s says where it comes from (`Starting Magic Missile
+contributes 2 resin`). The chip's own `tooltip` is its hover text: the
+donors' source (`Locked chest`), the one filter no tag shows, or `null` for
+any source.
 
 ### Problems
 
@@ -440,7 +444,7 @@ project:
 | `board_items`, `BoardItem`, `ItemKey`, `join_candidates`, `drop_action`, `DropTarget`, `DropAction` | The fold itself and the drop policy. |
 | `problems(rows)`, `row_problems(requirement)`, `Problem`, `ProblemScope` | The problem list. |
 | `open`, `change`, `form`, `save`, `Draft`, `Change`, `Form`, `SaveResult`, `ResinOutcome`, `ResinState`, `ResinAmount` | The sheet. |
-| `can_grow`, `can_change_count`, `can_count_levels`, `level_capacity`, `default_total`, `copy_depth`, `can_set_copy_depth`, `stack_view` | Stack rules. |
+| `can_grow`, `can_change_count`, `count_max`, `can_count_levels`, `level_capacity`, `default_total`, `copy_depth`, `can_set_copy_depth`, `stack_view` | Stack rules. |
 | `skip_boss_floor`, `compact_alternative_labels`, `labels` | Floor-slider stepping, label compaction, and every English phrase. |
 | `requirement_board`, `requirement_editor` (feature `json-query`) | The envelopes. |
 
@@ -470,6 +474,8 @@ decided once.
 | Source labels | Sentence case (`Locked chest`). |
 | Tag order | Transmutations or `choose at +3`, tier, upgrade, floor, then the effect cue, then `No resin`. |
 | Combined-level badge | `Σ ≥ T`, compact `Σ≥T`. |
+| Resin chip tags | The amount and `Mage +2` styled `credit`, apart from `F≤N`; `Auto` and `Mage +2` carry their own tooltips. |
+| Entry names in menus | A chip's name; a cluster's member names joined with ` or ` (Linux and macOS). |
 | Armor's any-effect | `any glyph`. |
 | Default combined level | The item count, within the capacity. |
 | Level capacity | The stack's ring capacity, or its group's attainable capacity once counting. |
