@@ -93,7 +93,7 @@ fun ArcaneResinSheet(
             else OutlinedTextField(value = typed,
                 onValueChange = {
                     typed = it
-                    edited.change(SheetChange.resinAmount(it.trim().toDoubleOrNull()))
+                    edited.change(SheetChange.resinAmount(typedAmount(it)))
                 },
                 label = { Text("Minimum resin") },
                 modifier = Modifier.fillMaxWidth(),
@@ -149,3 +149,15 @@ fun ArcaneResinSheet(
 /** A typed amount as the field shows it: a whole number without its ".0". */
 private fun amountText(amount: Double): String =
     if (amount % 1.0 == 0.0) amount.toLong().toString() else amount.toString()
+
+/**
+ * The number the amount field holds, for the editor to judge, or null when
+ * it holds none. Only plain decimal digits count: Kotlin's own parser would
+ * also read `3d`, `1e3`, `0x1p2` or `NaN` as numbers the field never meant.
+ */
+internal fun typedAmount(text: String): Double? {
+    val trimmed = text.trim()
+    return trimmed.toLongOrNull()?.toDouble() ?: trimmed.takeIf(PLAIN_DECIMAL::matches)?.toDouble()
+}
+
+private val PLAIN_DECIMAL = Regex("[+-]?([0-9]+\\.[0-9]*|\\.[0-9]+)")

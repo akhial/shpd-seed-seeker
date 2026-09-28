@@ -71,6 +71,12 @@ class ArcaneResinSheetTest {
         compose.onNodeWithText("Minimum resin").performTextReplacement("65536")
         compose.onNodeWithText("Save").assertIsNotEnabled()
         compose.onNodeWithText(invalid).assertIsDisplayed()
+        // Text Kotlin's parser alone would read as a number is still not one.
+        for (text in listOf("3d", "1e3", "0x1p2")) {
+            compose.onNodeWithText("Minimum resin").performTextReplacement(text)
+            compose.onNodeWithText("Save").assertIsNotEnabled()
+            compose.onNodeWithText(invalid).assertIsDisplayed()
+        }
         compose.captureResinScreenshot("sheet-error", requireNotNull(ShadowDialog.getLatestDialog().window))
         compose.onNodeWithText("Minimum resin").performTextReplacement("3")
         compose.onNodeWithText(invalid).assertDoesNotExist()
@@ -78,6 +84,15 @@ class ArcaneResinSheetTest {
         compose.runOnIdle { assertEquals(ResinCondition(3, auto = false, filter), saved) }
         compose.onNodeWithText("Remove").performClick()
         compose.runOnIdle { assertTrue(removed) }
+    }
+
+    @Test fun theAmountFieldReadsOnlyPlainNumbers() {
+        assertEquals(3.0, typedAmount(" 3 ")!!, 0.0)
+        assertEquals(1.5, typedAmount("1.5")!!, 0.0)
+        assertEquals(-2.0, typedAmount("-2")!!, 0.0)
+        for (text in listOf("", " ", "3d", "3f", "1e3", "0x1p2", "NaN", "Infinity", "1,5", "abc")) {
+            assertNull(text, typedAmount(text))
+        }
     }
 
     @Test fun autoCanBeSavedWithInvalidHiddenAmountAndKeepsFilters() {
