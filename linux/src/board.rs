@@ -305,8 +305,8 @@ mod tests {
     use serde_json::{Value, json};
     use shpd_seedfinder_core::catalog::{ItemId, ItemKind};
     use shpd_seedfinder_core::editor::{
-        self, BoardView, ChipView, Edit, EditResult, ItemView, Refusal, ResinAmount, ResinState,
-        Row, TagStyle, labels,
+        self, Badge, Badges, BoardView, ChipView, Edit, EditResult, ItemView, Refusal, ResinAmount,
+        ResinState, Row, TagStyle, labels,
     };
     use shpd_seedfinder_core::query::{
         ArcaneResinFilter, LevelSum, Requirement, UpgradeRequirement,
@@ -429,6 +429,20 @@ mod tests {
         }
     }
 
+    /// A chip's badges as the envelope writes them.
+    fn badges(badges: &Badges) -> Value {
+        let badge = |badge: &Option<Badge>| {
+            badge.as_ref().map_or(Value::Null, |badge| {
+                json!({
+                    "text": badge.text,
+                    "compact_text": badge.compact_text,
+                    "tooltip": badge.tooltip,
+                })
+            })
+        };
+        json!({ "count": badge(&badges.count), "total": badge(&badges.total) })
+    }
+
     fn assert_chip_matches(name: &str, chip: &ChipView, expected: &Value) {
         assert_eq!(chip.key, expected["key"], "{name}");
         assert_eq!(chip.name, expected["name"], "{name}: name");
@@ -453,21 +467,14 @@ mod tests {
         );
         assert_eq!(chip.uncursed, expected["uncursed"], "{name}");
         assert_eq!(chip.in_cluster, expected["in_cluster"], "{name}");
-        // Every badge and stepper belongs to a chip, a cluster member's too.
-        for (badge, expected) in [
-            (&chip.badges.count, &expected["badges"]["count"]),
-            (&chip.badges.total, &expected["badges"]["total"]),
-        ] {
-            assert_eq!(
-                badge.as_ref().map_or(Value::Null, |badge| json!({
-                    "text": badge.text,
-                    "compact_text": badge.compact_text,
-                    "tooltip": badge.tooltip,
-                })),
-                *expected,
-                "{name}: badge"
-            );
-        }
+        // Every badge and stepper belongs to a chip, a cluster member's too,
+        // and so do the badges its origin shows while one item is lifted.
+        assert_eq!(badges(&chip.badges), expected["badges"], "{name}: badges");
+        assert_eq!(
+            chip.remaining_badges.as_ref().map_or(Value::Null, badges),
+            expected["remaining_badges"],
+            "{name}: remaining badges"
+        );
         assert_eq!(chip.copies, keys(&expected["copies"]), "{name}: copies");
         let stack = &chip.stack;
         let shown = json!({
@@ -501,7 +508,7 @@ mod tests {
     #[test]
     fn the_typed_editor_gives_the_golden_board_answers_through_the_app_codec() {
         let replayed = fixtures("requirement_board");
-        assert_eq!(replayed.len(), 39);
+        assert_eq!(replayed.len(), 40);
         for Fixture {
             name,
             request,

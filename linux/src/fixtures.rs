@@ -66,6 +66,7 @@ golden![
     "board-stack-member",
     "board-member-count-one",
     "board-cluster-alike-stacks",
+    "board-remaining-badges",
     "board-stack-total",
     "board-stack-total-grow-copy-floor",
     "board-copy-depth",
