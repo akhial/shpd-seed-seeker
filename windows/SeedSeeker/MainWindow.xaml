@@ -70,8 +70,9 @@
                 <TextBlock x:Name="RemoveZoneLabel" Text="drop to remove" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource ShpdDangerBrush}"/>
               </StackPanel>
             </Border>
-            <TextBlock x:Name="NoRequirements" Text="No requirements yet. Add one to describe the item you're hunting for." Style="{StaticResource Caption}" Margin="1,0,1,10"/>
-            <Expander HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Margin="0,0,0,16">
+            <TextBlock x:Name="NoRequirements" Text="No requirements yet. Add one to describe the item you're hunting for." Style="{StaticResource Caption}" Margin="1,8,1,0"/>
+            <!-- Set apart from the chips above it, which otherwise sit right on its header. -->
+            <Expander HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Margin="0,16,0,16">
               <Expander.Header>
                 <StackPanel Orientation="Horizontal" Spacing="8">
                   <TextBlock x:Name="BlanketHeader" Text="Blanket Requirements (0)" VerticalAlignment="Center"/>
@@ -206,7 +207,12 @@
           </StackPanel>
         </ScrollView>
         <StackPanel Grid.Row="2" Padding="20,14,20,10" Spacing="10" BorderThickness="0,1,0,0" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
-          <Button x:Name="StartButton" Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Stretch" Padding="0,9" Click="Start_Click">
+          <!-- The button is disabled while a refine verifies the old results
+               and while a cancel lands. It keeps the focus meanwhile, so a
+               Ctrl+Enter start does not hand it (and its tooltip) to the
+               footer link. -->
+          <Button x:Name="StartButton" Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Stretch" Padding="0,9" Click="Start_Click"
+                  AllowFocusWhenDisabled="True">
             <!-- While a search runs this is Cancel Search, drawn with the
                  default style (SetStartButton), whose fills these make the
                  web's danger red; the accent style never reads them. -->
@@ -463,7 +469,7 @@
                               Background="{ThemeResource ShpdGreenFillBrush}" BorderBrush="{ThemeResource ShpdGreenStrokeBrush}">
                         <StackPanel Orientation="Horizontal" Spacing="5">
                           <FontIcon Glyph="&#xE73E;" FontSize="10" Foreground="{ThemeResource ShpdGreenBrush}" VerticalAlignment="Center"/>
-                          <TextBlock Text="Match" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource ShpdGreenBrush}" VerticalAlignment="Center"/>
+                          <TextBlock Text="Match" FontSize="12" FontWeight="SemiBold" TextLineBounds="Tight" Foreground="{ThemeResource ShpdGreenBrush}" VerticalAlignment="Center"/>
                         </StackPanel>
                       </Border>
                       <!-- A matched wand the query consumes as Arcane Resin: the same chip in the resin's violet. -->
@@ -472,7 +478,7 @@
                               ToolTipService.ToolTip="Arcane Resin donor match" AutomationProperties.Name="Arcane Resin donor match">
                         <StackPanel Orientation="Horizontal" Spacing="5">
                           <local:SpriteView SpriteIndex="317" SpriteSize="14" VerticalAlignment="Center"/>
-                          <TextBlock Text="Match" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource ShpdVioletBrush}" VerticalAlignment="Center"/>
+                          <TextBlock Text="Match" FontSize="12" FontWeight="SemiBold" TextLineBounds="Tight" Foreground="{ThemeResource ShpdVioletBrush}" VerticalAlignment="Center"/>
                         </StackPanel>
                       </Border>
                       <Border Visibility="{Binding ChoiceVisibility}" Height="18" Padding="5,0" CornerRadius="4" BorderThickness="1" VerticalAlignment="Center"

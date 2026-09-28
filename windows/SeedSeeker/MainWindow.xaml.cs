@@ -108,6 +108,13 @@ public sealed partial class MainWindow : Window
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(AppTitleBar);
         AppWindow.TitleBar.PreferredHeightOption = TitleBarHeightOption.Tall;
+        // The caption buttons follow Windows' theme unless told otherwise, so
+        // an app theme that differs from it would leave them faint.
+        if (Content is FrameworkElement themed)
+        {
+            ApplyCaptionTheme(themed.ActualTheme);
+            themed.ActualThemeChanged += (sender, _) => ApplyCaptionTheme(sender.ActualTheme);
+        }
         var scale = GetDpiForWindow(WinRT.Interop.WindowNative.GetWindowHandle(this)) / 96.0;
         AppWindow.Resize(new SizeInt32((int)(1280 * scale), (int)(740 * scale)));
         if (AppWindow.Presenter is OverlappedPresenter presenter)
@@ -150,6 +157,24 @@ public sealed partial class MainWindow : Window
             if (!updateCheckStarted) { updateCheckStarted = true; _ = CheckForUpdatesAsync(); }
             if (pendingLink is string link) { pendingLink = null; _ = ApplySharedLinkAsync(link); }
         };
+    }
+
+    /// <summary>
+    /// Colours the title bar's caption buttons for <paramref name="theme"/>,
+    /// the app's own theme: the text ink at rest, Fluent's subtle fills under
+    /// the pointer, and the secondary ink while the window is inactive.
+    /// </summary>
+    private void ApplyCaptionTheme(ElementTheme theme)
+    {
+        var dark = theme == ElementTheme.Dark;
+        var ink = dark ? Microsoft.UI.Colors.White : Microsoft.UI.Colors.Black;
+        Color Tint(byte alpha) => Color.FromArgb(alpha, ink.R, ink.G, ink.B);
+        var bar = AppWindow.TitleBar;
+        bar.ButtonBackgroundColor = bar.ButtonInactiveBackgroundColor = Microsoft.UI.Colors.Transparent;
+        bar.ButtonForegroundColor = bar.ButtonHoverForegroundColor = bar.ButtonPressedForegroundColor = ink;
+        bar.ButtonHoverBackgroundColor = Tint(dark ? (byte)0x0F : (byte)0x09);
+        bar.ButtonPressedBackgroundColor = Tint(dark ? (byte)0x0A : (byte)0x06);
+        bar.ButtonInactiveForegroundColor = Tint(dark ? (byte)0x5D : (byte)0x72);
     }
 
     private sealed class UpdateState { public string? SkippedVersion { get; set; } public DateTimeOffset LastChecked { get; set; } }
@@ -557,7 +582,7 @@ public sealed partial class MainWindow : Window
         var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
         // Sized and tucked against the name like every other chip's art (ChipArt).
         content.Children.Add(new SpriteView { SpriteIndex = 317, SpriteSize = 18, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, -2, 0) });
-        content.Children.Add(new TextBlock { Text = resin.Name, FontSize = 13, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+        content.Children.Add(new TextBlock { Text = resin.Name, FontSize = 13, FontWeight = FontWeights.SemiBold, TextLineBounds = TextLineBounds.Tight, VerticalAlignment = VerticalAlignment.Center });
         foreach (var tag in resin.Tags) content.Children.Add(ChipTagPill(tag));
         if (resin.Uncursed) content.Children.Add(UncursedTag("Uncursed wands"));
         return content;
@@ -604,7 +629,7 @@ public sealed partial class MainWindow : Window
     }
 
     private static TextBlock ChipName(ChipFace chip) =>
-        new() { Text = chip.Name, FontSize = 13, FontWeight = FontWeights.SemiBold, MaxWidth = 150, TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
+        new() { Text = chip.Name, FontSize = 13, FontWeight = FontWeights.SemiBold, MaxWidth = 150, TextTrimming = TextTrimming.CharacterEllipsis, TextLineBounds = TextLineBounds.Tight, VerticalAlignment = VerticalAlignment.Center };
 
     /// <summary>
     /// An either/or cluster: its members share one dashed capsule, with "or"
@@ -634,14 +659,18 @@ public sealed partial class MainWindow : Window
     {
         var label = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5, VerticalAlignment = VerticalAlignment.Center };
         label.Children.Add(new FontIcon { Glyph = "", FontSize = 12, VerticalAlignment = VerticalAlignment.Center });
-        label.Children.Add(new TextBlock { Text = "Add", FontSize = 13, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
-        label.Margin = new Thickness(12, 0, 12, 0);
+        label.Children.Add(new TextBlock { Text = "Add", FontSize = 13, FontWeight = FontWeights.SemiBold, TextLineBounds = TextLineBounds.Tight, VerticalAlignment = VerticalAlignment.Center });
+        label.Margin = new Thickness(10, 0, 12, 0);
         var content = new Grid();
         content.Children.Add(DashedCapsule(15, ChipEdge, ThemeBrush("SubtleFillColorTransparentBrush", Microsoft.UI.Colors.Transparent)));
         content.Children.Add(label);
+        // The outline is content, so the content has to fill the whole 30 px
+        // chip: a button centres its content at its natural height, which
+        // squeezed the capsule to the height of its label.
         var chip = new Button
         {
             Content = content, Height = 30, MinWidth = 0, MinHeight = 0, Padding = new Thickness(0),
+            HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Stretch,
             CornerRadius = new CornerRadius(15), BorderThickness = new Thickness(0),
             Background = ThemeBrush("SubtleFillColorTransparentBrush", Microsoft.UI.Colors.Transparent),
             Foreground = ThemeBrush("TextFillColorSecondaryBrush", Microsoft.UI.Colors.Gray),
@@ -1083,7 +1112,7 @@ public sealed partial class MainWindow : Window
 
     private Border GhostChip(StackPanel content)
     {
-        ghostCaptionText = new TextBlock { FontFamily = Palette.Mono, FontSize = 11, FontWeight = FontWeights.Bold, VerticalAlignment = VerticalAlignment.Center };
+        ghostCaptionText = new TextBlock { FontFamily = Palette.Mono, FontSize = 11, FontWeight = FontWeights.Bold, TextLineBounds = TextLineBounds.Tight, VerticalAlignment = VerticalAlignment.Center };
         ghostCaption = new Border { Child = ghostCaptionText, CornerRadius = new CornerRadius(8), Padding = new Thickness(5, 0, 5, 0), Height = 16, Visibility = Visibility.Collapsed, VerticalAlignment = VerticalAlignment.Center };
         content.Children.Add(ghostCaption);
         return new Border
