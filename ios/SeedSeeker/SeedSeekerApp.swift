@@ -72,7 +72,9 @@ final class AppModel {
             query = SavedQuery(requirements: [try! ItemRequirement(key: 1,
                 item: ItemCatalog.findById("wand_fireblast"), upgrade: 3, kind: .wand)])
         }
-        if let pending = controller.pendingQuery { query = pending }
+        // The interrupted search's own list, exactly as it was searched so it
+        // resumes; only its keys are renumbered, which no document carries.
+        if let pending = controller.pendingQuery { query = pending.withKeysInOrder() }
         presets = PresetPersistence.decode(defaults.string(forKey: "savedPresets") ?? "")
         showResults = controller.hasPendingSearch || !controller.results.isEmpty
     }

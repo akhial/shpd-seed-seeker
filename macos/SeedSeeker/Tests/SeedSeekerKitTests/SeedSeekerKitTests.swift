@@ -176,7 +176,7 @@ final class SeedSeekerKitTests: XCTestCase {
     }
 
     func testPresetPersistenceDropsInvalidEntries() throws {
-        let requirement = try ItemRequirement(key: 99, item: nil, upgrade: 1, kind: .wand,
+        let requirement = try ItemRequirement(key: 1, item: nil, upgrade: 1, kind: .wand,
                                               upgradeMatch: .atLeast, requireUncursed: true)
         let valid = QueryPreset(name: "My preset",
                                 query: SavedQuery(requirements: [requirement]))
@@ -188,10 +188,28 @@ final class SeedSeekerKitTests: XCTestCase {
         XCTAssertEqual(PresetPersistence.decode("not json"), [])
     }
 
+    /// Keys only name rows within one list, so saved queries and presets
+    /// load keyed 1…n, whatever an earlier build wrote: random 64-bit keys
+    /// (macOS), key 0 for new rows (iOS).
+    func testSavedQueriesAndPresetsLoadKeyedInOrder() throws {
+        let rows = [
+            try ItemRequirement(key: 0, item: nil, upgrade: 0, kind: .wand, upgradeMatch: .any),
+            try ItemRequirement(key: Int64.max, item: nil, upgrade: 0, kind: .ring, upgradeMatch: .any),
+            try ItemRequirement(key: Int64.max, item: nil, upgrade: 0, kind: .armor, upgradeMatch: .any),
+        ]
+        let text = try XCTUnwrap(QueryPersistence.encode(SavedQuery(requirements: rows)))
+        XCTAssertEqual(QueryPersistence.decode(text).requirements.map(\.key), [1, 2, 3])
+        let presets = try XCTUnwrap(PresetPersistence.encode([
+            QueryPreset(name: "Old keys", query: SavedQuery(requirements: rows)),
+        ]))
+        XCTAssertEqual(PresetPersistence.decode(presets).first?.query.requirements.map(\.key), [1, 2, 3])
+        XCTAssertEqual(rows.withKeysInOrder().map(\.kind), rows.map(\.kind))
+    }
+
     func testPresetPersistenceDropsOnlyUnreadableElements() throws {
         // A preset written by a future build (say, an unknown kind raw value)
         // must drop alone instead of taking the whole collection with it.
-        let requirement = try ItemRequirement(key: 7, item: nil, upgrade: 0, kind: .thrownWeapon,
+        let requirement = try ItemRequirement(key: 1, item: nil, upgrade: 0, kind: .thrownWeapon,
                                               upgradeMatch: .any)
         let valid = QueryPreset(name: "Thrown", query: SavedQuery(requirements: [requirement]))
         let encoded = try XCTUnwrap(PresetPersistence.encode([valid]))

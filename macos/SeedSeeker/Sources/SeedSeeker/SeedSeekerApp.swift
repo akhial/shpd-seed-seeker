@@ -354,11 +354,9 @@ private struct ContentView: View {
     private func apply(_ preset: QueryPreset) { apply(preset.query) }
 
     private func apply(_ saved: SavedQuery) {
-        requirements = saved.requirements.map { requirement in
-            var copy = requirement
-            copy.key = Int64.random(in: 1...Int64.max)
-            return copy
-        }
+        // Keyed 1…n, as every loaded list starts: a key only names a row
+        // within one list.
+        requirements = saved.requirements.withKeysInOrder()
         floorRequirements = saved.floorRequirements
         autoApplyTrinket = saved.autoApplyTrinket
         arcaneResinAuto = saved.arcaneResinAuto; arcaneResin = saved.arcaneResin; arcaneResinFilter = saved.arcaneResinFilter
