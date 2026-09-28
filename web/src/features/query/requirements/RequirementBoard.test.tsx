@@ -470,6 +470,32 @@ it("detaches a bare copy of a member's stack, which keeps its +2 in the cluster"
   expect(tags(chipWhere("Wand of Frost", false))).toEqual([]);
 });
 
+it("names and draws a stack picked up to join as the bare copy that moves", async () => {
+  const ENERGY = { kind: "ring", item: "ring_energy" };
+  await render(
+    JSON.stringify({ requirements: [{ ...ENERGY, upgrade: 4 }, ENERGY, ENERGY, DISINTEGRATION] }),
+  );
+  expect(chip("Ring of Energy").getAttribute("aria-label")).toBe("Ring of Energy, exactly +4");
+  await openMenu("Ring of Energy");
+  await click("orEither/or with…");
+  const energy = chip("Ring of Energy");
+  expect(energy.classList.contains("d1-chip-pick-source")).toBe(true);
+  expect(tags(energy)).toEqual([]);
+  expect(energy.querySelector(".d1-stack-badge")).toBeNull();
+  expect(energy.getAttribute("aria-label")).toBe("Ring of Energy, any upgrade");
+  expect(status()).toBe("Either/or with… choose a chip for Ring of Energy");
+  await act(async () => energy.focus());
+  expect(host.querySelector(".d1-chip-pop-title")!.textContent).toBe("Ring of Energy");
+  expect(host.querySelector(".d1-chip-pop-rel")).toBeNull();
+  await press(chip("Wand of Disintegration"), "Enter");
+  expect(requirements()).toEqual([
+    { ...ENERGY, upgrade: 4 },
+    ENERGY,
+    { any_of: [DISINTEGRATION, ENERGY] },
+  ]);
+  expect(tags(chipWhere("Ring of Energy", false))).toEqual(["+4"]);
+});
+
 it("draws the ghost with the chip's whole face: its trailing tags and uncursed check", async () => {
   await render(
     JSON.stringify({
@@ -648,7 +674,7 @@ it("joins by drag and by pick, and a lone chip stays put on the board", async ()
 
   await openMenu("Any ring");
   await click("orEither/or with…");
-  expect(status()).toBe("Either/or with… choose a chip");
+  expect(status()).toBe("Either/or with… choose a chip for Any ring");
   expect(chip("Any wand").classList.contains("d1-chip-pickable")).toBe(true);
   await act(async () =>
     chip("Wand of Frost").dispatchEvent(

@@ -481,8 +481,12 @@ export function RequirementBoard({
     const classes = ["d1-chip"];
     if (drag?.source === chip.key) classes.push("d1-chip-dragging");
     if (chip.problem) classes.push("d1-chip-error");
+    // A chip picked up to join is the moving item in place: it draws, and is
+    // named by, the item that moves.
+    const picked = pick?.source === chip.key;
+    const face = picked ? movingFace(chip) : chip;
     if (pick) {
-      if (pick.source === chip.key) classes.push("d1-chip-pick-source");
+      if (picked) classes.push("d1-chip-pick-source");
       else if (chips.get(pick.source)?.chip.join.includes(chip.key))
         classes.push("d1-chip-pickable");
     }
@@ -494,7 +498,7 @@ export function RequirementBoard({
         className={classes.join(" ") + dropClass({ kind: "chip", key: chip.key })}
         data-drop="chip"
         data-chip={chip.key}
-        aria-label={chip.description}
+        aria-label={face.description}
         onPointerDown={onChipPointerDown(chip.key)}
         onPointerMove={onChipPointerMove}
         onPointerUp={onChipPointerUp}
@@ -510,10 +514,10 @@ export function RequirementBoard({
           if (hoveredKey === chip.key) setHovered(null);
         }}
       >
-        <ItemFace face={chip} />
+        <ItemFace face={face} />
         {/* A chip picked up to join shows the one item that moves; a dragged
             chip's origin shows what its stack keeps while that item is away. */}
-        {pick?.source === chip.key
+        {picked
           ? null
           : drag?.source === chip.key && chip.remaining_badges
             ? renderRemainingBadges(chip.remaining_badges)
@@ -688,11 +692,13 @@ export function RequirementBoard({
   // The resin chip's menu has no requirement chip to draw from.
   const menuOnResin = menu?.key === "resin" && resin !== undefined;
   const hoveredChip = hovered ? chips.get(hovered.key)?.chip : undefined;
+  const pickSource = pick ? chips.get(pick.source)?.chip : undefined;
+  // The pick prompt names the item that moves, as its chip now draws it.
   const statusLine =
     hoverAction?.type === "refuse"
       ? hoverAction.message
       : pick
-        ? "Either/or with… choose a chip"
+        ? `Either/or with… choose a chip${pickSource ? ` for ${movingFace(pickSource).title}` : ""}`
         : notice;
 
   return (
@@ -758,7 +764,11 @@ export function RequirementBoard({
         </div>
       )}
       {hovered && hoveredChip && !drag && !menu && (
-        <ChipPopover chip={hoveredChip} style={{ left: hovered.left, top: hovered.top }} />
+        <ChipPopover
+          chip={hoveredChip}
+          moving={pick?.source === hoveredChip.key}
+          style={{ left: hovered.left, top: hovered.top }}
+        />
       )}
       {drag && (dragSource || draggingResin) && (
         <div
@@ -832,19 +842,34 @@ function ResinChipBody({ chip, amountOnly }: { chip: ResinChipView; amountOnly?:
   );
 }
 
-/** The detail card under a hovered or focused chip. */
-function ChipPopover({ chip, style }: { chip: ChipView; style: CSSProperties }) {
+/**
+ * The detail card under a hovered or focused chip. A chip picked up to join
+ * (`moving`) describes the item that moves, which carries none of its stack.
+ */
+function ChipPopover({
+  chip,
+  moving,
+  style,
+}: {
+  chip: ChipView;
+  moving: boolean;
+  style: CSSProperties;
+}) {
+  const face = moving ? movingFace(chip) : chip;
+  // A bare copy has no stack of its own to relate, nor the row's problem.
+  const own = face === chip;
   return (
     <div className="d1-chip-pop" role="tooltip" style={style}>
-      <div className="d1-chip-pop-title">{chip.title}</div>
-      {chip.details.length > 0 && <div className="d1-chip-pop-sub">{chip.details.join(" · ")}</div>}
-      {chip.relations.map((relation) => (
-        <div key={relation.glyph} className="d1-chip-pop-rel">
-          <span className="d1-chip-pop-glyph">{RELATION_GLYPHS[relation.glyph]}</span>
-          <span>{relation.text}</span>
-        </div>
-      ))}
-      {chip.problem && <div className="d1-chip-pop-error">{chip.problem}</div>}
+      <div className="d1-chip-pop-title">{face.title}</div>
+      {face.details.length > 0 && <div className="d1-chip-pop-sub">{face.details.join(" · ")}</div>}
+      {own &&
+        chip.relations.map((relation) => (
+          <div key={relation.glyph} className="d1-chip-pop-rel">
+            <span className="d1-chip-pop-glyph">{RELATION_GLYPHS[relation.glyph]}</span>
+            <span>{relation.text}</span>
+          </div>
+        ))}
+      {own && chip.problem && <div className="d1-chip-pop-error">{chip.problem}</div>}
     </div>
   );
 }
