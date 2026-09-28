@@ -361,6 +361,30 @@ final class RequirementSheetTests: XCTestCase {
         XCTAssertEqual(try turnedBack(empty.save(onto: rows)).form.errors, empty.form.errors)
     }
 
+    /// An Auto amount saves as Auto: the core writes `"amount": "auto"`, and
+    /// the query keeps no amount of its own.
+    func testAnAutoResinSavesAsAuto() throws {
+        let rows = [try requirement(1, kind: .wand), try requirement(2, item: "ring_might")]
+        let opened = try XCTUnwrap(RequirementSheet.open(rows: rows, key: 1, offerResin: true))
+        let auto = try moved(opened, [.item(RequirementSheet.arcaneResin), .resinAuto(true)])
+        XCTAssertTrue(auto.form.resin.auto)
+        XCTAssertTrue(auto.form.errors.isEmpty)
+        XCTAssertTrue(auto.form.canSave)
+        let saved = try landed(auto.save(onto: rows))
+        XCTAssertEqual(saved.rows.map(\.key), [2])
+        XCTAssertEqual(saved.resin, .set(try XCTUnwrap(BoardResin(amount: 0, auto: true, filter: ArcaneResinFilter()))))
+
+        // The same answer as written, its filter's unset fields null.
+        let text = #"{"changed": true, "rows": [], "rekeyed": [], "focus": null, "resin": {"set": {"amount": "auto", "filter": {"uncursed": false, "max_depth": null, "source": "locked_chest", "include_mage_wand": true}}}}"#
+        let object = try XCTUnwrap(try JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any])
+        let written = try XCTUnwrap(SheetSaved(json: object, sent: rows))
+        XCTAssertEqual(written.rows, [])
+        XCTAssertNil(written.focus)
+        XCTAssertEqual(written.resin, .set(try XCTUnwrap(BoardResin(
+            amount: 0, auto: true,
+            filter: ArcaneResinFilter(uncursed: false, source: .lockedChest, includeMageWand: true)))))
+    }
+
     /// The resin chip saved as a wand adds the wand and clears the query's
     /// resin; an Auto condition opens as Auto.
     func testTheResinChipSavedAsAWandClearsTheResin() throws {
