@@ -1806,8 +1806,7 @@ impl JoinRules {
         };
         let target_needs = !onto.in_cluster
             && onto.count() > 1
-            && (rows[target].requirement.identity_group.is_none()
-                || rows[target].requirement.level_sum.is_some());
+            && rows[target].requirement.identity_group.is_none();
         let source_needs = from.in_cluster
             && from.count() > 2
             && self.board.member_of[source]
@@ -1910,12 +1909,16 @@ fn joined(
             && (anchor.identity_group.is_none() || anchor.level_sum.is_some())
         {
             // Plain repeats and a combined level's rings become bare copies
-            // under a stack label of the target's own.
+            // under a stack label of the target's own: the one a combined
+            // level's stack already carries, or a free one.
             let used = taken(
                 next.iter().map(|row| row.requirement.identity_group),
                 &held.identity,
             );
-            let Some(label) = free_group(&used, MAX_IDENTITY_GROUP) else {
+            let Some(label) = anchor
+                .identity_group
+                .or_else(|| free_group(&used, MAX_IDENTITY_GROUP))
+            else {
                 return Step::Refused(Refusal::NoFreeGroup);
             };
             let member = Requirement {

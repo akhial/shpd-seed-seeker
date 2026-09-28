@@ -2667,6 +2667,64 @@ fn a_combined_level_stack_keeps_what_its_rest_can_reach_or_its_count_as_a_member
     assert_eq!(counts(&joined), [2, 1]);
 }
 
+/// A combined-level stack written with a stack label of its own keeps that
+/// label as a joined target: it needs no free one, so the join goes through
+/// with every other label taken, and it is not renumbered when labels are
+/// free.
+#[test]
+fn a_labelled_combined_level_target_keeps_its_own_label() {
+    let ring = |key, label| {
+        with(sum(row(key, ItemKind::Ring), 1, 5), |r| {
+            r.identity_group = Some(label);
+        })
+    };
+    let copy = |key, kind, label| with(row(key, kind), |r| r.identity_group = Some(label));
+    let might = named(3, ItemId::RingMight);
+    let taken = [
+        copy(4, ItemKind::Wand, 2),
+        copy(5, ItemKind::Wand, 2),
+        copy(6, ItemKind::Armor, 3),
+        copy(7, ItemKind::Armor, 3),
+        copy(8, ItemKind::Weapon, 4),
+        copy(9, ItemKind::Weapon, 4),
+    ];
+    let full: Vec<Row> = [ring(1, 1), ring(2, 1), might]
+        .into_iter()
+        .chain(taken)
+        .collect();
+    let join = Edit::Join {
+        source: 3,
+        target: 1,
+    };
+    assert_eq!(
+        drop_action(&full, 3, DropTarget::Row(1)),
+        DropAction::Join { target: 1 }
+    );
+    assert!(
+        join_candidates(&full, &board_items(&full))[2]
+            .join
+            .contains(&1)
+    );
+    let result = run(&full, &[join]);
+    assert_eq!(result.refused, None);
+    let joined = [
+        member(row(1, ItemKind::Ring), 1, Some(1)),
+        member(might, 1, None),
+        copy(2, ItemKind::Ring, 1),
+    ];
+    assert_eq!(result.rows[..3], joined);
+    assert_eq!(result.rows[3..], taken);
+    assert_eq!(counts(&result.rows), [2, 1, 2, 2, 2]);
+
+    let free = [ring(1, 3), ring(2, 3), might];
+    let joined = joined.map(|row| {
+        with(row, |r| {
+            r.identity_group = r.identity_group.map(|_| 3);
+        })
+    });
+    assert_eq!(edited(&free, &[join]), joined);
+}
+
 /// A member leaving a cluster — detached, or dragged onto another chip —
 /// takes one item of its stack: its own row, with its constraints. The rest
 /// stays in the cluster in its place, one item fewer, as the same item
