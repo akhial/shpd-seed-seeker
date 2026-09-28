@@ -1,9 +1,10 @@
 //! Brute-force oracle for the slot-based matcher: alternative groups,
-//! combined-level totals with optional members, same-kind stacks and
-//! accessibility
-//! scenarios are all exercised on random small worlds and random queries,
-//! and the engine's answers are compared with an exhaustive enumeration of
-//! every assignment.
+//! combined-level totals with optional members, same-kind stacks — anchored
+//! on a lone requirement, on a whole alternative group, or on some of its
+//! members (member stacks, whose copies another member waives) — and
+//! accessibility scenarios are all exercised on random small worlds and
+//! random queries, and the engine's answers are compared with an exhaustive
+//! enumeration of every assignment.
 
 use std::collections::BTreeMap;
 
@@ -67,10 +68,14 @@ fn family_effects(kind: ItemKind) -> Vec<Effect> {
 }
 
 fn random_world(rng: &mut Rng) -> GeneratedWorld {
+    random_world_from(rng, &POOL)
+}
+
+fn random_world_from(rng: &mut Rng, pool: &[ItemId]) -> GeneratedWorld {
     let count = 1 + rng.below(6);
     let items = (0..count)
         .map(|_| {
-            let id = POOL[rng.below(POOL.len())];
+            let id = pool[rng.below(pool.len())];
             let kind = item(id).kind;
             let effects = family_effects(kind);
             let effect = (!effects.is_empty() && rng.chance(50))
@@ -283,6 +288,32 @@ fn random_query(rng: &mut Rng) -> Option<SearchQuery> {
     query.validate().ok().map(|()| query)
 }
 
+/// For each requirement, the alternative group that gates it: set on the
+/// copies (lone requirements) of a label that some, but not all, members of
+/// that group carry. Such a copy is needed exactly when a member carrying
+/// its label fills the group, and waived otherwise.
+fn gates(query: &SearchQuery) -> Vec<Option<u8>> {
+    let requirements = &query.requirements;
+    requirements
+        .iter()
+        .map(|copy| {
+            let label = copy.identity_group?;
+            if copy.alternative_group.is_some() {
+                return None;
+            }
+            requirements.iter().find_map(|member| {
+                let group = member.alternative_group?;
+                (member.identity_group == Some(label)
+                    && requirements.iter().any(|other| {
+                        other.alternative_group == Some(group)
+                            && other.identity_group != Some(label)
+                    }))
+                .then_some(group)
+            })
+        })
+        .collect()
+}
+
 /// One slot's candidate members as `(requirement index, item index)` pairs
 /// under the query's floor limits and blacksmith exclusion.
 fn candidates(query: &SearchQuery, world: &GeneratedWorld) -> Vec<Vec<(usize, usize)>> {
@@ -402,6 +433,29 @@ fn score(
     world: &GeneratedWorld,
     chosen: &[Option<(usize, usize)>],
 ) -> Option<usize> {
+    // A member stack's copy whose group another member fills is waived: it
+    // holds no item and counts as satisfied.
+    let gates = gates(query);
+    let slots = query.ordinary_slots();
+    let mut waived = 0;
+    for (slot, choice) in slots.iter().zip(chosen) {
+        let copy = query.requirements[slot[0]];
+        let Some(group) = gates[slot[0]] else {
+            continue;
+        };
+        let filler = chosen
+            .iter()
+            .flatten()
+            .find(|(member, _)| query.requirements[*member].alternative_group == Some(group));
+        if filler.is_some_and(|(member, _)| {
+            query.requirements[*member].identity_group != copy.identity_group
+        }) {
+            if choice.is_some() {
+                return None;
+            }
+            waived += 1;
+        }
+    }
     let mut used = vec![false; world.items.len()];
     let mut identities: BTreeMap<u8, ItemId> = BTreeMap::new();
     let mut scenarios: BTreeMap<u16, u64> = BTreeMap::new();
@@ -472,7 +526,7 @@ fn score(
         &witnesses,
         required_resin(query, world, chosen),
     );
-    Some(plain + groups + blankets.max(with_resin))
+    Some(waived + plain + groups + blankets.max(with_resin))
 }
 
 fn blanket_score(
@@ -576,8 +630,10 @@ fn best_partial(
         chosen.pop();
     }
     // Level-sum members are optional even in a full assignment: the rest of
-    // their group may carry the total.
-    let optional = query.requirements[slots[slot][0]].level_sum.is_some();
+    // their group may carry the total. A member stack's copy may be waived;
+    // the score decides whether leaving it empty satisfies it.
+    let optional = query.requirements[slots[slot][0]].level_sum.is_some()
+        || gates(query)[slots[slot][0]].is_some();
     if !full_only || optional {
         chosen.push(None);
         if let Some(value) =
@@ -744,10 +800,12 @@ fn matcher_and_scout_agree_with_exhaustive_enumeration() {
         );
         // A satisfied level-sum group flags every contributing item, so the
         // flags can outnumber the conditions but never undercut them.
-        // Zero-cost Auto or Mage credit can satisfy resin without donor items.
+        // Zero-cost Auto or Mage credit can satisfy resin without donor items,
+        // and a waived member stack copy is satisfied without one.
         assert!(
             marks.matched_indices().len()
                 + query.blanket_slots().len()
+                + gates(&query).iter().flatten().count()
                 + usize::from(
                     query.arcane_resin_auto || query.arcane_resin_filter.include_mage_wand
                 )
@@ -764,4 +822,160 @@ fn matcher_and_scout_agree_with_exhaustive_enumeration() {
         (CASES / 20..CASES * 14 / 15).contains(&matched),
         "{matched} of {checked} matched"
     );
+}
+
+/// Items member stacks are drawn from: three wands and two other kinds, so
+/// that groups mix kinds and worlds often hold copies.
+const STACK_POOL: [ItemId; 5] = [
+    ItemId::WandFrost,
+    ItemId::WandDisintegration,
+    ItemId::WandLightning,
+    ItemId::PlateArmor,
+    ItemId::Sword,
+];
+
+/// A bare copy of `kind` in stack `label`, which may carry a floor limit
+/// of its own.
+fn stack_copy(rng: &mut Rng, kind: ItemKind, label: u8) -> Requirement {
+    Requirement {
+        identity_group: Some(label),
+        max_depth: rng
+            .chance(25)
+            .then(|| 1 + u8::try_from(rng.below(10)).unwrap()),
+        ..Requirement::any(kind)
+    }
+}
+
+/// Member stacks on their own. Each generated world is checked against
+/// four labellings of one alternative group, reusing the world: a label on
+/// one member (that member's own stack), labels of their own on two
+/// members, one label on every member of the first member's kind (all of
+/// them when the group agrees on a kind: copies of whichever matched), and
+/// none. Copies may carry floor limits of their own; a plain requirement
+/// and Auto resin sometimes join them (1,024 cases).
+#[test]
+#[allow(clippy::too_many_lines)] // Keep the labellings of one reused world together.
+fn member_stacks_agree_with_exhaustive_enumeration() {
+    const WORLDS: usize = 256;
+    let mut rng = Rng(0x57AC_CED0_0B1E_55ED);
+    let mut matched = [0; 4];
+    let mut waived = 0;
+    for _ in 0..WORLDS {
+        let world = random_world_from(&mut rng, &STACK_POOL);
+        let members: Vec<Requirement> = (0..2 + rng.below(2))
+            .map(|_| {
+                let id = STACK_POOL[rng.below(STACK_POOL.len())];
+                Requirement {
+                    item: rng.chance(75).then_some(id),
+                    upgrade: if rng.chance(25) {
+                        UpgradeRequirement::AtLeast(1)
+                    } else {
+                        UpgradeRequirement::Any
+                    },
+                    alternative_group: Some(1),
+                    ..Requirement::any(item(id).kind)
+                }
+            })
+            .collect();
+        let plain = rng.chance(40).then(|| {
+            let id = STACK_POOL[rng.below(STACK_POOL.len())];
+            Requirement {
+                item: Some(id),
+                ..Requirement::any(item(id).kind)
+            }
+        });
+        let auto = rng.chance(30);
+        for (labelling, count) in matched.iter_mut().enumerate() {
+            let mut requirements = members.clone();
+            let mut copies = Vec::new();
+            let mut label = |requirements: &mut Vec<Requirement>, rows: &[usize], group: u8| {
+                for &row in rows {
+                    requirements[row].identity_group = Some(group);
+                }
+                let kind = requirements[rows[0]].kind;
+                for _ in 0..=rng.below(2) {
+                    copies.push(stack_copy(&mut rng, kind, group));
+                }
+            };
+            match labelling {
+                0 => label(&mut requirements, &[0], 1),
+                1 => {
+                    label(&mut requirements, &[0], 1);
+                    label(&mut requirements, &[1], 2);
+                }
+                2 => {
+                    let kind = members[0].kind;
+                    let alike: Vec<usize> = (0..members.len())
+                        .filter(|&row| members[row].kind == kind)
+                        .collect();
+                    label(&mut requirements, &alike, 1);
+                }
+                _ => {}
+            }
+            requirements.extend(copies);
+            requirements.extend(plain);
+            let query = SearchQuery {
+                floor_requirements: Vec::new(),
+                auto_apply_trinket: false,
+                arcane_resin_filter: shpd_seedfinder_core::query::ArcaneResinFilter::default(),
+                arcane_resin_auto: auto,
+                arcane_resin: 0,
+                requirements,
+                max_depth: 10,
+                challenges: Challenges::NONE,
+                require_blacksmith: false,
+                exclude_blacksmith_rewards: false,
+                wandmaker_quest: None,
+            };
+            assert_eq!(query.validate(), Ok(()), "{query:?}");
+            let slots = query.ordinary_slots();
+            let candidates = candidates(&query, &world);
+            let conditions = query.scout_condition_count();
+            let full = best_partial(
+                &query,
+                &world,
+                &candidates,
+                &slots,
+                0,
+                &mut Vec::new(),
+                true,
+            );
+            let expected = full == Some(conditions);
+            assert_eq!(
+                query.matches(&world),
+                expected,
+                "matcher disagrees with brute force for {query:?} on {world:?}"
+            );
+            let best = best_partial(
+                &query,
+                &world,
+                &candidates,
+                &slots,
+                0,
+                &mut Vec::new(),
+                false,
+            )
+            .expect("skipping every slot is always a valid selection");
+            let marks = scout_matches(&world, &query);
+            assert_eq!(marks.total_requirements, conditions);
+            assert_eq!(
+                marks.matched_requirements, best,
+                "scout disagrees with brute force for {query:?} on {world:?}"
+            );
+            *count += usize::from(expected);
+            // A match holding fewer items than slots waived some copies.
+            if expected && marks.matched_indices().len() < slots.len() {
+                waived += 1;
+            }
+        }
+    }
+    // Every labelling both matches and misses, and some matches rest on a
+    // waived copy.
+    assert!(
+        matched
+            .iter()
+            .all(|&count| (WORLDS / 20..WORLDS * 14 / 15).contains(&count)),
+        "{matched:?} of {WORLDS} matched"
+    );
+    assert!(waived >= 10, "{waived} matches waived a copy");
 }

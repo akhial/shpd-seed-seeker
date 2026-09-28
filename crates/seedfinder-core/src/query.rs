@@ -1,10 +1,12 @@
 //! Multi-item query validation and accessibility-aware matching.
 
 mod resin;
+mod stacks;
 pub use resin::ArcaneResinFilter;
 pub(crate) use resin::donor_requirement as resin_donor_requirement;
 pub(crate) use resin::reforge_copies;
 pub(crate) use resin::upgrade_cost as resin_upgrade_cost;
+pub(crate) use stacks::{gate_of, member_stack_variants, stack_gates};
 
 use std::collections::BTreeMap;
 use std::fmt;
@@ -311,7 +313,14 @@ pub struct Requirement {
     /// Reserve this wand without budgeting Auto resin upgrades for it.
     pub exclude_resin: bool,
     pub source: Option<ItemSource>,
-    /// Requirements in the same non-zero group must resolve to the same item ID.
+    /// Requirements in the same non-zero group — a *stack* — must resolve
+    /// to the same item ID. One anchor unit (a lone requirement, or the
+    /// members of one alternative group) may carry constraints; the rest are
+    /// bare *copies*, each a separate slot. When the anchor is an
+    /// alternative group, the copies are required exactly when a member
+    /// carrying the label fills the group's slot, and waived when another
+    /// member does: a label on every member means "copies of whichever
+    /// matched", a label on one member is that member's own stack.
     pub identity_group: Option<u8>,
     /// Optional inclusive floor limit for this item, independent of the query's
     /// overall generation limit.
@@ -773,17 +782,15 @@ impl SearchQuery {
         }
 
         let mut assignment = Assignment::prepare(self, world);
-        let mandatory = assignment
-            .slots
-            .iter()
-            .filter(|slot| !slot.optional)
-            .count();
+        // A member stack's copies may be waived; only the rest must be filled.
+        let mandatory = |slot: &&Slot| !slot.optional && slot.gated.is_none();
         if assignment.blankets.iter().any(Vec::is_empty)
-            || mandatory > assignment.items.len()
+            || assignment.slots.iter().filter(mandatory).count() > assignment.items.len()
             || assignment
                 .slots
                 .iter()
-                .any(|slot| !slot.optional && slot.candidates.is_empty())
+                .filter(mandatory)
+                .any(|slot| slot.candidates.is_empty())
         {
             return false;
         }
@@ -847,8 +854,10 @@ fn first_dissent(requirements: &[Requirement], rows: &[usize]) -> Option<usize> 
 ///    order of their first dissenting member;
 /// 2. alternative groups mixing ordinary and blanket requirements, in slot
 ///    order;
-/// 3. identity groups spanning two families or constraining two units, by
-///    label — a group spanning families is not also checked for its units;
+/// 3. identity groups spanning two families or with two anchor units — two
+///    constrained units, or a member stack's alternative group beside
+///    another group carrying the label or a constrained copy — by label; a
+///    group spanning families is not also checked for its units;
 /// 4. combined-level groups whose agreed total their members cannot reach
 ///    ([`SumGroup::attainable_capacity`]), by label.
 ///
@@ -900,16 +909,21 @@ pub(crate) fn requirement_group_errors(
     // the stack binds to; every other member is a bare copy of the anchor's
     // kind. Constraining a second unit would describe two different items
     // forced to be the same, which the stack model deliberately cannot say.
-    for rows in identity_groups.into_values() {
+    // When only some members of an alternative group carry the label (a
+    // member stack), those members anchor it even when bare: they decide
+    // whether its copies are needed at all, so any other group carrying the
+    // label, or a constrained copy, is a second anchor.
+    for (label, rows) in identity_groups {
         let kind = requirements[rows[0]].kind;
         if rows.iter().any(|&index| requirements[index].kind != kind) {
             errors.push((QueryError::InconsistentIdentityGroup, rows));
             continue;
         }
+        let member_stack = stacks::gating_group(requirements, label).is_some();
         let mut anchor: Option<(Option<u8>, usize)> = None;
         let overconstrained = rows.iter().any(|&index| {
             let requirement = &requirements[index];
-            if requirement.is_bare() {
+            if requirement.is_bare() && !(member_stack && requirement.alternative_group.is_some()) {
                 return false;
             }
             // Members of one alternative group form a single unit.
@@ -1004,6 +1018,14 @@ struct SumProgress {
 struct Slot<'query> {
     candidates: Vec<SlotCandidate<'query>>,
     optional: bool,
+    /// The alternative group this slot is, when that group gates the copies
+    /// of a member stack: whichever member fills it is recorded in
+    /// [`Assignment::gates`].
+    gate: Option<u8>,
+    /// For a copy of a member stack, the gating alternative group and the
+    /// stack's label: the copy is waived once a member without the label
+    /// fills the group. Such slots are visited after every gate.
+    gated: Option<(u8, u8)>,
 }
 
 /// Query slots resolved against one world's items: alternatives collapse to
@@ -1024,6 +1046,9 @@ struct Assignment<'query> {
     scenarios: BTreeMap<u16, u64>,
     identities: BTreeMap<u8, ItemId>,
     sums: BTreeMap<u8, SumProgress>,
+    /// The identity label of the member filling each gating alternative
+    /// group, once one does ([`Slot::gate`]).
+    gates: BTreeMap<u8, Option<u8>>,
 }
 
 /// What one placement changed, so it can be undone exactly.
@@ -1090,8 +1115,14 @@ impl<'query> Assignment<'query> {
         } else {
             Vec::new()
         };
+        let stack_gates = stacks::stack_gates(&query.requirements);
         for slot in query.slots() {
             let slot_first = slot[0];
+            let first = &query.requirements[slot_first];
+            let gate = first
+                .alternative_group
+                .filter(|group| stack_gates.contains(&Some(*group)));
+            let gated = stacks::gate_of(&stack_gates, slot_first).zip(first.identity_group);
             let mut candidates = Vec::new();
             // Combined-level members never sit in alternative groups, so a
             // slot is optional exactly when its members carry a level sum.
@@ -1149,11 +1180,15 @@ impl<'query> Assignment<'query> {
             slots.push(Slot {
                 candidates,
                 optional,
+                gate,
+                gated,
             });
         }
         let sum_groups = query.level_sum_groups();
-        // Fail early by assigning the most constrained slot first.
-        slots.sort_by_key(|slot| slot.candidates.len());
+        // Fail early by assigning the most constrained slot first — but a
+        // member stack's copies only once their gate is filled, which decides
+        // whether they are needed.
+        slots.sort_by_key(|slot| (slot.gated.is_some(), slot.candidates.len()));
         Self {
             artifact_outcomes,
             artifact_start,
@@ -1168,7 +1203,27 @@ impl<'query> Assignment<'query> {
             scenarios: BTreeMap::new(),
             identities: BTreeMap::new(),
             sums: BTreeMap::new(),
+            gates: BTreeMap::new(),
         }
+    }
+
+    /// Whether the member stack copy in `slot` is waived: its gating group
+    /// is filled by a member without the stack's label. A copy whose gate
+    /// is still empty (only the scout leaves one empty) is not.
+    fn waived(&self, slot: usize) -> bool {
+        self.slots[slot].gated.is_some_and(|(group, label)| {
+            self.gates
+                .get(&group)
+                .is_some_and(|filled| *filled != Some(label))
+        })
+    }
+
+    /// Records which member filled a gating slot, returning the group to
+    /// clear when the placement is undone.
+    fn fill_gate(&mut self, slot: usize, requirement: &Requirement) -> Option<u8> {
+        let group = self.slots[slot].gate?;
+        self.gates.insert(group, requirement.identity_group);
+        Some(group)
     }
 
     /// Depth-first assignment requiring every mandatory slot to hold a
@@ -1193,6 +1248,10 @@ impl<'query> Assignment<'query> {
         if self.resin.enabled() && self.resin_selection().is_none() {
             return false;
         }
+        // A waived copy takes no item.
+        if self.waived(slot) {
+            return self.fills_every_slot(slot + 1);
+        }
         for candidate in 0..self.slots[slot].candidates.len() {
             let (item_index, identity, requirement, upgrade_with_resin) =
                 self.slots[slot].candidates[candidate];
@@ -1200,8 +1259,12 @@ impl<'query> Assignment<'query> {
             else {
                 continue;
             };
+            let gate = self.fill_gate(slot, requirement);
             if self.fills_every_slot(slot + 1) {
                 return true;
+            }
+            if let Some(group) = gate {
+                self.gates.remove(&group);
             }
             self.unassign(undo);
         }
@@ -1337,7 +1400,10 @@ pub struct ScoutMatches {
     pub transmuted_artifacts: Vec<(u8, usize)>,
     /// How many conditions the selection satisfies: one per filled plain
     /// slot, plus one per combined-level group whose assigned items reach
-    /// its total. A satisfied group flags every contributing item, so more
+    /// its total. A member stack's copy that the selection waives — its
+    /// alternative group filled by a member without the stack's label —
+    /// counts as satisfied without an item, so a full match satisfies every
+    /// condition. A satisfied group flags every contributing item, so more
     /// flags than conditions may be set; items of a group short of its
     /// total are not flagged at all.
     pub matched_requirements: usize,
@@ -1367,7 +1433,8 @@ impl ScoutMatches {
 /// The rules are the matcher's: the query's floor limit and each
 /// requirement's own, the blacksmith-reward exclusion, one item per slot,
 /// any member of an alternative group filling its slot, identity groups
-/// bound to a single item ID, accessibility scenarios intersected per group,
+/// bound to a single item ID, a member stack's copies waived when another
+/// member fills its group, accessibility scenarios intersected per group,
 /// and combined-level groups counting as one condition, satisfied when the
 /// assigned members' levels reach the total — a lone +0 ring of a wanted
 /// pair that falls short is not highlighted.
@@ -1383,6 +1450,7 @@ pub fn scout_matches(world: &GeneratedWorld, query: &SearchQuery) -> ScoutMatche
     let mut search = BestSubset {
         assignment: Assignment::prepare(query, world),
         selected: Vec::new(),
+        waived: 0,
         best: Vec::new(),
         best_resin: Vec::new(),
         best_conditions: 0,
@@ -1428,6 +1496,9 @@ struct BestSubset<'query> {
     assignment: Assignment<'query>,
     /// Assigned items with the combined-level group they serve, if any.
     selected: Vec<(usize, Option<u8>)>,
+    /// Member stack copies the selection waives: satisfied conditions that
+    /// hold no item.
+    waived: usize,
     /// The items of the best selection.
     best: Vec<usize>,
     /// The resin donors among `best`.
@@ -1445,7 +1516,7 @@ impl BestSubset<'_> {
             let failed = self.assignment.failed_sum_groups();
             let mut items: Vec<usize> = Vec::new();
             let mut satisfied_groups: Vec<u8> = Vec::new();
-            let mut conditions = 0;
+            let mut conditions = self.waived;
             let mut resin_donors = Vec::new();
             for &(item_index, sum_group) in &self.selected {
                 match sum_group {
@@ -1508,11 +1579,19 @@ impl BestSubset<'_> {
         // selected item and each remaining slot satisfies at most one
         // condition.
         if self.selected.len()
+            + self.waived
             + (self.assignment.slots.len() - slot)
             + self.assignment.blankets.len()
             + usize::from(self.assignment.resin.enabled())
             <= self.best_conditions
         {
+            return;
+        }
+        // A waived copy is satisfied without an item, and cannot take one.
+        if self.assignment.waived(slot) {
+            self.waived += 1;
+            self.visit(slot + 1);
+            self.waived -= 1;
             return;
         }
         for candidate in 0..self.assignment.slots[slot].candidates.len() {
@@ -1524,10 +1603,14 @@ impl BestSubset<'_> {
             else {
                 continue;
             };
+            let gate = self.assignment.fill_gate(slot, requirement);
             self.selected
                 .push((item_index, requirement.level_sum.map(|sum| sum.group)));
             self.visit(slot + 1);
             self.selected.pop();
+            if let Some(group) = gate {
+                self.assignment.gates.remove(&group);
+            }
             self.assignment.unassign(undo);
         }
         // Skipping this slot keeps the rest of the selection available.
@@ -1554,8 +1637,10 @@ pub enum QueryError {
     UncursedWithCurse,
     InvalidIdentityGroup,
     InconsistentIdentityGroup,
-    /// Two members of an identity group outside one alternative group carry
-    /// their own constraints; a stack has one anchor and bare copies.
+    /// An identity group has two anchor units: two of its members outside
+    /// one alternative group carry their own constraints, or a member
+    /// stack's group sits beside another group carrying the label or a
+    /// constrained copy. A stack has one anchor and bare copies.
     OverconstrainedIdentityGroup,
     InvalidAlternativeGroup,
     BlanketWithRelations,
@@ -1643,8 +1728,8 @@ impl fmt::Display for QueryError {
                 "linked item requirements must use the same category"
             }
             Self::OverconstrainedIdentityGroup => {
-                "only one linked requirement (or one alternative group) may carry item \
-                 constraints; the extra copies must be plain"
+                "only one linked requirement (or the members of one alternative group) may \
+                 carry item constraints; the extra copies must be plain"
             }
             Self::InvalidAlternativeGroup => "alternative group zero is reserved for no group",
             Self::InvalidLevelSum => "combined level groups need a non-zero group and total",
@@ -2625,6 +2710,313 @@ mod tests {
         ])));
     }
 
+    /// A query decoded from a JSON requirement list, validated.
+    fn stack_query(requirements: &str) -> SearchQuery {
+        crate::json_query::decode(&format!(r#"{{"requirements":{requirements}}}"#)).unwrap()
+    }
+
+    /// A world item at `depth`, +0.
+    fn found(item: ItemId, depth: u8) -> WorldItem {
+        WorldItem {
+            depth,
+            ..upgraded(item, 0)
+        }
+    }
+
+    #[test]
+    fn a_label_on_one_member_is_that_members_own_stack() {
+        use ItemId::{WandDisintegration as Disintegration, WandFrost as Frost};
+        // {Frost ×2 | Disintegration}: two Wands of Frost, or one Wand of
+        // Disintegration.
+        let query = stack_query(
+            r#"[{"any_of":[{"item":"wand_frost","identity_group":1},
+                {"item":"wand_disintegration"}]},
+               {"kind":"wand","identity_group":1}]"#,
+        );
+        let matches = |items: &[ItemId]| {
+            query.matches(&scout_world(
+                items.iter().map(|&item| found(item, 3)).collect(),
+            ))
+        };
+        assert!(matches(&[Disintegration]));
+        assert!(matches(&[Frost, Frost]));
+        assert!(matches(&[Frost, Disintegration]));
+        assert!(!matches(&[Frost]));
+        // The copy is a copy of the matched Frost, not any wand.
+        assert!(!matches(&[Frost, ItemId::WandLightning]));
+        assert!(!matches(&[]));
+    }
+
+    #[test]
+    fn members_may_carry_stacks_of_their_own() {
+        use ItemId::{WandDisintegration as Disintegration, WandFrost as Frost};
+        // {Frost ×2 | Disintegration ×3}.
+        let query = stack_query(
+            r#"[{"any_of":[{"item":"wand_frost","identity_group":1},
+                {"item":"wand_disintegration","identity_group":2}]},
+               {"kind":"wand","identity_group":1},
+               {"kind":"wand","identity_group":2},{"kind":"wand","identity_group":2}]"#,
+        );
+        let matches = |items: &[ItemId]| {
+            query.matches(&scout_world(
+                items.iter().map(|&item| found(item, 3)).collect(),
+            ))
+        };
+        assert!(matches(&[Frost, Frost]));
+        assert!(matches(&[Disintegration, Disintegration, Disintegration]));
+        assert!(matches(&[Disintegration, Frost, Disintegration, Frost]));
+        assert!(!matches(&[Disintegration, Disintegration]));
+        assert!(!matches(&[Frost, Disintegration, Disintegration]));
+    }
+
+    #[test]
+    fn a_label_on_every_member_keeps_copies_of_whichever_matched() {
+        use ItemId::{WandDisintegration as Disintegration, WandFrost as Frost};
+        let query = stack_query(
+            r#"[{"any_of":[{"item":"wand_frost","identity_group":1},
+                {"item":"wand_disintegration","identity_group":1}]},
+               {"kind":"wand","identity_group":1}]"#,
+        );
+        let matches = |items: &[ItemId]| {
+            query.matches(&scout_world(
+                items.iter().map(|&item| found(item, 3)).collect(),
+            ))
+        };
+        assert!(super::stack_gates(&query.requirements).is_empty());
+        assert!(matches(&[Disintegration, Disintegration]));
+        assert!(matches(&[Frost, Frost]));
+        assert!(!matches(&[Disintegration]));
+        assert!(!matches(&[Frost, Disintegration]));
+    }
+
+    #[test]
+    fn a_member_stacks_copies_keep_their_own_floor_limits() {
+        use ItemId::{WandDisintegration as Disintegration, WandFrost as Frost};
+        // The copy must be found by floor 3; Frost itself anywhere.
+        let query = stack_query(
+            r#"[{"any_of":[{"item":"wand_frost","identity_group":1},
+                {"item":"wand_disintegration","max_depth":2}]},
+               {"kind":"wand","identity_group":1,"max_depth":3}]"#,
+        );
+        let matches = |items: &[(ItemId, u8)]| {
+            query.matches(&scout_world(
+                items
+                    .iter()
+                    .map(|&(item, depth)| found(item, depth))
+                    .collect(),
+            ))
+        };
+        assert!(matches(&[(Frost, 9), (Frost, 3)]));
+        assert!(!matches(&[(Frost, 9), (Frost, 4)]));
+        // A waived copy's limit asks for nothing.
+        assert!(matches(&[(Disintegration, 2)]));
+        assert!(!matches(&[(Disintegration, 3), (Frost, 5)]));
+    }
+
+    #[test]
+    fn a_waived_copy_reserves_no_wand_and_costs_no_resin() {
+        use ItemId::{WandDisintegration as Disintegration, WandFrost as Frost};
+        let world = |items: &[(ItemId, u8)]| {
+            scout_world(
+                items
+                    .iter()
+                    .map(|&(item, upgrade)| upgraded(item, upgrade))
+                    .collect(),
+            )
+        };
+        let stack = r#"[{"any_of":[{"item":"wand_frost","identity_group":1},
+            {"item":"wand_disintegration"}]},{"kind":"wand","identity_group":1}"#;
+        // Disintegration fills the group: both Frosts are surplus, four
+        // resin. A copy taking one would leave two.
+        let fixed =
+            crate::json_query::decode(&format!(r#"{{"arcane_resin":4,"requirements":{stack}]}}"#))
+                .unwrap();
+        let three = world(&[(Disintegration, 0), (Frost, 0), (Frost, 0)]);
+        assert!(fixed.matches(&three));
+        assert!(!fixed.matches(&world(&[(Disintegration, 0), (Frost, 0)])));
+        // Auto: a +2 Disintegration needs three resin to reach +3, which the
+        // two surplus Frosts supply only while the copy is waived.
+        let auto = crate::json_query::decode(&format!(
+            r#"{{"arcane_resin":"auto","requirements":{stack}]}}"#
+        ))
+        .unwrap();
+        assert!(auto.matches(&world(&[(Disintegration, 2), (Frost, 0), (Frost, 0)])));
+        assert!(!auto.matches(&world(&[(Disintegration, 2), (Frost, 0)])));
+        // Filled by Frost, the copy is a reforge copy: only the anchor's
+        // upgrades are budgeted. A +2 anchor needs three resin, which two
+        // +0 donors supply; charging the +0 copy too would need nine.
+        assert!(auto.matches(&world(&[(Frost, 2), (Frost, 0), (Frost, 0), (Frost, 0)])));
+        // A +1 anchor needs five, one +1 donor short.
+        assert!(!auto.matches(&world(&[(Frost, 1), (Frost, 1), (Frost, 1)])));
+        // The scout shows the Disintegration kept and both Frosts consumed.
+        let marks = scout_matches(&three, &fixed);
+        assert_eq!(marks.matched_requirements, marks.total_requirements);
+        assert_eq!(marks.matched_indices(), vec![0, 1, 2]);
+        assert_eq!(marks.resin_donors, vec![false, true, true]);
+    }
+
+    #[test]
+    fn scout_marks_count_a_waived_copy_without_marking_an_item() {
+        use ItemId::{WandDisintegration as Disintegration, WandFrost as Frost};
+        let query = stack_query(
+            r#"[{"any_of":[{"item":"wand_frost","identity_group":1},
+                {"item":"wand_disintegration"}]},
+               {"kind":"wand","identity_group":1},{"kind":"wand","identity_group":1}]"#,
+        );
+        let marks = |items: &[ItemId]| {
+            scout_matches(
+                &scout_world(items.iter().map(|&item| found(item, 3)).collect()),
+                &query,
+            )
+        };
+        // Disintegration satisfies the group and waives both copies.
+        let waived = marks(&[Frost, Disintegration]);
+        assert_eq!(waived.total_requirements, 3);
+        assert_eq!(waived.matched_requirements, 3);
+        assert_eq!(waived.matched_indices(), vec![1]);
+        // Two Frosts of three: the group and one copy, both marked.
+        let short = marks(&[Frost, Frost]);
+        assert_eq!(short.matched_requirements, 2);
+        assert_eq!(short.matched_indices(), vec![0, 1]);
+        // Either way of filling the group satisfies every condition.
+        let full = marks(&[Frost, Frost, Disintegration, Frost]);
+        assert_eq!(full.matched_requirements, 3);
+        assert!([1, 3].contains(&full.matched_indices().len()));
+    }
+
+    #[test]
+    fn member_stacks_validate_and_the_invalid_shapes_still_fail() {
+        let validate = |requirements: &str| {
+            crate::json_query::decode_unvalidated(&format!(r#"{{"requirements":{requirements}}}"#))
+                .unwrap()
+                .validate()
+        };
+        // One member's stack, and one per member, are the intended shapes.
+        assert_eq!(
+            validate(
+                r#"[{"any_of":[{"item":"wand_frost","identity_group":1},
+                    {"item":"plate_armor"}]},{"kind":"wand","identity_group":1}]"#
+            ),
+            Ok(())
+        );
+        assert_eq!(
+            validate(
+                r#"[{"any_of":[{"item":"wand_frost","identity_group":1},
+                    {"item":"plate_armor","identity_group":2}]},
+                   {"kind":"wand","identity_group":1},{"kind":"armor","identity_group":2}]"#
+            ),
+            Ok(())
+        );
+        // A label still spans one kind: an armor copy of a Frost stack.
+        assert_eq!(
+            validate(
+                r#"[{"any_of":[{"item":"wand_frost","identity_group":1},
+                    {"item":"plate_armor"}]},{"kind":"armor","identity_group":1}]"#
+            ),
+            Err(QueryError::InconsistentIdentityGroup)
+        );
+        // A copy carrying constraints of its own is a second anchor.
+        assert_eq!(
+            validate(
+                r#"[{"any_of":[{"item":"wand_frost","identity_group":1},
+                    {"item":"plate_armor"}]},{"kind":"wand","upgrade":2,"identity_group":1}]"#
+            ),
+            Err(QueryError::OverconstrainedIdentityGroup)
+        );
+        // Even a bare member anchors a member stack, so the label may not
+        // sit on a second group, nor beside a constrained lone requirement.
+        assert_eq!(
+            validate(
+                r#"[{"any_of":[{"kind":"wand","identity_group":1},{"item":"plate_armor"}]},
+                   {"any_of":[{"kind":"wand","identity_group":1},{"item":"sword"}]},
+                   {"kind":"wand","identity_group":1}]"#
+            ),
+            Err(QueryError::OverconstrainedIdentityGroup)
+        );
+        assert_eq!(
+            validate(
+                r#"[{"any_of":[{"kind":"wand","identity_group":1},{"item":"plate_armor"}]},
+                   {"item":"wand_frost","identity_group":1}]"#
+            ),
+            Err(QueryError::OverconstrainedIdentityGroup)
+        );
+        // A group every member of which carries the label gates nothing:
+        // its bare members stay copies, as before.
+        assert_eq!(
+            validate(
+                r#"[{"any_of":[{"kind":"wand","identity_group":1}]},
+                   {"item":"wand_frost","identity_group":1}]"#
+            ),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn member_stacks_spell_out_as_queries_without_them() {
+        use ItemId::{WandDisintegration as Disintegration, WandFrost as Frost};
+        // {Frost ×2 | Disintegration ×3 | Lightning}.
+        let query = stack_query(
+            r#"[{"any_of":[{"item":"wand_frost","identity_group":1},
+                {"item":"wand_disintegration","identity_group":2},{"item":"wand_lightning"}]},
+               {"kind":"wand","identity_group":1},
+               {"kind":"wand","identity_group":2},{"kind":"wand","identity_group":2},
+               {"kind":"ring"}]"#,
+        );
+        assert_eq!(
+            super::stack_gates(&query.requirements),
+            [None, None, None, Some(1), Some(1), Some(1), None]
+        );
+        let variants = super::member_stack_variants(&query).unwrap();
+        let shapes: Vec<Vec<(Option<ItemId>, Option<u8>)>> = variants
+            .iter()
+            .map(|variant| {
+                variant
+                    .requirements
+                    .iter()
+                    .map(|r| (r.item, r.identity_group))
+                    .collect()
+            })
+            .collect();
+        assert_eq!(
+            shapes,
+            [
+                vec![(Some(Frost), Some(1)), (None, Some(1)), (None, None)],
+                vec![
+                    (Some(Disintegration), Some(2)),
+                    (None, Some(2)),
+                    (None, Some(2)),
+                    (None, None)
+                ],
+                vec![(Some(ItemId::WandLightning), None), (None, None)],
+            ]
+        );
+        for variant in &variants {
+            assert_eq!(variant.validate(), Ok(()));
+            assert!(super::member_stack_variants(variant).is_none());
+        }
+        // A world matches the query exactly when it matches some variant.
+        let mut rng = crate::editor::testing::Rng::new(0x57ac_4a11_0f11_ed00);
+        let pool = [
+            Frost,
+            Disintegration,
+            ItemId::WandLightning,
+            ItemId::RingMight,
+        ];
+        for _ in 0..256 {
+            let items = (0..rng.below(6))
+                .map(|_| found(pool[rng.below(pool.len())], 3))
+                .collect();
+            let world = scout_world(items);
+            assert_eq!(
+                query.matches(&world),
+                variants.iter().any(|variant| variant.matches(&world)),
+                "{world:?}"
+            );
+        }
+        // Without member stacks there is nothing to spell out.
+        assert!(super::member_stack_variants(&stack_query(r#"[{"kind":"wand"}]"#)).is_none());
+    }
+
     fn plain(kind: ItemKind) -> Requirement {
         Requirement {
             kind,
@@ -3283,14 +3675,24 @@ mod tests {
                 return Err(QueryError::MixedBlanketAlternatives);
             }
         }
-        for members in identity_groups.values() {
+        for (&label, members) in &identity_groups {
             let (_, _, first_kind, _) = members[0];
             if members.iter().any(|&(_, _, kind, _)| kind != first_kind) {
                 return Err(QueryError::InconsistentIdentityGroup);
             }
+            // A member stack: some member of an alternative group carries
+            // the label and another does not. Its members anchor it.
+            let member_stack = members.iter().any(|&(_, alternative, _, _)| {
+                alternative.is_some_and(|group| {
+                    requirements.iter().any(|other| {
+                        other.alternative_group == Some(group)
+                            && other.identity_group != Some(label)
+                    })
+                })
+            });
             let mut anchor: Option<(Option<u8>, usize)> = None;
             for &(index, alternative, _, bare) in members {
-                if bare {
+                if bare && !(member_stack && alternative.is_some()) {
                     continue;
                 }
                 let unit = alternative.map_or((None, index), |group| (Some(group), 0));

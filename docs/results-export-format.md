@@ -103,7 +103,15 @@ It is decoded by `crates/seedfinder-core/src/json_query.rs`:
     is a *stack* of copies of one item: one member — or the members of one
     `any_of` group — may name the item and its qualities, and every other
     member must be a plain entry of the same kind (a `max_depth` is allowed,
-    being a placement bound rather than an item property),
+    being a placement bound rather than an item property). When the label
+    sits on members of an `any_of` group, its copies are required exactly
+    when a member carrying the label fills the group, and waived when another
+    member does: `{Frost ×2 | Disintegration}` — the label on the Frost
+    member and one plain wand copy — is two Wands of Frost, or one Wand of
+    Disintegration; a label on every member is copies of whichever matched.
+    See [stacks](search-query-format.md#stacks). A file with a label on only
+    some members of a group was read before as copies always required; it
+    now reads as that member's own stack, without a format change,
   - `max_depth` — integer 1–24,
   - `blanket` — optional boolean, default false. When true, this condition must
     match an item assigned to an ordinary requirement or selected as an Arcane

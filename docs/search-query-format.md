@@ -133,7 +133,8 @@ The reference below uses `?` for optional fields, `|` for alternatives,
         // The Imp's six vault prizes, and the equipment in the vault's
         // treasure rooms; the player carries exactly one item out of either.
         "imp_reward" | "vault_treasure",
-      // Equal groups must resolve to the same kind and item ID.
+      // Equal groups must resolve to the same kind and item ID (see
+      // "Stacks" below).
       "identity_group"?: 1..255,
       "max_depth"?: 1..24 = query.max_depth,
       // Requirements sharing a group are matched by distinct items whose
@@ -144,16 +145,62 @@ The reference below uses `?` for optional fields, `|` for alternatives,
       // single +4) is:
       //   { "item": "ring_might", "level_sum": { "group": 1, "at_least": 5 } },
       //   { "item": "ring_might", "level_sum": { "group": 1, "at_least": 5 } }
-      // All members of one group must agree on "at_least". A same-item group
-      // ("identity_group") is a stack: one member — or the members of one
-      // "any_of" group — may name the item and its qualities; every other
-      // member must be a plain entry of the same kind.
+      // All members of one group must agree on "at_least".
       "level_sum"?: { "group": 1..255, "at_least": 1..255 }
     },
     ...
   ]
 }
 ```
+
+## Stacks
+
+A same-item group (`identity_group`) is a *stack*: its requirements must all
+resolve to one item. One *anchor* — a lone requirement, or the members of one
+`any_of` group — may name the item and its qualities; every other requirement
+of the group is a *copy*: a plain entry of the same kind (a `max_depth` is
+allowed, being a placement bound rather than an item property), matched by a
+separate item. "A Wand of Frost at +2 or better, and two more Wands of Frost":
+
+```json
+{ "requirements": [
+  { "item": "wand_frost", "upgrade": { "at_least": 2 }, "identity_group": 1 },
+  { "kind": "wand", "identity_group": 1 },
+  { "kind": "wand", "identity_group": 1 }
+] }
+```
+
+When the anchor is an `any_of` group, the label on its members binds the
+copies to those members: the copies are required — as copies of the matched
+item — exactly when a member carrying the label fills the group, and waived
+when another member does. A label on every member means "copies of whichever
+alternative matched". A label on some members is those members' own stack:
+`{Frost ×2 | Disintegration}` asks for two Wands of Frost, or one Wand of
+Disintegration:
+
+```json
+{ "requirements": [
+  { "any_of": [
+    { "item": "wand_frost", "identity_group": 1 },
+    { "item": "wand_disintegration" }
+  ] },
+  { "kind": "wand", "identity_group": 1 }
+] }
+```
+
+Different members may carry different labels, each with copies of its own
+(`{Frost ×2 | Disintegration ×3}`), and a member stack's members may differ in
+kind from the other members (`{Wand of Frost ×2 | Plate Armor}`); a label's
+own requirements always share one kind. A waived copy reserves no item and
+adds no Arcane Resin cost. Validation rejects a label spanning kinds, two
+anchors (two requirements outside one `any_of` group naming qualities), and a
+member stack's label on a second `any_of` group or on a copy with qualities.
+
+**Changed meaning.** Before member stacks, a label on only some members of an
+`any_of` group still made its copies always required, binding them freely when
+another member matched. Documents written that way now read as member
+stacks. Labels on every member, or on a lone anchor, keep their meaning, and
+no format version changed.
 
 ## Ring of Wealth farming floors
 

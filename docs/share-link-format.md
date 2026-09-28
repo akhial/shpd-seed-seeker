@@ -65,7 +65,7 @@ bits are written.
 | `effect` | 2 (+5 or +32) | Mode `0` any (no value bits) · `1` one effect, then its 5-bit code · `2` any enchantment (every non-curse effect of the family, no value bits) · `3` a set, then a 32-bit mask whose bit *n* is effect code *n*. Modes 1–3 are invalid for wands and rings; a mode-3 mask must be nonzero. Mode 2 carries no codes, so a link asking for "any enchantment" means the whole family of whichever release opens it. |
 | `uncursed` | 1 | Requirement flag. |
 | `source` | 1 (+5) | Source code: index into the frozen source table (18 entries). |
-| `identity_group` | 1 (+8) | Same-item group. The field is eight bits wide, but like the results-file format only groups 1–4 (the editors' A–D) are accepted; 0 and 5–255 are invalid. |
+| `identity_group` | 1 (+8) | Same-item group (a stack). The field is eight bits wide, but like the results-file format only groups 1–4 (the editors' A–D) are accepted; 0 and 5–255 are invalid. A label on members of an alternative group binds its copies to those members: see below. |
 | `max_depth` | 1 (+5) | Value is `depth − 1` (floors 1–24). |
 | `alternative_group` | 1 (+6) | Alternative-group label minus one. Records sharing a label form one "any of" slot; labels are renumbered in first-appearance order when encoding. |
 | `level_sum` | 1 (+10) | Combined-level group: two bits of group label minus one (groups 1–4, the editors' A–D), then the eight-bit minimum total in levels (1–255), where a matched item counts its upgrade plus one. |
@@ -78,6 +78,17 @@ bits are written.
 Extra copies represented by existing stack relationships are automatically excluded
 from Auto upgrade costs. They remain reserved for reforging; no additional bits
 are needed, and older stack links receive the same behavior.
+
+A stack label carried by members of an alternative group binds the stack's copies
+to those members: the copies are required exactly when a member carrying the
+label fills the group, and waived when another member does, so
+`{Frost ×2 | Disintegration}` (the label on the Frost member, one bare wand copy)
+is two Wands of Frost or one Wand of Disintegration. A waived copy reserves no
+item. No bits or version changed for this: a link whose label sits on every
+member, or on a lone anchor, reads as before, while one whose label sits on only
+some members — whose copies used to be always required, binding freely when
+another member matched — now reads as those members' own stack. See
+[stacks](search-query-format.md#stacks).
 
 ### Floor extension (versions 11–14)
 
