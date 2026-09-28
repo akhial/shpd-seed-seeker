@@ -27,6 +27,7 @@ mod result_navigation;
 mod results_pane;
 mod sheet;
 mod sprites;
+mod square;
 mod state;
 mod update;
 mod window;

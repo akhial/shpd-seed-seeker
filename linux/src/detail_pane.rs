@@ -23,6 +23,7 @@ use shpd_seedfinder_session::production_scout_world_selected;
 
 use crate::level_map_view::{FloorMapView, MapProfile};
 use crate::sprites::ItemSprite;
+use crate::square::SquareBin;
 use crate::state::{AppState, quest_rows, region};
 use crate::{glow, sprites};
 
@@ -383,11 +384,14 @@ impl DetailPane {
             .offers
             .borrow()
             .as_ref()
-            .and_then(|offers| offers.compute_bounds(&self.scroller.child()?))
+            .and_then(|offers| offers.compute_bounds(&self.manifest_box.parent()?))
             .filter(|bounds| bounds.height() > 0.0)
             .map_or(0.0, |bounds| {
                 // value-changed precedes allocation of the viewport's new
                 // transform, so use content coordinates and the live offset.
+                // The content is the clamp inside the viewport: the viewport
+                // itself moves its child by the scroll offset, which would
+                // count the offset twice.
                 ((self.scroller.vadjustment().value() - f64::from(bounds.y()))
                     / f64::from(bounds.height()))
                 .clamp(0.0, 1.0)
@@ -798,47 +802,49 @@ impl DetailPane {
                         .build(),
                 );
             }
-            let mut catalyst_shown = false;
+            // The catalyst leads its floor, as on the web: every trinket on
+            // the floor is one of its offers.
+            if let Some(index) = indices
+                .iter()
+                .find(|index| item(world.items[**index].item).kind == ItemKind::Trinket)
+            {
+                let (catalyst, offers) = trinket_choices(
+                    world,
+                    &world.items[*index],
+                    &marks.matched,
+                    &marks.transmuted_trinkets,
+                    self.selected_trinket.get(),
+                    {
+                        let pane = Rc::downgrade(self);
+                        let state = state.clone();
+                        let code = world.seed.to_code();
+                        move |id| {
+                            if let Some(pane) = pane.upgrade() {
+                                let selected =
+                                    (pane.selected_trinket.get() != Some(id)).then_some(id);
+                                pane.trinket_override.set(TrinketOverride::Manual(selected));
+                                pane.scout_with_override(Some(&code), &state);
+                            }
+                        }
+                    },
+                );
+                self.offers.replace(Some(offers));
+                group.add(&catalyst);
+            }
             for index in indices {
                 if item(world.items[*index].item).kind == ItemKind::Trinket {
-                    if !catalyst_shown {
-                        let (catalyst, offers) = trinket_choices(
-                            world,
-                            &world.items[*index],
-                            &marks.matched,
-                            &marks.transmuted_trinkets,
-                            self.selected_trinket.get(),
-                            {
-                                let pane = Rc::downgrade(self);
-                                let state = state.clone();
-                                let code = world.seed.to_code();
-                                move |id| {
-                                    if let Some(pane) = pane.upgrade() {
-                                        let selected =
-                                            (pane.selected_trinket.get() != Some(id)).then_some(id);
-                                        pane.trinket_override
-                                            .set(TrinketOverride::Manual(selected));
-                                        pane.scout_with_override(Some(&code), &state);
-                                    }
-                                }
-                            },
-                        );
-                        self.offers.replace(Some(offers));
-                        group.add(&catalyst);
-                        catalyst_shown = true;
-                    }
-                } else {
-                    let world_item = &world.items[*index];
-                    let row = item_row(world_item, gems, RowMatch::of(&marks, *index));
-                    if choice_is_dimmed(
-                        world_item.accessibility,
-                        marks.matched[*index],
-                        &matched_choices,
-                    ) {
-                        row.set_opacity(0.45);
-                    }
-                    group.add(&row);
+                    continue;
                 }
+                let world_item = &world.items[*index];
+                let row = item_row(world_item, gems, RowMatch::of(&marks, *index));
+                if choice_is_dimmed(
+                    world_item.accessibility,
+                    marks.matched[*index],
+                    &matched_choices,
+                ) {
+                    row.set_opacity(0.45);
+                }
+                group.add(&row);
             }
             section.append(&group);
             self.manifest_box.append(&section);
@@ -909,7 +915,7 @@ fn trinket_choices(
     transmuted: &[bool; 13],
     selected: Option<ItemId>,
     on_select: impl Fn(ItemId) + 'static,
-) -> (gtk::Box, gtk::Box) {
+) -> (gtk::ListBoxRow, gtk::Box) {
     let on_select = Rc::new(on_select);
     let content = gtk::Box::new(gtk::Orientation::Vertical, 8);
     let mut catalyst = location.clone();
@@ -921,6 +927,7 @@ fn trinket_choices(
         .spacing(6)
         .margin_start(12)
         .margin_end(12)
+        .margin_top(2)
         .build();
     let order = trinket_order(world.seed);
     for id in &order[..4] {
@@ -929,33 +936,15 @@ fn trinket_choices(
             .iter()
             .enumerate()
             .any(|(index, entry)| entry.item == *id && matched[index]);
-        let tile = sprites::trinket_tile(item(*id), is_match, true);
-        let applied = selected == Some(*id);
-        let overlay = gtk::Overlay::new();
-        overlay.set_child(Some(&tile));
-        if applied {
-            overlay.add_overlay(
-                &gtk::Label::builder()
-                    .label("Applied +3")
-                    .css_classes(["trinket-applied-badge"])
-                    .halign(gtk::Align::Center)
-                    .valign(gtk::Align::Start)
-                    .build(),
-            );
-        }
-        let button = gtk::ToggleButton::builder()
-            .child(&overlay)
-            .active(applied)
-            .css_classes(["flat", "trinket-toggle"])
-            .tooltip_text(item(*id).name)
-            .build();
-        button.update_property(&[gtk::accessible::Property::Label(item(*id).name)]);
+        let button = trinket_choice(*id, is_match, selected == Some(*id));
         button.connect_clicked({
             let id = *id;
             let on_select = Rc::clone(&on_select);
             move |_| on_select(id)
         });
-        choices.append(&button);
+        let square = SquareBin::new(&button);
+        square.set_hexpand(true);
+        choices.append(&square);
     }
     content.append(&choices);
     content.append(
@@ -992,7 +981,53 @@ fn trinket_choices(
         remaining.append(&tile);
     }
     content.append(&remaining);
-    (content, choices)
+    // A row of the floor's own list, so the catalyst reads as one of its items
+    // rather than floating between the cards.
+    let row = gtk::ListBoxRow::builder()
+        .child(&content)
+        .activatable(false)
+        .selectable(false)
+        .focusable(false)
+        .css_classes(["catalyst-row"])
+        .build();
+    (row, choices)
+}
+
+/// One of the four starting trinkets as a square card: its art and name,
+/// green when the requirements want it, and the accent with an "Applied +3"
+/// badge while it is the one applied.
+fn trinket_choice(id: ItemId, is_match: bool, applied: bool) -> gtk::ToggleButton {
+    let name = item(id).name;
+    let overlay = gtk::Overlay::new();
+    overlay.set_child(Some(&sprites::trinket_tile(item(id), is_match, true)));
+    if applied {
+        overlay.add_overlay(
+            &gtk::Label::builder()
+                .label("Applied +3")
+                .css_classes(["trinket-applied-badge"])
+                .halign(gtk::Align::Center)
+                .valign(gtk::Align::Start)
+                .margin_top(4)
+                .build(),
+        );
+    }
+    let button = gtk::ToggleButton::builder()
+        .child(&overlay)
+        .active(applied)
+        .css_classes(["trinket-choice"])
+        .tooltip_text(if applied {
+            format!("{name} — applied at +3; select again to remove it")
+        } else {
+            format!("Apply {name} at +3")
+        })
+        .build();
+    if is_match {
+        button.add_css_class("trinket-match");
+    }
+    button.update_property(&[gtk::accessible::Property::Label(&format!(
+        "Apply {name} at +3"
+    ))]);
+    button
 }
 
 /// How a manifest row took part in the scouted match.

@@ -214,29 +214,56 @@ button.stack-badge:hover {
   background-color: alpha(var(--error-color), 0.12);
 }
 
-/* Flat, square trinket choices share the native card palette. */
-.trinket-choice {
+/* The four starting trinkets: rounded square cards on the catalyst's row.
+   Green marks one the requirements want; the accent marks the one applied. */
+button.trinket-choice {
+  padding: 0;
   border: 1px solid alpha(currentColor, 0.16);
-  border-radius: 6px;
+  border-radius: 8px;
+  box-shadow: none;
+  background-image: none;
   background-color: alpha(currentColor, 0.03);
-}
-.trinket-choice.trinket-match {
-  border-color: @success_color;
-  background-color: alpha(@success_color, 0.16);
+  font-weight: normal;
 }
 
-.trinket-toggle { padding: 0; }
-.trinket-toggle:checked { outline: 2px solid @success_color; }
+button.trinket-choice:hover {
+  background-color: alpha(currentColor, 0.07);
+}
+
+button.trinket-choice.trinket-match {
+  border-color: var(--success-color);
+  background-color: alpha(var(--success-color), 0.1);
+  color: var(--success-color);
+}
+
+button.trinket-choice:checked {
+  border-color: var(--accent-color);
+  box-shadow: inset 0 0 0 1px var(--accent-color);
+  background-color: alpha(var(--accent-color), 0.1);
+}
+
 .trinket-applied-badge {
-  color: @success_color;
-  background-color: @card_bg_color;
-  border-radius: 4px;
-  padding: 0 4px;
+  padding: 0 6px;
+  border-radius: 999px;
+  color: var(--accent-fg-color);
+  background-color: var(--accent-bg-color);
   font-size: 10px;
   font-weight: bold;
 }
 
-/* Selection alone carries the applied highlight; hover must not mimic it. */
+/* The catalyst's list row holds its own header row; the row itself stays
+   flat, with room below the deck. */
+row.catalyst-row {
+  padding: 0 0 4px;
+}
+
+row.catalyst-row:hover {
+  background-color: transparent;
+}
+
+/* The compact choices the seed header docks while the cards are scrolled
+   away. Selection alone carries the applied highlight; hover must not
+   mimic it. */
 .trinket-shortcut {
   min-width: 20px;
   min-height: 20px;
@@ -244,10 +271,11 @@ button.stack-badge:hover {
   border: 1px solid alpha(currentColor, 0.16);
   border-radius: 6px;
 }
+
 .trinket-shortcut:checked {
-  border-color: @success_color;
-  box-shadow: inset 0 0 0 1px @success_color;
-  background: alpha(@success_color, 0.14);
+  border-color: var(--accent-color);
+  box-shadow: inset 0 0 0 1px var(--accent-color);
+  background: alpha(var(--accent-color), 0.12);
 }
 
 /* Mapping sprites float on the dialog, retaining keyboard focus indication. */
