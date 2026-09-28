@@ -950,10 +950,12 @@ impl ResultsPane {
             .title(seed_code)
             .css_classes(["seed-row"])
             .build();
-        row.add_prefix(&index_label);
         row.set_title("");
+        // One prefix, index first: libadwaita packs each new prefix before
+        // the last, which put the index after the code, mid-row.
         let code = gtk::Box::new(gtk::Orientation::Horizontal, 6);
         code.set_hexpand(true);
+        code.append(&index_label);
         code.append(
             &gtk::Label::builder()
                 .label(seed_code)
