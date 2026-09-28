@@ -69,6 +69,7 @@
                 "text": "Wand of Disintegration"
               }
             ],
+            "remaining_badges": null,
             "stack": {
               "can_change_count": true,
               "can_count_levels": false,
@@ -118,6 +119,7 @@
                 "text": "Wand of Frost"
               }
             ],
+            "remaining_badges": null,
             "stack": {
               "can_change_count": true,
               "can_count_levels": false,
@@ -178,6 +180,7 @@
             "problem": null,
             "refuse": [],
             "relations": [],
+            "remaining_badges": null,
             "stack": {
               "can_change_count": true,
               "can_count_levels": false,

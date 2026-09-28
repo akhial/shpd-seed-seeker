@@ -1635,7 +1635,8 @@ fn folded_away(rows: &[Row], key: u64) -> bool {
 /// The chip the attempt put on the board, as the sheet previews it: the
 /// saved row's own chip, or — when it folded into an earlier chip as a
 /// plain repeat — that chip, with its stack and badges. It is not on the
-/// board yet, so it has no key, no copy keys and no join candidates.
+/// board yet, so it has no key, no copy keys (so no remaining badges) and
+/// no join candidates.
 fn preview(attempt: &Attempt) -> Option<ChipView> {
     let saved = attempt.saved?;
     if !attempt.errors.is_empty() {
@@ -1654,6 +1655,7 @@ fn preview(attempt: &Attempt) -> Option<ChipView> {
         .clone();
     chip.key = 0;
     chip.copies.clear();
+    chip.remaining_badges = None;
     chip.join.clear();
     chip.refuse.clear();
     Some(chip)

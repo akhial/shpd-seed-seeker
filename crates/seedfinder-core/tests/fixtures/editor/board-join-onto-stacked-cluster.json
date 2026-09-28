@@ -91,6 +91,10 @@
                 "text": "2 of the same kind — the extra copies: any upgrade, any floor"
               }
             ],
+            "remaining_badges": {
+              "count": null,
+              "total": null
+            },
             "stack": {
               "can_change_count": true,
               "can_count_levels": false,
@@ -150,6 +154,10 @@
                 "text": "2 of the same kind — the extra copies: any upgrade, any floor"
               }
             ],
+            "remaining_badges": {
+              "count": null,
+              "total": null
+            },
             "stack": {
               "can_change_count": true,
               "can_count_levels": false,
@@ -199,6 +207,7 @@
                 "text": "Wand of Frost, Wand of Lightning"
               }
             ],
+            "remaining_badges": null,
             "stack": {
               "can_change_count": true,
               "can_count_levels": false,
@@ -263,6 +272,7 @@
             "problem": null,
             "refuse": [],
             "relations": [],
+            "remaining_badges": null,
             "stack": {
               "can_change_count": true,
               "can_count_levels": false,

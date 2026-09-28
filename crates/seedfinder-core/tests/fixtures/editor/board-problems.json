@@ -82,6 +82,10 @@
                 "text": "up to 2 — levels add to ≥ 3"
               }
             ],
+            "remaining_badges": {
+              "count": null,
+              "total": null
+            },
             "stack": {
               "can_change_count": true,
               "can_count_levels": true,
@@ -143,6 +147,7 @@
             "problem": "Requirement floor must be 1 through 24.",
             "refuse": [],
             "relations": [],
+            "remaining_badges": null,
             "stack": {
               "can_change_count": true,
               "can_count_levels": false,
@@ -205,6 +210,7 @@
             "problem": "A blanket requirement cannot request extra copies, combined levels, or trinket selection.",
             "refuse": [],
             "relations": [],
+            "remaining_badges": null,
             "stack": {
               "can_change_count": false,
               "can_count_levels": false,

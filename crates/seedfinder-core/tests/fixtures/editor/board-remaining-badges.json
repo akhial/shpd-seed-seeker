@@ -1,44 +1,33 @@
 {
-  "about": "A counting Ring of Energy stack within floor 9 whose copy lies within floor 20, grown to three: the new copy takes the copies' floor 20.",
+  "about": "A Ring of Energy +4 ×3 at rest: while one ring is dragged away, its origin shows remaining_badges, the ×2 a remove_one would leave.",
   "envelope": "requirement_board",
   "request": {
-    "edits": [
-      {
-        "count": 3,
-        "key": 1,
-        "type": "set_count"
-      }
-    ],
     "rows": [
       {
         "item": "ring_energy",
         "key": 1,
         "kind": "ring",
-        "level_sum": {
-          "at_least": 3,
-          "group": 1
-        },
-        "max_depth": 9
+        "upgrade": 4
       },
       {
         "item": "ring_energy",
         "key": 2,
-        "kind": "ring",
-        "level_sum": {
-          "at_least": 3,
-          "group": 1
-        },
-        "max_depth": 20
+        "kind": "ring"
+      },
+      {
+        "item": "ring_energy",
+        "key": 3,
+        "kind": "ring"
       }
     ]
   },
   "response": {
-    "changed": true,
+    "changed": false,
     "counts": {
       "blanket": 0,
       "ordinary": 1
     },
-    "focus": 1,
+    "focus": null,
     "items": [
       {
         "blanket": false,
@@ -46,24 +35,20 @@
           {
             "badges": {
               "count": {
-                "compact_text": "≤3",
-                "text": "≤3",
-                "tooltip": "Up to 3 items"
+                "compact_text": "×3",
+                "text": "×3",
+                "tooltip": "3 of the same kind"
               },
-              "total": {
-                "compact_text": "Σ≥3",
-                "text": "Σ ≥ 3",
-                "tooltip": "Levels add to at least 3 (a +0 item counts 1)"
-              }
+              "total": null
             },
             "can_detach": false,
             "copies": [
               2,
               3
             ],
-            "description": "Ring of Energy, floors 1–9",
+            "description": "Ring of Energy, exactly +4",
             "details": [
-              "floors 1–9"
+              "exactly +4"
             ],
             "effect": null,
             "family": "ring",
@@ -77,41 +62,37 @@
             "refuse": [],
             "relations": [
               {
-                "glyph": "sum",
-                "text": "up to 3 — levels add to ≥ 3; the extra copies: floors 1–20"
+                "glyph": "times",
+                "text": "3 of the same kind — the extra copies: any upgrade, any floor"
               }
             ],
             "remaining_badges": {
               "count": {
-                "compact_text": "≤2",
-                "text": "≤2",
-                "tooltip": "Up to 2 items"
+                "compact_text": "×2",
+                "text": "×2",
+                "tooltip": "2 of the same kind"
               },
-              "total": {
-                "compact_text": "Σ≥3",
-                "text": "Σ ≥ 3",
-                "tooltip": "Levels add to at least 3 (a +0 item counts 1)"
-              }
+              "total": null
             },
             "stack": {
               "can_change_count": true,
               "can_count_levels": true,
               "can_grow": true,
-              "can_set_copy_depth": false,
-              "copy_depth": 20,
+              "can_set_copy_depth": true,
+              "copy_depth": null,
               "count": 3,
               "count_max": 3,
-              "count_text": "≤3",
+              "count_text": "×3",
               "default_total": 3,
               "level_capacity": 11,
               "max": 3,
-              "total": 3,
-              "total_text": "Σ ≥ 3"
+              "total": null,
+              "total_text": "Σ ≥ 0"
             },
             "tags": [
               {
-                "style": "plain",
-                "text": "F≤9",
+                "style": "upgrade",
+                "text": "+4",
                 "tooltip": null
               }
             ],
@@ -144,31 +125,17 @@
         "item": "ring_energy",
         "key": 1,
         "kind": "ring",
-        "level_sum": {
-          "at_least": 3,
-          "group": 1
-        },
-        "max_depth": 9
+        "upgrade": 4
       },
       {
         "item": "ring_energy",
         "key": 2,
-        "kind": "ring",
-        "level_sum": {
-          "at_least": 3,
-          "group": 1
-        },
-        "max_depth": 20
+        "kind": "ring"
       },
       {
         "item": "ring_energy",
         "key": 3,
-        "kind": "ring",
-        "level_sum": {
-          "at_least": 3,
-          "group": 1
-        },
-        "max_depth": 20
+        "kind": "ring"
       }
     ]
   }

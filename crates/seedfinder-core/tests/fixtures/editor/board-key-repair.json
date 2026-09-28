@@ -73,6 +73,10 @@
                 "text": "2 of the same kind — the extra copies: any upgrade, any floor"
               }
             ],
+            "remaining_badges": {
+              "count": null,
+              "total": null
+            },
             "stack": {
               "can_change_count": true,
               "can_count_levels": false,
@@ -138,6 +142,7 @@
                 "text": "Any armor"
               }
             ],
+            "remaining_badges": null,
             "stack": {
               "can_change_count": true,
               "can_count_levels": false,
@@ -187,6 +192,7 @@
                 "text": "Any ring"
               }
             ],
+            "remaining_badges": null,
             "stack": {
               "can_change_count": true,
               "can_count_levels": false,

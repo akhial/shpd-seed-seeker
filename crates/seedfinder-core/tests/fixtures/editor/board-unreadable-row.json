@@ -54,6 +54,7 @@
             "problem": null,
             "refuse": [],
             "relations": [],
+            "remaining_badges": null,
             "stack": {
               "can_change_count": true,
               "can_count_levels": false,
@@ -108,6 +109,7 @@
             "problem": "This requirement cannot be read: unknown item 'wand_of_wonders'.",
             "refuse": [],
             "relations": [],
+            "remaining_badges": null,
             "stack": {
               "can_change_count": false,
               "can_count_levels": false,
@@ -166,6 +168,7 @@
             "problem": null,
             "refuse": [],
             "relations": [],
+            "remaining_badges": null,
             "stack": {
               "can_change_count": true,
               "can_count_levels": false,

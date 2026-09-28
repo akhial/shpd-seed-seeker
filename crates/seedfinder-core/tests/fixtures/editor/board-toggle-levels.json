@@ -68,6 +68,10 @@
                 "text": "up to 2 — levels add to ≥ 2"
               }
             ],
+            "remaining_badges": {
+              "count": null,
+              "total": null
+            },
             "stack": {
               "can_change_count": true,
               "can_count_levels": true,

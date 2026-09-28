@@ -123,6 +123,14 @@
                 "text": "3 of the same kind — the extra copies: any upgrade, any floor"
               }
             ],
+            "remaining_badges": {
+              "count": {
+                "compact_text": "×2",
+                "text": "×2",
+                "tooltip": "2 of the same kind"
+              },
+              "total": null
+            },
             "stack": {
               "can_change_count": true,
               "can_count_levels": true,
@@ -219,6 +227,7 @@
             "problem": null,
             "refuse": [],
             "relations": [],
+            "remaining_badges": null,
             "stack": {
               "can_change_count": true,
               "can_count_levels": false,
@@ -300,6 +309,7 @@
                 "text": "Any wand"
               }
             ],
+            "remaining_badges": null,
             "stack": {
               "can_change_count": true,
               "can_count_levels": false,
@@ -358,6 +368,7 @@
                 "text": "Wand of Fireblast"
               }
             ],
+            "remaining_badges": null,
             "stack": {
               "can_change_count": true,
               "can_count_levels": false,
@@ -432,6 +443,7 @@
             "problem": null,
             "refuse": [],
             "relations": [],
+            "remaining_badges": null,
             "stack": {
               "can_change_count": false,
               "can_count_levels": false,
@@ -504,6 +516,7 @@
             "problem": null,
             "refuse": [],
             "relations": [],
+            "remaining_badges": null,
             "stack": {
               "can_change_count": false,
               "can_count_levels": false,

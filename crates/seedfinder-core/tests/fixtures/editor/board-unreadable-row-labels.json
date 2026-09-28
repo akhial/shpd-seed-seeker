@@ -90,6 +90,10 @@
                 "text": "2 of the same kind — the extra copies: any upgrade, any floor"
               }
             ],
+            "remaining_badges": {
+              "count": null,
+              "total": null
+            },
             "stack": {
               "can_change_count": true,
               "can_count_levels": false,
@@ -154,6 +158,7 @@
               }
             ],
             "relations": [],
+            "remaining_badges": null,
             "stack": {
               "can_change_count": true,
               "can_count_levels": false,
@@ -208,6 +213,7 @@
             "problem": "This requirement cannot be read: unknown item 'ring_of_wonders'.",
             "refuse": [],
             "relations": [],
+            "remaining_badges": null,
             "stack": {
               "can_change_count": false,
               "can_count_levels": false,
@@ -262,6 +268,7 @@
             "problem": "This requirement cannot be read: unknown item 'ring_of_wonders'.",
             "refuse": [],
             "relations": [],
+            "remaining_badges": null,
             "stack": {
               "can_change_count": false,
               "can_count_levels": false,
@@ -316,6 +323,7 @@
             "problem": "This requirement cannot be read: unknown item 'ring_of_wonders'.",
             "refuse": [],
             "relations": [],
+            "remaining_badges": null,
             "stack": {
               "can_change_count": false,
               "can_count_levels": false,
@@ -370,6 +378,7 @@
             "problem": "This requirement cannot be read: unknown item 'ring_of_wonders'.",
             "refuse": [],
             "relations": [],
+            "remaining_badges": null,
             "stack": {
               "can_change_count": false,
               "can_count_levels": false,

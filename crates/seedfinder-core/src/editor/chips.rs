@@ -23,8 +23,8 @@ use crate::query::{
 
 use super::Row;
 use super::board::{
-    BoardItem, ChipStack, HeldLabels, ItemKey, JoinCandidates, Refusal, board_items,
-    join_candidates_holding,
+    BoardItem, ChipStack, Edit, HeldLabels, ItemKey, JoinCandidates, Refusal, apply_holding,
+    board_items, join_candidates_holding,
 };
 use super::labels::{
     ARCANE_RESIN, CopyFloors, EXCLUDED_FROM_RESIN, KindName, NO_RESIN, RESIN_AUTO,
@@ -203,6 +203,11 @@ pub struct ChipView {
     pub relations: Vec<Relation>,
     /// The badges the chip shows at rest.
     pub badges: Badges,
+    /// The badges the chip keeps while one of its items is lifted away —
+    /// what its drag origin shows: those [`super::Edit::RemoveOne`] of that
+    /// item leaves on the chip it focuses, since every drag moves exactly
+    /// one. `None` when the chip has no copies: the whole chip leaves.
+    pub remaining_badges: Option<Badges>,
     /// The keys of the hidden copies behind the chip's badge. Members whose
     /// stacks are alike share theirs.
     pub copies: Vec<u64>,
@@ -445,6 +450,35 @@ fn badges(stack: &ChipStack) -> Badges {
     }
 }
 
+/// The badges the chip of `stack` keeps while one of its items is lifted
+/// away ([`ChipView::remaining_badges`]): the ones [`Edit::RemoveOne`] of
+/// that item, beside the `held` labels, leaves on the chip it focuses — the
+/// chip itself, or the chip whose stack the rest folded into (a lone
+/// `Mace` beside a `Mace` stacked with a bare copy takes that stack's last
+/// Mace as its repeat). Running the very edit keeps the two from
+/// disagreeing on a combined level capped or dropped, or on a member whose
+/// stack is shared. A refused removal leaves the badges as they are. `None`
+/// when the chip has no copies: the whole chip leaves.
+fn remaining_badges(rows: &[Row], stack: &ChipStack, held: &HeldLabels) -> Option<Badges> {
+    if stack.copies.is_empty() {
+        return None;
+    }
+    let key = rows[stack.index].key;
+    let result = apply_holding(rows, None, &[Edit::RemoveOne { key }], held);
+    let focus = result.focus.unwrap_or(key);
+    let left = result
+        .rows
+        .iter()
+        .position(|row| row.key == focus)
+        .and_then(|index| {
+            board_items(&result.rows)
+                .iter()
+                .find_map(|item| item.stack(index))
+                .map(badges)
+        });
+    Some(left.unwrap_or_else(|| badges(stack)))
+}
+
 /// The resin chip for the query's resin condition.
 #[must_use]
 pub fn resin_chip(resin: &ResinState) -> ResinChip {
@@ -566,7 +600,7 @@ pub(crate) fn board_view_beside(
             } else {
                 counts.ordinary += 1;
             }
-            item_view(rows, item, &candidates, &found, &blame)
+            item_view(rows, item, &candidates, &found, &blame, held)
         })
         .collect();
     BoardView {
@@ -584,6 +618,7 @@ fn item_view(
     candidates: &[JoinCandidates],
     found: &[IndexedProblem],
     blame: &Blame<'_>,
+    held: &HeldLabels,
 ) -> ItemView {
     let keys = |indices: &[usize]| indices.iter().map(|&index| rows[index].key).collect();
     let chips: Vec<ChipView> = item
@@ -596,6 +631,7 @@ fn item_view(
                 stack,
                 &candidates[stack.index],
                 blame.chip(stack.index, &stack.copies).map(str::to_owned),
+                held,
             )
         })
         .collect();
@@ -628,6 +664,7 @@ fn chip_view(
     stack: &ChipStack,
     candidates: &JoinCandidates,
     problem: Option<String>,
+    held: &HeldLabels,
 ) -> ChipView {
     let row = &rows[stack.index];
     let requirement = &row.requirement;
@@ -648,6 +685,7 @@ fn chip_view(
         details,
         relations: relations(rows, item, stack),
         badges: badges(stack),
+        remaining_badges: remaining_badges(rows, stack, held),
         copies: stack.copies.iter().map(|&copy| rows[copy].key).collect(),
         stack: stack_view(rows, stack),
         problem,

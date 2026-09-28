@@ -1620,6 +1620,14 @@ fn badge_value(badge: Option<&Badge>) -> Value {
     })
 }
 
+fn badges_value(badges: &Badges) -> Value {
+    let Badges { count, total } = badges;
+    object(vec![
+        ("count", badge_value(count.as_ref())),
+        ("total", badge_value(total.as_ref())),
+    ])
+}
+
 fn item_view(view: &ItemView) -> Value {
     let ItemView {
         id,
@@ -1659,7 +1667,8 @@ fn chip_value(chip: &ChipView) -> Value {
         uncursed,
         details,
         relations,
-        badges: Badges { count, total },
+        badges,
+        remaining_badges,
         copies,
         stack,
         description,
@@ -1708,12 +1717,10 @@ fn chip_value(chip: &ChipView) -> Value {
         ("relations", relations),
         ("description", description.as_str().into()),
         ("problem", problem.as_deref().into()),
+        ("badges", badges_value(badges)),
         (
-            "badges",
-            object(vec![
-                ("count", badge_value(count.as_ref())),
-                ("total", badge_value(total.as_ref())),
-            ]),
+            "remaining_badges",
+            remaining_badges.as_ref().map_or(Value::Null, badges_value),
         ),
         ("copies", copies.as_slice().into()),
         ("stack", stack_value(stack)),
@@ -1800,6 +1807,7 @@ fn unreadable_item(raw: &Raw) -> Value {
             "badges",
             object(vec![("count", Value::Null), ("total", Value::Null)]),
         ),
+        ("remaining_badges", Value::Null),
         ("copies", none()),
         ("stack", stack),
         ("in_cluster", false.into()),

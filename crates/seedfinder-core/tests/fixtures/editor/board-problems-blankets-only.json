@@ -43,6 +43,7 @@
             "problem": null,
             "refuse": [],
             "relations": [],
+            "remaining_badges": null,
             "stack": {
               "can_change_count": false,
               "can_count_levels": false,

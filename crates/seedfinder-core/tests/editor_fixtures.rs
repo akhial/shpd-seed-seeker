@@ -408,6 +408,18 @@ fn board_fixtures(fixtures: &mut Fixtures) {
         }),
     );
     fixtures.add(
+        "board-remaining-badges",
+        "A Ring of Energy +4 ×3 at rest: while one ring is dragged away, its origin shows remaining_badges, the ×2 a remove_one would leave.",
+        Board,
+        &json!({
+            "rows": [
+                {"key": 1, "kind": "ring", "item": "ring_energy", "upgrade": 4},
+                {"key": 2, "kind": "ring", "item": "ring_energy"},
+                {"key": 3, "kind": "ring", "item": "ring_energy"},
+            ],
+        }),
+    );
+    fixtures.add(
         "board-detach",
         "A cluster member taken out on its own; the cluster of one dissolves.",
         Board,

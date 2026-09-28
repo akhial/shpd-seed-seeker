@@ -733,6 +733,186 @@ fn badges_show_the_count_and_the_combined_level() {
     assert_eq!(board.items[0].extras, [4]);
 }
 
+/// A badge as the board words it: `text`, the same without spaces, and its
+/// tooltip.
+fn badge(text: &str, compact_text: &str, tooltip: &str) -> Badge {
+    Badge {
+        text: text.to_owned(),
+        compact_text: compact_text.to_owned(),
+        tooltip: tooltip.to_owned(),
+    }
+}
+
+/// The badges the chip `key` shows at rest.
+fn badges_of(rows: &[Row], key: u64) -> Badges {
+    chip(&view(rows), key).badges.clone()
+}
+
+#[test]
+fn a_lifted_item_leaves_its_stack_one_item_fewer() {
+    // Ring of Energy +4 ×3 leaves ×2 behind; ×2 leaves a lone ring; ×1 has
+    // nothing to leave — the whole chip goes.
+    let energy = Requirement {
+        upgrade: UpgradeRequirement::Exact(4),
+        ..named(0, ItemId::RingEnergy).requirement
+    };
+    let three = edited(&[], &[saved(energy, 3, None)]);
+    let lifted = chip(&view(&three), 1).clone();
+    assert_eq!(
+        lifted.remaining_badges,
+        Some(Badges {
+            count: Some(badge("×2", "×2", "2 of the same kind")),
+            total: None,
+        })
+    );
+    let rest = edited(&three, &[Edit::RemoveOne { key: 1 }]);
+    assert_eq!(lifted.remaining_badges, Some(badges_of(&rest, 1)));
+    let two = edited(&[], &[saved(energy, 2, None)]);
+    assert_eq!(
+        chip(&view(&two), 1).remaining_badges,
+        Some(Badges::default())
+    );
+    let one = edited(&[], &[saved(energy, 1, None)]);
+    assert_eq!(chip(&view(&one), 1).remaining_badges, None);
+
+    // A Mace stacked with a bare copy, beside a lone Mace: once the copy
+    // goes, the rest is a plain repeat of the lone one, whose ×2 it shows.
+    let maces = [
+        named(1, ItemId::Mace),
+        with(named(2, ItemId::Mace), |r| r.identity_group = Some(1)),
+        with(row(3, ItemKind::Weapon), |r| r.identity_group = Some(1)),
+    ];
+    let board = view(&maces);
+    assert_eq!(chip(&board, 1).remaining_badges, None);
+    assert_eq!(chip(&board, 2).copies, [3]);
+    let rest = edited(&maces, &[Edit::RemoveOne { key: 2 }]);
+    assert_eq!(entry(&view(&rest), 2).members, [1]);
+    assert_eq!(chip(&board, 2).remaining_badges, Some(badges_of(&rest, 1)));
+    assert_eq!(
+        badges_of(&rest, 1).count.map(|badge| badge.text),
+        Some("×2".to_owned())
+    );
+}
+
+#[test]
+fn a_lifted_ring_leaves_a_combined_level_the_rest_can_reach() {
+    // Σ at the most three rings reach: the two left keep it, capped at
+    // what two can reach.
+    let rings = edited(
+        &[],
+        &[
+            saved(named(0, ItemId::RingMight).requirement, 3, None),
+            Edit::SetTotal {
+                key: 1,
+                total: Some(u8::MAX),
+            },
+        ],
+    );
+    let lifted = chip(&view(&rings), 1).clone();
+    let full = lifted.stack.level_capacity;
+    let remaining = lifted.remaining_badges.expect("the stack has copies");
+    assert_eq!(remaining.count, Some(badge("≤2", "≤2", "Up to 2 items")));
+    let rest = edited(&rings, &[Edit::RemoveOne { key: 1 }]);
+    let capped = chip(&view(&rest), 1).stack.total.expect("still counting");
+    assert!(capped < full, "{capped} of {full}");
+    assert_eq!(
+        remaining.total,
+        Some(badge(
+            &format!("Σ ≥ {capped}"),
+            &format!("Σ≥{capped}"),
+            &format!("Levels add to at least {capped} (a +0 item counts 1)"),
+        ))
+    );
+    assert_eq!(remaining, badges_of(&rest, 1));
+
+    // A total the rest still reaches stays as it was.
+    let low = edited(
+        &rings,
+        &[Edit::SetTotal {
+            key: 1,
+            total: Some(3),
+        }],
+    );
+    assert_eq!(
+        chip(&view(&low), 1)
+            .remaining_badges
+            .as_ref()
+            .and_then(|badges| badges.total.clone()),
+        Some(badge(
+            "Σ ≥ 3",
+            "Σ≥3",
+            "Levels add to at least 3 (a +0 item counts 1)"
+        ))
+    );
+
+    // Two rings leave one, which no longer counts levels.
+    let two = edited(
+        &[],
+        &[
+            saved(named(0, ItemId::RingMight).requirement, 2, None),
+            Edit::SetTotal {
+                key: 1,
+                total: Some(4),
+            },
+        ],
+    );
+    assert_eq!(
+        chip(&view(&two), 1).remaining_badges,
+        Some(Badges::default())
+    );
+    let rest = edited(&two, &[Edit::RemoveOne { key: 1 }]);
+    assert_eq!(badges_of(&rest, 1), Badges::default());
+}
+
+#[test]
+fn a_lifted_member_leaves_its_stack_as_remove_one_does() {
+    // {Frost ×2 | Disintegration}: Frost leaves a lone Frost; Disintegration
+    // has no copies and leaves whole.
+    let cluster = [
+        with(named(1, ItemId::WandFrost), |r| {
+            r.alternative_group = Some(1);
+            r.identity_group = Some(1);
+        }),
+        with(named(2, ItemId::WandDisintegration), |r| {
+            r.alternative_group = Some(1);
+        }),
+        with(row(3, ItemKind::Wand), |r| r.identity_group = Some(1)),
+    ];
+    let board = view(&cluster);
+    assert_eq!(chip(&board, 1).remaining_badges, Some(Badges::default()));
+    assert_eq!(chip(&board, 2).remaining_badges, None);
+
+    // Members sharing a stack: {Frost ×3 | Disintegration ×3} — Frost's
+    // own stack drops to ×2, Disintegration keeps ×3.
+    let shared = [
+        with(named(1, ItemId::WandFrost), |r| {
+            r.alternative_group = Some(1);
+            r.identity_group = Some(1);
+        }),
+        with(named(2, ItemId::WandDisintegration), |r| {
+            r.alternative_group = Some(1);
+            r.identity_group = Some(1);
+        }),
+        with(row(3, ItemKind::Wand), |r| r.identity_group = Some(1)),
+        with(row(4, ItemKind::Wand), |r| r.identity_group = Some(1)),
+    ];
+    let board = view(&shared);
+    let frost = chip(&board, 1);
+    assert_eq!(
+        frost.remaining_badges,
+        Some(Badges {
+            count: Some(badge("×2", "×2", "2 of the same kind")),
+            total: None,
+        })
+    );
+    let rest = edited(&shared, &[Edit::RemoveOne { key: 1 }]);
+    assert_eq!(frost.remaining_badges, Some(badges_of(&rest, 1)));
+    assert_eq!(
+        badges_of(&rest, 2).count.map(|badge| badge.text),
+        Some("×3".to_owned())
+    );
+}
+
 // --- problems on the board ----------------------------------------------------------
 
 #[test]
@@ -1242,6 +1422,40 @@ fn the_board_view_agrees_with_the_fold_the_problems_and_the_candidates() {
                 if let Some(own) = own {
                     assert_eq!(chip.problem.as_ref(), Some(&own.message), "{context}");
                 }
+            }
+        }
+    }
+}
+
+#[test]
+fn every_chip_leaves_behind_the_badges_remove_one_leaves() {
+    // Generated lists, valid rows or not, as given or after a random edit
+    // (1,024 cases): a chip without copies leaves whole; any other leaves
+    // the badges of the chip a removal of one item focuses — itself, or
+    // the chip whose stack the rest folds into.
+    let mut rng = Rng::new(0x9_0057_ba5e);
+    for case in 0..1024 {
+        let mut rows = mixed_rows(&mut rng);
+        if case % 2 == 1 {
+            let edit = random_edit(&mut rng, &rows);
+            rows = apply(&rows, None, &[edit]).rows;
+        }
+        let context = format!("case {case}: {rows:?}");
+        for lifted in view(&rows).items.iter().flat_map(|item| &item.chips) {
+            assert_eq!(
+                lifted.remaining_badges.is_none(),
+                lifted.copies.is_empty(),
+                "{context}"
+            );
+            if let Some(remaining) = &lifted.remaining_badges {
+                let rest = apply(&rows, None, &[Edit::RemoveOne { key: lifted.key }]);
+                let focus = rest.focus.unwrap_or(lifted.key);
+                assert_eq!(
+                    remaining,
+                    &chip(&view(&rest.rows), focus).badges,
+                    "{}: {context}",
+                    lifted.key
+                );
             }
         }
     }

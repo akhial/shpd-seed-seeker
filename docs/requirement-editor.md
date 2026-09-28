@@ -374,6 +374,7 @@ candidates still answer for the list as written, and agree with the edit.
 | `description` | The accessibility label: the title, then the details. It leaves out the relation lines and the badges, which the apps draw as nodes of their own with their own words (the cluster's `label`, each badge's `tooltip`); an app whose chip is one accessibility node appends `relations` itself. |
 | `problem` | The row's own first problem, else the first problem between rows blaming it; a chip also speaks for its own hidden copies (every member sharing a stack for the copies they share). |
 | `badges` | The badges the chip shows at rest: `count` when it asks for more than one item, `total` when it counts levels; each `{"text", "compact_text", "tooltip"}` (`×3` / `3 of the same kind`; `Σ ≥ 5`, compact `Σ≥5`, `Levels add to at least 5 (a +0 item counts 1)`), else `null`. A cluster member's badges are its own and are drawn on its chip, inside the cluster's outline. |
+| `remaining_badges` | The badges the chip keeps while one item is lifted away — what a drag's origin shows: `{"count", "total"}` like `badges`, the ones a `remove_one` of the chip leaves on the chip it focuses (the chip itself, or the chip its rest folds into as a plain repeat), so it cannot disagree with the drop. One copy fewer: Ring of Energy +4 ×3 leaves `×2`, a ×2 chip `{"count": null, "total": null}`; a combined level is capped at what the rest can reach, and dropped when one ring is left; a member leaves its own stack one fewer (Frost of `{Frost ×2 \| Disintegration}` leaves both `null`), and one sharing its stack with alike members leaves what `remove_one` leaves it (Frost of `{Frost ×3 \| Disintegration ×3}` leaves `×2`); a `remove_one` refused for want of a stack label leaves `badges`. `null` when the chip has no copies (`copies` is empty): the whole chip leaves, as Disintegration does. |
 | `copies` | The keys of the hidden copies behind the chip's badge, in list order; members whose stacks are alike share theirs. |
 | `stack` | What the chip's count, combined-level and copy-floor steppers offer: `count`, `max` (3), `can_grow`, `can_change_count`, `count_max` (the count stepper's upper bound: `max` while the chip can grow, else its `count`, which it may only shed copies from; never above `max`), `total`, `can_count_levels` (a lone named ring stack only), `level_capacity`, `default_total`, `copy_depth`, `can_set_copy_depth`, `count_text` (`×2`, or `≤2` while counting levels — present even at ×1 for steppers), `total_text` (`Σ ≥ 5`, `Σ ≥ 0` without a total). |
 | `in_cluster`, `can_detach` | A cluster member, which "On its own" (`detach`) applies to. |
@@ -385,10 +386,15 @@ target is in `join`, show the message when it is in `refuse`, else do
 nothing; onto the empty board of the chip's own section, `detach` a cluster
 member (`can_detach`) and leave a lone chip where it is; onto the remove
 target, `remove_one`. Every drag moves one item, so the chip being dragged
-is drawn as that one item: its name and tags, without its badges. A detach
-or a `remove_one` that needs a stack label when none is free is refused
-like a join; the typed `drop_action` answers it, the envelope's `refused`
-says so after the fact.
+is drawn as that one item: its name and tags, without its badges. Where an
+app draws the moving item apart from its origin, the origin — still a
+dimmed placeholder — shows the chip's `remaining_badges` while one item is
+lifted away (`null` keeps the placeholder as it was), and its `badges`
+again once the drag ends or is cancelled; a chip that is both at once (pick
+mode, a keyboard move) keeps the one-item look. A detach or a `remove_one`
+that needs a stack label when none is free is refused like a join; the
+typed `drop_action` answers it, the envelope's `refused` says so after the
+fact.
 
 **RESIN_CHIP**: `{"name": "Arcane Resin", "tags", "uncursed", "tooltip",
 "details", "description"}` — tags `Auto` or `≥N`, then `Mage +2`, then
@@ -540,7 +546,7 @@ explains.
 | --- | --- |
 | `v`, `mode` (`new` \| `edit`), `origin` (`{"type": "new"}`, `{"type": "row", "key": K}`, `{"type": "resin"}`), `blanket`, `in_cluster`, `resin_picked` | What the dialog chrome — title and button labels, which apps own — derives from. |
 | `title` | The sheet header's title: the requirement's (`Any Tier 3+ melee weapon`, `Rat Skull`), or `Arcane Resin` while the resin is picked. Unlike `preview` it is there while the draft has errors; the sprite follows `item` and `kind`. |
-| `preview` | The CHIP a save would produce, with its stack and badges (key 0, no copy keys, no join candidates), or `null` while there are errors or the resin is picked. |
+| `preview` | The CHIP a save would produce, with its stack and badges (key 0, no copy keys, no remaining badges, no join candidates), or `null` while there are errors or the resin is picked. |
 | `category`, `kind`, `weapon_type`, `item`, `source` | Pickers: `{"visible", "value", "options"}`. `item` lists the wildcard (`Any melee weapon`) unless the family always names one, `Arcane Resin` when offered, then the items — weapons grouped `Tier 2`…`Tier 5`. |
 | `tier`, `upgrade` | `{"visible", "mode", "modes", "value_visible", "value", "min", "max", "value_label"}` (`Tier 3 or higher`, `+2 or higher`); `value_visible` says the value slider shows: the control does, in a mode other than `any`. |
 | `effect` | `{"visible", "label", "mode", "modes", "choices_visible", "choices", "groups", "caption"}`; `label` is the section's (`Enchantment`, `Glyph` on armor), `choices_visible` says the "Specific…" grid shows (the control does, in mode `specific`), each choice `{"value", "label", "group": "enchantment" \| "curse", "selected"}`, curses listed only while the item may be cursed. |
