@@ -123,19 +123,20 @@ import kotlin.math.roundToInt
 
 private enum class SheetStep { ITEM, DETAILS }
 
-/** What the tier slider is called under each bounded tier mode. */
+/** The tier slider's name under each mode that takes a value (dialog chrome). */
 private val TIER_SLIDER = mapOf("exact" to "Exact tier", "at_least" to "Minimum tier", "at_most" to "Maximum tier")
 
-/** What the upgrade slider is called under each bounded upgrade mode. */
+/** The upgrade slider's name under each mode that takes a value (dialog chrome). */
 private val UPGRADE_SLIDER = mapOf("exact" to "Level", "at_least" to "At least")
 
 /**
  * The requirement editor. It draws the shared core's form for [sheet] —
- * which controls show, what they offer, their ranges, words and captions, the
- * chip a save would produce, and why the draft cannot be saved — and sends
- * every control the user moves back to the core as a change; the draft is
- * the core's and stays opaque here. The sheet's own are its two steps, its
- * titles, headings and help texts, and its buttons.
+ * which controls show, what they offer, their ranges, labels, section labels
+ * and help texts, the chip a save would produce, and why the draft cannot be
+ * saved — and sends every control the user moves back to the core as a
+ * change; the draft is the core's and stays opaque here. The sheet's own are
+ * its dialog chrome: its two steps, its titles, its buttons, the headings of
+ * its pickers and mode pickers, and its sliders' names.
  *
  * Save stores the draft onto [rows], the list as it is now, a new row taking
  * its key from [nextKey] on. [onSaved] gets what the save stored — the list
@@ -462,25 +463,19 @@ private fun DetailControls(form: SheetForm, onChange: (SheetChange) -> Unit) {
         SwitchRow(transmutations.label, transmutations.enabled, { onChange(SheetChange.transmutationsEnabled(it)) })
         Spacer(Modifier.height(12.dp))
         if (transmutations.enabled) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Maximum transmutations", Modifier.weight(1f))
+            // The stepper reads its own value ("At most 3") under the switch that names it.
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 Stepper(transmutations.value, transmutations.valueLabel, transmutations.min..transmutations.max) {
                     onChange(SheetChange.transmutations(it))
                 }
             }
-            transmutations.caption?.let {
-                Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
         }
+        if (transmutations.captionVisible) HelpText(transmutations.caption)
     }
     if (form.selectTrinket.visible) {
         SwitchRow(form.selectTrinket.label, form.selectTrinket.value, { onChange(SheetChange.selectTrinket(it)) })
         Spacer(Modifier.height(8.dp))
-        Text(
-            "Applies after the first brewing opportunity. If several alternatives are offered, no trinket is chosen.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        HelpText(form.selectTrinket.caption)
     }
 
     val tier = form.tier
@@ -499,9 +494,9 @@ private fun DetailControls(form: SheetForm, onChange: (SheetChange) -> Unit) {
                 )
             }
         }
-        TIER_SLIDER[tier.mode]?.let { label ->
+        if (tier.valueVisible) {
             Column(Modifier.padding(vertical = 4.dp)) {
-                ValueRow(label, tier.valueLabel)
+                ValueRow(TIER_SLIDER[tier.mode].orEmpty(), tier.valueLabel)
                 StepSlider(tier.value, tier.min..tier.max, tier.valueLabel) { onChange(SheetChange.tier(it)) }
             }
         }
@@ -513,10 +508,10 @@ private fun DetailControls(form: SheetForm, onChange: (SheetChange) -> Unit) {
         Text("Upgrade", style = MaterialTheme.typography.titleSmall)
         Spacer(Modifier.height(8.dp))
         ModeButtons(upgrade.modes, upgrade.mode) { onChange(SheetChange.upgradeMode(it)) }
-        UPGRADE_SLIDER[upgrade.mode]?.let { label ->
+        if (upgrade.valueVisible) {
             Spacer(Modifier.height(8.dp))
             Column {
-                ValueRow(label, upgrade.valueLabel)
+                ValueRow(UPGRADE_SLIDER[upgrade.mode].orEmpty(), upgrade.valueLabel)
                 StepSlider(upgrade.value, upgrade.min..upgrade.max, upgrade.valueLabel) { onChange(SheetChange.upgrade(it)) }
             }
         }
@@ -525,10 +520,10 @@ private fun DetailControls(form: SheetForm, onChange: (SheetChange) -> Unit) {
     val effect = form.effect
     if (effect.visible) {
         Spacer(Modifier.height(18.dp))
-        Text(if (form.category.value == "armor") "Glyph" else "Enchantment", style = MaterialTheme.typography.titleSmall)
+        Text(effect.label, style = MaterialTheme.typography.titleSmall)
         Spacer(Modifier.height(8.dp))
         ModeButtons(effect.modes, effect.mode) { onChange(SheetChange.effectMode(it)) }
-        if (effect.mode == "specific") {
+        if (effect.choicesVisible) {
             Spacer(Modifier.height(8.dp))
             effect.groups.forEachIndexed { index, group ->
                 if (index > 0) Spacer(Modifier.height(6.dp))
@@ -539,17 +534,14 @@ private fun DetailControls(form: SheetForm, onChange: (SheetChange) -> Unit) {
                     onToggle = { onChange(SheetChange.toggleEffect(it)) },
                 )
             }
-            Text(
-                effect.caption,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            HelpText(effect.caption)
         }
     }
 
     if (form.uncursed.visible) {
         Spacer(Modifier.height(10.dp))
         CheckRow(form.uncursed.label, form.uncursed.value) { onChange(SheetChange.uncursed(it)) }
+        HelpText(form.uncursed.caption)
     }
     if (form.source.visible) {
         Spacer(Modifier.height(10.dp))
@@ -566,8 +558,7 @@ private fun DetailControls(form: SheetForm, onChange: (SheetChange) -> Unit) {
 
     if (form.excludeResin.visible) {
         CheckRow(form.excludeResin.label, form.excludeResin.value) { onChange(SheetChange.excludeResin(it)) }
-        Text("Keep this wand without budgeting resin to upgrade it. Useful for imbuing: resin upgrades do not transfer to the staff. Extra copies are reserved for reforging and never need Auto resin.",
-            style = MaterialTheme.typography.bodySmall)
+        HelpText(form.excludeResin.caption)
     }
 
     val stack = form.stack
@@ -577,7 +568,7 @@ private fun DetailControls(form: SheetForm, onChange: (SheetChange) -> Unit) {
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("How many", style = MaterialTheme.typography.titleSmall)
+            Text(stack.label, style = MaterialTheme.typography.titleSmall)
             Spacer(Modifier.weight(1f))
             Stepper(stack.count, stack.valueLabel, stack.min..stack.max) { onChange(SheetChange.count(it)) }
         }
@@ -585,7 +576,6 @@ private fun DetailControls(form: SheetForm, onChange: (SheetChange) -> Unit) {
             Spacer(Modifier.height(12.dp))
             FloorLimit(
                 stack.copyDepth,
-                caption = "A floor limit is where an item lies, not what it is, so the copies keep their own.",
                 onEnabled = { onChange(SheetChange.copyDepthEnabled(it)) },
                 onFloor = { onChange(SheetChange.copyDepth(it)) },
             )
@@ -597,11 +587,12 @@ private fun DetailControls(form: SheetForm, onChange: (SheetChange) -> Unit) {
                 levels.label,
                 levels.enabled,
                 { onChange(SheetChange.countLevels(it)) },
-                caption = levels.caption ?: "Each item counts its upgrade plus one, and spare items may go unused.",
+                caption = levels.caption.takeIf { levels.captionVisible },
                 style = MaterialTheme.typography.titleSmall,
             )
             if (levels.enabled) {
-                ValueRow("Levels together", levels.valueLabel)
+                // The whole reading ("≥ 5 across up to 2") under the switch that names it.
+                Text(levels.valueLabel, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
                 StepSlider(levels.value, levels.min..levels.max, levels.valueLabel) { onChange(SheetChange.total(it)) }
             }
         }
@@ -684,6 +675,13 @@ private fun CheckRow(label: String, checked: Boolean, onChange: (Boolean) -> Uni
     }
 }
 
+/** A control's help text, as the form words it; nothing for a control without one. */
+@Composable
+internal fun HelpText(text: String?) {
+    text ?: return
+    Text(text, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
 /**
  * A slider over [range] at [value]. A drag reports only the whole steps it
  * crosses, so the editor hears one change per step rather than one per
@@ -707,10 +705,9 @@ internal fun FloorLimit(
     floors: SheetFloors,
     onEnabled: (Boolean) -> Unit,
     onFloor: (Int) -> Unit,
-    caption: String? = null,
     style: TextStyle = MaterialTheme.typography.titleSmall,
 ) {
-    SwitchRow(floors.label, floors.enabled, onEnabled, caption, style)
+    SwitchRow(floors.label, floors.enabled, onEnabled, style = style)
     if (floors.enabled) {
         Spacer(Modifier.height(6.dp))
         Text(floors.valueLabel, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)

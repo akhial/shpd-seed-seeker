@@ -26,9 +26,10 @@ internal val arcaneResinItem = CatalogItem("arcane_resin", "Arcane Resin", ItemK
 /**
  * The query's Arcane Resin condition, on the requirement editor's resin
  * section: [sheet] is opened on the query's resin, and the amount, the donor
- * wands' filters and their checks are the editor's, as in [RequirementSheet].
- * Save hands [onSaved] the condition to adopt; [onRemove], given while the
- * query asks for resin, takes it away, and without it the sheet adds one.
+ * wands' filters, their words and their checks are the editor's, as in
+ * [RequirementSheet]. Save hands [onSaved] the condition to adopt. A sheet
+ * opened on the query's resin edits it, and [onRemove] takes it away; on a
+ * query without resin the editor opens a new one, which Add stores.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -62,49 +63,43 @@ fun ArcaneResinSheet(
                 ) {
                     ItemSprite(arcaneResinItem, modifier = Modifier.size(36.dp).popOnChange(resin.auto))
                 }
-                Column(Modifier.weight(1f).padding(start = 12.dp)) {
-                    Text(form.title, style = MaterialTheme.typography.titleLarge)
-                    Text(
-                        if (resin.auto) "Enough to take every kept wand to +3" else "A fixed amount, at least",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                Text(form.title, Modifier.weight(1f).padding(start = 12.dp), style = MaterialTheme.typography.titleLarge)
                 TextButton(onClick = onDismiss) { Text("Close") }
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
-                listOf("Amount", "Auto").forEachIndexed { index, label ->
+                resin.modes.forEachIndexed { index, mode ->
                     ToggleButton(
-                        checked = resin.auto == (index == 1),
-                        onCheckedChange = { edited.change(SheetChange.resinAuto(index == 1)) },
-                        shapes = if (index == 0) ButtonGroupDefaults.connectedLeadingButtonShapes()
-                        else ButtonGroupDefaults.connectedTrailingButtonShapes(),
+                        checked = resin.auto == mode.value,
+                        onCheckedChange = { edited.change(SheetChange.resinAuto(mode.value)) },
+                        shapes = when (index) {
+                            0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                            resin.modes.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                            else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+                        },
                         colors = ToggleButtonDefaults.toggleButtonColors(
                             containerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
                         ),
                         modifier = Modifier.weight(1f).semantics {
                             role = Role.RadioButton
-                            selected = resin.auto == (index == 1)
+                            selected = resin.auto == mode.value
                         },
-                    ) { Text(label) }
+                    ) { Text(mode.label) }
                 }
             }
-            if (resin.auto) Text("Upgrade each kept wand to +3. Excluded wands and extra copies reserved for reforging need no resin.")
+            // What Auto means stands in the amount field's place.
+            if (resin.auto) Text(resin.caption)
             else OutlinedTextField(value = typed,
                 onValueChange = {
                     typed = it
                     edited.change(SheetChange.resinAmount(typedAmount(it)))
                 },
-                label = { Text("Minimum resin") },
+                label = { Text(resin.label) },
                 modifier = Modifier.fillMaxWidth(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), singleLine = true,
                 // The resin section's one error is its amount's.
                 isError = form.errors.isNotEmpty(),
                 supportingText = form.errors.firstOrNull()?.let { error -> { Text(error) } })
-            if (form.uncursed.visible) Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(form.uncursed.label, modifier = Modifier.weight(1f))
-                Switch(checked = form.uncursed.value, onCheckedChange = { edited.change(SheetChange.uncursed(it)) })
-            }
+            if (form.uncursed.visible) ResinSwitch(form.uncursed) { edited.change(SheetChange.uncursed(it)) }
             if (form.floorLimit.visible) Column {
                 FloorLimit(
                     form.floorLimit,
@@ -114,20 +109,12 @@ fun ArcaneResinSheet(
                 )
             }
             if (form.source.visible) SourcePicker(form.source, "Wand source") { edited.change(SheetChange.source(it)) }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text("Include Mage’s starting wand")
-                    Text("Adds 2 resin from Magic Missile. Assumes you recover it with Wand Preservation and dismantle it after imbuing.",
-                        style = MaterialTheme.typography.bodySmall)
-                }
-                Switch(checked = resin.includeMageWand, onCheckedChange = { edited.change(SheetChange.includeMageWand(it)) },
-                    modifier = Modifier.semantics { contentDescription = "Include Mage’s starting wand" })
-            }
+            if (resin.includeMageWand.visible) ResinSwitch(resin.includeMageWand) { edited.change(SheetChange.includeMageWand(it)) }
             edited.notice?.let {
                 Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
             }
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (onRemove != null) OutlinedButton(
+                if (!form.adding && onRemove != null) OutlinedButton(
                     onClick = onRemove,
                     shapes = ButtonDefaults.shapes(),
                     modifier = Modifier.height(52.dp),
@@ -139,10 +126,23 @@ fun ArcaneResinSheet(
                     shapes = ButtonDefaults.shapes(),
                     interactionSource = saveInteraction,
                     modifier = Modifier.weight(1f).height(52.dp).pressScale(saveInteraction, pressed = 0.95f)) {
-                    Text(if (onRemove != null) "Save" else "Add", style = MaterialTheme.typography.titleMedium)
+                    Text(if (form.adding) "Add" else "Save", style = MaterialTheme.typography.titleMedium)
                 }
             }
         }
+    }
+}
+
+/** A switch of the resin section: its label and help text beside it, the switch named by the label. */
+@Composable
+private fun ResinSwitch(toggle: SheetToggle, onChange: (Boolean) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(toggle.label)
+            toggle.caption?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+        }
+        Switch(checked = toggle.value, onCheckedChange = onChange,
+            modifier = Modifier.semantics { contentDescription = toggle.label })
     }
 }
 

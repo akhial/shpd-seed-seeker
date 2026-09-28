@@ -58,7 +58,7 @@ class BlanketRequirementsUiTest {
             }
         }
         compose.onNodeWithText("Edit blanket requirement").assertIsDisplayed()
-        compose.onNodeWithText("How many").assertDoesNotExist()
+        compose.onNodeWithText("Total item count").assertDoesNotExist()
         compose.onNodeWithText("Exclude from Auto resin").assertDoesNotExist()
         compose.onNodeWithText("Save").performClick()
         // Saving what is already there changes nothing, and lands on the blanket.

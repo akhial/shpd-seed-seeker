@@ -22,12 +22,16 @@ class EditorSheet(val draft: String, internal val formJson: String) {
 /**
  * Everything the requirement sheet shows for a draft, as the shared core
  * decides and words it (`docs/requirement-editor.md`, "FORM"): which
- * controls show, what they offer, their ranges and captions, the chip a save
- * would produce, and why the draft cannot be saved yet. The sheet lays these
- * out; its titles, headings and button labels are its own.
+ * controls show, what they offer, their ranges, labels and help texts, the
+ * chip a save would produce, and why the draft cannot be saved yet. The sheet
+ * lays these out; its titles, buttons, picker headings and slider names are
+ * its own.
  */
 data class SheetForm(
-    /** Whether the sheet adds a chip rather than edits one. */
+    /**
+     * Whether the sheet adds rather than edits: a new chip, or the query's
+     * Arcane Resin when it asks for none yet.
+     */
     val adding: Boolean,
     /** The visible row the sheet edits; null for a new chip or the resin chip. */
     val rowKey: Long?,
@@ -85,8 +89,10 @@ data class SheetForm(
                 effect = form.getJSONObject("effect").let { effect ->
                     SheetEffects(
                         visible = effect.getBoolean("visible"),
+                        label = effect.getString("label"),
                         mode = effect.getString("mode"),
                         modes = effect.getJSONArray("modes").options(JSONObject::getString),
+                        choicesVisible = effect.getBoolean("choices_visible"),
                         choices = effect.getJSONArray("choices").objects().map {
                             SheetEffect(it.getString("value"), it.getString("label"), it.getString("group"), it.getBoolean("selected"))
                         },
@@ -103,6 +109,7 @@ data class SheetForm(
                 stack = form.getJSONObject("stack").let { stack ->
                     SheetStack(
                         visible = stack.getBoolean("visible"),
+                        label = stack.getString("label"),
                         count = stack.getInt("count"),
                         min = stack.getInt("min"),
                         max = stack.getInt("max"),
@@ -114,9 +121,14 @@ data class SheetForm(
                 resin = form.getJSONObject("resin").let { resin ->
                     SheetResin(
                         visible = resin.getBoolean("visible"),
+                        label = resin.getString("label"),
                         auto = resin.getBoolean("auto"),
+                        modes = resin.getJSONArray("modes").options(JSONObject::getBoolean),
+                        caption = resin.getString("caption"),
                         amount = if (resin.isNull("amount")) null else resin.getDouble("amount"),
-                        includeMageWand = resin.getBoolean("include_mage_wand"),
+                        min = resin.getInt("min"),
+                        max = resin.getInt("max"),
+                        includeMageWand = resin.getJSONObject("include_mage_wand").toggle(),
                     )
                 },
                 errors = form.getJSONArray("errors").let { errors -> List(errors.length(), errors::getString) },
@@ -135,14 +147,16 @@ data class SheetPicker<T>(val visible: Boolean, val value: T, val options: List<
     val label: String? get() = options.firstOrNull { it.value == value }?.label
 }
 
-/** A check box or a switch. */
-data class SheetToggle(val visible: Boolean, val value: Boolean, val label: String)
+/** A check box or a switch, with the help text shown under it whenever it shows; null for none. */
+data class SheetToggle(val visible: Boolean, val value: Boolean, val label: String, val caption: String? = null)
 
 /** A mode picker with a value slider (tier, upgrade); [value] stays within [min]..[max] even while hidden. */
 data class SheetRange(
     val visible: Boolean,
     val mode: String,
     val modes: List<SheetOption<String>>,
+    /** Whether the value slider shows: the control does, in a mode that takes a value. */
+    val valueVisible: Boolean,
     val value: Int,
     val min: Int,
     val max: Int,
@@ -153,8 +167,12 @@ data class SheetRange(
 /** The effect filter of a weapon or armor, with the "Specific…" grid's [choices] under their [groups]. */
 data class SheetEffects(
     val visible: Boolean,
+    /** The section's label: `Enchantment`, or `Glyph` on armor. */
+    val label: String,
     val mode: String,
     val modes: List<SheetOption<String>>,
+    /** Whether the "Specific…" grid and its [caption] show. */
+    val choicesVisible: Boolean,
     val choices: List<SheetEffect>,
     val groups: List<SheetOption<String>>,
     /** What the ticked effects mean. */
@@ -175,7 +193,10 @@ data class SheetFloors(
     val valueLabel: String,
 )
 
-/** A switch with a stepper or slider (transmutations, a combined level). */
+/**
+ * A switch with a stepper or slider (transmutations, a combined level), which
+ * shows while [enabled]; its [caption] shows while [captionVisible].
+ */
 data class SheetStepper(
     val visible: Boolean,
     val enabled: Boolean,
@@ -184,12 +205,15 @@ data class SheetStepper(
     val max: Int,
     val label: String,
     val caption: String?,
+    val captionVisible: Boolean,
     val valueLabel: String,
 )
 
 /** How many items the chip asks for, its copies' floor limit, and the level they reach together. */
 data class SheetStack(
     val visible: Boolean,
+    /** The section's label, which its count stepper goes by: `Total item count`. */
+    val label: String,
     val count: Int,
     val min: Int,
     val max: Int,
@@ -199,8 +223,24 @@ data class SheetStack(
     val countLevels: SheetStepper,
 )
 
-/** The Arcane Resin section; [amount] is the number as typed, null for an empty field. */
-data class SheetResin(val visible: Boolean, val auto: Boolean, val amount: Double?, val includeMageWand: Boolean)
+/**
+ * The Arcane Resin section, under [label] (`Minimum resin`), which the amount
+ * field goes by too. [modes] is the Amount/Auto choice, valued as [auto] is;
+ * [caption] says what Auto means, in the amount field's place while [auto]
+ * is on. [amount] is the number as typed, null for an empty field, and
+ * [min]..[max] the amounts that save.
+ */
+data class SheetResin(
+    val visible: Boolean,
+    val label: String,
+    val auto: Boolean,
+    val modes: List<SheetOption<Boolean>>,
+    val caption: String,
+    val amount: Double?,
+    val min: Int,
+    val max: Int,
+    val includeMageWand: SheetToggle,
+)
 
 /**
  * One control the user moved (`docs/requirement-editor.md`, "CHANGE"). The
@@ -284,12 +324,13 @@ private fun <T> JSONArray.options(value: JSONObject.(String) -> T) = objects().m
     SheetOption(it.value("value"), it.getString("label"), it.stringOrNull("group"), it.getBoolean("hidden"))
 }
 
-private fun JSONObject.toggle() = SheetToggle(getBoolean("visible"), getBoolean("value"), getString("label"))
+private fun JSONObject.toggle() = SheetToggle(getBoolean("visible"), getBoolean("value"), getString("label"), stringOrNull("caption"))
 
 private fun JSONObject.range() = SheetRange(
     visible = getBoolean("visible"),
     mode = getString("mode"),
     modes = getJSONArray("modes").options(JSONObject::getString),
+    valueVisible = getBoolean("value_visible"),
     value = getInt("value"),
     min = getInt("min"),
     max = getInt("max"),
@@ -313,5 +354,6 @@ private fun JSONObject.stepper() = SheetStepper(
     max = getInt("max"),
     label = getString("label"),
     caption = stringOrNull("caption"),
+    captionVisible = getBoolean("caption_visible"),
     valueLabel = getString("value_label"),
 )

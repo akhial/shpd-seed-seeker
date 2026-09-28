@@ -354,7 +354,13 @@ class RequirementEditorTest {
         assertEquals(SheetFloors(true, false, 4, form.floorLimit.options, "Limit this item to a floor", "Within first 4 floors"), form.floorLimit)
         assertEquals(2, form.stack.count)
         assertEquals("×2", form.stack.valueLabel)
-        assertEquals(SheetStepper(true, true, 3, 1, 8, "Count levels together", null, "≥ 3 across up to 2"), form.stack.countLevels)
+        assertEquals(
+            SheetStepper(
+                true, true, 3, 1, 8, "Count levels together",
+                "Each item counts its upgrade plus one, and spare items may go unused.", captionVisible = true, "≥ 3 across up to 2",
+            ),
+            form.stack.countLevels,
+        )
         assertFalse(form.stack.copyDepth.visible)
         assertEquals(listOf("up to 2 — levels add to ≥ 3"), form.preview!!.relations)
         assertTrue(form.canSave)
@@ -369,7 +375,9 @@ class RequirementEditorTest {
         val resin = EditorSheet.decode(fixture("editor-resin-amount-invalid").getJSONObject("response")).form
         assertTrue(resin.resinPicked)
         assertNull(resin.rowKey)
-        assertEquals(SheetResin(visible = true, auto = false, amount = null, includeMageWand = true), resin.resin)
+        assertEquals(null, resin.resin.amount)
+        assertFalse(resin.resin.auto)
+        assertTrue(resin.resin.includeMageWand.value)
         assertEquals(listOf("Enter an amount from 1 to 65535."), resin.errors)
         assertFalse(resin.canSave)
         assertNull(resin.preview)
@@ -409,6 +417,109 @@ class RequirementEditorTest {
             refused.sheet.form.errors,
         )
         assertFalse(refused.sheet.form.canSave)
+    }
+
+    @Test fun anUntouchedSaveWritesNothingAndKeepsWhatTheSheetCannotShow() {
+        val untouched = replaySave("editor-save-untouched") as SheetSave.Saved
+        assertNull(untouched.rows)
+        assertEquals(1L, untouched.focus)
+
+        // The city vault's +5 artifact: the sheet has no control for its upgrade.
+        val sandals = listOf(ItemRequirement(1, find("sandals_of_nature"), 5, maximumDepth = 19))
+        val opened = RequirementEditor.open(sandals, key = 1)
+        assertFalse(opened.form.upgrade.visible)
+        assertNull((RequirementEditor.save(opened.draft, sandals) as SheetSave.Saved).rows)
+        // A save that changes something else keeps it too.
+        val floored = RequirementEditor.change(opened.draft, SheetChange.floorLimit(9))
+        val changed = RequirementEditor.save(floored.draft, sandals) as SheetSave.Saved
+        assertEquals(listOf(sandals.single().copy(maximumDepth = 9)), changed.rows)
+    }
+
+    @Test fun theFormWordsItsSectionsAndSaysWhatShows() {
+        fun sheet(rows: List<ItemRequirement>, vararg changes: SheetChange, key: Long? = null) =
+            changes.fold(RequirementEditor.open(rows, key = key)) { open, change -> RequirementEditor.change(open.draft, change) }.form
+
+        val weapon = sheet(emptyList())
+        assertEquals("Enchantment", weapon.effect.label)
+        assertFalse(weapon.effect.choicesVisible)
+        assertEquals("any", weapon.tier.mode)
+        assertFalse(weapon.tier.valueVisible)
+        assertFalse(weapon.upgrade.valueVisible)
+        assertNull(weapon.uncursed.caption)
+        val specific = sheet(
+            emptyList(), SheetChange.effectMode("specific"), SheetChange.tierMode("at_least"), SheetChange.upgradeMode("exact"),
+        )
+        assertTrue(specific.effect.choicesVisible)
+        assertTrue(specific.tier.valueVisible)
+        assertTrue(specific.upgrade.valueVisible)
+        assertEquals("Glyph", sheet(emptyList(), SheetChange.category("armor")).effect.label)
+
+        val wand = sheet(emptyList(), SheetChange.category("wand"))
+        assertTrue(wand.excludeResin.visible)
+        assertTrue(wand.excludeResin.caption!!.startsWith("Keep this wand without budgeting resin to upgrade it."))
+
+        val skull = sheet(emptyList(), SheetChange.category("trinket"), SheetChange.item("rat_skull"))
+        assertEquals(
+            "Applies after the first brewing opportunity. If several alternatives are offered, no trinket is chosen.",
+            skull.selectTrinket.caption,
+        )
+        // The transmutation limit's caption describes the limit, so it shows while the limit is on.
+        assertFalse(skull.transmutations.captionVisible)
+        assertTrue(sheet(emptyList(), SheetChange.category("trinket"), SheetChange.item("rat_skull"), SheetChange.transmutationsEnabled(true)).transmutations.captionVisible)
+
+        // The combined level's caption explains its switch, so it shows while the switch is off too.
+        val rings = sheet(emptyList(), SheetChange.category("ring"), SheetChange.item("ring_might"), SheetChange.count(2))
+        assertEquals("Total item count", rings.stack.label)
+        assertFalse(rings.stack.countLevels.enabled)
+        assertTrue(rings.stack.countLevels.captionVisible)
+        assertEquals("Each item counts its upgrade plus one, and spare items may go unused.", rings.stack.countLevels.caption)
+    }
+
+    @Test fun theResinSectionWordsItsChoiceItsBoundsAndItsSwitch() {
+        val form = EditorSheet.decode(fixture("editor-resin-mage-wand").getJSONObject("response")).form
+        val resin = form.resin
+        assertEquals("Minimum resin", resin.label)
+        assertEquals(listOf(false to "Amount", true to "Auto"), resin.modes.map { it.value to it.label })
+        assertEquals("Upgrade each kept wand to +3. Excluded wands and extra copies reserved for reforging need no resin.", resin.caption)
+        assertEquals(1 to 65535, resin.min to resin.max)
+        assertEquals(
+            SheetToggle(
+                visible = true, value = true, label = "Include Mage’s starting wand",
+                caption = "Add 2 resin from the Magic Missile wand recovered with Wand Preservation when imbuing another wand. " +
+                    "The preserved wand is +0, regardless of the staff’s level.",
+            ),
+            resin.includeMageWand,
+        )
+        // The error for an amount out of bounds names the same bounds.
+        val invalid = EditorSheet.decode(fixture("editor-resin-amount-invalid").getJSONObject("response")).form
+        assertEquals(listOf("Enter an amount from ${invalid.resin.min} to ${invalid.resin.max}."), invalid.errors)
+    }
+
+    @Test fun theResinSheetAddsToAQueryWithoutResinAndEditsOneWithIt() {
+        val frost = listOf(ItemRequirement(1, find("wand_frost"), 2))
+        val added = RequirementEditor.open(frost, openResin = true).form
+        assertTrue(added.adding)
+        assertTrue(added.resinPicked)
+        assertEquals(added.adding, EditorSheet.decode(fixture("editor-resin-open-new").getJSONObject("response")).form.adding)
+
+        val resin = ResinCondition(4, auto = false, ArcaneResinFilter(maximumDepth = 5, includeMageWand = true))
+        val opened = RequirementEditor.open(frost, resin = resin, openResin = true)
+        assertFalse(opened.form.adding)
+        // Floor 5 holds no items, so the slider shows it as 4; saved untouched, the query keeps its 5.
+        assertEquals(4, opened.form.floorLimit.value)
+        val untouched = RequirementEditor.save(opened.draft, frost) as SheetSave.Saved
+        assertNull(untouched.resin)
+        assertNull(untouched.rows)
+        val flipped = listOf(SheetChange.resinAuto(true), SheetChange.resinAuto(false))
+            .fold(opened) { open, change -> RequirementEditor.change(open.draft, change) }
+        assertNull((RequirementEditor.save(flipped.draft, frost) as SheetSave.Saved).resin)
+        assertNull((replaySave("editor-resin-save-untouched") as SheetSave.Saved).resin)
+
+        val more = RequirementEditor.change(opened.draft, SheetChange.resinAmount(6.0))
+        assertEquals(
+            SavedResin.Set(ResinCondition(6, auto = false, resin.filter.copy(maximumDepth = 4))),
+            (RequirementEditor.save(more.draft, frost) as SheetSave.Saved).resin,
+        )
     }
 
     @Test fun aSheetOpensChangesAndSavesThroughTheEngine() {

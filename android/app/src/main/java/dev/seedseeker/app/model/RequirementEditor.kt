@@ -288,9 +288,13 @@ data class ResinCondition(val amount: Int, val auto: Boolean, val filter: Arcane
     }
 
     companion object {
-        /** The condition of a query asking for [amount] resin, or Auto; null when it asks for none. */
+        /**
+         * The condition of a query asking for [amount] resin, or Auto; null
+         * when it asks for none. Which amounts are valid is the query's to
+         * check (`validationProblem`) and the editor's to report.
+         */
         fun of(amount: Int, auto: Boolean, filter: ArcaneResinFilter): ResinCondition? =
-            ResinCondition(amount, auto, filter).takeIf { auto || amount in 1..65535 }
+            ResinCondition(amount, auto, filter).takeIf { auto || amount > 0 }
 
         /** The condition the editor wrote; an Auto one keeps the app's amount of 0. */
         internal fun decode(value: JSONObject): ResinCondition {

@@ -33,8 +33,12 @@ class ArcaneResinSheetTest {
 
     private val rows = listOf(ItemRequirement(1, null, 2, kind = ItemKind.WAND))
 
-    /** The resin sheet on the query's [resin], as the app opens it; the last save's condition goes to [saved]. */
-    private fun showResinSheet(resin: ResinCondition?, onRemove: (() -> Unit)? = {}, saved: (ResinCondition) -> Unit) {
+    /**
+     * The resin sheet on the query's [resin], as the app opens it, with
+     * Remove always given; what each save does to the query's resin goes to
+     * [saved], null when it leaves it as it is.
+     */
+    private fun showResinSheet(resin: ResinCondition?, onRemove: () -> Unit = {}, saved: (SavedResin?) -> Unit) {
         val sheet = RequirementEditor.open(rows, resin = resin, openResin = true)
         val atlas = compose.activity.assets.open("third_party/shattered-pixel-dungeon/items.png")
             .use(BitmapFactory::decodeStream)!!.asImageBitmap()
@@ -43,7 +47,7 @@ class ArcaneResinSheetTest {
                 ArcaneResinSheet(sheet, rows, onDismiss = {}, onRemove = onRemove, onSaved = { stored ->
                     // Saving the query's resin leaves the rows as they were.
                     assertNull(stored.rows)
-                    saved((stored.resin as SavedResin.Set).condition)
+                    saved(stored.resin)
                 })
             }
         } }
@@ -51,7 +55,7 @@ class ArcaneResinSheetTest {
 
     @Test fun editorValidatesWholeAmountsAndPreservesDonorFilters() {
         val filter = ArcaneResinFilter(false, 12, ScoutItemSource.WANDMAKER_REWARD)
-        var saved: ResinCondition? = null
+        var saved: SavedResin? = null
         var removed = false
         showResinSheet(ResinCondition(6, auto = false, filter), onRemove = { removed = true }) { saved = it }
         compose.onNodeWithText("Surplus wands provide", substring = true).assertDoesNotExist()
@@ -81,7 +85,7 @@ class ArcaneResinSheetTest {
         compose.onNodeWithText("Minimum resin").performTextReplacement("3")
         compose.onNodeWithText(invalid).assertDoesNotExist()
         compose.onNodeWithText("Save").performClick()
-        compose.runOnIdle { assertEquals(ResinCondition(3, auto = false, filter), saved) }
+        compose.runOnIdle { assertEquals(SavedResin.Set(ResinCondition(3, auto = false, filter)), saved) }
         compose.onNodeWithText("Remove").performClick()
         compose.runOnIdle { assertTrue(removed) }
     }
@@ -97,36 +101,45 @@ class ArcaneResinSheetTest {
 
     @Test fun autoCanBeSavedWithInvalidHiddenAmountAndKeepsFilters() {
         val filter = ArcaneResinFilter(false, 12, ScoutItemSource.WANDMAKER_REWARD)
-        var saved: ResinCondition? = null
-        showResinSheet(ResinCondition(0, auto = true, filter)) { saved = it }
+        val saved = mutableListOf<SavedResin?>()
+        showResinSheet(ResinCondition(0, auto = true, filter)) { saved += it }
         compose.onNodeWithText("Auto").assertIsSelected()
+        // What Auto means stands in the amount field's place.
+        val auto = "Upgrade each kept wand to +3. Excluded wands and extra copies reserved for reforging need no resin."
+        compose.onNodeWithText(auto).assertIsDisplayed()
         compose.onNodeWithText("Minimum resin").assertDoesNotExist()
         compose.onNodeWithText("Remove").assertIsDisplayed()
         compose.onNodeWithText("Amount").performClick()
+        compose.onNodeWithText(auto).assertDoesNotExist()
         compose.onNodeWithText("Minimum resin").performTextReplacement("1.5")
         compose.onNodeWithText("Save").assertIsNotEnabled()
         compose.onNodeWithText("Auto").performClick()
         compose.onNodeWithText("Save").assertIsEnabled().performClick()
-        compose.runOnIdle { assertEquals(ResinCondition(0, auto = true, filter), saved) }
+        // Back on Auto the sheet says what the query already asks for, so the save leaves it alone.
+        compose.runOnIdle { assertEquals(listOf<SavedResin?>(null), saved) }
         compose.captureResinScreenshot("sheet-auto", requireNotNull(ShadowDialog.getLatestDialog().window))
         compose.onNodeWithText("Amount").performClick()
         compose.onNodeWithText("Minimum resin").performTextReplacement("3")
         compose.onNodeWithText("Save").performClick()
-        compose.runOnIdle { assertEquals(ResinCondition(3, auto = false, filter), saved) }
+        compose.runOnIdle { assertEquals(SavedResin.Set(ResinCondition(3, auto = false, filter)), saved.last()) }
     }
 
     @Test fun startingWandCanBeEnabledInBothResinModes() {
-        var saved: ResinCondition? = null
-        // A query without resin adds one: amount 2, uncursed donors.
-        showResinSheet(null, onRemove = null) { saved = it }
+        var saved: SavedResin? = null
+        // A query without resin adds one: amount 2, uncursed donors. The
+        // editor opens it as new, so there is nothing to remove.
+        showResinSheet(null) { saved = it }
         compose.onNodeWithText("Remove").assertDoesNotExist()
+        compose.onNodeWithText("Save").assertDoesNotExist()
         compose.onNodeWithContentDescription("Include Mage’s starting wand")
             .performScrollTo().assertIsOff().performClick().assertIsOn()
+        compose.onNodeWithText("Add 2 resin from the Magic Missile wand recovered with Wand Preservation", substring = true)
+            .performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Add").performScrollTo().performClick()
-        compose.runOnIdle { assertEquals(ResinCondition(2, auto = false, ArcaneResinFilter(includeMageWand = true)), saved) }
+        compose.runOnIdle { assertEquals(SavedResin.Set(ResinCondition(2, auto = false, ArcaneResinFilter(includeMageWand = true))), saved) }
         compose.onNodeWithText("Auto").performScrollTo().performClick()
         compose.onNodeWithText("Add").performScrollTo().performClick()
-        compose.runOnIdle { assertEquals(ResinCondition(0, auto = true, ArcaneResinFilter(includeMageWand = true)), saved) }
+        compose.runOnIdle { assertEquals(SavedResin.Set(ResinCondition(0, auto = true, ArcaneResinFilter(includeMageWand = true))), saved) }
         compose.captureResinScreenshot("sheet-mage", requireNotNull(ShadowDialog.getLatestDialog().window))
     }
 
@@ -137,6 +150,8 @@ class ArcaneResinSheetTest {
         compose.setContent { SeedSeekerTheme {
             RequirementSheet(sheet, rows, onDismiss = {}, onSaved = { saved = it })
         } }
+        compose.onNodeWithText("Keep this wand without budgeting resin to upgrade it.", substring = true)
+            .performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Exclude from Auto resin").performScrollTo().performClick()
         compose.onNodeWithText("Save").performClick()
         compose.runOnIdle {

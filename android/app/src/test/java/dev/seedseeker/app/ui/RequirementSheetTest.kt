@@ -13,10 +13,12 @@ import dev.seedseeker.app.catalog.ItemCatalog
 import dev.seedseeker.app.catalog.PackagedCatalog
 import dev.seedseeker.app.model.BoardEdit
 import dev.seedseeker.app.model.EditorSheet
+import dev.seedseeker.app.model.ItemKind
 import dev.seedseeker.app.model.ItemRequirement
 import dev.seedseeker.app.model.LevelSum
 import dev.seedseeker.app.model.RequirementEditor
 import dev.seedseeker.app.model.SheetSave
+import dev.seedseeker.app.model.UpgradeMatch
 import dev.seedseeker.app.ui.theme.SeedSeekerTheme
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -63,8 +65,12 @@ class RequirementSheetTest {
         compose.onNodeWithText("Ring of Accuracy").performClick()
         compose.onNodeWithText("Next").performClick()
         compose.onNodeWithText("Upgrade").assertIsDisplayed()
+        compose.onNodeWithText("Total item count").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("+").performScrollTo().performClick()
         compose.onNodeWithText("×2").assertIsDisplayed()
+        // The combined level's help explains its switch, so it shows before the switch is on.
+        compose.onNodeWithText("Each item counts its upgrade plus one, and spare items may go unused.")
+            .performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("Count levels together").performScrollTo().performClick()
         compose.onNodeWithText("≥ 2 across up to 2").performScrollTo().assertIsDisplayed()
         // The combined level speaks for the rings' upgrades.
@@ -76,6 +82,33 @@ class RequirementSheetTest {
             assertEquals(listOf(LevelSum(1, 2), LevelSum(1, 2)), rings.map { it.levelSum })
             assertEquals(7L, saved!!.focus)
         }
+    }
+
+    @Test fun anArmorSheetShowsItsGlyphsAndTheirHelpOnlyWhenPickingThem() {
+        val armor = ItemRequirement(1, null, 0, kind = ItemKind.ARMOR, upgradeMatch = UpgradeMatch.ANY)
+        show(RequirementEditor.open(listOf(armor), key = 1), listOf(armor))
+        compose.onNodeWithText("Glyph").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("Enchantment").assertDoesNotExist()
+        val help = "Tick the effects the item may carry; none ticked means any."
+        compose.onNodeWithText(help).assertDoesNotExist()
+        compose.onNodeWithText("Specific…").performScrollTo().performClick()
+        compose.onNodeWithText(help).performScrollTo().assertIsDisplayed()
+        // The tier slider shows only under a mode that takes a value.
+        compose.onNodeWithText("Maximum tier").assertDoesNotExist()
+        compose.onNodeWithText("At most").performScrollTo().performClick()
+        compose.onNodeWithText("Maximum tier").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test fun aTrinketSheetShowsEachHelpTextWithWhatItExplains() {
+        val skull = ItemRequirement(1, ItemCatalog.findById("rat_skull")!!, 0, upgradeMatch = UpgradeMatch.ANY)
+        show(RequirementEditor.open(listOf(skull), key = 1), listOf(skull))
+        compose.onNodeWithText("Applies after the first brewing opportunity", substring = true).performScrollTo().assertIsDisplayed()
+        // The transmutation limit's help describes the limit, so it shows while the limit is on.
+        val limit = "Matches an initial offer or any of the next"
+        compose.onNodeWithText(limit, substring = true).assertDoesNotExist()
+        compose.onNodeWithText("Allow transmutations").performScrollTo().performClick()
+        compose.onNodeWithText(limit, substring = true).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("At most 1").assertIsDisplayed()
     }
 
     @Test fun arcaneResinIsHandedToItsOwnSheet() {
@@ -109,7 +142,7 @@ class RequirementSheetTest {
         var saved: SheetSave.Saved? = null
         show(RequirementEditor.open(cluster, key = 3), cluster) { saved = it }
         compose.onNodeWithText("Edit alternative").assertIsDisplayed()
-        compose.onNodeWithText("How many").assertDoesNotExist()
+        compose.onNodeWithText("Total item count").assertDoesNotExist()
         compose.onNodeWithText("Back").performClick()
         compose.onNodeWithText("Trinket").performClick()
         compose.onNodeWithText("Next").performClick()

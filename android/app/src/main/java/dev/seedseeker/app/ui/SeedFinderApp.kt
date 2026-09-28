@@ -947,11 +947,10 @@ internal fun SeedFinderApp(
                     adopt(saved)
                     resinSheet = null
                 },
-                onRemove = boardResin?.let {
-                    {
-                        clearResin()
-                        resinSheet = null
-                    }
+                // Offered by the sheet only while it edits the query's resin.
+                onRemove = {
+                    clearResin()
+                    resinSheet = null
                 },
             )
         }
