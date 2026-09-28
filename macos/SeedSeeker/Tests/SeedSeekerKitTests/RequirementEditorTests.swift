@@ -120,7 +120,8 @@ final class RequirementEditorTests: XCTestCase {
         XCTAssertEqual(melee.effect?.anyEnchantment, true)
         XCTAssertEqual(melee.effect?.glowNames, [])
         XCTAssertTrue(melee.uncursed)
-        XCTAssertEqual(melee.join, [5, 6, 7])
+        // The ring stack is no longer refused: a weapon may join it too.
+        XCTAssertEqual(melee.join, [1, 5, 6, 7])
         XCTAssertEqual(melee.description,
                        "Any Tier 3+ melee weapon, +2 or higher, any enchantment, uncursed, floors 1–9")
 
