@@ -251,9 +251,14 @@ item — the chip's name and tags, without its `×N` or `Σ` badges.
   it. The `mixed_category_stack` refusal is gone.
 
 A join never orphans a copy: every entry but the two joined asks for what it
-did. It removes no row, and adds one only for the rest of a stack a member
-shared. It never leaves a stack or combined-level label on a chip without
-copies, and writes a canonical list. Detaching a lone source again folds it
+did. It adds a row only for the rest of a stack a member shared, and
+removes none except where the rest of a member's stack becomes alike
+another member's: the two then share one label and its copies, and the
+other label's copies are deleted (the cluster asks for what it did —
+`{Frost ×3 | Disintegration ×2}` losing a Frost gives `{Frost ×2 |
+Disintegration ×2}` under one label). A detach does the same. It never
+leaves a stack or combined-level label on a chip without copies, and writes
+a canonical list. Detaching a lone source again folds it
 back with the copies it left behind: Disintegration ×2 and Frost → join →
 `{Frost | Disintegration}` and Disintegration → detach Disintegration →
 Frost and Disintegration ×2.
@@ -624,7 +629,7 @@ decided once.
 | Topic | Behaviour |
 | --- | --- |
 | Badges and steppers | Every ×N and Σ badge and every count stepper is a chip's — a lone chip's or a cluster member's; a cluster draws none of its own. Members whose stacks are alike share one label and each shows ×N. |
-| Joining across categories | Allowed, with or without stacks: every copy keeps its own chip's kind (#190's refusal is lifted); leftover labels on chips without copies are dropped, and nothing is deleted. |
+| Joining across categories | Allowed, with or without stacks: every copy keeps its own chip's kind (#190's refusal is lifted); leftover labels on chips without copies are dropped, and no row is deleted but the copies of member stacks the join makes alike, which merge under one label. |
 | Joining a stack | One item moves (drag, pick mode, menu and accessibility alike): the source's own row, the rest of its stack staying where it was, one fewer, with its own floor limits; a stacked lone target keeps its stack as a member; a target cluster's members keep theirs, and the source joins as ×1. See [Joins](#joins). |
 | A combined level losing a ring to a join | The rings left behind keep counting, capped at what they can still reach, or stop when one is left. A counting target keeps its count as a member's stack and drops its Σ. |
 | Detach, and a member dragged out of a group | One item moves: the member's row, with its constraints; the rest of its stack stays in the group in its place, one fewer; a ×1 member leaves, and a group of one dissolves into a chip. |

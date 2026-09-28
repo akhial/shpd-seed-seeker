@@ -2667,6 +2667,41 @@ fn a_combined_level_stack_keeps_what_its_rest_can_reach_or_its_count_as_a_member
     assert_eq!(counts(&joined), [2, 1]);
 }
 
+/// A join removes no row but the copies of member stacks it makes alike:
+/// Frost leaving `{Frost ×3 | Disintegration ×2}` leaves `{Frost ×2 |
+/// Disintegration ×2}`, whose two stacks share one label and its copies,
+/// so Disintegration's own copy goes. The cluster asks for what it did.
+#[test]
+fn a_join_merges_the_member_stacks_it_makes_alike() {
+    let rows = [
+        member(named(1, ItemId::WandFrost), 1, Some(1)),
+        member(named(2, ItemId::WandDisintegration), 1, Some(2)),
+        bare_wand(3, 1),
+        bare_wand(4, 1),
+        bare_wand(5, 2),
+        named(6, ItemId::WandLightning),
+    ];
+    assert_eq!(counts(&rows), [3, 2, 1]);
+    let joined = edited(
+        &rows,
+        &[Edit::Join {
+            source: 1,
+            target: 6,
+        }],
+    );
+    assert_eq!(
+        joined,
+        [
+            member(named(3, ItemId::WandFrost), 1, Some(1)),
+            member(named(2, ItemId::WandDisintegration), 1, Some(1)),
+            bare_wand(4, 1),
+            member(named(6, ItemId::WandLightning), 2, None),
+            member(named(1, ItemId::WandFrost), 2, None),
+        ]
+    );
+    assert_eq!(counts(&joined), [2, 2, 1, 1]);
+}
+
 /// A combined-level stack written with a stack label of its own keeps that
 /// label as a joined target: it needs no free one, so the join goes through
 /// with every other label taken, and it is not renumbered when labels are
