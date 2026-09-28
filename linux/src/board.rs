@@ -1102,6 +1102,99 @@ mod tests {
         assert_eq!(shown_left_behind(disintegration), None);
     }
 
+    /// A chip's face as the board draws it: its name and its tags' texts.
+    fn drawn(face: &ChipFace) -> (&str, Vec<&str>) {
+        let tags = face.tags.iter().chain(&face.trailing_tags);
+        (
+            face.name.as_str(),
+            tags.map(|tag| tag.text.as_str()).collect(),
+        )
+    }
+
+    #[test]
+    fn a_drag_flies_as_the_bare_copy_it_carries() {
+        // Ring of Energy +4 ×3 beside Disintegration: the chip keeps its +4,
+        // and the item in flight is a bare Ring of Energy, named as one.
+        let mut rows: Vec<Row> = (1..=3)
+            .map(|key| Row {
+                key,
+                requirement: Requirement {
+                    item: Some(ItemId::RingEnergy),
+                    upgrade: if key == 1 {
+                        UpgradeRequirement::Exact(4)
+                    } else {
+                        UpgradeRequirement::Any
+                    },
+                    ..Requirement::any(ItemKind::Ring)
+                },
+            })
+            .collect();
+        rows.push(wand(4, ItemId::WandDisintegration));
+        let mut cache = BoardCache::default();
+        let view = cache.view(&rows, None);
+        let (_, energy) = find_chip(&view, 1).unwrap();
+        assert_eq!(drawn(&energy.face()), ("Ring of Energy", vec!["+4"]));
+        let lifted = energy.lifted.clone().unwrap();
+        assert_eq!(drawn(&lifted), ("Ring of Energy", vec![]));
+        assert_eq!(energy.moving_face(), lifted);
+        assert_ne!(lifted.description, energy.description);
+        // A chip without copies moves whole, and flies as itself.
+        let (_, disintegration) = find_chip(&view, 4).unwrap();
+        assert_eq!(disintegration.lifted, None);
+        assert_eq!(disintegration.moving_face(), disintegration.face());
+
+        // Dropped on Disintegration, the bare copy is what joins, and the
+        // +4 stays behind as ×2.
+        let edit = cache.pick_up(1).unwrap().drop_answer(Landing::Row(4));
+        let result = editor::apply(&rows, None, &[edit.edit().unwrap()]);
+        let view = cache.view(&result.rows, None);
+        let (_, joined) = find_chip(&view, result.focus.unwrap()).unwrap();
+        assert!(joined.in_cluster);
+        assert_eq!(joined.face(), lifted);
+        let (_, energy) = find_chip(&view, 1).unwrap();
+        assert!(!energy.in_cluster);
+        assert_eq!(drawn(&energy.face()), ("Ring of Energy", vec!["+4"]));
+        assert_eq!(shown_badges(energy), [(StackField::Count, "\u{d7}2", 2, 3)]);
+
+        // In {Frost +2 ×2 | Disintegration} Frost flies as a bare Wand of
+        // Frost; dropped on the board it leaves as one, and the member keeps
+        // its +2.
+        let mut cluster = vec![
+            wand(1, ItemId::WandFrost),
+            wand(2, ItemId::WandDisintegration),
+            any(3, ItemKind::Wand),
+        ];
+        cluster[0].requirement.upgrade = UpgradeRequirement::Exact(2);
+        for (key, row) in (1..).zip(&mut cluster) {
+            if key != 2 {
+                row.requirement.identity_group = Some(1);
+            }
+            if key != 3 {
+                row.requirement.alternative_group = Some(1);
+            }
+        }
+        let view = cache.view(&cluster, None);
+        let (_, frost) = find_chip(&view, 1).unwrap();
+        assert_eq!(drawn(&frost.face()), ("Wand of Frost", vec!["+2"]));
+        let lifted = frost.moving_face();
+        assert_eq!(Some(&lifted), frost.lifted.as_ref());
+        assert_eq!(drawn(&lifted), ("Wand of Frost", vec![]));
+        let edit = cache
+            .pick_up(1)
+            .unwrap()
+            .drop_answer(Landing::Board { blanket: false });
+        assert_eq!(edit, DropAnswer::Accept(Edit::Detach { key: 1 }));
+        let result = editor::apply(&cluster, None, &[edit.edit().unwrap()]);
+        let view = cache.view(&result.rows, None);
+        let (entry, lone) = find_chip(&view, result.focus.unwrap()).unwrap();
+        assert!(!lone.in_cluster);
+        assert_eq!(entry.chips.len(), 1);
+        assert_eq!(lone.face(), lifted);
+        let (_, frost) = find_chip(&view, 1).unwrap();
+        assert!(frost.in_cluster);
+        assert_eq!(drawn(&frost.face()), ("Wand of Frost", vec!["+2"]));
+    }
+
     #[test]
     fn the_resin_chip_tints_its_credit_and_explains_it_on_hover() {
         let resin = ResinState {

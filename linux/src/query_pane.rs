@@ -10,7 +10,7 @@ use adw::prelude::*;
 use gtk::{cairo, gdk, gio, glib, pango};
 
 use shpd_seedfinder_core::editor::{
-    self, Badge, BoardView, ChipView, Edit, EffectBadge, ItemView, ResinChip, Tag,
+    self, Badge, BoardView, ChipFace, ChipView, Edit, EffectBadge, ItemView, ResinChip, Tag,
 };
 use shpd_seedfinder_core::feasibility::Quest;
 use shpd_seedfinder_core::main_world::normalize_floor_limit;
@@ -746,7 +746,12 @@ impl QueryPane {
     /// One requirement as a chip: its face, then the badges of its own stack,
     /// alone or as a cluster member.
     fn chip(self: &Rc<Self>, chip: &ChipView) -> gtk::Widget {
-        let widget = chip_face(chip);
+        let widget = chip_face(&chip.face());
+        widget.set_tooltip_text(Some(&board::chip_tooltip(chip)));
+        if let Some(problem) = &chip.problem {
+            widget.add_css_class("chip-error");
+            widget.update_property(&[gtk::accessible::Property::Description(problem)]);
+        }
         for badge in self.badges(chip) {
             widget.append(&badge);
         }
@@ -858,15 +863,22 @@ impl QueryPane {
                 // Where the chip may land is read once, off the board it was
                 // drawn on, so hovering asks the editor nothing.
                 let dragged = key.and_then(|key| pane.board_view.borrow().pick_up(key));
-                // A drag moves one item: the chip in flight is its face
-                // alone, and the dimmed chip it leaves shows the badges of
-                // the stack without it, until the drag ends. A chip that
-                // leaves whole keeps its own.
+                // A drag moves one item: the chip in flight is the face of
+                // that item alone — a bare copy when the chip has copies,
+                // else the chip itself — named for it, and the dimmed chip
+                // it leaves keeps its own face with the badges of the stack
+                // without it, until the drag ends. A chip that leaves whole
+                // keeps its own.
                 if let Some(key) = key
                     && let Some(view) = pane.board_view.borrow().current()
                     && let Some((_, chip)) = board::find_chip(&view, key)
                 {
-                    gtk::DragIcon::for_drag(drag).set_child(Some(&chip_face(chip)));
+                    let moving = chip_face(&chip.moving_face());
+                    // A chip that leaves whole takes its problem along.
+                    if chip.lifted.is_none() && chip.problem.is_some() {
+                        moving.add_css_class("chip-error");
+                    }
+                    gtk::DragIcon::for_drag(drag).set_child(Some(&moving));
                     if let Some(widget) = &origin
                         && let Some(left) = board::left_behind(chip)
                     {
@@ -1309,44 +1321,40 @@ fn resin_menu() -> gio::Menu {
 }
 
 /// A requirement chip's face: its sprite, its name, and the tiny tags that
-/// qualify it, all as the shared editor words them — everything but the
-/// badges of its stack. The board adds those; a chip in flight is its face
-/// alone, the one item a drag moves.
-fn chip_face(chip: &ChipView) -> gtk::Box {
+/// qualify it, all as the shared editor words them, named by its
+/// description — everything but the badges of its stack. The board adds
+/// those, its tooltip and its problem; a chip in flight is the face of the
+/// one item a drag moves ([`ChipView::moving_face`]) alone.
+fn chip_face(face: &ChipFace) -> gtk::Box {
     let widget = gtk::Box::builder()
         .spacing(6)
         .css_classes(["chip"])
         .focusable(true)
         .accessible_role(gtk::AccessibleRole::Button)
-        .tooltip_text(board::chip_tooltip(chip))
         .build();
-    widget.update_property(&[gtk::accessible::Property::Label(&chip.description)]);
-    if let Some(problem) = &chip.problem {
-        widget.add_css_class("chip-error");
-        widget.update_property(&[gtk::accessible::Property::Description(problem)]);
-    }
-    widget.append(&chip_prefix(chip));
+    widget.update_property(&[gtk::accessible::Property::Label(&face.description)]);
+    widget.append(&chip_prefix(face));
     widget.append(
         &gtk::Label::builder()
-            .label(&chip.name)
+            .label(&face.name)
             .ellipsize(pango::EllipsizeMode::End)
             .max_width_chars(18)
             .build(),
     );
-    for tag in &chip.tags {
+    for tag in &face.tags {
         widget.append(&chip_tag(tag));
     }
-    if let Some(badge) = chip
+    if let Some(badge) = face
         .effect
         .as_ref()
-        .and_then(|effect| effect_badge(chip, effect))
+        .and_then(|effect| effect_badge(face, effect))
     {
         widget.append(&badge);
     }
-    for tag in &chip.trailing_tags {
+    for tag in &face.trailing_tags {
         widget.append(&chip_tag(tag));
     }
-    if chip.uncursed {
+    if face.uncursed {
         widget.append(&uncursed_mark());
     }
     widget
@@ -1427,7 +1435,7 @@ fn uncursed_mark() -> gtk::Label {
 /// The effect badge, for what a pulsing sprite cannot say on its own: several
 /// effects at once, "any enchantment", which settles on no colour, or an
 /// effect on a wildcard chip, whose category silhouette stays grayscale.
-fn effect_badge(chip: &ChipView, effect: &EffectBadge) -> Option<gtk::Widget> {
+fn effect_badge(face: &ChipFace, effect: &EffectBadge) -> Option<gtk::Widget> {
     let label = &effect.label;
     // "Any enchantment" settles on no colour of its own, so it wears them all.
     if effect.any_enchantment {
@@ -1494,7 +1502,7 @@ fn effect_badge(chip: &ChipView, effect: &EffectBadge) -> Option<gtk::Widget> {
     // sprite, and the tooltip names it; a badge would only say it twice.
     // A wildcard keeps its grayscale silhouette and green question mark, so
     // the dot carries the effect's colour.
-    if chip.item.is_some() {
+    if face.item.is_some() {
         return None;
     }
     Some(effect_dot(
@@ -1548,12 +1556,12 @@ fn effect_dot(glow: Option<glow::Glow>, label: &str) -> gtk::Widget {
 /// The chip icon for one requirement: the item's real sprite once a concrete
 /// item is pinned, pulsing the enchantment or curse the requirement asks for,
 /// and otherwise a grayscale category sprite beneath a green question mark.
-fn chip_prefix(chip: &ChipView) -> gtk::Widget {
-    match chip.item {
+fn chip_prefix(face: &ChipFace) -> gtk::Widget {
+    match face.item {
         // No seed is in sight here, so rings keep the catalog's own cell for
         // their class rather than any run's gem.
         Some(item_id) => {
-            let pinned = chip
+            let pinned = face
                 .effect
                 .as_ref()
                 .and_then(|effect| match effect.effects[..] {
@@ -1565,7 +1573,7 @@ fn chip_prefix(chip: &ChipView) -> gtk::Widget {
                 glow::effect(pinned),
             )
         }
-        None => sprites::wildcard_image(chip.family, chip.kind.weapon_category()),
+        None => sprites::wildcard_image(face.family, face.kind.weapon_category()),
     }
 }
 
