@@ -12,9 +12,10 @@ of them, and the ports drifted.
 
 The core owns the rules and the words. Every app keeps what is its own:
 rendering, gestures and hit-testing, animation, sprites and colours, dialog
-chrome (sheet titles and button labels), persistence, the canonical query
-codec, and query-level settings and checks (search depth, floor filters,
-challenges, "the query is empty").
+and board chrome (sheet titles, card titles and button labels, menu items,
+drag captions), persistence, the canonical query codec, and query-level
+settings and checks (search depth, floor filters, challenges, "the query is
+empty").
 
 Linux calls the typed Rust API directly. Every other app goes through two
 stateless JSON envelopes that project the same API without adding rules:
@@ -141,10 +142,12 @@ too.
 {"amount": 4, "filter": {"uncursed": true, "max_depth": 14, "source": null, "include_mage_wand": false}}
 ```
 
-`amount` is 1–65535 or `"auto"`. `filter` may be left out or `null`, and so
-may each of its fields; they default to uncursed donors, no floor limit, any
-source and no Magic Missile credit. `source` is a source name of the query
-format (`"locked_chest"`).
+`amount` is 1–65535 or `"auto"`; any other amount fails the whole request
+with an error envelope, so apps keep the query's amount in range (every
+query codec already refuses one outside it). `filter` may be left out or
+`null`, and so may each of its fields; they default to uncursed donors, no
+floor limit, any source and no Magic Missile credit. `source` is a source
+name of the query format (`"locked_chest"`).
 
 **EDIT**, applied in order:
 
@@ -197,14 +200,16 @@ the editor wrote needs no `normalize`. A list from elsewhere may not be
 canonical — a cluster of one, repeats a stack would fold, a stack labelled
 7 — and the board draws it as it is, its problems included.
 
-- **Required** when a list is imported into the editor: a share link, a
-  results or query file, a preset applied. Send `normalize` once, and write
-  the rows back when `changed` is set.
-- **Optional** when a list is restored and must keep matching a stored copy
-  of itself — a resumable search, the preset a query came from. Rewriting
-  it would break the match, and nothing needs it: the first edit normalizes
-  the list anyway, and the problems still gate Start and Share, so a label
-  out of range is reported rather than searched.
+- **Send it** once when a list comes into the editor from outside — a share
+  link, a query or results file, a preset applied, a saved state restored —
+  and write the rows back when `changed` is set.
+- **Skip it** where rewriting the list would break a match with a stored
+  copy of itself: a search that must resume, a preset matched by its
+  fingerprint, a results file that must keep matching the query it was
+  searched with. Where both apply, skip it. Nothing needs `normalize`
+  there: the first edit normalizes the list anyway, and the problems still
+  gate Start and Share, so a label out of range is reported rather than
+  searched.
 
 ### Response
 
@@ -379,20 +384,22 @@ cluster — changes nothing. Values are clamped into range; floor sliders
 step over the empty boss floors (a single step up onto 5, 10 or 15
 continues to 6, 11 or 16; every other move snaps down).
 
-**FORM** is everything the sheet shows, words included: every option,
-value and error, the labels of the check boxes, switches and steppers, the
+**FORM** is everything the sheet shows, words included: every option, value
+and error, the labels of the check boxes, switches and steppers, the
 section labels of the effect, the stack and the resin, the help texts, and
 the resin section's choice and bounds. The headings above the pickers and
-the mode pickers (`Category`, `Item`, `Tier`, `Upgrade`, `Source`) and a
-slider's accessible name are dialog chrome, the app's own like the sheet's
-title and buttons. Every control is filled whether it shows or not — its
-label, its options, its value in words, its help text — so an app may read
-a hidden one (iOS draws its cluster "How many" sheet's copy floor from the
-hidden `stack.copy_depth` of a sheet opened on a member). Every numeric
-control carries `min ≤ value ≤ max`, even while hidden, and every picker
-option is `{"value", "label", "group", "hidden"}` — `hidden` marks a choice
-offered only because the draft already names it (a tier-1 item from an
-imported query).
+the mode pickers (`Category`, `Item`, `Tier`, `Upgrade`, `Source`), card
+titles (`Item`, `Upgrade level`, `Stack`), the heading of a range toggle's
+stepper or slider (`Maximum transmutations`, `Levels reach`) and a slider's
+accessible name are dialog chrome, the app's own like the sheet's title and
+buttons. Every control is filled whether it shows or not — its label, its
+options, its value in words, its help text — so an app may read a hidden
+one (iOS draws its cluster "How many" sheet's copy floor from the hidden
+`stack.copy_depth` of a sheet opened on a member). Every numeric control
+carries `min ≤ value ≤ max`, even while hidden, and every picker option is
+`{"value", "label", "group", "hidden"}` — `hidden` marks a choice offered
+only because the draft already names it (a tier-1 item from an imported
+query).
 
 A range control carries its current value's label alone, not one per value:
 apps draw it as a slider or a stepper, not as a labelled menu. A mode
@@ -539,7 +546,8 @@ decided once.
 | Artifact transmutations | Supported, 1–10. |
 | Save guard | A save that newly breaks the list around the saved row is refused. |
 | Resin section | Seeded from the query's resin (uncursed donors by default), kept apart from the wand draft. |
-| Dialog chrome | App-owned: sheet titles, button labels, the headings of the pickers and mode pickers, slider accessible names. The labels of check boxes, switches and steppers, the effect, stack and resin section labels, the help texts and the resin section's words are the form's. |
+| Dialog chrome | App-owned: sheet titles, card titles, button labels, the headings of the pickers and mode pickers and of a range toggle's stepper or slider, slider accessible names. The labels of check boxes, switches and steppers, the effect, stack and resin section labels, the help texts and the resin section's words are the form's. |
+| Board chrome | App-owned: menu items and their headings (`Edit…`, `Remove`, `Either/or with…`, `How many`, `Combined level`, `Count levels together` / `Stop counting levels`, `On its own`), drag captions, and the hover text of a glyph such as the uncursed check mark. The words on the board itself — chip names, tags, details, badges, entry names, problems, refusals — are the core's. |
 | Help texts | A check box's always under it; the transmutation limit's while it is on; the combined level's beside its switch (`caption_visible`). |
 | Chip problems | The row's own, then cross-row blame; hidden copies surface on their entry. |
 
@@ -578,6 +586,13 @@ These are the core's own choices:
 - The board reports no duplicate trinket; only the sheet does, as an
   error, so an untouched sheet on either of two rows naming one trinket
   cannot be saved.
+- A new sheet that picks Arcane Resin among the wands on a query that
+  already has resin stays `mode: "new"`, although its save replaces that
+  resin (`set`). Apps that offer the pick decide Save and Remove from the
+  query's resin themselves, or open the resin chip's sheet instead.
+- The copy floor has no help text; the one Android and iOS drew ("A floor
+  limit is where an item lies, not what it is, so the copies keep their
+  own.") is gone until the floor toggle carries a caption.
 
 ## Golden fixtures
 
