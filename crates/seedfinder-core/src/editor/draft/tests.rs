@@ -1546,6 +1546,58 @@ fn the_sheet_keeps_the_copy_floor_through_counting_levels() {
     assert_eq!(off.rows, rows);
 }
 
+/// A copy floor changed while counting is off and saved with counting back
+/// on at the very same total is a change: the copy floor is saved even
+/// when the count and the combined level are what the stack already says.
+#[test]
+fn the_sheet_saves_a_counting_stacks_new_copy_floor_at_the_same_total() {
+    let rows = [
+        with(named(1, ItemId::RingEnergy), |r| {
+            r.max_depth = Some(9);
+            r.level_sum = Some(LevelSum {
+                group: 1,
+                minimum_total: 2,
+            });
+        }),
+        with(named(2, ItemId::RingEnergy), |r| {
+            r.max_depth = Some(20);
+            r.level_sum = Some(LevelSum {
+                group: 1,
+                minimum_total: 2,
+            });
+        }),
+    ];
+    let draft = after(
+        &sheet(&rows, 1),
+        &[
+            Change::SetCountLevels(false),
+            Change::SetCopyDepth(5),
+            Change::SetCountLevels(true),
+        ],
+    );
+    assert_eq!(draft.total, Some(2));
+    let (result, _) = saved(&draft);
+    assert!(result.changed);
+    assert_eq!(keys(&result.rows), [1, 2]);
+    let depths: Vec<_> = result
+        .rows
+        .iter()
+        .map(|row| row.requirement.max_depth)
+        .collect();
+    // Floor 5 is an empty boss floor and snaps to the floor below.
+    assert_eq!(depths, [Some(9), Some(4)]);
+    assert!(result.rows.iter().all(|row| {
+        row.requirement
+            .level_sum
+            .is_some_and(|sum| sum.minimum_total == 2)
+    }));
+
+    // Untouched, the same sheet still saves nothing.
+    let (untouched, _) = saved(&sheet(&rows, 1));
+    assert!(!untouched.changed);
+    assert_eq!(untouched.rows, rows);
+}
+
 // --- the form ------------------------------------------------------------
 
 #[test]

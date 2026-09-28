@@ -1544,7 +1544,7 @@ fn save(
 /// sheet's `(count, total, copy_depth)` onto the visible row `current`, a
 /// member of `item`, would store what is already there: the same
 /// requirement, and — for a lone chip — the same count, the same combined
-/// level, or the copy floor the sheet showed ([`super::copy_depth`], the
+/// level, and the copy floor the sheet showed ([`super::copy_depth`], the
 /// first copy's). Such a save is a no-op and returns the rows verbatim.
 ///
 /// Rebuilding would not always give the rows back: copies left behind a
@@ -1578,14 +1578,14 @@ fn saves_nothing(
         return false;
     }
     let counting = total.is_some() && can_count_levels(rows, item);
+    // A counting stack's sheet holds the copy floor too, behind its switch,
+    // and saves it back.
+    let depth = copy_depth.map(|depth| normalize_floor_limit(depth.clamp(1, MAX_SEARCH_DEPTH)));
+    let same_copies = item.extras.is_empty() || stack_copy_depth(rows, item) == depth;
     match item.total {
-        Some(current_total) => counting && total == Some(current_total),
+        Some(current_total) => counting && total == Some(current_total) && same_copies,
         None if counting => false,
-        None => {
-            let depth =
-                copy_depth.map(|depth| normalize_floor_limit(depth.clamp(1, MAX_SEARCH_DEPTH)));
-            item.extras.is_empty() || stack_copy_depth(rows, item) == depth
-        }
+        None => same_copies,
     }
 }
 
