@@ -124,7 +124,7 @@ it("keeps identical blanket chips separate from item stacks and OR labels on the
     ["r4", true],
   ]);
   expect(board.counts).toEqual({ ordinary: 2, blanket: 2 });
-  expect(board.items[2].stack.can_grow).toBe(false);
+  expect(board.items[2].chips[0].stack.can_grow).toBe(false);
   // A chip never joins the other board.
   expect(board.items[0].chips[0].join).toEqual([2]);
   expect(edited(query, [{ type: "join", source: 1, target: 3 }])).toEqual(query);

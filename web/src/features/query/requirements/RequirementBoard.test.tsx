@@ -120,6 +120,11 @@ async function press(element: HTMLElement, key: string) {
 const badges = (name: string) =>
   [...chip(name).querySelectorAll(".d1-stack-badge")].map((badge) => badge.textContent);
 
+const requirements = () => toQueryDocument(queryStore.state).requirements;
+
+const FROST = { kind: "wand", item: "wand_frost" };
+const DISINTEGRATION = { kind: "wand", item: "wand_disintegration" };
+
 it("steps a stack from its menu, which follows the stack's fresh count", async () => {
   await render('{"requirements":[{"kind":"ring","item":"ring_might","upgrade":2}]}');
   await openMenu("Ring of Might");
@@ -145,12 +150,13 @@ it("bounds both count steppers by the core's count_max", async () => {
   });
   if (!answer.ok) throw new Error(answer.error);
   const [item] = answer.value.items;
-  expect(item.stack).toMatchObject({ count: 2, max: 3, can_grow: true, count_max: 3 });
+  const [ring] = item.chips;
+  expect(ring.stack).toMatchObject({ count: 2, max: 3, can_grow: true, count_max: 3 });
   const draw = (count_max: number) =>
     act(async () =>
       root.render(
         <RequirementBoard
-          items={[{ ...item, stack: { ...item.stack, count_max } }]}
+          items={[{ ...item, chips: [{ ...ring, stack: { ...ring.stack, count_max } }] }]}
           onEdits={() => ({ notice: null, rekeyed: [] })}
           onEdit={() => null}
           onAdd={() => {}}
@@ -270,19 +276,98 @@ it("reports a sheet the editor cannot open in the query pane", async () => {
   expect(host.querySelector('[role="alert"]')).toBeNull();
 });
 
-it("refuses a drag across categories onto a stack, says why and keeps the query", async () => {
+it("joins across categories onto a stack, which keeps its count on its own chip", async () => {
   await render(
     '{"requirements":[{"kind":"ring","item":"ring_might","upgrade":2},{"kind":"ring","item":"ring_might"},{"kind":"wand"}]}',
   );
-  const query = queryStore.state;
   const wand = chip("Any wand");
   await dragOver(wand, chip("Ring of Might"));
-  expect(chip("Ring of Might").classList.contains("d1-drop-refused")).toBe(true);
-  expect(host.querySelector(".d1-ghost-alternative")).toBeNull();
-  expect(status()).toBe("Copies can only be grouped with the same item type.");
+  expect(chip("Ring of Might").classList.contains("d1-drop-alternative")).toBe(true);
+  expect(status()).toBeUndefined();
   await release(wand);
+  expect(requirements()).toEqual([
+    {
+      any_of: [
+        { kind: "ring", item: "ring_might", upgrade: 2, identity_group: 1 },
+        { kind: "wand" },
+      ],
+    },
+    { kind: "ring", identity_group: 1 },
+  ]);
+  // Two Rings of Might, or one wand: the ×2 is the ring's alone.
+  expect(badges("Ring of Might")).toEqual(["×2"]);
+  expect(badges("Any wand")).toEqual([]);
+  expect(host.querySelectorAll(".d1-cluster > .d1-stack-badge")).toHaveLength(0);
+});
+
+it("refuses a join that needs a stack label when none is free, says why and keeps the query", async () => {
+  await render(
+    JSON.stringify({
+      requirements: [
+        ...["wand", "armor", "ring", "weapon"].flatMap((kind, index) => [
+          { kind, upgrade: 1, identity_group: index + 1 },
+          { kind, identity_group: index + 1 },
+        ]),
+        FROST,
+        FROST,
+        DISINTEGRATION,
+      ],
+    }),
+  );
+  const query = queryStore.state;
+  const disintegration = chip("Wand of Disintegration");
+  await dragOver(disintegration, chip("Wand of Frost"));
+  expect(chip("Wand of Frost").classList.contains("d1-drop-refused")).toBe(true);
+  expect(host.querySelector(".d1-ghost-alternative")).toBeNull();
+  const message = "Every group label is in use. Remove a stack or a combined level first.";
+  expect(status()).toBe(message);
+  await release(disintegration);
   expect(queryStore.state).toBe(query);
-  expect(status()).toBe("Copies can only be grouped with the same item type.");
+  expect(status()).toBe(message);
+});
+
+it("draws each member's stack on its own chip and steps it from the member's menu", async () => {
+  // One label on every member: two of whichever matched, drawn as each ×2.
+  await render(
+    JSON.stringify({
+      requirements: [
+        {
+          any_of: [
+            { ...FROST, identity_group: 1 },
+            { ...DISINTEGRATION, identity_group: 1 },
+          ],
+        },
+        { kind: "wand", identity_group: 1 },
+      ],
+    }),
+  );
+  expect(badges("Wand of Frost")).toEqual(["×2"]);
+  expect(badges("Wand of Disintegration")).toEqual(["×2"]);
+  expect(host.querySelectorAll(".d1-cluster > .d1-stack-badge")).toHaveLength(0);
+  await openMenu("Wand of Frost");
+  expect(host.querySelector('[role="menu"] [aria-label="How many"]')).not.toBeNull();
+  await click("One more");
+  expect(host.querySelector(".d1-chip-menu-count .d1-mono")!.textContent).toBe("3");
+  expect(badges("Wand of Frost")).toEqual(["×3"]);
+  expect(badges("Wand of Disintegration")).toEqual(["×2"]);
+  // The stacks differ now, so Frost takes a label of its own.
+  expect(requirements()).toEqual([
+    {
+      any_of: [
+        { ...FROST, identity_group: 2 },
+        { ...DISINTEGRATION, identity_group: 1 },
+      ],
+    },
+    { kind: "wand", identity_group: 1 },
+    { kind: "wand", identity_group: 2 },
+    { kind: "wand", identity_group: 2 },
+  ]);
+  // The inline stepper is the member's too.
+  await click("×2");
+  const inline = chip("Wand of Disintegration").querySelector(
+    '.d1-stack-edit[aria-label="How many"]',
+  );
+  expect(inline).not.toBeNull();
 });
 
 it("joins by drag and by pick, and a lone chip stays put on the board", async () => {

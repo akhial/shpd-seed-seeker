@@ -64,7 +64,9 @@ describe("the requirement board bridge", () => {
     const board = boardOf(query);
     expect(board.counts).toEqual({ ordinary: 1, blanket: 1 });
     expect(board.items[0]).toMatchObject({ id: "r1", members: [1], extras: [2] });
-    expect(board.items[0].badges.count?.text).toBe("×2");
+    // The stack's badge and copies are its chip's.
+    expect(board.items[0].chips[0]).toMatchObject({ copies: [2], badges: { total: null } });
+    expect(board.items[0].chips[0].badges.count?.text).toBe("×2");
     expect(board.resin?.tags[0].text).toBe("Auto");
   });
 
@@ -72,15 +74,47 @@ describe("the requirement board bridge", () => {
     const query = fromQueryJson(
       '{"requirements":[{"kind":"ring","item":"ring_might","upgrade":2},{"kind":"ring","item":"ring_might"},{"kind":"wand"},{"kind":"wand","item":"wand_frost"}]}',
     );
-    const refused = editBoard(query, [{ type: "join", source: 3, target: 1 }]);
+    // A stack across categories: the ring keeps its stack as a member, whose
+    // copies each keep the ring's kind.
+    const across = editBoard(query, [{ type: "join", source: 3, target: 1 }]);
+    if (!across.ok) throw new Error(across.error);
+    expect(across.value.refused).toBeNull();
+    expect(
+      JSON.parse(toQueryJson({ ...query, requirements: across.value.requirements })).requirements,
+    ).toEqual([
+      {
+        any_of: [
+          { kind: "ring", item: "ring_might", upgrade: 2, identity_group: 1 },
+          { kind: "wand" },
+        ],
+      },
+      { kind: "ring", identity_group: 1 },
+      { kind: "wand", item: "wand_frost" },
+    ]);
+
+    // Every stack label in use: a join onto a stack is refused, and the list stays.
+    const crowded = fromQueryJson(
+      JSON.stringify({
+        requirements: [
+          ...["wand", "armor", "ring", "weapon"].flatMap((kind, index) => [
+            { kind, upgrade: 1, identity_group: index + 1 },
+            { kind, identity_group: index + 1 },
+          ]),
+          { kind: "wand", item: "wand_frost" },
+          { kind: "wand", item: "wand_frost" },
+          { kind: "wand", item: "wand_disintegration" },
+        ],
+      }),
+    );
+    const refused = editBoard(crowded, [{ type: "join", source: 11, target: 9 }]);
     expect(refused).toEqual({
       ok: true,
       value: {
-        requirements: query.requirements,
+        requirements: crowded.requirements,
         changed: false,
         refused: {
-          reason: "mixed_category_stack",
-          message: "Copies can only be grouped with the same item type.",
+          reason: "no_free_group",
+          message: "Every group label is in use. Remove a stack or a combined level first.",
         },
         rekeyed: [],
       },

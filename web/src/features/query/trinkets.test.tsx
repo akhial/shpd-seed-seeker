@@ -210,7 +210,7 @@ describe("offered trinket pilot", () => {
     const doc = toQueryDocument(state);
     expect(doc.requirements).toHaveLength(1);
     expect(doc.requirements[0]).toHaveProperty("any_of");
-    expect(boardOf(state).items[0].stack.can_grow).toBe(false);
+    expect(boardOf(state).items[0].chips[0].stack.can_grow).toBe(false);
     expect(
       fromQueryJson(JSON.stringify(doc))
         .requirements.map((r) => r.item)

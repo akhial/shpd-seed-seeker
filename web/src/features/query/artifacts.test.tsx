@@ -182,7 +182,7 @@ describe("artifact search and scout", () => {
       [{ type: "join", source: 2, target: 1 }],
     );
     const document = toQueryDocument(state);
-    expect(boardOf(state).items[0].stack.can_grow).toBe(false);
+    expect(boardOf(state).items[0].chips[0].stack.can_grow).toBe(false);
     expect(
       fromQueryJson(JSON.stringify(document))
         .requirements.map((r) => r.maxDepth)

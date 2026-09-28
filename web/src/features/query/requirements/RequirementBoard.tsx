@@ -23,9 +23,10 @@ import { rekey } from "./board";
 /**
  * The requirement board: every requirement is a chip; drop one chip onto
  * another for an either/or cluster, drag a chip out of its cluster to make
- * it standalone again. Everything else is a property of the chip itself:
- * a stack badge (×N / ≤N) for "more of the same kind", and a Σ badge for a
- * stack whose items count their levels towards one total.
+ * it standalone again. Everything else is a property of the chip itself —
+ * a lone chip or a cluster member alike: a stack badge (×N / ≤N) for "more
+ * of the same kind", and a Σ badge for a stack whose items count their
+ * levels towards one total. A cluster draws no badge of its own.
  *
  * The board draws what the shared core answers — its entries, their words,
  * which drops join and which are refused — and sends the gestures back as
@@ -394,7 +395,7 @@ export function RequirementBoard({
     return "";
   };
 
-  const renderChip = (chip: ChipView, item: BoardItemView) => {
+  const renderChip = (chip: ChipView) => {
     const classes = ["d1-chip"];
     if (drag?.source === chip.key) classes.push("d1-chip-dragging");
     if (chip.problem) classes.push("d1-chip-error");
@@ -467,17 +468,17 @@ export function RequirementBoard({
             <CheckIcon size={12} />
           </span>
         )}
-        {!chip.in_cluster && renderBadges(item)}
+        {renderBadges(chip)}
       </div>
     );
   };
 
-  /** The stack (×N / ≤N) and combined-level (Σ) badges with their steppers. */
-  const renderBadges = (item: BoardItemView): ReactNode => {
-    const { stack, badges } = item;
-    const key = item.members[0];
-    const editingCount = stepper?.id === item.id && stepper.which === "count";
-    const editingTotal = stepper?.id === item.id && stepper.which === "total";
+  /** A chip's stack (×N / ≤N) and combined-level (Σ) badges with their steppers. */
+  const renderBadges = (chip: ChipView): ReactNode => {
+    const { key, stack, badges } = chip;
+    const id = `r${key}`;
+    const editingCount = stepper?.id === id && stepper.which === "count";
+    const editingTotal = stepper?.id === id && stepper.which === "total";
     const total = stack.total;
     return (
       <>
@@ -523,7 +524,7 @@ export function RequirementBoard({
               data-no-drag
               title={badges.count?.tooltip}
               onPointerDown={(event) => event.stopPropagation()}
-              onClick={() => setStepper({ id: item.id, which: "count" })}
+              onClick={() => setStepper({ id, which: "count" })}
             >
               {badges.count?.text ?? stack.count_text}
             </button>
@@ -581,7 +582,7 @@ export function RequirementBoard({
               data-no-drag
               title={badges.total.tooltip}
               onPointerDown={(event) => event.stopPropagation()}
-              onClick={() => setStepper({ id: item.id, which: "total" })}
+              onClick={() => setStepper({ id, which: "total" })}
             >
               {badges.total.text}
             </button>
@@ -592,7 +593,7 @@ export function RequirementBoard({
   };
 
   const renderItem = (item: BoardItemView): ReactNode => {
-    if (item.cluster === null) return renderChip(item.chips[0], item);
+    if (item.cluster === null) return renderChip(item.chips[0]);
     return (
       <div
         key={item.id}
@@ -609,10 +610,9 @@ export function RequirementBoard({
                 or
               </span>
             )}
-            {renderChip(chip, item)}
+            {renderChip(chip)}
           </span>
         ))}
-        {renderBadges(item)}
       </div>
     );
   };
@@ -736,7 +736,6 @@ export function RequirementBoard({
         <ChipMenu
           state={menu}
           chip={menuEntry.chip}
-          item={menuEntry.item}
           onClose={() => setMenu(null)}
           onEdit={() => {
             setMenu(null);
@@ -805,7 +804,6 @@ function ChipPopover({ chip, style }: { chip: ChipView; style: CSSProperties }) 
 function ChipMenu({
   state,
   chip,
-  item,
   onClose,
   onEdit,
   onPick,
@@ -816,7 +814,6 @@ function ChipMenu({
 }: {
   state: MenuState;
   chip: ChipView;
-  item: BoardItemView;
   onClose: () => void;
   onEdit: () => void;
   onPick: () => void;
@@ -836,7 +833,7 @@ function ChipMenu({
   }, [onClose]);
   const left = Math.min(state.x, window.innerWidth - 230);
   const top = Math.min(state.y, window.innerHeight - 260);
-  const { stack } = item;
+  const { stack } = chip;
   return (
     <div ref={ref} className="d1-chip-menu" role="menu" style={{ left, top }}>
       {/* A chip without a kind is a row the core cannot read, which only Remove applies to. */}

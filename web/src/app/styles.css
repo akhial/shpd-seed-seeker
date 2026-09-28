@@ -1513,12 +1513,6 @@ input[type="range"]::-moz-range-thumb {
   background: transparent;
 }
 
-/* The cluster's badges sit at its trailing edge. */
-.d1-cluster > .d1-stack-badge,
-.d1-cluster > .d1-stack-edit {
-  margin: 0 3px;
-}
-
 .d1-board-status {
   margin: 0 4px;
   font-size: 11px;

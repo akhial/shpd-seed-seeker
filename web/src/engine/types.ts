@@ -211,7 +211,7 @@ export interface BoardRequest {
 }
 
 export interface BoardRefusal {
-  reason: "mixed_category_stack" | "blanket_total" | "no_free_group";
+  reason: "blanket_total" | "no_free_group";
   message: string;
 }
 
@@ -234,13 +234,13 @@ export interface StackBadge {
   tooltip: string;
 }
 
-/** What an entry's count and combined-level steppers offer. */
+/** What a chip's count and combined-level steppers offer. */
 export interface StackView {
   count: number;
   max: number;
   can_grow: boolean;
   can_change_count: boolean;
-  /** The count stepper's upper bound: `max` while the entry can grow, else its count. */
+  /** The count stepper's upper bound: `max` while the chip can grow, else its count. */
   count_max: number;
   total: number | null;
   can_count_levels: boolean;
@@ -274,6 +274,11 @@ export interface ChipView {
   relations: { glyph: "or" | "sum" | "times"; text: string }[];
   description: string;
   problem: string | null;
+  /** The badges at rest; a cluster member's are its own, drawn on its chip. */
+  badges: { count: StackBadge | null; total: StackBadge | null };
+  /** The hidden copies behind the chip's badge; members whose stacks are alike share theirs. */
+  copies: number[];
+  stack: StackView;
   in_cluster: boolean;
   can_detach: boolean;
   /** The visible rows this chip may join, in list order. */
@@ -282,7 +287,7 @@ export interface ChipView {
   refuse: ({ key: number } & BoardRefusal)[];
 }
 
-/** One board entry: a chip, or an either/or cluster, with its stack. */
+/** One board entry: a chip, or an either/or cluster. Stacks and badges are its chips'. */
 export interface BoardItemView {
   /** `r<key>` for a chip, `c<label>` for a cluster; stable while the entry survives an edit. */
   id: string;
@@ -293,8 +298,6 @@ export interface BoardItemView {
   name: string;
   members: number[];
   extras: number[];
-  stack: StackView;
-  badges: { count: StackBadge | null; total: StackBadge | null };
   chips: ChipView[];
   problem: string | null;
 }
