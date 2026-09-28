@@ -20,7 +20,6 @@ import androidx.compose.material3.ripple
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.unit.IntOffset
 import kotlin.math.roundToInt
 import androidx.compose.foundation.background
@@ -88,6 +87,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTag
 import androidx.compose.ui.text.font.FontFamily
@@ -101,6 +101,7 @@ import dev.seedseeker.app.model.BadgesView
 import dev.seedseeker.app.model.BoardEdit
 import dev.seedseeker.app.model.BoardItemView
 import dev.seedseeker.app.model.BoardView
+import dev.seedseeker.app.model.ChipFace
 import dev.seedseeker.app.model.ChipView
 import dev.seedseeker.app.model.EffectView
 import dev.seedseeker.app.model.ResinChipView
@@ -125,7 +126,10 @@ import dev.seedseeker.app.ui.theme.SpdYellow
  *   tap opens, never by a drag.
  * - A drag moves one item: the chip in hand is drawn alone, without its
  *   badges, and a stacked chip it leaves keeps the rest of its stack, which
- *   its faded place shows (`×3` reads `×2` while one ring is in hand).
+ *   its faded place shows (`×3` reads `×2` while one ring is in hand). The
+ *   item in hand is a bare copy, which the editor draws as the chip's lifted
+ *   face: Ring of Energy +4 ×3 lifts a plain Ring of Energy, and its place
+ *   keeps the `+4`.
  *
  * Entries flow like words: a chip sits beside the last one when it fits and
  * starts a new line when it does not. A capsule flows the same way inside its
@@ -328,8 +332,9 @@ fun RequirementBoard(
             }
             // The chip in hand: a lifted, tilted copy riding under the finger
             // while its place on the board waits, faded, for it to come back,
-            // wearing the badges the rest of its stack keeps. It is the one
-            // item the drag moves, so it wears no stack badges.
+            // wearing its own face and the badges the rest of its stack keeps.
+            // It is the one item the drag moves, so it wears that item's face
+            // and no stack badges.
             val ghostResin = resin.takeIf { draggingResin }
             if (held != null || ghostResin != null) {
                 val lift = remember { Animatable(0f) }
@@ -358,8 +363,12 @@ fun RequirementBoard(
                             // Stays opaque: a translucent layer renders offscreen at its
                             // unscaled size, which would crop the enlarged capsule's ends.
                         }
-                        // Silent to TalkBack, which still reads the chip's own place.
-                        .clearAndSetSemantics { testTag = HELD_CHIP_TAG },
+                        // Silent to TalkBack, which still reads the chip's own place;
+                        // a test still reads what it draws.
+                        .semantics {
+                            testTag = HELD_CHIP_TAG
+                            hideFromAccessibility()
+                        },
                 ) {
                     if (held != null) {
                         HeldChip(held)
@@ -465,7 +474,7 @@ private val chipLabelStyle: TextStyle
         MaterialTheme.typography.labelMedium
     }
 
-/** The test tag of the chip in hand, which is otherwise silent to the semantics tree. */
+/** The test tag of the chip in hand, which is hidden from accessibility services. */
 internal const val HELD_CHIP_TAG = "held-chip"
 
 /** How far a capsule's dashed edge stands off the chips inside it. */
@@ -623,10 +632,12 @@ private fun RequirementChip(
     onDragCancel: () -> Unit,
     /** The stack badges the chip wears; the one item a drag holds wears none. */
     badges: BadgesView?,
+    /** The item the chip draws: its own, or the one a drag of it carries. */
+    face: ChipFace = chip.face,
 ) {
     val metrics = LocalChipMetrics.current
     BoardChip(
-        description = listOfNotNull(chip.description, chip.problem).joinToString(", "),
+        description = listOfNotNull(face.description, chip.problem).joinToString(", "),
         enabled = enabled,
         dimmed = dimmed,
         highlighted = highlighted,
@@ -640,18 +651,18 @@ private fun RequirementChip(
         onDragCancel = onDragCancel,
     ) {
         SpriteTile(
-            item = chip.item,
-            wildcardKind = chip.kind,
+            item = face.item,
+            wildcardKind = face.kind,
             // "Any enchantment" settles on no colour of its own.
-            glows = chip.effect?.takeUnless { it.anyEnchantment }?.let { ItemGlows.forEffects(it.effects) }.orEmpty(),
+            glows = face.effect?.takeUnless { it.anyEnchantment }?.let { ItemGlows.forEffects(it.effects) }.orEmpty(),
             tileSize = metrics.tile,
         )
         Spacer(Modifier.width(metrics.spriteGap))
-        ChipTitle(chip.name)
-        ChipTags(chip.tags)
-        EffectBadge(chip.effect)
-        ChipTags(chip.trailingTags)
-        if (chip.uncursed) {
+        ChipTitle(face.name)
+        ChipTags(face.tags)
+        EffectBadge(face.effect)
+        ChipTags(face.trailingTags)
+        if (face.uncursed) {
             Spacer(Modifier.width(5.dp))
             UncursedTag()
         }
@@ -660,13 +671,15 @@ private fun RequirementChip(
 }
 
 /**
- * The one item a drag holds: [chip]'s sprite, name and tags, without the
- * `×N` or `Σ` it wears on the board, since only one of its items moves.
+ * The one item a drag holds, without the `×N` or `Σ` [chip] wears on the
+ * board, since only one of its items moves: the bare copy the editor says a
+ * drag of it lifts ([ChipView.lifted]), else the chip itself.
  */
 @Composable
 internal fun HeldChip(chip: ChipView) {
     RequirementChip(
         chip = chip,
+        face = chip.movingFace,
         enabled = false,
         dimmed = false,
         highlighted = false,

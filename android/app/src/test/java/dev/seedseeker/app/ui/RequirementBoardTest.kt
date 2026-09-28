@@ -258,14 +258,20 @@ class RequirementBoardTest {
                 assertEquals(listOf(3, 1), cluster.chips.map { it.stack.count })
             }
 
-            // The other way round, one ring moves and the rest stays a stack of two.
+            // The other way round, one bare ring moves: the +4 stays with the
+            // stack of two left behind, and the ring that joins is the one
+            // the chip said a drag lifts.
             compose.runOnIdle { requirements.value = counted }
+            val lifted = RequirementEditor.view(counted).itemOf(1)!!.chips.single().lifted!!
             pickUp(ringChip)
             dropOn(armorChip)
             compose.runOnIdle {
                 val (rest, cluster) = RequirementEditor.view(requirements.value).items
                 assertEquals(2, rest.chips.single().stack.count)
+                assertEquals(listOf("+4"), rest.chips.single().tags.map { it.text })
                 assertEquals(listOf("Plate Armor" to 1, "Ring of Energy" to 1), cluster.chips.map { it.name to it.stack.count })
+                assertEquals(lifted, cluster.chips[1].face)
+                assertTrue(cluster.chips[1].tags.none { it.text == "+4" })
             }
         }
     }
@@ -371,12 +377,20 @@ class RequirementBoardTest {
         badgeOn("Ring of Energy", "×3").assertIsDisplayed()
         assertTrue(badgeGreenPixels(ringChip) > 0)
 
-        // One ring is in hand, so its faded place shows the two that stay.
+        // One ring is in hand, so its faded place shows the two that stay,
+        // with the +4 they keep.
         pickUp(ringChip)
-        badgeOn("Ring of Energy", "×2").assertIsDisplayed()
+        val origin = hasContentDescription("Ring of Energy, exactly +4")
+        compose.onNode(hasText("×2") and hasAnyAncestor(origin)).assertIsDisplayed()
+        compose.onNode(origin and hasText("+4")).assertExists()
         compose.onNodeWithText("×3").assertDoesNotExist()
-        // The ring in hand is that one ring, without a badge.
+        // The ring in hand is that one ring, without a badge: a bare copy,
+        // which asks for no +4.
         assertEquals(0, badgeGreenPixels(compose.onNodeWithTag(HELD_CHIP_TAG)))
+        val inHand = hasAnyAncestor(hasTestTag(HELD_CHIP_TAG))
+        compose.onNode(inHand and hasContentDescription("Ring of Energy, any upgrade"))
+            .assert(hasText("Ring of Energy"))
+            .assert(!hasText("+4"))
 
         // A cancelled drag puts the ring back: the chip reads ×3 again.
         compose.onRoot().performTouchInput { cancel() }
@@ -451,6 +465,30 @@ class RequirementBoardTest {
             assertEquals("Wand of Frost" to 1, lone.chips.single().let { it.name to it.stack.count })
         }
         compose.onNodeWithText("×2").assertDoesNotExist()
+    }
+
+    @Test fun aMemberLetGoOnTheOpenBoardKeepsItsUpgradeAndSendsOutABareCopy() {
+        // {Frost +2 ×2 | Disintegration}: the Frost in hand is a bare copy.
+        requirements.value = memberStack.map { if (it.key == 1L) it.copy(upgrade = 2, upgradeMatch = UpgradeMatch.EXACT) else it }
+        amount.value = 0
+        show()
+        val lifted = RequirementEditor.view(requirements.value).itemOf(1)!!.chips.first().lifted!!
+        assertEquals("Wand of Frost, any upgrade", lifted.description)
+        pickUp(compose.onNodeWithContentDescription("Wand of Frost, exactly +2", substring = true))
+        compose.onNode(hasAnyAncestor(hasTestTag(HELD_CHIP_TAG)) and hasContentDescription("Wand of Frost, any upgrade"))
+            .assert(!hasText("+2"))
+        letGoOnTheOpenBoard()
+        // → {Frost +2 | Disintegration} + Wand of Frost.
+        compose.runOnIdle {
+            val (cluster, lone) = RequirementEditor.view(requirements.value).items
+            assertEquals(
+                listOf("Wand of Frost" to listOf("+2"), "Wand of Disintegration" to emptyList()),
+                cluster.chips.map { chip -> chip.name to chip.tags.map { it.text } },
+            )
+            assertEquals(lifted, lone.chips.single().face)
+        }
+        compose.onNodeWithText("×2").assertDoesNotExist()
+        compose.onNodeWithText("or").assertIsDisplayed()
     }
 
     @Test fun aChipTheEditorFindsAProblemWithSaysWhatItIs() {
