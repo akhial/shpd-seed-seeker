@@ -95,17 +95,18 @@ class RequirementEditorTest {
 
         assertEquals(listOf(1L), rings.members)
         assertEquals("Ring of Might", rings.name)
-        assertEquals(3, rings.count)
-        assertEquals(3, rings.countMax)
-        assertEquals(BadgeView("×3", "×3", "3 of the same kind"), rings.countBadge)
-        assertNull(rings.totalBadge)
         val might = rings.chips.single()
+        // The stack and its badges are the chip's own.
+        assertEquals(StackView(count = 3, countMax = 3, total = null, copyDepth = null), might.stack)
+        assertEquals(listOf(2L, 3L), might.copies)
+        assertEquals(BadgeView("×3", "×3", "3 of the same kind"), might.countBadge)
+        assertNull(might.totalBadge)
         assertEquals("Ring of Might", might.name)
         assertEquals(find("ring_might"), might.item)
         assertEquals(listOf(TagView("+2", TagStyle.UPGRADE)), might.tags)
-        assertEquals(setOf(4L, 5L, 6L, 7L), might.refuse.keys)
-        assertEquals("Copies can only be grouped with the same item type.", might.refuse.getValue(4))
-        assertTrue(might.join.isEmpty())
+        // A stack joins any category: its copies keep their own kind.
+        assertEquals(setOf(4L, 5L, 6L, 7L), might.join)
+        assertTrue(might.refuse.isEmpty())
 
         val anyMelee = melee.chips.single()
         assertEquals("Any melee", anyMelee.name)
@@ -118,7 +119,7 @@ class RequirementEditorTest {
         assertTrue(anyMelee.effect!!.anyEnchantment)
         assertEquals("any enchantment", anyMelee.effect!!.label)
         assertTrue(anyMelee.uncursed)
-        assertEquals(setOf(5L, 6L, 7L), anyMelee.join)
+        assertEquals(setOf(1L, 5L, 6L, 7L), anyMelee.join)
         assertEquals("Any Tier 3+ melee weapon, +2 or higher, any enchantment, uncursed, floors 1–9", anyMelee.description)
 
         assertEquals(1, wands.cluster)
@@ -126,12 +127,13 @@ class RequirementEditorTest {
         assertEquals("Wand of Fireblast or Any wand", wands.name)
         assertEquals(listOf(5L, 6L), wands.members)
         assertTrue(wands.chips.all { it.canDetach })
+        assertTrue(wands.chips.all { it.countBadge == null && it.stack.count == 1 && it.copies.isEmpty() })
         assertEquals(listOf(TagView("No resin")), wands.chips[1].trailingTags)
 
         assertEquals(find("rat_skull"), skull.chips.single().item)
         assertEquals(listOf(TagView("Transmute ≤3")), skull.chips.single().tags)
         // A trinket cannot grow, so its count stepper runs only to what it asks for.
-        assertEquals(1, skull.countMax)
+        assertEquals(1, skull.chips.single().stack.countMax)
 
         assertTrue(armor.blanket)
         assertEquals(listOf("Viscosity", "Brimstone"), armor.chips.single().effect!!.effects)
@@ -175,7 +177,7 @@ class RequirementEditorTest {
             ItemRequirement(2, might, 0, upgradeMatch = UpgradeMatch.ANY),
             ItemRequirement(3, null, 0, kind = ItemKind.WAND, upgradeMatch = UpgradeMatch.ANY, blanket = true),
         )
-        val (stack, blanket) = RequirementEditor.view(rows).items
+        val (stack, blanket) = RequirementEditor.view(rows).items.map { it.chips.single().stack }
         assertEquals(2 to 3, stack.count to stack.countMax)
         assertEquals(1 to 1, blanket.count to blanket.countMax)
     }
@@ -207,7 +209,7 @@ class RequirementEditorTest {
 
         val refused = BoardAnswer.decode(fixture("board-join-refused").getJSONObject("response"))
         assertNull(refused.rows)
-        assertEquals("Copies can only be grouped with the same item type.", refused.refused)
+        assertEquals("Every group label is in use. Remove a stack or a combined level first.", refused.refused)
 
         val repaired = BoardAnswer.decode(fixture("board-key-repair").getJSONObject("response"))
         assertEquals(mapOf(0L to 5L, 4L to 6L), repaired.rekeyed)
@@ -291,7 +293,8 @@ class RequirementEditorTest {
             val loaded = RequirementEditor.loaded(ResultsExport.decodeQuery(document).requirements, firstKey = 1)
             val board = RequirementEditor.view(loaded)
             val drawn = BoardView.decode(answer)
-            assertEquals(name, drawn.items.map { Triple(it.cluster != null, it.count, it.total) }, board.items.map { Triple(it.cluster != null, it.count, it.total) })
+            assertEquals(name, drawn.items.map { it.cluster != null }, board.items.map { it.cluster != null })
+            assertEquals(name, drawn.items.map { item -> item.chips.map { it.stack } }, board.items.map { item -> item.chips.map { it.stack } })
             assertEquals(name, drawn.items.map { item -> item.chips.map { it.name } }, board.items.map { item -> item.chips.map { it.name } })
             assertTrue(name, board.problems.isEmpty())
             // Already canonical: loading re-keys the rows and changes nothing else.
@@ -308,25 +311,34 @@ class RequirementEditorTest {
             ItemRequirement(4, null, 0, kind = ItemKind.WAND, upgradeMatch = UpgradeMatch.ANY),
             ItemRequirement(5, find("wand_frost"), 2),
         )
+        // A wand may join a ring stack: the stack's copies keep their own kind.
         val wand = RequirementEditor.view(rows).itemOf(4)!!.chips.single()
-        assertEquals(setOf(5L), wand.join)
-        assertEquals(setOf(1L), wand.refuse.keys)
+        assertEquals(setOf(1L, 5L), wand.join)
+        assertTrue(wand.refuse.isEmpty())
 
-        val refused = RequirementEditor.board(rows, listOf(BoardEdit.Join(source = 4, target = 1)))
-        assertNull(refused.rows)
-        assertEquals(wand.refuse.getValue(1), refused.refused)
-
-        val joined = RequirementEditor.board(rows, listOf(BoardEdit.Join(source = 4, target = 5)))
+        // The stacked target keeps its stack, as a member: two more rings, or the wand.
+        val joined = RequirementEditor.board(rows, listOf(BoardEdit.Join(source = 4, target = 1)))
         assertEquals(4L, joined.focus)
-        assertEquals(listOf(5L, 4L), joined.board.itemOf(4)!!.members)
-        val (frost, anyWand) = joined.rows!!.takeLast(2)
-        assertEquals(listOf(5L, 4L), listOf(frost.key, anyWand.key))
-        assertEquals(frost.alternativeGroup, anyWand.alternativeGroup)
+        val cluster = joined.board.itemOf(4)!!
+        assertEquals(listOf(1L, 4L), cluster.members)
+        assertEquals(listOf(3, 1), cluster.chips.map { it.stack.count })
+        assertEquals(listOf("×3", null), cluster.chips.map { it.countBadge?.text })
 
+        // Out on its own again, the wand leaves a cluster of one, which is the ring stack.
         val detached = RequirementEditor.board(joined.rows!!, listOf(BoardEdit.Detach(4)))
         assertTrue(detached.rows!!.all { it.alternativeGroup == null })
-        val removed = RequirementEditor.board(joined.rows!!, listOf(BoardEdit.Remove(4)))
-        assertEquals(listOf(1L, 2L, 3L, 5L), removed.rows!!.map { it.key })
+        assertEquals(listOf(3, 1, 1), detached.board.items.map { it.chips.single().stack.count })
+        // The chip's Remove takes the member with its whole stack.
+        val removed = RequirementEditor.board(joined.rows!!, listOf(BoardEdit.Remove(1)))
+        assertEquals(listOf(4L, 5L), removed.rows!!.map { it.key })
+
+        // With all four labels in use, the stacked target cannot keep its stack.
+        val busy = RequirementEditor.decodeRows(fixture("board-join-refused").getJSONObject("request").getJSONArray("rows"))
+        val disintegration = RequirementEditor.view(busy).itemOf(11)!!.chips.single()
+        assertEquals(setOf(9L), disintegration.refuse.keys)
+        val refused = RequirementEditor.board(busy, listOf(BoardEdit.Join(source = 11, target = 9)))
+        assertNull(refused.rows)
+        assertEquals(disintegration.refuse.getValue(9), refused.refused)
     }
 
     @Test fun savingKeepsAnUnchangedStackAndAppendsANewChip() {
@@ -348,18 +360,26 @@ class RequirementEditorTest {
         assertEquals(11L, added.nextKey)
     }
 
-    @Test fun aStackedClusterMemberSavedAsATrinketIsRefused() {
+    @Test fun aClusterMemberSavedIntoAnotherCategoryKeepsAStackOfItsNewKind() {
         val spear = ItemRequirement(0, find("spear"), 2)
         val stacked = RequirementEditor.board(
             emptyList(), listOf(BoardEdit.Save(null, spear, count = 2, total = null, copyDepth = null)), nextKey = 1,
         ).rows!! + ItemRequirement(3, find("mace"), 2)
         val cluster = RequirementEditor.board(stacked, listOf(BoardEdit.Join(source = 3, target = 1))).rows!!
-        assertEquals(2, RequirementEditor.view(cluster).items.single().count)
+        assertEquals(listOf(2, 1), RequirementEditor.view(cluster).items.single().chips.map { it.stack.count })
 
+        // The spear's stack is the spear's own, so the mace may turn trinket.
         val skull = ItemRequirement(3, find("rat_skull"), 0, upgradeMatch = UpgradeMatch.ANY, alternativeGroup = 1)
-        val answer = RequirementEditor.board(cluster, listOf(BoardEdit.Save(3, skull, 1, null, null)))
-        assertNull(answer.rows)
-        assertEquals("Copies can only be grouped with the same item type.", answer.refused)
+        val trinket = RequirementEditor.board(cluster, listOf(BoardEdit.Save(3, skull, 1, null, null)))
+        assertNull(trinket.refused)
+        assertEquals(listOf("Spear" to 2, "Rat Skull" to 1), trinket.board.items.single().chips.map { it.name to it.stack.count })
+
+        // A stacked member saved as a ring keeps a stack of rings.
+        val might = ItemRequirement(1, find("ring_might"), 1, alternativeGroup = 1)
+        val ring = RequirementEditor.board(cluster, listOf(BoardEdit.Save(1, might, 2, null, null)))
+        assertNull(ring.refused)
+        assertEquals(listOf("Ring of Might" to 2, "Mace" to 1), ring.board.items.single().chips.map { it.name to it.stack.count })
+        assertEquals(listOf(ItemKind.RING, ItemKind.RING), ring.rows!!.filter { it.identityGroup != null }.map { it.kind })
     }
 
     @Test fun everyEditIsReadByTheEditor() {
@@ -615,21 +635,30 @@ class RequirementEditorTest {
         assertEquals(10L, unchanged.focus)
     }
 
-    @Test fun aStackedClusterMemberTurnedTrinketCannotBeSaved() {
+    @Test fun aClusterMembersSheetEditsItsOwnStack() {
         val spear = ItemRequirement(0, find("spear"), 2)
         val stacked = RequirementEditor.board(
             emptyList(), listOf(BoardEdit.Save(null, spear, count = 2, total = null, copyDepth = null)), nextKey = 1,
         ).rows!! + ItemRequirement(3, find("mace"), 2)
         val cluster = RequirementEditor.board(stacked, listOf(BoardEdit.Join(source = 3, target = 1))).rows!!
+        val spearSheet = RequirementEditor.open(cluster, key = 1)
+        assertTrue(spearSheet.form.inCluster)
+        assertTrue(spearSheet.form.stack.visible)
+        assertEquals(2, spearSheet.form.stack.count)
         val opened = RequirementEditor.open(cluster, key = 3)
-        assertTrue(opened.form.inCluster)
-        assertFalse(opened.form.stack.visible)
+        assertTrue(opened.form.stack.visible)
+        assertEquals(1, opened.form.stack.count)
 
+        // Two maces or two spears: the member's own stack, beside the spear's.
+        val grown = RequirementEditor.save(RequirementEditor.change(opened.draft, SheetChange.count(2)).draft, cluster) as SheetSave.Saved
+        assertEquals(3L, grown.focus)
+        assertEquals(listOf(2, 2), RequirementEditor.view(grown.rows!!).items.single().chips.map { it.stack.count })
+
+        // The spear's copies are its own, so the mace may turn trinket.
         val trinket = RequirementEditor.change(opened.draft, SheetChange.category("trinket"))
-        assertEquals(listOf("Copies can only be grouped with the same item type."), trinket.form.errors)
-        assertFalse(trinket.form.canSave)
-        val refused = RequirementEditor.save(trinket.draft, cluster) as SheetSave.Refused
-        assertEquals(trinket.form.errors, refused.sheet.form.errors)
+        assertTrue(trinket.form.errors.isEmpty())
+        assertTrue(trinket.form.canSave)
+        assertTrue(RequirementEditor.save(trinket.draft, cluster) is SheetSave.Saved)
     }
 
     @Test fun everyItemTheSheetOffersHasATile() {

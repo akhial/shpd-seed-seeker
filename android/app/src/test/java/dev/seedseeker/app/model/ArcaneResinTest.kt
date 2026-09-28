@@ -17,7 +17,7 @@ class ArcaneResinTest {
                 val identity = if (linked) "\"kind\":\"wand\",\"identity_group\":1" else "\"item\":\"wand_frost\""
                 val anchor = if (excluded) "\"exclude_resin\":true" else "\"upgrade\":3"
                 val query = ResultsExport.decodeQuery(JSONObject("""{"arcane_resin":"auto","arcane_resin_filter":{"source":"ghost_reward"},"requirements":[{$identity,$anchor},{$identity},{$identity}]}"""))
-                assertEquals(3, RequirementEditor.view(query.requirements).items.single().count)
+                assertEquals(3, RequirementEditor.view(query.requirements).items.single().chips.single().stack.count)
                 assertEquals(query, DeepLink.decode(DeepLink.encodeLink(query)))
                 val request = SearchRequest(query.requirements, arcaneResinAuto = true, arcaneResinFilter = query.arcaneResinFilter)
                 val baseline = probability(request.copy(arcaneResinAuto = false))
@@ -33,7 +33,7 @@ class ArcaneResinTest {
             val anchor = ItemRequirement(1, item, 0, kind = ItemKind.WAND, upgradeMatch = UpgradeMatch.ANY, excludeResin = true)
             val grown = RequirementEditor.board(listOf(anchor), listOf(BoardEdit.SetCount(1, count = 3))).rows!!
             assertEquals(listOf(true, false, false), grown.map { it.excludeResin })
-            assertEquals(3, RequirementEditor.view(grown).items.single().count)
+            assertEquals(3, RequirementEditor.view(grown).items.single().chips.single().stack.count)
         }
         val ordinary = ItemRequirement(1, named, 0, upgradeMatch = UpgradeMatch.ANY)
         assertEquals(2, RequirementEditor.view(listOf(ordinary, ordinary.copy(key = 2, excludeResin = true))).items.size)

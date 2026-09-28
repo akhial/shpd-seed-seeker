@@ -36,7 +36,7 @@ data class SheetForm(
     /** The visible row the sheet edits; null for a new chip or the resin chip. */
     val rowKey: Long?,
     val blanket: Boolean,
-    /** The row is an either/or alternative, whose stack is its cluster's. */
+    /** The row is an either/or alternative, with a stack of its own. */
     val inCluster: Boolean,
     /** Arcane Resin is the picked item: the sheet edits the query's resin. */
     val resinPicked: Boolean,

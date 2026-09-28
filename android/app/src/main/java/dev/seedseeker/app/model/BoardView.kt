@@ -51,23 +51,15 @@ data class BoardView(
             )
         }
 
-        private fun decodeItem(item: JSONObject): BoardItemView {
-            val stack = item.getJSONObject("stack")
-            val badges = item.getJSONObject("badges")
-            return BoardItemView(
-                blanket = item.getBoolean("blanket"),
-                cluster = item.intOrNull("cluster"),
-                name = item.getString("name"),
-                members = item.getJSONArray("members").longs(),
-                count = stack.getInt("count"),
-                countMax = stack.getInt("count_max"),
-                total = stack.intOrNull("total"),
-                copyDepth = stack.intOrNull("copy_depth"),
-                countBadge = badges.objectOrNull("count")?.let(::decodeBadge),
-                totalBadge = badges.objectOrNull("total")?.let(::decodeBadge),
-                chips = item.getJSONArray("chips").objects().map(::decodeChip),
-            )
-        }
+        private fun decodeItem(item: JSONObject) = BoardItemView(
+            blanket = item.getBoolean("blanket"),
+            cluster = item.intOrNull("cluster"),
+            name = item.getString("name"),
+            members = item.getJSONArray("members").longs(),
+            chips = item.getJSONArray("chips").objects().map(::decodeChip),
+        )
+
+        private fun badges(chip: JSONObject) = chip.getJSONObject("badges")
 
         private fun decodeBadge(badge: JSONObject) =
             BadgeView(badge.getString("text"), badge.getString("compact_text"), badge.getString("tooltip"))
@@ -92,6 +84,17 @@ data class BoardView(
             relations = chip.getJSONArray("relations").objects().map { it.getString("text") },
             description = chip.getString("description"),
             problem = chip.stringOrNull("problem"),
+            countBadge = badges(chip).objectOrNull("count")?.let(::decodeBadge),
+            totalBadge = badges(chip).objectOrNull("total")?.let(::decodeBadge),
+            copies = chip.getJSONArray("copies").longs(),
+            stack = chip.getJSONObject("stack").let { stack ->
+                StackView(
+                    count = stack.getInt("count"),
+                    countMax = stack.getInt("count_max"),
+                    total = stack.intOrNull("total"),
+                    copyDepth = stack.intOrNull("copy_depth"),
+                )
+            },
             canDetach = chip.getBoolean("can_detach"),
             join = chip.getJSONArray("join").longs().toSet(),
             refuse = chip.getJSONArray("refuse").objects().associate { it.getLong("key") to it.getString("message") },
@@ -106,7 +109,10 @@ data class BoardView(
     }
 }
 
-/** One board entry: a chip, or an either/or cluster of chips, with the stack behind it. */
+/**
+ * One board entry: a chip, or an either/or cluster of chips. The entry has no
+ * stack of its own: every chip, a cluster member included, carries its own.
+ */
 data class BoardItemView(
     /** Whether the entry sits in the blanket section. */
     val blanket: Boolean,
@@ -116,24 +122,27 @@ data class BoardItemView(
     val name: String,
     /** The visible rows' keys, the anchor first. */
     val members: List<Long>,
-    /** How many items the entry asks for, its hidden copies included. */
-    val count: Int,
-    /** The most a count stepper may ask for: the stack's limit while it can grow, else [count]. */
-    val countMax: Int,
-    /** The combined level the stack's items reach together, when it counts levels. */
-    val total: Int?,
-    /** The floor limit the stack's hidden copies keep to. */
-    val copyDepth: Int?,
-    /** `×3`, or `≤3` while counting levels, when the entry asks for more than one item. */
-    val countBadge: BadgeView?,
-    /** `Σ ≥ 5`, when the stack counts levels. */
-    val totalBadge: BadgeView?,
     /** One chip per member. */
     val chips: List<ChipView>,
 ) {
-    /** The row the badges and the editor act on. */
+    /** The entry's first row, which keys it on the board. */
     val anchor: Long get() = members.first()
 }
+
+/**
+ * One chip's stack, which its sheet edits: `{Frost ×2 | Disintegration}` is
+ * a Frost chip of count 2 beside a Disintegration chip of count 1.
+ */
+data class StackView(
+    /** How many items the chip asks for, its hidden copies included. */
+    val count: Int,
+    /** The most a count stepper may ask for: the stack's limit while it can grow, else [count]. */
+    val countMax: Int,
+    /** The combined level the stack's items reach together, when it counts levels (lone ring stacks only). */
+    val total: Int?,
+    /** The floor limit the stack's hidden copies keep to. */
+    val copyDepth: Int?,
+)
 
 /** A stack badge: its text, the shorter text for compact chips, and what it means in words. */
 data class BadgeView(val text: String, val compactText: String, val tooltip: String)
@@ -165,6 +174,14 @@ data class ChipView(
     val description: String,
     /** The first problem the chip carries, its hidden copies' included. */
     val problem: String?,
+    /** `×3`, or `≤3` while counting levels, when the chip asks for more than one item. */
+    val countBadge: BadgeView?,
+    /** `Σ ≥ 5`, when the chip's stack counts levels. */
+    val totalBadge: BadgeView?,
+    /** The hidden copies behind the chip's badge; members whose stacks are alike share theirs. */
+    val copies: List<Long>,
+    /** The chip's own stack. */
+    val stack: StackView,
     /** Whether the chip is a cluster member, which can be taken out on its own. */
     val canDetach: Boolean,
     /** The visible rows this chip may join as an either/or alternative. */

@@ -30,6 +30,7 @@ import dev.seedseeker.app.model.ItemRequirement
 import dev.seedseeker.app.model.LevelSum
 import dev.seedseeker.app.model.RequirementEditor
 import dev.seedseeker.app.model.ResinCondition
+import dev.seedseeker.app.model.StackView
 import dev.seedseeker.app.model.UpgradeMatch
 import dev.seedseeker.app.ui.theme.SeedSeekerTheme
 import java.io.File
@@ -200,52 +201,88 @@ class RequirementBoardTest {
         }
     }
 
-    @Test fun droppingArmorOnACountedRingKeepsTheRingAndItsCountTogether() {
+    private val frost = ItemCatalog.findById("wand_frost")!!
+    private val disintegration = ItemCatalog.findById("wand_disintegration")!!
+
+    /** The `×N` badge drawn on the chip [name] names, inside it. */
+    private fun badgeOn(name: String, text: String) =
+        compose.onNode(hasText(text) and hasAnyAncestor(hasContentDescription("$name,", substring = true)))
+
+    /** `{Frost ×2 | Disintegration}`: two Wands of Frost, or one Wand of Disintegration. */
+    private val memberStack = listOf(
+        ItemRequirement(1, frost, 0, upgradeMatch = UpgradeMatch.ANY, alternativeGroup = 1, identityGroup = 1),
+        ItemRequirement(2, disintegration, 0, upgradeMatch = UpgradeMatch.ANY, alternativeGroup = 1),
+        ItemRequirement(3, null, 0, kind = ItemKind.WAND, upgradeMatch = UpgradeMatch.ANY, identityGroup = 1),
+    )
+
+    @Test fun droppingArmorOnACountedRingMakesThemAlternativesAndKeepsTheRingsCount() {
         val counted = edited(
             emptyList(),
             BoardEdit.Save(null, ItemRequirement(0, ItemCatalog.findById("ring_energy")!!, 4), count = 3, total = null, copyDepth = 20),
         ) + ItemRequirement(9, ItemCatalog.findById("plate_armor")!!, 3)
-        requirements.value = counted
         amount.value = 0
         show()
 
         for (isCompact in listOf(false, true)) {
-            compose.runOnIdle { compact.value = isCompact }
+            compose.runOnIdle {
+                compact.value = isCompact
+                requirements.value = counted
+            }
             val ringChip = compose.onNodeWithContentDescription("Ring of Energy,", substring = true)
             val armorChip = compose.onNodeWithContentDescription("Plate Armor,", substring = true)
+            // A stack joins any category now: each of its copies keeps its own kind.
             pickUp(armorChip)
             moveOver(ringChip)
-            compose.onNodeWithText("Copies can only be grouped with the same item type.").assertIsDisplayed()
-            release()
             compose.onNodeWithText("Copies can only be grouped with the same item type.").assertDoesNotExist()
-            compose.runOnIdle { assertEquals(counted, requirements.value) }
+            release()
+            compose.onNodeWithText("or").assertIsDisplayed()
             ringChip.assert(hasText("+4"))
-            compose.onNode(hasText("×3") and hasAnyAncestor(hasContentDescription("Ring of Energy,", substring = true)))
-                .assertIsDisplayed()
+            // The ring keeps its ×3 as a member: three rings, or the armor.
+            badgeOn("Ring of Energy", "×3").assertIsDisplayed()
+            compose.onNode(hasText("×3") and hasAnyAncestor(hasContentDescription("Plate Armor,", substring = true))).assertDoesNotExist()
+            compose.runOnIdle {
+                val cluster = RequirementEditor.view(requirements.value).items.single()
+                assertEquals(listOf(1L, 9L), cluster.members)
+                assertEquals(listOf(3, 1), cluster.chips.map { it.stack.count })
+            }
 
+            // The other way round, one ring moves and the rest stays a stack of two.
+            compose.runOnIdle { requirements.value = counted }
             pickUp(ringChip)
             dropOn(armorChip)
-            compose.runOnIdle { assertEquals(counted, requirements.value) }
+            compose.runOnIdle {
+                val (rest, cluster) = RequirementEditor.view(requirements.value).items
+                assertEquals(2, rest.chips.single().stack.count)
+                assertEquals(listOf("Plate Armor" to 1, "Ring of Energy" to 1), cluster.chips.map { it.name to it.stack.count })
+            }
         }
     }
 
     @Test fun aRejectedDropDoesNotDetachAMemberFromItsOriginalGroup() {
-        val counted = edited(
-            emptyList(),
-            BoardEdit.Save(null, ItemRequirement(0, ItemCatalog.findById("ring_energy")!!, 4), count = 3, total = null, copyDepth = null),
-        ) + listOf(original[0].copy(key = 9), original[1].copy(key = 10))
-        val grouped = edited(counted, BoardEdit.Join(source = 9, target = 10))
+        // All four stack labels are in use, so Wand of Frost ×2 cannot keep
+        // its stack as a member, and refuses the join.
+        val busy = listOf(ItemKind.ARMOR, ItemKind.RING, ItemKind.ARMOR, ItemKind.RING).flatMapIndexed { index, kind ->
+            List(2) { copy ->
+                ItemRequirement(20L + index * 2 + copy, null, 0, kind = kind, upgradeMatch = UpgradeMatch.ANY, identityGroup = index + 1)
+            }
+        }
+        val grouped = busy + listOf(
+            ItemRequirement(9, frost, 0, upgradeMatch = UpgradeMatch.ANY),
+            ItemRequirement(10, frost, 0, upgradeMatch = UpgradeMatch.ANY),
+        ) + edited(original, BoardEdit.Join(source = 1, target = 2))
         requirements.value = grouped
         amount.value = 0
         show()
 
         pickUp(firstWand())
-        dropOn(compose.onNodeWithContentDescription("Ring of Energy,", substring = true))
+        moveOver(compose.onNodeWithContentDescription("Wand of Frost,", substring = true))
+        compose.onNodeWithText("Every group label is in use. Remove a stack or a combined level first.").assertIsDisplayed()
+        release()
         compose.runOnIdle { assertEquals(grouped, requirements.value) }
         compose.onNodeWithText("or").assertIsDisplayed()
     }
 
-    @Test fun compatibleRingDropKeepsTheCountOnTheEitherOrGroup() {
+    @Test fun aRingDroppedOnACountedRingLeavesTheCountOnThatRing() {
         val counted = edited(
             emptyList(),
             BoardEdit.Save(null, ItemRequirement(0, ItemCatalog.findById("ring_energy")!!, 4), count = 3, total = null, copyDepth = 20),
@@ -261,13 +298,40 @@ class RequirementBoardTest {
             val board = RequirementEditor.view(joined)
             val item = board.items.single()
             assertEquals(listOf(1L, 9L), item.members)
-            assertEquals(3, item.count)
-            assertEquals(20, item.copyDepth)
-            assertEquals(listOf(20, 20), joined.filter { it.key !in item.members }.map { it.maximumDepth })
+            val (energy, wealth) = item.chips
+            assertEquals(StackView(count = 3, countMax = 3, total = null, copyDepth = 20), energy.stack)
+            assertEquals(1, wealth.stack.count)
+            assertEquals(listOf(20, 20), joined.filter { it.key in energy.copies }.map { it.maximumDepth })
             assertEquals(emptyList<Any>(), board.problems)
         }
         compose.onNodeWithText("or").assertIsDisplayed()
-        compose.onNodeWithText("×3").assertIsDisplayed()
+        // The badge is the energy ring's, drawn on its chip, and on no other.
+        badgeOn("Ring of Energy", "×3").assertIsDisplayed()
+        compose.onAllNodesWithText("×3").assertCountEquals(1)
+    }
+
+    @Test fun eachMemberWearsItsOwnStackBadge() {
+        requirements.value = memberStack
+        amount.value = 0
+        show()
+        badgeOn("Wand of Frost", "×2").assertIsDisplayed()
+        compose.onAllNodesWithText("×2").assertCountEquals(1)
+
+        // Members sharing one label are each drawn ×2, and the capsule wears none.
+        compose.runOnIdle {
+            requirements.value = memberStack.map { if (it.key == 2L) it.copy(identityGroup = 1) else it }
+        }
+        badgeOn("Wand of Frost", "×2").assertIsDisplayed()
+        badgeOn("Wand of Disintegration", "×2").assertIsDisplayed()
+        compose.onAllNodesWithText("×2").assertCountEquals(2)
+    }
+
+    @Test fun theChipInHandIsOneItemWithoutItsBadges() {
+        val chip = RequirementEditor.view(memberStack).itemOf(1)!!.chips.first()
+        assertEquals("×2", chip.countBadge?.text)
+        compose.setContent { SeedSeekerTheme { Surface { HeldChip(chip) } } }
+        compose.onNodeWithContentDescription("Wand of Frost,", substring = true).assertIsDisplayed()
+        compose.onNodeWithText("×2", useUnmergedTree = true).assertDoesNotExist()
     }
 
     @Test fun aMemberLeavesItsCapsuleOnlyWhenLetGoOnTheOpenBoard() {

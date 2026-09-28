@@ -117,8 +117,10 @@ import dev.seedseeker.app.ui.theme.SpdYellow
  *   a chip off its capsule pulls it back out on its own.
  * - A chip asking for several items of the same kind carries a `×N` badge, and
  *   one asking for a combined level carries `Σ ≥ N`. Both are properties of a
- *   chip rather than relationships between chips, so both are set in the editor
- *   a tap opens — never by a drag.
+ *   chip rather than relationships between chips — a capsule's member carries
+ *   its own (`{Frost ×2 | Disintegration}`: two Frosts, or one
+ *   Disintegration), and the capsule none — so both are set in the editor a
+ *   tap opens, never by a drag.
  *
  * Entries flow like words: a chip sits beside the last one when it fits and
  * starts a new line when it does not. A capsule flows the same way inside its
@@ -320,6 +322,7 @@ fun RequirementBoard(
             }
             // The chip in hand: a lifted, tilted copy riding under the finger
             // while its place on the board waits, faded, for it to come back.
+            // It is the one item the drag moves, so it wears no stack badges.
             val ghostResin = resin.takeIf { draggingResin }
             if (held != null || ghostResin != null) {
                 val lift = remember { Animatable(0f) }
@@ -351,20 +354,7 @@ fun RequirementBoard(
                         .clearAndSetSemantics {},
                 ) {
                     if (held != null) {
-                        RequirementChip(
-                            chip = held,
-                            countBadge = null,
-                            totalBadge = null,
-                            enabled = false,
-                            dimmed = false,
-                            highlighted = false,
-                            onPlaced = {},
-                            onClick = {},
-                            onDragStart = {},
-                            onDrag = {},
-                            onDragEnd = {},
-                            onDragCancel = {},
-                        )
+                        HeldChip(held)
                     } else if (ghostResin != null) {
                         ArcaneResinChip(
                             resin = ghostResin,
@@ -505,11 +495,6 @@ private fun BoardEntry(
         val chip = item.chips.single()
         RequirementChip(
             chip = chip,
-            // A lone chip carries its own stack badges; a cluster's belong
-            // to the capsule, since the stack binds to whichever member the
-            // search picks.
-            countBadge = item.countBadge,
-            totalBadge = item.totalBadge,
             enabled = enabled,
             dimmed = dragging == chip.key,
             highlighted = hovered == chip.key,
@@ -575,10 +560,10 @@ private fun BoardEntry(
                         color = MaterialTheme.colorScheme.tertiary,
                     )
                 }
+                // A member carries its own stack badges: the copies follow
+                // it, and are waived when another member is the one found.
                 RequirementChip(
                     chip = chip,
-                    countBadge = null,
-                    totalBadge = null,
                     enabled = enabled,
                     dimmed = dragging == chip.key,
                     highlighted = false,
@@ -589,19 +574,6 @@ private fun BoardEntry(
                     onDrag = onDrag,
                     onDragEnd = onDragEnd,
                     onDragCancel = onDragCancel,
-                )
-            }
-        }
-        if (item.countBadge != null || item.totalBadge != null) {
-            Row(
-                modifier = Modifier.height(metrics.height),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                StackBadges(
-                    count = item.countBadge,
-                    total = item.totalBadge,
-                    enabled = enabled,
-                    onClick = { onEdit(item.anchor) },
                 )
             }
         }
@@ -618,8 +590,6 @@ private fun BoardEntry(
 @Composable
 private fun RequirementChip(
     chip: ChipView,
-    countBadge: BadgeView?,
-    totalBadge: BadgeView?,
     enabled: Boolean,
     dimmed: Boolean,
     highlighted: Boolean,
@@ -630,6 +600,8 @@ private fun RequirementChip(
     onDrag: (Offset) -> Unit,
     onDragEnd: () -> Unit,
     onDragCancel: () -> Unit,
+    /** Whether the chip wears its stack badges; the one item a drag holds does not. */
+    badges: Boolean = true,
 ) {
     val metrics = LocalChipMetrics.current
     BoardChip(
@@ -662,8 +634,29 @@ private fun RequirementChip(
             Spacer(Modifier.width(5.dp))
             UncursedTag()
         }
-        StackBadges(count = countBadge, total = totalBadge, enabled = enabled, onClick = onClick)
+        if (badges) StackBadges(count = chip.countBadge, total = chip.totalBadge, enabled = enabled, onClick = onClick)
     }
+}
+
+/**
+ * The one item a drag holds: [chip]'s sprite, name and tags, without the
+ * `×N` or `Σ` it wears on the board, since only one of its items moves.
+ */
+@Composable
+internal fun HeldChip(chip: ChipView) {
+    RequirementChip(
+        chip = chip,
+        enabled = false,
+        dimmed = false,
+        highlighted = false,
+        onPlaced = {},
+        onClick = {},
+        onDragStart = {},
+        onDrag = {},
+        onDragEnd = {},
+        onDragCancel = {},
+        badges = false,
+    )
 }
 
 @Composable

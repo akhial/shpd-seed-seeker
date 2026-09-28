@@ -40,7 +40,7 @@ class ArtifactRequirementsTest {
         assertThrows(IllegalArgumentException::class.java) { artifact().copy(identityGroup = 1) }
         assertThrows(IllegalArgumentException::class.java) { artifact().copy(levelSum = LevelSum(1, 2)) }
         val requirements = listOf(artifact())
-        assertEquals(1, RequirementEditor.view(requirements).items.single().count)
+        assertEquals(1, RequirementEditor.view(requirements).items.single().chips.single().stack.count)
         assertNull(RequirementEditor.board(requirements, listOf(BoardEdit.SetCount(1, 2))).rows)
         assertEquals(2, RequirementEditor.view(listOf(artifact(), artifact(2))).items.size)
     }

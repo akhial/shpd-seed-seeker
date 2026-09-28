@@ -3,6 +3,7 @@ package dev.seedseeker.app.ui
 
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
@@ -133,7 +134,7 @@ class RequirementSheetTest {
         compose.runOnIdle { assertNull(saved!!.rows) }
     }
 
-    @Test fun aStackedMemberCannotLeaveItsStacksCategory() {
+    @Test fun aClusterMembersSheetEditsItsOwnStackInAnyCategory() {
         val spear = ItemRequirement(0, ItemCatalog.findById("spear")!!, 2)
         val stacked = RequirementEditor.board(
             emptyList(), listOf(BoardEdit.Save(null, spear, count = 2, total = null, copyDepth = null)), nextKey = 1,
@@ -142,12 +143,18 @@ class RequirementSheetTest {
         var saved: SheetSave.Saved? = null
         show(RequirementEditor.open(cluster, key = 3), cluster) { saved = it }
         compose.onNodeWithText("Edit alternative").assertIsDisplayed()
-        compose.onNodeWithText("Total item count").assertDoesNotExist()
+        // The member has a stack of its own, apart from the spear's ×2.
+        compose.onNodeWithText("Total item count").assertIsDisplayed()
         compose.onNodeWithText("Back").performClick()
         compose.onNodeWithText("Trinket").performClick()
         compose.onNodeWithText("Next").performClick()
-        compose.onNodeWithText("Copies can only be grouped with the same item type.").assertIsDisplayed()
-        compose.onNodeWithText("Save").assertIsNotEnabled()
-        compose.runOnIdle { assertNull(saved) }
+        // The spear's copies keep their own kind, so the mace may turn trinket.
+        compose.onNodeWithText("Copies can only be grouped with the same item type.").assertDoesNotExist()
+        compose.onNodeWithText("Save").assertIsEnabled().performClick()
+        compose.runOnIdle {
+            val chips = RequirementEditor.view(saved!!.rows!!).items.single().chips
+            assertEquals(listOf("Spear" to 2, 1), listOf(chips[0].name to chips[0].stack.count, chips[1].stack.count))
+            assertEquals(ItemKind.TRINKET, chips[1].kind)
+        }
     }
 }
