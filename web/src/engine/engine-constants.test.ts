@@ -17,6 +17,8 @@ import {
   MAX_UPGRADE_RING_STANDARD,
   MAX_UPGRADE_WEAPON,
   LEVEL_SUM_GROUP_MAX,
+  STACK_MAX,
+  TRINKET_TRANSMUTATION_MAX,
   maxUpgradeFor,
   maxUpgradeOf,
 } from "../features/query/query";
@@ -57,6 +59,11 @@ describe("local constants match the engine document", () => {
     expect(MAX_UPGRADE_WEAPON).toBe(info.limits.maxUpgradeWeapon);
     expect(MAX_UPGRADE_ANY_TIER).toBe(info.limits.maxUpgradeAnyTier);
     expect(EXTRA_UPGRADE_TIER).toBe(info.limits.extraUpgradeTier);
+  });
+
+  it("requirement sheet bounds", () => {
+    expect(STACK_MAX).toBe(info.limits.stackMax);
+    expect(TRINKET_TRANSMUTATION_MAX).toBe(info.limits.trinketTransmutationsMax);
   });
 
   it("upgrade ceilings per item family", () => {

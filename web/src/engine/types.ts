@@ -156,6 +156,163 @@ export interface AnyOfDocument {
 
 export type RequirementEntryDocument = RequirementDocument | AnyOfDocument;
 
+// The requirement editor's JSON envelopes (docs/requirement-editor.md). The
+// shared core owns every rule and every word behind them; these types only
+// spell out the wire format.
+
+/** One requirement of the editor's flat list: the document entry, its key and its either/or label. */
+export interface RequirementRow extends RequirementDocument {
+  key: number;
+  alternative_group?: number;
+}
+
+/** The query's Arcane Resin condition as the editor reads it. */
+export interface ResinCondition {
+  amount: number | "auto";
+  filter: {
+    uncursed: boolean;
+    max_depth: number | null;
+    source: ItemSource | null;
+    include_mage_wand: boolean;
+  } | null;
+}
+
+/** One board edit; keys name visible rows (a chip or one cluster member). */
+export type BoardEdit =
+  | { type: "normalize" }
+  | { type: "join"; source: number; target: number }
+  | { type: "detach"; key: number }
+  | { type: "remove"; key: number }
+  | { type: "remove_item"; key: number }
+  | { type: "set_count"; key: number; count: number }
+  | { type: "set_total"; key: number; total: number | null }
+  | { type: "toggle_levels"; key: number }
+  | { type: "set_copy_depth"; key: number; max_depth: number | null }
+  | {
+      type: "save";
+      key: number | null;
+      requirement: RequirementDocument;
+      count: number;
+      total: number | null;
+      copy_depth: number | null;
+    };
+
+export interface BoardRequest {
+  rows: RequirementRow[];
+  next_key?: number;
+  edits?: BoardEdit[];
+  resin?: ResinCondition | null;
+}
+
+export interface BoardRefusal {
+  reason: "mixed_category_stack" | "blanket_total" | "no_free_group";
+  message: string;
+}
+
+/** A qualifier beside a chip's name; the upgrade is tinted apart from the rest. */
+export interface ChipTag {
+  text: string;
+  style: "plain" | "upgrade";
+}
+
+/** A stack (×N / ≤N) or combined-level (Σ) badge at rest. */
+export interface StackBadge {
+  text: string;
+  compact_text: string;
+  tooltip: string;
+}
+
+/** What an entry's count and combined-level steppers offer. */
+export interface StackView {
+  count: number;
+  max: number;
+  can_grow: boolean;
+  can_change_count: boolean;
+  total: number | null;
+  can_count_levels: boolean;
+  level_capacity: number;
+  default_total: number;
+  copy_depth: number | null;
+  can_set_copy_depth: boolean;
+  count_text: string;
+  total_text: string;
+}
+
+/** One visible row of the board: a chip, or one member of a cluster. */
+export interface ChipView {
+  key: number;
+  name: string;
+  title: string;
+  item: string | null;
+  /** Null only for a row the editor cannot read. */
+  kind: RequirementKind | null;
+  family: ItemCategory | null;
+  tags: ChipTag[];
+  trailing_tags: ChipTag[];
+  effect: {
+    label: string;
+    effects: string[];
+    any_enchantment: boolean;
+    curses_only: boolean;
+  } | null;
+  uncursed: boolean;
+  details: string[];
+  relations: { glyph: "or" | "sum" | "times"; text: string }[];
+  description: string;
+  problem: string | null;
+  in_cluster: boolean;
+  can_detach: boolean;
+  /** The visible rows this chip may join, in list order. */
+  join: number[];
+  /** The visible rows a join onto is refused, with the reason. */
+  refuse: ({ key: number } & BoardRefusal)[];
+}
+
+/** One board entry: a chip, or an either/or cluster, with its stack. */
+export interface BoardItemView {
+  /** `r<key>` for a chip, `c<label>` for a cluster; stable while the entry survives an edit. */
+  id: string;
+  blanket: boolean;
+  cluster: number | null;
+  label: string | null;
+  members: number[];
+  extras: number[];
+  stack: StackView;
+  badges: { count: StackBadge | null; total: StackBadge | null };
+  chips: ChipView[];
+  problem: string | null;
+}
+
+export interface ResinChipView {
+  name: string;
+  tags: ChipTag[];
+  uncursed: boolean;
+  tooltip: string | null;
+  /** The amount tag's (the first tag's) hover text, explaining Auto. */
+  amount_tooltip: string | null;
+  details: string[];
+  description: string;
+}
+
+export interface RequirementProblem {
+  message: string;
+  keys: number[];
+  scope: "row" | "group" | "list";
+}
+
+export interface BoardResponse {
+  rows: RequirementRow[];
+  next_key: number;
+  changed: boolean;
+  rekeyed: [number, number][];
+  focus: number | null;
+  refused: BoardRefusal | null;
+  items: BoardItemView[];
+  counts: { ordinary: number; blanket: number };
+  problems: RequirementProblem[];
+  resin: ResinChipView | null;
+}
+
 /** The keys this release writes. Documents saved by older releases may carry
  * retired keys such as `fast_mode`; both the engine's codec and `fromQueryJson`
  * accept and ignore them. */
@@ -193,6 +350,10 @@ export interface EngineLimits {
   maxUpgradeWeapon: number;
   maxUpgradeAnyTier: number;
   extraUpgradeTier: number;
+  /** The most items one stack of the requirement editor asks for, its anchor included. */
+  stackMax: number;
+  trinketTransmutationsMax: number;
+  artifactTransmutationsMax: number;
   resultsFileMaxBytes: number;
 }
 

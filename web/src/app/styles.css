@@ -2005,6 +2005,17 @@ input[type="range"]::-moz-range-thumb {
   border: 1px solid rgba(217, 108, 95, 0.35);
 }
 
+/* The whole page when the requirement editor cannot load. */
+.d1-boot-failure {
+  max-width: 36em;
+  margin: 20vh auto 0;
+  padding: 0 20px;
+  font:
+    14px/1.5 system-ui,
+    sans-serif;
+  color: #f2b4ab;
+}
+
 .d1-banner-info {
   color: var(--d1-text-2);
   background: var(--d1-raised);
