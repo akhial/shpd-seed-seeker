@@ -1076,11 +1076,8 @@ fn item_row(world_item: &WorldItem, gems: RingGems, matched: RowMatch) -> adw::A
     ));
 
     if world_item.displayed_upgrade() > 0 {
-        let upgrade = gtk::Label::builder()
-            .label(format!("+{}", world_item.displayed_upgrade()))
-            .css_classes(["caption-heading", "success"])
-            .valign(gtk::Align::Center)
-            .build();
+        let upgrade = tag(&format!("+{}", world_item.displayed_upgrade()), "success");
+        upgrade.add_css_class("tag-numeric");
         row.add_suffix(&upgrade);
     }
     if let Some(effect) = world_item.effect {
@@ -1104,16 +1101,17 @@ fn item_row(world_item: &WorldItem, gems: RingGems, matched: RowMatch) -> adw::A
     match matched {
         RowMatch::Unmatched => {}
         RowMatch::Requirement => {
-            let badge = tag("Match", "success");
-            badge.set_tooltip_text(Some(
-                "Selected as part of a jointly obtainable requirement match",
-            ));
-            row.add_suffix(&badge);
+            row.add_css_class("item-matched");
+            row.add_suffix(&match_tag());
         }
-        RowMatch::ResinDonor => row.add_suffix(&resin_donor_tag()),
+        RowMatch::ResinDonor => {
+            row.add_css_class("item-matched");
+            row.add_css_class("item-resin");
+            row.add_suffix(&resin_donor_tag());
+        }
     }
     if let Accessibility::Choice { group, option } = world_item.accessibility {
-        let badge = tag(&format!("⑂ {}", choice_letter(group)), "dim-label");
+        let badge = tag(&format!("⑂ {}", choice_letter(group)), "choice");
         let description = format!(
             "One reward of choice group {} (option {})",
             choice_letter(group),
@@ -1147,6 +1145,23 @@ fn tag(label: &str, color: &str) -> gtk::Label {
         .build()
 }
 
+/// The match tag of an item kept for a requirement: a green capsule led by a
+/// check mark, apart from the square tags that describe the item.
+fn match_tag() -> gtk::Box {
+    let label = "Selected as part of a jointly obtainable requirement match";
+    let badge = gtk::Box::builder()
+        .orientation(gtk::Orientation::Horizontal)
+        .spacing(3)
+        .css_classes(["tag", "match-tag", "success"])
+        .valign(gtk::Align::Center)
+        .tooltip_text(label)
+        .build();
+    badge.update_property(&[gtk::accessible::Property::Label("Match")]);
+    badge.append(&gtk::Image::from_icon_name("object-select-symbolic"));
+    badge.append(&gtk::Label::new(Some("Match")));
+    badge
+}
+
 /// The match tag of a wand consumed for Arcane Resin: purple, led by the
 /// resin's own sprite instead of plain text.
 fn resin_donor_tag() -> gtk::Box {
@@ -1154,7 +1169,7 @@ fn resin_donor_tag() -> gtk::Box {
     let badge = gtk::Box::builder()
         .orientation(gtk::Orientation::Horizontal)
         .spacing(4)
-        .css_classes(["tag", "resin-match"])
+        .css_classes(["tag", "match-tag", "resin-match"])
         .valign(gtk::Align::Center)
         .tooltip_text(label)
         .build();
