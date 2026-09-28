@@ -1558,7 +1558,8 @@ fn attempt(draft: &Draft, hint: Option<u64>, held: &HeldLabels) -> Attempt {
 
 /// The board edit a save of `draft` writes onto the row `key`: its
 /// requirement, with a count only where the sheet shows one, a total only
-/// while the combined level is on, and a copy floor only while it shows.
+/// while the combined level is on, and a copy floor only while it shows —
+/// or while the combined level, which hides it, keeps it.
 fn save_edit(draft: &Draft, key: u64) -> Edit {
     let shown = Shown::of(draft);
     Edit::Save {
@@ -1566,7 +1567,9 @@ fn save_edit(draft: &Draft, key: u64) -> Edit {
         requirement: saved_requirement(draft),
         count: if shown.stack { draft.count } else { 1 },
         total: draft.total.filter(|_| shown.counting),
-        copy_depth: draft.copy_depth.filter(|_| shown.copy_depth),
+        copy_depth: draft
+            .copy_depth
+            .filter(|_| shown.copy_depth || shown.counting),
     }
 }
 

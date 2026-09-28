@@ -1510,6 +1510,42 @@ fn the_count_clears_or_clamps_the_combined_level() {
     }
 }
 
+/// Counting levels on or off keeps the copies' own floor limit, from the
+/// sheet as from the board: a counting stack's sheet holds the copy floor
+/// its switch hides and saves it back.
+#[test]
+fn the_sheet_keeps_the_copy_floor_through_counting_levels() {
+    let rows = [
+        with(named(1, ItemId::RingEnergy), |r| r.max_depth = Some(9)),
+        with(named(2, ItemId::RingEnergy), |r| r.max_depth = Some(20)),
+    ];
+    let depths = |rows: &[Row]| -> Vec<Option<u8>> {
+        rows.iter().map(|row| row.requirement.max_depth).collect()
+    };
+    let counting = after(&sheet(&rows, 1), &[Change::SetCountLevels(true)]);
+    assert!(!form(&counting).stack.copy_depth.visible);
+    let (result, _) = saved(&counting);
+    assert_eq!(keys(&result.rows), [1, 2]);
+    assert_eq!(depths(&result.rows), [Some(9), Some(20)]);
+    assert!(
+        result
+            .rows
+            .iter()
+            .all(|row| row.requirement.level_sum.is_some())
+    );
+
+    // A counting stack reopened, its total changed, keeps the floor too.
+    let raised = after(&sheet(&result.rows, 1), &[Change::SetTotal(5)]);
+    assert_eq!(raised.copy_depth, Some(20));
+    let (again, _) = saved(&raised);
+    assert!(again.changed);
+    assert_eq!(depths(&again.rows), [Some(9), Some(20)]);
+    // And so does turning counting off.
+    let plain = after(&sheet(&again.rows, 1), &[Change::SetCountLevels(false)]);
+    let (off, _) = saved(&plain);
+    assert_eq!(off.rows, rows);
+}
+
 // --- the form ------------------------------------------------------------
 
 #[test]
@@ -2679,19 +2715,23 @@ fn a_save_writes_only_the_stack_the_sheet_shows() {
     );
     assert_eq!(ring.copy_depth, Some(4));
     let rows = stored(&ring);
+    let member = Requirement {
+        level_sum: Some(LevelSum {
+            group: 1,
+            minimum_total: 5,
+        }),
+        ..named_requirement(ItemId::RingMight)
+    };
     assert_eq!(
         rows,
-        vec![
+        [
+            member,
             Requirement {
-                level_sum: Some(LevelSum {
-                    group: 1,
-                    minimum_total: 5
-                }),
-                ..named_requirement(ItemId::RingMight)
-            };
-            2
+                max_depth: Some(4),
+                ..member
+            }
         ],
-        "counting: no copy floor"
+        "counting keeps the copy floor the switch hides"
     );
     let plain = after(&ring, &[Change::SetCountLevels(false)]);
     let rows = stored(&plain);

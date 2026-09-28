@@ -1088,7 +1088,9 @@ fn set_count(
 /// With a total the whole stack becomes identical optional members sharing
 /// a level-sum label ("up to N items reaching T levels"), each open to any
 /// upgrade; without one it returns to an anchor with plain repeats
-/// ("exactly N of the item"). Only a lone named ring stack of two or more
+/// ("exactly N of the item"). Either way every row keeps its own floor
+/// limit, a placement rather than an item property: the anchor its own, the
+/// copies theirs. Only a lone named ring stack of two or more
 /// counts levels — levels add up across rings alone, and a single member
 /// would dissolve and silently drop its upgrade — but clearing works on any
 /// stale sum a hand-written document left. A new combined-level label is
@@ -1114,7 +1116,7 @@ fn set_total(
         }
         next[item.anchor()].requirement.level_sum = None;
         for &index in &item.extras {
-            next[index].requirement = plain_copy(&anchor, None);
+            next[index].requirement = plain_copy(&anchor, rows[index].requirement.max_depth);
         }
         normalize(&mut next);
         return Step::Rows(next);
@@ -1151,7 +1153,10 @@ fn set_total(
         ..anchor
     };
     for &index in std::iter::once(&item.anchor()).chain(&item.extras) {
-        next[index].requirement = member;
+        next[index].requirement = Requirement {
+            max_depth: rows[index].requirement.max_depth,
+            ..member
+        };
     }
     normalize(&mut next);
     Step::Rows(next)
@@ -1159,8 +1164,9 @@ fn set_total(
 
 /// Sets or clears the floor limit of the stack's hidden copies. The anchor
 /// keeps its own limit: "the +3 one before floor 4, the rest wherever" and
-/// "…the rest before floor 10" are both sayable. A combined-level stack has
-/// identical members and no lone copies to bound.
+/// "…the rest before floor 10" are both sayable. A combined-level stack's
+/// members keep the limits they had when it started counting; its copy
+/// floor is not edited while it counts.
 fn set_copy_depth(rows: &[Row], item: &BoardItem, max_depth: Option<u8>) -> Step {
     if item.total.is_some() || item.extras.is_empty() {
         return Step::Unchanged;
@@ -1578,12 +1584,17 @@ fn reshape(
         return Some(refusal);
     }
     item = item_of(rows)?;
-    let step = if total.is_some() && can_count_levels(rows, &item) {
-        set_total(rows, &item, total, preferred_sum, held)
-    } else {
-        set_copy_depth(rows, &item, copy_depth)
-    };
-    run(rows, step)
+    // The copies take their floor before counting starts, which keeps it.
+    let step = set_copy_depth(rows, &item, copy_depth);
+    if let Some(refusal) = run(rows, step) {
+        return Some(refusal);
+    }
+    item = item_of(rows)?;
+    if total.is_some() && can_count_levels(rows, &item) {
+        let step = set_total(rows, &item, total, preferred_sum, held);
+        return run(rows, step);
+    }
+    None
 }
 
 /// Where a dragged chip was released.

@@ -160,7 +160,7 @@ name of the query format (`"locked_chest"`).
 | `{"type": "remove_item", "key": K}` | Removes the whole entry holding `K`: members and hidden copies. |
 | `{"type": "set_count", "key": K, "count": n}` | How many items the entry asks for, clamped to 1–3. |
 | `{"type": "set_total", "key": K, "total": n \| null}` | Sets or clears the stack's combined level, clamped to 1–`level_capacity`. |
-| `{"type": "toggle_levels", "key": K}` | Turns counting levels on (at `default_total`) or off. |
+| `{"type": "toggle_levels", "key": K}` | Turns counting levels on (at `default_total`) or off. The anchor and every copy keep their own floor limits both ways. |
 | `{"type": "set_copy_depth", "key": K, "max_depth": n \| null}` | Sets or clears the floor limit of the stack's hidden copies; an empty boss floor snaps to the floor below. |
 | `{"type": "save", "key": K \| null, "requirement": ROW_WITHOUT_KEY, "count": n, "total": n \| null, "copy_depth": n \| null}` | Stores a requirement with its stack's shape. `null`, or a key not in the list, appends a new row. The sheet's `save` sends this for you. |
 
@@ -262,7 +262,7 @@ canonical — a cluster of one, repeats a stack would fold, a stack labelled
 | `effect` | `{"label", "effects", "any_enchantment", "curses_only"}` — `any enchantment` (`any glyph` on armor), one effect's name, or `effect: A/B/C`; `effects` in catalog order, the full set for any enchantment. `null` for any effect. |
 | `uncursed` | Cursed items are ruled out (drawn as a check mark). |
 | `details` | The popover's detail line as parts: `within 3 transmutations`, `choose at +3`, the upgrade (`exactly +3`, `+3 or higher`, `any upgrade` — left out while counting levels and on trinkets and artifacts), the effect, `uncursed`, `excluded from Auto resin`, the source (`Locked chest`), `floors 1–9`. |
-| `relations` | The popover's relation lines, each `{"glyph": "or" \| "sum" \| "times", "text"}`: the cluster's other members, `up to 2 — levels add to ≥ 5`, `3 of the same kind — the extra copies: any upgrade, floors 1–4`. |
+| `relations` | The popover's relation lines, each `{"glyph": "or" \| "sum" \| "times", "text"}`: the cluster's other members, `up to 2 — levels add to ≥ 5` (with `; the extra copies: floors 1–20` when the copies' floor limits differ from the anchor's), `3 of the same kind — the extra copies: any upgrade, floors 1–4`. |
 | `description` | The accessibility label: the title, then the details. It leaves out the relation lines and the badges, which the apps draw as nodes of their own with their own words (the cluster's `label`, each badge's `tooltip`); an app whose chip is one accessibility node appends `relations` itself. |
 | `problem` | The row's own first problem, else the first problem between rows blaming it; the anchor also speaks for its hidden copies. |
 | `in_cluster`, `can_detach` | A cluster member, which "On its own" (`detach`) applies to. |
@@ -519,6 +519,7 @@ decided once.
 | Combined level on a blanket | Refused. |
 | A cluster's stack label | Never spread onto trinket, artifact or blanket members. |
 | A group stepped down to ×1 | Drops its stack label, so it uses none of the four and none reaches a saved or shared query. |
+| Counting levels on or off | The anchor and every copy keep their own floor limits, on the board and through the sheet (which saves the copy floor its hidden control holds); the popover names the copies' floors while they differ from the anchor's. |
 | Copy contents | Built from defaults; plain copies keep the melee/thrown narrowing; resin exclusion, blanket, trinket selection and transmutations are never copied. |
 | Key lookup | Visible members only, never hidden copies. |
 | Labels out of range | Moved onto free labels in range by `normalize` and every edit that changes the rows; never merged to fit. |
@@ -560,8 +561,6 @@ for now:
 - Joining a stacked chip onto a stacked cluster of the same category takes
   the chip's stack label for the whole cluster; the cluster's old copies
   lose theirs and become a standalone wildcard chip.
-- Setting a combined level gives every copy the anchor's floor limit, and
-  clearing it removes the copies' limits.
 - Joining a stack that counts levels leaves its other members behind as a
   chip of their own.
 - Joining a stack-labelled cluster member onto a chip of the same category
@@ -592,14 +591,16 @@ These are the core's own choices:
 - The copy floor has no help text; the one Android and iOS drew ("A floor
   limit is where an item lies, not what it is, so the copies keep their
   own.") is gone until the floor toggle carries a caption.
+- The copy floor of a stack counting levels cannot be edited until it
+  stops counting; the sheet keeps it, hidden, and the popover names it.
 
 ## Golden fixtures
 
 `crates/seedfinder-core/tests/fixtures/editor/*.json` pins representative
 request/response pairs for both envelopes: the board tour, the four stack
 encodings, joins (traded, refused), detach and removals, copy floors,
-combined levels, a group stepped down to ×1, saves (new and unchanged),
-problems, key repair, label
+combined levels (their copies' floors kept both ways), a group stepped
+down to ×1, saves (new and unchanged), problems, key repair, label
 compaction and labels moved into range, unreadable rows, the sheet's
 open/change/save flow, an untouched save and one that repairs its row, the
 resin flows (a query with resin and one without, and the resin chip saved

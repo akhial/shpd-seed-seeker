@@ -389,22 +389,26 @@ fn relations(rows: &[Row], item: &BoardItem, index: usize) -> Vec<Relation> {
         });
     }
     let count = u8::try_from(item.count()).unwrap_or(u8::MAX);
+    let depths: BTreeSet<Option<u8>> = item
+        .extras
+        .iter()
+        .map(|&extra| rows[extra].requirement.max_depth)
+        .collect();
+    let floors = match depths.iter().copied().collect::<Vec<_>>()[..] {
+        [Some(depth)] => CopyFloors::Within(depth),
+        [None] => CopyFloors::Any,
+        _ => CopyFloors::Own,
+    };
     if let Some(total) = item.total {
+        // A counting stack's copies keep their own floor limits; the line
+        // names them where the anchor's floor tag would not say them.
+        let anchor_depth = rows[item.anchor()].requirement.max_depth;
+        let copies = (depths.iter().any(|&depth| depth != anchor_depth)).then_some(floors);
         relations.push(Relation {
             glyph: RelationGlyph::Sum,
-            text: level_sum_relation(count, total),
+            text: level_sum_relation(count, total, copies),
         });
     } else if count > 1 {
-        let depths: BTreeSet<Option<u8>> = item
-            .extras
-            .iter()
-            .map(|&extra| rows[extra].requirement.max_depth)
-            .collect();
-        let floors = match depths.into_iter().collect::<Vec<_>>()[..] {
-            [Some(depth)] => CopyFloors::Within(depth),
-            [None] => CopyFloors::Any,
-            _ => CopyFloors::Own,
-        };
         relations.push(Relation {
             glyph: RelationGlyph::Times,
             text: stack_relation(count, floors),

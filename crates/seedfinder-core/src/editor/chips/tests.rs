@@ -522,6 +522,47 @@ fn the_popover_reads_the_stack_and_the_relations_around_it() {
         chip(&board, 1).relations,
         [relation(RelationGlyph::Sum, "up to 3 — levels add to ≥ 5")]
     );
+    // Copies that keep a floor limit of their own while counting say so;
+    // the chip's floor tag is the anchor's alone.
+    let floored = edited(
+        &[
+            with(named(1, ItemId::RingMight), |r| r.max_depth = Some(9)),
+            with(named(2, ItemId::RingMight), |r| r.max_depth = Some(20)),
+        ],
+        &[Edit::ToggleLevels { key: 1 }],
+    );
+    assert_eq!(
+        chip(&view(&floored), 1).relations,
+        [relation(
+            RelationGlyph::Sum,
+            "up to 2 — levels add to ≥ 2; the extra copies: floors 1–20"
+        )]
+    );
+    let open = edited(
+        &[
+            with(named(1, ItemId::RingMight), |r| r.max_depth = Some(9)),
+            named(2, ItemId::RingMight),
+        ],
+        &[Edit::ToggleLevels { key: 1 }],
+    );
+    assert_eq!(
+        chip(&view(&open), 1).relations,
+        [relation(
+            RelationGlyph::Sum,
+            "up to 2 — levels add to ≥ 2; the extra copies: any floor"
+        )]
+    );
+    let same = edited(
+        &[
+            with(named(1, ItemId::RingMight), |r| r.max_depth = Some(9)),
+            with(named(2, ItemId::RingMight), |r| r.max_depth = Some(9)),
+        ],
+        &[Edit::ToggleLevels { key: 1 }],
+    );
+    assert_eq!(
+        chip(&view(&same), 1).relations,
+        [relation(RelationGlyph::Sum, "up to 2 — levels add to ≥ 2")]
+    );
 
     // A cluster member names its peers.
     let joined = edited(

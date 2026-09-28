@@ -119,8 +119,9 @@ pub fn copy_depth<R: AsRef<Requirement>>(rows: &[R], item: &BoardItem) -> Option
         .and_then(|&index| rows[index].as_ref().max_depth)
 }
 
-/// Whether the copies' floor limit is editable: there are copies, and they
-/// are not identical combined-level members bound by the anchor's own limit.
+/// Whether the copies' floor limit is editable: there are copies, and the
+/// stack is not counting levels — its members keep the limits they had
+/// when it started, through to when it stops.
 #[must_use]
 pub fn can_set_copy_depth(item: &BoardItem) -> bool {
     item.count() > 1 && item.total.is_none()

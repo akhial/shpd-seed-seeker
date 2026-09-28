@@ -438,10 +438,16 @@ pub fn total_tooltip(total: u8) -> String {
 }
 
 /// The popover line of a stack counting levels: `up to 3 — levels add to
-/// ≥ 5`.
+/// ≥ 5`. `copies` are the copies' floor limits where they differ from the
+/// anchor's, which the chip's own floor tag shows: `up to 2 — levels add to
+/// ≥ 5; the extra copies: floors 1–20`.
 #[must_use]
-pub fn level_sum_relation(count: u8, total: u8) -> String {
-    format!("up to {count} — levels add to ≥ {total}")
+pub fn level_sum_relation(count: u8, total: u8, copies: Option<CopyFloors>) -> String {
+    let line = format!("up to {count} — levels add to ≥ {total}");
+    match copies {
+        Some(floors) => format!("{line}; the extra copies: {}", copy_floors(floors)),
+        None => line,
+    }
 }
 
 /// The floor limits a stack's hidden copies share, as its popover line
@@ -461,12 +467,18 @@ pub enum CopyFloors {
 /// describe the anchor alone, so the line says what the copies ask.
 #[must_use]
 pub fn stack_relation(count: u8, floors: CopyFloors) -> String {
-    let floors = match floors {
+    format!(
+        "{count} of the same kind — the extra copies: any upgrade, {}",
+        copy_floors(floors)
+    )
+}
+
+fn copy_floors(floors: CopyFloors) -> String {
+    match floors {
         CopyFloors::Any => "any floor".to_owned(),
         CopyFloors::Within(depth) => floor_detail(depth),
         CopyFloors::Own => "own floor limits".to_owned(),
-    };
-    format!("{count} of the same kind — the extra copies: any upgrade, {floors}")
+    }
 }
 
 #[cfg(test)]

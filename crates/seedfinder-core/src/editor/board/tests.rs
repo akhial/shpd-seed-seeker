@@ -1029,6 +1029,39 @@ fn a_blanket_refuses_a_total_and_never_stacks() {
     assert!(!run(&blanket, &[Edit::SetCount { key: 1, count: 2 }]).changed);
 }
 
+#[test]
+fn counting_levels_keeps_the_copies_own_floor_limit_both_ways() {
+    let rows = [
+        floor(named(1, ItemId::RingEnergy), 9),
+        floor(named(2, ItemId::RingEnergy), 20),
+    ];
+    let counting = edited(&rows, &[Edit::ToggleLevels { key: 1 }]);
+    assert_eq!(
+        counting,
+        [
+            floor(sum(named(1, ItemId::RingEnergy), 1, 2), 9),
+            floor(sum(named(2, ItemId::RingEnergy), 1, 2), 20),
+        ]
+    );
+    assert_eq!(copy_depth(&counting, &entry(&counting, 1)), Some(20));
+    let changed = edited(
+        &counting,
+        &[Edit::SetTotal {
+            key: 1,
+            total: Some(5),
+        }],
+    );
+    assert_eq!(changed[1].requirement.max_depth, Some(20));
+    assert_eq!(edited(&counting, &[Edit::ToggleLevels { key: 1 }]), rows);
+    // Copies without a limit stay without one while the anchor keeps its.
+    let open = [rows[0], named(2, ItemId::RingEnergy)];
+    let round = edited(
+        &open,
+        &[Edit::ToggleLevels { key: 1 }, Edit::ToggleLevels { key: 1 }],
+    );
+    assert_eq!(round, open);
+}
+
 // --- the editor round trip ----------------------------------------------
 
 #[test]

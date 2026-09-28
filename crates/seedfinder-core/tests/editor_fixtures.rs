@@ -262,6 +262,32 @@ fn board_fixtures(fixtures: &mut Fixtures) {
         }),
     );
     fixtures.add(
+        "board-toggle-levels-copy-floor",
+        "Counting levels switched on for a Ring of Energy within floor 9 whose copy lies within floor 20: each keeps its own floor limit.",
+        Board,
+        &json!({
+            "rows": [
+                {"key": 1, "kind": "ring", "item": "ring_energy", "max_depth": 9},
+                {"key": 2, "kind": "ring", "item": "ring_energy", "max_depth": 20},
+            ],
+            "edits": [{"type": "toggle_levels", "key": 1}],
+        }),
+    );
+    fixtures.add(
+        "board-toggle-levels-off-copy-floor",
+        "Counting levels switched off again: the copy is a plain repeat that keeps its floor 20.",
+        Board,
+        &json!({
+            "rows": [
+                {"key": 1, "kind": "ring", "item": "ring_energy", "max_depth": 9,
+                 "level_sum": {"group": 1, "at_least": 2}},
+                {"key": 2, "kind": "ring", "item": "ring_energy", "max_depth": 20,
+                 "level_sum": {"group": 1, "at_least": 2}},
+            ],
+            "edits": [{"type": "toggle_levels", "key": 1}],
+        }),
+    );
+    fixtures.add(
         "board-cluster-count-one",
         "(Frost or Disintegration) ×2 stepped down to ×1: the group drops its stack label.",
         Board,
