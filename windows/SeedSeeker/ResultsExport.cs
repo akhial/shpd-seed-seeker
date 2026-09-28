@@ -160,6 +160,9 @@ public static class ResultsExport
     /// <summary>The document's name for <paramref name="source"/>, or null for a value this build does not know.</summary>
     internal static string? SourceName(ScoutItemSource source) => (int)source is var index and >= 0 && index < SourceNames.Length ? SourceNames[index] : null;
 
+    /// <summary>The source a document or the editor names, or null for any source or a name this build does not know.</summary>
+    internal static ScoutItemSource? SourceNamed(string? name) => Array.IndexOf(SourceNames, name) is var index and >= 0 ? (ScoutItemSource)index : null;
+
     /// <summary>The requirement object a document writes, without the editor's row fields.</summary>
     internal static JsonObject EncodeRequirement(ItemRequirement requirement)
     {

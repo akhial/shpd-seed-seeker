@@ -2,15 +2,17 @@ using System.Text.Json.Nodes;
 
 namespace SeedSeeker;
 
-// The requirement board as the shared core's editor answers it
-// (crates/seedfinder-core/src/editor, reached through
-// seedfinder_requirement_board; the format is docs/requirement-editor.md).
-// Every rule of the board lives there — how the flat list folds into chips,
-// clusters and stacks, what a drop, a badge or a menu writes back, what each
-// chip and badge says, and what is wrong with the list — so this file only
-// types the envelope for the window, and the window only draws it. Like
-// Models.cs it must stay free of Windows App SDK types: SeedSeeker.Tests
-// links it to run on any host.
+// The requirement board and its sheet as the shared core's editor answers
+// them (crates/seedfinder-core/src/editor, reached through
+// seedfinder_requirement_board and seedfinder_requirement_editor; the format
+// is docs/requirement-editor.md). Every rule of the board lives there — how
+// the flat list folds into chips, clusters and stacks, what a drop, a badge
+// or a menu writes back, what each chip and badge says, and what is wrong
+// with the list — and so does every rule of the sheet: what each control
+// offers, shows and says, what a change resets, and what a save writes. This
+// file only types the envelopes for the window, and the window only draws
+// them. Like Models.cs it must stay free of Windows App SDK types:
+// SeedSeeker.Tests links it to run on any host.
 
 /// <summary>A request the shared requirement editor could not read, with the row at fault when one was.</summary>
 public sealed class RequirementEditorException(string message, long? key = null) : Exception(message)
@@ -311,35 +313,40 @@ public sealed class BoardEditor
     /// <summary>A board request: the rows, the edits to run on them, and the query's resin for the resin chip.</summary>
     internal static string Request(IEnumerable<ItemRequirement> rows, QuerySettings query, IReadOnlyCollection<BoardEdit> edits)
     {
-        var request = new JsonObject { ["rows"] = new JsonArray([.. rows.Select(row => (JsonNode)ResultsExport.EncodeRow(row))]) };
+        var request = new JsonObject { ["rows"] = Rows(rows) };
         if (edits.Count > 0) request["edits"] = new JsonArray([.. edits.Select(edit => edit.Json)]);
-        if (query.NeedsResin)
-        {
-            var filter = query.ArcaneResinFilter;
-            // An amount out of range is the query's own problem to report
-            // (QueryRelationships.Validate); the chip only has to draw.
-            request["resin"] = new JsonObject
-            {
-                ["amount"] = query.ArcaneResinAuto ? (JsonNode)"auto" : Math.Clamp(query.ArcaneResin, 1, ushort.MaxValue),
-                ["filter"] = new JsonObject
-                {
-                    ["uncursed"] = filter.Uncursed,
-                    ["max_depth"] = filter.MaximumDepth is int depth and >= 0 and <= byte.MaxValue ? depth : null,
-                    ["source"] = filter.Source is ScoutItemSource source ? ResultsExport.SourceName(source) : null,
-                    ["include_mage_wand"] = filter.IncludeMageWand,
-                },
-            };
-        }
+        if (ResinRequest(query) is { } resin) request["resin"] = resin;
         return request.ToJsonString();
+    }
+
+    /// <summary>The rows of a request, both sections in list order.</summary>
+    internal static JsonArray Rows(IEnumerable<ItemRequirement> rows) => new([.. rows.Select(row => (JsonNode)ResultsExport.EncodeRow(row))]);
+
+    /// <summary>The query's Arcane Resin condition as the editor reads it (RESIN), or null when the query asks for none.</summary>
+    internal static JsonObject? ResinRequest(QuerySettings query)
+    {
+        if (!query.NeedsResin) return null;
+        var filter = query.ArcaneResinFilter;
+        // An amount out of range is the query's own problem to report
+        // (QueryRelationships.Validate); the chip only has to draw.
+        return new JsonObject
+        {
+            ["amount"] = query.ArcaneResinAuto ? (JsonNode)"auto" : Math.Clamp(query.ArcaneResin, 1, ushort.MaxValue),
+            ["filter"] = new JsonObject
+            {
+                ["uncursed"] = filter.Uncursed,
+                ["max_depth"] = filter.MaximumDepth is int depth and >= 0 and <= byte.MaxValue ? depth : null,
+                ["source"] = filter.Source is ScoutItemSource source ? ResultsExport.SourceName(source) : null,
+                ["include_mage_wand"] = filter.IncludeMageWand,
+            },
+        };
     }
 
     /// <summary>Reads a board answer, or throws the editor's own reason when it could not read the request.</summary>
     /// <exception cref="RequirementEditorException"/>
     internal static BoardAnswer Answer(string text)
     {
-        if (JsonNode.Parse(text) is not JsonObject answer)
-            throw new RequirementEditorException("The requirement editor's answer could not be read.");
-        if (answer["error"] is JsonNode error) throw new RequirementEditorException((string?)error ?? "", (long?)answer["key"]);
+        var answer = Parse(text);
         var changed = (bool)answer["changed"]!;
         var counts = answer["counts"]!;
         var view = new BoardView(
@@ -350,9 +357,7 @@ public sealed class BoardEditor
             answer["resin"] is JsonObject resin ? Resin(resin) : null);
         return new(view,
             changed ? [.. answer["rows"]!.AsArray().Select(row => ResultsExport.DecodeRow(row!.AsObject()))] : null,
-            (long)answer["next_key"]!, changed,
-            [.. answer["rekeyed"]!.AsArray().Select(pair => ((long)pair![0]!, (long)pair[1]!))],
-            (long?)answer["focus"],
+            (long)answer["next_key"]!, changed, Rekeyed(answer["rekeyed"]), (long?)answer["focus"],
             answer["refused"] is JsonObject refused ? new((string)refused["reason"]!, (string)refused["message"]!) : null);
     }
 
@@ -370,7 +375,8 @@ public sealed class BoardEditor
             [.. entry["chips"]!.AsArray().Select(chip => Chip(chip!))], (string?)entry["problem"]);
     }
 
-    private static BoardChip Chip(JsonNode chip) => new(
+    /// <summary>One CHIP of an answer: a visible row, or the chip a sheet would save.</summary>
+    internal static BoardChip Chip(JsonNode chip) => new(
         (long)chip["key"]!, (string)chip["name"]!, (string)chip["title"]!, (string?)chip["item"],
         ResultsExport.KindNamed((string?)chip["kind"]), Tags(chip["tags"]), Tags(chip["trailing_tags"]),
         chip["effect"] is JsonObject effect
@@ -397,5 +403,387 @@ public sealed class BoardEditor
 
     private static IReadOnlyList<long> Keys(JsonNode? keys) => [.. (keys as JsonArray ?? []).Select(key => (long)key!)];
 
-    private static IReadOnlyList<string> Strings(JsonNode? values) => [.. (values as JsonArray ?? []).Select(value => (string)value!)];
+    internal static IReadOnlyList<string> Strings(JsonNode? values) => [.. (values as JsonArray ?? []).Select(value => (string)value!)];
+
+    /// <summary>The keys the editor repaired, old to new.</summary>
+    internal static IReadOnlyList<(long Old, long New)> Rekeyed(JsonNode? pairs) =>
+        [.. (pairs as JsonArray ?? []).Select(pair => ((long)pair![0]!, (long)pair[1]!))];
+
+    /// <summary>Reads an answer's JSON, or throws the editor's own reason when it could not read the request.</summary>
+    /// <exception cref="RequirementEditorException"/>
+    internal static JsonObject Parse(string text)
+    {
+        if (JsonNode.Parse(text) is not JsonObject answer)
+            throw new RequirementEditorException("The requirement editor's answer could not be read.");
+        if (answer["error"] is JsonNode error) throw new RequirementEditorException((string?)error ?? "", (long?)answer["key"]);
+        return answer;
+    }
+}
+
+/// <summary>
+/// One choice of a sheet picker: the value a change sends back, its words,
+/// the heading it sits under (<c>Tier 2</c> in the weapon list), and whether
+/// it is offered only because the draft already names it — an imported tier-1
+/// item — so it shows and saves back unchanged.
+/// </summary>
+public sealed record SheetOption<T>(T Value, string Label, string? Group = null, bool Hidden = false);
+
+/// <summary>A picker: whether the sheet shows it, the chosen value, and every choice in order.</summary>
+public sealed record SheetChoice<T>(bool Visible, T Value, IReadOnlyList<SheetOption<T>> Options)
+{
+    /// <summary>The chosen option's position, or -1 when no option holds the value.</summary>
+    public int Selected => IndexOf(Options, Value);
+
+    /// <summary>Whether <paramref name="other"/> lists the same choices, so a picker drawn for it can keep its items.</summary>
+    public bool SameOptions(SheetChoice<T>? other) => other is not null && other.Options.SequenceEqual(Options);
+
+    internal static int IndexOf(IReadOnlyList<SheetOption<T>> options, T value)
+    {
+        for (var index = 0; index < options.Count; index++)
+            if (EqualityComparer<T>.Default.Equals(options[index].Value, value)) return index;
+        return -1;
+    }
+}
+
+/// <summary>
+/// A filter with a mode and a value — the tier, the upgrade: the modes its
+/// picker offers, and its value slider's range and words (<c>Tier 3 or
+/// higher</c>, <c>+2</c>). The value is always within Min…Max, even while the
+/// mode is "any" and the slider hidden.
+/// </summary>
+public sealed record SheetModeRange(bool Visible, string Mode, IReadOnlyList<SheetOption<string>> Modes, int Value, int Min, int Max, string ValueLabel)
+{
+    /// <summary>The mode picker.</summary>
+    public SheetChoice<string> Picker => new(Visible, Mode, Modes);
+
+    /// <summary>Whether the value slider shows: the filter shows and names a value.</summary>
+    public bool ShowsValue => Visible && Mode != "any";
+}
+
+/// <summary>A check box.</summary>
+public sealed record SheetToggle(bool Visible, bool Value, string Label);
+
+/// <summary>
+/// A switch with a floor slider — the item's floor limit, the copies', the
+/// resin donors'. The slider runs over <see cref="Options"/>, which skip the
+/// empty boss floors, and the value is always one of them.
+/// </summary>
+public sealed record SheetFloor(bool Visible, bool Enabled, int Value, IReadOnlyList<SheetOption<int>> Options, string Label, string ValueLabel)
+{
+    /// <summary>The value's position among the options: where the slider sits.</summary>
+    public int Selected => SheetChoice<int>.IndexOf(Options, Value);
+
+    /// <summary>The floor at slider position <paramref name="position"/>, the nearest option's.</summary>
+    public int At(double position) => Options[Math.Clamp((int)Math.Round(position), 0, Options.Count - 1)].Value;
+
+    public bool ShowsValue => Visible && Enabled;
+}
+
+/// <summary>A switch with a stepper — the transmutations, the combined level — whose value is always within Min…Max.</summary>
+public sealed record SheetStepper(bool Visible, bool Enabled, int Value, int Min, int Max, string Label, string? Caption, string ValueLabel)
+{
+    public bool ShowsValue => Visible && Enabled;
+}
+
+/// <summary>One effect of the "Specific…" grid: an enchantment (a glyph, on armor) or a curse.</summary>
+public sealed record SheetEffectChoice(string Value, string Label, bool Curse, bool Selected);
+
+/// <summary>
+/// The effect filter of a weapon or armor: its mode, and the grid of effects
+/// "Specific…" ticks from — curses listed only while the item may be cursed —
+/// under their headings, with what the ticked ones mean.
+/// </summary>
+public sealed record SheetEffect(bool Visible, string Mode, IReadOnlyList<SheetOption<string>> Modes,
+    IReadOnlyList<SheetEffectChoice> Choices, IReadOnlyList<SheetOption<string>> Groups, string Caption)
+{
+    /// <summary>The mode picker: Any, Any enchantment (Any glyph), Specific….</summary>
+    public SheetChoice<string> Picker => new(Visible, Mode, Modes);
+
+    /// <summary>Whether the grid shows: the filter shows and ticks specific effects.</summary>
+    public bool ShowsChoices => Visible && Mode == "specific";
+
+    /// <summary>The heading over the enchantments (<c>Glyphs</c> on armor) or the curses; null when the grid lists none.</summary>
+    public string? Heading(bool curse) => Groups.FirstOrDefault(group => group.Value == (curse ? "curse" : "enchantment"))?.Label;
+
+    /// <summary>Whether <paramref name="other"/> lists the same effects, ticked or not, so a grid drawn for it can keep its boxes.</summary>
+    public bool SameChoices(SheetEffect? other) => other is not null
+        && other.Choices.Select(choice => (choice.Value, choice.Label, choice.Curse)).SequenceEqual(Choices.Select(choice => (choice.Value, choice.Label, choice.Curse)));
+}
+
+/// <summary>The stack section: how many items the chip asks for, the copies' floor limit, and the combined level.</summary>
+public sealed record SheetStack(bool Visible, int Count, int Min, int Max, string ValueLabel, SheetFloor CopyDepth, SheetStepper CountLevels);
+
+/// <summary>
+/// The Arcane Resin section, shown while the resin is the picked item: the
+/// amount as typed (null for an empty field) or Auto, and the Mage's wand
+/// credit. The donors' uncursed, source and floor filters are the sheet's own
+/// controls meanwhile.
+/// </summary>
+public sealed record SheetResin(bool Visible, bool Auto, double? Amount, bool IncludeMageWand);
+
+/// <summary>What a sheet was opened on: a new chip, a row on the board, or the query's Arcane Resin.</summary>
+public enum SheetOrigin { New, Row, Resin }
+
+/// <summary>
+/// Everything a requirement sheet shows, as the editor answers it (FORM):
+/// every control's visibility, value, range, options and words, the chip a
+/// save would produce, and why it cannot save yet. The dialog's own chrome —
+/// its title and buttons — follows <see cref="IsNew"/>, <see cref="Origin"/>,
+/// <see cref="Blanket"/> and <see cref="ResinPicked"/>.
+/// </summary>
+public sealed record SheetForm
+{
+    /// <summary>The sheet adds a chip rather than editing one.</summary>
+    public required bool IsNew { get; init; }
+    public required SheetOrigin Origin { get; init; }
+    /// <summary>The row the sheet was opened on, for <see cref="SheetOrigin.Row"/>.</summary>
+    public required long? OriginKey { get; init; }
+    public required bool Blanket { get; init; }
+    public required bool InCluster { get; init; }
+    /// <summary>Arcane Resin is the picked item: the sheet edits the query's resin.</summary>
+    public required bool ResinPicked { get; init; }
+    /// <summary>What the sheet is about: the requirement's title, or <c>Arcane Resin</c>.</summary>
+    public required string Title { get; init; }
+    /// <summary>The chip a save would put on the board, or null while there are errors or the resin is picked.</summary>
+    public required BoardChip? Preview { get; init; }
+    /// <summary>The six families.</summary>
+    public required SheetChoice<string> Category { get; init; }
+    /// <summary>The flat list of kinds: the families, with melee and thrown weapons among them.</summary>
+    public required SheetChoice<string> Kind { get; init; }
+    /// <summary>Any, melee or thrown, on weapons.</summary>
+    public required SheetChoice<string> WeaponType { get; init; }
+    /// <summary>The wildcard (null) unless the family always names one, Arcane Resin when offered, then the items.</summary>
+    public required SheetChoice<string?> Item { get; init; }
+    public required SheetModeRange Tier { get; init; }
+    public required SheetModeRange Upgrade { get; init; }
+    public required SheetEffect Effect { get; init; }
+    public required SheetToggle Uncursed { get; init; }
+    /// <summary>Any source (null), then every source.</summary>
+    public required SheetChoice<string?> Source { get; init; }
+    public required SheetFloor FloorLimit { get; init; }
+    public required SheetToggle ExcludeResin { get; init; }
+    public required SheetStepper Transmutations { get; init; }
+    public required SheetToggle SelectTrinket { get; init; }
+    public required SheetStack Stack { get; init; }
+    public required SheetResin Resin { get; init; }
+    /// <summary>Why the draft cannot be saved, in the order to show them.</summary>
+    public required IReadOnlyList<string> Errors { get; init; }
+    public required bool CanSave { get; init; }
+}
+
+/// <summary>One control the user moved (the CHANGE of docs/requirement-editor.md); its value is the form's own.</summary>
+public sealed class SheetChange
+{
+    private readonly string type;
+    private readonly JsonNode? value;
+    private SheetChange(string type, JsonNode? value) { this.type = type; this.value = value; }
+
+    /// <summary>The change as its request writes it; a fresh node each time.</summary>
+    internal JsonObject Json => new() { ["type"] = type, ["value"] = value?.DeepClone() };
+
+    public override string ToString() => Json.ToJsonString();
+
+    public static SheetChange SetCategory(string family) => new("set_category", family);
+    public static SheetChange SetWeaponType(string type) => new("set_weapon_type", type);
+    /// <summary>The flat kind picker: a family, <c>melee_weapon</c> or <c>thrown_weapon</c>.</summary>
+    public static SheetChange SetKind(string kind) => new("set_kind", kind);
+    /// <summary>An item's id, <c>arcane_resin</c>, or null for the wildcard.</summary>
+    public static SheetChange SetItem(string? item) => new("set_item", item);
+    public static SheetChange SetTierMode(string mode) => new("set_tier_mode", mode);
+    public static SheetChange SetTier(int tier) => new("set_tier", Byte(tier));
+    public static SheetChange SetUpgradeMode(string mode) => new("set_upgrade_mode", mode);
+    public static SheetChange SetUpgrade(int upgrade) => new("set_upgrade", Byte(upgrade));
+    public static SheetChange SetEffectMode(string mode) => new("set_effect_mode", mode);
+    /// <summary>Ticks or unticks one effect of the "Specific…" grid.</summary>
+    public static SheetChange ToggleEffect(string effect) => new("toggle_effect", effect);
+    public static SheetChange SetUncursed(bool uncursed) => new("set_uncursed", uncursed);
+    /// <summary>A source's name, or null for any source.</summary>
+    public static SheetChange SetSource(string? source) => new("set_source", source);
+    public static SheetChange SetFloorLimitEnabled(bool enabled) => new("set_floor_limit_enabled", enabled);
+    public static SheetChange SetFloorLimit(int floor) => new("set_floor_limit", Byte(floor));
+    public static SheetChange SetExcludeResin(bool exclude) => new("set_exclude_resin", exclude);
+    public static SheetChange SetTransmutationsEnabled(bool enabled) => new("set_transmutations_enabled", enabled);
+    public static SheetChange SetTransmutations(int count) => new("set_transmutations", Byte(count));
+    public static SheetChange SetSelectTrinket(bool select) => new("set_select_trinket", select);
+    public static SheetChange SetCount(int count) => new("set_count", Byte(count));
+    public static SheetChange SetCopyDepthEnabled(bool enabled) => new("set_copy_depth_enabled", enabled);
+    public static SheetChange SetCopyDepth(int floor) => new("set_copy_depth", Byte(floor));
+    public static SheetChange SetCountLevels(bool enabled) => new("set_count_levels", enabled);
+    public static SheetChange SetTotal(int total) => new("set_total", Byte(total));
+    public static SheetChange SetResinAuto(bool auto) => new("set_resin_auto", auto);
+    /// <summary>The amount as typed; an empty or unreadable field (NaN) is no amount.</summary>
+    public static SheetChange SetResinAmount(double amount) => new("set_resin_amount", double.IsFinite(amount) ? amount : null);
+    public static SheetChange SetIncludeMageWand(bool include) => new("set_include_mage_wand", include);
+
+    /// <summary>The editor reads these values as bytes; it clamps them to their own ranges.</summary>
+    private static int Byte(int value) => Math.Clamp(value, 0, byte.MaxValue);
+}
+
+/// <summary>The query's Arcane Resin condition as a sheet saves it: Auto, or at least <see cref="Amount"/>.</summary>
+public sealed record ResinCondition(bool Auto, int Amount, ArcaneResinFilter Filter);
+
+/// <summary>
+/// What a sheet's save did.
+/// </summary>
+/// <param name="Rows">The list after the save, only when it changed: an unchanged
+/// chip saved as it was is never written back.</param>
+/// <param name="Rekeyed">Keys the editor repaired, old to new.</param>
+/// <param name="Focus">The row of the chip the save landed in, to return to; null when the sheet saved the resin.</param>
+/// <param name="Resin">The query's new resin condition, when Arcane Resin was the picked item.</param>
+/// <param name="ClearResin">The resin chip was saved as a requirement: the query drops its resin.</param>
+public sealed record SheetSave(IReadOnlyList<ItemRequirement>? Rows, long NextKey, IReadOnlyList<(long Old, long New)> Rekeyed,
+    long? Focus, ResinCondition? Resin, bool ClearResin)
+{
+    /// <summary>
+    /// Adopts the save into <paramref name="query"/>: its rows when they
+    /// changed, and what becomes of the query's resin. Whether anything
+    /// changed, so an unchanged save is neither redrawn nor written.
+    /// </summary>
+    public bool ApplyTo(QuerySettings query)
+    {
+        var changed = false;
+        if (Rows is { } rows) { query.Requirements = new(rows); changed = true; }
+        var (auto, amount, filter) = ClearResin ? (false, 0, new ArcaneResinFilter())
+            : Resin is { } resin ? (resin.Auto, resin.Auto ? 0 : resin.Amount, resin.Filter)
+            : (query.ArcaneResinAuto, query.ArcaneResin, query.ArcaneResinFilter);
+        if (auto != query.ArcaneResinAuto || amount != query.ArcaneResin || filter != query.ArcaneResinFilter)
+        {
+            query.ArcaneResinAuto = auto; query.ArcaneResin = amount; query.ArcaneResinFilter = filter;
+            changed = true;
+        }
+        return changed;
+    }
+}
+
+/// <summary>
+/// One open requirement sheet: the draft the editor holds between requests —
+/// kept as the opaque string it answered and sent back untouched — and the
+/// form it last answered for it. A sheet opens on a chip, a new chip or the
+/// query's Arcane Resin, takes one change per control the user moves, and
+/// saves onto the list as it stands.
+/// </summary>
+public sealed class RequirementSheet
+{
+    private string draft;
+
+    private RequirementSheet(JsonObject answer) => (draft, Form) = Read(answer);
+
+    /// <summary>What the sheet shows now.</summary>
+    public SheetForm Form { get; private set; }
+
+    /// <summary>
+    /// Opens a sheet on <paramref name="query"/>'s requirements: on the
+    /// visible row <paramref name="key"/>, or on a new chip of the blanket or
+    /// ordinary section when it is null; with <paramref name="openResin"/>, on
+    /// the query's Arcane Resin. The resin section starts from the query's
+    /// resin, and <paramref name="offerResin"/> offers Arcane Resin among the
+    /// wands of an ordinary sheet.
+    /// </summary>
+    /// <exception cref="RequirementEditorException">The row cannot be read, so it has no sheet.</exception>
+    public static RequirementSheet Open(QuerySettings query, long? key, bool blanket = false, bool offerResin = false, bool openResin = false) =>
+        new(Ask(new JsonObject
+        {
+            ["op"] = "open", ["rows"] = BoardEditor.Rows(query.Requirements), ["key"] = key is > 0 ? key : null,
+            ["blanket"] = blanket, ["resin"] = BoardEditor.ResinRequest(query), ["offer_resin"] = offerResin, ["open_resin"] = openResin,
+        }));
+
+    /// <summary>Applies one control the user moved; a change to a control the form hides changes nothing.</summary>
+    /// <exception cref="RequirementEditorException">The editor could not read the change.</exception>
+    public void Change(SheetChange change) =>
+        (draft, Form) = Read(Ask(new JsonObject { ["op"] = "change", ["draft"] = draft, ["change"] = change.Json }));
+
+    /// <summary>
+    /// Saves the draft onto <paramref name="query"/>'s requirements as they
+    /// stand, or refuses it: null, with <see cref="Form"/>'s errors saying why.
+    /// </summary>
+    /// <exception cref="RequirementEditorException">The editor could not read the rows.</exception>
+    public SheetSave? Save(QuerySettings query)
+    {
+        var answer = Ask(new JsonObject { ["op"] = "save", ["draft"] = draft, ["rows"] = BoardEditor.Rows(query.Requirements) });
+        if (answer["saved"] is not JsonObject saved)
+        {
+            (draft, Form) = Read(answer);
+            return null;
+        }
+        var resin = saved["resin"] as JsonObject;
+        return new(
+            (bool)saved["changed"]! ? [.. saved["rows"]!.AsArray().Select(row => ResultsExport.DecodeRow(row!.AsObject()))] : null,
+            (long)saved["next_key"]!, BoardEditor.Rekeyed(saved["rekeyed"]), (long?)saved["focus"],
+            resin?["set"] is JsonObject set ? Resin(set) : null, (bool?)resin?["clear"] ?? false);
+    }
+
+    private static JsonObject Ask(JsonObject request) => BoardEditor.Parse(NativeEngine.RequirementEditor(request.ToJsonString()));
+
+    private static (string Draft, SheetForm Form) Read(JsonObject answer) => ((string)answer["draft"]!, Sheet(answer["form"]!));
+
+    /// <summary>Reads a FORM.</summary>
+    internal static SheetForm Sheet(JsonNode form)
+    {
+        var origin = form["origin"]!;
+        var effect = form["effect"]!;
+        var stack = form["stack"]!;
+        var resin = form["resin"]!;
+        return new()
+        {
+            IsNew = (string?)form["mode"] == "new",
+            Origin = (string?)origin["type"] switch { "row" => SheetOrigin.Row, "resin" => SheetOrigin.Resin, _ => SheetOrigin.New },
+            OriginKey = (long?)origin["key"],
+            Blanket = (bool)form["blanket"]!,
+            InCluster = (bool)form["in_cluster"]!,
+            ResinPicked = (bool)form["resin_picked"]!,
+            Title = (string)form["title"]!,
+            Preview = form["preview"] is JsonObject preview ? BoardEditor.Chip(preview) : null,
+            Category = Choice(form["category"]!, Word),
+            Kind = Choice(form["kind"]!, Word),
+            WeaponType = Choice(form["weapon_type"]!, Word),
+            Item = Choice(form["item"]!, value => (string?)value),
+            Tier = ModeRange(form["tier"]!),
+            Upgrade = ModeRange(form["upgrade"]!),
+            Effect = new((bool)effect["visible"]!, (string)effect["mode"]!, Options(effect["modes"], Word),
+                [.. effect["choices"]!.AsArray().Select(choice => new SheetEffectChoice((string)choice!["value"]!, (string)choice["label"]!,
+                    (string?)choice["group"] == "curse", (bool)choice["selected"]!))],
+                Options(effect["groups"], Word), (string)effect["caption"]!),
+            Uncursed = Toggle(form["uncursed"]!),
+            Source = Choice(form["source"]!, value => (string?)value),
+            FloorLimit = Floor(form["floor_limit"]!),
+            ExcludeResin = Toggle(form["exclude_resin"]!),
+            Transmutations = Stepper(form["transmutations"]!),
+            SelectTrinket = Toggle(form["select_trinket"]!),
+            Stack = new((bool)stack["visible"]!, (int)stack["count"]!, (int)stack["min"]!, (int)stack["max"]!, (string)stack["value_label"]!,
+                Floor(stack["copy_depth"]!), Stepper(stack["count_levels"]!)),
+            Resin = new((bool)resin["visible"]!, (bool)resin["auto"]!, (double?)resin["amount"], (bool)resin["include_mage_wand"]!),
+            Errors = BoardEditor.Strings(form["errors"]),
+            CanSave = (bool)form["can_save"]!,
+        };
+    }
+
+    private static string Word(JsonNode? value) => (string)value!;
+
+    private static SheetChoice<T> Choice<T>(JsonNode control, Func<JsonNode?, T> value) =>
+        new((bool)control["visible"]!, value(control["value"]), Options(control["options"], value));
+
+    private static IReadOnlyList<SheetOption<T>> Options<T>(JsonNode? options, Func<JsonNode?, T> value) =>
+        [.. (options as JsonArray ?? []).Select(option => new SheetOption<T>(value(option!["value"]), (string)option["label"]!,
+            (string?)option["group"], (bool?)option["hidden"] ?? false))];
+
+    private static SheetModeRange ModeRange(JsonNode control) => new((bool)control["visible"]!, (string)control["mode"]!,
+        Options(control["modes"], Word), (int)control["value"]!, (int)control["min"]!, (int)control["max"]!, (string)control["value_label"]!);
+
+    private static SheetToggle Toggle(JsonNode control) => new((bool)control["visible"]!, (bool)control["value"]!, (string)control["label"]!);
+
+    private static SheetFloor Floor(JsonNode control) => new((bool)control["visible"]!, (bool)control["enabled"]!, (int)control["value"]!,
+        Options(control["options"], value => (int)value!), (string)control["label"]!, (string)control["value_label"]!);
+
+    private static SheetStepper Stepper(JsonNode control) => new((bool)control["visible"]!, (bool)control["enabled"]!, (int)control["value"]!,
+        (int)control["min"]!, (int)control["max"]!, (string)control["label"]!, (string?)control["caption"], (string)control["value_label"]!);
+
+    /// <summary>A RESIN the editor saved.</summary>
+    private static ResinCondition Resin(JsonObject resin)
+    {
+        var filter = resin["filter"] as JsonObject ?? new JsonObject();
+        var auto = resin["amount"] is JsonValue amount && amount.TryGetValue(out string? word) && word == "auto";
+        return new(auto, auto ? 0 : (int)resin["amount"]!, new ArcaneResinFilter(
+            (bool?)filter["uncursed"] ?? true, (int?)filter["max_depth"], ResultsExport.SourceNamed((string?)filter["source"]),
+            (bool?)filter["include_mage_wand"] ?? false));
+    }
 }
