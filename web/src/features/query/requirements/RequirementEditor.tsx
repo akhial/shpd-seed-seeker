@@ -4,6 +4,7 @@ import type {
   EditorFloorToggle,
   EditorOption,
   EditorSheet,
+  EditorToggle,
   ItemSource,
   TierMode,
   UpgradeMode,
@@ -12,20 +13,22 @@ import { Field, Segmented, SliderRow, Sprite, Stepper } from "../../../shared/ui
 import { requirementArt } from "../../../shared/sprites/requirement-art";
 
 // The sheet draws the shared core's form (docs/requirement-editor.md): which
-// controls show, what they offer, their ranges, words and errors all come
-// from it, and every control the user moves goes back as a change. The
-// dialog's own chrome — titles, section headings, button labels — is the
-// app's.
+// controls show, what they offer, their ranges, labels, help texts and errors
+// all come from it, and every control the user moves goes back as a change.
+// The dialog's own chrome — titles, the headings above pickers and mode
+// pickers, slider names, button labels — is the app's.
 
-/** What the tier slider is called under each bounded mode. */
-const TIER_SLIDER: Record<Exclude<TierMode, "any">, string> = {
+/** What the tier slider is called in each mode; the core shows it only in a bounded one. */
+const TIER_SLIDER: Record<TierMode, string> = {
+  any: "Tier",
   exact: "Exact tier",
   at_least: "Minimum tier",
   at_most: "Maximum tier",
 };
 
-/** What the upgrade slider is called under each bounded mode. */
-const UPGRADE_SLIDER: Record<Exclude<UpgradeMode, "any">, string> = {
+/** What the upgrade slider is called in each mode; the core shows it only in a bounded one. */
+const UPGRADE_SLIDER: Record<UpgradeMode, string> = {
+  any: "Upgrade",
   exact: "Exactly",
   at_least: "Minimum upgrade",
 };
@@ -51,6 +54,29 @@ function ItemOptions({ options }: { options: EditorOption<string | null>[] }) {
             {options.map(render)}
           </optgroup>,
         ],
+  );
+}
+
+/** A check box, with the help text the core gives it under it whenever it shows. */
+function CheckBox({
+  control,
+  onChange,
+}: {
+  control: EditorToggle;
+  onChange: (value: boolean) => void;
+}) {
+  return (
+    <>
+      <label className="d1-check">
+        <input
+          type="checkbox"
+          checked={control.value}
+          onChange={(event) => onChange(event.currentTarget.checked)}
+        />
+        <span>{control.label}</span>
+      </label>
+      {control.caption !== null && <p className="d1-caption">{control.caption}</p>}
+    </>
   );
 }
 
@@ -112,7 +138,6 @@ export function RequirementEditor({
   const { form } = sheet;
   const isNew = form.mode === "new";
   const { tier, upgrade, effect, stack, transmutations, resin } = form;
-  const glyphs = form.category.value === "armor";
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -207,7 +232,7 @@ export function RequirementEditor({
                     ariaLabel="Tier predicate"
                   />
                 </Field>
-                {tier.mode !== "any" && (
+                {tier.value_visible && (
                   <SliderRow
                     label={TIER_SLIDER[tier.mode]}
                     valueLabel={tier.value_label}
@@ -237,79 +262,65 @@ export function RequirementEditor({
                 <span>{transmutations.label}</span>
               </label>
               {transmutations.enabled && (
-                <>
-                  <Field label="Maximum transmutations" stack>
-                    <Stepper
-                      value={transmutations.value}
-                      min={transmutations.min}
-                      max={transmutations.max}
-                      onChange={(value) => onChange({ type: "set_transmutations", value })}
-                      ariaLabel="Maximum transmutations"
-                      format={() => transmutations.value_label}
-                    />
-                  </Field>
-                  {transmutations.caption && <p className="d1-caption">{transmutations.caption}</p>}
-                </>
+                <Field label="Maximum transmutations" stack>
+                  <Stepper
+                    value={transmutations.value}
+                    min={transmutations.min}
+                    max={transmutations.max}
+                    onChange={(value) => onChange({ type: "set_transmutations", value })}
+                    ariaLabel="Maximum transmutations"
+                    format={() => transmutations.value_label}
+                  />
+                </Field>
+              )}
+              {transmutations.caption_visible && transmutations.caption !== null && (
+                <p className="d1-caption">{transmutations.caption}</p>
               )}
             </section>
           )}
 
           {form.select_trinket.visible && (
             <section className="d1-modal-section">
-              <label className="d1-check">
-                <input
-                  type="checkbox"
-                  checked={form.select_trinket.value}
-                  onChange={(event) =>
-                    onChange({ type: "set_select_trinket", value: event.currentTarget.checked })
-                  }
-                />
-                <span>{form.select_trinket.label}</span>
-              </label>
-              <p className="d1-caption">
-                Applies from the next floor after the catalyst can first be brewed. In an OR group,
-                exactly one of its initial-offer alternatives must be offered; multiple matches use
-                No Trinket.
-              </p>
+              <CheckBox
+                control={form.select_trinket}
+                onChange={(value) => onChange({ type: "set_select_trinket", value })}
+              />
             </section>
           )}
 
           {resin.visible && (
             <section className="d1-modal-section">
-              <Field label="Minimum resin">
-                <Segmented
-                  value={resin.auto ? "auto" : "amount"}
-                  options={[
-                    { value: "amount", label: "Amount" },
-                    { value: "auto", label: "Auto" },
-                  ]}
-                  onChange={(mode) => onChange({ type: "set_resin_auto", value: mode === "auto" })}
-                  ariaLabel="Resin amount mode"
-                />
-              </Field>
-              {resin.auto ? (
-                <p className="d1-caption">
-                  Upgrade each kept wand to +3. Excluded wands and extra copies reserved for
-                  reforging need no resin.
-                </p>
-              ) : (
-                <Field label="Amount">
-                  <input
-                    className="d1-input"
-                    type="number"
-                    aria-label="Minimum resin"
-                    step={1}
-                    value={resin.amount ?? ""}
-                    onChange={(event) => {
-                      const amount = event.currentTarget.valueAsNumber;
-                      onChange({
-                        type: "set_resin_amount",
-                        value: Number.isNaN(amount) ? null : amount,
-                      });
-                    }}
+              {/* The amount field takes the section's label; Auto's meaning
+                  shows in its place. */}
+              <Field label={resin.label} stack>
+                <span className="d1-resin-amount">
+                  <Segmented
+                    value={resin.auto}
+                    options={resin.modes}
+                    onChange={(value) => onChange({ type: "set_resin_auto", value })}
+                    ariaLabel="Resin amount mode"
                   />
-                </Field>
-              )}
+                  {!resin.auto && (
+                    <input
+                      className="d1-input"
+                      type="number"
+                      aria-label={resin.label}
+                      min={resin.min}
+                      max={resin.max}
+                      step={1}
+                      value={resin.amount ?? ""}
+                      onChange={(event) => {
+                        const amount = event.currentTarget.valueAsNumber;
+                        onChange({
+                          type: "set_resin_amount",
+                          value: Number.isNaN(amount) ? null : amount,
+                        });
+                      }}
+                    />
+                  )}
+                </span>
+              </Field>
+              {resin.auto && <p className="d1-caption">{resin.caption}</p>}
             </section>
           )}
 
@@ -323,7 +334,7 @@ export function RequirementEditor({
                 ariaLabel="Upgrade predicate"
                 fill
               />
-              {upgrade.mode !== "any" && (
+              {upgrade.value_visible && (
                 <SliderRow
                   label={UPGRADE_SLIDER[upgrade.mode]}
                   valueLabel={upgrade.value_label}
@@ -339,14 +350,14 @@ export function RequirementEditor({
           {stack.visible && (
             <section className="d1-modal-section">
               <div className="d1-modal-section-head">
-                <h3>Total item count</h3>
+                <h3>{stack.label}</h3>
                 <Stepper
                   value={stack.count}
                   min={stack.min}
                   max={stack.max}
                   format={() => stack.value_label}
                   onChange={(value) => onChange({ type: "set_count", value })}
-                  ariaLabel="How many of this"
+                  ariaLabel={stack.label}
                 />
               </div>
               {stack.copy_depth.visible && (
@@ -369,21 +380,20 @@ export function RequirementEditor({
                     />
                     <span>{stack.count_levels.label}</span>
                   </label>
+                  {/* This caption explains the switch, so it shows beside it. */}
+                  {stack.count_levels.caption_visible && stack.count_levels.caption !== null && (
+                    <p className="d1-caption">{stack.count_levels.caption}</p>
+                  )}
                   {stack.count_levels.enabled && (
-                    <>
-                      <SliderRow
-                        label="Levels reach"
-                        valueLabel={stack.count_levels.value_label}
-                        min={stack.count_levels.min}
-                        max={stack.count_levels.max}
-                        value={stack.count_levels.value}
-                        fill
-                        onChange={(value) => onChange({ type: "set_total", value })}
-                      />
-                      {stack.count_levels.caption && (
-                        <p className="d1-caption">{stack.count_levels.caption}</p>
-                      )}
-                    </>
+                    <SliderRow
+                      label="Levels reach"
+                      valueLabel={stack.count_levels.value_label}
+                      min={stack.count_levels.min}
+                      max={stack.count_levels.max}
+                      value={stack.count_levels.value}
+                      fill
+                      onChange={(value) => onChange({ type: "set_total", value })}
+                    />
                   )}
                 </>
               )}
@@ -398,15 +408,15 @@ export function RequirementEditor({
               <h3>Details</h3>
               {effect.visible && (
                 <>
-                  <Field label={glyphs ? "Glyph" : "Enchantment"} stack>
+                  <Field label={effect.label} stack>
                     <Segmented
                       value={effect.mode}
                       options={effect.modes}
                       onChange={(value) => onChange({ type: "set_effect_mode", value })}
-                      ariaLabel={glyphs ? "Glyph filter" : "Enchantment filter"}
+                      ariaLabel={`${effect.label} filter`}
                     />
                   </Field>
-                  {effect.mode === "specific" && (
+                  {effect.choices_visible && (
                     <div className="d1-effect-grid" role="group" aria-label="Effects">
                       {effect.groups.flatMap((group) => [
                         <span className="d1-effect-grid-head" key={group.value}>
@@ -433,16 +443,10 @@ export function RequirementEditor({
                 </>
               )}
               {form.uncursed.visible && (
-                <label className="d1-check">
-                  <input
-                    type="checkbox"
-                    checked={form.uncursed.value}
-                    onChange={(event) =>
-                      onChange({ type: "set_uncursed", value: event.currentTarget.checked })
-                    }
-                  />
-                  <span>{form.uncursed.label}</span>
-                </label>
+                <CheckBox
+                  control={form.uncursed}
+                  onChange={(value) => onChange({ type: "set_uncursed", value })}
+                />
               )}
               {form.source.visible && (
                 <Field label="Source">
@@ -475,41 +479,20 @@ export function RequirementEditor({
             </section>
           )}
 
-          {resin.visible && (
+          {resin.include_mage_wand.visible && (
             <section className="d1-modal-section">
-              <label className="d1-check">
-                <input
-                  type="checkbox"
-                  checked={resin.include_mage_wand}
-                  onChange={(event) =>
-                    onChange({ type: "set_include_mage_wand", value: event.currentTarget.checked })
-                  }
-                />
-                <span>Include Mage’s starting wand</span>
-              </label>
-              <p className="d1-caption">
-                Adds 2 resin from Magic Missile. Assumes you recover it with Wand Preservation and
-                dismantle it after imbuing.
-              </p>
+              <CheckBox
+                control={resin.include_mage_wand}
+                onChange={(value) => onChange({ type: "set_include_mage_wand", value })}
+              />
             </section>
           )}
           {form.exclude_resin.visible && (
             <section className="d1-modal-section">
-              <label className="d1-check">
-                <input
-                  type="checkbox"
-                  checked={form.exclude_resin.value}
-                  onChange={(event) =>
-                    onChange({ type: "set_exclude_resin", value: event.currentTarget.checked })
-                  }
-                />
-                <span>{form.exclude_resin.label}</span>
-              </label>
-              <p className="d1-caption">
-                Keep this wand without budgeting resin to upgrade it. Useful for imbuing: resin
-                upgrades do not transfer to the staff. Extra copies are reserved for reforging and
-                never need Auto resin.
-              </p>
+              <CheckBox
+                control={form.exclude_resin}
+                onChange={(value) => onChange({ type: "set_exclude_resin", value })}
+              />
             </section>
           )}
 

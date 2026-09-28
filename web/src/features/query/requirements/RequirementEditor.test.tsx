@@ -3,12 +3,12 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
-import type { EditorForm } from "../../../engine/types";
+import type { EditorChange, EditorForm, EditorSheet } from "../../../engine/types";
 import { defaultQueryState, fromQueryJson, toQueryDocument } from "../query";
 import { queryStore } from "../../../app/store";
 import { QueryPanel } from "../QueryPanel";
 import { RequirementEditor } from "./RequirementEditor";
-import { openSheet } from "./sheet";
+import { changeSheet, openSheet } from "./sheet";
 
 let host: HTMLDivElement;
 let root: Root;
@@ -81,7 +81,8 @@ it("draws the core's form and saves a stack with its copies' floor", async () =>
   expect(modal()!.querySelector(".d1-modal-title p")!.textContent).toBe("Spear");
   // A named weapon has no tier filter.
   expect(modal()!.querySelector('[aria-label="Tier predicate"]')).toBeNull();
-  await click("One more", modal()!.querySelector('[aria-label="How many of this"]')!);
+  // The count stepper takes the stack section's label.
+  await click("One more", modal()!.querySelector('[aria-label="Total item count"]')!);
   expect(modal()!.querySelector(".d1-stepper-value")!.textContent).toBe("×2");
   await toggle("Limit the extra copies to a floor");
   expect(modal()!.textContent).toContain("Copies within first 4 floors");
@@ -169,9 +170,122 @@ it("draws a control only while the form shows it, with any caption it carries", 
     count_levels: {
       ...form.stack.count_levels,
       visible: true,
-      enabled: true,
+      enabled: false,
       caption: "Levels count once per ring.",
+      caption_visible: true,
     },
   };
   expect(html({ stack: counting })).toContain("Levels count once per ring.");
+  expect(
+    html({
+      stack: { ...counting, count_levels: { ...counting.count_levels, caption_visible: false } },
+    }),
+  ).not.toContain("Levels count once per ring.");
+});
+
+/** A sheet the core opened on a new chip, then moved by `changes`. */
+function sheetAfter(...changes: EditorChange[]): EditorSheet {
+  let answer = openSheet(defaultQueryState(), { type: "new", blanket: false });
+  for (const change of changes) if (answer.ok) answer = changeSheet(answer.value, change);
+  if (!answer.ok) throw new Error(answer.error);
+  return answer.value;
+}
+
+const markup = (sheet: EditorSheet) =>
+  renderToStaticMarkup(
+    <RequirementEditor sheet={sheet} onChange={() => {}} onSave={() => {}} onCancel={() => {}} />,
+  );
+
+it("shows a slider, the effect grid and a caption on the core's flags, not on their modes", () => {
+  const { form, draft } = sheetAfter({ type: "set_category", value: "armor" });
+  const html = (patch: Partial<EditorForm>) => markup({ draft, form: { ...form, ...patch } });
+  expect(html({})).not.toContain('aria-label="Minimum tier"');
+  expect(html({ tier: { ...form.tier, mode: "at_least", value_visible: false } })).not.toContain(
+    'aria-label="Minimum tier"',
+  );
+  expect(html({ tier: { ...form.tier, mode: "at_least", value_visible: true } })).toContain(
+    'aria-label="Minimum tier"',
+  );
+  expect(html({ upgrade: { ...form.upgrade, mode: "exact", value_visible: false } })).not.toContain(
+    'aria-label="Exactly"',
+  );
+  expect(html({ upgrade: { ...form.upgrade, mode: "exact", value_visible: true } })).toContain(
+    'aria-label="Exactly"',
+  );
+  expect(
+    html({ effect: { ...form.effect, mode: "specific", choices_visible: false } }),
+  ).not.toContain('aria-label="Effects"');
+  expect(html({ effect: { ...form.effect, choices_visible: true } })).toContain(
+    'aria-label="Effects"',
+  );
+  const limited = { ...form.transmutations, visible: true, enabled: true, caption: "Up to one." };
+  expect(html({ transmutations: { ...limited, caption_visible: false } })).not.toContain(
+    "Up to one.",
+  );
+  expect(html({ transmutations: { ...limited, caption_visible: true } })).toContain("Up to one.");
+});
+
+it("labels the sections and check boxes and shows their help texts in the core's words", () => {
+  // Armor: the effect section is the Glyph.
+  const armor = sheetAfter({ type: "set_category", value: "armor" });
+  expect(armor.form.effect.label).toBe("Glyph");
+  expect(markup(armor)).toContain('<span class="d1-field-label">Glyph</span>');
+  expect(markup(armor)).toContain('aria-label="Glyph filter"');
+
+  // An ordinary wand: resin exclusion, with its help under it.
+  const wand = sheetAfter({ type: "set_category", value: "wand" });
+  expect(wand.form.exclude_resin.caption).not.toBeNull();
+  expect(markup(wand)).toContain(`<p class="d1-caption">${wand.form.exclude_resin.caption}</p>`);
+
+  // A trinket: the choice at +3, with its help under it.
+  const trinket = sheetAfter({ type: "set_category", value: "trinket" });
+  expect(markup(trinket)).toContain(
+    `<p class="d1-caption">${trinket.form.select_trinket.caption}</p>`,
+  );
+
+  // A ring stack: the combined level's help shows beside its switch, on or off.
+  const stack = sheetAfter(
+    { type: "set_category", value: "ring" },
+    { type: "set_item", value: "ring_might" },
+    { type: "set_count", value: 2 },
+  );
+  const { count_levels } = stack.form.stack;
+  expect(count_levels).toMatchObject({ visible: true, enabled: false, caption_visible: true });
+  expect(markup(stack)).toContain(`<p class="d1-caption">${count_levels.caption}</p>`);
+  expect(markup(stack)).toContain(`<h3>${stack.form.stack.label}</h3>`);
+
+  // The transmutation limit's help shows only while the limit is on.
+  const limited = sheetAfter(
+    { type: "set_category", value: "trinket" },
+    { type: "set_transmutations_enabled", value: true },
+  );
+  expect(limited.form.transmutations.caption_visible).toBe(true);
+  expect(markup(limited)).toContain(limited.form.transmutations.caption!);
+  expect(markup(trinket)).not.toContain(limited.form.transmutations.caption!);
+});
+
+it("words the resin section, its choice, bounds and Mage switch as the core does", () => {
+  const amount = sheetAfter(
+    { type: "set_category", value: "wand" },
+    { type: "set_item", value: "arcane_resin" },
+  );
+  const { resin } = amount.form;
+  const html = markup(amount);
+  expect(html).toContain(`<span class="d1-field-label">${resin.label}</span>`);
+  for (const mode of resin.modes) expect(html).toContain(`>${mode.label}</button>`);
+  expect(html).toContain(
+    `aria-label="${resin.label}" min="${resin.min}" max="${resin.max}" step="1" value="${resin.amount}"`,
+  );
+  expect(html).not.toContain(resin.caption);
+  expect(html).toContain(`<span>${resin.include_mage_wand.label}</span>`);
+  expect(html).toContain(`<p class="d1-caption">${resin.include_mage_wand.caption}</p>`);
+
+  const auto = sheetAfter(
+    { type: "set_category", value: "wand" },
+    { type: "set_item", value: "arcane_resin" },
+    { type: "set_resin_auto", value: true },
+  );
+  // Auto's meaning shows in the amount field's place.
+  expect(markup(auto)).toContain(`<p class="d1-caption">${auto.form.resin.caption}</p>`);
+  expect(markup(auto)).not.toContain('type="number"');
 });

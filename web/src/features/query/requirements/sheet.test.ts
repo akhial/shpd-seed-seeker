@@ -138,6 +138,32 @@ describe("the requirement sheet bridge", () => {
     ]);
   });
 
+  it("leaves the query's resin alone when the core says its chip was saved untouched", () => {
+    // Floor 5 is an empty boss floor, which the floor slider cannot hold.
+    const query = fromQueryJson(
+      '{"arcane_resin":4,"arcane_resin_filter":{"max_depth":5},"requirements":[]}',
+    );
+    const untouched = saved(
+      query,
+      sheet(
+        query,
+        { type: "resin" },
+        { type: "set_resin_auto", value: true },
+        { type: "set_resin_auto", value: false },
+      ),
+    );
+    expect(untouched.resin).toBeUndefined();
+    expect(untouched.changed).toBe(false);
+    const moved = saved(
+      query,
+      sheet(query, { type: "resin" }, { type: "set_resin_amount", value: 6 }),
+    );
+    expect(moved.resin).toEqual({
+      arcaneResin: 6,
+      arcaneResinFilter: { uncursed: true, maxDepth: 4 },
+    });
+  });
+
   it("will not open a row the core cannot read, and names it", () => {
     const query = fromQueryJson('{"requirements":[{"kind":"wand"},{"item":"wand_of_wonders"}]}');
     expect(openSheet(query, { type: "row", key: 2 })).toEqual({

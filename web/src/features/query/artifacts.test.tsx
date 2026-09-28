@@ -152,12 +152,13 @@ describe("artifact search and scout", () => {
     expect(html).toContain('aria-valuetext="19"');
     const saved = saveSheet(query, sheet);
     if (!saved.ok || !("saved" in saved.value)) throw new Error("the sheet did not save");
-    // The sheet offers no upgrade on an artifact, and the core currently drops
-    // one a document carried even on an unchanged save — against the contract's
-    // "Saving an unchanged chip" (docs/requirement-editor.md), so this pins
-    // only what both agree on.
+    // The sheet offers no upgrade on an artifact but keeps the one a document
+    // carried: saved untouched, the query's own list comes back.
+    expect(saved.value.saved.changed).toBe(false);
+    expect(saved.value.saved.requirements).toBe(query.requirements);
     expect(saved.value.saved.requirements[0]).toMatchObject({
       item: "sandals_of_nature",
+      upgrade: { mode: "exact", value: 5 },
       maxDepth: 19,
     });
     const repeats = fromQueryJson(

@@ -64,16 +64,12 @@ export interface SheetSaved {
   focus: number | null;
 }
 
-const sameResin = (
-  left: Pick<QueryState, "arcaneResin" | "arcaneResinFilter">,
-  right: Pick<QueryState, "arcaneResin" | "arcaneResinFilter">,
-): boolean => JSON.stringify(resinCondition(left)) === JSON.stringify(resinCondition(right));
-
 /**
  * Saves the sheet onto the query's requirements as they are now. A refused
  * save answers the sheet again, its reasons in `form.errors`. The rows are
- * adopted only when the save changed them, and the resin only when it moved,
- * so saving a chip unchanged keeps the query as it was.
+ * adopted only when the save changed them, and the resin only when the core
+ * sets or clears it, so saving a chip — the resin chip included — unchanged
+ * keeps the query as it was.
  */
 export function saveSheet(
   query: BoardQuery,
@@ -108,7 +104,7 @@ export function saveSheet(
         requirements,
         changed,
         focus,
-        ...(nextResin && !sameResin(nextResin, query) ? { resin: nextResin } : {}),
+        ...(nextResin ? { resin: nextResin } : {}),
       },
     },
   };

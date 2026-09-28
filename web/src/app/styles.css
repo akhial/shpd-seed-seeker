@@ -3302,6 +3302,19 @@ input[type="range"]::-moz-range-thumb {
   gap: 0;
 }
 
+/* The resin section's one row: the Amount/Auto choice, then the amount. */
+.d1-resin-amount {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.d1-resin-amount .d1-input {
+  width: 96px;
+}
+
 .d1-resin-edit,
 .d1-resin-remove {
   display: inline-flex;

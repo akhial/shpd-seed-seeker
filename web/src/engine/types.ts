@@ -401,10 +401,12 @@ export interface EditorChoice<T> {
   options: EditorOption<T>[];
 }
 
+/** A check box, with the help text shown under it whenever it shows. */
 export interface EditorToggle {
   visible: boolean;
   value: boolean;
   label: string;
+  caption: string | null;
 }
 
 /** A mode picker with its value slider. */
@@ -412,6 +414,8 @@ export interface EditorModeRange<M> {
   visible: boolean;
   mode: M;
   modes: EditorOption<M>[];
+  /** The value slider shows: the control does, in a mode other than `any`. */
+  value_visible: boolean;
   value: number;
   min: number;
   max: number;
@@ -428,7 +432,7 @@ export interface EditorFloorToggle {
   value_label: string;
 }
 
-/** A switch with a stepper. */
+/** A switch with a stepper or slider, which shows while the switch is on. */
 export interface EditorRangeToggle {
   visible: boolean;
   enabled: boolean;
@@ -437,6 +441,8 @@ export interface EditorRangeToggle {
   max: number;
   label: string;
   caption: string | null;
+  /** The caption shows: while the switch is on for the transmutation limit, whenever the control does for the combined level. */
+  caption_visible: boolean;
   value_label: string;
 }
 
@@ -462,8 +468,12 @@ export interface EditorForm {
   upgrade: EditorModeRange<UpgradeMode>;
   effect: {
     visible: boolean;
+    /** The section's label: `Enchantment`, or `Glyph` on armor. */
+    label: string;
     mode: EffectMode;
     modes: EditorOption<EffectMode>[];
+    /** The "Specific…" grid shows: the control does, in mode `specific`. */
+    choices_visible: boolean;
     choices: { value: string; label: string; group: EffectGroup; selected: boolean }[];
     groups: EditorOption<EffectGroup>[];
     caption: string;
@@ -476,6 +486,8 @@ export interface EditorForm {
   select_trinket: EditorToggle;
   stack: {
     visible: boolean;
+    /** The section's label, which the count stepper takes too. */
+    label: string;
     count: number;
     min: number;
     max: number;
@@ -485,10 +497,19 @@ export interface EditorForm {
   };
   resin: {
     visible: boolean;
+    /** The section's label, which the amount field takes too. */
+    label: string;
     auto: boolean;
+    /** The Amount/Auto choice, each option valued as `auto` is. */
+    modes: EditorOption<boolean>[];
+    /** What Auto means, shown in the amount field's place while `auto` is on. */
+    caption: string;
     /** The amount as typed; `null` for an empty field. */
     amount: number | null;
-    include_mage_wand: boolean;
+    /** The amounts that save. */
+    min: number;
+    max: number;
+    include_mage_wand: EditorToggle;
   };
   /** Why the draft cannot be saved, in the order to show them. */
   errors: string[];

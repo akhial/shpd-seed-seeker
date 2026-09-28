@@ -35,7 +35,7 @@ describe("offered trinket pilot", () => {
     expect(validateQuery(query).valid).toBe(true);
     const chip = boardOf(query).items[0].chips[0];
     expect(chip.details).toContain("within 13 transmutations");
-    expect(chip.tags).toContainEqual({ text: "Transmute ≤13", style: "plain" });
+    expect(chip.tags).toContainEqual({ text: "Transmute ≤13", style: "plain", tooltip: null });
     const html = sheetHtml(sheetOn(query, requirement.key));
     expect(html).toContain("Allow transmutations");
     expect(html).not.toContain("After transmuting");
@@ -179,15 +179,17 @@ describe("offered trinket pilot", () => {
     );
     expect(boardOf(query).items[0].chips[0].title).toBe("Trinket");
     expect(boardOf(query).items[0].problem).not.toBeNull();
-    // The sheet names the first trinket and leaves out the filters a trinket cannot use.
+    // The sheet names the first trinket and shows no filters for it, but keeps
+    // the source and floor limit the row carried (a trinket offer follows the
+    // catalyst's placement, so the engine searches them).
     const sheet = sheetOn(query, 1);
     expect(sheet.form.item.value).toBe("rat_skull");
     const saved = saveSheet(query, sheet);
     if (!saved.ok || !("saved" in saved.value)) throw new Error("the sheet did not save");
     const [trinket] = saved.value.saved.requirements;
     expect(trinket).toMatchObject({ key: 1, kind: "trinket", item: "rat_skull" });
-    expect(trinket.source).toBeUndefined();
-    expect(trinket.maxDepth).toBeUndefined();
+    expect(trinket.source).toBe("locked_chest");
+    expect(trinket.maxDepth).toBe(2);
     const html = sheetHtml(sheet);
     expect(html).toContain('<p class="d1-mono">Rat Skull</p>');
     expect(html).toContain("Choose matching trinket at +3");

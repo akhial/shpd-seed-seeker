@@ -54,7 +54,7 @@ export interface SegmentedOption<T> {
   label: string;
 }
 
-export function Segmented<T extends string | number>({
+export function Segmented<T extends string | number | boolean>({
   value,
   options,
   onChange,
