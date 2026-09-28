@@ -212,8 +212,7 @@ final class RequirementEditorTests: XCTestCase {
         XCTAssertEqual(refused.refusal?.message, "Copies can only be grouped with the same item type.")
     }
 
-    /// Stack edits in one request, the way the cluster's stack sheet sends
-    /// its count and copy floor together.
+    /// Stack edits in one request run in order.
     func testStackEditsRunInOrder() throws {
         let cluster = [try requirement(1, item: "spear", alternativeGroup: 1),
                        try requirement(2, item: "mace", alternativeGroup: 1)]
@@ -250,6 +249,39 @@ final class RequirementEditorTests: XCTestCase {
         XCTAssertEqual(refused.refusal?.reason, "no_free_group")
         XCTAssertEqual(refused.refusal?.message,
                        "Every group label is in use. Remove a stack or a combined level first.")
+    }
+
+    /// The iOS cluster "How many" sheet: each control is one board edit, and
+    /// the copies' floor control — words, stops and the floor it turns on
+    /// at — is the core's, read off the member's own sheet, which hides it.
+    func testAClustersCopyFloorComesFromTheCore() throws {
+        let cluster = [try requirement(1, item: "spear", alternativeGroup: 1),
+                       try requirement(2, item: "mace", alternativeGroup: 1)]
+        let grown = try XCTUnwrap(RequirementBoard.apply([.setCount(1, 3)], to: cluster))
+        let stack = try XCTUnwrap(grown.item(holding: 1)).stack
+        XCTAssertTrue(stack.canSetCopyDepth)
+        XCTAssertEqual(stack.countText, "×3")
+        XCTAssertNil(stack.copyDepth)
+
+        let sheet = try XCTUnwrap(RequirementSheet.open(rows: grown.rows, key: 1))
+        XCTAssertTrue(sheet.form.inCluster)
+        XCTAssertFalse(sheet.form.stack.visible)
+        let off = sheet.form.stack.copyDepth
+        XCTAssertFalse(off.enabled)
+        XCTAssertEqual(off.value, 4)
+        XCTAssertFalse(off.options.contains(5))
+
+        let limited = try XCTUnwrap(RequirementBoard.apply([.setCopyDepth(1, off.value)], to: grown.rows))
+        XCTAssertTrue(limited.changed)
+        XCTAssertEqual(limited.item(holding: 1)?.stack.copyDepth, 4)
+        let on = try XCTUnwrap(RequirementSheet.open(rows: limited.rows, key: 1)).form.stack.copyDepth
+        XCTAssertTrue(on.enabled)
+        XCTAssertEqual(on.label, "Limit the extra copies to a floor")
+        XCTAssertEqual(on.valueLabel, "Copies within first 4 floors")
+        XCTAssertNoThrow(try SearchRequest(requirements: limited.rows))
+
+        let cleared = try XCTUnwrap(RequirementBoard.apply([.setCopyDepth(1, nil)], to: limited.rows))
+        XCTAssertNil(cleared.item(holding: 1)?.stack.copyDepth)
     }
 
     /// A stack of wands kept out of Auto resin grows plain copies — only the

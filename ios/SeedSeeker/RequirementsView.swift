@@ -131,9 +131,9 @@ struct RequirementsView: View {
         }
         .sheet(item: $stackKey) { presentation in
             if let item = snapshot.item(holding: presentation.id) {
-                RequirementsStackEditor(count: item.stack.count, copyDepth: item.stack.copyDepth,
-                                        range: item.stack.countRange) { count, depth in
-                    _ = apply([.setCount(presentation.id, count), .setCopyDepth(presentation.id, depth)])
+                RequirementsStackEditor(key: presentation.id, stack: item.stack,
+                                        copyFloor: presentation.copyFloor) { edit in
+                    editStack(presentation.id, edit)
                 }
                 .navigationTransition(.zoom(sourceID: presentation.source, in: sheetZoom))
             }
@@ -207,8 +207,7 @@ struct RequirementsView: View {
                         chip(member, item: item)
                         if member.key == item.anchor, let badge = item.countBadge, item.stack.canChangeCount {
                             Button {
-                                stackKey = RequirementsStackPresentation(id: item.anchor,
-                                                                         source: "stack-\(cluster)")
+                                showStack(item.anchor, source: "stack-\(cluster)")
                             } label: {
                                 Text(badge.compactText)
                                     .font(.caption.monospaced().weight(.semibold))
@@ -517,9 +516,33 @@ struct RequirementsView: View {
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(350))
                 guard let current = snapshot.item(holding: key), current.stack.canChangeCount else { return }
-                stackKey = RequirementsStackPresentation(id: key, source: "chip-\(key)")
+                showStack(key, source: "chip-\(key)")
             }
         }
+    }
+
+    /// Opens a cluster's "How many" sheet on its anchor `key`.
+    private func showStack(_ key: Int64, source: String) {
+        stackKey = RequirementsStackPresentation(id: key, source: source,
+                                                 copyFloor: copyFloor(of: key, in: requirements))
+    }
+
+    /// Runs one edit of the cluster's "How many" sheet on the board as it is
+    /// made, and answers what the sheet shows next: why the core refused it,
+    /// and the copies' floor control after it.
+    private func editStack(_ key: Int64, _ edit: BoardEdit) -> (refusal: String?, copyFloor: SheetFloorToggle?) {
+        let result = apply([edit])
+        if result?.refusal != nil { UINotificationFeedbackGenerator().notificationOccurred(.warning) }
+        return (result?.refusal?.message, copyFloor(of: key, in: result?.rows ?? requirements))
+    }
+
+    /// The copies' floor control as the shared core words it for the chip's
+    /// own sheet: its switch, the floors it stops at and the floor it turns
+    /// on at. A cluster member's sheet hides it — the stack is the cluster's,
+    /// and the "How many" sheet edits it on the board — but the core fills
+    /// it in all the same.
+    private func copyFloor(of key: Int64, in rows: [ItemRequirement]) -> SheetFloorToggle? {
+        RequirementSheet.open(rows: rows, key: key)?.form.stack.copyDepth
     }
 
     /// Shows a sheet the shared core opened as the chip or "Add" was tapped,
@@ -654,6 +677,8 @@ private struct RequirementsResinPresentation: Identifiable {
 private struct RequirementsStackPresentation: Identifiable {
     let id: Int64
     let source: String
+    /// The copies' floor control as the sheet opens.
+    let copyFloor: SheetFloorToggle?
 }
 
 /// A board chip's sprite: the item with its effects' glows, or the
@@ -734,25 +759,37 @@ struct RequirementsFlowLayout: Layout {
     }
 }
 
+/// The "How many" sheet of an either/or cluster, whose stack is the
+/// cluster's rather than any one member's. Every control is one board edit,
+/// applied as it is made, so the sheet always shows the stack the board holds.
 private struct RequirementsStackEditor: View {
     @Environment(\.dismiss) private var dismiss
-    @State var count: Int
-    @State var copyDepth: Int?
-    /// The counts the core offers: up to the stack limit while the cluster
-    /// can grow, else only down from its count.
-    let range: ClosedRange<Int>
-    let onSave: (Int, Int?) -> Void
+    /// The cluster's anchor, which the edits name.
+    let key: Int64
+    /// The cluster's stack as the board draws it now.
+    let stack: BoardStack
+    /// The copies' floor control, in the shared core's words.
+    @State var copyFloor: SheetFloorToggle?
+    /// Runs one edit; answers why the core refused it, and the copies' floor
+    /// control after it.
+    let onEdit: (BoardEdit) -> (refusal: String?, copyFloor: SheetFloorToggle?)
+    /// Why the core refused the last edit.
+    @State private var refusal: String?
 
     var body: some View {
         NavigationStack {
             Form {
-                Stepper(value: $count, in: range) {
-                    HStack { Text("How many"); Spacer(); Text("×\(count)").foregroundStyle(.tint) }
+                Section {
+                    Stepper(value: countBinding, in: stack.countRange) {
+                        HStack { Text("How many"); Spacer(); Text(stack.countText).foregroundStyle(.tint) }
+                    }
+                } footer: {
+                    if let refusal { Text(refusal).foregroundStyle(.orange) }
                 }
-                if count > 1 {
+                if stack.canSetCopyDepth, let copyFloor {
                     Section {
-                        Toggle("Limit the extra copies to a floor", isOn: Binding(get: { copyDepth != nil }, set: { copyDepth = $0 ? 4 : nil }))
-                        if copyDepth != nil { RequirementsCopyFloorPicker(title: "Copies within first", depth: $copyDepth) }
+                        RequirementsFloorControl(control: copyFloor, enabled: copyFloorEnabled(copyFloor),
+                                                 floor: copyFloorValue(copyFloor))
                     } footer: {
                         Text("A floor limit is where an item lies, not what it is, so the copies keep their own.")
                     }
@@ -761,41 +798,35 @@ private struct RequirementsStackEditor: View {
             .navigationTitle("How many")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { onSave(count, count > 1 ? copyDepth : nil); dismiss() }
-                }
+                ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } }
             }
         }
         .presentationDetents([.medium, .large])
     }
-}
 
-/// The cluster stack sheet's floor slider for the extra copies, over the
-/// floors a search may be limited to.
-private struct RequirementsCopyFloorPicker: View {
-    let title: String
-    @Binding var depth: Int?
-
-    private var selection: Binding<Double> {
-        Binding(get: {
-            Double(depth.map { FloorLimits.index(of: $0) } ?? 0)
-        }, set: { value in
-            depth = FloorLimits.options[min(max(Int(value.rounded()), 0), FloorLimits.options.count - 1)]
+    private var countBinding: Binding<Int> {
+        Binding(get: { stack.count }, set: { count in
+            if count != stack.count { run(.setCount(key, count)) }
         })
     }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack {
-                Text(title).font(.subheadline.weight(.semibold))
-                Spacer()
-                Text(depth.map { "\($0) floor\($0 == 1 ? "" : "s")" } ?? "")
-                    .font(.subheadline).foregroundStyle(.tint)
-            }
-            RequirementGraduatedSlider(title: title, value: selection,
-                                       bounds: 0...Double(FloorLimits.options.count - 1))
-                .accessibilityValue(depth.map { "Floor \($0)" } ?? "")
-        }
+    /// Turning the limit on starts the copies at the floor the core offers.
+    private func copyFloorEnabled(_ control: SheetFloorToggle) -> Binding<Bool> {
+        Binding(get: { control.enabled }, set: { on in
+            if on != control.enabled { run(.setCopyDepth(key, on ? control.value : nil)) }
+        })
+    }
+
+    /// A slider stop the copies are not already at.
+    private func copyFloorValue(_ control: SheetFloorToggle) -> Binding<Int> {
+        Binding(get: { control.value }, set: { floor in
+            if floor != control.value { run(.setCopyDepth(key, floor)) }
+        })
+    }
+
+    private func run(_ edit: BoardEdit) {
+        let answer = onEdit(edit)
+        refusal = answer.refusal
+        copyFloor = answer.copyFloor
     }
 }
