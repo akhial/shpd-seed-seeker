@@ -17,7 +17,7 @@ class ArcaneResinTest {
                 val identity = if (linked) "\"kind\":\"wand\",\"identity_group\":1" else "\"item\":\"wand_frost\""
                 val anchor = if (excluded) "\"exclude_resin\":true" else "\"upgrade\":3"
                 val query = ResultsExport.decodeQuery(JSONObject("""{"arcane_resin":"auto","arcane_resin_filter":{"source":"ghost_reward"},"requirements":[{$identity,$anchor},{$identity},{$identity}]}"""))
-                assertEquals(3, query.requirements.boardItems().single().stackCount)
+                assertEquals(3, RequirementEditor.view(query.requirements).items.single().count)
                 assertEquals(query, DeepLink.decode(DeepLink.encodeLink(query)))
                 val request = SearchRequest(query.requirements, arcaneResinAuto = true, arcaneResinFilter = query.arcaneResinFilter)
                 val baseline = probability(request.copy(arcaneResinAuto = false))
@@ -31,13 +31,12 @@ class ArcaneResinTest {
         val named = dev.seedseeker.app.catalog.ItemCatalog.findById("wand_lightning")!!
         for (item in listOf(null, named)) {
             val anchor = ItemRequirement(1, item, 0, kind = ItemKind.WAND, upgradeMatch = UpgradeMatch.ANY, excludeResin = true)
-            val requirements = listOf(anchor)
-            val grown = requirements.setStackCount(requirements.boardItems().single(), count = 3)
+            val grown = RequirementEditor.board(listOf(anchor), listOf(BoardEdit.SetCount(1, count = 3))).rows!!
             assertEquals(listOf(true, false, false), grown.map { it.excludeResin })
-            assertEquals(3, grown.boardItems().single().stackCount)
+            assertEquals(3, RequirementEditor.view(grown).items.single().count)
         }
         val ordinary = ItemRequirement(1, named, 0, upgradeMatch = UpgradeMatch.ANY)
-        assertEquals(2, listOf(ordinary, ordinary.copy(key = 2, excludeResin = true)).boardItems().size)
+        assertEquals(2, RequirementEditor.view(listOf(ordinary, ordinary.copy(key = 2, excludeResin = true))).items.size)
     }
 
     @Test fun resinOnlyQueriesSurviveEveryPortableAndLocalFormat() {
@@ -126,9 +125,10 @@ class ArcaneResinTest {
         assertEquals(probability(direct), estimate, 1e-12)
         val zeroCost = query.copy(requirements = emptyList())
         assertEquals(1, engine.scoutMatches("AAA-AAA-AAA", 0, zeroCost).matchedSlots)
-        assertThrows(IllegalArgumentException::class.java) {
-            query.copy(requirements = query.requirements.filter { it.blanket })
-        }
+        assertEquals(
+            "Add at least one ordinary requirement.",
+            RequirementEditor.view(query.requirements.filter { it.blanket }).problems.single().message,
+        )
     }
 
 }

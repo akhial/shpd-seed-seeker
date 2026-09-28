@@ -103,7 +103,7 @@ class ArcaneResinSheetTest {
         val wand = dev.seedseeker.app.model.ItemRequirement(1, null, 2, kind = dev.seedseeker.app.model.ItemKind.WAND)
         var saved: dev.seedseeker.app.model.ItemRequirement? = null
         compose.setContent { SeedSeekerTheme {
-            RequirementSheet(editing = wand, onDismiss = {}, onSave = { requirement, _, _, _ -> saved = requirement })
+            RequirementSheet(editing = wand, onDismiss = {}, onSave = { requirement, _, _, _ -> saved = requirement; null })
         } }
         compose.onNodeWithText("Exclude from Auto resin").performScrollTo().performClick()
         compose.onNodeWithText("Save").performClick()

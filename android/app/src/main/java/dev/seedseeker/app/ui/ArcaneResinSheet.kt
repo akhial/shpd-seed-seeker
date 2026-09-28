@@ -23,12 +23,6 @@ import kotlin.math.roundToInt
 
 internal val arcaneResinItem = CatalogItem("arcane_resin", "Arcane Resin", ItemKind.WAND, 317)
 
-internal fun resinFilterDescription(filter: ArcaneResinFilter): String = listOfNotNull(
-    if (filter.uncursed) "uncursed wands" else "any wands",
-    if (filter.includeMageWand) "starting Magic Missile +2 resin" else null,
-    filter.maximumDepth?.let { "≤ floor $it" }, filter.source?.label,
-).joinToString(" · ")
-
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ArcaneResinSheet(

@@ -115,6 +115,9 @@ import kotlin.math.roundToInt
 
 private enum class SheetStep { ITEM, DETAILS }
 
+/** What the sheet's Save hands back: the chip and its stack's shape. */
+private data class SheetSave(val requirement: ItemRequirement, val count: Int, val total: Int?, val copyDepth: Int?)
+
 /** The three shapes an effect filter takes in the editor. */
 private enum class EffectMode(val label: String) {
     ANY("Any"),
@@ -128,7 +131,8 @@ private enum class EffectMode(val label: String) {
  * [editingTotal] combined levels when a total is set, its extra copies kept to
  * [editingCopyDepth]'s floor. [onSave] hands the finished chip and stack shape
  * back — with [editing]'s key and alternative group, or key 0 for a new chip —
- * for the caller to place through `applyEdit`.
+ * for the caller to store through the requirement editor's `save` edit; it
+ * answers why the board refused the save, or null once it is stored.
  *
  * [startWithItemPicker] opens an existing chip on the item step, which is what
  * a freshly forked alternative wants: the copy is meant to become a different
@@ -151,7 +155,7 @@ fun RequirementSheet(
     blanket: Boolean = editing?.blanket ?: false,
     initialKind: ItemKind = ItemKind.WEAPON,
     onDismiss: () -> Unit,
-    onSave: (requirement: ItemRequirement, count: Int, total: Int?, copyDepth: Int?) -> Unit,
+    onSave: (requirement: ItemRequirement, count: Int, total: Int?, copyDepth: Int?) -> String?,
     onRemove: (() -> Unit)? = null,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -206,6 +210,8 @@ fun RequirementSheet(
     // The chip's own floor limit bounds the one item it describes; this one
     // bounds the copies behind it, which carry no constraints of their own.
     var copyDepth by remember(identity) { mutableStateOf(editingCopyDepth) }
+    // A save the board refused, and why.
+    var refused by remember(identity) { mutableStateOf<Pair<SheetSave, String>?>(null) }
 
     // A member of an either/or cluster leaves the stack to the cluster itself.
     val inAlternativeGroup = editing?.alternativeGroup != null
@@ -1021,8 +1027,26 @@ fun RequirementSheet(
                         Spacer(Modifier.height(14.dp))
                     }
 
+                    // What Save stores: the chip, and the shape of its stack.
+                    val saving = draft.getOrNull()?.let { requirement ->
+                        // Only a stack of a concrete ring counts levels; an
+                        // edit away from that drops the total it can no
+                        // longer say.
+                        val total = if (blanket || inAlternativeGroup || selectedItem == null || kind.family != ItemKind.RING) {
+                            null
+                        } else {
+                            stackTotal
+                        }
+                        // A cluster's stack is the cluster's, and a combined
+                        // level leaves no lone copies.
+                        val copies = if (inAlternativeGroup || stackCount < 2 || total != null) null else copyDepth
+                        SheetSave(requirement, if (!blanket && kind.supportsStacks) stackCount else 1, total, copies)
+                    }
+                    // The board's reason for refusing this very save, until the draft changes.
+                    val refusal = refused?.takeIf { it.first == saving }?.second
+                    val shown = refusal?.let { Result.failure(IllegalStateException(it)) } ?: draft
                     Column(Modifier.padding(horizontal = 20.dp)) {
-                        RequirementPreview(draft = draft)
+                        RequirementPreview(draft = shown)
                         Spacer(Modifier.height(10.dp))
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             if (editing != null && onRemove != null) {
@@ -1056,31 +1080,17 @@ fun RequirementSheet(
                             val saveInteraction = remember { MutableInteractionSource() }
                             Button(
                                 onClick = {
-                                    draft.getOrNull()?.let {
-                                        // Only a stack of a concrete ring counts
-                                        // levels; an edit away from that drops
-                                        // the total it can no longer say.
-                                        val total = if (blanket || inAlternativeGroup || selectedItem == null || kind.family != ItemKind.RING) {
-                                            null
-                                        } else {
-                                            stackTotal
-                                        }
-                                        // A cluster's stack is the cluster's, and
-                                        // a combined level leaves no lone copies.
-                                        val copies = if (inAlternativeGroup || stackCount < 2 || total != null) {
-                                            null
-                                        } else {
-                                            copyDepth
-                                        }
-                                        onSave(it, if (!blanket && kind.supportsStacks) stackCount else 1, total, copies)
+                                    saving?.let { save ->
+                                        onSave(save.requirement, save.count, save.total, save.copyDepth)
+                                            ?.let { refused = save to it }
                                     }
                                 },
-                                enabled = draft.isSuccess,
+                                enabled = shown.isSuccess,
                                 modifier = Modifier
                                     .weight(1f)
                                     .height(52.dp)
                                     .pressScale(saveInteraction, pressed = 0.95f)
-                                    .shakeOnChange(draft.exceptionOrNull()?.message),
+                                    .shakeOnChange(shown.exceptionOrNull()?.message),
                                 shapes = ButtonDefaults.shapes(),
                                 interactionSource = saveInteraction,
                             ) {

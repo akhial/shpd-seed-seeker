@@ -302,36 +302,9 @@ data class ItemRequirement(
     val singleEffect: String?
         get() = (effect as? EffectFilter.OneOf)?.names?.singleOrNull()
 
-    /** The highest upgrade an item satisfying this requirement can carry. */
-    val maximumUpgrade: Int
-        get() = if (upgradeMatch == UpgradeMatch.EXACT) upgrade else upgradeCeiling
-
     /** The highest upgrade this requirement may name, its item and tier filter included. */
     val upgradeCeiling: Int
         get() = SearchLimits.maximumUpgrade(kind, item, tierMatch, tier)
-
-    /**
-     * The most *levels* this requirement can contribute to a combined total:
-     * its highest upgrade plus one, since every matched item counts itself.
-     */
-    val maximumLevel: Int
-        get() = maximumUpgrade + 1
-
-    /**
-     * Whether this constrains nothing beyond its category — the shape a
-     * stack's extra copies take. A narrowed weapon kind is a constraint; a
-     * per-item floor limit is a placement bound, not an item property, and
-     * does not count.
-     */
-    val isBare: Boolean
-        get() = item == null &&
-            kind == kind.family &&
-            tierMatch == TierMatch.ANY &&
-            upgradeMatch == UpgradeMatch.ANY &&
-            effect == EffectFilter.Any &&
-            !requireUncursed &&
-            !excludeResin &&
-            source == null
 
     /** Human-readable effect constraint, or null when any effect is accepted. */
     val effectLabel: String?
@@ -412,57 +385,17 @@ fun List<ItemRequirement>.slots(): List<List<ItemRequirement>> {
 fun List<ItemRequirement>.slotCount(): Int = slots().size
 
 /**
- * The first problem that would make the engine refuse this requirement list,
- * as a user-facing message, or null when it is runnable. [SearchRequest]
- * enforces the same rules; this form exists so the editor can show the
- * message instead of silently disabling Search.
+ * The query-level problem that keeps this list from running, as a
+ * user-facing message, or null when there is none: a resin amount out of
+ * range, or nothing asked for at all. What is wrong with the requirements
+ * themselves — a stack, a combined level, an either/or group, blankets
+ * without an ordinary requirement — is the requirement editor's to say
+ * ([RequirementEditor], [BoardView.problems]); the header shows it after
+ * this, and the engine refuses such a query as well.
  */
 fun List<ItemRequirement>.validationProblem(arcaneResin: Int = 0, arcaneResinAuto: Boolean = false, hasFloorRequirements: Boolean = false): String? {
     if (arcaneResin !in 0..65535) return "Arcane Resin must be 0..65535."
     if (isEmpty() && arcaneResin == 0 && !arcaneResinAuto && !hasFloorRequirements) return "Add at least one requirement."
-    if (isNotEmpty() && none { !it.blanket }) return "Add at least one ordinary requirement."
-    if (slots().any { slot -> slot.any { it.blanket != slot.first().blanket } }) {
-        return "An either/or group cannot mix ordinary and blanket requirements."
-    }
-    // A stack (identity group) has one anchor unit — a lone requirement or one
-    // whole alternative group — that may constrain the item it binds to; every
-    // other member is a bare copy of the same category.
-    val identityGroups = filter { it.identityGroup != null }.groupBy { it.identityGroup!! }
-    for ((_, members) in identityGroups.toSortedMap()) {
-        if (members.map { it.kind.family }.distinct().size > 1) {
-            return "The copies of a stack must share its category."
-        }
-        val units = members.filterNot { it.isBare }
-            .map { it.alternativeGroup?.let { group -> "alt:$group" } ?: "req:${it.key}" }
-            .distinct()
-        if (units.size > 1) {
-            return "Only one item of a stack can carry constraints; the extra copies are plain."
-        }
-    }
-    // Combined-level groups: rings only, and one shared, reachable total,
-    // counted in levels (upgrade plus one per item).
-    val sumGroups = filter { it.levelSum != null }.groupBy { it.levelSum!!.group }
-    for ((_, members) in sumGroups.toSortedMap()) {
-        if (members.any { it.kind.family != ItemKind.RING }) {
-            return "Only rings can count levels together."
-        }
-        val totals = members.map { it.levelSum!!.atLeast }.distinct()
-        if (totals.size > 1) {
-            return "A stack must share one combined level " +
-                "(it has ${totals.sorted().joinToString(" and ")})."
-        }
-        // Each member's own ceiling, bounded by what a world generates: only
-        // the Imp vault's one prize levels a ring past the standard roll.
-        val reachable = minOf(
-            members.sumOf { it.maximumLevel },
-            SearchLimits.ringStackCapacity(members.size),
-        )
-        val needed = totals.single()
-        if (needed > reachable) {
-            return "A combined level of $needed needs more items: " +
-                "these ${members.size} can reach $reachable."
-        }
-    }
     return null
 }
 

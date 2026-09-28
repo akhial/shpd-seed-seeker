@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.asImageBitmap
@@ -23,12 +24,13 @@ import androidx.compose.ui.unit.dp
 import dev.seedseeker.app.catalog.ItemCatalog
 import dev.seedseeker.app.catalog.PackagedCatalog
 import dev.seedseeker.app.model.ArcaneResinFilter
+import dev.seedseeker.app.model.BoardEdit
 import dev.seedseeker.app.model.ItemKind
 import dev.seedseeker.app.model.ItemRequirement
-import dev.seedseeker.app.model.applyEdit
-import dev.seedseeker.app.model.boardItems
-import dev.seedseeker.app.model.joinAlternatives
-import dev.seedseeker.app.model.validationProblem
+import dev.seedseeker.app.model.LevelSum
+import dev.seedseeker.app.model.RequirementEditor
+import dev.seedseeker.app.model.ResinCondition
+import dev.seedseeker.app.model.UpgradeMatch
 import dev.seedseeker.app.ui.theme.SeedSeekerTheme
 import java.io.File
 import org.junit.Assert.*
@@ -57,6 +59,10 @@ class RequirementBoardTest {
     private var edits = 0
     private var removals = 0
 
+    /** A board of rows built through the editor, as the app builds them. */
+    private fun edited(rows: List<ItemRequirement>, vararg edits: BoardEdit): List<ItemRequirement> =
+        RequirementEditor.board(rows, edits.asList(), nextKey = 1).rows!!
+
     private fun show() {
         val atlas = compose.activity.assets.open("third_party/shattered-pixel-dungeon/items.png")
             .use(BitmapFactory::decodeStream)!!.asImageBitmap()
@@ -64,11 +70,14 @@ class RequirementBoardTest {
             SeedSeekerTheme {
                 CompositionLocalProvider(LocalItemAtlas provides atlas) {
                     Surface {
+                        val resin = ResinCondition.of(amount.value, automatic.value, ArcaneResinFilter())
+                        val board = remember(requirements.value, resin) { RequirementEditor.view(requirements.value, resin) }
                         RequirementBoard(
-                            requirements = requirements.value, enabled = enabled.value, compact = compact.value,
-                            onChange = { requirements.value = it }, onEdit = { _, _ -> },
-                            onRemove = { item -> requirements.value = requirements.value.filterIndexed { index, _ -> index !in item.members } },
-                            onAdd = {}, arcaneResin = amount.value, arcaneResinAuto = automatic.value, arcaneResinFilter = ArcaneResinFilter(),
+                            board = board, enabled = enabled.value, compact = compact.value,
+                            onChange = { edit ->
+                                RequirementEditor.board(requirements.value, listOf(edit), resin).rows?.let { requirements.value = it }
+                            },
+                            onEdit = {}, onAdd = {}, resin = board.resin,
                             onEditResin = { edits++ }, onRemoveResin = { removals++; amount.value = 0; automatic.value = false },
                             modifier = Modifier.width(380.dp).padding(16.dp),
                         )
@@ -175,12 +184,9 @@ class RequirementBoardTest {
     }
 
     @Test fun droppingArmorOnACountedRingKeepsTheRingAndItsCountTogether() {
-        val counted = emptyList<ItemRequirement>().applyEdit(
-            index = null,
-            requirement = ItemRequirement(0, ItemCatalog.findById("ring_energy")!!, 4),
-            count = 3,
-            total = null,
-            copyDepth = 20,
+        val counted = edited(
+            emptyList(),
+            BoardEdit.Save(null, ItemRequirement(0, ItemCatalog.findById("ring_energy")!!, 4), count = 3, total = null, copyDepth = 20),
         ) + ItemRequirement(9, ItemCatalog.findById("plate_armor")!!, 3)
         requirements.value = counted
         amount.value = 0
@@ -207,13 +213,11 @@ class RequirementBoardTest {
     }
 
     @Test fun aRejectedDropDoesNotDetachAMemberFromItsOriginalGroup() {
-        val counted = emptyList<ItemRequirement>().applyEdit(
-            index = null,
-            requirement = ItemRequirement(0, ItemCatalog.findById("ring_energy")!!, 4),
-            count = 3,
-            total = null,
+        val counted = edited(
+            emptyList(),
+            BoardEdit.Save(null, ItemRequirement(0, ItemCatalog.findById("ring_energy")!!, 4), count = 3, total = null, copyDepth = null),
         ) + listOf(original[0].copy(key = 9), original[1].copy(key = 10))
-        val grouped = counted.joinAlternatives(3, 4)
+        val grouped = edited(counted, BoardEdit.Join(source = 9, target = 10))
         requirements.value = grouped
         amount.value = 0
         show()
@@ -225,12 +229,9 @@ class RequirementBoardTest {
     }
 
     @Test fun compatibleRingDropKeepsTheCountOnTheEitherOrGroup() {
-        val counted = emptyList<ItemRequirement>().applyEdit(
-            index = null,
-            requirement = ItemRequirement(0, ItemCatalog.findById("ring_energy")!!, 4),
-            count = 3,
-            total = null,
-            copyDepth = 20,
+        val counted = edited(
+            emptyList(),
+            BoardEdit.Save(null, ItemRequirement(0, ItemCatalog.findById("ring_energy")!!, 4), count = 3, total = null, copyDepth = 20),
         ) + ItemRequirement(9, ItemCatalog.findById("ring_wealth")!!, 2)
         requirements.value = counted
         amount.value = 0
@@ -240,14 +241,47 @@ class RequirementBoardTest {
         dropOn(compose.onNodeWithContentDescription("Ring of Energy,", substring = true))
         compose.runOnIdle {
             val joined = requirements.value
-            val item = joined.boardItems().single()
-            assertEquals(listOf(1L, 9L), item.members.map { joined[it].key })
-            assertEquals(3, item.stackCount)
-            assertEquals(listOf(20, 20), item.extras.map { joined[it].maximumDepth })
-            assertNull(joined.validationProblem())
+            val board = RequirementEditor.view(joined)
+            val item = board.items.single()
+            assertEquals(listOf(1L, 9L), item.members)
+            assertEquals(3, item.count)
+            assertEquals(20, item.copyDepth)
+            assertEquals(listOf(20, 20), joined.filter { it.key !in item.members }.map { it.maximumDepth })
+            assertEquals(emptyList<Any>(), board.problems)
         }
         compose.onNodeWithText("or").assertIsDisplayed()
         compose.onNodeWithText("×3").assertIsDisplayed()
+    }
+
+    @Test fun aMemberLeavesItsCapsuleOnlyWhenLetGoOnTheOpenBoard() {
+        requirements.value = edited(original, BoardEdit.Join(source = 1, target = 2))
+        amount.value = 0
+        show()
+        val grouped = requirements.value
+        // Its own capsule, the other member included, takes no drop.
+        pickUp(firstWand())
+        dropOn(compose.onNode(hasContentDescription("Any wand,", substring = true) and hasText("+2")))
+        compose.runOnIdle { assertEquals(grouped, requirements.value) }
+        compose.onNodeWithText("or").assertIsDisplayed()
+
+        pickUp(firstWand())
+        val open = compose.onRoot().fetchSemanticsNode().boundsInRoot.let { Offset(it.center.x, it.bottom - 40f) }
+        compose.onRoot().performTouchInput { moveTo(open, delayMillis = 100) }
+        release()
+        compose.runOnIdle { assertTrue(requirements.value.all { it.alternativeGroup == null }) }
+        compose.onNodeWithText("or").assertDoesNotExist()
+    }
+
+    @Test fun aChipTheEditorFindsAProblemWithSaysWhatItIs() {
+        val might = ItemCatalog.findById("ring_might")!!
+        requirements.value = listOf(
+            ItemRequirement(1, might, 0, upgradeMatch = UpgradeMatch.ANY, levelSum = LevelSum(1, 2)),
+            ItemRequirement(2, might, 0, upgradeMatch = UpgradeMatch.ANY, levelSum = LevelSum(1, 3)),
+        )
+        amount.value = 0
+        show()
+        compose.onNodeWithContentDescription("Ring of Might,", substring = true)
+            .assert(hasContentDescription("A stack must share one combined level.", substring = true))
     }
 
     @Test fun searchingDisablesResinEditingAndDragging() {

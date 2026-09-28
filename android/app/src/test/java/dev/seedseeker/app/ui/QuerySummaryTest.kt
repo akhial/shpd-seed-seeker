@@ -3,11 +3,7 @@ package dev.seedseeker.app.ui
 
 import dev.seedseeker.app.catalog.ItemCatalog
 import dev.seedseeker.app.catalog.PackagedCatalog
-import dev.seedseeker.app.model.EffectFilter
-import dev.seedseeker.app.model.ItemKind
 import dev.seedseeker.app.model.ItemRequirement
-import dev.seedseeker.app.model.ScoutItemSource
-import dev.seedseeker.app.model.TierMatch
 import dev.seedseeker.app.model.UpgradeMatch
 import dev.seedseeker.app.model.LevelSum
 import dev.seedseeker.app.model.WandmakerQuest
@@ -18,80 +14,7 @@ class QuerySummaryTest {
     init { PackagedCatalog.install() }
 
     @Test
-    fun detailLineCondensesAnExactItemRequirement() {
-        val requirement = ItemRequirement(
-            key = 1,
-            item = ItemCatalog.weapons.first { it.id == "sword" },
-            upgrade = 2,
-            effect = EffectFilter.named("Lucky"),
-            maximumDepth = 12,
-        )
-
-        assertEquals("+2 · Lucky · ≤ floor 12", requirementDetailLine(requirement))
-    }
-
-    @Test
-    fun detailLineCondensesAWildcardRequirement() {
-        val requirement = ItemRequirement(
-            key = 2,
-            item = null,
-            kind = ItemKind.ARMOR,
-            upgrade = 1,
-            upgradeMatch = UpgradeMatch.AT_LEAST,
-            tierMatch = TierMatch.AT_LEAST,
-            tier = 3,
-            requireUncursed = true,
-            source = ScoutItemSource.GHOST_REWARD,
-            identityGroup = 2,
-        )
-
-        // A stack shows as a ×N badge on its chip, not in the detail line.
-        assertEquals(
-            "≥+1 · uncursed · Ghost reward",
-            requirementDetailLine(requirement),
-        )
-    }
-
-    @Test
-    fun detailLineIsEmptyForAnUnconstrainedRequirement() {
-        val requirement = ItemRequirement(
-            key = 3,
-            item = ItemCatalog.weapons.first { it.id == "sword" },
-            upgrade = 0,
-            upgradeMatch = UpgradeMatch.ANY,
-        )
-
-        assertEquals("", requirementDetailLine(requirement))
-    }
-
-    @Test
-    fun detailLineDescribesEffectSetsAnyEnchantmentAndCombinedUpgradeGroups() {
-        val greatshield = ItemCatalog.weapons.first { it.id == "greatshield" }
-        assertEquals(
-            "+2 · Blocking/Projecting/Vampiric",
-            requirementDetailLine(
-                ItemRequirement(
-                    key = 1,
-                    item = greatshield,
-                    upgrade = 2,
-                    effect = EffectFilter.OneOf(listOf("Blocking", "Projecting", "Vampiric")),
-                ),
-            ),
-        )
-        assertEquals(
-            "any glyph · uncursed",
-            requirementDetailLine(
-                ItemRequirement(
-                    key = 2,
-                    item = null,
-                    kind = ItemKind.ARMOR,
-                    upgrade = 0,
-                    upgradeMatch = UpgradeMatch.ANY,
-                    effect = EffectFilter.AnyEnchantment,
-                    requireUncursed = true,
-                ),
-            ),
-        )
+    fun previewDescriptionAndScoutMatchText() {
         val might = ItemRequirement(
             key = 3,
             item = ItemCatalog.rings.first { it.id == "ring_might" },
@@ -101,7 +24,6 @@ class QuerySummaryTest {
             levelSum = LevelSum(group = 1, atLeast = 4),
             maximumDepth = 4,
         )
-        assertEquals("Σ≥4 · ≤ floor 4", requirementDetailLine(might))
         assertEquals("Any upgrade • combined level ≥ 4 • by floor 4", might.description)
         assertEquals("1 of 2 requirements", scoutMatchText(1, 2))
         assertEquals("1 of 1 requirement", scoutMatchText(1, 1))

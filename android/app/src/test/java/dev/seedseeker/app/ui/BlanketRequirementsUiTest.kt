@@ -24,24 +24,23 @@ class BlanketRequirementsUiTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
     init { PackagedCatalog.install() }
 
-    @Test fun blanketBoardEditsTheOriginalQueryIndex() {
+    @Test fun blanketBoardEditsTheBlanketRow() {
         val requirements = listOf(
             ItemRequirement(1, ItemCatalog.findById("wand_frost")!!, 2),
             ItemRequirement(2, null, 3, kind = ItemKind.WAND, blanket = true,
                 source = ScoutItemSource.WANDMAKER_REWARD),
         )
-        var editedIndex: Int? = null
+        val board = RequirementEditor.view(requirements)
+        var editedKey: Long? = null
         compose.setContent {
             SeedSeekerTheme {
-                RequirementBoard(requirements, enabled = true, blanket = true,
-                    onChange = {}, onEdit = { _, index -> editedIndex = index }, onRemove = {}, onAdd = {},
-                    arcaneResin = 0, arcaneResinFilter = ArcaneResinFilter(),
-                    onEditResin = {}, onRemoveResin = {})
+                RequirementBoard(board, enabled = true, blanket = true,
+                    onChange = {}, onEdit = { editedKey = it }, onAdd = {})
             }
         }
         compose.onNodeWithText("Any wand").performClick()
-        compose.runOnIdle { assertEquals(1, editedIndex) }
-        compose.onNodeWithText(requirements[0].title).assertDoesNotExist()
+        compose.runOnIdle { assertEquals(2L, editedKey) }
+        compose.onNodeWithText("Wand of Frost").assertDoesNotExist()
     }
 
     @Test fun blanketSheetSavesFiltersWithoutOfferingExtraCopies() {
@@ -54,6 +53,7 @@ class BlanketRequirementsUiTest {
                     saved = requirement
                     assertEquals(1, count)
                     assertNull(total)
+                    null
                 })
             }
         }

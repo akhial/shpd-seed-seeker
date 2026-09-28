@@ -92,7 +92,9 @@ import dev.seedseeker.app.engine.NativeSeedFinder
 import dev.seedseeker.app.engine.ScoutMatches
 import dev.seedseeker.app.engine.SearchWorkers
 import dev.seedseeker.app.engine.SeedCode
-import dev.seedseeker.app.model.BoardItem
+import dev.seedseeker.app.model.BoardAnswer
+import dev.seedseeker.app.model.BoardEdit
+import dev.seedseeker.app.model.BoardViews
 import dev.seedseeker.app.model.ItemKind
 import dev.seedseeker.app.model.ItemRequirement
 import dev.seedseeker.app.model.Challenge
@@ -102,15 +104,12 @@ import dev.seedseeker.app.model.floorValidationProblem
 import dev.seedseeker.app.model.PresetQuery
 import dev.seedseeker.app.model.PresetStorage
 import dev.seedseeker.app.model.QueryPreset
+import dev.seedseeker.app.model.RequirementEditor
+import dev.seedseeker.app.model.ResinCondition
 import dev.seedseeker.app.model.ResultsExport
 import dev.seedseeker.app.model.ScoutWorld
 import dev.seedseeker.app.model.SearchRequest
 import dev.seedseeker.app.model.SeedResult
-import dev.seedseeker.app.model.applyEdit
-import dev.seedseeker.app.model.boardItems
-import dev.seedseeker.app.model.copyDepthOf
-import dev.seedseeker.app.model.removeItem
-import dev.seedseeker.app.model.removeMember
 import dev.seedseeker.app.model.slotCount
 import dev.seedseeker.app.model.toPresetQuery
 import dev.seedseeker.app.model.validationProblem
@@ -199,10 +198,11 @@ internal fun SeedFinderApp(
     var destination by remember { mutableStateOf(Destination.FINDER) }
     var aboutReturnDestination by remember { mutableStateOf(Destination.FINDER) }
     var settingsReturnDestination by remember { mutableStateOf(Destination.FINDER) }
-    var requirements by remember { mutableStateOf(initialQuery.requirements) }
-    var nextRequirementKey by remember {
-        mutableLongStateOf((initialQuery.requirements.maxOfOrNull { it.key } ?: 0L) + 1L)
-    }
+    var requirements by remember { mutableStateOf(RequirementEditor.loaded(initialQuery.requirements, firstKey = 1L)) }
+    var nextRequirementKey by remember { mutableLongStateOf(initialQuery.requirements.size + 1L) }
+    /** A list loaded from elsewhere, keyed on from [nextRequirementKey] in the editor's canonical encoding. */
+    fun load(loaded: List<ItemRequirement>): List<ItemRequirement> =
+        RequirementEditor.loaded(loaded, nextRequirementKey).also { nextRequirementKey += loaded.size }
     var addingBlanket by remember { mutableStateOf(false) }
     var userPresets by remember { mutableStateOf(presetStorage.load()) }
     var floorRequirements by remember { mutableStateOf(initialQuery.floorRequirements) }
@@ -238,9 +238,9 @@ internal fun SeedFinderApp(
     // Device-local, so unlike the query state above nothing an import, a
     // preset or a share link carries ever writes it.
     var workerCount by remember { mutableStateOf(workerPreference.load()) }
-    // The board anchor the editor is open on, plus the stack shape it showed;
-    // null means the sheet is building a new chip.
-    var editingIndex by remember { mutableStateOf<Int?>(null) }
+    // The row the editor is open on, plus the stack shape it showed; null
+    // means the sheet is building a new chip.
+    var editingKey by remember { mutableStateOf<Long?>(null) }
     var editingCount by remember { mutableStateOf(1) }
     var editingTotal by remember { mutableStateOf<Int?>(null) }
     var editingCopyDepth by remember { mutableStateOf<Int?>(null) }
@@ -279,7 +279,7 @@ internal fun SeedFinderApp(
         if (!controller.ready) return@LaunchedEffect
         val query = controller.snapshot.pending?.request?.toPresetQuery() ?: controller.snapshot.query
         if (query != null) {
-            requirements = query.requirements.map { it.copy(key = nextRequirementKey++) }
+            requirements = load(query.requirements)
             autoApplyTrinket = query.autoApplyTrinket
             arcaneResin = query.arcaneResin
             floorRequirements = query.floorRequirements
@@ -330,7 +330,7 @@ internal fun SeedFinderApp(
                     transferError = "Stop the search before importing results."
                     return@onSuccess
                 }
-                requirements = imported.query.requirements.map { it.copy(key = nextRequirementKey++) }
+                requirements = load(imported.query.requirements)
                 autoApplyTrinket = imported.query.autoApplyTrinket
                 arcaneResin = imported.query.arcaneResin
                 floorRequirements = imported.query.floorRequirements
@@ -410,7 +410,7 @@ internal fun SeedFinderApp(
             return@LaunchedEffect
         }
         runCatching { DeepLink.decode(code) }.onSuccess { query ->
-            requirements = query.requirements.map { it.copy(key = nextRequirementKey++) }
+            requirements = load(query.requirements)
             autoApplyTrinket = query.autoApplyTrinket
             arcaneResin = query.arcaneResin
             floorRequirements = query.floorRequirements
@@ -496,12 +496,20 @@ internal fun SeedFinderApp(
         }
     }
 
+    // The board as the requirement editor folds and words it, asked for once
+    // per change of the list or the resin, never per frame: this body also
+    // recomposes on every search progress tick.
+    val boardResin = ResinCondition.of(arcaneResin, arcaneResinAuto, arcaneResinFilter)
+    val boardViews = remember { BoardViews() }
+    val board = remember(requirements, boardResin) { boardViews.of(requirements, boardResin) }
+    val boardProblem = board.problems.firstOrNull()?.message
     // Why the query cannot run yet — no requirements, an unattainable combined
-    // upgrade total, … — shown in the header instead of silently disabling Search.
+    // level, … — shown in the header instead of silently disabling Search.
     val validationMessage = floorRequirements.floorValidationProblem(maximumDepth)
         ?: requirements.validationProblem(arcaneResin, arcaneResinAuto, floorRequirements.isNotEmpty())
+        ?: boardProblem
     // Null while the query is not runnable.
-    val currentRequest = runCatching {
+    val currentRequest = if (boardProblem != null) null else runCatching {
         SearchRequest(
             requirements = requirements,
             autoApplyTrinket = autoApplyTrinket,
@@ -516,6 +524,27 @@ internal fun SeedFinderApp(
             wandmakerQuest = wandmakerQuest,
         )
     }.getOrNull()
+    /**
+     * Sends [edits] to the requirement editor and adopts the list it answers
+     * when they changed it; null when the editor could not answer, which the
+     * snackbar reports while the list stays as it was.
+     */
+    fun editRequirements(vararg edits: BoardEdit): BoardAnswer? {
+        val answer = runCatching {
+            RequirementEditor.board(requirements, edits.asList(), boardResin, nextRequirementKey)
+        }.getOrElse { failure ->
+            scope.launch { snackbarHostState.showSnackbar(failure.message ?: "The requirements could not be edited.") }
+            return null
+        }
+        nextRequirementKey = maxOf(nextRequirementKey, answer.nextKey)
+        editingKey = editingKey?.let { answer.rekeyed[it] ?: it }
+        answer.rows?.let { rows ->
+            boardViews.keep(rows, boardResin, answer.board)
+            requirements = rows
+        }
+        return answer
+    }
+
     fun scoutSeed(seed: String) {
         val formatted = SeedCode.formatInput(seed)
         scoutInput = formatted
@@ -593,6 +622,7 @@ internal fun SeedFinderApp(
         when (shown) {
             Destination.FINDER -> FinderScreen(
                 requirements = requirements,
+                board = board,
                 autoApplyTrinket = autoApplyTrinket,
                 arcaneResin = arcaneResin,
                 arcaneResinFilter = arcaneResinFilter,
@@ -628,7 +658,7 @@ internal fun SeedFinderApp(
                     destination = Destination.SEARCH_SETTINGS
                 },
                 onApplyPreset = { preset ->
-                    requirements = preset.query.requirements.map { it.copy(key = nextRequirementKey++) }
+                    requirements = load(preset.query.requirements)
                     autoApplyTrinket = preset.query.autoApplyTrinket
                     floorRequirements = preset.query.floorRequirements
                     arcaneResin = preset.query.arcaneResin
@@ -674,7 +704,7 @@ internal fun SeedFinderApp(
                 onRemoveResin = { arcaneResin = 0; arcaneResinAuto = false; arcaneResinFilter = dev.seedseeker.app.model.ArcaneResinFilter() },
                 onAdd = { blanket ->
                     addingBlanket = blanket
-                    editingIndex = null
+                    editingKey = null
                     editingCount = 1
                     editingTotal = null
                     editingCopyDepth = null
@@ -682,15 +712,15 @@ internal fun SeedFinderApp(
                 },
                 // The tapped chip is what the editor opens on, but the stack it
                 // shows belongs to the whole board item behind it.
-                onEdit = { item, index ->
-                    editingIndex = index
-                    editingCount = item.stackCount
-                    editingTotal = item.total
-                    editingCopyDepth = requirements.copyDepthOf(item)
+                onEdit = { key ->
+                    val item = board.itemOf(key)
+                    editingKey = key
+                    editingCount = item?.count ?: 1
+                    editingTotal = item?.total
+                    editingCopyDepth = item?.copyDepth
                     showRequirementSheet = true
                 },
-                onRequirementsChange = { requirements = it },
-                onRemove = { item -> requirements = requirements.removeItem(item) },
+                onBoardChange = { edit -> editRequirements(edit) },
                 validationMessage = validationMessage,
                 onSearch = {
                     if (currentRequest != null) {
@@ -745,7 +775,12 @@ internal fun SeedFinderApp(
                         text.toString()
                     }
                 },
-                onShareQuery = {
+                onShareQuery = share@{
+                    // As for Start: the query's own checks, then the list's first problem.
+                    boardProblem?.let {
+                        linkError = it
+                        return@share
+                    }
                     runCatching {
                         DeepLink.encodeLink(
                             PresetQuery(
@@ -877,30 +912,30 @@ internal fun SeedFinderApp(
                 onRemove = { arcaneResin = 0; arcaneResinAuto = false; arcaneResinFilter = dev.seedseeker.app.model.ArcaneResinFilter(); showResinSheet = false })
         }
         if (showRequirementSheet) {
+            val editing = editingKey?.let { key -> requirements.firstOrNull { it.key == key } }
             RequirementSheet(
-                onAddResin = if (editingIndex == null && !addingBlanket) ({ showRequirementSheet = false; showResinSheet = true }) else null,
-                editing = editingIndex?.let(requirements::get),
-                otherRequirements = requirements.filterIndexed { index, _ -> index != editingIndex },
-                blanket = editingIndex?.let { requirements[it].blanket } ?: addingBlanket,
+                onAddResin = if (editing == null && !addingBlanket) ({ showRequirementSheet = false; showResinSheet = true }) else null,
+                editing = editing,
+                otherRequirements = requirements.filter { it.key != editing?.key },
+                blanket = editing?.blanket ?: addingBlanket,
                 initialKind = if (addingBlanket) requirements.firstOrNull { !it.blanket }?.kind ?: ItemKind.WEAPON else ItemKind.WEAPON,
                 editingCount = editingCount,
                 editingTotal = editingTotal,
                 editingCopyDepth = editingCopyDepth,
                 onDismiss = { showRequirementSheet = false },
-                onSave = { saved, count, total, copyDepth ->
-                    requirements = requirements.applyEdit(editingIndex, saved, count, total, copyDepth)
-                    showRequirementSheet = false
+                // The editor stores the chip with its stack's shape; a save it
+                // refuses keeps the sheet open on the reason.
+                onSave = save@{ saved, count, total, copyDepth ->
+                    val answer = editRequirements(BoardEdit.Save(editing?.key, saved, count, total, copyDepth))
+                        ?: return@save null
+                    if (answer.refused == null) showRequirementSheet = false
+                    answer.refused
                 },
                 // As from the board's drop zone: a lone chip goes with its
                 // copies, a member leaves the cluster and its stack behind.
-                onRemove = editingIndex?.let { index ->
+                onRemove = editing?.let { row ->
                     {
-                        val item = requirements.boardItems().first { index in it.members }
-                        requirements = if (item.cluster != null) {
-                            requirements.removeMember(index)
-                        } else {
-                            requirements.removeItem(item)
-                        }
+                        editRequirements(BoardEdit.Remove(row.key))
                         showRequirementSheet = false
                     }
                 },

@@ -85,17 +85,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import dev.seedseeker.app.model.ArcaneResinFilter
-import dev.seedseeker.app.model.BoardItem
-import dev.seedseeker.app.model.EffectFilter
-import dev.seedseeker.app.model.ItemRequirement
-import dev.seedseeker.app.model.TierMatch
-import dev.seedseeker.app.model.UpgradeMatch
-import dev.seedseeker.app.model.boardItems
-import dev.seedseeker.app.model.canJoinAlternatives
-import dev.seedseeker.app.model.detach
-import dev.seedseeker.app.model.joinAlternatives
-import dev.seedseeker.app.model.removeMember
+import dev.seedseeker.app.model.BadgeView
+import dev.seedseeker.app.model.BoardEdit
+import dev.seedseeker.app.model.BoardItemView
+import dev.seedseeker.app.model.BoardView
+import dev.seedseeker.app.model.ChipView
+import dev.seedseeker.app.model.EffectView
+import dev.seedseeker.app.model.ResinChipView
+import dev.seedseeker.app.model.TagView
 import dev.seedseeker.app.ui.theme.SpdGreen
 import dev.seedseeker.app.ui.theme.SpdUpgrade
 import dev.seedseeker.app.ui.theme.SpdYellow
@@ -108,7 +105,7 @@ import dev.seedseeker.app.ui.theme.SpdYellow
  *   slot — they share a dashed capsule with a small "or" between them. Dragging
  *   a chip off its capsule pulls it back out on its own.
  * - A chip asking for several items of the same kind carries a `×N` badge, and
- *   one asking for a combined level carries `Σ≥N`. Both are properties of a
+ *   one asking for a combined level carries `Σ ≥ N`. Both are properties of a
  *   chip rather than relationships between chips, so both are set in the editor
  *   a tap opens — never by a drag.
  *
@@ -122,45 +119,45 @@ import dev.seedseeker.app.ui.theme.SpdYellow
  * Removal is a drop rather than a target to hit — the board opens a zone under
  * itself while a chip is held — with the editor a tap opens as the other way.
  *
+ * What the chips say, which drops a chip takes, and what a drop writes back
+ * are the requirement editor's: [board] is its answer for the whole list, of
+ * which this draws the [blanket] section, and every drop is sent to
+ * [onChange] as a [BoardEdit]. A tap opens the editor on a row through
+ * [onEdit]. Hit-testing reads the join and refusal sets [board] already
+ * carries, so a drag asks the editor nothing until it lands.
+ *
  * [compact] draws every chip at its smaller size ([ChipMetrics.Compact]): a
  * shorter capsule, a smaller sprite, and smaller text, so a line holds more.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun RequirementBoard(
-    requirements: List<ItemRequirement>,
+    board: BoardView,
     enabled: Boolean,
     compact: Boolean = false,
     blanket: Boolean = false,
-    onChange: (List<ItemRequirement>) -> Unit,
-    onEdit: (BoardItem, Int) -> Unit,
-    onRemove: (BoardItem) -> Unit,
+    onChange: (BoardEdit) -> Unit,
+    onEdit: (Long) -> Unit,
     onAdd: () -> Unit,
-    arcaneResin: Int,
-    arcaneResinAuto: Boolean = false,
-    arcaneResinFilter: ArcaneResinFilter,
-    onEditResin: () -> Unit,
-    onRemoveResin: () -> Unit,
+    /** The Arcane Resin chip, drawn after the ordinary section's chips. */
+    resin: ResinChipView? = null,
+    onEditResin: () -> Unit = {},
+    onRemoveResin: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    val items = remember(requirements, blanket) {
-        requirements.boardItems().filter { requirements[it.anchor].blanket == blanket }
-    }
+    val items = remember(board, blanket) { board.items.filter { it.blanket == blanket } }
     val haptics = LocalHapticFeedback.current
     val entrances = LocalEntranceMemory.current
     // Live layout handles, so a drop can name what it landed on. Bounds are
     // resolved against the board only at hit-test time, which keeps them right
     // through scrolling.
-    val placements = remember { mutableStateMapOf<Int, LayoutCoordinates>() }
+    val placements = remember { mutableStateMapOf<Long, LayoutCoordinates>() }
     // A capsule is a target in its own right: the "or" between its chips and
-    // the padding around them are still the cluster's.
+    // the padding around them are still the cluster's. Keyed by its anchor row.
     val capsules = remember { mutableStateMapOf<Long, LayoutCoordinates>() }
-    // A board item's own key names a *position* in the list, which the next
-    // removal shifts; the anchor requirement's key names the thing itself.
-    fun itemKey(item: BoardItem): Long = requirements[item.anchor].key
-    var board by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    var boardArea by remember { mutableStateOf<LayoutCoordinates?>(null) }
     var deleteZone by remember { mutableStateOf<LayoutCoordinates?>(null) }
-    var dragging by remember { mutableStateOf<Int?>(null) }
+    var dragging by remember { mutableStateOf<Long?>(null) }
     var resinPlacement by remember { mutableStateOf<LayoutCoordinates?>(null) }
     var draggingResin by remember { mutableStateOf(false) }
     var dragPosition by remember { mutableStateOf(Offset.Zero) }
@@ -169,33 +166,33 @@ fun RequirementBoard(
     var grabOffset by remember { mutableStateOf(Offset.Zero) }
 
     fun rectOf(child: LayoutCoordinates?): Rect? {
-        val root = board?.takeIf { it.isAttached } ?: return null
+        val root = boardArea?.takeIf { it.isAttached } ?: return null
         val target = child?.takeIf { it.isAttached } ?: return null
         return root.localBoundingBoxOf(target)
     }
 
-    /** What the pointer is over, ignoring the dragged chip's own entry. */
-    fun targetAt(position: Offset, source: Int): DropTarget? {
+    fun chipOf(key: Long): ChipView? = items.firstNotNullOfOrNull { item -> item.chips.firstOrNull { it.key == key } }
+
+    /**
+     * What the pointer is over: a chip or a capsule takes the drop when the
+     * editor lets [source] join it, and says why when it refuses; anything
+     * else there, the chip's own entry included, takes nothing.
+     */
+    fun targetAt(position: Offset, source: ChipView): DropTarget? {
         if (rectOf(deleteZone)?.contains(position) == true) return DropTarget.Remove
-        fun join(index: Int): DropTarget =
-            if (requirements.canJoinAlternatives(source, index)) DropTarget.Join(index) else DropTarget.Incompatible
-        val own = items.firstOrNull { source in it.members }
-        val ownMembers = own?.members ?: listOf(source)
-        placements.entries
-            .firstOrNull { (index, coordinates) ->
-                index !in ownMembers && rectOf(coordinates)?.contains(position) == true
-            }
-            ?.let { return join(it.key) }
-        return items
-            .firstOrNull { it !== own && rectOf(capsules[itemKey(it)])?.contains(position) == true }
-            ?.let { join(it.anchor) }
+        val over = placements.entries.firstOrNull { (_, coordinates) -> rectOf(coordinates)?.contains(position) == true }?.key
+            ?: items.firstOrNull { rectOf(capsules[it.anchor])?.contains(position) == true }?.anchor
+            ?: return DropTarget.Board
+        if (over in source.join) return DropTarget.Join(over)
+        return source.refuse[over]?.let(DropTarget::Refused)
     }
 
+    val held = dragging?.let(::chipOf)
     // Resin is its own requirement and cannot join an either/or item group.
     val target = if (draggingResin) {
         DropTarget.Remove.takeIf { rectOf(deleteZone)?.contains(dragPosition) == true }
-    } else dragging?.let { targetAt(dragPosition, it) }
-    val hovered = (target as? DropTarget.Join)?.index
+    } else held?.let { targetAt(dragPosition, it) }
+    val hovered = (target as? DropTarget.Join)?.key
     val metrics = if (compact) ChipMetrics.Compact else ChipMetrics.Regular
     // A light tick each time the held chip finds something new to land on.
     LaunchedEffect(target) {
@@ -205,70 +202,62 @@ fun RequirementBoard(
     }
 
     CompositionLocalProvider(LocalChipMetrics provides metrics) {
-        Box(modifier = modifier.onGloballyPositioned { board = it }) {
+        Box(modifier = modifier.onGloballyPositioned { boardArea = it }) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(metrics.spacing),
                     verticalArrangement = Arrangement.spacedBy(metrics.spacing),
                 ) {
                     items.forEachIndexed { position, item ->
-                        key(itemKey(item)) {
+                        key(item.anchor) {
                             // Chips spring in when added, not every time the board reappears.
-                            val fresh = remember { entrances.firstTime("chip:${itemKey(item)}") }
+                            val fresh = remember { entrances.firstTime("chip:${item.anchor}") }
                             BoardEntry(
                                 modifier = Modifier.springEntrance(enabled = fresh, delayMillis = if (fresh) (position % 10) * 30 else 0),
-                                requirements = requirements,
                                 item = item,
                                 enabled = enabled,
-                                draggingIndex = dragging,
-                                hoveredIndex = hovered,
-                                onPlaced = { index, coordinates -> placements[index] = coordinates },
-                                onCapsulePlaced = { capsules[itemKey(item)] = it },
-                                onEdit = { index -> onEdit(item, index) },
-                                onDragStart = { index, offset ->
+                                dragging = dragging,
+                                hovered = hovered,
+                                onPlaced = { key, coordinates -> placements[key] = coordinates },
+                                onCapsulePlaced = { capsules[item.anchor] = it },
+                                onEdit = onEdit,
+                                onDragStart = { key, offset ->
                                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    dragging = index
+                                    dragging = key
                                     grabOffset = offset
-                                    dragPosition = (rectOf(placements[index])?.topLeft ?: Offset.Zero) + offset
+                                    dragPosition = (rectOf(placements[key])?.topLeft ?: Offset.Zero) + offset
                                 },
                                 onDrag = { delta -> dragPosition += delta },
                                 onDragEnd = {
-                                    val source = dragging
+                                    val source = dragging?.let(::chipOf)
                                     dragging = null
                                     if (source == null) return@BoardEntry
                                     when (val drop = targetAt(dragPosition, source)) {
                                         is DropTarget.Join -> {
                                             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            onChange(requirements.joinAlternatives(source, drop.index))
+                                            onChange(BoardEdit.Join(source.key, drop.key))
                                         }
                                         // A rejected drop is not a drag out of
                                         // a capsule: keep the original group.
-                                        DropTarget.Incompatible -> Unit
+                                        is DropTarget.Refused -> Unit
                                         // A lone chip goes with its copies; a member
                                         // leaves the cluster and its stack behind.
                                         DropTarget.Remove -> {
                                             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            if (item.cluster != null) {
-                                                onChange(requirements.removeMember(source))
-                                            } else {
-                                                onRemove(item)
-                                            }
+                                            onChange(BoardEdit.Remove(source.key))
                                         }
-                                        // Let go anywhere else: leave the capsule.
-                                        null -> if (requirements[source].alternativeGroup != null) {
-                                            onChange(requirements.detach(source))
-                                        }
+                                        // Let go on the open board: a member leaves its capsule.
+                                        DropTarget.Board -> if (source.canDetach) onChange(BoardEdit.Detach(source.key))
+                                        null -> Unit
                                     }
                                 },
                                 onDragCancel = { dragging = null },
                             )
                         }
                     }
-                    if (arcaneResinAuto || arcaneResin > 0) {
+                    if (resin != null) {
                         ArcaneResinChip(
-                            amount = arcaneResin,
-                            auto = arcaneResinAuto,
-                            filter = arcaneResinFilter,
+                            resin = resin,
                             enabled = enabled,
                             dimmed = draggingResin,
                             onPlaced = { resinPlacement = it },
@@ -292,14 +281,14 @@ fun RequirementBoard(
                     }
                     AddChip(enabled = enabled, onClick = onAdd)
                 }
-                if (dragging != null || draggingResin) {
+                if (held != null || draggingResin) {
                     RemoveZone(
                         over = target == DropTarget.Remove,
                         modifier = Modifier.onGloballyPositioned { deleteZone = it },
                     )
-                    if (target == DropTarget.Incompatible) {
+                    if (target is DropTarget.Refused) {
                         Text(
-                            "Copies can only be grouped with the same item type.",
+                            target.message,
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -308,8 +297,8 @@ fun RequirementBoard(
             }
             // The chip in hand: a lifted, tilted copy riding under the finger
             // while its place on the board waits, faded, for it to come back.
-            val held = dragging?.let { requirements.getOrNull(it) }
-            if (held != null || draggingResin) {
+            val ghostResin = resin.takeIf { draggingResin }
+            if (held != null || ghostResin != null) {
                 val lift = remember { Animatable(0f) }
                 LaunchedEffect(Unit) { lift.animateTo(1f, spring(dampingRatio = 0.5f, stiffness = 500f)) }
                 val overBin by animateFloatAsState(
@@ -340,9 +329,9 @@ fun RequirementBoard(
                 ) {
                     if (held != null) {
                         RequirementChip(
-                            requirement = held,
-                            stackCount = 1,
-                            total = null,
+                            chip = held,
+                            countBadge = null,
+                            totalBadge = null,
                             enabled = false,
                             dimmed = false,
                             highlighted = false,
@@ -353,11 +342,9 @@ fun RequirementBoard(
                             onDragEnd = {},
                             onDragCancel = {},
                         )
-                    } else {
+                    } else if (ghostResin != null) {
                         ArcaneResinChip(
-                            amount = arcaneResin,
-                            auto = arcaneResinAuto,
-                            filter = arcaneResinFilter,
+                            resin = ghostResin,
                             enabled = false,
                             dimmed = false,
                             onPlaced = {},
@@ -462,11 +449,14 @@ private val CAPSULE_INSET = 5.dp
 
 /** Where a dragged chip may be let go. */
 private sealed interface DropTarget {
-    /** Become an either/or alternative of the chip at [index]. */
-    data class Join(val index: Int) : DropTarget
+    /** Become an either/or alternative of the row [key]. */
+    data class Join(val key: Long) : DropTarget
 
-    /** Joining would separate or discard a stack's copies. */
-    data object Incompatible : DropTarget
+    /** A chip or capsule the editor refuses the join onto, and why. */
+    data class Refused(val message: String) : DropTarget
+
+    /** The open board: a cluster member leaves its capsule. */
+    data object Board : DropTarget
 
     /** Leave the board. */
     data object Remove : DropTarget
@@ -475,42 +465,42 @@ private sealed interface DropTarget {
 /** A chip, or the capsule holding an either/or cluster's chips. */
 @Composable
 private fun BoardEntry(
-    requirements: List<ItemRequirement>,
-    item: BoardItem,
+    item: BoardItemView,
     enabled: Boolean,
-    draggingIndex: Int?,
-    hoveredIndex: Int?,
-    onPlaced: (Int, LayoutCoordinates) -> Unit,
+    dragging: Long?,
+    hovered: Long?,
+    onPlaced: (Long, LayoutCoordinates) -> Unit,
     onCapsulePlaced: (LayoutCoordinates) -> Unit,
-    onEdit: (Int) -> Unit,
-    onDragStart: (Int, Offset) -> Unit,
+    onEdit: (Long) -> Unit,
+    onDragStart: (Long, Offset) -> Unit,
     onDrag: (Offset) -> Unit,
     onDragEnd: () -> Unit,
     onDragCancel: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (item.cluster == null) {
+        val chip = item.chips.single()
         RequirementChip(
-            requirement = requirements[item.anchor],
+            chip = chip,
             // A lone chip carries its own stack badges; a cluster's belong
             // to the capsule, since the stack binds to whichever member the
             // search picks.
-            stackCount = item.stackCount,
-            total = item.total,
+            countBadge = item.countBadge,
+            totalBadge = item.totalBadge,
             enabled = enabled,
-            dimmed = draggingIndex == item.anchor,
-            highlighted = hoveredIndex == item.anchor,
+            dimmed = dragging == chip.key,
+            highlighted = hovered == chip.key,
             modifier = modifier,
-            onPlaced = { onPlaced(item.anchor, it) },
-            onClick = { onEdit(item.anchor) },
-            onDragStart = { offset -> onDragStart(item.anchor, offset) },
+            onPlaced = { onPlaced(chip.key, it) },
+            onClick = { onEdit(chip.key) },
+            onDragStart = { offset -> onDragStart(chip.key, offset) },
             onDrag = onDrag,
             onDragEnd = onDragEnd,
             onDragCancel = onDragCancel,
         )
         return
     }
-    val highlighted = hoveredIndex != null && hoveredIndex in item.members
+    val highlighted = hovered != null && hovered in item.members
     val edge = MaterialTheme.colorScheme.tertiary
     val metrics = LocalChipMetrics.current
     // A capsule a chip is about to join marches its dashes like ants and swells.
@@ -550,7 +540,7 @@ private fun BoardEntry(
             .padding(CAPSULE_INSET),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        item.members.forEachIndexed { position, index ->
+        item.chips.forEachIndexed { position, chip ->
             Row(verticalAlignment = Alignment.CenterVertically) {
                 if (position > 0) {
                     Text(
@@ -563,30 +553,30 @@ private fun BoardEntry(
                     )
                 }
                 RequirementChip(
-                    requirement = requirements[index],
-                    stackCount = 1,
-                    total = null,
+                    chip = chip,
+                    countBadge = null,
+                    totalBadge = null,
                     enabled = enabled,
-                    dimmed = draggingIndex == index,
+                    dimmed = dragging == chip.key,
                     highlighted = false,
                     modifier = Modifier.weight(1f, fill = false),
-                    onPlaced = { onPlaced(index, it) },
-                    onClick = { onEdit(index) },
-                    onDragStart = { offset -> onDragStart(index, offset) },
+                    onPlaced = { onPlaced(chip.key, it) },
+                    onClick = { onEdit(chip.key) },
+                    onDragStart = { offset -> onDragStart(chip.key, offset) },
                     onDrag = onDrag,
                     onDragEnd = onDragEnd,
                     onDragCancel = onDragCancel,
                 )
             }
         }
-        if (item.stackCount > 1 || item.total != null) {
+        if (item.countBadge != null || item.totalBadge != null) {
             Row(
                 modifier = Modifier.height(metrics.height),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 StackBadges(
-                    stackCount = item.stackCount,
-                    total = item.total,
+                    count = item.countBadge,
+                    total = item.totalBadge,
                     enabled = enabled,
                     onClick = { onEdit(item.anchor) },
                 )
@@ -599,13 +589,14 @@ private fun BoardEntry(
  * One item to find: its sprite, its name, and the tiny tags that narrow it. A
  * tap edits it and a long press picks it up to drop on another chip; the effect
  * and the source it may come from stay in the editor and the spoken
- * description, since a phone's line has no room to spell them out.
+ * description, since a phone's line has no room to spell them out. A chip the
+ * editor finds a problem with wears the error colour and says the problem.
  */
 @Composable
 private fun RequirementChip(
-    requirement: ItemRequirement,
-    stackCount: Int,
-    total: Int?,
+    chip: ChipView,
+    countBadge: BadgeView?,
+    totalBadge: BadgeView?,
     enabled: Boolean,
     dimmed: Boolean,
     highlighted: Boolean,
@@ -619,10 +610,11 @@ private fun RequirementChip(
 ) {
     val metrics = LocalChipMetrics.current
     BoardChip(
-        description = chipDescription(requirement, stackCount, total),
+        description = listOfNotNull(chip.description, chip.problem).joinToString(", "),
         enabled = enabled,
         dimmed = dimmed,
         highlighted = highlighted,
+        faulty = chip.problem != null,
         modifier = modifier,
         onPlaced = onPlaced,
         onClick = onClick,
@@ -632,31 +624,28 @@ private fun RequirementChip(
         onDragCancel = onDragCancel,
     ) {
         SpriteTile(
-            item = requirement.item,
-            wildcardKind = requirement.kind,
-            glows = ItemGlows.forFilter(requirement.effect),
+            item = chip.item,
+            wildcardKind = chip.kind,
+            // "Any enchantment" settles on no colour of its own.
+            glows = chip.effect?.takeUnless { it.anyEnchantment }?.let { ItemGlows.forEffects(it.effects) }.orEmpty(),
             tileSize = metrics.tile,
         )
         Spacer(Modifier.width(metrics.spriteGap))
-        ChipTitle(chipTitle(requirement))
-        chipTags(requirement).forEach { tag ->
-            Spacer(Modifier.width(5.dp))
-            ChipTag(text = tag.text, tone = tag.tone)
-        }
-        EffectBadge(requirement)
-        if (requirement.requireUncursed) {
+        ChipTitle(chip.name)
+        ChipTags(chip.tags)
+        EffectBadge(chip.effect)
+        ChipTags(chip.trailingTags)
+        if (chip.uncursed) {
             Spacer(Modifier.width(5.dp))
             UncursedTag()
         }
-        StackBadges(stackCount = stackCount, total = total, enabled = enabled, onClick = onClick)
+        StackBadges(count = countBadge, total = totalBadge, enabled = enabled, onClick = onClick)
     }
 }
 
 @Composable
 private fun ArcaneResinChip(
-    amount: Int,
-    auto: Boolean,
-    filter: ArcaneResinFilter,
+    resin: ResinChipView,
     enabled: Boolean,
     dimmed: Boolean,
     onPlaced: (LayoutCoordinates) -> Unit,
@@ -668,10 +657,11 @@ private fun ArcaneResinChip(
 ) {
     val metrics = LocalChipMetrics.current
     BoardChip(
-        description = "Arcane Resin, ${if (auto) "Auto, upgrade matched wands to +3" else "at least $amount"}, ${resinFilterDescription(filter)}",
+        description = resin.description,
         enabled = enabled,
         dimmed = dimmed,
         highlighted = false,
+        faulty = false,
         onPlaced = onPlaced,
         onClick = onClick,
         onDragStart = onDragStart,
@@ -681,15 +671,9 @@ private fun ArcaneResinChip(
     ) {
         SpriteTile(item = arcaneResinItem, tileSize = metrics.tile)
         Spacer(Modifier.width(metrics.spriteGap))
-        ChipTitle("Arcane Resin")
-        Spacer(Modifier.width(5.dp))
-        ChipTag(text = if (auto) "Auto" else "≥$amount", tone = TagTone.QUALIFIER)
-        if (filter.includeMageWand) ChipTag(text = "Mage +2", tone = TagTone.QUALIFIER)
-        filter.maximumDepth?.let {
-            Spacer(Modifier.width(5.dp))
-            ChipTag(text = "F≤$it", tone = TagTone.QUALIFIER)
-        }
-        if (filter.uncursed) {
+        ChipTitle(resin.name)
+        ChipTags(resin.tags)
+        if (resin.uncursed) {
             Spacer(Modifier.width(5.dp))
             UncursedTag()
         }
@@ -708,13 +692,17 @@ private fun RowScope.ChipTitle(title: String) {
     )
 }
 
-/** Shared appearance and gestures for every draggable requirement chip. */
+/**
+ * Shared appearance and gestures for every draggable requirement chip; a
+ * [faulty] one is outlined in the error colour.
+ */
 @Composable
 private fun BoardChip(
     description: String,
     enabled: Boolean,
     dimmed: Boolean,
     highlighted: Boolean,
+    faulty: Boolean,
     modifier: Modifier = Modifier,
     onPlaced: (LayoutCoordinates) -> Unit,
     onClick: () -> Unit,
@@ -724,10 +712,10 @@ private fun BoardChip(
     onDragCancel: () -> Unit,
     content: @Composable RowScope.() -> Unit,
 ) {
-    val outline = if (highlighted) {
-        MaterialTheme.colorScheme.tertiary
-    } else {
-        MaterialTheme.colorScheme.outlineVariant
+    val outline = when {
+        highlighted -> MaterialTheme.colorScheme.tertiary
+        faulty -> MaterialTheme.colorScheme.error
+        else -> MaterialTheme.colorScheme.outlineVariant
     }
     val metrics = LocalChipMetrics.current
     // A drop target swells toward the chip in hand; the chip's own empty place shrinks back.
@@ -797,16 +785,20 @@ private fun BoardChip(
     }
 }
 
-/** How many of the chip (`×N` / `≤N`) and the level they reach together (`Σ≥N`). */
+/**
+ * How many of the chip (`×N` / `≤N`) and the level they reach together
+ * (`Σ ≥ N`, tighter on compact chips), each read out as what it means.
+ */
 @Composable
-private fun RowScope.StackBadges(stackCount: Int, total: Int?, enabled: Boolean, onClick: () -> Unit) {
-    if (stackCount > 1) {
+private fun RowScope.StackBadges(count: BadgeView?, total: BadgeView?, enabled: Boolean, onClick: () -> Unit) {
+    val compact = LocalChipMetrics.current.compact
+    count?.let {
         Spacer(Modifier.width(6.dp))
         StackBadge(
-            text = if (total != null) "≤$stackCount" else "×$stackCount",
+            text = if (compact) it.compactText else it.text,
             container = SpdGreen,
             content = MaterialTheme.colorScheme.onPrimary,
-            description = if (total != null) "up to $stackCount items" else "$stackCount of them",
+            description = it.tooltip,
             enabled = enabled,
             onClick = onClick,
         )
@@ -814,10 +806,10 @@ private fun RowScope.StackBadges(stackCount: Int, total: Int?, enabled: Boolean,
     total?.let {
         Spacer(Modifier.width(5.dp))
         StackBadge(
-            text = "Σ≥$it",
+            text = if (compact) it.compactText else it.text,
             container = SpdYellow,
             content = Color.Black,
-            description = "reaching $it levels together",
+            description = it.tooltip,
             enabled = enabled,
             onClick = onClick,
         )
@@ -860,16 +852,16 @@ private fun StackBadge(
  * at once do, and so does "any enchantment", which settles on no colour at all.
  */
 @Composable
-private fun EffectBadge(requirement: ItemRequirement) {
-    val glows = ItemGlows.forFilter(requirement.effect)
+private fun EffectBadge(effect: EffectView?) {
     when {
-        glows.size > 1 -> {
+        effect == null -> Unit
+        effect.anyEnchantment -> {
             Spacer(Modifier.width(5.dp))
-            EffectCountBadge(glows, requirement.effectLabel.orEmpty())
+            AnyEnchantmentDot(effect.label)
         }
-        requirement.effect == EffectFilter.AnyEnchantment -> {
+        effect.effects.size > 1 -> {
             Spacer(Modifier.width(5.dp))
-            AnyEnchantmentDot(requirement.effectLabel.orEmpty())
+            EffectCountBadge(ItemGlows.forEffects(effect.effects), effect.label)
         }
     }
 }
@@ -1070,8 +1062,14 @@ private fun Modifier.dashedOutline(
 /** How a qualifier badge is tinted. */
 private enum class TagTone { QUALIFIER, UPGRADE }
 
-/** A qualifier badge beside a chip's name. */
-private data class ChipTagSpec(val text: String, val tone: TagTone)
+/** The qualifier badges beside a chip's name, in the order given. */
+@Composable
+private fun ChipTags(tags: List<TagView>) {
+    tags.forEach { tag ->
+        Spacer(Modifier.width(5.dp))
+        ChipTag(text = tag.text, tone = if (tag.upgrade) TagTone.UPGRADE else TagTone.QUALIFIER)
+    }
+}
 
 @Composable
 private fun ChipTag(text: String, tone: TagTone) {
@@ -1117,37 +1115,3 @@ private fun UncursedTag() {
         }
     }
 }
-
-/** The chip's name: the item, or the wildcard it stands for, without its tier. */
-internal fun chipTitle(requirement: ItemRequirement): String =
-    requirement.item?.name ?: "Any ${requirement.kind.singularLabel}"
-
-/** The tiny qualifiers beside a chip's name: tier, upgrade, floor. */
-private fun chipTags(requirement: ItemRequirement): List<ChipTagSpec> =
-    buildList {
-        when (requirement.tierMatch) {
-            TierMatch.ANY -> Unit
-            TierMatch.EXACT -> add(ChipTagSpec("T${requirement.tier}", TagTone.QUALIFIER))
-            TierMatch.AT_LEAST -> add(ChipTagSpec("T${requirement.tier}+", TagTone.QUALIFIER))
-            TierMatch.AT_MOST -> add(ChipTagSpec("T≤${requirement.tier}", TagTone.QUALIFIER))
-        }
-        when (requirement.upgradeMatch) {
-            UpgradeMatch.ANY -> Unit
-            UpgradeMatch.EXACT -> add(ChipTagSpec("+${requirement.upgrade}", TagTone.UPGRADE))
-            UpgradeMatch.AT_LEAST -> add(ChipTagSpec("+${requirement.upgrade}↑", TagTone.UPGRADE))
-        }
-        if (requirement.excludeResin) add(ChipTagSpec("No resin", TagTone.QUALIFIER))
-        if (requirement.trinketTransmutations > 0) add(ChipTagSpec("Transmute ≤${requirement.trinketTransmutations}", TagTone.QUALIFIER))
-        if (requirement.artifactTransmutations > 0) add(ChipTagSpec("Transmute ≤${requirement.artifactTransmutations}", TagTone.QUALIFIER))
-        requirement.maximumDepth?.let { add(ChipTagSpec("F≤$it", TagTone.QUALIFIER)) }
-    }
-
-/** What a screen reader says for a chip: its name and every badge, spelled out. */
-private fun chipDescription(requirement: ItemRequirement, stackCount: Int, total: Int?): String =
-    buildList {
-        add(chipTitle(requirement))
-        if (stackCount > 1) add("$stackCount of them")
-        total?.let { add("reaching $it levels together") }
-        val detail = requirementDetailLine(requirement)
-        if (detail.isNotEmpty()) add(detail)
-    }.joinToString(", ")

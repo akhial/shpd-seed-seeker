@@ -43,6 +43,7 @@ class EngineConstantsTest {
         assertEquals(limits.getInt("boundedTierMin")..limits.getInt("boundedTierMax"), SearchLimits.BOUNDED_TIERS)
         assertEquals(limits.getInt("identityGroupMax"), SearchLimits.IDENTITY_GROUP_MAX)
         assertEquals(limits.getInt("levelSumGroupMax"), SearchLimits.LEVEL_SUM_GROUP_MAX)
+        assertEquals(limits.getInt("stackMax"), SearchLimits.STACK_MAX)
         assertEquals(limits.getInt("maxUpgradeDefault"), SearchLimits.MAX_UPGRADE_DEFAULT)
         assertEquals(limits.getInt("maxUpgradeRing"), SearchLimits.MAX_UPGRADE_RING)
         assertEquals(limits.getInt("maxUpgradeRingStandard"), SearchLimits.MAX_UPGRADE_RING_STANDARD)

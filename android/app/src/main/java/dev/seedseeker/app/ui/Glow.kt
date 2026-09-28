@@ -107,8 +107,11 @@ object ItemGlows {
      */
     fun forFilter(filter: EffectFilter): List<Glow> = when (filter) {
         EffectFilter.Any, EffectFilter.AnyEnchantment -> emptyList()
-        is EffectFilter.OneOf -> filter.names.map { enchantments[it] ?: curse }
+        is EffectFilter.OneOf -> forEffects(filter.names)
     }
+
+    /** The glows a list of effect names pulses through, one per name, in its order. */
+    fun forEffects(names: List<String>): List<Glow> = names.map { enchantments[it] ?: curse }
 
 }
 

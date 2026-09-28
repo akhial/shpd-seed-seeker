@@ -32,6 +32,8 @@ import dev.seedseeker.app.model.EffectFilter
 import dev.seedseeker.app.model.ItemKind
 import dev.seedseeker.app.model.ItemRequirement
 import dev.seedseeker.app.model.PresetQuery
+import dev.seedseeker.app.model.RequirementEditor
+import dev.seedseeker.app.model.ResinCondition
 import dev.seedseeker.app.model.RingGems
 import dev.seedseeker.app.model.ScoutAccessibility
 import dev.seedseeker.app.model.ScoutItem
@@ -128,15 +130,17 @@ class ExpressiveShowcaseTest {
         status: SearchStatus? = null,
         validation: String? = null,
     ) = FinderScreen(
-        requirements = requirements, maximumDepth = 24, autoApplyTrinket = true, floorRequirements = emptyList(),
+        requirements = requirements,
+        board = RequirementEditor.view(requirements, ResinCondition.of(0, auto = true, ArcaneResinFilter())),
+        maximumDepth = 24, autoApplyTrinket = true, floorRequirements = emptyList(),
         arcaneResin = 0, arcaneResinAuto = true, arcaneResinFilter = ArcaneResinFilter(),
         requireBlacksmith = false, excludeBlacksmithRewards = false, wandmakerQuest = null, challenges = 0,
         presets = BuiltInPresets.all, compactChips = false, results = results, foundCount = results.size,
         status = status, seedsPerSecond = 184_300.0, elapsedSeconds = 263, isSearching = searching,
         refinePhase = null, refineProgress = null, error = null, snackbarHostState = SnackbarHostState(),
         onAbout = {}, onSettings = {}, onSearchSettings = {}, onApplyPreset = {}, onSavePreset = {},
-        onDeletePreset = {}, onEditResin = {}, onRemoveResin = {}, onAdd = {}, onEdit = { _, _ -> },
-        onRequirementsChange = {}, onRemove = {}, validationMessage = validation, onSearch = {}, onCancel = {},
+        onDeletePreset = {}, onEditResin = {}, onRemoveResin = {}, onAdd = {}, onEdit = {},
+        onBoardChange = {}, validationMessage = validation, onSearch = {}, onCancel = {},
         canExportResults = true, canClearResults = true, importNotice = null, onExportResults = {},
         onImportResults = {}, onImportClipboard = {}, onClearResults = {}, onShareQuery = {}, onScoutSeed = {},
         bottomBar = { Box(Modifier.fillMaxWidth().height(80.dp)) },
@@ -199,7 +203,7 @@ class ExpressiveShowcaseTest {
     }
 
     @Test fun requirementSheet() {
-        host(settle = false) { RequirementSheet(editing = null, onDismiss = {}, onSave = { _, _, _, _ -> }) }
+        host(settle = false) { RequirementSheet(editing = null, onDismiss = {}, onSave = { _, _, _, _ -> null }) }
         shot("sheet-item", dialogWindow(), settle = false)
         compose.onNodeWithText("Next").performClick()
         pump()

@@ -117,7 +117,8 @@ import androidx.compose.ui.unit.sp
 import androidx.graphics.shapes.RoundedPolygon
 import dev.seedseeker.app.catalog.ItemCatalog
 import dev.seedseeker.app.model.ArcaneResinFilter
-import dev.seedseeker.app.model.BoardItem
+import dev.seedseeker.app.model.BoardEdit
+import dev.seedseeker.app.model.BoardView
 import dev.seedseeker.app.model.FloorRequirement
 import dev.seedseeker.app.model.ItemRequirement
 import dev.seedseeker.app.model.QueryPreset
@@ -125,8 +126,6 @@ import dev.seedseeker.app.model.SearchState
 import dev.seedseeker.app.model.SearchStatus
 import dev.seedseeker.app.model.SeedResult
 import dev.seedseeker.app.model.WandmakerQuest
-import dev.seedseeker.app.model.boardCount
-import dev.seedseeker.app.model.boardItems
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -134,6 +133,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun FinderScreen(
     requirements: List<ItemRequirement>,
+    /** The requirement editor's board of [requirements]. */
+    board: BoardView,
     maximumDepth: Int,
     autoApplyTrinket: Boolean,
     floorRequirements: List<FloorRequirement>,
@@ -168,9 +169,9 @@ fun FinderScreen(
     onEditResin: () -> Unit,
     onRemoveResin: () -> Unit,
     onAdd: (Boolean) -> Unit,
-    onEdit: (BoardItem, Int) -> Unit,
-    onRequirementsChange: (List<ItemRequirement>) -> Unit,
-    onRemove: (BoardItem) -> Unit,
+    /** Opens the editor on the row with this key. */
+    onEdit: (Long) -> Unit,
+    onBoardChange: (BoardEdit) -> Unit,
     /** Why the query cannot run yet, shown in the header; null when it is runnable. */
     validationMessage: String?,
     onSearch: () -> Unit,
@@ -360,7 +361,7 @@ fun FinderScreen(
                     .fillMaxWidth()
                     .widthIn(max = 680.dp),
             ) {
-                val boardCount = requirements.filterNot { it.blanket }.boardCount() + if (hasResin) 1 else 0
+                val boardCount = board.ordinaryCount + if (hasResin) 1 else 0
                 PageHeader(
                     title = "Requirements",
                     count = boardCount,
@@ -368,7 +369,7 @@ fun FinderScreen(
                     accent = MaterialTheme.colorScheme.primaryContainer,
                     onAccent = MaterialTheme.colorScheme.onPrimaryContainer,
                     summary = listOf(
-                        requirementsSummaryText(requirements),
+                        requirementsSummaryText(board),
                         if (hasResin) (if (arcaneResinAuto) "Auto Arcane Resin" else "≥$arcaneResin Arcane Resin") else "",
                     ).filter { it.isNotEmpty() }.joinToString(" · "),
                     open = !showResults,
@@ -380,10 +381,10 @@ fun FinderScreen(
                     QueryPage(
                         floorRequirements = floorRequirements,
                         requirements = requirements,
+                        board = board,
                         maximumDepth = maximumDepth,
                         autoApplyTrinket = autoApplyTrinket,
                         arcaneResin = arcaneResin,
-                        arcaneResinFilter = arcaneResinFilter,
                         arcaneResinAuto = arcaneResinAuto,
                         requireBlacksmith = requireBlacksmith,
                         excludeBlacksmithRewards = excludeBlacksmithRewards,
@@ -396,8 +397,7 @@ fun FinderScreen(
                         onRemoveResin = onRemoveResin,
                         onAdd = onAdd,
                         onEdit = onEdit,
-                        onRequirementsChange = onRequirementsChange,
-                        onRemove = onRemove,
+                        onBoardChange = onBoardChange,
                         onSearchSettings = onSearchSettings,
                         // Takes every line down to the closed page's header,
                         // which waits at the bottom edge above the search bar
@@ -703,12 +703,12 @@ internal fun milestoneOf(count: Int): Int =
     listOf(1, 5, 10, 25, 50, 100, 250, 500, 1_000).count { count >= it }
 
 /** What the board asks for, in a line: each slot by name, its alternatives joined by "or". */
-private fun requirementsSummaryText(requirements: List<ItemRequirement>): String =
-    requirements.boardItems().joinToString(" · ") { item ->
+private fun requirementsSummaryText(board: BoardView): String =
+    board.items.joinToString(" · ") { item ->
         buildString {
-            if (requirements[item.anchor].blanket) append("Blanket: ")
-            append(item.members.joinToString(" or ") { chipTitle(requirements[it]) })
-            if (item.stackCount > 1) append(" ×${item.stackCount}")
+            if (item.blanket) append("Blanket: ")
+            append(item.chips.joinToString(" or ") { it.name })
+            item.countBadge?.let { append(" ${it.text}") }
         }
     }
 
@@ -717,12 +717,12 @@ private fun requirementsSummaryText(requirements: List<ItemRequirement>): String
 @Composable
 private fun QueryPage(
     requirements: List<ItemRequirement>,
+    board: BoardView,
     maximumDepth: Int,
     autoApplyTrinket: Boolean,
     floorRequirements: List<FloorRequirement>,
     arcaneResin: Int,
     arcaneResinAuto: Boolean = false,
-    arcaneResinFilter: ArcaneResinFilter,
     requireBlacksmith: Boolean,
     excludeBlacksmithRewards: Boolean,
     wandmakerQuest: WandmakerQuest?,
@@ -733,9 +733,8 @@ private fun QueryPage(
     onEditResin: () -> Unit,
     onRemoveResin: () -> Unit,
     onAdd: (Boolean) -> Unit,
-    onEdit: (BoardItem, Int) -> Unit,
-    onRequirementsChange: (List<ItemRequirement>) -> Unit,
-    onRemove: (BoardItem) -> Unit,
+    onEdit: (Long) -> Unit,
+    onBoardChange: (BoardEdit) -> Unit,
     onSearchSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -745,16 +744,13 @@ private fun QueryPage(
             .verticalScroll(rememberScrollState()),
     ) {
         RequirementBoard(
-            requirements = requirements,
+            board = board,
             enabled = !isSearching,
             compact = compactChips,
-            onChange = onRequirementsChange,
+            onChange = onBoardChange,
             onEdit = onEdit,
-            onRemove = onRemove,
             onAdd = { onAdd(false) },
-            arcaneResin = arcaneResin,
-            arcaneResinFilter = arcaneResinFilter,
-            arcaneResinAuto = arcaneResinAuto,
+            resin = board.resin,
             onEditResin = onEditResin,
             onRemoveResin = onRemoveResin,
             modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
@@ -778,7 +774,7 @@ private fun QueryPage(
         Spacer(Modifier.height(10.dp))
         var blanketsExpanded by remember { mutableStateOf(false) }
         var showBlanketHelp by remember { mutableStateOf(false) }
-        val blanketCount = requirements.filter { it.blanket }.boardCount()
+        val blanketCount = board.blanketCount
         Surface(
             shape = MaterialTheme.shapes.extraLarge,
             color = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -842,11 +838,9 @@ private fun QueryPage(
                     exit = shrinkVertically(LayoutSizeSpring) + fadeOut(),
                 ) {
                     RequirementBoard(
-                        requirements = requirements, blanket = true, enabled = !isSearching,
-                        compact = compactChips, onChange = onRequirementsChange,
-                        onEdit = onEdit, onRemove = onRemove, onAdd = { onAdd(true) },
-                        arcaneResin = 0, arcaneResinFilter = ArcaneResinFilter(),
-                        onEditResin = onEditResin, onRemoveResin = onRemoveResin,
+                        board = board, blanket = true, enabled = !isSearching,
+                        compact = compactChips, onChange = onBoardChange,
+                        onEdit = onEdit, onAdd = { onAdd(true) },
                         modifier = Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 14.dp),
                     )
                 }
