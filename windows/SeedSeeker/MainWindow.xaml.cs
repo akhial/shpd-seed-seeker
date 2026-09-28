@@ -388,7 +388,8 @@ public sealed partial class MainWindow : Window
     private Task EditArcaneResin() => EditRequirement(() => RequirementSheet.Open(query, null, openResin: true));
     /// <summary>
     /// Deletes the chip keyed <paramref name="key"/> with its whole stack: a
-    /// lone chip's whole entry, or a cluster member with its own copies.
+    /// lone chip's whole entry, or a cluster member with its own copies. The
+    /// menu's Remove and the Delete key; the remove zone takes one item.
     /// </summary>
     private void RemoveChip(long key) => EditBoard(BoardEdit.Remove(key));
     /// <summary>
@@ -412,10 +413,11 @@ public sealed partial class MainWindow : Window
     // ---- the requirement board ----------------------------------------------
     // Every requirement is a chip: drop one chip onto another for an either/or
     // cluster, drag a chip out of its cluster onto the empty board to make it
-    // standalone again, drop it on the zone below to remove it. Everything
-    // else is a property of the chip itself, a cluster member's as much as a lone
-    // chip's — a stack badge (×N / ≤N) for "more of the same kind", and a Σ
-    // badge for a lone ring stack counting its levels together.
+    // standalone again, drop it on the zone below to take one item off it.
+    // Everything else is a property of the chip itself, a cluster member's
+    // as much as a lone chip's — a stack badge (×N / ≤N) for "more of the
+    // same kind", and a Σ badge for a lone ring stack counting its levels
+    // together.
     // What the board holds, what every chip and badge says and what each
     // gesture writes back are the shared editor's (BoardEditor); the board is
     // redrawn from its answer on every change.
@@ -970,7 +972,7 @@ public sealed partial class MainWindow : Window
     private BoardDrop DropOf(long key, DropTarget? target)
     {
         if (target is null) return BoardDrop.None;
-        if (key == ArcaneResinKey) return query.NeedsResin && target.Kind == DropKind.Remove ? new(DropEffect.Remove) : BoardDrop.None;
+        if (key == ArcaneResinKey) return query.NeedsResin && target.Kind == DropKind.Remove ? new(DropEffect.RemoveOne) : BoardDrop.None;
         return boardView.Drop(key, target.Kind, target.Key, target.Blanket);
     }
 
@@ -979,7 +981,7 @@ public sealed partial class MainWindow : Window
     {
         DropEffect.Join => "or",
         DropEffect.Detach => "on its own",
-        DropEffect.Remove => "remove",
+        DropEffect.RemoveOne => "remove",
         DropEffect.Refused => drop.Message,
         _ => null,
     };
@@ -987,12 +989,12 @@ public sealed partial class MainWindow : Window
     private void CompleteDrop(long key, DropTarget? target)
     {
         var drop = DropOf(key, target);
-        if (key == ArcaneResinKey) { if (drop.Effect == DropEffect.Remove) RemoveArcaneResin(); return; }
+        if (key == ArcaneResinKey) { if (drop.Effect == DropEffect.RemoveOne) RemoveArcaneResin(); return; }
         switch (drop.Effect)
         {
             case DropEffect.Join: EditBoard(BoardEdit.Join(key, target!.Key)); break;
             case DropEffect.Detach: EditBoard(BoardEdit.Detach(key)); break;
-            case DropEffect.Remove: RemoveChip(key); break;
+            case DropEffect.RemoveOne: EditBoard(BoardEdit.RemoveOne(key)); break;
         }
     }
 

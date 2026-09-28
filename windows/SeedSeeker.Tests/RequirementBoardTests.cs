@@ -12,7 +12,7 @@ namespace SeedSeeker.Tests;
 /// is asked once per list, and the edits the window sends — joins, refusals,
 /// counts, combined levels, removals — come back through the real engine as
 /// the window adopts them. Stacks are per chip: a cluster member's badge and
-/// count are its own.
+/// count are its own, and the remove zone takes one item.
 /// </summary>
 public sealed class RequirementBoardTests
 {
@@ -459,6 +459,43 @@ public sealed class RequirementBoardTests
     }
 
     [Fact]
+    public void TheRemoveZoneTakesOneItemAndTheMenuTheWholeStack()
+    {
+        var editor = new BoardEditor();
+        var frost = Named("wand_frost"); frost.AlternativeGroup = 1; frost.IdentityGroup = 1;
+        var disintegration = Named("wand_disintegration"); disintegration.AlternativeGroup = 1;
+        var query = Loaded(editor, frost, disintegration, new() { Kind = ItemKind.Wand, IdentityGroup = 1 }, new() { Kind = ItemKind.Wand, IdentityGroup = 1 },
+            Named("ring_might"), Named("ring_might"));
+        var (frostKey, disintegrationKey, ring) = (KeyOf(query, "wand_frost"), KeyOf(query, "wand_disintegration"), KeyOf(query, "ring_might"));
+        var board = editor.View(query);
+        Assert.Equal("×3", board.ChipOf(frostKey)!.CountBadge!.Text);
+        Assert.Equal(DropEffect.RemoveOne, board.Drop(frostKey, DropKind.Remove).Effect);
+
+        // A member ×3 steps down to ×2 in its cluster, and stays followed.
+        var member = Apply(editor, query, BoardEdit.RemoveOne(frostKey));
+        Assert.Equal(frostKey, member.Focus);
+        Assert.Equal(["×2", null], member.View.EntryOf(frostKey)!.Chips.Select(chip => chip.CountBadge?.Text));
+        // A lone ×2 steps down to one.
+        var lone = Apply(editor, query, BoardEdit.RemoveOne(ring));
+        Assert.Null(lone.View.ChipOf(ring)!.CountBadge);
+        Assert.Single(query.Requirements, row => row.Item?.Id == "ring_might");
+        // A ×1 member leaves its cluster, which dissolves into a chip; a lone chip of one item is removed.
+        var leaves = Apply(editor, query, BoardEdit.RemoveOne(disintegrationKey));
+        Assert.Null(leaves.Focus);
+        Assert.DoesNotContain(query.Requirements, row => row.Key == disintegrationKey);
+        Assert.All(leaves.View.Entries, entry => Assert.Null(entry.Cluster));
+        Apply(editor, query, BoardEdit.RemoveOne(ring));
+        Assert.DoesNotContain(query.Requirements, row => row.Kind == ItemKind.Ring);
+        // The menu's Remove takes the chip with its whole stack.
+        Assert.Equal("×2", editor.View(query).ChipOf(frostKey)!.CountBadge!.Text);
+        var removed = Apply(editor, query, BoardEdit.Remove(frostKey));
+        Assert.True(removed.Changed);
+        Assert.Empty(query.Requirements);
+        // Nothing left to take is no change.
+        Assert.False(editor.Edit(query, BoardEdit.RemoveOne(frostKey)).Changed);
+    }
+
+    [Fact]
     public void CombinedLevelsAreCountedAndClearedThroughTheEngine()
     {
         var editor = new BoardEditor();
@@ -512,7 +549,8 @@ public sealed class RequirementBoardTests
         Assert.Equal(DropEffect.Detach, board.Drop(mace, DropKind.Board).Effect);
         Assert.Equal(DropEffect.None, board.Drop(mace, DropKind.Board, blanketBoard: true).Effect);
         Assert.Equal(DropEffect.None, board.Drop(armor, DropKind.Board).Effect);
-        Assert.Equal(DropEffect.Remove, board.Drop(wand, DropKind.Remove).Effect);
+        Assert.Equal(DropEffect.RemoveOne, board.Drop(wand, DropKind.Remove).Effect);
+        Assert.Equal(DropEffect.RemoveOne, board.Drop(mace, DropKind.Remove).Effect);
         Assert.Equal(DropEffect.None, board.Drop(404, DropKind.Remove).Effect);
     }
 

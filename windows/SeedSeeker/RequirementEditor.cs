@@ -132,7 +132,8 @@ public sealed record BoardRefusal(string Reason, string Message);
 /// <summary>Where a chip is dropped: onto a chip, a cluster's capsule, a section's empty board, or the remove zone.</summary>
 public enum DropKind { Chip, Cluster, Board, Remove }
 
-public enum DropEffect { None, Join, Refused, Detach, Remove }
+/// <summary>What a drop sends: a join, a detach, or one item taken away (<c>remove_one</c>); a refusal sends nothing.</summary>
+public enum DropEffect { None, Join, Refused, Detach, RemoveOne }
 
 /// <summary>What a drop does, and the refusal to show when the editor refuses it.</summary>
 public sealed record BoardDrop(DropEffect Effect, string? Message = null)
@@ -181,7 +182,8 @@ public sealed class BoardView(IReadOnlyList<BoardEntry> entries, BoardCounts cou
     /// join the editor offers, or the refusal it gives; onto the empty board of
     /// the chip's own section (<paramref name="blanketBoard"/>), a cluster
     /// member comes out on its own while a lone chip stays where it is; onto
-    /// the remove zone, a removal. Anything else does nothing.
+    /// the remove zone, one item of the chip is taken away. Anything else does
+    /// nothing.
     /// </summary>
     /// <param name="target">For a chip, its key; for a cluster, any member's.</param>
     public BoardDrop Drop(long source, DropKind kind, long target = 0, bool blanketBoard = false)
@@ -193,7 +195,7 @@ public sealed class BoardView(IReadOnlyList<BoardEntry> entries, BoardCounts cou
             DropKind.Chip or DropKind.Cluster => dragged.Chip.Refuse.FirstOrDefault(refusal => refusal.Key == target) is { } refusal
                 ? new(DropEffect.Refused, refusal.Message) : BoardDrop.None,
             DropKind.Board => dragged.Entry.Blanket == blanketBoard && dragged.Chip.CanDetach ? new(DropEffect.Detach) : BoardDrop.None,
-            DropKind.Remove => new(DropEffect.Remove),
+            DropKind.Remove => new(DropEffect.RemoveOne),
             _ => BoardDrop.None,
         };
     }
@@ -235,9 +237,14 @@ public sealed class BoardEdit
     public static BoardEdit Detach(long key) => new("detach", new() { ["key"] = key });
     /// <summary>
     /// Removes the chip with its whole stack: a cluster member with its own
-    /// copies, or a lone chip's whole entry.
+    /// copies, or a lone chip's whole entry. The chip menu's Remove.
     /// </summary>
     public static BoardEdit Remove(long key) => new("remove", new() { ["key"] = key });
+    /// <summary>
+    /// Takes one item of the chip away, as a drop on the remove zone does: a
+    /// stack keeps the rest, one fewer; a chip of one item is removed.
+    /// </summary>
+    public static BoardEdit RemoveOne(long key) => new("remove_one", new() { ["key"] = key });
     /// <summary>How many items the chip <paramref name="key"/> asks for: a lone chip's stack, or a cluster member's own.</summary>
     public static BoardEdit SetCount(long key, int count) => new("set_count", new() { ["key"] = key, ["count"] = Byte(count) });
     /// <summary>Sets or clears the combined level of the lone ring stack <paramref name="key"/>.</summary>
