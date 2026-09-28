@@ -120,6 +120,17 @@ async function press(element: HTMLElement, key: string) {
 const badges = (name: string) =>
   [...chip(name).querySelectorAll(".d1-stack-badge")].map((badge) => badge.textContent);
 
+/** The chip named `name` inside a cluster, or outside every cluster. */
+const chipWhere = (name: string, clustered: boolean): HTMLElement => {
+  const found = [...host.querySelectorAll<HTMLElement>('[data-drop="chip"]')].find(
+    (element) =>
+      element.querySelector(".d1-chip-name")?.textContent === name &&
+      (element.closest(".d1-cluster") !== null) === clustered,
+  );
+  expect(found, `${name} ${clustered ? "in" : "outside"} a cluster`).toBeDefined();
+  return found!;
+};
+
 const requirements = () => toQueryDocument(queryStore.state).requirements;
 
 const FROST = { kind: "wand", item: "wand_frost" };
@@ -368,6 +379,114 @@ it("draws each member's stack on its own chip and steps it from the member's men
     '.d1-stack-edit[aria-label="How many"]',
   );
   expect(inline).not.toBeNull();
+});
+
+it("drags one item: the ghost is the chip alone, and a round trip folds back", async () => {
+  await render(JSON.stringify({ requirements: [DISINTEGRATION, DISINTEGRATION, FROST] }));
+  expect(badges("Wand of Disintegration")).toEqual(["×2"]);
+  const disintegration = chip("Wand of Disintegration");
+  await dragOver(disintegration, chip("Wand of Frost"));
+  const ghost = host.querySelector<HTMLElement>(".d1-chip-ghost")!;
+  expect(ghost.querySelector(".d1-chip-name")!.textContent).toBe("Wand of Disintegration");
+  expect(ghost.querySelector(".d1-stack-badge")).toBeNull();
+  expect(ghost.textContent).not.toContain("×");
+  await release(disintegration);
+  // One Disintegration joins; the other stays where it was.
+  expect(requirements()).toEqual([DISINTEGRATION, { any_of: [FROST, DISINTEGRATION] }]);
+  expect(badges("Wand of Frost")).toEqual([]);
+  expect(chipWhere("Wand of Disintegration", false).querySelector(".d1-stack-badge")).toBeNull();
+
+  const member = chipWhere("Wand of Disintegration", true);
+  await dragOver(member, host.querySelector('[data-drop="board"]'));
+  expect(host.querySelector(".d1-board.d1-drop-detach")).not.toBeNull();
+  await release(member);
+  expect(requirements()).toEqual([DISINTEGRATION, FROST, DISINTEGRATION]);
+  expect(host.querySelector(".d1-cluster")).toBeNull();
+  expect(badges("Wand of Disintegration")).toEqual(["×2"]);
+});
+
+it("keeps a stacked target's stack as a member, and detaches one copy of it", async () => {
+  await render(JSON.stringify({ requirements: [FROST, FROST, DISINTEGRATION] }));
+  const disintegration = chip("Wand of Disintegration");
+  await dragOver(disintegration, chip("Wand of Frost"));
+  await release(disintegration);
+  // Two Frosts, or one Disintegration.
+  expect(requirements()).toEqual([
+    {
+      any_of: [{ ...FROST, identity_group: 1 }, DISINTEGRATION],
+    },
+    { kind: "wand", identity_group: 1 },
+  ]);
+  expect(badges("Wand of Frost")).toEqual(["×2"]);
+  expect(badges("Wand of Disintegration")).toEqual([]);
+
+  const frost = chip("Wand of Frost");
+  await dragOver(frost, host.querySelector('[data-drop="board"]'));
+  expect(host.querySelector(".d1-chip-ghost .d1-stack-badge")).toBeNull();
+  await release(frost);
+  expect(requirements()).toEqual([{ any_of: [FROST, DISINTEGRATION] }, FROST]);
+  expect(chipWhere("Wand of Frost", true).querySelector(".d1-stack-badge")).toBeNull();
+  expect(chipWhere("Wand of Frost", false).querySelector(".d1-stack-badge")).toBeNull();
+});
+
+it("shows a chip picked up to join without its badges", async () => {
+  await render(JSON.stringify({ requirements: [FROST, FROST, DISINTEGRATION] }));
+  await openMenu("Wand of Frost");
+  await click("orEither/or with…");
+  const frost = chip("Wand of Frost");
+  expect(frost.classList.contains("d1-chip-pick-source")).toBe(true);
+  expect(frost.querySelector(".d1-stack-badge")).toBeNull();
+  await press(chip("Wand of Disintegration"), "Enter");
+  // One Frost joins; the other stays behind.
+  expect(requirements()).toEqual([FROST, { any_of: [DISINTEGRATION, FROST] }]);
+  expect(chipWhere("Wand of Frost", false).querySelector(".d1-stack-badge")).toBeNull();
+});
+
+it("takes one item on the remove zone, and the whole stack from the menu", async () => {
+  const drop = async (element: HTMLElement) => {
+    await dragOver(element, () => host.querySelector('[data-drop="delete"]'));
+    await act(async () => element.dispatchEvent(pointer("pointermove", 70, 70)));
+    expect(host.querySelector(".d1-ghost-delete")!.textContent).toBe("remove");
+    await release(element);
+  };
+  await render(
+    JSON.stringify({
+      requirements: [
+        FROST,
+        FROST,
+        {
+          any_of: [
+            { ...DISINTEGRATION, identity_group: 1 },
+            { kind: "wand", item: "wand_lightning" },
+          ],
+        },
+        { kind: "wand", identity_group: 1 },
+        { kind: "wand", identity_group: 1 },
+      ],
+    }),
+  );
+  expect(badges("Wand of Frost")).toEqual(["×2"]);
+  expect(badges("Wand of Disintegration")).toEqual(["×3"]);
+  // A lone stack gives up one item.
+  await drop(chip("Wand of Frost"));
+  expect(badges("Wand of Frost")).toEqual([]);
+  // So does a member's.
+  await drop(chip("Wand of Disintegration"));
+  expect(badges("Wand of Disintegration")).toEqual(["×2"]);
+  expect(requirements()).toEqual([
+    FROST,
+    {
+      any_of: [
+        { ...DISINTEGRATION, identity_group: 1 },
+        { kind: "wand", item: "wand_lightning" },
+      ],
+    },
+    { kind: "wand", identity_group: 1 },
+  ]);
+  // The menu's Remove takes the member with its copies.
+  await openMenu("Wand of Disintegration");
+  await click("Remove");
+  expect(requirements()).toEqual([FROST, { kind: "wand", item: "wand_lightning" }]);
 });
 
 it("joins by drag and by pick, and a lone chip stays put on the board", async () => {

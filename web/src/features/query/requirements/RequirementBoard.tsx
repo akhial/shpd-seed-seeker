@@ -26,7 +26,8 @@ import { rekey } from "./board";
  * it standalone again. Everything else is a property of the chip itself —
  * a lone chip or a cluster member alike: a stack badge (×N / ≤N) for "more
  * of the same kind", and a Σ badge for a stack whose items count their
- * levels towards one total. A cluster draws no badge of its own.
+ * levels towards one total. A cluster draws no badge of its own. Every drag
+ * moves one item, so the chip in flight is drawn without its badges.
  *
  * The board draws what the shared core answers — its entries, their words,
  * which drops join and which are refused — and sends the gestures back as
@@ -97,7 +98,7 @@ type DropAction =
   | { type: "join"; target: number }
   | { type: "refuse"; message: string }
   | { type: "detach" }
-  | { type: "remove" };
+  | { type: "remove_one" };
 
 type DragSource = number | "resin";
 
@@ -228,7 +229,8 @@ export function RequirementBoard({
   const dropAction = (source: number, over: DropTarget): DropAction | null => {
     const chip = chips.get(source)?.chip;
     if (!chip) return null;
-    if (over.kind === "delete") return { type: "remove" };
+    // The remove target takes one item; the menu's Remove takes the whole stack.
+    if (over.kind === "delete") return { type: "remove_one" };
     if (over.kind === "board") return chip.can_detach ? { type: "detach" } : null;
     const targets =
       over.kind === "chip"
@@ -468,7 +470,8 @@ export function RequirementBoard({
             <CheckIcon size={12} />
           </span>
         )}
-        {renderBadges(chip)}
+        {/* A chip picked up to join shows the one item that moves. */}
+        {pick?.source !== chip.key && renderBadges(chip)}
       </div>
     );
   };
@@ -716,10 +719,12 @@ export function RequirementBoard({
           style={{ left: drag.x, top: drag.y }}
           aria-hidden="true"
         >
+          {/* The one item that moves: its name and tags, never its badges. */}
           {dragSource ? (
             <>
               <ChipSprite chip={dragSource} />
               <span className="d1-chip-name">{dragSource.name}</span>
+              <Tags tags={dragSource.tags} />
             </>
           ) : (
             draggingResin && <ResinChipBody chip={resin.chip} amountOnly />

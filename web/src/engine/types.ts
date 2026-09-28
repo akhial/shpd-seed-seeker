@@ -188,7 +188,10 @@ export type BoardEdit =
   | { type: "normalize" }
   | { type: "join"; source: number; target: number }
   | { type: "detach"; key: number }
+  /** The chip menu's Remove: the chip with its whole stack. */
   | { type: "remove"; key: number }
+  /** A drop on the remove target: one item of the chip. */
+  | { type: "remove_one"; key: number }
   | { type: "remove_item"; key: number }
   | { type: "set_count"; key: number; count: number }
   | { type: "set_total"; key: number; total: number | null }
