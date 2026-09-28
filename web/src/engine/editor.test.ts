@@ -31,7 +31,7 @@ async function replay<Request, Response extends object>(
     if (typeof fixture.request === "string") continue;
     const answer = send(fixture.request);
     if ("error" in fixture.response)
-      expect(answer, name).toEqual({ ok: false, error: fixture.response.error });
+      expect(answer, name).toEqual({ ok: false, ...fixture.response });
     else expect(answer, name).toEqual({ ok: true, value: fixture.response });
   }
 }

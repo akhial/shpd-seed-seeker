@@ -164,14 +164,17 @@ export function QueryPanel({
   const drawn = requirementBoardOf(query);
   if (!drawn.ok) throw new Error(drawn.error);
   const { items, counts, resin: resinChip } = drawn.value;
-  // The board draws every chip a sheet can open, so an open the core cannot
-  // answer is a failure of the editor, which the boundary reports too.
+  // An open the core cannot answer is a failure of the editor, which the
+  // boundary reports too.
   if (editorFailure) throw new Error(editorFailure);
 
-  const openEditor = (target: SheetTarget) => {
+  /** Opens the sheet, or answers why the core refuses to open it on a row it cannot read. */
+  const openEditor = (target: SheetTarget): string | null => {
     const answer = openSheet(queryStore.state, target);
     if (answer.ok) setEditor({ sheet: answer.value });
+    else if (answer.key !== undefined) return answer.error;
     else setEditorFailure(answer.error);
+    return null;
   };
 
   const changeEditor = (change: EditorChange) =>
@@ -361,7 +364,7 @@ export function QueryPanel({
                 !blanket && query.arcaneResin && resinChip
                   ? {
                       chip: resinChip,
-                      onEdit: () => openEditor({ type: "resin" }),
+                      onEdit: () => void openEditor({ type: "resin" }),
                       onRemove: () =>
                         patchQuery({ arcaneResin: undefined, arcaneResinFilter: undefined }),
                     }
@@ -369,7 +372,7 @@ export function QueryPanel({
               }
               onEdits={applyBoardEdits}
               onEdit={(key) => openEditor({ type: "row", key })}
-              onAdd={() => openEditor({ type: "new", blanket })}
+              onAdd={() => void openEditor({ type: "new", blanket })}
             />
           );
           return (

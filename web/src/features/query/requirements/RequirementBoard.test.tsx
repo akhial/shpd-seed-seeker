@@ -7,6 +7,13 @@ import { queryStore } from "../../../app/store";
 import type { ItemSource } from "../../../engine/types";
 import { QueryPanel } from "../QueryPanel";
 import { QueryPanelBoundary } from "../QueryPanelBoundary";
+import { requirementEditor } from "../../../engine/editor";
+
+// The real envelope answers every request; one test makes it fail.
+vi.mock("../../../engine/editor", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../engine/editor")>();
+  return { ...actual, requirementEditor: vi.fn(actual.requirementEditor) };
+});
 
 let host: HTMLDivElement;
 let root: Root;
@@ -84,10 +91,15 @@ const pointer = (type: string, x: number, y: number) =>
     clientY: y,
   });
 
-/** Lifts `source` and holds it over `target`, as far as hit-testing goes. */
-async function dragOver(source: HTMLElement, target: Element | null) {
+/**
+ * Lifts `source` and holds it over `target`, as far as hit-testing goes; a
+ * function finds a target that appears only once the drag has begun.
+ */
+async function dragOver(source: HTMLElement, target: Element | null | (() => Element | null)) {
   source.setPointerCapture = vi.fn();
-  vi.spyOn(document, "elementFromPoint").mockImplementation(() => target);
+  vi.spyOn(document, "elementFromPoint").mockImplementation(
+    typeof target === "function" ? target : () => target,
+  );
   await act(async () => source.dispatchEvent(pointer("pointerdown", 20, 20)));
   await act(async () => source.dispatchEvent(pointer("pointermove", 60, 60)));
 }
@@ -97,6 +109,15 @@ async function release(source: HTMLElement) {
 }
 
 const status = () => host.querySelector(".d1-board-status")?.textContent;
+
+async function press(element: HTMLElement, key: string) {
+  await act(async () =>
+    element.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true })),
+  );
+}
+
+const badges = (name: string) =>
+  [...chip(name).querySelectorAll(".d1-stack-badge")].map((badge) => badge.textContent);
 
 it("steps a stack from its menu, which follows the stack's fresh count", async () => {
   await render('{"requirements":[{"kind":"ring","item":"ring_might","upgrade":2}]}');
@@ -110,11 +131,80 @@ it("steps a stack from its menu, which follows the stack's fresh count", async (
   expect(host.querySelector(".d1-chip-menu-count .d1-mono")!.textContent).toBe("3");
   expect(button("One more")!.disabled).toBe(true);
   await click("ΣCount levels together");
-  const badges = [...chip("Ring of Might").querySelectorAll(".d1-stack-badge")].map(
-    (badge) => badge.textContent,
-  );
-  expect(badges).toEqual(["≤3", "Σ ≥ 3"]);
+  expect(badges("Ring of Might")).toEqual(["≤3", "Σ ≥ 3"]);
   expect(host.textContent).toContain("1 requirement");
+});
+
+it("steps a combined level down to off and back on at the core's default", async () => {
+  await render('{"requirements":[{"kind":"ring","item":"ring_might"}]}');
+  await openMenu("Ring of Might");
+  await click("One more");
+  await click("ΣCount levels together");
+  expect(badges("Ring of Might")).toEqual(["≤2", "Σ ≥ 2"]);
+  await click("Σ ≥ 2");
+  await click("Lower total");
+  expect(badges("Ring of Might")).toEqual(["≤2", "Σ ≥ 1"]);
+  await click("Lower total");
+  // Off: the stepper stays open at the core's "Σ ≥ 0", with nothing to lower.
+  expect(badges("Ring of Might")).toEqual(["×2", "Σ ≥ 0"]);
+  expect(button("Lower total")!.disabled).toBe(true);
+  expect(toQueryDocument(queryStore.state).requirements).toEqual([
+    { kind: "ring", item: "ring_might" },
+    { kind: "ring", item: "ring_might" },
+  ]);
+  await click("Raise total");
+  expect(badges("Ring of Might")).toEqual(["≤2", "Σ ≥ 2"]);
+});
+
+it("opens the menu and removes a chip from the keyboard, or by dropping it on the remove zone", async () => {
+  await render('{"requirements":[{"kind":"wand"},{"kind":"ring"},{"kind":"armor"}]}');
+  await press(chip("Any wand"), ".");
+  expect(host.querySelector('[role="menu"]')).not.toBeNull();
+  expect(button("Edit…")).toBeDefined();
+  await press(chip("Any wand"), "Escape");
+  expect(host.querySelector('[role="menu"]')).toBeNull();
+  await press(chip("Any ring"), "Delete");
+  expect(toQueryDocument(queryStore.state).requirements).toEqual([
+    { kind: "wand" },
+    { kind: "armor" },
+  ]);
+  const armor = chip("Any armor");
+  await dragOver(armor, () => host.querySelector('[data-drop="delete"]'));
+  // The remove zone appears once the drag has begun.
+  await act(async () => armor.dispatchEvent(pointer("pointermove", 70, 70)));
+  expect(host.querySelector(".d1-delete-zone-over")).not.toBeNull();
+  expect(host.querySelector(".d1-ghost-delete")!.textContent).toBe("remove");
+  await release(armor);
+  expect(toQueryDocument(queryStore.state).requirements).toEqual([{ kind: "wand" }]);
+  expect(host.querySelector('[data-drop="delete"]')).toBeNull();
+});
+
+it("says why a row the core cannot read won't open, and lets it be removed", async () => {
+  await render('{"requirements":[{"kind":"wand","item":"wand_of_wonders"},{"kind":"ring"}]}');
+  const unknown = chip("Unknown requirement");
+  expect(unknown.classList.contains("d1-chip-error")).toBe(true);
+  await press(unknown, "Enter");
+  expect(host.querySelector(".d1-modal")).toBeNull();
+  expect(status()).toBe("This requirement cannot be read: unknown item 'wand_of_wonders'.");
+  expect(host.querySelector('[role="alert"]')).toBeNull();
+  await openMenu("Unknown requirement");
+  expect(button("Edit…")).toBeUndefined();
+  expect(button("orEither/or with…")).toBeUndefined();
+  await click("Remove");
+  expect(toQueryDocument(queryStore.state).requirements).toEqual([{ kind: "ring" }]);
+});
+
+it("reports a sheet the editor cannot open in the query pane", async () => {
+  vi.spyOn(console, "error").mockImplementation(() => {});
+  await render('{"requirements":[{"kind":"wand"}]}');
+  vi.mocked(requirementEditor).mockReturnValueOnce({ ok: false, error: "the editor trapped" });
+  await press(chip("Any wand"), "Enter");
+  expect(host.querySelector('[role="alert"]')!.textContent).toContain(
+    "The requirements could not be shown: the editor trapped",
+  );
+  await click("Clear requirements");
+  expect(queryStore.state.requirements).toEqual([]);
+  expect(host.querySelector('[role="alert"]')).toBeNull();
 });
 
 it("refuses a drag across categories onto a stack, says why and keeps the query", async () => {

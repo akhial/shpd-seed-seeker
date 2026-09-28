@@ -138,11 +138,12 @@ describe("the requirement sheet bridge", () => {
     ]);
   });
 
-  it("will not open a row the core cannot read", () => {
+  it("will not open a row the core cannot read, and names it", () => {
     const query = fromQueryJson('{"requirements":[{"kind":"wand"},{"item":"wand_of_wonders"}]}');
     expect(openSheet(query, { type: "row", key: 2 })).toEqual({
       ok: false,
       error: "This requirement cannot be read: unknown item 'wand_of_wonders'.",
+      key: 2,
     });
   });
 });

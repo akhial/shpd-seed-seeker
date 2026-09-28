@@ -130,8 +130,8 @@ export function RequirementBoard({
   /** This section's entries, as the core drew them. */
   items: BoardItemView[];
   onEdits: (edits: BoardEdit[]) => BoardEditReport;
-  /** Opens the sheet on a chip. */
-  onEdit: (key: number) => void;
+  /** Opens the sheet on a chip, or answers why the core will not. */
+  onEdit: (key: number) => string | null;
   onAdd: () => void;
   resin?: {
     chip: ResinChipView;
@@ -293,14 +293,8 @@ export function RequirementBoard({
   };
 
   const editChip = (key: number) => {
-    const entry = chips.get(key);
-    if (!entry) return;
-    // The editor cannot open a row it cannot read; such a chip can only be removed.
-    if (entry.chip.kind === null) {
-      setNotice(entry.chip.problem);
-      return;
-    }
-    onEdit(key);
+    // The core refuses to open a row it cannot read, and says why.
+    if (chips.has(key)) setNotice(onEdit(key));
   };
 
   /** Completes pick mode on `key`: the menu's and the keyboard's way to drop. */
@@ -535,11 +529,14 @@ export function RequirementBoard({
             onPointerDown={(event) => event.stopPropagation()}
             data-no-drag
           >
+            {/* Stepping below Σ ≥ 1 stops counting levels; stepping up from
+                there starts again where the core starts it. */}
             <button
               type="button"
               aria-label="Lower total"
+              disabled={total === null}
               onClick={() =>
-                edit({ type: "set_total", key, total: total === 1 ? null : (total ?? 2) - 1 })
+                edit({ type: "set_total", key, total: total && total > 1 ? total - 1 : null })
               }
             >
               −
@@ -548,8 +545,14 @@ export function RequirementBoard({
             <button
               type="button"
               aria-label="Raise total"
-              disabled={(total ?? 0) >= stack.level_capacity}
-              onClick={() => edit({ type: "set_total", key, total: (total ?? 0) + 1 })}
+              disabled={total !== null && total >= stack.level_capacity}
+              onClick={() =>
+                edit(
+                  total === null
+                    ? { type: "toggle_levels", key }
+                    : { type: "set_total", key, total: total + 1 },
+                )
+              }
             >
               +
             </button>
@@ -835,6 +838,7 @@ function ChipMenu({
   const { stack } = item;
   return (
     <div ref={ref} className="d1-chip-menu" role="menu" style={{ left, top }}>
+      {/* A chip without a kind is a row the core cannot read, which only Remove applies to. */}
       {chip.kind !== null && (
         <button type="button" role="menuitem" onClick={onEdit}>
           Edit…

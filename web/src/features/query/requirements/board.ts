@@ -62,6 +62,13 @@ const boardFields = ({ requirements, arcaneResin, arcaneResinFilter }: BoardQuer
  * The board of a query. The envelope runs once per change of the
  * requirements or the resin, however many readers (both board sections, the
  * header counts, the Start and Share gate) ask for it in between.
+ *
+ * The contract asks apps to send `normalize` once when a list is loaded or
+ * imported; the web deliberately does not. Its store hydrates (saved query,
+ * share link, preset) before the editor module may be ready, and a
+ * normalized list would stop matching its preset's fingerprint and resuming
+ * a cancelled search. Every fold, edit and save accepts any encoding, so the
+ * only effect is that the first real edit may re-encode rows it did not touch.
  */
 export function requirementBoardOf(query: BoardQuery): EditorAnswer<BoardResponse> {
   if (drawn && sameBoard(drawn.query, query)) return drawn.answer;
