@@ -584,8 +584,10 @@ fn the_envelopes_answer_the_golden_fixtures() {
                 path.display()
             )
         });
+        // Line endings a checkout converted (`core.autocrlf` on Windows) are
+        // not drift; `.gitattributes` also keeps these files LF.
         assert!(
-            stored == render(fixture),
+            stored.replace("\r\n", "\n") == render(fixture),
             "{name} drifted from what the envelopes answer; review the change and regenerate \
              with UPDATE_EDITOR_FIXTURES=1"
         );
