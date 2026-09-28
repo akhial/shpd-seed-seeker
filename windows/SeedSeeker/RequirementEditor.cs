@@ -725,6 +725,12 @@ public sealed class RequirementSheet
             (draft, Form) = Read(answer);
             return null;
         }
+        return Saved(saved);
+    }
+
+    /// <summary>Reads what a save answered (<c>saved</c>).</summary>
+    internal static SheetSave Saved(JsonObject saved)
+    {
         var resin = saved["resin"] as JsonObject;
         return new(
             (bool)saved["changed"]! ? [.. saved["rows"]!.AsArray().Select(row => ResultsExport.DecodeRow(row!.AsObject()))] : null,

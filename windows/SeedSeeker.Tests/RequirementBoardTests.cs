@@ -55,10 +55,12 @@ public sealed class RequirementBoardTests
     {
         var files = Directory.GetFiles(FixtureDirectory(), "*.json");
         Assert.True(files.Length >= 30, "the editor fixtures moved");
+        var read = 0;
         foreach (var file in files)
         {
             var fixture = JsonNode.Parse(File.ReadAllText(file))!.AsObject();
             var request = RequestText(fixture["request"]!);
+            var board = (string?)fixture["envelope"] == "requirement_board";
             var answer = (string?)fixture["envelope"] switch
             {
                 "requirement_board" => NativeEngine.RequirementBoard(request),
@@ -66,7 +68,33 @@ public sealed class RequirementBoardTests
                 var other => throw new InvalidDataException($"{file}: unknown envelope {other}"),
             };
             Assert.True(JsonNode.DeepEquals(fixture["response"], JsonNode.Parse(answer)), $"{Path.GetFileName(file)} answered {answer}");
+
+            // Every answer reads into what the window draws from, hidden
+            // controls included; one the editor could not read says so.
+            if (fixture["response"]!["error"] is not null)
+            {
+                Assert.Throws<RequirementEditorException>(() => BoardEditor.Parse(answer));
+                continue;
+            }
+            var failure = Record.Exception(() =>
+            {
+                if (board) { BoardEditor.Answer(answer); return; }
+                var sheet = BoardEditor.Parse(answer);
+                if (sheet["saved"] is JsonObject saved) { RequirementSheet.Saved(saved); return; }
+                // Every numeric control holds its value within its range, and
+                // every floor slider sits on one of its options.
+                var form = RequirementSheet.Sheet(sheet["form"]!);
+                foreach (var (value, min, max) in new[] {
+                    (form.Tier.Value, form.Tier.Min, form.Tier.Max), (form.Upgrade.Value, form.Upgrade.Min, form.Upgrade.Max),
+                    (form.Transmutations.Value, form.Transmutations.Min, form.Transmutations.Max), (form.Stack.Count, form.Stack.Min, form.Stack.Max),
+                    (form.Stack.CountLevels.Value, form.Stack.CountLevels.Min, form.Stack.CountLevels.Max), (form.Resin.Min, 1, form.Resin.Max) })
+                    Assert.InRange(value, min, max);
+                Assert.True(form.FloorLimit.Selected >= 0 && form.Stack.CopyDepth.Selected >= 0);
+            });
+            Assert.True(failure is null, $"{Path.GetFileName(file)} did not read: {failure}");
+            read++;
         }
+        Assert.True(read >= 30, "the fixtures hold too few answers to read");
     }
 
     [Fact]
