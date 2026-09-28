@@ -691,6 +691,86 @@ fn an_unreadable_rows_group_labels_are_never_handed_out() {
     assert_eq!(compacted["items"][0]["members"], json!([1, 2]));
 }
 
+/// The joins a chip offers hold the labels unreadable rows hold, as the
+/// join edit does: a stacked target needing a stack label is refused for
+/// want of one, and every offered join and refusal answers so when sent.
+#[test]
+fn the_joins_a_chip_offers_hold_an_unreadable_rows_labels() {
+    let unknown = |key: u64, label: u8| json!({"key": key, "kind": "ring", "item": "ring_of_wonders", "identity_group": label});
+    let frost = |key: u64| json!({"key": key, "kind": "wand", "item": "wand_frost"});
+    let disintegration = json!({"key": 3, "kind": "wand", "item": "wand_disintegration"});
+    let alike = |key: u64, item: &str, label: u8| json!({"key": key, "kind": "wand", "item": item, "alternative_group": 1, "identity_group": label});
+    let copy = |key: u64, kind: &str, label: u8| json!({"key": key, "kind": kind, "identity_group": label});
+    let lists = [
+        // Frost ×2 as plain repeats needs a label to join as a member.
+        json!([
+            frost(1),
+            frost(2),
+            disintegration,
+            unknown(4, 1),
+            unknown(5, 2),
+            unknown(6, 3),
+            unknown(7, 4),
+        ]),
+        // Frost of the shared {Frost ×3 | Disintegration ×3} leaves the rest
+        // of its stack a label of its own, as does the Plate Armor ×2 it
+        // joins.
+        json!([
+            alike(1, "wand_frost", 1),
+            alike(2, "wand_disintegration", 1),
+            copy(3, "wand", 1),
+            copy(4, "wand", 1),
+            {"key": 5, "kind": "armor", "item": "plate_armor"},
+            {"key": 6, "kind": "armor", "item": "plate_armor"},
+            unknown(7, 3),
+            unknown(8, 4),
+        ]),
+    ];
+    for rows in &lists {
+        let board = board_json(&json!({"rows": rows}));
+        let chips: Vec<&Value> = board["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .flat_map(|item| item["chips"].as_array().unwrap())
+            .collect();
+        let mut refusals = 0;
+        for chip in chips {
+            let source = &chip["key"];
+            let joined = |target: &Value| {
+                board_json(&json!({
+                    "rows": rows,
+                    "edits": [{"type": "join", "source": source, "target": target}],
+                }))
+            };
+            for target in chip["join"].as_array().unwrap() {
+                let response = joined(target);
+                assert_eq!(response["refused"], Value::Null, "{source} → {target}");
+                assert_eq!(response["changed"], json!(true), "{source} → {target}");
+            }
+            for refused in chip["refuse"].as_array().unwrap() {
+                let response = joined(&refused["key"]);
+                assert_eq!(
+                    response["refused"]["reason"], refused["reason"],
+                    "{source} → {refused}"
+                );
+                refusals += 1;
+            }
+        }
+        assert!(refusals > 0, "{board}");
+    }
+    // The review's case: Disintegration may not join Frost ×2.
+    let board = board_json(&json!({"rows": lists[0]}));
+    let disintegration = &board["items"][1]["chips"][0];
+    assert_eq!(disintegration["key"], json!(3));
+    assert_eq!(disintegration["join"], json!([]));
+    assert_eq!(
+        disintegration["refuse"][0]["reason"],
+        json!("no_free_group"),
+        "{disintegration}"
+    );
+}
+
 /// Platform encoders write an unset nullable property as `null`
 /// (System.Text.Json by default, kotlinx with explicit nulls): every
 /// optional request field takes `null` for its default.

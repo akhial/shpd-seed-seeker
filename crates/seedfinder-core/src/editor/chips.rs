@@ -23,7 +23,8 @@ use crate::query::{
 
 use super::Row;
 use super::board::{
-    BoardItem, ChipStack, ItemKey, JoinCandidates, Refusal, board_items, join_candidates,
+    BoardItem, ChipStack, HeldLabels, ItemKey, JoinCandidates, Refusal, board_items,
+    join_candidates_holding,
 };
 use super::labels::{
     ARCANE_RESIN, CopyFloors, EXCLUDED_FROM_RESIN, KindName, NO_RESIN, RESIN_AUTO,
@@ -540,18 +541,19 @@ impl<'a> Blame<'a> {
 /// import ([`super::Edit::Normalize`]).
 #[must_use]
 pub fn board_view(rows: &[Row], resin: Option<&ResinState>) -> BoardView {
-    board_view_beside(rows, resin, Unread::default())
+    board_view_beside(rows, resin, (Unread::default(), &HeldLabels::default()))
 }
 
 /// [`board_view`] of a list that also holds rows the editor cannot read,
-/// in the `unread` sections: they count towards the list-level problem.
+/// in the `unread` sections, holding the `held` labels: they count towards
+/// the list-level problem, and no join the chips offer takes their labels.
 pub(crate) fn board_view_beside(
     rows: &[Row],
     resin: Option<&ResinState>,
-    unread: Unread,
+    (unread, held): (Unread, &HeldLabels),
 ) -> BoardView {
     let items = board_items(rows);
-    let candidates = join_candidates(rows, &items);
+    let candidates = join_candidates_holding(rows, &items, held);
     let found = indexed_problems(rows, unread);
     let blame = Blame::new(rows.len(), &found);
     let mut counts = Counts::default();

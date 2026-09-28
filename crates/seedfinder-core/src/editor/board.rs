@@ -2307,11 +2307,17 @@ pub struct JoinCandidates {
 /// feedback need no per-gesture call.
 #[must_use]
 pub fn join_candidates(rows: &[Row], items: &[BoardItem]) -> Vec<JoinCandidates> {
-    let rules = JoinRules::new(
-        rows,
-        Board::from_items(rows.len(), items.to_vec()),
-        &HeldLabels::default(),
-    );
+    join_candidates_holding(rows, items, &HeldLabels::default())
+}
+
+/// [`join_candidates`] beside rows holding the `held` labels, which a join
+/// never takes: the answers agree with [`apply_holding`]'s.
+pub(crate) fn join_candidates_holding(
+    rows: &[Row],
+    items: &[BoardItem],
+    held: &HeldLabels,
+) -> Vec<JoinCandidates> {
+    let rules = JoinRules::new(rows, Board::from_items(rows.len(), items.to_vec()), held);
     let visible: Vec<usize> = (0..rows.len())
         .filter(|&index| rules.board.member_of[index].is_some())
         .collect();

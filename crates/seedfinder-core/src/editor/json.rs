@@ -597,7 +597,8 @@ fn board(request: &str) -> Result<Value, Failure> {
     let mut merged = merge(&entries, run.rows, &run.unreadable);
     rekeyed.extend(separate(&mut merged));
     let rows = typed(&merged);
-    let view = board_view_beside(&rows, resin.as_ref(), unread(&merged));
+    let held = held_labels(&merged, |_| true);
+    let view = board_view_beside(&rows, resin.as_ref(), (unread(&merged), &held));
     Ok(object(vec![
         ("rows", merged.iter().map(write_entry).collect()),
         ("next_key", next_key_of(&merged, hint).into()),

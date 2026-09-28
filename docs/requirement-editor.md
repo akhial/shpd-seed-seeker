@@ -116,7 +116,10 @@ chip can join it, and it joins nothing. Only `remove`, `remove_one` and
 sheet refuses to open it or save onto it. Its key and group labels stay its own: keys the
 editor mints never land on an unreadable row's key, and no new cluster,
 stack or combined level takes a label it holds (when wide labels are
-compacted, its alternative label is relabelled with the others). It is a
+compacted, its alternative label is relabelled with the others) — and the
+chips' `join` and `refuse` lists count those labels as taken, so a join
+that would need one is listed in `refuse` with `no_free_group`, as the edit
+answers (`board-unreadable-row-labels`). It is a
 row of its section all the same: `counts` counts it, and so does the
 list-level problem.
 
@@ -719,7 +722,7 @@ whole stack, one item of a member's stack and of a lone combined level),
 copy floors, combined levels (their copies' floors kept both ways and
 given to new copies), a member stepped down to ×1, saves (new and
 unchanged), problems, key repair, label compaction and labels moved into
-range, unreadable rows, the sheet's open/change/save flow, a member's sheet
+range, unreadable rows (and the labels they hold, which no join takes), the sheet's open/change/save flow, a member's sheet
 and its save, an untouched save and one that repairs its row, the resin
 flows (a query with resin and one without, and the resin chip saved
 untouched), and the error envelopes.

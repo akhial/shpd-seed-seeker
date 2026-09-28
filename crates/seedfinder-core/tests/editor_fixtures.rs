@@ -635,6 +635,22 @@ fn board_fixtures(fixtures: &mut Fixtures) {
         }),
     );
     fixtures.add(
+        "board-unreadable-row-labels",
+        "The stack labels unreadable rows hold are never taken: Wand of Disintegration cannot join Frost ×2, which would need one as a member stack, and its chip refuses it with no_free_group.",
+        Board,
+        &json!({
+            "rows": [
+                {"key": 1, "kind": "wand", "item": "wand_frost"},
+                {"key": 2, "kind": "wand", "item": "wand_frost"},
+                {"key": 3, "kind": "wand", "item": "wand_disintegration"},
+                {"key": 4, "kind": "ring", "item": "ring_of_wonders", "identity_group": 1},
+                {"key": 5, "kind": "ring", "item": "ring_of_wonders", "identity_group": 2},
+                {"key": 6, "kind": "ring", "item": "ring_of_wonders", "identity_group": 3},
+                {"key": 7, "kind": "ring", "item": "ring_of_wonders", "identity_group": 4},
+            ],
+        }),
+    );
+    fixtures.add(
         "board-error-json",
         "A request that is not JSON.",
         Board,
