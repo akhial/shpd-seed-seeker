@@ -371,10 +371,7 @@ fun FinderScreen(
                     polygon = MaterialShapes.Clover4Leaf,
                     accent = MaterialTheme.colorScheme.primaryContainer,
                     onAccent = MaterialTheme.colorScheme.onPrimaryContainer,
-                    summary = listOf(
-                        requirementsSummaryText(board),
-                        if (hasResin) (if (arcaneResinAuto) "Auto Arcane Resin" else "≥$arcaneResin Arcane Resin") else "",
-                    ).filter { it.isNotEmpty() }.joinToString(" · "),
+                    summary = requirementsSummaryText(board),
                     open = !showResults,
                     openFraction = { 1f - resultsFraction() },
                     openDescription = "Show requirements",
@@ -707,15 +704,21 @@ private fun ResultsHeader(
 internal fun milestoneOf(count: Int): Int =
     listOf(1, 5, 10, 25, 50, 100, 250, 500, 1_000).count { count >= it }
 
-/** What the board asks for, in a line: each slot by name, its alternatives joined by "or". */
-private fun requirementsSummaryText(board: BoardView): String =
-    board.items.joinToString(" · ") { item ->
-        buildString {
-            if (item.blanket) append("Blanket: ")
-            append(item.chips.joinToString(" or ") { it.name })
-            item.countBadge?.let { append(" ${it.text}") }
-        }
-    }
+/**
+ * What the board asks for, in a line: each slot by name, its alternatives
+ * joined by "or", then the Arcane Resin chip by its amount tag (`Auto`,
+ * `≥6`) and name — all in the requirement editor's words.
+ */
+internal fun requirementsSummaryText(board: BoardView): String =
+    (
+        board.items.map { item ->
+            buildString {
+                if (item.blanket) append("Blanket: ")
+                append(item.chips.joinToString(" or ") { it.name })
+                item.countBadge?.let { append(" ${it.text}") }
+            }
+        } + listOfNotNull(board.resin?.let { resin -> listOfNotNull(resin.tags.firstOrNull()?.text, resin.name).joinToString(" ") })
+    ).joinToString(" · ")
 
 /** The requirement board and a summary linking to the full search settings. */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
