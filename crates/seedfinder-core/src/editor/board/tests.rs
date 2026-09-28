@@ -16,7 +16,7 @@ use super::super::testing::{
 use super::*;
 use crate::catalog::{ItemId, ItemKind, WeaponCategory};
 use crate::editor::{
-    STACK_MAX, can_change_count, can_count_levels, can_grow, copy_depth, level_capacity,
+    STACK_MAX, can_change_count, can_count_levels, can_grow, copy_depth, level_capacity, problems,
 };
 use crate::query::{LevelSum, QueryError, Requirement, TierRequirement, UpgradeRequirement};
 
@@ -2288,6 +2288,128 @@ fn stack_and_level_labels_run_out_at_four_with_a_refusal() {
     assert_eq!(entry(&result.rows, 1).total, Some(3));
 }
 
+/// The document codec reads any byte as a stack or combined-level label,
+/// and the engine searches any label but 0, while the portable formats and
+/// every platform's model stop at four. Normalizing moves a label out of
+/// range onto a free one, as wide alternative labels are compacted, and
+/// never merges two groups to make them fit.
+#[test]
+fn normalizing_moves_labels_out_of_range_onto_free_ones() {
+    let stacked = |key, label| with(row(key, ItemKind::Wand), |r| r.identity_group = Some(label));
+    // Linux's hand-edited state: a stack labelled 7.
+    let rows = [stacked(1, 7), stacked(2, 7)];
+    assert_eq!(
+        problems(&rows)
+            .iter()
+            .map(|problem| problem.message.as_str())
+            .collect::<Vec<_>>(),
+        ["A stack group must be 1 through 4."; 2]
+    );
+    let result = run(&rows, &[Edit::Normalize]);
+    assert!(result.changed);
+    assert_eq!(keys(&result.rows), [1, 2]);
+    assert_eq!(
+        result
+            .rows
+            .iter()
+            .map(|row| row.requirement.identity_group)
+            .collect::<Vec<_>>(),
+        [Some(1); 2]
+    );
+    assert!(problems(&result.rows).is_empty());
+    assert_eq!(validate(&result.rows), Ok(()));
+    assert!(!run(&result.rows, &[Edit::Normalize]).changed);
+
+    // Labels in range stay; each group out of range takes the lowest free
+    // label in the order it first appears, the reserved 0 included.
+    let rows = [
+        stacked(1, 9),
+        stacked(2, 2),
+        stacked(3, 9),
+        stacked(4, 2),
+        stacked(5, 0),
+        stacked(6, 0),
+        with(named(7, ItemId::RingMight), |r| {
+            r.level_sum = Some(LevelSum {
+                group: 200,
+                minimum_total: 2,
+            });
+        }),
+        with(named(8, ItemId::RingMight), |r| {
+            r.level_sum = Some(LevelSum {
+                group: 200,
+                minimum_total: 2,
+            });
+        }),
+        with(row(9, ItemKind::Armor), |r| r.alternative_group = Some(0)),
+        with(row(10, ItemKind::Ring), |r| r.alternative_group = Some(0)),
+    ];
+    let result = run(&rows, &[Edit::Normalize]);
+    let labels = |pick: fn(&Requirement) -> Option<u8>| {
+        result
+            .rows
+            .iter()
+            .map(|row| pick(&row.requirement))
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        labels(|r| r.identity_group),
+        [
+            Some(1),
+            Some(2),
+            Some(1),
+            Some(2),
+            Some(3),
+            Some(3),
+            None,
+            None,
+            None,
+            None
+        ]
+    );
+    assert_eq!(
+        labels(|r| r.level_sum.map(|sum| sum.group))[6..8],
+        [Some(1), Some(1)]
+    );
+    assert_eq!(labels(|r| r.alternative_group)[8..], [Some(1), Some(1)]);
+    assert!(problems(&result.rows).is_empty(), "{:?}", result.rows);
+    assert_emittable(&result.rows, "relabelled");
+
+    // Five stacks and four labels: the fifth keeps its own, and says so.
+    let rows: Vec<Row> = (0..5)
+        .flat_map(|group: u8| {
+            let key = u64::from(group) * 2 + 1;
+            [stacked(key, 10 + group), stacked(key + 1, 10 + group)]
+        })
+        .collect();
+    let result = run(&rows, &[Edit::Normalize]);
+    assert_eq!(
+        labels_of(&result.rows),
+        [1, 1, 2, 2, 3, 3, 4, 4, 14, 14].map(Some)
+    );
+    assert_eq!(
+        problems(&result.rows)
+            .iter()
+            .map(|problem| problem.keys.clone())
+            .collect::<Vec<_>>(),
+        [[9], [10]]
+    );
+    assert_eq!(counts(&result.rows), [2; 5]);
+
+    // Any effective edit leaves the list in range; a no-op leaves it alone.
+    let rows = [stacked(1, 7), stacked(2, 7), row(3, ItemKind::Ring)];
+    assert!(!run(&rows, &[Edit::Detach { key: 3 }]).changed);
+    let grown = run(&rows, &[Edit::SetCount { key: 3, count: 2 }]);
+    assert_eq!(labels_of(&grown.rows), [Some(2), Some(2), Some(1), Some(1)]);
+    assert_eq!(grown.focus, Some(3));
+}
+
+fn labels_of(rows: &[Row]) -> Vec<Option<u8>> {
+    rows.iter()
+        .map(|row| row.requirement.identity_group)
+        .collect()
+}
+
 // --- the stack documents the web writes -----------------------------------
 
 /// The four stack shapes as the web board writes them, pinned from both
@@ -2422,6 +2544,12 @@ fn random_edits_on_valid_rows_keep_every_row_emittable() {
         );
         assert_eq!(result.changed, result.rows != rows, "{context}");
         assert_eq!(apply(&rows, hint, &edits), result, "{context}");
+        // Whatever an edit wrote is canonical: normalizing it again is a
+        // no-op.
+        assert!(
+            !result.changed || !apply(&result.rows, hint, &[Edit::Normalize]).changed,
+            "{context}"
+        );
 
         // One edit at a time: each step keeps the invariant, a refusal or a
         // no-op leaves its input alone, and the steps add up to the sequence.
@@ -2546,5 +2674,80 @@ fn random_edits_on_arbitrary_rows_never_panic() {
             "{context}"
         );
         let _ = join_candidates(&result.rows, &board_items(&result.rows));
+    }
+}
+
+/// Random valid lists written under other labels — one distinct byte per
+/// group, the reserved 0 among them — read as the very board their original
+/// reads, and normalizing writes every label back in range (1,024 cases).
+#[test]
+fn a_list_under_any_labels_normalizes_to_the_same_board() {
+    let mut rng = Rng::new(0x1abe_15a1_1b17_2026);
+    // A distinct byte for each label 1..=4 the generator writes.
+    let spread = |rng: &mut Rng| {
+        let mut labels = [0_u8; 5];
+        for index in 1..labels.len() {
+            labels[index] = loop {
+                let label = u8::try_from(rng.below(256)).expect("a byte");
+                if !labels[1..index].contains(&label) {
+                    break label;
+                }
+            };
+        }
+        labels
+    };
+    let at = |rows: &[Row], indices: &[usize]| -> Vec<u64> {
+        indices.iter().map(|&index| rows[index].key).collect()
+    };
+    let shape = |rows: &[Row]| {
+        board_items(rows)
+            .iter()
+            .map(|item| {
+                (
+                    at(rows, &item.members),
+                    at(rows, &item.extras),
+                    item.total,
+                    item.cluster.is_some(),
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+    let sorted = |rows: &[Row]| {
+        let mut found: Vec<(Vec<u64>, String)> = problems(rows)
+            .into_iter()
+            .map(|problem| (problem.keys, problem.message))
+            .collect();
+        found.sort();
+        found
+    };
+    for case in 0..1024 {
+        let rows = random_rows(&mut rng);
+        let (identity, sum, alternative) = (spread(&mut rng), spread(&mut rng), spread(&mut rng));
+        let wide: Vec<Row> = rows
+            .iter()
+            .map(|row| {
+                with(*row, |r| {
+                    r.identity_group = r.identity_group.map(|label| identity[usize::from(label)]);
+                    if let Some(level) = &mut r.level_sum {
+                        level.group = sum[usize::from(level.group)];
+                    }
+                    r.alternative_group = r
+                        .alternative_group
+                        .map(|label| alternative[usize::from(label)]);
+                })
+            })
+            .collect();
+        let context = format!("case {case}: {wide:?}");
+        let narrow = run(&rows, &[Edit::Normalize]).rows;
+        let normalized = run(&wide, &[Edit::Normalize]);
+        assert_emittable(&normalized.rows, &context);
+        assert_eq!(keys(&normalized.rows), keys(&rows), "{context}");
+        assert_eq!(shape(&wide), shape(&rows), "{context}");
+        assert_eq!(shape(&normalized.rows), shape(&narrow), "{context}");
+        assert_eq!(sorted(&normalized.rows), sorted(&narrow), "{context}");
+        assert!(
+            !run(&normalized.rows, &[Edit::Normalize]).changed,
+            "{context}"
+        );
     }
 }

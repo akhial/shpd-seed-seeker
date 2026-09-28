@@ -75,18 +75,31 @@ the effects an app listed — so compare rows as JSON values, or rely on
 
 ### Labels
 
-- Alternative labels may be any integer ≥ 1 on input (Android numbers
+- Alternative labels may be any whole number on input (Android numbers
   clusters without a bound). If any label passes 255, every cluster is
   relabelled 1, 2, … in first-appearance order and `changed` is set.
 - Stack (`identity_group`) and combined-level (`level_sum.group`) labels
-  must be 1–255 on input; the editor never mints one above 4.
+  are read as the query document reads them, 0–255; the editor never mints
+  one above 4.
+- `normalize`, and every edit that changes the rows, moves a label out of
+  range onto a free one in range: a stack or combined-level label outside
+  1–4 (the portable formats and every platform's model stop at 4, the
+  engine rejects 0), or the reserved either/or label 0. Labels in range
+  stay; each group out of range takes the lowest label no row — an
+  unreadable row included — uses, in first-appearance order, so distinct
+  groups stay distinct. A list with more stacks (or combined levels) than
+  labels leaves the groups no label is left for as they were, and the
+  problem list reports them (`A stack group must be 1 through 4.`): groups
+  are never merged to fit.
 - Whatever an edit or a save writes from rows that each pass the engine's
   requirement validation is itself valid: every row passes validation,
-  keeps its stack and combined-level labels in 1–4, carries no such label
-  on a trinket, artifact or blanket row, never combines a level sum with an
-  alternative label, and reads back through the row codec unchanged. Several
-  platform models refuse to construct a requirement breaking these rules, so
-  the guarantee is property-tested.
+  keeps its stack and combined-level labels in 1–4 (unless the list holds
+  more than four stacks or four combined levels), carries no such label on
+  a trinket, artifact or blanket row, never combines a level sum with an
+  alternative label, and reads back through the row codec unchanged. It is
+  also canonical: `normalize` changes nothing on it. Several platform
+  models refuse to construct a requirement breaking these rules, so the
+  guarantee is property-tested.
 
 ### Unreadable rows
 
@@ -136,7 +149,7 @@ format (`"locked_chest"`).
 
 | Edit | Effect |
 | --- | --- |
-| `{"type": "normalize"}` | Rewrites the list into its canonical encoding. Send once when a list is loaded or imported. |
+| `{"type": "normalize"}` | Rewrites the list into its canonical encoding, its labels in range among it (see [Labels](#labels)). See [When to normalize](#when-to-normalize). |
 | `{"type": "join", "source": K, "target": K}` | Makes `source` an either/or alternative of `target` (any member of a chip or cluster). The source moves after the cluster's last member. |
 | `{"type": "detach", "key": K}` | Takes a cluster member out on its own. It leaves the cluster's stack behind. |
 | `{"type": "remove", "key": K}` | Removes a cluster member, or a chip's whole entry. |
@@ -175,6 +188,22 @@ cluster's leftover stack labels when it is not.
   | `mixed_category_stack` | `Copies can only be grouped with the same item type.` |
   | `blanket_total` | `A blanket requirement cannot count levels together.` |
   | `no_free_group` | `Every group label is in use. Remove a stack or a combined level first.` |
+
+### When to normalize
+
+Every edit that changes the rows writes the canonical encoding, so a list
+the editor wrote needs no `normalize`. A list from elsewhere may not be
+canonical — a cluster of one, repeats a stack would fold, a stack labelled
+7 — and the board draws it as it is, its problems included.
+
+- **Required** when a list is imported into the editor: a share link, a
+  results or query file, a preset applied. Send `normalize` once, and write
+  the rows back when `changed` is set.
+- **Optional** when a list is restored and must keep matching a stored copy
+  of itself — a resumable search, the preset a query came from. Rewriting
+  it would break the match, and nothing needs it: the first edit normalizes
+  the list anyway, and the problems still gate Start and Share, so a label
+  out of range is reported rather than searched.
 
 ### Response
 
@@ -412,6 +441,7 @@ decided once.
 | A cluster's stack label | Never spread onto trinket, artifact or blanket members. |
 | Copy contents | Built from defaults; plain copies keep the melee/thrown narrowing; resin exclusion, blanket, trinket selection and transmutations are never copied. |
 | Key lookup | Visible members only, never hidden copies. |
+| Labels out of range | Moved onto free labels in range by `normalize` and every edit that changes the rows; never merged to fit. |
 | Saving an unchanged chip | Identical rows, the same copy keys, `changed: false`. |
 | New rows | Appended; sections are never reordered. |
 | Wildcard chip names | `Any melee`, `Any thrown`. |

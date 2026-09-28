@@ -322,6 +322,20 @@ fn board_fixtures(fixtures: &mut Fixtures) {
         }),
     );
     fixtures.add(
+        "board-normalize-labels",
+        "A hand-written stack labelled 7 and combined level labelled 9: normalizing moves both onto free labels in range, and their problems go.",
+        Board,
+        &json!({
+            "rows": [
+                {"key": 1, "kind": "wand", "upgrade": 3, "identity_group": 7},
+                {"key": 2, "kind": "wand", "identity_group": 7},
+                {"key": 3, "kind": "ring", "item": "ring_might", "level_sum": {"group": 9, "at_least": 3}},
+                {"key": 4, "kind": "ring", "item": "ring_might", "level_sum": {"group": 9, "at_least": 3}},
+            ],
+            "edits": [{"type": "normalize"}],
+        }),
+    );
+    fixtures.add(
         "board-unreadable-row",
         "A row naming an item the catalog does not know is kept verbatim and shown as an unknown chip.",
         Board,

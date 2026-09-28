@@ -426,6 +426,46 @@ fn wide_alternative_labels_are_compacted() {
     assert_eq!(response["items"][1]["id"], json!("c2"));
 }
 
+/// Linux's hand-edited state: a stack labelled 7, which Start refused and
+/// nothing on the board could repair. Normalizing moves it into range, past
+/// the labels an unreadable row holds.
+#[test]
+fn normalize_moves_stack_labels_into_range() {
+    let stacked = |key: u64| json!({"key": key, "kind": "wand", "identity_group": 7});
+    let request = json!({"rows": [stacked(1), stacked(2)], "edits": [{"type": "normalize"}]});
+    let response = board_json(&request);
+    assert_eq!(response["changed"], json!(true), "{response}");
+    assert_eq!(
+        response["rows"],
+        json!([
+            {"key": 1, "kind": "wand", "identity_group": 1},
+            {"key": 2, "kind": "wand", "identity_group": 1},
+        ])
+    );
+    assert_eq!(response["problems"], json!([]));
+    assert_eq!(response["items"][0]["extras"], json!([2]));
+    // Without the edit the rows come back as they were, problems and all.
+    let untouched = board_json(&json!({"rows": [stacked(1), stacked(2)]}));
+    assert_eq!(untouched["changed"], json!(false));
+    assert_eq!(
+        untouched["problems"][0]["message"],
+        json!("A stack group must be 1 through 4.")
+    );
+
+    let unknown = json!({"key": 3, "kind": "wand", "item": "wand_of_wonders", "identity_group": 1});
+    let response = board_json(&json!({
+        "rows": [stacked(1), stacked(2), unknown],
+        "edits": [{"type": "normalize"}],
+    }));
+    let labels: Vec<&Value> = response["rows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|row| &row["identity_group"])
+        .collect();
+    assert_eq!(labels, [&json!(2), &json!(2), &json!(1)], "{response}");
+}
+
 #[test]
 fn unreadable_rows_are_carried_through_and_only_removed() {
     let unknown = json!({"key": 9, "kind": "wand", "item": "wand_of_wonders", "upgrade": 3});

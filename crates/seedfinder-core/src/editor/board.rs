@@ -397,12 +397,14 @@ fn takes_stack_label(row: &Requirement) -> bool {
 ///
 /// - a cluster that holds an identity label spreads it to every member that
 ///   can carry one;
+/// - a lone alternative and a lone level-sum member dissolve;
 /// - a stack anchored on a lone concrete chip carries plain repeats, not
 ///   identity labels;
-/// - a lone alternative, a lone identity label and a lone level-sum member
-///   dissolve.
+/// - a lone identity label dissolves.
 ///
-/// Rows keep their keys and their order.
+/// The steps run in that order so one pass is enough: a second changes
+/// nothing. Rows keep their keys and their order. [`apply`] then moves the
+/// labels a hand-written list held out of range into it ([`relabel`]).
 fn normalize(rows: &mut [Row]) {
     let mut cluster_label: BTreeMap<u8, u8> = BTreeMap::new();
     for row in rows.iter() {
@@ -422,10 +424,33 @@ fn normalize(rows: &mut [Row]) {
             row.requirement.identity_group = Some(label);
         }
     }
+    // Groups of one say nothing. A cluster or a combined level of one goes
+    // first, so the chip it leaves is seen as the lone chip it now is.
+    let alternatives = counted(rows.iter().map(|row| row.requirement.alternative_group));
+    let sums = counted(
+        rows.iter()
+            .map(|row| row.requirement.level_sum.map(|sum| sum.group)),
+    );
+    for row in rows.iter_mut() {
+        let requirement = &mut row.requirement;
+        if requirement
+            .alternative_group
+            .is_some_and(|group| alternatives[&group] < 2)
+        {
+            requirement.alternative_group = None;
+        }
+        if requirement
+            .level_sum
+            .is_some_and(|sum| sums[&sum.group] < 2)
+        {
+            requirement.level_sum = None;
+        }
+    }
     // A stack anchored on a lone concrete chip encodes as plain repeats —
-    // unless a copy also counts a combined level (a hand-written list): as a
-    // plain repeat it would lose that level, which the board shows as a
-    // stack of its own, so the group stays as written.
+    // unless a copy also counts a combined level, sits in a cluster, or is
+    // of another kind (a hand-written list): as a plain repeat of the anchor
+    // it would lose what the board shows of it, so the group stays as
+    // written and the problem list says what is wrong with it.
     for members in identity_groups(rows).values() {
         let constrained: Vec<usize> = members
             .iter()
@@ -438,9 +463,13 @@ fn normalize(rows: &mut [Row]) {
         let anchor = rows[anchor_index].requirement;
         if anchor.item.is_none()
             || anchor.alternative_group.is_some()
-            || members
-                .iter()
-                .any(|&index| index != anchor_index && rows[index].requirement.level_sum.is_some())
+            || members.iter().any(|&index| {
+                let member = &rows[index].requirement;
+                index != anchor_index
+                    && (member.level_sum.is_some()
+                        || member.alternative_group.is_some()
+                        || member.kind != anchor.kind)
+            })
         {
             continue;
         }
@@ -455,34 +484,85 @@ fn normalize(rows: &mut [Row]) {
             };
         }
     }
-    // Groups of one say nothing.
-    let alternatives = counted(rows.iter().map(|row| row.requirement.alternative_group));
     let identities = counted(rows.iter().map(|row| row.requirement.identity_group));
-    let sums = counted(
-        rows.iter()
-            .map(|row| row.requirement.level_sum.map(|sum| sum.group)),
-    );
     for row in rows.iter_mut() {
         let requirement = &mut row.requirement;
-        if requirement
-            .alternative_group
-            .is_some_and(|group| alternatives[&group] < 2)
-        {
-            requirement.alternative_group = None;
-        }
         if requirement
             .identity_group
             .is_some_and(|group| identities[&group] < 2)
         {
             requirement.identity_group = None;
         }
-        if requirement
-            .level_sum
-            .is_some_and(|sum| sums[&sum.group] < 2)
-        {
-            requirement.level_sum = None;
+    }
+}
+
+/// Moves every group label a hand-written list holds out of range onto a
+/// free one in range: a stack or combined-level label outside 1–4
+/// ([`MAX_IDENTITY_GROUP`], [`MAX_LEVEL_SUM_GROUP`]) — the document codec
+/// reads any byte — and the reserved either/or label 0. Labels in range
+/// stay; each group out of range takes the lowest label no row and no
+/// `held` label uses, in first-appearance order, the way wide alternative
+/// labels are compacted ([`super::compact_alternative_labels`]), so distinct
+/// groups stay distinct. A group no label is left for keeps its own, and the
+/// problem list reports it: merging two stacks to fit would change what the
+/// list asks for. Returns whether any label moved.
+fn relabel(rows: &mut [Row], held: &HeldLabels) -> bool {
+    let identity = relabel_groups(
+        rows,
+        &held.identity,
+        MAX_IDENTITY_GROUP,
+        |requirement| requirement.identity_group,
+        |requirement, label| requirement.identity_group = Some(label),
+    );
+    let level_sum = relabel_groups(
+        rows,
+        &held.level_sum,
+        MAX_LEVEL_SUM_GROUP,
+        |requirement| requirement.level_sum.map(|sum| sum.group),
+        |requirement, label| {
+            if let Some(sum) = &mut requirement.level_sum {
+                sum.group = label;
+            }
+        },
+    );
+    let alternative = relabel_groups(
+        rows,
+        &held.alternative,
+        u8::MAX,
+        |requirement| requirement.alternative_group,
+        |requirement, label| requirement.alternative_group = Some(label),
+    );
+    identity || level_sum || alternative
+}
+
+/// [`relabel`] for one kind of label, read by `label` and written by `set`,
+/// whose range is `1..=maximum`.
+fn relabel_groups(
+    rows: &mut [Row],
+    held: &BTreeSet<u8>,
+    maximum: u8,
+    label: impl Fn(&Requirement) -> Option<u8>,
+    set: impl Fn(&mut Requirement, u8),
+) -> bool {
+    let mut used = taken(rows.iter().map(|row| label(&row.requirement)), held);
+    let mut moved: BTreeMap<u8, u8> = BTreeMap::new();
+    let mut changed = false;
+    for row in rows.iter_mut() {
+        let Some(old) = label(&row.requirement).filter(|old| !(1..=maximum).contains(old)) else {
+            continue;
+        };
+        let new = *moved.entry(old).or_insert_with(|| {
+            free_group(&used, maximum).map_or(old, |new| {
+                used.insert(new);
+                new
+            })
+        });
+        if new != old {
+            set(&mut row.requirement, new);
+            changed = true;
         }
     }
+    changed
 }
 
 fn counted(groups: impl IntoIterator<Item = Option<u8>>) -> BTreeMap<u8, usize> {
@@ -555,8 +635,10 @@ impl fmt::Display for Refusal {
 /// changes nothing.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Edit {
-    /// Rewrites the list into its canonical encoding. Platforms send it
-    /// once when they load or import a list.
+    /// Rewrites the list into its canonical encoding, stack and
+    /// combined-level labels in 1–4 among it. Platforms send it once when
+    /// they import a list; every other edit that changes the rows ends in
+    /// it too.
     Normalize,
     /// Makes `source` an either/or alternative of `target` (any member of a
     /// chip or cluster).
@@ -670,6 +752,10 @@ pub struct EditResult {
 /// with the repaired request's, so edits that undo each other report no
 /// change and a platform writes nothing back. The focus of an effective
 /// edit always names a visible row.
+///
+/// Every effective edit leaves the list canonical, and so moves a stack,
+/// combined-level or either/or label a hand-written list held out of range
+/// onto a free label in range; a group no label is left for keeps its own.
 #[must_use]
 pub fn apply(rows: &[Row], next_key_hint: Option<u64>, edits: &[Edit]) -> EditResult {
     apply_holding(rows, next_key_hint, edits, &HeldLabels::default())
@@ -690,8 +776,14 @@ pub(crate) fn apply_holding(
     let mut refused = None;
     for edit in edits {
         let outcome = apply_one(&current, next_key_hint, edit.resolved(&map), held);
-        if let Some(next) = outcome.rows {
-            focus = outcome.focus;
+        if let Some(mut next) = outcome.rows {
+            // A moved label can move where a hand-written list's overlapping
+            // groups fold a row, so the focus is found again.
+            focus = if relabel(&mut next, held) {
+                outcome.focus.and_then(|key| visible_focus(&next, key))
+            } else {
+                outcome.focus
+            };
             current = next;
         }
         if outcome.refused.is_some() {
@@ -881,10 +973,11 @@ impl Keys {
     }
 }
 
-/// `preferred` when it is not `taken`, else the lowest free label.
+/// `preferred` when it is in range and not `taken`, else the lowest free
+/// label.
 fn label_for(taken: &BTreeSet<u8>, preferred: Option<u8>, maximum: u8) -> Option<u8> {
     preferred
-        .filter(|label| !taken.contains(label))
+        .filter(|label| (1..=maximum).contains(label) && !taken.contains(label))
         .or_else(|| free_group(taken, maximum))
 }
 

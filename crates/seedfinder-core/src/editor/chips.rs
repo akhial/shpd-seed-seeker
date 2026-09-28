@@ -508,8 +508,8 @@ impl<'a> Blame<'a> {
 
 /// The whole board: every entry with its chips, badges and stack controls,
 /// the section counts, the list's problems, and the resin chip when `resin`
-/// is set. `rows` are shown as they are; platforms normalize a list once on
-/// load ([`super::Edit::Normalize`]).
+/// is set. `rows` are shown as they are; platforms normalize a list they
+/// import ([`super::Edit::Normalize`]).
 #[must_use]
 pub fn board_view(rows: &[Row], resin: Option<&ResinState>) -> BoardView {
     board_view_beside(rows, resin, Unread::default())
