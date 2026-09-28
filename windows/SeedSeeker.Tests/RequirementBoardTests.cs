@@ -411,4 +411,20 @@ public sealed class RequirementBoardTests
         var greatsword = Apply(editor, query, BoardEdit.Save(null, vault, 1, null, null)).Focus!.Value;
         Assert.Equal("Greatsword\nany upgrade · Vault treasure", editor.View(query).ChipOf(greatsword)!.Detail);
     }
+
+    [Fact]
+    public void ACopyAClusterFoldsAwaySpeaksThroughItsAnchorsChip()
+    {
+        // The window flags problems on chips alone: the anchor's chip carries
+        // its hidden copies' problems, so a cluster's capsule never has to.
+        var editor = new BoardEditor();
+        var fireblast = Named("wand_fireblast"); fireblast.AlternativeGroup = 1; fireblast.IdentityGroup = 1;
+        var query = Loaded(editor, fireblast, new() { Kind = ItemKind.Wand, AlternativeGroup = 1, IdentityGroup = 1 },
+            new() { Kind = ItemKind.Wand, IdentityGroup = 1, MaximumDepth = 30 });
+        var entry = Assert.Single(editor.View(query).Entries);
+        Assert.Equal([query.Requirements[2].Key], entry.Extras);
+        Assert.Equal("Requirement floor must be 1 through 24.", entry.Problem);
+        Assert.Equal(entry.Problem, entry.Chips[0].Problem);
+        Assert.Null(entry.Chips[1].Problem);
+    }
 }

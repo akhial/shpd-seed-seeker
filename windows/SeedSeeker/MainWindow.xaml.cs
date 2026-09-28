@@ -593,8 +593,9 @@ public sealed partial class MainWindow : Window
 
     /// <summary>
     /// An either/or cluster: its members share one dashed capsule, with "or"
-    /// between them and the stack badges at the trailing edge. A problem on a
-    /// copy the stack folds away, which no member speaks for, marks the capsule.
+    /// between them and the stack badges at the trailing edge. Problems show
+    /// on the members' own chips — the anchor's also speaks for the copies
+    /// the stack folds away — so the capsule itself never flags one.
     /// </summary>
     private Grid Cluster(BoardEntry entry)
     {
@@ -607,9 +608,8 @@ public sealed partial class MainWindow : Window
         foreach (var badge in StackBadges(entry)) { badge.Margin = new Thickness(3, 0, 3, 0); row.Children.Add(badge); }
         var anchor = entry.Members[0];
         var capsule = new Grid { Tag = anchor, VerticalAlignment = VerticalAlignment.Center };
-        capsule.Children.Add(DashedCapsule(20, entry.Problem is null ? CautionInk : DangerInk, CautionFill));
+        capsule.Children.Add(DashedCapsule(20, CautionInk, CautionFill));
         capsule.Children.Add(row);
-        if (entry.Problem is string problem) ToolTipService.SetToolTip(capsule, problem);
         // After its members, which Chip() has already listed.
         dropTargets.Add(new DropTarget(DropKind.Cluster, capsule, anchor));
         return capsule;
