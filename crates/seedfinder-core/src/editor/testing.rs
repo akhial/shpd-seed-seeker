@@ -335,7 +335,7 @@ pub(crate) fn random_edit(rng: &mut Rng, rows: &[Row]) -> Edit {
         }
     };
     let depth = |rng: &mut Rng| rng.chance(70).then(|| rng.range(0, 26));
-    match rng.below(11) {
+    match rng.below(12) {
         0 => Edit::Normalize,
         1 | 2 => Edit::Join {
             source: key(rng),
@@ -353,7 +353,8 @@ pub(crate) fn random_edit(rng: &mut Rng, rows: &[Row]) -> Edit {
             total: rng.chance(80).then(|| rng.range(0, 16)),
         },
         8 => Edit::ToggleLevels { key: key(rng) },
-        9 => Edit::SetCopyDepth {
+        9 => Edit::RemoveOne { key: key(rng) },
+        10 => Edit::SetCopyDepth {
             key: key(rng),
             max_depth: depth(rng),
         },

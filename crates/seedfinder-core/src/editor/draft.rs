@@ -40,7 +40,7 @@ use crate::query::{
 };
 use crate::trinkets::TRANSMUTATION_COUNT as TRINKET_TRANSMUTATIONS;
 
-use super::board::{BoardItem, Edit, EditResult, HeldLabels, apply_holding, board_items};
+use super::board::{ChipStack, Edit, EditResult, HeldLabels, apply_holding, board_items};
 use super::chips::{ChipView, ResinAmount, ResinState, board_view};
 use super::labels::{
     ARCANE_RESIN, KindName, RESIN_AMOUNT, RESIN_AUTO, RESIN_AUTO_CAPTION, RESIN_MAGE_WAND,
@@ -381,7 +381,8 @@ pub struct Draft {
     pub copy_depth_memory: u8,
     /// The count the transmutation switch turns back on at.
     pub transmutations_memory: u8,
-    /// A cluster member: its stack belongs to the cluster, not the sheet.
+    /// A cluster member: it keeps its cluster, and its stack cannot count
+    /// levels.
     pub in_cluster: bool,
     pub blanket: bool,
     /// Whether the item picker offers Arcane Resin among the wands (the
@@ -401,7 +402,7 @@ pub struct Draft {
 }
 
 /// One control the user moved. A change to a control the [`Form`] does not
-/// show — a tier on a named item, a stack in a cluster — changes nothing, so
+/// show — a tier on a named item, a blanket's stack — changes nothing, so
 /// a stale gesture can never write a field the sheet hides.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Change {
@@ -878,19 +879,14 @@ fn taken_trinkets(rows: &[Row], key: Option<u64>) -> Vec<ItemId> {
     taken
 }
 
-/// The visible row a key opens and its board entry. A hidden copy — which no
-/// gesture can name, but a platform might — opens its entry's anchor.
-fn opened_row(rows: &[Row], key: u64) -> Option<(usize, BoardItem)> {
+/// The stack of the chip a key opens. A hidden copy — which no gesture can
+/// name, but a platform might — opens the chip whose copy it is.
+fn opened_row(rows: &[Row], key: u64) -> Option<ChipStack> {
     let index = rows.iter().position(|row| row.key == key)?;
-    let entry = board_items(rows)
+    board_items(rows)
         .into_iter()
-        .find(|entry| entry.members.contains(&index) || entry.extras.contains(&index))?;
-    let shown = if entry.members.contains(&index) {
-        index
-    } else {
-        entry.anchor()
-    };
-    Some((shown, entry))
+        .flat_map(|entry| entry.stacks)
+        .find(|stack| stack.index == index || stack.copies.contains(&index))
 }
 
 /// Opens the sheet.
@@ -954,13 +950,13 @@ pub fn open(
         draft.key = None;
         draft.blanket = false;
         draft.requirement = Requirement::any(ItemKind::Wand);
-    } else if let Some((index, entry)) = key.and_then(|key| opened_row(rows, key)) {
-        let row = rows[index];
-        let stack = stack_view(rows, &entry);
+    } else if let Some(chip) = key.and_then(|key| opened_row(rows, key)) {
+        let row = rows[chip.index];
+        let stack = stack_view(rows, &chip);
         draft.origin = Origin::Row(row.key);
         draft.key = Some(row.key);
         draft.blanket = row.requirement.blanket;
-        draft.in_cluster = entry.cluster.is_some();
+        draft.in_cluster = chip.in_cluster;
         draft.requirement = editable(row.requirement);
         draft.count = stack.count.clamp(1, STACK_MAX);
         // The sheet shows — and so saves — what its controls can hold: a
@@ -1053,13 +1049,13 @@ fn capacity(requirement: &Requirement, count: u8) -> u8 {
         ..*requirement
     };
     let rows = vec![copy; usize::from(count.clamp(1, STACK_MAX))];
-    let entry = BoardItem {
-        members: vec![0],
-        cluster: None,
-        extras: (1..rows.len()).collect(),
+    let stack = ChipStack {
+        index: 0,
+        in_cluster: false,
+        copies: (1..rows.len()).collect(),
         total: None,
     };
-    level_capacity(&rows, &entry).max(1)
+    level_capacity(&rows, &stack).max(1)
 }
 
 /// Which controls a draft shows. [`change`] ignores the others and
@@ -1088,12 +1084,16 @@ impl Shown {
         let requirement = &draft.requirement;
         let family = requirement.kind;
         let resin = picks_resin(draft);
-        let stack = !resin && !draft.blanket && !draft.in_cluster && !names_one(family);
+        let stack = !resin && !draft.blanket && !names_one(family);
         let count = draft.count.clamp(1, STACK_MAX);
-        // A combined level is a property of a concrete stack of two or more
-        // — and of rings only, whose effects scale with their level.
-        let count_levels =
-            stack && requirement.item.is_some() && count > 1 && family == ItemKind::Ring;
+        // A combined level is a property of a concrete lone stack of two or
+        // more — of rings only, whose effects scale with their level, and
+        // never of a cluster member, whose stack is its own.
+        let count_levels = stack
+            && !draft.in_cluster
+            && requirement.item.is_some()
+            && count > 1
+            && family == ItemKind::Ring;
         let counting = count_levels && draft.total.is_some();
         Self {
             resin,
@@ -1531,7 +1531,7 @@ fn attempt(draft: &Draft, hint: Option<u64>, held: &HeldLabels) -> Attempt {
         // Nothing to write and nothing to repair; the sheet still returns to
         // its chip.
         let mut result = apply_holding(&rows, hint, &[], held);
-        result.focus = anchor_of(&rows, key);
+        result.focus = chip_of(&rows, key);
         result
     } else {
         saved
@@ -1614,13 +1614,10 @@ fn repairs(before: &[Problem], after: &[Problem]) -> bool {
         && before.iter().any(|problem| !within(problem, after))
 }
 
-/// The anchor of the board entry holding the row `key`.
-fn anchor_of(rows: &[Row], key: u64) -> Option<u64> {
-    let index = rows.iter().position(|row| row.key == key)?;
-    board_items(rows)
-        .into_iter()
-        .find(|entry| entry.members.contains(&index) || entry.extras.contains(&index))
-        .map(|entry| rows[entry.anchor()].key)
+/// The chip showing the row `key`: the row itself, or the chip whose copy
+/// it is.
+fn chip_of(rows: &[Row], key: u64) -> Option<u64> {
+    opened_row(rows, key).map(|stack| rows[stack.index].key)
 }
 
 /// Whether the row with `key` is in `rows` as a hidden copy — no board
@@ -1637,8 +1634,8 @@ fn folded_away(rows: &[Row], key: u64) -> bool {
 
 /// The chip the attempt put on the board, as the sheet previews it: the
 /// saved row's own chip, or — when it folded into an earlier chip as a
-/// plain repeat — that chip. It is not on the board yet, so it has no key
-/// and no join candidates.
+/// plain repeat — that chip, with its stack and badges. It is not on the
+/// board yet, so it has no key, no copy keys and no join candidates.
 fn preview(attempt: &Attempt) -> Option<ChipView> {
     let saved = attempt.saved?;
     if !attempt.errors.is_empty() {
@@ -1656,6 +1653,7 @@ fn preview(attempt: &Attempt) -> Option<ChipView> {
         .or_else(|| entry.chips.first())?
         .clone();
     chip.key = 0;
+    chip.copies.clear();
     chip.join.clear();
     chip.refuse.clear();
     Some(chip)

@@ -1,11 +1,11 @@
 {
-  "about": "A wildcard weapon dropped on a Spear stack joins just the +2 Spear; the plain repeat stays behind as a Spear of its own.",
+  "about": "A +2 Spear ×2 dragged onto a Tier 3 weapon joins just the +2 Spear; the plain repeat stays behind as a Spear of its own.",
   "envelope": "requirement_board",
   "request": {
     "edits": [
       {
-        "source": 3,
-        "target": 1,
+        "source": 1,
+        "target": 3,
         "type": "join"
       }
     ],
@@ -36,52 +36,77 @@
       "blanket": 0,
       "ordinary": 2
     },
-    "focus": 3,
+    "focus": 1,
     "items": [
       {
-        "badges": {
-          "count": null,
-          "total": null
-        },
         "blanket": false,
         "chips": [
           {
-            "can_detach": true,
-            "description": "Spear, exactly +2",
+            "badges": {
+              "count": null,
+              "total": null
+            },
+            "can_detach": false,
+            "copies": [],
+            "description": "Spear, any upgrade",
             "details": [
-              "exactly +2"
+              "any upgrade"
             ],
             "effect": null,
             "family": "weapon",
-            "in_cluster": true,
+            "in_cluster": false,
             "item": "spear",
             "join": [
-              2
+              3,
+              1
             ],
-            "key": 1,
+            "key": 2,
             "kind": "weapon",
             "name": "Spear",
             "problem": null,
             "refuse": [],
-            "relations": [
-              {
-                "glyph": "or",
-                "text": "Any weapon"
-              }
-            ],
-            "tags": [
-              {
-                "style": "upgrade",
-                "text": "+2",
-                "tooltip": null
-              }
-            ],
+            "relations": [],
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 3,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 5,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [],
             "title": "Spear",
             "trailing_tags": [],
             "uncursed": false
-          },
+          }
+        ],
+        "cluster": null,
+        "extras": [],
+        "id": "r2",
+        "label": null,
+        "members": [
+          2
+        ],
+        "name": "Spear",
+        "problem": null
+      },
+      {
+        "blanket": false,
+        "chips": [
           {
+            "badges": {
+              "count": null,
+              "total": null
+            },
             "can_detach": true,
+            "copies": [],
             "description": "Any Tier 3 weapon, any upgrade",
             "details": [
               "any upgrade"
@@ -104,6 +129,21 @@
                 "text": "Spear"
               }
             ],
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 3,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 5,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
             "tags": [
               {
                 "style": "plain",
@@ -114,6 +154,61 @@
             "title": "Any Tier 3 weapon",
             "trailing_tags": [],
             "uncursed": false
+          },
+          {
+            "badges": {
+              "count": null,
+              "total": null
+            },
+            "can_detach": true,
+            "copies": [],
+            "description": "Spear, exactly +2",
+            "details": [
+              "exactly +2"
+            ],
+            "effect": null,
+            "family": "weapon",
+            "in_cluster": true,
+            "item": "spear",
+            "join": [
+              2
+            ],
+            "key": 1,
+            "kind": "weapon",
+            "name": "Spear",
+            "problem": null,
+            "refuse": [],
+            "relations": [
+              {
+                "glyph": "or",
+                "text": "Any weapon"
+              }
+            ],
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 3,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 5,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [
+              {
+                "style": "upgrade",
+                "text": "+2",
+                "tooltip": null
+              }
+            ],
+            "title": "Spear",
+            "trailing_tags": [],
+            "uncursed": false
           }
         ],
         "cluster": 1,
@@ -121,84 +216,11 @@
         "id": "c1",
         "label": "Any of 2",
         "members": [
-          1,
-          3
+          3,
+          1
         ],
-        "name": "Spear or Any weapon",
-        "problem": null,
-        "stack": {
-          "can_change_count": true,
-          "can_count_levels": false,
-          "can_grow": true,
-          "can_set_copy_depth": false,
-          "copy_depth": null,
-          "count": 1,
-          "count_max": 3,
-          "count_text": "×1",
-          "default_total": 1,
-          "level_capacity": 5,
-          "max": 3,
-          "total": null,
-          "total_text": "Σ ≥ 0"
-        }
-      },
-      {
-        "badges": {
-          "count": null,
-          "total": null
-        },
-        "blanket": false,
-        "chips": [
-          {
-            "can_detach": false,
-            "description": "Spear, any upgrade",
-            "details": [
-              "any upgrade"
-            ],
-            "effect": null,
-            "family": "weapon",
-            "in_cluster": false,
-            "item": "spear",
-            "join": [
-              1,
-              3
-            ],
-            "key": 2,
-            "kind": "weapon",
-            "name": "Spear",
-            "problem": null,
-            "refuse": [],
-            "relations": [],
-            "tags": [],
-            "title": "Spear",
-            "trailing_tags": [],
-            "uncursed": false
-          }
-        ],
-        "cluster": null,
-        "extras": [],
-        "id": "r2",
-        "label": null,
-        "members": [
-          2
-        ],
-        "name": "Spear",
-        "problem": null,
-        "stack": {
-          "can_change_count": true,
-          "can_count_levels": false,
-          "can_grow": true,
-          "can_set_copy_depth": false,
-          "copy_depth": null,
-          "count": 1,
-          "count_max": 3,
-          "count_text": "×1",
-          "default_total": 1,
-          "level_capacity": 5,
-          "max": 3,
-          "total": null,
-          "total_text": "Σ ≥ 0"
-        }
+        "name": "Any weapon or Spear",
+        "problem": null
       }
     ],
     "next_key": 4,
@@ -208,11 +230,9 @@
     "resin": null,
     "rows": [
       {
-        "alternative_group": 1,
         "item": "spear",
-        "key": 1,
-        "kind": "weapon",
-        "upgrade": 2
+        "key": 2,
+        "kind": "weapon"
       },
       {
         "alternative_group": 1,
@@ -223,9 +243,11 @@
         }
       },
       {
+        "alternative_group": 1,
         "item": "spear",
-        "key": 2,
-        "kind": "weapon"
+        "key": 1,
+        "kind": "weapon",
+        "upgrade": 2
       }
     ]
   }

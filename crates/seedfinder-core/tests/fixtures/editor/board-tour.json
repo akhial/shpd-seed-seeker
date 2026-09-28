@@ -82,18 +82,22 @@
     "focus": null,
     "items": [
       {
-        "badges": {
-          "count": {
-            "compact_text": "×3",
-            "text": "×3",
-            "tooltip": "3 of the same kind"
-          },
-          "total": null
-        },
         "blanket": false,
         "chips": [
           {
+            "badges": {
+              "count": {
+                "compact_text": "×3",
+                "text": "×3",
+                "tooltip": "3 of the same kind"
+              },
+              "total": null
+            },
             "can_detach": false,
+            "copies": [
+              2,
+              3
+            ],
             "description": "Ring of Might, exactly +2",
             "details": [
               "exactly +2"
@@ -102,39 +106,38 @@
             "family": "ring",
             "in_cluster": false,
             "item": "ring_might",
-            "join": [],
+            "join": [
+              4,
+              5,
+              6,
+              7
+            ],
             "key": 1,
             "kind": "ring",
             "name": "Ring of Might",
             "problem": null,
-            "refuse": [
-              {
-                "key": 4,
-                "message": "Copies can only be grouped with the same item type.",
-                "reason": "mixed_category_stack"
-              },
-              {
-                "key": 5,
-                "message": "Copies can only be grouped with the same item type.",
-                "reason": "mixed_category_stack"
-              },
-              {
-                "key": 6,
-                "message": "Copies can only be grouped with the same item type.",
-                "reason": "mixed_category_stack"
-              },
-              {
-                "key": 7,
-                "message": "Copies can only be grouped with the same item type.",
-                "reason": "mixed_category_stack"
-              }
-            ],
+            "refuse": [],
             "relations": [
               {
                 "glyph": "times",
                 "text": "3 of the same kind — the extra copies: any upgrade, any floor"
               }
             ],
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": true,
+              "can_grow": true,
+              "can_set_copy_depth": true,
+              "copy_depth": null,
+              "count": 3,
+              "count_max": 3,
+              "count_text": "×3",
+              "default_total": 3,
+              "level_capacity": 11,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
             "tags": [
               {
                 "style": "upgrade",
@@ -158,32 +161,18 @@
           1
         ],
         "name": "Ring of Might",
-        "problem": null,
-        "stack": {
-          "can_change_count": true,
-          "can_count_levels": true,
-          "can_grow": true,
-          "can_set_copy_depth": true,
-          "copy_depth": null,
-          "count": 3,
-          "count_max": 3,
-          "count_text": "×3",
-          "default_total": 3,
-          "level_capacity": 11,
-          "max": 3,
-          "total": null,
-          "total_text": "Σ ≥ 0"
-        }
+        "problem": null
       },
       {
-        "badges": {
-          "count": null,
-          "total": null
-        },
         "blanket": false,
         "chips": [
           {
+            "badges": {
+              "count": null,
+              "total": null
+            },
             "can_detach": false,
+            "copies": [],
             "description": "Any Tier 3+ melee weapon, +2 or higher, any enchantment, uncursed, floors 1–9",
             "details": [
               "+2 or higher",
@@ -219,6 +208,7 @@
             "in_cluster": false,
             "item": null,
             "join": [
+              1,
               5,
               6,
               7
@@ -227,14 +217,23 @@
             "kind": "melee_weapon",
             "name": "Any melee",
             "problem": null,
-            "refuse": [
-              {
-                "key": 1,
-                "message": "Copies can only be grouped with the same item type.",
-                "reason": "mixed_category_stack"
-              }
-            ],
+            "refuse": [],
             "relations": [],
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 3,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 5,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
             "tags": [
               {
                 "style": "plain",
@@ -265,32 +264,18 @@
           4
         ],
         "name": "Any melee",
-        "problem": null,
-        "stack": {
-          "can_change_count": true,
-          "can_count_levels": false,
-          "can_grow": true,
-          "can_set_copy_depth": false,
-          "copy_depth": null,
-          "count": 1,
-          "count_max": 3,
-          "count_text": "×1",
-          "default_total": 1,
-          "level_capacity": 5,
-          "max": 3,
-          "total": null,
-          "total_text": "Σ ≥ 0"
-        }
+        "problem": null
       },
       {
-        "badges": {
-          "count": null,
-          "total": null
-        },
         "blanket": false,
         "chips": [
           {
+            "badges": {
+              "count": null,
+              "total": null
+            },
             "can_detach": true,
+            "copies": [],
             "description": "Wand of Fireblast, exactly +3",
             "details": [
               "exactly +3"
@@ -300,6 +285,7 @@
             "in_cluster": true,
             "item": "wand_fireblast",
             "join": [
+              1,
               4,
               7
             ],
@@ -307,19 +293,28 @@
             "kind": "wand",
             "name": "Wand of Fireblast",
             "problem": null,
-            "refuse": [
-              {
-                "key": 1,
-                "message": "Copies can only be grouped with the same item type.",
-                "reason": "mixed_category_stack"
-              }
-            ],
+            "refuse": [],
             "relations": [
               {
                 "glyph": "or",
                 "text": "Any wand"
               }
             ],
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 3,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 5,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
             "tags": [
               {
                 "style": "upgrade",
@@ -332,7 +327,12 @@
             "uncursed": false
           },
           {
+            "badges": {
+              "count": null,
+              "total": null
+            },
             "can_detach": true,
+            "copies": [],
             "description": "Any wand, exactly +3, excluded from Auto resin",
             "details": [
               "exactly +3",
@@ -343,6 +343,7 @@
             "in_cluster": true,
             "item": null,
             "join": [
+              1,
               4,
               7
             ],
@@ -350,19 +351,28 @@
             "kind": "wand",
             "name": "Any wand",
             "problem": null,
-            "refuse": [
-              {
-                "key": 1,
-                "message": "Copies can only be grouped with the same item type.",
-                "reason": "mixed_category_stack"
-              }
-            ],
+            "refuse": [],
             "relations": [
               {
                 "glyph": "or",
                 "text": "Wand of Fireblast"
               }
             ],
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 3,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 5,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
             "tags": [
               {
                 "style": "upgrade",
@@ -390,32 +400,18 @@
           6
         ],
         "name": "Wand of Fireblast or Any wand",
-        "problem": null,
-        "stack": {
-          "can_change_count": true,
-          "can_count_levels": false,
-          "can_grow": true,
-          "can_set_copy_depth": false,
-          "copy_depth": null,
-          "count": 1,
-          "count_max": 3,
-          "count_text": "×1",
-          "default_total": 1,
-          "level_capacity": 5,
-          "max": 3,
-          "total": null,
-          "total_text": "Σ ≥ 0"
-        }
+        "problem": null
       },
       {
-        "badges": {
-          "count": null,
-          "total": null
-        },
         "blanket": false,
         "chips": [
           {
+            "badges": {
+              "count": null,
+              "total": null
+            },
             "can_detach": false,
+            "copies": [],
             "description": "Rat Skull, within 3 transmutations",
             "details": [
               "within 3 transmutations"
@@ -425,6 +421,7 @@
             "in_cluster": false,
             "item": "rat_skull",
             "join": [
+              1,
               4,
               5,
               6
@@ -433,14 +430,23 @@
             "kind": "trinket",
             "name": "Rat Skull",
             "problem": null,
-            "refuse": [
-              {
-                "key": 1,
-                "message": "Copies can only be grouped with the same item type.",
-                "reason": "mixed_category_stack"
-              }
-            ],
+            "refuse": [],
             "relations": [],
+            "stack": {
+              "can_change_count": false,
+              "can_count_levels": false,
+              "can_grow": false,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 1,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 1,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
             "tags": [
               {
                 "style": "plain",
@@ -461,32 +467,18 @@
           7
         ],
         "name": "Rat Skull",
-        "problem": null,
-        "stack": {
-          "can_change_count": false,
-          "can_count_levels": false,
-          "can_grow": false,
-          "can_set_copy_depth": false,
-          "copy_depth": null,
-          "count": 1,
-          "count_max": 1,
-          "count_text": "×1",
-          "default_total": 1,
-          "level_capacity": 1,
-          "max": 3,
-          "total": null,
-          "total_text": "Σ ≥ 0"
-        }
+        "problem": null
       },
       {
-        "badges": {
-          "count": null,
-          "total": null
-        },
         "blanket": true,
         "chips": [
           {
+            "badges": {
+              "count": null,
+              "total": null
+            },
             "can_detach": false,
+            "copies": [],
             "description": "Any armor, any upgrade, effect: Viscosity/Brimstone, Locked chest",
             "details": [
               "any upgrade",
@@ -512,6 +504,21 @@
             "problem": null,
             "refuse": [],
             "relations": [],
+            "stack": {
+              "can_change_count": false,
+              "can_count_levels": false,
+              "can_grow": false,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 1,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 5,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
             "tags": [],
             "title": "Any armor",
             "trailing_tags": [],
@@ -526,22 +533,7 @@
           8
         ],
         "name": "Any armor",
-        "problem": null,
-        "stack": {
-          "can_change_count": false,
-          "can_count_levels": false,
-          "can_grow": false,
-          "can_set_copy_depth": false,
-          "copy_depth": null,
-          "count": 1,
-          "count_max": 1,
-          "count_text": "×1",
-          "default_total": 1,
-          "level_capacity": 5,
-          "max": 3,
-          "total": null,
-          "total_text": "Σ ≥ 0"
-        }
+        "problem": null
       }
     ],
     "next_key": 9,

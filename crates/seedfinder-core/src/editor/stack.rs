@@ -1,4 +1,5 @@
-//! Stack rules: what a board entry's count and combined-level badges offer.
+//! Stack rules: what a chip's count and combined-level badges offer. Every
+//! chip — a lone chip or a cluster member — has a stack of its own.
 //!
 //! Every platform draws the badges and steppers itself; these functions say
 //! what they may offer, so a stepper never proposes an edit [`super::apply`]
@@ -8,58 +9,54 @@ use crate::catalog::ItemKind;
 use crate::query::{Requirement, SumGroup, UpgradeRequirement};
 
 use super::labels::{count_text, total_text};
-use super::{BoardItem, STACK_MAX};
+use super::{ChipStack, STACK_MAX};
 
-/// Whether the entry can grow a stack (web `canStack`). A copy has to name
-/// the kind it copies, so every member must share the anchor's family, and
-/// a cluster spanning two — "spear or ring" — names none. Trinkets and
-/// artifacts are unique finds and never stack, and a blanket requirement
-/// constrains items the ordinary ones reserve rather than reserving more.
-///
-/// Every member, not only the anchor, must be ordinary: a stack labels all
-/// of a cluster's members, and the engine rejects a label on a blanket.
+/// Whether the chip can grow a stack (web `canStack`): every chip — a lone
+/// chip or a cluster member — has a stack of its own, whose copies name its
+/// own kind. Trinkets and artifacts are unique finds and never stack, and a
+/// blanket requirement constrains items the ordinary ones reserve rather
+/// than reserving more (the engine rejects a stack label on one).
 #[must_use]
-pub fn can_grow<R: AsRef<Requirement>>(rows: &[R], item: &BoardItem) -> bool {
-    let family = rows[item.anchor()].as_ref().kind;
-    !matches!(family, ItemKind::Trinket | ItemKind::Artifact)
-        && item.members.iter().all(|&index| {
-            let member = rows[index].as_ref();
-            member.kind == family && !member.blanket
-        })
+pub fn can_grow<R: AsRef<Requirement>>(rows: &[R], stack: &ChipStack) -> bool {
+    let chip = rows[stack.index].as_ref();
+    !chip.blanket && !matches!(chip.kind, ItemKind::Trinket | ItemKind::Artifact)
 }
 
-/// Whether the count stepper is live: the entry can grow, or it holds
-/// copies to shed (shrinking a cluster that spans categories is fine).
+/// Whether the count stepper is live: the chip can grow, or it holds
+/// copies to shed.
 #[must_use]
-pub fn can_change_count<R: AsRef<Requirement>>(rows: &[R], item: &BoardItem) -> bool {
-    can_grow(rows, item) || item.count() > 1
+pub fn can_change_count<R: AsRef<Requirement>>(rows: &[R], stack: &ChipStack) -> bool {
+    can_grow(rows, stack) || stack.count() > 1
 }
 
-/// The highest count the entry's stepper offers: [`STACK_MAX`] while it
-/// can grow, else its own count, which it may only shed copies from. Never
+/// The highest count the chip's stepper offers: [`STACK_MAX`] while it can
+/// grow, else its own count, which it may only shed copies from. Never
 /// above [`STACK_MAX`]: a hand-written stack of more items shrinks to it.
 #[must_use]
-pub fn count_max<R: AsRef<Requirement>>(rows: &[R], item: &BoardItem) -> u8 {
-    if can_grow(rows, item) {
+pub fn count_max<R: AsRef<Requirement>>(rows: &[R], stack: &ChipStack) -> u8 {
+    if can_grow(rows, stack) {
         STACK_MAX
     } else {
-        u8::try_from(item.count()).unwrap_or(u8::MAX).min(STACK_MAX)
+        u8::try_from(stack.count())
+            .unwrap_or(u8::MAX)
+            .min(STACK_MAX)
     }
 }
 
-/// Whether the entry may count its items' levels together: a lone chip of
-/// a named ring with copies, since levels add up across rings alone. A
-/// stack already counting levels reports `true` so it can be turned off.
+/// Whether the chip may count its items' levels together: a lone chip of a
+/// named ring with copies, since levels add up across rings alone and a
+/// combined level cannot sit in a cluster. A stack already counting levels
+/// reports `true` so it can be turned off.
 #[must_use]
-pub fn can_count_levels<R: AsRef<Requirement>>(rows: &[R], item: &BoardItem) -> bool {
-    let anchor = rows[item.anchor()].as_ref();
-    item.cluster.is_none()
+pub fn can_count_levels<R: AsRef<Requirement>>(rows: &[R], stack: &ChipStack) -> bool {
+    let anchor = rows[stack.index].as_ref();
+    !stack.in_cluster
         && !anchor.blanket
         && anchor.item.is_some()
-        && (item.total.is_some() || (item.count() > 1 && anchor.kind == ItemKind::Ring))
+        && (stack.total.is_some() || (stack.count() > 1 && anchor.kind == ItemKind::Ring))
 }
 
-/// The largest total the entry's combined level can ask for.
+/// The largest total the chip's combined level can ask for.
 ///
 /// With a total set it is the level-sum group's
 /// [`SumGroup::attainable_capacity`]; without one, the capacity the stack
@@ -69,9 +66,9 @@ pub fn can_count_levels<R: AsRef<Requirement>>(rows: &[R], item: &BoardItem) -> 
 /// (MAX_STANDARD_RING_UPGRADE + 1)`: a world levels only one ring past the
 /// standard roll.
 #[must_use]
-pub fn level_capacity<R: AsRef<Requirement>>(rows: &[R], item: &BoardItem) -> u8 {
-    let anchor = *rows[item.anchor()].as_ref();
-    let group = if let (Some(_), Some(sum)) = (item.total, anchor.level_sum) {
+pub fn level_capacity<R: AsRef<Requirement>>(rows: &[R], stack: &ChipStack) -> u8 {
+    let anchor = *rows[stack.index].as_ref();
+    let group = if let (Some(_), Some(sum)) = (stack.total, anchor.level_sum) {
         let mut group = SumGroup::default();
         for row in rows {
             let row = row.as_ref();
@@ -87,7 +84,7 @@ pub fn level_capacity<R: AsRef<Requirement>>(rows: &[R], item: &BoardItem) -> u8
         }
         group
     } else {
-        let members = u16::try_from(item.count()).unwrap_or(u16::MAX);
+        let members = u16::try_from(stack.count()).unwrap_or(u16::MAX);
         let copy = Requirement {
             upgrade: UpgradeRequirement::Any,
             ..anchor
@@ -104,17 +101,18 @@ pub fn level_capacity<R: AsRef<Requirement>>(rows: &[R], item: &BoardItem) -> u8
 /// The total a stack starts counting at: one level per item, within the
 /// capacity.
 #[must_use]
-pub fn default_total<R: AsRef<Requirement>>(rows: &[R], item: &BoardItem) -> u8 {
-    u8::try_from(item.count())
+pub fn default_total<R: AsRef<Requirement>>(rows: &[R], stack: &ChipStack) -> u8 {
+    u8::try_from(stack.count())
         .unwrap_or(u8::MAX)
-        .clamp(1, level_capacity(rows, item).max(1))
+        .clamp(1, level_capacity(rows, stack).max(1))
 }
 
-/// The floor limit the stack's hidden copies share: the first copy's, when
+/// The floor limit the chip's hidden copies share: the first copy's, when
 /// a hand-written document gave them different ones.
 #[must_use]
-pub fn copy_depth<R: AsRef<Requirement>>(rows: &[R], item: &BoardItem) -> Option<u8> {
-    item.extras
+pub fn copy_depth<R: AsRef<Requirement>>(rows: &[R], stack: &ChipStack) -> Option<u8> {
+    stack
+        .copies
         .first()
         .and_then(|&index| rows[index].as_ref().max_depth)
 }
@@ -123,23 +121,23 @@ pub fn copy_depth<R: AsRef<Requirement>>(rows: &[R], item: &BoardItem) -> Option
 /// stack is not counting levels — its members keep the limits they had
 /// when it started, through to when it stops.
 #[must_use]
-pub fn can_set_copy_depth(item: &BoardItem) -> bool {
-    item.count() > 1 && item.total.is_none()
+pub fn can_set_copy_depth(stack: &ChipStack) -> bool {
+    stack.count() > 1 && stack.total.is_none()
 }
 
-/// Everything the count and combined-level badges and steppers show.
+/// Everything a chip's count and combined-level badges and steppers show.
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[allow(clippy::struct_excessive_bools)] // Independent capabilities of one badge pair.
 pub struct StackView {
-    /// How many items the entry asks for, its anchor included.
+    /// How many items the chip asks for, its own row included.
     pub count: u8,
-    /// The most items one entry may ask for, [`STACK_MAX`].
+    /// The most items one chip may ask for, [`STACK_MAX`].
     pub max: u8,
     pub can_grow: bool,
     pub can_change_count: bool,
-    /// The count stepper's upper bound: `max` while the entry can grow,
-    /// else its own count — a cluster spanning categories may only shed
-    /// copies ([`count_max`]).
+    /// The count stepper's upper bound: `max` while the chip can grow, else
+    /// its own count — a trinket or blanket may only shed copies
+    /// ([`count_max`]).
     pub count_max: u8,
     /// The combined level, when the stack counts levels.
     pub total: Option<u8>,
@@ -154,28 +152,29 @@ pub struct StackView {
     /// The count badge's text, `×N` (or `≤N` while counting levels, the
     /// members being optional) — shown by steppers even at ×1.
     pub count_text: String,
-    /// The total badge's text, `Σ ≥ T` (`Σ ≥ 0` while a stepper edits an
-    /// entry without a total yet).
+    /// The total badge's text, `Σ ≥ T` (`Σ ≥ 0` while a stepper edits a
+    /// chip without a total yet).
     pub total_text: String,
 }
 
-/// The [`StackView`] of `item`, one of [`super::board_items`] of `rows`.
+/// The [`StackView`] of `stack`, the stack of a chip of
+/// [`super::board_items`] of `rows`.
 #[must_use]
-pub fn stack_view<R: AsRef<Requirement>>(rows: &[R], item: &BoardItem) -> StackView {
-    let count = u8::try_from(item.count()).unwrap_or(u8::MAX);
+pub fn stack_view<R: AsRef<Requirement>>(rows: &[R], stack: &ChipStack) -> StackView {
+    let count = u8::try_from(stack.count()).unwrap_or(u8::MAX);
     StackView {
         count,
         max: STACK_MAX,
-        can_grow: can_grow(rows, item),
-        can_change_count: can_change_count(rows, item),
-        count_max: count_max(rows, item),
-        total: item.total,
-        can_count_levels: can_count_levels(rows, item),
-        level_capacity: level_capacity(rows, item),
-        default_total: default_total(rows, item),
-        copy_depth: copy_depth(rows, item),
-        can_set_copy_depth: can_set_copy_depth(item),
-        count_text: count_text(count, item.total.is_some()),
-        total_text: total_text(item.total.unwrap_or(0)),
+        can_grow: can_grow(rows, stack),
+        can_change_count: can_change_count(rows, stack),
+        count_max: count_max(rows, stack),
+        total: stack.total,
+        can_count_levels: can_count_levels(rows, stack),
+        level_capacity: level_capacity(rows, stack),
+        default_total: default_total(rows, stack),
+        copy_depth: copy_depth(rows, stack),
+        can_set_copy_depth: can_set_copy_depth(stack),
+        count_text: count_text(count, stack.total.is_some()),
+        total_text: total_text(stack.total.unwrap_or(0)),
     }
 }

@@ -422,7 +422,9 @@ fn a_stack_has_one_category_and_one_constrained_unit() {
     };
     assert_eq!(
         messages(&keyed(&[clustered(spear), clustered(sword), mace])),
-        ["Only one item of a stack can carry constraints; the extra copies are plain."]
+        [
+            "Only one item of a stack, or the members of one either/or group, can carry constraints; the extra copies are plain."
+        ]
     );
 }
 
@@ -460,8 +462,9 @@ fn identity_groups_are_stacks_with_one_anchor() {
         ..Requirement::any(kind)
     };
     let check = |requirements: &[Requirement]| messages(&keyed(requirements));
-    let overconstrained =
-        ["Only one item of a stack can carry constraints; the extra copies are plain."];
+    let overconstrained = [
+        "Only one item of a stack, or the members of one either/or group, can carry constraints; the extra copies are plain.",
+    ];
     // One anchor with plain copies; a floor limit on a copy is fine.
     assert!(
         check(&[

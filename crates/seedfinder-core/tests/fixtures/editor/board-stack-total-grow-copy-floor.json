@@ -41,22 +41,26 @@
     "focus": 1,
     "items": [
       {
-        "badges": {
-          "count": {
-            "compact_text": "≤3",
-            "text": "≤3",
-            "tooltip": "Up to 3 items"
-          },
-          "total": {
-            "compact_text": "Σ≥3",
-            "text": "Σ ≥ 3",
-            "tooltip": "Levels add to at least 3 (a +0 item counts 1)"
-          }
-        },
         "blanket": false,
         "chips": [
           {
+            "badges": {
+              "count": {
+                "compact_text": "≤3",
+                "text": "≤3",
+                "tooltip": "Up to 3 items"
+              },
+              "total": {
+                "compact_text": "Σ≥3",
+                "text": "Σ ≥ 3",
+                "tooltip": "Levels add to at least 3 (a +0 item counts 1)"
+              }
+            },
             "can_detach": false,
+            "copies": [
+              2,
+              3
+            ],
             "description": "Ring of Energy, floors 1–9",
             "details": [
               "floors 1–9"
@@ -77,6 +81,21 @@
                 "text": "up to 3 — levels add to ≥ 3; the extra copies: floors 1–20"
               }
             ],
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": true,
+              "can_grow": true,
+              "can_set_copy_depth": false,
+              "copy_depth": 20,
+              "count": 3,
+              "count_max": 3,
+              "count_text": "≤3",
+              "default_total": 3,
+              "level_capacity": 11,
+              "max": 3,
+              "total": 3,
+              "total_text": "Σ ≥ 3"
+            },
             "tags": [
               {
                 "style": "plain",
@@ -100,22 +119,7 @@
           1
         ],
         "name": "Ring of Energy",
-        "problem": null,
-        "stack": {
-          "can_change_count": true,
-          "can_count_levels": true,
-          "can_grow": true,
-          "can_set_copy_depth": false,
-          "copy_depth": 20,
-          "count": 3,
-          "count_max": 3,
-          "count_text": "≤3",
-          "default_total": 3,
-          "level_capacity": 11,
-          "max": 3,
-          "total": 3,
-          "total_text": "Σ ≥ 3"
-        }
+        "problem": null
       }
     ],
     "next_key": 4,

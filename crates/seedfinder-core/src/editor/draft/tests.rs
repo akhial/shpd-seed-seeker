@@ -128,9 +128,13 @@ fn written(edits: &[Edit]) -> Vec<Row> {
     result.rows
 }
 
-/// The number of items each board entry asks for.
+/// The number of items each chip asks for, entry by entry and member by
+/// member.
 fn counts(rows: &[Row]) -> Vec<usize> {
-    board_items(rows).iter().map(BoardItem::count).collect()
+    board_items(rows)
+        .iter()
+        .flat_map(|item| item.stacks.iter().map(ChipStack::count))
+        .collect()
 }
 
 fn keys(rows: &[Row]) -> Vec<u64> {
@@ -336,7 +340,7 @@ fn an_existing_row_opens_with_the_stack_its_board_entry_shows() {
             target: 6,
         },
     ]);
-    assert_eq!(counts(&rows), [3, 2, 1]);
+    assert_eq!(counts(&rows), [3, 2, 1, 1]);
 
     let ring = sheet(&rows, 1);
     assert_eq!((ring.origin, ring.key), (Origin::Row(1), Some(1)));
@@ -372,12 +376,26 @@ fn an_existing_row_opens_with_the_stack_its_board_entry_shows() {
     assert_eq!(stack.copy_depth.value_label, "Copies within first 6 floors");
     assert!(!stack.count_levels.visible);
 
-    // A cluster member's stack is its cluster's: the sheet shows none.
+    // A cluster member's stack is its own: the sheet shows it, but a
+    // combined level cannot sit in a cluster.
     let member = sheet(&rows, 7);
     assert!(member.in_cluster);
     assert!(member.requirement.alternative_group.is_some());
-    assert!(!form(&member).stack.visible);
+    assert_eq!(member.count, 1);
+    let member = after(&member, &[Change::SetCount(2)]);
     assert!(form(&member).in_cluster);
+    assert_eq!(
+        shown(&form(&member)),
+        [
+            "upgrade",
+            "uncursed",
+            "source",
+            "floor_limit",
+            "stack",
+            "copy_depth"
+        ]
+    );
+    assert!(!form(&member).stack.count_levels.visible);
 
     // A hidden copy has no chip; its key opens the chip it belongs to.
     let copy = sheet(&rows, 2);
@@ -1872,11 +1890,11 @@ fn a_range_toggles_caption_shows_with_what_it_explains() {
     assert!(!form(&new_sheet(&[])).transmutations.caption_visible);
 }
 
-/// iOS draws its cluster "How many" sheet's copy floor from a sheet opened
-/// on a member: the form hides the stack there — it is the cluster's — but
-/// fills it all, as it fills every hidden control.
+/// A sheet opened on a cluster member shows the member's own stack — its
+/// count and its copies' floor — as a lone chip's sheet does, and fills the
+/// copy floor while it hides it, as it fills every hidden control.
 #[test]
-fn a_hidden_copy_floor_is_filled_for_a_cluster_member() {
+fn a_cluster_members_sheet_shows_its_own_stack() {
     let rows = apply(
         &[
             named(1, ItemId::Spear),
@@ -1897,10 +1915,11 @@ fn a_hidden_copy_floor_is_filled_for_a_cluster_member() {
         ],
     )
     .rows;
-    let member = form(&sheet(&rows, 2));
-    assert!(member.in_cluster && !member.stack.visible);
-    let floor = &member.stack.copy_depth;
-    assert!(!floor.visible && floor.enabled);
+    let spear = form(&sheet(&rows, 1));
+    assert!(spear.in_cluster && spear.stack.visible);
+    assert_eq!(spear.stack.count, 2);
+    let floor = &spear.stack.copy_depth;
+    assert!(floor.visible && floor.enabled);
     assert_eq!(floor.label, "Limit the extra copies to a floor");
     assert_eq!(floor.value, 6);
     assert_eq!(floor.value_label, "Copies within first 6 floors");
@@ -1911,14 +1930,27 @@ fn a_hidden_copy_floor_is_filled_for_a_cluster_member() {
             .iter()
             .any(|option| option.value % 5 == 0 && option.value < 20)
     );
-    // Without a copy floor yet it starts where the switch turns on.
-    let unlimited = form(&sheet(&rows[..2], 2));
-    let floor = &unlimited.stack.copy_depth;
-    assert!(!floor.enabled);
+    // The other member's stack is its own: ×1, its copy floor hidden but
+    // filled, starting where the switch turns on.
+    let mace = form(&sheet(&rows, 2));
+    assert!(mace.in_cluster && mace.stack.visible);
+    assert_eq!(mace.stack.count, 1);
+    let floor = &mace.stack.copy_depth;
+    assert!(!floor.visible && !floor.enabled);
     assert_eq!(
         (floor.value, floor.value_label.as_str()),
         (4, "Copies within first 4 floors")
     );
+    // Saving the member at ×3 gives it a stack of its own beside the Spear's.
+    let mace = after(&sheet(&rows, 2), &[Change::SetCount(3)]);
+    let (result, _) = saved(&mace);
+    assert_eq!(result.focus, Some(2));
+    assert_eq!(counts(&result.rows), [2, 3, 1]);
+    assert!(problems(&result.rows).is_empty());
+    // An untouched member's sheet saves nothing.
+    let (result, _) = saved(&sheet(&rows, 1));
+    assert!(!result.changed);
+    assert_eq!(result.focus, Some(1));
 }
 
 /// Windows `ItemCatalogTests` and Linux's picker tests: the fresh pickers
@@ -2457,7 +2489,7 @@ fn a_wand_chip_turned_into_resin_leaves_the_board() {
             target: 3,
         },
     ]);
-    assert_eq!(counts(&rows), [2, 1]);
+    assert_eq!(counts(&rows), [2, 1, 1]);
     let chip = after(
         &sheet(&rows, 1),
         &[Change::SetItem(ItemChoice::ArcaneResin)],
@@ -2552,11 +2584,13 @@ fn a_trinket_another_ordinary_row_names_is_a_duplicate() {
 
 /// Critic M4: a cluster member of a stack edited into another category
 /// broke the stack on every platform but Linux, whose whole-query check
-/// refused it. The save now follows the join rule (#190) and is refused
-/// everywhere — trinkets and artifacts too, although no label is spread onto
-/// them and so no problem would have blamed the row.
+/// refused it; #190 then refused the save everywhere, since a cluster's
+/// stack had to name one kind for all its members. Every member's stack is
+/// now its own, of its own kind: a member saved into another category keeps
+/// its stack in the new kind (or sheds it, becoming a trinket or artifact),
+/// and the other members keep theirs.
 #[test]
-fn the_save_guard_refuses_a_save_that_breaks_a_stack() {
+fn a_member_saved_into_another_category_keeps_a_stack_of_its_own_kind() {
     let rows = written(&[
         add(named_requirement(ItemId::Spear), 1, None, None),
         add(named_requirement(ItemId::Mace), 1, None, None),
@@ -2566,8 +2600,7 @@ fn the_save_guard_refuses_a_save_that_breaks_a_stack() {
         },
         Edit::SetCount { key: 1, count: 2 },
     ]);
-    assert_eq!(counts(&rows), [2]);
-    let mixed = Refusal::MixedCategoryStack.to_string();
+    assert_eq!(counts(&rows), [2, 1]);
     for changes in [
         &[Change::SetCategory(ItemKind::Wand)][..],
         &[
@@ -2576,16 +2609,27 @@ fn the_save_guard_refuses_a_save_that_breaks_a_stack() {
         ],
         &[Change::SetCategory(ItemKind::Artifact)],
     ] {
-        let draft = after(&sheet(&rows, 2), changes);
-        let control = form(&draft);
-        assert_eq!(control.errors, std::slice::from_ref(&mixed), "{changes:?}");
-        assert!(!control.can_save);
-        assert_eq!(control.preview, None);
-        let SaveResult::Refused { draft: kept, form } = save(&draft, &rows, None) else {
-            panic!("the save is refused: {changes:?}");
-        };
-        assert_eq!(kept.rows, rows);
-        assert_eq!(form, control);
+        for key in [1, 2] {
+            let draft = after(&sheet(&rows, key), changes);
+            assert!(
+                form_can_save(&draft),
+                "{changes:?}: {:?}",
+                form(&draft).errors
+            );
+            let (result, _) = saved(&draft);
+            let context = format!("{key} {changes:?} → {:?}", result.rows);
+            assert!(problems(&result.rows).is_empty(), "{context}");
+            assert_emittable(&result.rows, &context);
+            let stacks = counts(&result.rows);
+            let kept = if key == 1 { stacks[0] } else { stacks[1] };
+            let expected =
+                if changes.len() == 1 && changes[0] == Change::SetCategory(ItemKind::Wand) {
+                    draft.count.into()
+                } else {
+                    1
+                };
+            assert_eq!(kept, expected, "{context}");
+        }
     }
     // Another weapon is fine, and so is a lone chip changing category.
     assert!(form_can_save(&after(
@@ -2613,7 +2657,7 @@ fn a_member_of_a_cluster_shrunk_to_one_changes_category_like_a_join() {
         Edit::SetCount { key: 1, count: 2 },
         Edit::SetCount { key: 1, count: 1 },
     ]);
-    assert_eq!(counts(&rows), [1]);
+    assert_eq!(counts(&rows), [1, 1]);
     assert!(
         rows.iter()
             .all(|row| row.requirement.identity_group.is_none())
@@ -2713,8 +2757,7 @@ fn a_stack_without_a_free_label_is_an_error() {
 
 #[test]
 fn a_save_writes_only_the_stack_the_sheet_shows() {
-    // A cluster member saves without a stack of its own, whatever the draft
-    // holds.
+    // A cluster member saves the stack its sheet shows, as its own.
     let cluster = written(&[
         add(named_requirement(ItemId::Spear), 1, None, None),
         add(named_requirement(ItemId::Mace), 1, None, None),
@@ -2727,8 +2770,8 @@ fn a_save_writes_only_the_stack_the_sheet_shows() {
     let mut member = sheet(&cluster, 2);
     member.count = 3;
     let (result, _) = saved(&member);
-    assert!(!result.changed);
-    assert_eq!(counts(&result.rows), [2]);
+    assert!(result.changed);
+    assert_eq!(counts(&result.rows), [2, 3]);
     // A blanket never stacks.
     let blankets = [
         row(1, ItemKind::Wand),
@@ -2873,7 +2916,7 @@ fn saving_an_untouched_sheet_changes_nothing() {
             let (result, outcome) = saved(&draft);
             assert!(!result.changed, "{:?}", rows[index]);
             assert_eq!(result.rows, rows);
-            assert_eq!(result.focus, Some(rows[entry.anchor()].key));
+            assert_eq!(result.focus, Some(rows[index].key));
             assert_eq!(outcome, ResinOutcome::Unchanged);
         }
     }
@@ -3279,11 +3322,13 @@ fn assert_untouched_saves_change_nothing(rows: &[Row], context: &str) {
             .iter()
             .find(|entry| entry.members.contains(&index) || entry.extras.contains(&index))
             .expect("every row is on the board");
-        let shown = if entry.members.contains(&index) {
-            index
-        } else {
-            entry.anchor()
-        };
+        // A hidden copy opens the chip whose copy it is.
+        let shown = entry
+            .stacks
+            .iter()
+            .find(|stack| stack.index == index || stack.copies.contains(&index))
+            .expect("every row is a chip or a copy of one")
+            .index;
         let draft = open(rows, Some(row.key), false, None, true, false);
         assert_eq!(draft.origin, Origin::Row(rows[shown].key), "{context}");
         if row_problems(&rows[shown].requirement).is_empty() {
@@ -3305,7 +3350,7 @@ fn assert_untouched_saves_change_nothing(rows: &[Row], context: &str) {
                     continue;
                 }
                 assert_eq!(result.rows, rows, "{context}");
-                assert_eq!(result.focus, Some(rows[entry.anchor()].key), "{context}");
+                assert_eq!(result.focus, Some(rows[shown].key), "{context}");
             }
             SaveResult::Refused { form, .. } => {
                 assert_eq!(form.errors, [DUPLICATE_TRINKET], "{context}");

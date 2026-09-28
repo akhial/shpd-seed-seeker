@@ -27,18 +27,22 @@
     "focus": 1,
     "items": [
       {
-        "badges": {
-          "count": {
-            "compact_text": "×3",
-            "text": "×3",
-            "tooltip": "3 of the same kind"
-          },
-          "total": null
-        },
         "blanket": false,
         "chips": [
           {
+            "badges": {
+              "count": {
+                "compact_text": "×3",
+                "text": "×3",
+                "tooltip": "3 of the same kind"
+              },
+              "total": null
+            },
             "can_detach": false,
+            "copies": [
+              2,
+              3
+            ],
             "description": "Ring of Might, exactly +2",
             "details": [
               "exactly +2"
@@ -59,6 +63,21 @@
                 "text": "3 of the same kind — the extra copies: any upgrade, any floor"
               }
             ],
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": true,
+              "can_grow": true,
+              "can_set_copy_depth": true,
+              "copy_depth": null,
+              "count": 3,
+              "count_max": 3,
+              "count_text": "×3",
+              "default_total": 3,
+              "level_capacity": 11,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
             "tags": [
               {
                 "style": "upgrade",
@@ -82,22 +101,7 @@
           1
         ],
         "name": "Ring of Might",
-        "problem": null,
-        "stack": {
-          "can_change_count": true,
-          "can_count_levels": true,
-          "can_grow": true,
-          "can_set_copy_depth": true,
-          "copy_depth": null,
-          "count": 3,
-          "count_max": 3,
-          "count_text": "×3",
-          "default_total": 3,
-          "level_capacity": 11,
-          "max": 3,
-          "total": null,
-          "total_text": "Σ ≥ 0"
-        }
+        "problem": null
       }
     ],
     "next_key": 4,

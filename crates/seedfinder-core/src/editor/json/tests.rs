@@ -68,6 +68,7 @@ fn wire_edit(edit: &Edit) -> Value {
         }
         Edit::Detach { key } => json!({"type": "detach", "key": key}),
         Edit::Remove { key } => json!({"type": "remove", "key": key}),
+        Edit::RemoveOne { key } => json!({"type": "remove_one", "key": key}),
         Edit::RemoveItem { key } => json!({"type": "remove_item", "key": key}),
         Edit::SetCount { key, count } => json!({"type": "set_count", "key": key, "count": count}),
         Edit::SetTotal { key, total } => json!({"type": "set_total", "key": key, "total": total}),
@@ -239,6 +240,7 @@ fn the_four_stack_shapes_travel_as_the_web_writes_them() {
         &[
             json!({"type": "join", "source": 1, "target": 2}),
             json!({"type": "set_count", "key": 1, "count": 3}),
+            json!({"type": "set_count", "key": 2, "count": 3}),
         ],
     );
     assert_eq!(
@@ -352,35 +354,45 @@ fn a_request_without_edits_echoes_its_rows() {
 
 #[test]
 fn a_refused_join_answers_the_reason_and_leaves_the_rows() {
-    let rows = [
-        exact(named(1, ItemId::RingMight), 2),
-        named(2, ItemId::RingMight),
-        row(3, ItemKind::Wand),
-    ];
+    // Every stack label is taken, and a drop onto the Frost stack would make
+    // it a member's stack under a label of its own.
+    let mut rows: Vec<Row> = [1, 3, 5, 7]
+        .into_iter()
+        .flat_map(|key| {
+            let stacked = |key| with(row(key, ItemKind::Wand), |r| r.identity_group = Some(1));
+            [stacked(key), stacked(key + 1)]
+        })
+        .collect();
+    for (row, label) in rows.iter_mut().zip([1, 1, 2, 2, 3, 3, 4, 4]) {
+        row.requirement.identity_group = Some(label);
+    }
+    rows.extend([
+        named(9, ItemId::WandFrost),
+        named(10, ItemId::WandFrost),
+        named(11, ItemId::WandDisintegration),
+    ]);
     let request = json!({
         "rows": rows_json(&rows),
-        "edits": [{"type": "join", "source": 3, "target": 1}],
+        "edits": [{"type": "join", "source": 11, "target": 9}],
     });
     let response = board_json(&request);
     assert_eq!(response["rows"], rows_json(&rows));
     assert_eq!(response["changed"], json!(false));
-    assert_eq!(
-        response["refused"],
-        json!({
-            "reason": "mixed_category_stack",
-            "message": "Copies can only be grouped with the same item type.",
-        })
-    );
+    let refusal = json!({
+        "reason": "no_free_group",
+        "message": "Every group label is in use. Remove a stack or a combined level first.",
+    });
+    assert_eq!(response["refused"], refusal);
     // The chips say so up front, so a platform refuses the drop before it
     // sends one.
-    let wand = &response["items"][1]["chips"][0];
-    assert_eq!(wand["key"], json!(3));
+    let chip = &response["items"][5]["chips"][0];
+    assert_eq!(chip["key"], json!(11));
     assert_eq!(
-        wand["refuse"],
+        chip["refuse"],
         json!([{
-            "key": 1,
-            "reason": "mixed_category_stack",
-            "message": "Copies can only be grouped with the same item type.",
+            "key": 9,
+            "reason": "no_free_group",
+            "message": "Every group label is in use. Remove a stack or a combined level first.",
         }])
     );
 }

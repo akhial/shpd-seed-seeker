@@ -74,14 +74,15 @@
     "focus": 1,
     "items": [
       {
-        "badges": {
-          "count": null,
-          "total": null
-        },
         "blanket": false,
         "chips": [
           {
+            "badges": {
+              "count": null,
+              "total": null
+            },
             "can_detach": false,
+            "copies": [],
             "description": "Wand of Lightning, any upgrade",
             "details": [
               "any upgrade"
@@ -91,6 +92,7 @@
             "in_cluster": false,
             "item": "wand_lightning",
             "join": [
+              3,
               6,
               7,
               1,
@@ -100,14 +102,23 @@
             "kind": "wand",
             "name": "Wand of Lightning",
             "problem": null,
-            "refuse": [
-              {
-                "key": 3,
-                "message": "Copies can only be grouped with the same item type.",
-                "reason": "mixed_category_stack"
-              }
-            ],
+            "refuse": [],
             "relations": [],
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 3,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 5,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
             "tags": [],
             "title": "Wand of Lightning",
             "trailing_tags": [],
@@ -122,36 +133,25 @@
           2
         ],
         "name": "Wand of Lightning",
-        "problem": null,
-        "stack": {
-          "can_change_count": true,
-          "can_count_levels": false,
-          "can_grow": true,
-          "can_set_copy_depth": false,
-          "copy_depth": null,
-          "count": 1,
-          "count_max": 3,
-          "count_text": "×1",
-          "default_total": 1,
-          "level_capacity": 5,
-          "max": 3,
-          "total": null,
-          "total_text": "Σ ≥ 0"
-        }
+        "problem": null
       },
       {
-        "badges": {
-          "count": {
-            "compact_text": "×3",
-            "text": "×3",
-            "tooltip": "3 of the same kind"
-          },
-          "total": null
-        },
         "blanket": false,
         "chips": [
           {
+            "badges": {
+              "count": {
+                "compact_text": "×3",
+                "text": "×3",
+                "tooltip": "3 of the same kind"
+              },
+              "total": null
+            },
             "can_detach": false,
+            "copies": [
+              4,
+              5
+            ],
             "description": "Ring of Energy, exactly +4",
             "details": [
               "exactly +4"
@@ -160,44 +160,39 @@
             "family": "ring",
             "in_cluster": false,
             "item": "ring_energy",
-            "join": [],
+            "join": [
+              2,
+              6,
+              7,
+              1,
+              8
+            ],
             "key": 3,
             "kind": "ring",
             "name": "Ring of Energy",
             "problem": null,
-            "refuse": [
-              {
-                "key": 2,
-                "message": "Copies can only be grouped with the same item type.",
-                "reason": "mixed_category_stack"
-              },
-              {
-                "key": 6,
-                "message": "Copies can only be grouped with the same item type.",
-                "reason": "mixed_category_stack"
-              },
-              {
-                "key": 7,
-                "message": "Copies can only be grouped with the same item type.",
-                "reason": "mixed_category_stack"
-              },
-              {
-                "key": 1,
-                "message": "Copies can only be grouped with the same item type.",
-                "reason": "mixed_category_stack"
-              },
-              {
-                "key": 8,
-                "message": "Copies can only be grouped with the same item type.",
-                "reason": "mixed_category_stack"
-              }
-            ],
+            "refuse": [],
             "relations": [
               {
                 "glyph": "times",
                 "text": "3 of the same kind — the extra copies: any upgrade, floors 1–20"
               }
             ],
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": true,
+              "can_grow": true,
+              "can_set_copy_depth": true,
+              "copy_depth": 20,
+              "count": 3,
+              "count_max": 3,
+              "count_text": "×3",
+              "default_total": 3,
+              "level_capacity": 11,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
             "tags": [
               {
                 "style": "upgrade",
@@ -221,32 +216,18 @@
           3
         ],
         "name": "Ring of Energy",
-        "problem": null,
-        "stack": {
-          "can_change_count": true,
-          "can_count_levels": true,
-          "can_grow": true,
-          "can_set_copy_depth": true,
-          "copy_depth": 20,
-          "count": 3,
-          "count_max": 3,
-          "count_text": "×3",
-          "default_total": 3,
-          "level_capacity": 11,
-          "max": 3,
-          "total": null,
-          "total_text": "Σ ≥ 0"
-        }
+        "problem": null
       },
       {
-        "badges": {
-          "count": null,
-          "total": null
-        },
         "blanket": false,
         "chips": [
           {
+            "badges": {
+              "count": null,
+              "total": null
+            },
             "can_detach": false,
+            "copies": [],
             "description": "Plate Armor, exactly +3",
             "details": [
               "exactly +3"
@@ -257,26 +238,32 @@
             "item": "plate_armor",
             "join": [
               2,
+              3,
               7,
+              1,
               8
             ],
             "key": 6,
             "kind": "armor",
             "name": "Plate Armor",
             "problem": null,
-            "refuse": [
-              {
-                "key": 3,
-                "message": "Copies can only be grouped with the same item type.",
-                "reason": "mixed_category_stack"
-              },
-              {
-                "key": 1,
-                "message": "Copies can only be grouped with the same item type.",
-                "reason": "mixed_category_stack"
-              }
-            ],
+            "refuse": [],
             "relations": [],
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 3,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 5,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
             "tags": [
               {
                 "style": "upgrade",
@@ -297,32 +284,18 @@
           6
         ],
         "name": "Plate Armor",
-        "problem": null,
-        "stack": {
-          "can_change_count": true,
-          "can_count_levels": false,
-          "can_grow": true,
-          "can_set_copy_depth": false,
-          "copy_depth": null,
-          "count": 1,
-          "count_max": 3,
-          "count_text": "×1",
-          "default_total": 1,
-          "level_capacity": 5,
-          "max": 3,
-          "total": null,
-          "total_text": "Σ ≥ 0"
-        }
+        "problem": null
       },
       {
-        "badges": {
-          "count": null,
-          "total": null
-        },
         "blanket": false,
         "chips": [
           {
+            "badges": {
+              "count": null,
+              "total": null
+            },
             "can_detach": false,
+            "copies": [],
             "description": "Wand of Frost, any upgrade",
             "details": [
               "any upgrade"
@@ -333,6 +306,7 @@
             "item": "wand_frost",
             "join": [
               2,
+              3,
               6,
               1,
               8
@@ -341,14 +315,23 @@
             "kind": "wand",
             "name": "Wand of Frost",
             "problem": null,
-            "refuse": [
-              {
-                "key": 3,
-                "message": "Copies can only be grouped with the same item type.",
-                "reason": "mixed_category_stack"
-              }
-            ],
+            "refuse": [],
             "relations": [],
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 3,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 5,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
             "tags": [],
             "title": "Wand of Frost",
             "trailing_tags": [],
@@ -363,36 +346,24 @@
           7
         ],
         "name": "Wand of Frost",
-        "problem": null,
-        "stack": {
-          "can_change_count": true,
-          "can_count_levels": false,
-          "can_grow": true,
-          "can_set_copy_depth": false,
-          "copy_depth": null,
-          "count": 1,
-          "count_max": 3,
-          "count_text": "×1",
-          "default_total": 1,
-          "level_capacity": 5,
-          "max": 3,
-          "total": null,
-          "total_text": "Σ ≥ 0"
-        }
+        "problem": null
       },
       {
-        "badges": {
-          "count": {
-            "compact_text": "×2",
-            "text": "×2",
-            "tooltip": "2 of the same kind"
-          },
-          "total": null
-        },
         "blanket": false,
         "chips": [
           {
+            "badges": {
+              "count": {
+                "compact_text": "×2",
+                "text": "×2",
+                "tooltip": "2 of the same kind"
+              },
+              "total": null
+            },
             "can_detach": false,
+            "copies": [
+              20
+            ],
             "description": "Wand of Disintegration, any upgrade",
             "details": [
               "any upgrade"
@@ -403,6 +374,8 @@
             "item": "wand_disintegration",
             "join": [
               2,
+              3,
+              6,
               7,
               8
             ],
@@ -410,24 +383,28 @@
             "kind": "wand",
             "name": "Wand of Disintegration",
             "problem": null,
-            "refuse": [
-              {
-                "key": 3,
-                "message": "Copies can only be grouped with the same item type.",
-                "reason": "mixed_category_stack"
-              },
-              {
-                "key": 6,
-                "message": "Copies can only be grouped with the same item type.",
-                "reason": "mixed_category_stack"
-              }
-            ],
+            "refuse": [],
             "relations": [
               {
                 "glyph": "times",
                 "text": "2 of the same kind — the extra copies: any upgrade, any floor"
               }
             ],
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": true,
+              "copy_depth": null,
+              "count": 2,
+              "count_max": 3,
+              "count_text": "×2",
+              "default_total": 2,
+              "level_capacity": 8,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
             "tags": [],
             "title": "Wand of Disintegration",
             "trailing_tags": [],
@@ -444,32 +421,18 @@
           1
         ],
         "name": "Wand of Disintegration",
-        "problem": null,
-        "stack": {
-          "can_change_count": true,
-          "can_count_levels": false,
-          "can_grow": true,
-          "can_set_copy_depth": true,
-          "copy_depth": null,
-          "count": 2,
-          "count_max": 3,
-          "count_text": "×2",
-          "default_total": 2,
-          "level_capacity": 8,
-          "max": 3,
-          "total": null,
-          "total_text": "Σ ≥ 0"
-        }
+        "problem": null
       },
       {
-        "badges": {
-          "count": null,
-          "total": null
-        },
         "blanket": false,
         "chips": [
           {
+            "badges": {
+              "count": null,
+              "total": null
+            },
             "can_detach": false,
+            "copies": [],
             "description": "Any wand, exactly +3",
             "details": [
               "exactly +3"
@@ -480,6 +443,7 @@
             "item": null,
             "join": [
               2,
+              3,
               6,
               7,
               1
@@ -488,14 +452,23 @@
             "kind": "wand",
             "name": "Any wand",
             "problem": null,
-            "refuse": [
-              {
-                "key": 3,
-                "message": "Copies can only be grouped with the same item type.",
-                "reason": "mixed_category_stack"
-              }
-            ],
+            "refuse": [],
             "relations": [],
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 3,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 5,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
             "tags": [
               {
                 "style": "upgrade",
@@ -516,22 +489,7 @@
           8
         ],
         "name": "Any wand",
-        "problem": null,
-        "stack": {
-          "can_change_count": true,
-          "can_count_levels": false,
-          "can_grow": true,
-          "can_set_copy_depth": false,
-          "copy_depth": null,
-          "count": 1,
-          "count_max": 3,
-          "count_text": "×1",
-          "default_total": 1,
-          "level_capacity": 5,
-          "max": 3,
-          "total": null,
-          "total_text": "Σ ≥ 0"
-        }
+        "problem": null
       }
     ],
     "next_key": 21,

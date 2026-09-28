@@ -176,7 +176,7 @@ fn board_fixtures(fixtures: &mut Fixtures) {
     );
     fixtures.add(
         "board-stack-cluster",
-        "A wand joined to a Wand of Fireblast, the cluster grown to three (the fourth web stack document).",
+        "A wand joined to a Wand of Fireblast, each member grown to three: their alike stacks share one label and one set of copies (the fourth web stack document), and each chip shows ×3.",
         Board,
         &json!({
             "rows": [
@@ -186,12 +186,38 @@ fn board_fixtures(fixtures: &mut Fixtures) {
             "edits": [
                 {"type": "join", "source": 1, "target": 2},
                 {"type": "set_count", "key": 1, "count": 3},
+                {"type": "set_count", "key": 2, "count": 3},
             ],
         }),
     );
     fixtures.add(
-        "board-join-refused",
-        "A wand dropped on a stack of rings: a cluster spanning categories cannot hold a stack.",
+        "board-stack-member",
+        "The +3 wand of (Fireblast or any +3 wand) grown to two: a stack of its own, under a label only it carries — two of the same wand, or a Fireblast.",
+        Board,
+        &json!({
+            "rows": [
+                {"key": 2, "kind": "wand", "item": "wand_fireblast", "upgrade": 3, "alternative_group": 1},
+                {"key": 1, "kind": "wand", "upgrade": 3, "alternative_group": 1},
+            ],
+            "edits": [{"type": "set_count", "key": 1, "count": 2}],
+        }),
+    );
+    fixtures.add(
+        "board-cluster-alike-stacks",
+        "(Frost or Disintegration or Lightning) with one label on Frost and Disintegration and one copy: the cluster draws no badge of its own; Frost and Disintegration each show ×2, Lightning none.",
+        Board,
+        &json!({
+            "rows": [
+                {"key": 1, "kind": "wand", "item": "wand_frost", "alternative_group": 1, "identity_group": 1},
+                {"key": 2, "kind": "wand", "item": "wand_disintegration", "alternative_group": 1, "identity_group": 1},
+                {"key": 3, "kind": "wand", "item": "wand_lightning", "alternative_group": 1},
+                {"key": 4, "kind": "wand", "identity_group": 1},
+            ],
+        }),
+    );
+    fixtures.add(
+        "board-join-across-categories",
+        "A wand dropped on a +2 Ring of Might ×2 (#190 refused it): the ring keeps its stack as a member, its plain repeat now a bare ring copy under a label of its own — two Rings of Might, or the wand.",
         Board,
         &json!({
             "rows": [
@@ -203,8 +229,29 @@ fn board_fixtures(fixtures: &mut Fixtures) {
         }),
     );
     fixtures.add(
+        "board-join-refused",
+        "Every stack label is taken, so a Wand of Disintegration dropped on Wand of Frost ×2 — whose stack would need a label of its own as a member — is refused, as the chip's refuse list says up front.",
+        Board,
+        &json!({
+            "rows": [
+                {"key": 1, "kind": "wand", "upgrade": 1, "identity_group": 1},
+                {"key": 2, "kind": "wand", "identity_group": 1},
+                {"key": 3, "kind": "wand", "upgrade": 2, "identity_group": 2},
+                {"key": 4, "kind": "wand", "identity_group": 2},
+                {"key": 5, "kind": "armor", "upgrade": 1, "identity_group": 3},
+                {"key": 6, "kind": "armor", "identity_group": 3},
+                {"key": 7, "kind": "ring", "upgrade": 1, "identity_group": 4},
+                {"key": 8, "kind": "ring", "identity_group": 4},
+                {"key": 9, "kind": "wand", "item": "wand_frost"},
+                {"key": 10, "kind": "wand", "item": "wand_frost"},
+                {"key": 11, "kind": "wand", "item": "wand_disintegration"},
+            ],
+            "edits": [{"type": "join", "source": 11, "target": 9}],
+        }),
+    );
+    fixtures.add(
         "board-join-leaves-copies",
-        "A wildcard weapon dropped on a Spear stack joins just the +2 Spear; the plain repeat stays behind as a Spear of its own.",
+        "A +2 Spear ×2 dragged onto a Tier 3 weapon joins just the +2 Spear; the plain repeat stays behind as a Spear of its own.",
         Board,
         &json!({
             "rows": [
@@ -212,7 +259,7 @@ fn board_fixtures(fixtures: &mut Fixtures) {
                 {"key": 2, "kind": "weapon", "item": "spear"},
                 {"key": 3, "kind": "weapon", "tier": {"exact": 3}},
             ],
-            "edits": [{"type": "join", "source": 3, "target": 1}],
+            "edits": [{"type": "join", "source": 1, "target": 3}],
         }),
     );
     fixtures.add(
@@ -238,7 +285,7 @@ fn board_fixtures(fixtures: &mut Fixtures) {
     );
     fixtures.add(
         "board-join-onto-stacked-chip",
-        "Wand of Disintegration dropped on Wand of Frost ×2 joins just that Frost; the other Frost stays behind.",
+        "Wand of Disintegration dropped on Wand of Frost ×2: Frost keeps its stack as a member, its plain repeat now a bare wand copy under a label only Frost carries — {Frost ×2 | Disintegration}, two Frosts or one Disintegration.",
         Board,
         &json!({
             "rows": [
@@ -251,7 +298,7 @@ fn board_fixtures(fixtures: &mut Fixtures) {
     );
     fixtures.add(
         "board-join-onto-stacked-cluster",
-        "Wand of Disintegration ×2 dropped on (Frost or Lightning) ×2: one Disintegration joins the group, which keeps its ×2, its copy and its label; the other Disintegration stays behind.",
+        "Wand of Disintegration ×2 dropped on {Frost ×2 | Lightning ×2}: one Disintegration joins as a ×1 member, the members keep their shared stack, and the other Disintegration stays behind.",
         Board,
         &json!({
             "rows": [
@@ -279,8 +326,22 @@ fn board_fixtures(fixtures: &mut Fixtures) {
         }),
     );
     fixtures.add(
-        "board-join-member-leaves-count",
-        "The +2 Frost of (Frost +2 or Disintegration) ×2 dragged onto a +3 wand: the group's count stays with Disintegration, now a plain ×2, and no row keeps a stack label.",
+        "board-join-onto-combined-level",
+        "A Ring of Might dropped on a Ring of Energy ×3 counting levels: the Energy stack keeps its count as a member's stack and drops the combined level, which cannot travel into a cluster.",
+        Board,
+        &json!({
+            "rows": [
+                {"key": 1, "kind": "ring", "item": "ring_energy", "level_sum": {"group": 1, "at_least": 11}},
+                {"key": 2, "kind": "ring", "item": "ring_energy", "level_sum": {"group": 1, "at_least": 11}},
+                {"key": 3, "kind": "ring", "item": "ring_energy", "level_sum": {"group": 1, "at_least": 11}},
+                {"key": 4, "kind": "ring", "item": "ring_might"},
+            ],
+            "edits": [{"type": "join", "source": 4, "target": 1}],
+        }),
+    );
+    fixtures.add(
+        "board-join-member-moves-one",
+        "The +2 Frost of {Frost +2 ×2 | Disintegration ×2} dragged onto a +3 wand takes one item: the +2 Frost joins the wand, a plain Frost stays in the group in its place, and Disintegration keeps its ×2.",
         Board,
         &json!({
             "rows": [
@@ -304,6 +365,46 @@ fn board_fixtures(fixtures: &mut Fixtures) {
                 {"key": 7, "kind": "wand", "item": "wand_frost"},
             ],
             "edits": [{"type": "join", "source": 1, "target": 7}],
+        }),
+    );
+    fixtures.add(
+        "board-detach-one-copy",
+        "Frost out of {Frost ×2 | Disintegration}: one Frost leaves, and the group keeps a Frost in its place — {Frost | Disintegration} and Frost.",
+        Board,
+        &json!({
+            "rows": [
+                {"key": 1, "kind": "wand", "item": "wand_frost", "alternative_group": 1, "identity_group": 1},
+                {"key": 2, "kind": "wand", "item": "wand_disintegration", "alternative_group": 1},
+                {"key": 3, "kind": "wand", "identity_group": 1},
+            ],
+            "edits": [{"type": "detach", "key": 1}],
+        }),
+    );
+    fixtures.add(
+        "board-remove-one-member",
+        "One item of the +2 Frost ×3 in {Frost +2 ×3 | Disintegration} dropped on the remove target: Frost steps down to ×2, keeping its upgrade and its label.",
+        Board,
+        &json!({
+            "rows": [
+                {"key": 1, "kind": "wand", "item": "wand_frost", "upgrade": 2, "alternative_group": 1, "identity_group": 1},
+                {"key": 2, "kind": "wand", "item": "wand_disintegration", "alternative_group": 1},
+                {"key": 3, "kind": "wand", "identity_group": 1},
+                {"key": 4, "kind": "wand", "identity_group": 1},
+            ],
+            "edits": [{"type": "remove_one", "key": 1}],
+        }),
+    );
+    fixtures.add(
+        "board-remove-one-stack",
+        "One item of a Ring of Energy ×3 counting levels to at least 11 dropped on the remove target: two rings are left, their total capped at the 8 they can reach.",
+        Board,
+        &json!({
+            "rows": [
+                {"key": 1, "kind": "ring", "item": "ring_energy", "level_sum": {"group": 1, "at_least": 11}},
+                {"key": 2, "kind": "ring", "item": "ring_energy", "level_sum": {"group": 1, "at_least": 11}},
+                {"key": 3, "kind": "ring", "item": "ring_energy", "level_sum": {"group": 1, "at_least": 11}},
+            ],
+            "edits": [{"type": "remove_one", "key": 1}],
         }),
     );
     fixtures.add(
@@ -409,8 +510,8 @@ fn board_fixtures(fixtures: &mut Fixtures) {
         }),
     );
     fixtures.add(
-        "board-cluster-count-one",
-        "(Frost or Disintegration) ×2 stepped down to ×1: the group drops its stack label.",
+        "board-member-count-one",
+        "{Frost ×2 | Disintegration ×2}, their alike stacks sharing a label, with Frost stepped down to ×1: Frost drops the label, and Disintegration keeps it with the copy.",
         Board,
         &json!({
             "rows": [
@@ -624,6 +725,25 @@ fn editor_fixtures(fixtures: &mut Fixtures) {
             {"key": 1, "kind": "ring", "item": "ring_might", "level_sum": {"group": 1, "at_least": 3}},
             {"key": 2, "kind": "ring", "item": "ring_might", "level_sum": {"group": 1, "at_least": 3}},
         ]}),
+    );
+    let member_rows = json!([
+        {"key": 1, "kind": "wand", "item": "wand_frost", "alternative_group": 1, "identity_group": 1},
+        {"key": 2, "kind": "wand", "item": "wand_disintegration", "alternative_group": 1},
+        {"key": 3, "kind": "wand", "identity_group": 1},
+    ]);
+    let member = fixtures.add(
+        "editor-open-member",
+        "A sheet on the Frost of {Frost ×2 | Disintegration}: a member's stack is its own, so the sheet shows its count and copy floor, but no combined level.",
+        Editor,
+        &json!({"op": "open", "key": 1, "rows": member_rows}),
+    );
+    fixtures.add(
+        "editor-save-member",
+        "The member saved at ×3: Frost's own stack grows by a copy, and Disintegration stays ×1.",
+        Editor,
+        &json!({"op": "save",
+               "draft": fixtures_draft(&member, Editor, &[json!({"type": "set_count", "value": 3})]),
+               "rows": member_rows}),
     );
     fixtures.add(
         "editor-open-blanket",

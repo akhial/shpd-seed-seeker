@@ -1,25 +1,40 @@
 {
-  "about": "The copies of a stack limited to floor 10, which snaps down to floor 9 (floor 10 is an empty boss floor).",
+  "about": "One item of a Ring of Energy ×3 counting levels to at least 11 dropped on the remove target: two rings are left, their total capped at the 8 they can reach.",
   "envelope": "requirement_board",
   "request": {
     "edits": [
       {
         "key": 1,
-        "max_depth": 10,
-        "type": "set_copy_depth"
+        "type": "remove_one"
       }
     ],
     "rows": [
       {
-        "item": "ring_might",
+        "item": "ring_energy",
         "key": 1,
         "kind": "ring",
-        "upgrade": 2
+        "level_sum": {
+          "at_least": 11,
+          "group": 1
+        }
       },
       {
-        "item": "ring_might",
+        "item": "ring_energy",
         "key": 2,
-        "kind": "ring"
+        "kind": "ring",
+        "level_sum": {
+          "at_least": 11,
+          "group": 1
+        }
+      },
+      {
+        "item": "ring_energy",
+        "key": 3,
+        "kind": "ring",
+        "level_sum": {
+          "at_least": 11,
+          "group": 1
+        }
       }
     ]
   },
@@ -37,59 +52,55 @@
           {
             "badges": {
               "count": {
-                "compact_text": "×2",
-                "text": "×2",
-                "tooltip": "2 of the same kind"
+                "compact_text": "≤2",
+                "text": "≤2",
+                "tooltip": "Up to 2 items"
               },
-              "total": null
+              "total": {
+                "compact_text": "Σ≥8",
+                "text": "Σ ≥ 8",
+                "tooltip": "Levels add to at least 8 (a +0 item counts 1)"
+              }
             },
             "can_detach": false,
             "copies": [
               2
             ],
-            "description": "Ring of Might, exactly +2",
-            "details": [
-              "exactly +2"
-            ],
+            "description": "Ring of Energy",
+            "details": [],
             "effect": null,
             "family": "ring",
             "in_cluster": false,
-            "item": "ring_might",
+            "item": "ring_energy",
             "join": [],
             "key": 1,
             "kind": "ring",
-            "name": "Ring of Might",
+            "name": "Ring of Energy",
             "problem": null,
             "refuse": [],
             "relations": [
               {
-                "glyph": "times",
-                "text": "2 of the same kind — the extra copies: any upgrade, floors 1–9"
+                "glyph": "sum",
+                "text": "up to 2 — levels add to ≥ 8"
               }
             ],
             "stack": {
               "can_change_count": true,
               "can_count_levels": true,
               "can_grow": true,
-              "can_set_copy_depth": true,
-              "copy_depth": 9,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
               "count": 2,
               "count_max": 3,
-              "count_text": "×2",
+              "count_text": "≤2",
               "default_total": 2,
               "level_capacity": 8,
               "max": 3,
-              "total": null,
-              "total_text": "Σ ≥ 0"
+              "total": 8,
+              "total_text": "Σ ≥ 8"
             },
-            "tags": [
-              {
-                "style": "upgrade",
-                "text": "+2",
-                "tooltip": null
-              }
-            ],
-            "title": "Ring of Might",
+            "tags": [],
+            "title": "Ring of Energy",
             "trailing_tags": [],
             "uncursed": false
           }
@@ -103,7 +114,7 @@
         "members": [
           1
         ],
-        "name": "Ring of Might",
+        "name": "Ring of Energy",
         "problem": null
       }
     ],
@@ -114,16 +125,22 @@
     "resin": null,
     "rows": [
       {
-        "item": "ring_might",
+        "item": "ring_energy",
         "key": 1,
         "kind": "ring",
-        "upgrade": 2
+        "level_sum": {
+          "at_least": 8,
+          "group": 1
+        }
       },
       {
-        "item": "ring_might",
+        "item": "ring_energy",
         "key": 2,
         "kind": "ring",
-        "max_depth": 9
+        "level_sum": {
+          "at_least": 8,
+          "group": 1
+        }
       }
     ]
   }

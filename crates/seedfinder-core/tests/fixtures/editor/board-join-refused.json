@@ -1,28 +1,72 @@
 {
-  "about": "A wand dropped on a stack of rings: a cluster spanning categories cannot hold a stack.",
+  "about": "Every stack label is taken, so a Wand of Disintegration dropped on Wand of Frost ×2 — whose stack would need a label of its own as a member — is refused, as the chip's refuse list says up front.",
   "envelope": "requirement_board",
   "request": {
     "edits": [
       {
-        "source": 3,
-        "target": 1,
+        "source": 11,
+        "target": 9,
         "type": "join"
       }
     ],
     "rows": [
       {
-        "item": "ring_might",
+        "identity_group": 1,
         "key": 1,
-        "kind": "ring",
+        "kind": "wand",
+        "upgrade": 1
+      },
+      {
+        "identity_group": 1,
+        "key": 2,
+        "kind": "wand"
+      },
+      {
+        "identity_group": 2,
+        "key": 3,
+        "kind": "wand",
         "upgrade": 2
       },
       {
-        "item": "ring_might",
-        "key": 2,
+        "identity_group": 2,
+        "key": 4,
+        "kind": "wand"
+      },
+      {
+        "identity_group": 3,
+        "key": 5,
+        "kind": "armor",
+        "upgrade": 1
+      },
+      {
+        "identity_group": 3,
+        "key": 6,
+        "kind": "armor"
+      },
+      {
+        "identity_group": 4,
+        "key": 7,
+        "kind": "ring",
+        "upgrade": 1
+      },
+      {
+        "identity_group": 4,
+        "key": 8,
         "kind": "ring"
       },
       {
-        "key": 3,
+        "item": "wand_frost",
+        "key": 9,
+        "kind": "wand"
+      },
+      {
+        "item": "wand_frost",
+        "key": 10,
+        "kind": "wand"
+      },
+      {
+        "item": "wand_disintegration",
+        "key": 11,
         "kind": "wand"
       }
     ]
@@ -31,41 +75,49 @@
     "changed": false,
     "counts": {
       "blanket": 0,
-      "ordinary": 2
+      "ordinary": 6
     },
     "focus": null,
     "items": [
       {
-        "badges": {
-          "count": {
-            "compact_text": "×2",
-            "text": "×2",
-            "tooltip": "2 of the same kind"
-          },
-          "total": null
-        },
         "blanket": false,
         "chips": [
           {
+            "badges": {
+              "count": {
+                "compact_text": "×2",
+                "text": "×2",
+                "tooltip": "2 of the same kind"
+              },
+              "total": null
+            },
             "can_detach": false,
-            "description": "Ring of Might, exactly +2",
+            "copies": [
+              2
+            ],
+            "description": "Any wand, exactly +1",
             "details": [
-              "exactly +2"
+              "exactly +1"
             ],
             "effect": null,
-            "family": "ring",
+            "family": "wand",
             "in_cluster": false,
-            "item": "ring_might",
-            "join": [],
+            "item": null,
+            "join": [
+              3,
+              5,
+              7,
+              11
+            ],
             "key": 1,
-            "kind": "ring",
-            "name": "Ring of Might",
+            "kind": "wand",
+            "name": "Any wand",
             "problem": null,
             "refuse": [
               {
-                "key": 3,
-                "message": "Copies can only be grouped with the same item type.",
-                "reason": "mixed_category_stack"
+                "key": 9,
+                "message": "Every group label is in use. Remove a stack or a combined level first.",
+                "reason": "no_free_group"
               }
             ],
             "relations": [
@@ -74,14 +126,29 @@
                 "text": "2 of the same kind — the extra copies: any upgrade, any floor"
               }
             ],
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": true,
+              "copy_depth": null,
+              "count": 2,
+              "count_max": 3,
+              "count_text": "×2",
+              "default_total": 2,
+              "level_capacity": 8,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
             "tags": [
               {
                 "style": "upgrade",
-                "text": "+2",
+                "text": "+1",
                 "tooltip": null
               }
             ],
-            "title": "Ring of Might",
+            "title": "Any wand",
             "trailing_tags": [],
             "uncursed": false
           }
@@ -95,108 +162,476 @@
         "members": [
           1
         ],
-        "name": "Ring of Might",
-        "problem": null,
-        "stack": {
-          "can_change_count": true,
-          "can_count_levels": true,
-          "can_grow": true,
-          "can_set_copy_depth": true,
-          "copy_depth": null,
-          "count": 2,
-          "count_max": 3,
-          "count_text": "×2",
-          "default_total": 2,
-          "level_capacity": 8,
-          "max": 3,
-          "total": null,
-          "total_text": "Σ ≥ 0"
-        }
+        "name": "Any wand",
+        "problem": null
       },
       {
-        "badges": {
-          "count": null,
-          "total": null
-        },
         "blanket": false,
         "chips": [
           {
+            "badges": {
+              "count": {
+                "compact_text": "×2",
+                "text": "×2",
+                "tooltip": "2 of the same kind"
+              },
+              "total": null
+            },
             "can_detach": false,
-            "description": "Any wand, any upgrade",
+            "copies": [
+              4
+            ],
+            "description": "Any wand, exactly +2",
             "details": [
-              "any upgrade"
+              "exactly +2"
             ],
             "effect": null,
             "family": "wand",
             "in_cluster": false,
             "item": null,
-            "join": [],
+            "join": [
+              1,
+              5,
+              7,
+              11
+            ],
             "key": 3,
             "kind": "wand",
             "name": "Any wand",
             "problem": null,
             "refuse": [
               {
-                "key": 1,
-                "message": "Copies can only be grouped with the same item type.",
-                "reason": "mixed_category_stack"
+                "key": 9,
+                "message": "Every group label is in use. Remove a stack or a combined level first.",
+                "reason": "no_free_group"
               }
             ],
-            "relations": [],
-            "tags": [],
+            "relations": [
+              {
+                "glyph": "times",
+                "text": "2 of the same kind — the extra copies: any upgrade, any floor"
+              }
+            ],
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": true,
+              "copy_depth": null,
+              "count": 2,
+              "count_max": 3,
+              "count_text": "×2",
+              "default_total": 2,
+              "level_capacity": 8,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [
+              {
+                "style": "upgrade",
+                "text": "+2",
+                "tooltip": null
+              }
+            ],
             "title": "Any wand",
             "trailing_tags": [],
             "uncursed": false
           }
         ],
         "cluster": null,
-        "extras": [],
+        "extras": [
+          4
+        ],
         "id": "r3",
         "label": null,
         "members": [
           3
         ],
         "name": "Any wand",
-        "problem": null,
-        "stack": {
-          "can_change_count": true,
-          "can_count_levels": false,
-          "can_grow": true,
-          "can_set_copy_depth": false,
-          "copy_depth": null,
-          "count": 1,
-          "count_max": 3,
-          "count_text": "×1",
-          "default_total": 1,
-          "level_capacity": 5,
-          "max": 3,
-          "total": null,
-          "total_text": "Σ ≥ 0"
-        }
+        "problem": null
+      },
+      {
+        "blanket": false,
+        "chips": [
+          {
+            "badges": {
+              "count": {
+                "compact_text": "×2",
+                "text": "×2",
+                "tooltip": "2 of the same kind"
+              },
+              "total": null
+            },
+            "can_detach": false,
+            "copies": [
+              6
+            ],
+            "description": "Any armor, exactly +1",
+            "details": [
+              "exactly +1"
+            ],
+            "effect": null,
+            "family": "armor",
+            "in_cluster": false,
+            "item": null,
+            "join": [
+              1,
+              3,
+              7,
+              11
+            ],
+            "key": 5,
+            "kind": "armor",
+            "name": "Any armor",
+            "problem": null,
+            "refuse": [
+              {
+                "key": 9,
+                "message": "Every group label is in use. Remove a stack or a combined level first.",
+                "reason": "no_free_group"
+              }
+            ],
+            "relations": [
+              {
+                "glyph": "times",
+                "text": "2 of the same kind — the extra copies: any upgrade, any floor"
+              }
+            ],
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": true,
+              "copy_depth": null,
+              "count": 2,
+              "count_max": 3,
+              "count_text": "×2",
+              "default_total": 2,
+              "level_capacity": 8,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [
+              {
+                "style": "upgrade",
+                "text": "+1",
+                "tooltip": null
+              }
+            ],
+            "title": "Any armor",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [
+          6
+        ],
+        "id": "r5",
+        "label": null,
+        "members": [
+          5
+        ],
+        "name": "Any armor",
+        "problem": null
+      },
+      {
+        "blanket": false,
+        "chips": [
+          {
+            "badges": {
+              "count": {
+                "compact_text": "×2",
+                "text": "×2",
+                "tooltip": "2 of the same kind"
+              },
+              "total": null
+            },
+            "can_detach": false,
+            "copies": [
+              8
+            ],
+            "description": "Any ring, exactly +1",
+            "details": [
+              "exactly +1"
+            ],
+            "effect": null,
+            "family": "ring",
+            "in_cluster": false,
+            "item": null,
+            "join": [
+              1,
+              3,
+              5,
+              11
+            ],
+            "key": 7,
+            "kind": "ring",
+            "name": "Any ring",
+            "problem": null,
+            "refuse": [
+              {
+                "key": 9,
+                "message": "Every group label is in use. Remove a stack or a combined level first.",
+                "reason": "no_free_group"
+              }
+            ],
+            "relations": [
+              {
+                "glyph": "times",
+                "text": "2 of the same kind — the extra copies: any upgrade, any floor"
+              }
+            ],
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": true,
+              "copy_depth": null,
+              "count": 2,
+              "count_max": 3,
+              "count_text": "×2",
+              "default_total": 2,
+              "level_capacity": 8,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [
+              {
+                "style": "upgrade",
+                "text": "+1",
+                "tooltip": null
+              }
+            ],
+            "title": "Any ring",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [
+          8
+        ],
+        "id": "r7",
+        "label": null,
+        "members": [
+          7
+        ],
+        "name": "Any ring",
+        "problem": null
+      },
+      {
+        "blanket": false,
+        "chips": [
+          {
+            "badges": {
+              "count": {
+                "compact_text": "×2",
+                "text": "×2",
+                "tooltip": "2 of the same kind"
+              },
+              "total": null
+            },
+            "can_detach": false,
+            "copies": [
+              10
+            ],
+            "description": "Wand of Frost, any upgrade",
+            "details": [
+              "any upgrade"
+            ],
+            "effect": null,
+            "family": "wand",
+            "in_cluster": false,
+            "item": "wand_frost",
+            "join": [
+              1,
+              3,
+              5,
+              7,
+              11
+            ],
+            "key": 9,
+            "kind": "wand",
+            "name": "Wand of Frost",
+            "problem": null,
+            "refuse": [],
+            "relations": [
+              {
+                "glyph": "times",
+                "text": "2 of the same kind — the extra copies: any upgrade, any floor"
+              }
+            ],
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": true,
+              "copy_depth": null,
+              "count": 2,
+              "count_max": 3,
+              "count_text": "×2",
+              "default_total": 2,
+              "level_capacity": 8,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [],
+            "title": "Wand of Frost",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [
+          10
+        ],
+        "id": "r9",
+        "label": null,
+        "members": [
+          9
+        ],
+        "name": "Wand of Frost",
+        "problem": null
+      },
+      {
+        "blanket": false,
+        "chips": [
+          {
+            "badges": {
+              "count": null,
+              "total": null
+            },
+            "can_detach": false,
+            "copies": [],
+            "description": "Wand of Disintegration, any upgrade",
+            "details": [
+              "any upgrade"
+            ],
+            "effect": null,
+            "family": "wand",
+            "in_cluster": false,
+            "item": "wand_disintegration",
+            "join": [
+              1,
+              3,
+              5,
+              7
+            ],
+            "key": 11,
+            "kind": "wand",
+            "name": "Wand of Disintegration",
+            "problem": null,
+            "refuse": [
+              {
+                "key": 9,
+                "message": "Every group label is in use. Remove a stack or a combined level first.",
+                "reason": "no_free_group"
+              }
+            ],
+            "relations": [],
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 3,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 5,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [],
+            "title": "Wand of Disintegration",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [],
+        "id": "r11",
+        "label": null,
+        "members": [
+          11
+        ],
+        "name": "Wand of Disintegration",
+        "problem": null
       }
     ],
-    "next_key": 4,
+    "next_key": 12,
     "problems": [],
     "refused": {
-      "message": "Copies can only be grouped with the same item type.",
-      "reason": "mixed_category_stack"
+      "message": "Every group label is in use. Remove a stack or a combined level first.",
+      "reason": "no_free_group"
     },
     "rekeyed": [],
     "resin": null,
     "rows": [
       {
-        "item": "ring_might",
+        "identity_group": 1,
         "key": 1,
-        "kind": "ring",
+        "kind": "wand",
+        "upgrade": 1
+      },
+      {
+        "identity_group": 1,
+        "key": 2,
+        "kind": "wand"
+      },
+      {
+        "identity_group": 2,
+        "key": 3,
+        "kind": "wand",
         "upgrade": 2
       },
       {
-        "item": "ring_might",
-        "key": 2,
+        "identity_group": 2,
+        "key": 4,
+        "kind": "wand"
+      },
+      {
+        "identity_group": 3,
+        "key": 5,
+        "kind": "armor",
+        "upgrade": 1
+      },
+      {
+        "identity_group": 3,
+        "key": 6,
+        "kind": "armor"
+      },
+      {
+        "identity_group": 4,
+        "key": 7,
+        "kind": "ring",
+        "upgrade": 1
+      },
+      {
+        "identity_group": 4,
+        "key": 8,
         "kind": "ring"
       },
       {
-        "key": 3,
+        "item": "wand_frost",
+        "key": 9,
+        "kind": "wand"
+      },
+      {
+        "item": "wand_frost",
+        "key": 10,
+        "kind": "wand"
+      },
+      {
+        "item": "wand_disintegration",
+        "key": 11,
         "kind": "wand"
       }
     ]

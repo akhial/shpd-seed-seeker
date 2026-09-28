@@ -34,14 +34,15 @@
     "focus": 5,
     "items": [
       {
-        "badges": {
-          "count": null,
-          "total": null
-        },
         "blanket": false,
         "chips": [
           {
+            "badges": {
+              "count": null,
+              "total": null
+            },
             "can_detach": false,
+            "copies": [],
             "description": "Any wand, any upgrade",
             "details": [
               "any upgrade"
@@ -50,19 +51,30 @@
             "family": "wand",
             "in_cluster": false,
             "item": null,
-            "join": [],
+            "join": [
+              5
+            ],
             "key": 1,
             "kind": "wand",
             "name": "Any wand",
             "problem": null,
-            "refuse": [
-              {
-                "key": 5,
-                "message": "Copies can only be grouped with the same item type.",
-                "reason": "mixed_category_stack"
-              }
-            ],
+            "refuse": [],
             "relations": [],
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 3,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 5,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
             "tags": [],
             "title": "Any wand",
             "trailing_tags": [],
@@ -77,36 +89,24 @@
           1
         ],
         "name": "Any wand",
-        "problem": null,
-        "stack": {
-          "can_change_count": true,
-          "can_count_levels": false,
-          "can_grow": true,
-          "can_set_copy_depth": false,
-          "copy_depth": null,
-          "count": 1,
-          "count_max": 3,
-          "count_text": "×1",
-          "default_total": 1,
-          "level_capacity": 5,
-          "max": 3,
-          "total": null,
-          "total_text": "Σ ≥ 0"
-        }
+        "problem": null
       },
       {
-        "badges": {
-          "count": {
-            "compact_text": "×2",
-            "text": "×2",
-            "tooltip": "2 of the same kind"
-          },
-          "total": null
-        },
         "blanket": false,
         "chips": [
           {
+            "badges": {
+              "count": {
+                "compact_text": "×2",
+                "text": "×2",
+                "tooltip": "2 of the same kind"
+              },
+              "total": null
+            },
             "can_detach": false,
+            "copies": [
+              6
+            ],
             "description": "Any thrown weapon, +2 or higher",
             "details": [
               "+2 or higher"
@@ -115,24 +115,35 @@
             "family": "weapon",
             "in_cluster": false,
             "item": null,
-            "join": [],
+            "join": [
+              1
+            ],
             "key": 5,
             "kind": "thrown_weapon",
             "name": "Any thrown",
             "problem": null,
-            "refuse": [
-              {
-                "key": 1,
-                "message": "Copies can only be grouped with the same item type.",
-                "reason": "mixed_category_stack"
-              }
-            ],
+            "refuse": [],
             "relations": [
               {
                 "glyph": "times",
                 "text": "2 of the same kind — the extra copies: any upgrade, floors 1–6"
               }
             ],
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": true,
+              "copy_depth": 6,
+              "count": 2,
+              "count_max": 3,
+              "count_text": "×2",
+              "default_total": 2,
+              "level_capacity": 8,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
             "tags": [
               {
                 "style": "upgrade",
@@ -155,22 +166,7 @@
           5
         ],
         "name": "Any thrown",
-        "problem": null,
-        "stack": {
-          "can_change_count": true,
-          "can_count_levels": false,
-          "can_grow": true,
-          "can_set_copy_depth": true,
-          "copy_depth": 6,
-          "count": 2,
-          "count_max": 3,
-          "count_text": "×2",
-          "default_total": 2,
-          "level_capacity": 8,
-          "max": 3,
-          "total": null,
-          "total_text": "Σ ≥ 0"
-        }
+        "problem": null
       }
     ],
     "next_key": 7,

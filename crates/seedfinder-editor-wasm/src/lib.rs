@@ -60,7 +60,10 @@ mod tests {
                 {"key": 2, "kind": "wand", "identity_group": 1},
             ])
         );
-        assert_eq!(board["items"][0]["badges"]["count"]["text"], json!("×2"));
+        assert_eq!(
+            board["items"][0]["chips"][0]["badges"]["count"]["text"],
+            json!("×2")
+        );
 
         let sheet: Value =
             serde_json::from_str(&requirement_editor(r#"{"op":"open","rows":[]}"#)).unwrap();

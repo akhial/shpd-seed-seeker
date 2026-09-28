@@ -459,14 +459,15 @@ fn a_cluster_is_captioned_and_counted_once() {
 
 /// The count stepper's upper bound, which the web, Windows, Linux and the
 /// Apple apps each worked out from `can_grow`: the stack limit while the
-/// entry can grow, else only down from its count.
+/// chip can grow, else only down from its count. Every chip has its own,
+/// a cluster member's too.
 #[test]
 fn the_count_stepper_runs_to_the_limit_or_only_down() {
     let spears = edited(&[], &[saved(named(0, ItemId::Spear).requirement, 2, None)]);
-    let stack = &view(&spears).items[0].stack;
+    let stack = &view(&spears).items[0].chips[0].stack;
     assert!(stack.can_grow);
     assert_eq!((stack.count, stack.count_max, stack.max), (2, STACK_MAX, 3));
-    // A cluster spanning categories only sheds the copies it has.
+    // In a cluster spanning categories each member counts for itself.
     let mixed = [
         with(named(1, ItemId::Spear), |r| {
             r.alternative_group = Some(1);
@@ -475,11 +476,16 @@ fn the_count_stepper_runs_to_the_limit_or_only_down() {
         with(row(2, ItemKind::Ring), |r| r.alternative_group = Some(1)),
         with(row(3, ItemKind::Weapon), |r| r.identity_group = Some(1)),
     ];
-    let stack = &view(&mixed).items[0].stack;
-    assert!(!stack.can_grow && stack.can_change_count);
-    assert_eq!((stack.count, stack.count_max), (2, 2));
+    let board = view(&mixed);
+    let (spear, ring) = (&chip(&board, 1).stack, &chip(&board, 2).stack);
+    assert!(spear.can_grow && ring.can_grow);
+    assert_eq!((spear.count, spear.count_max), (2, STACK_MAX));
+    assert_eq!((ring.count, ring.count_max), (1, STACK_MAX));
+    assert!(!spear.can_count_levels && !ring.can_count_levels);
+    assert_eq!(chip(&board, 1).copies, [3]);
+    assert!(chip(&board, 2).copies.is_empty());
     // A trinket never stacks: its stepper stops at one.
-    let rat = &view(&[named(1, ItemId::RatSkull)]).items[0].stack;
+    let rat = &view(&[named(1, ItemId::RatSkull)]).items[0].chips[0].stack;
     assert_eq!(
         (rat.count, rat.count_max, rat.can_change_count),
         (1, 1, false)
@@ -619,7 +625,7 @@ fn the_stack_line_says_where_the_copies_may_lie() {
             "2 of the same kind — the extra copies: any upgrade, any floor"
         )]
     );
-    // A stacked cluster's line shows on every member, after the peers.
+    // A member's stack line shows on that member alone, after its peers.
     let rows = edited(
         &[
             with(named(1, ItemId::Spear), |r| r.alternative_group = Some(1)),
@@ -628,18 +634,20 @@ fn the_stack_line_says_where_the_copies_may_lie() {
         &[Edit::SetCount { key: 1, count: 2 }],
     );
     let board = view(&rows);
-    for (key, peer) in [(1, "Sword"), (2, "Spear")] {
-        assert_eq!(
-            chip(&board, key).relations,
-            [
-                relation(RelationGlyph::Or, peer),
-                relation(
-                    RelationGlyph::Times,
-                    "2 of the same kind — the extra copies: any upgrade, any floor"
-                ),
-            ]
-        );
-    }
+    assert_eq!(
+        chip(&board, 1).relations,
+        [
+            relation(RelationGlyph::Or, "Sword"),
+            relation(
+                RelationGlyph::Times,
+                "2 of the same kind — the extra copies: any upgrade, any floor"
+            ),
+        ]
+    );
+    assert_eq!(
+        chip(&board, 2).relations,
+        [relation(RelationGlyph::Or, "Spear")]
+    );
 }
 
 // --- badges ----------------------------------------------------------------------
@@ -648,23 +656,22 @@ fn the_stack_line_says_where_the_copies_may_lie() {
 fn badges_show_the_count_and_the_combined_level() {
     // A lone chip shows no badge, but its stepper still reads ×1.
     let board = view(&[named(1, ItemId::Spear)]);
-    assert_eq!(board.items[0].badges, Badges::default());
-    assert_eq!(board.items[0].stack.count_text, "×1");
-    assert_eq!(board.items[0].stack.total_text, "Σ ≥ 0");
+    assert_eq!(board.items[0].chips[0].badges, Badges::default());
+    assert_eq!(board.items[0].chips[0].stack.count_text, "×1");
+    assert_eq!(board.items[0].chips[0].stack.total_text, "Σ ≥ 0");
 
     let spears = edited(&[], &[saved(named(0, ItemId::Spear).requirement, 2, None)]);
     let board = view(&spears);
-    assert_eq!(
-        board.items[0].badges,
-        Badges {
-            count: Some(Badge {
-                text: "×2".to_owned(),
-                compact_text: "×2".to_owned(),
-                tooltip: "2 of the same kind".to_owned(),
-            }),
-            total: None,
-        }
-    );
+    let two = Badges {
+        count: Some(Badge {
+            text: "×2".to_owned(),
+            compact_text: "×2".to_owned(),
+            tooltip: "2 of the same kind".to_owned(),
+        }),
+        total: None,
+    };
+    assert_eq!(board.items[0].chips[0].badges, two);
+    assert_eq!(board.items[0].chips[0].copies, [2]);
 
     let rings = edited(
         &[],
@@ -679,7 +686,7 @@ fn badges_show_the_count_and_the_combined_level() {
     let board = view(&rings);
     let item = &board.items[0];
     assert_eq!(
-        item.badges,
+        item.chips[0].badges,
         Badges {
             count: Some(Badge {
                 text: "≤3".to_owned(),
@@ -693,8 +700,37 @@ fn badges_show_the_count_and_the_combined_level() {
             }),
         }
     );
-    assert_eq!(item.stack, stack_view(&rings, &board_items(&rings)[0]));
+    assert_eq!(
+        item.chips[0].stack,
+        stack_view(&rings, &board_items(&rings)[0].stacks[0])
+    );
     assert_eq!(item.extras.len(), 2);
+
+    // A cluster draws no badge of its own: members whose stacks are alike
+    // share one label and each shows ×2 — Frost ×2 or Disintegration ×2 —
+    // and a member without copies shows none.
+    let cluster = [
+        with(named(1, ItemId::WandFrost), |r| {
+            r.alternative_group = Some(1);
+            r.identity_group = Some(1);
+        }),
+        with(named(2, ItemId::WandDisintegration), |r| {
+            r.alternative_group = Some(1);
+            r.identity_group = Some(1);
+        }),
+        with(named(3, ItemId::WandLightning), |r| {
+            r.alternative_group = Some(1);
+        }),
+        with(row(4, ItemKind::Wand), |r| r.identity_group = Some(1)),
+    ];
+    let board = view(&cluster);
+    assert_eq!(board.items.len(), 1);
+    assert_eq!(chip(&board, 1).badges, two);
+    assert_eq!(chip(&board, 2).badges, two);
+    assert_eq!(chip(&board, 3).badges, Badges::default());
+    assert_eq!(chip(&board, 1).copies, [4]);
+    assert_eq!(chip(&board, 2).copies, [4]);
+    assert_eq!(board.items[0].extras, [4]);
 }
 
 // --- problems on the board ----------------------------------------------------------
@@ -756,7 +792,7 @@ fn a_combined_levels_copies_speak_through_its_chip_beside_a_stack() {
     assert_eq!(board.items.len(), 2);
     assert_eq!(board.items[1].members, [2]);
     assert_eq!(board.items[1].extras, [3]);
-    assert_eq!(board.items[1].stack.total, Some(2));
+    assert_eq!(board.items[1].chips[0].stack.total, Some(2));
     let floor = "Requirement floor must be 1 through 24.";
     assert_eq!(board.problems[0].keys, [3]);
     assert_eq!(board.items[1].problem.as_deref(), Some(floor));
@@ -764,8 +800,10 @@ fn a_combined_levels_copies_speak_through_its_chip_beside_a_stack() {
     assert_eq!(board.items[0].problem, None);
 }
 
+/// A stack's copies speak through the chips they belong to: every member
+/// whose stack they are, and no other.
 #[test]
-fn a_clusters_copies_speak_through_its_first_member_only() {
+fn a_stacks_copies_speak_through_every_member_they_belong_to() {
     let rows = [
         with(named(1, ItemId::Spear), |r| {
             r.alternative_group = Some(1);
@@ -775,6 +813,7 @@ fn a_clusters_copies_speak_through_its_first_member_only() {
             r.alternative_group = Some(1);
             r.identity_group = Some(1);
         }),
+        with(named(4, ItemId::Mace), |r| r.alternative_group = Some(1)),
         with(row(3, ItemKind::Weapon), |r| {
             r.identity_group = Some(1);
             r.max_depth = Some(0);
@@ -786,7 +825,8 @@ fn a_clusters_copies_speak_through_its_first_member_only() {
     let floor = "Requirement floor must be 1 through 24.";
     assert_eq!(board.items[0].problem.as_deref(), Some(floor));
     assert_eq!(chip(&board, 1).problem.as_deref(), Some(floor));
-    assert_eq!(chip(&board, 2).problem, None);
+    assert_eq!(chip(&board, 2).problem.as_deref(), Some(floor));
+    assert_eq!(chip(&board, 4).problem, None);
 }
 
 #[test]
@@ -798,7 +838,7 @@ fn a_problem_between_rows_marks_every_chip_it_blames() {
         row(3, ItemKind::Ring),
     ];
     let board = view(&rows);
-    let message = "Only one item of a stack can carry constraints; the extra copies are plain.";
+    let message = "Only one item of a stack, or the members of one either/or group, can carry constraints; the extra copies are plain.";
     for key in [1, 2] {
         assert_eq!(chip(&board, key).problem.as_deref(), Some(message));
         assert_eq!(entry(&board, key).problem.as_deref(), Some(message));
@@ -853,26 +893,46 @@ fn every_chip_carries_the_rows_it_may_join_and_those_it_is_refused() {
         &[row(3, ItemKind::Wand), named(4, ItemId::RingMight)],
         &[saved(named(0, ItemId::Spear).requirement, 2, None)],
     );
-    // [wand 3, ring 4, spear 5, spear copy 6]
+    // [wand 3, ring 4, spear 5, spear copy 6]: every copy keeps its own
+    // chip's kind, so the stacked spear joins across categories.
     let board = view(&rows);
     let spear = chip(&board, 5);
-    assert!(spear.join.is_empty());
-    assert_eq!(
-        spear.refuse,
-        [
-            (3, Refusal::MixedCategoryStack),
-            (4, Refusal::MixedCategoryStack)
-        ]
+    assert_eq!(spear.join, [3, 4]);
+    assert!(spear.refuse.is_empty());
+    assert_eq!(chip(&board, 3).join, [4, 5]);
+    assert!(chip(&board, 3).refuse.is_empty());
+    // With every stack label taken, a drop onto the Frost stack — which
+    // becomes a member's stack under a label of its own — is refused.
+    let mut full: Vec<Row> = rows.clone();
+    for key in [10, 20, 30, 40] {
+        full.push(row(key, ItemKind::Wand));
+        full = edited(&full, &[Edit::SetCount { key, count: 2 }]);
+    }
+    full = edited(
+        &full,
+        &[
+            saved(named(0, ItemId::WandFrost).requirement, 2, None),
+            saved(named(0, ItemId::WandDisintegration).requirement, 1, None),
+        ],
     );
-    assert_eq!(chip(&board, 3).join, [4]);
-    assert_eq!(chip(&board, 3).refuse, [(5, Refusal::MixedCategoryStack)]);
+    let frost = full[full.len() - 3].key;
+    let disintegration = full[full.len() - 1].key;
+    let board = view(&full);
+    assert_eq!(
+        chip(&board, disintegration).refuse,
+        [(5, Refusal::NoFreeGroup), (frost, Refusal::NoFreeGroup)]
+    );
+    assert!(chip(&board, frost).join.contains(&disintegration));
     // The answers are the board's join candidates, row by row.
-    let candidates = join_candidates(&rows, &board_items(&rows));
-    for item in &board.items {
-        for chip in &item.chips {
-            let index = rows.iter().position(|row| row.key == chip.key).unwrap();
-            assert_eq!(chip.join, candidates[index].join);
-            assert_eq!(chip.refuse, candidates[index].refuse);
+    for rows in [&rows, &full] {
+        let board = view(rows);
+        let candidates = join_candidates(rows, &board_items(rows));
+        for item in &board.items {
+            for chip in &item.chips {
+                let index = rows.iter().position(|row| row.key == chip.key).unwrap();
+                assert_eq!(chip.join, candidates[index].join);
+                assert_eq!(chip.refuse, candidates[index].refuse);
+            }
         }
     }
 }
@@ -945,11 +1005,7 @@ fn the_built_in_staff_preset_reads_as_one_stack_and_one_wand() {
         ("Any wand", vec!["+3"])
     );
     assert_eq!(
-        board.items[0]
-            .badges
-            .count
-            .as_ref()
-            .map(|badge| badge.text.as_str()),
+        staff.badges.count.as_ref().map(|badge| badge.text.as_str()),
         Some("×3")
     );
     assert_eq!(
@@ -1139,21 +1195,6 @@ fn the_board_view_agrees_with_the_fold_the_problems_and_the_candidates() {
             assert_eq!(view.extras, keys(&item.extras), "{context}");
             assert_eq!(view.cluster, item.cluster, "{context}");
             assert_eq!(view.label.is_some(), item.cluster.is_some(), "{context}");
-            assert_eq!(view.stack, stack_view(&rows, item), "{context}");
-            // The stepper never offers a count the edit would clamp away,
-            // and offers growth exactly when the entry can grow.
-            assert!(view.stack.count_max <= view.stack.max, "{context}");
-            assert_eq!(
-                view.stack.count_max > view.stack.count,
-                view.stack.can_grow && view.stack.count < view.stack.max,
-                "{context}"
-            );
-            assert_eq!(view.badges.count.is_some(), item.count() > 1, "{context}");
-            assert_eq!(
-                view.badges.total.is_some(),
-                item.total.is_some(),
-                "{context}"
-            );
             let touched = found.iter().any(|problem| {
                 problem
                     .keys
@@ -1162,8 +1203,30 @@ fn the_board_view_agrees_with_the_fold_the_problems_and_the_candidates() {
             });
             assert_eq!(view.problem.is_some(), touched, "{context}");
             assert_eq!(view.chips.len(), item.members.len(), "{context}");
-            for (chip, &index) in view.chips.iter().zip(&item.members) {
+            for (chip, stack) in view.chips.iter().zip(&item.stacks) {
+                let index = stack.index;
                 assert_eq!(chip.key, rows[index].key, "{context}");
+                assert_eq!(chip.stack, stack_view(&rows, stack), "{context}");
+                assert_eq!(chip.copies, keys(&stack.copies), "{context}");
+                // The stepper never offers a count the edit would clamp
+                // away, and offers growth exactly when the chip can grow.
+                assert!(chip.stack.count_max <= chip.stack.max, "{context}");
+                assert_eq!(
+                    chip.stack.count_max > chip.stack.count,
+                    chip.stack.can_grow && chip.stack.count < chip.stack.max,
+                    "{context}"
+                );
+                assert_eq!(chip.badges.count.is_some(), stack.count() > 1, "{context}");
+                assert_eq!(
+                    chip.badges.total.is_some(),
+                    stack.total.is_some(),
+                    "{context}"
+                );
+                // A chip's copies are hidden copies of its entry.
+                assert!(
+                    stack.copies.iter().all(|copy| item.extras.contains(copy)),
+                    "{context}"
+                );
                 assert_eq!(chip.join, candidates[index].join, "{context}");
                 assert_eq!(chip.refuse, candidates[index].refuse, "{context}");
                 assert!(chip.description.starts_with(&chip.title), "{context}");

@@ -636,7 +636,12 @@
         "type": "new"
       },
       "preview": {
+        "badges": {
+          "count": null,
+          "total": null
+        },
         "can_detach": false,
+        "copies": [],
         "description": "Any melee weapon, any upgrade",
         "details": [
           "any upgrade"
@@ -652,6 +657,21 @@
         "problem": null,
         "refuse": [],
         "relations": [],
+        "stack": {
+          "can_change_count": false,
+          "can_count_levels": false,
+          "can_grow": false,
+          "can_set_copy_depth": false,
+          "copy_depth": null,
+          "count": 1,
+          "count_max": 1,
+          "count_text": "×1",
+          "default_total": 1,
+          "level_capacity": 5,
+          "max": 3,
+          "total": null,
+          "total_text": "Σ ≥ 0"
+        },
         "tags": [],
         "title": "Any melee weapon",
         "trailing_tags": [],

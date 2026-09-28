@@ -6,7 +6,7 @@ pub use resin::ArcaneResinFilter;
 pub(crate) use resin::donor_requirement as resin_donor_requirement;
 pub(crate) use resin::reforge_copies;
 pub(crate) use resin::upgrade_cost as resin_upgrade_cost;
-pub(crate) use stacks::{gate_of, member_stack_variants, stack_gates};
+pub(crate) use stacks::{gate_of, gating_group, member_stack_variants, stack_gates};
 
 use std::collections::BTreeMap;
 use std::fmt;

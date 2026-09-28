@@ -1,30 +1,36 @@
 {
-  "about": "Removing one member of a three-way cluster keeps the other two together.",
+  "about": "One item of the +2 Frost ×3 in {Frost +2 ×3 | Disintegration} dropped on the remove target: Frost steps down to ×2, keeping its upgrade and its label.",
   "envelope": "requirement_board",
   "request": {
     "edits": [
       {
-        "key": 2,
-        "type": "remove"
+        "key": 1,
+        "type": "remove_one"
       }
     ],
     "rows": [
       {
         "alternative_group": 1,
-        "item": "wand_fireblast",
+        "identity_group": 1,
+        "item": "wand_frost",
         "key": 1,
-        "kind": "wand"
+        "kind": "wand",
+        "upgrade": 2
       },
       {
         "alternative_group": 1,
-        "item": "wand_frost",
+        "item": "wand_disintegration",
         "key": 2,
         "kind": "wand"
       },
       {
-        "alternative_group": 1,
-        "item": "wand_lightning",
+        "identity_group": 1,
         "key": 3,
+        "kind": "wand"
+      },
+      {
+        "identity_group": 1,
+        "key": 4,
         "kind": "wand"
       }
     ]
@@ -35,55 +41,71 @@
       "blanket": 0,
       "ordinary": 1
     },
-    "focus": null,
+    "focus": 1,
     "items": [
       {
         "blanket": false,
         "chips": [
           {
             "badges": {
-              "count": null,
+              "count": {
+                "compact_text": "×2",
+                "text": "×2",
+                "tooltip": "2 of the same kind"
+              },
               "total": null
             },
             "can_detach": true,
-            "copies": [],
-            "description": "Wand of Fireblast, any upgrade",
+            "copies": [
+              3
+            ],
+            "description": "Wand of Frost, exactly +2",
             "details": [
-              "any upgrade"
+              "exactly +2"
             ],
             "effect": null,
             "family": "wand",
             "in_cluster": true,
-            "item": "wand_fireblast",
+            "item": "wand_frost",
             "join": [],
             "key": 1,
             "kind": "wand",
-            "name": "Wand of Fireblast",
+            "name": "Wand of Frost",
             "problem": null,
             "refuse": [],
             "relations": [
               {
                 "glyph": "or",
-                "text": "Wand of Lightning"
+                "text": "Wand of Disintegration"
+              },
+              {
+                "glyph": "times",
+                "text": "2 of the same kind — the extra copies: any upgrade, any floor"
               }
             ],
             "stack": {
               "can_change_count": true,
               "can_count_levels": false,
               "can_grow": true,
-              "can_set_copy_depth": false,
+              "can_set_copy_depth": true,
               "copy_depth": null,
-              "count": 1,
+              "count": 2,
               "count_max": 3,
-              "count_text": "×1",
-              "default_total": 1,
-              "level_capacity": 5,
+              "count_text": "×2",
+              "default_total": 2,
+              "level_capacity": 8,
               "max": 3,
               "total": null,
               "total_text": "Σ ≥ 0"
             },
-            "tags": [],
-            "title": "Wand of Fireblast",
+            "tags": [
+              {
+                "style": "upgrade",
+                "text": "+2",
+                "tooltip": null
+              }
+            ],
+            "title": "Wand of Frost",
             "trailing_tags": [],
             "uncursed": false
           },
@@ -94,24 +116,24 @@
             },
             "can_detach": true,
             "copies": [],
-            "description": "Wand of Lightning, any upgrade",
+            "description": "Wand of Disintegration, any upgrade",
             "details": [
               "any upgrade"
             ],
             "effect": null,
             "family": "wand",
             "in_cluster": true,
-            "item": "wand_lightning",
+            "item": "wand_disintegration",
             "join": [],
-            "key": 3,
+            "key": 2,
             "kind": "wand",
-            "name": "Wand of Lightning",
+            "name": "Wand of Disintegration",
             "problem": null,
             "refuse": [],
             "relations": [
               {
                 "glyph": "or",
-                "text": "Wand of Fireblast"
+                "text": "Wand of Frost"
               }
             ],
             "stack": {
@@ -130,20 +152,22 @@
               "total_text": "Σ ≥ 0"
             },
             "tags": [],
-            "title": "Wand of Lightning",
+            "title": "Wand of Disintegration",
             "trailing_tags": [],
             "uncursed": false
           }
         ],
         "cluster": 1,
-        "extras": [],
+        "extras": [
+          3
+        ],
         "id": "c1",
         "label": "Any of 2",
         "members": [
           1,
-          3
+          2
         ],
-        "name": "Wand of Fireblast or Wand of Lightning",
+        "name": "Wand of Frost or Wand of Disintegration",
         "problem": null
       }
     ],
@@ -155,13 +179,20 @@
     "rows": [
       {
         "alternative_group": 1,
-        "item": "wand_fireblast",
+        "identity_group": 1,
+        "item": "wand_frost",
         "key": 1,
-        "kind": "wand"
+        "kind": "wand",
+        "upgrade": 2
       },
       {
         "alternative_group": 1,
-        "item": "wand_lightning",
+        "item": "wand_disintegration",
+        "key": 2,
+        "kind": "wand"
+      },
+      {
+        "identity_group": 1,
         "key": 3,
         "kind": "wand"
       }

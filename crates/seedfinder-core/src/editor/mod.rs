@@ -22,12 +22,14 @@
 //!
 //! - an *either/or cluster* is several rows sharing an
 //!   [`Requirement::alternative_group`]: one slot, any member fills it;
-//! - a *stack* is a chip (or a whole cluster) asking for more than one item
-//!   of the same kind — the blacksmith's reforge fodder. Its extra copies
-//!   never carry constraints of their own. A stack of a concrete item
-//!   encodes as plain repeated requirements; a wildcard or cluster stack
-//!   encodes as bare copies tied to the anchor with an
-//!   [`Requirement::identity_group`];
+//! - a *stack* is a chip — a lone chip or a cluster member — asking for
+//!   more than one item of the same kind: the blacksmith's reforge fodder.
+//!   Its extra copies never carry constraints of their own. A lone stack of
+//!   a concrete item encodes as plain repeated requirements; a wildcard
+//!   stack, and a member's, encodes as bare copies tied to the chip with an
+//!   [`Requirement::identity_group`] (the engine's member stacks: the
+//!   copies count only when that member fills its cluster's slot), which
+//!   members whose stacks are alike share;
 //! - a stack with a *combined level* encodes as identical members sharing a
 //!   [`Requirement::level_sum`]: each matched item counts upgrade + 1
 //!   towards the total, and members are optional, so the stack reads "up to
@@ -74,8 +76,8 @@ use crate::query::Requirement;
 
 pub(crate) use board::is_plain_item_copy;
 pub use board::{
-    BoardItem, DropAction, DropTarget, Edit, EditResult, ItemKey, JoinCandidates, Refusal, apply,
-    board_items, drop_action, join_candidates,
+    BoardItem, ChipStack, DropAction, DropTarget, Edit, EditResult, ItemKey, JoinCandidates,
+    Refusal, apply, board_items, drop_action, join_candidates,
 };
 pub use chips::{
     Badge, Badges, BoardView, ChipView, Counts, EffectBadge, ItemView, Relation, RelationGlyph,

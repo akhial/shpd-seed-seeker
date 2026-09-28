@@ -40,18 +40,21 @@
     "focus": 1,
     "items": [
       {
-        "badges": {
-          "count": {
-            "compact_text": "×2",
-            "text": "×2",
-            "tooltip": "2 of the same kind"
-          },
-          "total": null
-        },
         "blanket": false,
         "chips": [
           {
+            "badges": {
+              "count": {
+                "compact_text": "×2",
+                "text": "×2",
+                "tooltip": "2 of the same kind"
+              },
+              "total": null
+            },
             "can_detach": false,
+            "copies": [
+              2
+            ],
             "description": "Ring of Energy, any upgrade, floors 1–9",
             "details": [
               "any upgrade",
@@ -73,6 +76,21 @@
                 "text": "2 of the same kind — the extra copies: any upgrade, floors 1–20"
               }
             ],
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": true,
+              "can_grow": true,
+              "can_set_copy_depth": true,
+              "copy_depth": 20,
+              "count": 2,
+              "count_max": 3,
+              "count_text": "×2",
+              "default_total": 2,
+              "level_capacity": 8,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
             "tags": [
               {
                 "style": "plain",
@@ -95,22 +113,7 @@
           1
         ],
         "name": "Ring of Energy",
-        "problem": null,
-        "stack": {
-          "can_change_count": true,
-          "can_count_levels": true,
-          "can_grow": true,
-          "can_set_copy_depth": true,
-          "copy_depth": 20,
-          "count": 2,
-          "count_max": 3,
-          "count_text": "×2",
-          "default_total": 2,
-          "level_capacity": 8,
-          "max": 3,
-          "total": null,
-          "total_text": "Σ ≥ 0"
-        }
+        "problem": null
       }
     ],
     "next_key": 3,

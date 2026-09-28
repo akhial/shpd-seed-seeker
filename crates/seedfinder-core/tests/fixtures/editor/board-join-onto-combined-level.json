@@ -1,31 +1,46 @@
 {
-  "about": "Removing one member of a three-way cluster keeps the other two together.",
+  "about": "A Ring of Might dropped on a Ring of Energy ×3 counting levels: the Energy stack keeps its count as a member's stack and drops the combined level, which cannot travel into a cluster.",
   "envelope": "requirement_board",
   "request": {
     "edits": [
       {
-        "key": 2,
-        "type": "remove"
+        "source": 4,
+        "target": 1,
+        "type": "join"
       }
     ],
     "rows": [
       {
-        "alternative_group": 1,
-        "item": "wand_fireblast",
+        "item": "ring_energy",
         "key": 1,
-        "kind": "wand"
+        "kind": "ring",
+        "level_sum": {
+          "at_least": 11,
+          "group": 1
+        }
       },
       {
-        "alternative_group": 1,
-        "item": "wand_frost",
+        "item": "ring_energy",
         "key": 2,
-        "kind": "wand"
+        "kind": "ring",
+        "level_sum": {
+          "at_least": 11,
+          "group": 1
+        }
       },
       {
-        "alternative_group": 1,
-        "item": "wand_lightning",
+        "item": "ring_energy",
         "key": 3,
-        "kind": "wand"
+        "kind": "ring",
+        "level_sum": {
+          "at_least": 11,
+          "group": 1
+        }
+      },
+      {
+        "item": "ring_might",
+        "key": 4,
+        "kind": "ring"
       }
     ]
   },
@@ -35,55 +50,66 @@
       "blanket": 0,
       "ordinary": 1
     },
-    "focus": null,
+    "focus": 4,
     "items": [
       {
         "blanket": false,
         "chips": [
           {
             "badges": {
-              "count": null,
+              "count": {
+                "compact_text": "×3",
+                "text": "×3",
+                "tooltip": "3 of the same kind"
+              },
               "total": null
             },
             "can_detach": true,
-            "copies": [],
-            "description": "Wand of Fireblast, any upgrade",
+            "copies": [
+              2,
+              3
+            ],
+            "description": "Ring of Energy, any upgrade",
             "details": [
               "any upgrade"
             ],
             "effect": null,
-            "family": "wand",
+            "family": "ring",
             "in_cluster": true,
-            "item": "wand_fireblast",
+            "item": "ring_energy",
             "join": [],
             "key": 1,
-            "kind": "wand",
-            "name": "Wand of Fireblast",
+            "kind": "ring",
+            "name": "Ring of Energy",
             "problem": null,
             "refuse": [],
             "relations": [
               {
                 "glyph": "or",
-                "text": "Wand of Lightning"
+                "text": "Ring of Might"
+              },
+              {
+                "glyph": "times",
+                "text": "3 of the same kind — the extra copies: any upgrade, any floor"
               }
             ],
             "stack": {
               "can_change_count": true,
               "can_count_levels": false,
               "can_grow": true,
-              "can_set_copy_depth": false,
+              "can_set_copy_depth": true,
               "copy_depth": null,
-              "count": 1,
+              "count": 3,
               "count_max": 3,
-              "count_text": "×1",
-              "default_total": 1,
-              "level_capacity": 5,
+              "count_text": "×3",
+              "default_total": 3,
+              "level_capacity": 11,
               "max": 3,
               "total": null,
               "total_text": "Σ ≥ 0"
             },
             "tags": [],
-            "title": "Wand of Fireblast",
+            "title": "Ring of Energy",
             "trailing_tags": [],
             "uncursed": false
           },
@@ -94,24 +120,24 @@
             },
             "can_detach": true,
             "copies": [],
-            "description": "Wand of Lightning, any upgrade",
+            "description": "Ring of Might, any upgrade",
             "details": [
               "any upgrade"
             ],
             "effect": null,
-            "family": "wand",
+            "family": "ring",
             "in_cluster": true,
-            "item": "wand_lightning",
+            "item": "ring_might",
             "join": [],
-            "key": 3,
-            "kind": "wand",
-            "name": "Wand of Lightning",
+            "key": 4,
+            "kind": "ring",
+            "name": "Ring of Might",
             "problem": null,
             "refuse": [],
             "relations": [
               {
                 "glyph": "or",
-                "text": "Wand of Fireblast"
+                "text": "Ring of Energy"
               }
             ],
             "stack": {
@@ -130,24 +156,27 @@
               "total_text": "Σ ≥ 0"
             },
             "tags": [],
-            "title": "Wand of Lightning",
+            "title": "Ring of Might",
             "trailing_tags": [],
             "uncursed": false
           }
         ],
         "cluster": 1,
-        "extras": [],
+        "extras": [
+          2,
+          3
+        ],
         "id": "c1",
         "label": "Any of 2",
         "members": [
           1,
-          3
+          4
         ],
-        "name": "Wand of Fireblast or Wand of Lightning",
+        "name": "Ring of Energy or Ring of Might",
         "problem": null
       }
     ],
-    "next_key": 4,
+    "next_key": 5,
     "problems": [],
     "refused": null,
     "rekeyed": [],
@@ -155,15 +184,26 @@
     "rows": [
       {
         "alternative_group": 1,
-        "item": "wand_fireblast",
+        "identity_group": 1,
+        "item": "ring_energy",
         "key": 1,
-        "kind": "wand"
+        "kind": "ring"
       },
       {
         "alternative_group": 1,
-        "item": "wand_lightning",
+        "item": "ring_might",
+        "key": 4,
+        "kind": "ring"
+      },
+      {
+        "identity_group": 1,
+        "key": 2,
+        "kind": "ring"
+      },
+      {
+        "identity_group": 1,
         "key": 3,
-        "kind": "wand"
+        "kind": "ring"
       }
     ]
   }

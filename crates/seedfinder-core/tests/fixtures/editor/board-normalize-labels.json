@@ -48,18 +48,21 @@
     "focus": null,
     "items": [
       {
-        "badges": {
-          "count": {
-            "compact_text": "×2",
-            "text": "×2",
-            "tooltip": "2 of the same kind"
-          },
-          "total": null
-        },
         "blanket": false,
         "chips": [
           {
+            "badges": {
+              "count": {
+                "compact_text": "×2",
+                "text": "×2",
+                "tooltip": "2 of the same kind"
+              },
+              "total": null
+            },
             "can_detach": false,
+            "copies": [
+              2
+            ],
             "description": "Any wand, exactly +3",
             "details": [
               "exactly +3"
@@ -68,24 +71,35 @@
             "family": "wand",
             "in_cluster": false,
             "item": null,
-            "join": [],
+            "join": [
+              3
+            ],
             "key": 1,
             "kind": "wand",
             "name": "Any wand",
             "problem": null,
-            "refuse": [
-              {
-                "key": 3,
-                "message": "Copies can only be grouped with the same item type.",
-                "reason": "mixed_category_stack"
-              }
-            ],
+            "refuse": [],
             "relations": [
               {
                 "glyph": "times",
                 "text": "2 of the same kind — the extra copies: any upgrade, any floor"
               }
             ],
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": true,
+              "copy_depth": null,
+              "count": 2,
+              "count_max": 3,
+              "count_text": "×2",
+              "default_total": 2,
+              "level_capacity": 8,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
             "tags": [
               {
                 "style": "upgrade",
@@ -108,64 +122,63 @@
           1
         ],
         "name": "Any wand",
-        "problem": null,
-        "stack": {
-          "can_change_count": true,
-          "can_count_levels": false,
-          "can_grow": true,
-          "can_set_copy_depth": true,
-          "copy_depth": null,
-          "count": 2,
-          "count_max": 3,
-          "count_text": "×2",
-          "default_total": 2,
-          "level_capacity": 8,
-          "max": 3,
-          "total": null,
-          "total_text": "Σ ≥ 0"
-        }
+        "problem": null
       },
       {
-        "badges": {
-          "count": {
-            "compact_text": "≤2",
-            "text": "≤2",
-            "tooltip": "Up to 2 items"
-          },
-          "total": {
-            "compact_text": "Σ≥3",
-            "text": "Σ ≥ 3",
-            "tooltip": "Levels add to at least 3 (a +0 item counts 1)"
-          }
-        },
         "blanket": false,
         "chips": [
           {
+            "badges": {
+              "count": {
+                "compact_text": "≤2",
+                "text": "≤2",
+                "tooltip": "Up to 2 items"
+              },
+              "total": {
+                "compact_text": "Σ≥3",
+                "text": "Σ ≥ 3",
+                "tooltip": "Levels add to at least 3 (a +0 item counts 1)"
+              }
+            },
             "can_detach": false,
+            "copies": [
+              4
+            ],
             "description": "Ring of Might",
             "details": [],
             "effect": null,
             "family": "ring",
             "in_cluster": false,
             "item": "ring_might",
-            "join": [],
+            "join": [
+              1
+            ],
             "key": 3,
             "kind": "ring",
             "name": "Ring of Might",
             "problem": null,
-            "refuse": [
-              {
-                "key": 1,
-                "message": "Copies can only be grouped with the same item type.",
-                "reason": "mixed_category_stack"
-              }
-            ],
+            "refuse": [],
             "relations": [
               {
                 "glyph": "sum",
                 "text": "up to 2 — levels add to ≥ 3"
               }
             ],
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": true,
+              "can_grow": true,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 2,
+              "count_max": 3,
+              "count_text": "≤2",
+              "default_total": 2,
+              "level_capacity": 8,
+              "max": 3,
+              "total": 3,
+              "total_text": "Σ ≥ 3"
+            },
             "tags": [],
             "title": "Ring of Might",
             "trailing_tags": [],
@@ -182,22 +195,7 @@
           3
         ],
         "name": "Ring of Might",
-        "problem": null,
-        "stack": {
-          "can_change_count": true,
-          "can_count_levels": true,
-          "can_grow": true,
-          "can_set_copy_depth": false,
-          "copy_depth": null,
-          "count": 2,
-          "count_max": 3,
-          "count_text": "≤2",
-          "default_total": 2,
-          "level_capacity": 8,
-          "max": 3,
-          "total": 3,
-          "total_text": "Σ ≥ 3"
-        }
+        "problem": null
       }
     ],
     "next_key": 5,

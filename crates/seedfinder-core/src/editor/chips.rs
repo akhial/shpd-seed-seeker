@@ -22,7 +22,9 @@ use crate::query::{
 };
 
 use super::Row;
-use super::board::{BoardItem, ItemKey, JoinCandidates, Refusal, board_items, join_candidates};
+use super::board::{
+    BoardItem, ChipStack, ItemKey, JoinCandidates, Refusal, board_items, join_candidates,
+};
 use super::labels::{
     ARCANE_RESIN, CopyFloors, EXCLUDED_FROM_RESIN, KindName, NO_RESIN, RESIN_AUTO,
     RESIN_AUTO_TOOLTIP, RESIN_MAGE_DETAIL, RESIN_MAGE_TAG, RESIN_MAGE_TOOLTIP, SELECT_TRINKET,
@@ -55,8 +57,8 @@ pub struct Counts {
     pub blanket: usize,
 }
 
-/// One board entry: a chip, or an either/or cluster of chips, with its
-/// stack badges.
+/// One board entry: a chip, or an either/or cluster of chips. Its badges
+/// and steppers are its chips': nothing is drawn or counted per cluster.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ItemView {
     /// The entry's identity, stable while it survives an edit.
@@ -73,12 +75,9 @@ pub struct ItemView {
     pub name: String,
     /// The visible rows' keys: one for a chip, every member of a cluster.
     pub members: Vec<u64>,
-    /// The hidden copies' keys behind the stack badge.
+    /// Every hidden copy's key: the copies behind all its chips' badges,
+    /// each once, in list order.
     pub extras: Vec<u64>,
-    /// What the count and combined-level steppers offer.
-    pub stack: StackView,
-    /// The badges the entry shows at rest.
-    pub badges: Badges,
     /// One chip per member, in member order.
     pub chips: Vec<ChipView>,
     /// The first problem touching any member or hidden copy, so a problem
@@ -86,12 +85,12 @@ pub struct ItemView {
     pub problem: Option<String>,
 }
 
-/// The badges an entry shows at rest. The steppers that edit them read
+/// The badges a chip shows at rest. The steppers that edit them read
 /// [`StackView::count_text`] and [`StackView::total_text`] instead, which
 /// exist even when the badge does not.
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct Badges {
-    /// `×N` (or `≤N` while counting levels), when the entry asks for more
+    /// `×N` (or `≤N` while counting levels), when the chip asks for more
     /// than one item.
     pub count: Option<Badge>,
     /// `Σ ≥ T`, when the stack counts levels together.
@@ -201,10 +200,17 @@ pub struct ChipView {
     /// The popover's relation lines: the cluster, the combined level, the
     /// stack.
     pub relations: Vec<Relation>,
+    /// The badges the chip shows at rest.
+    pub badges: Badges,
+    /// The keys of the hidden copies behind the chip's badge. Members whose
+    /// stacks are alike share theirs.
+    pub copies: Vec<u64>,
+    /// What the chip's count, combined-level and copy-floor steppers offer.
+    pub stack: StackView,
     /// The accessibility label: the title, then the details.
     pub description: String,
     /// The chip's own first problem, else the first problem between rows
-    /// that blames it; the anchor also speaks for its hidden copies.
+    /// that blames it; the chip also speaks for its hidden copies.
     pub problem: Option<String>,
     pub in_cluster: bool,
     /// Whether "On its own" ([`super::Edit::Detach`]) applies.
@@ -371,16 +377,16 @@ pub fn chip_description(title: &str, details: &[String]) -> String {
     }
 }
 
-/// The popover's relation lines for the chip at `index`, a member of
-/// `item`: the cluster's other members, then the combined level or the
+/// The popover's relation lines for the chip of `stack`, a member of
+/// `item`: the cluster's other members, then its combined level or its
 /// stack.
-fn relations(rows: &[Row], item: &BoardItem, index: usize) -> Vec<Relation> {
+fn relations(rows: &[Row], item: &BoardItem, stack: &ChipStack) -> Vec<Relation> {
     let mut relations = Vec::new();
     if item.cluster.is_some() {
         let peers: Vec<&str> = item
             .members
             .iter()
-            .filter(|&&member| member != index)
+            .filter(|&&member| member != stack.index)
             .map(|&member| requirement_name(&rows[member].requirement))
             .collect();
         relations.push(Relation {
@@ -388,21 +394,21 @@ fn relations(rows: &[Row], item: &BoardItem, index: usize) -> Vec<Relation> {
             text: peers.join(", "),
         });
     }
-    let count = u8::try_from(item.count()).unwrap_or(u8::MAX);
-    let depths: BTreeSet<Option<u8>> = item
-        .extras
+    let count = u8::try_from(stack.count()).unwrap_or(u8::MAX);
+    let depths: BTreeSet<Option<u8>> = stack
+        .copies
         .iter()
-        .map(|&extra| rows[extra].requirement.max_depth)
+        .map(|&copy| rows[copy].requirement.max_depth)
         .collect();
     let floors = match depths.iter().copied().collect::<Vec<_>>()[..] {
         [Some(depth)] => CopyFloors::Within(depth),
         [None] => CopyFloors::Any,
         _ => CopyFloors::Own,
     };
-    if let Some(total) = item.total {
+    if let Some(total) = stack.total {
         // A counting stack's copies keep their own floor limits; the line
-        // names them where the anchor's floor tag would not say them.
-        let anchor_depth = rows[item.anchor()].requirement.max_depth;
+        // names them where the chip's floor tag would not say them.
+        let anchor_depth = rows[stack.index].requirement.max_depth;
         let copies = (depths.iter().any(|&depth| depth != anchor_depth)).then_some(floors);
         relations.push(Relation {
             glyph: RelationGlyph::Sum,
@@ -417,10 +423,10 @@ fn relations(rows: &[Row], item: &BoardItem, index: usize) -> Vec<Relation> {
     relations
 }
 
-/// The badges `item` shows at rest.
-fn badges(item: &BoardItem) -> Badges {
-    let count = u8::try_from(item.count()).unwrap_or(u8::MAX);
-    let counting = item.total.is_some();
+/// The badges the chip of `stack` shows at rest.
+fn badges(stack: &ChipStack) -> Badges {
+    let count = u8::try_from(stack.count()).unwrap_or(u8::MAX);
+    let counting = stack.total.is_some();
     Badges {
         count: (count > 1).then(|| {
             let text = count_text(count, counting);
@@ -430,7 +436,7 @@ fn badges(item: &BoardItem) -> Badges {
                 tooltip: count_tooltip(count, counting),
             }
         }),
-        total: item.total.map(|total| Badge {
+        total: stack.total.map(|total| Badge {
             text: total_text(total),
             compact_text: compact_total_text(total),
             tooltip: total_tooltip(total),
@@ -518,7 +524,7 @@ impl<'a> Blame<'a> {
     }
 
     /// The chip problem of the row at `index`: its own, else a shared one;
-    /// `copies` (an anchor's hidden copies) speak after it, own problems
+    /// `copies` (the chip's hidden copies) speak after it, own problems
     /// first.
     fn chip(&self, index: usize, copies: &[usize]) -> Option<&'a str> {
         self.own[index]
@@ -579,20 +585,15 @@ fn item_view(
 ) -> ItemView {
     let keys = |indices: &[usize]| indices.iter().map(|&index| rows[index].key).collect();
     let chips: Vec<ChipView> = item
-        .members
+        .stacks
         .iter()
-        .map(|&index| {
-            let copies: &[usize] = if index == item.anchor() {
-                &item.extras
-            } else {
-                &[]
-            };
+        .map(|stack| {
             chip_view(
                 rows,
                 item,
-                index,
-                &candidates[index],
-                blame.chip(index, copies).map(str::to_owned),
+                stack,
+                &candidates[stack.index],
+                blame.chip(stack.index, &stack.copies).map(str::to_owned),
             )
         })
         .collect();
@@ -613,25 +614,23 @@ fn item_view(
         name: entry_name(chips.iter().map(|chip| chip.name.as_str())),
         members: keys(&item.members),
         extras: keys(&item.extras),
-        stack: stack_view(rows, item),
-        badges: badges(item),
         chips,
         problem,
     }
 }
 
-/// The chip of the row at `index`, a member of `item`.
+/// The chip of `stack`, a member of `item`.
 fn chip_view(
     rows: &[Row],
     item: &BoardItem,
-    index: usize,
+    stack: &ChipStack,
     candidates: &JoinCandidates,
     problem: Option<String>,
 ) -> ChipView {
-    let row = &rows[index];
+    let row = &rows[stack.index];
     let requirement = &row.requirement;
     let title = requirement_title(requirement);
-    let details = chip_details(requirement, item.total.is_some());
+    let details = chip_details(requirement, stack.total.is_some());
     ChipView {
         key: row.key,
         name: requirement_name(requirement).to_owned(),
@@ -645,7 +644,10 @@ fn chip_view(
         effect: effect_badge(requirement),
         uncursed: requirement.require_uncursed,
         details,
-        relations: relations(rows, item, index),
+        relations: relations(rows, item, stack),
+        badges: badges(stack),
+        copies: stack.copies.iter().map(|&copy| rows[copy].key).collect(),
+        stack: stack_view(rows, stack),
         problem,
         in_cluster: item.cluster.is_some(),
         can_detach: item.cluster.is_some(),

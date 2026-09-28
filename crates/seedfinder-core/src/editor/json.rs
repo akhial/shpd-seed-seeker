@@ -514,6 +514,9 @@ enum WireEdit {
     Remove {
         key: u64,
     },
+    RemoveOne {
+        key: u64,
+    },
     RemoveItem {
         key: u64,
     },
@@ -548,6 +551,7 @@ impl WireEdit {
             Self::Join { source, target } => Edit::Join { source, target },
             Self::Detach { key } => Edit::Detach { key },
             Self::Remove { key } => Edit::Remove { key },
+            Self::RemoveOne { key } => Edit::RemoveOne { key },
             Self::RemoveItem { key } => Edit::RemoveItem { key },
             Self::SetCount { key, count } => Edit::SetCount { key, count },
             Self::SetTotal { key, total } => Edit::SetTotal { key, total },
@@ -691,7 +695,7 @@ impl<'a> Run<'a> {
         let named: Vec<u64> = match *edit {
             Edit::Normalize => Vec::new(),
             Edit::Join { source, target } => vec![source, target],
-            Edit::Remove { key } | Edit::RemoveItem { key } => {
+            Edit::Remove { key } | Edit::RemoveOne { key } | Edit::RemoveItem { key } => {
                 return if self.unreadable.contains(&key) {
                     Touch::Remove(key)
                 } else {
@@ -1624,8 +1628,6 @@ fn item_view(view: &ItemView) -> Value {
         name,
         members,
         extras,
-        stack,
-        badges: Badges { count, total },
         chips,
         problem,
     } = view;
@@ -1637,14 +1639,6 @@ fn item_view(view: &ItemView) -> Value {
         ("name", name.as_str().into()),
         ("members", members.as_slice().into()),
         ("extras", extras.as_slice().into()),
-        ("stack", stack_value(stack)),
-        (
-            "badges",
-            object(vec![
-                ("count", badge_value(count.as_ref())),
-                ("total", badge_value(total.as_ref())),
-            ]),
-        ),
         ("chips", chips.iter().map(chip_value).collect()),
         ("problem", problem.as_deref().into()),
     ])
@@ -1664,6 +1658,9 @@ fn chip_value(chip: &ChipView) -> Value {
         uncursed,
         details,
         relations,
+        badges: Badges { count, total },
+        copies,
+        stack,
         description,
         problem,
         in_cluster,
@@ -1710,6 +1707,15 @@ fn chip_value(chip: &ChipView) -> Value {
         ("relations", relations),
         ("description", description.as_str().into()),
         ("problem", problem.as_deref().into()),
+        (
+            "badges",
+            object(vec![
+                ("count", badge_value(count.as_ref())),
+                ("total", badge_value(total.as_ref())),
+            ]),
+        ),
+        ("copies", copies.as_slice().into()),
+        ("stack", stack_value(stack)),
         ("in_cluster", (*in_cluster).into()),
         ("can_detach", (*can_detach).into()),
         ("join", join.as_slice().into()),
@@ -1756,7 +1762,7 @@ fn resin_chip(chip: &ResinChip) -> Value {
 
 /// The standalone entry of an unreadable row: a chip with no kind, no
 /// relationships and no stack, whose problem says why it cannot be read.
-/// Only `remove` and `remove_item` act on it.
+/// Only `remove`, `remove_one` and `remove_item` act on it.
 fn unreadable_item(raw: &Raw) -> Value {
     let none = || Value::Array(Vec::new());
     let stack = object(vec![
@@ -1789,6 +1795,12 @@ fn unreadable_item(raw: &Raw) -> Value {
         ("relations", none()),
         ("description", UNKNOWN_REQUIREMENT.into()),
         ("problem", raw.message.as_str().into()),
+        (
+            "badges",
+            object(vec![("count", Value::Null), ("total", Value::Null)]),
+        ),
+        ("copies", none()),
+        ("stack", stack),
         ("in_cluster", false.into()),
         ("can_detach", false.into()),
         ("join", none()),
@@ -1802,11 +1814,6 @@ fn unreadable_item(raw: &Raw) -> Value {
         ("name", UNKNOWN_REQUIREMENT.into()),
         ("members", vec![raw.key].into()),
         ("extras", none()),
-        ("stack", stack),
-        (
-            "badges",
-            object(vec![("count", Value::Null), ("total", Value::Null)]),
-        ),
         ("chips", vec![chip].into()),
         ("problem", raw.message.as_str().into()),
     ])

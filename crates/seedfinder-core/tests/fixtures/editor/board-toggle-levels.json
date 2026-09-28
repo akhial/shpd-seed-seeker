@@ -31,22 +31,25 @@
     "focus": 1,
     "items": [
       {
-        "badges": {
-          "count": {
-            "compact_text": "≤2",
-            "text": "≤2",
-            "tooltip": "Up to 2 items"
-          },
-          "total": {
-            "compact_text": "Σ≥2",
-            "text": "Σ ≥ 2",
-            "tooltip": "Levels add to at least 2 (a +0 item counts 1)"
-          }
-        },
         "blanket": false,
         "chips": [
           {
+            "badges": {
+              "count": {
+                "compact_text": "≤2",
+                "text": "≤2",
+                "tooltip": "Up to 2 items"
+              },
+              "total": {
+                "compact_text": "Σ≥2",
+                "text": "Σ ≥ 2",
+                "tooltip": "Levels add to at least 2 (a +0 item counts 1)"
+              }
+            },
             "can_detach": false,
+            "copies": [
+              2
+            ],
             "description": "Ring of Haste",
             "details": [],
             "effect": null,
@@ -65,6 +68,21 @@
                 "text": "up to 2 — levels add to ≥ 2"
               }
             ],
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": true,
+              "can_grow": true,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 2,
+              "count_max": 3,
+              "count_text": "≤2",
+              "default_total": 2,
+              "level_capacity": 8,
+              "max": 3,
+              "total": 2,
+              "total_text": "Σ ≥ 2"
+            },
             "tags": [],
             "title": "Ring of Haste",
             "trailing_tags": [],
@@ -81,22 +99,7 @@
           1
         ],
         "name": "Ring of Haste",
-        "problem": null,
-        "stack": {
-          "can_change_count": true,
-          "can_count_levels": true,
-          "can_grow": true,
-          "can_set_copy_depth": false,
-          "copy_depth": null,
-          "count": 2,
-          "count_max": 3,
-          "count_text": "≤2",
-          "default_total": 2,
-          "level_capacity": 8,
-          "max": 3,
-          "total": 2,
-          "total_text": "Σ ≥ 2"
-        }
+        "problem": null
       }
     ],
     "next_key": 3,

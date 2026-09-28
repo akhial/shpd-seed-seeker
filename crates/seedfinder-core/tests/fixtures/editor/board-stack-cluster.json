@@ -1,5 +1,5 @@
 {
-  "about": "A wand joined to a Wand of Fireblast, the cluster grown to three (the fourth web stack document).",
+  "about": "A wand joined to a Wand of Fireblast, each member grown to three: their alike stacks share one label and one set of copies (the fourth web stack document), and each chip shows ×3.",
   "envelope": "requirement_board",
   "request": {
     "edits": [
@@ -11,6 +11,11 @@
       {
         "count": 3,
         "key": 1,
+        "type": "set_count"
+      },
+      {
+        "count": 3,
+        "key": 2,
         "type": "set_count"
       }
     ],
@@ -37,18 +42,22 @@
     "focus": 2,
     "items": [
       {
-        "badges": {
-          "count": {
-            "compact_text": "×3",
-            "text": "×3",
-            "tooltip": "3 of the same kind"
-          },
-          "total": null
-        },
         "blanket": false,
         "chips": [
           {
+            "badges": {
+              "count": {
+                "compact_text": "×3",
+                "text": "×3",
+                "tooltip": "3 of the same kind"
+              },
+              "total": null
+            },
             "can_detach": true,
+            "copies": [
+              3,
+              4
+            ],
             "description": "Wand of Fireblast, exactly +3",
             "details": [
               "exactly +3"
@@ -73,6 +82,21 @@
                 "text": "3 of the same kind — the extra copies: any upgrade, any floor"
               }
             ],
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": true,
+              "copy_depth": null,
+              "count": 3,
+              "count_max": 3,
+              "count_text": "×3",
+              "default_total": 3,
+              "level_capacity": 11,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
             "tags": [
               {
                 "style": "upgrade",
@@ -85,7 +109,19 @@
             "uncursed": false
           },
           {
+            "badges": {
+              "count": {
+                "compact_text": "×3",
+                "text": "×3",
+                "tooltip": "3 of the same kind"
+              },
+              "total": null
+            },
             "can_detach": true,
+            "copies": [
+              3,
+              4
+            ],
             "description": "Any wand, exactly +3",
             "details": [
               "exactly +3"
@@ -110,6 +146,21 @@
                 "text": "3 of the same kind — the extra copies: any upgrade, any floor"
               }
             ],
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": true,
+              "copy_depth": null,
+              "count": 3,
+              "count_max": 3,
+              "count_text": "×3",
+              "default_total": 3,
+              "level_capacity": 11,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
             "tags": [
               {
                 "style": "upgrade",
@@ -134,22 +185,7 @@
           1
         ],
         "name": "Wand of Fireblast or Any wand",
-        "problem": null,
-        "stack": {
-          "can_change_count": true,
-          "can_count_levels": false,
-          "can_grow": true,
-          "can_set_copy_depth": true,
-          "copy_depth": null,
-          "count": 3,
-          "count_max": 3,
-          "count_text": "×3",
-          "default_total": 3,
-          "level_capacity": 11,
-          "max": 3,
-          "total": null,
-          "total_text": "Σ ≥ 0"
-        }
+        "problem": null
       }
     ],
     "next_key": 5,

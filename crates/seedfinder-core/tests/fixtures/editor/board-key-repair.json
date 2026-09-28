@@ -35,18 +35,21 @@
     "focus": 5,
     "items": [
       {
-        "badges": {
-          "count": {
-            "compact_text": "×2",
-            "text": "×2",
-            "tooltip": "2 of the same kind"
-          },
-          "total": null
-        },
         "blanket": false,
         "chips": [
           {
+            "badges": {
+              "count": {
+                "compact_text": "×2",
+                "text": "×2",
+                "tooltip": "2 of the same kind"
+              },
+              "total": null
+            },
             "can_detach": false,
+            "copies": [
+              7
+            ],
             "description": "Any wand, any upgrade",
             "details": [
               "any upgrade"
@@ -55,29 +58,36 @@
             "family": "wand",
             "in_cluster": false,
             "item": null,
-            "join": [],
+            "join": [
+              4,
+              6
+            ],
             "key": 5,
             "kind": "wand",
             "name": "Any wand",
             "problem": null,
-            "refuse": [
-              {
-                "key": 4,
-                "message": "Copies can only be grouped with the same item type.",
-                "reason": "mixed_category_stack"
-              },
-              {
-                "key": 6,
-                "message": "Copies can only be grouped with the same item type.",
-                "reason": "mixed_category_stack"
-              }
-            ],
+            "refuse": [],
             "relations": [
               {
                 "glyph": "times",
                 "text": "2 of the same kind — the extra copies: any upgrade, any floor"
               }
             ],
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": true,
+              "copy_depth": null,
+              "count": 2,
+              "count_max": 3,
+              "count_text": "×2",
+              "default_total": 2,
+              "level_capacity": 8,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
             "tags": [],
             "title": "Any wand",
             "trailing_tags": [],
@@ -94,32 +104,18 @@
           5
         ],
         "name": "Any wand",
-        "problem": null,
-        "stack": {
-          "can_change_count": true,
-          "can_count_levels": false,
-          "can_grow": true,
-          "can_set_copy_depth": true,
-          "copy_depth": null,
-          "count": 2,
-          "count_max": 3,
-          "count_text": "×2",
-          "default_total": 2,
-          "level_capacity": 8,
-          "max": 3,
-          "total": null,
-          "total_text": "Σ ≥ 0"
-        }
+        "problem": null
       },
       {
-        "badges": {
-          "count": null,
-          "total": null
-        },
         "blanket": false,
         "chips": [
           {
+            "badges": {
+              "count": null,
+              "total": null
+            },
             "can_detach": true,
+            "copies": [],
             "description": "Any ring, any upgrade",
             "details": [
               "any upgrade"
@@ -128,31 +124,47 @@
             "family": "ring",
             "in_cluster": true,
             "item": null,
-            "join": [],
+            "join": [
+              5
+            ],
             "key": 4,
             "kind": "ring",
             "name": "Any ring",
             "problem": null,
-            "refuse": [
-              {
-                "key": 5,
-                "message": "Copies can only be grouped with the same item type.",
-                "reason": "mixed_category_stack"
-              }
-            ],
+            "refuse": [],
             "relations": [
               {
                 "glyph": "or",
                 "text": "Any armor"
               }
             ],
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 3,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 5,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
             "tags": [],
             "title": "Any ring",
             "trailing_tags": [],
             "uncursed": false
           },
           {
+            "badges": {
+              "count": null,
+              "total": null
+            },
             "can_detach": true,
+            "copies": [],
             "description": "Any armor, any upgrade",
             "details": [
               "any upgrade"
@@ -161,24 +173,35 @@
             "family": "armor",
             "in_cluster": true,
             "item": null,
-            "join": [],
+            "join": [
+              5
+            ],
             "key": 6,
             "kind": "armor",
             "name": "Any armor",
             "problem": null,
-            "refuse": [
-              {
-                "key": 5,
-                "message": "Copies can only be grouped with the same item type.",
-                "reason": "mixed_category_stack"
-              }
-            ],
+            "refuse": [],
             "relations": [
               {
                 "glyph": "or",
                 "text": "Any ring"
               }
             ],
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 3,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 5,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
             "tags": [],
             "title": "Any armor",
             "trailing_tags": [],
@@ -194,22 +217,7 @@
           6
         ],
         "name": "Any ring or Any armor",
-        "problem": null,
-        "stack": {
-          "can_change_count": false,
-          "can_count_levels": false,
-          "can_grow": false,
-          "can_set_copy_depth": false,
-          "copy_depth": null,
-          "count": 1,
-          "count_max": 1,
-          "count_text": "×1",
-          "default_total": 1,
-          "level_capacity": 5,
-          "max": 3,
-          "total": null,
-          "total_text": "Σ ≥ 0"
-        }
+        "problem": null
       }
     ],
     "next_key": 8,
