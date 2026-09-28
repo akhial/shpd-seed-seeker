@@ -14,6 +14,7 @@ import { ARCANE_RESIN_SPRITE, itemArt } from "../../../shared/sprites/sprites";
 import type {
   BoardEdit,
   BoardItemView,
+  ChipBadges,
   ChipTag,
   ChipView,
   ResinChipView,
@@ -28,7 +29,8 @@ import { rekey } from "./board";
  * a lone chip or a cluster member alike: a stack badge (×N / ≤N) for "more
  * of the same kind", and a Σ badge for a stack whose items count their
  * levels towards one total. A cluster draws no badge of its own. Every drag
- * moves one item, so the chip in flight is drawn without its badges.
+ * moves one item, so the chip in flight is drawn without its badges, and the
+ * dimmed chip it leaves shows the badges its stack keeps.
  *
  * The board draws what the shared core answers — its entries, their words,
  * which drops join and which are refused — and sends the gestures back as
@@ -501,11 +503,32 @@ export function RequirementBoard({
         }}
       >
         <ChipFace chip={chip} />
-        {/* A chip picked up to join shows the one item that moves. */}
-        {pick?.source !== chip.key && renderBadges(chip)}
+        {/* A chip picked up to join shows the one item that moves; a dragged
+            chip's origin shows what its stack keeps while that item is away. */}
+        {pick?.source === chip.key
+          ? null
+          : drag?.source === chip.key && chip.remaining_badges
+            ? renderRemainingBadges(chip.remaining_badges)
+            : renderBadges(chip)}
       </div>
     );
   };
+
+  /** The badges a dragged chip's origin keeps: shown, never stepped. */
+  const renderRemainingBadges = ({ count, total }: ChipBadges): ReactNode => (
+    <>
+      {count && (
+        <span className="d1-stack-badge" title={count.tooltip}>
+          {count.text}
+        </span>
+      )}
+      {total && (
+        <span className="d1-stack-badge" title={total.tooltip}>
+          {total.text}
+        </span>
+      )}
+    </>
+  );
 
   /** A chip's stack (×N / ≤N) and combined-level (Σ) badges with their steppers. */
   const renderBadges = (chip: ChipView): ReactNode => {

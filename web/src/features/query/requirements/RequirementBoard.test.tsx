@@ -421,6 +421,61 @@ it("draws the ghost with the chip's whole face: its trailing tags and uncursed c
   await release(frost);
 });
 
+it("leaves a dimmed origin showing what its stack keeps, and its badges again after", async () => {
+  // Ring of Energy +4 ×3: the stack's copies are bare repeats of its first ring.
+  const ENERGY = { kind: "ring", item: "ring_energy" };
+  await render(
+    JSON.stringify({ requirements: [{ ...ENERGY, upgrade: 4 }, ENERGY, ENERGY, FROST] }),
+  );
+  expect(badges("Ring of Energy")).toEqual(["×3"]);
+  const energy = chip("Ring of Energy");
+  await dragOver(energy, chip("Wand of Frost"));
+  // The origin keeps two rings; the ghost is the one that moves.
+  expect(energy.classList.contains("d1-chip-dragging")).toBe(true);
+  expect(badges("Ring of Energy")).toEqual(["×2"]);
+  expect(energy.querySelector('[title="2 of the same kind"]')).not.toBeNull();
+  expect(host.querySelector(".d1-chip-ghost .d1-stack-badge")).toBeNull();
+  // A cancelled drag puts the chip's own badges back.
+  await act(async () => energy.dispatchEvent(pointer("pointercancel", 60, 60)));
+  expect(energy.classList.contains("d1-chip-dragging")).toBe(false);
+  expect(badges("Ring of Energy")).toEqual(["×3"]);
+
+  // A combined level the two rings left can still reach stays on the origin.
+  await openMenu("Ring of Energy");
+  await click("ΣCount levels together");
+  expect(badges("Ring of Energy")).toEqual(["≤3", "Σ ≥ 3"]);
+  await dragOver(chip("Ring of Energy"), chip("Wand of Frost"));
+  expect(badges("Ring of Energy")).toEqual(["≤2", "Σ ≥ 3"]);
+  await act(async () => window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })));
+  expect(badges("Ring of Energy")).toEqual(["≤3", "Σ ≥ 3"]);
+});
+
+it("leaves a member's origin as remove_one would, and a chip with no copies as it was", async () => {
+  // Two Frosts, or one Disintegration.
+  await render(
+    JSON.stringify({
+      requirements: [
+        { any_of: [{ ...FROST, identity_group: 1 }, DISINTEGRATION] },
+        { kind: "wand", identity_group: 1 },
+      ],
+    }),
+  );
+  const frost = chip("Wand of Frost");
+  expect(badges("Wand of Frost")).toEqual(["×2"]);
+  await dragOver(frost, host.querySelector('[data-drop="board"]'));
+  expect(badges("Wand of Frost")).toEqual([]);
+  await act(async () => frost.dispatchEvent(pointer("pointercancel", 60, 60)));
+  expect(badges("Wand of Frost")).toEqual(["×2"]);
+
+  // Disintegration has no copies: the whole chip leaves its placeholder.
+  const disintegration = chip("Wand of Disintegration");
+  await dragOver(disintegration, host.querySelector('[data-drop="board"]'));
+  expect(disintegration.classList.contains("d1-chip-dragging")).toBe(true);
+  expect(badges("Wand of Disintegration")).toEqual([]);
+  expect(badges("Wand of Frost")).toEqual(["×2"]);
+  await act(async () => disintegration.dispatchEvent(pointer("pointercancel", 60, 60)));
+});
+
 it("keeps a stacked target's stack as a member, and detaches one copy of it", async () => {
   await render(JSON.stringify({ requirements: [FROST, FROST, DISINTEGRATION] }));
   const disintegration = chip("Wand of Disintegration");

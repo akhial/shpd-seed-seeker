@@ -230,11 +230,17 @@ export interface ChipTag {
   tooltip: string | null;
 }
 
-/** A stack (×N / ≤N) or combined-level (Σ) badge at rest. */
+/** A stack (×N / ≤N) or combined-level (Σ) badge. */
 export interface StackBadge {
   text: string;
   compact_text: string;
   tooltip: string;
+}
+
+/** A chip's stack (×N / ≤N) and combined-level (Σ) badges, each absent when not shown. */
+export interface ChipBadges {
+  count: StackBadge | null;
+  total: StackBadge | null;
 }
 
 /** What a chip's count and combined-level steppers offer. */
@@ -278,7 +284,12 @@ export interface ChipView {
   description: string;
   problem: string | null;
   /** The badges at rest; a cluster member's are its own, drawn on its chip. */
-  badges: { count: StackBadge | null; total: StackBadge | null };
+  badges: ChipBadges;
+  /**
+   * The badges the chip keeps while one item is lifted away, which a drag's
+   * origin shows; null when the chip has no copies and the whole chip leaves.
+   */
+  remaining_badges: ChipBadges | null;
   /** The hidden copies behind the chip's badge; members whose stacks are alike share theirs. */
   copies: number[];
   stack: StackView;
