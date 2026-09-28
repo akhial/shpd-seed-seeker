@@ -977,10 +977,11 @@ private struct QueryView: View {
 /**
  The requirement board: every requirement is a chip; drop one chip onto
  another for an either/or cluster, drag a chip out of its cluster to make it
- standalone again. Everything else is a property of the chip itself, a
- cluster member's included — a stack badge (×N / ≤N) for "more of the same
- kind", and a Σ badge for a stack on its own whose items count their levels
- towards one total.
+ standalone again. A drag moves one item, so a ×3 chip dragged away leaves
+ ×2 behind. Everything else is a property of the chip itself, a cluster
+ member's included — a stack badge (×N / ≤N) for "more of the same kind",
+ and a Σ badge for a stack on its own whose items count their levels towards
+ one total.
 
  The board draws what the shared core's ``RequirementBoard`` says — the
  folded entries, every chip's words, what each chip may join — and every
@@ -1040,15 +1041,16 @@ private struct RequirementBoardView: View {
         // bin only exists while a drag does, and a drag that ends off the
         // board leaves nothing to tell us so.
         .background(Color.clear.contentShape(Rectangle()).onTapGesture { dragging = nil })
-        // Dropped on the board rather than on a chip: how a cluster member goes
-        // back to standing on its own, while a lone chip stays where it is. It
-        // is also the catch-all that puts the bin away when a drag ends
-        // without landing anywhere.
+        // Dropped on the board rather than on a chip: how one item of a
+        // cluster member goes back to standing on its own, while a lone chip
+        // stays where it is. The core may refuse it (every group label in
+        // use), and says why. It is also the catch-all that puts the bin away
+        // when a drag ends without landing anywhere.
         .dropDestination(for: String.self) { payload, _ in
             dragging = nil
             guard let source = draggedKey(payload), let chip = board.chip(source), chip.canDetach,
                   board.item(holding: source)?.blanket == blanket else { return false }
-            return perform([.detach(source)]) == nil
+            return run([.detach(source)]) == nil
         }
     }
 
@@ -1091,8 +1093,9 @@ private struct RequirementBoardView: View {
         }
     }
 
-    /// The bin: only there while a chip is in flight, and the pointer's only
-    /// way to delete one.
+    /// The bin: only there while a chip is in flight. A drag moves one item,
+    /// so the bin takes one: a ×3 chip is left ×2, a chip of one item goes.
+    /// The chip's "Remove" and the delete key take its whole stack.
     private var bin: some View {
         HStack(spacing: 6) {
             Image(systemName: "xmark.circle")
@@ -1110,7 +1113,7 @@ private struct RequirementBoardView: View {
             dragging = nil; overBin = false
             if payload.first == arcaneResinItem.id { removeResin(); return true }
             guard let source = draggedKey(payload), board.chip(source) != nil else { return false }
-            return perform([.remove(source)]) == nil
+            return run([.removeOne(source)]) == nil
         } isTargeted: { overBin = $0 }
     }
 }
@@ -1194,6 +1197,14 @@ private struct ChipView: View {
         .onDrag {
             dragging = .item(chip.key)
             return NSItemProvider(object: NSString(string: "\(chip.key)"))
+        } preview: {
+            // A drag moves one item, so what is lifted is the chip alone:
+            // no ×N, no Σ.
+            face
+                .padding(.horizontal, 7)
+                .frame(height: 30)
+                .background(Color(nsColor: .controlBackgroundColor), in: Capsule())
+                .overlay(Capsule().strokeBorder(Color.secondary.opacity(0.35), lineWidth: 1))
         }
         .dropDestination(for: String.self) { payload, _ in
             onDrop(payload, [chip.key])

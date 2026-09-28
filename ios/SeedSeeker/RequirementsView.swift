@@ -330,7 +330,9 @@ struct RequirementsView: View {
         return chip.inCluster ? AppTheme.seed.opacity(0.04) : .white.opacity(0.015)
     }
 
-    private func chipContent(_ chip: BoardChip) -> some View {
+    /// A chip's face, with its stack badges unless `badges` is false: a
+    /// lifted chip is one item, whatever its stack, so it shows neither.
+    private func chipContent(_ chip: BoardChip, badges: Bool = true) -> some View {
         HStack(spacing: compactChips ? 6 : 8) {
             RequirementsChipSprite(chip: chip, size: compactChips ? 23 : 28)
             Text(chip.name)
@@ -344,8 +346,8 @@ struct RequirementsView: View {
                 if chip.uncursed {
                     uncursedTag
                 }
-                if memberCountBadge(chip) == nil, let badge = chip.countBadge { tag(badge.compactText) }
-                if let badge = chip.totalBadge { tag(badge.compactText) }
+                if badges, memberCountBadge(chip) == nil, let badge = chip.countBadge { tag(badge.compactText) }
+                if badges, let badge = chip.totalBadge { tag(badge.compactText) }
                 RequirementEffectBadge(effect: chip.effect, isWildcard: chip.item == nil)
                 ForEach(chip.trailingTags, id: \.self) { value in tag(value.text, upgrade: value.isUpgrade) }
             }
@@ -393,7 +395,8 @@ struct RequirementsView: View {
         // rather than on every frame of the drag.
         let lifted = key.flatMap { shown.chip($0) }
         if let lifted {
-            interaction.preview = AnyView(chipContent(lifted))
+            // A drag moves one item: the chip alone, without ×N or Σ.
+            interaction.preview = AnyView(chipContent(lifted, badges: false))
         } else if let resin = shown.resin {
             interaction.preview = AnyView(resinContent(resin))
         }
@@ -445,7 +448,7 @@ struct RequirementsView: View {
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(200))
                 guard generation == liftGeneration else { return }
-                if let key = current.chip?.key { remove(key: key) } else { removeResin() }
+                if let key = current.chip?.key { removeOne(key: key) } else { removeResin() }
                 resetLift()
             }
         } else if let target = hoverKey, let source = current.chip, let refusal = source.refusal(onto: target) {
@@ -610,12 +613,29 @@ struct RequirementsView: View {
         if let refusal = apply([.join(source: key, target: target)])?.refusal { show(refusal.message) }
     }
 
+    /// Takes one item of a member out on its own; the core may refuse it
+    /// when every group label is in use.
     private func detach(key: Int64) {
-        apply([.detach(key)])
+        warn(apply([.detach(key)])?.refusal)
     }
 
+    /// Removes the chip with its whole stack: its sheet's and VoiceOver's
+    /// Remove.
     private func remove(key: Int64) {
         apply([.remove(key)])
+    }
+
+    /// Removes one item of the chip: what the remove target takes, since a
+    /// drag moves one item.
+    private func removeOne(key: Int64) {
+        warn(apply([.removeOne(key)])?.refusal)
+    }
+
+    /// Says why the core refused an edit, with a warning haptic.
+    private func warn(_ refusal: BoardRefusal?) {
+        guard let refusal else { return }
+        UINotificationFeedbackGenerator().notificationOccurred(.warning)
+        show(refusal.message)
     }
 
     /// Says why a drop could not join, in the hint's place, for a moment.

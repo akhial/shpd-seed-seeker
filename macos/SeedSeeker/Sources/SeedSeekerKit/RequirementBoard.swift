@@ -6,12 +6,19 @@ import Foundation
 public enum BoardEdit: Sendable {
     /// Rewrites the list into its canonical encoding, once, as it is loaded.
     case normalize
-    /// Makes `source` an either/or alternative of `target`.
+    /// Makes one item of `source` an either/or alternative of `target`: the
+    /// source's own row moves, and the rest of its stack stays where it was,
+    /// one fewer. A stacked target keeps its stack as a member.
     case join(source: Int64, target: Int64)
-    /// Takes a cluster member out on its own; it leaves the stack behind.
+    /// Takes one item of a cluster member out on its own; the rest of its
+    /// stack stays in the cluster, one fewer.
     case detach(Int64)
-    /// Removes a cluster member, or a chip's whole entry.
+    /// Removes the chip with its whole stack — a cluster member with its own
+    /// copies, a lone chip's whole entry: what a chip's "Remove" sends.
     case remove(Int64)
+    /// Removes one item of the chip — what the remove target sends: a ×N
+    /// stack becomes ×(N−1), and a chip of one item goes.
+    case removeOne(Int64)
     /// Removes the whole entry holding the row: members and hidden copies.
     case removeItem(Int64)
     /// How many items the chip asks for — a lone chip or one cluster member.
@@ -33,6 +40,8 @@ public enum BoardEdit: Sendable {
             return ["type": "detach", "key": key]
         case .remove(let key):
             return ["type": "remove", "key": key]
+        case .removeOne(let key):
+            return ["type": "remove_one", "key": key]
         case .removeItem(let key):
             return ["type": "remove_item", "key": key]
         case .setCount(let key, let count):
