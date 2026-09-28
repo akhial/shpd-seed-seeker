@@ -316,10 +316,10 @@ pub fn resin_tooltip(resin: &ResinChip) -> String {
 #[cfg(test)]
 mod tests {
     use serde_json::{Value, json};
-    use shpd_seedfinder_core::catalog::{ItemId, ItemKind};
+    use shpd_seedfinder_core::catalog::{self, ItemId, ItemKind};
     use shpd_seedfinder_core::editor::{
-        self, Badge, Badges, BoardView, ChipView, Edit, EditResult, ItemView, Refusal, ResinAmount,
-        ResinState, Row, TagStyle, labels,
+        self, Badge, Badges, BoardView, ChipFace, ChipView, Edit, EditResult, ItemView, Refusal,
+        ResinAmount, ResinState, Row, TagStyle, labels,
     };
     use shpd_seedfinder_core::query::{
         ArcaneResinFilter, LevelSum, Requirement, UpgradeRequirement,
@@ -456,21 +456,21 @@ mod tests {
         json!({ "count": badge(&badges.count), "total": badge(&badges.total) })
     }
 
-    fn assert_chip_matches(name: &str, chip: &ChipView, expected: &Value) {
-        assert_eq!(chip.key, expected["key"], "{name}");
-        assert_eq!(chip.name, expected["name"], "{name}: name");
-        assert_eq!(chip.title, expected["title"], "{name}: title");
-        assert_eq!(chip.description, expected["description"], "{name}");
-        assert_eq!(json!(chip.problem), expected["problem"], "{name}");
-        assert_eq!(tags(&chip.tags), expected["tags"], "{name}: tags");
+    /// The fields of a face the board draws, a chip's own or the one a
+    /// drag of it lifts, against the envelope's.
+    fn assert_face_matches(name: &str, face: &ChipFace, expected: &Value) {
+        assert_eq!(face.name, expected["name"], "{name}: name");
+        assert_eq!(face.title, expected["title"], "{name}: title");
+        assert_eq!(face.description, expected["description"], "{name}");
+        assert_eq!(tags(&face.tags), expected["tags"], "{name}: tags");
         assert_eq!(
-            tags(&chip.trailing_tags),
+            tags(&face.trailing_tags),
             expected["trailing_tags"],
             "{name}: trailing tags"
         );
-        assert_eq!(json!(chip.details), expected["details"], "{name}: details");
+        assert_eq!(json!(face.details), expected["details"], "{name}: details");
         assert_eq!(
-            json!(chip.effect.as_ref().map(|effect| &effect.label)),
+            json!(face.effect.as_ref().map(|effect| &effect.label)),
             if expected["effect"].is_null() {
                 Value::Null
             } else {
@@ -478,7 +478,27 @@ mod tests {
             },
             "{name}: effect"
         );
-        assert_eq!(chip.uncursed, expected["uncursed"], "{name}");
+        assert_eq!(face.uncursed, expected["uncursed"], "{name}");
+        assert_eq!(
+            json!(face.item.map(|item| catalog::item(item).stable_id)),
+            expected["item"],
+            "{name}: item"
+        );
+    }
+
+    fn assert_chip_matches(name: &str, chip: &ChipView, expected: &Value) {
+        assert_eq!(chip.key, expected["key"], "{name}");
+        assert_face_matches(name, &chip.face(), expected);
+        assert_eq!(json!(chip.problem), expected["problem"], "{name}");
+        // The face a drag of the chip flies as: a bare copy's when it has
+        // copies, none when the chip moves whole.
+        match (&chip.lifted, &expected["lifted"]) {
+            (None, Value::Null) => {}
+            (Some(lifted), expected @ Value::Object(_)) => {
+                assert_face_matches(&format!("{name}: lifted"), lifted, expected);
+            }
+            (lifted, expected) => panic!("{name}: lifted {lifted:?}, expected {expected}"),
+        }
         assert_eq!(chip.in_cluster, expected["in_cluster"], "{name}");
         // Every badge and stepper belongs to a chip, a cluster member's too,
         // and so do the badges its origin shows while one item is lifted.
@@ -521,7 +541,7 @@ mod tests {
     #[test]
     fn the_typed_editor_gives_the_golden_board_answers_through_the_app_codec() {
         let replayed = fixtures("requirement_board");
-        assert_eq!(replayed.len(), 40);
+        assert_eq!(replayed.len(), 43);
         for Fixture {
             name,
             request,

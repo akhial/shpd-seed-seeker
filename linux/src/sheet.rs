@@ -441,7 +441,7 @@ mod tests {
     }
 
     /// The preview chip, by the fields the envelope's chip shares with the
-    /// board's.
+    /// board's, and the face a drag of it would lift.
     fn preview(chip: &ChipView) -> Value {
         json!([
             chip.key,
@@ -449,7 +449,9 @@ mod tests {
             chip.title,
             tags(&chip.tags),
             chip.details,
-            chip.description
+            chip.description,
+            // A preview is never dragged: it lifts nothing.
+            chip.lifted.as_ref().map(|face| &face.description)
         ])
     }
 
@@ -463,7 +465,8 @@ mod tests {
             chip["title"],
             chip["tags"],
             chip["details"],
-            chip["description"]
+            chip["description"],
+            chip["lifted"]["description"]
         ])
     }
 
