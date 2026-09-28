@@ -333,7 +333,9 @@ public struct BoardStack: Hashable, Sendable {
     /// `Σ ≥ 5`.
     public let totalText: String
 
-    /// The counts the stepper offers: up to ``max`` while the entry can grow,
+    /// The counts the stepper offers, read off ``canGrow`` and ``max`` as
+    /// every app reads them (the web disables its increment on
+    /// `!can_grow || count >= max`): up to ``max`` while the entry can grow,
     /// else only down from its count.
     public var countRange: ClosedRange<Int> { 1...Swift.max(1, canGrow ? max : count) }
     /// The totals the combined-level stepper offers.

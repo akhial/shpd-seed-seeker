@@ -230,6 +230,28 @@ final class RequirementEditorTests: XCTestCase {
         XCTAssertEqual(shrunk.item(holding: 1)?.stack.count, 1)
     }
 
+    /// A count the board offers can still be refused when every group label
+    /// is in use; the menus and steppers show the message, and nothing changes.
+    func testACountWithNoFreeGroupIsRefused() throws {
+        var rows: [ItemRequirement] = []
+        for group in 1...4 {
+            for copy in 0..<2 {
+                rows.append(try ItemRequirement(key: Int64(8 + 2 * group + copy), item: nil, upgrade: 0,
+                                                kind: .armor, upgradeMatch: .any, identityGroup: group))
+            }
+        }
+        rows.append(try requirement(1, item: "spear", alternativeGroup: 1))
+        rows.append(try requirement(2, item: "mace", alternativeGroup: 1))
+        let cluster = try XCTUnwrap(RequirementBoard.of(rows).item(holding: 1))
+        XCTAssertTrue(cluster.stack.canGrow)
+        let refused = try XCTUnwrap(RequirementBoard.apply([.setCount(1, 2)], to: rows))
+        XCTAssertFalse(refused.changed)
+        XCTAssertEqual(refused.rows, rows)
+        XCTAssertEqual(refused.refusal?.reason, "no_free_group")
+        XCTAssertEqual(refused.refusal?.message,
+                       "Every group label is in use. Remove a stack or a combined level first.")
+    }
+
     /// A stack of wands kept out of Auto resin grows plain copies — only the
     /// anchor is excluded — so it folds into one chip and stays searchable.
     func testAnExcludedWandStackFoldsIntoOneChip() throws {

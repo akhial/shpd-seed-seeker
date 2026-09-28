@@ -1002,7 +1002,7 @@ private struct RequirementBoardView: View {
     /// The key of the chip in flight — also what says the bin should show.
     @State private var dragging: RequirementChipDrag?
     @State private var overBin = false
-    /// Why the last drop could not join, shown under the chips for a moment.
+    /// Why the last drop or edit was refused, shown under the chips for a moment.
     @State private var notice: String?
     @State private var noticeReset: Task<Void, Never>?
 
@@ -1012,11 +1012,11 @@ private struct RequirementBoardView: View {
                 ForEach(board.section(blanket: blanket)) { item in
                     if item.cluster == nil, let chip = item.chips.first {
                         ChipView(board: board, chip: chip, item: item, inCluster: false,
-                                 dragging: $dragging, onOpen: onOpen, perform: perform,
+                                 dragging: $dragging, onOpen: onOpen, perform: { run($0) },
                                  onDrop: { drop($0, onto: $1) })
                     } else {
                         ClusterView(board: board, item: item, dragging: $dragging,
-                                    onOpen: onOpen, perform: perform,
+                                    onOpen: onOpen, perform: { run($0) },
                                     onDrop: { drop($0, onto: $1) })
                     }
                 }
@@ -1064,11 +1064,20 @@ private struct RequirementBoardView: View {
         dragging = nil
         guard let source = draggedKey(payload), let chip = board.chip(source) else { return false }
         if let target = targets.first(where: { chip.join.contains($0) }) {
-            if let refusal = perform([.join(source: source, target: target)]) { show(refusal.message) }
+            _ = run([.join(source: source, target: target)])
             return true
         }
         if let refusal = chip.refuse.first(where: { targets.contains($0.key) }) { show(refusal.message) }
         return false
+    }
+
+    /// Runs the edits a drop, a menu, a stepper or the delete key sends, and
+    /// says under the chips why the core refused one — a count or combined
+    /// level with every group label in use, say.
+    private func run(_ edits: [BoardEdit]) -> BoardRefusal? {
+        let refusal = perform(edits)
+        if let refusal { show(refusal.message) }
+        return refusal
     }
 
     private func show(_ message: String) {
@@ -1365,7 +1374,9 @@ private struct StackBadgesView: View {
                         // A hand-written document can hand a mixed cluster a
                         // stack; it may then only be shrunk, never grown.
                         Stepper(value: countBinding, in: item.stack.countRange) {
-                            Text("How many: \(item.stack.count)").monospacedDigit()
+                            LabeledContent("How many") {
+                                Text(item.stack.countText).monospacedDigit().foregroundStyle(.secondary)
+                            }
                         }
                         .padding(14).frame(width: 200)
                     }
@@ -1376,7 +1387,9 @@ private struct StackBadgesView: View {
                     .help(badge.tooltip)
                     .popover(isPresented: $editingTotal, arrowEdge: .bottom) {
                         Stepper(value: totalBinding, in: item.stack.totalRange) {
-                            Text("Combined level: ≥ \(item.stack.total ?? 1)").monospacedDigit()
+                            LabeledContent("Combined level") {
+                                Text(item.stack.totalText).monospacedDigit().foregroundStyle(.secondary)
+                            }
                         }
                         .padding(14).frame(width: 210)
                     }
@@ -1701,6 +1714,8 @@ private struct RequirementEditor: View {
                 Text("Upgrade each kept wand to +3. Excluded wands and extra copies reserved for reforging need no resin.")
                     .foregroundStyle(.secondary)
             } else {
+                // The form gives the amount but no bounds; the stepper keeps
+                // to the amounts the query format holds.
                 Stepper(value: number(form.resin.wholeAmount ?? 1) { .resinAmount(Double($0)) },
                         in: 1...65_535) {
                     LabeledContent("Minimum resin") {
@@ -1756,8 +1771,7 @@ private struct RequirementEditor: View {
                                in: Double(form.stack.countLevels.min)...Double(form.stack.countLevels.max),
                                step: 1)
                     }
-                    Text("Up to \(form.stack.count) of the item, each counting its upgrade plus "
-                         + "one; any subset reaching the total satisfies it.")
+                    Text("Each item counts its upgrade plus one; any subset reaching the total satisfies it.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
