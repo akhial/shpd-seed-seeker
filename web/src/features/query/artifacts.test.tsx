@@ -4,11 +4,22 @@ import { beforeAll, describe, expect, it } from "vite-plus/test";
 import { displayedUpgrade, itemsForKind } from "../../shared/game/catalog";
 import { fromQueryJson, maxUpgradeOf, toQueryDocument, validateRequirement } from "./query";
 import init, { analyze_query, filter_seeds, scout } from "../../engine/pkg/seedfinder.js";
-import type { ScoutResult } from "../../engine/types";
+import type { BoardEdit, QueryState, ScoutResult } from "../../engine/types";
 import { RequirementEditor, namedItemEditorRequirement } from "./requirements/RequirementEditor";
 import { ScoutPanel } from "../scout/ScoutPanel";
 import { availableArtifactIds } from "../scout/choices";
-import { boardItems, canStack, joinAlternatives } from "./requirements/relations";
+import { editBoard, requirementBoardOf } from "./requirements/board";
+
+const boardOf = (query: QueryState) => {
+  const answer = requirementBoardOf(query);
+  if (!answer.ok) throw new Error(answer.error);
+  return answer.value;
+};
+const edited = (query: QueryState, edits: BoardEdit[]): QueryState => {
+  const answer = editBoard(query, edits);
+  if (!answer.ok) throw new Error(answer.error);
+  return { ...query, requirements: answer.value.requirements };
+};
 
 beforeAll(async () => {
   await init({
@@ -148,22 +159,26 @@ describe("artifact search and scout", () => {
     expect(html).toContain('aria-valuetext="19"');
     const repeats = fromQueryJson(
       '{"requirements":[{"item":"ethereal_chains"},{"item":"ethereal_chains","max_depth":14}]}',
-    ).requirements;
-    expect(boardItems(repeats)).toHaveLength(2);
-    const alternatives = joinAlternatives(repeats, 0, 1);
-    expect(boardItems(alternatives)).toHaveLength(1);
+    );
+    expect(boardOf(repeats).items).toHaveLength(2);
+    const alternatives = edited(repeats, [{ type: "join", source: 1, target: 2 }]);
+    expect(boardOf(alternatives).items).toHaveLength(1);
     expect(
-      alternatives.every((r) => r.item === "ethereal_chains" && r.identityGroup === undefined),
+      alternatives.requirements.every(
+        (r) => r.item === "ethereal_chains" && r.identityGroup === undefined,
+      ),
     ).toBe(true);
   });
 
   it("searches artifact OR groups and preserves individual floor limits", () => {
-    const state = fromQueryJson(
-      '{"requirements":[{"item":"unstable_spellbook","max_depth":14},{"item":"ethereal_chains","max_depth":4}]}',
+    const state = edited(
+      fromQueryJson(
+        '{"requirements":[{"item":"unstable_spellbook","max_depth":14},{"item":"ethereal_chains","max_depth":4}]}',
+      ),
+      [{ type: "join", source: 2, target: 1 }],
     );
-    state.requirements = joinAlternatives(state.requirements, 1, 0);
     const document = toQueryDocument(state);
-    expect(canStack(state.requirements, boardItems(state.requirements)[0])).toBe(false);
+    expect(boardOf(state).items[0].stack.can_grow).toBe(false);
     expect(
       fromQueryJson(JSON.stringify(document))
         .requirements.map((r) => r.maxDepth)

@@ -16,6 +16,7 @@ import {
   FLOOR_LIMIT_OPTIONS,
   emptyRequirement,
   fromQueryJson,
+  requirementToDocument,
   toQueryJson,
 } from "./query";
 import type { ValidationResult } from "./query";
@@ -34,21 +35,15 @@ import { encodeShareLink } from "../../engine/wasm";
 import { WANDMAKER_QUESTS } from "../../engine/types";
 import type {
   AnalysisResult,
+  BoardEdit,
   ChallengeName,
   QueryState,
   RequirementState,
   WandmakerQuest,
 } from "../../engine/types";
 import { RequirementBoard } from "./requirements/RequirementBoard";
-import type { StackShape } from "./requirements/RequirementBoard";
-import {
-  applyEdit,
-  boardCount,
-  boardItems,
-  removeItem,
-  removeMember,
-  replaceRequirementSection,
-} from "./requirements/relations";
+import type { BoardEditReport, StackShape } from "./requirements/RequirementBoard";
+import { editBoard, requirementBoardOf } from "./requirements/board";
 import { RequirementEditor } from "./requirements/RequirementEditor";
 import { SliderRow } from "../../shared/ui/primitives";
 
@@ -57,10 +52,24 @@ const patchQuery = (patch: Partial<QueryState>) =>
 const cloneQuery = (query: QueryState): QueryState => fromQueryJson(toQueryJson(query));
 
 interface EditorSession {
-  index: number | null;
+  /** The row the editor opened on; null for a new requirement or the resin chip. */
+  key: number | null;
   requirement: RequirementState;
   stack: StackShape;
   resin?: boolean;
+}
+
+/**
+ * Applies board edits to the current query, writing the requirements back
+ * only when they changed.
+ */
+function applyBoardEdits(edits: BoardEdit[]): BoardEditReport {
+  const state = queryStore.state;
+  const answer = editBoard(state, edits);
+  if (!answer.ok) return { notice: answer.error, rekeyed: [] };
+  const { changed, requirements, refused, rekeyed } = answer.value;
+  if (changed) queryStore.setState(() => ({ ...state, requirements }));
+  return { notice: refused?.message ?? null, rekeyed };
 }
 
 export function QueryPanel({
@@ -89,6 +98,7 @@ export function QueryPanel({
   const [namingPreset, setNamingPreset] = useState(false);
   const [presetName, setPresetName] = useState("");
   const [editor, setEditor] = useState<EditorSession | null>(null);
+  const [editorRefusal, setEditorRefusal] = useState<string | undefined>(undefined);
   const [linkCopied, setLinkCopied] = useState(false);
   const [blanketHelpOpen, setBlanketHelpOpen] = useState(false);
 
@@ -147,11 +157,16 @@ export function QueryPanel({
     savePresets(next);
   };
 
-  const setRequirements = (blanket: boolean, requirements: RequirementState[]) => {
-    queryStore.setState((state) => ({
-      ...state,
-      requirements: replaceRequirementSection(state.requirements, blanket, requirements),
-    }));
+  // The board of both sections and its header counts read one answer of the
+  // shared core, drawn once per change of the requirements. A failure
+  // surfaces in the query pane's error boundary.
+  const drawn = requirementBoardOf(query);
+  if (!drawn.ok) throw new Error(drawn.error);
+  const { items, counts, resin: resinChip } = drawn.value;
+
+  const openEditor = (session: EditorSession) => {
+    setEditorRefusal(undefined);
+    setEditor(session);
   };
 
   const commitRequirement = (
@@ -161,18 +176,29 @@ export function QueryPanel({
     total: number | undefined,
     copyDepth: number | undefined,
   ) => {
-    queryStore.setState((state) => ({
-      ...state,
-      ...(session.resin ? { arcaneResin: undefined, arcaneResinFilter: undefined } : {}),
-      requirements: applyEdit(
-        state.requirements,
-        session.index,
-        requirement,
+    const state = queryStore.state;
+    const answer = editBoard(state, [
+      {
+        type: "save",
+        key: session.key,
+        requirement: requirementToDocument(requirement),
         count,
-        total,
-        copyDepth,
-      ),
-    }));
+        total: total ?? null,
+        copy_depth: copyDepth ?? null,
+      },
+    ]);
+    if (!answer.ok || answer.value.refused) {
+      setEditorRefusal(answer.ok ? answer.value.refused?.message : answer.error);
+      return;
+    }
+    const { changed, requirements } = answer.value;
+    // Saving a chip unchanged keeps the query as it was.
+    if (changed || session.resin)
+      queryStore.setState(() => ({
+        ...state,
+        ...(session.resin ? { arcaneResin: undefined, arcaneResinFilter: undefined } : {}),
+        requirements,
+      }));
     setEditor(null);
   };
 
@@ -187,7 +213,7 @@ export function QueryPanel({
 
   const floorCount = query.floorRequirements?.length ?? 0;
   const slotTotal =
-    boardCount(query.requirements) + Number(Boolean(query.arcaneResin)) + floorCount;
+    counts.ordinary + counts.blanket + Number(Boolean(query.arcaneResin)) + floorCount;
   const challengeCount = query.challenges.length;
   const wandmakerCount = Number(Boolean(query.wandmakerQuest));
   const blacksmithCount = Number(query.requireBlacksmith) + Number(query.excludeBlacksmithRewards);
@@ -330,21 +356,17 @@ export function QueryPanel({
         </section>
 
         {[false, true].map((blanket) => {
-          const requirements = query.requirements.filter(
-            (requirement) => Boolean(requirement.blanket) === blanket,
-          );
-          const count = boardCount(requirements);
+          const count = blanket ? counts.blanket : counts.ordinary;
           const board = (
             <RequirementBoard
-              requirements={requirements}
+              items={items.filter((item) => item.blanket === blanket)}
               resin={
-                !blanket && query.arcaneResin
+                !blanket && query.arcaneResin && resinChip
                   ? {
-                      amount: query.arcaneResin!,
-                      filter: query.arcaneResinFilter,
+                      chip: resinChip,
                       onEdit: () =>
-                        setEditor({
-                          index: null,
+                        openEditor({
+                          key: null,
                           resin: true,
                           requirement: {
                             ...emptyRequirement("wand"),
@@ -359,17 +381,14 @@ export function QueryPanel({
                     }
                   : undefined
               }
-              onChange={(next) => setRequirements(blanket, next)}
-              onEdit={(index, stack) =>
-                setEditor({
-                  index: query.requirements.indexOf(requirements[index]),
-                  requirement: requirements[index],
-                  stack,
-                })
-              }
+              onEdits={applyBoardEdits}
+              onEdit={(key, stack) => {
+                const requirement = query.requirements.find((entry) => entry.key === key);
+                if (requirement) openEditor({ key, requirement, stack });
+              }}
               onAdd={() =>
-                setEditor({
-                  index: null,
+                openEditor({
+                  key: null,
                   requirement: {
                     ...emptyRequirement(
                       blanket
@@ -662,36 +681,39 @@ export function QueryPanel({
 
       {editor && (
         <RequirementEditor
-          key={editor.index ?? "new"}
+          key={editor.key ?? "new"}
           requirement={editor.requirement}
-          otherRequirements={query.requirements.filter((_, index) => index !== editor.index)}
-          isNew={editor.index === null && !editor.resin}
+          otherRequirements={query.requirements.filter(
+            (requirement) => requirement.key !== editor.key,
+          )}
+          isNew={editor.key === null && !editor.resin}
           stack={editor.stack}
+          refusal={editorRefusal}
           resinAmount={query.arcaneResin}
           resinFilter={query.arcaneResinFilter}
           onSaveResin={(amount, filter) => {
-            queryStore.setState((state) => {
-              const item = boardItems(state.requirements).find((item) =>
-                item.members.includes(editor.index ?? -1),
-              );
-              return {
-                ...state,
-                arcaneResin: amount,
-                arcaneResinFilter:
-                  !filter.uncursed ||
-                  filter.maxDepth !== undefined ||
-                  filter.source ||
-                  filter.includeMageWand
-                    ? filter
-                    : undefined,
-                requirements:
-                  item && editor.index !== null
-                    ? item.cluster !== undefined
-                      ? removeMember(state.requirements, editor.index)
-                      : removeItem(state.requirements, item)
-                    : state.requirements,
-              };
-            });
+            const state = queryStore.state;
+            // A wand switched to Arcane Resin leaves the board, copies and all.
+            const removed =
+              editor.key === null
+                ? undefined
+                : editBoard(state, [{ type: "remove", key: editor.key }]);
+            if (removed && !removed.ok) {
+              setEditorRefusal(removed.error);
+              return;
+            }
+            queryStore.setState(() => ({
+              ...state,
+              arcaneResin: amount,
+              arcaneResinFilter:
+                !filter.uncursed ||
+                filter.maxDepth !== undefined ||
+                filter.source ||
+                filter.includeMageWand
+                  ? filter
+                  : undefined,
+              requirements: removed ? removed.value.requirements : state.requirements,
+            }));
             setEditor(null);
           }}
           onSave={(requirement, count, total, copyDepth) =>

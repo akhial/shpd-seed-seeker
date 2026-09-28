@@ -1,39 +1,24 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   CSSProperties,
   KeyboardEvent as ReactKeyboardEvent,
   PointerEvent as ReactPointerEvent,
   ReactNode,
 } from "react";
-import { displayItemName, sourceLabel } from "../../../shared/game/catalog";
 import { effectGlows } from "../../../shared/sprites/glow";
 import type { Glow } from "../../../shared/sprites/glow";
+import { requirementArt } from "../../../shared/sprites/requirement-art";
 import { CheckIcon, PlusIcon, XIcon } from "../../../shared/ui/icons";
-import {
-  STACK_MAX,
-  isAnyEnchantment,
-  levelSumCapacity,
-  maxUpgradeOf,
-  requirementFamily,
-  validateRequirement,
-} from "../query";
 import { ARCANE_RESIN_SPRITE, itemArt } from "../../../shared/sprites/sprites";
-import type { ArcaneResinAmount, ArcaneResinFilter, RequirementState } from "../../../engine/types";
+import type {
+  BoardEdit,
+  BoardItemView,
+  ChipTag,
+  ChipView,
+  ResinChipView,
+} from "../../../engine/types";
 import { Sprite } from "../../../shared/ui/primitives";
-import {
-  boardItems,
-  canStack,
-  copyDepthOf,
-  detach,
-  joinAlternatives,
-  removeItem,
-  removeMember,
-  setStackCount,
-  setStackTotal,
-  stackCount,
-} from "./relations";
-import type { BoardItem } from "./relations";
-import { effectLabel, requirementArt, requirementTitle } from "./summary";
+import { rekey } from "./board";
 
 /**
  * The requirement board: every requirement is a chip; drop one chip onto
@@ -41,60 +26,47 @@ import { effectLabel, requirementArt, requirementTitle } from "./summary";
  * it standalone again. Everything else is a property of the chip itself:
  * a stack badge (×N / ≤N) for "more of the same kind", and a Σ badge for a
  * stack whose items count their levels towards one total.
+ *
+ * The board draws what the shared core answers — its entries, their words,
+ * which drops join and which are refused — and sends the gestures back as
+ * edits. Board state names rows by key and entries by id, both stable across
+ * the core's edits.
  */
 
 const DRAG_THRESHOLD = 5;
 const LONG_PRESS_MS = 480;
+/** How long a refusal stays in the status line. */
+const NOTICE_MS = 4_000;
 
-const WILDCARD_SHORT: Record<string, string> = {
-  weapon: "Any weapon",
-  melee_weapon: "Any melee",
-  thrown_weapon: "Any thrown",
-  armor: "Any armor",
-  wand: "Any wand",
-  ring: "Any ring",
+/** The popover's mark for each relation line. */
+const RELATION_GLYPHS: Record<ChipView["relations"][number]["glyph"], string> = {
+  or: "or",
+  sum: "Σ",
+  times: "×",
 };
 
-/** The short name a chip shows: the item, or its wildcard family. */
-export const chipName = (requirement: RequirementState): string => {
-  if (requirement.item) return displayItemName(requirement.item);
-  return requirement.kind ? (WILDCARD_SHORT[requirement.kind] ?? requirement.kind) : "Any item";
-};
-
-function ChipSprite({ requirement, glows }: { requirement: RequirementState; glows?: Glow[] }) {
-  return requirement.item ? (
-    <Sprite art={requirementArt(requirement)} size={18} glow={glows} />
+function ChipSprite({ chip, glows }: { chip: ChipView; glows?: Glow[] }) {
+  return chip.item ? (
+    <Sprite art={requirementArt(chip)} size={18} glow={glows} />
   ) : (
     <span className="d1-chip-wildcard" aria-hidden="true">
       <span className="d1-chip-wildcard-silhouette">
-        <Sprite art={requirementArt(requirement)} size={18} />
+        <Sprite art={requirementArt(chip)} size={18} />
       </span>
       <span className="d1-chip-wildcard-mark">?</span>
     </span>
   );
 }
 
-/** A qualifier beside a chip's name; the upgrade is tinted apart from the rest. */
-export interface ChipTag {
-  text: string;
-  upgrade?: true;
-}
-
-/** The tiny qualifiers beside a chip's name: tier, upgrade, floor. */
-export function chipTags(requirement: RequirementState): ChipTag[] {
-  const tags: ChipTag[] = [];
-  const { tier, upgrade } = requirement;
-  if (requirement.trinketTransmutations || requirement.artifactTransmutations)
-    tags.push({
-      text: `Transmute ≤${requirement.trinketTransmutations || requirement.artifactTransmutations}`,
-    });
-  if (!requirement.item && tier.mode === "exact") tags.push({ text: `T${tier.value}` });
-  if (!requirement.item && tier.mode === "at_least") tags.push({ text: `T${tier.value}+` });
-  if (!requirement.item && tier.mode === "at_most") tags.push({ text: `T≤${tier.value}` });
-  if (upgrade.mode === "exact") tags.push({ text: `+${upgrade.value}`, upgrade: true });
-  if (upgrade.mode === "at_least") tags.push({ text: `+${upgrade.value}↑`, upgrade: true });
-  if (requirement.maxDepth !== undefined) tags.push({ text: `F≤${requirement.maxDepth}` });
-  return tags;
+function Tags({ tags }: { tags: ChipTag[] }) {
+  return tags.map((tag) => (
+    <span
+      key={tag.text}
+      className={tag.style === "upgrade" ? "d1-chip-tag d1-chip-tag-up" : "d1-chip-tag"}
+    >
+      {tag.text}
+    </span>
+  ));
 }
 
 /** Blend evenly spaced effect colours around a stationary ring, as on macOS. */
@@ -106,10 +78,17 @@ function effectRingCss(glows: Glow[]): CSSProperties {
 }
 
 type DropTarget =
-  | { kind: "chip"; index: number }
+  | { kind: "chip"; key: number }
   | { kind: "cluster"; group: number }
   | { kind: "delete" }
   | { kind: "board" };
+
+/** What releasing a chip over a target does. */
+type DropAction =
+  | { type: "join"; target: number }
+  | { type: "refuse"; message: string }
+  | { type: "detach" }
+  | { type: "remove" };
 
 type DragSource = number | "resin";
 
@@ -121,8 +100,7 @@ interface DragState {
 }
 
 interface MenuState {
-  item: BoardItem;
-  index: number;
+  key: number;
   x: number;
   y: number;
 }
@@ -130,7 +108,7 @@ interface PickState {
   source: number;
 }
 interface StepperState {
-  key: string;
+  id: string;
   which: "count" | "total";
 }
 
@@ -144,20 +122,28 @@ export interface StackShape {
   inCluster: boolean;
 }
 
+/** What an edit did, as far as the board's own state cares. */
+export interface BoardEditReport {
+  /** A refusal or failure to say. */
+  notice: string | null;
+  /** Keys the core renumbered, `[old, new]`. */
+  rekeyed: [number, number][];
+}
+
 export function RequirementBoard({
-  requirements,
-  onChange,
+  items,
+  onEdits,
   onEdit,
   onAdd,
   resin,
 }: {
-  requirements: RequirementState[];
-  onChange: (requirements: RequirementState[]) => void;
-  onEdit: (index: number, stack: StackShape) => void;
+  /** This section's entries, as the core drew them. */
+  items: BoardItemView[];
+  onEdits: (edits: BoardEdit[]) => BoardEditReport;
+  onEdit: (key: number, stack: StackShape) => void;
   onAdd: () => void;
   resin?: {
-    amount: ArcaneResinAmount;
-    filter?: ArcaneResinFilter;
+    chip: ResinChipView;
     onEdit: () => void;
     onRemove: () => void;
   };
@@ -167,11 +153,12 @@ export function RequirementBoard({
   const [menu, setMenu] = useState<MenuState | null>(null);
   const [pick, setPick] = useState<PickState | null>(null);
   const [stepper, setStepper] = useState<StepperState | null>(null);
-  const [hovered, setHoveredState] = useState<{ index: number; left: number; top: number } | null>(
+  const [notice, setNotice] = useState<string | null>(null);
+  const [hovered, setHoveredState] = useState<{ key: number; left: number; top: number } | null>(
     null,
   );
   const pressRef = useRef<{
-    index: DragSource;
+    key: DragSource;
     x: number;
     y: number;
     timer: number | undefined;
@@ -180,25 +167,44 @@ export function RequirementBoard({
   const dragRef = useRef<DragState | null>(null);
   const suppressResinClick = useRef(false);
 
-  const items = boardItems(requirements);
-  const itemOf = (index: number): BoardItem | undefined =>
-    items.find((item) => item.members.includes(index));
-  const stackOf = (item: BoardItem): StackShape => ({
-    count: stackCount(item),
-    total: item.total,
-    copyDepth: copyDepthOf(requirements, item),
-    inCluster: item.cluster !== undefined,
-  });
+  /** Every visible row by key, with the entry it belongs to. */
+  const chips = useMemo(() => {
+    const byKey = new Map<number, { chip: ChipView; item: BoardItemView }>();
+    for (const item of items) for (const chip of item.chips) byKey.set(chip.key, { chip, item });
+    return byKey;
+  }, [items]);
 
-  const hoveredIndex = hovered?.index ?? null;
-  const setHovered = (index: number | null, element?: HTMLElement) => {
-    if (index === null || !element) {
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(null), NOTICE_MS);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
+
+  const edit = (...edits: BoardEdit[]) => {
+    const report = onEdits(edits);
+    setNotice(report.notice);
+    if (report.rekeyed.length === 0) return;
+    const { rekeyed } = report;
+    setMenu((current) => current && { ...current, key: rekey(current.key, rekeyed) });
+    setHoveredState((current) => current && { ...current, key: rekey(current.key, rekeyed) });
+    setStepper(
+      (current) =>
+        current && {
+          ...current,
+          id: current.id.replace(/^r(\d+)$/, (_, key: string) => `r${rekey(Number(key), rekeyed)}`),
+        },
+    );
+  };
+
+  const hoveredKey = hovered?.key ?? null;
+  const setHovered = (key: number | null, element?: HTMLElement) => {
+    if (key === null || !element) {
       setHoveredState(null);
       return;
     }
     const rect = element.getBoundingClientRect();
     setHoveredState({
-      index,
+      key,
       left: Math.min(rect.left, window.innerWidth - 300),
       top: rect.bottom + 8,
     });
@@ -212,15 +218,38 @@ export function RequirementBoard({
     const kind = element.dataset.drop;
     // Resin can be removed by dragging, but never joins an either/or group.
     if (kind === "resin" || (source === "resin" && kind !== "delete")) return null;
-    if (kind === "chip") return { kind: "chip", index: Number(element.dataset.chip) };
+    if (kind === "chip") return { kind: "chip", key: Number(element.dataset.chip) };
     if (kind === "cluster") return { kind: "cluster", group: Number(element.dataset.group) };
     if (kind === "delete") return { kind: "delete" };
     return { kind: "board" };
   };
 
+  /** The drop the core allows: a join it lists, a refusal it words, or a detach. */
+  const dropAction = (source: number, over: DropTarget): DropAction | null => {
+    const chip = chips.get(source)?.chip;
+    if (!chip) return null;
+    if (over.kind === "delete") return { type: "remove" };
+    if (over.kind === "board") return chip.can_detach ? { type: "detach" } : null;
+    const targets =
+      over.kind === "chip"
+        ? [over.key]
+        : (items.find((item) => item.cluster === over.group)?.members ?? []);
+    const target = targets.find((key) => chip.join.includes(key));
+    if (target !== undefined) return { type: "join", target };
+    const refusal = chip.refuse.find((entry) => targets.includes(entry.key));
+    return refusal ? { type: "refuse", message: refusal.message } : null;
+  };
+
   const updateDrag = (next: DragState | null) => {
     dragRef.current = next;
     setDrag(next);
+  };
+
+  const perform = (source: number, action: DropAction | null) => {
+    if (!action) return;
+    if (action.type === "refuse") setNotice(action.message);
+    else if (action.type === "join") edit({ type: "join", source, target: action.target });
+    else edit({ type: action.type, key: source });
   };
 
   const completeDrop = (state: DragState) => {
@@ -230,44 +259,24 @@ export function RequirementBoard({
       if (over.kind === "delete") resin?.onRemove();
       return;
     }
-    const current = requirements[source];
-    let next: RequirementState[] | undefined;
-    if (over.kind === "chip") {
-      if (over.index === source) return;
-      next = joinAlternatives(requirements, source, over.index);
-    } else if (over.kind === "cluster") {
-      if (current.alternativeGroup === over.group) return;
-      const target = items.find((entry) => entry.cluster === over.group);
-      if (target) next = joinAlternatives(requirements, source, target.members[0]);
-    } else if (over.kind === "delete") {
-      const item = itemOf(source);
-      if (item)
-        next =
-          item.cluster !== undefined
-            ? removeMember(requirements, source)
-            : removeItem(requirements, item);
-    } else if (current.alternativeGroup !== undefined) {
-      next = detach(requirements, source);
-    }
-    if (next && next !== requirements) onChange(next);
+    perform(source, dropAction(source, over));
   };
 
-  const onChipPointerDown = (index: DragSource) => (event: ReactPointerEvent<HTMLElement>) => {
+  const onChipPointerDown = (key: DragSource) => (event: ReactPointerEvent<HTMLElement>) => {
     if (event.button !== 0) return;
     if ((event.target as HTMLElement).closest("[data-no-drag]")) return;
-    if (index === "resin") suppressResinClick.current = false;
+    if (key === "resin") suppressResinClick.current = false;
     event.currentTarget.setPointerCapture(event.pointerId);
     const timer =
-      event.pointerType === "mouse" || index === "resin"
+      event.pointerType === "mouse" || key === "resin"
         ? undefined
         : window.setTimeout(() => {
             const press = pressRef.current;
             if (!press || press.dragging) return;
             pressRef.current = null;
-            const item = itemOf(index);
-            if (item) setMenu({ item, index, x: press.x, y: press.y });
+            setMenu({ key, x: press.x, y: press.y });
           }, LONG_PRESS_MS);
-    pressRef.current = { index, x: event.clientX, y: event.clientY, timer, dragging: false };
+    pressRef.current = { key, x: event.clientX, y: event.clientY, timer, dragging: false };
   };
 
   const onChipPointerMove = (event: ReactPointerEvent<HTMLElement>) => {
@@ -277,23 +286,42 @@ export function RequirementBoard({
       if (Math.hypot(event.clientX - press.x, event.clientY - press.y) < DRAG_THRESHOLD) return;
       window.clearTimeout(press.timer);
       press.dragging = true;
-      if (press.index === "resin") suppressResinClick.current = true;
+      if (press.key === "resin") suppressResinClick.current = true;
       setMenu(null);
       setHovered(null);
       setPick(null);
       setStepper(null);
+      setNotice(null);
     }
     updateDrag({
-      source: press.index,
+      source: press.key,
       x: event.clientX,
       y: event.clientY,
-      over: targetAt(event.clientX, event.clientY, press.index),
+      over: targetAt(event.clientX, event.clientY, press.key),
     });
   };
 
-  const editChip = (index: number) => {
-    const item = itemOf(index);
-    onEdit(index, item ? stackOf(item) : { count: 1, inCluster: false });
+  const editChip = (key: number) => {
+    const entry = chips.get(key);
+    if (!entry) return;
+    // The editor cannot open a row it cannot read; such a chip can only be removed.
+    if (entry.chip.kind === null) {
+      setNotice(entry.chip.problem);
+      return;
+    }
+    const { stack, cluster } = entry.item;
+    onEdit(key, {
+      count: stack.count,
+      total: stack.total ?? undefined,
+      copyDepth: stack.copy_depth ?? undefined,
+      inCluster: cluster !== null,
+    });
+  };
+
+  /** Completes pick mode on `key`: the menu's and the keyboard's way to drop. */
+  const pickChip = (source: number, key: number) => {
+    setPick(null);
+    if (key !== source) perform(source, dropAction(source, { kind: "chip", key }));
   };
 
   const onChipPointerUp = (event: ReactPointerEvent<HTMLElement>) => {
@@ -309,14 +337,9 @@ export function RequirementBoard({
       return;
     }
     // The resin edit button handles its native click, including keyboard activation.
-    if (press.index === "resin") return;
-    if (pick) {
-      if (pick.source !== press.index)
-        onChange(joinAlternatives(requirements, pick.source, press.index));
-      setPick(null);
-      return;
-    }
-    editChip(press.index);
+    if (press.key === "resin") return;
+    if (pick) pickChip(pick.source, press.key);
+    else editChip(press.key);
   };
 
   const onChipPointerCancel = () => {
@@ -336,27 +359,20 @@ export function RequirementBoard({
       setMenu(null);
       setPick(null);
       setStepper(null);
+      setNotice(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const onChipKeyDown = (index: number) => (event: ReactKeyboardEvent<HTMLElement>) => {
+  const onChipKeyDown = (key: number) => (event: ReactKeyboardEvent<HTMLElement>) => {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
-      if (pick) {
-        if (pick.source !== index) onChange(joinAlternatives(requirements, pick.source, index));
-        setPick(null);
-      } else editChip(index);
+      if (pick) pickChip(pick.source, key);
+      else editChip(key);
     } else if (event.key === "Delete" || event.key === "Backspace") {
       event.preventDefault();
-      const item = itemOf(index);
-      if (!item) return;
-      onChange(
-        item.cluster !== undefined
-          ? removeMember(requirements, index)
-          : removeItem(requirements, item),
-      );
+      edit({ type: "remove", key });
     } else if (
       event.key === "ContextMenu" ||
       (event.shiftKey && event.key === "F10") ||
@@ -364,84 +380,75 @@ export function RequirementBoard({
     ) {
       event.preventDefault();
       const rect = event.currentTarget.getBoundingClientRect();
-      const item = itemOf(index);
-      if (item) setMenu({ item, index, x: rect.left, y: rect.bottom });
+      setMenu({ key, x: rect.left, y: rect.bottom });
     }
   };
 
   // ---- rendering ---------------------------------------------------------------
 
+  /** The hovered target's action while a chip is in flight. */
+  const hoverAction =
+    drag && drag.over && drag.source !== "resin" ? dropAction(drag.source, drag.over) : null;
+
   const dropClass = (target: DropTarget): string => {
     const over = drag?.over;
-    if (!over) return "";
+    if (!over || !hoverAction) return "";
     const same =
       over.kind === target.kind &&
       (over.kind === "chip"
-        ? over.index === (target as { index: number }).index
+        ? over.key === (target as { key: number }).key
         : over.kind === "cluster"
           ? over.group === (target as { group: number }).group
           : true);
     if (!same) return "";
-    if (over.kind === "board") {
-      return drag &&
-        drag.source !== "resin" &&
-        requirements[drag.source].alternativeGroup !== undefined
-        ? " d1-drop-detach"
-        : "";
-    }
-    return " d1-drop-alternative";
+    if (hoverAction.type === "detach") return " d1-drop-detach";
+    if (hoverAction.type === "join") return " d1-drop-alternative";
+    if (hoverAction.type === "refuse") return " d1-drop-refused";
+    return "";
   };
 
-  const renderChip = (index: number, inCluster: boolean) => {
-    const requirement = requirements[index];
-    const errors = validateRequirement(requirement);
+  const renderChip = (chip: ChipView, item: BoardItemView) => {
     const classes = ["d1-chip"];
-    if (drag?.source === index) classes.push("d1-chip-dragging");
-    if (errors.length > 0) classes.push("d1-chip-error");
-    if (pick) classes.push(pick.source === index ? "d1-chip-pick-source" : "d1-chip-pickable");
-    const glows = effectGlows(requirement.effect);
+    if (drag?.source === chip.key) classes.push("d1-chip-dragging");
+    if (chip.problem) classes.push("d1-chip-error");
+    if (pick) {
+      if (pick.source === chip.key) classes.push("d1-chip-pick-source");
+      else if (chips.get(pick.source)?.chip.join.includes(chip.key))
+        classes.push("d1-chip-pickable");
+    }
+    const effect = chip.effect;
+    const glows = effect && !effect.any_enchantment ? effectGlows(effect.effects) : [];
     const glow = glows[0] ?? null;
-    const effect = effectLabel(requirement);
-    const item = itemOf(index);
-    const showBadges = item !== undefined && !inCluster;
     return (
       <div
-        key={index}
+        key={chip.key}
         role="button"
         tabIndex={0}
-        className={classes.join(" ") + dropClass({ kind: "chip", index })}
+        className={classes.join(" ") + dropClass({ kind: "chip", key: chip.key })}
         data-drop="chip"
-        data-chip={index}
-        aria-label={`${requirementTitle(requirement)}${requirement.trinketTransmutations || requirement.artifactTransmutations ? `, within ${requirement.trinketTransmutations || requirement.artifactTransmutations} transmutation${(requirement.trinketTransmutations || requirement.artifactTransmutations) === 1 ? "" : "s"}` : ""}`}
-        onPointerDown={onChipPointerDown(index)}
+        data-chip={chip.key}
+        aria-label={chip.description}
+        onPointerDown={onChipPointerDown(chip.key)}
         onPointerMove={onChipPointerMove}
         onPointerUp={onChipPointerUp}
         onPointerCancel={onChipPointerCancel}
-        onKeyDown={onChipKeyDown(index)}
+        onKeyDown={onChipKeyDown(chip.key)}
         onContextMenu={(event) => {
           event.preventDefault();
-          const owner = itemOf(index);
-          if (owner) setMenu({ item: owner, index, x: event.clientX, y: event.clientY });
+          setMenu({ key: chip.key, x: event.clientX, y: event.clientY });
         }}
-        onMouseEnter={(event) => setHovered(index, event.currentTarget)}
+        onMouseEnter={(event) => setHovered(chip.key, event.currentTarget)}
         onMouseLeave={() => {
-          if (hoveredIndex === index) setHovered(null);
+          if (hoveredKey === chip.key) setHovered(null);
         }}
-        onFocus={(event) => setHovered(index, event.currentTarget)}
+        onFocus={(event) => setHovered(chip.key, event.currentTarget)}
         onBlur={() => {
-          if (hoveredIndex === index) setHovered(null);
+          if (hoveredKey === chip.key) setHovered(null);
         }}
       >
-        <ChipSprite requirement={requirement} glows={glows} />
-        <span className="d1-chip-name">{chipName(requirement)}</span>
-        {chipTags(requirement).map((tag) => (
-          <span
-            key={tag.text}
-            className={tag.upgrade ? "d1-chip-tag d1-chip-tag-up" : "d1-chip-tag"}
-          >
-            {tag.text}
-          </span>
-        ))}
+        <ChipSprite chip={chip} glows={glows} />
+        <span className="d1-chip-name">{chip.name}</span>
+        <Tags tags={chip.tags} />
         {/* Named items show a single effect through their sprite's glow.
             Wildcards keep their green question mark and show an effect badge. */}
         {effect &&
@@ -449,45 +456,42 @@ export function RequirementBoard({
             <span
               className="d1-chip-effect d1-chip-effect-multi"
               style={effectRingCss(glows)}
-              title={effect}
+              title={effect.label}
             >
               {glows.length}
             </span>
           ) : glow ? (
-            requirement.item ? null : (
+            chip.item ? null : (
               <span
                 className="d1-chip-effect"
                 style={{ color: glow.color, backgroundColor: glow.color }}
-                title={effect}
+                title={effect.label}
               />
             )
           ) : (
             <span
-              className={`d1-chip-effect ${isAnyEnchantment(requirement.effect) ? "d1-chip-effect-any" : "d1-chip-effect-curse"}`}
-              title={effect}
+              className={`d1-chip-effect ${effect.any_enchantment ? "d1-chip-effect-any" : "d1-chip-effect-curse"}`}
+              title={effect.label}
             />
           ))}
-        {requirement.excludeResin && <span className="d1-chip-tag">No resin</span>}
-        {requirement.uncursed && (
+        <Tags tags={chip.trailing_tags} />
+        {chip.uncursed && (
           <span className="d1-chip-tag d1-chip-tag-soft" title="Uncursed">
             <CheckIcon size={12} />
           </span>
         )}
-        {showBadges && item && renderBadges(item)}
+        {!chip.in_cluster && renderBadges(item)}
       </div>
     );
   };
 
   /** The stack (×N / ≤N) and combined-level (Σ) badges with their steppers. */
-  const renderBadges = (item: BoardItem): ReactNode => {
-    const count = stackCount(item);
-    const anchor = requirements[item.members[0]];
-    const capacity =
-      item.total !== undefined
-        ? levelSumCapacity([anchor, ...item.extras.map((index) => requirements[index])])
-        : count * (maxUpgradeOf(anchor) + 1);
-    const editingCount = stepper?.key === item.key && stepper.which === "count";
-    const editingTotal = stepper?.key === item.key && stepper.which === "total";
+  const renderBadges = (item: BoardItemView): ReactNode => {
+    const { stack, badges } = item;
+    const key = item.members[0];
+    const editingCount = stepper?.id === item.id && stepper.which === "count";
+    const editingTotal = stepper?.id === item.id && stepper.which === "total";
+    const total = stack.total;
     return (
       <>
         {editingCount ? (
@@ -501,19 +505,17 @@ export function RequirementBoard({
             <button
               type="button"
               aria-label="One fewer"
-              disabled={count <= 1}
-              onClick={() => onChange(setStackCount(requirements, item, count - 1))}
+              disabled={stack.count <= 1}
+              onClick={() => edit({ type: "set_count", key, count: stack.count - 1 })}
             >
               −
             </button>
-            <span className="d1-stack-badge">
-              {item.total !== undefined ? `≤${count}` : `×${count}`}
-            </span>
+            <span className="d1-stack-badge">{stack.count_text}</span>
             <button
               type="button"
               aria-label="One more"
-              disabled={count >= STACK_MAX}
-              onClick={() => onChange(setStackCount(requirements, item, count + 1))}
+              disabled={!stack.can_grow || stack.count >= stack.max}
+              onClick={() => edit({ type: "set_count", key, count: stack.count + 1 })}
             >
               +
             </button>
@@ -527,18 +529,16 @@ export function RequirementBoard({
             </button>
           </span>
         ) : (
-          (count > 1 || editingTotal) && (
+          (badges.count || editingTotal) && (
             <button
               type="button"
               className="d1-stack-badge d1-stack-badge-btn"
               data-no-drag
-              title={
-                item.total !== undefined ? `Up to ${count} items` : `${count} of the same kind`
-              }
+              title={badges.count?.tooltip}
               onPointerDown={(event) => event.stopPropagation()}
-              onClick={() => setStepper({ key: item.key, which: "count" })}
+              onClick={() => setStepper({ id: item.id, which: "count" })}
             >
-              {item.total !== undefined ? `≤${count}` : `×${count}`}
+              {badges.count?.text ?? stack.count_text}
             </button>
           )
         )}
@@ -554,21 +554,17 @@ export function RequirementBoard({
               type="button"
               aria-label="Lower total"
               onClick={() =>
-                onChange(
-                  item.total === 1
-                    ? setStackTotal(requirements, item, undefined)
-                    : setStackTotal(requirements, item, (item.total ?? 2) - 1),
-                )
+                edit({ type: "set_total", key, total: total === 1 ? null : (total ?? 2) - 1 })
               }
             >
               −
             </button>
-            <span className="d1-stack-badge">Σ ≥ {item.total ?? 0}</span>
+            <span className="d1-stack-badge">{stack.total_text}</span>
             <button
               type="button"
               aria-label="Raise total"
-              disabled={(item.total ?? 0) >= capacity}
-              onClick={() => onChange(setStackTotal(requirements, item, (item.total ?? 0) + 1))}
+              disabled={(total ?? 0) >= stack.level_capacity}
+              onClick={() => edit({ type: "set_total", key, total: (total ?? 0) + 1 })}
             >
               +
             </button>
@@ -582,16 +578,16 @@ export function RequirementBoard({
             </button>
           </span>
         ) : (
-          item.total !== undefined && (
+          badges.total && (
             <button
               type="button"
               className="d1-stack-badge d1-stack-badge-btn"
               data-no-drag
-              title={`Levels add to at least ${item.total} (a +0 item counts 1)`}
+              title={badges.total.tooltip}
               onPointerDown={(event) => event.stopPropagation()}
-              onClick={() => setStepper({ key: item.key, which: "total" })}
+              onClick={() => setStepper({ id: item.id, which: "total" })}
             >
-              Σ ≥ {item.total}
+              {badges.total.text}
             </button>
           )
         )}
@@ -599,25 +595,25 @@ export function RequirementBoard({
     );
   };
 
-  const renderItem = (item: BoardItem): ReactNode => {
-    if (item.cluster === undefined) return renderChip(item.members[0], false);
+  const renderItem = (item: BoardItemView): ReactNode => {
+    if (item.cluster === null) return renderChip(item.chips[0], item);
     return (
       <div
-        key={item.key}
+        key={item.id}
         className={`d1-cluster${dropClass({ kind: "cluster", group: item.cluster })}`}
         data-drop="cluster"
         data-group={item.cluster}
         role="group"
-        aria-label={`Any of ${item.members.length}`}
+        aria-label={item.label ?? undefined}
       >
-        {item.members.map((index, position) => (
-          <span key={index} className="d1-cluster-member">
+        {item.chips.map((chip, position) => (
+          <span key={chip.key} className="d1-cluster-member">
             {position > 0 && (
               <span className="d1-cluster-or" aria-hidden="true">
                 or
               </span>
             )}
-            {renderChip(index, true)}
+            {renderChip(chip, item)}
           </span>
         ))}
         {renderBadges(item)}
@@ -625,9 +621,16 @@ export function RequirementBoard({
     );
   };
 
-  const dragSource = drag && drag.source !== "resin" ? requirements[drag.source] : null;
+  const dragSource = drag && drag.source !== "resin" ? chips.get(drag.source)?.chip : undefined;
   const draggingResin = drag?.source === "resin" && resin;
-  const statusLine = pick ? "Either/or with… choose a chip" : null;
+  const menuEntry = menu ? chips.get(menu.key) : undefined;
+  const hoveredChip = hovered ? chips.get(hovered.key)?.chip : undefined;
+  const statusLine =
+    hoverAction?.type === "refuse"
+      ? hoverAction.message
+      : pick
+        ? "Either/or with… choose a chip"
+        : notice;
 
   return (
     <div ref={wrapRef} className="d1-board-wrap">
@@ -653,7 +656,7 @@ export function RequirementBoard({
               type="button"
               className="d1-resin-edit"
               aria-label="Edit Arcane Resin"
-              title={resin.filter?.source ? sourceLabel(resin.filter.source) : undefined}
+              title={resin.chip.tooltip ?? undefined}
               onPointerDown={onChipPointerDown("resin")}
               onPointerMove={onChipPointerMove}
               onPointerUp={onChipPointerUp}
@@ -671,31 +674,7 @@ export function RequirementBoard({
                 }
               }}
             >
-              <Sprite art={itemArt(ARCANE_RESIN_SPRITE)} size={18} />
-              <span className="d1-chip-name">Arcane Resin</span>
-              <span
-                className="d1-chip-tag"
-                title={
-                  resin.amount === "auto"
-                    ? "Enough resin to upgrade kept wands to +3, excluding No resin wands and reforge copies"
-                    : undefined
-                }
-              >
-                {resin.amount === "auto" ? "Auto" : `≥${resin.amount}`}
-              </span>
-              {resin.filter?.includeMageWand && (
-                <span className="d1-chip-tag" title="Starting Magic Missile contributes 2 resin">
-                  Mage +2
-                </span>
-              )}
-              {resin.filter?.maxDepth !== undefined && (
-                <span className="d1-chip-tag">F≤{resin.filter.maxDepth}</span>
-              )}
-              {(resin.filter?.uncursed ?? true) && (
-                <span className="d1-chip-tag d1-chip-tag-soft" title="Uncursed wands">
-                  <CheckIcon size={12} />
-                </span>
-              )}
+              <ResinChipBody chip={resin.chip} />
             </button>
             <button
               type="button"
@@ -732,13 +711,8 @@ export function RequirementBoard({
           {statusLine}
         </div>
       )}
-      {hovered && !drag && !menu && requirements[hovered.index] && (
-        <ChipPopover
-          requirements={requirements}
-          index={hovered.index}
-          item={itemOf(hovered.index)}
-          style={{ left: hovered.left, top: hovered.top }}
-        />
+      {hovered && hoveredChip && !drag && !menu && (
+        <ChipPopover chip={hoveredChip} style={{ left: hovered.left, top: hovered.top }} />
       )}
       {drag && (dragSource || draggingResin) && (
         <div
@@ -747,24 +721,14 @@ export function RequirementBoard({
           aria-hidden="true"
         >
           {dragSource ? (
-            <ChipSprite requirement={dragSource} />
+            <>
+              <ChipSprite chip={dragSource} />
+              <span className="d1-chip-name">{dragSource.name}</span>
+            </>
           ) : (
-            <Sprite art={itemArt(ARCANE_RESIN_SPRITE)} size={18} />
+            draggingResin && <ResinChipBody chip={resin.chip} amountOnly />
           )}
-          <span className="d1-chip-name">{dragSource ? chipName(dragSource) : "Arcane Resin"}</span>
-          {draggingResin && (
-            <span
-              className="d1-chip-tag"
-              title={
-                resin.amount === "auto"
-                  ? "Enough resin to upgrade kept wands to +3, excluding No resin wands and reforge copies"
-                  : undefined
-              }
-            >
-              {resin.amount === "auto" ? "Auto" : `≥${resin.amount}`}
-            </span>
-          )}
-          {(drag.over?.kind === "chip" || drag.over?.kind === "cluster") && (
+          {hoverAction?.type === "join" && (
             <span className="d1-chip-ghost-tag d1-ghost-alternative">or</span>
           )}
           {drag.over?.kind === "delete" && (
@@ -772,39 +736,32 @@ export function RequirementBoard({
           )}
         </div>
       )}
-      {menu && (
+      {menu && menuEntry && (
         <ChipMenu
           state={menu}
-          requirements={requirements}
+          chip={menuEntry.chip}
+          item={menuEntry.item}
           onClose={() => setMenu(null)}
           onEdit={() => {
             setMenu(null);
-            editChip(menu.index);
+            editChip(menu.key);
           }}
           onPick={() => {
             setMenu(null);
-            setPick({ source: menu.index });
+            setPick({ source: menu.key });
           }}
-          onCount={(count) => onChange(setStackCount(requirements, menu.item, count))}
+          onCount={(count) => edit({ type: "set_count", key: menu.key, count })}
           onTotal={() => {
             setMenu(null);
-            if (menu.item.total === undefined) {
-              onChange(setStackTotal(requirements, menu.item, Math.max(1, stackCount(menu.item))));
-            } else {
-              onChange(setStackTotal(requirements, menu.item, undefined));
-            }
+            edit({ type: "toggle_levels", key: menu.key });
           }}
           onDetach={() => {
             setMenu(null);
-            onChange(detach(requirements, menu.index));
+            edit({ type: "detach", key: menu.key });
           }}
           onRemove={() => {
             setMenu(null);
-            onChange(
-              menu.item.cluster !== undefined
-                ? removeMember(requirements, menu.index)
-                : removeItem(requirements, menu.item),
-            );
+            edit({ type: "remove", key: menu.key });
           }}
         />
       )}
@@ -812,74 +769,45 @@ export function RequirementBoard({
   );
 }
 
+/** The resin chip's face; the drag ghost shows only its amount. */
+function ResinChipBody({ chip, amountOnly }: { chip: ResinChipView; amountOnly?: boolean }) {
+  const [amount, ...rest] = chip.tags;
+  return (
+    <>
+      <Sprite art={itemArt(ARCANE_RESIN_SPRITE)} size={18} />
+      <span className="d1-chip-name">{chip.name}</span>
+      {amount && (
+        <span className="d1-chip-tag" title={chip.amount_tooltip ?? undefined}>
+          {amount.text}
+        </span>
+      )}
+      {!amountOnly && (
+        <>
+          <Tags tags={rest} />
+          {chip.uncursed && (
+            <span className="d1-chip-tag d1-chip-tag-soft" title="Uncursed wands">
+              <CheckIcon size={12} />
+            </span>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+
 /** The detail card under a hovered or focused chip. */
-function ChipPopover({
-  requirements,
-  index,
-  item,
-  style,
-}: {
-  requirements: RequirementState[];
-  index: number;
-  item: BoardItem | undefined;
-  style: CSSProperties;
-}) {
-  const requirement = requirements[index];
-  const errors = validateRequirement(requirement);
-  const lines: string[] = [];
-  if (requirement.trinketTransmutations || requirement.artifactTransmutations)
-    lines.push(
-      `within ${requirement.trinketTransmutations || requirement.artifactTransmutations} transmutation${(requirement.trinketTransmutations || requirement.artifactTransmutations) === 1 ? "" : "s"}`,
-    );
-  if (requirement.upgrade.mode === "exact") lines.push(`exactly +${requirement.upgrade.value}`);
-  else if (requirement.upgrade.mode === "at_least")
-    lines.push(`+${requirement.upgrade.value} or higher`);
-  else if (item?.total === undefined) lines.push("any upgrade");
-  const effect = effectLabel(requirement);
-  if (effect) lines.push(effect);
-  if (requirement.uncursed) lines.push("uncursed");
-  if (requirement.excludeResin) lines.push("excluded from Auto resin");
-  if (requirement.source) lines.push(sourceLabel(requirement.source));
-  if (requirement.maxDepth !== undefined) lines.push(`floors 1–${requirement.maxDepth}`);
-  const relations: { glyph: string; text: string }[] = [];
-  if (requirement.alternativeGroup !== undefined) {
-    const peers = requirements
-      .filter(
-        (other) => other !== requirement && other.alternativeGroup === requirement.alternativeGroup,
-      )
-      .map(chipName);
-    relations.push({ glyph: "or", text: peers.join(", ") });
-  }
-  if (item && item.total !== undefined) {
-    relations.push({
-      glyph: "Σ",
-      text: `up to ${stackCount(item)} — levels add to ≥ ${item.total}`,
-    });
-  } else if (item && stackCount(item) > 1) {
-    // The chip's own bounds (+3, F≤4) describe one copy, not the extras.
-    const depths = [...new Set(item.extras.map((extra) => requirements[extra].maxDepth))];
-    const floors =
-      depths.length > 1
-        ? "own floor limits"
-        : depths[0] !== undefined
-          ? `floors 1–${depths[0]}`
-          : "any floor";
-    relations.push({
-      glyph: "×",
-      text: `${stackCount(item)} of the same kind — the extra copies: any upgrade, ${floors}`,
-    });
-  }
+function ChipPopover({ chip, style }: { chip: ChipView; style: CSSProperties }) {
   return (
     <div className="d1-chip-pop" role="tooltip" style={style}>
-      <div className="d1-chip-pop-title">{requirementTitle(requirement)}</div>
-      {lines.length > 0 && <div className="d1-chip-pop-sub">{lines.join(" · ")}</div>}
-      {relations.map((relation) => (
+      <div className="d1-chip-pop-title">{chip.title}</div>
+      {chip.details.length > 0 && <div className="d1-chip-pop-sub">{chip.details.join(" · ")}</div>}
+      {chip.relations.map((relation) => (
         <div key={relation.glyph} className="d1-chip-pop-rel">
-          <span className="d1-chip-pop-glyph">{relation.glyph}</span>
+          <span className="d1-chip-pop-glyph">{RELATION_GLYPHS[relation.glyph]}</span>
           <span>{relation.text}</span>
         </div>
       ))}
-      {errors.length > 0 && <div className="d1-chip-pop-error">{errors[0]}</div>}
+      {chip.problem && <div className="d1-chip-pop-error">{chip.problem}</div>}
     </div>
   );
 }
@@ -887,7 +815,8 @@ function ChipPopover({
 /** The chip's context menu: the gestures as words, for keyboard and touch. */
 function ChipMenu({
   state,
-  requirements,
+  chip,
+  item,
   onClose,
   onEdit,
   onPick,
@@ -897,7 +826,8 @@ function ChipMenu({
   onRemove,
 }: {
   state: MenuState;
-  requirements: RequirementState[];
+  chip: ChipView;
+  item: BoardItemView;
   onClose: () => void;
   onEdit: () => void;
   onPick: () => void;
@@ -917,27 +847,20 @@ function ChipMenu({
   }, [onClose]);
   const left = Math.min(state.x, window.innerWidth - 230);
   const top = Math.min(state.y, window.innerHeight - 260);
-  const { item } = state;
-  const count = stackCount(item);
-  const anchor = requirements[item.members[0]];
-  const inCluster = item.cluster !== undefined;
-  const canPick = requirements.length > 1;
-  // A cluster spanning two categories cannot anchor a stack, so it is not
-  // offered one.
-  const canCount = canStack(requirements, item);
-  const canTotal =
-    !inCluster && anchor.item !== undefined && count > 1 && requirementFamily(anchor) === "ring";
+  const { stack } = item;
   return (
     <div ref={ref} className="d1-chip-menu" role="menu" style={{ left, top }}>
-      <button type="button" role="menuitem" onClick={onEdit}>
-        Edit…
-      </button>
-      {canPick && (
+      {chip.kind !== null && (
+        <button type="button" role="menuitem" onClick={onEdit}>
+          Edit…
+        </button>
+      )}
+      {chip.join.length > 0 && (
         <button type="button" role="menuitem" onClick={onPick}>
           <b>or</b>Either/or with…
         </button>
       )}
-      {canCount && (
+      {stack.can_change_count && (
         <>
           <span className="d1-chip-menu-rule" />
           <div className="d1-chip-menu-stepper" role="group" aria-label="How many">
@@ -948,17 +871,17 @@ function ChipMenu({
               <button
                 type="button"
                 aria-label="One fewer"
-                disabled={count <= 1}
-                onClick={() => onCount(count - 1)}
+                disabled={stack.count <= 1}
+                onClick={() => onCount(stack.count - 1)}
               >
                 −
               </button>
-              <span className="d1-mono">{count}</span>
+              <span className="d1-mono">{stack.count}</span>
               <button
                 type="button"
                 aria-label="One more"
-                disabled={count >= STACK_MAX}
-                onClick={() => onCount(count + 1)}
+                disabled={!stack.can_grow || stack.count >= stack.max}
+                onClick={() => onCount(stack.count + 1)}
               >
                 +
               </button>
@@ -966,13 +889,13 @@ function ChipMenu({
           </div>
         </>
       )}
-      {canTotal && (
+      {stack.can_count_levels && (
         <button type="button" role="menuitem" onClick={onTotal}>
           <b>Σ</b>
-          {item.total === undefined ? "Count levels together" : "Stop counting levels"}
+          {stack.total === null ? "Count levels together" : "Stop counting levels"}
         </button>
       )}
-      {inCluster && (
+      {chip.can_detach && (
         <>
           <span className="d1-chip-menu-rule" />
           <button type="button" role="menuitem" onClick={onDetach}>

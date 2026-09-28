@@ -16,6 +16,7 @@ import type {
   QueryState,
   RequirementDocument,
   RequirementEntryDocument,
+  RequirementRow,
   RequirementState,
   TierFilter,
   UpgradeFilter,
@@ -238,10 +239,6 @@ export function querySlots(requirements: readonly RequirementState[]): QuerySlot
   return slots;
 }
 
-/** The number of slots a requirement list fills, counting each alternative group once. */
-export const slotCount = (requirements: readonly RequirementState[]): number =>
-  querySlots(requirements).length;
-
 /** The last floor the Blacksmith's quest can sit on: a run whose floor limit
  * reaches it always meets him, so "require Blacksmith" only matters below it. */
 export const BLACKSMITH_LAST_FLOOR = 14;
@@ -278,7 +275,9 @@ export const nearestOptionIndex = (options: readonly number[], value: number): n
 export const defaultTier = (): TierFilter => ({ mode: "any", value: 3 });
 export const defaultUpgrade = (): UpgradeFilter => ({ mode: "any", value: 1 });
 
+/** A new requirement for the editor; key 0 is no row of the list yet. */
 export const emptyRequirement = (kind?: RequirementState["kind"]): RequirementState => ({
+  key: 0,
   kind,
   tier: defaultTier(),
   upgrade: defaultUpgrade(),
@@ -294,7 +293,8 @@ export const defaultQueryState = (): QueryState => ({
   challenges: [],
 });
 
-function requirementToDocument(requirement: RequirementState): RequirementDocument {
+/** The requirement as one entry of a query document, without its key or either/or label. */
+export function requirementToDocument(requirement: RequirementState): RequirementDocument {
   const output: RequirementDocument = {};
   // The category is always written, derived from the item when the editor
   // state has none: the engine's start decision compares kinds for equality,
@@ -436,6 +436,7 @@ function levelSumFromDocument(value: unknown): RequirementState["levelSum"] {
 
 function requirementFromDocument(
   value: RequirementDocument,
+  key: number,
   alternativeGroup?: number,
 ): RequirementState {
   const raw = value as Record<string, unknown>;
@@ -444,6 +445,7 @@ function requirementFromDocument(
   // the kind the start decision needs.
   const kind = value.kind ?? (value.item ? getItem(value.item)?.type : undefined);
   const requirement: RequirementState = {
+    key,
     kind,
     item: value.item,
     tier: tierFromDocument(raw.tier),
@@ -497,7 +499,10 @@ function requirementFromDocument(
   return requirement;
 }
 
-/** Flattens the entries: any_of groups get fresh sequential group ids in document order. */
+/**
+ * Flattens the entries: any_of groups get fresh sequential group ids in
+ * document order, and the rows are keyed 1…n for the requirement editor.
+ */
 function requirementsFromDocument(entries: RequirementEntryDocument[]): RequirementState[] {
   const requirements: RequirementState[] = [];
   let nextGroup = 0;
@@ -509,13 +514,37 @@ function requirementsFromDocument(entries: RequirementEntryDocument[]): Requirem
       nextGroup += 1;
       for (const member of members) {
         if (!isRecord(member) || "any_of" in member) throw new Error("any_of groups cannot nest");
-        requirements.push(requirementFromDocument(member as RequirementDocument, nextGroup));
+        requirements.push(
+          requirementFromDocument(
+            member as RequirementDocument,
+            requirements.length + 1,
+            nextGroup,
+          ),
+        );
       }
       continue;
     }
-    requirements.push(requirementFromDocument(entry as RequirementDocument));
+    requirements.push(
+      requirementFromDocument(entry as RequirementDocument, requirements.length + 1),
+    );
   }
   return requirements;
+}
+
+/** The requirement as a row of the requirement editor: its document entry, key and either/or label. */
+export function requirementToRow(requirement: RequirementState): RequirementRow {
+  return {
+    ...requirementToDocument(requirement),
+    key: requirement.key,
+    ...(requirement.alternativeGroup !== undefined
+      ? { alternative_group: requirement.alternativeGroup }
+      : {}),
+  };
+}
+
+/** Reads a row the requirement editor answered with back into editor state. */
+export function requirementFromRow(row: RequirementRow): RequirementState {
+  return requirementFromDocument(row, row.key, row.alternative_group);
 }
 
 /**
@@ -781,7 +810,8 @@ export function validateQuery(state: QueryState): ValidationResult {
   return { valid: errors.length === 0, errors };
 }
 
-function validArcaneResin(value: unknown): boolean {
+/** Whether an Arcane Resin amount is Auto or a whole number of resin. */
+export function validArcaneResin(value: unknown): boolean {
   return (
     value === "auto" ||
     (typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 65535)

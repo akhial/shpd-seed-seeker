@@ -1350,6 +1350,11 @@ input[type="range"]::-moz-range-thumb {
   border-color: var(--d1-amber) !important;
   box-shadow: 0 0 0 2px var(--d1-amber-dim);
 }
+/* A join the editor refuses; the status line says why. */
+.d1-drop-refused {
+  border-color: var(--d1-danger) !important;
+  border-style: dashed;
+}
 
 /* Pick mode (menu fallback): the source is held, the others invite a click. */
 .d1-chip-pick-source {
@@ -2003,6 +2008,17 @@ input[type="range"]::-moz-range-thumb {
   color: #f2b4ab;
   background: rgba(217, 108, 95, 0.1);
   border: 1px solid rgba(217, 108, 95, 0.35);
+}
+
+/* The query pane's fallback when the requirement editor fails. */
+.d1-query-failure {
+  display: grid;
+  gap: 10px;
+  justify-items: start;
+  margin: 16px;
+}
+.d1-query-failure > p {
+  margin: 0;
 }
 
 /* The whole page when the requirement editor cannot load. */

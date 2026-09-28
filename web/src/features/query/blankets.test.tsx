@@ -4,6 +4,7 @@ import { afterEach, beforeAll, expect, it } from "vite-plus/test";
 import {
   defaultQueryState,
   fromQueryJson,
+  requirementToDocument,
   toQueryDocument,
   toQueryJson,
   validateQuery,
@@ -17,16 +18,10 @@ import init, {
   scout,
   filter_seeds,
 } from "../../engine/pkg/seedfinder.js";
-import type { ScoutResult } from "../../engine/types";
+import type { BoardEdit, QueryState, ScoutResult } from "../../engine/types";
 import { QueryPanel } from "./QueryPanel";
 import { RequirementEditor } from "./requirements/RequirementEditor";
-import {
-  applyEdit,
-  boardItems,
-  canStack,
-  joinAlternatives,
-  replaceRequirementSection,
-} from "./requirements/relations";
+import { editBoard, requirementBoardOf } from "./requirements/board";
 
 beforeAll(async () => {
   await init({
@@ -98,28 +93,54 @@ it("shows a collapsed blanket board with a count and the existing source and upg
   expect(editor).not.toContain("At least one item used by your ordinary requirements");
 });
 
+const edited = (query: QueryState, edits: BoardEdit[]): QueryState => {
+  const answer = editBoard(query, edits);
+  if (!answer.ok) throw new Error(answer.error);
+  return { ...query, requirements: answer.value.requirements };
+};
+
 it("keeps identical blanket chips separate from item stacks and OR labels on the other board", () => {
   const query = fromQueryJson(
-    '{"requirements":[{"item":"wand_frost"},{"item":"wand_frost","blanket":true},{"item":"wand_frost","blanket":true}]}',
+    '{"requirements":[{"item":"wand_frost"},{"item":"wand_lightning"},{"item":"wand_frost","blanket":true},{"item":"wand_frost","blanket":true}]}',
   );
-  expect(boardItems(query.requirements)).toHaveLength(3);
-  expect(canStack(query.requirements, boardItems(query.requirements)[1])).toBe(false);
-  expect(joinAlternatives(query.requirements, 0, 1)).toEqual(query.requirements);
-  const ordinary = [
-    { ...query.requirements[0], alternativeGroup: 1 },
-    { ...query.requirements[0], item: "wand_lightning", alternativeGroup: 1 },
-  ];
-  const blankets = joinAlternatives(query.requirements.slice(1), 0, 1);
-  const merged = replaceRequirementSection(
-    [...ordinary, ...query.requirements.slice(1)],
-    true,
-    blankets,
-  );
-  expect(merged[0].alternativeGroup).not.toBe(merged[2].alternativeGroup);
-  expect(validateQuery({ ...query, requirements: merged }).valid).toBe(true);
-  const edited = applyEdit(merged, 2, { ...merged[2], source: "wandmaker_reward" }, 1, undefined);
-  expect(edited[2].blanket).toBe(true);
-  expect(edited[2].source).toBe("wandmaker_reward");
+  const answer = requirementBoardOf(query);
+  if (!answer.ok) throw new Error(answer.error);
+  const board = answer.value;
+  expect(board.items.map((item) => [item.id, item.blanket])).toEqual([
+    ["r1", false],
+    ["r2", false],
+    ["r3", true],
+    ["r4", true],
+  ]);
+  expect(board.counts).toEqual({ ordinary: 2, blanket: 2 });
+  expect(board.items[2].stack.can_grow).toBe(false);
+  // A chip never joins the other board.
+  expect(board.items[0].chips[0].join).toEqual([2]);
+  expect(edited(query, [{ type: "join", source: 1, target: 3 }])).toEqual(query);
+  // Either/or labels are allocated across both boards.
+  const joined = edited(query, [
+    { type: "join", source: 2, target: 1 },
+    { type: "join", source: 4, target: 3 },
+  ]);
+  const labels = joined.requirements.map((requirement) => requirement.alternativeGroup);
+  expect(new Set(labels).size).toBe(2);
+  expect(validateQuery(joined).valid).toBe(true);
+  const blanket = joined.requirements.find((requirement) => requirement.key === 3)!;
+  const saved = edited(joined, [
+    {
+      type: "save",
+      key: 3,
+      requirement: requirementToDocument({ ...blanket, source: "wandmaker_reward" }),
+      count: 1,
+      total: null,
+      copy_depth: null,
+    },
+  ]);
+  expect(saved.requirements.find((requirement) => requirement.key === 3)).toMatchObject({
+    blanket: true,
+    source: "wandmaker_reward",
+    alternativeGroup: blanket.alternativeGroup,
+  });
 });
 
 it("rejects a blanket without ordinary items and mixed ordinary/blanket alternatives", () => {

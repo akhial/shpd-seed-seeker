@@ -75,6 +75,12 @@ export interface LevelSum {
 }
 
 export interface RequirementState {
+  /**
+   * The row's identity for the requirement editor, stable across its edits.
+   * `fromQueryJson` numbers a loaded list 1…n and the editor mints the rest;
+   * it is never written to a query document.
+   */
+  key: number;
   /** Reserve this wand without budgeting Auto resin upgrades. */
   excludeResin?: boolean;
   /** Extra filter on an item assigned to an ordinary requirement. */

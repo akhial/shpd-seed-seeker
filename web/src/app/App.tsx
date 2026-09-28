@@ -21,6 +21,7 @@ import {
 import type { AnalysisResult, ChallengeName, EngineInfo, ScoutResult } from "../engine/types";
 import { DownloadMenu } from "./DownloadMenu";
 import { QueryPanel } from "../features/query/QueryPanel";
+import { QueryPanelBoundary } from "../features/query/QueryPanelBoundary";
 import { ResultsPanel } from "../features/results/ResultsPanel";
 import { ScoutPanel } from "../features/scout/ScoutPanel";
 import { FooterStatus, StatusSnackbar } from "../features/search/StatusBar";
@@ -458,16 +459,18 @@ export default function App() {
 
       <main className="d1-main">
         <section className={paneClass("query")} aria-label="Query builder">
-          <QueryPanel
-            analysis={analysis}
-            validation={validation}
-            running={running}
-            engineReady={engine !== undefined}
-            onToggleSearch={toggleSearch}
-            isMac={isMac}
-            shareNotice={shareNotice}
-            onDismissShareNotice={() => setShareNotice(undefined)}
-          />
+          <QueryPanelBoundary>
+            <QueryPanel
+              analysis={analysis}
+              validation={validation}
+              running={running}
+              engineReady={engine !== undefined}
+              onToggleSearch={toggleSearch}
+              isMac={isMac}
+              shareNotice={shareNotice}
+              onDismissShareNotice={() => setShareNotice(undefined)}
+            />
+          </QueryPanelBoundary>
         </section>
         <section className={paneClass("results")} aria-label="Search results">
           <ResultsPanel

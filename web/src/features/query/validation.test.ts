@@ -3,6 +3,7 @@ import { clampUpgrade, defaultQueryState, validateQuery, validateRequirement } f
 import type { QueryState, RequirementState } from "../../engine/types";
 
 const requirement = (patch: Partial<RequirementState> = {}): RequirementState => ({
+  key: 1,
   kind: "weapon",
   tier: { mode: "any", value: 3 },
   upgrade: { mode: "any", value: 1 },

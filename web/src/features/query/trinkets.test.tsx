@@ -2,12 +2,16 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vite-plus/test";
 import { itemsForKind } from "../../shared/game/catalog";
 import { fromQueryJson, toQueryDocument, validateQuery, validateRequirement } from "./query";
-import type { ScoutItem } from "../../engine/types";
+import type { QueryState, ScoutItem } from "../../engine/types";
 import { CatalystEntry } from "../scout/ScoutPanel";
-import { boardItems, canStack, joinAlternatives } from "./requirements/relations";
+import { editBoard, requirementBoardOf } from "./requirements/board";
 import { RequirementEditor, namedItemEditorRequirement } from "./requirements/RequirementEditor";
-import { requirementDetails, requirementTitle } from "./requirements/summary";
-import { chipTags } from "./requirements/RequirementBoard";
+
+const boardOf = (query: QueryState) => {
+  const answer = requirementBoardOf(query);
+  if (!answer.ok) throw new Error(answer.error);
+  return answer.value;
+};
 
 describe("offered trinket pilot", () => {
   it("round-trips a transmutation limit and includes initial offers", () => {
@@ -18,8 +22,9 @@ describe("offered trinket pilot", () => {
     expect(requirement.trinketTransmutations).toBe(13);
     expect(fromQueryJson(JSON.stringify(toQueryDocument(query)))).toEqual(query);
     expect(validateQuery(query).valid).toBe(true);
-    expect(requirementDetails(requirement)).toContain("within 13 transmutations");
-    expect(chipTags(requirement)).toContainEqual({ text: "Transmute ≤13" });
+    const chip = boardOf(query).items[0].chips[0];
+    expect(chip.details).toContain("within 13 transmutations");
+    expect(chip.tags).toContainEqual({ text: "Transmute ≤13", style: "plain" });
     const html = renderToStaticMarkup(
       <RequirementEditor
         requirement={requirement}
@@ -172,16 +177,16 @@ describe("offered trinket pilot", () => {
   });
 
   it("requires a named trinket and shows no details or wildcard controls", () => {
-    const legacy = fromQueryJson(
+    const query = fromQueryJson(
       '{"requirements":[{"kind":"trinket","source":"locked_chest","max_depth":2}]}',
-    ).requirements[0];
+    );
+    const legacy = query.requirements[0];
     expect(validateRequirement(legacy)).toContain("Select a trinket.");
-    expect(requirementTitle(legacy)).toBe("Trinket");
+    expect(boardOf(query).items[0].chips[0].title).toBe("Trinket");
     const draft = namedItemEditorRequirement(legacy);
     expect(draft.item).toBe("rat_skull");
     expect(draft.source).toBeUndefined();
     expect(draft.maxDepth).toBeUndefined();
-    expect(requirementTitle(draft)).toBe("Rat Skull");
     const html = renderToStaticMarkup(
       <RequirementEditor
         requirement={legacy}
@@ -191,6 +196,7 @@ describe("offered trinket pilot", () => {
         onCancel={() => {}}
       />,
     );
+    expect(html).toContain('<p class="d1-mono">Rat Skull</p>');
     expect(html).toContain("Choose matching trinket at +3");
     expect(html).not.toContain("Any trinket");
     expect(html).not.toContain('value=""');
@@ -202,12 +208,14 @@ describe("offered trinket pilot", () => {
 
   it("joins named trinkets into an OR group and persists them as offered predicates", () => {
     const state = fromQueryJson('{"requirements":[{"item":"mimic_tooth"},{"item":"rat_skull"}]}');
-    state.requirements = joinAlternatives(state.requirements, 1, 0);
+    const joined = editBoard(state, [{ type: "join", source: 2, target: 1 }]);
+    if (!joined.ok) throw new Error(joined.error);
+    state.requirements = joined.value.requirements;
     expect(validateQuery(state).valid).toBe(true);
     const doc = toQueryDocument(state);
     expect(doc.requirements).toHaveLength(1);
     expect(doc.requirements[0]).toHaveProperty("any_of");
-    expect(canStack(state.requirements, boardItems(state.requirements)[0])).toBe(false);
+    expect(boardOf(state).items[0].stack.can_grow).toBe(false);
     expect(
       fromQueryJson(JSON.stringify(doc))
         .requirements.map((r) => r.item)

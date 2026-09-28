@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   armorCurses,
   armorGlyphs,
+  displayItemName,
   itemsForKind,
   kindFamily,
   sources,
@@ -36,7 +37,7 @@ import type {
 } from "../../../engine/types";
 import type { StackShape } from "./RequirementBoard";
 import { Field, Segmented, SliderRow, Sprite, Stepper } from "../../../shared/ui/primitives";
-import { requirementArt, requirementTitle } from "./summary";
+import { requirementArt } from "../../../shared/sprites/requirement-art";
 
 const CATEGORY_OPTIONS: { value: ItemCategory; label: string }[] = [
   { value: "weapon", label: "Weapon" },
@@ -90,6 +91,32 @@ const range = (first: number, last: number): number[] =>
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
+const KIND_NOUNS: Record<RequirementKind, string> = {
+  weapon: "weapon",
+  melee_weapon: "melee weapon",
+  thrown_weapon: "thrown weapon",
+  armor: "armor",
+  wand: "wand",
+  ring: "ring",
+  trinket: "trinket",
+  artifact: "artifact",
+};
+
+/** The header's name for the draft, until the sheet draws the core's form. */
+function requirementTitle(requirement: RequirementState): string {
+  if (requirement.item === "arcane_resin") return "Arcane Resin";
+  if (requirement.item) return displayItemName(requirement.item);
+  const family = requirementFamily(requirement);
+  if (family === "trinket") return "Trinket";
+  if (family === "artifact") return "Artifact";
+  const kind = requirement.kind ? KIND_NOUNS[requirement.kind] : "item";
+  const tier = requirement.tier;
+  if (tier.mode === "exact") return `Any tier-${tier.value} ${kind}`;
+  if (tier.mode === "at_least") return `Any ${kind} · tier ${tier.value}+`;
+  if (tier.mode === "at_most") return `Any ${kind} · tier ≤${tier.value}`;
+  return `Any ${kind}`;
+}
+
 /** Named families always select an identity; trinkets also discard hidden placement filters. */
 export function namedItemEditorRequirement(requirement: RequirementState): RequirementState {
   if (requirementFamily(requirement) === "artifact") {
@@ -118,6 +145,7 @@ export function RequirementEditor({
   requirement,
   isNew,
   stack,
+  refusal,
   resinAmount,
   resinFilter,
   otherRequirements = [],
@@ -129,6 +157,8 @@ export function RequirementEditor({
   isNew: boolean;
   /** The chip's stack shape; a cluster member's belongs to the cluster. */
   stack: StackShape;
+  /** Why the last save was refused. */
+  refusal?: string;
   resinAmount?: ArcaneResinAmount;
   resinFilter?: ArcaneResinFilter;
   otherRequirements?: RequirementState[];
@@ -880,11 +910,12 @@ export function RequirementEditor({
             </section>
           )}
 
-          {errors.length > 0 && (
+          {(errors.length > 0 || refusal) && (
             <ul className="d1-editor-errors" role="alert">
               {errors.map((error) => (
                 <li key={error}>{error}</li>
               ))}
+              {refusal && <li>{refusal}</li>}
             </ul>
           )}
         </div>
