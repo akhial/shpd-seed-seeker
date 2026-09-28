@@ -12,7 +12,7 @@ namespace SeedSeeker.Tests;
 /// is asked once per list, and the edits the window sends — joins, refusals,
 /// counts, combined levels, removals — come back through the real engine as
 /// the window adopts them. Stacks are per chip: a cluster member's badge and
-/// count are its own, and the remove zone takes one item.
+/// count are its own, and every drag moves one item.
 /// </summary>
 public sealed class RequirementBoardTests
 {
@@ -459,6 +459,59 @@ public sealed class RequirementBoardTests
     }
 
     [Fact]
+    public void EveryDragMovesOneItemAndComesBackTheWayItWent()
+    {
+        var editor = new BoardEditor();
+        var query = Loaded(editor, Named("wand_disintegration"), Named("wand_disintegration"), Named("wand_frost"));
+        var (disintegration, frost) = (KeyOf(query, "wand_disintegration"), KeyOf(query, "wand_frost"));
+        var copy = query.Requirements.Last(row => row.Item?.Id == "wand_disintegration").Key;
+        Assert.Equal("×2", editor.View(query).ChipOf(disintegration)!.CountBadge!.Text);
+
+        // Disintegration ×2 onto Frost: one Disintegration joins, the other stays where it was.
+        Assert.Equal(DropEffect.Join, editor.View(query).Drop(disintegration, DropKind.Chip, frost).Effect);
+        var joined = Apply(editor, query, BoardEdit.Join(disintegration, frost));
+        Assert.Equal(disintegration, joined.Focus);
+        var cluster = Assert.Single(joined.View.Entries, entry => entry.Cluster is not null);
+        Assert.Equal([frost, disintegration], cluster.Members);
+        Assert.All(cluster.Chips, chip => Assert.Null(chip.CountBadge));
+        var rest = joined.View.ChipOf(copy)!;
+        Assert.Equal(("Wand of Disintegration", false, (BoardBadge?)null), (rest.Name, rest.InCluster, rest.CountBadge));
+
+        // Dragged out onto the board, it comes back as Frost + Disintegration ×2.
+        Assert.Equal(DropEffect.Detach, joined.View.Drop(disintegration, DropKind.Board).Effect);
+        var detached = Apply(editor, query, BoardEdit.Detach(disintegration));
+        Assert.All(detached.View.Entries, entry => Assert.Null(entry.Cluster));
+        Assert.Equal(["×2", null], detached.View.Entries.Select(entry => entry.Chips[0].CountBadge?.Text));
+        Assert.Equal(["Wand of Disintegration", "Wand of Frost"], detached.View.Entries.Select(entry => entry.Name));
+        Assert.All(query.Requirements, row => Assert.Null(row.AlternativeGroup));
+    }
+
+    [Fact]
+    public void AJoinOntoAStackKeepsItAsAMemberAndADetachTakesOneCopy()
+    {
+        var editor = new BoardEditor();
+        var query = Loaded(editor, Named("wand_frost"), Named("wand_frost"), Named("wand_disintegration"));
+        var (frost, disintegration) = (KeyOf(query, "wand_frost"), KeyOf(query, "wand_disintegration"));
+
+        // Disintegration onto Frost ×2: two Frosts, or one Disintegration.
+        var joined = Apply(editor, query, BoardEdit.Join(disintegration, frost));
+        var cluster = Assert.Single(joined.View.Entries);
+        Assert.Equal(["×2", null], cluster.Chips.Select(chip => chip.CountBadge?.Text));
+        Assert.Equal(cluster.Extras, joined.View.ChipOf(frost)!.Copies);
+        Assert.Equal(1, query.Requirements.Single(row => row.Key == frost).IdentityGroup);
+        Assert.Null(query.Requirements.Single(row => row.Key == disintegration).IdentityGroup);
+
+        // Frost dragged out takes one copy with it: {Frost | Disintegration} and Frost.
+        var detached = Apply(editor, query, BoardEdit.Detach(frost));
+        Assert.Equal(frost, detached.Focus);
+        Assert.Equal(2, detached.View.Entries.Count);
+        Assert.False(detached.View.ChipOf(frost)!.InCluster);
+        var left = Assert.Single(detached.View.Entries, entry => entry.Cluster is not null);
+        Assert.Equal(["Wand of Frost", "Wand of Disintegration"], left.Chips.Select(chip => chip.Name));
+        Assert.All(detached.View.Entries.SelectMany(entry => entry.Chips), chip => Assert.Null(chip.CountBadge));
+    }
+
+    [Fact]
     public void TheRemoveZoneTakesOneItemAndTheMenuTheWholeStack()
     {
         var editor = new BoardEditor();
@@ -493,6 +546,31 @@ public sealed class RequirementBoardTests
         Assert.Empty(query.Requirements);
         // Nothing left to take is no change.
         Assert.False(editor.Edit(query, BoardEdit.RemoveOne(frostKey)).Changed);
+    }
+
+    [Fact]
+    public void TheLiftedChipIsTheOneItemADragMoves()
+    {
+        // The ghost draws the lifted chip: its name and tags, without the
+        // stack's ×N or Σ, whether the chip is a lone stack or a member's.
+        var editor = new BoardEditor();
+        var query = Loaded(editor, Named("ring_might", UpgradeMatch.Exactly, 2));
+        var key = KeyOf(query, "ring_might");
+        Apply(editor, query, BoardEdit.SetCount(key, 3), BoardEdit.ToggleLevels(key));
+        var chip = editor.View(query).ChipOf(key)!;
+        Assert.NotNull(chip.CountBadge);
+        Assert.NotNull(chip.TotalBadge);
+        var lifted = chip.Lifted;
+        Assert.Null(lifted.CountBadge);
+        Assert.Null(lifted.TotalBadge);
+        Assert.Equal((chip.Key, chip.Name, chip.Title), (lifted.Key, lifted.Name, lifted.Title));
+        Assert.Equal(chip.Tags, lifted.Tags);
+        Assert.Equal(chip.Stack, lifted.Stack);
+
+        var member = BoardEditor.Answer(Fixture("board-stack-member")["response"]!.ToJsonString()).View.ChipOf(1)!;
+        Assert.Equal(("Any wand", "×2"), (member.Name, member.CountBadge!.Text));
+        Assert.Equal([new ChipTag("+3", TagStyle.Upgrade)], member.Lifted.Tags);
+        Assert.Null(member.Lifted.CountBadge);
     }
 
     [Fact]

@@ -70,6 +70,13 @@ public sealed record BoardChip(long Key, string Name, string Title, string? Item
     bool InCluster, bool CanDetach, IReadOnlyList<long> Join, IReadOnlyList<JoinRefusal> Refuse)
 {
     /// <summary>
+    /// The chip as a drag picks it up: every drag moves one item, so the
+    /// chip that rides under the pointer is that one item — its name and
+    /// tags, without its <c>×N</c> or <c>Σ</c> badges.
+    /// </summary>
+    public BoardChip Lifted => this with { CountBadge = null, TotalBadge = null };
+
+    /// <summary>
     /// The chip's hover detail: its title, what it asks of one item, the
     /// relationships it stands in, and the problem it has, one line each.
     /// </summary>
@@ -182,8 +189,9 @@ public sealed class BoardView(IReadOnlyList<BoardEntry> entries, BoardCounts cou
     /// join the editor offers, or the refusal it gives; onto the empty board of
     /// the chip's own section (<paramref name="blanketBoard"/>), a cluster
     /// member comes out on its own while a lone chip stays where it is; onto
-    /// the remove zone, one item of the chip is taken away. Anything else does
-    /// nothing.
+    /// the remove zone, one item of the chip is taken away. Every drag moves
+    /// one item, so a stack gives up one copy, whichever the gesture. Anything
+    /// else does nothing.
     /// </summary>
     /// <param name="target">For a chip, its key; for a cluster, any member's.</param>
     public BoardDrop Drop(long source, DropKind kind, long target = 0, bool blanketBoard = false)
@@ -231,9 +239,14 @@ public sealed class BoardEdit
 
     /// <summary>Rewrites the list into its canonical encoding, once when it is loaded or imported.</summary>
     public static BoardEdit Normalize() => new("normalize");
-    /// <summary>Makes <paramref name="source"/> an either/or alternative of <paramref name="target"/>, any member of a chip or cluster.</summary>
+    /// <summary>
+    /// Makes one item of <paramref name="source"/> an either/or alternative of
+    /// <paramref name="target"/>, any member of a chip or cluster: the rest of
+    /// a stacked source stays where it was, and a stacked target keeps its
+    /// stack as a member.
+    /// </summary>
     public static BoardEdit Join(long source, long target) => new("join", new() { ["source"] = source, ["target"] = target });
-    /// <summary>Takes a cluster member out on its own; the rest of its stack stays in the cluster.</summary>
+    /// <summary>Takes one item of a cluster member out on its own; the rest of its stack stays in the cluster.</summary>
     public static BoardEdit Detach(long key) => new("detach", new() { ["key"] = key });
     /// <summary>
     /// Removes the chip with its whole stack: a cluster member with its own

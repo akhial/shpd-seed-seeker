@@ -414,10 +414,11 @@ public sealed partial class MainWindow : Window
     // Every requirement is a chip: drop one chip onto another for an either/or
     // cluster, drag a chip out of its cluster onto the empty board to make it
     // standalone again, drop it on the zone below to take one item off it.
-    // Everything else is a property of the chip itself, a cluster member's
-    // as much as a lone chip's — a stack badge (×N / ≤N) for "more of the
-    // same kind", and a Σ badge for a lone ring stack counting its levels
-    // together.
+    // Every drag moves one item: a stacked chip gives up one copy and keeps
+    // the rest, and the ghost is that one item, without badges. Everything
+    // else is a property of the chip itself, a cluster member's as much as a
+    // lone chip's — a stack badge (×N / ≤N) for "more of the same kind", and
+    // a Σ badge for a lone ring stack counting its levels together.
     // What the board holds, what every chip and badge says and what each
     // gesture writes back are the shared editor's (BoardEditor); the board is
     // redrawn from its answer on every change.
@@ -511,7 +512,7 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// A chip's face: the sprite with its glow, the name, the qualifiers, and
     /// the chip's own stack badges — a cluster member's too, inside the
-    /// cluster's outline.
+    /// cluster's outline. The drag ghost draws the lifted chip, which has none.
     /// </summary>
     private StackPanel ChipContent(BoardChip view)
     {
@@ -1041,14 +1042,13 @@ public sealed partial class MainWindow : Window
         return new SolidColorBrush(luminance > 0.55 ? Microsoft.UI.Colors.Black : Microsoft.UI.Colors.White);
     }
 
-    /// <summary>The chip's likeness that follows the pointer: its sprite and name on a solid ground with a shadow, and a pill for the drop's caption.</summary>
-    private Border GhostChip(BoardChip chip)
-    {
-        var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
-        content.Children.Add(ChipArt(chip));
-        content.Children.Add(ChipName(chip));
-        return GhostChip(content);
-    }
+    /// <summary>
+    /// The chip's likeness that follows the pointer: the one item the drag
+    /// moves (<see cref="BoardChip.Lifted"/>) — its sprite, name and tags,
+    /// without its ×N or Σ badges — on a solid ground with a shadow, and a
+    /// pill for the drop's caption.
+    /// </summary>
+    private Border GhostChip(BoardChip chip) => GhostChip(ChipContent(chip.Lifted));
 
     private Border GhostChip(StackPanel content)
     {
