@@ -124,7 +124,8 @@ pub fn present(app: &adw::Application) {
     });
 
     // The sheets save through the shared editor onto the rows as they are
-    // when they close; a refused save keeps its sheet open with why.
+    // when they close; a refused save keeps its sheet open with why. A
+    // closing requirement sheet returns to the chip it saved.
     let save_sheet: Rc<dyn Fn(&Draft) -> SaveResult> = Rc::new({
         let state = Rc::clone(&state);
         let query = Rc::clone(&query);
@@ -151,18 +152,37 @@ pub fn present(app: &adw::Application) {
         }
     });
     let edit_requirement: Rc<dyn Fn(Draft)> = Rc::new({
+        let query = Rc::clone(&query);
         let save_sheet = Rc::clone(&save_sheet);
         let edit_resin = Rc::clone(&edit_resin);
         let window = window.clone();
         move |draft| {
-            let save_sheet = Rc::clone(&save_sheet);
-            let edit_resin = Rc::clone(&edit_resin);
-            requirement_editor::present(
+            let focus = Rc::new(Cell::new(None));
+            let dialog = requirement_editor::present(
                 &window,
                 draft,
-                move |draft| save_sheet(draft),
-                move |draft| edit_resin(draft),
+                {
+                    let save_sheet = Rc::clone(&save_sheet);
+                    let focus = Rc::clone(&focus);
+                    move |draft| {
+                        let saved = save_sheet(draft);
+                        if let SaveResult::Saved { result, .. } = &saved {
+                            focus.set(result.focus);
+                        }
+                        saved
+                    }
+                },
+                {
+                    let edit_resin = Rc::clone(&edit_resin);
+                    move |draft| edit_resin(draft)
+                },
             );
+            let query = Rc::clone(&query);
+            dialog.connect_closed(move |_| {
+                if let Some(key) = focus.take() {
+                    query.focus_row(key);
+                }
+            });
         }
     });
 
@@ -205,6 +225,9 @@ pub fn present(app: &adw::Application) {
             }
             if result.changed {
                 refresh_all();
+                if let Some(key) = result.focus {
+                    query.focus_row(key);
+                }
             }
         }
     });

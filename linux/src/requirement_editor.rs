@@ -80,7 +80,7 @@ pub fn present(
     draft: Draft,
     on_save: impl Fn(&Draft) -> SaveResult + 'static,
     on_resin: impl Fn(Draft) + 'static,
-) {
+) -> adw::Dialog {
     let sheet = Sheet::new(draft);
     let is_new = sheet.form().mode == FormMode::New;
     let blanket = sheet.form().blanket;
@@ -160,6 +160,7 @@ pub fn present(
         }
     });
     editor.dialog.present(Some(parent));
+    editor.dialog.clone()
 }
 
 #[allow(clippy::too_many_lines)] // Widget assembly is declarative and linear.

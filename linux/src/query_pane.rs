@@ -98,6 +98,9 @@ pub struct QueryPane {
     board_view: RefCell<BoardCache>,
     /// The chip in flight, as the drop targets under it read it.
     dragging: RefCell<Option<Dragged>>,
+    /// Every chip on the board by the row it shows, for following the row
+    /// an edit or a closing sheet lands on.
+    chips: RefCell<Vec<(u64, gtk::Widget)>>,
     farming_buttons: Vec<(u8, gtk::ToggleButton)>,
     other_floors: gtk::Box,
     rooms_expander: adw::ExpanderRow,
@@ -387,6 +390,7 @@ impl QueryPane {
             stack_opened_on: Cell::new(1.0),
             board_view: RefCell::new(BoardCache::default()),
             dragging: RefCell::new(None),
+            chips: RefCell::new(Vec::new()),
             farming_buttons,
             other_floors,
             rooms_expander,
@@ -619,6 +623,7 @@ impl QueryPane {
         // away here rather than waiting for a drag that may never end.
         self.remove_revealer.set_reveal_child(false);
         self.dragging.replace(None);
+        self.chips.borrow_mut().clear();
         let view = self
             .board_view
             .borrow_mut()
@@ -779,6 +784,9 @@ impl QueryPane {
         }
         self.wire_chip(&widget, Some(chip.key));
         widget.add_controller(self.drop_target(Landing::Row(chip.key)));
+        self.chips
+            .borrow_mut()
+            .push((chip.key, widget.clone().upcast()));
         widget.upcast()
     }
 
@@ -1109,6 +1117,27 @@ impl QueryPane {
         {
             self.stack_target.set(Some((new, field)));
         }
+    }
+
+    /// Moves the focus to the chip showing row `key` — where an edit or a
+    /// closing sheet landed — once the gesture that led there has settled,
+    /// so a closing menu or dialog does not take the focus back.
+    pub fn focus_row(self: &Rc<Self>, key: u64) {
+        let pane = Rc::downgrade(self);
+        glib::idle_add_local_once(move || {
+            let Some(pane) = pane.upgrade() else {
+                return;
+            };
+            let chip = pane
+                .chips
+                .borrow()
+                .iter()
+                .find(|(shown, _)| *shown == key)
+                .map(|(_, chip)| chip.clone());
+            if let Some(chip) = chip {
+                chip.grab_focus();
+            }
+        });
     }
 
     fn show_menu(self: &Rc<Self>, chip: &gtk::Widget, key: Option<u64>) {
