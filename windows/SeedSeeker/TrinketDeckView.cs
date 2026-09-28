@@ -24,9 +24,12 @@ public sealed class TrinketDeckView : StackPanel
             {
                 CornerRadius = new CornerRadius(6), BorderThickness = new Thickness(applied ? 2 : 1),
                 IsChecked = applied, Padding = new Thickness(0), HorizontalContentAlignment = HorizontalAlignment.Stretch,
+                // Every card fills its quarter of the row, so all four are the
+                // same square whatever their names (a toggle button hugs its content by default).
+                HorizontalAlignment = HorizontalAlignment.Stretch, VerticalAlignment = VerticalAlignment.Top,
                 VerticalContentAlignment = VerticalAlignment.Stretch,
-                Background = Resource(applied ? "SystemFillColorSuccessBackgroundBrush" : "CardBackgroundFillColorDefaultBrush"),
-                BorderBrush = Resource(applied || matched ? "SystemFillColorSuccessBrush" : "CardStrokeColorDefaultBrush"),
+                Background = applied ? Palette.GreenFill : Resource("CardBackgroundFillColorDefaultBrush"),
+                BorderBrush = applied || matched ? Palette.Green : Palette.TrinketStroke,
             };
             StyleSelection(card);
             AutomationProperties.SetName(card, item.Name + (applied ? ", applied at +3" : "") + (matched ? ", matches requirement" : ""));
@@ -43,9 +46,12 @@ public sealed class TrinketDeckView : StackPanel
                 HorizontalAlignment = HorizontalAlignment.Stretch, Margin = new Thickness(0, 2, 0, 2),
                 Child = new TextBlock { Text = item.Name, FontSize = 12, TextWrapping = TextWrapping.NoWrap } };
             Grid.SetRow(name, 2); body.Children.Add(name);
-            if (applied) body.Children.Add(new TextBlock { Text = "Applied +3", FontSize = 11,
-                HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top,
-                Foreground = Resource("SystemFillColorSuccessBrush") });
+            if (applied)
+            {
+                var badge = Palette.Tag("Applied +3", Palette.Green, Palette.GreenFill);
+                badge.HorizontalAlignment = HorizontalAlignment.Center; badge.VerticalAlignment = VerticalAlignment.Top;
+                body.Children.Add(badge);
+            }
             card.Content = body;
             card.SizeChanged += (_, _) =>
             {
@@ -65,8 +71,8 @@ public sealed class TrinketDeckView : StackPanel
             var matched = matches.Contains(item.Id);
             var cell = new Border { Width = 24, Height = 24, CornerRadius = new CornerRadius(4),
                 HorizontalAlignment = HorizontalAlignment.Center, BorderThickness = new Thickness(1),
-                BorderBrush = matched ? Resource("SystemFillColorSuccessBrush") : null,
-                Background = matched ? Resource("SystemFillColorSuccessBackgroundBrush") : null };
+                BorderBrush = matched ? Palette.Green : null,
+                Background = matched ? Palette.GreenFill : null };
             var sprite = new SpriteView { SpriteIndex = item.SpriteIndex, SpriteSize = 20,
                 HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             cell.Child = sprite;
@@ -85,8 +91,10 @@ public sealed class TrinketDeckView : StackPanel
         // never paint an unselected hover as another applied choice.
         foreach (var state in new[] { "Checked", "CheckedPointerOver", "CheckedPressed", "CheckedDisabled" })
         {
-            button.Resources["ToggleButtonBorderBrush" + state] = Resource("SystemFillColorSuccessBrush");
-            button.Resources["ToggleButtonBackground" + state] = Resource("SystemFillColorSuccessBackgroundBrush");
+            button.Resources["ToggleButtonBorderBrush" + state] = Palette.Green;
+            button.Resources["ToggleButtonBackground" + state] = Palette.GreenFill;
+            // The fill is a tint, not the accent, so the name keeps the body ink.
+            button.Resources["ToggleButtonForeground" + state] = Resource(state == "CheckedDisabled" ? "TextFillColorDisabledBrush" : "TextFillColorPrimaryBrush");
         }
         foreach (var state in new[] { "PointerOver", "Pressed" })
         {

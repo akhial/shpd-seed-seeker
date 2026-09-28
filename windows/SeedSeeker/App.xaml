@@ -8,12 +8,132 @@
         <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
       </ResourceDictionary.MergedDictionaries>
 
+      <!-- The Shattered Pixel Dungeon palette the web app uses for its tags,
+           badges and highlights: the game's yellow for qualifiers, its upgrade
+           green for "+N", a softer green for matches, red for curses and
+           violet for secrets and Arcane Resin. The dark theme takes the web's
+           values; the light theme darkens each ink to read on a light ground. -->
+      <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Default">
+          <SolidColorBrush x:Key="ShpdAmberBrush" Color="#FFFFFF55"/>
+          <SolidColorBrush x:Key="ShpdAmberFillBrush" Color="#24FFFF55"/>
+          <SolidColorBrush x:Key="ShpdAmberFillHoverBrush" Color="#42FFFF55"/>
+          <SolidColorBrush x:Key="ShpdAmberStrokeBrush" Color="#73FFFF55"/>
+          <SolidColorBrush x:Key="ShpdAmberWashBrush" Color="#0AFFFF55"/>
+          <SolidColorBrush x:Key="ShpdUpgradeBrush" Color="#FF83FC64"/>
+          <SolidColorBrush x:Key="ShpdUpgradeFillBrush" Color="#1F83FC64"/>
+          <SolidColorBrush x:Key="ShpdGreenBrush" Color="#FF6EC98F"/>
+          <SolidColorBrush x:Key="ShpdGreenFillBrush" Color="#246EC98F"/>
+          <SolidColorBrush x:Key="ShpdGreenStrokeBrush" Color="#596EC98F"/>
+          <SolidColorBrush x:Key="ShpdGreenWashBrush" Color="#106EC98F"/>
+          <SolidColorBrush x:Key="ShpdCurseBrush" Color="#FFF2958A"/>
+          <SolidColorBrush x:Key="ShpdCurseFillBrush" Color="#24D96C5F"/>
+          <SolidColorBrush x:Key="ShpdDangerBrush" Color="#FFD96C5F"/>
+          <SolidColorBrush x:Key="ShpdDangerFillBrush" Color="#FF8D3633"/>
+          <SolidColorBrush x:Key="ShpdVioletBrush" Color="#FFC9A6F5"/>
+          <SolidColorBrush x:Key="ShpdVioletFillBrush" Color="#248C64DC"/>
+          <SolidColorBrush x:Key="ShpdVioletStrokeBrush" Color="#668C64DC"/>
+          <SolidColorBrush x:Key="ShpdVioletWashBrush" Color="#128C64DC"/>
+          <SolidColorBrush x:Key="ShpdTealBrush" Color="#FF58C2B4"/>
+          <SolidColorBrush x:Key="ShpdChipStrokeBrush" Color="#2EFFFFFF"/>
+          <SolidColorBrush x:Key="ShpdTrinketStrokeBrush" Color="#30BBA0EE"/>
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Light">
+          <SolidColorBrush x:Key="ShpdAmberBrush" Color="#FF7A6200"/>
+          <SolidColorBrush x:Key="ShpdAmberFillBrush" Color="#33F5C400"/>
+          <SolidColorBrush x:Key="ShpdAmberFillHoverBrush" Color="#55F5C400"/>
+          <SolidColorBrush x:Key="ShpdAmberStrokeBrush" Color="#99B08D00"/>
+          <SolidColorBrush x:Key="ShpdAmberWashBrush" Color="#14F5C400"/>
+          <SolidColorBrush x:Key="ShpdUpgradeBrush" Color="#FF2A7A12"/>
+          <SolidColorBrush x:Key="ShpdUpgradeFillBrush" Color="#2464D440"/>
+          <SolidColorBrush x:Key="ShpdGreenBrush" Color="#FF1F7A45"/>
+          <SolidColorBrush x:Key="ShpdGreenFillBrush" Color="#1F2E9E5B"/>
+          <SolidColorBrush x:Key="ShpdGreenStrokeBrush" Color="#662E9E5B"/>
+          <SolidColorBrush x:Key="ShpdGreenWashBrush" Color="#142E9E5B"/>
+          <SolidColorBrush x:Key="ShpdCurseBrush" Color="#FFB3261E"/>
+          <SolidColorBrush x:Key="ShpdCurseFillBrush" Color="#1FD96C5F"/>
+          <SolidColorBrush x:Key="ShpdDangerBrush" Color="#FFB3261E"/>
+          <SolidColorBrush x:Key="ShpdDangerFillBrush" Color="#FFB3261E"/>
+          <SolidColorBrush x:Key="ShpdVioletBrush" Color="#FF6A3EB5"/>
+          <SolidColorBrush x:Key="ShpdVioletFillBrush" Color="#1F8C64DC"/>
+          <SolidColorBrush x:Key="ShpdVioletStrokeBrush" Color="#668C64DC"/>
+          <SolidColorBrush x:Key="ShpdVioletWashBrush" Color="#148C64DC"/>
+          <SolidColorBrush x:Key="ShpdTealBrush" Color="#FF16786B"/>
+          <SolidColorBrush x:Key="ShpdChipStrokeBrush" Color="#29000000"/>
+          <SolidColorBrush x:Key="ShpdTrinketStrokeBrush" Color="#408C64DC"/>
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="HighContrast">
+          <SolidColorBrush x:Key="ShpdAmberBrush" Color="{ThemeResource SystemColorWindowTextColor}"/>
+          <SolidColorBrush x:Key="ShpdAmberFillBrush" Color="{ThemeResource SystemColorWindowColor}"/>
+          <SolidColorBrush x:Key="ShpdAmberFillHoverBrush" Color="{ThemeResource SystemColorHighlightColor}"/>
+          <SolidColorBrush x:Key="ShpdAmberStrokeBrush" Color="{ThemeResource SystemColorWindowTextColor}"/>
+          <SolidColorBrush x:Key="ShpdAmberWashBrush" Color="{ThemeResource SystemColorWindowColor}"/>
+          <SolidColorBrush x:Key="ShpdUpgradeBrush" Color="{ThemeResource SystemColorWindowTextColor}"/>
+          <SolidColorBrush x:Key="ShpdUpgradeFillBrush" Color="{ThemeResource SystemColorWindowColor}"/>
+          <SolidColorBrush x:Key="ShpdGreenBrush" Color="{ThemeResource SystemColorWindowTextColor}"/>
+          <SolidColorBrush x:Key="ShpdGreenFillBrush" Color="{ThemeResource SystemColorWindowColor}"/>
+          <SolidColorBrush x:Key="ShpdGreenStrokeBrush" Color="{ThemeResource SystemColorWindowTextColor}"/>
+          <SolidColorBrush x:Key="ShpdGreenWashBrush" Color="{ThemeResource SystemColorWindowColor}"/>
+          <SolidColorBrush x:Key="ShpdCurseBrush" Color="{ThemeResource SystemColorWindowTextColor}"/>
+          <SolidColorBrush x:Key="ShpdCurseFillBrush" Color="{ThemeResource SystemColorWindowColor}"/>
+          <SolidColorBrush x:Key="ShpdDangerBrush" Color="{ThemeResource SystemColorHighlightColor}"/>
+          <SolidColorBrush x:Key="ShpdDangerFillBrush" Color="{ThemeResource SystemColorHighlightColor}"/>
+          <SolidColorBrush x:Key="ShpdVioletBrush" Color="{ThemeResource SystemColorWindowTextColor}"/>
+          <SolidColorBrush x:Key="ShpdVioletFillBrush" Color="{ThemeResource SystemColorWindowColor}"/>
+          <SolidColorBrush x:Key="ShpdVioletStrokeBrush" Color="{ThemeResource SystemColorWindowTextColor}"/>
+          <SolidColorBrush x:Key="ShpdVioletWashBrush" Color="{ThemeResource SystemColorWindowColor}"/>
+          <SolidColorBrush x:Key="ShpdTealBrush" Color="{ThemeResource SystemColorWindowTextColor}"/>
+          <SolidColorBrush x:Key="ShpdChipStrokeBrush" Color="{ThemeResource SystemColorWindowTextColor}"/>
+          <SolidColorBrush x:Key="ShpdTrinketStrokeBrush" Color="{ThemeResource SystemColorWindowTextColor}"/>
+        </ResourceDictionary>
+      </ResourceDictionary.ThemeDictionaries>
+
+      <!-- The web app's green accent, rgb(86, 189, 82), in the shades Fluent
+           derives its accent fills and text from: the dark theme fills with
+           Light2 and writes with Light3, the light theme fills with Dark1 and
+           writes with Dark2. -->
+      <Color x:Key="SystemAccentColor">#FF3F9A3C</Color>
+      <Color x:Key="SystemAccentColorLight1">#FF4CAE48</Color>
+      <Color x:Key="SystemAccentColorLight2">#FF56BD52</Color>
+      <Color x:Key="SystemAccentColorLight3">#FF8EDB8A</Color>
+      <Color x:Key="SystemAccentColorDark1">#FF2E7D2B</Color>
+      <Color x:Key="SystemAccentColorDark2">#FF25661F</Color>
+      <Color x:Key="SystemAccentColorDark3">#FF1B4F17</Color>
+
+      <FontFamily x:Key="MonoFont">Cascadia Mono, Consolas</FontFamily>
+
       <Style x:Key="SectionHeader" TargetType="TextBlock" BasedOn="{StaticResource BodyStrongTextBlockStyle}">
         <Setter Property="Margin" Value="1,22,0,8"/>
       </Style>
       <Style x:Key="Caption" TargetType="TextBlock" BasedOn="{StaticResource CaptionTextBlockStyle}">
         <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}"/>
         <Setter Property="TextWrapping" Value="Wrap"/>
+      </Style>
+
+      <!-- A tag: the monospace pill every qualifier, count and badge shares,
+           on the board and in Scout alike (the web's .d1-chip-tag). Its
+           colours come from the palette above. -->
+      <Style x:Key="Tag" TargetType="Border">
+        <Setter Property="Height" Value="16"/>
+        <Setter Property="Padding" Value="4,0"/>
+        <Setter Property="CornerRadius" Value="4"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+      </Style>
+      <Style x:Key="TagText" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource MonoFont}"/>
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="LineHeight" Value="16"/>
+        <Setter Property="LineStackingStrategy" Value="BlockLineHeight"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
+      </Style>
+      <!-- A match chip: a capsule outlined in its own colour (the web's .d1-badge-match). -->
+      <Style x:Key="MatchChip" TargetType="Border">
+        <Setter Property="Height" Value="22"/>
+        <Setter Property="Padding" Value="7,0,8,0"/>
+        <Setter Property="CornerRadius" Value="11"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="VerticalAlignment" Value="Center"/>
       </Style>
 
       <!-- Static card, PowerToys settings-card look -->

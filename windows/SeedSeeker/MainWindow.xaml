@@ -64,10 +64,10 @@
             <!-- Only there while a chip is in flight: the pointer's way to delete. -->
             <Border x:Name="RemoveZone" Visibility="Collapsed"
                     Margin="0,8,0,0" Padding="0,8" CornerRadius="10" BorderThickness="1"
-                    Background="Transparent" BorderBrush="{ThemeResource SystemFillColorCriticalBrush}">
+                    Background="Transparent" BorderBrush="{ThemeResource ShpdDangerBrush}">
               <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center">
-                <FontIcon x:Name="RemoveZoneIcon" Glyph="&#xE74D;" FontSize="12" Foreground="{ThemeResource SystemFillColorCriticalBrush}"/>
-                <TextBlock x:Name="RemoveZoneLabel" Text="drop to remove" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource SystemFillColorCriticalBrush}"/>
+                <FontIcon x:Name="RemoveZoneIcon" Glyph="&#xE74D;" FontSize="12" Foreground="{ThemeResource ShpdDangerBrush}"/>
+                <TextBlock x:Name="RemoveZoneLabel" Text="drop to remove" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource ShpdDangerBrush}"/>
               </StackPanel>
             </Border>
             <TextBlock x:Name="NoRequirements" Text="No requirements yet. Add one to describe the item you're hunting for." Style="{StaticResource Caption}" Margin="1,0,1,10"/>
@@ -75,7 +75,7 @@
               <Expander.Header>
                 <StackPanel Orientation="Horizontal" Spacing="8">
                   <TextBlock x:Name="BlanketHeader" Text="Blanket Requirements (0)" VerticalAlignment="Center"/>
-                  <Button AutomationProperties.Name="About blanket requirements" ToolTipService.ToolTip="About blanket requirements">
+                  <Button Style="{StaticResource SubtleIconButton}" AutomationProperties.Name="About blanket requirements" ToolTipService.ToolTip="About blanket requirements">
                     <FontIcon Glyph="&#xE946;" FontSize="14"/>
                     <Button.Flyout>
                       <Flyout>
@@ -125,10 +125,13 @@
                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition/></Grid.RowDefinitions>
                 <TextBlock Text="Wandmaker" Style="{StaticResource SectionHeader}"/>
                 <Border Grid.Row="1" Style="{StaticResource SettingsCard}">
-                  <Grid ColumnSpacing="14">
+                  <!-- Top-aligned: the card stretches to its row, and the label
+                       has to stay beside the picker rather than centre in it. -->
+                  <Grid ColumnSpacing="14" VerticalAlignment="Top">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/></Grid.ColumnDefinitions>
                     <TextBlock Text="Quest" VerticalAlignment="Center"/>
-                    <ComboBox Grid.Column="1" x:Name="WandmakerQuestPicker" HorizontalAlignment="Stretch" MinWidth="0" SelectionChanged="WandmakerQuestChanged"/>
+                    <ComboBox Grid.Column="1" x:Name="WandmakerQuestPicker" HorizontalAlignment="Stretch" VerticalAlignment="Center" MinWidth="0" SelectionChanged="WandmakerQuestChanged"
+                              AutomationProperties.Name="Wandmaker quest"/>
                   </Grid>
                 </Border>
               </Grid>
@@ -204,6 +207,38 @@
         </ScrollView>
         <StackPanel Grid.Row="2" Padding="20,14,20,10" Spacing="10" BorderThickness="0,1,0,0" BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}">
           <Button x:Name="StartButton" Style="{StaticResource AccentButtonStyle}" HorizontalAlignment="Stretch" Padding="0,9" Click="Start_Click">
+            <!-- While a search runs this is Cancel Search, drawn with the
+                 default style (SetStartButton), whose fills these make the
+                 web's danger red; the accent style never reads them. -->
+            <Button.Resources>
+              <ResourceDictionary>
+                <ResourceDictionary.ThemeDictionaries>
+                  <ResourceDictionary x:Key="Default">
+                    <SolidColorBrush x:Key="ButtonBackground" Color="#FF8D3633"/>
+                    <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FF9E4440"/>
+                    <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#FF7A2E2B"/>
+                    <SolidColorBrush x:Key="ButtonBorderBrush" Color="#FFB25741"/>
+                    <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FFB25741"/>
+                    <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#FFB25741"/>
+                    <SolidColorBrush x:Key="ButtonForeground" Color="White"/>
+                    <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="White"/>
+                    <SolidColorBrush x:Key="ButtonForegroundPressed" Color="#E6FFFFFF"/>
+                  </ResourceDictionary>
+                  <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="ButtonBackground" Color="#FFB3261E"/>
+                    <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#FFC42B22"/>
+                    <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#FF9C211A"/>
+                    <SolidColorBrush x:Key="ButtonBorderBrush" Color="#FF9C211A"/>
+                    <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#FF9C211A"/>
+                    <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#FF9C211A"/>
+                    <SolidColorBrush x:Key="ButtonForeground" Color="White"/>
+                    <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="White"/>
+                    <SolidColorBrush x:Key="ButtonForegroundPressed" Color="#E6FFFFFF"/>
+                  </ResourceDictionary>
+                  <ResourceDictionary x:Key="HighContrast"/>
+                </ResourceDictionary.ThemeDictionaries>
+              </ResourceDictionary>
+            </Button.Resources>
             <StackPanel Orientation="Horizontal" Spacing="8">
               <FontIcon x:Name="StartIcon" Glyph="&#xE768;" FontSize="14"/>
               <TextBlock x:Name="StartLabel" Text="Start Search"/>
@@ -270,7 +305,7 @@
             <TextBlock Grid.Column="1" Text="Seed" Style="{StaticResource Caption}"/>
           </Grid>
           <ListView x:Name="ResultsList" Grid.Row="3" Margin="-12,4,-12,0" Padding="12,0,12,16"
-                    ScrollViewer.HorizontalScrollMode="Disabled" ScrollViewer.HorizontalScrollBarVisibility="Hidden"
+                    ScrollViewer.HorizontalScrollMode="Disabled" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                     SelectionChanged="ResultsList_SelectionChanged" DoubleTapped="ResultsList_DoubleTapped">
             <ListView.ItemContainerStyle>
               <Style TargetType="ListViewItem">
@@ -371,7 +406,7 @@
               <TextBlock Text="Enter a canonical seed, or select a search result, to inspect its item manifest." Style="{StaticResource Caption}" TextAlignment="Center"/>
             </StackPanel>
             <ListView x:Name="ScoutList" Visibility="Collapsed" SelectionMode="None" Padding="12,4,12,16"
-                      ScrollViewer.HorizontalScrollMode="Disabled" ScrollViewer.HorizontalScrollBarVisibility="Hidden">
+                      ScrollViewer.HorizontalScrollMode="Disabled" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
               <ListView.ItemsPanel><ItemsPanelTemplate><StackPanel/></ItemsPanelTemplate></ListView.ItemsPanel>
               <ListView.ItemContainerStyle>
                 <Style TargetType="ListViewItem">
@@ -384,29 +419,36 @@
                   <GroupStyle.Panel><ItemsPanelTemplate><StackPanel/></ItemsPanelTemplate></GroupStyle.Panel>
                   <GroupStyle.HeaderTemplate>
                     <DataTemplate>
-                      <ContentControl Content="{Binding Header}" HorizontalContentAlignment="Stretch"/>
+                      <ContentControl Content="{Binding Header}" HorizontalContentAlignment="Stretch" Loaded="FloorHeader_Loaded"/>
                     </DataTemplate>
                   </GroupStyle.HeaderTemplate>
                 </GroupStyle>
               </ListView.GroupStyle>
               <ListView.ItemTemplate>
                 <DataTemplate>
-                  <Grid ColumnSpacing="10" Padding="0,6" Opacity="{Binding RowOpacity}">
+                  <!-- A matched row is washed in its match colour, green or the
+                       resin's violet, as the web list highlights it; the wash
+                       reaches past the item's padding so the text stays put. -->
+                  <Grid ColumnSpacing="10" Padding="8,6" Margin="-8,1" CornerRadius="6" Background="{Binding RowBackground}" Opacity="{Binding RowOpacity}">
                     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                     <local:SpriteView SpriteIndex="{Binding SpriteIndex}" TypeIconIndex="{Binding TypeIconIndex}" SpriteSize="22"
                                       GlowColor="{Binding GlowColor}" GlowPeriod="{Binding GlowPeriod}"
                                       VerticalAlignment="Center"/>
                     <StackPanel Grid.Column="1" Spacing="2">
+                      <!-- The name and its badges: the same monospace tags the
+                           requirement board draws, in the Shattered palette. -->
                       <StackPanel Orientation="Horizontal" Spacing="6">
-                        <TextBlock Text="{Binding ItemName}" FontWeight="{Binding Weight}" TextWrapping="Wrap"/>
-                        <TextBlock Text="{Binding Upgrade}" Visibility="{Binding UpgradeVisibility}" Foreground="{ThemeResource SystemFillColorSuccessBrush}" FontSize="12" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                        <Border Visibility="{Binding CurseVisibility}" Background="{ThemeResource SystemFillColorCriticalBackgroundBrush}" CornerRadius="8" Padding="7,1" VerticalAlignment="Center">
-                          <TextBlock Text="cursed" FontSize="11" Foreground="{ThemeResource SystemFillColorCriticalBrush}"/>
+                        <TextBlock Text="{Binding ItemName}" FontWeight="{Binding Weight}" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                        <Border Visibility="{Binding UpgradeVisibility}" Style="{StaticResource Tag}" Background="{ThemeResource ShpdUpgradeFillBrush}">
+                          <TextBlock Text="{Binding Upgrade}" Style="{StaticResource TagText}" Foreground="{ThemeResource ShpdUpgradeBrush}"/>
                         </Border>
-                        <Border Visibility="{Binding SecretVisibility}" Background="{ThemeResource SystemFillColorAttentionBackgroundBrush}" CornerRadius="8" Padding="7,1" VerticalAlignment="Center"
+                        <Border Visibility="{Binding CurseVisibility}" Style="{StaticResource Tag}" Background="{ThemeResource ShpdCurseFillBrush}">
+                          <TextBlock Text="cursed" Style="{StaticResource TagText}" Foreground="{ThemeResource ShpdCurseBrush}"/>
+                        </Border>
+                        <Border Visibility="{Binding SecretVisibility}" Style="{StaticResource Tag}" Background="{ThemeResource ShpdVioletFillBrush}"
                                 ToolTipService.ToolTip="Hidden in a secret room — search to reveal it">
-                          <TextBlock Text="secret" FontSize="11" Foreground="{ThemeResource SystemFillColorAttentionBrush}"/>
+                          <TextBlock Text="secret" Style="{StaticResource TagText}" Foreground="{ThemeResource ShpdVioletBrush}"/>
                         </Border>
                       </StackPanel>
                       <StackPanel Orientation="Horizontal" Spacing="6">
@@ -417,28 +459,30 @@
                       <TextBlock Text="{Binding Accessibility}" Visibility="{Binding AccessibilityVisibility}" FontSize="11" Foreground="{ThemeResource TextFillColorTertiaryBrush}" TextWrapping="Wrap"/>
                     </StackPanel>
                     <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                    <Border Visibility="{Binding MatchVisibility}" Background="{ThemeResource SystemFillColorSuccessBackgroundBrush}" CornerRadius="10" Padding="8,2">
-                      <StackPanel Orientation="Horizontal" Spacing="5">
-                        <FontIcon Glyph="&#xE73E;" FontSize="10" Foreground="{ThemeResource SystemFillColorSuccessBrush}"/>
-                        <TextBlock Text="Match" FontSize="11" FontWeight="SemiBold" Foreground="{ThemeResource SystemFillColorSuccessBrush}"/>
-                      </StackPanel>
-                    </Border>
-                    <!-- A matched wand the query consumes as Arcane Resin. The 1px border
-                         comes out of the padding so both match chips are the same size. -->
-                    <Border Visibility="{Binding ResinDonorVisibility}" Background="#248C64DC" BorderBrush="#668C64DC" BorderThickness="1" CornerRadius="10" Padding="7,1"
-                            ToolTipService.ToolTip="Arcane Resin donor match" AutomationProperties.Name="Arcane Resin donor match">
-                      <StackPanel Orientation="Horizontal" Spacing="5">
-                        <local:SpriteView SpriteIndex="317" SpriteSize="14" VerticalAlignment="Center"/>
-                        <TextBlock Text="Match" FontSize="11" FontWeight="SemiBold" Foreground="#C9A6F5" VerticalAlignment="Center"/>
-                      </StackPanel>
-                    </Border>
-                    <Border Visibility="{Binding ChoiceVisibility}" Background="{ThemeResource SubtleFillColorSecondaryBrush}" BorderBrush="{ThemeResource ControlStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="10" Padding="8,2"
-                            ToolTipService.ToolTip="{Binding Accessibility}" AutomationProperties.Name="{Binding Accessibility}">
-                      <StackPanel Orientation="Horizontal" Spacing="5">
-                        <FontIcon Glyph="&#xE8FD;" FontSize="11"/>
-                        <TextBlock Text="{Binding Choice}" FontSize="11" FontWeight="SemiBold"/>
-                      </StackPanel>
-                    </Border>
+                      <Border Visibility="{Binding MatchVisibility}" Style="{StaticResource MatchChip}"
+                              Background="{ThemeResource ShpdGreenFillBrush}" BorderBrush="{ThemeResource ShpdGreenStrokeBrush}">
+                        <StackPanel Orientation="Horizontal" Spacing="5">
+                          <FontIcon Glyph="&#xE73E;" FontSize="10" Foreground="{ThemeResource ShpdGreenBrush}" VerticalAlignment="Center"/>
+                          <TextBlock Text="Match" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource ShpdGreenBrush}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                      </Border>
+                      <!-- A matched wand the query consumes as Arcane Resin: the same chip in the resin's violet. -->
+                      <Border Visibility="{Binding ResinDonorVisibility}" Style="{StaticResource MatchChip}"
+                              Background="{ThemeResource ShpdVioletFillBrush}" BorderBrush="{ThemeResource ShpdVioletStrokeBrush}"
+                              ToolTipService.ToolTip="Arcane Resin donor match" AutomationProperties.Name="Arcane Resin donor match">
+                        <StackPanel Orientation="Horizontal" Spacing="5">
+                          <local:SpriteView SpriteIndex="317" SpriteSize="14" VerticalAlignment="Center"/>
+                          <TextBlock Text="Match" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource ShpdVioletBrush}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                      </Border>
+                      <Border Visibility="{Binding ChoiceVisibility}" Height="18" Padding="5,0" CornerRadius="4" BorderThickness="1" VerticalAlignment="Center"
+                              Background="{ThemeResource SubtleFillColorSecondaryBrush}" BorderBrush="{ThemeResource ShpdChipStrokeBrush}"
+                              ToolTipService.ToolTip="{Binding Accessibility}" AutomationProperties.Name="{Binding Accessibility}">
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                          <FontIcon Glyph="&#xE8FD;" FontSize="10" Foreground="{ThemeResource TextFillColorSecondaryBrush}" VerticalAlignment="Center"/>
+                          <TextBlock Text="{Binding Choice}" Style="{StaticResource TagText}" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                        </StackPanel>
+                      </Border>
                     </StackPanel>
                     <ContentControl Grid.Row="1" Grid.ColumnSpan="3" Content="{Binding TrinketDeck}" HorizontalContentAlignment="Stretch"/>
                   </Grid>

@@ -124,13 +124,10 @@ public sealed partial class MainWindow : Window
         DailyCalendar.MinDate = new DateTimeOffset(new DateTime(1970, 1, 1));
         DailyCalendar.MaxDate = new DateTimeOffset(new DateTime(9999, 12, 31));
         TrinketDock.RenderTransform = trinketDockTransform;
-        ScoutList.Loaded += (_, _) =>
-        {
-            scoutScroll = Descendants<ScrollViewer>(ScoutList).FirstOrDefault();
-            if (scoutScroll is not null) scoutScroll.ViewChanged += (_, _) => UpdateTrinketDock();
-        };
+        ScoutList.Loaded += (_, _) => HookScoutScroll();
         ScoutList.LayoutUpdated += (_, _) =>
         {
+            HookScoutScroll();
             RestoreScoutAnchor();
             UpdateTrinketDock();
         };
@@ -464,13 +461,8 @@ public sealed partial class MainWindow : Window
     private readonly List<(FrameworkElement Target, object Tip)> suspendedToolTips = [];
 
     private static Brush ChipFill => ThemeBrush("CardBackgroundFillColorSecondaryBrush", Microsoft.UI.Colors.Transparent);
-    private static Brush ChipEdge => ThemeBrush("CardStrokeColorDefaultBrush", Microsoft.UI.Colors.Gray);
-    private static Brush DangerInk => ThemeBrush("SystemFillColorCriticalBrush", Microsoft.UI.Colors.IndianRed);
-    private static Brush CautionInk => ThemeBrush("SystemFillColorCautionBrush", Microsoft.UI.Colors.Goldenrod);
-    private static Brush CautionFill => ThemeBrush("SystemFillColorCautionBackgroundBrush", Microsoft.UI.Colors.Transparent);
-    private static Brush SuccessInk => ThemeBrush("SystemFillColorSuccessBrush", Microsoft.UI.Colors.MediumSeaGreen);
-    private static Brush SuccessFill => ThemeBrush("SystemFillColorSuccessBackgroundBrush", Microsoft.UI.Colors.Transparent);
-    private static FontFamily Mono => new("Cascadia Mono, Consolas");
+    private static Brush ChipEdge => Palette.ChipStroke;
+    private static Brush DangerInk => Palette.Danger;
 
     /// <summary>The shared editor's board, asked once per requirement list.</summary>
     private readonly BoardEditor boardEditor = new();
@@ -526,7 +518,7 @@ public sealed partial class MainWindow : Window
         foreach (var tag in view.Tags) content.Children.Add(ChipTagPill(tag));
         if (EffectBadge(view) is UIElement effect) content.Children.Add(effect);
         foreach (var tag in view.TrailingTags) content.Children.Add(ChipTagPill(tag));
-        if (view.Uncursed) content.Children.Add(ChipTagPill("\u2713", SuccessInk, SuccessFill));
+        if (view.Uncursed) content.Children.Add(UncursedTag());
         foreach (var badge in StackBadges(view)) content.Children.Add(badge);
         return content;
     }
@@ -555,17 +547,18 @@ public sealed partial class MainWindow : Window
     private StackPanel ArcaneResinContent(ResinChip resin)
     {
         var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, VerticalAlignment = VerticalAlignment.Center };
-        content.Children.Add(new SpriteView { SpriteIndex = 317, SpriteSize = 20, VerticalAlignment = VerticalAlignment.Center });
+        // Sized and tucked against the name like every other chip's art (ChipArt).
+        content.Children.Add(new SpriteView { SpriteIndex = 317, SpriteSize = 18, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, -2, 0) });
         content.Children.Add(new TextBlock { Text = resin.Name, FontSize = 13, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
         foreach (var tag in resin.Tags) content.Children.Add(ChipTagPill(tag));
-        if (resin.Uncursed) content.Children.Add(ChipTagPill("\u2713", SuccessInk, SuccessFill));
+        if (resin.Uncursed) content.Children.Add(UncursedTag("Uncursed wands"));
         return content;
     }
 
     private Button ArcaneResinChip(ResinChip resin)
     {
         var menu = new MenuFlyout();
-        var edit = new MenuFlyoutItem { Text = "Edit\u2026" };
+        var edit = new MenuFlyoutItem { Text = "Edit\u2026", Icon = new FontIcon { Glyph = "" } };
         edit.Click += async (_, _) => await EditArcaneResin();
         var remove = new MenuFlyoutItem { Text = "Remove", Icon = new FontIcon { Glyph = "" } };
         remove.Click += (_, _) => RemoveArcaneResin();
@@ -616,12 +609,12 @@ public sealed partial class MainWindow : Window
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, Margin = new Thickness(4, 3, 4, 3), VerticalAlignment = VerticalAlignment.Center };
         for (var position = 0; position < entry.Chips.Count; position++)
         {
-            if (position > 0) row.Children.Add(new TextBlock { Text = "or", FontFamily = Mono, FontSize = 11, FontWeight = FontWeights.Bold, Foreground = CautionInk, Margin = new Thickness(4, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center });
+            if (position > 0) row.Children.Add(new TextBlock { Text = "or", FontFamily = Palette.Mono, FontSize = 11, FontWeight = FontWeights.Bold, Foreground = Palette.Amber, Opacity = 0.85, Margin = new Thickness(4, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center });
             row.Children.Add(Chip(entry.Chips[position]));
         }
         var anchor = entry.Members[0];
         var capsule = new Grid { Tag = anchor, VerticalAlignment = VerticalAlignment.Center };
-        capsule.Children.Add(DashedCapsule(20, CautionInk, CautionFill));
+        capsule.Children.Add(DashedCapsule(20, Palette.AmberStroke, Palette.AmberWash));
         capsule.Children.Add(row);
         // After its members, which Chip() has already listed.
         dropTargets.Add(new DropTarget(DropKind.Cluster, capsule, anchor));
@@ -648,29 +641,37 @@ public sealed partial class MainWindow : Window
         };
         chip.Tag = blanket;
         ToolTipService.SetToolTip(chip, blanket ? "Add a blanket requirement" : "Add a requirement");
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(chip, blanket ? "Add a blanket requirement" : "Add a requirement");
         if (!blanket) chip.KeyboardAccelerators.Add(new KeyboardAccelerator { Modifiers = VirtualKeyModifiers.Control, Key = VirtualKey.N });
         chip.Click += AddRequirement_Click;
         return chip;
     }
 
-    /// <summary>A tiny monospace pill: the chip's tier, upgrade and floor qualifiers.</summary>
-    private static Border ChipTagPill(string text, Brush ink, Brush fill) => new()
-    {
-        Background = fill, CornerRadius = new CornerRadius(4), Padding = new Thickness(4, 0, 4, 0), VerticalAlignment = VerticalAlignment.Center,
-        Child = new TextBlock { Text = text, FontFamily = Mono, FontSize = 11, FontWeight = FontWeights.SemiBold, Foreground = ink },
-    };
-
     /// <summary>
-    /// A chip tag as a pill: the upgrade, and the resin the resin chip counts,
-    /// green; every other qualifier amber. A tag that explains itself
-    /// (<c>Auto</c>, <c>Mage +2</c>) carries its own tooltip.
+    /// A chip tag as a pill (<see cref="Palette.Tag"/>): the upgrade in the
+    /// game's upgrade green, the resin the resin chip counts in the softer
+    /// match green, every other qualifier in its yellow. A tag that explains
+    /// itself (<c>Auto</c>, <c>Mage +2</c>) carries its own tooltip.
     /// </summary>
     private static Border ChipTagPill(ChipTag tag)
     {
-        var green = tag.Style is TagStyle.Upgrade or TagStyle.Credit;
-        var pill = ChipTagPill(tag.Text, green ? SuccessInk : CautionInk, green ? SuccessFill : CautionFill);
+        var pill = tag.Style switch
+        {
+            TagStyle.Upgrade => Palette.Tag(tag.Text, Palette.Upgrade, Palette.UpgradeFill),
+            TagStyle.Credit => Palette.Tag(tag.Text, Palette.Green, Palette.GreenFill),
+            _ => Palette.Tag(tag.Text, Palette.Amber, Palette.AmberFill),
+        };
         if (tag.Tooltip is string tooltip) ToolTipService.SetToolTip(pill, tooltip);
         return pill;
+    }
+
+    /// <summary>The uncursed filter's check mark, in the match green.</summary>
+    private static Border UncursedTag(string tooltip = "Uncursed")
+    {
+        var tag = Palette.Tag("", Palette.Green, Palette.GreenFill);
+        tag.Child = new FontIcon { Glyph = "", FontSize = 10, Foreground = Palette.Green, VerticalAlignment = VerticalAlignment.Center };
+        ToolTipService.SetToolTip(tag, tooltip);
+        return tag;
     }
 
     /// <summary>
@@ -725,26 +726,32 @@ public sealed partial class MainWindow : Window
         var key = chip.Key;
         var stack = chip.Stack;
         if (chip.CountBadge is { } count)
-            badges.Add(StackBadge(count, SuccessInk, SuccessFill, "How many", stack.Count, 1, stack.CountMax,
+            badges.Add(StackBadge(count, "How many", stack.Count, 1, stack.CountMax,
                 value => EditBoard(BoardEdit.SetCount(key, value))));
         if (chip.TotalBadge is { } total && stack.Total is int current)
-            badges.Add(StackBadge(total, CautionInk, CautionFill, "Combined level", current, 1, Math.Max(1, stack.LevelCapacity),
+            badges.Add(StackBadge(total, "Combined level", current, 1, Math.Max(1, stack.LevelCapacity),
                 value => EditBoard(BoardEdit.SetTotal(key, value))));
         return badges;
     }
 
-    private static Button StackBadge(BoardBadge badge, Brush ink, Brush fill, string header, int value, int minimum, int maximum, Action<int> apply)
+    /// <summary>
+    /// A stack badge: another of the chip's tags (the same monospace pill,
+    /// in the same yellow), only pressable, so it brightens under the pointer.
+    /// </summary>
+    private static Button StackBadge(BoardBadge badge, string header, int value, int minimum, int maximum, Action<int> apply)
     {
         var box = new NumberBox { Header = header, Value = value, Minimum = minimum, Maximum = maximum, SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Inline, Width = 180 };
         var flyout = new Flyout { Content = box };
         flyout.Closed += (_, _) => { if (!double.IsNaN(box.Value) && (int)box.Value != value) apply(Math.Clamp((int)box.Value, minimum, maximum)); };
         var button = new Button
         {
-            Content = new TextBlock { Text = badge.Text, FontFamily = Mono, FontSize = 11, FontWeight = FontWeights.Bold, Foreground = ink },
-            Background = fill, BorderThickness = new Thickness(0), CornerRadius = new CornerRadius(9),
-            Padding = new Thickness(6, 0, 6, 0), MinWidth = 0, MinHeight = 0, Height = 18,
+            Content = new TextBlock { Text = badge.Text, Style = (Style)Application.Current.Resources["TagText"], Foreground = Palette.Amber },
+            Background = Palette.AmberFill, BorderThickness = new Thickness(0), CornerRadius = new CornerRadius(4),
+            Padding = new Thickness(4, 0, 4, 0), MinWidth = 0, MinHeight = 0, Height = 16,
             VerticalAlignment = VerticalAlignment.Center, Flyout = flyout,
         };
+        button.Resources["ButtonBackgroundPointerOver"] = Palette.AmberFillHover;
+        button.Resources["ButtonBackgroundPressed"] = Palette.AmberFillHover;
         ToolTipService.SetToolTip(button, badge.Tooltip);
         return button;
     }
@@ -758,12 +765,12 @@ public sealed partial class MainWindow : Window
     {
         var key = chip.Key;
         var menu = new MenuFlyout();
-        var edit = new MenuFlyoutItem { Text = "Edit\u2026" };
+        var edit = new MenuFlyoutItem { Text = "Edit\u2026", Icon = new FontIcon { Glyph = "" } };
         edit.Click += async (_, _) => await EditChip(key);
         menu.Items.Add(edit);
         // "Either/or with…" names the entries this chip may join, a cluster
         // once, the menu's way of saying the drop a pointer would make.
-        var join = new MenuFlyoutSubItem { Text = "Either/or with\u2026" };
+        var join = new MenuFlyoutSubItem { Text = "Either/or with\u2026", Icon = new FontIcon { Glyph = "" } };
         foreach (var (name, target) in boardView.JoinChoices(key))
         {
             var choice = new MenuFlyoutItem { Text = name };
@@ -775,7 +782,7 @@ public sealed partial class MainWindow : Window
         if (stack.CanChangeCount)
         {
             menu.Items.Add(new MenuFlyoutSeparator());
-            var howMany = new MenuFlyoutSubItem { Text = "How many" };
+            var howMany = new MenuFlyoutSubItem { Text = "How many", Icon = new FontIcon { Glyph = "" } };
             for (var wanted = 1; wanted <= stack.CountMax; wanted++)
             {
                 var count = wanted;
@@ -787,14 +794,14 @@ public sealed partial class MainWindow : Window
         }
         if (stack.CanCountLevels)
         {
-            var levels = new MenuFlyoutItem { Text = stack.Total is null ? "Count levels together" : "Stop counting levels" };
+            var levels = new MenuFlyoutItem { Text = stack.Total is null ? "Count levels together" : "Stop counting levels", Icon = new FontIcon { Glyph = "" } };
             levels.Click += (_, _) => EditBoard(BoardEdit.ToggleLevels(key));
             menu.Items.Add(levels);
         }
         if (chip.CanDetach)
         {
             menu.Items.Add(new MenuFlyoutSeparator());
-            var detach = new MenuFlyoutItem { Text = "On its own" };
+            var detach = new MenuFlyoutItem { Text = "On its own", Icon = new FontIcon { Glyph = "" } };
             detach.Click += (_, _) => EditBoard(BoardEdit.Detach(key));
             menu.Items.Add(detach);
         }
@@ -914,11 +921,11 @@ public sealed partial class MainWindow : Window
         if (caption is not null && target is not null)
         {
             ghostCaptionText.Text = caption;
-            ghostCaption.Background = drop.Effect == DropEffect.Refused ? DangerInk : target.Kind switch
+            ghostCaption.Background = drop.Effect == DropEffect.Refused ? Palette.DangerFill : target.Kind switch
             {
-                DropKind.Remove => DangerInk,
+                DropKind.Remove => Palette.DangerFill,
                 DropKind.Board => ThemeBrush("AccentFillColorDefaultBrush", Microsoft.UI.Colors.DodgerBlue),
-                _ => CautionInk,
+                _ => Palette.Amber,
             };
             ghostCaptionText.Foreground = InkOn(ghostCaption.Background);
         }
@@ -1016,7 +1023,7 @@ public sealed partial class MainWindow : Window
         {
             case { Kind: DropKind.Chip, Element: Button chip }:
                 var (edge, fill) = (chip.BorderBrush, chip.Background);
-                chip.BorderBrush = CautionInk; chip.Background = CautionFill;
+                chip.BorderBrush = Palette.Amber; chip.Background = Palette.AmberFill;
                 unlight = () => { chip.BorderBrush = edge; chip.Background = fill; };
                 break;
             case { Kind: DropKind.Cluster, Element: Grid { Children: [Microsoft.UI.Xaml.Shapes.Rectangle outline, ..] } }:
@@ -1025,9 +1032,9 @@ public sealed partial class MainWindow : Window
                 unlight = () => { outline.StrokeDashArray = dashes; outline.StrokeThickness = 1; };
                 break;
             case { Kind: DropKind.Remove }:
-                var ink = InkOn(DangerInk);
+                var ink = InkOn(Palette.DangerFill);
                 var (zoneFill, iconInk, labelInk) = (RemoveZone.Background, RemoveZoneIcon.Foreground, RemoveZoneLabel.Foreground);
-                RemoveZone.Background = DangerInk; RemoveZoneIcon.Foreground = ink; RemoveZoneLabel.Foreground = ink;
+                RemoveZone.Background = Palette.DangerFill; RemoveZoneIcon.Foreground = ink; RemoveZoneLabel.Foreground = ink;
                 unlight = () => { RemoveZone.Background = zoneFill; RemoveZoneIcon.Foreground = iconInk; RemoveZoneLabel.Foreground = labelInk; };
                 break;
             case { Kind: DropKind.Board, Element: WrapPanel board }:
@@ -1039,9 +1046,9 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Black or white, whichever reads on <paramref name="fill"/>: the system
-    /// caution and critical fills are pastel in the dark theme and deep in the
-    /// light one, so no one ink suits a pill painted with them.
+    /// Black or white, whichever reads on <paramref name="fill"/>: the
+    /// palette's yellow is bright in the dark theme and deep in the light one,
+    /// so no one ink suits a pill painted with it.
     /// </summary>
     private static Brush InkOn(Brush fill)
     {
@@ -1060,7 +1067,7 @@ public sealed partial class MainWindow : Window
 
     private Border GhostChip(StackPanel content)
     {
-        ghostCaptionText = new TextBlock { FontFamily = Mono, FontSize = 11, FontWeight = FontWeights.Bold, VerticalAlignment = VerticalAlignment.Center };
+        ghostCaptionText = new TextBlock { FontFamily = Palette.Mono, FontSize = 11, FontWeight = FontWeights.Bold, VerticalAlignment = VerticalAlignment.Center };
         ghostCaption = new Border { Child = ghostCaptionText, CornerRadius = new CornerRadius(8), Padding = new Thickness(5, 0, 5, 0), Height = 16, Visibility = Visibility.Collapsed, VerticalAlignment = VerticalAlignment.Center };
         content.Children.Add(ghostCaption);
         return new Border
@@ -1175,12 +1182,15 @@ public sealed partial class MainWindow : Window
         var dialog = new ContentDialog { XamlRoot = Content.XamlRoot, CloseButtonText = "Cancel", DefaultButton = ContentDialogButton.Primary, Content = VerticalScrollView(content, 510, 460) };
 
         static Visibility Shown(bool visible) => visible ? Visibility.Visible : Visibility.Collapsed;
-        static TextBlock Help() => new() { TextWrapping = TextWrapping.Wrap };
+        // Help text reads as a caption, as the sidebar cards' does.
+        static TextBlock Help() => new() { TextWrapping = TextWrapping.Wrap, Style = (Style)Application.Current.Resources["Caption"] };
         // A check box, and its help text under it whenever the box shows.
         static void Tick(CheckBox box, TextBlock help, SheetToggle toggle)
         {
             box.Content = toggle.Label; box.IsChecked = toggle.Value; box.Visibility = Shown(toggle.Visible);
             help.Text = toggle.Caption ?? ""; help.Visibility = Shown(toggle.Visible && toggle.Caption is not null);
+            // Under the box's label rather than the box, as Fluent indents a check box's description.
+            help.Margin = new Thickness(28, -10, 0, 0);
         }
         // Refills a picker only when its choices changed: refilling resets
         // the selection, which would read as a pick.
@@ -1242,7 +1252,10 @@ public sealed partial class MainWindow : Window
                 effectCaption.Text = effect.Caption;
                 effectGrid.Visibility = Shown(effect.ChoicesVisible);
                 var resin = form.Resin;
-                resinLabel.Text = resinAmountLabel.Text = resin.Label;
+                // The amount sits under the picker the label already names; it
+                // keeps the label only as its accessible name.
+                resinLabel.Text = resin.Label;
+                Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(resinAmount, resin.Label);
                 Fill(resinMode, resin.Picker, drawn?.Resin.Picker);
                 // The amount, or in its place what Auto means.
                 resinAmount.Minimum = resin.Min; resinAmount.Maximum = resin.Max; resinAmount.Value = resin.Amount ?? double.NaN;
@@ -1649,6 +1662,9 @@ public sealed partial class MainWindow : Window
     {
         StartIcon.Glyph = running ? "" : "";
         StartLabel.Text = running ? "Cancel Search" : "Start Search";
+        // Cancel Search is the web's danger red: the default style, whose
+        // fills the button's own resources recolour (MainWindow.xaml).
+        StartButton.Style = (Style)Application.Current.Resources[running ? "DefaultButtonStyle" : "AccentButtonStyle"];
         PresetPicker.IsEnabled = !running;
         SavePresetButton.IsEnabled = !running;
         CopyLinkButton.IsEnabled = !running && query.HasRequirements;
@@ -2092,11 +2108,26 @@ public sealed partial class MainWindow : Window
         if (quest.Length > 0) title.Children.Add(new TextBlock { Text = $"· {quest}", FontSize = 12, Opacity = .7, VerticalAlignment = VerticalAlignment.Center });
         if (world.IsFarmingFloor(depth))
         {
-            var garden = new TextBlock { Text = "· Garden", FontSize = 12, Foreground = SuccessInk, VerticalAlignment = VerticalAlignment.Center };
+            var garden = new TextBlock { Text = "· Garden", FontSize = 12, Foreground = Palette.Green, VerticalAlignment = VerticalAlignment.Center };
             ToolTipService.SetToolTip(garden, "Dark floor with a garden.");
             title.Children.Add(garden);
         }
         return EngineInfo.MapDepths.Contains(depth) ? MapDisclosure(depth, title) : title;
+    }
+
+    /// <summary>
+    /// A StackPanel-grouped list hosts each group header in a GroupItem whose
+    /// header ContentControl aligns its content left, so a floor's header
+    /// would shrink to its title. Its hosts are stretched once it is in the
+    /// tree, so every floor heading and map disclosure spans the pane.
+    /// </summary>
+    private void FloorHeader_Loaded(object sender, RoutedEventArgs e)
+    {
+        for (var node = VisualTreeHelper.GetParent((DependencyObject)sender); node is not null and not GroupItem and not ListView; node = VisualTreeHelper.GetParent(node))
+        {
+            if (node is ContentControl host) host.HorizontalContentAlignment = HorizontalAlignment.Stretch;
+            if (node is FrameworkElement element) element.HorizontalAlignment = HorizontalAlignment.Stretch;
+        }
     }
 
     private Expander MapDisclosure(int depth, UIElement title)
@@ -2165,6 +2196,19 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    /// <summary>
+    /// Finds the scout list's scroller and follows it. The list starts
+    /// collapsed, so it has no template when it loads: the scroller turns up
+    /// on the first layout after a scout shows it, and only then can the
+    /// trinket dock follow the cards out of view.
+    /// </summary>
+    private void HookScoutScroll()
+    {
+        if (scoutScroll is not null) return;
+        scoutScroll = Descendants<ScrollViewer>(ScoutList).FirstOrDefault();
+        if (scoutScroll is not null) scoutScroll.ViewChanged += (_, _) => UpdateTrinketDock();
+    }
+
     private void SetTrinketDockEnabled(bool enabled)
     {
         foreach (var button in TrinketDock.Children.OfType<Microsoft.UI.Xaml.Controls.Primitives.ToggleButton>())
@@ -2182,8 +2226,8 @@ public sealed partial class MainWindow : Window
             {
                 Width = 32, Height = 32, Padding = new Thickness(4), CornerRadius = new CornerRadius(6),
                 IsChecked = applied, BorderThickness = new Thickness(applied ? 2 : 1),
-                BorderBrush = ThemeBrush(applied ? "SystemFillColorSuccessBrush" : "CardStrokeColorDefaultBrush", applied ? Microsoft.UI.Colors.ForestGreen : Microsoft.UI.Colors.Gray),
-                Background = ThemeBrush(applied ? "SystemFillColorSuccessBackgroundBrush" : "CardBackgroundFillColorDefaultBrush", Microsoft.UI.Colors.Transparent),
+                BorderBrush = applied ? Palette.Green : Palette.TrinketStroke,
+                Background = applied ? Palette.GreenFill : ThemeBrush("CardBackgroundFillColorDefaultBrush", Microsoft.UI.Colors.Transparent),
                 Content = new SpriteView { SpriteIndex = item.SpriteIndex, SpriteSize = 20 },
                 IsTabStop = false,
             };
@@ -2260,7 +2304,9 @@ public sealed class ScoutRow
     public Visibility SecretVisibility { get; init; } = Visibility.Collapsed;
     public string Effect { get; init; } = "";
     public Visibility EffectVisibility { get; init; } = Visibility.Collapsed;
-    public Brush EffectBrush { get; init; } = new SolidColorBrush(Color.FromArgb(255, 42, 160, 176));
+    public Brush EffectBrush { get; init; } = Palette.Teal;
+    /// <summary>The wash behind a matched row: green, or violet for a resin donor; none otherwise.</summary>
+    public Brush? RowBackground { get; init; }
     public string Source { get; init; } = "";
     public string Accessibility { get; init; } = "";
     public Visibility AccessibilityVisibility { get; init; } = Visibility.Collapsed;
@@ -2302,13 +2348,14 @@ public sealed class ScoutRow
             CurseVisibility = x.Cursed ? Visibility.Visible : Visibility.Collapsed,
             SecretVisibility = x.Secret ? Visibility.Visible : Visibility.Collapsed,
             Effect = x.Effect ?? "", EffectVisibility = x.Effect is null ? Visibility.Collapsed : Visibility.Visible,
-            EffectBrush = isCurse ? (Brush)Application.Current.Resources["SystemFillColorCriticalBrush"] : new SolidColorBrush(Color.FromArgb(255, 42, 160, 176)),
+            EffectBrush = isCurse ? Palette.Danger : Palette.Teal,
             Source = Labels.Source(x.Source),
             Accessibility = access, AccessibilityVisibility = x.AccessibilityTag == 2 ? Visibility.Visible : Visibility.Collapsed,
             Choice = ScoutChoices.Letter(x.AccessibilityGroup), ChoiceVisibility = x.AccessibilityTag == 1 ? Visibility.Visible : Visibility.Collapsed,
             RowOpacity = dimmed ? .45 : 1,
             MatchVisibility = match && !resinDonor ? Visibility.Visible : Visibility.Collapsed,
             ResinDonor = resinDonor, ResinDonorVisibility = resinDonor ? Visibility.Visible : Visibility.Collapsed,
+            RowBackground = resinDonor ? Palette.VioletWash : match ? Palette.GreenWash : null,
             Weight = match ? FontWeights.SemiBold : FontWeights.Normal,
             SpriteIndex = gems.SpriteIndex(x.Item), TypeIconIndex = x.Item.TypeIconIndex ?? -1,
             GlowColor = glow?.Color ?? default, GlowPeriod = glow?.Period ?? 0,
