@@ -387,7 +387,8 @@ fn an_existing_row_opens_with_the_stack_its_board_entry_shows() {
 
 /// Critic M16: the sliders run +1…max (exactly) and +1…max−1 (at least), so
 /// "+0 or higher" and "+max or higher" used to be silently rewritten. They
-/// open as what they mean, and saving writes that.
+/// open as what they mean. Saved untouched, the row keeps what it says;
+/// saved with any change, it takes what the sheet showed.
 #[test]
 fn upgrade_bounds_the_sliders_cannot_hold_open_as_what_they_mean() {
     let tier_three = Requirement {
@@ -444,8 +445,14 @@ fn upgrade_bounds_the_sliders_cannot_hold_open_as_what_they_mean() {
         let slider = form(&draft).upgrade;
         assert!(slider.min <= slider.value && slider.value <= slider.max);
         let (result, _) = saved(&draft);
-        assert_eq!(result.rows[0].requirement.upgrade, opened);
-        assert_eq!(result.changed, opened != upgrade, "{requirement:?}");
+        assert_eq!(result.rows, rows, "{requirement:?}");
+        assert!(!result.changed, "{requirement:?}");
+        let (result, _) = saved(&after(&draft, &[Change::SetFloorLimitEnabled(true)]));
+        assert_eq!(
+            result.rows[0].requirement.upgrade, opened,
+            "{requirement:?}"
+        );
+        assert!(result.changed, "{requirement:?}");
     }
 }
 
@@ -469,8 +476,11 @@ fn trinkets_and_artifacts_open_on_a_named_item_without_the_controls_they_never_u
     );
     assert_eq!(
         draft.requirement,
-        named_requirement(ItemId::RatSkull),
-        "the first trinket, without its placement filters"
+        Requirement {
+            item: Some(ItemId::RatSkull),
+            ..legacy
+        },
+        "the first trinket, its placement filters kept though the sheet shows none"
     );
     let trinket = form(&draft);
     assert_eq!(shown(&trinket), ["transmutations", "select_trinket"]);
@@ -525,11 +535,15 @@ fn trinkets_and_artifacts_open_on_a_named_item_without_the_controls_they_never_u
         }],
         1,
     );
-    assert_eq!(draft.requirement.upgrade, UpgradeRequirement::Any);
+    assert_eq!(draft.requirement, sandals, "the vault's +5 is kept");
     let artifact = form(&draft);
     assert_eq!(
         shown(&artifact),
         ["uncursed", "source", "floor_limit", "transmutations"]
+    );
+    assert_eq!(
+        (artifact.upgrade.mode, artifact.upgrade.value),
+        (UpgradeMode::Exact, 5)
     );
     assert!(!choices(&artifact).contains(&ItemChoice::Any));
     assert_eq!(artifact.item.options.len(), 11);
@@ -550,6 +564,95 @@ fn trinkets_and_artifacts_open_on_a_named_item_without_the_controls_they_never_u
     assert_eq!(
         sheet(&wildcard, 1).requirement.item,
         Some(ItemId::AlchemistsToolkit)
+    );
+}
+
+/// The web's report: an artifact asking for the city vault's +5 lost its
+/// upgrade on an untouched save, which answered `changed: true`. The query
+/// format accepts an artifact upgrade (+1…+5) and no platform ever offered a
+/// control for one, so the sheet keeps it hidden and keeps it — as it keeps
+/// a trinket's source, floor limit and uncursed filter — through saves that
+/// change something else. Only a category switch, which resets what the new
+/// family does not share, lets them go.
+#[test]
+fn fields_the_sheet_does_not_show_survive_its_saves() {
+    let sandals = Requirement {
+        upgrade: UpgradeRequirement::Exact(5),
+        max_depth: Some(19),
+        ..named_requirement(ItemId::SandalsOfNature)
+    };
+    let rows = [Row {
+        key: 1,
+        requirement: sandals,
+    }];
+    let draft = sheet(&rows, 1);
+    assert!(!form(&draft).upgrade.visible);
+    let (result, _) = saved(&draft);
+    assert_eq!(
+        (result.changed, result.rows.clone()),
+        (false, rows.to_vec())
+    );
+    assert_eq!(result.focus, Some(1));
+    let transmuting = after(&draft, &[Change::SetTransmutationsEnabled(true)]);
+    assert_eq!(
+        stored(&transmuting),
+        [Requirement {
+            artifact_transmutations: 1,
+            ..sandals
+        }]
+    );
+    // Another artifact keeps it; changes to the hidden control change nothing.
+    let other = after(
+        &draft,
+        &[
+            Change::SetItem(ItemChoice::Item(ItemId::HornOfPlenty)),
+            Change::SetUpgradeMode(UpgradeMode::Any),
+            Change::SetUpgrade(2),
+        ],
+    );
+    assert_eq!(other.requirement.upgrade, UpgradeRequirement::Exact(5));
+    let ring = after(&draft, &[Change::SetCategory(ItemKind::Ring)]);
+    assert_eq!(ring.requirement.upgrade, UpgradeRequirement::Any);
+
+    let trinket = Requirement {
+        source: Some(ItemSource::LockedChest),
+        max_depth: Some(9),
+        require_uncursed: true,
+        ..named_requirement(ItemId::RatSkull)
+    };
+    assert_eq!(trinket.validate(), Ok(()));
+    let rows = [Row {
+        key: 1,
+        requirement: trinket,
+    }];
+    let draft = sheet(&rows, 1);
+    assert_eq!(shown(&form(&draft)), ["transmutations", "select_trinket"]);
+    let chosen = after(
+        &draft,
+        &[
+            Change::SetSelectTrinket(true),
+            Change::SetSource(None),
+            Change::SetFloorLimitEnabled(false),
+            Change::SetUncursed(false),
+        ],
+    );
+    assert_eq!(
+        stored(&chosen),
+        [Requirement {
+            select_trinket: true,
+            ..trinket
+        }]
+    );
+    let wand = after(
+        &draft,
+        &[
+            Change::SetCategory(ItemKind::Wand),
+            Change::SetCategory(ItemKind::Trinket),
+        ],
+    );
+    assert_eq!(
+        (wand.requirement.source, wand.requirement.max_depth),
+        (None, None)
     );
 }
 
@@ -1747,6 +1850,42 @@ fn the_resin_chip_saved_as_a_requirement_clears_the_resin() {
     assert_eq!(saved(&ring).1, ResinOutcome::Clear);
 }
 
+/// Android's report: a resin sheet opened on a query without resin said
+/// "edit", so the platform decided Add and Remove from its own state. There
+/// is no resin chip to edit, so the sheet is a new one with Arcane Resin
+/// picked: the chrome says Add and offers no Remove, and saving it as a
+/// wand adds the wand and clears nothing.
+#[test]
+fn a_resin_sheet_on_a_query_without_resin_adds_one() {
+    let rows = [row(1, ItemKind::Ring)];
+    let two = ResinState {
+        amount: ResinAmount::AtLeast(2),
+        filter: ArcaneResinFilter::default(),
+    };
+    let draft = open(&rows, None, false, None, false, true);
+    assert_eq!((draft.origin, draft.key), (Origin::New, None));
+    let control = form(&draft);
+    assert_eq!((control.mode, control.origin), (FormMode::New, Origin::New));
+    assert!(control.resin_picked && control.resin.visible);
+    assert_eq!(control.title, ARCANE_RESIN);
+    assert_eq!(control.item.value, ItemChoice::ArcaneResin);
+    let (result, outcome) = saved(&draft);
+    assert_eq!(result.rows, rows);
+    assert_eq!(outcome, ResinOutcome::Set(two));
+    let wand = after(&draft, &[Change::SetItem(ItemChoice::Any)]);
+    let (result, outcome) = saved(&wand);
+    assert_eq!(outcome, ResinOutcome::Unchanged);
+    assert_eq!(result.rows.len(), 2);
+
+    // With the query's resin it is the resin chip, which the sheet edits.
+    let draft = open(&rows, None, false, Some(&two), false, true);
+    let control = form(&draft);
+    assert_eq!(
+        (control.mode, control.origin),
+        (FormMode::Edit, Origin::Resin)
+    );
+}
+
 /// Web "selects Auto, preserves filters, and restores the mode when
 /// editing" and "preserves the Mage credit while switching resin modes".
 #[test]
@@ -2526,46 +2665,94 @@ fn editor_rows(rng: &mut Rng) -> Vec<Row> {
     rows
 }
 
-/// Every chip of a list the editor wrote reopens and saves back unchanged
-/// (1,024 lists), unless opening it already rewrote something the sheet's
-/// controls cannot hold (a "+0 or higher", a boss floor). The only error an
-/// untouched sheet may show is a duplicate trinket the list already had.
-#[test]
-fn every_chip_the_editor_wrote_saves_back_unchanged() {
-    let mut rng = Rng::new(0x0dd_ba11_2026_0927);
-    for case in 0..1024 {
-        let rows = editor_rows(&mut rng);
-        for entry in board_items(&rows) {
-            for &index in &entry.members {
-                let row = rows[index];
-                let draft = open(&rows, Some(row.key), false, None, rng.chance(50), false);
-                let stack = stack_view(&rows, &entry);
-                let as_stored = Requirement {
-                    identity_group: None,
-                    level_sum: None,
-                    ..row.requirement
-                };
-                if draft.requirement != as_stored
-                    || draft.total != stack.total
-                    || draft.copy_depth != stack.copy_depth
-                {
-                    continue;
-                }
-                let context = format!("case {case}: {rows:?} at {}", row.key);
-                match save(&draft, &rows, None) {
-                    SaveResult::Saved { result, resin } => {
-                        assert!(!result.changed, "{context} → {:?}", result.rows);
-                        assert_eq!(result.rows, rows, "{context}");
-                        assert_eq!(resin, ResinOutcome::Unchanged, "{context}");
-                    }
-                    SaveResult::Refused { form, .. } => assert!(
-                        form.errors.iter().all(|error| error == DUPLICATE_TRINKET),
-                        "{context}: {:?}",
-                        form.errors
-                    ),
-                }
+/// A requirement up to the re-encodings the sheet makes of values its
+/// controls cannot hold — "+0 or higher" is any upgrade, "+max or higher"
+/// exactly +max, a floor limit on an empty boss floor the floor below — and
+/// without the stack labels the sheet shows as a count and a total. Nothing
+/// else may differ between a row and the sheet opened on it.
+fn as_the_sheet_holds_it(requirement: Requirement) -> Requirement {
+    let ceiling = requirement.upgrade_ceiling();
+    Requirement {
+        upgrade: match requirement.upgrade {
+            UpgradeRequirement::AtLeast(0) => UpgradeRequirement::Any,
+            UpgradeRequirement::AtLeast(upgrade) if upgrade >= ceiling => {
+                UpgradeRequirement::Exact(ceiling)
+            }
+            upgrade => upgrade,
+        },
+        max_depth: requirement.max_depth.map(normalize_floor_limit),
+        identity_group: None,
+        level_sum: None,
+        ..requirement
+    }
+}
+
+/// Opens a sheet on every row of `rows` — chips, cluster members, blankets,
+/// the anchors of stacks and their hidden copies — and saves it untouched:
+/// the rows come back identical, `changed: false`, and the focus on the
+/// chip. The sheet holds every field of the row but for the re-encodings of
+/// [`as_the_sheet_holds_it`], so a save that changes something else drops
+/// nothing. The one refusal an untouched sheet may meet is a duplicate
+/// trinket the list already holds.
+fn assert_untouched_saves_change_nothing(rows: &[Row], context: &str) {
+    let entries = board_items(rows);
+    for (index, row) in rows.iter().enumerate() {
+        let context = format!("{context} at {}", row.key);
+        let entry = entries
+            .iter()
+            .find(|entry| entry.members.contains(&index) || entry.extras.contains(&index))
+            .expect("every row is on the board");
+        let shown = if entry.members.contains(&index) {
+            index
+        } else {
+            entry.anchor()
+        };
+        let draft = open(rows, Some(row.key), false, None, true, false);
+        assert_eq!(draft.origin, Origin::Row(rows[shown].key), "{context}");
+        assert_eq!(
+            saved_requirement(&draft),
+            as_the_sheet_holds_it(rows[shown].requirement),
+            "{context}"
+        );
+        match save(&draft, rows, None) {
+            SaveResult::Saved { result, resin } => {
+                assert!(!result.changed, "{context} → {:?}", result.rows);
+                assert_eq!(result.rows, rows, "{context}");
+                assert_eq!(result.focus, Some(rows[entry.anchor()].key), "{context}");
+                assert_eq!(resin, ResinOutcome::Unchanged, "{context}");
+            }
+            SaveResult::Refused { form, .. } => {
+                assert_eq!(form.errors, [DUPLICATE_TRINKET], "{context}");
+                let item = rows[shown].requirement.item;
+                let named = rows
+                    .iter()
+                    .filter(|other| {
+                        !other.requirement.blanket
+                            && other.requirement.kind == ItemKind::Trinket
+                            && other.requirement.item == item
+                    })
+                    .count();
+                assert!(named > 1, "{context}");
             }
         }
+    }
+}
+
+/// Every row of a list the editor wrote, or of a generated list once
+/// normalized (1,024 lists, blankets, clusters and stacks among them),
+/// saves back untouched exactly as it was.
+#[test]
+fn every_row_saves_back_untouched_exactly_as_it_was() {
+    let mut rng = Rng::new(0x0dd_ba11_2026_0927);
+    for case in 0..1024 {
+        let rows = if case % 2 == 0 {
+            editor_rows(&mut rng)
+        } else {
+            apply(&random_rows(&mut rng), None, &[Edit::Normalize]).rows
+        };
+        let context = format!("case {case}: {rows:?}");
+        assert_emittable(&rows, &context);
+        assert_untouched_saves_change_nothing(&rows, &context);
     }
 }
 

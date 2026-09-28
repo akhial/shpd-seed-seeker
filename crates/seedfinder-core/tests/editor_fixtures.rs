@@ -509,6 +509,22 @@ fn editor_fixtures(fixtures: &mut Fixtures) {
                     &[json!({"type": "set_resin_auto", "value": false})]),
                "change": {"type": "set_resin_amount", "value": null}}),
     );
+    let sandals = json!([
+        {"key": 1, "kind": "artifact", "item": "sandals_of_nature", "upgrade": 5, "max_depth": 19},
+    ]);
+    let untouched = fixtures_open(Editor, &json!({"op": "open", "rows": sandals, "key": 1}));
+    fixtures.add(
+        "editor-save-untouched",
+        "An artifact asking for the city vault's +5, which the sheet has no control for, saved untouched: the rows come back as they were.",
+        Editor,
+        &json!({"op": "save", "draft": untouched["draft"], "rows": sandals}),
+    );
+    fixtures.add(
+        "editor-resin-open-new",
+        "A resin sheet on a query without resin adds one: a new sheet with Arcane Resin picked.",
+        Editor,
+        &json!({"op": "open", "rows": [], "open_resin": true}),
+    );
     fixtures.add(
         "editor-error-draft",
         "A draft from another version (or none at all) cannot be read; the platform reopens the sheet.",
@@ -621,6 +637,73 @@ fn the_envelopes_answer_the_golden_fixtures() {
         stored, expected,
         "stale fixtures; regenerate with UPDATE_EDITOR_FIXTURES=1"
     );
+}
+
+/// Every row the fixtures send — hand-written lists, key repairs, problems
+/// and all — opens into a sheet that, saved untouched onto the same rows,
+/// answers what the board answers for those rows alone: a sheet no one
+/// changed writes nothing of its own. Rows that cannot be opened (an
+/// unreadable one) are left out, and the one refusal an untouched sheet may
+/// meet is a duplicate trinket the list already holds.
+#[test]
+fn every_fixture_row_saves_back_untouched() {
+    if std::env::var_os("UPDATE_EDITOR_FIXTURES").is_some_and(|value| value == "1") {
+        return;
+    }
+    let mut lists = BTreeSet::new();
+    for entry in fs::read_dir(directory()).expect("list the fixtures") {
+        let path = entry.expect("a fixture entry").path();
+        if path.extension().is_none_or(|extension| extension != "json") {
+            continue;
+        }
+        let fixture: Value =
+            serde_json::from_str(&fs::read_to_string(&path).expect("read a fixture"))
+                .expect("a fixture is JSON");
+        if let Some(rows) = fixture["request"]
+            .get("rows")
+            .filter(|rows| rows.is_array())
+        {
+            lists.insert(rows.to_string());
+        }
+    }
+    let mut saved = 0;
+    for list in &lists {
+        let rows: Value = serde_json::from_str(list).expect("rows are JSON");
+        let board = Envelope::Board.call(&json!({"rows": rows}));
+        if board.get("error").is_some() {
+            continue;
+        }
+        for key in rows
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|row| row["key"].as_u64())
+        {
+            let opened = Envelope::Editor.call(&json!({"op": "open", "rows": rows, "key": key}));
+            if opened.get("error").is_some() {
+                continue;
+            }
+            let answer = Envelope::Editor
+                .call(&json!({"op": "save", "draft": opened["draft"], "rows": rows}));
+            let context = format!("{list} at {key}: {answer}");
+            match answer.get("saved") {
+                Some(result) => {
+                    assert_eq!(result["rows"], board["rows"], "{context}");
+                    assert_eq!(result["changed"], board["changed"], "{context}");
+                    assert_eq!(result["resin"], Value::Null, "{context}");
+                    saved += 1;
+                }
+                None => assert_eq!(
+                    answer["form"]["errors"],
+                    json!([
+                        "This trinket is already required. Each trinket appears only once in the deck."
+                    ]),
+                    "{context}"
+                ),
+            }
+        }
+    }
+    assert!(saved > 0);
 }
 
 /// The files replay: every stored request, sent as a platform would send

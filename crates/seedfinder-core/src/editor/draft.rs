@@ -711,10 +711,12 @@ const fn set_transmutations(requirement: &mut Requirement, value: u8) {
 /// Pulls the upgrade under what the requirement's item and tier can reach,
 /// and above +0: naming an item or narrowing the tier can put a +5 out of
 /// reach, since only a tier-4 weapon is ever levelled that far, and the
-/// sliders start at +1. Trinkets and artifacts are never searched by
-/// upgrade, so theirs is always any.
+/// sliders start at +1. Trinkets are never levelled, so theirs is always
+/// any. An artifact's is kept: no sheet offers one, but a query may ask for
+/// the +5 the city vault transfers into its artifact, and a save must not
+/// drop what the sheet does not show.
 fn clamp_upgrade(requirement: &mut Requirement) {
-    if names_one(requirement.kind) {
+    if requirement.kind == ItemKind::Trinket {
         requirement.upgrade = UpgradeRequirement::Any;
         return;
     }
@@ -730,11 +732,16 @@ fn clamp_upgrade(requirement: &mut Requirement) {
 
 /// A stored requirement as the sheet edits it (web
 /// `namedItemEditorRequirement`, plus the slider rules): trinkets and
-/// artifacts always name one, trinkets drop the placement filters they
-/// never use, an at-least bound the sliders cannot show opens as what it
-/// means — "+0 or higher" is any upgrade, "+max or higher" is exactly +max
-/// — and a floor limit on an empty boss floor opens as the floor below,
-/// which the engine reads it as anyway.
+/// artifacts always name one, trinkets drop the tier and effect they cannot
+/// carry, an at-least bound the sliders cannot show opens as what it means
+/// — "+0 or higher" is any upgrade, "+max or higher" is exactly +max — and
+/// a floor limit on an empty boss floor opens as the floor below, which the
+/// engine reads it as anyway.
+///
+/// Every other field is kept, shown or not: a trinket's source, floor limit
+/// and uncursed filter, an artifact's upgrade. The sheet has no control for
+/// them, but the engine searches them, so a save that dropped them would
+/// quietly change a query the user only meant to adjust.
 fn editable(mut requirement: Requirement) -> Requirement {
     requirement.identity_group = None;
     requirement.level_sum = None;
@@ -745,11 +752,8 @@ fn editable(mut requirement: Requirement) -> Requirement {
         }
         ItemKind::Trinket => {
             requirement.item = requirement.item.or_else(|| first_item(ItemKind::Trinket));
-            requirement.source = None;
-            requirement.max_depth = None;
             requirement.tier = TierRequirement::Any;
             requirement.effect = EffectRequirement::Any;
-            requirement.require_uncursed = false;
         }
         _ => {}
     }
@@ -818,7 +822,9 @@ fn opened_row(rows: &[Row], key: u64) -> Option<(usize, BoardItem)> {
 /// Opens the sheet.
 ///
 /// - With `open_resin`, on the query's Arcane Resin condition: the resin is
-///   the picked item, over an any-wand draft it can be turned into.
+///   the picked item, over an any-wand draft it can be turned into. A query
+///   without resin (`resin` is `None`) has no resin chip to edit, so the
+///   sheet is a new one with Arcane Resin picked ([`Origin::New`]).
 /// - With the key of a row on the board, on that row: its requirement, its
 ///   entry's stack (count, combined level, copies' floor) and whether it is
 ///   a cluster member come from the board. `blanket` is the row's own.
@@ -863,7 +869,13 @@ pub fn open(
         rows: rows.to_vec(),
     };
     if open_resin {
-        draft.origin = Origin::Resin;
+        // Without a resin condition there is no chip to edit: the sheet adds
+        // one, and saving it as a wand clears nothing.
+        draft.origin = if resin.is_some() {
+            Origin::Resin
+        } else {
+            Origin::New
+        };
         draft.key = None;
         draft.blanket = false;
         draft.requirement = Requirement::any(ItemKind::Wand);
@@ -1436,15 +1448,14 @@ fn attempt(draft: &Draft, hint: Option<u64>, held: &HeldLabels) -> Attempt {
         .map(resolve)
         .filter(|&key| is_valid_key(key) && !folded_away(&rows, key))
         .unwrap_or_else(|| mint_key(&rows, hint));
-    let shown = Shown::of(draft);
-    let edit = Edit::Save {
-        key: Some(key),
-        requirement,
-        count: if shown.stack { draft.count } else { 1 },
-        total: draft.total.filter(|_| shown.counting),
-        copy_depth: draft.copy_depth.filter(|_| shown.copy_depth),
+    let result = if stores_nothing(draft, &rows, key) {
+        // Nothing to write; the sheet still returns to its chip.
+        let mut result = apply_holding(&rows, hint, &[], held);
+        result.focus = anchor_of(&rows, key);
+        result
+    } else {
+        apply_holding(&rows, hint, &[save_edit(draft, key)], held)
     };
-    let result = apply_holding(&rows, hint, &[edit], held);
     if let Some(refusal) = result.refused {
         errors.push(refusal.to_string());
     } else {
@@ -1464,6 +1475,45 @@ fn attempt(draft: &Draft, hint: Option<u64>, held: &HeldLabels) -> Attempt {
         saved: Some(key),
         errors,
     }
+}
+
+/// The board edit a save of `draft` writes onto the row `key`: its
+/// requirement, with a count only where the sheet shows one, a total only
+/// while the combined level is on, and a copy floor only while it shows.
+fn save_edit(draft: &Draft, key: u64) -> Edit {
+    let shown = Shown::of(draft);
+    Edit::Save {
+        key: Some(key),
+        requirement: saved_requirement(draft),
+        count: if shown.stack { draft.count } else { 1 },
+        total: draft.total.filter(|_| shown.counting),
+        copy_depth: draft.copy_depth.filter(|_| shown.copy_depth),
+    }
+}
+
+/// Whether saving `draft`, opened on a row, onto the row `key` of `rows`
+/// stores what the row already says: the sheet opened on it now would save
+/// the very same edit. Such a save writes nothing, so the row keeps what the
+/// sheet's controls cannot hold — a "+0 or higher", a floor limit on an
+/// empty boss floor, a combined level beyond reach, copies with floors of
+/// their own — and a list no one changed stays the list a platform stored
+/// (Android's refine plan and the web's preset match compare it whole).
+fn stores_nothing(draft: &Draft, rows: &[Row], key: u64) -> bool {
+    matches!(draft.origin, Origin::Row(_))
+        && rows.iter().any(|row| row.key == key)
+        && save_edit(
+            &open(rows, Some(key), draft.blanket, None, false, false),
+            key,
+        ) == save_edit(draft, key)
+}
+
+/// The anchor of the board entry holding the row `key`.
+fn anchor_of(rows: &[Row], key: u64) -> Option<u64> {
+    let index = rows.iter().position(|row| row.key == key)?;
+    board_items(rows)
+        .into_iter()
+        .find(|entry| entry.members.contains(&index) || entry.extras.contains(&index))
+        .map(|entry| rows[entry.anchor()].key)
 }
 
 /// Whether the row with `key` is in `rows` as a hidden copy — no board
@@ -1518,7 +1568,9 @@ pub fn form(draft: &Draft) -> Form {
 /// combined level is on, a copy floor only while it shows — or, with
 /// Arcane Resin picked, the query's resin condition, removing the wand chip
 /// the sheet was opened on. Saving the resin chip as a requirement clears
-/// the query's resin. A draft with errors is refused with its form.
+/// the query's resin. A sheet saved untouched writes nothing: the rows come
+/// back as they were, even where they hold what no control can show. A
+/// draft with errors is refused with its form.
 #[must_use]
 pub fn save(draft: &Draft, rows: &[Row], next_key: Option<u64>) -> SaveResult {
     save_holding(draft, rows, next_key, &HeldLabels::default())

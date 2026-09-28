@@ -309,12 +309,20 @@ requests:
   row will take); `blanket` picks the new chip's section; `resin` is the
   query's current resin condition, which seeds the resin section;
   `offer_resin` offers Arcane Resin among the wands; `open_resin` opens the
-  query's resin chip. Everything but `rows` defaults to `null`/`false`, and
-  `null` means the default.
+  query's resin chip (`mode: "edit"`, origin `resin`) — or, when `resin` is
+  `null` because the query has none, a new sheet with Arcane Resin picked
+  (`mode: "new"`, origin `new`), so the chrome says Add and offers no
+  Remove. Everything but `rows` defaults to `null`/`false`, and `null` means
+  the default.
 - `change` — applies one control the user moved.
 - `save` — saves the draft onto `rows`, the list as it is now. When the row
   the sheet was opened on has since become a hidden copy of another chip,
-  the save adds a new chip rather than vanishing into the copy.
+  the save adds a new chip rather than vanishing into the copy. A sheet
+  saved untouched — the draft still says what a sheet opened on the row now
+  would — writes nothing: the rows come back as they were, `changed:
+  false`, with `focus` on the chip, even where the row holds what no control
+  can show ("+0 or higher", a floor limit on an empty boss floor, a combined
+  level out of reach).
 
 Open and change answer `{"draft": DRAFT, "form": FORM}`. A save answers
 
@@ -371,6 +379,17 @@ query).
 | `stack` | `{"visible", "count", "min", "max", "value_label", "copy_depth", "count_levels"}`, with `copy_depth` a floor toggle and `count_levels` a range toggle (`≥ 5 across up to 2`). |
 | `resin` | `{"visible", "auto", "amount", "include_mage_wand"}`, `amount` the number as typed. |
 | `errors`, `can_save` | Why the draft cannot be saved, in the order to show them. |
+
+The sheet keeps every field of the row, shown or not. It re-encodes only
+what its controls cannot hold — a stored "+0 or higher" opens as any
+upgrade, "+max or higher" as exactly +max, a floor limit on an empty boss
+floor as the floor below, a total out of reach as the stack's capacity —
+and drops only what the family cannot carry (a trinket's tier or effect).
+Fields no control shows are kept through every save: an artifact's upgrade
+(the query format accepts +1…+5 — the city vault transfers +5 into its
+artifact — but no app ever offered a control for it) and a trinket's
+source, floor limit and uncursed filter. A category switch resets them, as
+it resets everything the new family does not share.
 
 A draft's errors are its requirement's own problems, a trinket another
 ordinary row already names (`This trinket is already required. Each
@@ -442,7 +461,8 @@ decided once.
 | Copy contents | Built from defaults; plain copies keep the melee/thrown narrowing; resin exclusion, blanket, trinket selection and transmutations are never copied. |
 | Key lookup | Visible members only, never hidden copies. |
 | Labels out of range | Moved onto free labels in range by `normalize` and every edit that changes the rows; never merged to fit. |
-| Saving an unchanged chip | Identical rows, the same copy keys, `changed: false`. |
+| Saving an unchanged chip | Writes nothing: identical rows, the same copy keys, `changed: false`, even for values no control can show. |
+| Fields the sheet does not show | Kept through every save (an artifact's upgrade; a trinket's source, floor limit and uncursed filter); a category switch resets them. |
 | New rows | Appended; sections are never reordered. |
 | Wildcard chip names | `Any melee`, `Any thrown`. |
 | Titles | `Any Tier 3 weapon`, `Any Tier 3+ weapon`, `Any Tier 3 or lower weapon`. |
@@ -456,7 +476,8 @@ decided once.
 | New chip | Any weapon; a new blanket takes the first ordinary row's kind and melee/thrown narrowing. |
 | Category switch | Keeps source, floor and uncursed where the new family has them; resets the rest. |
 | Default tier | 3. |
-| Upgrade bounds | Exactly +1…max, at least +1…max−1; a stored "+0 or higher" opens as any, "+max or higher" as exactly max. |
+| Upgrade bounds | Exactly +1…max, at least +1…max−1; a stored "+0 or higher" opens as any, "+max or higher" as exactly max, and is written so only by a save that changes something. |
+| Resin sheet on a query without resin | A new sheet with Arcane Resin picked (`mode: "new"`): Add, no Remove. |
 | "Specific…" with nothing ticked | Allowed; saves as any effect. |
 | Floor pickers | Skip the empty boss floors. |
 | Artifact transmutations | Supported, 1–10. |
@@ -488,9 +509,10 @@ for now:
 `crates/seedfinder-core/tests/fixtures/editor/*.json` pins representative
 request/response pairs for both envelopes: the board tour, the four stack
 encodings, joins (traded, refused), detach and removals, copy floors,
-combined levels, saves (new and unchanged), problems, key repair and label
-compaction, unreadable rows, the sheet's open/change/save flow, the resin
-flows, and the error envelopes. Each file is
+combined levels, saves (new and unchanged), problems, key repair, label
+compaction and labels moved into range, unreadable rows, the sheet's
+open/change/save flow and an untouched save, the resin flows (a query with
+resin and one without), and the error envelopes. Each file is
 
 ```json
 {"about": "...", "envelope": "requirement_board", "request": {...}, "response": {...}}
@@ -503,8 +525,10 @@ returned. App tests replay the files through their own binding and compare
 the answers.
 
 The core test `tests/editor_fixtures.rs` regenerates every pair and fails
-when a file drifts. After a deliberate change, review the answers and
-rewrite the files:
+when a file drifts; it also opens a sheet on every row the fixtures send
+and checks that saving it untouched answers what the board answers for the
+rows alone. After a deliberate change, review the answers and rewrite the
+files:
 
 ```sh
 UPDATE_EDITOR_FIXTURES=1 cargo test -p shpd-seedfinder-core --test editor_fixtures
