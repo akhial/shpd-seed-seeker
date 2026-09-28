@@ -8,7 +8,6 @@ use shpd_seedfinder_core::editor::{
     self, Draft, Edit, EditResult, ResinAmount, ResinOutcome, ResinState, Row, SaveResult,
 };
 use shpd_seedfinder_core::feasibility::Quest;
-use shpd_seedfinder_core::model::ItemSource;
 use shpd_seedfinder_core::query::{ArcaneResinFilter, QueryError, SearchQuery};
 use shpd_seedfinder_core::quests::{
     BlacksmithQuestType, GhostQuestType, ImpQuestType, QuestSummary, WandmakerQuestType,
@@ -314,29 +313,6 @@ pub const fn kind_icon(kind: ItemKind, weapon_category: Option<WeaponCategory>) 
     }
 }
 
-pub const fn source_label(source: ItemSource) -> &'static str {
-    match source {
-        ItemSource::Heap => "Floor",
-        ItemSource::Chest => "Chest",
-        ItemSource::LockedChest => "Locked chest",
-        ItemSource::CrystalChest => "Crystal chest",
-        ItemSource::Tomb => "Tomb",
-        ItemSource::Skeleton => "Skeletal remains",
-        ItemSource::SacrificialFire => "Sacrificial fire",
-        ItemSource::Mimic => "Mimic",
-        ItemSource::GoldenMimic => "Golden mimic",
-        ItemSource::CrystalMimic => "Crystal mimic",
-        ItemSource::Statue => "Animated statue",
-        ItemSource::ArmoredStatue => "Armored statue",
-        ItemSource::Shop => "Shop",
-        ItemSource::GhostReward => "Sad ghost reward",
-        ItemSource::WandmakerReward => "Wandmaker reward",
-        ItemSource::BlacksmithReward => "Blacksmith reward",
-        ItemSource::ImpReward => "Imp reward",
-        ItemSource::VaultTreasure => "Vault treasure",
-    }
-}
-
 /// Dungeon region name for one depth.
 pub const fn region(depth: u8) -> &'static str {
     match depth {
@@ -482,7 +458,7 @@ mod tests {
 
     use super::{
         AppState, QuestRow, blacksmith_quest_label, ghost_quest_label, imp_target_label,
-        quest_rows, source_label, wandmaker_quest_label,
+        quest_rows, wandmaker_quest_label,
     };
 
     fn row(key: u64, requirement: Requirement) -> Row {
@@ -638,7 +614,7 @@ mod tests {
         assert_eq!(selected[0].item, ItemId::SandalsOfNature);
         assert_eq!(selected[0].depth, 19);
         assert_eq!(selected[0].upgrade, 5);
-        assert_eq!(source_label(selected[0].source), "Imp reward");
+        assert_eq!(selected[0].source, ItemSource::ImpReward);
     }
 
     #[test]
@@ -840,19 +816,6 @@ mod tests {
             "Gnoll Geomancer"
         );
         assert_eq!(imp_target_label(ImpQuestType::Vault), "Vault");
-    }
-
-    #[test]
-    fn source_labels_name_every_item_source() {
-        use shpd_seedfinder_core::model::ItemSource;
-
-        // The source picker offers `ItemSource::ALL` verbatim, so every entry
-        // needs a label; a new engine source shows up here first.
-        for source in ItemSource::ALL {
-            assert!(!source_label(*source).is_empty());
-        }
-        assert_eq!(source_label(ItemSource::ImpReward), "Imp reward");
-        assert_eq!(source_label(ItemSource::VaultTreasure), "Vault treasure");
     }
 
     #[test]

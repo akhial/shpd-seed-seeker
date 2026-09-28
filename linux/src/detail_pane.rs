@@ -23,7 +23,7 @@ use shpd_seedfinder_session::production_scout_world_selected;
 
 use crate::level_map_view::{FloorMapView, MapProfile};
 use crate::sprites::ItemSprite;
-use crate::state::{AppState, quest_rows, region, source_label};
+use crate::state::{AppState, quest_rows, region};
 use crate::{glow, sprites};
 
 #[derive(Clone, Copy)]
@@ -1018,7 +1018,7 @@ impl RowMatch {
 }
 
 fn item_row(world_item: &WorldItem, gems: RingGems, matched: RowMatch) -> adw::ActionRow {
-    let mut subtitle = source_label(world_item.source).to_owned();
+    let mut subtitle = world_item.source.label().to_owned();
     match world_item.accessibility {
         Accessibility::Independent | Accessibility::Choice { .. } => {}
         Accessibility::Scenarios { group, .. } => {
