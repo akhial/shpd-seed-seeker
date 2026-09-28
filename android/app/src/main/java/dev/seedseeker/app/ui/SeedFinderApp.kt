@@ -808,8 +808,10 @@ internal fun SeedFinderApp(
                     }
                 },
                 onShareQuery = share@{
-                    // As for Start: the query's own checks, then the list's first problem.
-                    boardProblem?.let {
+                    // As for Start: the query's own checks, then the list's
+                    // first problem. An empty query (the codec's own check
+                    // below) has neither floors nor a list problem.
+                    (floorRequirements.floorValidationProblem(maximumDepth) ?: boardProblem)?.let {
                         linkError = it
                         return@share
                     }
