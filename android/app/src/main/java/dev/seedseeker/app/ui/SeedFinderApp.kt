@@ -541,6 +541,10 @@ internal fun SeedFinderApp(
         nextRequirementKey = maxOf(nextRequirementKey, answer.nextKey)
         // A drop leaves its chip where the finger let go; there is nothing to follow.
         boardFocus = null
+        // The board already says why a join is refused while the chip is held;
+        // a detach or a drop in the bin can only be refused once it is sent,
+        // when a stack left behind needs a label and all four are in use.
+        answer.refused?.let { reason -> scope.launch { snackbarHostState.showSnackbar(reason) } }
         answer.rows?.let { rows ->
             boardViews.keep(rows, boardResin, answer.board)
             requirements = rows
