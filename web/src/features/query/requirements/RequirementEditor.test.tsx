@@ -1,10 +1,14 @@
 // @vitest-environment happy-dom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, expect, it, vi } from "vite-plus/test";
+import type { EditorForm } from "../../../engine/types";
 import { defaultQueryState, fromQueryJson, toQueryDocument } from "../query";
 import { queryStore } from "../../../app/store";
 import { QueryPanel } from "../QueryPanel";
+import { RequirementEditor } from "./RequirementEditor";
+import { openSheet } from "./sheet";
 
 let host: HTMLDivElement;
 let root: Root;
@@ -131,4 +135,43 @@ it("shows why a draft cannot be saved and keeps its button off", async () => {
     (element) => element.textContent === "Add Requirement",
   )!;
   expect(add.disabled).toBe(true);
+});
+
+it("draws a control only while the form shows it, with any caption it carries", () => {
+  const open = openSheet(defaultQueryState(), { type: "new", blanket: false });
+  if (!open.ok) throw new Error(open.error);
+  const { form } = open.value;
+  const html = (patch: Partial<EditorForm>) =>
+    renderToStaticMarkup(
+      <RequirementEditor
+        sheet={{ ...open.value, form: { ...form, ...patch } }}
+        onChange={() => {}}
+        onSave={() => {}}
+        onCancel={() => {}}
+      />,
+    );
+  expect(html({})).toContain('aria-label="Category"');
+  expect(html({ category: { ...form.category, visible: false } })).not.toContain(
+    'aria-label="Category"',
+  );
+  expect(html({})).toContain("Any weapon</option>");
+  expect(html({ item: { ...form.item, visible: false } })).not.toContain("Any weapon</option>");
+  // The floor limit alone still gets its Details section.
+  const floorOnly = html({
+    effect: { ...form.effect, visible: false },
+    uncursed: { ...form.uncursed, visible: false },
+    source: { ...form.source, visible: false },
+  });
+  expect(floorOnly).toContain("Details");
+  expect(floorOnly).toContain("Limit this item to a floor");
+  const counting = {
+    ...form.stack,
+    count_levels: {
+      ...form.stack.count_levels,
+      visible: true,
+      enabled: true,
+      caption: "Levels count once per ring.",
+    },
+  };
+  expect(html({ stack: counting })).toContain("Levels count once per ring.");
 });

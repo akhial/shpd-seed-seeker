@@ -165,13 +165,15 @@ export function RequirementEditor({
         <div className="d1-modal-body">
           <section className="d1-modal-section">
             <h3>Item</h3>
-            <Segmented
-              value={form.category.value}
-              options={form.category.options}
-              onChange={(value) => onChange({ type: "set_category", value })}
-              ariaLabel="Category"
-              fill
-            />
+            {form.category.visible && (
+              <Segmented
+                value={form.category.value}
+                options={form.category.options}
+                onChange={(value) => onChange({ type: "set_category", value })}
+                ariaLabel="Category"
+                fill
+              />
+            )}
             {form.weapon_type.visible && (
               <Field label="Weapon type" stack>
                 <Segmented
@@ -182,17 +184,19 @@ export function RequirementEditor({
                 />
               </Field>
             )}
-            <Field label={form.category.value === "trinket" ? "Trinket" : "Item"}>
-              <select
-                className="d1-select"
-                value={form.item.value ?? ""}
-                onChange={(event) =>
-                  onChange({ type: "set_item", value: event.currentTarget.value || null })
-                }
-              >
-                <ItemOptions options={form.item.options} />
-              </select>
-            </Field>
+            {form.item.visible && (
+              <Field label={form.category.value === "trinket" ? "Trinket" : "Item"}>
+                <select
+                  className="d1-select"
+                  value={form.item.value ?? ""}
+                  onChange={(event) =>
+                    onChange({ type: "set_item", value: event.currentTarget.value || null })
+                  }
+                >
+                  <ItemOptions options={form.item.options} />
+                </select>
+              </Field>
+            )}
             {tier.visible && (
               <>
                 <Field label="Tier" stack>
@@ -366,22 +370,30 @@ export function RequirementEditor({
                     <span>{stack.count_levels.label}</span>
                   </label>
                   {stack.count_levels.enabled && (
-                    <SliderRow
-                      label="Levels reach"
-                      valueLabel={stack.count_levels.value_label}
-                      min={stack.count_levels.min}
-                      max={stack.count_levels.max}
-                      value={stack.count_levels.value}
-                      fill
-                      onChange={(value) => onChange({ type: "set_total", value })}
-                    />
+                    <>
+                      <SliderRow
+                        label="Levels reach"
+                        valueLabel={stack.count_levels.value_label}
+                        min={stack.count_levels.min}
+                        max={stack.count_levels.max}
+                        value={stack.count_levels.value}
+                        fill
+                        onChange={(value) => onChange({ type: "set_total", value })}
+                      />
+                      {stack.count_levels.caption && (
+                        <p className="d1-caption">{stack.count_levels.caption}</p>
+                      )}
+                    </>
                   )}
                 </>
               )}
             </section>
           )}
 
-          {(effect.visible || form.uncursed.visible || form.source.visible) && (
+          {(effect.visible ||
+            form.uncursed.visible ||
+            form.source.visible ||
+            form.floor_limit.visible) && (
             <section className="d1-modal-section">
               <h3>Details</h3>
               {effect.visible && (
