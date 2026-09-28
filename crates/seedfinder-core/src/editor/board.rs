@@ -845,14 +845,16 @@ pub enum Edit {
     /// they import a list; every other edit that changes the rows ends in
     /// it too.
     Normalize,
-    /// Makes `source` an either/or alternative of `target` (any member of a
-    /// chip or cluster). One item moves: the source's own row, while the
-    /// rest of its stack stays where it was; a stacked lone target keeps
-    /// its stack as a member of the new cluster, and a target cluster's
-    /// members keep theirs.
+    /// Makes one item of `source` an either/or alternative of `target` (any
+    /// member of a chip or cluster). A chip with copies stays where it is,
+    /// with its constraints and one item fewer, and a bare copy of it joins
+    /// ([`lift`]); a chip without copies joins itself. A stacked lone
+    /// target keeps its stack as a member of the new cluster, and a target
+    /// cluster's members keep theirs.
     Join { source: u64, target: u64 },
-    /// Takes one item of a cluster member out on its own: the member's row,
-    /// while the rest of its stack stays in the cluster.
+    /// Takes one item of a cluster member out on its own: a bare copy of
+    /// it, while the member stays in the cluster one item fewer — or the
+    /// member itself when it has no copies ([`lift`]).
     Detach { key: u64 },
     /// Deletes a chip with its whole stack: a cluster member with its own
     /// copies, or a lone chip's whole entry.
@@ -1579,79 +1581,114 @@ fn restack(
     Step::Rows(next)
 }
 
-/// The cluster member at `index` of `item` leaves its cluster with one item
-/// of its stack: its own row, which keeps its key and constraints and
-/// carries no label. The rest of its stack stays in the cluster at its
-/// place, as a member asking for the same item without the constraints —
-/// a plain repeat of it, with the first copy's floor limit — whose copies
-/// are the others: the first copy's row and key when the stack was the
-/// member's own, else a new row with a stack of its own. Refuses when that
-/// stack needs a label and none is free.
-fn leave(
-    mut rows: Vec<Row>,
+/// The item a drag of a chip with copies carries: one bare copy of its
+/// stack — the chip's item with its melee/thrown narrowing, or its kind for
+/// a wildcard stack — with the floor limit of `copy`, the copy
+/// [`Edit::RemoveOne`] drops, and nothing else: no constraint, no label, no
+/// combined level. It stays in the chip's section.
+fn carried_copy(chip: &Requirement, copy: &Requirement) -> Requirement {
+    Requirement {
+        blanket: chip.blanket,
+        ..plain_copy(chip, copy.max_depth)
+    }
+}
+
+/// `requirement` without its group labels: a chip moving whole.
+const fn unlabelled_chip(requirement: Requirement) -> Requirement {
+    Requirement {
+        alternative_group: None,
+        identity_group: None,
+        level_sum: None,
+        ..requirement
+    }
+}
+
+/// Takes one item off the chip at `index` of `item`, as [`Edit::RemoveOne`]
+/// does: its last copy. A member's stack is restacked one fewer
+/// ([`restack_member`]); a lone stack's last copy goes, its combined level
+/// capped at what the rest can reach. A chip without copies keeps its
+/// rows. Refuses when the rest of a member's stack needs a label and none
+/// is free.
+fn shed(
+    rows: &mut Vec<Row>,
     item: &BoardItem,
     index: usize,
     keys: &mut Keys,
     held: &HeldLabels,
-) -> Result<Vec<Row>, Refusal> {
+) -> Result<(), Refusal> {
     let stack = item.stack(index).expect("a member of the entry");
-    let member = rows[index].requirement;
-    let key = rows[index].key;
-    let shared = shares_label(&rows, item, index);
-    rows[index].requirement.alternative_group = None;
-    rows[index].requirement.identity_group = None;
-    let Some(&first) = stack.copies.first() else {
-        return Ok(rows);
+    let Some((&last, rest)) = stack.copies.split_last() else {
+        return Ok(());
     };
-    let rest = Requirement {
-        alternative_group: member.alternative_group,
-        ..plain_copy(&member, rows[first].requirement.max_depth)
-    };
-    let others: Vec<Requirement> = stack.copies[1..]
-        .iter()
-        .map(|&copy| unlabelled(rows[copy].requirement))
-        .collect();
-    if !shared {
-        let rest = Row {
-            key: rows[first].key,
-            requirement: Requirement {
-                identity_group: member.identity_group.filter(|_| !others.is_empty()),
-                ..rest
-            },
-        };
-        rows.remove(first);
-        let at = index_of(&rows, key).expect("the leaving row stays");
-        rows.insert(at, rest);
-        return Ok(rows);
+    if stack.in_cluster {
+        let copies: Vec<Requirement> = rest
+            .iter()
+            .map(|&copy| unlabelled(rows[copy].requirement))
+            .collect();
+        return restack_member(rows, item, index, &copies, keys, (None, held));
     }
-    let rest_key = keys.take(&rows);
-    rows.insert(
-        index,
-        Row {
-            key: rest_key,
-            requirement: rest,
-        },
-    );
-    if others.is_empty() {
-        return Ok(rows);
+    let sum = rows[index].requirement.level_sum;
+    *rows = without(rows, &[last]);
+    if let Some(sum) = sum {
+        cap_level_sum(rows, sum.group);
     }
-    let board = Board::new(&rows);
-    let (rest_index, rest_item) = board
-        .member(&rows, rest_key)
-        .expect("the rest of the stack is on the board");
-    restack_member(
-        &mut rows,
-        rest_item,
-        rest_index,
-        &others,
-        keys,
-        (None, held),
-    )?;
-    Ok(rows)
+    Ok(())
 }
 
-/// Takes one item of a cluster member out on its own ([`leave`]): its row
-/// stays in place, after the rest of its stack.
+/// Lifts the item a drag of the visible row `key` carries off the
+/// canonical `rows`, returning them with that item's key.
+///
+/// A chip with copies stays where it is, with its constraints and one item
+/// fewer ([`shed`], as [`Edit::RemoveOne`] leaves it), and the item is a
+/// bare copy of it ([`carried_copy`]), a row right after the chip: the key
+/// of the copy the chip shed, or a new one when that copy stays with alike
+/// members that share it. A chip without copies is the item: it leaves its
+/// cluster, stack and combined level, whose rest is capped at what it can
+/// still reach. Refuses when the rest of a member's stack needs a label
+/// and none is free.
+fn lift(
+    mut rows: Vec<Row>,
+    key: u64,
+    keys: &mut Keys,
+    held: &HeldLabels,
+) -> Result<(Vec<Row>, u64), Refusal> {
+    let board = Board::new(&rows);
+    let found = board.member(&rows, key);
+    let copy = found.and_then(|(index, item)| {
+        let last = *item.stack(index)?.copies.last()?;
+        Some((index, item, last))
+    });
+    let Some((index, item, last)) = copy else {
+        if let Some(index) = index_of(&rows, key) {
+            let requirement = rows[index].requirement;
+            rows[index].requirement = unlabelled_chip(requirement);
+            if let Some(sum) = requirement.level_sum {
+                cap_level_sum(&mut rows, sum.group);
+            }
+        }
+        return Ok((rows, key));
+    };
+    let carried = carried_copy(&rows[index].requirement, &rows[last].requirement);
+    let shed_key = rows[last].key;
+    shed(&mut rows, item, index, keys, held)?;
+    let carried_key = if rows.iter().any(|row| row.key == shed_key) {
+        keys.take(&rows)
+    } else {
+        shed_key
+    };
+    let at = index_of(&rows, key).expect("the chip stays") + 1;
+    rows.insert(
+        at,
+        Row {
+            key: carried_key,
+            requirement: carried,
+        },
+    );
+    Ok((rows, carried_key))
+}
+
+/// Takes one item of a cluster member out on its own ([`lift`]): a bare
+/// copy, right after the member, or the member itself, in its place.
 fn detach(rows: &[Row], key: u64, hint: Option<u64>, held: &HeldLabels) -> Outcome {
     let board = Board::new(rows);
     let Some((_, item)) = board.member(rows, key) else {
@@ -1661,12 +1698,11 @@ fn detach(rows: &[Row], key: u64, hint: Option<u64>, held: &HeldLabels) -> Outco
         return Outcome::unchanged();
     }
     let next = canonical(rows);
-    let board = Board::new(&next);
-    let Some((index, item)) = board.member(&next, key) else {
+    if Board::new(&next).member(&next, key).is_none() {
         return Outcome::unchanged();
-    };
-    match leave(next, item, index, &mut Keys::minting(hint), held) {
-        Ok(next) => Outcome::rows(next, Some(key)),
+    }
+    match lift(next, key, &mut Keys::minting(hint), held) {
+        Ok((next, moved)) => Outcome::rows(next, Some(moved)),
         Err(refusal) => Outcome::refused(refusal),
     }
 }
@@ -1707,29 +1743,31 @@ fn doomed_rows(rows: &[Row], item: &BoardItem, index: usize, whole: bool) -> Vec
     indices.into_iter().map(|index| rows[index].key).collect()
 }
 
-/// Deletes one item of the chip `key`: a copy of its stack — a member's
-/// last copy, or a lone stack's, whose combined level keeps what the rest
-/// can reach — or the chip itself when it has no copies.
+/// Deletes one item of the chip `key`: its last copy ([`shed`]) — a
+/// member's stack restacked on the list's canonical encoding, a lone
+/// stack's combined level keeping what the rest can reach — or the chip
+/// itself when it has no copies.
 fn remove_one(rows: &[Row], key: u64, hint: Option<u64>, held: &HeldLabels) -> Outcome {
     let board = Board::new(rows);
     let Some(stack) = board.visible(rows, key) else {
         return Outcome::unchanged();
     };
-    let Some(&last) = stack.copies.last() else {
+    if stack.copies.is_empty() {
         return remove(rows, key, false);
+    }
+    let mut next = if stack.in_cluster {
+        canonical(rows)
+    } else {
+        rows.to_vec()
     };
-    if stack.in_cluster {
-        let step = restack(rows, key, hint, held, |mut copies, _, _| {
-            copies.pop();
-            copies
-        });
-        return Outcome::from_step(step, Some(key));
+    let board = Board::new(&next);
+    let Some((index, item)) = board.member(&next, key) else {
+        return Outcome::unchanged();
+    };
+    match shed(&mut next, item, index, &mut Keys::minting(hint), held) {
+        Ok(()) => Outcome::rows(next, Some(key)),
+        Err(refusal) => Outcome::refused(refusal),
     }
-    let mut next = without(rows, &[last]);
-    if let Some(sum) = rows[stack.index].requirement.level_sum {
-        cap_level_sum(&mut next, sum.group);
-    }
-    Outcome::rows(next, Some(key))
 }
 
 /// Precomputed answers to "may this visible row join that one?", shared by
@@ -1814,7 +1852,7 @@ impl JoinRules {
         if usize::from(target_needs) + usize::from(source_needs) <= self.free_labels {
             return check;
         }
-        let step = joined(
+        let (step, _) = joined(
             rows,
             (rows[source].key, rows[target].key, group),
             &mut Keys::minting(None),
@@ -1827,22 +1865,23 @@ impl JoinRules {
     }
 }
 
-/// The chip at `source` becomes an either/or alternative of the chip at
-/// `target`, and moves after the cluster's last member.
+/// One item of the chip at `source` becomes an either/or alternative of the
+/// chip at `target`, and moves after the cluster's last member.
 ///
-/// A join moves one item: the source's own row, with its constraints. A
-/// lone source's copies stay behind as an entry of their own, one item
-/// fewer, with their own floor limits — as if its count had been stepped
-/// down around the anchor; a member's stack stays in its cluster, one item
-/// fewer ([`leave`]). A stacked lone target keeps its stack as a member of
-/// the new cluster; a target cluster's members keep theirs, and the source
-/// joins as a ×1 member.
+/// A join moves one item ([`lift`]). A source with copies stays where it
+/// is, with its constraints and one item fewer — a lone stack's last copy
+/// gone, a member's stack restacked, as [`Edit::RemoveOne`] leaves it — and
+/// a bare copy of it joins: the chip's item, or its kind for a wildcard
+/// stack, with the shed copy's floor limit and nothing else. A source
+/// without copies joins itself. A stacked lone target keeps its stack as a
+/// member of the new cluster; a target cluster's members keep theirs, and
+/// the item joins as a ×1 member.
 ///
-/// A combined level cannot travel into a cluster. The members a joined
-/// source leaves behind keep it, capped at what they can still reach, or
-/// drop it when only one is left — the sheet's rule for a stack stepped
-/// down; a stacked target drops it and keeps its count, its rings becoming
-/// bare copies under a stack label.
+/// A combined level cannot travel into a cluster. A source counting levels
+/// keeps counting one ring fewer, its total capped at what the rest can
+/// still reach, or drops it when only one is left — the sheet's rule for a
+/// stack stepped down; a stacked target drops it and keeps its count, its
+/// rings becoming bare copies under a stack label.
 ///
 /// Every copy keeps its own chip's kind, so categories may mix freely.
 fn join(
@@ -1864,97 +1903,83 @@ fn join(
         JoinCheck::Refuse(refusal) => return Outcome::refused(refusal),
         JoinCheck::Join(group) => group,
     };
-    let step = joined(
+    let (step, moved) = joined(
         rows,
         (source_key, target_key, group),
         &mut Keys::minting(hint),
         held,
     );
-    Outcome::from_step(step, Some(source_key))
+    Outcome::from_step(step, Some(moved))
 }
 
 /// The rows of the join of `source_key` onto `target_key` into `group`
-/// (see [`join`]), which [`JoinRules::check`] allowed.
+/// (see [`join`]), which [`JoinRules::check`] allowed, and the key of the
+/// item that joined.
 fn joined(
     rows: &[Row],
     (source_key, target_key, group): (u64, u64, u8),
     keys: &mut Keys,
     held: &HeldLabels,
-) -> Step {
+) -> (Step, u64) {
     let mut next = canonical(rows);
     let board = Board::new(&next);
-    let (Some((source, source_item)), Some((target, target_item))) = (
+    let shown = (
         board.member(&next, source_key),
         board.member(&next, target_key),
-    ) else {
+    );
+    let folded = !matches!(shown, (Some(_), Some(_)));
+    if let (Some(_), Some((target, target_item))) = shown {
+        let target_stack = target_item.stack(target).expect("a member of the entry");
+        if !target_stack.in_cluster {
+            let anchor = next[target].requirement;
+            if target_stack.count() > 1
+                && (anchor.identity_group.is_none() || anchor.level_sum.is_some())
+            {
+                // Plain repeats and a combined level's rings become bare
+                // copies under a stack label of the target's own: the one a
+                // combined level's stack already carries, or a free one.
+                let used = taken(
+                    next.iter().map(|row| row.requirement.identity_group),
+                    &held.identity,
+                );
+                let Some(label) = anchor
+                    .identity_group
+                    .or_else(|| free_group(&used, MAX_IDENTITY_GROUP))
+                else {
+                    return (Step::Refused(Refusal::NoFreeGroup), source_key);
+                };
+                let member = Requirement {
+                    identity_group: Some(label),
+                    level_sum: None,
+                    ..anchor
+                };
+                next[target].requirement = member;
+                for &copy in &target_stack.copies {
+                    next[copy].requirement =
+                        bare_copy(&member, label, next[copy].requirement.max_depth);
+                }
+            }
+            next[target].requirement.alternative_group = Some(group);
+        }
+    }
+    // The target's rows changed in place only, so the source is found again
+    // on them.
+    let (mut next, moved) = match lift(next, source_key, keys, held) {
+        Ok(lifted) => lifted,
+        Err(refusal) => return (Step::Refused(refusal), source_key),
+    };
+    if folded && let Some(target) = index_of(&next, target_key) {
         // A hand-written cluster of one tied to a lone chip's stack folds
         // into that stack once normalized. The two rows still make one slot,
-        // as the list showed them.
-        for row in &mut next {
-            if row.key == source_key || row.key == target_key {
-                row.requirement.alternative_group = Some(group);
-            }
-            if row.key == source_key {
-                row.requirement.identity_group = None;
-                row.requirement.level_sum = None;
-            }
-        }
-        normalize(&mut next);
-        return Step::Rows(next);
-    };
-    let target_stack = target_item.stack(target).expect("a member of the entry");
-    if !target_stack.in_cluster {
-        let anchor = next[target].requirement;
-        if target_stack.count() > 1
-            && (anchor.identity_group.is_none() || anchor.level_sum.is_some())
-        {
-            // Plain repeats and a combined level's rings become bare copies
-            // under a stack label of the target's own: the one a combined
-            // level's stack already carries, or a free one.
-            let used = taken(
-                next.iter().map(|row| row.requirement.identity_group),
-                &held.identity,
-            );
-            let Some(label) = anchor
-                .identity_group
-                .or_else(|| free_group(&used, MAX_IDENTITY_GROUP))
-            else {
-                return Step::Refused(Refusal::NoFreeGroup);
-            };
-            let member = Requirement {
-                identity_group: Some(label),
-                level_sum: None,
-                ..anchor
-            };
-            next[target].requirement = member;
-            for &copy in &target_stack.copies {
-                next[copy].requirement =
-                    bare_copy(&member, label, next[copy].requirement.max_depth);
-            }
-        }
+        // as the list showed them: the target's row joins as it is, and a
+        // source folded away joins itself.
         next[target].requirement.alternative_group = Some(group);
     }
-    let mut sums = Vec::new();
-    if source_item.cluster.is_some() {
-        next = match leave(next, source_item, source, keys, held) {
-            Ok(next) => next,
-            Err(refusal) => return Step::Refused(refusal),
-        };
-    } else {
-        let requirement = &mut next[source].requirement;
-        requirement.identity_group = None;
-        if let Some(sum) = requirement.level_sum.take() {
-            sums.push(sum.group);
-        }
-    }
-    let source = index_of(&next, source_key).expect("the source stays");
+    let source = index_of(&next, moved).expect("the lifted item is a row");
     next[source].requirement.alternative_group = Some(group);
-    for sum in sums {
-        cap_level_sum(&mut next, sum);
-    }
-    let mut moved = move_after(next, source, |row| row.alternative_group == Some(group));
-    normalize(&mut moved);
-    Step::Rows(moved)
+    let mut next = move_after(next, source, |row| row.alternative_group == Some(group));
+    normalize(&mut next);
+    (Step::Rows(next), moved)
 }
 
 /// Caps the total of the combined level labelled `group` at what its

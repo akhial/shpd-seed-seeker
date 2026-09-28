@@ -1,5 +1,5 @@
 {
-  "about": "A Ring of Energy from three counting levels to at least 11 joins a Ring of Might: the two left behind keep counting, capped at the 8 they can reach.",
+  "about": "A Ring of Energy from three counting levels to at least 11 joins a Ring of Might, a plain ring: the two left behind keep counting, capped at the 8 they can reach.",
   "envelope": "requirement_board",
   "request": {
     "edits": [
@@ -50,7 +50,7 @@
       "blanket": 0,
       "ordinary": 2
     },
-    "focus": 1,
+    "focus": 3,
     "items": [
       {
         "blanket": false,
@@ -70,7 +70,7 @@
             },
             "can_detach": false,
             "copies": [
-              3
+              2
             ],
             "description": "Ring of Energy",
             "details": [],
@@ -80,9 +80,9 @@
             "item": "ring_energy",
             "join": [
               4,
-              1
+              3
             ],
-            "key": 2,
+            "key": 1,
             "kind": "ring",
             "name": "Ring of Energy",
             "problem": null,
@@ -120,12 +120,12 @@
         ],
         "cluster": null,
         "extras": [
-          3
+          2
         ],
-        "id": "r2",
+        "id": "r1",
         "label": null,
         "members": [
-          2
+          1
         ],
         "name": "Ring of Energy",
         "problem": null
@@ -149,7 +149,7 @@
             "in_cluster": true,
             "item": "ring_might",
             "join": [
-              2
+              1
             ],
             "key": 4,
             "kind": "ring",
@@ -199,9 +199,9 @@
             "in_cluster": true,
             "item": "ring_energy",
             "join": [
-              2
+              1
             ],
-            "key": 1,
+            "key": 3,
             "kind": "ring",
             "name": "Ring of Energy",
             "problem": null,
@@ -240,7 +240,7 @@
         "label": "Any of 2",
         "members": [
           4,
-          1
+          3
         ],
         "name": "Ring of Might or Ring of Energy",
         "problem": null
@@ -254,7 +254,7 @@
     "rows": [
       {
         "item": "ring_energy",
-        "key": 2,
+        "key": 1,
         "kind": "ring",
         "level_sum": {
           "at_least": 8,
@@ -263,7 +263,7 @@
       },
       {
         "item": "ring_energy",
-        "key": 3,
+        "key": 2,
         "kind": "ring",
         "level_sum": {
           "at_least": 8,
@@ -279,7 +279,7 @@
       {
         "alternative_group": 1,
         "item": "ring_energy",
-        "key": 1,
+        "key": 3,
         "kind": "ring"
       }
     ]

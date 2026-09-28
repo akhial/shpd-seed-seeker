@@ -1,5 +1,5 @@
 {
-  "about": "Wand of Disintegration ×2 dropped on {Frost ×2 | Lightning ×2}: one Disintegration joins as a ×1 member, the members keep their shared stack, and the other Disintegration stays behind.",
+  "about": "Wand of Disintegration ×2 dropped on {Frost ×2 | Lightning ×2}: a bare Disintegration joins as a ×1 member, the members keep their shared stack, and the chip stays behind at ×1.",
   "envelope": "requirement_board",
   "request": {
     "edits": [
@@ -47,7 +47,7 @@
       "blanket": 0,
       "ordinary": 2
     },
-    "focus": 4,
+    "focus": 5,
     "items": [
       {
         "blanket": false,
@@ -74,7 +74,7 @@
             "in_cluster": true,
             "item": "wand_frost",
             "join": [
-              5
+              4
             ],
             "key": 1,
             "kind": "wand",
@@ -137,7 +137,7 @@
             "in_cluster": true,
             "item": "wand_lightning",
             "join": [
-              5
+              4
             ],
             "key": 2,
             "kind": "wand",
@@ -194,9 +194,9 @@
             "in_cluster": true,
             "item": "wand_disintegration",
             "join": [
-              5
+              4
             ],
-            "key": 4,
+            "key": 5,
             "kind": "wand",
             "name": "Wand of Disintegration",
             "problem": null,
@@ -238,7 +238,7 @@
         "members": [
           1,
           2,
-          4
+          5
         ],
         "name": "Wand of Frost or Wand of Lightning or Wand of Disintegration",
         "problem": null
@@ -264,9 +264,9 @@
             "join": [
               1,
               2,
-              4
+              5
             ],
-            "key": 5,
+            "key": 4,
             "kind": "wand",
             "name": "Wand of Disintegration",
             "problem": null,
@@ -296,10 +296,10 @@
         ],
         "cluster": null,
         "extras": [],
-        "id": "r5",
+        "id": "r4",
         "label": null,
         "members": [
-          5
+          4
         ],
         "name": "Wand of Disintegration",
         "problem": null
@@ -328,7 +328,7 @@
       {
         "alternative_group": 1,
         "item": "wand_disintegration",
-        "key": 4,
+        "key": 5,
         "kind": "wand"
       },
       {
@@ -338,7 +338,7 @@
       },
       {
         "item": "wand_disintegration",
-        "key": 5,
+        "key": 4,
         "kind": "wand"
       }
     ]

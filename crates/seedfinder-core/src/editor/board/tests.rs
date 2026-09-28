@@ -6,9 +6,9 @@
 //! the four stack documents the web writes); Swift `RelationsTests.swift`;
 //! Windows `QueryRelationshipsTests.cs`; Linux `relations.rs` — deduplicated
 //! and expressed in keys. Where the older suites pinned a stack following
-//! its chip into a cluster, the cases pin the one-item join instead: the
-//! chip joins alone and its copies stay behind, while a stacked target keeps
-//! its stack as a member. #190's refusal of a join across categories with a
+//! its chip into a cluster, the cases pin the one-item join instead: a bare
+//! copy joins and the chip stays behind with its constraints, one item
+//! fewer, while a stacked target keeps its stack as a member. #190's refusal of a join across categories with a
 //! stack is lifted — every copy keeps its own chip's kind — and the cases
 //! that pinned it now pin the join.
 
@@ -266,8 +266,9 @@ fn joining_a_combined_level_stack_drops_its_total_and_leaving_a_pair_dissolves_i
                 target: 3,
             }],
         );
+        // One ring joins, a bare copy: the anchor stays, its pair dissolved.
         assert!(joined.iter().all(|row| row.requirement.level_sum.is_none()));
-        assert_eq!(keys(&joined), [2, 3, 1]);
+        assert_eq!(keys(&joined), [1, 3, 2]);
         assert_eq!(counts(&joined), [1, 1, 1]);
         assert_eq!(validate(&joined), Ok(()));
         let out = edited(&joined, &[Edit::Detach { key: 3 }]);
@@ -516,7 +517,8 @@ fn a_cluster_member_grows_a_stack_of_its_own() {
 /// target's plain repeats for bare copies the whole cluster shared, which
 /// turned "two Spears, and a Mace" into "two of the same item, Spear or
 /// Mace". A stacked target now keeps its stack as a member — "two Spears, or
-/// a Mace" — and a stacked source joins alone, its copies left behind.
+/// a Mace" — and a stacked source stays, one item fewer, while a bare copy
+/// of it joins.
 #[test]
 fn a_stacked_target_keeps_its_stack_and_a_stacked_source_leaves_its_copies() {
     let base = edited(
@@ -564,8 +566,11 @@ fn a_stacked_target_keeps_its_stack_and_a_stacked_source_leaves_its_copies() {
             },
         ],
     );
-    assert_eq!(keys(&rings), [10, 9, 1]);
-    assert_eq!(rings[0], named(10, ItemId::RingMight));
+    // The +2 ring stays; a bare copy of it joins.
+    assert_eq!(keys(&rings), [1, 9, 10]);
+    assert_eq!(rings[0], exact(named(1, ItemId::RingMight), 2));
+    assert_eq!(rings[2].requirement.item, Some(ItemId::RingMight));
+    assert_eq!(rings[2].requirement.upgrade, UpgradeRequirement::Any);
     assert_eq!(counts(&rings), [1, 1, 1]);
     assert_eq!(validate(&rings), Ok(()));
 }
@@ -586,8 +591,8 @@ fn a_join_across_categories_keeps_every_stack_with_its_own_kind() {
         &[Edit::SetCount { key: 1, count: 3 }],
     );
     assert_eq!(labels_of(&stacked), [Some(1), Some(1), Some(1), None]);
-    // The stacked weapon joins the wand: the +3 weapon moves, and the two
-    // weapons it leaves behind stay one stack.
+    // The stacked weapon joins the wand: a bare weapon joins, and the +3
+    // weapon stays, a stack of two.
     assert_eq!(
         drop_action(&stacked, 1, DropTarget::Row(9)),
         DropAction::Join { target: 9 }
@@ -602,12 +607,13 @@ fn a_join_across_categories_keeps_every_stack_with_its_own_kind() {
     assert_eq!(
         shape(&joined),
         [
+            (1, None, Some(1), None),
             (10, None, Some(1), None),
-            (11, None, Some(1), None),
             (9, Some(1), None, None),
-            (1, Some(1), None, None),
+            (11, Some(1), None, None),
         ]
     );
+    assert_eq!(joined[3], member(row(11, ItemKind::Weapon), 1, None));
     assert_eq!(counts(&joined), [2, 1, 1]);
     assert!(problems(&joined).is_empty());
     // The wand joins the stacked weapon, which keeps its ×3 as a member.
@@ -807,7 +813,8 @@ fn every_member_of_a_cluster_spanning_categories_grows_its_own_stack() {
 }
 
 /// #190 refused a counted ring joining the ring member of a cluster that
-/// spans categories. The ring joins alone; its copies stay behind.
+/// spans categories. A bare copy of the ring joins; the ring stays behind,
+/// one item fewer.
 #[test]
 fn a_counted_ring_joins_the_ring_member_of_a_mixed_category_cluster() {
     let mixed = edited(
@@ -834,7 +841,7 @@ fn a_counted_ring_joins_the_ring_member_of_a_mixed_category_cluster() {
             target: 1,
         }],
     );
-    assert_eq!(keys(&joined), [1, 2, 9, 10, 11]);
+    assert_eq!(keys(&joined), [1, 2, 11, 9, 10]);
     assert_eq!(counts(&joined), [1, 1, 1, 2]);
     assert!(problems(&joined).is_empty());
 }
@@ -883,17 +890,18 @@ fn ejecting_a_member_from_a_stacked_cluster_strips_its_label() {
             Edit::SetCount { key: 1, count: 2 },
         ],
     );
+    // A bare copy of the Spear leaves, on the key of the copy it was; the
+    // Spear stays in the cluster at ×1, its label gone with its copy.
     let result = run(&base, &[Edit::Detach { key: 1 }]);
-    assert_eq!(result.focus, Some(1));
+    assert_eq!(result.focus, Some(3));
     let spear = result.rows[index_of(&result.rows, 1).unwrap()].requirement;
-    assert_eq!(spear.alternative_group, None);
+    assert_eq!(spear.alternative_group, Some(1));
     assert_eq!(spear.identity_group, None);
-    // The rest of its stack, a Spear, stays in the cluster in its place.
     assert_eq!(
         shape(&result.rows),
         [
-            (3, Some(1), None, None),
-            (1, None, None, None),
+            (1, Some(1), None, None),
+            (3, None, None, None),
             (2, Some(1), None, None),
         ]
     );
@@ -1715,7 +1723,7 @@ fn editing_away_the_limit_clears_it_from_every_copy() {
 }
 
 #[test]
-fn the_copies_keep_their_floor_when_their_chip_joins_a_cluster_without_them() {
+fn a_joining_copy_and_the_copies_left_behind_keep_their_floor() {
     let mut rows = edited(&[], &[saved(ring(None), 3, None, Some(7))]);
     rows.push(named(9, ItemId::RingHaste));
     let joined = edited(
@@ -1725,11 +1733,19 @@ fn the_copies_keep_their_floor_when_their_chip_joins_a_cluster_without_them() {
             target: 9,
         }],
     );
-    assert_eq!(keys(&joined), [2, 3, 9, 1]);
-    let left = entry(&joined, 2);
+    assert_eq!(keys(&joined), [1, 2, 9, 3]);
+    let left = entry(&joined, 1);
     assert_eq!((left.cluster, left.count()), (None, 2));
     assert_eq!(copy_depth(&joined, &left.stacks[0]), Some(7));
-    assert_eq!(joined[0].requirement.max_depth, Some(7));
+    assert_eq!(joined[0].requirement.max_depth, None);
+    assert_eq!(
+        joined[3].requirement,
+        Requirement {
+            max_depth: Some(7),
+            alternative_group: Some(1),
+            ..ring(None)
+        }
+    );
     assert_eq!(validate(&joined), Ok(()));
 }
 
@@ -1777,7 +1793,7 @@ fn the_copies_floor_snaps_off_empty_boss_floors_and_into_range() {
 /// The web, Swift, Windows and Linux suites expected the ring's repeat to
 /// stay behind as a standalone chip while the ring joined the wand, and a
 /// wildcard wand stack to leave its copies when its chip joined a spear:
-/// that is the one-item join again.
+/// the one-item join, which now carries a bare copy and leaves the chip.
 #[test]
 fn a_counted_chip_joins_a_chip_of_another_category_and_leaves_its_copies() {
     let mut rows = edited(&[], &[saved(ring(None), 2, None, None)]);
@@ -1792,12 +1808,12 @@ fn a_counted_chip_joins_a_chip_of_another_category_and_leaves_its_copies() {
     assert_eq!(
         shape(&joined),
         [
-            (2, None, None, None),
+            (1, None, None, None),
             (9, Some(1), None, None),
-            (1, Some(1), None, None),
+            (2, Some(1), None, None),
         ]
     );
-    assert_eq!(joined[0], named(2, ItemId::RingMight));
+    assert_eq!(joined[0], named(1, ItemId::RingMight));
     assert_eq!(validate(&joined), Ok(()));
 
     let mut rows = edited(
@@ -2351,8 +2367,8 @@ fn the_focus_follows_a_row_that_normalizing_folds_away() {
 /// The reported list: Disintegration ×2 dragged onto Frost moved the whole
 /// stack into the group, whose count became Disintegration's second copy —
 /// "two of the same wand, Frost or Disintegration". One Disintegration now
-/// joins; the other stays behind, and detaching the joined one folds the
-/// two back together.
+/// joins, a bare copy, while the chip stays behind with the other; detaching
+/// the joined one folds the two back together.
 #[test]
 fn a_stacked_chip_dragged_onto_a_chip_joins_one_copy_and_detaching_it_folds_back() {
     let rows = [
@@ -2374,24 +2390,24 @@ fn a_stacked_chip_dragged_onto_a_chip_joins_one_copy_and_detaching_it_folds_back
             target: 7,
         }],
     );
-    assert_eq!(result.focus, Some(1));
-    assert_eq!(keys(&result.rows), [2, 3, 4, 5, 6, 7, 1, 8, 20]);
+    // The copy that joined is the stack's last: row 20.
+    assert_eq!(result.focus, Some(20));
+    assert_eq!(keys(&result.rows), [1, 2, 3, 4, 5, 6, 7, 20, 8]);
     assert_eq!(
-        shape(&result.rows)[5..],
+        shape(&result.rows)[6..],
         [
             (7, Some(1), None, None),
-            (1, Some(1), None, None),
+            (20, Some(1), None, None),
             (8, None, None, None),
-            (20, None, None, None),
         ]
     );
-    assert_eq!(result.rows[8], rows[8]);
-    assert_eq!(counts(&result.rows), [1, 3, 1, 1, 1, 1, 1]);
+    assert_eq!(result.rows[0], rows[0]);
+    assert_eq!(counts(&result.rows), [1, 1, 3, 1, 1, 1, 1]);
     assert_eq!(validate(&result.rows), Ok(()));
 
-    let detached = run(&result.rows, &[Edit::Detach { key: 1 }]);
+    let detached = run(&result.rows, &[Edit::Detach { key: 20 }]);
     assert_eq!(detached.focus, Some(1));
-    assert_eq!(keys(&detached.rows), [2, 3, 4, 5, 6, 7, 1, 8, 20]);
+    assert_eq!(keys(&detached.rows), [1, 2, 3, 4, 5, 6, 7, 20, 8]);
     assert!(
         detached
             .rows
@@ -2401,10 +2417,11 @@ fn a_stacked_chip_dragged_onto_a_chip_joins_one_copy_and_detaching_it_folds_back
     let disintegration = entry(&detached.rows, 1);
     assert_eq!(disintegration.count(), 2);
     assert_eq!(detached.rows[disintegration.extras[0]].key, 20);
-    assert_eq!(counts(&detached.rows), [1, 3, 1, 1, 2, 1]);
+    assert_eq!(counts(&detached.rows), [2, 1, 3, 1, 1, 1]);
+    assert_eq!(requirements(&detached.rows)[..7], requirements(&rows)[..7]);
 
-    // The same round trip with the stack first: the detached chip folds into
-    // the copy it left behind.
+    // The same round trip with the stack first: the detached copy folds
+    // back into the chip it came from.
     let pair = [
         named(1, ItemId::WandDisintegration),
         named(2, ItemId::WandDisintegration),
@@ -2417,20 +2434,83 @@ fn a_stacked_chip_dragged_onto_a_chip_joins_one_copy_and_detaching_it_folds_back
             target: 3,
         }],
     );
-    assert_eq!(keys(&joined), [2, 3, 1]);
+    assert_eq!(keys(&joined), [1, 3, 2]);
     assert_eq!(counts(&joined), [1, 1, 1]);
-    let back = edited(&joined, &[Edit::Detach { key: 1 }]);
-    assert_eq!(keys(&back), [2, 3, 1]);
+    let back = edited(&joined, &[Edit::Detach { key: 2 }]);
+    assert_eq!(keys(&back), [1, 3, 2]);
     assert_eq!(
         requirements(&back),
-        requirements(&[pair[1], pair[2], pair[0]])
+        requirements(&[pair[0], pair[2], pair[1]])
     );
     assert_eq!(counts(&back), [2, 1]);
 }
 
+/// The reported drag: Ring of Energy +4 ×3 onto Disintegration moved the
+/// +4 row into the group while the bin took a bare copy, so the lifted chip
+/// and its origin both read +4. Every drop now carries the copy the bin
+/// takes: a bare Ring of Energy joins, the chip stays +4 ×2, and detaching
+/// the copy folds it back. A member's copy leaves the same way.
 #[test]
-fn every_kind_of_stack_leaves_its_other_copies_behind_when_its_chip_joins() {
-    // Three Disintegrations: two stay behind as a stack of their own.
+fn the_reported_ring_joins_as_a_bare_copy_and_folds_back() {
+    let rows = [
+        exact(named(1, ItemId::RingEnergy), 4),
+        named(2, ItemId::RingEnergy),
+        named(3, ItemId::RingEnergy),
+        named(4, ItemId::WandDisintegration),
+    ];
+    assert_eq!(counts(&rows), [3, 1]);
+    let joined = run(
+        &rows,
+        &[Edit::Join {
+            source: 1,
+            target: 4,
+        }],
+    );
+    assert_eq!(joined.focus, Some(3));
+    assert_eq!(
+        joined.rows,
+        [
+            rows[0],
+            rows[1],
+            member(rows[3], 1, None),
+            member(rows[2], 1, None),
+        ]
+    );
+    assert_eq!(counts(&joined.rows), [2, 1, 1]);
+    // The bin takes the very copy the join carried.
+    let removed = edited(&rows, &[Edit::RemoveOne { key: 1 }]);
+    assert_eq!(removed, [rows[0], rows[1], rows[3]]);
+    // Detached again, the copy folds back into the +4 stack.
+    let back = run(&joined.rows, &[Edit::Detach { key: 3 }]);
+    assert_eq!(back.focus, Some(1));
+    assert_eq!(back.rows, [rows[0], rows[1], rows[3], rows[2]]);
+    assert_eq!(counts(&back.rows), [3, 1]);
+
+    // Frost of `{Frost +2 ×2 | Disintegration}` detached: a bare Frost
+    // leaves, and the member stays +2 — what the bin leaves it.
+    let frost = [
+        member(exact(named(1, ItemId::WandFrost), 2), 1, Some(1)),
+        member(named(2, ItemId::WandDisintegration), 1, None),
+        bare_wand(3, 1),
+    ];
+    let detached = run(&frost, &[Edit::Detach { key: 1 }]);
+    assert_eq!(detached.focus, Some(3));
+    assert_eq!(
+        detached.rows,
+        [
+            member(exact(named(1, ItemId::WandFrost), 2), 1, None),
+            named(3, ItemId::WandFrost),
+            member(named(2, ItemId::WandDisintegration), 1, None),
+        ]
+    );
+    let removed = edited(&frost, &[Edit::RemoveOne { key: 1 }]);
+    assert_eq!(removed, [detached.rows[0], detached.rows[2]]);
+}
+
+#[test]
+fn every_kind_of_stack_stays_one_item_fewer_when_a_copy_of_it_joins() {
+    // Three Disintegrations: the last copy joins with its floor, and the
+    // chip stays a stack of two.
     let three = [
         named(1, ItemId::WandFrost),
         named(2, ItemId::WandDisintegration),
@@ -2444,13 +2524,17 @@ fn every_kind_of_stack_leaves_its_other_copies_behind_when_its_chip_joins() {
             target: 1,
         }],
     );
-    assert_eq!(keys(&joined), [1, 2, 3, 4]);
-    assert_eq!(joined[2..], three[2..]);
+    assert_eq!(keys(&joined), [1, 4, 2, 3]);
+    assert_eq!(joined[2..], three[1..3]);
+    assert_eq!(
+        joined[1],
+        member(floor(named(4, ItemId::WandDisintegration), 9), 1, None)
+    );
     assert_eq!(members(&joined), [vec![0, 1], vec![2]]);
     assert_eq!(counts(&joined), [1, 1, 2]);
-    assert_eq!(copy_depth(&joined, &chip(&joined, 3)), Some(9));
+    assert_eq!(copy_depth(&joined, &chip(&joined, 2)), Some(9));
 
-    // A wildcard stack: the constrained anchor joins, a bare wand stays.
+    // A wildcard stack: a bare wand joins, the constrained chip stays.
     let wildcard = edited(
         &[
             named(1, ItemId::WandFrost),
@@ -2477,15 +2561,19 @@ fn every_kind_of_stack_leaves_its_other_copies_behind_when_its_chip_joins() {
         shape(&joined),
         [
             (1, Some(1), None, None),
-            (2, Some(1), None, None),
-            (3, None, None, None)
+            (3, Some(1), None, None),
+            (2, None, None, None)
         ]
     );
-    assert_eq!(joined[1].requirement.upgrade, UpgradeRequirement::Exact(3));
-    assert_eq!(joined[2].requirement, Requirement::any(ItemKind::Wand));
+    assert_eq!(
+        joined[1],
+        member(row(3, ItemKind::Wand), 1, None),
+        "the wildcard's kind and nothing else"
+    );
+    assert_eq!(joined[2].requirement.upgrade, UpgradeRequirement::Exact(3));
     assert_eq!(counts(&joined), [1, 1, 1]);
 
-    // Three of a wildcard: the two left behind stay one stack.
+    // Three of a wildcard: the chip stays a stack of two.
     let wildcard = edited(&wildcard, &[Edit::SetCount { key: 2, count: 3 }]);
     let joined = edited(
         &wildcard,
@@ -2497,7 +2585,8 @@ fn every_kind_of_stack_leaves_its_other_copies_behind_when_its_chip_joins() {
     assert_eq!(counts(&joined), [1, 1, 2]);
     assert_eq!(validate(&joined), Ok(()));
 
-    // Rings within floor 20: the +4 joins Might, the copies keep floor 20.
+    // Rings within floor 20: a plain copy joins Might with its floor 20,
+    // and the +4 keeps the other.
     let rings = [
         exact(named(1, ItemId::RingEnergy), 4),
         floor(named(2, ItemId::RingEnergy), 20),
@@ -2511,14 +2600,14 @@ fn every_kind_of_stack_leaves_its_other_copies_behind_when_its_chip_joins() {
             target: 4,
         }],
     );
-    assert_eq!(keys(&joined), [2, 3, 4, 1]);
-    assert_eq!(joined[..2], rings[1..3]);
-    let left = entry(&joined, 2);
+    assert_eq!(keys(&joined), [1, 2, 4, 3]);
+    assert_eq!(joined[..2], rings[..2]);
+    let left = entry(&joined, 1);
     assert_eq!(
         (left.count(), copy_depth(&joined, &left.stacks[0])),
         (2, Some(20))
     );
-    assert_eq!(joined[3].requirement.upgrade, UpgradeRequirement::Exact(4));
+    assert_eq!(joined[3], member(rings[2], 1, None));
     assert_eq!(counts(&joined), [2, 1, 1]);
     assert_eq!(validate(&joined), Ok(()));
 }
@@ -2565,21 +2654,22 @@ fn a_drop_onto_a_stack_keeps_the_targets_stack() {
         drop_action(&cluster, 4, DropTarget::Cluster(1)),
         DropAction::Join { target: 1 }
     );
+    // One Disintegration joins, a copy of the stack; the chip stays ×1.
     for target in [1, 2] {
         let result = run(&cluster, &[Edit::Join { source: 4, target }]);
-        assert_eq!(result.focus, Some(4));
+        assert_eq!(result.focus, Some(5));
         assert_eq!(
             shape(&result.rows),
             [
                 (1, Some(1), Some(1), None),
                 (2, Some(1), Some(1), None),
-                (4, Some(1), None, None),
+                (5, Some(1), None, None),
                 (3, None, Some(1), None),
-                (5, None, None, None),
+                (4, None, None, None),
             ]
         );
         assert_eq!(result.rows[3], cluster[2]);
-        assert_eq!(result.rows[4], cluster[4]);
+        assert_eq!(result.rows[4], cluster[3]);
         assert_eq!(entry(&result.rows, 1).members.len(), 3);
         assert_eq!(counts(&result.rows), [2, 2, 1, 1]);
         assert!(problems(&result.rows).is_empty());
@@ -2607,10 +2697,10 @@ fn a_combined_level_stack_keeps_what_its_rest_can_reach_or_its_count_as_a_member
             }],
         );
         assert_eq!(result.refused, None, "{context}");
-        let left = entry(&result.rows, 2);
+        let left = entry(&result.rows, 1);
         assert_eq!((left.count(), left.total()), (2, Some(kept)), "{context}");
         assert_eq!(
-            result.rows[index_of(&result.rows, 1).unwrap()].requirement,
+            result.rows[index_of(&result.rows, 3).unwrap()].requirement,
             Requirement {
                 alternative_group: Some(1),
                 ..named(0, ItemId::RingEnergy).requirement
@@ -2652,8 +2742,8 @@ fn a_combined_level_stack_keeps_what_its_rest_can_reach_or_its_count_as_a_member
     );
     assert!(joined.iter().all(|row| row.requirement.level_sum.is_none()));
     assert_eq!(
-        joined[index_of(&joined, 2).unwrap()],
-        named(2, ItemId::RingEnergy)
+        joined[index_of(&joined, 1).unwrap()],
+        named(1, ItemId::RingEnergy)
     );
     assert_eq!(counts(&joined), [1, 1, 1]);
     let joined = edited(
@@ -2668,9 +2758,10 @@ fn a_combined_level_stack_keeps_what_its_rest_can_reach_or_its_count_as_a_member
 }
 
 /// A join removes no row but the copies of member stacks it makes alike:
-/// Frost leaving `{Frost ×3 | Disintegration ×2}` leaves `{Frost ×2 |
+/// one Frost of `{Frost ×3 | Disintegration ×2}` joining leaves `{Frost ×2 |
 /// Disintegration ×2}`, whose two stacks share one label and its copies,
-/// so Disintegration's own copy goes. The cluster asks for what it did.
+/// so Frost's own copy left goes (the other one joined). The cluster asks
+/// for what it did.
 #[test]
 fn a_join_merges_the_member_stacks_it_makes_alike() {
     let rows = [
@@ -2692,11 +2783,11 @@ fn a_join_merges_the_member_stacks_it_makes_alike() {
     assert_eq!(
         joined,
         [
-            member(named(3, ItemId::WandFrost), 1, Some(1)),
-            member(named(2, ItemId::WandDisintegration), 1, Some(1)),
-            bare_wand(4, 1),
+            member(named(1, ItemId::WandFrost), 1, Some(2)),
+            member(named(2, ItemId::WandDisintegration), 1, Some(2)),
+            bare_wand(5, 2),
             member(named(6, ItemId::WandLightning), 2, None),
-            member(named(1, ItemId::WandFrost), 2, None),
+            member(named(4, ItemId::WandFrost), 2, None),
         ]
     );
     assert_eq!(counts(&joined), [2, 2, 1, 1]);
@@ -2761,11 +2852,11 @@ fn a_labelled_combined_level_target_keeps_its_own_label() {
 }
 
 /// A member leaving a cluster — detached, or dragged onto another chip —
-/// takes one item of its stack: its own row, with its constraints. The rest
-/// stays in the cluster in its place, one item fewer, as the same item
-/// without the constraints: Frost out of `{Frost ×2 | Disintegration}`
-/// gives `{Frost | Disintegration}` and Frost.
+/// takes one item of its stack: a bare copy, while the member stays in its
+/// place with its constraints, one item fewer. Frost out of `{Frost +2 ×2 |
+/// Disintegration}` gives `{Frost +2 | Disintegration}` and Frost.
 #[test]
+#[allow(clippy::too_many_lines)] // Four stacks, each pinned whole.
 fn a_member_leaving_a_cluster_takes_one_item_of_its_stack() {
     let own = [
         member(named(1, ItemId::WandFrost), 1, Some(1)),
@@ -2774,12 +2865,12 @@ fn a_member_leaving_a_cluster_takes_one_item_of_its_stack() {
     ];
     assert_eq!(counts(&own), [2, 1]);
     let detached = run(&own, &[Edit::Detach { key: 1 }]);
-    assert_eq!(detached.focus, Some(1));
+    assert_eq!(detached.focus, Some(3));
     assert_eq!(
         detached.rows,
         [
-            member(named(3, ItemId::WandFrost), 1, None),
-            named(1, ItemId::WandFrost),
+            member(named(1, ItemId::WandFrost), 1, None),
+            named(3, ItemId::WandFrost),
             member(named(2, ItemId::WandDisintegration), 1, None),
         ]
     );
@@ -2788,8 +2879,7 @@ fn a_member_leaving_a_cluster_takes_one_item_of_its_stack() {
         drop_action(&own, 1, DropTarget::Board { blanket: false }),
         DropAction::Detach
     );
-    // Constraints leave with the member's row; the rest keeps the copy's
-    // floor limit.
+    // Constraints stay with the member; the copy keeps its floor limit.
     let upgraded = [
         member(exact(named(1, ItemId::WandFrost), 2), 1, Some(1)),
         own[1],
@@ -2799,41 +2889,43 @@ fn a_member_leaving_a_cluster_takes_one_item_of_its_stack() {
     assert_eq!(
         detached[..2],
         [
-            member(floor(named(3, ItemId::WandFrost), 9), 1, None),
-            exact(named(1, ItemId::WandFrost), 2),
+            member(exact(named(1, ItemId::WandFrost), 2), 1, None),
+            floor(named(3, ItemId::WandFrost), 9),
         ]
     );
 
-    // Alike stacks share their copies, so the rest is a new row.
+    // Alike stacks share their copies, so the copy that leaves is a new
+    // row, and the shared copy stays with Frost.
     let shared = [
         member(named(1, ItemId::WandFrost), 1, Some(1)),
         member(named(2, ItemId::WandDisintegration), 1, Some(1)),
         bare_wand(3, 1),
     ];
     assert_eq!(counts(&shared), [2, 2]);
-    let detached = edited(&shared, &[Edit::Detach { key: 2 }]);
+    let detached = run(&shared, &[Edit::Detach { key: 2 }]);
+    assert_eq!(detached.focus, Some(4));
     assert_eq!(
-        detached,
+        detached.rows,
         [
             member(named(1, ItemId::WandFrost), 1, Some(1)),
-            member(named(4, ItemId::WandDisintegration), 1, None),
-            named(2, ItemId::WandDisintegration),
+            member(named(2, ItemId::WandDisintegration), 1, None),
+            named(4, ItemId::WandDisintegration),
             bare_wand(3, 1),
         ]
     );
-    assert_eq!(counts(&detached), [2, 1, 1]);
-    // At ×3 the rest keeps a stack of its own, under a label of its own.
+    assert_eq!(counts(&detached.rows), [2, 1, 1]);
+    // At ×3 the member keeps a stack of its own, under a label of its own.
     let three = [shared[0], shared[1], shared[2], bare_wand(4, 1)];
     let detached = edited(&three, &[Edit::Detach { key: 2 }]);
     assert_eq!(
         shape(&detached),
         [
             (1, Some(1), Some(1), None),
-            (5, Some(1), Some(2), None),
-            (2, None, None, None),
+            (2, Some(1), Some(2), None),
+            (6, None, None, None),
             (3, None, Some(1), None),
             (4, None, Some(1), None),
-            (6, None, Some(2), None),
+            (5, None, Some(2), None),
         ]
     );
     assert_eq!(counts(&detached), [3, 2, 1]);
@@ -2853,18 +2945,22 @@ fn a_member_leaving_a_cluster_takes_one_item_of_its_stack() {
             target: 7,
         }],
     );
-    assert_eq!(result.focus, Some(1));
+    assert_eq!(result.focus, Some(8));
     assert_eq!(
         shape(&result.rows),
         [
-            (8, Some(1), None, None),
+            (1, Some(1), None, None),
             (2, Some(1), Some(1), None),
             (3, None, Some(1), None),
             (7, Some(2), None, None),
-            (1, Some(2), None, None),
+            (8, Some(2), None, None),
         ]
     );
-    assert_eq!(result.rows[0], member(named(8, ItemId::WandFrost), 1, None));
+    assert_eq!(
+        result.rows[0],
+        member(exact(named(1, ItemId::WandFrost), 2), 1, None)
+    );
+    assert_eq!(result.rows[4], member(named(8, ItemId::WandFrost), 2, None));
     assert_eq!(counts(&result.rows), [1, 2, 1, 1]);
     assert!(problems(&result.rows).is_empty());
 }
@@ -2972,13 +3068,13 @@ fn a_row_leaving_a_hand_written_stack_leaves_the_copies_the_board_showed() {
     assert_eq!(
         joined,
         [
-            named(2, ItemId::WandDisintegration),
+            named(1, ItemId::WandDisintegration),
             member(named(7, ItemId::WandFrost), 1, None),
-            member(named(1, ItemId::WandDisintegration), 1, None),
+            member(named(2, ItemId::WandDisintegration), 1, None),
         ]
     );
     assert_eq!(joined, edited(&source, &[Edit::Normalize, join]));
-    // A constrained anchor's copies stay plain repeats of its item.
+    // A constrained anchor stays, its copy a plain repeat of its item.
     let upgraded = [
         with(exact(named(1, ItemId::WandDisintegration), 3), |r| {
             r.identity_group = Some(1);
@@ -2991,9 +3087,13 @@ fn a_row_leaving_a_hand_written_stack_leaves_the_copies_the_board_showed() {
     assert_eq!(
         joined[..2],
         [
+            exact(named(1, ItemId::WandDisintegration), 3),
             named(2, ItemId::WandDisintegration),
-            named(3, ItemId::WandDisintegration),
         ]
+    );
+    assert_eq!(
+        joined[3],
+        member(named(3, ItemId::WandDisintegration), 1, None)
     );
     assert_eq!(counts(&joined), [2, 1, 1]);
 
@@ -3142,13 +3242,15 @@ fn dissolved(chip: Requirement, copies: &[Requirement]) -> Vec<Demand> {
 }
 
 /// What a join of the visible row `source` onto the visible row `target` of
-/// a canonical list should leave it asking for: the source's entry one item
-/// fewer — a lone stack's other copies behind (a combined level capped at
-/// what they can still reach), a member's stack in its cluster as the same
-/// item without the constraints — and the two in one cluster: the target's
+/// a canonical list should leave it asking for: the source's chip one item
+/// fewer — a lone stack's last copy gone (a combined level capped at what
+/// the rest can still reach), a member's last copy gone, a chip without
+/// copies gone from its entry — and the two in one cluster: the target's
 /// members with their stacks, or a lone target with its whole stack as a
 /// member (plain repeats and a combined level's rings as bare copies), and
-/// the source as a ×1 member. Every other entry asks for what it did.
+/// the item that moved as a ×1 member: a bare copy of the source's item or
+/// kind with the last copy's floor limit, or the source itself. Every other
+/// entry asks for what it did.
 fn joined_demands(rows: &[Row], source: usize, target: usize) -> Vec<Demand> {
     let items = board_items(rows);
     let owner = |index: usize| {
@@ -3166,46 +3268,43 @@ fn joined_demands(rows: &[Row], source: usize, target: usize) -> Vec<Demand> {
         .collect();
     let source_item = &items[from];
     let source_stack = source_item.stack(source).expect("a chip");
-    let copies = requirements_at(rows, &source_stack.copies);
+    let chip = rows[source].requirement;
+    let mut copies = requirements_at(rows, &source_stack.copies);
+    let moved = copies.pop().map_or(chip, |last| carried_copy(&chip, &last));
     if source_item.cluster.is_some() {
-        let mut stacks: Vec<(Requirement, Vec<Requirement>)> = stacks_of(rows, source_item)
+        let stacks: Vec<(Requirement, Vec<Requirement>)> = stacks_of(rows, source_item)
             .into_iter()
             .zip(&source_item.stacks)
-            .filter(|(_, stack)| stack.index != source)
-            .map(|(pair, _)| pair)
+            .filter(|(_, stack)| stack.index != source || !stack.copies.is_empty())
+            .map(|((member, others), stack)| {
+                if stack.index == source {
+                    (member, copies.clone())
+                } else {
+                    (member, others)
+                }
+            })
             .collect();
-        if let Some((first, rest)) = copies.split_first() {
-            stacks.push((
-                plain_copy(&rows[source].requirement, first.max_depth),
-                rest.to_vec(),
-            ));
-        }
         if let [(chip, copies)] = &stacks[..] {
             expected.extend(dissolved(*chip, copies));
         } else {
             expected.push(cluster_demand(&stacks));
         }
-    } else if source_stack.total.is_none() && rows[source].requirement.item.is_some() {
-        expected.extend(
-            copies
-                .iter()
-                .map(|copy| Demand::Lone(vec![text(copy)], None)),
-        );
-    } else if !copies.is_empty() {
+    } else if !source_stack.copies.is_empty() {
+        let left: Vec<Requirement> = std::iter::once(chip).chain(copies).collect();
         let reach = SumGroup {
-            members: u16::try_from(copies.len()).expect("a short stack"),
+            members: u16::try_from(left.len()).expect("a short stack"),
             minimum_total: 0,
-            capacity: copies
+            capacity: left
                 .iter()
-                .map(|copy| u16::from(copy.maximum_level()))
+                .map(|ring| u16::from(ring.maximum_level()))
                 .sum(),
         }
         .attainable_capacity();
         let total = source_stack
             .total
-            .filter(|_| copies.len() > 1)
+            .filter(|_| left.len() > 1)
             .map(|total| total.min(u8::try_from(reach).unwrap_or(u8::MAX)));
-        expected.push(Demand::Lone(texts(&copies), total));
+        expected.extend(lone_demands(&left, total));
     }
     let mut stacks = if items[onto].cluster.is_some() {
         stacks_of(rows, &items[onto])
@@ -3219,7 +3318,7 @@ fn joined_demands(rows: &[Row], source: usize, target: usize) -> Vec<Demand> {
             .collect();
         vec![(chip, copies)]
     };
-    stacks.push((rows[source].requirement, Vec::new()));
+    stacks.push((moved, Vec::new()));
     expected.push(cluster_demand(&stacks));
     expected.sort();
     expected
@@ -3328,9 +3427,10 @@ fn assert_no_idle_label(rows: &[Row], context: &str) {
 
 /// Canonical valid lists built by board edits, each joined every way its
 /// visible rows allow (1,024 lists, per the test budget): the join keeps
-/// every row but adds one only for the rest of a stack members shared;
-/// every entry but the two joined asks for what it did, the source's entry
-/// gives up one item and the target keeps its stack — no copy is orphaned;
+/// every key but adds one only for the copy a member sharing its stack
+/// carries; every entry but the two joined asks for what it did, the
+/// source's chip gives up one item — a bare copy, or itself when it has
+/// none — and the target keeps its stack — no copy is orphaned;
 /// no chip without copies keeps a stack or combined-level label; and the
 /// result is valid and canonical. The same list with its named stacks
 /// written as bare copies joins to the very same rows.
@@ -3403,7 +3503,8 @@ fn a_join_moves_one_item_and_leaves_every_copy_where_it_belongs() {
                     joined_demands(&rows, source, target),
                     "{context}"
                 );
-                let joined = entry(after, source_key);
+                let moved = result.focus.expect("a join follows the item it moved");
+                let joined = entry(after, moved);
                 assert!(joined.cluster.is_some(), "{context}");
                 assert!(
                     joined
@@ -4021,7 +4122,7 @@ fn random_edits_on_valid_rows_keep_every_row_emittable() {
                 match drop_action(&current, source, DropTarget::Row(target)) {
                     DropAction::Join { .. } => {
                         assert!(step.changed && step.refused.is_none(), "{context}");
-                        let joined = entry(&step.rows, source);
+                        let joined = entry(&step.rows, step.focus.unwrap_or(source));
                         let target = index_of(&step.rows, target).unwrap();
                         assert!(
                             !canonical

@@ -251,7 +251,7 @@ fn board_fixtures(fixtures: &mut Fixtures) {
     );
     fixtures.add(
         "board-join-leaves-copies",
-        "A +2 Spear ×2 dragged onto a Tier 3 weapon joins just the +2 Spear; the plain repeat stays behind as a Spear of its own.",
+        "A +2 Spear ×2 dragged onto a Tier 3 weapon: a drag carries a bare copy, so a plain Spear joins, and the +2 Spear stays behind on its own.",
         Board,
         &json!({
             "rows": [
@@ -264,7 +264,7 @@ fn board_fixtures(fixtures: &mut Fixtures) {
     );
     fixtures.add(
         "board-join-one-copy",
-        "Wand of Disintegration ×2 dragged onto Wand of Frost: one Disintegration joins Frost, the other stays behind on its own (the stack's count never becomes the group's).",
+        "Wand of Disintegration ×2 dragged onto Wand of Frost: one Disintegration — the stack's last copy, key 20 — joins Frost, and the chip stays behind on its own (the stack's count never becomes the group's).",
         Board,
         &json!({
             "rows": repro(),
@@ -273,13 +273,13 @@ fn board_fixtures(fixtures: &mut Fixtures) {
     );
     fixtures.add(
         "board-join-round-trip",
-        "The same join, then the joined Disintegration detached: it folds back together with the copy it left behind, and Frost is alone again.",
+        "The same join, then the joined Disintegration (key 20) detached: it folds back into the chip it came from, and Frost is alone again.",
         Board,
         &json!({
             "rows": repro(),
             "edits": [
                 {"type": "join", "source": 1, "target": 7},
-                {"type": "detach", "key": 1},
+                {"type": "detach", "key": 20},
             ],
         }),
     );
@@ -298,7 +298,7 @@ fn board_fixtures(fixtures: &mut Fixtures) {
     );
     fixtures.add(
         "board-join-onto-stacked-cluster",
-        "Wand of Disintegration ×2 dropped on {Frost ×2 | Lightning ×2}: one Disintegration joins as a ×1 member, the members keep their shared stack, and the other Disintegration stays behind.",
+        "Wand of Disintegration ×2 dropped on {Frost ×2 | Lightning ×2}: a bare Disintegration joins as a ×1 member, the members keep their shared stack, and the chip stays behind at ×1.",
         Board,
         &json!({
             "rows": [
@@ -313,7 +313,7 @@ fn board_fixtures(fixtures: &mut Fixtures) {
     );
     fixtures.add(
         "board-join-combined-level",
-        "A Ring of Energy from three counting levels to at least 11 joins a Ring of Might: the two left behind keep counting, capped at the 8 they can reach.",
+        "A Ring of Energy from three counting levels to at least 11 joins a Ring of Might, a plain ring: the two left behind keep counting, capped at the 8 they can reach.",
         Board,
         &json!({
             "rows": [
@@ -341,7 +341,7 @@ fn board_fixtures(fixtures: &mut Fixtures) {
     );
     fixtures.add(
         "board-join-member-moves-one",
-        "The +2 Frost of {Frost +2 ×2 | Disintegration ×2} dragged onto a +3 wand takes one item: the +2 Frost joins the wand, a plain Frost stays in the group in its place, and Disintegration keeps its ×2.",
+        "The +2 Frost of {Frost +2 ×2 | Disintegration ×2} dragged onto a +3 wand takes one item: a bare Frost joins the wand, the +2 Frost stays in the group at ×1, and Disintegration keeps its ×2.",
         Board,
         &json!({
             "rows": [
@@ -355,7 +355,7 @@ fn board_fixtures(fixtures: &mut Fixtures) {
     );
     fixtures.add(
         "board-join-hand-written-stack",
-        "A Wand of Disintegration +3 ×3 written as bare copies under a stack label, the way a list from elsewhere may hold it, dragged onto Wand of Frost: the two left behind stay Disintegrations, not Any wand.",
+        "A Wand of Disintegration +3 ×3 written as bare copies under a stack label, the way a list from elsewhere may hold it, dragged onto Wand of Frost: a plain Disintegration joins, and the +3 chip keeps the other copy as a Disintegration, not Any wand.",
         Board,
         &json!({
             "rows": [
@@ -369,7 +369,7 @@ fn board_fixtures(fixtures: &mut Fixtures) {
     );
     fixtures.add(
         "board-detach-one-copy",
-        "Frost out of {Frost ×2 | Disintegration}: one Frost leaves, and the group keeps a Frost in its place — {Frost | Disintegration} and Frost.",
+        "Frost out of {Frost ×2 | Disintegration}: a bare Frost leaves, on the key of the copy it was, and the member stays in the group at ×1 — {Frost | Disintegration} and Frost.",
         Board,
         &json!({
             "rows": [

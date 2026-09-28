@@ -1,5 +1,5 @@
 {
-  "about": "Frost out of {Frost ×2 | Disintegration}: one Frost leaves, and the group keeps a Frost in its place — {Frost | Disintegration} and Frost.",
+  "about": "Frost out of {Frost ×2 | Disintegration}: a bare Frost leaves, on the key of the copy it was, and the member stays in the group at ×1 — {Frost | Disintegration} and Frost.",
   "envelope": "requirement_board",
   "request": {
     "edits": [
@@ -35,7 +35,7 @@
       "blanket": 0,
       "ordinary": 2
     },
-    "focus": 1,
+    "focus": 3,
     "items": [
       {
         "blanket": false,
@@ -56,9 +56,9 @@
             "in_cluster": true,
             "item": "wand_frost",
             "join": [
-              1
+              3
             ],
-            "key": 3,
+            "key": 1,
             "kind": "wand",
             "name": "Wand of Frost",
             "problem": null,
@@ -106,7 +106,7 @@
             "in_cluster": true,
             "item": "wand_disintegration",
             "join": [
-              1
+              3
             ],
             "key": 2,
             "kind": "wand",
@@ -146,7 +146,7 @@
         "id": "c1",
         "label": "Any of 2",
         "members": [
-          3,
+          1,
           2
         ],
         "name": "Wand of Frost or Wand of Disintegration",
@@ -171,10 +171,10 @@
             "in_cluster": false,
             "item": "wand_frost",
             "join": [
-              3,
+              1,
               2
             ],
-            "key": 1,
+            "key": 3,
             "kind": "wand",
             "name": "Wand of Frost",
             "problem": null,
@@ -204,10 +204,10 @@
         ],
         "cluster": null,
         "extras": [],
-        "id": "r1",
+        "id": "r3",
         "label": null,
         "members": [
-          1
+          3
         ],
         "name": "Wand of Frost",
         "problem": null
@@ -222,12 +222,12 @@
       {
         "alternative_group": 1,
         "item": "wand_frost",
-        "key": 3,
+        "key": 1,
         "kind": "wand"
       },
       {
         "item": "wand_frost",
-        "key": 1,
+        "key": 3,
         "kind": "wand"
       },
       {

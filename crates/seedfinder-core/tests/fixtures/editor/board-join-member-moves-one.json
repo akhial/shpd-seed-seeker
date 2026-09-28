@@ -1,5 +1,5 @@
 {
-  "about": "The +2 Frost of {Frost +2 ×2 | Disintegration ×2} dragged onto a +3 wand takes one item: the +2 Frost joins the wand, a plain Frost stays in the group in its place, and Disintegration keeps its ×2.",
+  "about": "The +2 Frost of {Frost +2 ×2 | Disintegration ×2} dragged onto a +3 wand takes one item: a bare Frost joins the wand, the +2 Frost stays in the group at ×1, and Disintegration keeps its ×2.",
   "envelope": "requirement_board",
   "request": {
     "edits": [
@@ -43,7 +43,7 @@
       "blanket": 0,
       "ordinary": 2
     },
-    "focus": 1,
+    "focus": 8,
     "items": [
       {
         "blanket": false,
@@ -55,9 +55,9 @@
             },
             "can_detach": true,
             "copies": [],
-            "description": "Wand of Frost, any upgrade",
+            "description": "Wand of Frost, exactly +2",
             "details": [
-              "any upgrade"
+              "exactly +2"
             ],
             "effect": null,
             "family": "wand",
@@ -65,9 +65,9 @@
             "item": "wand_frost",
             "join": [
               7,
-              1
+              8
             ],
-            "key": 8,
+            "key": 1,
             "kind": "wand",
             "name": "Wand of Frost",
             "problem": null,
@@ -94,7 +94,13 @@
               "total": null,
               "total_text": "Σ ≥ 0"
             },
-            "tags": [],
+            "tags": [
+              {
+                "style": "upgrade",
+                "text": "+2",
+                "tooltip": null
+              }
+            ],
             "title": "Wand of Frost",
             "trailing_tags": [],
             "uncursed": false
@@ -122,7 +128,7 @@
             "item": "wand_disintegration",
             "join": [
               7,
-              1
+              8
             ],
             "key": 2,
             "kind": "wand",
@@ -171,7 +177,7 @@
         "id": "c1",
         "label": "Any of 2",
         "members": [
-          8,
+          1,
           2
         ],
         "name": "Wand of Frost or Wand of Disintegration",
@@ -196,7 +202,7 @@
             "in_cluster": true,
             "item": null,
             "join": [
-              8,
+              1,
               2
             ],
             "key": 7,
@@ -244,19 +250,19 @@
             },
             "can_detach": true,
             "copies": [],
-            "description": "Wand of Frost, exactly +2",
+            "description": "Wand of Frost, any upgrade",
             "details": [
-              "exactly +2"
+              "any upgrade"
             ],
             "effect": null,
             "family": "wand",
             "in_cluster": true,
             "item": "wand_frost",
             "join": [
-              8,
+              1,
               2
             ],
-            "key": 1,
+            "key": 8,
             "kind": "wand",
             "name": "Wand of Frost",
             "problem": null,
@@ -283,13 +289,7 @@
               "total": null,
               "total_text": "Σ ≥ 0"
             },
-            "tags": [
-              {
-                "style": "upgrade",
-                "text": "+2",
-                "tooltip": null
-              }
-            ],
+            "tags": [],
             "title": "Wand of Frost",
             "trailing_tags": [],
             "uncursed": false
@@ -301,7 +301,7 @@
         "label": "Any of 2",
         "members": [
           7,
-          1
+          8
         ],
         "name": "Any wand or Wand of Frost",
         "problem": null
@@ -316,8 +316,9 @@
       {
         "alternative_group": 1,
         "item": "wand_frost",
-        "key": 8,
-        "kind": "wand"
+        "key": 1,
+        "kind": "wand",
+        "upgrade": 2
       },
       {
         "alternative_group": 1,
@@ -340,9 +341,8 @@
       {
         "alternative_group": 2,
         "item": "wand_frost",
-        "key": 1,
-        "kind": "wand",
-        "upgrade": 2
+        "key": 8,
+        "kind": "wand"
       }
     ]
   }

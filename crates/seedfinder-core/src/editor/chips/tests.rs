@@ -1516,20 +1516,34 @@ fn visible(board: &BoardView) -> Vec<u64> {
     keys
 }
 
-/// Each entry's badges, keys aside: its section, then each chip's count and
-/// combined level, sorted so that order does not count. Names are left out:
-/// a join moves a stack's anchor, whose narrowing its plain repeats lack —
-/// and whose kind, in a hand-written list, its copies may not share.
-fn faces(board: &BoardView) -> Vec<(bool, Vec<[Option<String>; 2]>)> {
+/// One chip as [`faces`] compares it: its name, its tags and trailing tags,
+/// its count and its combined level.
+type Face = (String, Vec<String>, [Option<String>; 2]);
+
+/// Each entry's chips, keys aside: its section, then each chip's name,
+/// tags and badges, sorted so that order does not count.
+fn faces(board: &BoardView) -> Vec<(bool, Vec<Face>)> {
     let text = |badge: &Option<Badge>| badge.as_ref().map(|badge| badge.text.clone());
     let mut faces: Vec<_> = board
         .items
         .iter()
         .map(|item| {
-            let mut chips: Vec<_> = item
+            let mut chips: Vec<Face> = item
                 .chips
                 .iter()
-                .map(|chip| [text(&chip.badges.count), text(&chip.badges.total)])
+                .map(|chip| {
+                    let tags = chip
+                        .tags
+                        .iter()
+                        .chain(&chip.trailing_tags)
+                        .map(|tag| tag.text.clone())
+                        .collect();
+                    (
+                        chip.name.clone(),
+                        tags,
+                        [text(&chip.badges.count), text(&chip.badges.total)],
+                    )
+                })
                 .collect();
             chips.sort();
             (item.blanket, chips)
@@ -1540,20 +1554,21 @@ fn faces(board: &BoardView) -> Vec<(bool, Vec<[Option<String>; 2]>)> {
 }
 
 /// How many chips [`faces`] holds.
-fn chips(faces: &[(bool, Vec<[Option<String>; 2]>)]) -> usize {
+fn chips(faces: &[(bool, Vec<Face>)]) -> usize {
     faces.iter().map(|(_, chips)| chips.len()).sum()
 }
 
 #[test]
 fn every_drop_leaves_what_a_removal_of_one_item_leaves() {
-    // Every drag moves one item, so a join onto any candidate and a detach
-    // leave the rest of the board as a removal of that one item does: after
-    // a join, everything but the target's entry, which the item joined;
-    // after a detach, everything once the item that left is taken away
-    // (1,024 generated lists, normalized or edited; those with a problem —
-    // a stack spanning kinds or sections — are skipped). A drop or removal
-    // that folds a chip into another is not compared: the other may leave
-    // the two apart.
+    // Every drag carries one item, the very one a removal of one takes, so
+    // a join onto any candidate and a detach leave the rest of the board as
+    // that removal does — names and tags included, the chip keeping its
+    // constraints: after a join, everything but the target's entry, which
+    // the item joined; after a detach, everything once the item that left
+    // is taken away (1,024 generated lists, normalized or edited; those
+    // with a problem — a stack spanning kinds or sections — are skipped). A
+    // drop or removal that folds a chip into another is not compared: the
+    // other may leave the two apart.
     let mut rng = Rng::new(0xd_20b5);
     let mut compared = 0;
     for case in 0..1024 {
@@ -1602,14 +1617,8 @@ fn every_drop_leaves_what_a_removal_of_one_item_leaves() {
                 if detached.refused.is_some() || !detached.changed {
                     continue;
                 }
-                let left = view(&detached.rows);
-                let landed = left
-                    .items
-                    .iter()
-                    .flat_map(|item| &item.chips)
-                    .find(|chip| chip.key == key || chip.copies.contains(&key))
-                    .expect("the detached item shows");
-                let taken = apply(&detached.rows, None, &[Edit::RemoveOne { key: landed.key }]);
+                let landed = detached.focus.expect("a detach follows the item");
+                let taken = apply(&detached.rows, None, &[Edit::RemoveOne { key: landed }]);
                 let (taken, removed) = (faces(&view(&taken.rows)), faces(&view(&removed.rows)));
                 if chips(&taken) == chips(&removed) {
                     compared += 1;

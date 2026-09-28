@@ -1,5 +1,5 @@
 {
-  "about": "A +2 Spear ×2 dragged onto a Tier 3 weapon joins just the +2 Spear; the plain repeat stays behind as a Spear of its own.",
+  "about": "A +2 Spear ×2 dragged onto a Tier 3 weapon: a drag carries a bare copy, so a plain Spear joins, and the +2 Spear stays behind on its own.",
   "envelope": "requirement_board",
   "request": {
     "edits": [
@@ -36,7 +36,7 @@
       "blanket": 0,
       "ordinary": 2
     },
-    "focus": 1,
+    "focus": 2,
     "items": [
       {
         "blanket": false,
@@ -48,9 +48,9 @@
             },
             "can_detach": false,
             "copies": [],
-            "description": "Spear, any upgrade",
+            "description": "Spear, exactly +2",
             "details": [
-              "any upgrade"
+              "exactly +2"
             ],
             "effect": null,
             "family": "weapon",
@@ -58,9 +58,9 @@
             "item": "spear",
             "join": [
               3,
-              1
+              2
             ],
-            "key": 2,
+            "key": 1,
             "kind": "weapon",
             "name": "Spear",
             "problem": null,
@@ -82,7 +82,13 @@
               "total": null,
               "total_text": "Σ ≥ 0"
             },
-            "tags": [],
+            "tags": [
+              {
+                "style": "upgrade",
+                "text": "+2",
+                "tooltip": null
+              }
+            ],
             "title": "Spear",
             "trailing_tags": [],
             "uncursed": false
@@ -90,10 +96,10 @@
         ],
         "cluster": null,
         "extras": [],
-        "id": "r2",
+        "id": "r1",
         "label": null,
         "members": [
-          2
+          1
         ],
         "name": "Spear",
         "problem": null
@@ -117,7 +123,7 @@
             "in_cluster": true,
             "item": null,
             "join": [
-              2
+              1
             ],
             "key": 3,
             "kind": "weapon",
@@ -164,18 +170,18 @@
             },
             "can_detach": true,
             "copies": [],
-            "description": "Spear, exactly +2",
+            "description": "Spear, any upgrade",
             "details": [
-              "exactly +2"
+              "any upgrade"
             ],
             "effect": null,
             "family": "weapon",
             "in_cluster": true,
             "item": "spear",
             "join": [
-              2
+              1
             ],
-            "key": 1,
+            "key": 2,
             "kind": "weapon",
             "name": "Spear",
             "problem": null,
@@ -202,13 +208,7 @@
               "total": null,
               "total_text": "Σ ≥ 0"
             },
-            "tags": [
-              {
-                "style": "upgrade",
-                "text": "+2",
-                "tooltip": null
-              }
-            ],
+            "tags": [],
             "title": "Spear",
             "trailing_tags": [],
             "uncursed": false
@@ -220,7 +220,7 @@
         "label": "Any of 2",
         "members": [
           3,
-          1
+          2
         ],
         "name": "Any weapon or Spear",
         "problem": null
@@ -234,8 +234,9 @@
     "rows": [
       {
         "item": "spear",
-        "key": 2,
-        "kind": "weapon"
+        "key": 1,
+        "kind": "weapon",
+        "upgrade": 2
       },
       {
         "alternative_group": 1,
@@ -248,9 +249,8 @@
       {
         "alternative_group": 1,
         "item": "spear",
-        "key": 1,
-        "kind": "weapon",
-        "upgrade": 2
+        "key": 2,
+        "kind": "weapon"
       }
     ]
   }

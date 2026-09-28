@@ -1,5 +1,5 @@
 {
-  "about": "Wand of Disintegration ×2 dragged onto Wand of Frost: one Disintegration joins Frost, the other stays behind on its own (the stack's count never becomes the group's).",
+  "about": "Wand of Disintegration ×2 dragged onto Wand of Frost: one Disintegration — the stack's last copy, key 20 — joins Frost, and the chip stays behind on its own (the stack's count never becomes the group's).",
   "envelope": "requirement_board",
   "request": {
     "edits": [
@@ -67,8 +67,72 @@
       "blanket": 0,
       "ordinary": 6
     },
-    "focus": 1,
+    "focus": 20,
     "items": [
+      {
+        "blanket": false,
+        "chips": [
+          {
+            "badges": {
+              "count": null,
+              "total": null
+            },
+            "can_detach": false,
+            "copies": [],
+            "description": "Wand of Disintegration, any upgrade",
+            "details": [
+              "any upgrade"
+            ],
+            "effect": null,
+            "family": "wand",
+            "in_cluster": false,
+            "item": "wand_disintegration",
+            "join": [
+              2,
+              3,
+              6,
+              7,
+              20,
+              8
+            ],
+            "key": 1,
+            "kind": "wand",
+            "name": "Wand of Disintegration",
+            "problem": null,
+            "refuse": [],
+            "relations": [],
+            "remaining_badges": null,
+            "stack": {
+              "can_change_count": true,
+              "can_count_levels": false,
+              "can_grow": true,
+              "can_set_copy_depth": false,
+              "copy_depth": null,
+              "count": 1,
+              "count_max": 3,
+              "count_text": "×1",
+              "default_total": 1,
+              "level_capacity": 5,
+              "max": 3,
+              "total": null,
+              "total_text": "Σ ≥ 0"
+            },
+            "tags": [],
+            "title": "Wand of Disintegration",
+            "trailing_tags": [],
+            "uncursed": false
+          }
+        ],
+        "cluster": null,
+        "extras": [],
+        "id": "r1",
+        "label": null,
+        "members": [
+          1
+        ],
+        "name": "Wand of Disintegration",
+        "problem": null
+      },
       {
         "blanket": false,
         "chips": [
@@ -88,12 +152,12 @@
             "in_cluster": false,
             "item": "wand_lightning",
             "join": [
+              1,
               3,
               6,
               7,
-              1,
-              8,
-              20
+              20,
+              8
             ],
             "key": 2,
             "kind": "wand",
@@ -159,12 +223,12 @@
             "in_cluster": false,
             "item": "ring_energy",
             "join": [
+              1,
               2,
               6,
               7,
-              1,
-              8,
-              20
+              20,
+              8
             ],
             "key": 3,
             "kind": "ring",
@@ -244,12 +308,12 @@
             "in_cluster": false,
             "item": "plate_armor",
             "join": [
+              1,
               2,
               3,
               7,
-              1,
-              8,
-              20
+              20,
+              8
             ],
             "key": 6,
             "kind": "armor",
@@ -314,11 +378,11 @@
             "in_cluster": true,
             "item": "wand_frost",
             "join": [
+              1,
               2,
               3,
               6,
-              8,
-              20
+              8
             ],
             "key": 7,
             "kind": "wand",
@@ -368,13 +432,13 @@
             "in_cluster": true,
             "item": "wand_disintegration",
             "join": [
+              1,
               2,
               3,
               6,
-              8,
-              20
+              8
             ],
-            "key": 1,
+            "key": 20,
             "kind": "wand",
             "name": "Wand of Disintegration",
             "problem": null,
@@ -413,7 +477,7 @@
         "label": "Any of 2",
         "members": [
           7,
-          1
+          20
         ],
         "name": "Wand of Frost or Wand of Disintegration",
         "problem": null
@@ -437,11 +501,11 @@
             "in_cluster": false,
             "item": null,
             "join": [
+              1,
               2,
               3,
               6,
               7,
-              1,
               20
             ],
             "key": 8,
@@ -487,70 +551,6 @@
         ],
         "name": "Any wand",
         "problem": null
-      },
-      {
-        "blanket": false,
-        "chips": [
-          {
-            "badges": {
-              "count": null,
-              "total": null
-            },
-            "can_detach": false,
-            "copies": [],
-            "description": "Wand of Disintegration, any upgrade",
-            "details": [
-              "any upgrade"
-            ],
-            "effect": null,
-            "family": "wand",
-            "in_cluster": false,
-            "item": "wand_disintegration",
-            "join": [
-              2,
-              3,
-              6,
-              7,
-              1,
-              8
-            ],
-            "key": 20,
-            "kind": "wand",
-            "name": "Wand of Disintegration",
-            "problem": null,
-            "refuse": [],
-            "relations": [],
-            "remaining_badges": null,
-            "stack": {
-              "can_change_count": true,
-              "can_count_levels": false,
-              "can_grow": true,
-              "can_set_copy_depth": false,
-              "copy_depth": null,
-              "count": 1,
-              "count_max": 3,
-              "count_text": "×1",
-              "default_total": 1,
-              "level_capacity": 5,
-              "max": 3,
-              "total": null,
-              "total_text": "Σ ≥ 0"
-            },
-            "tags": [],
-            "title": "Wand of Disintegration",
-            "trailing_tags": [],
-            "uncursed": false
-          }
-        ],
-        "cluster": null,
-        "extras": [],
-        "id": "r20",
-        "label": null,
-        "members": [
-          20
-        ],
-        "name": "Wand of Disintegration",
-        "problem": null
       }
     ],
     "next_key": 21,
@@ -559,6 +559,11 @@
     "rekeyed": [],
     "resin": null,
     "rows": [
+      {
+        "item": "wand_disintegration",
+        "key": 1,
+        "kind": "wand"
+      },
       {
         "item": "wand_lightning",
         "key": 2,
@@ -597,18 +602,13 @@
       {
         "alternative_group": 1,
         "item": "wand_disintegration",
-        "key": 1,
+        "key": 20,
         "kind": "wand"
       },
       {
         "key": 8,
         "kind": "wand",
         "upgrade": 3
-      },
-      {
-        "item": "wand_disintegration",
-        "key": 20,
-        "kind": "wand"
       }
     ]
   }
