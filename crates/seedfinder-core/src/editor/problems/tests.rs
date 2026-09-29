@@ -901,63 +901,106 @@ fn a_list_has_no_problem_exactly_when_the_engine_accepts_it() {
 }
 
 #[test]
+#[allow(clippy::too_many_lines)] // One literal per preset.
 fn the_web_built_in_presets_have_no_problems() {
-    let wand = |upgrade| Requirement {
+    let exact = UpgradeRequirement::Exact;
+    let tier_five = |upgrade| Requirement {
+        tier: TierRequirement::Exact(5),
         upgrade,
-        ..Requirement::any(ItemKind::Wand)
+        ..weapon()
     };
-    let stacked = |requirement: Requirement| Requirement {
-        identity_group: Some(1),
-        ..requirement
-    };
-    let any = UpgradeRequirement::Any;
-    let staff = |top| {
-        vec![
-            stacked(wand(UpgradeRequirement::Exact(top))),
-            stacked(wand(any)),
-            stacked(wand(any)),
-            wand(UpgradeRequirement::AtLeast(1)),
-        ]
-    };
-    let bonanza = vec![
-        wand(UpgradeRequirement::Exact(3)),
+    let disintegration = item_of(ItemId::WandDisintegration);
+    let disintegrate = vec![
         Requirement {
-            max_depth: Some(4),
-            ..wand(UpgradeRequirement::Exact(2))
+            upgrade: UpgradeRequirement::AtLeast(3),
+            ..disintegration
+        },
+        disintegration,
+        disintegration,
+        Requirement {
+            trinket_transmutations: 1,
+            ..item_of(ItemId::EyeOfNewt)
         },
         Requirement {
-            max_depth: Some(4),
-            ..wand(UpgradeRequirement::Exact(2))
+            upgrade: UpgradeRequirement::AtLeast(2),
+            ..item_of(ItemId::RingEnergy)
         },
-        wand(UpgradeRequirement::Exact(2)),
+    ];
+    let guerilla = vec![
+        Requirement {
+            upgrade: exact(3),
+            effect: EffectRequirement::exactly(Effect::Weapon(WeaponEffect::Blooming)),
+            max_depth: Some(7),
+            ..item_of(ItemId::AssassinsBlade)
+        },
+        Requirement {
+            effect: EffectRequirement::exactly(Effect::Armor(ArmorEffect::Camouflage)),
+            ..Requirement::any(ItemKind::Armor)
+        },
+        Requirement {
+            upgrade: UpgradeRequirement::AtLeast(2),
+            ..item_of(ItemId::RingArcana)
+        },
     ];
     let wealth = vec![
         Requirement {
-            upgrade: UpgradeRequirement::Exact(4),
-            source: Some(ItemSource::ImpReward),
+            upgrade: exact(4),
             ..item_of(ItemId::RingWealth)
         },
         Requirement {
-            upgrade: UpgradeRequirement::Exact(2),
+            max_depth: Some(9),
+            ..item_of(ItemId::DriedRose)
+        },
+        Requirement {
+            tier: TierRequirement::AtMost(4),
+            upgrade: exact(3),
             max_depth: Some(4),
-            ..item_of(ItemId::RingWealth)
+            ..Requirement::any(ItemKind::Armor)
+        },
+        Requirement {
+            tier: TierRequirement::AtMost(4),
+            upgrade: exact(3),
+            max_depth: Some(9),
+            ..weapon()
+        },
+        Requirement {
+            trinket_transmutations: 1,
+            ..item_of(ItemId::DimensionalSundial)
         },
     ];
-    let tier_four = vec![
-        stacked(Requirement {
-            tier: TierRequirement::Exact(4),
-            upgrade: UpgradeRequirement::Exact(5),
-            ..weapon()
-        }),
-        stacked(weapon()),
-        stacked(weapon()),
+    let plate = Requirement {
+        upgrade: exact(3),
+        ..item_of(ItemId::PlateArmor)
+    };
+    let necromancer = vec![
+        Requirement {
+            upgrade: exact(3),
+            ..item_of(ItemId::WandCorruption)
+        },
+        tier_five(exact(3)),
+        plate,
+    ];
+    let berserker = vec![
+        Requirement {
+            effect: EffectRequirement::exactly(Effect::Weapon(WeaponEffect::Vampiric)),
+            ..tier_five(exact(3))
+        },
+        Requirement {
+            effect: EffectRequirement::exactly(Effect::Armor(ArmorEffect::Thorns)),
+            ..plate
+        },
+        Requirement {
+            upgrade: exact(4),
+            ..item_of(ItemId::RingArcana)
+        },
+        item_of(ItemId::ChaliceOfBlood),
     ];
     for (name, preset) in [
-        ("+21 Staff", staff(3)),
-        ("+22 Staff", staff(4)),
-        ("Wand Bonanza", bonanza),
-        ("+21 Ring of Wealth", wealth),
-        ("+26 Tier 4 Weapon", tier_four),
+        ("DISINTEGRATE", disintegrate),
+        ("Guerilla Assassin", guerilla),
+        ("Ring of Wealth", wealth),
+        ("Necromancer", necromancer),
+        ("Blood Berserker", berserker),
     ] {
         let rows = keyed(&preset);
         assert_eq!(problems(&rows), [], "{name}");

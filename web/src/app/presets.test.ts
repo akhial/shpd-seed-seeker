@@ -1,6 +1,53 @@
 import { describe, expect, it } from "vite-plus/test";
-import { VAULT_FLOOR_LIMIT, builtInPresets } from "./store";
+import { builtInPresets } from "./store";
+import { fromQueryJson } from "../features/query/query";
 import { validateQuery } from "../features/query/validation";
+
+/** Each preset as the shared query-document format writes it. */
+const documents: [string, string][] = [
+  [
+    "DISINTEGRATE",
+    `{"auto_apply_trinket":true,"max_depth":19,"requirements":[
+      {"item":"wand_disintegration","kind":"wand","upgrade":{"at_least":3}},
+      {"item":"wand_disintegration","kind":"wand"},
+      {"item":"wand_disintegration","kind":"wand"},
+      {"item":"eye_of_newt","kind":"trinket","trinket_transmutations":1},
+      {"item":"ring_energy","kind":"ring","upgrade":{"at_least":2}}]}`,
+  ],
+  [
+    "Guerilla Assassin",
+    `{"auto_apply_trinket":true,"requirements":[
+      {"effect":"Blooming","item":"assassins_blade","kind":"weapon","max_depth":7,"upgrade":3},
+      {"effect":"Camouflage","kind":"armor"},
+      {"item":"ring_arcana","kind":"ring","upgrade":{"at_least":2}}]}`,
+  ],
+  [
+    "Ring of Wealth",
+    `{"auto_apply_trinket":true,
+      "floor_requirements":[{"any_rooms":["garden","secret_garden"],"depth":17,"feeling":"dark"}],
+      "requirements":[
+      {"item":"ring_wealth","kind":"ring","upgrade":4},
+      {"item":"dried_rose","kind":"artifact","max_depth":9},
+      {"kind":"armor","max_depth":4,"tier":{"at_most":4},"upgrade":3},
+      {"kind":"weapon","max_depth":9,"tier":{"at_most":4},"upgrade":3},
+      {"item":"dimensional_sundial","kind":"trinket","trinket_transmutations":1}]}`,
+  ],
+  [
+    "Necromancer",
+    `{"auto_apply_trinket":true,"max_depth":14,"wandmaker_quest":"corpse_dust","requirements":[
+      {"item":"wand_corruption","kind":"wand","upgrade":3},
+      {"kind":"weapon","tier":{"exact":5},"upgrade":3},
+      {"item":"plate_armor","kind":"armor","upgrade":3}]}`,
+  ],
+  [
+    "Blood Berserker",
+    `{"auto_apply_trinket":true,"requirements":[
+      {"effect":"Vampiric","kind":"weapon","tier":{"exact":5},"upgrade":3},
+      {"effect":"Thorns","item":"plate_armor","kind":"armor","upgrade":3},
+      {"item":"ring_arcana","kind":"ring","upgrade":4},
+      {"item":"chalice_of_blood","kind":"artifact"}]}`,
+  ],
+];
 
 describe("built-in presets", () => {
   it("ships a query the editor accepts", () => {
@@ -9,36 +56,10 @@ describe("built-in presets", () => {
     }
   });
 
-  it("anchors the +22 staff on a +4 wand, within the Imp floors", () => {
-    const preset = builtInPresets.find((entry) => entry.name === "+22 Staff")!;
-    expect(preset.query.maxDepth).toBe(VAULT_FLOOR_LIMIT);
-    expect(preset.query.requirements.map((requirement) => requirement.upgrade)).toEqual([
-      { mode: "exact", value: 4 },
-      { mode: "any", value: 1 },
-      { mode: "any", value: 1 },
-      { mode: "at_least", value: 1 },
-    ]);
-    expect(preset.query.requirements.map((requirement) => requirement.identityGroup)).toEqual([
-      1,
-      1,
-      1,
-      undefined,
-    ]);
-  });
-
-  it("stacks two more copies on the +5 tier-4 weapon", () => {
-    const preset = builtInPresets.find((entry) => entry.name === "+26 Tier 4 Weapon")!;
-    expect(preset.query.maxDepth).toBe(VAULT_FLOOR_LIMIT);
-    expect(preset.query.requirements).toHaveLength(3);
-    expect(
-      preset.query.requirements.every(
-        (requirement) => requirement.kind === "weapon" && requirement.identityGroup === 1,
-      ),
-    ).toBe(true);
-    expect(preset.query.requirements[0].tier).toEqual({ mode: "exact", value: 4 });
-    expect(preset.query.requirements[0].upgrade).toEqual({ mode: "exact", value: 5 });
-    expect(
-      preset.query.requirements.slice(1).map((requirement) => requirement.upgrade.mode),
-    ).toEqual(["any", "any"]);
+  it("is the query each preset was taken from", () => {
+    expect(builtInPresets.map((preset) => preset.name)).toEqual(documents.map(([name]) => name));
+    for (const [index, [name, document]] of documents.entries()) {
+      expect(builtInPresets[index].query, name).toEqual(fromQueryJson(document));
+    }
   });
 });

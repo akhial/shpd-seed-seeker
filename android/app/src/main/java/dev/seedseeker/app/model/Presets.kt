@@ -26,118 +26,162 @@ data class QueryPreset(
 )
 
 object BuiltInPresets {
-    /**
-     * The floor limit the vault presets carry: floor 19 is the last floor the
-     * Imp — and so the vault holding its levelled prizes — can appear on, so a
-     * deeper scan only costs time.
-     */
-    private const val VAULT_FLOOR_LIMIT = 19
+    private fun item(id: String) = checkNotNull(ItemCatalog.findById(id)) { "Built-in preset names unknown item $id" }
 
-    val staff21 = QueryPreset(
-        id = "staff-21",
-        name = "+21 Staff",
+    val disintegrate = QueryPreset(
+        id = "disintegrate",
+        name = "DISINTEGRATE",
         isBuiltIn = true,
         query = PresetQuery(
             requirements = listOf(
-                ItemRequirement(1, null, 3, kind = ItemKind.WAND, upgradeMatch = UpgradeMatch.EXACT, identityGroup = 1),
-                ItemRequirement(2, null, 0, kind = ItemKind.WAND, upgradeMatch = UpgradeMatch.ANY, identityGroup = 1),
-                ItemRequirement(3, null, 0, kind = ItemKind.WAND, upgradeMatch = UpgradeMatch.ANY, identityGroup = 1),
-                ItemRequirement(4, null, 1, kind = ItemKind.WAND, upgradeMatch = UpgradeMatch.AT_LEAST),
+                ItemRequirement(1, item("wand_disintegration"), 3, kind = ItemKind.WAND, upgradeMatch = UpgradeMatch.AT_LEAST),
+                ItemRequirement(2, item("wand_disintegration"), 0, kind = ItemKind.WAND, upgradeMatch = UpgradeMatch.ANY),
+                ItemRequirement(3, item("wand_disintegration"), 0, kind = ItemKind.WAND, upgradeMatch = UpgradeMatch.ANY),
+                ItemRequirement(
+                    4,
+                    item("eye_of_newt"),
+                    0,
+                    kind = ItemKind.TRINKET,
+                    upgradeMatch = UpgradeMatch.ANY,
+                    trinketTransmutations = 1,
+                ),
+                ItemRequirement(5, item("ring_energy"), 2, kind = ItemKind.RING, upgradeMatch = UpgradeMatch.AT_LEAST),
             ),
+            maximumDepth = 19,
         ),
     )
 
-    /**
-     * The +21 stack anchored one level higher, on the +4 wand v4.0.0's Imp
-     * vault lays out among its prizes.
-     */
-    val staff22 = QueryPreset(
-        id = "staff-22",
-        name = "+22 Staff",
-        isBuiltIn = true,
-        query = PresetQuery(
-            requirements = listOf(
-                ItemRequirement(1, null, 4, kind = ItemKind.WAND, upgradeMatch = UpgradeMatch.EXACT, identityGroup = 1),
-                ItemRequirement(2, null, 0, kind = ItemKind.WAND, upgradeMatch = UpgradeMatch.ANY, identityGroup = 1),
-                ItemRequirement(3, null, 0, kind = ItemKind.WAND, upgradeMatch = UpgradeMatch.ANY, identityGroup = 1),
-                ItemRequirement(4, null, 1, kind = ItemKind.WAND, upgradeMatch = UpgradeMatch.AT_LEAST),
-            ),
-            maximumDepth = VAULT_FLOOR_LIMIT,
-        ),
-    )
-
-    val wandBonanza = QueryPreset(
-        id = "wand-bonanza",
-        name = "Wand Bonanza",
-        isBuiltIn = true,
-        query = PresetQuery(
-            requirements = listOf(
-                ItemRequirement(1, null, 3, kind = ItemKind.WAND, upgradeMatch = UpgradeMatch.EXACT),
-                ItemRequirement(2, null, 2, kind = ItemKind.WAND, upgradeMatch = UpgradeMatch.EXACT, maximumDepth = 4),
-                ItemRequirement(3, null, 2, kind = ItemKind.WAND, upgradeMatch = UpgradeMatch.EXACT, maximumDepth = 4),
-                ItemRequirement(4, null, 2, kind = ItemKind.WAND, upgradeMatch = UpgradeMatch.EXACT),
-            ),
-        ),
-    )
-
-    val ringOfWealth21 = QueryPreset(
-        id = "ring-of-wealth-21",
-        name = "+21 Ring of Wealth",
+    val guerillaAssassin = QueryPreset(
+        id = "guerilla-assassin",
+        name = "Guerilla Assassin",
         isBuiltIn = true,
         query = PresetQuery(
             requirements = listOf(
                 ItemRequirement(
                     1,
-                    ItemCatalog.findById("ring_wealth"),
-                    4,
-                    kind = ItemKind.RING,
-                    upgradeMatch = UpgradeMatch.EXACT,
-                    source = ScoutItemSource.IMP_REWARD,
-                ),
-                ItemRequirement(
-                    2,
-                    ItemCatalog.findById("ring_wealth"),
-                    2,
-                    kind = ItemKind.RING,
-                    upgradeMatch = UpgradeMatch.EXACT,
-                ),
-                ItemRequirement(
+                    item("assassins_blade"),
                     3,
-                    ItemCatalog.findById("ring_wealth"),
+                    effect = EffectFilter.named("Blooming"),
+                    kind = ItemKind.WEAPON,
+                    upgradeMatch = UpgradeMatch.EXACT,
+                    maximumDepth = 7,
+                ),
+                ItemRequirement(
+                    2,
+                    null,
                     0,
-                    kind = ItemKind.RING,
+                    effect = EffectFilter.named("Camouflage"),
+                    kind = ItemKind.ARMOR,
                     upgradeMatch = UpgradeMatch.ANY,
                 ),
+                ItemRequirement(3, item("ring_arcana"), 2, kind = ItemKind.RING, upgradeMatch = UpgradeMatch.AT_LEAST),
             ),
         ),
     )
 
-    /**
-     * A tier-4 weapon at the +5 only the vault reaches, with two more of the
-     * same weapon to pour into it.
-     */
-    val tier4Weapon26 = QueryPreset(
-        id = "tier-4-weapon-26",
-        name = "+26 Tier 4 Weapon",
+    /** Floor 17 must be a farming floor, the requirement the farming-floor toggle writes. */
+    val ringOfWealth = QueryPreset(
+        id = "ring-of-wealth",
+        name = "Ring of Wealth",
+        isBuiltIn = true,
+        query = PresetQuery(
+            requirements = listOf(
+                ItemRequirement(1, item("ring_wealth"), 4, kind = ItemKind.RING, upgradeMatch = UpgradeMatch.EXACT),
+                ItemRequirement(
+                    2,
+                    item("dried_rose"),
+                    0,
+                    kind = ItemKind.ARTIFACT,
+                    upgradeMatch = UpgradeMatch.ANY,
+                    maximumDepth = 9,
+                ),
+                ItemRequirement(
+                    3,
+                    null,
+                    3,
+                    kind = ItemKind.ARMOR,
+                    tier = 4,
+                    tierMatch = TierMatch.AT_MOST,
+                    upgradeMatch = UpgradeMatch.EXACT,
+                    maximumDepth = 4,
+                ),
+                ItemRequirement(
+                    4,
+                    null,
+                    3,
+                    kind = ItemKind.WEAPON,
+                    tier = 4,
+                    tierMatch = TierMatch.AT_MOST,
+                    upgradeMatch = UpgradeMatch.EXACT,
+                    maximumDepth = 9,
+                ),
+                ItemRequirement(
+                    5,
+                    item("dimensional_sundial"),
+                    0,
+                    kind = ItemKind.TRINKET,
+                    upgradeMatch = UpgradeMatch.ANY,
+                    trinketTransmutations = 1,
+                ),
+            ),
+            floorRequirements = listOf(
+                FloorRequirement(17, FloorFeeling.DARK, anyRooms = listOf("garden", "secret_garden")),
+            ),
+        ),
+    )
+
+    val necromancer = QueryPreset(
+        id = "necromancer",
+        name = "Necromancer",
+        isBuiltIn = true,
+        query = PresetQuery(
+            requirements = listOf(
+                ItemRequirement(1, item("wand_corruption"), 3, kind = ItemKind.WAND, upgradeMatch = UpgradeMatch.EXACT),
+                ItemRequirement(
+                    2,
+                    null,
+                    3,
+                    kind = ItemKind.WEAPON,
+                    tier = 5,
+                    tierMatch = TierMatch.EXACT,
+                    upgradeMatch = UpgradeMatch.EXACT,
+                ),
+                ItemRequirement(3, item("plate_armor"), 3, kind = ItemKind.ARMOR, upgradeMatch = UpgradeMatch.EXACT),
+            ),
+            maximumDepth = 14,
+            wandmakerQuest = WandmakerQuest.CORPSE_DUST,
+        ),
+    )
+
+    val bloodBerserker = QueryPreset(
+        id = "blood-berserker",
+        name = "Blood Berserker",
         isBuiltIn = true,
         query = PresetQuery(
             requirements = listOf(
                 ItemRequirement(
                     1,
                     null,
-                    5,
+                    3,
+                    effect = EffectFilter.named("Vampiric"),
                     kind = ItemKind.WEAPON,
-                    tier = 4,
+                    tier = 5,
                     tierMatch = TierMatch.EXACT,
                     upgradeMatch = UpgradeMatch.EXACT,
-                    identityGroup = 1,
                 ),
-                ItemRequirement(2, null, 0, kind = ItemKind.WEAPON, upgradeMatch = UpgradeMatch.ANY, identityGroup = 1),
-                ItemRequirement(3, null, 0, kind = ItemKind.WEAPON, upgradeMatch = UpgradeMatch.ANY, identityGroup = 1),
+                ItemRequirement(
+                    2,
+                    item("plate_armor"),
+                    3,
+                    effect = EffectFilter.named("Thorns"),
+                    kind = ItemKind.ARMOR,
+                    upgradeMatch = UpgradeMatch.EXACT,
+                ),
+                ItemRequirement(3, item("ring_arcana"), 4, kind = ItemKind.RING, upgradeMatch = UpgradeMatch.EXACT),
+                ItemRequirement(4, item("chalice_of_blood"), 0, kind = ItemKind.ARTIFACT, upgradeMatch = UpgradeMatch.ANY),
             ),
-            maximumDepth = VAULT_FLOOR_LIMIT,
         ),
     )
 
-    val all = listOf(staff21, staff22, wandBonanza, ringOfWealth21, tier4Weapon26)
+    val all = listOf(disintegrate, guerillaAssassin, ringOfWealth, necromancer, bloodBerserker)
 }

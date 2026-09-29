@@ -3,62 +3,98 @@ import SeedSeekerKit
 import XCTest
 
 final class SeedSeekerKitTests: XCTestCase {
-    func testBundledStaffPreset() throws {
-        let preset = BuiltInPresets.staff21
-        XCTAssertEqual(preset.name, "+21 Staff")
-        XCTAssertEqual(preset.query.requirements.count, 4)
-        XCTAssertEqual(preset.query.requirements.map(\.kind), [.wand, .wand, .wand, .wand])
-        XCTAssertEqual(preset.query.requirements.map(\.upgradeMatch), [.exactly, .any, .any, .atLeast])
-        XCTAssertEqual(preset.query.requirements.map(\.upgrade), [3, 0, 0, 1])
-        XCTAssertEqual(preset.query.requirements.map(\.identityGroup), [1, 1, 1, nil])
-        XCTAssertNotNil(preset.query.validated())
+    func testBuiltInPresetsInOrder() throws {
+        XCTAssertEqual(BuiltInPresets.all.map(\.name),
+                       ["DISINTEGRATE", "Guerilla Assassin", "Ring of Wealth", "Necromancer", "Blood Berserker"])
+        let ids = Set(BuiltInPresets.all.map(\.id))
+        XCTAssertEqual(ids.count, BuiltInPresets.all.count)
+        // The retired presets' ids stay retired, so a hidden or stored id
+        // never names one of these.
+        let retired = (1...5).map { UUID(uuidString: "C3DB688D-3D7D-43F0-B10E-9BCBEA27210\($0)")! }
+        XCTAssertTrue(ids.isDisjoint(with: retired))
+        for preset in BuiltInPresets.all {
+            XCTAssertTrue(preset.query.autoApplyTrinket, preset.name)
+            XCTAssertEqual(preset.query.requirements.map(\.key),
+                           Array(1...Int64(preset.query.requirements.count)), preset.name)
+            XCTAssertNotNil(preset.query.validated(), preset.name)
+            XCTAssertNoThrow(try preset.query.searchRequest(), preset.name)
+        }
     }
 
-    func testBundledStaff22Preset() throws {
-        let preset = BuiltInPresets.staff22
-        XCTAssertEqual(preset.name, "+22 Staff")
+    func testBundledDisintegratePreset() throws {
+        let preset = BuiltInPresets.disintegrate
+        XCTAssertEqual(preset.name, "DISINTEGRATE")
         XCTAssertEqual(preset.query.maximumDepth, 19)
-        XCTAssertEqual(preset.query.requirements.map(\.kind), [.wand, .wand, .wand, .wand])
-        XCTAssertEqual(preset.query.requirements.map(\.upgradeMatch), [.exactly, .any, .any, .atLeast])
-        XCTAssertEqual(preset.query.requirements.map(\.upgrade), [4, 0, 0, 1])
-        XCTAssertEqual(preset.query.requirements.map(\.identityGroup), [1, 1, 1, nil])
+        XCTAssertEqual(preset.query.requirements.map(\.item?.id),
+                       ["wand_disintegration", "wand_disintegration", "wand_disintegration",
+                        "eye_of_newt", "ring_energy"])
+        XCTAssertEqual(preset.query.requirements.map(\.kind), [.wand, .wand, .wand, .trinket, .ring])
+        XCTAssertEqual(preset.query.requirements.map(\.upgradeMatch), [.atLeast, .any, .any, .any, .atLeast])
+        XCTAssertEqual(preset.query.requirements.map(\.upgrade), [3, 0, 0, 0, 2])
+        XCTAssertEqual(preset.query.requirements.map(\.trinketTransmutations), [0, 0, 0, 1, 0])
         XCTAssertNotNil(preset.query.validated())
     }
 
-    func testBundledTier4WeaponPreset() throws {
-        let preset = BuiltInPresets.tier4Weapon26
-        XCTAssertEqual(preset.name, "+26 Tier 4 Weapon")
-        XCTAssertEqual(preset.query.maximumDepth, 19)
-        XCTAssertEqual(preset.query.requirements.map(\.kind), [.weapon, .weapon, .weapon])
-        XCTAssertEqual(preset.query.requirements.map(\.tierMatch), [.exactly, .any, .any])
-        XCTAssertEqual(preset.query.requirements.map(\.tier), [4, 0, 0])
-        XCTAssertEqual(preset.query.requirements.map(\.upgradeMatch), [.exactly, .any, .any])
-        XCTAssertEqual(preset.query.requirements.map(\.upgrade), [5, 0, 0])
-        XCTAssertEqual(preset.query.requirements.map(\.identityGroup), [1, 1, 1])
-        XCTAssertNotNil(preset.query.validated())
-    }
-
-    func testBundledWandBonanzaPreset() throws {
-        let preset = BuiltInPresets.wandBonanza
-        XCTAssertEqual(preset.name, "Wand Bonanza")
-        XCTAssertEqual(preset.query.requirements.map(\.kind), [.wand, .wand, .wand, .wand])
-        XCTAssertEqual(preset.query.requirements.map(\.item), [nil, nil, nil, nil])
-        XCTAssertEqual(preset.query.requirements.map(\.upgradeMatch), [.exactly, .exactly, .exactly, .exactly])
-        XCTAssertEqual(preset.query.requirements.map(\.upgrade), [3, 2, 2, 2])
-        XCTAssertEqual(preset.query.requirements.map(\.maximumDepth), [nil, 4, 4, nil])
-        XCTAssertEqual(preset.query.requirements.map(\.identityGroup), [nil, nil, nil, nil])
+    func testBundledGuerillaAssassinPreset() throws {
+        let preset = BuiltInPresets.guerillaAssassin
+        XCTAssertEqual(preset.name, "Guerilla Assassin")
+        XCTAssertEqual(preset.query.maximumDepth, 24)
+        XCTAssertEqual(preset.query.requirements.map(\.item?.id), ["assassins_blade", nil, "ring_arcana"])
+        XCTAssertEqual(preset.query.requirements.map(\.kind), [.weapon, .armor, .ring])
+        XCTAssertEqual(preset.query.requirements.map(\.modifier), ["Blooming", "Camouflage", nil])
+        XCTAssertEqual(preset.query.requirements.map(\.upgradeMatch), [.exactly, .any, .atLeast])
+        XCTAssertEqual(preset.query.requirements.map(\.upgrade), [3, 0, 2])
+        XCTAssertEqual(preset.query.requirements.map(\.maximumDepth), [7, nil, nil])
         XCTAssertNotNil(preset.query.validated())
     }
 
     func testBundledRingOfWealthPreset() throws {
-        let preset = BuiltInPresets.ringOfWealth21
-        XCTAssertEqual(preset.name, "+21 Ring of Wealth")
+        let preset = BuiltInPresets.ringOfWealth
+        XCTAssertEqual(preset.name, "Ring of Wealth")
+        XCTAssertEqual(preset.query.maximumDepth, 24)
+        // Floor 17 carries exactly what the farming-floor toggle writes.
+        var farming = SavedQuery()
+        farming.toggleFarmingFloor(17)
+        XCTAssertEqual(preset.query.floorRequirements, farming.floorRequirements)
+        XCTAssertTrue(preset.query.floorRequirements.allSatisfy(\.isFarming))
         XCTAssertEqual(preset.query.requirements.map(\.item?.id),
-                       ["ring_wealth", "ring_wealth", "ring_wealth"])
-        XCTAssertEqual(preset.query.requirements.map(\.upgradeMatch), [.exactly, .exactly, .any])
-        XCTAssertEqual(preset.query.requirements.map(\.upgrade), [4, 2, 0])
-        XCTAssertEqual(preset.query.requirements.map(\.maximumDepth), [nil, nil, nil])
-        XCTAssertEqual(preset.query.requirements.first?.source, .impReward)
+                       ["ring_wealth", "dried_rose", nil, nil, "dimensional_sundial"])
+        XCTAssertEqual(preset.query.requirements.map(\.kind), [.ring, .artifact, .armor, .weapon, .trinket])
+        XCTAssertEqual(preset.query.requirements.map(\.tierMatch), [.any, .any, .atMost, .atMost, .any])
+        XCTAssertEqual(preset.query.requirements.map(\.tier), [0, 0, 4, 4, 0])
+        XCTAssertEqual(preset.query.requirements.map(\.upgradeMatch), [.exactly, .any, .exactly, .exactly, .any])
+        XCTAssertEqual(preset.query.requirements.map(\.upgrade), [4, 0, 3, 3, 0])
+        XCTAssertEqual(preset.query.requirements.map(\.maximumDepth), [nil, 9, 4, 9, nil])
+        XCTAssertEqual(preset.query.requirements.map(\.trinketTransmutations), [0, 0, 0, 0, 1])
+        XCTAssertNotNil(preset.query.validated())
+    }
+
+    func testBundledNecromancerPreset() throws {
+        let preset = BuiltInPresets.necromancer
+        XCTAssertEqual(preset.name, "Necromancer")
+        XCTAssertEqual(preset.query.maximumDepth, 14)
+        XCTAssertEqual(preset.query.wandmakerQuest, .corpseDust)
+        XCTAssertEqual(preset.query.requirements.map(\.item?.id), ["wand_corruption", nil, "plate_armor"])
+        XCTAssertEqual(preset.query.requirements.map(\.kind), [.wand, .weapon, .armor])
+        XCTAssertEqual(preset.query.requirements.map(\.tierMatch), [.any, .exactly, .any])
+        XCTAssertEqual(preset.query.requirements.map(\.tier), [0, 5, 0])
+        XCTAssertEqual(preset.query.requirements.map(\.upgradeMatch), [.exactly, .exactly, .exactly])
+        XCTAssertEqual(preset.query.requirements.map(\.upgrade), [3, 3, 3])
+        XCTAssertNotNil(preset.query.validated())
+    }
+
+    func testBundledBloodBerserkerPreset() throws {
+        let preset = BuiltInPresets.bloodBerserker
+        XCTAssertEqual(preset.name, "Blood Berserker")
+        XCTAssertEqual(preset.query.maximumDepth, 24)
+        XCTAssertEqual(preset.query.requirements.map(\.item?.id),
+                       [nil, "plate_armor", "ring_arcana", "chalice_of_blood"])
+        XCTAssertEqual(preset.query.requirements.map(\.kind), [.weapon, .armor, .ring, .artifact])
+        XCTAssertEqual(preset.query.requirements.map(\.modifier), ["Vampiric", "Thorns", nil, nil])
+        XCTAssertEqual(preset.query.requirements.map(\.tierMatch), [.exactly, .any, .any, .any])
+        XCTAssertEqual(preset.query.requirements.map(\.tier), [5, 0, 0, 0])
+        XCTAssertEqual(preset.query.requirements.map(\.upgradeMatch), [.exactly, .exactly, .exactly, .any])
+        XCTAssertEqual(preset.query.requirements.map(\.upgrade), [3, 3, 4, 0])
         XCTAssertNotNil(preset.query.validated())
     }
 
@@ -180,7 +216,7 @@ final class SeedSeekerKitTests: XCTestCase {
                                               upgradeMatch: .atLeast, requireUncursed: true)
         let valid = QueryPreset(name: "My preset",
                                 query: SavedQuery(requirements: [requirement]))
-        let invalid = QueryPreset(name: "   ", query: BuiltInPresets.ringOfWealth21.query)
+        let invalid = QueryPreset(name: "   ", query: BuiltInPresets.ringOfWealth.query)
         let encoded = try XCTUnwrap(PresetPersistence.encode([valid, invalid]))
         let decoded = PresetPersistence.decode(encoded)
         XCTAssertEqual(decoded, [valid])

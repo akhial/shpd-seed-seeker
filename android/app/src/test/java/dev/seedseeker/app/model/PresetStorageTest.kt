@@ -18,7 +18,7 @@ class PresetStorageTest {
     fun activeQuerySurvivesReopeningStorageWithoutChangingNamedPresets() {
         val preferences = MemoryPreferences()
         val storage = PresetStorage(preferences)
-        val preset = BuiltInPresets.staff21.copy(isBuiltIn = false)
+        val preset = BuiltInPresets.ringOfWealth.copy(isBuiltIn = false)
         storage.save(listOf(preset))
         val query = preset.query.copy(
             maximumDepth = 19,
@@ -41,7 +41,7 @@ class PresetStorageTest {
     fun emptyDraftReplacesPreviousQuery() {
         val preferences = MemoryPreferences()
         val storage = PresetStorage(preferences)
-        storage.saveCurrentQuery(BuiltInPresets.staff21.query)
+        storage.saveCurrentQuery(BuiltInPresets.ringOfWealth.query)
         val empty = PresetQuery(requirements = emptyList())
         storage.saveCurrentQuery(empty)
         assertEquals(empty, PresetStorage(preferences).loadCurrentQuery())
@@ -51,7 +51,7 @@ class PresetStorageTest {
     fun missingOrDamagedActiveQueryFallsBackWithoutLosingPresets() {
         val preferences = MemoryPreferences()
         val storage = PresetStorage(preferences)
-        val preset = BuiltInPresets.staff21.copy(isBuiltIn = false)
+        val preset = BuiltInPresets.ringOfWealth.copy(isBuiltIn = false)
         storage.save(listOf(preset))
         assertEquals(null, storage.loadCurrentQuery())
         for (value in listOf("not json", "{}", """{"maximumDepth":99,"requirements":[]}""")) {

@@ -499,10 +499,56 @@ final class QueryDocumentTests: XCTestCase {
                            .requirements, [])
     }
 
-    func testBuiltInPresetsAreUnchangedAndStillEncode() throws {
-        for preset in BuiltInPresets.all {
+    /// Each built-in preset is the query its shared document describes (the
+    /// same presets every platform ships), so a mistyped literal fails here.
+    func testBuiltInPresetsMatchTheirDocumentsAndStillEncode() throws {
+        let documents: [(name: String, json: String)] = [
+            ("DISINTEGRATE", """
+                {"auto_apply_trinket":true,"max_depth":19,"requirements":[\
+                {"item":"wand_disintegration","kind":"wand","upgrade":{"at_least":3}},\
+                {"item":"wand_disintegration","kind":"wand"},\
+                {"item":"wand_disintegration","kind":"wand"},\
+                {"item":"eye_of_newt","kind":"trinket","trinket_transmutations":1},\
+                {"item":"ring_energy","kind":"ring","upgrade":{"at_least":2}}]}
+                """),
+            ("Guerilla Assassin", """
+                {"auto_apply_trinket":true,"requirements":[\
+                {"effect":"Blooming","item":"assassins_blade","kind":"weapon","max_depth":7,"upgrade":3},\
+                {"effect":"Camouflage","kind":"armor"},\
+                {"item":"ring_arcana","kind":"ring","upgrade":{"at_least":2}}]}
+                """),
+            ("Ring of Wealth", """
+                {"auto_apply_trinket":true,\
+                "floor_requirements":[{"any_rooms":["garden","secret_garden"],"depth":17,"feeling":"dark"}],\
+                "requirements":[\
+                {"item":"ring_wealth","kind":"ring","upgrade":4},\
+                {"item":"dried_rose","kind":"artifact","max_depth":9},\
+                {"kind":"armor","max_depth":4,"tier":{"at_most":4},"upgrade":3},\
+                {"kind":"weapon","max_depth":9,"tier":{"at_most":4},"upgrade":3},\
+                {"item":"dimensional_sundial","kind":"trinket","trinket_transmutations":1}]}
+                """),
+            ("Necromancer", """
+                {"auto_apply_trinket":true,"max_depth":14,"requirements":[\
+                {"item":"wand_corruption","kind":"wand","upgrade":3},\
+                {"kind":"weapon","tier":{"exact":5},"upgrade":3},\
+                {"item":"plate_armor","kind":"armor","upgrade":3}],\
+                "wandmaker_quest":"corpse_dust"}
+                """),
+            ("Blood Berserker", """
+                {"auto_apply_trinket":true,"requirements":[\
+                {"effect":"Vampiric","kind":"weapon","tier":{"exact":5},"upgrade":3},\
+                {"effect":"Thorns","item":"plate_armor","kind":"armor","upgrade":3},\
+                {"item":"ring_arcana","kind":"ring","upgrade":4},\
+                {"item":"chalice_of_blood","kind":"artifact"}]}
+                """),
+        ]
+        XCTAssertEqual(BuiltInPresets.all.map(\.name), documents.map { $0.name })
+        for (preset, document) in zip(BuiltInPresets.all, documents) {
+            let object = try XCTUnwrap(
+                try JSONSerialization.jsonObject(with: Data(document.json.utf8)) as? [String: Any], preset.name)
+            XCTAssertEqual(try ResultsExport.decodeQuery(object), preset.query, preset.name)
             XCTAssertEqual(preset.query.requirements.slotCount, preset.query.requirements.count, preset.name)
-            XCTAssertTrue(preset.query.requirements.allSatisfy { $0.effect == .any && $0.levelSum == nil }, preset.name)
+            XCTAssertTrue(preset.query.requirements.allSatisfy { $0.levelSum == nil }, preset.name)
             try assertEngineAgrees(preset.query)
         }
     }

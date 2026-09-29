@@ -446,64 +446,64 @@ public sealed class QueryPreset
 
 public static class BuiltInPresets
 {
-    /// <summary>
-    /// The floor limit the vault presets carry: floor 19 is the last floor the
-    /// Imp — and so the vault holding its levelled prizes — can appear on, so a
-    /// deeper scan only costs time.
-    /// </summary>
-    public const int VaultFloorLimit = 19;
-
     public static IReadOnlyList<QueryPreset> All { get; } = [
         new()
         {
-            Id = "staff-21", Name = "+21 Staff", IsBuiltIn = true,
+            Id = "disintegrate", Name = "DISINTEGRATE", IsBuiltIn = true,
+            Query = new QuerySettings { AutoApplyTrinket = true, MaximumDepth = 19, Requirements = [
+                new() { Kind = ItemKind.Wand, Item = ItemCatalog.Find("wand_disintegration"), Upgrade = 3, UpgradeMatch = UpgradeMatch.AtLeast },
+                new() { Kind = ItemKind.Wand, Item = ItemCatalog.Find("wand_disintegration") },
+                new() { Kind = ItemKind.Wand, Item = ItemCatalog.Find("wand_disintegration") },
+                new() { Kind = ItemKind.Trinket, Item = ItemCatalog.Find("eye_of_newt"), TrinketTransmutations = 1 },
+                new() { Kind = ItemKind.Ring, Item = ItemCatalog.Find("ring_energy"), Upgrade = 2, UpgradeMatch = UpgradeMatch.AtLeast },
+            ] },
+        },
+        new()
+        {
+            Id = "guerilla-assassin", Name = "Guerilla Assassin", IsBuiltIn = true,
             Query = new QuerySettings { AutoApplyTrinket = true, Requirements = [
-                new() { Kind = ItemKind.Wand, Upgrade = 3, UpgradeMatch = UpgradeMatch.Exactly, IdentityGroup = 1 },
-                new() { Kind = ItemKind.Wand, UpgradeMatch = UpgradeMatch.Any, IdentityGroup = 1 },
-                new() { Kind = ItemKind.Wand, UpgradeMatch = UpgradeMatch.Any, IdentityGroup = 1 },
-                new() { Kind = ItemKind.Wand, Upgrade = 1, UpgradeMatch = UpgradeMatch.AtLeast },
+                new() { Kind = ItemKind.Weapon, Item = ItemCatalog.Find("assassins_blade"), Effect = EffectFilter.OneOf(["Blooming"]),
+                    Upgrade = 3, UpgradeMatch = UpgradeMatch.Exactly, MaximumDepth = 7 },
+                new() { Kind = ItemKind.Armor, Effect = EffectFilter.OneOf(["Camouflage"]) },
+                new() { Kind = ItemKind.Ring, Item = ItemCatalog.Find("ring_arcana"), Upgrade = 2, UpgradeMatch = UpgradeMatch.AtLeast },
             ] },
         },
-        // The same stack anchored one level higher, on the +4 wand v4.0.0's Imp
-        // vault lays out among its prizes.
+        // Floor 17 as the farming-floor toggle marks it: dark, with a garden.
         new()
         {
-            Id = "staff-22", Name = "+22 Staff", IsBuiltIn = true,
-            Query = new QuerySettings { AutoApplyTrinket = true, MaximumDepth = VaultFloorLimit, Requirements = [
-                new() { Kind = ItemKind.Wand, Upgrade = 4, UpgradeMatch = UpgradeMatch.Exactly, IdentityGroup = 1 },
-                new() { Kind = ItemKind.Wand, UpgradeMatch = UpgradeMatch.Any, IdentityGroup = 1 },
-                new() { Kind = ItemKind.Wand, UpgradeMatch = UpgradeMatch.Any, IdentityGroup = 1 },
-                new() { Kind = ItemKind.Wand, Upgrade = 1, UpgradeMatch = UpgradeMatch.AtLeast },
+            Id = "ring-of-wealth", Name = "Ring of Wealth", IsBuiltIn = true,
+            Query = new QuerySettings
+            {
+                AutoApplyTrinket = true,
+                FloorRequirements = [new() { Depth = 17, Feeling = "dark", AnyRooms = ["garden", "secret_garden"] }],
+                Requirements = [
+                    new() { Kind = ItemKind.Ring, Item = ItemCatalog.Find("ring_wealth"), Upgrade = 4, UpgradeMatch = UpgradeMatch.Exactly },
+                    new() { Kind = ItemKind.Artifact, Item = ItemCatalog.Find("dried_rose"), MaximumDepth = 9 },
+                    new() { Kind = ItemKind.Armor, Tier = 4, TierMatch = TierMatch.AtMost, Upgrade = 3, UpgradeMatch = UpgradeMatch.Exactly, MaximumDepth = 4 },
+                    new() { Kind = ItemKind.Weapon, Tier = 4, TierMatch = TierMatch.AtMost, Upgrade = 3, UpgradeMatch = UpgradeMatch.Exactly, MaximumDepth = 9 },
+                    new() { Kind = ItemKind.Trinket, Item = ItemCatalog.Find("dimensional_sundial"), TrinketTransmutations = 1 },
+                ],
+            },
+        },
+        new()
+        {
+            Id = "necromancer", Name = "Necromancer", IsBuiltIn = true,
+            Query = new QuerySettings { AutoApplyTrinket = true, MaximumDepth = 14, WandmakerQuest = WandmakerQuest.CorpseDust, Requirements = [
+                new() { Kind = ItemKind.Wand, Item = ItemCatalog.Find("wand_corruption"), Upgrade = 3, UpgradeMatch = UpgradeMatch.Exactly },
+                new() { Kind = ItemKind.Weapon, Tier = 5, TierMatch = TierMatch.Exactly, Upgrade = 3, UpgradeMatch = UpgradeMatch.Exactly },
+                new() { Kind = ItemKind.Armor, Item = ItemCatalog.Find("plate_armor"), Upgrade = 3, UpgradeMatch = UpgradeMatch.Exactly },
             ] },
         },
         new()
         {
-            Id = "wand-bonanza", Name = "Wand Bonanza", IsBuiltIn = true,
+            Id = "blood-berserker", Name = "Blood Berserker", IsBuiltIn = true,
             Query = new QuerySettings { AutoApplyTrinket = true, Requirements = [
-                new() { Kind = ItemKind.Wand, Upgrade = 3, UpgradeMatch = UpgradeMatch.Exactly },
-                new() { Kind = ItemKind.Wand, Upgrade = 2, UpgradeMatch = UpgradeMatch.Exactly, MaximumDepth = 4 },
-                new() { Kind = ItemKind.Wand, Upgrade = 2, UpgradeMatch = UpgradeMatch.Exactly, MaximumDepth = 4 },
-                new() { Kind = ItemKind.Wand, Upgrade = 2, UpgradeMatch = UpgradeMatch.Exactly },
-            ] },
-        },
-        new()
-        {
-            Id = "ring-of-wealth-21", Name = "+21 Ring of Wealth", IsBuiltIn = true,
-            Query = new QuerySettings { AutoApplyTrinket = true, Requirements = [
-                new() { Kind = ItemKind.Ring, Item = ItemCatalog.Find("ring_wealth"), Upgrade = 4, UpgradeMatch = UpgradeMatch.Exactly, Source = ScoutItemSource.ImpReward },
-                new() { Kind = ItemKind.Ring, Item = ItemCatalog.Find("ring_wealth"), Upgrade = 2, UpgradeMatch = UpgradeMatch.Exactly },
-                new() { Kind = ItemKind.Ring, Item = ItemCatalog.Find("ring_wealth"), UpgradeMatch = UpgradeMatch.Any },
-            ] },
-        },
-        // A tier-4 weapon at the +5 only the vault reaches, with two more of the
-        // same weapon to pour into it.
-        new()
-        {
-            Id = "tier-4-weapon-26", Name = "+26 Tier 4 Weapon", IsBuiltIn = true,
-            Query = new QuerySettings { AutoApplyTrinket = true, MaximumDepth = VaultFloorLimit, Requirements = [
-                new() { Kind = ItemKind.Weapon, Tier = 4, TierMatch = TierMatch.Exactly, Upgrade = 5, UpgradeMatch = UpgradeMatch.Exactly, IdentityGroup = 1 },
-                new() { Kind = ItemKind.Weapon, UpgradeMatch = UpgradeMatch.Any, IdentityGroup = 1 },
-                new() { Kind = ItemKind.Weapon, UpgradeMatch = UpgradeMatch.Any, IdentityGroup = 1 },
+                new() { Kind = ItemKind.Weapon, Tier = 5, TierMatch = TierMatch.Exactly, Upgrade = 3, UpgradeMatch = UpgradeMatch.Exactly,
+                    Effect = EffectFilter.OneOf(["Vampiric"]) },
+                new() { Kind = ItemKind.Armor, Item = ItemCatalog.Find("plate_armor"), Upgrade = 3, UpgradeMatch = UpgradeMatch.Exactly,
+                    Effect = EffectFilter.OneOf(["Thorns"]) },
+                new() { Kind = ItemKind.Ring, Item = ItemCatalog.Find("ring_arcana"), Upgrade = 4, UpgradeMatch = UpgradeMatch.Exactly },
+                new() { Kind = ItemKind.Artifact, Item = ItemCatalog.Find("chalice_of_blood") },
             ] },
         },
     ];
