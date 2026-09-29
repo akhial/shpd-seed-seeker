@@ -857,10 +857,12 @@ pub enum Edit {
     /// member itself when it has no copies ([`lift`]).
     Detach { key: u64 },
     /// Deletes a chip with its whole stack: a cluster member with its own
-    /// copies, or a lone chip's whole entry.
+    /// copies, or a lone chip's whole entry — the rows the board draws
+    /// under it, even where normalizing would fold others into it.
     Remove { key: u64 },
     /// Deletes one item of a chip's stack — a copy, or the chip itself when
-    /// it has none — as a drag onto the remove target does.
+    /// it has none — as a drag onto the remove target does. Like
+    /// [`Edit::Remove`], it takes only what the board draws under the chip.
     RemoveOne { key: u64 },
     /// Deletes the whole entry holding `key`: members and hidden copies.
     RemoveItem { key: u64 },
@@ -1738,37 +1740,29 @@ fn detach(rows: &[Row], key: u64, hint: Option<u64>, held: &HeldLabels) -> Outco
 /// Deletes a chip with its whole stack — a cluster member with its own
 /// copies (a stack it shares stays with the others), a lone chip's whole
 /// entry — or, with `whole`, the whole entry holding it.
+///
+/// It deletes the rows the board draws under the chip, on the list as
+/// written: a list never normalized may fold another chip's rows into it
+/// once normalized, and those stay, to be folded however normalizing the
+/// rest folds them.
 fn remove(rows: &[Row], key: u64, whole: bool) -> Outcome {
-    let written = Board::new(rows);
-    let Some((index, item)) = written.member(rows, key) else {
+    let board = Board::new(rows);
+    let Some((index, item)) = board.member(rows, key) else {
         return Outcome::unchanged();
     };
-    let next = canonical(rows);
-    let board = Board::new(&next);
-    // A hand-written cluster of one tied to a lone chip's stack folds into
-    // that stack once normalized; its rows go as the list showed them.
-    let doomed: Vec<u64> = match board.member(&next, key) {
-        Some((index, item)) => doomed_rows(&next, item, index, whole),
-        None => doomed_rows(rows, item, index, whole),
-    };
-    let next = next
-        .into_iter()
-        .filter(|row| !doomed.contains(&row.key))
-        .collect();
-    Outcome::rows(next, None)
+    Outcome::rows(without(rows, &doomed_rows(rows, item, index, whole)), None)
 }
 
-/// The keys [`remove`] deletes for the visible row at `index` of `item`.
-fn doomed_rows(rows: &[Row], item: &BoardItem, index: usize, whole: bool) -> Vec<u64> {
-    let indices: Vec<usize> = if whole || item.cluster.is_none() {
+/// The rows [`remove`] deletes for the visible row at `index` of `item`.
+fn doomed_rows(rows: &[Row], item: &BoardItem, index: usize, whole: bool) -> Vec<usize> {
+    if whole || item.cluster.is_none() {
         item.members.iter().chain(&item.extras).copied().collect()
     } else if shares_label(rows, item, index) {
         vec![index]
     } else {
         let stack = item.stack(index).expect("a member of the entry");
         std::iter::once(index).chain(stack.copies.clone()).collect()
-    };
-    indices.into_iter().map(|index| rows[index].key).collect()
+    }
 }
 
 /// Deletes one item of the chip `key`: its last copy ([`shed`]) — a

@@ -159,8 +159,8 @@ name of the query format (`"locked_chest"`).
 | `{"type": "normalize"}` | Rewrites the list into its canonical encoding, its labels in range among it (see [Labels](#labels)). See [When to normalize](#when-to-normalize). |
 | `{"type": "join", "source": K, "target": K}` | Makes one item of `source` an either/or alternative of `target` (any member of a chip or cluster); the item moves after the cluster's last member. A source with copies stays where it is, with its constraints and one item fewer — as `remove_one` leaves it — and a bare copy of it joins: the chip's item (or its kind, for a wildcard stack) with that copy's floor limit and nothing else — the chip's `lifted` face. A source without copies joins itself. A stacked lone target keeps its stack as a member of the new cluster; a target cluster's members keep theirs, and the item joins as a ×1 member. `focus` names the item that joined. See [Joins](#joins). |
 | `{"type": "detach", "key": K}` | Takes one item of a cluster member out on its own. A member with copies stays in the cluster in its place, with its constraints and one item fewer, and a bare copy of it leaves — the chip's `lifted` face — right after it, folding into an alike lone chip before it; a ×1 member leaves the cluster itself, and a cluster of one dissolves into a chip. `focus` names the item that left (or the chip it folded into). |
-| `{"type": "remove", "key": K}` | Removes the chip with its whole stack: a cluster member with its own copies (a stack it shares with other members stays with them), or a lone chip's whole entry. The chip menu's "Remove". |
-| `{"type": "remove_one", "key": K}` | Removes one item of the chip — what a drag onto the remove target sends: a member ×N becomes ×(N−1), a ×1 member leaves its cluster (removed), a lone stack ×N becomes ×(N−1) (a combined level capped at what the rest can reach, or dropped at one ring), and a lone chip without copies is removed. |
+| `{"type": "remove", "key": K}` | Removes the chip with its whole stack: a cluster member with its own copies (a stack it shares with other members stays with them), or a lone chip's whole entry — the rows the board draws under it, never rows a list never normalized would fold into it once normalized. The chip menu's "Remove". |
+| `{"type": "remove_one", "key": K}` | Removes one item of the chip — what a drag onto the remove target sends: a member ×N becomes ×(N−1), a ×1 member leaves its cluster (removed), a lone stack ×N becomes ×(N−1) (a combined level capped at what the rest can reach, or dropped at one ring), and a lone chip without copies is removed. Like `remove`, it takes only what the board draws under the chip. |
 | `{"type": "remove_item", "key": K}` | Removes the whole entry holding `K`: every member and every hidden copy. |
 | `{"type": "set_count", "key": K, "count": n}` | How many items the chip asks for, clamped to 1–3 — a lone chip's stack, or a member's own. New copies take the floor limit the existing copies carry, not the chip's. |
 | `{"type": "set_total", "key": K, "total": n \| null}` | Sets or clears the lone chip's combined level, clamped to 1–`level_capacity`. A cluster member counts no levels: nothing happens. |
@@ -328,14 +328,22 @@ is, its problems included.
   gate Start and Share, so a label out of range is reported rather than
   searched.
 
-An edit that takes a row out of its entry or reshapes a member's stack —
-`join`, `detach`, `remove`, `remove_one`, a member's count or copy floor, a
-member's save — reads such a list in its canonical encoding first. A named
-stack written as bare copies under a stack label then leaves its copies
-what the board showed them to be (`Wand of Disintegration` copies stay
+An edit that moves a row out of its entry or reshapes a member's stack —
+`join`, `detach`, a member's `remove_one`, count or copy floor, a member's
+save — reads such a list in its canonical encoding first. A named stack
+written as bare copies under a stack label then leaves its copies what the
+board showed them to be (`Wand of Disintegration` copies stay
 Disintegrations, not `Any wand`), and two alike member stacks under two
 labels act as the one stack the board shows. The drop policy and the join
 candidates still answer for the list as written, and agree with the edit.
+
+A removal never deletes a row the board did not show under the chip:
+`remove` takes the chip with its stack as drawn (or its whole entry), and
+`remove_one` one item of it, on the list as written. Beside Mace +1, a
+hand-written `Mace ×2` (an anchor and a bare copy under a stack label)
+normalizes into two plain repeats of the +1 chip; the bin on the lone Mace
++1 still takes that one Mace, and leaves `Mace ×2`. What is left is then
+normalized as any edit's rows are, which may merge alike stacks.
 
 ### Response
 
@@ -673,7 +681,7 @@ decided once.
 | A combined level losing a ring to a join | A plain ring joins; the chip keeps counting, capped at what its rest can still reach, or stops when one ring is left. A counting target keeps its count as a member's stack and drops its Σ. |
 | Detach, and a member dragged out of a group | One item moves: a bare copy, while the member stays in the group in its place with its requirements, one item fewer; a ×1 member leaves itself, and a group of one dissolves into a chip. |
 | The moving chip | Draws the chip's `lifted` face (the bare copy a drag carries), else its own, without badges; the origin draws its own face with `remaining_badges`; announcements name the lifted face. Ring of Energy +4 ×3 lifts `Ring of Energy`, and only the origin reads `+4`. |
-| Remove | The remove target takes one item (`remove_one`); the chip menu's "Remove" takes the chip with its whole stack (`remove`). |
+| Remove | The remove target takes one item (`remove_one`); the chip menu's "Remove" takes the chip with its whole stack (`remove`). Both take only what the board draws under the chip, even on a list never normalized. |
 | A member stepped down to ×1 | Drops its stack label, so it uses none of the four and none reaches a saved or shared query. |
 | Counting levels on or off | The anchor and every copy keep their own floor limits, on the board and through the sheet (which saves the copy floor its hidden control holds); a counting stack grown on the board gives the new copies the copies' floor; the popover names the copies' floors while they differ from the anchor's. |
 | A stacked cluster member saved into another category | Saved, with its stack rebuilt in its new kind (or dropped when it can no longer stack); the other members keep theirs. |
@@ -765,7 +773,8 @@ chip, a stacked cluster and a combined level, a combined level losing a
 ring, a member moving one item, across categories, a hand-written stack,
 refused for want of a label), detaches (a member alone, a bare copy of a
 member's stack, with and without constraints) and removals (one member, a
-whole stack, one item of a member's stack and of a lone combined level),
+whole stack, one item of a member's stack and of a lone combined level,
+the bin on a lone chip of a list never normalized),
 copy floors, combined levels (their copies' floors kept both ways and
 given to new copies), a member stepped down to ×1, saves (new and
 unchanged), problems, key repair, label compaction and labels moved into

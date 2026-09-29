@@ -3135,6 +3135,42 @@ fn a_row_leaving_a_hand_written_stack_leaves_the_copies_the_board_showed() {
     );
 }
 
+/// A list never normalized — a resumed search, a preset — is drawn as
+/// written, and a removal takes what the board draws under the chip: never
+/// a hand-written stack that the canonical fold would give it. The review's
+/// case: the bin on a lone Mace +1 beside a hand-written Mace ×2 took all
+/// three Maces.
+#[test]
+fn a_removal_on_a_list_never_normalized_takes_what_the_board_draws() {
+    let mace = |key: u64| named(key, ItemId::Mace);
+    let rows = [
+        exact(mace(3), 1),
+        with(mace(1), |r| r.identity_group = Some(1)),
+        with(row(2, ItemKind::Weapon), |r| r.identity_group = Some(1)),
+        named(9, ItemId::WandFrost),
+    ];
+    assert_eq!(members(&rows), [vec![0], vec![1], vec![3]]);
+    assert_eq!(counts(&rows), [1, 2, 1]);
+    // Normalized, the hand-written stack is two plain repeats of the Mace
+    // +1 before it: the canonical fold that removals once read.
+    assert_eq!(counts(&edited(&rows, &[Edit::Normalize])), [3, 1]);
+    let left = [mace(1), mace(2), rows[3]];
+    for edit in [Edit::RemoveOne { key: 3 }, Edit::Remove { key: 3 }] {
+        let result = run(&rows, &[edit]);
+        assert_eq!(result.rows, left, "{edit:?}");
+        assert_eq!(counts(&result.rows), [2, 1], "{edit:?}");
+    }
+    // The hand-written stack goes as drawn: one copy, or the whole chip.
+    assert_eq!(
+        counts(&edited(&rows, &[Edit::RemoveOne { key: 1 }])),
+        [2, 1]
+    );
+    assert_eq!(
+        edited(&rows, &[Edit::Remove { key: 1 }]),
+        [exact(mace(3), 1), rows[3]]
+    );
+}
+
 /// What a canonical list asks for, entry by entry, blind to where rows sit
 /// and to which chip a plain repeat folds into: each row of a named lone
 /// chip's plain stack on its own, any other lone stack as its rows together

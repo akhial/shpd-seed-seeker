@@ -452,6 +452,20 @@ fn board_fixtures(fixtures: &mut Fixtures) {
         }),
     );
     fixtures.add(
+        "board-remove-one-as-drawn",
+        "The bin on that lone Mace +1: a removal takes only what the board draws under the chip, so the hand-written Mace ×2 stays (as plain repeats once normalized) with Wand of Frost.",
+        Board,
+        &json!({
+            "rows": [
+                {"key": 3, "kind": "melee_weapon", "item": "mace", "upgrade": 1},
+                {"key": 1, "kind": "melee_weapon", "item": "mace", "identity_group": 1},
+                {"key": 2, "kind": "weapon", "identity_group": 1},
+                {"key": 9, "kind": "wand", "item": "wand_frost"},
+            ],
+            "edits": [{"type": "remove_one", "key": 3}],
+        }),
+    );
+    fixtures.add(
         "board-remaining-badges",
         "A Ring of Energy +4 ×3 at rest: a drag of it carries lifted, a bare Ring of Energy, while its origin shows remaining_badges, the +4 ×2 a remove_one would leave.",
         Board,

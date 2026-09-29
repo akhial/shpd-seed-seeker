@@ -1804,6 +1804,15 @@ fn every_drop_leaves_what_a_removal_of_one_item_leaves() {
     assert!(compared > 256, "{compared} drops compared");
 }
 
+/// The chip showing `key` on `board`, if one does.
+fn shown(board: &BoardView, key: u64) -> Option<&ChipView> {
+    board
+        .items
+        .iter()
+        .flat_map(|item| &item.chips)
+        .find(|chip| chip.key == key)
+}
+
 #[test]
 fn a_drag_carries_the_item_its_lifted_face_shows() {
     // Generated lists, valid rows or not, as given or after a random edit,
@@ -1882,4 +1891,119 @@ fn a_drag_carries_the_item_its_lifted_face_shows() {
         detaches > 100,
         "{joins} joins, {detaches} detaches compared"
     );
+}
+
+#[test]
+fn a_removal_takes_only_what_the_board_draws_under_the_chip() {
+    // Generated lists as written, never normalized (1,024 cases): the
+    // menu's Remove and the bin's RemoveOne delete only rows the board draws
+    // under the chip — Remove its stack or a lone chip's whole entry,
+    // RemoveOne one of its copies or, without copies, the chip — and leave
+    // every other chip's face and count as they were. What normalizing the
+    // rest merges tells itself apart by keys and labels: a chip that folds
+    // into an alike chip has its row among that chip's copies, and the chip
+    // it folds into grows by it; a member whose stack merges with an alike
+    // member's loses its copies' rows but keeps its count; a chip whose
+    // rows share a label with a deleted row is read anew without it; and a
+    // chip the list's own normalization redraws is one Normalize alone
+    // changes.
+    let mut rng = Rng::new(0x0b10_fd4a);
+    let mut compared = 0;
+    for case in 0..1024 {
+        let rows = mixed_rows(&mut rng);
+        let context = format!("case {case}: {rows:?}");
+        let board = view(&rows);
+        let normalized = view(&apply(&rows, None, &[Edit::Normalize]).rows);
+        let drawn = |board: &BoardView, key: u64| {
+            shown(board, key).map(|chip| (chip.face(), chip.badges.clone()))
+        };
+        let before = visible(&board);
+        for item in &board.items {
+            for chip in &item.chips {
+                let stack: Vec<u64> = if item.cluster.is_none() {
+                    item.members.iter().chain(&item.extras).copied().collect()
+                } else {
+                    std::iter::once(chip.key)
+                        .chain(chip.copies.clone())
+                        .collect()
+                };
+                let one = if chip.copies.is_empty() {
+                    stack.clone()
+                } else {
+                    chip.copies.clone()
+                };
+                for (edit, allowed) in [
+                    (Edit::Remove { key: chip.key }, stack),
+                    (Edit::RemoveOne { key: chip.key }, one),
+                ] {
+                    let context = format!("{edit:?}: {context}");
+                    let result = apply(&rows, None, &[edit]);
+                    let after = view(&result.rows);
+                    let kept = |key: u64| result.rows.iter().any(|row| row.key == key);
+                    let labels = |row: &Row| {
+                        let requirement = &row.requirement;
+                        [
+                            requirement.identity_group.map(|label| (0, label)),
+                            requirement.alternative_group.map(|label| (1, label)),
+                            requirement.level_sum.map(|sum| (2, sum.group)),
+                        ]
+                    };
+                    let freed: Vec<(u8, u8)> = rows
+                        .iter()
+                        .filter(|row| !kept(row.key))
+                        .flat_map(labels)
+                        .flatten()
+                        .collect();
+                    for other in board.items.iter().flat_map(|item| &item.chips) {
+                        if other.key == chip.key {
+                            continue;
+                        }
+                        assert!(kept(other.key), "{} deleted: {context}", other.key);
+                        // Copies go only with the chip, or merged into an
+                        // alike member's stack, the member keeping its count.
+                        if other
+                            .copies
+                            .iter()
+                            .any(|&copy| !kept(copy) && !allowed.contains(&copy))
+                        {
+                            assert!(other.in_cluster, "{} merged: {context}", other.key);
+                            assert_eq!(
+                                shown(&after, other.key).map(|chip| &chip.badges.count),
+                                Some(&other.badges.count),
+                                "{} merged: {context}",
+                                other.key
+                            );
+                        }
+                        let tied = rows
+                            .iter()
+                            .filter(|row| row.key == other.key || other.copies.contains(&row.key))
+                            .flat_map(labels)
+                            .flatten()
+                            .any(|label| freed.contains(&label));
+                        let redrawn =
+                            tied || drawn(&normalized, other.key) != drawn(&board, other.key);
+                        let Some(now) = shown(&after, other.key) else {
+                            let folded = after
+                                .items
+                                .iter()
+                                .flat_map(|item| &item.chips)
+                                .any(|chip| chip.copies.contains(&other.key));
+                            assert!(folded || redrawn, "{} lost: {context}", other.key);
+                            continue;
+                        };
+                        let grown = now
+                            .copies
+                            .iter()
+                            .any(|copy| *copy != chip.key && before.contains(copy));
+                        if (now.face(), &now.badges) == (other.face(), &other.badges) {
+                            compared += 1;
+                        } else {
+                            assert!(grown || redrawn, "{} redrawn: {context}", other.key);
+                        }
+                    }
+                }
+            }
+        }
+    }
+    assert!(compared > 20_000, "{compared} chips compared");
 }
