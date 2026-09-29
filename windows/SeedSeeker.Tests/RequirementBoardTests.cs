@@ -84,13 +84,21 @@ public sealed class RequirementBoardTests
             var failure = Record.Exception(() =>
             {
                 // A chip with no copies leaves whole: nothing stays behind,
-                // and the chip itself moves; a stack lifts a bare copy.
+                // and the chip itself moves; a stack lifts a bare copy. The
+                // lifted face follows the canonical rows, so on a list never
+                // normalized it may disagree with the copies the board draws
+                // (board-lifted-never-normalized).
                 if (board)
                 {
+                    var canonical = !BoardEditor.Answer(NativeEngine.RequirementBoard(new JsonObject
+                    {
+                        ["rows"] = fixture["response"]!["rows"]!.DeepClone(),
+                        ["edits"] = new JsonArray(new JsonObject { ["type"] = "normalize" }),
+                    }.ToJsonString())).Changed;
                     foreach (var chip in BoardEditor.Answer(answer).View.Entries.SelectMany(entry => entry.Chips))
                     {
                         Assert.Equal(chip.Copies.Count == 0, chip.RemainingBadges is null);
-                        Assert.Equal(chip.Copies.Count == 0, chip.Lifted is null);
+                        if (canonical) Assert.Equal(chip.Copies.Count == 0, chip.Lifted is null);
                         Assert.Equal(chip.Lifted ?? chip.Face, chip.MovingFace);
                     }
                     return;

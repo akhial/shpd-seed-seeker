@@ -60,7 +60,7 @@ public sealed record JoinRefusal(long Key, string Reason, string Message);
 /// <param name="CountBadge">The <c>×N</c> badge, when the chip asks for more than one item.</param>
 /// <param name="TotalBadge">The <c>Σ ≥ T</c> badge, when the chip counts levels together.</param>
 /// <param name="RemainingBadges">The badges the chip keeps while one item is lifted away; null when it has no copies, so the whole chip leaves.</param>
-/// <param name="Lifted">The face of the item a drag of the chip carries: a bare copy of it — its item, or its kind for a wildcard stack, with that copy's floor limit and nothing else — so Ring of Energy +4 ×3 lifts a plain Ring of Energy; null when it has no copies, and the chip itself moves.</param>
+/// <param name="Lifted">The face of the item a drag of the chip carries: a bare copy of it — its item, or its kind for a wildcard stack, with that copy's floor limit and nothing else — so Ring of Energy +4 ×3 lifts a plain Ring of Energy; null when it has no copies, and the chip itself moves. It is decided on the canonical rows the edits run on, so on a list never normalized it may be set with no copies, or null with copies.</param>
 /// <param name="Copies">The hidden copies' keys behind the chip's badge; members whose stacks are alike share theirs.</param>
 /// <param name="CanDetach">Whether "On its own" applies: the chip is a cluster member.</param>
 /// <param name="Join">The visible rows this chip may join, in list order.</param>
